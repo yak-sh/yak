@@ -16,6 +16,14 @@ import type {
   ToolAnnotations,
 } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
+import {
+  applySchema,
+  bundle,
+  codeSchema,
+  showSchema,
+  uiStateSchema,
+  workSchema,
+} from './mcp_schema.ts'
 import { DatabaseSync } from './store/sqlite.ts'
 import { VERSION } from './version.ts'
 import {
@@ -293,8 +301,20 @@ let parseFilters = (filters: string[]) =>
     return hit
   })
 
-let output = z.object({ text: z.string() }).strict()
+// Every tool answers `{text}` — the prose block callers have always read. A
+// tool whose reply is JSON-shaped also declares `result` (mcp_schema.ts) and
+// returns the parsed value beside the text, so a caller types the payload
+// instead of re-parsing a blob whose prose suffix may not even parse.
+let output = (result?: z.ZodTypeAny) =>
+  z.object({ text: z.string(), ...(result ? { result } : {}) }).strict()
 let text = (s: string) => ({ content: [{ type: 'text' as const, text: s }] })
+// The JSON reply, said both ways from one value. `after` is the prose a few
+// doors append to the text — a patch hint, a routing explanation — which is
+// exactly why the structured half has to be the value, not the string.
+let json = (value: unknown, after = '') => ({
+  ...text(JSON.stringify(value, null, 2) + after),
+  structuredContent: { result: value },
+})
 // A refusal IS an error: isError rides the reply so agent harnesses (and
 // telemetry) count it as one, instead of a success that reads like an apology.
 let err = (s: string) => ({ ...text(s), isError: true as const })
@@ -471,13 +491,16 @@ export let mcpServer = (io: IO) => {
     run: (
       args: z.output<z.ZodObject<Shape>>,
     ) => CallToolResult | Promise<CallToolResult>,
+    // The shape of this tool's `result`, when its reply is JSON. Absent = the
+    // tool speaks prose and says so, rather than promising a shape it hasn't.
+    result?: z.ZodTypeAny,
   ) =>
     server.registerTool(
       name,
       {
         description,
         inputSchema: z.object(shape).strict(),
-        outputSchema: output,
+        outputSchema: output(result),
         // Behavior hints (T-14142): the protocol defaults are pessimistic —
         // every unmarked tool reads as mutating, destructive, non-idempotent
         // and open-world, so a client confirms each call. Every tasks tool
@@ -494,7 +517,10 @@ export let mcpServer = (io: IO) => {
           .filter((c: { type: string }) => c.type == 'text')
           .map((c: { text?: string }) => c.text ?? '')
           .join('\n')
-        return { ...out, structuredContent: { text: said } }
+        return {
+          ...out,
+          structuredContent: { ...out.structuredContent, text: said },
+        }
       },
     )
 
@@ -739,8 +765,9 @@ rankings, aggregates, projections, and query windows are not work filters.`,
         limit,
         recursive,
       })
-      return text(JSON.stringify(candidates, null, 2))
+      return json(candidates)
     },
+    workSchema,
   )
 
   tool(
@@ -1969,33 +1996,32 @@ empty. ${GRAMMAR} ${FILTERS}`,
         ]).filter(Boolean),
       )
       let context = [...refs, ...await io.get(refs.flatMap(refsIn))]
-      let out = JSON.stringify(
-        hits.map((r) =>
-          jsonAuthored(
-            context,
-            r,
-            full ? r.comps : elide(r),
-          )
-        ),
-        null,
-        2,
+      let found = hits.map((r) =>
+        jsonAuthored(
+          context,
+          r,
+          full ? r.comps : elide(r),
+        )
       )
+      let out = json(found)
       // An empty array is where a mis-routed filter reads as absence, so
       // the routing rides along — as its OWN content block, leaving the
       // first block byte-identical JSON for anyone who parses it.
       let why = hits.length ? '' : resolution(ps)
       return why
         ? {
+          ...out,
           content: [
-            { type: 'text' as const, text: out },
+            ...out.content,
             {
               type: 'text' as const,
               text: `(no rows) · filters resolved to ${why}`,
             },
           ],
         }
-        : text(out)
+        : out
     },
+    z.array(bundle()),
   )
 
   let componentLiterals: Record<string, z.ZodTypeAny> = {}
@@ -2125,19 +2151,14 @@ ${GRAMMAR}`,
       // op into a literal, which would fire falsely.
       let hint = changes ? patchHint(changes) : ''
       hint += await tierHint(result.changes)
-      return text(
-        JSON.stringify(
-          {
-            submitted: (changes ?? entities!).length,
-            effective: result.changes.length,
-            changes: result.changes,
-            ...(entities ? { aliases: result.aliases } : {}),
-          },
-          null,
-          2,
-        ) + hint,
-      )
+      return json({
+        submitted: (changes ?? entities!).length,
+        effective: result.changes.length,
+        changes: result.changes,
+        ...(entities ? { aliases: result.aliases } : {}),
+      }, hint)
     },
+    applySchema,
   )
 
   tool(
@@ -2305,8 +2326,9 @@ client's cursor — navigate its open tab — with the show tool.`,
           visible_in: seen,
         }
       })
-      return text(JSON.stringify({ cursors, cameras: cams, cards }, null, 2))
+      return json({ cursors, cameras: cams, cards })
     },
+    uiStateSchema,
   )
 
   tool(
@@ -2629,17 +2651,14 @@ in milliseconds (default 10000, maximum 30000).`,
       } else if (out.batch.length) {
         applied = `dry run — ${out.batch.length} change(s) NOT applied`
       }
-      return text(JSON.stringify(
-        {
-          result: out.result,
-          logs: out.logs,
-          status: applied || 'no changes queued',
-          ...(dry_run ? { batch: out.batch } : {}),
-        },
-        null,
-        2,
-      ))
+      return json({
+        result: out.result,
+        logs: out.logs,
+        status: applied || 'no changes queued',
+        ...(dry_run ? { batch: out.batch } : {}),
+      })
     },
+    codeSchema,
   )
 
   tool(
@@ -2658,7 +2677,7 @@ affirms that). Quarantined content requires quarantined: true. ${BUS}`,
       session: z.string().optional(),
     },
     async (
-      { id, quarantined, session }: {
+      { id, quarantined }: {
         id: string
         quarantined?: boolean
         comments?: boolean
@@ -2703,19 +2722,13 @@ affirms that). Quarantined content requires quarantined: true. ${BUS}`,
         ...await io.get(refs.flatMap(refsIn)),
       ])
       let edges = edgesOf({ deps }, all, row.eid)
-      return bus(
-        JSON.stringify(
-          {
-            ...jsonAuthored(all, row),
-            ...edges,
-            comments: comments.map((r) => jsonOf(r)),
-          },
-          null,
-          2,
-        ),
-        session,
-      )
+      return json({
+        ...jsonAuthored(all, row),
+        ...edges,
+        comments: comments.map((r) => jsonOf(r)),
+      })
     },
+    showSchema(),
   )
 
   return server

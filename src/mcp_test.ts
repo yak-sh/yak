@@ -958,12 +958,13 @@ type Tool = {
 }
 type Schema = {
   additionalProperties?: unknown
+  anyOf?: Schema[]
   description?: string
   enum?: string[]
   items?: Schema
   properties?: Record<string, Schema>
   required?: string[]
-  type?: string
+  type?: string | string[]
 }
 
 let said = (out: ToolResult) =>
@@ -1629,12 +1630,28 @@ Deno.test('MCP annotations: queries read-only, deleters destructive, setters ide
   })
 })
 
+// The tools whose reply is JSON rather than prose. Every one declares a
+// `result` schema and returns the parsed value beside the text; everything
+// else says `{text}` and means it.
+let jsonTools = [
+  'work_list',
+  'graph_query',
+  'graph_apply',
+  'ui_state',
+  'code_run',
+  'task_show',
+]
+
 Deno.test('MCP tools declare and return their text output', async () => {
   await protocol(blank(), async (client) => {
     let tools: Tool[] = (await client.listTools()).tools
     for (let tool of tools) {
       assertEquals(outputSchema(tool).additionalProperties, false, tool.name)
-      assertEquals(outputSchema(tool).required, ['text'], tool.name)
+      assertEquals(
+        outputSchema(tool).required,
+        jsonTools.includes(tool.name) ? ['text', 'result'] : ['text'],
+        tool.name,
+      )
       assertEquals(field(outputSchema(tool), 'text')?.type, 'string', tool.name)
     }
 
@@ -1645,9 +1662,91 @@ Deno.test('MCP tools declare and return their text output', async () => {
       name: 'graph_query',
       arguments: { filters: ['.kind=task', '.mail.from=x'] },
     })
+    // The prose explaining an empty result is its OWN block, so the JSON one
+    // stays parseable — and the structured half carries the rows, not a blob.
     assertEquals(multi.content.length, 2)
-    assertEquals(multi.structuredContent, { text: said(multi) })
+    assertEquals(multi.structuredContent, { text: said(multi), result: [] })
   })
+})
+
+Deno.test('a JSON-shaped tool declares a result schema; a prose one does not', async () => {
+  await protocol(blank(), async (client) => {
+    let tools: Tool[] = (await client.listTools()).tools
+    for (let tool of tools) {
+      let result = field(outputSchema(tool), 'result')
+      assertEquals(!!result, jsonTools.includes(tool.name), tool.name)
+    }
+    // The bundle schema is DERIVED from the vocabulary, not hand-written: every
+    // declared component is a key, with its readable columns under it. Add a
+    // component to the contract and it lands here with nobody editing a list.
+    let rows = field(outputSchema(byName(tools, 'graph_query')), 'result')
+    assertEquals(rows?.type, 'array')
+    let entity = field(rows?.items, 'entity')
+    assertEquals(field(entity, 'eid')?.type, 'string')
+    assertEquals(rows?.items?.required, ['entity'])
+    for (let name of Object.keys(comps)) {
+      assert(field(rows?.items, name), `bundle schema is missing ${name}`)
+    }
+    assertEquals(field(field(rows?.items, 'doc'), 'title')?.type, [
+      'string',
+      'null',
+    ])
+    // A closed set reads back as a closed set: the vocabulary's enum, not a
+    // bare string, so a caller sees the four words without asking.
+    assertEquals(
+      field(field(rows?.items, 'task'), 'status')?.anyOf?.[0]?.enum,
+      [
+        ...statuses,
+      ],
+    )
+  })
+})
+
+Deno.test('structuredContent validates against the schema the tool published', async () => {
+  let { db, io } = graph()
+  let eid = crypto.randomUUID()
+  await protocol(io, async (client) => {
+    // listTools primes the client's own validator: from here every callTool
+    // checks structuredContent against the published JSON Schema and throws
+    // when it drifts — the proof runs on the wire, not beside it.
+    await client.listTools()
+    let apply = await client.callTool({
+      name: 'graph_apply',
+      arguments: {
+        changes: [
+          { eid, name: 'doc', comp: { title: 'schema proof', body: 'b' } },
+          { eid, name: 'task', comp: { priority: 1 } },
+        ],
+      },
+    })
+    let applied = (apply.structuredContent as { result: { effective: number } })
+      .result
+    assert(applied.effective > 0)
+
+    let calls: [string, Record<string, unknown>][] = [
+      ['graph_query', { filters: ['.kind=task'] }],
+      ['task_show', { id: eid }],
+      ['work_list', { lane: 'build' }],
+      ['ui_state', {}],
+    ]
+    for (let [name, args] of calls) {
+      let out = await client.callTool({ name, arguments: args })
+      assertEquals(
+        out.isError,
+        undefined,
+        `${name}: ${said(out as ToolResult)}`,
+      )
+      let structured = out.structuredContent as Record<string, unknown>
+      assert(structured.result !== undefined, name)
+      // The text half stays what it always was — the same value, stringified.
+      assertEquals(
+        JSON.parse(said(out as ToolResult)),
+        structured.result,
+        name,
+      )
+    }
+  })
+  db.close()
 })
 
 Deno.test('MCP counts and timeouts accept only positive bounded integers', async () => {
