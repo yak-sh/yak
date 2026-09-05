@@ -18,12 +18,11 @@ import {
   directory,
   type Space,
   stamp,
-  storeName,
 } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
-import { KERNEL, meta } from './meta.ts'
-import { type Door, storeOf } from './store.ts'
+import { KERNEL, meta, metaOf } from './meta.ts'
+import type { Door } from './store.ts'
 import { told } from './stream.ts'
 import { level, standing } from './usage.ts'
 
@@ -138,22 +137,10 @@ export type Breaks = (bundles: Bundle[]) => Promise<unknown>
 export let metaBreaks = (env: Env): Breaks => (bundles) =>
   meta(env).apply(bundles, KERNEL)
 
-/**
- * One app's breaks, through its own store's door.
- *
- * TODO(T-33815): an app store is still the old Store class, so this lowers a
- * bundle list into the fleet's mutation envelope. When app serving moves to
- * graph.ts's Store this becomes `metaOf(store).apply(bundles, KERNEL)` — the
- * same wire the meta half already speaks.
- */
-export let appBreaks = (store: Door): Breaks => async (bundles) => {
-  let sent = await store('/apply', {
-    method: 'POST',
-    body: JSON.stringify({ entities: bundles }),
-  }, KERNEL)
-  if (!sent.ok) throw new Error(`report refused: ${await sent.text()}`)
-  return sent.json()
-}
+/** One app's breaks, through its own store's door — the same wire the meta
+ * half speaks, because it is the same Store class (graph.ts). */
+export let appBreaks = (store: Door): Breaks => (bundles) =>
+  metaOf(store).apply(bundles, KERNEL)
 
 export let noted = async (breaks: Breaks, broke: {
   request: string
@@ -306,7 +293,25 @@ export let cards = (seen: Seen[]) => {
 let appsOf = (env: Env, space: Space) =>
   directory(bound(env.DIRECTORY, dirPart.fetch, env)).apps(space)
 
-// The open items of one app: both facets, unseen only unless `all`.
+// One app's store in the graph's own wire, with this caller vouched: what a
+// mark is written through, and what an open item is read out of.
+let graphAt = (env: Env, space: Space, app: App, who: Who) => {
+  let store = appStore(env.STORE, space, app)
+  return {
+    query: (line: string) =>
+      metaOf((path, init, headers) =>
+        store(path, init, { ...vouched(who), ...headers })
+      ).query(line),
+    mark: (hits: Hit[], mark: 'notified' | 'archived') =>
+      metaOf(store).apply(
+        hits.map((h) => ({ entity: { eid: h.entity.eid }, [mark]: {} })),
+        { ...vouched(who), ...KERNEL },
+      ),
+  }
+}
+
+// The open items of one app: both facets, unseen only unless `all`. A hit wears
+// the facet as its `kind`, which is what an id is spelled from (`line`).
 export let openIn = async (
   env: Env,
   space: Space,
@@ -314,23 +319,24 @@ export let openIn = async (
   who: Who,
   all = false,
 ) => {
-  let store = appStore(env.STORE, space, app)
   let seen = all ? '' : '&.notified='
   let hits: Hit[] = []
   for (let facet of ['exception', 'error']) {
-    let r = await store(
-      `/query?.${facet}!&.doc?&.archived=${seen}`,
-      {},
-      vouched(who),
-    )
-    if (!r.ok) throw new Error(`${app.slug}: ${await r.text()}`)
-    hits.push(...await r.json() as Hit[])
+    try {
+      let found = await graphAt(env, space, app, who)
+        .query(`.${facet}!&.doc?&.archived=${seen}`)
+      hits.push(...found.map((b) => ({ kind: facet, ...b }) as unknown as Hit))
+    } catch (e) {
+      throw new Error(`${app.slug}: ${e instanceof Error ? e.message : e}`)
+    }
   }
   return hits
 }
 
 // Serve, then mark: what is open, and `notified` on each item that had
-// none, so the next reply is quiet about them.
+// none, so the next reply is quiet about them. The mark is the PLATFORM's own
+// stamp, so it rides the kernel's door — a viewer who may read an app's breaks
+// is not thereby a writer of it.
 export let serve = async (
   env: Env,
   space: Space,
@@ -345,13 +351,7 @@ export let serve = async (
     seen.push(...hits.map((hit) => ({ app: a, hit })))
     let fresh = hits.filter((h) => !('notified' in h))
     if (!fresh.length) continue
-    let marked = await storeOf(env.STORE, storeName(space, a))('/apply', {
-      method: 'POST',
-      body: JSON.stringify(
-        fresh.map((h) => ({ eid: h.entity.eid, name: 'notified', comp: {} })),
-      ),
-    }, vouched(who))
-    if (!marked.ok) throw new Error(`${a.slug}: ${await marked.text()}`)
+    await graphAt(env, space, a, who).mark(fresh, 'notified')
   }
   return seen
 }
@@ -359,13 +359,7 @@ export let serve = async (
 // Closed: the mark that stops an item showing, here, in the unseen section,
 // and in the view.
 let close = async (env: Env, space: Space, app: App, who: Who, hits: Hit[]) => {
-  let done = await storeOf(env.STORE, storeName(space, app))('/apply', {
-    method: 'POST',
-    body: JSON.stringify(
-      hits.map((h) => ({ eid: h.entity.eid, name: 'archived', comp: {} })),
-    ),
-  }, vouched(who))
-  if (!done.ok) throw new Error(`${app.slug}: ${await done.text()}`)
+  await graphAt(env, space, app, who).mark(hits, 'archived')
   return hits.length
 }
 

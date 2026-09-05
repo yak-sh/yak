@@ -151,8 +151,9 @@ let held = () => {
   // A filter is ANDed terms; a `?` term only asks for a component to ride
   // along, so it screens nothing.
   let answer = (search: string) => {
-    let terms = decodeURIComponent(search.slice(1)).split('&')
-      .filter((t) => t && !t.endsWith('?'))
+    // The graph's own read door: the whole filter line as one parameter.
+    let line = new URLSearchParams(search).get('q') ?? ''
+    let terms = line.split('&').filter((t) => t && !t.endsWith('?'))
     return rows.filter((row) =>
       terms.every((t) => {
         let [key, want] = t.split('=')
@@ -165,12 +166,11 @@ let held = () => {
     )
   }
   let apply = (body: string) => {
-    let { entities } = JSON.parse(body) as {
-      entities: Record<string, unknown>[]
-    }
+    let entities = JSON.parse(body) as Record<string, unknown>[]
     let alias: Record<string, string> = {}
     let named = (v: unknown) =>
       typeof v == 'string' && v.startsWith('$') ? alias[v] : v
+    let out: Record<string, unknown>[] = []
     for (let e of entities) {
       let { entity, ...comps } = e as {
         entity?: { eid: string }
@@ -191,9 +191,12 @@ let held = () => {
         let cols = comp as Record<string, unknown>
         for (let [k, v] of Object.entries(cols)) cols[k] = named(v)
       }
-      put(eid, comps)
+      let row = put(eid, comps)
+      // The batch AS APPLIED, each minted bundle wearing the alias it was
+      // written under — what the graph's `/apply` answers.
+      out.push({ ...row, ...(want?.startsWith('$') ? { $alias: want } : {}) })
     }
-    return Response.json({ changes: [], aliases: alias })
+    return Response.json(out)
   }
   let env = {
     STORE: {

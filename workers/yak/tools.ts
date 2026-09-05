@@ -34,8 +34,9 @@
 // app's files serve live from its blob store — and the version it bumps to is
 // kept, files and all, so app_rollback can put it back.
 import { r2Blobs } from '../../src/blobs_r2.ts'
-import { TOOLS_EXAMPLE, viewsOf } from '../../src/store/tools.ts'
+import { parseTools, TOOLS_EXAMPLE, viewsOf } from '../../src/store/tools.ts'
 import {
+  borrowed,
   EXAMPLE,
   grow,
   homed,
@@ -47,6 +48,7 @@ import {
 import type { EntityLiteral } from '../../src/mutation.ts'
 import { appAccess } from '../../src/types.ts'
 import { VERSION } from '../../src/version.ts'
+import { appDoc } from './vocab.ts'
 import { purged } from './files.ts'
 import {
   type Access,
@@ -542,9 +544,30 @@ let released = async (
         "app's own files; deploy the page beside index.html",
     )
   }
+  // And the manifest is CHECKED here, against the words this app has after the
+  // release above: a tool writing a component nobody declared is refused where
+  // the vocabulary can be read. The store keeps a declaration as written
+  // (graph.ts `/tools`) — a store that parsed its own tools would be a second
+  // vocabulary inside the object, and the one that plants the words is the one
+  // that can say which they are.
+  // Either spelling of the manifest says the same words (vocab.ts `appDoc`),
+  // and a tool is checked against the NAMES, so that is all this reads.
+  let words = Object.fromEntries(
+    Object.keys(
+      appDoc(JSON.parse(await answer(await store('/vocab')))).$defs ?? {},
+    ).map((name) => [name, {}]),
+  ) as Vocab
+  let borrows = JSON.parse(await answer(await store('/uses'))) as Record<
+    string,
+    string
+  >
+  let checked = parseTools(sent, { ...words, ...borrowed(borrows) })
   let tooled = JSON.parse(
     await answer(
-      await store('/tools', { method: 'POST', body: sent }, vouched(who)),
+      await store('/tools', {
+        method: 'POST',
+        body: JSON.stringify(checked),
+      }, vouched(who)),
     ),
   )
   let declared: string[] = tooled.tools ?? []

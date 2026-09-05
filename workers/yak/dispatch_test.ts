@@ -65,7 +65,7 @@ let app: App = {
 // what a test can say.
 type Wrote = {
   store: string
-  entities: { exception: Record<string, unknown> }[]
+  bundles: { exception: Record<string, unknown> }[]
 }
 let wrote: Wrote[] = []
 
@@ -81,9 +81,11 @@ let envOf = (get: (name: string) => { fetch(r: Request): Promise<Response> }) =>
       idFromName: (n: string) => n,
       get: () => ({
         fetch: async (r: Request) => {
-          let body = JSON.parse(await r.text())
-          wrote.push({ store: r.headers.get('x-store') ?? '', ...body })
-          return Response.json({ ok: true })
+          // The graph's own write door: a bare array of bundles in, the batch
+          // as applied back.
+          let bundles = JSON.parse(await r.text())
+          wrote.push({ store: r.headers.get('x-store') ?? '', bundles })
+          return Response.json(bundles)
         },
       }),
     },
@@ -213,7 +215,7 @@ Deno.test("a worker's own no is not a break; its 5xx is", async () => {
   let out = await ran(envOf(mirror(503).get), space, app, visit(), who)
   assertEquals(out!.status, 503)
   assertEquals(wrote[0].store, 'jeff/recipes')
-  let broke = wrote[0].entities[0].exception
+  let broke = wrote[0].bundles[0].exception
   assertEquals(broke.version, 7)
   assertEquals(broke.request, 'worker GET /recipes/hello')
   assertEquals(broke.message, "the app's worker answered 503")
@@ -236,7 +238,7 @@ Deno.test("a worker that throws is the app's break, and is filed here", async ()
   assertEquals(out!.status, 500, 'the visitor gets the soft page')
   assertEquals(wrote.length, 1, 'one break, and only one')
   assertEquals(wrote[0].store, 'jeff/recipes', "the app's own store")
-  let broke = wrote[0].entities[0].exception
+  let broke = wrote[0].bundles[0].exception
   assertEquals(broke.version, 7)
   assertEquals(broke.request, 'worker GET /recipes/hello')
   assertEquals(broke.message, 'undefined is not an object')

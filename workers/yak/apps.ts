@@ -38,7 +38,9 @@ import * as dirPart from './directory.ts'
 import { granted, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { sizeOf } from './image.ts'
-import { asking, listed, listing } from './listing.ts'
+import { asking, listed, type Row } from './listing.ts'
+import { metaOf, minted } from './meta.ts'
+import { batched, lined, lowered } from './wire.ts'
 import { nothingHere, spaceIndex } from './pages.ts'
 import { hostOf, MOUNT, PLATFORM, route } from './route.ts'
 import {
@@ -96,6 +98,9 @@ let SAYS: Record<string, string> = {
   no_bytes: 'an upload needs a body: post the file itself',
   too_large: 'that file is too big to send — try a smaller one',
   no_such_file: 'no file at that address in this app',
+  // What the STORE said no to — an unknown component, a `$was` that moved, a
+  // dead entity. Its own sentence rides in `message`; this is the fallback.
+  refused: 'the app store would not take that',
 }
 
 // The same refusals to someone who IS signed in: signing in is no longer the
@@ -469,27 +474,24 @@ let took = async (
   // sent twice are one attachment renamed rather than a second row saying the
   // same thing. A listing shows the use and not the content, which is right:
   // a doc's body is a blob row as well, and nobody saved that.
-  let saved = await store('/apply', {
-    method: 'POST',
-    body: JSON.stringify({
-      entities: [
-        {
-          entity: { eid: sha },
-          blob: { bytes: bytes.byteLength },
-          ...(size ? { image: size } : {}),
-        },
-        {
-          entity: { eid: await useOf(sha) },
-          // A patch, so an upload that names nothing leaves the name the
-          // first one gave these bytes: the same file is the same file,
-          // whatever the page had to call it the second time.
-          attachment: { blob: sha, mime, ...(name ? { name } : {}) },
-        },
-      ],
-    }),
-  }, headers)
-  if (!saved.ok) return saved
-  await saved.body?.cancel()
+  try {
+    await metaOf(store).apply([
+      {
+        entity: { eid: sha },
+        blob: { bytes: bytes.byteLength },
+        ...(size ? { image: size } : {}),
+      },
+      {
+        entity: { eid: await useOf(sha) },
+        // A patch, so an upload that names nothing leaves the name the
+        // first one gave these bytes: the same file is the same file,
+        // whatever the page had to call it the second time.
+        attachment: { blob: sha, mime, ...(name ? { name } : {}) },
+      },
+    ], headers)
+  } catch (e) {
+    return json(400, 'refused', e instanceof Error ? e.message : String(e))
+  }
   return Response.json({
     eid: sha,
     url: `/${app.slug}/api/blob/${sha}`,
@@ -519,8 +521,9 @@ let gave = async (
   } catch {
     return json(404, 'no_such_file')
   }
-  let rows = await (await store(`/query?id=${await useOf(sha)}`, {}, headers))
-    .json()
+  let rows = await metaOf((path, init, sent) =>
+    store(path, init, { ...headers, ...sent })
+  ).query(`.eid=${await useOf(sha)}`)
   let file = (rows as { attachment?: { mime?: string; name?: string } }[])
     .find((r) => r.attachment)?.attachment
   return new Response(bytes, {
@@ -641,33 +644,26 @@ export let acting = (env: Env, space: Space, app: App, who: Who) => {
           }
         }
       }
-      let r = await store('/apply', {
-        method: 'POST',
-        body: JSON.stringify(mutation),
-      }, { ...vouched(who), ...await named(env, who) })
-      let body = await r.text()
-      if (!r.ok) throw new Error(body)
-      let said = JSON.parse(body) as {
-        changes?: { eid: string }[]
-        aliases?: Record<string, string>
-      }
+      let applied = await metaOf(store).apply(
+        batched(mutation),
+        { ...vouched(who), ...await named(env, who) },
+      )
       return {
-        entities: [...new Set((said.changes ?? []).map((c) => c.eid))],
-        aliases: said.aliases ?? {},
+        entities: [...new Set(applied.map((b) => b.entity.eid))],
+        aliases: minted(applied),
       }
     },
     query: async (line: string) => {
       if (!reads(who, app.access)) no('not_a_reader')
-      let asked = asking(`?${line.replace(/^[?&]+/, '')}`)
+      let asked = asking(lined(line))
       // A line about a borrowed word is asked where that word lives. One
       // home per line: a filter spanning two stores is a composition, and
       // the agent door's federated read is where that is done.
       let door = await homeOf(env, space, app, line) ?? store
-      let r = await door(`/query${asked}`, {}, vouched(who))
-      let body = await r.text()
-      if (!r.ok) throw new Error(body)
-      let rows = JSON.parse(body)
-      return Array.isArray(rows) ? listed(rows, asked) : rows
+      let rows = await metaOf((path, init, headers) =>
+        door(path, init, { ...vouched(who), ...headers })
+      ).query(asked)
+      return listed(rows as Row[], asked)
     },
   }
 }
@@ -751,31 +747,34 @@ let api = async (
   }
   if (path == '/query') {
     if (!mayRead) return refused('not_a_reader')
-    // The ask carries the listing's own screen (listing.ts `asking`), so what
-    // a count counts is what a list lists.
-    let asked = asking(new URL(req.url).search)
-    let r = await store(`/query${asked}`, {}, headers)
-    if (!r.ok) return r
-    // The same rule the person's agent reads a listing by (listing.ts): one
-    // filter line, one answer, whichever door asked it.
-    return new Response(listing(await r.text(), asked), {
-      headers: { 'content-type': 'application/json' },
-    })
+    // The page spells its filter as the query string itself and the Store takes
+    // the whole line as one parameter (wire.ts `lined`). The ask then carries
+    // the listing's own screen (listing.ts `asking`), so what a count counts is
+    // what a list lists.
+    let asked = asking(lined(new URL(req.url).search))
+    try {
+      let rows = await metaOf((at, init, sent) =>
+        store(at, init, { ...headers, ...sent })
+      ).query(asked)
+      // The same rule the person's agent reads a listing by (listing.ts): one
+      // filter line, one answer, whichever door asked it.
+      return Response.json(listed(rows as Row[], asked))
+    } catch (e) {
+      return json(400, 'refused', e instanceof Error ? e.message : String(e))
+    }
   }
   // The live door: one socket per page onto this app's store, so a write from
   // another device arrives here without asking. The upgrade goes to the object
   // itself — the socket is the store's, and the kernel is out of the way once
-  // it is open — so whether this person may WRITE over it is decided here, at
-  // the handshake, and rides on the socket. Whoever may read may listen.
+  // it is open — so the whole question is decided here, at the handshake, and
+  // it is a READ: no write crosses this seam (@yaks/api), a batch goes through
+  // `/apply` like any other, and whoever may read may listen.
   if (path == '/ws') {
     if (req.headers.get('upgrade') != 'websocket') {
       return json(426, 'expected_websocket')
     }
     if (!mayRead) return refused('not_a_reader')
-    return store('/ws', req, {
-      ...headers,
-      ...(mayPost ? { 'x-yak-write': '1', ...(await named(env, who)) } : {}),
-    })
+    return store('/ws', req, headers)
   }
   if (path == '/apply') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')
@@ -786,10 +785,21 @@ let api = async (
     // the way it shows every other.
     let stopped = await full(env, space, app, body.length)
     if (stopped) return json(413, 'space_full', stopped)
-    return store('/apply', { method: 'POST', body }, {
-      ...headers,
-      ...(await named(env, who)),
-    })
+    // The page's envelope in, the page's answer out (wire.ts): the Store takes
+    // a bare array of bundles and answers the batch as applied, and every app
+    // already deployed reads `{ok, changes, aliases}` off its own client.
+    try {
+      return Response.json(
+        lowered(
+          await metaOf(store).apply(batched(JSON.parse(body)), {
+            ...headers,
+            ...(await named(env, who)),
+          }),
+        ),
+      )
+    } catch (e) {
+      return json(400, 'refused', e instanceof Error ? e.message : String(e))
+    }
   }
   // The file door: bytes in, one content-addressed address out. Uploaded
   // bytes are app DATA, not the app's own files — a vote page's photo is the

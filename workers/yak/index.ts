@@ -86,7 +86,11 @@ import {
 import { metaBreaks, noted, refusal } from './unseen.ts'
 import { metered } from './usage.ts'
 
-export { Store } from './store.ts'
+// THE Store, at every address the binding names — the directory at
+// `yak/platform` and every app's own beside it (T-33815). It carries the DO's
+// own name, so wrangler's migration list never moves; store.ts is the object
+// this replaced and has no caller left, which T-33807 takes away.
+export { Store } from './graph.ts'
 export { Wire } from './stream.ts'
 
 // The kernel's SECOND entrypoint, and the only one with a cache in front of it

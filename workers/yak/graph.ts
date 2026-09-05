@@ -73,6 +73,8 @@ import {
   json,
   refuse,
   signed,
+  type Sink,
+  type Subs,
   subscriptions,
   Unauthorized,
 } from '@yaks/api'
@@ -300,7 +302,7 @@ export class Store {
     this.#vocab = vocab
     this.#graph = g
     let subs = subscriptions(g)
-    this.#live = sockets(subs, ctx)
+    this.#live = sockets(this.#naming(subs), ctx)
     // The one `Authenticate` (T-33813). The app is read at REQUEST time — the
     // object may learn which app it holds from the request being answered —
     // and the mode with it, so a store told its access changed follows the
@@ -519,8 +521,9 @@ export class Store {
       // `resources/list` is made of. A release that only repointed a view moves
       // resources and not tools, and the kernel says each with its own
       // `list_changed` (declared.ts).
+      let said = await answer.json() as Record<string, unknown>
       return Response.json({
-        ...await answer.json(),
+        ...said,
         changed: apart(now) != apart(was),
         views: viewed(now) != viewed(was),
       })
@@ -557,21 +560,47 @@ export class Store {
     return path == '/query' ? await this.#kinded(answer) : answer
   }
 
-  // The word an answer's rows are NAMED by. `kind` is not a column and no
-  // client can derive it: it is the most specific component this vocabulary
-  // says the entity wears (@yaks/vocab `kindOf`), and only a store holding the
-  // vocabulary can say which that is. Every caller above reads it — the
-  // composing read calls a row by it (reach.ts), a page's listing draws with
-  // it, and the guide documents it on every row — so it is painted here, at
-  // the one door that answers rows.
+  // The word a row is NAMED by. `kind` is not a column and no client can derive
+  // it: it is the most specific component this vocabulary says the entity wears
+  // (@yaks/vocab `kindOf`), and only a store holding the vocabulary can say
+  // which that is. Every caller above reads it — the composing read calls a row
+  // by it (reach.ts), a page's listing draws with it, and the guide documents it
+  // on every row.
+  #kind = (row: Bundle): Bundle => ({
+    kind: this.#vocab.kindOf(row as Record<string, unknown>),
+    ...row,
+  })
+
   async #kinded(answer: Response): Promise<Response> {
     if (!answer.ok) return answer
     let rows = await answer.json()
-    if (!Array.isArray(rows)) return Response.json(rows)
-    return Response.json(rows.map((row: Bundle) => ({
-      kind: this.#vocab.kindOf(row as Record<string, unknown>),
-      ...row,
-    })))
+    return Response.json(Array.isArray(rows) ? rows.map(this.#kind) : rows)
+  }
+
+  // The same word on a subscription's frames, because a subscription is that
+  // query still answering: a page that swaps `query()` for `subscribe()` must
+  // get the same rows (public/client.js). The sink a socket hands in is wrapped
+  // ONCE per sink, since `close` and `drop` find a subscription by the sink it
+  // was opened with.
+  #naming(subs: Subs): Subs {
+    let wrapped = new Map<Sink, Sink>()
+    let by = (sink: Sink): Sink => {
+      let held = wrapped.get(sink)
+      if (!held) {
+        wrapped.set(
+          sink,
+          held = (f) =>
+            sink(f.bundles ? { ...f, bundles: f.bundles.map(this.#kind) } : f),
+        )
+      }
+      return held
+    }
+    return {
+      open: (sink, id, query) => subs.open(by(sink), id, query),
+      close: (sink, id) => subs.close(by(sink), id),
+      drop: (sink) => subs.drop(by(sink)),
+      commit: subs.commit,
+    }
   }
 
   // One of the object's own memory slots as a door: a GET reads back what it

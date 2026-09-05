@@ -165,20 +165,22 @@ export let store = (base) => {
     url.protocol = url.protocol == 'https:' ? 'wss:' : 'ws:'
     let s = sock = new WebSocket(url)
     // Every subscription is (re)declared on open, so a reconnect needs no
-    // catch-up: each answer replaces that sub's rows with what is true now.
+    // catch-up: the store answers each declaration with the whole set, so the
+    // rows it replaces are dropped first.
     s.onopen = () => {
       tries = 0
       for (let [name, sub] of subs) {
-        s.send(JSON.stringify({ sub: name, q: sub.q }))
+        sub.rows.clear()
+        s.send(JSON.stringify({ subscribe: sub.q, id: name }))
       }
     }
     s.onmessage = (e) => {
       let f = JSON.parse(e.data)
-      let sub = subs.get(f.sub)
+      let sub = subs.get(f.id)
       if (!sub) return
       // The store's own sentence about a query it could not serve; uncaught
       // on purpose, so the reporter tells the person's agent about it.
-      if (f.error) throw new Error(f.error)
+      if (f.refused) throw new Error(f.refused.message ?? f.refused.error)
       fold(sub.rows, f)
       sub.cb(rows(sub.rows))
     }
@@ -200,8 +202,9 @@ export let store = (base) => {
   // subscription.
   let subscribe = (filter, cb) => {
     let name = `${++n}:${filter}`
-    subs.set(name, { q: filter, rows: new Map(), cb })
-    tell({ sub: name, q: filter })
+    let q = asked(filter)
+    subs.set(name, { q, rows: new Map(), cb })
+    tell({ subscribe: q, id: name })
     return () => {
       if (!subs.delete(name)) return
       // No subscriptions, no socket: the last one to leave closes it, and the
@@ -211,21 +214,65 @@ export let store = (base) => {
         sock = null
         return s && s.close()
       }
-      tell({ unsub: name })
+      tell({ unsubscribe: name })
     }
   }
   return { apply, me, query, search, subscribe, upload }
 }
 
-// One subscription frame folded into its rows. A frame carries ROWS — the
-// same answer `query()` gives, because the store answers both through one
-// projection — so folding is just keeping them: `replace` reseeds the set,
-// a row replaces the one it names, and a `drop` (it died, or it left the
-// filter) leaves.
+// One subscription frame folded into its rows. A frame carries whole ROWS —
+// the same answer `query()` gives, because the store paints the same word on
+// both — so folding is just keeping them: a row replaces the one it names, and
+// one that is `gone` (it died, or it stopped matching) leaves.
 let fold = (rows, f) => {
-  if (f.replace) rows.clear()
-  for (let row of f.rows ?? []) rows.set(row.entity.eid, row)
-  for (let eid of f.drop ?? []) rows.delete(eid)
+  for (let row of f.bundles ?? []) rows.set(row.entity.eid, row)
+  for (let eid of f.gone ?? []) rows.delete(eid)
+}
+
+// A page's filter as the STORE spells it. A fetch goes through the app's door,
+// which does this on the way (workers/yak/wire.ts `lined`, listing.ts
+// `asking`); a socket goes straight to the store, so a subscription is
+// translated here — the same two rules, so `query(f)` and `subscribe(f)` ask
+// one question.
+//
+// Two rules, and no more. Three riders the page spells bare are dotted words
+// there (`id=` is an address, so it is `.eid=`), and the platform's own rows —
+// the breaks it noted, the person row a store mints for each writer — are left
+// out of the question unless the filter names one.
+let RIDERS = { id: '.eid', limit: '.limit', after: '.after' }
+let SCREEN = ['exception', 'error', 'person']
+let OPERATOR = /^([A-Za-z_.\-[\]][\w.\-[\]]*)(!=|~=|<=|>=|<|>|=|!|\?)/
+
+let plain = (v) => {
+  try {
+    return decodeURIComponent(v)
+  } catch {
+    return v
+  }
+}
+
+// A decoded value the grammar would otherwise read as structure: `&` separates
+// segments, and quotes glue a value across one. A dot-param's own spaces
+// survive unquoted, and a value carrying a quote has no escape, so it goes over
+// as it stands rather than becoming a different value.
+let glued = (v, term) =>
+  (v.includes('&') || (!term && /\s\./.test(v))) && !v.includes('"')
+    ? `"${v}"`
+    : v
+
+let asked = (filter = '') => {
+  let line = filter.replace(/^[?&]+/, '').split('&').filter(Boolean)
+    .map((seg) => {
+      let m = OPERATOR.exec(seg)
+      if (!m) return glued(plain(seg), true)
+      let v = glued(plain(seg.slice(m[0].length)))
+      return `${RIDERS[m[1]] ?? m[1]}${m[2]}${v}`
+    }).join('&')
+  if (!line || line.includes('id=')) return line
+  let screen = SCREEN.filter((k) => !line.includes(`.${k}`)).map((k) =>
+    `.${k}=`
+  )
+  return [line, ...screen].join('&')
 }
 
 // Oldest first, by the number the store minted — `query()`'s own order.
