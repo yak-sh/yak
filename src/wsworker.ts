@@ -16,6 +16,7 @@ import { registerCodexSource } from './source_codex.ts'
 import { registerManagedSource } from './source_managed.ts'
 import { registerSessionSource } from './source_session.ts'
 import { type Frame, type Subserve, subserve } from './subserve.ts'
+import { subqueue } from './subqueue.ts'
 
 type In =
   | { init: string }
@@ -35,6 +36,9 @@ let post = (m: unknown) =>
 // (T-22658). Held at module scope so the {close} teardown can reach it.
 let db: DatabaseSync | undefined
 let sub: Subserve | undefined
+// This socket's serving ORDER (subqueue.ts): the control frames of one burst,
+// answered cheapest first, so a tally is not stuck behind a board.
+let queue: ReturnType<typeof subqueue> | undefined
 let sources = false
 
 // Each Worker is its own JS isolate: the source registry installed by
@@ -50,9 +54,25 @@ let registerSources = () => {
   sources = true
 }
 
+// An error escaping a served frame is the connection or the file, not one bad
+// query (subserve catches those itself) — a client served by silence is the
+// failure mode this must never repeat (2026-08-26: workers reading a corrupt
+// live db logged here while every join died mute). Report dead; the delegator
+// closes the socket and the client reconnects inline. Every door into subserve
+// runs through here, the queued ones included: a scheduled serve happens on its
+// own turn, past the message handler's own stack.
+let guard = (run: () => void) => {
+  try {
+    run()
+  } catch (e) {
+    console.warn('wsworker:', e)
+    post({ dead: e instanceof Error ? e.message : String(e) })
+  }
+}
+
 self.onmessage = (m: MessageEvent<In>) => {
   let d = m.data
-  try {
+  guard(() => {
     if ('init' in d) {
       registerSources()
       // connect()-style pragmas without connect(): the worker never migrates
@@ -61,6 +81,7 @@ self.onmessage = (m: MessageEvent<In>) => {
       db = new DatabaseSync(d.init, { readOnly: true })
       db.exec('pragma busy_timeout = 5000')
       sub = subserve(db, (frame) => post({ frame: JSON.stringify(frame) }))
+      queue = subqueue(db, (f) => guard(() => sub?.frame(f)))
       return
     }
     if ('close' in d) {
@@ -79,11 +100,12 @@ self.onmessage = (m: MessageEvent<In>) => {
       } finally {
         db = undefined
         sub = undefined
+        queue = undefined
         post({ closed: true })
       }
       return
     }
-    if (!sub) return
+    if (!sub || !queue) return
     if ('raw' in d) {
       let f = JSON.parse(d.raw)
       // Write batches route back to the writer process; the ack/error frames
@@ -95,18 +117,13 @@ self.onmessage = (m: MessageEvent<In>) => {
           id: f.id != null ? String(f.id) : undefined,
         })
       }
-      return sub.frame(f)
+      // Reads go through this socket's queue: it holds a burst of subscribe
+      // frames just long enough to answer the cheap ones first, and passes
+      // everything else (the join, an unsub) straight to subserve.
+      return queue.push(f)
     }
     if ('cast' in d) return sub.cast(d.cast as never, d.cursor)
     if ('aged' in d) return sub.aged(d.aged)
     if ('observe' in d) return void sub.observe(d.observe, d.session)
-  } catch (e) {
-    // An error escaping to here is the connection or the file, not one bad
-    // query (subserve catches those itself) — a client served by silence is
-    // the failure mode this must never repeat (2026-08-26: workers reading a
-    // corrupt live db logged here while every join died mute). Report dead;
-    // the delegator closes the socket and the client reconnects inline.
-    console.warn('wsworker:', e)
-    post({ dead: e instanceof Error ? e.message : String(e) })
-  }
+  })
 }

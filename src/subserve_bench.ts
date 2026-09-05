@@ -18,6 +18,7 @@ Deno.env.set('DB_PATH', ':memory:')
 let { apply } = await import('./db.ts')
 let { db } = await import('./live_db.ts')
 let { subserve } = await import('./subserve.ts')
+let { subqueue } = await import('./subqueue.ts')
 let { cursorOf } = await import('./db.ts')
 import type { Change } from './types.ts'
 
@@ -54,6 +55,33 @@ Deno.bench('subserve: a status tally sub answers without members', () => {
   let sv = subserve(db, sink)
   sv.frame({ sub: 'tally', q: `.project=${PROJ}&.tally=task.status` }, sink)
 })
+
+// A small sub's FIRST FRAME while a large one is in flight (T-33753). The two
+// go out in one burst, board first; the queue answers the bounded tally before
+// the 600-row board, so this measures the tally's own cost and not the board's.
+// Served in arrival order it costs the board's time plus its own — 17ms here,
+// and on the live graph a 142-byte answer waiting ~900ms on the subs ahead of
+// it. b.start/b.end keep the board, still served afterwards, out of the
+// measurement.
+Deno.bench(
+  'subserve: a small sub first-frames while a large one is in flight',
+  async (b) => {
+    let small = Promise.withResolvers<void>()
+    let both = Promise.withResolvers<void>()
+    let n = 0
+    let sv = subserve(db, (f) => {
+      if ((f as { sub?: string }).sub == 'tally') small.resolve()
+      if (++n == 2) both.resolve()
+    })
+    let q = subqueue(db, (f) => sv.frame(f))
+    b.start()
+    q.push({ sub: 'board', q: `.project=${PROJ}&.limit=400` })
+    q.push({ sub: 'tally', q: `.project=${PROJ}&.tally=task.status` })
+    await small.promise
+    b.end()
+    await both.promise
+  },
+)
 
 // One committed batch folded across a socket holding a realistic set of subs —
 // a board window, its tally, a favorites set and a route. Only the touched eid

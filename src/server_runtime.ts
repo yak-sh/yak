@@ -44,6 +44,7 @@ import { db } from './live_db.ts'
 import { catchup } from './catchup.ts'
 import { published, withBackupLock } from './redaction.ts'
 import { type Subserve, subserve } from './subserve.ts'
+import { subqueue } from './subqueue.ts'
 import {
   configureEffects,
   dispatch,
@@ -492,6 +493,8 @@ let ws = (req: Request) => {
   // that socket so the client reconnects onto an inline serve, and no join can
   // die silently again.
   let s: Served = { sock: socket }
+  // The inline serve's queue (worker sockets keep their own, in the worker).
+  let inline: ReturnType<typeof subqueue> | undefined
   // Graceful worker teardown (T-22658): Worker.terminate() leaks the worker's
   // sqlite fds, so ask the worker to close its own connection ({close}) and
   // terminate only on its {closed} ack — or after a deadline, so a wedged worker
@@ -556,6 +559,10 @@ let ws = (req: Request) => {
         socket.send(JSON.stringify(frame))
       }
     })
+    // Same serving ORDER as a worker socket (subqueue.ts): one thread answers
+    // this socket's subs either way, so both doors answer a burst cheapest
+    // first rather than in arrival order.
+    inline = subqueue(db, (f) => s.inline!.frame(f, () => feed.settle()))
   }
   served.add(s)
   socket.onclose = () => {
@@ -584,7 +591,7 @@ let ws = (req: Request) => {
         frame.id != null ? String(frame.id) : undefined,
       )
     }
-    s.inline!.frame(frame, () => feed.settle())
+    inline!.push(frame)
   }
   return response
 }
