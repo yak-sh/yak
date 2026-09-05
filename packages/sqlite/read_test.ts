@@ -86,3 +86,12 @@ Deno.test('the newest-first window pages a prefix', () => {
     ['p3', 'p2'],
   )
 })
+
+Deno.test('a gathered bundle carries the entity number storage minted', () => {
+  let s = store()
+  s.write([
+    { entity: { eid: 'p1' }, product: { price: 1 } },
+    { entity: { eid: 'p2' }, product: { price: 2 } },
+  ])
+  assertEquals(s.read('.price=2')[0].entity, { eid: 'p2', num: 2 })
+})
