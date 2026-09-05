@@ -11,6 +11,8 @@
 //                        writer is nobody, and an unsigned letter is recorded
 //                        with `verified: false` rather than dropped
 //   attachments          filed where a page's upload is, hung off the letter
+//   a former address     a rename moves the app, and the address it left still
+//                        lands in it — the move its hostname follows
 //   nobody home          refused, so the sender is told, and nothing written
 //   the app hears it     a page subscribed to its own store sees the letter
 //                        arrive without asking
@@ -202,6 +204,39 @@ slow('a letter lands in the app its address named', async () => {
     await wire.stop()
     mine.stop()
     Deno.removeSync(dir, { recursive: true })
+    await k.stop()
+  }
+})
+
+slow("a letter to an app's former address follows the rename", async () => {
+  let k = await kernel()
+  try {
+    let them = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
+    await connector(k, them.cookie)
+      .tool('app_set', { space: 'jeff', app: 'recipes', slug: 'cookbook' })
+    assertEquals(
+      (await arrives(k, {
+        from: 'ana@books.example',
+        to: 'jeff.recipes@yaks.app',
+        raw: rfc822({ Subject: 'Still find you' }, 'Bring a dish.'),
+      })).status,
+      200,
+    )
+    // The store is named at birth, so the letter is in the app it named — now
+    // answering at its new address, with the envelope it arrived under.
+    let [letter] = await client(k, 'jeff.yaks.app', 'cookbook', them.cookie)
+      .get('.mail!&.doc?') as unknown as Row[]
+    assertEquals(letter.doc.title, 'Still find you')
+    assertEquals(letter.mail.to, 'jeff.recipes@yaks.app')
+    // A slug nobody here has ever had is no move to follow: still refused.
+    let no = await arrives(k, {
+      from: 'ana@books.example',
+      to: 'jeff.nothere@yaks.app',
+      raw: rfc822({ Subject: 'Anyone there?' }, 'Hello?'),
+    })
+    assertEquals(no.status, 400)
+    assertStringIncludes(await no.text(), 'no mailbox')
+  } finally {
     await k.stop()
   }
 })

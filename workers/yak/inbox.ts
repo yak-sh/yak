@@ -5,8 +5,9 @@
 //
 // The whole of the routing is the LOCAL PART: `<space>.<app>@yaks.app` is that
 // app's store, `<space>@yaks.app` is the space's home app (post.ts `mailedTo`,
-// the same derivation an app's letters leave under). An address naming a space
-// or an app that is not
+// the same derivation an app's letters leave under). An address the app has
+// LEFT still reaches it, the way its old hostname does. An address naming a
+// space or an app that is not
 // there is REFUSED — a bounce the sender reads — rather than accepted and
 // dropped, because silence is the one answer that cannot be corrected later.
 // Anything that fails on OUR side throws instead: a throw is a temporary
@@ -65,7 +66,14 @@ let opened = async (
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let space = await dir.space(box.space)
   if (!space) throw new Refused(`no mailbox for ${to}`)
-  let app = box.app ? await dir.app(space, box.app) : await dir.home(space)
+  // An address the app has LEFT still finds it, as its old hostname does
+  // (apps.ts `served`, directory.ts `former`): a rename moves `app.slug` and
+  // keeps the old name on the app's alias, so a letter to
+  // `<space>.<was>@yaks.app` lands in the store a link to `/<was>/` reaches.
+  // A slug that was nobody's here has no such move to follow, and is refused.
+  let app = box.app
+    ? await dir.app(space, box.app) ?? await dir.former(space, box.app)
+    : await dir.home(space)
   if (!app) {
     throw new Refused(
       box.app ? `no mailbox for ${to}` : `${space.slug} has no front page: ` +
