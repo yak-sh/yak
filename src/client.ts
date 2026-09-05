@@ -37,7 +37,7 @@ import type {
   WorkClaimMutation,
 } from './mutation.ts'
 export type { EntityLiteral, LiteralRef } from './mutation.ts'
-import { idOf, SHORT, shortId, slugsOf } from './types.ts'
+import { EID, idOf, SHORT, shortId, slugsOf } from './types.ts'
 import { link, moves, typeOf } from './edge.ts'
 import { formatProp, parseProp, propAt, refOf } from './props.ts'
 import { local } from './time.ts'
@@ -1572,11 +1572,6 @@ let object = (v: unknown): v is Record<string, unknown> =>
 let owns = (v: object, key: string) =>
   Object.prototype.hasOwnProperty.call(v, key)
 
-// An eid a client is free to NAME an entity by: a uuid it minted, or the
-// content hash a blob (or commit) is its own name by. db.ts resolveId reads
-// the same two shapes as a whole eid.
-let MINTABLE = new RegExp(`${UUID.source}|^[0-9a-f]{64}$`, 'i')
-
 // The bundle shape lowered onto the older key/id/comps/deps literal, so one
 // compiler serves both: a `$` eid is a batch-local key, any other eid names an
 // existing entity, and each `edges` sentence files under its edge type.
@@ -1769,11 +1764,12 @@ export let normalizeLiterals = (
   for (let node of nodes) {
     let found = node.id ? external(node.id) : undefined
     // Clients mint their own eids, so an `entity.eid` already SHAPED like one
-    // — a uuid, or the content hash a blob or commit is named by — that names
-    // nothing yet and carries comps DEFINES the entity here, the same freedom
-    // the flat wire has. A human id, a bare num, or a slug that resolves to
-    // nothing is a typo, and an eid with nothing to define is a reference.
-    let coined = !found && node.id && MINTABLE.test(node.id) &&
+    // — a uuid, or the hash a blob or commit is named by (types.ts EID) —
+    // that names nothing yet and carries comps DEFINES the entity here, the
+    // same freedom the flat wire has. A human id, a bare num, or a slug that
+    // resolves to nothing is a typo, and an eid with nothing to define is a
+    // reference.
+    let coined = !found && node.id && EID.test(node.id) &&
         Object.keys(node.comps).length
       ? node.id.toLowerCase()
       : undefined

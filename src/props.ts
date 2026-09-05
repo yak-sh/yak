@@ -4,6 +4,7 @@ import {
   type Change,
   comps,
   derivedProps,
+  EID,
   type PropType,
   stamped,
 } from './types.ts'
@@ -106,9 +107,6 @@ let fail = (p: Prop, grammar: string, v: unknown): never => {
 }
 
 let DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i
-let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-// A blob's eid is its content hash (64 hex); a commit's is its git sha (40).
-let SHA = /^[0-9a-f]{64}$|^[0-9a-f]{40}$/i
 
 let number = (p: Prop, v: unknown): number => {
   let s = typeof v == 'string' ? v.trim() : String(v)
@@ -177,9 +175,9 @@ let eid = (p: Prop, v: unknown, ctx: PropContext): string => {
   let s = String(
     v && typeof v == 'object' && 'eid' in v ? (v as { eid: unknown }).eid : v,
   ).trim()
-  if (UUID.test(s) || SHA.test(s)) return s.toLowerCase()
+  if (EID.test(s)) return s.toLowerCase()
   let found = ctx.resolve?.(s)
-  if (found && (UUID.test(found) || SHA.test(found))) return found.toLowerCase()
+  if (found && EID.test(found)) return found.toLowerCase()
   let target = typeof p.type == 'object' && 'eid' in p.type ? p.type.eid : ''
   let near = ctx.near?.(s, target)
   if (near) throw new Error(`no ${noun(p)} '${s}' — did you mean ${near}?`)

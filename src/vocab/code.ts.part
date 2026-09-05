@@ -255,7 +255,14 @@ export let shortId = (eid: string) => eid.slice(0, 8)
 // group, so a case-folded string prefix-match (or a sargable PK range) finds
 // the entity. Min 6 so a stray one- or two-char token doesn't "resolve".
 export let SHORT = /^[0-9a-f]{6,8}$/i
-export let idOf = (e: { eid: string; kind: string; num?: number | null }) =>
+// A WHOLE eid, in every shape a client may name an entity by: the uuid it
+// mints, or the hash a content-addressed entity is its own name by — a
+// blob's sha-256 (64 hex), a commit's git sha (40). One spelling for every
+// id door, so none of them can drift out of knowing a shape the others take
+// (db.ts resolveId, props.ts reference, client.ts minting).
+export let EID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$|^[0-9a-f]{40}$|^[0-9a-f]{64}$/i
+export let idOf =(e: { eid: string; kind: string; num?: number | null }) =>
   e.num
     ? `${prefix[e.kind] ?? e.kind[0].toUpperCase()}-${e.num}`
     : shortId(e.eid)

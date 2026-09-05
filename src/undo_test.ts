@@ -162,6 +162,17 @@ Deno.test('a bundle mints at the eid its author chose', () => {
   let spine = compOf(db, mine, 'entity') as { eid: string; num: number }
   assertEquals(spine.eid, mine)
   assertEquals(typeof spine.num, 'number')
+  // A content-addressed entity names itself by its hash, and the bundle door
+  // mints at that shape too: a commit's eid IS its git sha (40 hex), so
+  // recording the same revision twice finds the one entity.
+  let sha = 'b'.repeat(40)
+  mutate(db, {
+    entities: [{
+      entity: { eid: sha },
+      commit: { target: mine, sha, repo: 'tasks', message: 'a commit' },
+    }],
+  })
+  assertEquals(compOf(db, sha, 'commit')?.message, 'a commit')
 })
 
 Deno.test('a bundle wearing tombstone kills the entity; later bundles are void', () => {

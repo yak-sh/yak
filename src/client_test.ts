@@ -1105,10 +1105,14 @@ Deno.test('normalizeLiterals: a bundle mints at a client-chosen eid', () => {
   // canonical lowercase out, the shape db.ts stores.
   let mine = 'CCCCCCCC-0000-4000-8000-0000000000AA'
   let hash = 'a'.repeat(64)
+  // A commit is named by its git sha (40 hex) the way a blob is by its
+  // content hash (64) — both are whole eids the bundle door may mint at.
+  let sha = 'B'.repeat(40)
   assertEquals(
     plan([
       { entity: { eid: mine }, doc: { title: 'mine' } },
       { comment: { target: mine, body: 'about mine' } },
+      { entity: { eid: sha }, commit: { target: mine, sha, repo: 'tasks' } },
       // The old literal shape's `id` follows the same rule.
       { id: hash, comps: { blob: { bytes: 1 } } },
     ]).changes,
@@ -1118,6 +1122,11 @@ Deno.test('normalizeLiterals: a bundle mints at a client-chosen eid', () => {
         eid: 'cccccccc-0000-4000-8000-00000000000f',
         name: 'comment',
         comp: { target: mine.toLowerCase(), body: 'about mine' },
+      },
+      {
+        eid: sha.toLowerCase(),
+        name: 'commit',
+        comp: { target: mine.toLowerCase(), sha, repo: 'tasks' },
       },
       { eid: hash, name: 'blob', comp: { bytes: 1 } },
     ],

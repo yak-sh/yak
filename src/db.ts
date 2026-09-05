@@ -21,6 +21,7 @@ import {
   comps,
   deaths,
   type Dep,
+  EID,
   governed,
   type Hit,
   idOf,
@@ -2420,7 +2421,7 @@ export let resolveId = (
   }
   let low = id.toLowerCase()
   // A full eid: a uuid, a blob's content hash, or a commit's git sha.
-  if (UUIDRE.test(id) || CONTENT_EID.test(id) || SHA_EID.test(id)) {
+  if (EID.test(id)) {
     let hit = (prep(db, 'select eid from entity where eid = ?').get(low) as
       | { eid: string }
       | undefined)?.eid
@@ -2500,10 +2501,8 @@ export let human = (db: Sql, eid: string): string => {
 
 let ADDR = /@/
 let UUIDRE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// A blob's eid IS its content hash, so the same bytes are one entity.
 let CONTENT_EID = /^[0-9a-f]{64}$/i
-// A commit's eid IS its git sha (the way a blob's is its content hash), so
-// recording the same revision twice finds the same entity.
-let SHA_EID = /^[0-9a-f]{40}$/i
 
 // The entity already wearing this address: an address-book `email`, or an
 // id-shaped fleet address naming one by its human id (S-31@<fleet> → that
