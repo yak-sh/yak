@@ -94,25 +94,48 @@ export type Caller = { person: string; via: 'session' | 'oauth' }
 // configuration `fetch` runs, so the two never disagree.
 let api = (env: Env) => getOAuthApi<Env>(opts(env), env)
 
-// THE contract every other part reads (mcp.ts swaps its stub for this import):
-// who is asking, by session cookie or by bearer token, or nobody. It answers
-// an identity and never a permission — what a person may do in a space is
-// their membership (session.ts, directory.ts).
-export let withAuth = async (
+// Who is asking, and whether anybody TRIED: `who` is the caller — by session
+// cookie or by bearer token — and `tried` says a credential was presented at
+// all. They are two different answers and a lazy door needs both: a token that
+// expired, was revoked, or was minted for somebody else is not a caller, but
+// it is not an anonymous request either, and MCP requires such a caller be
+// answered 401 with the challenge rather than quietly served the surface a
+// stranger gets (T-34344). Verification happens once, here, so nobody has to
+// re-derive the difference from the headers.
+export let asking = async (
   env: Env,
   req: Request,
-): Promise<Caller | null> => {
-  let bearer = /^Bearer\s+(\S+)$/i.exec(req.headers.get('authorization') ?? '')
+): Promise<{ who: Caller | null; tried: boolean }> => {
+  let said = req.headers.get('authorization') ?? ''
+  let cookied = cookieValue(req.headers.get('cookie'))
+  // An `Authorization` header we cannot even parse is still a credential
+  // offered: a caller speaking a scheme this door does not take is refused,
+  // not mistaken for nobody.
+  let tried = !!said || !!cookied
+  let bearer = /^Bearer\s+(\S+)$/i.exec(said)
   if (bearer) {
     let token = await api(env).unwrapToken<Props>(bearer[1])
     let person = token?.grant.props?.person
-    return person ? { person, via: 'oauth' } : null
+    return { who: person ? { person, via: 'oauth' } : null, tried }
   }
-  let token = cookieValue(req.headers.get('cookie'))
-  if (!token || !env.SESSION_SECRET) return null
-  let claims = await verify(token, env.SESSION_SECRET)
-  return claims ? { person: claims.person, via: 'session' } : null
+  if (!cookied || !env.SESSION_SECRET) return { who: null, tried }
+  let claims = await verify(cookied, env.SESSION_SECRET)
+  return {
+    who: claims ? { person: claims.person, via: 'session' } : null,
+    tried,
+  }
 }
+
+// THE contract every other part reads (mcp.ts swaps its stub for this import):
+// who is asking, by session cookie or by bearer token, or nobody. It answers
+// an identity and never a permission — what a person may do in a space is
+// their membership (session.ts, directory.ts). A door that must refuse a
+// credential that did not verify reads `asking` above; a page that only ever
+// draws a sign-in box has nothing to do with the difference.
+export let withAuth = async (
+  env: Env,
+  req: Request,
+): Promise<Caller | null> => (await asking(env, req)).who
 
 // The RFC 9728 challenge a protected resource answers an anonymous caller
 // with: where to find the metadata that names this platform's authorization

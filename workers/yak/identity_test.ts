@@ -408,6 +408,28 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     assertEquals(rpc.status, 200)
     assert((await rpc.json()).result, 'the connector answered the bearer')
 
+    // And the same token once it no longer verifies — one character of it
+    // changed is what an expired, revoked or foreign one reads as, since every
+    // one of them is a token the provider cannot find — is REFUSED there, not
+    // quietly handed the surface a stranger gets: 401, with the challenge that
+    // sends the connector back through this flow (T-34344).
+    let stale = await k.at('yaks.app', '/mcp', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${bearer.slice(0, -1)}${
+          bearer.endsWith('a') ? 'b' : 'a'
+        }`,
+      },
+      body: '{"jsonrpc":"2.0","id":1,"method":"tools/list"}',
+    })
+    assertEquals(stale.status, 401)
+    assertMatch(
+      stale.headers.get('www-authenticate') ?? '',
+      /resource_metadata=/,
+    )
+    await stale.body?.cancel()
+
     // And with one let in, the block on their space page shuts: the steps are
     // still there — a SECOND assistant is added the same way — but they are
     // one line to open rather than the page (T-34236).

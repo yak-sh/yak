@@ -15,6 +15,7 @@ import {
 // Schema, so what proves it describes a batch is a JSON Schema validator.
 import { Ajv } from 'ajv'
 import { slow, until } from '../../src/testing.ts'
+import { COOKIE, sign } from '../../src/token.ts'
 import {
   arrives,
   client,
@@ -1355,6 +1356,46 @@ slow('the door before anyone signs in', async () => {
     })
     assertEquals(bad.status, 401)
     await bad.body?.cancel()
+    // A credential that did not VERIFY is not an anonymous caller (T-34344).
+    // Nobody at all gets the public surface; somebody whose token expired, was
+    // revoked, was minted for another resource, or is simply garbage gets the
+    // 401 and the challenge — the answer MCP's spec requires, and the only one
+    // Claude reads as "sign in again", since it honors no `WWW-Authenticate`
+    // on a 200. Answered on `tools/list`, which is exactly what a stranger IS
+    // served, so nothing here can pass by falling through to the public list.
+    let offered = async (headers: Record<string, string>) => {
+      let r = await k.at('yaks.app', '/mcp', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...headers },
+        body: '{"jsonrpc":"2.0","id":1,"method":"tools/list"}',
+      })
+      assertEquals(r.status, 401, JSON.stringify(headers))
+      assertEquals(r.headers.get('www-authenticate'), challenge)
+      assertEquals((await r.json()).error.code, 'unauthorized')
+    }
+    await offered({ authorization: 'Bearer nope' })
+    // Shaped like one of ours and known to nobody: what a token this provider
+    // minted reads as once its grant is revoked or its record has expired out
+    // of the store, and what somebody else's server mints for their own
+    // resource.
+    await offered({
+      authorization:
+        `Bearer ${crypto.randomUUID()}:${crypto.randomUUID()}:${crypto.randomUUID()}`,
+    })
+    // A scheme this door does not take at all is still a caller who tried.
+    await offered({ authorization: 'Basic bm9wZTpub3Bl' })
+    // And the cookie half of the same rule: a session that ran out.
+    await offered({
+      cookie: `${COOKIE}=${await sign(
+        {
+          person: jeff.person,
+          space: null,
+          exp: Math.floor(Date.now() / 1000) - 60,
+        },
+        k.secret,
+      )}`,
+    })
+
     // And the stream, which is a person's own: there is no public one.
     let stream = await k.at('yaks.app', '/mcp', {
       headers: { accept: 'text/event-stream' },

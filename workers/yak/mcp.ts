@@ -34,13 +34,15 @@
 // break in an app goes unseen by the agent that builds it (T-32362). That
 // rides on the tool now (agent.ts), not on this door.
 //
-// Who is asking is identity.ts's `withAuth`: the platform session cookie a
+// Who is asking is identity.ts's `asking`: the platform session cookie a
 // browser carries, or the OAuth bearer an agent carries, one answer either
-// way. It is deliberately NOT the vouched `x-yak-person` header — the kernel
-// sets that header on what it hands an app, and this door is at the apex
-// reading a request straight off the internet, where the header is only ever
-// a client's claim about itself. A 401 carries identity's `WWW-Authenticate`
-// challenge, the line an MCP client follows into the OAuth flow.
+// way — and beside it whether a credential was offered at all, because this
+// door treats the two refusals differently. It is deliberately NOT the vouched
+// `x-yak-person` header — the kernel sets that header on what it hands an app,
+// and this door is at the apex reading a request straight off the internet,
+// where the header is only ever a client's claim about itself. A 401 carries
+// identity's `WWW-Authenticate` challenge, the line an MCP client follows into
+// the OAuth flow.
 //
 // Nobody at all is answered too, by preauth.ts (T-33030): what this platform
 // is, and the guide, which the web already serves to anybody who asks for it.
@@ -57,7 +59,7 @@ import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { INSTRUCTIONS, pageFor } from './guide.ts'
-import { unauthorized, withAuth } from './identity.ts'
+import { asking, unauthorized } from './identity.ts'
 import { callDeclared, listDeclared, listViews, readView } from './declared.ts'
 import { answer, asset, type Doc, DOCS } from './preauth.ts'
 import { PROMPTS } from './prompts.ts'
@@ -321,7 +323,14 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // Who is asking, if anybody. An anonymous request costs nothing to find
   // out — no header to unwrap, no cookie to verify (identity.ts) — and what
   // it gets is the pre-auth surface below rather than the door in its face.
-  let auth = await withAuth(env, req)
+  let { who: auth, tried } = await asking(env, req)
+  // A credential that did not verify is NOT an anonymous caller: an expired or
+  // revoked token, or one minted for something else, is refused here with the
+  // 401 and the challenge, before the pre-auth surface can answer it. The spec
+  // requires that 401, and Claude ignores `WWW-Authenticate` on a 200 — so
+  // answering the public surface instead is a connector silently losing every
+  // tool where it should have been asked to sign in again (T-34344).
+  if (!auth && tried) return unauthorized(req)
   // The GET is the session's STREAM (stream.ts): a client holds it open to
   // hear what the server says between its own calls, which today is one
   // thing — that its tool list moved, because an app of theirs deployed new
