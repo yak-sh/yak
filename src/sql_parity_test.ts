@@ -11,15 +11,13 @@
 // reference-deref path, time stamps. If @yaks/sql disagrees with src/sql.ts on
 // any line below, the two answer different questions and the test says so.
 //
-// The fleet Vocab is converted mechanically from the fleet manifests (the same
-// converter vocab/parity_test.ts uses — fleet glue, so it lives in the test),
-// then loaded through @yaks/vocab and handed to @yaks/sql with the fleet's
-// derived-column registrations (task.status, updated.at).
+// The fleet Vocab is converted mechanically from the fleet manifests by the
+// shared fleet glue (src/vocab/fleet_vocab.ts), loaded through @yaks/vocab and
+// handed to @yaks/sql with the fleet's derived-column registrations
+// (task.status, updated.at).
 
 import { assert, assertEquals } from '@std/assert'
 import { parse } from '@yaks/query'
-import { loadVocab } from '@yaks/vocab'
-import type { PropSchema, VocabDoc } from '@yaks/vocab'
 import { compile, Unsupported } from '@yaks/sql'
 import { derived as fleetDerived } from './sql_derived.ts'
 
@@ -28,147 +26,13 @@ import { aggregateSql, countSql, select, where, windowed } from './sql.ts'
 import { run } from './relation.ts'
 import { textBlob } from './db.ts'
 import { isRef } from './props.ts'
-import { derivedProps } from './types.ts'
 import { open } from './store/sqlite.ts'
+import { fleetVocab } from './vocab/fleet_vocab.ts'
 
-import canvas from './vocab/manifests/canvas.json' with { type: 'json' }
-import capture from './vocab/manifests/capture.json' with {
-  type: 'json',
-}
-import comms from './vocab/manifests/comms.json' with { type: 'json' }
-import identity from './vocab/manifests/identity.json' with {
-  type: 'json',
-}
-import kernel from './vocab/manifests/kernel.json' with { type: 'json' }
-import mail from './vocab/manifests/mail.json' with { type: 'json' }
-import platform from './vocab/manifests/platform.json' with {
-  type: 'json',
-}
-import roles from './vocab/manifests/roles.json' with { type: 'json' }
-import sessions from './vocab/manifests/sessions.json' with {
-  type: 'json',
-}
-import work from './vocab/manifests/work.json' with { type: 'json' }
-
-// ---- the converter (copied from src/vocab/parity_test.ts: fleet glue) ------
-
-type ManifestType =
-  | string
-  | { enum: readonly string[] | string; aliases?: Record<string, string> }
-  | { eid: string; death: string }
-  | { well: string }
-  | { text: string }
-type ManifestComp = {
-  kind?: boolean
-  before?: string[]
-  prefix?: string
-  by_name?: boolean
-  wire?: boolean
-  log?: boolean
-  cols?: Record<string, ManifestType>
-  stamped?: Record<string, ManifestType>
-}
-type Manifest = {
-  name: string
-  enums?: Record<string, { values: string[] }>
-  comps: Record<string, ManifestComp>
-}
-
-let manifests: Manifest[] = [
-  canvas,
-  capture,
-  comms,
-  identity,
-  kernel,
-  mail,
-  platform,
-  roles,
-  sessions,
-  work,
-] as Manifest[]
-
-let enums: Record<string, string[]> = {}
-for (let m of manifests) {
-  for (let [name, e] of Object.entries(m.enums ?? {})) enums[name] = e.values
-}
-
-let SCALARS: Record<string, PropSchema> = {
-  text: { type: 'string' },
-  body: { type: 'string', store: 'blob' },
-  number: { type: 'number' },
-  priority: { type: 'number', format: 'priority' },
-  bool: { type: 'boolean' },
-  query: { type: 'string', format: 'query' },
-  time: { type: 'string', format: 'date-time' },
-  url: { type: 'string', format: 'uri' },
-}
-
-let propOf = (t: ManifestType): PropSchema => {
-  if (typeof t == 'string') return { ...SCALARS[t] }
-  if ('enum' in t) {
-    let values = typeof t.enum == 'string' ? enums[t.enum] : t.enum
-    return { enum: values, ...(t.aliases ? { aliases: t.aliases } : {}) }
-  }
-  if ('eid' in t) return { type: 'string', ref: t.eid, death: t.death }
-  return { type: 'string' }
-}
-
-let shy = new Set([
-  'fork.from',
-  'accept.body',
-  'edge.from',
-  'edge.to',
-  'member.person',
-  'pane.parent',
-  'session.parent',
-])
-
-let compOf = (spec: ManifestComp): PropSchema => ({
-  type: 'object',
-  ...(spec.kind ? { kind: true } : {}),
-  ...(spec.before ? { before: spec.before } : {}),
-  ...(spec.wire === false ? { wire: false } : {}),
-  ...(spec.log ? { bare: false } : {}),
-  ...(spec.prefix ? { prefix: spec.prefix } : {}),
-  ...(spec.by_name ? { by_name: true } : {}),
-  properties: {
-    ...Object.fromEntries(
-      Object.entries(spec.cols ?? {}).map(([p, t]) => [p, propOf(t)]),
-    ),
-    ...Object.fromEntries(
-      Object.entries(spec.stamped ?? {}).map((
-        [p, t],
-      ) => [p, { ...propOf(t), stamped: true }]),
-    ),
-  },
-})
-
-let docOf = (m: Manifest): VocabDoc => ({
-  $vocabulary: {
-    'https://yaks.sh/vocab/core': true,
-    'https://yaks.sh/vocab/fleet': true,
-  },
-  title: m.name,
-  $defs: Object.fromEntries(
-    Object.entries(m.comps).map(([name, spec]) => [name, compOf(spec)]),
-  ),
-})
-
-let docs = manifests.map(docOf)
-for (let d of docs) {
-  for (let [name, def] of Object.entries(d.$defs ?? {})) {
-    for (let [p, s] of Object.entries(def.properties ?? {})) {
-      if (shy.has(`${name}.${p}`)) s.bare = false
-    }
-  }
-}
-for (let [comp, ps] of Object.entries(derivedProps)) {
-  let def = docs.map((d) => d.$defs?.[comp]).find((x) => x)
-  for (let [p, t] of Object.entries(ps)) {
-    def!.properties![p] = { ...propOf(t as ManifestType), persist: false }
-  }
-}
-let V = loadVocab(docs)
+// The fleet vocabulary, converted and loaded through the shared fleet glue
+// (src/vocab/fleet_vocab.ts) — the same conversion the @yaks/vocab parity test
+// and the @yaks/sqlite integration spike load.
+let V = fleetVocab()
 
 // ---- the graph (the fleet compiler's own fixture) --------------------------
 

@@ -2,8 +2,8 @@
 // manifests into the @yaks/vocab JSON Schema format, loaded through the
 // runtime, must answer exactly what the fleet's generated src/types.ts (and
 // src/query.ts routing) answer today — same comps, same column types, same
-// kindOrder, same death worklists, same routing. The converter lives HERE, in
-// the test, because it is fleet glue: the package ships zero components.
+// kindOrder, same death worklists, same routing. The converter is fleet glue
+// (the package ships zero components); it lives in ./fleet_vocab.ts, shared.
 //
 // Known, deliberate divergences (the fleet layers rules the meta-model does
 // not carry): the log partition (log comps don't claim bare spellings), the
@@ -11,166 +11,22 @@
 // (statusOf) — the derived column itself is declared here as persist: false.
 
 import { assert, assertEquals } from '@std/assert'
-import { loadVocab } from '@yaks/vocab'
-import type { Column, PropSchema, VocabDoc } from '@yaks/vocab'
+import type { Column } from '@yaks/vocab'
 import {
   comps,
   deaths,
-  derivedProps,
   kindOrder,
   prefix,
   type PropType,
   stamped,
 } from '../types.ts'
 import { route } from '../query.ts'
-import canvas from './manifests/canvas.json' with { type: 'json' }
-import capture from './manifests/capture.json' with {
-  type: 'json',
-}
-import comms from './manifests/comms.json' with { type: 'json' }
-import identity from './manifests/identity.json' with {
-  type: 'json',
-}
-import kernel from './manifests/kernel.json' with { type: 'json' }
-import mail from './manifests/mail.json' with { type: 'json' }
-import platform from './manifests/platform.json' with {
-  type: 'json',
-}
-import roles from './manifests/roles.json' with { type: 'json' }
-import sessions from './manifests/sessions.json' with {
-  type: 'json',
-}
-import work from './manifests/work.json' with { type: 'json' }
+import { fleetVocab } from './fleet_vocab.ts'
 
-// ---- the converter: one manifest comp spec → one $defs object schema -------
-
-type ManifestType =
-  | string
-  | { enum: readonly string[] | string; aliases?: Record<string, string> }
-  | { eid: string; death: string }
-  | { well: string }
-  | { text: string }
-type ManifestComp = {
-  kind?: boolean
-  before?: string[]
-  prefix?: string
-  by_name?: boolean
-  wire?: boolean
-  log?: boolean
-  cols?: Record<string, ManifestType>
-  stamped?: Record<string, ManifestType>
-}
-type Manifest = {
-  name: string
-  enums?: Record<string, { values: string[] }>
-  comps: Record<string, ManifestComp>
-}
-
-let manifests: Manifest[] = [
-  canvas,
-  capture,
-  comms,
-  identity,
-  kernel,
-  mail,
-  platform,
-  roles,
-  sessions,
-  work,
-] as Manifest[]
-
-// Named enums resolve across all manifests, the way gen.ts resolves them.
-let enums: Record<string, string[]> = {}
-for (let m of manifests) {
-  for (let [name, e] of Object.entries(m.enums ?? {})) enums[name] = e.values
-}
-
-let SCALARS: Record<string, PropSchema> = {
-  text: { type: 'string' },
-  body: { type: 'string', store: 'blob' },
-  number: { type: 'number' },
-  priority: { type: 'number', format: 'priority' },
-  bool: { type: 'boolean' },
-  query: { type: 'string', format: 'query' },
-  time: { type: 'string', format: 'date-time' },
-  url: { type: 'string', format: 'uri' },
-}
-
-let propOf = (t: ManifestType): PropSchema => {
-  if (typeof t == 'string') return { ...SCALARS[t] }
-  if ('enum' in t) {
-    let values = typeof t.enum == 'string' ? enums[t.enum] : t.enum
-    return { enum: values, ...(t.aliases ? { aliases: t.aliases } : {}) }
-  }
-  if ('eid' in t) return { type: 'string', ref: t.eid, death: t.death }
-  // a well ({well} in a manifest, {text} in types.ts) dissolves: completion
-  // draws from examples ∪ the column's live distinct values
-  return { type: 'string' }
-}
-
-// The fleet's bare-spelling suppressions, said declaratively: a log comp never
-// claims bare spellings (query.ts filters sessionComps out of routing), and the
-// curated bareShy columns (plus the edge-vocabulary `parent` refs) yield their
-// bare word to the concept that already owns it.
-let shy = new Set([
-  'fork.from',
-  'accept.body',
-  'edge.from',
-  'edge.to',
-  'member.person',
-  'pane.parent',
-  'session.parent',
-])
-
-let compOf = (spec: ManifestComp): PropSchema => ({
-  type: 'object',
-  ...(spec.kind ? { kind: true } : {}),
-  ...(spec.before ? { before: spec.before } : {}),
-  ...(spec.wire === false ? { wire: false } : {}),
-  ...(spec.log ? { bare: false } : {}),
-  ...(spec.prefix ? { prefix: spec.prefix } : {}),
-  ...(spec.by_name ? { by_name: true } : {}),
-  properties: {
-    ...Object.fromEntries(
-      Object.entries(spec.cols ?? {}).map(([p, t]) => [p, propOf(t)]),
-    ),
-    ...Object.fromEntries(
-      Object.entries(spec.stamped ?? {}).map((
-        [p, t],
-      ) => [p, { ...propOf(t), stamped: true }]),
-    ),
-  },
-})
-
-let docOf = (m: Manifest): VocabDoc => ({
-  $vocabulary: {
-    'https://yaks.sh/vocab/core': true,
-    'https://yaks.sh/vocab/fleet': true,
-  },
-  title: m.name,
-  $defs: Object.fromEntries(
-    Object.entries(m.comps).map(([name, spec]) => [name, compOf(spec)]),
-  ),
-})
-
-let docs = manifests.map(docOf)
-for (let d of docs) {
-  for (let [name, def] of Object.entries(d.$defs ?? {})) {
-    for (let [p, s] of Object.entries(def.properties ?? {})) {
-      if (shy.has(`${name}.${p}`)) s.bare = false
-    }
-  }
-}
-// The fleet's derived columns (types.ts derivedProps) are hand-written fleet
-// logic, not manifest data: declared here as computed (persist: false) enum
-// columns — readable, routable, never writable, value computed downstream.
-for (let [comp, ps] of Object.entries(derivedProps)) {
-  let def = docs.map((d) => d.$defs?.[comp]).find((x) => x)
-  for (let [p, t] of Object.entries(ps)) {
-    def!.properties![p] = { ...propOf(t), persist: false }
-  }
-}
-let v = loadVocab(docs)
+// The converter that maps the fleet manifests into @yaks/vocab documents lives
+// in fleet_vocab.ts — one truth, shared by this test, the @yaks/sql parity test,
+// and the @yaks/sqlite integration spike.
+let v = fleetVocab()
 
 // ---- the canonical type spelling both sides collapse to --------------------
 
