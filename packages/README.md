@@ -52,6 +52,10 @@ In dependency order:
   `created`/`changed`/`removed` handlers per component, run after the
   transaction, each isolated, with an optional durable ledger. The mechanism —
   it ships no effect of its own.
+- **[@yaks/member](./member)** — who belongs and what they may touch: a space
+  roster (`member`), per-thing grants (`grant`), an access mode (`access`), the
+  `precondition` hook that refuses a write the actor's role does not allow, and
+  the `canRead` a door consults before it answers a query.
 - **[@yaks/api](./api)** — the transport: a plain `Request` → `Response` handler
   over a graph (`/apply`, `/query`, `/ws`), where the door authenticates the
   writer, and a subscription is a saved query whose answer is pushed again when
@@ -116,6 +120,10 @@ on its own:
   batch MEANS, and this decides what to do about it once it is true — a
   notification, a receipt, a spawned process — registered per component, run
   post-commit, and isolated so a broken observer never breaks a write.
+- `@yaks/member` is the other kind of rule over the same `apply()`: not what a
+  batch MEANS but who is allowed to say it, enforced as a `precondition` hook so
+  a refusal rolls the batch back, and mirrored as a `canRead` the door asks for
+  the reads that never reach `apply()` at all.
 - `@yaks/api` puts the whole stack behind three routes. It composes
   `@yaks/graph` (for writes) with a storage adapter (for reads) and
   `@yaks/match` (to decide cheaply which subscription a committed batch
