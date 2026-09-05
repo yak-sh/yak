@@ -9,6 +9,9 @@
 //   it refuses transactions as SQL     `begin`/`savepoint`/`release` are
 //                                      errors; `transactionSync` is the only
 //                                      transaction, and it nests
+//   it refuses Cloudflare's own tables  a statement naming `_cf_KV` throws
+//                                      SQLITE_AUTH, the way workerd's
+//                                      authorizer does — see {@link prohibited}
 //   a blob comes back as an ArrayBuffer
 //
 // so a bug this stand-in cannot see is a bug the runtime would not have shown
@@ -17,7 +20,7 @@
 import { Database } from '@db/sqlite'
 import type { Vocab } from '@yaks/vocab'
 import { shop } from '../sqlite/harness.ts'
-import type { DurableStorage, SqlValue } from './sql.ts'
+import { type DurableStorage, prohibited, type SqlValue } from './sql.ts'
 import { storage, type Store } from './store.ts'
 
 export { shop }
@@ -26,6 +29,16 @@ export { shop }
 // and attaching or vacuuming another database is not on offer.
 let REFUSED =
   /^\s*(begin|commit|end|rollback|savepoint|release|attach|detach|vacuum)\b/i
+
+// workerd's SQL authorizer, at the one place it bites an object that reads its
+// own schema: a statement that NAMES a table Cloudflare owns is refused — read,
+// write or drop alike — while `sqlite_master` still lists it. There is no
+// authorizer callback to hang off @db/sqlite, so the identifiers a statement
+// mentions are what is checked; the runtime names the column too, which nothing
+// here can know.
+let WORD = /[A-Za-z_][A-Za-z0-9_$]*/g
+let refused = (query: string): string | undefined =>
+  query.replaceAll('"', ' ').match(WORD)?.find(prohibited)
 
 let ok = (value: unknown): value is SqlValue =>
   value === null || typeof value == 'string' || typeof value == 'number' ||
@@ -48,14 +61,16 @@ let out = (row: Record<string, unknown>) => {
 /**
  * A stand-in for `ctx.storage` over a fresh in-memory database.
  *
- * Two members beyond {@link DurableStorage}, because the runtime has them and
- * an object may ask: `databaseSize`, how many bytes it holds, and `deleteAll`,
- * the one way to empty it — dropping the tables leaves metadata behind, and an
- * object whose storage is empty ceases to exist.
+ * Three members beyond {@link DurableStorage}. Two because the runtime has
+ * them and an object may ask: `databaseSize`, how many bytes it holds, and
+ * `deleteAll`, the one way to empty it — dropping the tables leaves metadata
+ * behind, and an object whose storage is empty ceases to exist. The third,
+ * `beneath`, is the runtime's own hand rather than the object's.
  */
 export let durable = (): DurableStorage & {
   sql: { databaseSize: number }
   deleteAll(): Promise<void>
+  beneath(query: string): Record<string, unknown>[]
 } => {
   let db = new Database(':memory:')
   let depth = 0
@@ -98,6 +113,8 @@ export let durable = (): DurableStorage & {
             `not authorized: use transactionSync, not \`${query.trim()}\``,
           )
         }
+        let no = refused(query)
+        if (no) throw new Error(`access to ${no} is prohibited: SQLITE_AUTH`)
         let rows = run(query, bindings).map(out)
         return { toArray: () => rows, [Symbol.iterator]: () => rows.values() }
       },
@@ -128,6 +145,11 @@ export let durable = (): DurableStorage & {
       }
       return Promise.resolve()
     },
+    // A statement run BENEATH the authorizer, which is the runtime's own hand:
+    // planting `_cf_KV` and reading it back are both things workerd refuses to
+    // an object and does itself. The only door a test has to what every
+    // deployed object is carrying.
+    beneath: (query: string) => run(query, []),
     // Nested savepoints, which is what the runtime's own transaction is: an
     // inner throw rolls back only the inner run.
     transactionSync: (body) => {

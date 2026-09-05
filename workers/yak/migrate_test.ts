@@ -12,11 +12,11 @@
 // SLOW tier: every one of these plants the fleet's whole 328-op schema to have
 // something to migrate, which is a third of a second an object — the cost of
 // the thing under test, not of the setup around it.
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertThrows } from '@std/assert'
 import { slow } from '../../src/testing.ts'
 import { blobSchema } from '@yaks/blob'
 import type { Bundle } from '@yaks/graph'
-import type { Wire } from '@yaks/durable-object'
+import { reserved, type Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/harness.ts'
 import { edgeEid } from '@yaks/edge'
 import { schema } from '@yaks/sqlite'
@@ -253,6 +253,46 @@ slow('an app store carries every row across, and reconciles', async () => {
   let rows = rowsIn(files.held)
   assert(rows.journal_tx.length > 0, 'the journal is archived')
   assert(rows.doc.length > 0, 'the old doc rows are archived')
+})
+
+slow("the runtime's own table is not the object's to move", async () => {
+  let ctx = state()
+  await seedApp(ctx)
+
+  // What every DEPLOYED object carries and no probe ever had (T-34019): the
+  // table behind `ctx.storage.kv`, which the old store kept everything it
+  // remembered in. `sqlite_master` lists it like any other and the authorizer
+  // then refuses to read it, so a pass that enumerated tables and selected from
+  // each threw before a row moved — and the object served 503 for its lifetime.
+  ctx.storage.beneath(
+    'create table "_cf_KV" (key text primary key, value blob) without rowid',
+  )
+  ctx.storage.beneath(`insert into "_cf_KV" values ('name', 'ada/cookbook')`)
+  assertThrows(
+    () => ctx.storage.sql.exec('select * from "_cf_KV"'),
+    Error,
+    'SQLITE_AUTH',
+  )
+
+  let files = bucket()
+  let now = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
+  assertEquals((await now.query('.doc!', APP)).length, 3)
+  let report = reportIn(files.held)
+  assert(report.ok, report.message)
+
+  // Never enumerated: not exported, not carried, not even named as dropped.
+  // It was never this object's row to have an opinion about.
+  for (let table of Object.keys(rowsIn(files.held))) {
+    assert(!reserved(table), `${table} reached the export`)
+  }
+  for (let m of [...report.moved, ...report.dropped]) {
+    assert(!reserved(m.table), `${m.table} reached the report`)
+  }
+
+  // And it is standing where the runtime left it, with its row — proof the pass
+  // neither dropped it nor renamed it aside.
+  let held = ctx.storage.beneath('select count(*) as n from "_cf_KV"')
+  assertEquals(Number(held[0].n), 1)
 })
 
 slow('the second boot is a no-op', async () => {

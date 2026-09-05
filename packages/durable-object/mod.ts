@@ -46,6 +46,8 @@ export {
   driver,
   type DurableSql,
   type DurableStorage,
+  prohibited,
+  reserved,
   type SqlCursor,
   type SqlValue,
 } from './sql.ts'

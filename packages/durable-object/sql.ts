@@ -21,6 +21,26 @@ import type { Driver, Param, Row } from '@yaks/sqlite'
 /** A value the engine will bind: everything else is converted first. */
 export type SqlValue = ArrayBuffer | string | number | null
 
+/**
+ * A table CLOUDFLARE owns inside the object's SQLite. `_cf_KV` is the one
+ * behind `ctx.storage.kv` — the docs spell it `__cf_kv` and the engine reports
+ * it as `_cf_KV`, so neither the case nor the number of underscores is worth
+ * trusting — and `_cf_METADATA` is its neighbour.
+ *
+ * These are not merely uninteresting: workerd's SQL authorizer REFUSES them to
+ * the object's own statements — `access to _cf_KV.key is prohibited:
+ * SQLITE_AUTH` — while still listing them in `sqlite_master`. So anything that
+ * enumerates tables and then reads them must skip these or throw (T-34019).
+ */
+export let prohibited = (name: string): boolean => /^_+cf_/i.test(name)
+
+/**
+ * Every table the object does not own: {@link prohibited} plus SQLite's own
+ * catalogue, which is readable but is nobody's data.
+ */
+export let reserved = (name: string): boolean =>
+  prohibited(name) || /^sqlite_/i.test(name)
+
 /** What `exec` hands back — the rows, drained with `toArray()`. */
 export type SqlCursor<T> = Iterable<T> & {
   /** every remaining row, read at once */

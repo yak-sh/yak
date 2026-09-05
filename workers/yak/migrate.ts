@@ -55,7 +55,7 @@
 // is one of them: nothing in workers/yak installs @yaks/journal, so an app store
 // has no `batch`/`delta` table to carry `journal_tx`/`journal_change`/
 // `journal_field` into. It is archived to R2 with the rest and said so.
-import { driver, type DurableStorage } from '@yaks/durable-object'
+import { driver, type DurableStorage, reserved } from '@yaks/durable-object'
 import { edgeEid } from '@yaks/edge'
 import { sha256 } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
@@ -158,12 +158,21 @@ export let stale = (storage: DurableStorage): boolean =>
     ['journal_tx'],
   ).length > 0
 
+/**
+ * Every definition of one type that is THIS OBJECT'S — the single place the
+ * pass learns what tables there are, so both halves of it, the export and the
+ * carry, enumerate the same list.
+ *
+ * `reserved` (@yaks/durable-object) is what it is not: SQLite's catalogue and
+ * Cloudflare's own tables. The runtime lists `_cf_KV` here like any other and
+ * then refuses to read it — which is how a pass that took `sqlite_master` at
+ * its word threw `SQLITE_AUTH` in every deployed object and none of the local
+ * ones, where nothing creates that table (T-34019).
+ */
 let named = (d: Drive, type: string): { name: string; sql: string }[] =>
-  d.query(
-    `select name, sql from sqlite_master where type = ? ` +
-      `and name not like 'sqlite_%'`,
-    [type],
-  ).map((r) => ({ name: String(r.name), sql: String(r.sql ?? '') }))
+  d.query('select name, sql from sqlite_master where type = ?', [type])
+    .map((r) => ({ name: String(r.name), sql: String(r.sql ?? '') }))
+    .filter((t) => !reserved(t.name))
 
 let columns = (d: Drive, table: string): string[] =>
   d.query(`pragma table_info(${q(table)})`, []).map((r) => String(r.name))

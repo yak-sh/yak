@@ -702,6 +702,14 @@ export class Store {
     // object out, or writing it to the bucket — because the transaction takes
     // itself back and hands over a report instead. So nothing moved, and the
     // object says why rather than answering 500 to everything that arrives.
+    //
+    // A refusal is NOT retried on the next request, deliberately. Every way
+    // this refuses is a bug in the code or the environment — an unreadable
+    // table (T-34019), an unbound bucket, counts that do not reconcile — and
+    // none of them clear without a deploy, which restarts every object anyway.
+    // Retrying would only re-export the object's whole graph to R2 once per
+    // request, which is a bill and a bucket full of identical dumps for a
+    // refusal that is still going to refuse.
     let go = () =>
       this.#carrying(request).catch((e) => {
         this.#pending = false
