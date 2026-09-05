@@ -246,6 +246,50 @@ Deno.test('the order refuses cycles and unknown kinds', () => {
   assertThrows(() => kindOrder(['a'], () => ['ghost']), Error, 'not a kind')
 })
 
+Deno.test('indexes merge the column flag with the composite lists', () => {
+  let w = loadVocab({
+    $defs: {
+      space: { type: 'object', properties: { slug: { unique: true } } },
+      app: {
+        type: 'object',
+        unique: [['space', 'slug']],
+        index: [['space', 'version']],
+        properties: {
+          slug: { type: 'string' },
+          space: { type: 'string', ref: 'entity', death: 'cascade' },
+          version: { type: 'number' },
+          hot: { type: 'boolean', index: true },
+          // computed: no cell to index
+          rank: { type: 'number', persist: false, index: true },
+        },
+      },
+      alias: { type: 'object', properties: { slug: { type: 'string' } } },
+    },
+  })
+  assertEquals(w.indexes('space'), [{ cols: ['slug'], unique: true }])
+  assertEquals(w.indexes('app'), [
+    { cols: ['hot'], unique: false },
+    { cols: ['space', 'slug'], unique: true },
+    { cols: ['space', 'version'], unique: false },
+  ])
+  assertEquals(w.indexes('alias'), [])
+  assertEquals(w.indexes('nobody'), [])
+})
+
+Deno.test('one pair declared twice is one index, unique if either said so', () => {
+  let w = loadVocab({
+    $defs: {
+      shelf: {
+        type: 'object',
+        unique: [['aisle']],
+        index: [['aisle']],
+        properties: { aisle: { type: 'string', index: true } },
+      },
+    },
+  })
+  assertEquals(w.indexes('shelf'), [{ cols: ['aisle'], unique: true }])
+})
+
 Deno.test('a word has one home across documents', () => {
   assertThrows(
     () => loadVocab([slice, { $defs: { doc: { type: 'object' } } }]),

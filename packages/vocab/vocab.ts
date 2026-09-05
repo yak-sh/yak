@@ -15,6 +15,7 @@ import type {
   CompInfo,
   Death,
   Hop,
+  Index,
   PropSchema,
   Scalar,
   VocabDoc,
@@ -108,6 +109,9 @@ export type Vocab = {
   comp: (name: string) => CompInfo | undefined
   columns: (comp: string) => string[] // readable columns (writable ∪ stamped)
   column: (comp: string, prop: string) => Column | undefined
+  /** The indexes a component declares, merged from both spellings — see
+   * {@link Index}. A storage adapter renders them; nothing else reads them. */
+  indexes: (comp: string) => Index[]
   route: (prop: string) => { comp: string; prop: string }
   /** A dotted path → the hops it names. `facet` says the predicate is the bare
    * presence form (`.name!`), where a single segment naming a COMPONENT is that
@@ -123,6 +127,39 @@ export type Vocab = {
     value: Record<string, unknown>,
     opts?: { stamped?: boolean },
   ) => string[]
+}
+
+// The composite lists a component declares under one keyword. A boolean there
+// is the COLUMN spelling misplaced, and means nothing about the whole table, so
+// it reads as no list rather than a refusal the meta-schema already makes.
+let lists = (v: unknown): string[][] => Array.isArray(v) ? v as string[][] : []
+
+// A component's indexes, from the two spellings that declare them: a column's
+// own `unique`/`index` flag is that one column's index, and the component's
+// lists are the composites. Column flags come first, in declaration order, then
+// the composites; a pair of columns declared twice is ONE index, unique if
+// either spelling asked for uniqueness.
+let indexesOf = (
+  comp: PropSchema | undefined,
+  cols: (prop: string) => Column | undefined,
+): Index[] => {
+  if (!comp) return []
+  let out = new Map<string, Index>()
+  let add = (names: string[], unique: boolean) => {
+    if (!names.length) return
+    let key = names.join(',')
+    let had = out.get(key)
+    out.set(key, { cols: names, unique: unique || !!had?.unique })
+  }
+  for (let [prop, s] of Object.entries(comp.properties ?? {})) {
+    // A computed column has no cell to index.
+    if (!cols(prop)?.persist) continue
+    if (s.unique === true) add([prop], true)
+    else if (s.index === true) add([prop], false)
+  }
+  for (let names of lists(comp.unique)) add(names, true)
+  for (let names of lists(comp.index)) add(names, false)
+  return [...out.values()]
 }
 
 // The spine, and the identity column no vocabulary authors. A document declares
@@ -260,6 +297,7 @@ export let loadVocab = (
     comp: infoOf,
     columns: (comp) => routes.get(comp) ?? [],
     column: colFor,
+    indexes: (comp) => indexesOf(defs[comp], (p) => colFor(comp, p)),
     // Bare prop → its owning component. A stamped lifecycle column never steals
     // a bare spelling from a live one (`.status` stays the task's even though
     // sessions carry a stamped status), so non-stamped owners are preferred

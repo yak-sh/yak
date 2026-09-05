@@ -7,7 +7,14 @@ import { schema } from '@yaks/sqlite'
 import { EXAMPLE as SHORT_EXAMPLE } from '../../src/store/vocab.ts'
 import ops from '../../src/store/schema.json' with { type: 'json' }
 import { PAGES } from './guide.ts'
-import { appDoc, appVocab, RELATIONS, RESERVED, schemaOf } from './vocab.ts'
+import {
+  appDoc,
+  appVocab,
+  platformVocab,
+  RELATIONS,
+  RESERVED,
+  schemaOf,
+} from './vocab.ts'
 
 let read = (path: string) =>
   Deno.readTextFileSync(new URL(path, import.meta.url))
@@ -198,6 +205,30 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
   assert(
     sql.some((s) => s.includes('create virtual table if not exists doc_fts')),
   )
+})
+
+Deno.test('the platform declares the uniques its races are decided by', () => {
+  let sql = schema(platformVocab())
+  for (
+    let [name, cols] of [
+      ['space_slug', '"space" ("slug")'],
+      ['app_space_slug', '"app" ("space", "slug")'],
+      ['alias_slug', '"alias" ("slug")'],
+      ['member_space_person', '"member" ("space", "person")'],
+      ['hostname_name', '"hostname" ("name")'],
+      ['deploy_app_version', '"deploy" ("app", "version")'],
+      ['published_name', '"published" ("name")'],
+    ]
+  ) {
+    assert(
+      sql.includes(
+        `create unique index if not exists ${name} on ${cols}`,
+      ),
+      `no ${name}`,
+    )
+  }
+  // An app's own store declares none of them — they are the directory's words.
+  assert(!schema(appVocab()).some((s) => s.includes('unique index')))
 })
 
 Deno.test('none of the fleet vocabulary comes with it', () => {

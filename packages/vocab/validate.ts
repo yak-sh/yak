@@ -53,6 +53,12 @@ let storableProp = (
     : [`${comp}.${prop} has type '${s.type}' — one of ${ok.join(', ')}`]
 }
 
+// The composite index lists a component declares, both keywords together. An
+// index over a column the component never declares would emit DDL no table can
+// take, so the names are checked here where a refusal can still teach.
+let composites = (s: PropSchema): string[][] =>
+  [s.unique, s.index].flatMap((v) => Array.isArray(v) ? v as string[][] : [])
+
 // The storable profile over a whole document: every $def is an object schema
 // whose properties are storable columns.
 export let storable = (doc: VocabDoc): string[] => {
@@ -73,6 +79,13 @@ export let storable = (doc: VocabDoc): string[] => {
         errs.push(`${comp}.${JSON.stringify(prop)} is not a column name`)
       }
       errs.push(...storableProp(comp, prop, s))
+    }
+    for (let cols of composites(schema)) {
+      for (let col of cols) {
+        if (!(schema.properties ?? {})[col]) {
+          errs.push(`${comp} indexes ${col}, which is no column of ${comp}`)
+        }
+      }
     }
   }
   return errs

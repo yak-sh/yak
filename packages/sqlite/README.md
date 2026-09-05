@@ -204,6 +204,9 @@ SQLite connection wants.
 - one table per component, keyed by an integer `entity` owner; a reference
   stores the target's integer id (with a foreign key), a scalar its value, a
   column-less component is a bare tag whose row's existence is the fact;
+- one index per `unique`/`index` a component declares, named after the columns
+  it covers (`app_space_slug`) — a unique one is the constraint a race is
+  decided by, and the losing insert is refused by the engine;
 - a `doc_value` view and a `doc_fts` full-text index over the `doc` component's
   text columns, when the vocabulary declares one.
 

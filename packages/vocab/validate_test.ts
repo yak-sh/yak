@@ -39,6 +39,18 @@ Deno.test('storable refuses what a table cannot lower', () => {
   assert(said.includes('recipe.dead is a reference without a death word'))
 })
 
+Deno.test('storable refuses an index over a column that is not there', () => {
+  let errs = storable(doc({
+    recipe: {
+      type: 'object',
+      unique: [['serves', 'oven']],
+      index: [['serves']],
+      properties: { serves: { type: 'number' } },
+    },
+  }))
+  assertEquals(errs, ['recipe indexes oven, which is no column of recipe'])
+})
+
 Deno.test('reserved names refuse against a base vocabulary', () => {
   let base = loadVocab(slice)
   let app = doc({

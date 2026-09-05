@@ -19,8 +19,8 @@
 // It serves TWO roles, told apart by the name the kernel gives the object. An
 // app's store wakes with the core plus its own `vocab.json`; the DIRECTORY —
 // the one object named `yak/platform` — wakes with the platform's own
-// vocabulary and the uniques its races are decided by (vocab.ts `platformDoc`,
-// T-33814). One class, one composition, two vocabularies.
+// vocabulary, uniques and all (vocab.ts `platformDoc`, T-33814). One class,
+// one composition, two vocabularies.
 //
 // This class carries the DO's own NAME, `Store`, so wrangler's migration list
 // never moves; the old store.ts wears the same name beside it until T-33807
@@ -109,12 +109,7 @@ import {
   reads,
 } from '@yaks/member'
 import type { Vocab } from '@yaks/vocab'
-import {
-  appVocab,
-  PLATFORM_INDEXES,
-  PLATFORM_STORE,
-  platformVocab,
-} from './vocab.ts'
+import { appVocab, PLATFORM_STORE, platformVocab } from './vocab.ts'
 
 /** The slice of a `DurableObjectState` this object needs: its storage, and its
  * hibernatable sockets. A Worker's own `DurableObjectState` satisfies it. */
@@ -215,19 +210,17 @@ export class Store {
     let ctx = this.#ctx
     // Which words this object speaks is a question of WHICH OBJECT it is. One
     // store on the platform is the directory (the meta space, T-33814): it
-    // wakes with the platform's own vocabulary and the uniques its races are
-    // decided by. Every other object is an app, and wakes with the core plus
-    // whatever its `vocab.json` declared.
+    // wakes with the platform's own vocabulary, which declares the uniques its
+    // races are decided by. Every other object is an app, and wakes with the
+    // core plus whatever its `vocab.json` declared.
     let meta = this.#get('name') == PLATFORM_STORE
     let vocab = meta ? platformVocab() : appVocab(this.#get('vocab') ?? {})
     let drive = driver(ctx.storage)
     let bytes = sqliteBlobs(drive)
     let store = storage(ctx.storage, vocab, { derived: blobRead(vocab) })
-    let ddl = [
-      ...store.ddl(),
-      ...blobSchema(),
-      ...(meta ? PLATFORM_INDEXES : []),
-    ]
+    // Every index the vocabulary declares is already in `store.ddl()` — the
+    // directory's uniques included, since they are words of `platformDoc`.
+    let ddl = [...store.ddl(), ...blobSchema()]
     // The schema this object stands at, as one word: a wake under the same
     // vocabulary runs no DDL at all, and a deploy that added a component
     // raises its table on the next request.

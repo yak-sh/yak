@@ -159,6 +159,10 @@ let num: PropSchema = { type: 'number' }
 let time: PropSchema = { type: 'string', format: 'date-time' }
 // Server-owned: readable, never wire-writable. The kernel's own door writes it.
 let owned = (s: PropSchema): PropSchema => ({ ...s, stamped: true })
+// No two rows of the component may share this value — the uniqueness a race is
+// decided by, said on the column when it is one column (a composite is said on
+// the component, `unique: [['space', 'slug']]`).
+let unique = (s: PropSchema): PropSchema => ({ ...s, unique: true })
 
 /**
  * The platform's own components — what the directory IS, as one JSON Schema
@@ -172,6 +176,12 @@ let owned = (s: PropSchema): PropSchema => ({ ...s, stamped: true })
  * Cloudflare, an `exception` the platform noted about itself. They stay
  * readable, and the kernel's own door (`x-yak-kernel`, graph.ts) is the only
  * writer.
+ *
+ * The `unique` words are the directory's races, decided in the engine: two
+ * isolates minting the space `ada` at once must not both win, one hostname
+ * points at one app, and an offer's name is the platform-wide handle it is
+ * installed by. @yaks/sqlite raises the index from the declaration; the losing
+ * write bounces, re-reads, and finds the winner (directory.ts `own`).
  */
 export let platformDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
@@ -181,12 +191,13 @@ export let platformDoc: VocabDoc = {
       type: 'object',
       kind: true,
       before: ['doc'],
-      properties: { slug: text, home: ref('detach') },
+      properties: { slug: unique(text), home: ref('detach') },
     },
     app: {
       type: 'object',
       kind: true,
       before: ['doc'],
+      unique: [['space', 'slug']],
       properties: {
         slug: text,
         space: ref('cascade'),
@@ -197,11 +208,12 @@ export let platformDoc: VocabDoc = {
     // Every address an app has answered at: the one it was born at — which is
     // what its Durable Object is named, so it may never move — and, in
     // `slugs`, each one a rename left behind.
-    alias: { type: 'object', properties: { slug: text, slugs: text } },
+    alias: { type: 'object', properties: { slug: unique(text), slugs: text } },
     member: {
       type: 'object',
       kind: true,
       before: ['doc'],
+      unique: [['space', 'person']],
       properties: {
         space: ref('cascade'),
         person: ref('cascade', false),
@@ -214,7 +226,7 @@ export let platformDoc: VocabDoc = {
       kind: true,
       before: ['doc'],
       properties: {
-        name: text,
+        name: unique(text),
         app: ref('cascade'),
         stage: { enum: ['pending', 'active', 'error'] },
         at: time,
@@ -224,6 +236,7 @@ export let platformDoc: VocabDoc = {
       type: 'object',
       kind: true,
       before: ['doc'],
+      unique: [['app', 'version']],
       properties: {
         app: ref('cascade'),
         version: num,
@@ -233,7 +246,7 @@ export let platformDoc: VocabDoc = {
     },
     published: {
       type: 'object',
-      properties: { name: text, version: num, at: time, about: text },
+      properties: { name: unique(text), version: num, at: time, about: text },
     },
     installed: {
       type: 'object',
@@ -319,26 +332,6 @@ export let platformDocs: VocabDoc[] = [
   edgeDoc,
   relationDoc,
   platformDoc,
-]
-
-/**
- * The uniques the directory's races are decided by. @yaks/sqlite derives tables
- * and columns from a vocabulary and no indexes, so the platform says its own:
- * two isolates minting the space `ada` at once must not both win, one hostname
- * points at one app, and an offer's name is the platform-wide handle it is
- * installed by. The losing write bounces, re-reads, and finds the winner
- * (directory.ts `own`).
- */
-export let PLATFORM_INDEXES: string[] = [
-  'create unique index if not exists space_slug on "space" ("slug")',
-  'create unique index if not exists app_space_slug on "app" ("space", "slug")',
-  'create unique index if not exists alias_slug on "alias" ("slug")',
-  'create unique index if not exists member_space_person on "member" ' +
-  '("space", "person")',
-  'create unique index if not exists hostname_name on "hostname" ("name")',
-  'create unique index if not exists deploy_app_version on "deploy" ' +
-  '("app", "version")',
-  'create unique index if not exists published_name on "published" ("name")',
 ]
 
 /**

@@ -15,6 +15,9 @@
 //                 A scalar column stores its value; a reference stores the
 //                 referent's integer id; a component with no columns is a bare
 //                 tag whose presence is the fact.
+//   <index>       one per `unique`/`index` a component declares, named after
+//                 the columns it covers. A unique one is the constraint a race
+//                 is decided by; the vocabulary is where that is said.
 //   doc_value     a view over the `doc` component (when the vocabulary declares
 //                 one), exposing a `rowid` so full-text search can join it.
 //   doc_fts       a full-text index over the `doc` text columns, kept current
@@ -26,7 +29,7 @@
 // refused at the engine, except a `keep` reference, which outlives the row it
 // points at and stays key-free.
 
-import type { Column, Vocab } from '@yaks/vocab'
+import type { Column, Index, Vocab } from '@yaks/vocab'
 
 // The identity table and the graveyard. Fixed shape — every layout has exactly
 // this spine, whatever components ride on it.
@@ -70,6 +73,15 @@ let tableDdl = (v: Vocab, comp: string): string => {
     body.join(',\n    ')
   }\n  )`
 }
+
+// One declared index, named `<comp>_<cols>` — derived from what it covers, so
+// the name is the same in every store that loads the vocabulary and a second
+// install finds its own index already standing. `if not exists` is what makes a
+// re-install a no-op; a UNIQUE one is the constraint a race is decided by (the
+// loser's insert is refused, and it re-reads to find the winner).
+let indexDdl = (comp: string, i: Index): string =>
+  `create ${i.unique ? 'unique ' : ''}index if not exists ` +
+  `${comp}_${i.cols.join('_')} on ${q(comp)} (${i.cols.map(q).join(', ')})`
 
 // The `doc` view and its full-text index, emitted only when the vocabulary
 // declares a `doc` component. The view republishes `doc`'s columns plus a
@@ -120,12 +132,18 @@ let docDdl = (v: Vocab): string[] => {
 
 // The whole schema as an ordered list of statements: the spine, then one table
 // per component (the `entity` spine component is the identity table above, not
-// a component table), then the doc view and its index. `install()` in ./mod.ts
-// runs them; a caller may also read them to inspect or migrate by hand.
-export let schema = (vocab: Vocab): string[] => [
-  ...SPINE,
-  ...vocab.all
-    .filter((name) => name != 'entity')
-    .map((name) => tableDdl(vocab, name)),
-  ...docDdl(vocab),
-]
+// a component table), then the indexes those tables declare, then the doc view
+// and its search index. `install()` in ./mod.ts runs them; a caller may also
+// read them to inspect or migrate by hand.
+export let schema = (vocab: Vocab): string[] => {
+  let comps = vocab.all.filter((name) => name != 'entity')
+  return [
+    ...SPINE,
+    ...comps.map((name) => tableDdl(vocab, name)),
+    // After every table: an index names a column the create above just raised.
+    ...comps.flatMap((name) =>
+      vocab.indexes(name).map((i) => indexDdl(name, i))
+    ),
+    ...docDdl(vocab),
+  ]
+}

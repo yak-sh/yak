@@ -45,6 +45,26 @@
       "description": "Input spellings that resolve to an enum member; output always speaks the canonical member.",
       "type": "object",
       "additionalProperties": { "type": "string" }
+    },
+    "unique": {
+      "description": "The uniqueness a race is decided by. On a COLUMN, true = no two rows of the component may share the value. On a COMPONENT, the composite uniques as column lists: [[\"space\", \"slug\"]].",
+      "anyOf": [
+        { "type": "boolean" },
+        {
+          "type": "array",
+          "items": { "type": "array", "items": { "type": "string" } }
+        }
+      ]
+    },
+    "index": {
+      "description": "An index to read by, carrying no uniqueness. On a COLUMN, true = index it. On a COMPONENT, the composite indexes as column lists: [[\"app\", \"version\"]].",
+      "anyOf": [
+        { "type": "boolean" },
+        {
+          "type": "array",
+          "items": { "type": "array", "items": { "type": "string" } }
+        }
+      ]
     }
   }
 }

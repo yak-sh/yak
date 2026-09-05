@@ -66,6 +66,12 @@ export type CompInfo = {
   keywords: Record<string, unknown> // registered extension keywords, verbatim
 }
 
+// One index over a component's table: the columns it covers, in order, and
+// whether it also promises uniqueness. Derived from the `unique`/`index`
+// keywords (a column's own flag, plus the component's composite lists), never
+// hand-listed — see `Vocab.indexes`.
+export type Index = { cols: string[]; unique: boolean }
+
 // One deref step of a dotted path: the component a segment landed in and the
 // column it named. `.comment.target.doc.title` → [{comment,target},{doc,title}].
 export type Hop = { comp: string; prop: string }
@@ -112,6 +118,10 @@ export type PropSchema = {
   before?: string[]
   wire?: boolean
   bare?: boolean
+  // On a COLUMN a boolean (this column alone); on a COMPONENT the composite
+  // column lists. `Vocab.indexes` merges the two spellings.
+  unique?: boolean | string[][]
+  index?: boolean | string[][]
   aliases?: Record<string, string>
   // an extension vocabulary's keywords ride here too (keywords.ts)
   [k: string]: unknown

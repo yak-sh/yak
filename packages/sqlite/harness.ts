@@ -1,10 +1,11 @@
 // Shared test fixtures (not part of the published package — see deno.json): an
 // in-memory SQLite driver over jsr:@db/sqlite, and a small made-up vocabulary
 // the test files write against. The domain is a tiny shop — documents,
-// products, reviews, makers, bookmarks — chosen so it exercises every reference
-// death word (a review cascades with its product, a product detaches from a
-// deleted maker, a bookmark is released) without any knowledge outside this
-// file.
+// products, reviews, makers, bookmarks, shelves — chosen so it exercises every
+// reference death word (a review cascades with its product, a product detaches
+// from a deleted maker, a bookmark is released) and both index spellings (a
+// product's unique sku, a shelf's composite slot) without any knowledge outside
+// this file.
 
 import { Database } from '@db/sqlite'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
@@ -47,10 +48,25 @@ let doc: VocabDoc = {
       kind: true,
       before: ['doc'],
       properties: {
+        // The stock number, which no two products share — the column's own
+        // `unique`, and what a duplicate insert is refused by.
+        sku: { type: 'string', unique: true },
         price: { type: 'number' },
         available: { type: 'boolean' },
         status: { enum: ['draft', 'live', 'sold'] },
         maker: { type: 'string', ref: 'entity', death: 'detach' },
+      },
+    },
+    // Where a product sits on the floor: one product per slot, and an aisle
+    // read by the shelf order. The COMPOSITE spellings, said on the component.
+    shelf: {
+      type: 'object',
+      unique: [['aisle', 'slot']],
+      index: [['aisle', 'height']],
+      properties: {
+        aisle: { type: 'string' },
+        slot: { type: 'number' },
+        height: { type: 'number' },
       },
     },
     // A review exists ABOUT a product — deleting the product takes its reviews

@@ -119,6 +119,34 @@ Deno.test('get answers by identity, and says nothing about an unknown eid', () =
   assertEquals(got[0].entity.num, 1)
 })
 
+Deno.test('a declared unique refuses the second writer of the value', () => {
+  let s = store()
+  write(s, [{ entity: { eid: 'p1' }, product: { sku: 'MUG-1' } }])
+  let threw = false
+  try {
+    write(s, [{ entity: { eid: 'p2' }, product: { sku: 'MUG-1' } }])
+  } catch {
+    threw = true
+  }
+  assert(threw)
+  // The loser wrote nothing at all — the batch's transaction went with it.
+  assertEquals(s.tx((tx) => tx.get(['p2'])), [])
+})
+
+Deno.test('a composite unique refuses only the whole pair', () => {
+  let s = store()
+  write(s, [{ entity: { eid: 's1' }, shelf: { aisle: 'A', slot: 1 } }])
+  // The same aisle in another slot is fine.
+  write(s, [{ entity: { eid: 's2' }, shelf: { aisle: 'A', slot: 2 } }])
+  let threw = false
+  try {
+    write(s, [{ entity: { eid: 's3' }, shelf: { aisle: 'A', slot: 1 } }])
+  } catch {
+    threw = true
+  }
+  assert(threw)
+})
+
 Deno.test('a transaction rolls back on a throw, and nests', () => {
   let s = store()
   write(s, [{ entity: { eid: 'p1' }, product: { price: 12 } }])

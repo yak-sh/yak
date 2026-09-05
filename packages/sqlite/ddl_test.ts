@@ -50,3 +50,36 @@ Deno.test('the statements list in dependency order — spine first', () => {
   let stmts = schema(shop)
   assertEquals(stmts[0].includes('create table if not exists entity ('), true)
 })
+
+Deno.test('a column marked unique gets a unique index named after it', () => {
+  assert(
+    all.includes(
+      'create unique index if not exists product_sku on "product" ("sku")',
+    ),
+    all,
+  )
+})
+
+Deno.test('a component declares its composite unique and its index', () => {
+  assert(
+    all.includes(
+      'create unique index if not exists shelf_aisle_slot ' +
+        'on "shelf" ("aisle", "slot")',
+    ),
+    all,
+  )
+  assert(
+    all.includes(
+      'create index if not exists shelf_aisle_height ' +
+        'on "shelf" ("aisle", "height")',
+    ),
+    all,
+  )
+})
+
+Deno.test('an index comes after the table it covers', () => {
+  let stmts = schema(shop)
+  let table = stmts.findIndex((s) => s.includes('exists "shelf"'))
+  let index = stmts.findIndex((s) => s.includes('shelf_aisle_slot'))
+  assert(table >= 0 && index > table, `${table} ${index}`)
+})

@@ -27,6 +27,10 @@
     }
   },
   "$defs": {
+    "cols": {
+      "type": "array",
+      "items": { "type": "array", "items": { "type": "string" } }
+    },
     "component": {
       "type": "object",
       "properties": {
@@ -45,6 +49,8 @@
         "before": { "type": "array", "items": { "type": "string" } },
         "wire": { "type": "boolean" },
         "bare": { "type": "boolean" },
+        "unique": { "$ref": "#/$defs/cols" },
+        "index": { "$ref": "#/$defs/cols" },
         "prefix": { "type": "string", "pattern": "^[A-Z]$" },
         "by_name": { "type": "boolean" }
       },
@@ -65,6 +71,8 @@
         "persist": { "type": "boolean" },
         "stamped": { "type": "boolean" },
         "bare": { "type": "boolean" },
+        "unique": { "type": "boolean" },
+        "index": { "type": "boolean" },
         "aliases": {
           "type": "object",
           "additionalProperties": { "type": "string" }

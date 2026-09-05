@@ -24,6 +24,8 @@ vocabulary (declared via JSON Schema's own `$vocabulary` mechanism,
 | `store`   | column | `"blob"` = a content-addressed markdown body                      |
 | `aliases` | column | input spellings that resolve to an enum member                    |
 | `bare`    | both   | `false` = never claims its bare filter spelling; qualified only   |
+| `unique`  | both   | column: no two rows share it. comp: `[["space","slug"]]`          |
+| `index`   | both   | the same two spellings, without the uniqueness                    |
 | `kind`    | comp   | this component names a display kind                               |
 | `before`  | comp   | kinds this kind sorts before (feeds the derived kindOrder)        |
 | `wire`    | comp   | `false` = readable-not-writable component (the spine)             |
