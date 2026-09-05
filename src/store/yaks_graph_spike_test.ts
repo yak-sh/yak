@@ -17,7 +17,8 @@
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { graph } from '@yaks/graph'
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Graph } from '@yaks/graph'
+import { sessions } from '@yaks/session'
 import { storage } from '@yaks/sqlite'
 import type { Driver } from '@yaks/sqlite'
 
@@ -65,6 +66,18 @@ let core = graph({
   storage: storage(driver, V, { derived: fleetDerived, now: NOW }),
   vocab: V,
 })
+
+// Either database read back through the SAME reader — what a test asserting
+// about the state (rather than about a return value) asks.
+let reader = (db: typeof appDb) =>
+  storage(
+    {
+      query: (sql, params) => db.prepare(sql).all(...params),
+      exec: (sql) => db.exec(sql),
+    },
+    V,
+    { derived: fleetDerived, now: NOW },
+  )
 
 // A change is the app's wire shape; a bundle is @yaks/graph's. One bundle per
 // change keeps the order identical, which is what a batch's semantics rest on.
@@ -159,11 +172,13 @@ let both = (changes: Change[]): Change[] => {
   return theirs
 }
 
-// Both writers refuse the same batch, for the same reason.
-let refuse = (changes: Change[], because: RegExp) => {
+// Both writers refuse the same batch, for the same reason. `who` names the
+// core-side writer, so a test about a PLUGIN's rule holds the plugged-in graph
+// against the app the same way this holds the bare core against it.
+let refuse = (changes: Change[], because: RegExp, who: Graph = core) => {
   let mine: unknown, theirs: unknown
   try {
-    core.apply(changes.map(asBundle))
+    who.apply(changes.map(asBundle))
   } catch (e) {
     mine = e
   }
@@ -269,14 +284,7 @@ Deno.test('parity: the two databases themselves agree', () => {
   // Not a return-value comparison: the two graphs, read back through the SAME
   // reader, must agree about what is alive and what it says.
   let told = (db: typeof appDb) =>
-    (storage(
-      {
-        query: (sql, params) => db.prepare(sql).all(...params),
-        exec: (sql) => db.exec(sql),
-      },
-      V,
-      { derived: fleetDerived, now: NOW },
-    ).read('.kind=task') as Bundle[]).map((b) =>
+    (reader(db).read('.kind=task') as Bundle[]).map((b) =>
       JSON.stringify([b.entity.eid, b.task])
     ).sort()
   assertEquals(told(coreDb), told(appDb))
@@ -329,35 +337,74 @@ Deno.test('gap: a doc body is content-addressed by the app, plain text here', ()
   )
 })
 
+Deno.test('parity: the claim lease and the stop gate, with @yaks/session in', () => {
+  // The two rules this file used to pin as gaps. Composing the plugin onto the
+  // SAME core database flips both to agreement: the plugin's `precondition`
+  // hook refuses what db.ts refuses, for the same reason, and its `audit` hook
+  // writes the same conflict record afterwards.
+  let leased = graph({
+    storage: storage(driver, V, { derived: fleetDerived, now: NOW }),
+    vocab: V,
+    plugins: [sessions()],
+  })
+  let s1 = uuid(), s2 = uuid(), t = uuid()
+  let setup: Change[] = [
+    { eid: s1, name: 'session', comp: { id: 'lease-one' } },
+    { eid: s2, name: 'session', comp: { id: 'lease-two' } },
+    { eid: t, name: 'task', comp: { priority: 1 } },
+    { eid: t, name: 'claim', comp: { session: s1 } },
+  ]
+  apply(appDb, setup as never)
+  leased.apply(setup.map(asBundle))
+
+  // the claim LEASE: another session's take bounces in both
+  refuse(
+    [{ eid: t, name: 'claim', comp: { session: s2 } }],
+    /already claimed/,
+    leased,
+  )
+  // and both audit the bounce as a conflict entity naming the two sides
+  let sides = (bs: Bundle[]) =>
+    bs.map((b) => {
+      let c = b.conflict as Record<string, unknown>
+      return [c.target, c.loser, c.holder]
+    })
+  assertEquals(
+    sides(leased.read(`.conflict.target=${t}`) as Bundle[]),
+    [[t, s2, s1]],
+  )
+  assertEquals(
+    sides(reader(appDb).read(`.conflict.target=${t}`) as Bundle[]),
+    [[t, s2, s1]],
+  )
+
+  // the same session re-claiming is a refresh, not a take, in both
+  let refresh: Change[] = [{ eid: t, name: 'claim', comp: { session: s1 } }]
+  leased.apply(refresh.map(asBundle))
+  apply(appDb, refresh as never)
+  for (let db of [coreDb, appDb]) {
+    assertEquals(
+      (reader(db).read(`.claim.session=${s1}`) as Bundle[])
+        .map((b) => b.entity.eid),
+      [t],
+    )
+  }
+
+  // a stop_request may only be pulled on a session that is still going
+  refuse(
+    [{ eid: uuid(), name: 'stop_request', comp: { target: s1 } }],
+    /stop_request refused/,
+    leased,
+  )
+})
+
 Deno.test('gap: the fleet rules the core does not carry', () => {
   // Each of these refuses in the app and lands in the core, because each is a
   // rule about a fleet COMPONENT rather than about the graph. The phase each
-  // belongs on, when it becomes a plugin, is named beside it.
-  let s1 = uuid(), s2 = uuid(), t = uuid(), m = uuid()
-  apply(appDb, [
-    { eid: s1, name: 'session', comp: { id: 'one' } },
-    { eid: s2, name: 'session', comp: { id: 'two' } },
-    { eid: t, name: 'task', comp: { priority: 1 } },
-    { eid: t, name: 'claim', comp: { session: s1 } },
-  ] as never)
-  // the claim LEASE (a precondition hook in @yaks/session)
-  assertThrows(
-    () =>
-      apply(appDb, [{ eid: t, name: 'claim', comp: { session: s2 } }] as never),
-    Error,
-    'already claimed',
-  )
-  // a stop_request may only be pulled on a live managed session (precondition)
-  assertThrows(
-    () =>
-      apply(appDb, [{
-        eid: uuid(),
-        name: 'stop_request',
-        comp: { target: s1 },
-      }] as never),
-    Error,
-    'stop_request refused',
-  )
+  // belongs on, when it becomes a plugin, is named beside it. (The claim lease
+  // and the stop gate used to be here; they are the test above now.)
+  let t = uuid(), m = uuid()
+  apply(appDb, [{ eid: t, name: 'task', comp: { priority: 1 } }] as never)
   // an alias slug names exactly one entity (precondition, @yaks/names)
   apply(appDb, [{ eid: t, name: 'alias', comp: { slug: 'taken' } }] as never)
   assertThrows(
@@ -378,13 +425,13 @@ Deno.test('gap: the fleet rules the core does not carry', () => {
     'the app stamps a non-person memory proposed',
   )
   // ... and the core, with no plugins, applies each of these as ordinary data
-  let t2 = uuid(), s3 = uuid()
+  let t2 = uuid()
   core.apply([
-    { entity: { eid: s3 }, session: { id: 'three' } },
     { entity: { eid: t2 }, task: { priority: 1 } },
-    { entity: { eid: t2 }, claim: { session: s3 } },
+    { entity: { eid: t2 }, alias: { slug: 'taken' } },
+    { entity: { eid: t2 }, memory: { scope: null } },
   ])
-  assertEquals((core.read(`.priority=1&.claim!`) as Bundle[]).length >= 1, true)
+  assertEquals((core.read(`.alias.slug=taken`) as Bundle[]).length, 1)
 })
 
 Deno.test("gap: $edit field operators are the app's, not the core's", () => {
