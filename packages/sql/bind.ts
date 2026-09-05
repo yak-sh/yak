@@ -24,9 +24,10 @@
 // registration, DECLINES — the binder never invents a value it cannot read.
 //
 // What is NOT here declines LOUDLY (an `Unsupported` throw, never a silent
-// wrong answer): the `.near` KNN and the `.edges`/`.reaches` graph walks and the
-// lazy partition they read (their edge-nature normalization is application
-// logic the vocab does not carry).
+// wrong answer): the `.edges`/`.reaches` graph walks and the lazy partition they
+// read (their edge-nature normalization is application logic the vocab does not
+// carry), and the `.near` KNN, which needs vectors this package does not hold —
+// `@yaks/embedding` registers as an extension and answers it, ordering included.
 
 import type {
   After,
@@ -580,7 +581,9 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
     }
   }
   // Ordering, then the window. `.order=-field` is descending. The window is
-  // newest-first by spine num, with `.after` continuing below a num cursor.
+  // newest-first by spine num, with `.after` continuing below a num cursor, and
+  // it REPLACES any ordering asked for — a cursor pages down one sequence, and
+  // @yaks/match answers a window the same way (its parity_test pins it).
   // The ordered column is resolved BEFORE the joins are read off: ordering by a
   // column no filter mentions is what pulls its table in, and a join list taken
   // any earlier would not have it.
@@ -604,11 +607,21 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
 }
 
 // An order value to an ORDER BY expression. A leading '-' is descending; the
-// rest routes to a column. (An in-memory matcher would sort these in JS;
+// rest is offered to the extensions first — a ranking (`.order=similar`) names
+// no column, so only the package holding the ranks can spell it — and routes to
+// a column when none claims it. (An in-memory matcher would sort these in JS;
 // compiling them into the statement is a capability this IR adds.)
 let orderExpr = (ctx: Ctx, value: string): string => {
   let desc = value.startsWith('-')
   let field = desc ? value.slice(1) : value
-  let { expr } = resolveField(ctx, field)
+  let expr = ranked(ctx, field) ?? resolveField(ctx, field).expr
   return `${expr}${desc ? ' desc' : ''}`
+}
+
+let ranked = (ctx: Ctx, field: string): string | null => {
+  for (let e of ctx.ext) {
+    let expr = e.order?.(field, site(ctx))
+    if (expr) return expr
+  }
+  return null
 }

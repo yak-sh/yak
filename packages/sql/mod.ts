@@ -21,14 +21,15 @@
 //
 // A clause this package declines may still be answered by ANOTHER package: an
 // `Extension` (./extend.ts) claims a clause kind and lowers it to a condition
-// over the same IR. That is the seam a full-text, vector, or graph-walk package
-// registers through — `compile(ast, vocab, { extend: [...] })`.
+// over the same IR, and may spell an `.order=` value that names no column. That
+// is the seam a full-text, vector, or graph-walk package registers through —
+// `compile(ast, vocab, { extend: [...] })`.
 //
 // Coverage is stated plainly. The common query path is exact — reverse hops
 // (`.reviews>=5`, `.reviews.stars=5`) included; the advanced directives it
 // cannot yet reach throw `Unsupported` rather than answer almost-right — see
-// ./bind.ts for the exact list (the `.near` KNN and the `.edges`/`.reaches`
-// graph walks).
+// ./bind.ts for the exact list (the `.edges`/`.reaches` graph walks, and the
+// `.near` KNN unless a vector package claims it).
 
 import type { And } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'

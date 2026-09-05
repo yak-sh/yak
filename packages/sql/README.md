@@ -103,6 +103,13 @@ The contract, whole:
   supply a missing one.
 - Claiming a directive kind that would otherwise decline (`near`, `edges`,
   `reaches`) makes it compile as a filter instead of throwing.
+- An extension may also spell an **ordering** the vocabulary has no column for —
+  a relevance, a similarity — through an `order(value, site)` hook. It is handed
+  the `.order=` value with any leading `-` stripped and answers the `ORDER BY`
+  expression, or `null` to let the value route to a column as usual. The
+  expression carries no bound params (the IR's `ORDER BY` holds none), so a
+  ranking lowers to an expression over values it can spell safely — the integer
+  ids it already resolved, or a joined column.
 
 ## Honest coverage
 
@@ -114,8 +121,9 @@ projections, and the `.refs=` backlink union.
 
 Advanced directives it cannot yet reach throw **`Unsupported`** rather than
 answer almost-right — a caller catches it to fall back to a JS matcher or to
-report the gap. The current gaps are the `.near` KNN and the `.edges`/`.reaches`
-graph walks (`bind.ts` has the exact list).
+report the gap. The current gaps are the `.edges`/`.reaches` graph walks, and
+the `.near` KNN unless a vector package claims it — `@yaks/embedding` does,
+ordering included (`bind.ts` has the exact list).
 
 ## Reverse hops
 

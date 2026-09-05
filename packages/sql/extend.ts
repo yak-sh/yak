@@ -64,9 +64,23 @@ export type Site = {
 // compiles the clause itself, or refuses it as `Unsupported`.
 export type Compile = (clause: Clause, site: Site) => Cond | null
 
-// A named contribution: which clause kinds it claims, and how each compiles.
-// A kind absent from the map is left entirely to the binder.
+// How an ORDER value that names no column is spelled. `.order=` normally routes
+// to a column, but an extension that ranks — a search by relevance, a vector
+// search by similarity — sorts by something the vocabulary has no column for.
+// It is handed the order value with any leading `-` already stripped (the
+// binder appends `desc` itself) and answers the ORDER BY expression, or `null`
+// to decline so the binder routes to a column as usual.
+//
+// The expression carries no bound params, because the IR's ORDER BY holds
+// none — an extension that ranks by data must lower it to an expression over
+// values it can spell safely (integer ids, a joined column).
+export type OrderBy = (value: string, site: Site) => string | null
+
+// A named contribution: which clause kinds it claims, how each compiles, and
+// optionally how it spells an ordering. A kind absent from the map is left
+// entirely to the binder.
 export type Extension = {
   name: string
   compile: Partial<Record<Clause['kind'], Compile>>
+  order?: OrderBy
 }
