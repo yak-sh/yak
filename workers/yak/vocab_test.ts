@@ -196,6 +196,17 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
       // @yaks/edge — the link, and the twelve verbs it may wear
       'edge',
       ...RELATIONS,
+      // what the PLATFORM says in every app's store: the breaks it noted, the
+      // marks a served or fixed item wears, and the two rows an upload makes
+      'exception',
+      'error',
+      'archived',
+      'notified',
+      'opened',
+      'quarantined',
+      'blob',
+      'image',
+      'attachment',
       // the app's own
       'recipe',
       'cooked',
@@ -237,7 +248,7 @@ Deno.test('none of the fleet vocabulary comes with it', () => {
   )
   let mine = new Set(tablesOf(schema(appVocab())))
   assert(fleet.length > 50, `the fleet plants ${fleet.length} tables`)
-  assert(mine.size < 25, `an app plants ${mine.size}`)
+  assert(mine.size < 40, `an app plants ${mine.size}`)
   for (let word of ['session', 'canvas', 'wake', 'persona', 'memory', 'task']) {
     assert(fleet.includes(word), `the fleet no longer plants ${word}`)
     assert(!mine.has(word), `an app's store still plants ${word}`)

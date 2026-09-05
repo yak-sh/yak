@@ -54,6 +54,33 @@ import { EDGE_URI, edgeDoc, edgeKeywords } from '@yaks/edge'
 import { idKeywords } from '@yaks/id'
 import { memberDoc } from '@yaks/member'
 
+// The column shapes these documents are written out of. A `ref` names another
+// entity and says what happens to this row when that one dies; `owned` is
+// `stamped` — readable, never wire-writable, the kernel's own door the only
+// writer.
+let ref = (death: string, bare = true): PropSchema => ({
+  type: 'string',
+  ref: 'entity',
+  death,
+  ...(bare ? {} : { bare: false }),
+})
+let text: PropSchema = { type: 'string' }
+let num: PropSchema = { type: 'number' }
+let time: PropSchema = { type: 'string', format: 'date-time' }
+let owned = (s: PropSchema): PropSchema => ({ ...s, stamped: true })
+// No two rows of the component may share this value — the uniqueness a race is
+// decided by, said on the column when it is one column (a composite is said on
+// the component, `unique: [['space', 'slug']]`).
+let unique = (s: PropSchema): PropSchema => ({ ...s, unique: true })
+
+// A STAMP's three columns: when, by whom, through what. `created`, `updated`
+// and every mark a served or fixed row wears are the same three words.
+let stampCols: Record<string, PropSchema> = {
+  at: owned(time),
+  by: owned(ref('keep')),
+  via: owned(ref('keep')),
+}
+
 /** The components every app's store has that no package owns: the spine, the
  * writer, and the two server-owned stamps. `doc` is @yaks/doc's, `member`
  * @yaks/member's, and both are loaded beside this one (see {@link coreDocs}). */
@@ -67,22 +94,8 @@ export let coreDoc: VocabDoc = {
       properties: { num: { type: 'number', stamped: true } },
     },
     person: { type: 'object', kind: true, before: ['doc'], properties: {} },
-    created: {
-      type: 'object',
-      properties: {
-        at: { type: 'string', format: 'date-time', stamped: true },
-        by: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
-        via: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
-      },
-    },
-    updated: {
-      type: 'object',
-      properties: {
-        at: { type: 'string', format: 'date-time', stamped: true },
-        by: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
-        via: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
-      },
-    },
+    created: { type: 'object', properties: stampCols },
+    updated: { type: 'object', properties: stampCols },
   },
 }
 
@@ -120,6 +133,67 @@ export let relationDoc: VocabDoc = {
   ),
 }
 
+/**
+ * What the PLATFORM says in an app's store that the app never asked for: the
+ * breaks it noted there, the marks a served or fixed item wears, and the two
+ * rows an upload makes. They are core rather than an app's own for the same
+ * reason the relations are — every store already holds rows under these names,
+ * `app_errors` and the unseen block read them by these names in every app, and
+ * a word means the same thing everywhere.
+ *
+ * The server-owned ones are `stamped`: an `exception` is the platform's word
+ * about the app's own code, and the kernel's door (`x-yak-kernel`, graph.ts) is
+ * its only writer. The MARKS are stamped too and written bare — `notified: {}`
+ * says the thing without saying a column.
+ *
+ * Their columns are the fleet's own (src/vocab/manifests/kernel.json,
+ * comms.json), so a row written through the old store means exactly what a row
+ * written through this one means.
+ */
+export let kernelDoc: VocabDoc = {
+  $vocabulary: { [CORE_URI]: true },
+  title: 'kernel',
+  $defs: {
+    exception: {
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      properties: {
+        at: owned(time),
+        request: owned(text),
+        version: owned(num),
+        message: owned(text),
+        stack: owned(text),
+      },
+    },
+    // A known failure state the platform reports deliberately, as against a
+    // break nobody chose. `app_errors` reads both facets in every store, so
+    // both are declared in every store.
+    error: {
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      properties: { at: owned(time), message: owned(text) },
+    },
+    archived: { type: 'object', properties: stampCols },
+    notified: { type: 'object', properties: stampCols },
+    opened: { type: 'object', properties: stampCols },
+    quarantined: { type: 'object', properties: stampCols },
+    // The two rows a page's upload makes (apps.ts `took`): the CONTENT,
+    // addressed by its sha, and the USE of it, addressed off that. They stay
+    // apart because they are two things, and because a component may not point
+    // at its own entity.
+    blob: { type: 'object', properties: { bytes: num } },
+    image: { type: 'object', properties: { w: num, h: num } },
+    attachment: {
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      properties: { blob: ref('cascade'), mime: text, name: text },
+    },
+  },
+}
+
 /** The documents an app's vocabulary is built on, in load order. */
 export let coreDocs: VocabDoc[] = [
   coreDoc,
@@ -127,6 +201,7 @@ export let coreDocs: VocabDoc[] = [
   memberDoc,
   edgeDoc,
   relationDoc,
+  kernelDoc,
 ]
 
 // ---- the platform's own store (T-33814) -------------------------------------
@@ -147,22 +222,6 @@ export let coreDocs: VocabDoc[] = [
 /** The store the directory lives in, named the way every app's store is. Its
  * slugs are the platform's own and never move, so the name is a constant. */
 export let PLATFORM_STORE = 'yak/platform'
-
-let ref = (death: string, bare = true): PropSchema => ({
-  type: 'string',
-  ref: 'entity',
-  death,
-  ...(bare ? {} : { bare: false }),
-})
-let text: PropSchema = { type: 'string' }
-let num: PropSchema = { type: 'number' }
-let time: PropSchema = { type: 'string', format: 'date-time' }
-// Server-owned: readable, never wire-writable. The kernel's own door writes it.
-let owned = (s: PropSchema): PropSchema => ({ ...s, stamped: true })
-// No two rows of the component may share this value — the uniqueness a race is
-// decided by, said on the column when it is one column (a composite is said on
-// the component, `unique: [['space', 'slug']]`).
-let unique = (s: PropSchema): PropSchema => ({ ...s, unique: true })
 
 /**
  * The platform's own components — what the directory IS, as one JSON Schema
@@ -279,14 +338,7 @@ export let platformDoc: VocabDoc = {
     // The mark a served line wears. Server-owned like the fleet's, and a bare
     // presence in practice: the sweep writes it, and clears it (`notified:
     // null`) when a space's standing moves.
-    notified: {
-      type: 'object',
-      properties: {
-        at: owned(time),
-        by: owned(ref('keep')),
-        via: owned(ref('keep')),
-      },
-    },
+    notified: { type: 'object', properties: stampCols },
     signin: {
       type: 'object',
       kind: true,

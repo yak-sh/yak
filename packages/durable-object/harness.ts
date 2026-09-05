@@ -45,8 +45,18 @@ let out = (row: Record<string, unknown>) => {
   return row
 }
 
-/** A stand-in for `ctx.storage` over a fresh in-memory database. */
-export let durable = (): DurableStorage => {
+/**
+ * A stand-in for `ctx.storage` over a fresh in-memory database.
+ *
+ * Two members beyond {@link DurableStorage}, because the runtime has them and
+ * an object may ask: `databaseSize`, how many bytes it holds, and `deleteAll`,
+ * the one way to empty it — dropping the tables leaves metadata behind, and an
+ * object whose storage is empty ceases to exist.
+ */
+export let durable = (): DurableStorage & {
+  sql: { databaseSize: number }
+  deleteAll(): Promise<void>
+} => {
   let db = new Database(':memory:')
   let depth = 0
   let run = (query: string, bindings: SqlValue[]) => {
@@ -80,6 +90,32 @@ export let durable = (): DurableStorage => {
         let rows = run(query, bindings).map(out)
         return { toArray: () => rows, [Symbol.iterator]: () => rows.values() }
       },
+      // What this database weighs, the way SQLite itself measures it.
+      get databaseSize() {
+        let [page] = run('pragma page_count', [])
+        let [size] = run('pragma page_size', [])
+        return Number(Object.values(page ?? {})[0] ?? 0) *
+          Number(Object.values(size ?? {})[0] ?? 0)
+      },
+    },
+    // Empty, all of it — tables, indexes and the virtual tables a full-text
+    // index is made of. The runtime throws the whole object's storage away;
+    // this drops everything in the schema, which over one in-memory database
+    // is the same end state.
+    deleteAll: () => {
+      let names = run(
+        "select type, name from sqlite_master where name not like 'sqlite_%'",
+        [],
+      ) as { type: string; name: string }[]
+      db.exec('pragma writable_schema = off')
+      for (let kind of ['trigger', 'view', 'index', 'table']) {
+        for (let it of names.filter((n) => n.type == kind)) {
+          try {
+            db.exec(`drop ${kind} if exists "${it.name}"`)
+          } catch { /* a shadow table its virtual table already took */ }
+        }
+      }
+      return Promise.resolve()
     },
     // Nested savepoints, which is what the runtime's own transaction is: an
     // inner throw rolls back only the inner run.

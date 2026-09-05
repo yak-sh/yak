@@ -302,6 +302,17 @@ Deno.test('the object plants core + member + edge + the app, and nothing else', 
       // @yaks/edge, and the verbs an edge may wear
       'edge',
       ...RELATIONS,
+      // the platform's own words in an app's store: the breaks, the marks, and
+      // the two rows an upload makes
+      'exception',
+      'error',
+      'archived',
+      'notified',
+      'opened',
+      'quarantined',
+      'blob',
+      'image',
+      'attachment',
       // the app's own
       'recipe',
     ].sort(),

@@ -79,6 +79,7 @@ import {
 import { blobRead, blobs, blobSchema, sqliteBlobs } from '@yaks/blob'
 import {
   driver,
+  type DurableSql,
   type DurableStorage,
   type Hibernation,
   type Sockets,
@@ -111,15 +112,29 @@ import {
 import type { Vocab } from '@yaks/vocab'
 import { appVocab, PLATFORM_STORE, platformVocab } from './vocab.ts'
 
-/** The slice of a `DurableObjectState` this object needs: its storage, and its
- * hibernatable sockets. A Worker's own `DurableObjectState` satisfies it. */
-export type State = Hibernation & { storage: DurableStorage }
+/**
+ * The slice of a `DurableObjectState` this object needs: its storage, and its
+ * hibernatable sockets. A Worker's own `DurableObjectState` satisfies it.
+ *
+ * Two things beyond @yaks/durable-object's own slice, because the PLATFORM asks
+ * this object for them and no app ever does. `databaseSize` is how many bytes
+ * it holds — the only per-app storage figure that exists, since Cloudflare's
+ * storage dataset has no per-object dimension (usage.ts reads it through
+ * `/graph`). `deleteAll` is the one way to empty an object: dropping the tables
+ * leaves metadata behind, and an object whose storage is empty ceases to exist.
+ */
+export type State = Hibernation & {
+  storage: DurableStorage & {
+    sql: DurableSql & { databaseSize: number }
+    deleteAll(): Promise<void>
+  }
+}
 
 // What the object remembers about itself, and the table it remembers it in.
 // One row per word — the object's SQLite is the only memory that survives an
 // eviction, and this is smaller than asking @yaks/graph to hold configuration
 // as data.
-type Word = 'name' | 'vocab' | 'app' | 'access' | 'schema'
+type Word = 'name' | 'vocab' | 'uses' | 'tools' | 'app' | 'access' | 'schema'
 let KV = `create table if not exists yak_kv (
     k text primary key,
     v text not null
@@ -182,6 +197,33 @@ async (req) => {
   throw new Denied(who.eid, held, 'viewer', 'read')
 }
 
+// A hibernatable socket the runtime will also close for us.
+type Closable = Wire & { close?(code: number, reason: string): void }
+
+// A tools manifest without its views, and its views alone — the two halves a
+// release can move one of (see the `/tools` door). Both read the JSON as
+// written and say nothing about whether it is a manifest at all: what is in
+// the slot is whatever the kernel put there.
+let entries = (manifest: string): [string, Record<string, unknown>][] => {
+  try {
+    let held = JSON.parse(manifest)
+    return held && typeof held == 'object' && !Array.isArray(held)
+      ? Object.entries(held as Record<string, Record<string, unknown>>)
+      : []
+  } catch {
+    return []
+  }
+}
+
+let apart = (manifest: string): string =>
+  JSON.stringify(
+    entries(manifest).map(([name, t]) => [name, { ...t, view: undefined }]),
+  )
+
+let viewed = (manifest: string): string =>
+  [...new Set(entries(manifest).map(([, t]) => t?.view).filter(Boolean))]
+    .map(String).sort().join('\n')
+
 /** The id a mirrored grant is filed under: one per (app, person), derived, so
  * the same vouch lands on one row however often it is said. */
 export let grantEid = (app: string, person: string): string =>
@@ -243,8 +285,7 @@ export class Store {
       // The guard is added LAST and only when this object knows which app it
       // holds: @yaks/member refuses a write by an actor with no level, so a
       // store that cannot name its app has no access question to ask and the
-      // kernel's own gate in front of it is the whole rule — which is what it
-      // is today. T-33815 has the deploy name the app on every call.
+      // kernel's own gate in front of it is the whole rule.
       plugins: [
         edges(vocab),
         blobs(vocab, bytes),
@@ -253,7 +294,7 @@ export class Store {
         effects(vocab),
         // Before the guard, because it is what the guard reads.
         this.#vouching,
-        ...(app ? [members({ app })] : []),
+        ...(app ? [this.#guarding(app)] : []),
       ],
     })
     this.#vocab = vocab
@@ -396,6 +437,55 @@ export class Store {
     },
   }
 
+  // Whether the batch running RIGHT NOW came in at the kernel's door. A Durable
+  // Object is single-threaded and its storage is synchronous, so `#trust()`
+  // below runs `apply()` from the line that sets this to the line that clears
+  // it without ever yielding: no other batch can be between the two. And the
+  // failure it could have is the safe one — a flag cleared too early leaves the
+  // guard ON, which refuses a write rather than admitting one.
+  #kernelling = false
+
+  /**
+   * @yaks/member's guard, with the one writer it is not about taken out.
+   *
+   * The guard asks whether the ACTOR may write this app. The platform is not an
+   * actor — it writes ABOUT the app rather than in it: the break it noted
+   * (unseen.ts `noted`), the mark on a line it served. That door is
+   * {@link Store.fetch}'s `x-yak-kernel` branch, which no client can reach
+   * (store.ts `storeOf` strips the whole vouch set), and a batch through it
+   * carries no person to hold a level — so the rule as written would refuse
+   * exactly the writes the platform must always be able to make.
+   *
+   * The rule itself stays @yaks/member's. Only who it is asked about is ours.
+   */
+  #guarding(app: string): Plugin {
+    let plugin = members({ app })
+    let guard = plugin.hooks?.precondition
+    return {
+      ...plugin,
+      hooks: {
+        ...plugin.hooks,
+        precondition: (bundles, tx) =>
+          this.#kernelling || !guard ? bundles : guard(bundles, tx),
+      },
+    }
+  }
+
+  // One batch, applied as the caller the door decided it is. `trusted` is two
+  // things at once and they are the same thing: @yaks/graph admits the
+  // server-owned columns, and the guard above stands down.
+  #trust(bundles: Bundle[], who: string | null) {
+    this.#kernelling = true
+    try {
+      return this.#graph.apply(
+        signed(bundles, who ? { eid: who } : null),
+        { trusted: true },
+      )
+    } finally {
+      this.#kernelling = false
+    }
+  }
+
   #patch(bundles: Bundle[]) {
     this.#graph.storage.tx((tx) => tx.patch(bundles))
   }
@@ -410,7 +500,44 @@ export class Store {
     this.#learn(request)
     this.#live.wake()
     let path = new URL(request.url).pathname
+    let kernel = request.headers.get('x-yak-kernel') == '1'
     if (path == '/vocab') return this.#vocabDoor(request)
+    // The three slots beside the vocabulary: the words this app USES but does
+    // not home (T-32728), the tools it declares (T-32685), and what the object
+    // weighs. None is graph data — a declaration holds no rows and a byte count
+    // is not one — so each is a word in this object's own memory, and the
+    // kernel is the only caller.
+    if (path == '/uses') return this.#slot(request, 'uses')
+    if (path == '/tools') {
+      let was = this.#get('tools') ?? '{}'
+      let answer = await this.#slot(request, 'tools')
+      if (!answer.ok || request.method != 'POST') return answer
+      let now = this.#get('tools') ?? '{}'
+      // The manifest's two halves, compared apart (T-33004): the TOOL half is
+      // the manifest with the views taken out — what `tools/list` is made of —
+      // and the VIEW half is the set of pages those tools name, which is what
+      // `resources/list` is made of. A release that only repointed a view moves
+      // resources and not tools, and the kernel says each with its own
+      // `list_changed` (declared.ts).
+      return Response.json({
+        ...await answer.json(),
+        changed: apart(now) != apart(was),
+        views: viewed(now) != viewed(was),
+      })
+    }
+    if (path == '/graph') {
+      return Response.json({
+        db: `do:${this.#get('name') ?? ''}`,
+        bytes: this.#ctx.storage.sql.databaseSize,
+      })
+    }
+    // The app this store held is gone (tools.ts app_delete, erase.ts
+    // `emptied`): everything in it, at once. Kernel only, like the trusted
+    // write — a client's request never carries the flag.
+    if (path == '/' && request.method == 'DELETE') {
+      if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
+      return this.#erase()
+    }
     // The socket is a READ that stays open, and it is the one door @yaks/api
     // does not answer here — hibernation is the runtime's, so `sockets` takes
     // it — which would leave it the one door with no policy on it. So it asks
@@ -423,12 +550,84 @@ export class Store {
       }
       return this.#live.accept(request)
     }
-    if (path == '/apply' && request.method == 'POST') {
-      if (request.headers.get('x-yak-kernel') == '1') {
-        return this.#kernel(request)
-      }
+    if (path == '/apply' && request.method == 'POST' && kernel) {
+      return this.#kernel(request)
     }
-    return this.#route(request)
+    let answer = await this.#route(request)
+    return path == '/query' ? await this.#kinded(answer) : answer
+  }
+
+  // The word an answer's rows are NAMED by. `kind` is not a column and no
+  // client can derive it: it is the most specific component this vocabulary
+  // says the entity wears (@yaks/vocab `kindOf`), and only a store holding the
+  // vocabulary can say which that is. Every caller above reads it — the
+  // composing read calls a row by it (reach.ts), a page's listing draws with
+  // it, and the guide documents it on every row — so it is painted here, at
+  // the one door that answers rows.
+  async #kinded(answer: Response): Promise<Response> {
+    if (!answer.ok) return answer
+    let rows = await answer.json()
+    if (!Array.isArray(rows)) return Response.json(rows)
+    return Response.json(rows.map((row: Bundle) => ({
+      kind: this.#vocab.kindOf(row as Record<string, unknown>),
+      ...row,
+    })))
+  }
+
+  // One of the object's own memory slots as a door: a GET reads back what it
+  // last accepted, a POST replaces it whole. The body is stored as WRITTEN —
+  // whoever posts it is the one that can check it against the app's words
+  // (tools.ts `released`), and a slot that parsed its own content would be a
+  // second vocabulary in the object.
+  async #slot(request: Request, word: Word): Promise<Response> {
+    if (request.method == 'GET') {
+      return Response.json(JSON.parse(this.#get(word) ?? '{}'))
+    }
+    if (request.method != 'POST') {
+      return Response.json(
+        { error: 'NotAllowed', message: `/${word} takes GET or POST` },
+        { status: 405, headers: { allow: 'GET, POST' } },
+      )
+    }
+    let body = await request.text()
+    let held: unknown
+    try {
+      held = JSON.parse(body.trim() || '{}')
+    } catch {
+      held = null
+    }
+    if (!held || typeof held != 'object' || Array.isArray(held)) {
+      return json(
+        { error: 'Refused', message: `/${word} takes a JSON object` },
+        400,
+      )
+    }
+    let now = JSON.stringify(held)
+    if (now != (this.#get(word) ?? '{}')) this.#put(word, now)
+    return Response.json({ ok: true, [word]: Object.keys(held) })
+  }
+
+  // Everything in this object, gone, and the object born again on the spot:
+  // an app made later at the same address finds a planted, empty graph rather
+  // than one with no tables at all. `deleteAll` takes the object's own memory
+  // with it, so the name it answers to is written back before it boots — that
+  // word is what says which vocabulary it speaks.
+  async #erase(): Promise<Response> {
+    let name = this.#get('name') ?? ''
+    // The pages watching this app are watching nothing now. `close` is the
+    // runtime's own on a server-side socket; @yaks/durable-object's `Wire` names
+    // only what it sends, so the method is asked for structurally here.
+    for (let ws of this.#ctx.getWebSockets() as Closable[]) {
+      this.#live.close(ws)
+      try {
+        ws.close?.(1000, 'deleted')
+      } catch { /* already gone */ }
+    }
+    await this.#ctx.storage.deleteAll()
+    this.#ctx.storage.sql.exec(KV)
+    if (name) this.#put('name', name)
+    this.#boot()
+    return Response.json({ ok: true })
   }
 
   // The platform writing about its own data: a `plan` a person may not lift,
@@ -450,13 +649,7 @@ export class Store {
           message: '/apply takes a JSON array of bundles',
         }, 400)
       }
-      let who = vouchOf(request).person
-      return json(
-        await this.#graph.apply(
-          signed(body as Bundle[], who ? { eid: who } : null),
-          { trusted: true },
-        ),
-      )
+      return json(await this.#trust(body as Bundle[], vouchOf(request).person))
     } catch (e) {
       return refuse(e)
     }
