@@ -62,9 +62,11 @@ export type D1Like<S extends Stmt<S> = D1Stmt> = {
   batch: (statements: S[]) => Promise<D1Result<Row>[]>
 }
 
-/** One statement of a write: the SQL, and the parameters it binds. The write
- * half builds these; ./store.ts prepares and sends them together. */
-export type Sql = { sql: string; params: D1Value[] }
+/** One statement: the SQL, and the values it binds. A read builds these here, a
+ * write builds them in @yaks/sqlite; ./store.ts prepares and sends them
+ * together, putting every value through {@link bind} on the way — which is why
+ * the values are unnarrowed until then. */
+export type Sql = { sql: string; params: readonly unknown[] }
 
 /**
  * A value as D1 takes it. `undefined` and `null` are the same absence; a bigint

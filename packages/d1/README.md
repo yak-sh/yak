@@ -116,7 +116,10 @@ A transaction here is **deferred-write**:
 Every statement is written to be self-sufficient so that it can wait: an owner
 id is a subquery (`select id from entity where eid = ?`) rather than a value
 looked up first, so a batch that mints an entity and then points at it resolves
-inside the batch, in order, with no round trip.
+inside the batch, in order, with no round trip. Those statements are
+[@yaks/sqlite](https://jsr.io/@yaks/sqlite)'s — one write path, run one at a
+time over an embedded engine and gathered into a batch here — so a patch cannot
+mean one thing in one store and something else in another.
 
 **Read-your-own-writes** is answered from an overlay, not from the database.
 `apply()` needs it — the death cascade asks who points at a dying entity _after_
@@ -172,9 +175,10 @@ One of three interchangeable adapters behind the same `Storage` seam:
 The schema is @yaks/sqlite's: D1 _is_ SQLite, so the DDL a vocabulary implies is
 derived in one place and this package runs it. The per-component gather is
 shared the same way, so a column the filter resolves one way cannot come back
-gathered another. What this package owns is the round-trip shape — a whole
-bundle, however many components, is gathered in one `batch()` rather than one
-statement at a time — and the transaction above.
+gathered another — and so is the write path, statement for statement. What this
+package owns is the round-trip shape — a whole bundle, however many components,
+is gathered in one `batch()` rather than one statement at a time — and the
+transaction above.
 
 ## Types
 

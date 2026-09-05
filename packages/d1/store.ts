@@ -18,7 +18,11 @@
 //
 // So the WRITE half is genuinely all-or-nothing, and a refused batch (a failing
 // `$was` guard, a hook that says no at commit) leaves the database untouched
-// because it was never written to.
+// because it was never written to. It can wait like that because the writes
+// themselves ask nothing: @yaks/sqlite builds every one as a self-sufficient
+// statement (an owner id is a subquery, never a value looked up first), and this
+// package gathers those same statements rather than keeping a write path of its
+// own.
 //
 // READ-YOUR-OWN-WRITES, which `apply()` needs — the death cascade reads who
 // points at a dying entity AFTER the batch's own patches — is answered from an
@@ -46,11 +50,17 @@ import type { Bundle, Comp, Eid, Entity, Tx } from '@yaks/graph'
 import { comps, tombstoned } from '@yaks/graph'
 import { matcher } from '@yaks/match'
 import type { BindOpts } from '@yaks/sql'
-import { schema } from '@yaks/sqlite'
+import { mintSql, patchSql, removeSql, schema, touched } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
-import { type D1Like, type Row, type Sql, type Stmt, unbind } from './d1.ts'
+import {
+  bind,
+  type D1Like,
+  type Row,
+  type Sql,
+  type Stmt,
+  unbind,
+} from './d1.ts'
 import { bundles, gatherSql, type Query, sql } from './read.ts'
-import { mint, patch as patchSql, remove as removeSql } from './write.ts'
 
 export type { Query }
 
@@ -119,7 +129,10 @@ export let storage = <S extends Stmt<S>>(
   vocab: Vocab,
   base: BindOpts = {},
 ): Store => {
-  let prep = (s: Sql): S => db.prepare(s.sql).bind(...s.params)
+  // `bind` at the door, so a statement may be built in the plain SQLite values
+  // @yaks/sqlite's shared write path speaks (a bigint, a byte array) and D1's
+  // narrower type table is met in exactly one place.
+  let prep = (s: Sql): S => db.prepare(s.sql).bind(...s.params.map(bind))
 
   // One statement, one round trip.
   let one = async (s: Sql): Promise<Row[]> =>
@@ -212,24 +225,11 @@ export let storage = <S extends Stmt<S>>(
     let birth = async (eid: Eid, born: Entity[]): Promise<void> => {
       if (known.get(eid)) return
       let num = await next()
-      pending.push(mint(eid, num))
+      pending.push(mintSql(eid, num))
       known.set(eid, { num, dead: false })
       dirty.set(eid, { entity: { eid, num } })
       born.push({ eid, num })
     }
-
-    // Every eid a batch of bundles touches or points at.
-    let named = (bs: Bundle[]): Eid[] =>
-      bs.flatMap((b) => [
-        b.entity.eid,
-        ...comps(b).flatMap(([name, comp]) =>
-          Object.entries(comp ?? {})
-            .filter(([p, val]) =>
-              val != null && vocab.column(name, p)?.category == 'ref'
-            )
-            .map(([, val]) => String(val))
-        ),
-      ])
 
     let tx: Tx = {
       read: async (query, opts) => {
@@ -250,13 +250,13 @@ export let storage = <S extends Stmt<S>>(
         })
       },
       patch: async (bs) => {
-        await learn(named(bs))
+        await learn(touched(vocab, bs))
         let born: Entity[] = []
-        // `named` puts the bundle's own eid first, then what it points at, so
+        // `touched` puts the bundle's own eid first, then what it points at, so
         // numbers land in the same first-touch order every adapter uses.
         for (let b of bs) {
           if (buried(b.entity.eid)) continue
-          for (let e of named([b])) await birth(e, born)
+          for (let e of touched(vocab, [b])) await birth(e, born)
         }
         for (let b of bs) {
           let eid = b.entity.eid

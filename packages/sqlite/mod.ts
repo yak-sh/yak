@@ -9,6 +9,12 @@
 // vocabulary implies) and WRITES (a patch applied to that schema). The reads it
 // gets for free — it runs @yaks/sql's compiled statement and gathers the rows.
 //
+// Both halves are the reference every SQLite-shaped adapter shares. The schema
+// is one derivation, and so is the write: ./write.ts builds each write as a
+// SELF-SUFFICIENT statement — an owner id is a subquery, never a value looked up
+// first — so the same statements this package runs one at a time are the ones
+// @yaks/d1 gathers into a single batch.
+//
 // The model is the yaks entity graph: everything is an ENTITY (a string id)
 // wearing COMPONENTS (a row per component table). An entity is what its
 // components make it — a blog post is a `doc` plus a `post`; a product is a
@@ -42,7 +48,20 @@ export * from './driver.ts'
 export * from './bundle.ts'
 export { grown, indexed, schema, tabled, type Text } from './ddl.ts'
 export { compSql, get, type Query, read, rows } from './read.ts'
-export { buried, patch, remove } from './write.ts'
+export {
+  buried,
+  dropSql,
+  mintSql,
+  patch,
+  patchSql,
+  remove,
+  removeSql,
+  type Spine,
+  spines,
+  type Sql,
+  touched,
+  upsertSql,
+} from './write.ts'
 export type { Storage } from '@yaks/graph'
 
 /**

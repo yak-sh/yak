@@ -61,6 +61,17 @@ export {
   unbind,
 } from './d1.ts'
 export { bundles, comps, gatherSql, type Query, spineSql, sql } from './read.ts'
-export { drop, mint, patch, remove, upsert } from './write.ts'
+// The write path is @yaks/sqlite's. Every write it builds is a self-sufficient
+// statement — an owner id is a subquery, nothing is read between two writes —
+// which is exactly what a batch that has not been sent yet needs, so this
+// package gathers those statements rather than keeping a second copy of them.
+export {
+  dropSql,
+  mintSql,
+  patchSql,
+  removeSql,
+  touched,
+  upsertSql,
+} from '@yaks/sqlite'
 export { storage, type Store } from './store.ts'
 export type { Storage, Tx } from '@yaks/graph'

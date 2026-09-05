@@ -5,7 +5,9 @@
 
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from './bundle.ts'
-import { store } from './harness.ts'
+import type { Driver } from './driver.ts'
+import { mem, shop, store } from './harness.ts'
+import { storage } from './mod.ts'
 
 let c = (b: Bundle, name: string): Comp => b[name] as Comp
 
@@ -145,6 +147,47 @@ Deno.test('a composite unique refuses only the whole pair', () => {
     threw = true
   }
   assert(threw)
+})
+
+// The write path is shared with @yaks/d1, which cannot read mid-batch, so it
+// must not ask the database anything to build a write. What is left is two
+// questions about IDENTITY — which of the named eids exist, and what numbers the
+// new ones were given — and they do not multiply with the batch.
+Deno.test('a patch asks twice about identity, whatever the batch is', () => {
+  let seen: string[] = []
+  let base = mem()
+  let driver: Driver = {
+    query: (sql, params) => {
+      seen.push(sql)
+      return base.query(sql, params)
+    },
+    exec: (sql) => base.exec(sql),
+  }
+  let s = storage(driver, shop)
+  s.install()
+  let asked = () => {
+    let n = seen.filter((q) => q.trimStart().startsWith('select')).length
+    seen.length = 0
+    return n
+  }
+
+  asked() // forget what install() asked
+  write(s, [{ entity: { eid: 'p1' }, product: { price: 12, maker: 'm1' } }])
+  assertEquals(asked(), 2)
+
+  write(s, [
+    { entity: { eid: 'p2' }, doc: { title: 'Mug' }, product: { price: 1 } },
+    { entity: { eid: 'r1' }, review: { stars: 5, product: 'p2' } },
+    { entity: { eid: 'p1' }, product: { price: 9 } },
+  ])
+  assertEquals(asked(), 2)
+
+  // A batch that mints nothing asks once: there are no numbers to read back.
+  write(s, [{ entity: { eid: 'p1' }, product: { price: 3 } }])
+  assertEquals(asked(), 1)
+
+  s.tx((tx) => tx.remove([{ eid: 'p1' }]))
+  assertEquals(asked(), 0)
 })
 
 Deno.test('a transaction rolls back on a throw, and nests', () => {
