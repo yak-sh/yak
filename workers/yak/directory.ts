@@ -1,12 +1,13 @@
 // The directory part (D-32318 §The meta-space): spaces, apps, and members
 // are entities in the meta-space's store — the Store object named
-// yak/platform — and this handler is that store's door, `GET /query` and
-// `POST /apply`, in the graph's own wire: the filter grammar or an entity
-// bundle in, entity JSON out. No shape of its own: a caller in this Worker
-// and a caller across a service binding ask the same question, and
-// `directory(fetcher)` below is the typed client that phrases the ones the
-// kernel asks (a space by slug, an app in it, its home, a person's role) and
-// writes the ones that change it (a space born, an app born, a deploy).
+// yak/platform, a graph on the platform's own vocabulary (vocab.ts
+// `platformDoc`, T-33814) — and this handler is that store's door,
+// `GET /query?q=<filter line>` and `POST /apply`, bundles in and entity JSON
+// out. No shape of its own: a caller in this Worker and a caller across a
+// service binding ask the same question, and `directory(fetcher)` below is the
+// typed client that phrases the ones the kernel asks (a space by slug, an app
+// in it, its home, a person's role) and writes the ones that change it (a
+// space born, an app born, a deploy). meta.ts is the store below it.
 //
 // Answers are cached in a Map private to this module with a 30-second TTL
 // rather than the Cache API: a resolution is a few hundred bytes, the Cache
@@ -20,19 +21,23 @@
 // change made elsewhere. The cache is this part's own — no other module
 // reads it — and moves with it.
 // The meta space seeds itself on first touch (space `yak`, app `platform`),
-// written as an entity literal through the store's /apply, so the directory
-// can describe its own store.
+// written as bundles through the store's /apply, so the directory can describe
+// its own store.
+import type { Bundle } from '@yaks/graph'
 import type { Mutation } from '../../src/mutation.ts'
 import { slugsOf } from '../../src/types.ts'
 import type { Env, Fetcher } from './env.ts'
+import { KERNEL, type Meta, meta as metaStore } from './meta.ts'
 import { SLUG } from './route.ts'
 import { nameOf } from './signin.ts'
 import { type Door, type Namespace, storeOf } from './store.ts'
+import { PLATFORM_STORE } from './vocab.ts'
 
 export let META = { space: 'yak', app: 'platform' }
 // The meta space's own store, named the way every app's is. Its slugs are
-// the platform's own and never move, so the name is a constant.
-export let META_STORE = `${META.space}/${META.app}`
+// the platform's own and never move, so the name is a constant — vocab.ts
+// spells it, because the store's own vocabulary is chosen by that name.
+export let META_STORE = PLATFORM_STORE
 
 // What a space or an app spent this calendar month (platform.rs `Meter`,
 // usage.ts writes it): on an app its own store's, on a space every app of it
@@ -236,29 +241,25 @@ let cache = new Map<string, { at: number; body: string }>()
 // seed still happens before there is anything to describe.
 //
 // A second isolate racing the first bounces on the unique slug and is
-// ignored: its query then finds the winner.
-let seeded: Promise<void> | undefined
+// ignored: its query then finds the winner. Held against the DOOR rather than
+// the module, so that one door is seeded once and a test with its own store
+// seeds its own.
+let seeded = new WeakMap<Meta, Promise<void>>()
 
-let seed = async (env: Env) => {
-  let meta = storeOf(env.STORE, META_STORE)
-  let found = await (await meta(`/query?.space.slug=${META.space}`)).json()
-  if ((found as Row[]).length) return
-  await meta('/apply', {
-    method: 'POST',
-    body: JSON.stringify({
-      entities: [
-        {
-          entity: { eid: '$space' },
-          doc: { title: META.space },
-          space: { slug: META.space },
-        },
-        {
-          doc: { title: META.app },
-          app: { slug: META.app, space: '$space' },
-        },
-      ],
-    }),
-  })
+let seed = async (store: Meta) => {
+  if ((await store.query(`.space.slug=${META.space}`)).length) return
+  await store.apply([
+    {
+      entity: { eid: '$space' },
+      doc: { title: META.space },
+      space: { slug: META.space },
+    },
+    {
+      entity: { eid: '$app' },
+      doc: { title: META.app },
+      app: { slug: META.app, space: '$space' },
+    },
+  ])
 }
 
 let notFound = () => new Response('not found', { status: 404 })
@@ -282,31 +283,69 @@ let forwarded = (req: Request) =>
     VOUCH.map((h) => [h, req.headers.get(h)]).filter(([, v]) => v),
   ) as Record<string, string>
 
-export let fetch = async (req: Request, env: Env): Promise<Response> => {
+// This part's own door is the fleet's mutation envelope — a bundle list under
+// `entities`, which is what its typed client and every tool writes — and the
+// store below it is a graph, so the envelope is opened here and the bundles go
+// on as they are (meta.ts). `over` names the store the door speaks to, which is
+// the seam a test drives a whole directory against.
+export let over = (store: Meta) => async (req: Request): Promise<Response> => {
   let url = new URL(req.url)
   if (url.pathname == '/apply' && req.method == 'POST') {
-    await (seeded ??= seed(env))
-    let r = await storeOf(env.STORE, META_STORE)('/apply', {
-      method: 'POST',
-      body: await req.text(),
-    }, forwarded(req))
-    // The directory just moved; nothing read before it is still true.
-    if (r.ok) cache.clear()
-    return r
+    let first = seeded.get(store)
+    if (!first) seeded.set(store, first = seed(store))
+    await first
+    try {
+      let sent = await req.json() as { entities?: Bundle[] }
+      let applied = await store.apply(sent.entities ?? [], forwarded(req))
+      // The directory just moved; nothing read before it is still true.
+      cache.clear()
+      return Response.json({ ok: true, ...resulted(applied) })
+    } catch (e) {
+      return new Response(e instanceof Error ? e.message : String(e), {
+        status: 400,
+      })
+    }
   }
   if (url.pathname != '/query' || req.method != 'GET') return notFound()
-  let hit = req.headers.get(FRESH) ? null : cache.get(url.search)
+  let line = url.searchParams.get('q') ?? ''
+  let hit = req.headers.get(FRESH) ? null : cache.get(line)
   if (hit && hit.at > Date.now() - TTL) {
     return Response.json(JSON.parse(hit.body))
   }
-  let r = await storeOf(env.STORE, META_STORE)(`/query${url.search}`)
-  if (!r.ok) return r
-  let body = await r.text()
-  if (body != '[]') cache.set(url.search, { at: Date.now(), body })
+  let rows: Bundle[]
+  try {
+    rows = await store.query(line)
+  } catch (e) {
+    return new Response(e instanceof Error ? e.message : String(e), {
+      status: 400,
+    })
+  }
+  let body = JSON.stringify(rows)
+  if (body != '[]') cache.set(line, { at: Date.now(), body })
   return new Response(body, {
     headers: { 'content-type': 'application/json' },
   })
 }
+
+/** The part, over the directory's own store. */
+export let fetch = (req: Request, env: Env): Promise<Response> =>
+  over(metaStore(env))(req)
+
+// The applied batch in the shape this part's callers read: the flat changes a
+// tool inspects for the eid it just wrote, and the aliases a mint is looked up
+// by. Both are projections of the bundles the graph answered with.
+let resulted = (applied: Bundle[]) => ({
+  changes: applied.flatMap((b) =>
+    Object.entries(b)
+      .filter(([k]) => k != 'entity' && !k.startsWith('$'))
+      .map(([name, comp]) => ({ eid: b.entity.eid, name, comp }))
+  ),
+  aliases: Object.fromEntries(
+    applied.flatMap((b) =>
+      typeof b.$alias == 'string' ? [[b.$alias, b.entity.eid]] : []
+    ),
+  ),
+})
 
 // A write the kernel makes ABOUT the directory rather than for a person: the
 // hourly meter and the plan a space is on (usage.ts), which are the
@@ -314,20 +353,15 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
 // carrying the kernel flag — `fetch` above forwards only what vouches for a
 // person, so that flag can never arrive from outside — and empties the cache,
 // because what it just changed is what the next read answers.
-export let stamp = async (env: Env, mutation: Mutation) => {
-  let r = await storeOf(env.STORE, META_STORE)('/apply', {
-    method: 'POST',
-    body: JSON.stringify(mutation),
-  }, { 'x-yak-kernel': '1' })
-  if (!r.ok) throw new Error(`directory: ${await r.text()}`)
-  await r.body?.cancel()
+export let stamp = async (env: Env, mutation: { entities: Bundle[] }) => {
+  await metaStore(env).apply(mutation.entities, KERNEL)
   cache.clear()
 }
 
 // A listing carries the components the filter NAMES (workers/yak/query.ts),
 // so every read here asks for what it reads: a space with its title, plan and
 // meter, an app with its title, the alias its store is named by, and its
-// meter. `id=` names no component and answers the whole bundle, which is why
+// meter. `.eid=` names no component and answers the whole bundle, which is why
 // those are bare.
 // What every read of an APP asks for beside the app row itself, in one place
 // because `appOf` reads all of it and a filter that forgets one answers null
@@ -451,10 +485,13 @@ export type Directory = ReturnType<typeof directory>
 // marked the version before it live (C-32905 item 5). Page traffic keeps the
 // cache; an agent's answer never disagrees with the write it just made.
 export let directory = (via: Fetcher, now = false) => {
+  // The whole filter line as ONE parameter, values written raw: the door
+  // hands it to the graph as the query it is (meta.ts), rather than each
+  // caller escaping the pieces of a search string.
   let query = async (q: string, fresh = now): Promise<Row[]> => {
     let r = await via.fetch(
       new Request(
-        `http://directory/query?${q}`,
+        `http://directory/query?q=${encodeURIComponent(q)}`,
         fresh ? { headers: { [FRESH]: '1' } } : {},
       ),
     )
@@ -497,14 +534,14 @@ export let directory = (via: Fetcher, now = false) => {
       return row ? appOf(row) : null
     },
     // An address the app has LEFT, still pointing at it. A rename moves
-    // `app.slug` and keeps the old address on the app's alias, and every
-    // alias resolves like an id — so this is the id door, asked in the meta
-    // store, and an answer that is an app of THIS space is a move to follow
-    // (T-32576: a rename used to strand every open page).
+    // `app.slug` and keeps the old address on the app's alias, so the answer
+    // is the app of THIS space that still answers to the address asked for —
+    // a move to follow (T-32576: a rename used to strand every open page).
     former: async (space: Space, slug: string) => {
-      let row = await one(`id=${bornAt(space, slug)}`)
-      let app = row?.app && row.app.space == space.eid ? appOf(row) : null
-      return app && app.slug != slug ? app : null
+      let was = bornAt(space, slug)
+      let app = (await self.apps(space))
+        .find((a) => a.slug != slug && a.slugs.includes(was))
+      return app ?? null
     },
     // Every app in a space, oldest first — the order they were made.
     apps: async (space: Space): Promise<App[]> =>
@@ -515,21 +552,19 @@ export let directory = (via: Fetcher, now = false) => {
     // or nobody.
     payer: async (customer: string) => {
       let row = await one(
-        `.plan.customer=${
-          encodeURIComponent(customer)
-        }&.space!&.doc?&.meter?&.notified?`,
+        `.plan.customer=${customer}&.space!&.doc?&.meter?&.notified?`,
       )
       return row?.space ? spaceOf(row) : null
     },
     // A space by eid, which is how an app names the space it belongs to.
     at: async (eid: string) => {
-      let row = await one(`id=${eid}`)
+      let row = await one(`.eid=${eid}`)
       return row?.space ? spaceOf(row) : null
     },
     // One app by eid, with the space it belongs to — what an installed app's
     // pin names (`installed.of`), and how an offer is read back.
     appAt: async (eid: string) => {
-      let row = await one(`id=${eid}`)
+      let row = await one(`.eid=${eid}`)
       if (!row?.app) return null
       let app = appOf(row)
       let space = await self.at(app.space)
@@ -544,7 +579,7 @@ export let directory = (via: Fetcher, now = false) => {
     // read here, and an empty answer is not cached, so a domain serves the
     // moment it is attached rather than a TTL later.
     serves: async (host: string) => {
-      let row = await one(`.hostname.name=${encodeURIComponent(host)}`)
+      let row = await one(`.hostname.name=${host}`)
       if (!row?.hostname) return null
       let at = await self.appAt(idOf(row.hostname.app))
       return at ? { ...at, host: hostOf(row) } : null
@@ -562,9 +597,7 @@ export let directory = (via: Fetcher, now = false) => {
     // The app offered under a platform-wide name (T-32888), with the space it
     // came from — an offer is an app, so this is one row read two ways.
     offered: async (name: string) => {
-      let row = await one(
-        `.published.name=${encodeURIComponent(name)}&.app!`,
-      )
+      let row = await one(`.published.name=${name}&.app!`)
       return row?.app ? await self.appAt(row.entity.eid) : null
     },
     // Every offer standing, newest first — what a person's agent browses.
@@ -593,7 +626,7 @@ export let directory = (via: Fetcher, now = false) => {
       (await query('.space!&.doc?&.plan?&.meter?&.notified?')).map(spaceOf),
     // The app that answers the space's bare hostname, if it has one.
     home: async (space: Space) => {
-      let row = space.home ? await one(`id=${space.home}`) : undefined
+      let row = space.home ? await one(`.eid=${space.home}`) : undefined
       return row?.app ? appOf(row) : null
     },
     // A person's membership row: the eid, so an invite can revise or remove
@@ -623,18 +656,18 @@ export let directory = (via: Fetcher, now = false) => {
     // nobody, which is how an invited person's later sign-in finds the row
     // the invite made.
     personAt: async (email: string) =>
-      (await one(`.person!&.email.address=${encodeURIComponent(email)}`))
+      (await one(`.person!&.email.address=${email}`))
         ?.entity.eid ?? null,
     // The same question the other way: where the platform writes to this
     // person — the letter's envelope, and nothing else (T-32629).
     emailAt: async (person: string) =>
-      (await one(`id=${person}`))?.email?.address ?? null,
+      (await one(`.eid=${person}`))?.email?.address ?? null,
     // What to call this person anywhere their address must not go: the name
     // they chose at sign-in, else the front of their address (signin.ts
     // `nameOf`). An app's store is written this and never the address, so a
     // page that shows its bylines shows names (T-32654).
     nameAt: async (person: string) => {
-      let row = await one(`id=${person}`)
+      let row = await one(`.eid=${person}`)
       return row?.email ? nameOf(row.doc?.title, row.email.address) : null
     },
     // Every space this person belongs to, the meta space left out: `yak` is
@@ -646,13 +679,13 @@ export let directory = (via: Fetcher, now = false) => {
       // A filter resolves an eid to an entity, so a person the meta store has
       // never seen — someone who signed in before it kept a row — makes the
       // question itself unanswerable. No row, no memberships.
-      if (!(await one(`id=${person}`))) return []
+      if (!(await one(`.eid=${person}`))) return []
       let members = await query(
         `.member.person=${person}${role ? `&.member.role=${role}` : ''}`,
       )
       let spaces: Space[] = []
       for (let m of members) {
-        let row = m.member && await one(`id=${idOf(m.member.space)}`)
+        let row = m.member && await one(`.eid=${idOf(m.member.space)}`)
         if (row?.space && row.space.slug != META.space) {
           spaces.push(spaceOf(row))
         }
@@ -669,7 +702,7 @@ export let directory = (via: Fetcher, now = false) => {
     // finds the winner.
     own: async (person: string): Promise<Space> => {
       let mine = await self.spaces(person, 'owner')
-      let row = await one(`id=${person}`)
+      let row = await one(`.eid=${person}`)
       let wanted = slugFor(row?.email?.address ?? 'space')
       if (mine.length) return mine.find((s) => s.slug == wanted) ?? mine[0]
       let slug = wanted
@@ -687,7 +720,10 @@ export let directory = (via: Fetcher, now = false) => {
               doc: { title: wanted },
               space: { slug },
             },
-            { member: { space: '$space', person, role: 'owner' } },
+            {
+              entity: { eid: '$seat' },
+              member: { space: '$space', person, role: 'owner' },
+            },
           ],
         }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
       } catch (e) {
@@ -699,7 +735,7 @@ export let directory = (via: Fetcher, now = false) => {
     },
     // Whether nobody belongs yet: read only to admit the first member.
     memberless: async (space: Space) =>
-      !(await one(`.member.space=${space.eid}&limit=1`)),
+      !(await one(`.member.space=${space.eid}&.limit=1`)),
   }
   return self
 }

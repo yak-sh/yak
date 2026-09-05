@@ -20,7 +20,8 @@
 // door does with a refusal is the door's: it answers exactly what an accepted
 // ask answers and mails nothing, because a visible refusal would say whether
 // an address had been asked for.
-import type { Door } from './store.ts'
+import type { Bundle } from '@yaks/graph'
+import { KERNEL, type Meta, minted } from './meta.ts'
 
 // Ten minutes, five guesses: long enough to switch to the mail app, short
 // enough that a six-digit code is never worth grinding.
@@ -69,36 +70,21 @@ let digits = () =>
   String(crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000)
     .padStart(6, '0')
 
-let apply = async (store: Door, body: unknown) => {
-  let r = await store('/apply', {
-    method: 'POST',
-    body: JSON.stringify(body),
-  }, { 'x-yak-kernel': '1' })
-  if (!r.ok) throw new Error(`meta store refused: ${await r.text()}`)
-  return r.json()
-}
-
-let ask = async (store: Door, q: string) => {
-  let r = await store(`/query?${q}`)
-  if (!r.ok) throw new Error(`meta store: ${await r.text()}`)
-  return r.json() as Promise<Record<string, unknown>[]>
-}
+let apply = (store: Meta, bundles: Bundle[]) => store.apply(bundles, KERNEL)
 
 // The whole entity goes, not just the component: a sign-in leaves nothing
 // behind. `tombstone` is the bundle's spelling of death (T-32429), so this
 // is one more bundle like every other write here.
-let forget = (store: Door, eids: string[]) =>
+let forget = (store: Meta, eids: string[]) =>
   eids.length
-    ? apply(store, {
-      entities: eids.map((eid) => ({ entity: { eid }, tombstone: {} })),
-    })
+    ? apply(store, eids.map((eid) => ({ entity: { eid }, tombstone: {} })))
     : Promise.resolve(null)
 
 // Every row ever written for an address, newest first. A row outlives the code
 // it carried: dead, it is the record that the letter went out, and that record
 // is what the ceiling counts.
-let sent = async (store: Door, email: string) =>
-  ((await ask(store, `.signin.email=${encodeURIComponent(canon(email))}`))
+let sent = async (store: Meta, email: string) =>
+  ((await store.query(`.signin.email=${canon(email)}`))
     .filter((r) => r.signin) as unknown as Signin[])
     .sort((a, b) => b.signin.expires.localeCompare(a.signin.expires))
 
@@ -116,7 +102,7 @@ let open = (r: Signin) =>
 // not the digits, so a second ask cannot re-send the first letter's code, and
 // letting the first one live is what a slow letter needs. Rows that have
 // fallen out of the window are swept here; nothing else sweeps them.
-export let mint = async (store: Door, secret: string, email: string) => {
+export let mint = async (store: Meta, secret: string, email: string) => {
   let rows = await sent(store, email)
   let floor = Date.now() - WINDOW
   await forget(
@@ -125,16 +111,15 @@ export let mint = async (store: Door, secret: string, email: string) => {
   )
   if (rows.filter((r) => at(r) > floor).length >= SENDS) return null
   let code = digits()
-  await apply(store, {
-    entities: [{
-      signin: {
-        email: canon(email),
-        code: await mac(email, code, secret),
-        expires: new Date(Date.now() + LIFE).toISOString(),
-        tries: 0,
-      },
-    }],
-  })
+  await apply(store, [{
+    entity: { eid: '$code' },
+    signin: {
+      email: canon(email),
+      code: await mac(email, code, secret),
+      expires: new Date(Date.now() + LIFE).toISOString(),
+      tries: 0,
+    },
+  }])
   return code
 }
 
@@ -148,7 +133,7 @@ export let mint = async (store: Door, secret: string, email: string) => {
 // stays only as the record; burning one is what an attacker would do to buy
 // another letter, and it buys nothing.
 export let spend = async (
-  store: Door,
+  store: Meta,
   secret: string,
   email: string,
   code: string,
@@ -161,21 +146,21 @@ export let spend = async (
     await forget(store, rows.map((r) => r.entity.eid))
     return true
   }
-  await apply(store, {
-    entities: live.map((r) => ({
+  await apply(
+    store,
+    live.map((r) => ({
       entity: { eid: r.entity.eid },
       signin: { tries: (r.signin.tries ?? 0) + 1 },
     })),
-  })
+  )
   return false
 }
 
 type Person = { entity: { eid: string }; doc?: { title?: string } }
 
-let personAt = async (store: Door, email: string) =>
-  (await ask(
-    store,
-    `.person!&.email.address=${encodeURIComponent(canon(email))}&.doc?`,
+let personAt = async (store: Meta, email: string) =>
+  (await store.query(
+    `.person!&.email.address=${canon(email)}&.doc?`,
   ))[0] as Person | undefined
 
 // An address is not a name. A person minted before anyone was asked wears
@@ -193,7 +178,7 @@ export let nameOf = (title: string | null | undefined, email: string) =>
 
 // Whether anyone has ever named this address, which is what the code card
 // asks about when it asks (identity.ts).
-export let nameAt = async (store: Door, email: string) =>
+export let nameAt = async (store: Meta, email: string) =>
   chose((await personAt(store, email))?.doc?.title)
 
 // The person behind an address, minted on first sight. `email` is a facet any
@@ -205,29 +190,29 @@ export let nameAt = async (store: Door, email: string) =>
 // name yet — an invitation never renames someone who has named themselves —
 // and a person nobody has named keeps no title at all, so the next sign-in
 // knows to ask.
-export let personOf = async (store: Door, email: string, name?: string) => {
+export let personOf = async (store: Meta, email: string, name?: string) => {
   let at = canon(email)
   let row = await personAt(store, at)
   if (row) {
     if (name && !chose(row.doc?.title)) {
-      await apply(store, {
-        entities: [{ entity: { eid: row.entity.eid }, doc: { title: name } }],
-      })
+      await apply(store, [{
+        entity: { eid: row.entity.eid },
+        doc: { title: name },
+      }])
     }
     return row.entity.eid
   }
   // An eid the batch mints is a `$alias`, and the reply says what it became:
   // a bundle names an EXISTING entity by eid, so a client cannot hand the
   // store a uuid it invented (D-23827).
-  let out = await apply(store, {
-    entities: [{
+  let eid = minted(
+    await apply(store, [{
       entity: { eid: '$who' },
       ...(name ? { doc: { title: name } } : {}),
       person: {},
       email: { address: at },
-    }],
-  }) as { aliases?: Record<string, string> }
-  let eid = out.aliases?.$who
+    }]),
+  ).$who
   if (!eid) throw new Error('the meta store minted no person')
   return eid
 }

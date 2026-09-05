@@ -37,19 +37,12 @@
 // `ceilings()` reads, and a tier a person could write is a person who can lift
 // their own ceilings.
 import * as dirPart from './directory.ts'
-import {
-  directory,
-  META_STORE,
-  type Plan,
-  type Space,
-  stamp,
-} from './directory.ts'
+import { directory, type Plan, type Space, stamp } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { PLATFORM } from './route.ts'
 
 import { cookieValue, verify } from '../../src/token.ts'
-import { storeOf } from './store.ts'
-import { noted } from './unseen.ts'
+import { metaBreaks, noted } from './unseen.ts'
 
 let API = 'https://api.stripe.com'
 
@@ -300,7 +293,7 @@ let json = (status: number, code: string, message: string) =>
 // A break, where the owner reads the platform's own (index.ts `report`). It is
 // awaited, so the entity exists by the time the door answers.
 let broke = async (env: Env, request: string, e: unknown) => {
-  await noted(storeOf(env.STORE, META_STORE), {
+  await noted(metaBreaks(env), {
     request,
     message: e instanceof Error ? e.message : String(e),
     stack: e instanceof Error ? e.stack ?? '' : '',

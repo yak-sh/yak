@@ -26,7 +26,7 @@
 // Without CF_ANALYTICS_TOKEN there is nothing to ask, so the sweep says one
 // line on the log and returns: the secret is the owner's to set (T-32759), and
 // a deploy standing before they do must not fail every hour.
-import type { EntityLiteral } from '../../src/mutation.ts'
+import type { Bundle } from '@yaks/graph'
 import * as dirPart from './directory.ts'
 import {
   type App,
@@ -198,7 +198,7 @@ export let sweep = async (env: Env, now = new Date()) => {
     ),
   )
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-  let entities: EntityLiteral[] = []
+  let entities: Bundle[] = []
   for (let space of await dir.all()) {
     let total = { ...none(), bytes: 0 }
     let apps = await dir.apps(space)

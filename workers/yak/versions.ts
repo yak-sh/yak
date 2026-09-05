@@ -182,6 +182,7 @@ export let record = async (
     entities: [
       { entity: { eid: app.eid }, app: { version } },
       {
+        entity: { eid: '$deploy' },
         deploy: {
           app: app.eid,
           version,

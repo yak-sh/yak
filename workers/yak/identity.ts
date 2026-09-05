@@ -55,11 +55,12 @@ import {
 import { cookie, cookieValue, sign, verify } from '../../src/token.ts'
 import { HANDOFF, handoffTo, opener, safeNext, spender } from './handoff.ts'
 export { HANDOFF } from './handoff.ts'
-import { directory, META, META_STORE } from './directory.ts'
+import { directory, META } from './directory.ts'
 import { doomed, erase, naming, refused, ticketed, went } from './erase.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { mail } from './mail.ts'
+import { KERNEL, meta } from './meta.ts'
 import {
   askAllow,
   askCode,
@@ -71,7 +72,6 @@ import {
 } from './pages.ts'
 import { hostOf, onZone, PLATFORM, SLUG } from './route.ts'
 import { canon, mint, nameAt, nameOf, personOf, spend } from './signin.ts'
-import { storeOf } from './store.ts'
 
 // A month of not signing in again. The cookie is the browser's; an agent's
 // token has the provider's own, shorter life.
@@ -160,8 +160,6 @@ let domainOf = (req: Request) => {
   let host = hostOf(req)
   return host == PLATFORM || host.endsWith(`.${PLATFORM}`) ? PLATFORM : ''
 }
-
-let meta = (env: Env) => storeOf(env.STORE, META_STORE)
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
@@ -396,13 +394,10 @@ let landed = async (
   await dir.own(person)
   let space = await dir.space(META.space)
   if (space && await dir.memberless(space)) {
-    let r = await store('/apply', {
-      method: 'POST',
-      body: JSON.stringify({
-        entities: [{ member: { space: space.eid, person, role: 'owner' } }],
-      }),
-    }, { 'x-yak-kernel': '1' })
-    if (!r.ok) throw new Error(`first owner refused: ${await r.text()}`)
+    await store.apply([{
+      entity: { eid: '$seat' },
+      member: { space: space.eid, person, role: 'owner' },
+    }], KERNEL)
   }
   let token = await sign(
     { person, space: null, exp: Math.floor(Date.now() / 1000) + SESSION },
@@ -601,7 +596,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     if (ask instanceof Response) return ask
     let who = await withAuth(env, req)
     if (!who) return askEmail(q, null, await clientName(env, ask))
-    let [row] = await (await meta(env)(`/query?id=${who.person}`)).json() as {
+    let [row] = await meta(env).query(`.eid=${who.person}`) as {
       email?: { address: string }
     }[]
     return askAllow(

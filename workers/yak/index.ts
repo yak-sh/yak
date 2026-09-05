@@ -65,7 +65,7 @@ import { sealed } from './cache.ts'
 import * as filePart from './files.ts'
 import * as billing from './billing.ts'
 import * as dirPart from './directory.ts'
-import { directory, META_STORE } from './directory.ts'
+import { directory } from './directory.ts'
 import { customOf, reading, stageOf, type Step, steps } from './domains.ts'
 import { bound, type Env, type Inbound } from './env.ts'
 import * as identity from './identity.ts'
@@ -83,8 +83,7 @@ import {
   sameOrigin,
   shared,
 } from './route.ts'
-import { storeOf } from './store.ts'
-import { noted, refusal } from './unseen.ts'
+import { metaBreaks, noted, refusal } from './unseen.ts'
 import { metered } from './usage.ts'
 
 export { Store } from './store.ts'
@@ -323,7 +322,7 @@ let report = async (env: Env, what: string, e: unknown) => {
   // because a page reporting its own break writes the same one. No space is
   // told: the meta store is the platform's own, and this is nobody's news but
   // ours.
-  await noted(storeOf(env.STORE, META_STORE), {
+  await noted(metaBreaks(env), {
     request: what,
     message: e instanceof Error ? e.message : String(e),
     stack: e instanceof Error ? e.stack ?? '' : '',

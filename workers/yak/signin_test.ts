@@ -1,5 +1,5 @@
 // The sign-in code's decisions, at the seam: signin.ts talks to the meta
-// store through one Door, so a stub Door holds the rows and records the
+// store as a graph (meta.ts), so a stub Meta holds the rows and records the
 // bundles. What is proved here is what a workerd test cannot reach without
 // waiting ten minutes or forging a server-stamped column: a code dies of old
 // age, a code dies of too many guesses, a code minted for one address never
@@ -18,7 +18,8 @@ import {
   TRIES,
   WINDOW,
 } from './signin.ts'
-import type { Door } from './store.ts'
+import type { Bundle } from '@yaks/graph'
+import type { Meta } from './meta.ts'
 
 let n = 0
 let row = (
@@ -29,13 +30,21 @@ let row = (
 ) => ({ entity: { eid: `e${++n}` }, signin: { email, code, expires, tries } })
 
 let door = (rows: unknown[]) => {
-  let wrote: Record<string, unknown>[] = []
-  let at: Door = (path, init) => {
-    if (path.startsWith('/query')) return Promise.resolve(Response.json(rows))
-    wrote.push(JSON.parse(String(init?.body)))
-    // What a mint gets back: the eid the store gave the `$who` the bundle
-    // asked for (D-23827).
-    return Promise.resolve(Response.json({ ok: true, aliases: { $who: 'p1' } }))
+  let wrote: Bundle[] = []
+  let at: Meta = {
+    query: () => Promise.resolve(rows as Bundle[]),
+    apply: (bundles) => {
+      wrote.push(...bundles)
+      // What a mint gets back: the eid the store gave the `$who` the bundle
+      // asked for, riding the applied bundle as `$alias` (D-23827).
+      return Promise.resolve(
+        bundles.map((b) =>
+          b.entity.eid == '$who'
+            ? { ...b, entity: { eid: 'p1' }, $alias: '$who' }
+            : b
+        ),
+      )
+    },
   }
   return { at, wrote }
 }
@@ -47,18 +56,12 @@ let SECRET = 'a probe secret'
 let ME = 'me@yaks.app'
 
 // A bundle that buries the entity: the tombstone spelling of death.
-let forgotten = (wrote: Record<string, unknown>[]) =>
-  wrote.some((b) =>
-    ((b as { entities?: { tombstone?: unknown }[] }).entities ?? [])
-      .some((e) => e.tombstone)
-  )
+let forgotten = (wrote: Bundle[]) => wrote.some((b) => b.tombstone)
 
 // The guess count each patched row was left holding.
-let tries = (wrote: Record<string, unknown>[]) =>
-  wrote.flatMap((b) =>
-    ((b as { entities?: { signin?: { tries?: number } }[] }).entities ?? [])
-      .map((e) => e.signin?.tries).filter((t) => t != null)
-  )
+let tries = (wrote: Bundle[]) =>
+  wrote.map((b) => (b.signin as { tries?: number } | undefined)?.tries)
+    .filter((t) => t != null)
 
 Deno.test('the live code opens, and is spent', async () => {
   let d = door([row(ME, await mac(ME, '123456', SECRET), soon())])
@@ -123,11 +126,8 @@ let record = (ago: number) => ({
   },
 })
 
-let minted = (wrote: Record<string, unknown>[]) =>
-  wrote.flatMap((b) =>
-    ((b as { entities?: { signin?: { code?: string } }[] }).entities ?? [])
-      .filter((e) => e.signin?.code)
-  )
+let minted = (wrote: Bundle[]) =>
+  wrote.filter((b) => (b.signin as { code?: string } | undefined)?.code)
 
 Deno.test('three letters an hour to one address, and no more', async () => {
   let under = door([record(0), record(60_000)])
@@ -156,10 +156,7 @@ Deno.test('signing in clears the count', async () => {
   ]
   let d = door(full)
   assert(await spend(d.at, SECRET, ME, '123456'))
-  assertEquals(
-    (d.wrote[0] as { entities: unknown[] }).entities.length,
-    full.length,
-  )
+  assertEquals(d.wrote.length, full.length)
 })
 
 Deno.test('a code belongs to its address', async () => {
@@ -194,11 +191,9 @@ let person = (title?: string) => ({
   ...(title ? { doc: { title } } : {}),
 })
 
-let titles = (wrote: Record<string, unknown>[]) =>
-  wrote.flatMap((b) =>
-    ((b as { entities?: { doc?: { title?: string } }[] }).entities ?? [])
-      .map((e) => e.doc?.title).filter(Boolean)
-  )
+let titles = (wrote: Bundle[]) =>
+  wrote.map((b) => (b.doc as { title?: string } | undefined)?.title)
+    .filter(Boolean)
 
 Deno.test('a person nobody has named keeps no title', async () => {
   let d = door([])

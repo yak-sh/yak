@@ -9,6 +9,7 @@
 // never SQL; the apps of a space come from the directory part. The same
 // rows fold into `cards` for the errors view (public/errors.html), where the
 // person's own button archives one through `archive`.
+import type { Bundle } from '@yaks/graph'
 import { idOf } from '../../src/types.ts'
 import * as dirPart from './directory.ts'
 import {
@@ -21,6 +22,7 @@ import {
 } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
+import { KERNEL, meta } from './meta.ts'
 import { type Door, storeOf } from './store.ts'
 import { told } from './stream.ts'
 import { level, standing } from './usage.ts'
@@ -127,27 +129,48 @@ let hushed = (space: Space, app: App) => {
 // It wore a `doc` until T-32533, and that put the platform's own crashes in
 // `.doc!` — the query a person's agent is taught as "everything you saved" —
 // where one showed up in a recipe box as a recipe (C-32531 item 1).
-export let noted = async (store: Door, broke: {
+// Where a break is written: one bundle, under the kernel flag, because an
+// `exception` is wholly server-owned. The PLATFORM's own breaks go to the meta
+// store ({@link metaBreaks}); an app's go to that app's store.
+export type Breaks = (bundles: Bundle[]) => Promise<unknown>
+
+/** The platform's own breaks: the directory's store, in the graph's wire. */
+export let metaBreaks = (env: Env): Breaks => (bundles) =>
+  meta(env).apply(bundles, KERNEL)
+
+/**
+ * One app's breaks, through its own store's door.
+ *
+ * TODO(T-33815): an app store is still the old Store class, so this lowers a
+ * bundle list into the fleet's mutation envelope. When app serving moves to
+ * graph.ts's Store this becomes `metaOf(store).apply(bundles, KERNEL)` — the
+ * same wire the meta half already speaks.
+ */
+export let appBreaks = (store: Door): Breaks => async (bundles) => {
+  let sent = await store('/apply', {
+    method: 'POST',
+    body: JSON.stringify({ entities: bundles }),
+  }, KERNEL)
+  if (!sent.ok) throw new Error(`report refused: ${await sent.text()}`)
+  return sent.json()
+}
+
+export let noted = async (breaks: Breaks, broke: {
   request: string
   version?: number | null
   message: string
   stack?: string
 }, at?: { env: Env; space: Space; app: App }) => {
-  let sent = await store('/apply', {
-    method: 'POST',
-    body: JSON.stringify({
-      entities: [{
-        exception: {
-          at: new Date().toISOString(),
-          request: broke.request,
-          version: broke.version ?? null,
-          message: broke.message,
-          stack: broke.stack ?? '',
-        },
-      }],
-    }),
-  }, { 'x-yak-kernel': '1' })
-  if (!sent.ok) throw new Error(`report refused: ${await sent.text()}`)
+  await breaks([{
+    entity: { eid: '$broke' },
+    exception: {
+      at: new Date().toISOString(),
+      request: broke.request,
+      version: broke.version ?? null,
+      message: broke.message,
+      stack: broke.stack ?? '',
+    },
+  }])
   if (!at || hushed(at.space, at.app)) return
   try {
     let dir = directory(bound(at.env.DIRECTORY, dirPart.fetch, at.env))

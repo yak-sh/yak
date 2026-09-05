@@ -57,7 +57,6 @@ import {
   bornAt,
   type Directory,
   META,
-  META_STORE,
   type Role,
   type Space,
   stamp,
@@ -65,6 +64,7 @@ import {
   url,
 } from './directory.ts'
 import { moved, reachChanged, toolsOf } from './declared.ts'
+import { meta, minted } from './meta.ts'
 import {
   doomed,
   door,
@@ -848,14 +848,9 @@ let HOURLY = 3
 // counts nothing: a rate limit is never the reason feedback is lost.
 let recently = async (ctx: Ctx) => {
   try {
-    let r = await storeOf(ctx.env.STORE, META_STORE)(
-      `/query?.report!&.created.by=${ctx.person}&.report.at>=1-hour-ago`,
-    )
-    if (!r.ok) {
-      await r.body?.cancel()
-      return 0
-    }
-    return ((await r.json()) as unknown[]).length
+    return (await meta(ctx.env).query(
+      `.report!&.created.by=${ctx.person}&.report.at>=1-hour-ago`,
+    )).length
   } catch {
     return 0
   }
@@ -900,7 +895,10 @@ export let TOOLS: Tool[] = [
             doc: { title: text(args.title, 'title') },
             space: { slug: s },
           },
-          { member: { space: '$space', person: ctx.person, role: 'owner' } },
+          {
+            entity: { eid: '$seat' },
+            member: { space: '$space', person: ctx.person, role: 'owner' },
+          },
         ],
       }, vouched({ person: ctx.person, role: 'owner' }))
       let space = (await ctx.dir.space(s))!
@@ -2338,20 +2336,17 @@ export let TOOLS: Tool[] = [
       let name = args.name == null
         ? undefined
         : nameOf(text(args.name, 'name'), email)
-      let person = await personOf(
-        storeOf(ctx.env.STORE, META_STORE),
-        email,
-        name,
-      )
+      let person = await personOf(meta(ctx.env), email, name)
       let had = await ctx.dir.member(space, person)
       if (person == ctx.person && had) {
         throw new Error(`${email} is you, and you own ${space.slug}`)
       }
       await ctx.dir.apply({
         entities: [
-          had
-            ? { entity: { eid: had.eid }, member: { role: want } }
-            : { member: { space: space.eid, person, role: want } },
+          had ? { entity: { eid: had.eid }, member: { role: want } } : {
+            entity: { eid: '$seat' },
+            member: { space: space.eid, person, role: want },
+          },
         ],
       }, vouched(who))
       // Being added is a deploy from where the added person stands: every
@@ -2654,28 +2649,21 @@ export let TOOLS: Tool[] = [
       // The whole thing is the body; the title is its opening, so a listing
       // of reports reads.
       let opening = said.trim().split('\n')[0].slice(0, 80)
-      let meta = storeOf(ctx.env.STORE, META_STORE)
-      let wrote = await meta('/apply', {
-        method: 'POST',
-        body: JSON.stringify({
-          entities: [{
-            doc: { title: opening, body: said },
-            report: {
-              app: app?.eid ?? null,
-              space: space?.eid ?? null,
-              version: app?.version ?? null,
-              release: VERSION,
-              at,
-            },
-          }],
-        }),
-      }, {
+      let wrote = await meta(ctx.env).apply([{
+        entity: { eid: '$said' },
+        doc: { title: opening, body: said },
+        report: {
+          app: app?.eid ?? null,
+          space: space?.eid ?? null,
+          version: app?.version ?? null,
+          release: VERSION,
+          at,
+        },
+      }], {
         ...vouched({ person: ctx.person, role: null }),
         ...await titling(ctx.dir, ctx.person),
       })
-      if (!wrote.ok) throw new Error(await wrote.text())
-      let { changes } = await wrote.json() as { changes: Change[] }
-      let eid = changes[0]?.eid ?? ''
+      let eid = minted(wrote).$said ?? ''
       // The letter, to the platform's own address — the one a person reading
       // it would reply to (mail.ts REPLY_TO). It leads with the WORDS: what
       // was said is the report, and everything else is a line of context

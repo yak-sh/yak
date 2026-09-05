@@ -129,6 +129,225 @@ export let coreDocs: VocabDoc[] = [
   relationDoc,
 ]
 
+// ---- the platform's own store (T-33814) -------------------------------------
+//
+// One object on this platform is not an app: the DIRECTORY, the meta space's
+// store, named `yak/platform` and holding every space, app, member, hostname,
+// deploy, sign-in and meter there is. It runs the same Store class over the
+// same packages; what differs is the VOCABULARY it wakes with — these words
+// instead of an app's `vocab.json`.
+//
+// It does not load @yaks/member's document. That package's `member.role` is
+// `owner|member`, and the platform's roster has three seats
+// (`owner|editor|viewer`), so the word is declared here at the platform's own
+// meaning. Nothing installs @yaks/member's guard on this store either: the
+// kernel decides who may read and write the directory before the request
+// reaches the object (directory.ts), and there is no app to be a member OF.
+
+/** The store the directory lives in, named the way every app's store is. Its
+ * slugs are the platform's own and never move, so the name is a constant. */
+export let PLATFORM_STORE = 'yak/platform'
+
+let ref = (death: string, bare = true): PropSchema => ({
+  type: 'string',
+  ref: 'entity',
+  death,
+  ...(bare ? {} : { bare: false }),
+})
+let text: PropSchema = { type: 'string' }
+let num: PropSchema = { type: 'number' }
+let time: PropSchema = { type: 'string', format: 'date-time' }
+// Server-owned: readable, never wire-writable. The kernel's own door writes it.
+let owned = (s: PropSchema): PropSchema => ({ ...s, stamped: true })
+
+/**
+ * The platform's own components — what the directory IS, as one JSON Schema
+ * document. Every word here is the fleet contract's own (src/types.ts) read
+ * back in the format @yaks/vocab loads: the same columns, the same closed sets,
+ * the same death behaviour, so a row written through the old store means
+ * exactly what a row written through this one means.
+ *
+ * The server-owned ones are `stamped`: a `plan` nobody may lift for themselves,
+ * a `signin` no client may author, a `meter` the hourly sweep reads off
+ * Cloudflare, an `exception` the platform noted about itself. They stay
+ * readable, and the kernel's own door (`x-yak-kernel`, graph.ts) is the only
+ * writer.
+ */
+export let platformDoc: VocabDoc = {
+  $vocabulary: { [CORE_URI]: true },
+  title: 'platform',
+  $defs: {
+    space: {
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      properties: { slug: text, home: ref('detach') },
+    },
+    app: {
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      properties: {
+        slug: text,
+        space: ref('cascade'),
+        version: num,
+        access: { enum: ['public', 'open', 'private'] },
+      },
+    },
+    // Every address an app has answered at: the one it was born at — which is
+    // what its Durable Object is named, so it may never move — and, in
+    // `slugs`, each one a rename left behind.
+    alias: { type: 'object', properties: { slug: text, slugs: text } },
+    member: {
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      properties: {
+        space: ref('cascade'),
+        person: ref('cascade', false),
+        role: { enum: ['owner', 'editor', 'viewer'] },
+      },
+    },
+    email: { type: 'object', properties: { address: text } },
+    hostname: {
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      properties: {
+        name: text,
+        app: ref('cascade'),
+        stage: { enum: ['pending', 'active', 'error'] },
+        at: time,
+      },
+    },
+    deploy: {
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      properties: {
+        app: ref('cascade'),
+        version: num,
+        files: text,
+        worker: text,
+      },
+    },
+    published: {
+      type: 'object',
+      properties: { name: text, version: num, at: time, about: text },
+    },
+    installed: {
+      type: 'object',
+      properties: { of: ref('detach'), version: num },
+    },
+    plan: {
+      type: 'object',
+      properties: {
+        tier: owned({ enum: ['free', 'plus'] }),
+        customer: owned(text),
+        subscription: owned(text),
+        status: owned(text),
+        until: owned(time),
+        ending: owned(time),
+        at: owned(time),
+      },
+    },
+    meter: {
+      type: 'object',
+      properties: {
+        month: owned(text),
+        requests: owned(num),
+        rows_read: owned(num),
+        rows_written: owned(num),
+        bytes: owned(num),
+        emails: owned(num),
+        at: owned(time),
+      },
+    },
+    // The mark a served line wears. Server-owned like the fleet's, and a bare
+    // presence in practice: the sweep writes it, and clears it (`notified:
+    // null`) when a space's standing moves.
+    notified: {
+      type: 'object',
+      properties: {
+        at: owned(time),
+        by: owned(ref('keep')),
+        via: owned(ref('keep')),
+      },
+    },
+    signin: {
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      properties: {
+        email: owned(text),
+        code: owned(text),
+        expires: owned(time),
+        tries: owned(num),
+      },
+    },
+    report: {
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      properties: {
+        app: ref('keep'),
+        space: ref('keep'),
+        version: num,
+        release: text,
+        at: time,
+      },
+    },
+    exception: {
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      properties: {
+        at: owned(time),
+        request: owned(text),
+        version: owned(num),
+        message: owned(text),
+        stack: owned(text),
+      },
+    },
+  },
+}
+
+/** The documents the directory's vocabulary is built on, in load order. */
+export let platformDocs: VocabDoc[] = [
+  coreDoc,
+  docDoc,
+  edgeDoc,
+  relationDoc,
+  platformDoc,
+]
+
+/**
+ * The uniques the directory's races are decided by. @yaks/sqlite derives tables
+ * and columns from a vocabulary and no indexes, so the platform says its own:
+ * two isolates minting the space `ada` at once must not both win, one hostname
+ * points at one app, and an offer's name is the platform-wide handle it is
+ * installed by. The losing write bounces, re-reads, and finds the winner
+ * (directory.ts `own`).
+ */
+export let PLATFORM_INDEXES: string[] = [
+  'create unique index if not exists space_slug on "space" ("slug")',
+  'create unique index if not exists app_space_slug on "app" ("space", "slug")',
+  'create unique index if not exists alias_slug on "alias" ("slug")',
+  'create unique index if not exists member_space_person on "member" ' +
+  '("space", "person")',
+  'create unique index if not exists hostname_name on "hostname" ("name")',
+  'create unique index if not exists deploy_app_version on "deploy" ' +
+  '("app", "version")',
+  'create unique index if not exists published_name on "published" ("name")',
+]
+
+/**
+ * The directory's whole vocabulary: the core documents plus the platform's own
+ * words. The Store loads it instead of {@link appVocab} when the object it woke
+ * in is the meta store (graph.ts).
+ */
+export let platformVocab = (): Vocab => loadVocab(platformDocs, appKeywords)
+
 /** The keyword vocabularies those documents and an app's own may use. Each is
  * owned by the package that reads it — @yaks/id `prefix`, @yaks/blob `store`,
  * @yaks/edge `relation` — and registered so the loader carries it. */

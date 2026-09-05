@@ -156,7 +156,8 @@ let held = () => {
     return rows.filter((row) =>
       terms.every((t) => {
         let [key, want] = t.split('=')
-        if (key == 'id') return row.entity.eid == want
+        if (key == '.eid') return row.entity.eid == want
+        if (key == '.limit' || key == '.after') return true
         let [, name, col] = key.split('.')
         let comp = row[name] as Record<string, unknown> | undefined
         return col ? comp?.[col] == want : !!comp

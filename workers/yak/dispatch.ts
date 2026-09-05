@@ -36,7 +36,7 @@ import type { Env, Fetcher } from './env.ts'
 import { oops } from './pages.ts'
 import type { Who } from './session.ts'
 import { storeOf } from './store.ts'
-import { failed, noted, refusal, serving } from './unseen.ts'
+import { appBreaks, failed, noted, refusal, serving } from './unseen.ts'
 
 // The dispatch namespace binding, the slice we ask of it (env.ts): a name in,
 // a fetcher out. `get` throws for a script that is not there, and the docs
@@ -194,7 +194,7 @@ let broke = (
   said: { message: string; stack?: string },
 ) =>
   serving(env, space, app).then((version) =>
-    noted(storeOf(env.STORE, storeName(space, app)), {
+    noted(appBreaks(storeOf(env.STORE, storeName(space, app))), {
       request: `worker ${req.method} ${new URL(req.url).pathname}`,
       version,
       ...said,

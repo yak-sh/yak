@@ -54,7 +54,7 @@ import { type Reach, split, written } from './reach.ts'
 import type { EntityLiteral } from '../../src/mutation.ts'
 import { type Door, storeOf } from './store.ts'
 import { type Clock, clock, timed } from './timing.ts'
-import { noted, refusal, serving } from './unseen.ts'
+import { appBreaks, noted, refusal, serving } from './unseen.ts'
 import { full } from './usage.ts'
 import { sha256 } from './versions.ts'
 
@@ -698,7 +698,7 @@ let api = async (
     // (unseen.ts `serving`, C-32869 item 4).
     let version = reports.length ? await serving(env, space, app) : null
     for (let broke of reports) {
-      await noted(store, { ...broke, version }, { env, space, app })
+      await noted(appBreaks(store), { ...broke, version }, { env, space, app })
     }
     return new Response(null, { status: 204 })
   }
