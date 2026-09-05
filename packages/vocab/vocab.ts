@@ -10,6 +10,7 @@
 // small app is a smaller instance in the same format.
 
 import type {
+  Assoc,
   Column,
   CompInfo,
   Death,
@@ -91,6 +92,7 @@ export type Vocab = {
   column: (comp: string, prop: string) => Column | undefined
   route: (prop: string) => { comp: string; prop: string }
   aim: (path: string) => Hop[]
+  assoc: (name: string) => Assoc | undefined
   kindOf: (has: Record<string, unknown>) => string
   deaths: (word: Death) => [string, string][]
   refCols: () => [string, string][]
@@ -186,6 +188,29 @@ export let loadVocab = (input: VocabDoc | VocabDoc[]): Vocab => {
     }
   }
 
+  // A plural that is a NAME, not English: uniqueness is the goal, so 'shelf' →
+  // 'shelfs' is fine and 'series' → 'series' stays put.
+  let plural = (s: string) =>
+    s.endsWith('y') ? `${s.slice(0, -1)}ies` : s.endsWith('s') ? s : `${s}s`
+
+  // The reverse associations, DERIVED from the reference columns and never hand
+  // listed, so a new reference column earns its reverse name for free. A
+  // component with one reference is named by its plural (`review.book` →
+  // `.reviews`); several references disambiguate with the column (`loan.book`,
+  // `loan.member` → `.loans_book`, `.loans_member`). A name a real column or
+  // component already routes is left alone — the forward spelling always wins —
+  // and where two components pluralize alike the alphabetically first keeps it.
+  let assocs = new Map<string, Assoc>()
+  for (let comp of names) {
+    let refs = Object.keys(props(comp))
+      .filter((p) => colFor(comp, p)!.category == 'ref')
+    for (let prop of refs) {
+      let name = refs.length == 1 ? plural(comp) : `${plural(comp)}_${prop}`
+      if (owners.has(name) || routes.has(name) || assocs.has(name)) continue
+      assocs.set(name, { comp, prop })
+    }
+  }
+
   let kinds = deriveKindOrder(
     names.filter((n) => defs[n].kind),
     (k) => defs[k].before ?? [],
@@ -247,6 +272,9 @@ export let loadVocab = (input: VocabDoc | VocabDoc[]): Vocab => {
       }
       return out
     },
+    // A plural name → the reverse association it names, or undefined when the
+    // name is no association (a caller then reads the word its own way).
+    assoc: (name) => assocs.get(name),
     // The most specific kind an entity carries names it — first present in
     // kindOrder, else the bare spine.
     kindOf: (has) => kinds.find((k) => has[k]) ?? 'entity',

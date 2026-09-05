@@ -70,6 +70,11 @@ export type CompInfo = {
 // column it named. `.comment.target.doc.title` → [{comment,target},{doc,title}].
 export type Hop = { comp: string; prop: string }
 
+// A reverse ASSOCIATION: one component's reference column, seen from the far
+// side. `.reviews` on a book is the `review` rows whose `book` column points at
+// it, so the association is that (comp, prop) pair under a plural name.
+export type Assoc = { comp: string; prop: string }
+
 // A vocab document, as authored: a JSON Schema whose `$defs` are the components.
 // Loose on purpose — the meta-schema and loadVocab() are what validate it; this
 // is just enough shape for the reader.

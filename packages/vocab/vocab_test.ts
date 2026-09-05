@@ -87,6 +87,43 @@ Deno.test('dotted paths aim to hops', () => {
   )
 })
 
+Deno.test('reverse associations derive from the reference columns', () => {
+  // one reference column: the component's plural names it
+  assertEquals(v.assoc('comments'), { comp: 'comment', prop: 'target' })
+  // several reference columns: the column disambiguates the plural
+  assertEquals(v.assoc('claims'), { comp: 'claim', prop: 'session' })
+  assertEquals(v.assoc('nothings'), undefined)
+  // a forward spelling is never shadowed
+  assertEquals(v.assoc('task'), undefined)
+})
+
+Deno.test('an association names the column when a comp has several refs', () => {
+  let w = loadVocab({
+    $defs: {
+      book: { type: 'object', properties: { isbn: { type: 'string' } } },
+      member: { type: 'object', properties: { name: { type: 'string' } } },
+      review: {
+        type: 'object',
+        properties: {
+          book: { type: 'string', ref: 'book', death: 'cascade' },
+          stars: { type: 'number' },
+        },
+      },
+      loan: {
+        type: 'object',
+        properties: {
+          book: { type: 'string', ref: 'book', death: 'cascade' },
+          member: { type: 'string', ref: 'member', death: 'cascade' },
+        },
+      },
+    },
+  })
+  assertEquals(w.assoc('reviews'), { comp: 'review', prop: 'book' })
+  assertEquals(w.assoc('loans_book'), { comp: 'loan', prop: 'book' })
+  assertEquals(w.assoc('loans_member'), { comp: 'loan', prop: 'member' })
+  assertEquals(w.assoc('loans'), undefined)
+})
+
 Deno.test('kindOf takes the most specific kind, entity as the floor', () => {
   assertEquals(v.kindOf({ task: 1, doc: 1 }), 'task')
   assertEquals(v.kindOf({ doc: 1, alias: 1 }), 'doc')

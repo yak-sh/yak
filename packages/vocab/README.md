@@ -33,6 +33,12 @@ distinct values. Ordering is derived, never hand-ranked: component and stamped
 order are alphabetical, and kindOrder is alphabetical refined topologically by
 `before` (a cycle refuses).
 
+**Reverse associations are derived too.** Every reference column is also a name
+on the far side: `review.book` makes `.reviews` the reviews pointing at a book,
+and a component with several references disambiguates with the column
+(`loan.book` → `.loans_book`). A forward spelling always wins its name, so an
+association never shadows a real column or component.
+
 Two further comp-level keywords are **recognized and carried, not acted on**:
 `prefix` (an id prefix such as `T` or `P`) and `by_name` (the component's title
 is a name a caller can resolve). The loader records them on the component —
@@ -72,6 +78,7 @@ v.column('task', 'project')
 //   affinity: 'integer', fk: true, stamped: false, persist: true, … }
 v.route('title') // { comp: 'doc', prop: 'title' }   bare prop → its home
 v.aim('comment.target.doc.title') // [{comment,target}, {doc,title}]  path → hops
+v.assoc('reviews') // { comp: 'review', prop: 'book' }  a plural → its reverse
 v.kindOf({ task: 1, doc: 1 }) // 'task' — most specific kind wins
 v.deaths('cascade') // the reaper's worklist: [comp, col] pairs
 v.check('task', { priority: 1 }) // [] — instance well-formedness
