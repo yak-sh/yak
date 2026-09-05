@@ -40,6 +40,10 @@ In dependency order:
   a `Map` of bundles answering `@yaks/graph`'s `Storage`, reads through
   `@yaks/match`, synchronous, browser-ready. Tested batch for batch against
   `@yaks/sqlite`.
+- **[@yaks/api](./api)** — the transport: a plain `Request` → `Response` handler
+  over a graph (`/apply`, `/query`, `/ws`), where the door authenticates the
+  writer, and a subscription is a saved query whose answer is pushed again when
+  a committed batch changes it.
 
 ## How they compose
 
@@ -67,6 +71,11 @@ on its own:
 - `@yaks/memory` puts that evaluator behind the storage seam: a whole graph in a
   Map, with the same `apply()` and the same queries as the database path, for a
   page, a worker, or a test that has no database to install.
+- `@yaks/api` puts the whole stack behind three routes. It composes
+  `@yaks/graph` (for writes) with a storage adapter (for reads) and
+  `@yaks/match` (to decide cheaply which subscription a committed batch
+  changed), and speaks only web-standard types, so the same handler serves on
+  Deno, Node and a Worker.
 
 ## Publishing requirements
 
