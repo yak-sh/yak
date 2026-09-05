@@ -1434,6 +1434,11 @@
           "jsr:@std/assert@1"
         ]
       },
+      "packages/sync": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
       "packages/task": {
         "dependencies": [
           "jsr:@std/assert@1"

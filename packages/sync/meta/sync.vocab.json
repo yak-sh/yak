@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yaks.sh/vocab/sync",
+  "title": "yaks sync keyword vocabulary",
+  "description": "The keyword @yaks/sync adds to a component vocabulary: where a component's data lives. A client graph holds three kinds of state at once — what the server owns, what this browser owns, and what only this render owns — and the tier is declared once, on the component, rather than decided again at every call site.",
+  "$comment": "A vocabulary declaration in the JSON Schema sense: a URI that names this keyword set, plus the schema of each keyword. A vocab file declares it under $vocabulary.",
+  "$defs": {
+    "persist": {
+      "description": "Which tier this component persists to. \"wire\" (the default) is synced to the server; \"local\" is kept by this client and never sent; \"none\" is ephemeral, held only while the process lives.",
+      "enum": ["wire", "local", "none"],
+      "default": "wire"
+    }
+  }
+}
