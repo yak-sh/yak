@@ -6,6 +6,15 @@
   the digits), the break reports unseen.ts, the letters mail.ts (Cloudflare
   Email Sending). Change one of those and change this page with it.
 
+  THE PAGE SAYS IT IS THE WHOLE LIST, so anything the code sends off this box
+  belongs on it (T-34352): the feedback tool's letter to hello@yaks.app and
+  the graph inbox (tools.ts `feedback`, mail.ts REPLY_TO/GRAPH), an app's own
+  letters out and the arrivals filed into it (post.ts, inbox.ts), the words a
+  person types to the builder, which a model on Cloudflare's own AI binding
+  reads (builder.ts) and a Cloudflare container compiles for (sandbox.ts), and
+  Stripe, who sell the paid plan and hold the card (billing.ts — the email
+  address is all we hand them). Add a recipient in the code and add it here.
+
   DRAFT — written for the owner to read with a lawyer before it is relied on.
   The operator, its address and the contact are the owner's own (Jeff,
   2026-09-02). The Cloudflare Web Analytics note is T-32487, open: the beacon
@@ -73,7 +82,7 @@
     <main class="Page Prose">
       <div class="Prose_Head">
         <h1 class="Title Title-page">Privacy policy</h1>
-        <p class="Prose_When">Last updated 3 September 2026</p>
+        <p class="Prose_When">Last updated 5 September 2026</p>
         <p>
           We keep as little as we can, and we're happy to tell you all of it.
           This page is the whole list.
@@ -128,11 +137,35 @@
             writes to build them.
           </li>
           <li>
+            <strong>Letters your apps send and receive.</strong> An app can
+            have an address of its own, like
+            <b>yourspace.yourapp@yaks.app</b>. Anything written to it is kept
+            in that app — the sender's address, what they wrote, and whatever
+            they attached — and anything the app sends goes out under that
+            address.
+          </li>
+          <li>
             <strong>Reports when something breaks.</strong> If a page or a
             request fails, we record what happened: the message, where in the
             code it came from, the address being visited, and which version of
             the app was running. That report goes to your assistant so it can
             fix the thing. It isn't a record of what you were up to.
+          </li>
+          <li>
+            <strong>What you say to our builder.</strong> If you have us build
+            an app for you rather than bringing your own assistant, what you
+            type goes to a model to be read and answered, and we keep the
+            conversation with your space so you can pick it back up.
+          </li>
+          <li>
+            <strong>Feedback you send us.</strong> Ask your assistant to report
+            a problem — or pass on a wish, a rough edge or a kind word — and
+            your words are mailed to the people who run this place, at
+            <a href="mailto:hello@yaks.app">hello@yaks.app</a> and the work
+            list where we track them. Your name, your email address, the space
+            and the app you were in, and the version that was running ride
+            along, so we can look into it and write back. We keep those
+            reports.
           </li>
         </ul>
       </section>
@@ -141,8 +174,10 @@
         <h2>What we don't keep</h2>
         <p>
           No advertising profile, no history of where else you've been, no
-          location, no contact list, and no payment details — there's nothing to
-          pay for yet. We don't sell anything to anyone, ever.
+          location, and no contact list. No card number either: the paid plan
+          is sold and charged by Stripe, your card goes to them and never
+          through us, and what comes back to us is your plan and whether it's
+          on. We don't sell anything to anyone, ever.
         </p>
       </section>
 
@@ -151,10 +186,30 @@
         <p>
           All of it sits on Cloudflare, who host this whole platform: their
           workers run the code, their storage holds each app's data and files,
-          and their network carries every request. They handle it on our behalf
-          and keep their own operational records of requests, the way any host
+          their network carries every request, their model is the one that
+          answers you in the builder, and their sandbox is where a build
+          compiles anything a browser can't. They handle it on our behalf and
+          keep their own operational records of requests, the way any host
           does. That network is worldwide, so the nearest copy to you may sit in
           a different country than the nearest copy to somebody else.
+        </p>
+      </section>
+
+      <section>
+        <h2>Who else touches it</h2>
+        <p>
+          Two other companies, and that's the end of the list.
+          <strong>Stripe</strong> sells the paid plan: we hand them your email
+          address so they can bill you, and they hand back whether the plan is
+          on. <strong>Google</strong> serves the typeface these pages are set
+          in, so your browser asks them for a font file and they see that
+          request the way any web server would.
+        </p>
+        <p>
+          Nobody else — no advertiser, no data broker, no analytics company of
+          our choosing. And when you send us feedback, it reaches us by mail,
+          which means it passes through whichever mail providers stand between
+          here and our inbox, the way every letter does.
         </p>
       </section>
 
@@ -164,6 +219,10 @@
           Sign-in codes and invitations go out through Cloudflare Email Sending.
           Those are the only letters we send you unasked, and each one is
           something you or a friend set in motion.
+        </p>
+        <p>
+          Your apps' own letters travel the same road, and so does the feedback
+          you send us — that one goes to us rather than to you.
         </p>
       </section>
 

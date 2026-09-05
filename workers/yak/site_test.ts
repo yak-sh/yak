@@ -5,6 +5,7 @@
 // `/robots.txt` and `/llms.txt` from (T-34288).
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { slow } from '../../src/testing.ts'
+import { REPLY_TO } from './mail.ts'
 import { BUILDS, CURRENCY, LETTERS, PRICE } from './meter.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { kernel } from './probe.ts'
@@ -400,6 +401,27 @@ Deno.test('the plan pages quote the price the offer names', () => {
   for (let page of ['index.html', 'pricing.html']) {
     assertStringIncludes(flat(read(page)), `$${PRICE.plus} a month`)
   }
+})
+
+// "This page is the whole list", so everything the code sends off this box is
+// named on it (T-34352). Each line below is one recipient in the code, and the
+// address is read out of mail.ts rather than typed here.
+Deno.test('the privacy policy names everywhere the code sends something', () => {
+  let html = flat(read('privacy.html')).toLowerCase()
+  // The feedback tool's letter: the words, who sent them, and where it goes
+  // (tools.ts `feedback` → mail.ts REPLY_TO and GRAPH).
+  assertStringIncludes(html, 'feedback you send us')
+  assertStringIncludes(html, REPLY_TO)
+  // An app's own address, out and in (post.ts, inbox.ts).
+  assertStringIncludes(html, '@yaks.app</b>')
+  // The model that reads what a person types to the builder (builder.ts), and
+  // the container a build compiles in (sandbox.ts).
+  assertStringIncludes(html, 'what you say to our builder')
+  assertStringIncludes(html, 'sandbox')
+  // Stripe, who sell the plan and hold the card (billing.ts).
+  assertStringIncludes(html, 'stripe')
+  // And the claim that makes the rest of it a promise.
+  assertStringIncludes(html, 'this page is the whole list')
 })
 
 Deno.test('the help page answers its own questions in JSON-LD', () => {
