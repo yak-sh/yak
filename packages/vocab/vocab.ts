@@ -19,7 +19,20 @@ import type {
   Scalar,
   VocabDoc,
 } from './types.ts'
+import type { Keywords } from './keywords.ts'
 import { kindOrder as deriveKindOrder } from './order.ts'
+
+// The extension keywords a registration admits, picked off a schema verbatim.
+// A keyword the caller did not register is invisible: the loader carries what
+// somebody asked for and nothing else.
+let carried = (
+  s: PropSchema,
+  names: Set<string>,
+): Record<string, unknown> => {
+  let out: Record<string, unknown> = {}
+  for (let n of names) if (s[n] !== undefined) out[n] = s[n]
+  return out
+}
 
 // One property schema → the column it describes. The scalar spelling is
 // reconstructed from native JSON Schema (`type` + `format` + `store`), so a
@@ -53,7 +66,12 @@ let deathOf = (s?: string): Death | undefined =>
     ? s
     : undefined
 
-let columnOf = (comp: string, prop: string, s: PropSchema): Column => {
+let columnOf = (
+  comp: string,
+  prop: string,
+  s: PropSchema,
+  extra: Set<string>,
+): Column => {
   let category: Column['category'] = s.ref != null
     ? 'ref'
     : s.enum != null
@@ -77,6 +95,7 @@ let columnOf = (comp: string, prop: string, s: PropSchema): Column => {
     // A reference carries an FK to entity(id) unless its death is 'keep' — a
     // kept ref outlives its target's tombstone, so it stays FK-free (ddl.ts).
     fk: category == 'ref' && death != 'keep',
+    keywords: carried(s, extra),
   }
 }
 
@@ -84,6 +103,7 @@ let columnOf = (comp: string, prop: string, s: PropSchema): Column => {
 // none reads a global.
 export type Vocab = {
   docs: VocabDoc[]
+  keywords: Keywords[] // the extension vocabularies this load registered
   comps: string[] // wire-writable component names, alphabetical
   all: string[] // every declared component name, alphabetical
   kinds: string[] // kindOrder: alphabetical, refined by `before`, topo-sorted
@@ -121,8 +141,13 @@ let shapeOf = (v: Vocab, comp: string): string => {
   return `${comp} has ${said.join(', ')}`
 }
 
-export let loadVocab = (input: VocabDoc | VocabDoc[]): Vocab => {
+export let loadVocab = (
+  input: VocabDoc | VocabDoc[],
+  keywords: Keywords[] = [],
+): Vocab => {
   let docs = Array.isArray(input) ? input : [input]
+  let compWords = new Set(keywords.flatMap((k) => k.comp ?? []))
+  let colWords = new Set(keywords.flatMap((k) => k.column ?? []))
   // Merge every doc's $defs into one component table; a name declared twice is a
   // conflict (a word has one home).
   let defs: Record<string, PropSchema> = {}
@@ -141,7 +166,7 @@ export let loadVocab = (input: VocabDoc | VocabDoc[]): Vocab => {
     if (cols.has(key)) return cols.get(key)
     let s = props(comp)[prop]
     if (!s) return undefined
-    let c = columnOf(comp, prop, s)
+    let c = columnOf(comp, prop, s, colWords)
     cols.set(key, c)
     return c
   }
@@ -166,8 +191,7 @@ export let loadVocab = (input: VocabDoc | VocabDoc[]): Vocab => {
         return !s.stamped && s.persist !== false
       }),
       stamped: entries.filter((p) => props(name)[p].stamped),
-      prefix: d.prefix,
-      byName: d.by_name,
+      keywords: carried(d, compWords),
     }
   }
 
@@ -218,6 +242,7 @@ export let loadVocab = (input: VocabDoc | VocabDoc[]): Vocab => {
 
   let v: Vocab = {
     docs,
+    keywords,
     comps: compNames,
     all: names,
     kinds,

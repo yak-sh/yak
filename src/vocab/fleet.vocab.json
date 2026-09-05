@@ -2,14 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://yaks.sh/vocab/fleet",
   "title": "yaks fleet keyword vocabulary",
-  "description": "Keywords that belong to the fleet's own vocabulary LAYER, not the core meta-model. A vocab file may declare and carry these, but their behavior (id-minting) is a later package's job — @yaks/vocab records the declaration and interrogates it, nothing more.",
+  "description": "Keywords that belong to the fleet's own vocabulary LAYER, not the core meta-model. A vocab file may declare and carry these, but their behavior is a later package's job — @yaks/vocab records the declaration and interrogates it, nothing more. `prefix` has moved out to @yaks/id (packages/id/meta/id.vocab.json); this file holds what is still homeless.",
   "$comment": "Split out on purpose: a customer app composes the core vocabulary and typically NOT this one. Modelled, carried, but its handler is deferred.",
   "$defs": {
-    "prefix": {
-      "description": "The human id prefix for this kind (T for task, P for project). Feeds id-minting, deferred to a later package.",
-      "type": "string",
-      "pattern": "^[A-Z]$"
-    },
     "by_name": {
       "description": "true = this kind's doc title is a name a caller can type (resolved to the entity). Deferred handler.",
       "type": "boolean"

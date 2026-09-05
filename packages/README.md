@@ -14,6 +14,10 @@ In dependency order:
 - **[@yaks/vocab](./vocab)** — describe a component vocabulary as JSON Schema
   (2020-12) plus a small custom keyword vocabulary, and interrogate it at
   runtime: column types, path routing, display ordering, instance checks.
+- **[@yaks/id](./id)** — entity ids: mint an eid, and turn the `prefix` a
+  component declares plus a number into a human id (`B-7`) and back. The first
+  splinter off `@yaks/vocab`: the meta-model carries the keyword, this package
+  is what it means.
 - **[@yaks/sql](./sql)** — compile a `@yaks/query` AST against a `@yaks/vocab`
   schema into a SQL string and bound params, through a dialect-agnostic
   relational IR (a SQLite dialect ships with the package).

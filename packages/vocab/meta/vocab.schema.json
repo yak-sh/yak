@@ -2,13 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://yaks.sh/vocab/meta",
   "title": "yaks vocab file",
-  "description": "The meta-schema a vocab document validates against: a JSON Schema 2020-12 document whose $defs are components — each an object schema whose properties are storable columns (scalar, reference, or closed set; no nesting, no arrays). The keyword shapes are inlined from the core and fleet keyword vocabularies so this file validates standalone.",
+  "description": "The meta-schema a vocab document validates against: a JSON Schema 2020-12 document whose $defs are components — each an object schema whose properties are storable columns (scalar, reference, or closed set; no nesting, no arrays). Only the CORE keyword shapes are inlined, so this file validates standalone; a file using an extension vocabulary's keywords validates against extendMeta([thoseKeywords]) instead.",
   "$vocabulary": {
     "https://json-schema.org/draft/2020-12/vocab/core": true,
     "https://json-schema.org/draft/2020-12/vocab/applicator": true,
     "https://json-schema.org/draft/2020-12/vocab/validation": true,
-    "https://yaks.sh/vocab/core": true,
-    "https://yaks.sh/vocab/fleet": false
+    "https://yaks.sh/vocab/core": true
   },
   "type": "object",
   "required": ["$defs"],

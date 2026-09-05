@@ -12,12 +12,15 @@
 
 import { assert, assertEquals } from '@std/assert'
 import type { Column } from '@yaks/vocab'
+import { idOf, prefixes } from '@yaks/id'
 import {
   comps,
   deaths,
+  idOf as idOfFleet,
   kindOrder,
   prefix,
   type PropType,
+  shortId,
   stamped,
 } from '../types.ts'
 import { route } from '../query.ts'
@@ -27,6 +30,7 @@ import { fleetVocab } from './fleet_vocab.ts'
 // in fleet_vocab.ts — one truth, shared by this test, the @yaks/sql parity test,
 // and the @yaks/sqlite integration spike.
 let v = fleetVocab()
+let EID = '9f1c8d2a-0b44-4e51-9f77-6a0c1e2d3b45'
 
 // ---- the canonical type spelling both sides collapse to --------------------
 
@@ -96,10 +100,20 @@ Deno.test('parity: enum aliases ride along', () => {
   })
 })
 
-Deno.test('parity: fleet keywords (prefix, by_name)', () => {
-  for (let [kind, p] of Object.entries(prefix)) {
-    assertEquals(v.comp(kind)?.prefix, p, kind)
-  }
+Deno.test('parity: the id prefixes, read through @yaks/id', () => {
+  assertEquals(prefixes(v), prefix)
+  // and the same id every fleet door prints
+  let id = idOf(v)
+  assertEquals(
+    id({ eid: EID, kind: 'task', num: 3 }),
+    idOfFleet({
+      eid: EID,
+      kind: 'task',
+      num: 3,
+    }),
+  )
+  assertEquals(id({ eid: EID, kind: 'entity', num: 3 }), 'E-3')
+  assertEquals(id({ eid: EID, kind: 'task' }), shortId(EID))
 })
 
 Deno.test('parity: derived status is readable, never writable', () => {

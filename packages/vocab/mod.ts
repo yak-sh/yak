@@ -9,6 +9,8 @@
 // The pieces:
 //   meta.ts      the core keyword vocabulary ($vocabulary doc) and the
 //                meta-schema a vocab file validates against
+//   keywords.ts  the extension seam: another package registers its own
+//                keywords, and the loader carries them without reading them
 //   vocab.ts     loadVocab(docs) → Vocab: the interrogation + routing API a
 //                binder (@yaks/sql) consumes — column types, path routing,
 //                kindOrder/kindOf, death worklists, instance checks
@@ -21,3 +23,4 @@ export * from './order.ts'
 export * from './vocab.ts'
 export * from './validate.ts'
 export * from './meta.ts'
+export * from './keywords.ts'

@@ -3,7 +3,7 @@
 // no global vocabulary anywhere.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import { kindOrder, loadVocab } from './mod.ts'
+import { extendMeta, kindOrder, loadVocab, metaSchema } from './mod.ts'
 import slice from './fleet/slice.schema.json' with { type: 'json' }
 
 let v = loadVocab(slice)
@@ -30,6 +30,7 @@ Deno.test('columns interrogate to their whole shape', () => {
     store: undefined,
     affinity: 'real',
     fk: false,
+    keywords: {},
   })
   let target = v.column('comment', 'target')!
   assertEquals(
@@ -148,10 +149,40 @@ Deno.test('death worklists derive from the declarations', () => {
   assert(v.refCols().some(([c, p]) => c == 'role' && p == 'observed'))
 })
 
-Deno.test('fleet keywords are carried, not acted on', () => {
-  assertEquals(v.comp('task')?.prefix, 'T')
-  assertEquals(v.comp('project')?.byName, true)
-  assertEquals(v.comp('comment')?.prefix, undefined)
+Deno.test('a registered extension keyword is carried, not interpreted', () => {
+  let words = {
+    uri: 'https://example.com/vocab/shelf',
+    comp: ['prefix', 'by_name'],
+    column: ['format'],
+  }
+  let w = loadVocab(slice, [words])
+  assertEquals(w.keywords, [words])
+  assertEquals(w.comp('task')?.keywords, { prefix: 'T' })
+  assertEquals(w.comp('project')?.keywords, { prefix: 'P', by_name: true })
+  assertEquals(w.comp('comment')?.keywords, {}) // declares none
+  assertEquals(w.column('task', 'priority')?.keywords, { format: 'priority' })
+  // unregistered keywords stay invisible
+  assertEquals(v.comp('task')?.keywords, {})
+  assertEquals(v.column('task', 'priority')?.keywords, {})
+})
+
+Deno.test('the meta-schema composes with an extension vocabulary', () => {
+  let words = {
+    uri: 'https://example.com/vocab/shelf',
+    comp: ['shelf'],
+    column: ['unit'],
+    doc: { $defs: { unit: { type: 'string' } } },
+  }
+  let m = extendMeta([words]) as Record<string, Record<string, unknown>>
+  assertEquals(m.$vocabulary['https://example.com/vocab/shelf'], true)
+  let props = (k: string) =>
+    (m.$defs[k] as { properties: Record<string, unknown> }).properties
+  assertEquals(props('component').shelf, true) // named, undescribed
+  assertEquals(props('column').unit, { type: 'string' })
+  assert(props('column').ref) // the core keywords still stand
+  // composing leaves the published meta-schema alone
+  let core = metaSchema.$defs as Record<string, { properties: object }>
+  assert(!('shelf' in core.component.properties))
 })
 
 Deno.test('instances check against the loaded shape', () => {

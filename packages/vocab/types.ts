@@ -50,11 +50,12 @@ export type Column = {
   store?: 'blob' // a body column, backed by a content-addressed blob
   affinity: 'text' | 'real' | 'integer' // the SQLite column affinity it stores as
   fk: boolean // a reference carrying a foreign key to entity(id)
+  keywords: Record<string, unknown> // registered extension keywords, verbatim
 }
 
 // A component, interrogated: its columns split writable/stamped, its display
-// facts, and two comp keywords the loader records but does not act on — an id
-// `prefix` and whether its title is a name a caller can resolve.
+// facts, and whatever extension keywords a caller registered (keywords.ts) —
+// carried verbatim, never interpreted here.
 export type CompInfo = {
   name: string
   wire: boolean // false = readable-not-writable component (the spine)
@@ -62,8 +63,7 @@ export type CompInfo = {
   before: string[] // kinds this kind sorts before (feeds kindOrder)
   writable: string[] // wire-writable column names
   stamped: string[] // server-owned column names
-  prefix?: string // a human id prefix (T, P, …) — carried, behavior deferred
-  byName?: boolean // the title is a typeable name — carried, behavior deferred
+  keywords: Record<string, unknown> // registered extension keywords, verbatim
 }
 
 // One deref step of a dotted path: the component a segment landed in and the
@@ -111,8 +111,6 @@ export type PropSchema = {
   wire?: boolean
   bare?: boolean
   aliases?: Record<string, string>
-  // comp keywords the loader records but does not act on
-  prefix?: string
-  by_name?: boolean
+  // an extension vocabulary's keywords ride here too (keywords.ts)
   [k: string]: unknown
 }

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yaks.sh/vocab/id",
+  "title": "yaks id keyword vocabulary",
+  "description": "The keyword @yaks/id adds to a component vocabulary. A component declaring `prefix` says its entities wear a human id in that letter's series — a book with prefix B is B-7 — and @yaks/id turns the pair into the id and back.",
+  "$comment": "A vocabulary declaration in the JSON Schema sense: a URI naming this keyword set, plus the schema of each keyword. A vocab file declares it under $vocabulary; a loader registers it with loadVocab(docs, [idKeywords]).",
+  "$defs": {
+    "prefix": {
+      "description": "The letter this component's human ids wear: \"B\" gives B-7. One uppercase letter, unique across the vocabulary — it is what a person types.",
+      "type": "string",
+      "pattern": "^[A-Z]$"
+    }
+  }
+}

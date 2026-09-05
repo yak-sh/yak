@@ -23,6 +23,7 @@
     "./workers/yak",
     "./packages/query",
     "./packages/vocab",
+    "./packages/id",
     "./packages/sql",
     "./packages/sqlite",
     "./packages/graph",

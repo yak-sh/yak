@@ -39,12 +39,6 @@ and a component with several references disambiguates with the column
 (`loan.book` → `.loans_book`). A forward spelling always wins its name, so an
 association never shadows a real column or component.
 
-Two further comp-level keywords are **recognized and carried, not acted on**:
-`prefix` (an id prefix such as `T` or `P`) and `by_name` (the component's title
-is a name a caller can resolve). The loader records them on the component —
-`v.comp('task').prefix`, `v.comp('project').byName` — and leaves the behavior
-(id-minting, name resolution) to the package that consumes the vocabulary.
-
 ```json
 {
   "$vocabulary": { "https://yaks.sh/vocab/core": true },
@@ -63,6 +57,35 @@ is a name a caller can resolve). The loader records them on the component —
 ```
 
 `meta/vocab.schema.json` is the meta-schema a vocab file validates against.
+
+## Extension keywords
+
+The core keywords describe what a component _table_ needs. Anything past that —
+an id prefix, a name column, a unit of measure — belongs to whoever cares about
+it, and arrives through JSON Schema's own extension mechanism: a **keyword
+vocabulary**, declared by its URI.
+
+```ts
+import { extendMeta, loadVocab } from '@yaks/vocab'
+
+let shelf = {
+  uri: 'https://example.com/vocab/shelf',
+  comp: ['shelf'], // keywords this vocabulary adds to a component
+  column: ['unit'], // …and to a column
+  doc: { $defs: { shelf: { type: 'string' }, unit: { type: 'string' } } },
+}
+
+let v = loadVocab([catalog], [shelf])
+v.comp('book').keywords.shelf // 'fiction'
+v.column('book', 'weight').keywords.unit // 'gram'
+extendMeta([shelf]) // the meta-schema, now admitting those keywords
+```
+
+The loader **carries** a registered keyword and never interprets one — what it
+_means_ belongs to the package that declared it.
+[@yaks/id](https://jsr.io/@yaks/id) owns `prefix` this way, and
+[@yaks/names](https://jsr.io/@yaks/names) owns `by_name`. A keyword nobody
+registered is invisible.
 
 ## The runtime
 
