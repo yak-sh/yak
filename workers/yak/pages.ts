@@ -244,17 +244,37 @@ export let askEmail = (
 // The one question the platform ever asks a person about themselves, and only
 // while nobody has answered it: what their apps should call them beside what
 // they write (T-32654). Optional — skipped, the front of their address does.
-let naming = `<p>And what should we call you? Skip it and we'll use the front
-of your address.</p>
-<input name="name" maxlength="60" autocomplete="name" placeholder="Dana" aria-label="What should we call you?">`
+// What a first sign-in asks about a person, and whatever they have already
+// typed: the name their apps call them by (T-32654) and the address those
+// apps live at (T-32967), beside the code, so a refusal hands the card back
+// with every word of theirs still in it.
+export type Asked = { name?: string; slug: string; code?: string }
 
-// Ask for the code just mailed. `ask` adds the name question, for someone
-// nobody has named yet. `why` is the soft refusal, when there was one.
+// The two questions the platform ever asks a person about themselves, and
+// only while nobody has answered them. Both optional: skipped, the front of
+// their address is the name, and `slug` — pre-filled with the address the
+// platform would have derived anyway — is the address. Choosing here is not a
+// step in front of anything: it rides the same POST as the code, and
+// `/connect` is still where an address moves afterwards.
+let asking = (said: Asked) =>
+  `<p>And what should we call you? Skip it and we'll use the front
+of your address.</p>
+<input name="name" maxlength="60" autocomplete="name" placeholder="Dana" aria-label="What should we call you?" value="${
+    esc(said.name ?? '')
+  }">
+<p>Your apps will live here. Change it now if you like — you can also change
+it later, while nothing is built there.</p>
+<span class="At"><input name="space" maxlength="63" autocomplete="off" spellcheck="false" aria-label="The name your apps live at" value="${
+    esc(said.slug)
+  }"><span>.yaks.app</span></span>`
+
+// Ask for the code just mailed. `ask` adds the first-sign-in questions, for
+// someone nobody has named yet. `why` is the soft refusal, when there was one.
 export let askCode = (
   email: string,
   q: string | null,
   back: string | null,
-  ask = false,
+  ask: Asked | null = null,
   why?: string,
   status = 200,
 ) =>
@@ -264,8 +284,10 @@ export let askCode = (
     status,
     `<form method="post" action="/login/code">${carried(q, back)}
 <input type="hidden" name="email" value="${esc(email)}">
-<input class="Code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus autocomplete="one-time-code" aria-label="Your six-digit code">
-${ask ? naming : ''}
+<input class="Code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus autocomplete="one-time-code" aria-label="Your six-digit code" value="${
+      esc(ask?.code ?? '')
+    }">
+${ask ? asking(ask) : ''}
 <button type="submit">Sign in</button>
 </form>${home}`,
   )

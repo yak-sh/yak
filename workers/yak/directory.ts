@@ -716,21 +716,35 @@ export let directory = (via: Fetcher, now = false) => {
       }
       return spaces
     },
+    // The next free spelling of a derived name: the name itself, else
+    // numbered until nothing answers to it. What `own` mints, and what the
+    // sign-in card offers a person before it does (T-32967).
+    free: async (base: string) => {
+      let slug = base
+      for (let n = 2; await self.space(slug); n++) slug = `${base}${n}`
+      return slug
+    },
     // The person's own space, minted the moment they first need one — at
     // sign-in, or at the first tool call by someone who signed in before this
-    // existed (T-32482). Nobody is ever asked to name a space. Theirs is a
-    // space they OWN — the one their address spells, if they own it, else the
-    // first they own — and being a member of somebody else's is not having
-    // one, so an invited person is minted theirs here rather than handed the
-    // inviter's (T-33142). A race that loses on the unique slug re-reads and
-    // finds the winner.
-    own: async (person: string): Promise<Space> => {
+    // existed (T-32482). Theirs is a space they OWN — the one their address
+    // spells, if they own it, else the first they own — and being a member of
+    // somebody else's is not having one, so an invited person is minted theirs
+    // here rather than handed the inviter's (T-33142). A race that loses on
+    // the unique slug re-reads and finds the winner.
+    //
+    // `want` is the address they chose at the sign-in card, taken only when it
+    // is a slug and still free — the card asked the same question a moment
+    // earlier and refused a taken one out loud (identity.ts `refuse`), so this
+    // is the race between that answer and the mint, not the refusal a person
+    // reads. Someone who already has a space is not minting one, so their
+    // choice is moot here and `/connect` is where they move (T-34137).
+    own: async (person: string, want?: string): Promise<Space> => {
       let mine = await self.spaces(person, 'owner')
       let row = await one(`.eid=${person}`)
       let wanted = slugFor(row?.email?.address ?? 'space')
       if (mine.length) return mine.find((s) => s.slug == wanted) ?? mine[0]
-      let slug = wanted
-      for (let n = 2; await self.space(slug); n++) slug = `${wanted}${n}`
+      let chosen = !!want && SLUG.test(want) && !await self.space(want)
+      let slug = chosen ? want! : await self.free(wanted)
       // The same batch space_new writes, for the same reasons: the person's
       // own row (they may have none yet), the space, and their ownership of
       // it — all bundles, since a bundle mints at an eid its author chose
@@ -739,9 +753,11 @@ export let directory = (via: Fetcher, now = false) => {
         await self.apply({
           entities: [
             { entity: { eid: person }, person: {} },
+            // A space nobody has named is known by the name it answers to,
+            // which is what `/connect` writes when one is chosen there too.
             {
               entity: { eid: '$space' },
-              doc: { title: wanted },
+              doc: { title: slug },
               space: { slug },
             },
             {

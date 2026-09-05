@@ -439,6 +439,112 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
   }
 })
 
+// The address a person chooses AT SIGN-UP, which is where it was dropped
+// (T-34137): the code card's second question rides the same POST as the code,
+// and the space signing in mints wears it. Left alone, the derived address is
+// what it always was; taken, the card comes back with their words in it and
+// the code still standing.
+slow('the address chosen at sign-up is the space that is minted', async () => {
+  let k = await kernel()
+  let uniq = () => crypto.randomUUID().slice(0, 8)
+  try {
+    // The card offers the address it would have derived, filled in.
+    let email = `probe-${uniq()}@yaks.app`
+    let derived = email.split('@')[0]
+    let card = await (await form(k, '/login', { email })).text()
+    assertMatch(card, /what should we call you/i)
+    assertMatch(card, new RegExp(`name="space"[^>]*value="${derived}"`))
+
+    // Changed, and it is the address their apps live at — the front of their
+    // own address minted nothing.
+    let want = `dana-${uniq()}`
+    let code = await mailed(k, email)
+    let inn = await form(k, '/login/code', {
+      email,
+      code,
+      name: 'Dana',
+      space: want,
+    })
+    assertEquals(inn.status, 303)
+    await inn.body?.cancel()
+    let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
+    let dir = meta(k, cookie)
+    let [theirs] = await dir.query(`.space.slug=${want}&.doc?`)
+    assert(theirs, `a space at ${want}`)
+    assertEquals((theirs.doc as { title: string }).title, want)
+    assertEquals(await dir.query(`.space.slug=${derived}`), [])
+    // And the page they land on says the same address back to them.
+    assertMatch(
+      await (await k.at('yaks.app', '/connect', { headers: { cookie } }))
+        .text(),
+      new RegExp(`${want}.yaks.app`),
+    )
+
+    // Left alone, signing in mints exactly what it always minted.
+    let quiet = `probe-${uniq()}@yaks.app`
+    await (await form(k, '/login', { email: quiet })).body?.cancel()
+    let plain = await form(k, '/login/code', {
+      email: quiet,
+      code: await mailed(k, quiet),
+    })
+    assertEquals(plain.status, 303)
+    await plain.body?.cancel()
+    assert(
+      (await dir.query(`.space.slug=${quiet.split('@')[0]}`)).length,
+      'the front of their address',
+    )
+
+    // A taken one is refused before the code is spent, in the sentence
+    // `/connect` says — with their name, their address and their code still
+    // in the card, and the code they were mailed still worth typing.
+    let other = `probe-${uniq()}@yaks.app`
+    await (await form(k, '/login', { email: other })).body?.cancel()
+    let theirCode = await mailed(k, other)
+    let no = await form(k, '/login/code', {
+      email: other,
+      code: theirCode,
+      name: 'Rex',
+      space: want,
+    })
+    assertEquals(no.status, 400)
+    let said = await no.text()
+    assertMatch(said, new RegExp(`${want}.yaks.app is taken`))
+    assertMatch(said, /value="Rex"/)
+    assertMatch(said, new RegExp(`name="space"[^>]*value="${want}"`))
+    assertMatch(said, new RegExp(`name="code"[^>]*value="${theirCode}"`))
+
+    // A badly shaped one says what an address is, and nothing is spent.
+    let bad = await form(k, '/login/code', {
+      email: other,
+      code: theirCode,
+      space: 'Not An Address',
+    })
+    assertEquals(bad.status, 400)
+    assertMatch(await bad.text(), /lowercase letters, numbers and dashes/)
+
+    // So they pick another, on the same code, and it is theirs.
+    let mine = `rex-${uniq()}`
+    let took = await form(k, '/login/code', {
+      email: other,
+      code: theirCode,
+      name: 'Rex',
+      space: mine,
+    })
+    assertEquals(took.status, 303)
+    await took.body?.cancel()
+    assert(
+      (await dir.query(`.space.slug=${mine}`)).length,
+      `a space at ${mine}`,
+    )
+
+    // Asked once: the next sign-in only wants the code.
+    let second = await (await form(k, '/login', { email })).text()
+    assertEquals(/name="space"/.test(second), false)
+  } finally {
+    await k.stop()
+  }
+})
+
 // The page a fresh sign-in lands on: how to hand this platform to the
 // assistant a person already talks to (T-32972), and beside it the address
 // their apps will live at, theirs to change inline while nothing is built

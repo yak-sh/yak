@@ -9,10 +9,18 @@
 // the mail seam (mail.ts);
 // `POST /login/code` spends it, finds or mints the person, and sets the
 // platform session cookie (src/token.ts). No password exists to lose. The code
-// card asks one thing about them, once and only while nobody has answered it:
-// what their apps should call them (T-32654) — skipped, that is the front of
-// their address, and either way an address never leaves the directory. A person
-// sent here from a page they could not use arrives as `/login?return=<url>`:
+// card asks two things about them, once and only while nobody has answered
+// them: what their apps should call them (T-32654) — skipped, that is the
+// front of their address, and either way an address never leaves the directory
+// — and the address their apps live at (T-32967), offered pre-filled with the
+// one the platform would have derived, so leaving it alone is what signing in
+// always did. Both ride the same POST as the code, and both come back with the
+// card when it is redrawn. Neither gates anything: `/connect` still carries
+// the address afterwards, for as long as nothing is built there, and it is
+// where somebody who signed in through a connector — and so never saw this
+// card's second question answered — moves theirs (T-34137).
+// A person sent here from a page they could not use arrives as
+// `/login?return=<url>`:
 // both cards carry that address forward, and the spent code lands them back on
 // it when it is one of ours (T-32593).
 //
@@ -55,7 +63,7 @@ import {
 import { cookie, cookieValue, sign, verify } from '../../src/token.ts'
 import { HANDOFF, handoffTo, opener, safeNext, spender } from './handoff.ts'
 export { HANDOFF } from './handoff.ts'
-import { directory, META } from './directory.ts'
+import { directory, META, slugFor } from './directory.ts'
 import { doomed, erase, naming, refused, ticketed, went } from './erase.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
@@ -65,6 +73,7 @@ import {
   askAllow,
   askCode,
   askDelete,
+  type Asked,
   askEmail,
   connect,
   deleted,
@@ -162,6 +171,37 @@ let domainOf = (req: Request) => {
 }
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
+
+// The questions a first sign-in asks, or none: what to call them (T-32654)
+// and the address their apps will live at (T-32967) — offered pre-filled with
+// the very address `own()` would have derived, so submitting the card
+// untouched mints exactly what it minted before this existed. `said` is
+// whatever they typed on a card being redrawn, which outranks the default.
+// Nobody named, nobody asked: both questions ride the one condition the name
+// field always rode, so their presence says nothing new about whether an
+// address has an account.
+let firstTime = async (
+  env: Env,
+  email: string,
+  said: Partial<Asked> = {},
+): Promise<Asked | null> =>
+  await nameAt(meta(env), email) ? null : {
+    ...said,
+    slug: said.slug || await dirOf(env).free(slugFor(email)),
+  }
+
+// Why an address cannot be theirs, in a sentence, or nothing. It answers only
+// whether a hostname is free — what every address on the zone already says out
+// loud — and it is asked BEFORE the code is spent, so a person who picks a
+// taken one still has the code they were mailed. The sentences are `choose`'s,
+// which is the same refusal read on the same platform (T-34137).
+let refuse = async (env: Env, want: string) =>
+  !SLUG.test(want)
+    ? 'An address is lowercase letters, numbers and dashes, ' +
+      'starting with a letter or a number — like dana or dana-notes.'
+    : await dirOf(env).space(want)
+    ? `${want}.${PLATFORM} is taken. Try another?`
+    : null
 
 // Who is asking, out of the platform session COOKIE and nothing else. It is
 // deliberately not `withAuth` above, which also answers an agent's bearer:
@@ -386,12 +426,14 @@ let landed = async (
   person: string,
   q: string,
   back: string,
+  want?: string,
 ) => {
   let store = meta(env)
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   // Signing in IS having a space (T-32482): theirs already, or minted here
-  // from their address, so no agent ever has to ask them for a name.
-  await dir.own(person)
+  // from the address they chose at the card, or from their own address when
+  // they left it alone — so no agent ever has to ask them for a name.
+  await dir.own(person, want)
   let space = await dir.space(META.space)
   if (space && await dir.memberless(space)) {
     await store.apply([{
@@ -559,7 +601,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       email,
       field('q') || null,
       back,
-      !await nameAt(meta(env), email),
+      await firstTime(env, email),
     )
   }
 
@@ -567,12 +609,34 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     let email = canon(field('email'))
     let q = field('q')
     let back = field('return')
-    if (!await spend(meta(env), secret(env), email, field('code'))) {
+    let code = field('code')
+    let name = field('name').trim().slice(0, 60)
+    let want = field('space').trim().toLowerCase()
+    // The address they chose, answered before the code is spent: a person who
+    // picks a taken one gets the card back with their words — the name, the
+    // address and the code they had already typed — still in it, and the code
+    // they were mailed still standing.
+    let no = want && await refuse(env, want)
+    if (no) {
       return askCode(
         email,
         q || null,
         back || null,
-        !await nameAt(meta(env), email),
+        {
+          name,
+          slug: want,
+          code,
+        },
+        no,
+        400,
+      )
+    }
+    if (!await spend(meta(env), secret(env), email, code)) {
+      return askCode(
+        email,
+        q || null,
+        back || null,
+        await firstTime(env, email, { name, slug: want || undefined }),
         'That code has expired or was mistyped. Ask for a fresh one?',
         400,
       )
@@ -580,12 +644,8 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     // What they said to call them, or the front of their address when they
     // skipped the question (`nameOf`) — written once, so the next sign-in
     // does not ask again. A name shaped like an address is no name.
-    let person = await personOf(
-      meta(env),
-      email,
-      nameOf(field('name').trim().slice(0, 60), email),
-    )
-    return landed(req, env, person, q, back)
+    let person = await personOf(meta(env), email, nameOf(name, email))
+    return landed(req, env, person, q, back, want)
   }
 
   // The consent page: the sign-in card wearing the client's name, or one
