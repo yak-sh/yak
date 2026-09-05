@@ -12,31 +12,30 @@
 // SQL equals src/sql.ts's over a hand-built fixture, calling compile() directly.
 // This proves the whole @yaks/sqlite ADAPTER — storage()/rows()/read() — answers
 // the app's real db, seeded the real way. It is the honest evidence that the
-// read path works on real data, and it pins the exact coverage boundary: the
-// advanced directives decline, and doc.body diverges (documented below).
+// read path works on real data, and it pins the exact coverage boundary — now
+// one gap wide: doc.body is gathered off the wrong layout (documented below).
 //
 // Findings, in one place (see the bottom tests for the executable form):
 //   - Membership over the covered query subset is EXACT against the real graph.
-//   - `.edges` / `.reaches` throw Unsupported through the adapter — the app
-//     answers these, @yaks/sql does not, so a no-fallback read-path swap is
-//     still blocked on them (filed under V-33493).
 //   - `.near=<eid>&.order=similar` compiles and ranks, through @yaks/embedding
 //     registered as a @yaks/sql extension, against the app's OWN `embedding`
 //     table — the layouts are column-for-column the same (T-33538).
 //   - The reverse-hop grammar (`.comments!`, `.comments>=5`, `.comments.<path>`)
 //     compiles and agrees with the app (T-33540).
+//   - The traversal grammar (`.edges!`, `.reaches[requires,<=N]=<eid>`) compiles
+//     through @yaks/edge's @yaks/sql extension and agrees with the app (T-33539).
 //   - `read()` gathers doc.body straight off the `doc` table, but the app stores
 //     body as a blob_text FK behind the `doc_value` view, so a gathered bundle's
 //     doc.body is the blob's integer id, not the text (filed).
 
 import { assert, assertEquals } from '@std/assert'
-import { parse } from '@yaks/query'
 import { storage } from '@yaks/sqlite'
-import { compile, Unsupported } from '@yaks/sql'
 import { fields, hashEmbedder, semantic, sweep } from '@yaks/embedding'
 import type { Driver } from '@yaks/sqlite'
+import { traverse } from '@yaks/edge'
 
 import { fleetVocab } from '../vocab/fleet_vocab.ts'
+import { link } from '../edge.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply } = await import('../db.ts')
@@ -90,6 +89,11 @@ apply(db, [
   },
   { eid: C1, name: 'doc', comp: { title: 'a note about alpha' } },
   { eid: C1, name: 'comment', comp: { target: T1 } },
+  // a requires chain, so the traversal grammar has something to walk:
+  // T3 → T2 → T1, and T4 off to the side.
+  ...link(T2, 'requires', T1),
+  ...link(T3, 'requires', T2),
+  ...link(T4, 'contains', T1),
 ])
 
 // ---- the two readers over that one graph -----------------------------------
@@ -100,7 +104,10 @@ let driver: Driver = {
   query: (sql, params) => db.prepare(sql).all(...params),
   exec: (sql) => db.exec(sql),
 }
-let store = storage(driver, V, { derived: fleetDerived, now: NOW })
+// @yaks/edge registers the traversal clauses (`.edges`, `.reaches`) the way
+// @yaks/fts registers search: an extension over the same compiler.
+let opts = { derived: fleetDerived, now: NOW, extend: [traverse(V)] }
+let store = storage(driver, V, opts)
 
 // The adapter's membership answer for a query, as a sorted eid set.
 let mine = (q: string): string[] =>
@@ -188,25 +195,26 @@ Deno.test('spike: an aggregate count matches through rows()', () => {
 
 // ---- the exact coverage boundary, made executable --------------------------
 
-Deno.test('gap: advanced directives decline through the adapter', () => {
-  // BLOCKER for a no-fallback read-path swap: the app compiles these in sql.ts;
-  // @yaks/sql does not, so routing the app's reads through @yaks/sqlite would
-  // push them to a JS fallback — the workaround the owner forbids. They throw
-  // Unsupported, naming the feature, rather than answering almost-right.
+Deno.test('spike: the traversal grammar agrees with the app', () => {
+  // Was the last of the declining directives (T-33539). @yaks/edge compiles both
+  // clauses against the same fleet vocabulary — `.reaches` as a recursive CTE
+  // over the edge table, `.edges` as the rider that narrows nothing — so they
+  // are held against the app's own compiler rather than declining.
   for (
     let q of [
+      '.reaches[requires,<=1]=' + T1,
+      '.reaches[requires,<=2]=' + T1,
+      '.reaches[requires,<=9]=' + T1,
+      '.reaches[contains,<=9]=' + T1,
+      '.reaches[requires,<=9]=' + T1 + '&.status=done',
       '.edges!',
-      '.reaches[requires,<=3]=' + T1,
+      '.edges[requires]!',
+      '.edges!&.status=open',
     ]
-  ) {
-    let threw: unknown
-    try {
-      compile(parse(q), V, { derived: fleetDerived, now: NOW })
-    } catch (e) {
-      threw = e
-    }
-    assert(threw instanceof Unsupported, `expected Unsupported for ${q}`)
-  }
+  ) agree(q)
+  // and the agreement is not vacuous: the seeded chain is T3 → T2 → T1
+  assertEquals(mine('.reaches[requires,<=1]=' + T1), [T2])
+  assertEquals(mine('.reaches[requires,<=2]=' + T1).sort(), [T2, T3].sort())
 })
 
 Deno.test('spike: the reverse-hop grammar agrees with the app', () => {

@@ -18,7 +18,9 @@ import { loadVocab } from '@yaks/vocab'
 import type { Keywords, PropSchema, Vocab, VocabDoc } from '@yaks/vocab'
 import { ID_URI, idKeywords } from '@yaks/id'
 import { nameKeywords, NAMES_URI } from '@yaks/names'
+import { EDGE_URI, edgeKeywords } from '@yaks/edge'
 import { derivedProps, type PropType } from '../types.ts'
+import { natureOf } from '../edge.ts'
 
 import canvas from './manifests/canvas.json' with { type: 'json' }
 import capture from './manifests/capture.json' with { type: 'json' }
@@ -50,6 +52,7 @@ type ManifestComp = {
 type Manifest = {
   name: string
   enums?: Record<string, { values: string[] }>
+  edges?: string[]
   comps: Record<string, ManifestComp>
 }
 
@@ -109,8 +112,19 @@ let shy = new Set([
   'session.parent',
 ])
 
-let compOf = (spec: ManifestComp): PropSchema => ({
+// The relation tags, gathered the way enums are. A manifest names the edge
+// TYPES a query says (`referenced`); the comp an edge entity WEARS is its
+// nature (`references`), which edge.ts maps. @yaks/edge reads the pair off the
+// `relation` keyword, so the fleet's edge vocabulary reaches the package as a
+// declaration rather than as a second copy of the list.
+let relationOf: Record<string, string> = {}
+for (let m of manifests) {
+  for (let type of m.edges ?? []) relationOf[natureOf[type] ?? type] = type
+}
+
+let compOf = (name: string, spec: ManifestComp): PropSchema => ({
   type: 'object',
+  ...(relationOf[name] ? { relation: relationOf[name] } : {}),
   ...(spec.kind ? { kind: true } : {}),
   ...(spec.before ? { before: spec.before } : {}),
   ...(spec.wire === false ? { wire: false } : {}),
@@ -131,19 +145,20 @@ let compOf = (spec: ManifestComp): PropSchema => ({
 
 // The keyword vocabularies the fleet's own components use beyond the core
 // meta-model. Each is owned by the package that interprets it (@yaks/id reads
-// `prefix`, @yaks/names reads `by_name`), and registered here so the loader
-// carries it.
-export let fleetKeywords: Keywords[] = [idKeywords, nameKeywords]
+// `prefix`, @yaks/names reads `by_name`, @yaks/edge reads `relation`), and
+// registered here so the loader carries it.
+export let fleetKeywords: Keywords[] = [idKeywords, nameKeywords, edgeKeywords]
 
 let docOf = (m: Manifest): VocabDoc => ({
   $vocabulary: {
     'https://yaks.sh/vocab/core': true,
     [ID_URI]: true,
     [NAMES_URI]: true,
+    [EDGE_URI]: true,
   },
   title: m.name,
   $defs: Object.fromEntries(
-    Object.entries(m.comps).map(([name, spec]) => [name, compOf(spec)]),
+    Object.entries(m.comps).map(([name, spec]) => [name, compOf(name, spec)]),
   ),
 })
 
