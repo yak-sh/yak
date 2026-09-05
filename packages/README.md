@@ -52,6 +52,10 @@ In dependency order:
   over a graph (`/apply`, `/query`, `/ws`), where the door authenticates the
   writer, and a subscription is a saved query whose answer is pushed again when
   a committed batch changes it.
+- **[@yaks/mcp](./mcp)** — the agent's door onto the same graph: an MCP server
+  of five generic tools that take and answer bundles, served as a portable
+  `fetch` handler or over stdio, each tool's output schema derived from the
+  vocabulary.
 - **[@yaks/workers](./workers)** — that handler as a Cloudflare Worker: the
   `WebSocketPair` upgrade `/ws` needs, the `fetch` entrypoint a Worker exports,
   a door that reads a cookie or a bearer token, and the hop to a Durable Object
@@ -105,6 +109,11 @@ on its own:
   `@yaks/match` (to decide cheaply which subscription a committed batch
   changed), and speaks only web-standard types, so the same handler serves on
   Deno, Node and a Worker.
+- `@yaks/mcp` is that same door for an agent instead of a program: it takes
+  `@yaks/api`'s `Authenticate` and its signing, so both doors onto one graph
+  agree about who is writing, and it answers in the same bundles — described by
+  an output schema derived from `@yaks/vocab`, so an agent reads a typed value
+  rather than parsing prose.
 - `@yaks/workers` is the last inch of that on Cloudflare: the three things a
   Worker does differently — make a socket, export a `fetch`, name the writer —
   so a graph is served from the edge without `@yaks/api` learning a Cloudflare

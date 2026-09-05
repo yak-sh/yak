@@ -22,6 +22,7 @@
     "npm:@cloudflare/workers-types@^4.20260702.1": "4.20260702.1",
     "npm:@huggingface/transformers@3": "3.8.1",
     "npm:@modelcontextprotocol/sdk@^1.12.0": "1.29.0_zod@3.25.76",
+    "npm:@modelcontextprotocol/sdk@^1.29.0": "1.29.0_zod@3.25.76",
     "npm:@preact/signals-core@^1.14.0": "1.14.4",
     "npm:@preact/signals@^2.9.0": "2.9.4_preact@10.29.7",
     "npm:@sqliteai/sqlite-vector-darwin-arm64@1.0.0": "1.0.0",
@@ -1401,6 +1402,13 @@
         "dependencies": [
           "jsr:@db/sqlite@0.13.0",
           "jsr:@std/assert@1"
+        ]
+      },
+      "packages/mcp": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:@modelcontextprotocol/sdk@^1.29.0",
+          "npm:zod@^3.24.0"
         ]
       },
       "packages/member": {

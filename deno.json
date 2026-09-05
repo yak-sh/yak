@@ -41,6 +41,7 @@
     "./packages/fts",
     "./packages/embedding",
     "./packages/api",
+    "./packages/mcp",
     "./packages/workers",
     "./packages/task",
     "./packages/session",
