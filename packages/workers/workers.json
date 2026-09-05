@@ -1,0 +1,14 @@
+{
+  "_": "The Cloudflare gate: the shipped source, type-checked with the RUNTIME's own types in scope — a binding is the binding wrangler declares, and `ResponseInit` is the one that carries a `webSocket`. `deno check --config packages/workers/workers.json packages/workers/conform.ts` is the check; it is part of `deno task check`.",
+  "compilerOptions": {
+    "lib": ["esnext", "dom"],
+    "strict": true
+  },
+  "imports": {
+    "@yaks/api": "../api/mod.ts",
+    "@yaks/graph": "../graph/mod.ts",
+    "@yaks/match": "../match/mod.ts",
+    "@yaks/query": "../query/mod.ts",
+    "@yaks/vocab": "../vocab/mod.ts"
+  }
+}

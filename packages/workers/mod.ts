@@ -2,35 +2,44 @@
  * @yaks/workers — the Cloudflare Workers adapter that serves
  * {@link https://jsr.io/@yaks/api | @yaks/api} from a Worker.
  *
- * `@yaks/api` is written to web-standard `Request`/`Response` types and knows
- * nothing about any host. This package is the thin seam that binds it to the
- * Workers runtime: it reads the Worker `env` to reach a graph's storage — a
- * Durable Object namespace (`@yaks/durable-object`) or a D1 binding
- * (`@yaks/d1`) — performs the Workers-native WebSocket upgrade for the `/ws`
- * route, and exports the `fetch` entrypoint a Worker requires.
+ * `@yaks/api` is a plain `Request` → `Response` handler that knows nothing
+ * about any host. Three things are Cloudflare's own, and they are all this
+ * package is:
  *
- * It holds only what is Cloudflare-specific; the routing and the graph logic
- * stay in the portable packages, so the same API also runs under Deno or Node
- * behind a different, equally thin adapter.
+ * - **{@link workerUpgrade}** — a socket, made the way Cloudflare makes one:
+ *   a `WebSocketPair`, the server half accepted, the client half returned on a
+ *   101. It is the `upgrade` seam `/ws` needs.
+ * - **{@link worker}** — the `fetch` entrypoint a Worker exports. Bindings
+ *   arrive with the request, so the graph is built from `env` on the first one
+ *   and kept for the isolate.
+ * - **{@link door}** — who is writing, read off a Worker request: a session
+ *   cookie or a bearer token, handed to the app's own `verify`.
+ *
+ * A graph that lives in a Durable Object is served the same way, one hop
+ * further on: the Worker {@link forward}s the request to the object, and the
+ * object runs `api()` over its own storage.
+ *
+ * ```ts
+ * import { door, worker } from '@yaks/workers'
+ *
+ * export default worker({
+ *   api: (env: { DB: unknown }) => ({
+ *     graph: shopGraph(env.DB),
+ *     authenticate: door({ cookie: 'shop_session', verify: memberFor }),
+ *   }),
+ * })
+ * ```
  *
  * @module
  */
 
-import type { Handler } from '@yaks/api'
-
-/** The Worker bindings this adapter reads to reach a graph's storage. */
-export type Env = Record<string, unknown>
-
-/** A Cloudflare Worker's default export: its `fetch` entrypoint. */
-export type Worker = {
-  /** handle one request, given the Worker's bindings */
-  fetch: (request: Request, env: Env) => Response | Promise<Response>
-}
-
-/**
- * Build the Worker export for a graph: resolve storage from `env`, front it
- * with {@link https://jsr.io/@yaks/api | @yaks/api}, and wire the
- * Workers-native socket upgrade. The implementation lands with the package;
- * this is the shape it satisfies.
- */
-export type worker = (api: (env: Env) => Handler) => Worker
+export { type Accepting, workerUpgrade } from './upgrade.ts'
+export { bearer, cookies, type Door, door } from './door.ts'
+export {
+  type Context,
+  type Env,
+  type Options,
+  type Worker,
+  worker,
+} from './worker.ts'
+export { forward, type Namespace, type Stub } from './stub.ts'
