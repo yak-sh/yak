@@ -62,7 +62,7 @@
  * import { invited, mailbox, mailDoc, stash } from '@yaks/mail'
  *
  * let vocab = loadVocab([docDoc, mailDoc, club])
- * let fx = effects(vocab)
+ * let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
  * let post = stash()
  * let g = graph({ storage, vocab, plugins: [fx, docs(), mailbox({ domain: 'books.example', sender: post, effects: fx })] })
  *

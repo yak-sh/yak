@@ -93,20 +93,35 @@ caller starts its own work and returns nothing.
 
 ## Writing back
 
-A handler receives a **detached** transaction: each call is its own unit of
-work, after the batch committed.
+An effect that writes gets one door, and it is the graph's own `apply()`.
 
 ```ts
-fx.changed('order', 'paid', (e, tx) => {
-  tx.patch([{ entity: { eid: receipt }, receipt: { order: e.entity.eid } }])
+let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
+
+fx.changed('order', 'paid', (e, tx, write) => {
+  write([{ entity: { eid: receipt }, receipt: { order: e.entity.eid } }])
 })
 ```
 
-For the full pipeline — admission, stamps, cascade — call `apply()` on the graph
-itself; a handler registered after the graph exists simply closes over it.
-Either way the write-back is a new batch, so an effect that writes the component
-it watches will wake itself. Watch a different component, or a different column,
-than you write.
+So the write-back is admitted, stamped, cascaded, journaled, cast to
+subscribers, and seen by the other effects — none of which a write straight
+through `tx.patch` is. It is a **new batch**, after the commit that woke the
+handler, never a row smuggled into a transaction that has already finished.
+`trusted` is what lets an effect stamp a server-owned column, which is most of
+what effects write.
+
+The `tx` a handler also receives stays the detached transaction it always was:
+each call its own unit of work, for **reading** the settled state.
+
+**The loop is stopped by the door, not by each handler.** A write from an effect
+can of course wake an effect. Every batch carries its generation under `$effect`
+— `0` at the door, `1` for an effect's write, one more each hop — and a batch
+past `depth` (default `1`) commits, journals and casts like any other while
+waking nobody.
+
+```ts
+let fx = effects(vocab, { write, depth: 0 }) // an effect's write wakes no one
+```
 
 ## The durable tier (optional)
 

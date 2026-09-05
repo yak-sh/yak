@@ -8,7 +8,9 @@
 // runs the guard and the effects, and what the transport was handed is what
 // @yaks/mail composed out of the rows.
 import { assert, assertEquals } from '@std/assert'
+import type { Frame } from '@yaks/api'
 import type { Bundle } from '@yaks/graph'
+import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/harness.ts'
 import { Store } from './graph.ts'
 import { mailedTo, mailFrom, posting } from './post.ts'
@@ -54,11 +56,32 @@ let outbox = (refuse?: string) => {
   }
 }
 
-let state = () => ({
-  storage: durable(),
-  acceptWebSocket: () => {},
-  getWebSockets: () => [],
-})
+// One object's whole state, with the socket list the runtime holds for it —
+// the stand-in cannot do the 101 upgrade, so a socket is driven the way the
+// runtime drives a hibernated one, through `webSocketMessage`.
+let state = () => {
+  let live: Wire[] = []
+  return {
+    storage: durable(),
+    live,
+    acceptWebSocket: (ws: Wire) => void live.push(ws),
+    getWebSockets: () => live,
+  }
+}
+
+// A hibernatable socket, faked: what it was sent, in order.
+let wire = () => {
+  let sent: Frame[] = []
+  let held: unknown = null
+  return {
+    sent,
+    send: (data: string) => void sent.push(JSON.parse(data)),
+    serializeAttachment: (v: unknown) => {
+      held = JSON.parse(JSON.stringify(v))
+    },
+    deserializeAttachment: () => held,
+  }
+}
 
 let APP = 'a0000000-0000-4000-8000-000000000001'
 let ADA = 'b0000000-0000-4000-8000-000000000002'
@@ -88,10 +111,10 @@ let post = (store: Store, path: string, body: unknown, v?: Vouch) =>
   )
 
 // A store holding the cookbook, with a post room bound to `mail`.
-let cookbook = async (mail = outbox(), v = owner) => {
-  let store = new Store(state(), { MAIL: mail })
+let cookbook = async (mail = outbox(), v = owner, ctx = state()) => {
+  let store = new Store(ctx, { MAIL: mail })
   assertEquals((await post(store, '/vocab', {}, v)).status, 200)
-  return { store, mail }
+  return { store, mail, ctx }
 }
 
 // The letter as an app writes one: the recipient as an entity wearing an
@@ -135,6 +158,42 @@ Deno.test("a member's letter leaves from the app's own address", async () => {
     'ana@example.com',
   )
   assertEquals(row.bounced, undefined)
+})
+
+// The whole point of writing the outcome through apply() rather than straight
+// through storage (T-34044): a page watching the letter is TOLD it left, in the
+// same second, instead of finding out on its next query.
+Deno.test('a page watching the letter is told it left', async () => {
+  let ctx = state()
+  let { store, mail } = await cookbook(outbox(), owner, ctx)
+  let ws = wire()
+  ctx.live.push(ws)
+  // The raw feed carries batches exactly as applied, so a `delivered` bundle in
+  // one can only have come from the effect's own apply().
+  store.webSocketMessage(ws, JSON.stringify({ subscribe: true, id: 'all' }))
+  // And the page-shaped ask: the letters that have left.
+  store.webSocketMessage(
+    ws,
+    JSON.stringify({ subscribe: '.delivered!', id: 'note' }),
+  )
+  assertEquals(ws.sent.length, 1) // the raw feed opens with no set at all
+  assertEquals((ws.sent[0] as { id: string }).id, 'note')
+
+  assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
+  assertEquals(mail.sent.length, 1)
+
+  let bundles = (f: Frame) => (f.bundles ?? []) as Bundle[]
+  let cast = ws.sent.filter((f) =>
+    bundles(f).some((b) => b.entity.eid == NOTE && b.delivered)
+  )
+  // Both subscriptions heard it: the raw feed as the batch the effect wrote,
+  // the query as a letter that now matches.
+  assertEquals([...new Set(cast.map((f) => f.id))].sort(), ['all', 'note'])
+  let raw = bundles(cast.find((f) => f.id == 'all')!)
+  assertEquals(
+    (raw.find((b) => b.delivered)!.delivered as { via?: string }).via,
+    'm1@yaks.app',
+  )
 })
 
 Deno.test("the from address is the platform's word, never the batch's", async () => {

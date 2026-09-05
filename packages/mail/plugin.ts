@@ -20,7 +20,9 @@ import { type Post, sending } from './send.ts'
 export type Mailbox = {
   /** your own mail domain — the addresses this graph canonicalizes on write */
   domain?: string
-  /** register `created(mail)` on this registry, so letters actually go */
+  /** register `created(mail)` on this registry, so letters actually go. It
+   * needs a WRITE DOOR — `effects(vocab, { write })`, applied trusted — since
+   * that is how the outcome is settled back onto the letter. */
   effects?: Effects
 } & Partial<Post>
 
@@ -53,7 +55,7 @@ let clean = (fix: (a: string) => string) => (b: Bundle): Bundle => {
  * import { mailbox, mailDoc, stash } from '@yaks/mail'
  *
  * let vocab = loadVocab([docDoc, mailDoc, club])
- * let fx = effects(vocab)
+ * let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
  * let g = graph({
  *   storage,
  *   vocab,

@@ -76,7 +76,10 @@ export type Club = {
 
 /** A club with a post room. `refuse` makes every send fail, for the bounce. */
 export let clubhouse = (refuse?: string): Club => {
-  let fx = effects(club)
+  // The write door the sending effect settles a letter through: the club's own
+  // graph, trusted, since `delivered` and `bounced` are server-owned. `g` is
+  // built below and this only ever runs post-commit.
+  let fx = effects(club, { write: (b) => g.apply(b, { trusted: true }) })
   let post = stash(refuse ? { refuse } : {})
   let g = graph({
     storage: memory(club),

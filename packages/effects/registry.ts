@@ -22,15 +22,22 @@
 // keeps a synchronous `apply()`, and the first asynchronous handler makes that
 // one call's answer a promise. A handler that must not delay its caller starts
 // its own work and returns nothing.
+//
+// A handler that WRITES is handed a third thing: the write door (./write.ts),
+// which puts its bundles through the graph's own `apply()` as a new batch. The
+// loop that invites is stopped by the generation the door marks and this file
+// reads — never by a rule each handler has to remember.
 
 import type { Bundle, Hook, Plugin, Tx } from '@yaks/graph'
 import { isPromise, over, then } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { before, type Event, events, type Kind, strip } from './trace.ts'
+import { generation, marked, unmark, type Write } from './write.ts'
 
-/** A post-commit observer: what happened, and a detached transaction to read
- * or write through. Its return value is awaited when it is a promise. */
-export type Handler = (event: Event, tx: Tx) => unknown
+/** A post-commit observer: what happened, a detached transaction to read
+ * through, and the door to WRITE through ({@link Write}). Its return value is
+ * awaited when it is a promise. */
+export type Handler = (event: Event, tx: Tx, write: Write) => unknown
 
 /** One registration: the component it watches, what has to happen to it, and
  * the handler. `id` names it — `post.created`, `post.changed.published`,
@@ -76,6 +83,15 @@ export type Opts = {
   around?: Around
   /** the plugin's name, for diagnostics (default: `@yaks/effects`) */
   name?: string
+  /** how a handler writes back: one new batch through the graph's own
+   * `apply()`, trusted (see {@link Write}). Without it a handler that asks to
+   * write is reported rather than quietly writing past the pipeline. */
+  write?: Write
+  /** how many generations of effect-written batches still wake handlers
+   * (default: `1`). A batch at a door is generation 0 and an effect's own
+   * write is 1, so the default lets one effect see another's write and stops
+   * the generation after that. */
+  depth?: number
 }
 
 /**
@@ -131,6 +147,20 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   let slots: Slot[] = []
   let report = opts.report ?? warn
   let around = opts.around
+  let depth = opts.depth ?? 1
+
+  // The write door as one batch's handlers see it: whatever they write is
+  // marked a generation on from the batch that woke them, so the run that
+  // observes THAT write knows how far the chain has come.
+  let writer = (gen: number): Write => (bundles) => {
+    if (!opts.write) {
+      throw new Error(
+        'this effect asked to write and no write door is registered — ' +
+          'effects(vocab, { write: (b) => graph.apply(b, { trusted: true }) })',
+      )
+    }
+    return opts.write(marked(bundles, gen + 1))
+  }
 
   let name = (comp: string, kind: Kind, column?: string) => {
     let base = column ? `${comp}.${kind}.${column}` : `${comp}.${kind}`
@@ -145,17 +175,20 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
 
   // One handler run, isolated. `ok` says whether it completed, which is what a
   // reconciler needs and what dispatch ignores.
-  let fire = (s: Slot, event: Event, tx: Tx): boolean | Promise<boolean> => {
+  let fire = (
+    s: Slot,
+    event: Event,
+    tx: Tx,
+    write: Write,
+  ): boolean | Promise<boolean> => {
     let job: Job = { handler: s.id, event }
     let failed = (err: unknown) => {
       report(err, job)
       return false
     }
     try {
-      let out = around ? around(job, tx, () => s.run(event, tx)) : s.run(
-        event,
-        tx,
-      )
+      let go = () => s.run(event, tx, write)
+      let out = around ? around(job, tx, go) : go()
       return isPromise(out) ? out.then(() => true, failed) : true
     } catch (err) {
       return failed(err)
@@ -164,13 +197,19 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
 
   // The effect phase: what happened, who was watching, one isolated run each.
   let dispatch: Hook = (bundles: Bundle[], tx: Tx) => {
-    let clean = () => strip(bundles)
+    let clean = () => unmark(strip(bundles))
     if (!slots.length) return clean()
+    // Past the depth this registry allows: the batch committed, journaled and
+    // cast to subscribers like any other — it simply wakes nobody, which is
+    // where a chain of effects writing about each other comes to rest.
+    let gen = generation(bundles)
+    if (gen > depth) return clean()
+    let write = writer(gen)
     let jobs = events(bundles).flatMap((e) =>
       slots.filter((s) => watching(s, e)).map((s) => [s, e] as [Slot, Event])
     )
     if (!jobs.length) return clean()
-    return then(over(jobs, ([s, e]) => fire(s, e, tx)), clean)
+    return then(over(jobs, ([s, e]) => fire(s, e, tx, write)), clean)
   }
 
   let fx: Effects = {
@@ -197,7 +236,9 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
         })
         return false
       }
-      return fire(s, event, tx)
+      // A reconciled run stands outside any batch, so its own writes start the
+      // chain over: what it writes is generation 1, like a fresh run's.
+      return fire(s, event, tx, writer(0))
     },
   }
   return fx

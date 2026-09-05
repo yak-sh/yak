@@ -419,7 +419,14 @@ export class Store {
     // binding, post-commit (T-33686). It is FRESH on every boot, so the
     // registration below happens once per incarnation however often a store
     // is rebuilt.
-    let fx = effects(vocab)
+    // An effect writes back through the KERNEL's own door — a new batch
+    // through this graph's `apply()`, trusted and unsigned — so what a letter
+    // came to is journaled, cast to every open socket, and seen by whatever
+    // else is watching, instead of a row a page finds on its next query
+    // (T-34044). `#trust` is the same door `x-yak-kernel` writes through; the
+    // graph it names is whichever one this object last built, which is the
+    // only one that could be committing.
+    let fx = effects(vocab, { write: (b) => this.#trust(b, null) })
     // Who carries a letter out of THIS store, and only for an app: the
     // platform's own store writes its sign-in codes through mail.ts from the
     // fleet's own address, and has no app whose name a letter could leave

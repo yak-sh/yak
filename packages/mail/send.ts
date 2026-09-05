@@ -8,9 +8,10 @@
 //
 // The effect runs POST-COMMIT, which is the right place for it: the letter is
 // durable before anyone tries to send it, a mail server that is down cannot
-// refuse the write, and the outcome — `delivered` or `bounced` — is written
-// back through the graph as an ordinary patch. So "what happened to that
-// letter?" is a query, not a log file.
+// refuse the write, and the outcome — `delivered` or `bounced` — goes back
+// through the graph's own `apply()` as a batch of its own. So "what happened to
+// that letter?" is a query AND a frame: it is journaled and pushed to whoever
+// is watching, rather than a row found on the next look (T-34044).
 //
 // The transport itself is INJECTED. This package composes a message and hands
 // it over; whether that is Cloudflare, an SMTP relay, or a list in memory is
@@ -130,7 +131,7 @@ export let message = (
  * import { effects } from '@yaks/effects'
  * import { sending, stash } from '@yaks/mail'
  *
- * let fx = effects(vocab)
+ * let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
  * fx.created('mail', sending({ sender: stash() }))
  * ```
  *
@@ -138,37 +139,47 @@ export let message = (
  * recipient later goes then — the handler reads the whole entity, so it does
  * not care which component woke it. It is idempotent either way: a letter that
  * already carries `delivered` or `bounced` is left alone.
+ *
+ * The outcome goes back through @yaks/effects' WRITE door — a new batch through
+ * the graph's own `apply()` — so "this letter left" is journaled and pushed to
+ * whoever is watching the letter, rather than a row they find next time they
+ * ask. The registry needs that door: `effects(vocab, { write })`, applied
+ * trusted, since `delivered` and `bounced` are the sender's word and therefore
+ * server-owned.
  */
-export let sending = ({ sender, now = clock }: Post): Handler => (event, tx) =>
-  then(whole(tx, event.entity), (letter) => {
-    let mail = comp(letter, MAIL)
-    let deliver = comp(letter, DELIVER)
-    // Not a letter, not an ask to send one, or one already settled.
-    if (!mail || !deliver) return
-    if (comp(letter, DELIVERED) || comp(letter, BOUNCED)) return
-    let settle = (out: Comp, name: string) =>
-      tx.patch([{ entity: event.entity, [name]: { at: now(), ...out } }])
-    let fail = (reason: string) => settle({ reason }, BOUNCED)
-    let recipient = deliver.to == null ? '' : String(deliver.to)
-    if (!recipient) return fail('deliver.to names nobody')
-    return then(addressOf(tx, recipient), (to) => {
-      if (!to) return fail(`no address on file for ${recipient}`)
-      if (!str(mail, 'from')) return fail('the letter has no from address')
-      let answered = mail.reply_to == null ? '' : String(mail.reply_to)
-      return then(
-        answered ? threadOf(tx, answered) : '',
-        (replyTo) =>
-          sender.send(message(letter!, to, replyTo || undefined)).then(
-            (receipt) =>
-              tx.patch([{
-                entity: event.entity,
-                // The envelope, denormalized onto the letter as data: an address
-                // book edited later never rewrites where this one went.
-                [MAIL]: { to },
-                [DELIVERED]: { at: now(), via: receipt.id ?? to },
-              }]),
-            (err) => fail(String((err as Error)?.message ?? err).slice(0, 240)),
-          ),
-      )
+export let sending =
+  ({ sender, now = clock }: Post): Handler => (event, tx, write) =>
+    then(whole(tx, event.entity), (letter) => {
+      let mail = comp(letter, MAIL)
+      let deliver = comp(letter, DELIVER)
+      // Not a letter, not an ask to send one, or one already settled.
+      if (!mail || !deliver) return
+      if (comp(letter, DELIVERED) || comp(letter, BOUNCED)) return
+      let settle = (out: Comp, name: string) =>
+        write([{ entity: event.entity, [name]: { at: now(), ...out } }])
+      let fail = (reason: string) => settle({ reason }, BOUNCED)
+      let recipient = deliver.to == null ? '' : String(deliver.to)
+      if (!recipient) return fail('deliver.to names nobody')
+      return then(addressOf(tx, recipient), (to) => {
+        if (!to) return fail(`no address on file for ${recipient}`)
+        if (!str(mail, 'from')) return fail('the letter has no from address')
+        let answered = mail.reply_to == null ? '' : String(mail.reply_to)
+        return then(
+          answered ? threadOf(tx, answered) : '',
+          (replyTo) =>
+            sender.send(message(letter!, to, replyTo || undefined)).then(
+              (receipt) =>
+                write([{
+                  entity: event.entity,
+                  // The envelope, denormalized onto the letter as data: an
+                  // address book edited later never rewrites where this one
+                  // went.
+                  [MAIL]: { to },
+                  [DELIVERED]: { at: now(), via: receipt.id ?? to },
+                }]),
+              (err) =>
+                fail(String((err as Error)?.message ?? err).slice(0, 240)),
+            ),
+        )
+      })
     })
-  })

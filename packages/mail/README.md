@@ -60,7 +60,9 @@ import { docDoc, docs } from '@yaks/doc'
 import { mailbox, mailDoc, stash } from '@yaks/mail'
 
 let vocab = loadVocab([docDoc, mailDoc, club])
-let fx = effects(vocab)
+// The write door the outcome is settled through — trusted, because `delivered`
+// and `bounced` are the sender's word and therefore server-owned.
+let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
 let post = stash()
 let g = graph({
   storage,
@@ -77,8 +79,11 @@ let g = graph({
 component declared twice, so `doc` keeps one home and an application that
 already has it is not fought over it.
 
-So a write cannot fail because a mail server is down, and _what became of that
-letter_ is a query, not a log file:
+The outcome goes back through the graph's own `apply()`, so it is journaled and
+pushed to whoever is watching the letter — a write straight through storage
+would be a row they only find on their next look. So a write cannot fail because
+a mail server is down, and _what became of that letter_ is a query and a frame,
+not a log file:
 
 ```text
 delivered { at, via }     it left; `via` is the id the transport gave it

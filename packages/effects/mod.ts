@@ -45,12 +45,26 @@
  *   first handler that returns a promise makes that call's answer a promise.
  *
  * ## Writing back
- * A handler receives a detached transaction — `tx.patch([...])` writes a
- * bundle straight through storage, post-commit — and a handler registered
- * after the graph exists can simply close over it and call `g.apply()` for the
- * full pipeline. Either way the write is a new batch, so an effect that writes
- * the component it watches will wake itself: watch a different component, or a
- * different column, than you write.
+ * An effect that writes gets one door, and it is the graph's own `apply()`:
+ *
+ * ```ts
+ * let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
+ *
+ * fx.changed('order', 'paid', (e, tx, write) =>
+ *   write([{ entity: { eid: receipt }, receipt: { order: e.entity.eid } }]))
+ * ```
+ *
+ * So the write is admitted, stamped, journaled, cast to subscribers and seen by
+ * the other effects — everything a write through `tx.patch` is not. It is a NEW
+ * batch, after the commit that woke the handler, never a row smuggled into the
+ * finished transaction. `trusted` is what lets an effect stamp a server-owned
+ * column, which is most of what effects write.
+ *
+ * A write from an effect could of course wake an effect. That loop is stopped
+ * by the door, not by a rule in each handler: every batch carries its
+ * {@link generation} — 0 at the door, 1 for an effect's write — and a batch
+ * past `depth` (default 1) commits and casts like any other while waking
+ * nobody.
  *
  * It imports no platform API, so the same registry runs on a server, in a
  * worker, and in a browser tab.
@@ -59,5 +73,6 @@
  */
 
 export * from './trace.ts'
+export * from './write.ts'
 export * from './registry.ts'
 export * from './durable.ts'
