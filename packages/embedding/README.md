@@ -105,6 +105,15 @@ integer ids. That is why the ordering carries no bound parameter (the IR's
 `ORDER BY` holds none) and why the rest of the query line still filters, counts
 and pages normally.
 
+**Paging a neighbourhood.** `.near=X&.order=similar&.limit=5` answers the five
+nearest, and `&.after=<num>` continues from that entity's own place in the
+ranking — @yaks/sql asks this extension's `order` hook a second time with the
+anchor's owner id, so the cursor is a rank position without ever being spelled
+as one. The cursor is the ordinary `.after=<num>`: a caller pages a
+neighbourhood exactly as it pages a board, and never learns that the sort key is
+a similarity. An `.after` naming an entity outside the neighbourhood sorts with
+the `else` arm, past every neighbour, so the page is empty rather than wrong.
+
 The similarity comes back as a **query-only component**: `near.rank(bundles)`
 returns them nearest-first, each wearing `rank: { score }`. Nothing stores it —
 a component is a shape for carrying data about an entity, and it does not have
