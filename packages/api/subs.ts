@@ -82,13 +82,15 @@ type Sub = {
 // A clause every subscriber can be judged on alone: a column of the entity
 // itself, a word in its own text, nothing. A path that hops through a
 // reference, a backlink, an ordering, a window or an aggregate is a question
-// about the SET, and answering it needs the query run again.
+// about the SET, and answering it needs the query run again. `*` asks which
+// components an answer CARRIES — no question about membership at all — so it
+// leaves a subscription incremental.
 let local = (c: Clause, v: Vocab): boolean =>
   c.kind == 'and' || c.kind == 'or'
     ? c.clauses.every((k) => local(k, v))
     : c.kind == 'pred'
     ? v.aim(c.path.join('.'), bare(c)).length == 1
-    : c.kind == 'text' || c.kind == 'never'
+    : c.kind == 'text' || c.kind == 'never' || c.kind == 'every'
 
 // The per-bundle test for a parsed query, or null to re-read it instead: a
 // query reaching beyond one entity, and one @yaks/match declines outright,

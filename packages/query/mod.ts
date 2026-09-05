@@ -6,7 +6,7 @@
 // `parse('.a=1&.b=2')` deep-equals `and(eq('a', '1'), eq('b', '2'))`.
 //
 // It knows the FORMAT — operators, any-of lists, ranges, time literals, the
-// reserved directives (order, near, refs, count, distinct, tally, fields,
+// reserved directives (order, near, refs, count, distinct, tally, fields, `*`,
 // limit, after, edges, reaches), dot-param routing shape, and how tokens
 // separate — but nothing about any schema. Whether `status` is a real column, a
 // reference, or an enum, and how a field maps to storage, is a downstream job

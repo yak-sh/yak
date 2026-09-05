@@ -261,10 +261,8 @@ async (req) => {
   throw new Denied(who.eid, held, 'viewer', 'read')
 }
 
-// The spine's own name, and the listing's word for "every component" — not the
-// grammar's, so it never reaches the parser as a bare full-text term.
+// The spine's own name.
 let SPINE = 'entity'
-let EVERY = '*'
 
 // The two pieces of the wider platform grammar an app's store refuses BY NAME
 // rather than answering some other way (public/guide/querying.md, where both
@@ -1023,15 +1021,6 @@ export class Store {
           return refuse(e)
         }
       }
-      // `*` is the LISTING's word — "answer every component" — not the
-      // grammar's, so it never reaches the parser, where a bare word is a
-      // full-text term that matches nothing. It is read by `#wanted` off the
-      // line as the caller wrote it and cut out of the line the query runs.
-      let segs = line.split('&')
-      if (segs.includes(EVERY)) {
-        url.searchParams.set('q', segs.filter((s) => s != EVERY).join('&'))
-        request = new Request(url, request)
-      }
       return await this.#kinded(await this.#route(request), line)
     }
     return await this.#route(request)
@@ -1095,9 +1084,12 @@ export class Store {
   // could carry, which is also what keeps the door's own platform screens
   // (listing.ts `asking`) from reading as requests.
   #wanted(line: string): Set<string> | null {
-    if (line.split('&').includes(EVERY)) return null
+    let clauses = parse(line).clauses
+    // `*` is the grammar's widest projection (@yaks/query), so every door that
+    // parses the line reads it the same way and none has to strip it first.
+    if (clauses.some((c) => c.kind == 'every')) return null
     let want = new Set<string>()
-    for (let c of parse(line).clauses) {
+    for (let c of clauses) {
       if (c.kind != 'pred' || !c.path.length) continue
       // Absence is not a request: `.archived=` names no component the answer
       // could carry, which is also what keeps the door's own platform screens

@@ -51,6 +51,26 @@ Deno.test('a commit pushes what the query selects, and nothing else', () => {
   assertEquals(take(), [])
 })
 
+// `*` asks which components an answer CARRIES, not which entities belong, so a
+// line wearing it subscribes exactly as the line without it does — incremental,
+// judged per bundle. Read as a text term instead, it matched nothing and the
+// subscription went silent (T-34070).
+Deno.test('`*` projects, and never narrows a subscription', () => {
+  let graph = shop()
+  let subs = subscriptions(graph)
+  let { to, take } = ear()
+  subs.open(to, 'cheap', '.price<20&*')
+  take()
+
+  graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  let [hit] = take()
+  assertEquals(ids(hit), ['b1'])
+  assertEquals(comp(hit.bundles![0], 'book').price, 12)
+
+  graph.apply([{ entity: { eid: 'b2' }, book: { price: 30 } }])
+  assertEquals(take(), [])
+})
+
 Deno.test('an entity that stops matching is reported gone', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])

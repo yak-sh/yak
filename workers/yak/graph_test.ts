@@ -225,6 +225,46 @@ Deno.test('a subscription is answered, and a commit reaches the socket', async (
   assertEquals(pushed.bundles[0].entity.eid, CAKE)
 })
 
+// `*` is the grammar's widest projection, so ONE reading of the line serves
+// both doors: it used to be cut out of `/query`'s line by hand and handed to
+// `subs.open` whole, where it reached @yaks/match as a full-text term nothing
+// matches — the subscription answered empty and stayed silent forever (T-34070).
+Deno.test('a subscription asking `*` answers what /query answers', async () => {
+  let ctx = state()
+  let store = await cookbook(ctx)
+  let ws = wire()
+  ctx.live.push(ws)
+  let line = '.recipe!&*'
+
+  store.webSocketMessage(ws, JSON.stringify({ subscribe: line, id: 'r' }))
+  assertEquals(ws.sent, [{ id: 'r', bundles: [] }])
+
+  await post(store, '/apply', [{
+    entity: { eid: CAKE },
+    doc: { title: 'Lemon drizzle' },
+    recipe: { serves: 8 },
+  }], owner)
+  assertEquals(ws.sent.length, 2)
+  let pushed = ws.sent[1] as { id: string; bundles: Bundle[] }
+  assertEquals(pushed.id, 'r')
+  // Every component of the row, not just the one the filter named.
+  assertEquals(pushed.bundles.length, 1)
+  assertEquals(pushed.bundles[0].entity.eid, CAKE)
+  assertEquals((pushed.bundles[0].recipe as { serves: number }).serves, 8)
+  assertEquals(
+    (pushed.bundles[0].doc as { title: string }).title,
+    'Lemon drizzle',
+  )
+
+  // The same line over the other door answers the same rows.
+  let read = await (await get(
+    store,
+    `/query?q=${encodeURIComponent(line)}`,
+    owner,
+  )).json() as Bundle[]
+  assertEquals(read, pushed.bundles)
+})
+
 Deno.test('a woken object serves the same app, and the same sockets', async () => {
   let ctx = state()
   let store = await cookbook(ctx)

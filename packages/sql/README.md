@@ -138,8 +138,8 @@ The common query path is exact: predicates (every operator), any-of lists,
 ranges, time phrases, boolean composition, reference-deref paths, reverse hops,
 full-text terms, the `.kind` scope, presence/absence, ordering,
 `.limit`/`.after` windows, `.count`/`.distinct`/`.tally` aggregates, `.fields`
-projections, the `.refs=` backlink union, and the `.eid=`/`.num=` identity
-predicate.
+and `*` projections, the `.refs=` backlink union, and the `.eid=`/`.num=`
+identity predicate.
 
 Advanced directives it cannot yet reach throw **`Unsupported`** rather than
 answer almost-right — a caller catches it to fall back to a JS matcher or to

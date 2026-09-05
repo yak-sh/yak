@@ -61,8 +61,9 @@ let b = and(
 
 Vocabulary: `eq ne contains lt le gt ge present absent want pred` (predicates);
 `list range scalar time text` (values and terms); `and or` (composition);
-`order near refs hasRefs count distinct tally fields limit after edges reaches`
-(directives); `clauses orderOf nearOf windowOf` (accessors).
+`clauses orderOf nearOf windowOf` (accessors); and the directives
+`order near refs hasRefs count distinct tally fields every limit after edges
+reaches`.
 
 ## The format
 
@@ -73,8 +74,8 @@ Vocabulary: `eq ne contains lt le gt ge present absent want pred` (predicates);
 - Paths are raw dotted segments: `.review.book.title~=magic`. This parser does
   not route them to a schema — that is a downstream job.
 - Directives ride the clause list: `.order=hot` `.near=42` `.refs=42` `.count!`
-  `.distinct=col` `.tally=col` `.fields=pin.x,pin.z~` `.limit=200`
-  `.after=13882` `.edges!` `.edges.peers=status,title`
+  `.distinct=col` `.tally=col` `.fields=pin.x,pin.z~` `*` (every component)
+  `.limit=200` `.after=13882` `.edges!` `.edges.peers=status,title`
   `.edges[watches,author.team]!` `.reaches[blocks,<=3]=42`.
 - Quotes glue a value across whitespace and `&`; the empty query selects nothing
   (`{ kind: 'never' }`).

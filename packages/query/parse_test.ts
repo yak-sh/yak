@@ -13,6 +13,7 @@ import {
   distinct,
   edges,
   eq,
+  every,
   fields,
   ge,
   gt,
@@ -67,6 +68,11 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['.distinct=domain', and(distinct('domain'))],
   ['.tally=task.domain', and(tally('task.domain'))],
   ['.fields=pin.x,pin.z~', and(fields('pin.x', 'pin.z~'))],
+  // `*` is the widest projection, and only as a whole token: a trailing star
+  // on a word stays the full-text prefix term.
+  ['*', and(every())],
+  ['.recipe!&*', and(present('recipe'), every())],
+  ['lemo*', and(text('lemo*'))],
   ['.limit=200', and(limit(200))],
   ['.after=13882', and(after(13882))],
   ['.edges!', and(edges())],

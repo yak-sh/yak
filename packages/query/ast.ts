@@ -56,6 +56,12 @@ export type Tally = { kind: 'tally'; path: string[] }
 // trailing `~` marks it volatile — projected but muted). `path` is raw segments.
 export type FieldSel = { path: string[]; wake: boolean }
 export type Fields = { kind: 'fields'; fields: FieldSel[] }
+// `*` — carry EVERY component of each selected entity. The widest projection
+// there is, and a projection only: it says nothing about which entities the
+// query selects, so an evaluator reads it beside `fields` and never as a filter.
+// It is a directive rather than a bare word precisely so it cannot fall through
+// to the full-text term `*`, which selects nothing anywhere.
+export type Every = { kind: 'every' }
 export type Limit = { kind: 'limit'; n: number }
 // The window's cursor: the spine NUMBER of the entity to continue past. It names
 // an entity, never a position or an order key, so one spelling pages any
@@ -94,6 +100,7 @@ export type Clause =
   | Distinct
   | Tally
   | Fields
+  | Every
   | Limit
   | After
   | Edges
@@ -219,6 +226,7 @@ export let fields = (...specs: (string | FieldSel)[]): Fields => ({
   kind: 'fields',
   fields: specs.map(field),
 })
+export let every = (): Every => ({ kind: 'every' })
 
 export let edges = (
   opts: { select?: EdgeSelect; peers?: string[][] } = {},

@@ -9,7 +9,7 @@
 // The mirror of the builders in ast.ts: `parse('.a=1&.b=2')` deep-equals
 // `and(eq('a', '1'), eq('b', '2'))`.
 
-import { And, Clause, Op, scalar, text, Value } from './ast.ts'
+import { And, Clause, every, Op, scalar, text, Value } from './ast.ts'
 
 // ---- values ----
 
@@ -176,6 +176,10 @@ let words = (seg: string): string[] =>
 // holding bare words or an embedded ` .` splits on whitespace, mixing filters
 // and text terms the way a search box does.
 //
+// A LONE `*` is the widest projection, not a word: it asks for every component
+// of every row selected. Only the whole token means it — a trailing `*` on a
+// word (`lemo*`) is still the full-text prefix term it always was.
+//
 // The empty query selects NOTHING: an empty string, or one with no clauses,
 // yields a lone `never`, so a blank board query does not stage the whole graph.
 export let parse = (q: string): And => {
@@ -186,6 +190,7 @@ export let parse = (q: string): And => {
         if (p) return p
       }
       return words(seg).flatMap((tok): Clause[] => {
+        if (tok == '*') return [every()]
         if (tok.startsWith('.')) {
           let p = parseDot(tok)
           if (p) return p

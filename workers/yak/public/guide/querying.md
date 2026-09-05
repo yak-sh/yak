@@ -75,6 +75,9 @@ looking rather than drawing:
 
     await query('.doc.title~=drizzle&*')
 
+It is part of the line, so it rides wherever a line goes: `subscribe()` keeps
+answering the same query, and its frames carry the same whole rows.
+
 ## What an answer carries
 
 **A row carries only the components its filter NAMED.** This is the one rule to

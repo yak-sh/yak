@@ -144,6 +144,13 @@ let QUERIES = [
   'nothingatall',
   // the empty query selects nothing
   '',
+  // `*` is a PROJECTION — every component of every row it selects — so it
+  // filters nothing and the line means what it would without it. Both
+  // evaluators read it off the clause list rather than as a text term, which
+  // is what a `/query` line and a `/ws` subscription's line have in common.
+  '*',
+  '.kind=book&*',
+  '.price<10&*',
   // ordering
   '.kind=book&.order=price',
   '.kind=book&.order=-price',

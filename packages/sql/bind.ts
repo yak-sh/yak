@@ -517,8 +517,9 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
 }
 
 // The directives, read off the top-level clause list. Order/limit/after ride a
-// membership; count/distinct/tally reshape it; near/edges/reaches decline
-// unless an extension claims them, in which case they filter like any clause.
+// membership; count/distinct/tally reshape it; fields/`*` project it;
+// near/edges/reaches decline unless an extension claims them, in which case
+// they filter like any clause.
 let UNREACHED = new Set(['near', 'edges', 'reaches'])
 let DIRECTIVES = new Set([
   'order',
@@ -527,6 +528,7 @@ let DIRECTIVES = new Set([
   'distinct',
   'tally',
   'fields',
+  'every',
   'limit',
   'after',
   'edges',
