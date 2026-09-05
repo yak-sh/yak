@@ -432,3 +432,101 @@ export let seed = async (
   }
   return { ...them, eids }
 }
+
+// ---- a zip, as a person would drop one (unzip.ts, drop.ts, T-34230) --------
+//
+// The reader is the thing under test, so the fixtures are written here rather
+// than checked in as bytes: a zip whose folder is stripped, one carrying a path
+// that escapes, one written as a stream — each is an argument, not a file
+// somebody has to open a hex editor to read.
+//
+// The CRC is left zero. Nothing on this path checks one — the runtime's inflate
+// does not, and neither does unzip.ts — because a zip is a container here and
+// not an archive anybody keeps.
+export type Packed = {
+  path: string
+  content?: string | Uint8Array<ArrayBuffer>
+  // Deflate the bytes rather than storing them.
+  deflate?: boolean
+  // What the header SAYS, for a zip the door must refuse: a method it does not
+  // read, or the encrypted bit.
+  method?: number
+  flags?: number
+}
+
+let deflated = async (bytes: Uint8Array<ArrayBuffer>) =>
+  new Uint8Array(
+    await new Response(
+      new Blob([bytes]).stream().pipeThrough(
+        new CompressionStream('deflate-raw'),
+      ),
+    ).arrayBuffer(),
+  )
+
+export let zipped = async (entries: Packed[]) => {
+  let enc = new TextEncoder()
+  let body: Uint8Array[] = []
+  let index: Uint8Array[] = []
+  let at = 0
+  for (let one of entries) {
+    let raw = typeof one.content == 'string'
+      ? enc.encode(one.content)
+      : one.content ?? new Uint8Array()
+    let packed = one.deflate ? await deflated(raw) : raw
+    let method = one.method ?? (one.deflate ? 8 : 0)
+    let flags = one.flags ?? 0
+    // Bit 3: the sizes were not known when the header went out, so they are
+    // zero there and true in the index at the end.
+    let streamed = !!(flags & 8)
+    let name = enc.encode(one.path)
+    let head = new Uint8Array(30 + name.length)
+    let h = new DataView(head.buffer)
+    h.setUint32(0, 0x04034b50, true)
+    h.setUint16(4, 20, true)
+    h.setUint16(6, flags, true)
+    h.setUint16(8, method, true)
+    h.setUint32(18, streamed ? 0 : packed.length, true)
+    h.setUint32(22, streamed ? 0 : raw.length, true)
+    h.setUint16(26, name.length, true)
+    head.set(name, 30)
+    body.push(head, packed)
+    let size = head.length + packed.length
+    if (streamed) {
+      let tail = new Uint8Array(16)
+      let t = new DataView(tail.buffer)
+      t.setUint32(0, 0x08074b50, true)
+      t.setUint32(8, packed.length, true)
+      t.setUint32(12, raw.length, true)
+      body.push(tail)
+      size += tail.length
+    }
+    let row = new Uint8Array(46 + name.length)
+    let c = new DataView(row.buffer)
+    c.setUint32(0, 0x02014b50, true)
+    c.setUint16(6, 20, true)
+    c.setUint16(8, flags, true)
+    c.setUint16(10, method, true)
+    c.setUint32(20, packed.length, true)
+    c.setUint32(24, raw.length, true)
+    c.setUint16(28, name.length, true)
+    c.setUint32(42, at, true)
+    row.set(name, 46)
+    index.push(row)
+    at += size
+  }
+  let end = new Uint8Array(22)
+  let e = new DataView(end.buffer)
+  e.setUint32(0, 0x06054b50, true)
+  e.setUint16(8, index.length, true)
+  e.setUint16(10, index.length, true)
+  e.setUint32(12, index.reduce((n, r) => n + r.length, 0), true)
+  e.setUint32(16, at, true)
+  let all = [...body, ...index, end]
+  let out = new Uint8Array(all.reduce((n, p) => n + p.length, 0))
+  let i = 0
+  for (let p of all) {
+    out.set(p, i)
+    i += p.length
+  }
+  return out
+}

@@ -193,8 +193,15 @@ export let platform = (host: string, pathname: string) =>
 // The shape over-reaches a little: a static asset at `/x/api/y` on the apex
 // matches too, which costs nothing, since nothing a browser fetches
 // cross-origin without CORS can read the answer either way.
+//
+// The drop door is here too (drop.ts, T-34230). It is not a graph door — it is
+// a form a member posts a file to — but it CHANGES a space with nothing but
+// the session cookie behind it, and sibling spaces are same-site, so a page in
+// anybody's space could aim a form at anybody else's `/deploy` and the cookie
+// would ride along. Same guard, same reason.
 export let doorway = (pathname: string) =>
-  pathname == '/mcp' || /^(?:\/[^/]+)?\/api\//.test(pathname)
+  pathname == '/mcp' || pathname == '/deploy' ||
+  /^(?:\/[^/]+)?\/api\//.test(pathname)
 
 // The browser's own word for the page that asked, against the hostname it
 // asked AT. Every space is a subdomain of one registrable domain, so sibling

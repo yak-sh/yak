@@ -9,6 +9,9 @@ Make one with `app_new`, write files with `app_files` — the whole set in one
 call, as `files: [{path, content}, ...]` — then `app_deploy`, and give the
 person the URL.
 
+The person can also make or update one without you: the drop zone on their
+space's own page takes a `.zip` of an app's files, or a single `index.html`.
+
 This page is the map, and it is meant to be read whole: a passage on every
 feature there is. Where a subject has more to it than a passage, a `Deeper:`
 line names the page that goes further — offered beside this one as its own

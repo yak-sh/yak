@@ -45,7 +45,10 @@
 //     /api/billing/*          billing.ts: checkout and the customer portal
 //     /mcp, /api/*            mcp.ts (T-32329; a JSON 404 until then)
 //     anything else           ./public, else a soft 404
-//   <space>.yaks.app          apps.ts:
+//   <space>.yaks.app          apps.ts, and one door of its own:
+//     POST /deploy            drop.ts: a zip of files, or one index.html,
+//                             dropped on the space's page — an app made or
+//                             updated, by the member who dropped it
 //     /                       the space's front page — its home app, SERVED
 //                             here; "nothing here" if it has none
 //     /<app>                  302 to /<app>/, or to / when <app> is the front
@@ -67,6 +70,7 @@ import * as billing from './billing.ts'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { customOf, reading, stageOf, type Step, steps } from './domains.ts'
+import * as drop from './drop.ts'
 import { bound, type Env, type Inbound } from './env.ts'
 import * as identity from './identity.ts'
 import { arrived, Refused } from './inbox.ts'
@@ -117,7 +121,16 @@ export class Files extends WorkerEntrypoint {
 }
 
 let serve = async (req: Request, env: Env, r: Route) => {
-  if (r.space != null) return bound(env.APPS, apps.fetch, env).fetch(req)
+  if (r.space != null) {
+    // The one path on a space's hostname the kernel answers itself (drop.ts,
+    // T-34230): a file dropped on the space's own page, which becomes an app.
+    // POST only, so an app whose slug happens to be `deploy` still serves its
+    // own pages at the same address.
+    if (req.method == 'POST' && new URL(req.url).pathname == '/deploy') {
+      return drop.fetch(req, env)
+    }
+    return bound(env.APPS, apps.fetch, env).fetch(req)
+  }
   let path = r.path
   if (
     path == '/login' || path.startsWith('/login/') || path == '/connect' ||

@@ -37,6 +37,7 @@ export let PLATFORM_PATHS = [
   '/login',
   '/login/*',
   '/connect',
+  '/deploy',
   '/mcp',
   '/api/*',
   '/*/api/*',

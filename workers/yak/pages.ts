@@ -72,6 +72,11 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .Say-no { color: var(--warn) }
 .Bill_Doors { display: flex; flex-wrap: wrap; gap: .625rem; margin: 1rem 0 .5rem }
 .Bill_Go-quiet { background: transparent; color: var(--meadow); border: 1px solid var(--line) }
+.Drop_Zone { display: grid; place-items: center; gap: .5rem; padding: 1.4rem 1rem; border: 2px dashed var(--soft-ink); border-radius: 1.25rem; background: var(--ground); text-align: center; cursor: pointer }
+.Drop_Zone-over { border-color: var(--meadow); background: var(--paper) }
+.Drop_File { border: 0; padding: 0; background: none; cursor: pointer }
+.Drop_Say { color: var(--soft-ink); font-size: .9rem }
+.Files { display: grid; gap: .3rem; margin: 0; padding-left: 1.2rem; color: var(--soft-ink); font-size: .95rem }
 </style>
 </head>
 <body><main><h1>${title}</h1><p>${lead}</p>${inner}</main></body>
@@ -95,6 +100,120 @@ export let nothingHere = () =>
     "There are no apps at this address yet. If it's yours, ask your " +
       'assistant to build one.',
     404,
+  )
+
+// Deploying by DROPPING a file (T-34230): the one door on this platform that
+// makes an app with no assistant in the room. A file input, which a file can
+// also be dragged onto, and the name the app lives at — one plain form that
+// POSTs to `/deploy` (drop.ts) and needs no script at all. The script below
+// only fills the name in from the file's own and lets a drag land on the
+// label; nothing it does is required for the form to work.
+//
+// `slug` given is an app's OWN page, where the name is not a question: the
+// drop goes to that app and nowhere else.
+let dropZone = (slug?: string) =>
+  `<form class="Drop" method="post" action="/deploy" enctype="multipart/form-data">
+<label class="Drop_Zone">
+<input class="Drop_File" type="file" name="file" required aria-label="The file to deploy">
+<span class="Drop_Say">A .zip of the app's files, or a single index.html</span>
+</label>
+${
+    slug ? held('slug', slug) : `<input name="slug" maxlength="63" ` +
+      `autocomplete="off" spellcheck="false" placeholder="what to call it" ` +
+      `aria-label="What to call the app">`
+  }
+<button type="submit">Deploy${slug ? ` to ${esc(slug)}` : ''}</button>
+</form>`
+
+// Constant text, no interpolation, and every write to the page is textContent
+// or a class — the page never speaks HTML on a person's behalf (`inline`
+// below takes the same line).
+let dropping = `<script>
+let drop = document.querySelector('.Drop')
+if (drop) {
+  let file = drop.querySelector('input[type=file]')
+  let zone = drop.querySelector('.Drop_Zone')
+  let say = drop.querySelector('.Drop_Say')
+  let slug = drop.querySelector('input[name=slug]')
+  // What to call it, from what the file is called: recipes.zip -> recipes.
+  // Never over a name already typed, and never off a bare index.html, whose
+  // stem says nothing about the app.
+  let named = (f) => {
+    say.textContent = f.name
+    if (!slug || slug.value) return
+    let stem = f.name.replace(/\\.[a-z0-9]+$/i, '').toLowerCase()
+    if (stem == 'index') return
+    slug.value = stem.replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '')
+      .slice(0, 63)
+  }
+  file.addEventListener('change', () => {
+    if (file.files[0]) named(file.files[0])
+  })
+  zone.addEventListener('dragover', (e) => {
+    e.preventDefault()
+    zone.classList.add('Drop_Zone-over')
+  })
+  zone.addEventListener('dragleave', () => {
+    zone.classList.remove('Drop_Zone-over')
+  })
+  zone.addEventListener('drop', (e) => {
+    e.preventDefault()
+    zone.classList.remove('Drop_Zone-over')
+    if (!e.dataTransfer.files.length) return
+    file.files = e.dataTransfer.files
+    named(e.dataTransfer.files[0])
+  })
+}
+</script>`
+
+// What a drop answers, either way it went (T-34230), and it is a PAGE because
+// the form that sent it is a plain form: whoever dropped the file reads this,
+// script or no script. What is live and where, the files that went in, and the
+// same drop zone again with this app's name fixed — which makes it the app's
+// own page for a person with no assistant open.
+export let dropped = (at: {
+  space: string
+  slug?: string
+  url?: string
+  version?: number
+  files?: string[]
+  why?: string
+  status?: number
+}) =>
+  shell(
+    at.why ? 'That did not go in' : `${esc(at.slug ?? at.space)} is live`,
+    at.why
+      ? esc(at.why)
+      : `Version ${at.version} is serving. Here is what went in.`,
+    at.status ?? 200,
+    `${
+      at.url
+        ? `<p class="Url"><a href="${esc(at.url)}"><code>${
+          esc(at.url)
+        }</code></a></p>`
+        : ''
+    }
+${
+      at.files?.length
+        ? `<section class="Card"><h2>${at.files.length} ${
+          at.files.length == 1 ? 'file' : 'files'
+        }</h2>
+<ol class="Files">${at.files.map((f) => `<li>${esc(f)}</li>`).join('')}</ol>
+</section>`
+        : ''
+    }
+<div class="Card"><h2>${at.slug ? 'Deploy again' : 'Try again'}</h2>
+<p class="Note">${
+      at.slug
+        ? `Drop another zip — or one index.html — and ${
+          esc(at.slug)
+        } becomes it.`
+        : 'A .zip of the files, or a single index.html.'
+    }</p>
+${dropZone(at.slug)}
+</div>
+<p><a class="Away" href="/">Everything at ${esc(at.space)}.yaks.app</a></p>
+${dropping}`,
   )
 
 // The space's own address when no app is its front page (T-33040). A space
@@ -158,6 +277,12 @@ builds one here — a page of your own you can send to anyone.</p>
           'game — and it lives at this address.'
     }</p>
 <p><a class="Away" href="https://yaks.app/connect">Connect your assistant</a></p>
+</div>
+<div class="Card">
+<h2>Or deploy a file</h2>
+<p class="Note">Have a zip of a site, or one page of HTML? Drop it here and
+it becomes an app at this address — no assistant needed.</p>
+${dropZone()}
 </div>`
     : ''
   let lead = at.apps.length
@@ -169,7 +294,9 @@ builds one here — a page of your own you can send to anyone.</p>
     esc(at.title || at.space),
     lead,
     200,
-    `${mine}${ask}${yours}${inn}${pitch}${at.person ? home : ''}`,
+    `${mine}${ask}${yours}${inn}${pitch}${at.person ? home : ''}${
+      owner ? dropping : ''
+    }`,
   )
 }
 

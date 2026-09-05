@@ -746,6 +746,41 @@ type Change = { eid: string; name: string; comp: unknown }
 let fileKey = (space: Space, app: App, path: string) =>
   `${space.slug}/${app.slug}/${path.replace(/^\/+/, '')}`
 
+/**
+ * Bytes into an app's files, and the edge emptied once after the last one —
+ * the write half of app_files, with no tool call in it, because bytes arrive
+ * by another door too: a zip somebody dropped on their space's page carries
+ * pictures, and a picture is not `content: string` (drop.ts, T-34230). Answers
+ * the paths as the app serves them.
+ */
+export let wrote = async (
+  env: Env,
+  space: Space,
+  app: App,
+  files: { path: string; bytes: Uint8Array }[],
+) => {
+  let blobs = r2Blobs(env.BLOBS)
+  let prefix = fileKey(space, app, '')
+  for (let f of files) await blobs.put(fileKey(space, app, f.path), f.bytes)
+  // One purge for the whole batch, after the last byte lands: the tag is the
+  // app, not the file, so writing ten files empties the edge once (cache.ts
+  // `tagsOf`).
+  await purged(env, app)
+  return files.map((f) => fileKey(space, app, f.path).slice(prefix.length))
+}
+
+/**
+ * One of these tools, run as this caller. The drop door (drop.ts) is a PAGE
+ * doing what an agent does — make the app, write its files, release it — and
+ * this is how it does exactly that rather than a second spelling of it:
+ * every ceiling, guard and sentence is the tool's own.
+ */
+export let call = (ctx: Ctx, name: string, args: Args): Promise<Out> => {
+  let tool = TOOLS.find((t) => t.name == name)
+  if (!tool) throw new Error(`no tool ${name}`)
+  return tool.run(ctx, args)
+}
+
 // What an app's access means where it is felt: what happens when the person
 // sends someone the link. Said on every tool that sets it, so the agent can
 // repeat it and the person is never surprised by who can act on their app.
@@ -1058,8 +1093,6 @@ export let TOOLS: Tool[] = [
       )
       let blobs = r2Blobs(ctx.env.BLOBS)
       let prefix = fileKey(space, app, '')
-      // A path as the app serves it: from the slash, no leading slashes.
-      let at = (path: string) => fileKey(space, app, path).slice(prefix.length)
       if (op == 'list') {
         let keys = await blobs.list(prefix)
         // The app's OWN files: what the platform keeps beside them — the
@@ -1081,21 +1114,19 @@ export let TOOLS: Tool[] = [
         await purged(ctx.env, app)
         return { text: `deleted ${key.slice(prefix.length)}`, space }
       }
-      let wrote = batch.length ? batch : [{
+      let sent = batch.length ? batch : [{
         path: text(args.path, 'path'),
         content: text(args.content, 'content'),
       }]
-      for (let f of wrote) {
-        await blobs.put(
-          fileKey(space, app, f.path),
-          new TextEncoder().encode(f.content),
-        )
-      }
-      // One purge for the whole batch, after the last byte lands: the tag is
-      // the app, not the file, so writing ten files empties the edge once
-      // (cache.ts `tagsOf`).
-      await purged(ctx.env, app)
-      let paths = wrote.map((f) => at(f.path))
+      let paths = await wrote(
+        ctx.env,
+        space,
+        app,
+        sent.map((f) => ({
+          path: f.path,
+          bytes: new TextEncoder().encode(f.content),
+        })),
+      )
       return {
         text: paths.length == 1
           ? `wrote ${paths[0]} → ${url(space, app)}${paths[0]}`
