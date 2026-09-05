@@ -3971,10 +3971,9 @@ slow("an app's letters, listed and sent through the connector", async () => {
 
     // What became of the one that went is a row on that same letter, written
     // back a moment after the tool answered — which is what makes mail_list
-    // the way to read it, rather than the send's own reply. Either outcome is
-    // the point: this runtime's local mail binding cannot take the letter at
-    // all, so here it is always the bounce, and what is held is that the
-    // letter comes to REST rather than vanishing.
+    // the way to read it, rather than the send's own reply. What the letter
+    // came to rest AS is mail_test.ts's; what is held here is that the tool's
+    // own answer names the letter that settled.
     let settled = await until(async () => {
       let [one] = JSON.parse(
         await agent.tool('mail_list', { app: 'recipes', direction: 'sent' }),

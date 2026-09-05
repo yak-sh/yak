@@ -13,7 +13,18 @@
 // deno cache reaches those two deps.
 
 // The pin. `--yes` so a cold npx cache installs it instead of asking.
-export let WRANGLER = ['npx', '--yes', 'wrangler@4.42.2']
+//
+// It has a FLOOR, not just a version: `send_email` is Email Sending's binding
+// now, whose `send()` takes `{from, to, subject, text, html}` and answers
+// `{messageId}` (post.ts), and miniflare only grew that shape late — 4.42.2's
+// stand-in knew the old Email Routing binding alone and bounced every letter
+// with `could not parse email` (T-34179). Never pin below a wrangler whose
+// miniflare simulates the builder; mail_test.ts holds it.
+//
+// And not the newest either: 4.128.0 boots the same probes three times slower
+// and drops kernels under the parallel slow tier (`Network connection lost`),
+// where 4.111.0 runs it at the old pin's pace. Measure before moving.
+export let WRANGLER = ['npx', '--yes', 'wrangler@4.111.0']
 
 export let dir = new URL('./', import.meta.url).pathname.replace(/\/$/, '')
 

@@ -202,6 +202,13 @@ Deno.test('a 404 from the worker, and no worker, both mean the files', async () 
   assertEquals(await ran(envOf(gone), space, app, visit(), who), null)
   // No namespace at all is local development, which serves the files too.
   assertEquals(await ran({} as Env, space, app, visit(), who), null)
+  // And so is a namespace BOUND where it cannot be reached: `wrangler dev`
+  // binds a stub that throws, since a dispatch namespace is remote-only, and
+  // a runtime with no app workers is not an app that broke (T-34179).
+  let elsewhere = () => {
+    throw new Error('Binding DISPATCH needs to be run remotely')
+  }
+  assertEquals(await ran(envOf(elsewhere), space, app, visit(), who), null)
 })
 
 // A 4xx the worker answered is its own deliberate no — the outside service

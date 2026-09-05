@@ -319,10 +319,9 @@ slow(
 
       // The other direction, in the same runtime: the store object itself
       // reads the space's month off the directory before it hands a letter
-      // over (meter.ts `metering`) — one Durable Object asking another. No
-      // letter can leave a probe, so this one comes to rest on the local
-      // binding's own refusal, whatever it says; what the meter cares about is
-      // that an attempt which never left costs the space nothing.
+      // over (meter.ts `metering`) — one Durable Object asking another. The
+      // letter comes to rest either way, and the answer is why it bounced or
+      // `''` where it left.
       let page = client(k, 'jeff.yaks.app', 'recipes', them.cookie)
       let outbound = async (eid: string) => {
         await page.applied([
@@ -334,18 +333,20 @@ slow(
             deliver: { to: ANA },
           },
         ])
-        return String(
-          await until(async () => {
-            let [row] = await page.get(
-              `.entity.eid=${eid}&.bounced?`,
-            ) as unknown as { bounced?: { reason: string } }[]
-            return row?.bounced?.reason
-          }, { timeout: 15_000, label: 'the letter to come to rest' }),
-        )
+        let rest = await until(async () => {
+          let [row] = await page.get(
+            `.entity.eid=${eid}&.delivered?&.bounced?`,
+          ) as unknown as {
+            delivered?: unknown
+            bounced?: { reason: string }
+          }[]
+          return row?.delivered || row?.bounced ? row : null
+        }, { timeout: 15_000, label: 'the letter to come to rest' })
+        return String(rest!.bounced?.reason ?? '')
       }
-      let refused = await outbound(FIRST)
-      assert(!refused.includes('emails a month'), refused)
-      assertEquals(await spent(), 2)
+      // One that goes is one letter on the same column an arrival lands on.
+      assertEquals(await outbound(FIRST), '')
+      assertEquals(await spent(), 3)
 
       // At the allowance. The seeding goes in through the graph tier, which is
       // not the directory's own write door, so the kernel's 30-second read cache

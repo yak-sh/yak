@@ -17,11 +17,13 @@ import type { Frame } from '@yaks/api'
 import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/harness.ts'
+import { slow, until } from '../../src/testing.ts'
 import { type Namespace, storeOf } from './door.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { monthOf } from './meter.ts'
 import { mailedTo, mailFrom, posting } from './post.ts'
+import { client, kernel, seed } from './probe.ts'
 import { PLATFORM_STORE } from './vocab.ts'
 
 Deno.test('an app writes from a local part at the apex', () => {
@@ -53,12 +55,22 @@ Deno.test('every address an app writes from is one it can be written to', () => 
 
 // The binding, faked: what it was handed, and a refusal on demand — the
 // provider failure a letter has to come to rest on rather than disappear into.
+//
+// It holds the payload to the contract the runtime publishes for `send()` —
+// Email Sending's Workers API takes `{from, to, subject, text?, html?}` — so a
+// fake can never accept a shape the binding would refuse. The runtime's own
+// binding is held once, end to end, at the bottom of this file.
 let outbox = (refuse?: string) => {
   let sent: Record<string, unknown>[] = []
   return {
     sent,
     send: (l: Record<string, unknown>) => {
       if (refuse) return Promise.reject(new Error(refuse))
+      for (let k of ['from', 'to', 'subject']) {
+        if (!l[k] || typeof l[k] != 'string') {
+          return Promise.reject(new Error(`send: ${k} is required`))
+        }
+      }
       sent.push(l)
       return Promise.resolve({ messageId: `<m${sent.length}@yaks.app>` })
     },
@@ -385,4 +397,30 @@ Deno.test('no binding, no letter: the sender that refuses says why', async () =>
     html: '<p>x</p>',
   }).then(() => null, (e: Error) => e.message)
   assertEquals(refused, 'this deploy has no mail binding')
+})
+
+// ---- the binding itself (T-34179) -------------------------------------------
+
+// Every test above hands the letter to a fake. This one hands it to the
+// RUNTIME's own `send_email` binding, under `wrangler dev`, because that is the
+// half a fake cannot stand for: the payload post.ts builds is Email Sending's
+// Workers API (`send({from, to, subject, text, html})` → `{messageId}`), and a
+// runtime that does not speak it bounces every letter the platform sends.
+slow("an app's letter leaves through the runtime's own binding", async () => {
+  let k = await kernel()
+  try {
+    let them = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
+    let app = client(k, 'jeff.yaks.app', 'recipes', them.cookie)
+    await app.applied(letter())
+    let settled = await until(async () => {
+      let [one] = await app.get(
+        `.entity.eid=${NOTE}&.delivered?&.bounced?`,
+      ) as unknown as Bundle[]
+      return one?.delivered || one?.bounced ? one : null
+    }, { timeout: 30_000, poll: 250, label: 'the letter to come to rest' })
+    assertEquals(settled!.bounced, undefined)
+    assert((settled!.delivered as { via?: string }).via, 'it left with an id')
+  } finally {
+    await k.stop()
+  }
 })

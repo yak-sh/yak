@@ -62,6 +62,13 @@ export let mailedTo = (address: string): Mailbox | null => {
  * `[[send_email]]`, env.ts `MAIL`). No token rides with it — the deploy is the
  * authorization — and what a binding may send FROM is the set of domains
  * onboarded to Email Sending on the zone, which is the check that matters.
+ *
+ * This is the BUILDER overload of the runtime's own `SendEmail.send`
+ * (conform.ts holds it there): Email Sending's Workers API takes the letter as
+ * an object and answers `{messageId}`. `send(EmailMessage)` — Email Routing's
+ * older shape, a raw RFC 5322 message — is the other overload, and the one a
+ * miniflare below the pin in wrangler.ts knows alone (T-34179).
+ * @see https://developers.cloudflare.com/email-service/api/send-emails/workers-api/
  */
 export type Binding = {
   send(letter: {

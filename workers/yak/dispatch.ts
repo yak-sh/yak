@@ -25,10 +25,12 @@
 //
 // Local development has no dispatch namespace: it is remote-only
 // (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/reference/local-development/),
-// so under `wrangler dev` the binding is simply undefined and every app
-// serves its files the way it always did. `remote = true` in wrangler.toml
-// would point local dev at the deployed namespace; we do not set it, because
-// a test must not need the account.
+// so under `wrangler dev` there is no worker to reach and every app serves its
+// files the way it always did. HOW that absence arrives depends on the
+// wrangler: older ones left the binding undefined, current ones bind a stub
+// that throws `needs to be run remotely`, which `nowhere` reads as the same
+// fact. `remote = true` in wrangler.toml would point local dev at the deployed
+// namespace; we do not set it, because a test must not need the account.
 import { COOKIE, opened, seal } from '../../src/token.ts'
 import type { App, Role, Space } from './directory.ts'
 import { storeName } from './directory.ts'
@@ -192,6 +194,17 @@ let handed = async (
 let missing = (e: unknown) =>
   e instanceof Error && e.message.startsWith('Worker not found')
 
+// A namespace bound where it cannot be reached. Dispatch namespaces are
+// remote-only, so `wrangler dev` and the workerd probes bind a STUB that
+// throws `Binding DISPATCH needs to be run remotely` rather than leaving the
+// binding off — which is the same fact as no binding at all, this runtime has
+// no app workers, and never the app's break (T-34179).
+let unreachable = (e: unknown) =>
+  e instanceof Error && e.message.includes('needs to be run remotely')
+
+// Neither of those is a worker to serve from: the app's files answer instead.
+let nowhere = (e: unknown) => missing(e) || unreachable(e)
+
 // One break of the app's own making, where its agent reads it — the app's
 // store, its serving version, and the members told. Both ways the app's code
 // can fall over come through here, because they are one event: a worker that
@@ -244,7 +257,7 @@ let called = async (
     worker = env.DISPATCH.get(scriptName(store))
   } catch (e) {
     // Not the app's code — the namespace refusing to hand it over is ours.
-    if (missing(e)) return null
+    if (nowhere(e)) return null
     throw e
   }
   try {
@@ -252,7 +265,7 @@ let called = async (
       await handed(req, app, store, who, env.SESSION_SECRET),
     )
   } catch (e) {
-    if (missing(e)) return null
+    if (nowhere(e)) return null
     throw e
   }
 }
