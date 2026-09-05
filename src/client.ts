@@ -3646,6 +3646,11 @@ export let authored = (rows: Row[], byEid: Map<string, Row>): Said[] => {
     if (UNSAID.has(r.kind) || r.kind == 'entity') continue
     if (r.comps.person) continue
     let { created, updated, decided, feedback } = r.comps
+    // No stamp here names a person, so this row authored nothing — settle
+    // that on four Set lookups, BEFORE paying to read its words. This walks
+    // the whole graph on every digest and almost all of it is other hands;
+    // reading every body first made the digest scan the board's prose.
+    if (!by(created) && !by(feedback) && !by(updated) && !by(decided)) continue
     let where = whereOf(r, byEid)
     let text = wordsOf(r)
     let born = String(created?.at ?? '')
