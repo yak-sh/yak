@@ -10,7 +10,14 @@
 // is refused there and then, before any bundle is read.
 
 import type { Bundle } from '@yaks/graph'
-import type { Clause, Pred, Range, Refs, Value } from '@yaks/query'
+import {
+  bare,
+  type Clause,
+  type Pred,
+  type Range,
+  type Refs,
+  type Value,
+} from '@yaks/query'
 import { identity, Unsupported } from '@yaks/sql'
 import type { Assoc, Hop, Vocab } from '@yaks/vocab'
 import { column, comp, type Index, wears } from './read.ts'
@@ -291,7 +298,7 @@ export let clause = (ctx: Ctx, c: Clause): Test => {
     // side; anything else routes forward through the vocabulary.
     let assoc = ctx.v.assoc(c.path[0])
     if (assoc) return reverse(ctx, c.path[0], assoc, c)
-    let hops = ctx.v.aim(c.path.join('.'))
+    let hops = ctx.v.aim(c.path.join('.'), bare(c))
     return hops.length == 1 ? single(ctx, hops[0], c) : path(ctx, hops, c)
   }
   throw new Unsupported(`the ${(c as Clause).kind} directive`, '', BY)

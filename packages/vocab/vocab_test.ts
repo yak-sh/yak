@@ -84,6 +84,18 @@ Deno.test('dotted paths aim to hops', () => {
   )
 })
 
+Deno.test('a bare bang aims at the component a column shadows', () => {
+  // `project` is both a component and task's reference column. Every form but
+  // the bare bang keeps the column — `.project=P-3` must not change meaning.
+  assertEquals(v.aim('project'), [{ comp: 'task', prop: 'project' }])
+  // `.project!` completes the component sentence: the facet has no other
+  // spelling, while the column keeps its qualified one.
+  assertEquals(v.aim('project', true), [{ comp: 'project', prop: '' }])
+  assertEquals(v.aim('task.project', true), [{ comp: 'task', prop: 'project' }])
+  // a name no component wears is routed as ever
+  assertEquals(v.aim('title', true), [{ comp: 'doc', prop: 'title' }])
+})
+
 Deno.test('the spine routes its own identity, declared or not', () => {
   // no document declares `entity.eid`; the loader routes it because every
   // entity has one — so `.eid=` and `.entity.eid=` name entities

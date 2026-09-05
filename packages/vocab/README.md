@@ -102,6 +102,9 @@ v.column('task', 'project')
 v.route('title') // { comp: 'doc', prop: 'title' }   bare prop → its home
 v.route('eid') // { comp: 'entity', prop: 'eid' }  the spine's own identity
 v.aim('comment.target.doc.title') // [{comment,target}, {doc,title}]  path → hops
+v.aim('project', true) // [{project,''}]  the bare-bang form: `.project!` is the
+// component's facet even where task.project claims the bare spelling
+
 v.assoc('reviews') // { comp: 'review', prop: 'book' }  a plural → its reverse
 v.kindOf({ task: 1, doc: 1 }) // 'task' — most specific kind wins
 v.deaths('cascade') // the reaper's worklist: [comp, col] pairs

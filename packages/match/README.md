@@ -78,6 +78,11 @@ Everything on @yaks/sql's common path:
   plain rules when the operand is no phrase.
 - **Kinds**: `.kind=book` — the entity wears that kind and every kind sorting
   before it is absent.
+- **Facets**: `.review!` wears the component, `.review=` does not — including a
+  TAG, a component with no columns at all, where wearing it is the whole fact. A
+  bare bang completes a component sentence, so it wins over a column of the same
+  name (`.book!` is the books; `.book=b1` is still review's reference, and
+  `.review.book!` reaches that column).
 - **References**: `.author=a1`, and dereference paths through them,
   `.book.author.doc.title~=vale`.
 - **Reverse hops**: `.reviews!` has one, `.reviews=` has none, `.reviews>=5` a

@@ -56,6 +56,15 @@ let QUERIES = [
   '.price<10',
   '.stars>3',
   '.stars<=3',
+  // a tag: a component with no columns, where presence is the whole fact
+  '.signed!',
+  '.signed=',
+  '.signed~=',
+  // a bare bang completes a COMPONENT sentence even where a column of the same
+  // name claims the bare spelling: `.book!` is the books, `.book=b1` is still
+  // review.book, and `.review.book!` still reaches the column.
+  '.book!',
+  '.review.book!',
   // booleans and enums
   '.available=1',
   '.available=0',

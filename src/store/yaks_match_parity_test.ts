@@ -41,9 +41,11 @@ let V = fleetVocab()
 
 let db = bareDb()
 let P = uuid(), S = uuid(), T1 = uuid(), T2 = uuid(), T3 = uuid()
-let C1 = uuid()
+let C1 = uuid(), CV = uuid()
 
 apply(db, [
+  { eid: CV, name: 'doc', comp: { title: 'A Canvas' } },
+  { eid: CV, name: 'canvas', comp: {} },
   { eid: S, name: 'session', comp: { id: 'match-parity' } },
   { eid: P, name: 'doc', comp: { title: 'Match Parity Project' } },
   { eid: P, name: 'project', comp: {} },
@@ -93,6 +95,10 @@ let CORPUS = [
   // facets and reference columns
   '.task!',
   '.claim!',
+  // a TAG the fleet wears, whose name several reference columns also carry
+  // (camera.canvas, pin.canvas): the bare bang is the component's facet
+  '.canvas!',
+  '.project!',
   '.task.project!',
   '.task.project=',
   `.project=${P}`,
@@ -127,6 +133,9 @@ Deno.test('fleet: @yaks/match agrees with @yaks/sql over the real graph', () => 
   // and the agreement is not vacuous
   assertEquals(ram('.kind=task'), [T1, T2, T3].sort())
   assertEquals(ram('.comments!'), [T1])
+  // and a shadowed component name answers the component, not the column
+  assertEquals(ram('.canvas!'), [CV])
+  assertEquals(ram('.project!'), [P])
 })
 
 Deno.test('fleet: a window pages identically', () => {

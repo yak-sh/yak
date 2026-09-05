@@ -47,6 +47,7 @@ import type {
   Tally,
   Value,
 } from '@yaks/query'
+import { bare } from '@yaks/query'
 import type { Assoc, Hop, Vocab } from '@yaks/vocab'
 import {
   and,
@@ -493,7 +494,7 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
     // side; anything else routes forward through the vocab.
     let assoc = ctx.v.assoc(c.path[0])
     if (assoc) return reverse(ctx, c.path[0], assoc, c)
-    let hops = ctx.v.aim(c.path.join('.'))
+    let hops = ctx.v.aim(c.path.join('.'), bare(c))
     return hops.length == 1 ? single(ctx, hops[0], c) : path(ctx, hops, c)
   }
   throw new Unsupported(`the ${(c as Clause).kind} directive`)

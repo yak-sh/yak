@@ -176,6 +176,15 @@ export let pred = (field: string, o: Op, value: Value | null): Pred => ({
   value,
 })
 
+/**
+ * Is this the bare presence form — one segment, a trailing bang, no value?
+ * `.canvas!` completes a COMPONENT sentence, so an evaluator resolves it to
+ * that component's facet even where a same-named column claims the bare
+ * spelling everywhere else (@yaks/vocab's `aim(path, facet)`).
+ */
+export let bare = (p: Pred): boolean =>
+  p.op == '!' && p.path.length == 1 && !p.value
+
 export let and = (...clauses: Clause[]): And => ({ kind: 'and', clauses })
 export let or = (...clauses: Clause[]): Or => ({ kind: 'or', clauses })
 

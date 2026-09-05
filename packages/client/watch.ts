@@ -26,7 +26,7 @@
 import type { Bundle, Eid, Graph } from '@yaks/graph'
 import { detached, over, then } from '@yaks/graph'
 import { type Filter, filter } from '@yaks/match'
-import { type Clause, parse } from '@yaks/query'
+import { bare, type Clause, parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 
 /** Something with a `value` that can be replaced: the one thing this package
@@ -99,7 +99,7 @@ let alone = (c: Clause, v: Vocab): boolean =>
   c.kind == 'and' || c.kind == 'or'
     ? c.clauses.every((k) => alone(k, v))
     : c.kind == 'pred'
-    ? v.aim(c.path.join('.')).length == 1
+    ? v.aim(c.path.join('.'), bare(c)).length == 1
     : c.kind == 'text' || c.kind == 'never'
 
 // The per-bundle test for a query, or null to re-read it instead: a query

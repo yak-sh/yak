@@ -30,6 +30,20 @@ Deno.test('a scalar filter selects, and an absent column is a value', () => {
 Deno.test('a component is worn or it is not', () => {
   assertEquals(sel('.review!'), ['r1', 'r2', 'r3'])
   assertEquals(sel('.member!'), ['m1'])
+  // a TAG — no columns at all, so wearing it is the whole fact
+  assertEquals(sel('.signed!'), ['b4'])
+  assertEquals(sel('.signed~='), ['b4'])
+  assertFalse(sel('.signed=').includes('b4'))
+  assert(sel('.signed=').includes('b1'))
+})
+
+Deno.test('a bare bang names the component, not the column beside it', () => {
+  // `book` is both a component and review's reference column. The bang
+  // completes the component sentence; every other form keeps the column, and
+  // the column's qualified spelling still reaches it.
+  assertEquals(sel('.book!'), ['b1', 'b2', 'b3', 'b4'])
+  assertEquals(sel('.book=b1'), ['r1', 'r2'])
+  assertEquals(sel('.review.book!'), ['r1', 'r2', 'r3'])
 })
 
 Deno.test('the kind scope names the most specific kind', () => {

@@ -55,6 +55,11 @@ let doc: VocabDoc = {
       before: ['doc'],
       properties: { joined: { type: 'string', format: 'date-time' } },
     },
+    // A TAG: a component with no columns at all, whose presence is the whole
+    // fact. Wearing it says the shop signed this copy; there is nothing else to
+    // say about it, so `.signed!` and `.signed=` are the only questions it
+    // answers.
+    signed: { type: 'object', properties: {} },
   },
 }
 
@@ -112,6 +117,7 @@ let rows: Bundle[] = [
     entity: { eid: 'b4' },
     doc: { title: 'Fables of the North', body: 'short stories' },
     book: { price: 7.5, available: true, status: 'shelved', author: 'a1' },
+    signed: {},
   },
   { entity: { eid: 'r1' }, review: { stars: 5, book: 'b1' } },
   { entity: { eid: 'r2' }, review: { stars: 3, book: 'b1' } },

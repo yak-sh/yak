@@ -109,7 +109,11 @@ export type Vocab = {
   columns: (comp: string) => string[] // readable columns (writable ∪ stamped)
   column: (comp: string, prop: string) => Column | undefined
   route: (prop: string) => { comp: string; prop: string }
-  aim: (path: string) => Hop[]
+  /** A dotted path → the hops it names. `facet` says the predicate is the bare
+   * presence form (`.name!`), where a single segment naming a COMPONENT is that
+   * component's facet even if a same-named column would otherwise claim the
+   * bare spelling. */
+  aim: (path: string, facet?: boolean) => Hop[]
   assoc: (name: string) => Assoc | undefined
   kindOf: (has: Record<string, unknown>) => string
   deaths: (word: Death) => [string, string][]
@@ -286,8 +290,18 @@ export let loadVocab = (
     // COMPONENT with another segment behind it is the explicit `comp.prop`
     // spelling and eats two; anything else is a bare prop routed by name and
     // eats one. Every non-final hop must be a reference for the deref to stand.
-    aim: (path) => {
+    //
+    // `facet` is the one exception, and it belongs to the PRESENCE form alone
+    // (`.name!`): a bare bang completes a component sentence, so the component
+    // wins over a same-named column. It has to — a facet has no other spelling,
+    // while the column keeps its qualified one (`.camera.canvas!`). Without it
+    // `.canvas!` asks about camera's canvas reference and answers the wrong
+    // entities, or none.
+    aim: (path, facet) => {
       let segs = path.split('.')
+      if (facet && segs.length == 1 && routes.has(segs[0])) {
+        return [{ comp: segs[0], prop: '' }]
+      }
       let out: Hop[] = []
       for (let i = 0; i < segs.length;) {
         let own = routes.get(segs[i])

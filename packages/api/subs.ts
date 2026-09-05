@@ -23,7 +23,7 @@
 import type { Bundle, Eid, Graph } from '@yaks/graph'
 import { detached, isPromise, over, then } from '@yaks/graph'
 import { type Filter, filter } from '@yaks/match'
-import { type Clause, parse } from '@yaks/query'
+import { bare, type Clause, parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import { type Refusal, refusal } from './refuse.ts'
 
@@ -87,7 +87,7 @@ let local = (c: Clause, v: Vocab): boolean =>
   c.kind == 'and' || c.kind == 'or'
     ? c.clauses.every((k) => local(k, v))
     : c.kind == 'pred'
-    ? v.aim(c.path.join('.')).length == 1
+    ? v.aim(c.path.join('.'), bare(c)).length == 1
     : c.kind == 'text' || c.kind == 'never'
 
 // The per-bundle test for a parsed query, or null to re-read it instead: a
