@@ -1,0 +1,16 @@
+{
+  "_": "The Cloudflare gate: the shipped source, type-checked with the RUNTIME's own types in scope — the binding is the `D1Database` wrangler hands you, and a prepared statement is the runtime's. `deno check --config packages/d1/workers.json packages/d1/conform.ts` is the check; it is part of `deno task check`. It stands alone because those types are global: in scope, every other file in the repo would be checked against a Worker it does not run in.",
+  "compilerOptions": {
+    "lib": ["esnext", "dom"],
+    "strict": true
+  },
+  "imports": {
+    "@cloudflare/workers-types": "npm:@cloudflare/workers-types@^4.20260702.1",
+    "@yaks/graph": "../graph/mod.ts",
+    "@yaks/match": "../match/mod.ts",
+    "@yaks/query": "../query/mod.ts",
+    "@yaks/sql": "../sql/mod.ts",
+    "@yaks/sqlite": "../sqlite/mod.ts",
+    "@yaks/vocab": "../vocab/mod.ts"
+  }
+}

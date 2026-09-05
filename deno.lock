@@ -1358,7 +1358,9 @@
       },
       "packages/d1": {
         "dependencies": [
-          "jsr:@std/assert@1"
+          "jsr:@db/sqlite@0.13.0",
+          "jsr:@std/assert@1",
+          "npm:@cloudflare/workers-types@^4.20260702.1"
         ]
       },
       "packages/durable-object": {

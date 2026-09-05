@@ -1,47 +1,66 @@
 /**
- * @yaks/d1 — a storage adapter that backs a yaks graph with Cloudflare D1.
+ * @yaks/d1 — the storage adapter that backs a yaks graph with Cloudflare D1.
  *
- * D1 is a serverless SQLite offered only over an async API, so this adapter is
- * async end to end: every read and write returns a promise. It composes the
- * yaks query/vocabulary/SQL stack over a D1 binding to satisfy the
- * {@link https://jsr.io/@yaks/graph | @yaks/graph} {@link Storage} seam —
- * queries in as bundles out, a change patched into rows.
+ * ## What it is
+ * D1 is a serverless SQLite reachable only over an async API, so this adapter
+ * is async end to end: every read and every write returns a promise. It
+ * composes the yaks query → vocabulary → SQL stack over a D1 binding to satisfy
+ * {@link https://jsr.io/@yaks/graph | @yaks/graph}'s `Storage` seam — a query
+ * in, whole bundles out; a change patched into rows.
  *
- * It is a sibling of `@yaks/durable-object` (a Durable Object's embedded,
- * synchronous SQLite) and {@link https://jsr.io/@yaks/sqlite | @yaks/sqlite}
- * (the in-process adapter). All three implement the same seam; the seam is
- * async-or-sync, so this adapter returns promises while a synchronous one does
- * not, and a graph stays portable across them.
+ * ```ts
+ * import { graph } from '@yaks/graph'
+ * import { storage } from '@yaks/d1'
+ *
+ * // let store = storage(env.DB, vocab)
+ * // await store.install()
+ * // let g = graph({ storage: store, vocab })
+ * // await g.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }])
+ * // await g.read('.kind=doc')
+ * ```
+ *
+ * Because the seam is async-OR-sync and @yaks/graph threads either (its `then`
+ * awaits a promise and passes a plain value straight through), the SAME
+ * `apply()` is synchronous over @yaks/sqlite and asynchronous here. Nothing in
+ * between has to know which.
+ *
+ * ## The transaction, stated plainly
+ * D1 has no interactive transaction — no call opens one, lets your code read
+ * and decide inside it, and commits at the end. What it has is `batch()`, which
+ * runs a list of statements sequentially in one implicit transaction and rolls
+ * the whole list back if any fails. So {@link storage}'s `tx` defers: reads run
+ * immediately against the committed database, writes are gathered as
+ * statements, returning flushes them as ONE atomic batch, and throwing discards
+ * them unsent. Reads inside the transaction see its own pending writes through
+ * an in-memory overlay judged by {@link https://jsr.io/@yaks/match | @yaks/match}.
+ *
+ * The write is atomic; the transaction is NOT serializable, because the reads
+ * cannot be enrolled in a batch that has not been sent. See the README's
+ * "The transaction" for exactly what that costs and when it matters.
+ *
+ * ## Where it sits
+ * One of three interchangeable adapters behind the same seam:
+ * **@yaks/d1** (this package, async), {@link
+ * https://jsr.io/@yaks/durable-object | @yaks/durable-object} (a Durable
+ * Object's embedded SQLite, synchronous) and {@link
+ * https://jsr.io/@yaks/sqlite | @yaks/sqlite} (in-process, synchronous — and
+ * the reference every adapter is held to).
  *
  * @module
  */
 
-import type { Storage } from '@yaks/graph'
-import type { Vocab } from '@yaks/vocab'
-
-/**
- * The async surface this adapter needs from a D1 binding — the subset of
- * Cloudflare's `D1Database` it calls. Naming just this keeps the adapter free
- * of any concrete Workers types.
- */
-export type D1Like = {
-  /** prepare a parameterized statement for binding and running */
-  prepare: (sql: string) => D1Stmt
-  /** run a batch of prepared statements as one unit */
-  batch: <T = unknown>(statements: D1Stmt[]) => Promise<T[]>
-}
-
-/** A prepared D1 statement: bind params, then run for rows. */
-export type D1Stmt = {
-  /** bind positional parameters, returning the bound statement */
-  bind: (...params: unknown[]) => D1Stmt
-  /** run the statement and resolve its result rows */
-  all: <T = Record<string, unknown>>() => Promise<{ results: T[] }>
-}
-
-/**
- * Bind a store to a D1 binding and a vocabulary. Returns the {@link Storage}
- * seam, whose methods resolve asynchronously. The implementation lands with the
- * package; this is the shape it satisfies.
- */
-export type openStore = (db: D1Like, vocab: Vocab) => Storage
+export {
+  bind,
+  type D1Like,
+  type D1Result,
+  type D1Stmt,
+  type D1Value,
+  type Row,
+  type Sql,
+  type Stmt,
+  unbind,
+} from './d1.ts'
+export { bundles, comps, gatherSql, type Query, spineSql, sql } from './read.ts'
+export { drop, mint, patch, remove, upsert } from './write.ts'
+export { storage, type Store } from './store.ts'
+export type { Storage, Tx } from '@yaks/graph'

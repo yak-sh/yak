@@ -80,6 +80,10 @@ In dependency order:
   Durable Object: its embedded SQLite driven through `@yaks/sqlite`, plus the
   plumbing that hands a hibernatable WebSocket's frames to `@yaks/api`'s
   subscriptions.
+- **[@yaks/d1](./d1)** — the other Cloudflare database, and the one that is only
+  reachable asynchronously: the same `Storage`, answered with promises, where a
+  transaction defers its writes and sends them as one atomic `batch()` because
+  D1 has no interactive transaction to hold open.
 - **[@yaks/sync](./sync)** — the other end of that transport: a plugin that
   forwards a client graph's committed writes to a server, applies what the
   server pushes back, and reconciles — or reverts — the optimistic write in
@@ -157,6 +161,12 @@ on its own:
 - `@yaks/durable-object` is the storage under it, where the database comes with
   the host: one Durable Object is one graph, strongly consistent, with nothing
   to connect to — and its hibernatable sockets are where the subscriptions live.
+- `@yaks/d1` is the same seam where the database is across a network instead of
+  in the host, which is what makes the sync pass-through worth having: one
+  `apply()` runs synchronously over SQLite and a Durable Object and returns a
+  promise here, with the phases, plugins and cascade unchanged. Its README
+  states exactly what D1's lack of an interactive transaction costs, rather than
+  claiming an isolation D1 does not offer.
 - `@yaks/sync` closes the loop: a `@yaks/graph` over `@yaks/memory` in a page,
   plus this plugin, is a client that writes locally at once and agrees with the
   `@yaks/api` at the other end afterwards. Both transports are injected, so the
