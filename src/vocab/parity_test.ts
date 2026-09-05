@@ -13,7 +13,9 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Column } from '@yaks/vocab'
 import { idOf, prefixes } from '@yaks/id'
+import { named } from '@yaks/names'
 import {
+  byName,
   comps,
   deaths,
   idOf as idOfFleet,
@@ -114,6 +116,14 @@ Deno.test('parity: the id prefixes, read through @yaks/id', () => {
   )
   assertEquals(id({ eid: EID, kind: 'entity', num: 3 }), 'E-3')
   assertEquals(id({ eid: EID, kind: 'task' }), shortId(EID))
+})
+
+Deno.test('parity: the kinds whose title is a name, read through @yaks/names', () => {
+  assertEquals(Object.keys(named(v)).sort(), [...byName].sort())
+  // and each reads its name off the same column the fleet does (doc.title)
+  for (let at of Object.values(named(v))) {
+    assertEquals(at, { comp: 'doc', prop: 'title' })
+  }
 })
 
 Deno.test('parity: derived status is readable, never writable', () => {

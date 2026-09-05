@@ -1393,6 +1393,11 @@
           "jsr:@std/assert@1"
         ]
       },
+      "packages/names": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
       "packages/query": {
         "dependencies": [
           "jsr:@std/assert@1"

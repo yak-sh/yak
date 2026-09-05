@@ -24,6 +24,7 @@
     "./packages/query",
     "./packages/vocab",
     "./packages/id",
+    "./packages/names",
     "./packages/sql",
     "./packages/sqlite",
     "./packages/graph",

@@ -18,6 +18,9 @@ In dependency order:
   component declares plus a number into a human id (`B-7`) and back. The first
   splinter off `@yaks/vocab`: the meta-model carries the keyword, this package
   is what it means.
+- **[@yaks/names](./names)** — the other way an entity is addressed: the
+  components a vocabulary marks `by_name`, the column their name lives in, and
+  the match for a name someone typed.
 - **[@yaks/sql](./sql)** — compile a `@yaks/query` AST against a `@yaks/vocab`
   schema into a SQL string and bound params, through a dialect-agnostic
   relational IR (a SQLite dialect ships with the package).

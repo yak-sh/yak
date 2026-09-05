@@ -17,6 +17,7 @@
 import { loadVocab } from '@yaks/vocab'
 import type { Keywords, PropSchema, Vocab, VocabDoc } from '@yaks/vocab'
 import { ID_URI, idKeywords } from '@yaks/id'
+import { nameKeywords, NAMES_URI } from '@yaks/names'
 import { derivedProps, type PropType } from '../types.ts'
 
 import canvas from './manifests/canvas.json' with { type: 'json' }
@@ -130,13 +131,15 @@ let compOf = (spec: ManifestComp): PropSchema => ({
 
 // The keyword vocabularies the fleet's own components use beyond the core
 // meta-model. Each is owned by the package that interprets it (@yaks/id reads
-// `prefix`), and registered here so the loader carries it.
-export let fleetKeywords: Keywords[] = [idKeywords]
+// `prefix`, @yaks/names reads `by_name`), and registered here so the loader
+// carries it.
+export let fleetKeywords: Keywords[] = [idKeywords, nameKeywords]
 
 let docOf = (m: Manifest): VocabDoc => ({
   $vocabulary: {
     'https://yaks.sh/vocab/core': true,
     [ID_URI]: true,
+    [NAMES_URI]: true,
   },
   title: m.name,
   $defs: Object.fromEntries(

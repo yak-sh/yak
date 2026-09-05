@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yaks.sh/vocab/names",
+  "title": "yaks names keyword vocabulary",
+  "description": "The keyword @yaks/names adds to a component vocabulary. A component declaring `by_name` says its entities are addressable by the name a person types — an author is reached as \"Ursula Le Guin\", where a review is not reached by the sentence it opens with.",
+  "$comment": "A vocabulary declaration in the JSON Schema sense: a URI naming this keyword set, plus the schema of each keyword. A vocab file declares it under $vocabulary; a loader registers it with loadVocab(docs, [nameKeywords]).",
+  "$defs": {
+    "by_name": {
+      "description": "true = this component's entities answer to a name, held in the vocabulary's default name column (`title`). A string names the column instead: \"by_name\": \"label\" reads the name from `label`.",
+      "anyOf": [{ "type": "boolean" }, { "type": "string" }]
+    }
+  }
+}
