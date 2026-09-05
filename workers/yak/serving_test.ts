@@ -14,6 +14,11 @@
 // The directory is a Store too, at `yak/platform`, so the space and the app
 // this serves are real rows written the way `space_new` and `app_new` write
 // them (platform_test.ts is that half on its own).
+//
+// The ROUTING ORDER is held here as well, at the end: which part answers a
+// path — an app, the home app, the platform's own index — is the same door
+// asked the same way, and the stand-in is where a home app with a worker can
+// be stood up at all (apps.ts `served`, D-34197).
 import { assert, assertEquals } from '@std/assert'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/harness.ts'
@@ -21,6 +26,7 @@ import { sign } from '../../src/token.ts'
 import * as apps from './apps.ts'
 import { directory, storeName } from './directory.ts'
 import * as dirPart from './directory.ts'
+import { scriptName } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { Store } from './graph.ts'
 import { emptied } from './erase.ts'
@@ -429,4 +435,135 @@ Deno.test('DELETE / empties the app store and bears it again', async () => {
       .space('ada'),
   )
   assert(PLATFORM_STORE)
+})
+
+// ---- the routing order (apps.ts `served`, D-34197) --------------------------
+
+// One rung a test, over the same stand-in: which PART answers a path is the
+// whole of what these hold, so each one asks an address whose answer only the
+// rung it names can give.
+//
+// The home app's worker is a stub. A dispatch namespace is remote-only — there
+// is no workerd implementation and `wrangler dev` leaves the binding undefined
+// (dispatch.ts) — so what the seam itself does with a grant is dispatch_test.ts
+// and what is proved here is that the kernel ASKS it, and where in the order.
+// The `/.well-known/` half of rung 1 is decided before this part (route.ts
+// `platform`, index.ts) and is held in route_test.ts and home_test.ts.
+
+// The space, `cookbook` as its home app, `garden` beside it, and a home worker
+// where one is given: an app answering `.get` for no other script is an app
+// with no worker, which is the message the runtime knows one by.
+let router = async (worker?: (req: Request) => Response) => {
+  let { env, files } = platform()
+  let { dir, space, app } = await seeded(env)
+  let by = { 'x-yak-person': ADA, 'x-yak-role': 'owner' }
+  await dir.apply({
+    entities: [
+      {
+        entity: { eid: '$garden' },
+        doc: { title: 'Garden' },
+        app: { slug: 'garden', space: space.eid, version: 1, access: 'public' },
+        alias: { slug: 'ada/garden' },
+      },
+      { entity: { eid: space.eid }, space: { home: app.eid } },
+    ],
+  }, by)
+  let script = scriptName(storeName(space, app))
+  ;(env as { DISPATCH?: unknown }).DISPATCH = {
+    get: (name: string) => {
+      if (!worker || name != script) {
+        throw new Error('Worker not found: ' + name)
+      }
+      return { fetch: (r: Request) => Promise.resolve(worker(r)) }
+    },
+  }
+  return {
+    env,
+    at: (path: string) => apps.fetch(visit(path), env),
+    put: (key: string, body: string) =>
+      files.held.set(key, new TextEncoder().encode(body)),
+  }
+}
+
+Deno.test('rung 1: a platform path never reaches an app', async () => {
+  let k = await router(() => new Response('the router', { status: 200 }))
+  // The store doors are the kernel's, under an app's slug and at the home
+  // app's bare root alike: a home worker that answers everything else does not
+  // answer these.
+  for (let path of ['/cookbook/api/graph', '/api/graph']) {
+    assertEquals((await (await k.at(path)).json()).db, 'do:ada/cookbook')
+  }
+  // And `/<x>/api/…` at an app that is not here is a 404 rather than the home
+  // app's page: a page asking a store at a wrong address must not be handed
+  // HTML it cannot parse.
+  assertEquals((await k.at('/gone/api/query')).status, 404)
+})
+
+Deno.test("rung 2: an app's slug wins over the home app", async () => {
+  let k = await router(() => new Response('the router', { status: 200 }))
+  k.put('ada/garden/index.html', '<!doctype html><body>garden</body>')
+  let page = await k.at('/garden/')
+  assertEquals(page.status, 200)
+  assert((await page.text()).includes('garden'))
+  // Even where the app has nothing there: the segment is the garden app's, so
+  // the home app and its worker are not asked at all.
+  assertEquals((await k.at('/garden/nothing.txt')).status, 404)
+})
+
+Deno.test("rung 3: the home app's files answer the bare hostname", async () => {
+  let k = await router()
+  k.put('ada/cookbook/index.html', '<!doctype html><body>cookbook</body>')
+  k.put('ada/cookbook/photo.png', 'not really a png')
+  assertEquals(await (await k.at('/photo.png')).text(), 'not really a png')
+  // A path behind no file whose last segment names no file type is a route,
+  // not a miss: the app's own page answers it (files.ts `pretty`).
+  assert((await (await k.at('/about')).text()).includes('cookbook'))
+})
+
+Deno.test("rung 4: the space's index is `/`'s last word", async () => {
+  // A home app with a front page keeps `/`.
+  let k = await router()
+  k.put('ada/cookbook/index.html', '<!doctype html><body>cookbook</body>')
+  assert((await (await k.at('/')).text()).includes('cookbook'))
+
+  // Without one, `/` is the index — the space EXISTS, so its own address is a
+  // door and not a 404 — while a path under it is still nothing.
+  let bare = await router()
+  let listed = await bare.at('/')
+  assertEquals(listed.status, 200)
+  assert((await listed.text()).includes('href="/garden/"'))
+  assertEquals((await bare.at('/nothing.txt')).status, 404)
+
+  // A home worker that PASSES on `/` (its 404 is the pass verdict) leaves the
+  // index to answer, and one that owns it wins: the index is what is left when
+  // neither half of the home app has anything there.
+  let passing = await router(() => new Response('no', { status: 404 }))
+  assert((await (await passing.at('/')).text()).includes('href="/garden/"'))
+  let own = await router(() => new Response('the router', { status: 200 }))
+  assertEquals(await (await own.at('/')).text(), 'the router')
+})
+
+Deno.test('rung 5: everything else is the home worker, else 404', async () => {
+  let k = await router((req) =>
+    new Response(`ran ${new URL(req.url).pathname}`)
+  )
+  // Its files do not shadow it: the worker is asked first, exactly as it is
+  // under an app's own slug, so it sees every path no other app claims.
+  k.put('ada/cookbook/index.html', '<!doctype html><body>cookbook</body>')
+  k.put('ada/cookbook/photo.png', 'not really a png')
+  for (let path of ['/about', '/photo.png', '/deep/anything']) {
+    assertEquals(await (await k.at(path)).text(), `ran ${path}`, path)
+  }
+  // And where the worker passes, its files answer behind it.
+  let some = await router((req) =>
+    new URL(req.url).pathname == '/menu'
+      ? new Response('the menu')
+      : new Response('no', { status: 404 })
+  )
+  some.put('ada/cookbook/photo.png', 'not really a png')
+  assertEquals(await (await some.at('/menu')).text(), 'the menu')
+  assertEquals(await (await some.at('/photo.png')).text(), 'not really a png')
+  // No worker and no file is the 404 at the end of the order.
+  let plain = await router()
+  assertEquals((await plain.at('/nothing.txt')).status, 404)
 })
