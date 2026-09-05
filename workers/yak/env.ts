@@ -41,6 +41,10 @@ export type Env = {
   // The person's own MCP stream (stream.ts): one object per signed-in
   // person, holding what an open connector is listening to.
   WIRE: Namespace
+  // The builder's conversation (build.ts, T-34240): one object per space,
+  // holding what has been said there and running one build at a time, with
+  // the space's page listening on a socket.
+  BUILDER: Namespace
   // Cloudflare's per-deploy version id (wrangler.toml [version_metadata]):
   // `id` changes on every `wrangler deploy`, so the stream compares it to know
   // the platform moved (stream.ts, T-33013). Optional — the binding is absent
@@ -119,16 +123,16 @@ export type Env = {
   STRIPE_PRICE?: string
   STRIPE_API?: string
   // The builder (builder.ts, T-34239): the model that makes somebody their
-  // first app. Workers AI is the free build — `AI` is the binding
-  // (wrangler.toml `[ai]`), no key of ours, and absent under the workerd
-  // probes, where the loop says so rather than half-running. OpenAI is the
-  // paid one, reached through the AI Gateway: AI_GATEWAY names the gateway on
-  // the account above, and either key opens it — OPENAI_API_KEY as ours, or
-  // AI_GATEWAY_TOKEN as the gateway's own stored one (T-34238). Both secrets;
-  // unset, the paid build refuses in a sentence naming that ticket.
-  // OPENAI_API is a probe's door to somewhere other than the gateway.
-  // BUILDER_MODEL_FREE and BUILDER_MODEL_PAID are the model ids, so changing
-  // either is a `wrangler secret put` and no deploy of new code.
+  // first app. BOTH tiers run on Workers AI — `AI` is the binding
+  // (wrangler.toml `[ai]`), no key of ours and nothing bought, absent under
+  // the workerd probes where the loop says so rather than half-running.
+  // The four beside it are the OTHER provider, which nobody has switched on:
+  // point BUILDER_MODEL_PAID at an OpenAI model and the loop reaches it
+  // through the AI Gateway named by AI_GATEWAY, paid for by OPENAI_API_KEY or
+  // by the gateway's own stored key (AI_GATEWAY_TOKEN). OPENAI_API is a
+  // probe's door to somewhere other than the gateway. BUILDER_MODEL_FREE and
+  // BUILDER_MODEL_PAID are the model ids, so changing either is a `wrangler
+  // secret put` and no deploy of new code.
   AI?: {
     run(model: string, input: unknown, opts?: unknown): Promise<unknown>
     gateway(id: string): { getUrl(provider?: string): Promise<string> }

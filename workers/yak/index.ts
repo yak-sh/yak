@@ -4,8 +4,9 @@
 // router composes them by calling those handlers; a part split into its own
 // Worker later is a service binding in env.ts and no change here. The Store
 // Durable Object (graph.ts) is its own module for the same reason: a DO may
-// live in a different Worker from the one that binds it, and so is the Wire
-// object (stream.ts), which holds a person's open agent stream. Every route
+// live in a different Worker from the one that binds it, and so are the Wire
+// object (stream.ts), which holds a person's open agent stream, and the
+// Builder (build.ts), which holds a space's build conversation. Every route
 // runs inside one catch: a throw becomes an exception entity in the META
 // store — OUR code fell over, whatever app the URL named (T-33234, `report`
 // below) — and a soft page, so no failure goes unseen (D-32318 §Errors,
@@ -51,6 +52,8 @@
 //                             updated, by the member who dropped it
 //     /                       the space's front page — its home app, SERVED
 //                             here; "nothing here" if it has none
+//     /api/build              build.ts: the socket the builder talks on, the
+//                             space's own and ahead of every app
 //     /<app>                  302 to /<app>/, or to / when <app> is the front
 //                             page, whose address is the bare hostname
 //     /<app>/api/graph        the store's identity, plus who is asking
@@ -97,6 +100,7 @@ import { metered } from './usage.ts'
 // fleet-shaped object it replaced wore, and that object is gone (T-33807).
 export { Store } from './graph.ts'
 export { Wire } from './stream.ts'
+export { Builder } from './build.ts'
 
 // The kernel's SECOND entrypoint, and the only one with a cache in front of it
 // (cache.ts, wrangler.toml `[exports.Files]`). The default entrypoint below is

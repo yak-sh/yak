@@ -23,6 +23,7 @@
 // door refused ON PURPOSE never becomes one (unseen.ts `refusal`): a
 // signed-out visitor sent to sign in is the platform working.
 import { r2Blobs } from '../../src/blobs_r2.ts'
+import { BUILD, joining, NOBODY, NOT_A_WRITER } from './build.ts'
 import { at as cachedAt } from './cache.ts'
 import * as files from './files.ts'
 import { keyed, PREFIX, prefixOf, purged, SHA } from './files.ts'
@@ -1056,6 +1057,24 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   if (!space) return nothingHere()
   if (kernels(space, r.app)) return nothingHere()
   let url = new URL(req.url)
+  // The builder's socket (build.ts, T-34240). A SPACE's door, not an app's:
+  // the person it is for has no app yet, so it is answered here — before the
+  // home app is looked for, since a space with none would be a 404 at every
+  // path but `/`. It is a platform path (router.ts), so no app routes it.
+  if (url.pathname == BUILD) {
+    if (req.headers.get('upgrade') != 'websocket') {
+      return json(426, 'expected_websocket')
+    }
+    let who = await c.time(
+      'who',
+      () => whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p)),
+    )
+    if (!who.person) {
+      return json(401, 'not_a_writer', NOBODY, signInAt(url.href))
+    }
+    if (!writes(who.role)) return json(403, 'not_a_writer', NOT_A_WRITER)
+    return joining(env, space.eid, req, who)
+  }
   let app = r.app ? await c.time('app', () => dir.app(space!, r.app!)) : null
   if (r.app && !app) {
     // Not an app here — but it may be where one USED to be (directory.ts

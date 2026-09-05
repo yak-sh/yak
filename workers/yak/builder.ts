@@ -11,18 +11,20 @@
 // sentence back as the result.
 //
 // TWO PROVIDERS, ONE SEAM. A `Model` answers one turn: what it said, which
-// tools it wants, what it spent. Workers AI is the free build — no key, the
-// `AI` binding, a model in the catalog — and OpenAI through the AI Gateway is
-// the paid one. Neither shape is pretended to be the other: Workers AI takes
-// `messages` and answers a flat `tool_calls`, OpenAI's Responses API takes
-// `input` items and answers `function_call` items, and each provider spells
-// {@link Line} in its own words. The id says which: a Workers AI model is
-// always `@cf/…`.
+// tools it wants, what it spent. Workers AI needs no key — the `AI` binding is
+// the authorization — and OpenAI through the AI Gateway is the other. Neither
+// shape is pretended to be the other: Workers AI takes `messages` and answers
+// a flat `tool_calls`, OpenAI's Responses API takes `input` items and answers
+// `function_call` items, and each provider spells {@link Line} in its own
+// words. The id says which: a Workers AI model is always `@cf/…`.
 //
-// Owner, 2026-09-05: "i think openai prices are better: i'd use sol or terra"
-// and "i guess we could just use like glm offered from cloudflare, right?" —
-// so the free build is GLM on Workers AI and the paid one is Terra, each an
-// env var away from being something else.
+// BOTH TIERS RUN ON THE BINDING TODAY. Owner, 2026-09-05: "can't we use
+// workers AI instead of AI Gateway to start now without purchasing anything?
+// we already have free usage" — so the free build is GLM Flash and the paid
+// one is the full GLM, both on `AI`, and nothing has to be bought or made
+// before a person can build. The OpenAI path stays here whole, behind config
+// nobody has set: point BUILDER_MODEL_PAID at an id that is not `@cf/…` and
+// name a gateway, and the paid build speaks to OpenAI instead.
 //
 // The loop has three ends: a round limit, an output ceiling per turn, and a
 // wall budget. Every one of them, every refusal a provider makes, and the
@@ -99,8 +101,24 @@ export type Answer = { text: string; calls: Call[]; usage: Usage }
 /** A model, whichever provider it is behind. */
 export type Model = { id: string; ask(a: Ask): Promise<Answer> }
 
+/**
+ * The loop, as it happens. A round is not a stream — a turn arrives whole —
+ * but the four things a person watching wants to see arrive at four different
+ * moments, and a build takes a minute. So the loop tells whoever is listening
+ * at each of them, and the object holding the socket turns each into a frame
+ * (build.ts, T-34240). Nobody listening is the ordinary case: `on` is
+ * optional and the loop's answer is the same either way.
+ */
+export type Beat =
+  | { beat: 'said'; text: string }
+  | { beat: 'tool'; call: string; name: string; args: string }
+  | { beat: 'ran'; call: string; name: string; text: string; ok: boolean }
+  | { beat: 'done'; text: string; refused?: string }
+
 /** How far the loop may go before it says so. */
 export type Opts = {
+  /** who is watching this build happen, if anybody */
+  on?: (b: Beat) => void
   /** the model to run, where the caller has one already (tests, a retry) */
   model?: Model
   /** the model id, overriding what the space's tier picks */
@@ -135,9 +153,11 @@ export type Built = {
  * `@cf/qwen/qwen3.8-27b` is the fallback where a plan has no frontier model. */
 export let FREE = '@cf/zai-org/glm-5.3-flash'
 
-/** The paid build's model: Terra, one of the two the owner named (Sol is
- * `gpt-5.6-sol`, twice the price). $2/M in, $0.20/M cached, $12/M out. */
-export let PAID = 'gpt-5.6-terra'
+/** The paid build's model: the same family, at full size — $1.40/M in,
+ * $4.40/M out on the same binding, so a Plus space builds on a bigger model
+ * and the platform still buys nothing. Terra (`gpt-5.6-terra`) is one
+ * BUILDER_MODEL_PAID away, once there is a gateway to reach it through. */
+export let PAID = '@cf/zai-org/glm-5.3'
 
 /** Nobody is built for: the loop writes as the person calling it, and there
  * is no such person. */
@@ -145,13 +165,15 @@ export let ANON =
   'Sign in first — everything I would build belongs to somebody, and I ' +
   'write as whoever is asking. https://yaks.app/login'
 
-/** The paid build with no way to reach OpenAI. Named in a sentence, because
- * the person reading it did nothing wrong. */
+/** A model that is not Workers AI's, with no way to reach it. Nobody meets
+ * this by default — both tiers run on the binding — only a platform whose
+ * BUILDER_MODEL_PAID names an OpenAI model with no gateway set. Named in a
+ * sentence, because the person reading it did nothing wrong. */
 export let NO_KEY =
-  'The paid build runs on OpenAI through the AI Gateway, and no gateway is ' +
-  'named on this platform yet — T-34238 is the owner making one and setting ' +
-  "AI_GATEWAY. What pays for it is either OPENAI_API_KEY or the gateway's " +
-  'own credits, so the key is optional. Nothing was built.'
+  "That model is OpenAI's and this platform has no AI Gateway to reach it " +
+  'through: set AI_GATEWAY, and either OPENAI_API_KEY or AI_GATEWAY_TOKEN ' +
+  'to pay for it. Every build here runs on Workers AI unless ' +
+  'BUILDER_MODEL_PAID says otherwise. Nothing was built.'
 
 /** Every model of this one, everywhere, is busy: the account's per-model rate
  * (20 a minute on the frontier ones). It is a wait, not a failure. */
@@ -166,11 +188,11 @@ let busy = (e: unknown) =>
     e instanceof Error ? e.message : String(e),
   )
 
-/** The free build with no Workers AI binding — a local run, or a probe. */
+/** No Workers AI binding — a local run, or a probe. Both tiers run on it, so
+ * this is every build on a runtime that has none. */
 export let NO_AI =
-  'No model is bound here: the free build runs on Workers AI through the AI ' +
-  'binding and this runtime has none. T-34238 is the OpenAI key for the ' +
-  'paid one. Nothing was built.'
+  'No model is bound here: a build runs on Workers AI through the AI binding ' +
+  'and this runtime has none. Nothing was built.'
 
 let tooMany = (n: number) =>
   `I kept reaching for tools and stopped myself after ${n} rounds. What is ` +
@@ -485,6 +507,15 @@ export let build = async (
   let usage: Usage = { input: 0, output: 0, cached: 0 }
   let rounds = 0
   let built = false
+  // A listener's own failure is not the build's: a socket that went away
+  // mid-round must not end a conversation that is still going.
+  let on = (b: Beat) => {
+    try {
+      opts.on?.(b)
+    } catch (e) {
+      console.warn('builder: a listener threw', e)
+    }
+  }
   // Every way out of the loop, including the refusals: a build that HAPPENED
   // is counted whichever end the conversation came to, and a conversation
   // that deployed nothing is counted nowhere (meter.ts `countedBuild`).
@@ -492,8 +523,10 @@ export let build = async (
     if (refused) lines.push({ said: 'builder', text: refused })
     if (built) await countedBuild(env, space, usage)
     let last = [...lines].reverse().find((l) => l.said == 'builder')
+    let text = last?.said == 'builder' ? last.text : ''
+    on({ beat: 'done', text, ...(refused ? { refused } : {}) })
     return {
-      text: last?.said == 'builder' ? last.text : '',
+      text,
       lines,
       usage,
       rounds,
@@ -550,9 +583,18 @@ export let build = async (
       ...(answer.calls.length ? { calls: answer.calls } : {}),
       usage: answer.usage,
     })
+    if (answer.text) on({ beat: 'said', text: answer.text })
     if (!answer.calls.length) return await end()
     for (let c of answer.calls) {
+      on({ beat: 'tool', call: c.id, name: c.name, args: c.args })
       let said = await called(by, c)
+      on({
+        beat: 'ran',
+        call: c.id,
+        name: c.name,
+        text: said.text,
+        ok: said.ok,
+      })
       // What makes this conversation a BUILD: an app_deploy that went
       // through. A conversation that ships one app costs one build however
       // many turns it took, and one that ships nothing costs none.

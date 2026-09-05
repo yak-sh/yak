@@ -9,11 +9,13 @@
 //
 // What is here is only what the runtime gives a Worker and Deno does not: the
 // streaming HTML rewriter, a Durable Object's state (the stand-in
-// @yaks/durable-object ships), an R2 bucket, and the namespace that hands out
-// a Store per name. Everything above them — the directory, the tools, the
-// serving door — is the kernel's own code, called directly.
+// @yaks/durable-object ships), an R2 bucket, a scripted Workers AI binding,
+// and the namespace that hands out a Store per name. Everything above them —
+// the directory, the tools, the serving door — is the kernel's own code,
+// called directly.
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/harness.ts'
+import { Builder } from './build.ts'
 import type { Env } from './env.ts'
 import { Store } from './graph.ts'
 
@@ -74,6 +76,39 @@ export let state = () => {
   }
 }
 
+/** One turn, as a scripted model answers it. */
+export type Turn = {
+  text?: string
+  calls?: { name: string; arguments: unknown }[]
+}
+
+/**
+ * Workers AI, scripted: the `AI` binding answering the turns it was given, in
+ * the binding's OWN shape (`{response, tool_calls, usage}`), so a test drives
+ * builder.ts's whole provider — the messages it writes, the tool calls it
+ * reads back — and not just its loop. Past the end of the script it says
+ * nothing, which ends the loop.
+ */
+export let ai = (script: Turn[]) => {
+  let asked: { model: string; input: Record<string, unknown> }[] = []
+  let at = 0
+  return {
+    asked,
+    run: (model: string, input: unknown) => {
+      asked.push({ model, input: input as Record<string, unknown> })
+      let turn = script[at++] ?? {}
+      return Promise.resolve({
+        response: turn.text ?? '',
+        tool_calls: turn.calls ?? [],
+        usage: { prompt_tokens: 20, completion_tokens: 5 },
+      })
+    },
+    // The gateway a Workers AI binding can name is nobody's here: nothing on
+    // this platform reaches OpenAI (builder.ts, T-34238).
+    gateway: () => ({ getUrl: () => Promise.resolve('') }),
+  }
+}
+
 /** The bucket, as the slice `r2Blobs` asks for. */
 export let bucket = () => {
   let held = new Map<string, Uint8Array>()
@@ -119,6 +154,15 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
     }
     return held
   }
+  // The builder's object, one per space (build.ts). Made on demand like a
+  // store, and kept, so a second connection reaches the conversation the first
+  // one started.
+  let builders = new Map<string, Builder>()
+  let builder = (name: string): Builder => {
+    let held = builders.get(name)
+    if (!held) builders.set(name, held = new Builder(state(), env))
+    return held
+  }
   let files = bucket()
   let env = {
     SESSION_SECRET: secret,
@@ -146,7 +190,13 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
         fetch: () => Promise.resolve(new Response(null, { status: 204 })),
       }),
     },
+    BUILDER: {
+      idFromName: (n: string) => n,
+      get: (n: unknown) => ({
+        fetch: (r: Request) => Promise.resolve(builder(String(n)).fetch(r)),
+      }),
+    },
     ...vars,
   } as unknown as Env
-  return { env, files, object, sockets }
+  return { env, files, object, sockets, builder }
 }

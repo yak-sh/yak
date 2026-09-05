@@ -119,6 +119,13 @@ class_name = "Store"
 name = "WIRE"
 class_name = "Wire"
 
+# One object per SPACE, holding the builder's conversation and running one
+# build at a time in it (build.ts, T-34240). The page listens on it at
+# <space>.yaks.app/api/build.
+[[durable_objects.bindings]]
+name = "BUILDER"
+class_name = "Builder"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Store"]
@@ -126,6 +133,10 @@ new_sqlite_classes = ["Store"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["Wire"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["Builder"]
 
 # Outbound mail as a binding rather than the REST API (T-33684): Cloudflare
 # Email Sending, authorized by this deploy instead of by a token, so nothing
@@ -142,10 +153,14 @@ new_sqlite_classes = ["Wire"]
 [[send_email]]
 name = "MAIL"
 
-# Workers AI (builder.ts, T-34239): the free build's model runs on this
-# binding, which needs no key — the deploy is the authorization, the way the
-# mail binding is. Under `wrangler dev` it proxies to the account; in the
-# workerd probes there is no binding at all and the loop says so.
+# Workers AI (builder.ts, T-34239): BOTH tiers' models run on this binding,
+# which needs no key — the deploy is the authorization, the way the mail
+# binding is. Owner, 2026-09-05: "can't we use workers AI instead of AI
+# Gateway to start now without purchasing anything? we already have free
+# usage" — so there is no gateway and no AI_GATEWAY here, and the OpenAI path
+# in builder.ts waits behind config nobody has set. Under `wrangler dev` this
+# proxies to the account; in the workerd probes there is no binding at all and
+# the loop says so.
 [ai]
 binding = "AI"
 
@@ -241,14 +256,13 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 # (billing.ts). Unset, those doors say the paid tier is not switched on here
 # rather than half-working, and a webhook that arrives unread is filed where
 # the owner sees it.
-# OPENAI_API_KEY is what the PAID build speaks to OpenAI with, through the AI
-# Gateway named by AI_GATEWAY — or AI_GATEWAY_TOKEN alone, where the gateway
-# holds the key itself (builder.ts, T-34238). All three are unset here on
-# purpose: the gateway does not exist on the account yet, and unset is what
-# makes the paid build refuse in a sentence naming that ticket instead of
-# 404ing at a gateway nobody made. The free build needs none of them — it runs
-# on the `[ai]` binding above. BUILDER_MODEL_FREE and BUILDER_MODEL_PAID are
-# the model ids, unset meaning builder.ts's own defaults.
+# OPENAI_API_KEY, AI_GATEWAY and AI_GATEWAY_TOKEN are the OTHER provider, and
+# all three are unset on purpose: no gateway exists on the account and nothing
+# needs one, since both tiers build on the `[ai]` binding above (T-34238 is
+# the owner's to open if we ever want OpenAI). Set AI_GATEWAY plus one of the
+# keys and point BUILDER_MODEL_PAID at an OpenAI model, and the paid build
+# speaks to OpenAI instead. BUILDER_MODEL_FREE and BUILDER_MODEL_PAID are the
+# model ids, unset meaning builder.ts's own defaults.
 # CIMD is not a secret but rides the same door, because that door needs no
 # code deploy: `printf off | wrangler secret put CIMD` stops the well-known
 # claiming Client ID Metadata Document support, `printf on | ...` restores it,

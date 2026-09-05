@@ -247,31 +247,39 @@ Deno.test('a tool refusal is a line the model can correct', async () => {
   assertEquals(said[1], 'no tool nonesuch')
 })
 
-Deno.test('the free build has no model bound here, and says so', async () => {
+// Neither tier has a model bound in a Deno test: both run on the binding, and
+// the stand-in has none unless a test scripts one (harness.ts `ai`).
+Deno.test('no model is bound here, and either tier says so', async () => {
   let { env, space } = await seeded()
-  let out = await build(env, owner, free(space), asked('go'))
-
-  assertEquals(out.refused, NO_AI)
-  assertStringIncludes(out.text, 'T-34238')
+  for (let tier of [null, 'plus' as const]) {
+    let out = await build(env, owner, { ...space, tier }, asked('go'))
+    assertEquals(out.refused, NO_AI)
+    assertStringIncludes(out.text, 'AI binding')
+  }
 })
 
-Deno.test('the paid build with no key names the ticket that mints one', async () => {
-  let { env, space } = await seeded()
+Deno.test('an OpenAI model with no gateway to reach it says so', async () => {
+  let { env, space } = await seeded({ BUILDER_MODEL_PAID: 'gpt-5.6-terra' })
   let out = await build(env, owner, { ...space, tier: 'plus' }, asked('go'))
 
   assertEquals(out.refused, NO_KEY)
-  assertStringIncludes(out.text, 'OPENAI_API_KEY')
+  assertStringIncludes(out.text, 'AI_GATEWAY')
 })
 
 Deno.test('the tier picks the model, and the id picks the provider', async () => {
   let { env, space } = await seeded()
+  // Both tiers are Workers AI today — nothing is bought to build here — and
+  // the paid one is the bigger model of the same family.
   assertStringIncludes(idOf(env, free(space)), '@cf/')
-  assertEquals(idOf(env, { ...space, tier: 'plus' }), 'gpt-5.6-terra')
+  assertStringIncludes(idOf(env, { ...space, tier: 'plus' }), '@cf/')
+  assert(idOf(env, free(space)) != idOf(env, { ...space, tier: 'plus' }))
 
   // Config overrides both, and a `@cf/` id is Workers AI whoever set it.
   let said = { ...env, BUILDER_MODEL_FREE: '@cf/openai/gpt-oss-120b' }
   assertEquals(idOf(said, free(space)), '@cf/openai/gpt-oss-120b')
   assertEquals(modelOf(env, '@cf/x/y').id, '@cf/x/y')
+  // And an id that is not `@cf/…` is the other provider.
+  assertEquals(modelOf(env, 'gpt-5.6-terra').id, 'gpt-5.6-terra')
 })
 
 Deno.test('the roster is the platform table, whole', async () => {
@@ -330,7 +338,10 @@ Deno.test('the paid build reaches the gateway with no key of ours', async () => 
     },
   }))
   try {
-    let { env, space } = await seeded({ OPENAI_API: said.url })
+    let { env, space } = await seeded({
+      OPENAI_API: said.url,
+      BUILDER_MODEL_PAID: 'gpt-5.6-terra',
+    })
     let out = await build(env, owner, { ...space, tier: 'plus' }, asked('hi'))
 
     assertEquals(out.refused, undefined)
@@ -350,7 +361,10 @@ Deno.test('the paid build reaches the gateway with no key of ours', async () => 
 Deno.test('a busy model is a wait, not a failure', async () => {
   let said = openaiStub(() => ({ status: 429, body: { error: 'slow down' } }))
   try {
-    let { env, space } = await seeded({ OPENAI_API: said.url })
+    let { env, space } = await seeded({
+      OPENAI_API: said.url,
+      BUILDER_MODEL_PAID: 'gpt-5.6-terra',
+    })
     let out = await build(env, owner, { ...space, tier: 'plus' }, asked('hi'))
 
     assertEquals(out.refused, BUSY)
