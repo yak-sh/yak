@@ -12,9 +12,10 @@
 // entity, and a component that never reaches a table is a perfectly good way
 // for one phase to tell a later one what it decided.
 
-import type { Bundle } from './bundle.ts'
-import type { Tx } from './storage.ts'
+import type { Bundle, Change, Entity } from './bundle.ts'
+import type { Query, ReadOpts, Tx } from './storage.ts'
 import type { Derive } from './alias.ts'
+import type { Graph } from './graph.ts'
 import type { VocabDoc } from '@yaks/vocab'
 
 /**
@@ -89,6 +90,60 @@ export type Hook = (
 ) => Bundle[] | Promise<Bundle[]>
 
 /**
+ * A schema for a tool's arguments or its result. What counts as one is the
+ * TRANSPORT's business — {@link https://jsr.io/@yaks/mcp | @yaks/mcp} takes Zod
+ * schemas, because the MCP SDK does — so the core leaves it opaque rather than
+ * depending on a validation library.
+ */
+export type Schema = object
+
+/**
+ * What a {@link Tool} is handed when it runs: the graph, who is asking, and the
+ * two doors it should use. `apply` signs the batch as `actor`, so a tool cannot
+ * write in the client's name by accident; reaching past it to `graph.apply` is
+ * the deliberate, unsigned way.
+ */
+export type ToolCtx = {
+  /** the graph the tool works on (its vocabulary and storage included) */
+  graph: Graph
+  /** the entity the transport authenticated, or `null` for nobody */
+  actor: Entity | null
+  /** apply a batch, signed as `actor` */
+  apply: (change: Change) => Bundle[] | Promise<Bundle[]>
+  /** a query → the matching entities as whole bundles */
+  read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
+}
+
+/**
+ * A tool: one named thing an agent can ask a graph to do, contributed the same
+ * way a plugin contributes components and hooks. A transport (@yaks/mcp) is
+ * what lists it and calls it; this package only carries the declaration.
+ *
+ * The arguments arrive as a plain bag — the transport has already checked them
+ * against `input` — and whatever `run` returns is the tool's structured result,
+ * which for most tools is bundles.
+ */
+export type Tool = {
+  /** the tool's name, as an agent calls it */
+  name: string
+  /** a short human title */
+  title?: string
+  /** what it does and when to reach for it — the agent reads this */
+  description: string
+  /** one schema per named argument */
+  input?: Record<string, Schema>
+  /** the shape of the structured result */
+  output?: Schema
+  /** this tool only reads — a client may call it without asking first */
+  readOnly?: boolean
+  /** do it: the arguments in, the structured result out */
+  run: (
+    args: Record<string, unknown>,
+    ctx: ToolCtx,
+  ) => unknown | Promise<unknown>
+}
+
+/**
  * A plugin: a self-contained contribution to a graph. It brings a component
  * vocabulary (its domain) and hooks on the phases it cares about. This is the
  * same shape an application uses to add its own components — the fleet's own
@@ -101,6 +156,8 @@ export type Plugin = {
   vocab?: VocabDoc[]
   /** the phases it hooks, at most one hook each */
   hooks?: Partial<Record<Phase, Hook>>
+  /** the tools it contributes to a transport that serves them */
+  tools?: Tool[]
   /** the components of its that are CONTENT-ADDRESSED, and how each names its
    * entity — consulted in the `mint` phase when such a component arrives under
    * an alias (see {@link Derive}) */
@@ -111,3 +168,8 @@ export type Plugin = {
  * what a caller loads (with any base documents) before binding a storage. */
 export let vocabOf = (plugins: Plugin[]): VocabDoc[] =>
   plugins.flatMap((p) => p.vocab ?? [])
+
+/** Every tool a set of plugins contributes, in plugin order — what a transport
+ * lists beside its own. */
+export let toolsOf = (plugins: Plugin[]): Tool[] =>
+  plugins.flatMap((p) => p.tools ?? [])

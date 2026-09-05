@@ -144,6 +144,10 @@ nothing.
 - **`Phase` / `Plugin` / `Hook`** — the pluggable `apply()` above. A plugin also
   contributes a component vocabulary, the same way a downstream app adds its own
   domain.
+- **`Tool` / `ToolCtx`** — what a plugin offers an agent, listed and called by a
+  transport such as [@yaks/mcp](https://jsr.io/@yaks/mcp). The declaration lives
+  here so a plugin brings its tools the way it brings its components; nothing in
+  this package lists or calls one.
 
 There is deliberately **no `snapshot()`**: reads are queries answered by a
 `Storage` adapter, never a whole-graph dump.
