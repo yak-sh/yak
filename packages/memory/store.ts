@@ -18,15 +18,7 @@
 // reference per entity a transaction touched, replayed backwards, restores the
 // map exactly as it was without copying anything the batch did not write.
 
-import type {
-  Bundle,
-  Comp,
-  Eid,
-  Entity,
-  ReadOpts,
-  Row,
-  Storage,
-} from '@yaks/graph'
+import type { Bundle, Comp, Eid, Entity, ReadOpts, Row } from '@yaks/graph'
 import { comps, isPromise, tombstoned } from '@yaks/graph'
 import { matcher, type Query } from '@yaks/match'
 import type { Vocab } from '@yaks/vocab'
@@ -58,7 +50,7 @@ export type Tx = {
 }
 
 /**
- * A bound store: @yaks/graph's {@link Storage}, answered synchronously. The
+ * A bound store: @yaks/graph's `Storage`, answered synchronously. The
  * same five members a database adapter has, so it satisfies `Storage` wherever
  * one is wanted — and a caller holding a `Store` directly never awaits a row.
  */
@@ -159,10 +151,11 @@ export let memory = (vocab: Vocab, base: MemoryOpts = {}): Store => {
 
   let tx: Tx = {
     read,
-    get: (eids) => eids.flatMap((eid) => {
-      let rec = rows.get(eid)
-      return rec ? [bundleOf(rec)] : []
-    }),
+    get: (eids) =>
+      eids.flatMap((eid) => {
+        let rec = rows.get(eid)
+        return rec ? [bundleOf(rec)] : []
+      }),
     patch,
     remove: (entities) => {
       for (let { eid } of entities) {
@@ -178,7 +171,8 @@ export let memory = (vocab: Vocab, base: MemoryOpts = {}): Store => {
     ddl: () => [],
     install: () => {},
     read,
-    rows: (query, opts) => read(query, opts).map((b) => ({ eid: b.entity.eid })),
+    rows: (query, opts) =>
+      read(query, opts).map((b) => ({ eid: b.entity.eid })),
     tx: (body) => {
       // A nested transaction is a savepoint: it rolls back to where it opened,
       // and its entries stay in the log for the outer one to undo in its turn.

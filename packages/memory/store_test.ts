@@ -7,7 +7,7 @@
 // package — and the adapter they hold against each other — speak one domain.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Storage } from '@yaks/graph'
 import { shop } from '../sqlite/harness.ts'
 import { memory, type Store } from './mod.ts'
 
@@ -140,7 +140,8 @@ Deno.test('an outer rollback undoes what an inner transaction committed', () => 
 })
 
 Deno.test('a map has no schema: ddl is empty and install does nothing', () => {
-  let s = memory(shop)
+  // and a Store is a Storage — the seam @yaks/graph applies changes through
+  let s: Storage = memory(shop)
   assertEquals(s.ddl(), [])
   assertEquals(s.install(), undefined)
 })

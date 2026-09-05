@@ -36,6 +36,10 @@ In dependency order:
 - **[@yaks/match](./match)** — the other evaluator of the same grammar: a
   `@yaks/query` AST run as a predicate over bundles held in memory, with no
   database. Tested query by query for parity with `@yaks/sql`.
+- **[@yaks/memory](./memory)** — the storage adapter with nothing underneath it:
+  a `Map` of bundles answering `@yaks/graph`'s `Storage`, reads through
+  `@yaks/match`, synchronous, browser-ready. Tested batch for batch against
+  `@yaks/sqlite`.
 
 ## How they compose
 
@@ -60,6 +64,9 @@ on its own:
 - `@yaks/match` is the path with no storage at all: hand it the same AST and
   vocabulary and it filters the bundles you already hold, so a saved filter
   means one thing in the database and in the page.
+- `@yaks/memory` puts that evaluator behind the storage seam: a whole graph in a
+  Map, with the same `apply()` and the same queries as the database path, for a
+  page, a worker, or a test that has no database to install.
 
 ## Publishing requirements
 

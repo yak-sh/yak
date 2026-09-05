@@ -118,7 +118,11 @@ let script: { name: string; batch: Change; now?: string }[] = [
       },
       { entity: { eid: 'p2' }, product: { price: 4, status: 'draft' } },
       { entity: { eid: 'r1' }, review: { stars: 5, product: 'p1' } },
-      { entity: { eid: 'u1' }, doc: { title: 'Reader' }, bookmark: { of: 'p1' } },
+      {
+        entity: { eid: 'u1' },
+        doc: { title: 'Reader' },
+        bookmark: { of: 'p1' },
+      },
     ],
   },
   {
