@@ -151,6 +151,9 @@ slow(
       // app WITH its data without opening anything (T-32481).
       for (
         let said of [
+          // The platform's NAME, said before anything else: an agent that
+          // only ever read the address called the place "Yaks" (T-34302).
+          'This is yaks.app',
           '<space>.yaks.app/<app>/',
           'app_new',
           'app_files',
@@ -1214,6 +1217,9 @@ slow('the door before anyone signs in', async () => {
     let said = await anon.tool('about')
     for (
       let word of [
+        // It opens with the name, so a stranger's first sentence about this
+        // place says what the place is called (T-34302).
+        'yaks.app is a place to make small web apps',
         'yourname.yaks.app/<app>/',
         'index.html',
         'https://yaks.app',

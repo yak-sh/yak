@@ -435,6 +435,8 @@ slow('the apex answers the crawler and the model', async () => {
 
     let whole = await (await k.at('yaks.app', '/llms-full.txt')).text()
     assertStringIncludes(whole, '# Building an app on yaks.app')
+    // And it says the name outright, once, at the top (T-34302).
+    assertStringIncludes(whole, 'This place is called yaks.app')
     for (let p of PAGES) {
       assertStringIncludes(whole, `<!-- ${uriOf(p.slug)} -->`)
     }

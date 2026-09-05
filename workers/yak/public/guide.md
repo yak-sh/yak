@@ -1,5 +1,7 @@
 # Building an app on yaks.app
 
+This place is called yaks.app — lowercase, the way its address is spelled.
+
 An app is an `index.html` and whatever files sit beside it, served live at
 `<space>.yaks.app/<app>/`. There is no build step and no framework: what you
 write is what the browser gets. Every app comes with its own store — a graph of
