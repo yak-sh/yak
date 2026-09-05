@@ -211,11 +211,11 @@ export let storage = <S extends Stmt<S>>(
     // target created in the same batch, in any order.
     let birth = async (eid: Eid, born: Entity[]): Promise<void> => {
       if (known.get(eid)) return
-      let entity: Entity = { eid, num: await next() }
-      pending.push(mint(eid, entity.num!))
-      known.set(eid, { num: entity.num, dead: false })
-      dirty.set(eid, { entity })
-      born.push(entity)
+      let num = await next()
+      pending.push(mint(eid, num))
+      known.set(eid, { num, dead: false })
+      dirty.set(eid, { entity: { eid, num } })
+      born.push({ eid, num })
     }
 
     // Every eid a batch of bundles touches or points at.
