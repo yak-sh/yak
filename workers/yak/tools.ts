@@ -50,7 +50,7 @@ import type { EntityLiteral } from '../../src/mutation.ts'
 import { appAccess } from '../../src/types.ts'
 import { VERSION } from '../../src/version.ts'
 import { appDoc } from './vocab.ts'
-import { purged } from './files.ts'
+import { mimeOf, purged } from './files.ts'
 import {
   type Access,
   type App,
@@ -149,11 +149,15 @@ import {
   record,
   restore,
   restored,
+  sha256,
   snapshot,
   type Version,
   versions,
   whatChanged,
 } from './versions.ts'
+// The one ceiling on bytes going into an app's store, wherever they arrive
+// from: an upload, a drop, or `app_files` fetch.
+import { MAX } from './apps.ts'
 
 export type Ctx = {
   env: Env
@@ -258,7 +262,24 @@ let ACCESS = {
 let ROLES: Role[] = ['owner', 'editor', 'viewer']
 
 // What app_files does to a file, in the order an app is built.
-let OPS = ['list', 'read', 'write', 'delete']
+let OPS = ['list', 'read', 'write', 'patch', 'fetch', 'delete']
+
+// The ops that need a writer, which is every one that changes a byte.
+let WRITES = ['write', 'patch', 'fetch', 'delete']
+
+/**
+ * What an `app_files` call is asking for, when it did not say. BYTES say what
+ * a call is: a `files` batch is a write, and so is a lone path with `content`
+ * (or `base64`) beside it, whether or not `op` came along — which is what the
+ * tool's description has always promised and what used to refuse (T-34337).
+ * Nothing but a path is still nothing: it names no act, and guessing `read`
+ * from it would answer a file to someone who meant to write one.
+ */
+export let opOf = (args: Record<string, unknown>, batch: number) =>
+  String(
+    args.op ??
+      (batch || args.content != null || args.base64 != null ? 'write' : ''),
+  )
 
 let text = (v: unknown, what: string) => {
   if (typeof v != 'string' || !v) throw new Error(`${what} is required`)
@@ -293,7 +314,9 @@ let bytesOf = (f: Record<string, unknown>, at = '') => {
 // The many-file form of a write: `files: [{path, content}]`, so an app is one
 // call and not one call per file (C-32624 item 5). Each refusal says which
 // entry was wrong, since the model sent them all at once.
-let files = (v: unknown): { path: string; bytes: Uint8Array }[] => {
+let files = (
+  v: unknown,
+): { path: string; bytes: Uint8Array<ArrayBuffer> }[] => {
   if (v == null) return []
   if (!Array.isArray(v)) {
     throw new Error('files: a list of {path, content}')
@@ -933,6 +956,98 @@ export let wrote = async (
 }
 
 /**
+ * What a write says about the bytes it stored: how many there are, their
+ * sha256, and — for a `.json` file — whether they parse.
+ *
+ * A model writes a file by transcribing it, and a long one comes out with a
+ * bracket run miscounted. Answering the measurement in the same call that
+ * made the file means the mistake is caught where it was made, instead of
+ * once the app is served broken (T-34337). The sha is what a second write
+ * is compared against, and the byte count is what a hand-counted file is.
+ */
+export let stored = (path: string, bytes: Uint8Array, sha: string) =>
+  `${bytes.byteLength} bytes, sha256 ${sha}` +
+  (path.endsWith('.json') ? `, ${parses(bytes)}` : '')
+
+// A `.json` file's verdict. The parse error carries its own position, which
+// is the whole reason to say it here: "at position 45971" names the bracket,
+// and nothing else in the answer could.
+export let parses = (bytes: Uint8Array) => {
+  try {
+    JSON.parse(new TextDecoder().decode(bytes))
+    return 'parsed'
+  } catch (e) {
+    return `NOT valid JSON — ${(e as Error).message}`
+  }
+}
+
+/**
+ * A find-and-replace over one file's text: exact, and exactly once. Two
+ * matches would edit a place nobody looked at and none would answer "wrote"
+ * having changed nothing, so both refuse saying how many there were — which
+ * is the number that tells the caller what to do next. The split-and-join is
+ * not `String.replace`: a `$&` in the replacement is text here, not a
+ * back-reference.
+ */
+export let patched = (
+  was: string,
+  find: string,
+  replace: string,
+  path: string,
+) => {
+  let parts = was.split(find)
+  if (parts.length == 2) return parts.join(replace)
+  let hits = parts.length - 1
+  throw new Error(
+    `find matched ${hits} times in ${path} — a patch replaces exactly one` +
+      (hits
+        ? ': lengthen find until it names one place'
+        : ': read the file back and copy the text exactly'),
+  )
+}
+
+/**
+ * A file off the web, for `op: fetch` to write into an app — so vendoring a
+ * library is one call and not a transcription of minified code (T-34337).
+ *
+ * https only: an app is made of bytes somebody can vouch for. The ceiling is
+ * the platform's own (apps.ts MAX), refused on the `content-length` before
+ * the body is read and again on the body itself, since a header is a claim.
+ */
+export let fetched = async (said: string) => {
+  let at: URL
+  try {
+    at = new URL(said)
+  } catch {
+    throw new Error(`url: ${said} is not a URL`)
+  }
+  if (at.protocol != 'https:') {
+    throw new Error(`url: https only, not ${at.protocol.replace(':', '')}`)
+  }
+  let big = (n: number) => `${at} is ${size(n)} — ${size(MAX)} at most`
+  let r = await fetch(at)
+  if (!r.ok) throw new Error(`${at} answered ${r.status}`)
+  let claim = Number(r.headers.get('content-length') ?? 0)
+  if (claim > MAX) throw new Error(big(claim))
+  let bytes = new Uint8Array(await r.arrayBuffer())
+  if (bytes.byteLength > MAX) throw new Error(big(bytes.byteLength))
+  return {
+    bytes,
+    // What the response said it is, without its parameters. An app serves
+    // the file by its PATH (files.ts mimeOf), so this is a fact about where
+    // the bytes came from — and the sentence to read when a `.js` written to
+    // a `.txt` path serves as text.
+    mime: (r.headers.get('content-type') ?? '').split(';')[0].trim(),
+  }
+}
+
+// The same digest a `<script integrity>` attribute wants: base64, not hex.
+// So a page that goes on loading the file from a CDN can be pinned to the
+// bytes this fetch actually got.
+export let sri = (sha: string) =>
+  btoa(String.fromCharCode(...sha.match(/../g)!.map((b) => parseInt(b, 16))))
+
+/**
  * One of these tools, run as this caller. The drop door (drop.ts) is a PAGE
  * doing what an agent does — make the app, write its files, release it — and
  * this is how it does exactly that rather than a second spelling of it:
@@ -1278,7 +1393,14 @@ export let TOOLS: Tool[] = [
       "'./api/client.js'`, which is served beside the app. Write every " +
       "address relative: the kernel gives each page a `<base>` at the app's " +
       'own address, so nothing in an app names the app, and a copy someone ' +
-      'installs at another address still works. Call guide for the whole of ' +
+      'installs at another address still works. Every write answers what it ' +
+      'stored — the byte count and the sha256, and for a .json file whether ' +
+      'it parses, naming the position when it does not — so a miscounted ' +
+      'bracket is caught in the call that made it. op: patch with path, find ' +
+      'and replace edits one file in place: find is exact and must match ' +
+      'exactly once. op: fetch with path and url writes an https response ' +
+      'body to path, which is how a library is vendored without transcribing ' +
+      'it, and answers an integrity hash for it. Call guide for the whole of ' +
       'it, in a page (https://yaks.app/guide.md).',
     input: {
       type: 'object',
@@ -1296,6 +1418,18 @@ export let TOOLS: Tool[] = [
         base64: str(
           'the file BYTES, base64, instead of content — for a file that is ' +
             'not text, such as the .wasm a worker.js imports',
+        ),
+        find: str(
+          'for patch: the exact text to replace, which must appear exactly ' +
+            'once in the file',
+        ),
+        replace: str(
+          'for patch: what goes in its place; the empty string removes the ' +
+            'text',
+        ),
+        url: str(
+          'for fetch: the https address whose body is written to path — a ' +
+            'library vendored into the app rather than transcribed',
         ),
         files: {
           type: 'array',
@@ -1316,21 +1450,16 @@ export let TOOLS: Tool[] = [
     },
     run: async (ctx, args) => {
       let batch = files(args.files)
-      // A batch says what it is: `files` is a write, whether or not `op`
-      // came along. The refusal names the ops AND the batch, because a bare
-      // "op is required" leaves an agent guessing at both (C-32624 item 5).
-      let op = String(args.op ?? (batch.length ? 'write' : ''))
+      let op = opOf(args, batch.length)
+      // The refusal names the ops AND the batch, because a bare "op is
+      // required" leaves an agent guessing at both (C-32624 item 5).
       if (!OPS.includes(op)) {
         throw new Error(
           `op: one of ${OPS.join(', ')} — write takes path and content, or ` +
             'files: [{path, content}] for several at once',
         )
       }
-      let { space, app, who } = await inApp(
-        ctx,
-        args,
-        op == 'write' || op == 'delete',
-      )
+      let { space, app, who } = await inApp(ctx, args, WRITES.includes(op))
       let blobs = r2Blobs(ctx.env.BLOBS)
       let prefix = fileKey(space, app, '')
       if (op == 'list') {
@@ -1354,17 +1483,72 @@ export let TOOLS: Tool[] = [
         await purged(ctx.env, app)
         return { text: `deleted ${key.slice(prefix.length)}`, space }
       }
+      // A read-modify-write of one file, in one call: the loop an agent that
+      // miscounted a bracket in a 46 KB file had no cheap way to run.
+      if (op == 'patch') {
+        let path = text(args.path, 'path')
+        let key = fileKey(space, app, path)
+        if (!(await blobs.has(key))) throw new Error(`no file ${path}`)
+        // Empty is a legal replacement — it is how a line is removed — so
+        // this asks for a string rather than for something.
+        if (typeof args.replace != 'string') {
+          throw new Error('replace is required (the empty string removes)')
+        }
+        let now = new TextEncoder().encode(patched(
+          new TextDecoder().decode(await blobs.get(key)),
+          text(args.find, 'find'),
+          args.replace,
+          key.slice(prefix.length),
+        ))
+        let [p] = await wrote(ctx.env, space, app, who, [{ path, bytes: now }])
+        return {
+          text: `patched ${p} → ${url(space, app)}${p} — ${
+            stored(p, now, await sha256(now))
+          }`,
+          space,
+        }
+      }
+      // A library vendored, rather than a minified file transcribed by hand.
+      if (op == 'fetch') {
+        let path = text(args.path, 'path')
+        let got = await fetched(text(args.url, 'url'))
+        let [p] = await wrote(ctx.env, space, app, who, [{
+          path,
+          bytes: got.bytes,
+        }])
+        let sha = await sha256(got.bytes)
+        return {
+          // The integrity hash so a page that goes on loading this from a
+          // CDN can be pinned to the very bytes we got; the mime is what the
+          // response claimed, and mimeOf(path) is what the app will serve.
+          text:
+            `fetched ${args.url} → ${url(space, app)}${p} — ${
+              stored(p, got.bytes, sha)
+            }${got.mime ? `, ${got.mime}` : ''}, integrity sha256-${sri(sha)}` +
+            (mimeOf(p) == 'application/octet-stream'
+              ? ' — the app serves it as application/octet-stream; give the ' +
+                'path a known extension to serve it as anything else'
+              : ''),
+          space,
+        }
+      }
       let sent = batch.length ? batch : [{
         path: text(args.path, 'path'),
         bytes: bytesOf(args),
       }]
       let paths = await wrote(ctx.env, space, app, who, sent)
+      // What landed, per file: the measurement the caller checks its own
+      // transcription against.
+      let each = await Promise.all(
+        sent.map(async (f, i) =>
+          stored(paths[i], f.bytes, await sha256(f.bytes))
+        ),
+      )
       return {
         text: paths.length == 1
-          ? `wrote ${paths[0]} → ${url(space, app)}${paths[0]}`
-          : `wrote ${paths.length} files → ${url(space, app)}: ${
-            paths.join(', ')
-          }`,
+          ? `wrote ${paths[0]} → ${url(space, app)}${paths[0]} — ${each[0]}`
+          : `wrote ${paths.length} files → ${url(space, app)}:\n` +
+            paths.map((p, i) => `${p} — ${each[i]}`).join('\n'),
         space,
       }
     },

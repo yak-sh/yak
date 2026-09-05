@@ -273,11 +273,12 @@ export let PAGES: Page[] = [
     slug: 'files',
     title: 'Files and pictures',
     description:
-      'upload() for a file off an <input>: where the bytes are served back ' +
-      'from, the attachment and image rows it writes, the 20 MB ceiling and ' +
-      'the downscale under it, and a gallery that never shows one picture ' +
-      'twice.',
-    brief: 'uploads, pictures, galleries',
+      "app_files for the app's own files — what a write answers, the patch " +
+      'and fetch ops — then upload() for a file off an <input>: where the ' +
+      'bytes are served back from, the attachment and image rows it writes, ' +
+      'the 20 MB ceiling and the downscale under it, and a gallery that ' +
+      'never shows one picture twice.',
+    brief: "the app's files, uploads, pictures, galleries",
   },
   {
     slug: 'tools',

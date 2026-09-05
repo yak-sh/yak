@@ -31,6 +31,7 @@ import {
 import { monthOf } from './meter.ts'
 import { PAGES, uriOf } from './guide.ts'
 import { PROMPTS } from './prompts.ts'
+import { sha256 } from './versions.ts'
 import { VERSION } from '../../src/version.ts'
 
 // The eid a batch minted under an alias, read off the batch AS APPLIED
@@ -445,18 +446,27 @@ slow(
       )
 
       // Files written through the tool serve at the app's address, and the
-      // first app answers the space's bare hostname.
+      // first app answers the space's bare hostname. A write says what it
+      // stored — bytes and sha256 — so a transcription is checked in the
+      // call that made it (T-34337).
       let page = '<!doctype html><h1>Our recipe box</h1>'
       let app = { space: 'jeff', app: 'recipes' }
+      assertEquals(
+        await agent.tool('app_files', {
+          ...app,
+          op: 'write',
+          path: 'index.html',
+          content: page,
+        }),
+        'wrote index.html → https://jeff.yaks.app/recipes/index.html — ' +
+          `${page.length} bytes, sha256 ${await sha256(
+            new TextEncoder().encode(page),
+          )}`,
+      )
+      // And `op` is not needed to say so: path and content ARE the write,
+      // which is what the description always promised (T-34337).
       await agent.tool('app_files', {
         ...app,
-        op: 'write',
-        path: 'index.html',
-        content: page,
-      })
-      await agent.tool('app_files', {
-        ...app,
-        op: 'write',
         path: 'css/site.css',
         content: 'h1{}',
       })
@@ -477,7 +487,12 @@ slow(
             { path: '/img/logo.svg', content: '<svg/>' },
           ],
         }),
-        'wrote 2 files → https://jeff.yaks.app/recipes/: app.js, img/logo.svg',
+        'wrote 2 files → https://jeff.yaks.app/recipes/:\n' +
+          `app.js — 24 bytes, sha256 ${await sha256(
+            new TextEncoder().encode('export let go = () => {}'),
+          )}\nimg/logo.svg — 6 bytes, sha256 ${await sha256(
+            new TextEncoder().encode('<svg/>'),
+          )}`,
       )
       assertEquals(
         await agent.tool('app_files', { ...app, op: 'list' }),
@@ -496,7 +511,10 @@ slow(
         () => agent.tool('app_files', { ...app }),
         Error,
       )
-      assertStringIncludes(lost.message, 'op: one of list, read, write, delete')
+      assertStringIncludes(
+        lost.message,
+        'op: one of list, read, write, patch, fetch, delete',
+      )
       assertStringIncludes(lost.message, 'files: [{path, content}]')
       await assertRejects(
         () => agent.tool('app_files', { ...app, files: [{ path: 'x.js' }] }),
@@ -543,6 +561,69 @@ slow(
         (await k.at('jeff.yaks.app', '/recipes/draft.html')).status,
         404,
       )
+      // A .json write is parsed in the same breath, so a miscounted bracket
+      // is caught in the call that made it rather than once the app serves
+      // broken (T-34337). Both files land — the verdict is a sentence, not a
+      // refusal, since a half-written file is a thing agents write on purpose.
+      assertStringIncludes(
+        await agent.tool('app_files', {
+          ...app,
+          path: 'vocab.json',
+          content: '{"recipe": {"serves": "number"}}',
+        }),
+        '32 bytes, sha256 ',
+      )
+      assertStringIncludes(
+        await agent.tool('app_files', {
+          ...app,
+          path: 'vocab.json',
+          content: '{"recipe": {"serves": "number"}',
+        }),
+        'NOT valid JSON — ',
+      )
+      await agent.tool('app_files', {
+        ...app,
+        op: 'delete',
+        path: 'vocab.json',
+      })
+      // A patch is the read-modify-write loop in one call: exact, and once.
+      assertStringIncludes(
+        await agent.tool('app_files', {
+          ...app,
+          op: 'patch',
+          path: 'index.html',
+          find: 'Our recipe box',
+          replace: 'The recipe box',
+        }),
+        'patched index.html → https://jeff.yaks.app/recipes/index.html — ',
+      )
+      assertEquals(
+        await agent.tool('app_files', {
+          ...app,
+          op: 'read',
+          path: 'index.html',
+        }),
+        '<!doctype html><h1>The recipe box</h1>',
+      )
+      await assertRejects(
+        () =>
+          agent.tool('app_files', {
+            ...app,
+            op: 'patch',
+            path: 'index.html',
+            find: 'Our recipe box',
+            replace: 'x',
+          }),
+        Error,
+        'find matched 0 times in index.html',
+      )
+      await agent.tool('app_files', {
+        ...app,
+        op: 'patch',
+        path: 'index.html',
+        find: 'The recipe box',
+        replace: 'Our recipe box',
+      })
       // A file that is NOT text goes as base64 (T-34263): the `.wasm` an
       // app's worker imports cannot be `content: string`, and a deploy that
       // cannot carry it is a worker compiled from another language that can

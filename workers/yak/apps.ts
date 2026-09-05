@@ -397,8 +397,10 @@ let broken = (body: string) => {
 
 // The ceiling on one upload. A store is not a drive: a page downscales a
 // photo before it sends it (the guide's five lines), and 20 MB of anything
-// else is not what someone meant to put in an app's graph.
-let MAX = 20 * 1024 * 1024
+// else is not what someone meant to put in an app's graph. Exported because
+// `app_files` fetch pulls a file off the web into the same store and must
+// stop in the same place (tools.ts, T-34337).
+export let MAX = 20 * 1024 * 1024
 
 // The bytes' own name (versions.ts `sha256`, the content address a version's
 // manifest is made of) is the object's key AND the entity's eid here, so the

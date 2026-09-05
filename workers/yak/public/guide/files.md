@@ -1,10 +1,50 @@
 # Files and pictures
 
 Bytes are the one thing an app's store does not take in a bundle. This page is
-the file half: what `upload` takes and answers, where the bytes are served from,
-the two rows one upload writes, who may send and who may look, the 20 MB ceiling
-and the downscale that gets a phone photo under it — and a gallery that does not
-show the same picture twice.
+the file half: how you write the app's OWN files with `app_files`, then what
+`upload` takes and answers for the bytes its visitors send, where those are
+served from, the two rows one upload writes, who may send and who may look, the
+20 MB ceiling and the downscale that gets a phone photo under it — and a gallery
+that does not show the same picture twice.
+
+## app_files, and what a write answers
+
+The app's own files — `index.html`, the css and js beside it, `vocab.json` — are
+written with `app_files`. **Bytes are the write**: a `path` and a `content`, or
+a `files: [{path, content}, …]` batch, needs no `op` at all.
+
+**Every write answers what was stored**, so a file transcribed by hand is
+checked in the call that made it rather than once the app serves broken:
+
+    wrote index.html → https://jeff.yaks.app/recipes/index.html
+      — 4213 bytes, sha256 9f2a…
+
+A `.json` file is parsed in the same breath and the answer says `parsed`, or
+says it is not with the position —
+`NOT valid JSON — Expected ',' or '}' after
+property value in JSON at position 45971`
+— which is the bracket, named. The verdict is a sentence, not a refusal: the
+file still lands.
+
+**`op: patch` edits one file in place** — `path`, `find`, `replace`. `find` is
+exact text, not a pattern, and must match exactly once; anything else refuses
+saying how many matches there were, so lengthen `find` until it names one place.
+An empty `replace` removes the text. It is the cheap fix for the one line that
+came out wrong, where the alternative is re-sending the whole file.
+
+**`op: fetch` writes a URL's body to a path** — `path` and `url`, https only,
+under the same 20 MB ceiling. It is how a third-party library is vendored into
+the app rather than transcribed:
+
+    app_files(app, op: 'fetch', path: 'chess.js',
+              url: 'https://cdnjs.cloudflare.com/…/chess.min.js')
+    → fetched … → https://jeff.yaks.app/chess/chess.js — 15234 bytes,
+      sha256 3c1f…, text/javascript, integrity sha256-PB8…=
+
+The `integrity` is the same digest in the spelling a `<script integrity>` wants,
+so a page that goes on loading the file from a CDN can be pinned to the bytes
+this fetch got. What the app SERVES it as comes from the path's extension, not
+from the response — name it `.js` and it is javascript.
 
 ## upload, and what it answers
 
