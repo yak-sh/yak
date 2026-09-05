@@ -118,12 +118,28 @@ different problems:
 Every name in `Layout` is configurable, because the table is often one you
 already have — point it at yours and the existing rows read where they lie.
 
-## What it does not do
+## Searching a body
 
-A swapped column stores its **address**, so an index built directly over that
-column indexes addresses, not words. Point a full-text index at a view that
-resolves the column (the same expression `blobRead` builds), or index the text
-before it is swapped.
+A swapped column stores its **address**, so an index built straight over it
+holds hashes and a search matches titles alone. `blobText(vocab, layout)` is the
+resolution — a `comp.prop` map from the SQL that names an address to the SQL
+that names its text — and both `@yaks/fts` and `@yaks/sqlite` take one:
+
+```ts
+import { fields, schema } from '@yaks/fts'
+import { blobText } from '@yaks/blob'
+
+for (let stmt of schema(fields(vocab), blobText(vocab))) db.exec(stmt)
+// or, for the `doc` index @yaks/sqlite ships:
+// let store = storage(driver, vocab, { text: blobText(vocab) })
+```
+
+The words go into the index on every write path, because it is the table's own
+triggers that resolve them — the plugin's write, a plain `insert`, a restore.
+Resolving there is sound: a blob is immutable and content-addressed, so the
+delete side of an external-content index reads exactly what the insert side did.
+
+## What it does not do
 
 Nothing collects unreferenced bytes. A content-addressed object is cheap, immune
 to a stale reader, and shared by every row that holds the same value, so
@@ -142,6 +158,7 @@ text column holding a hash, and the store is a table of hashes and text.
 | `Blobs`, `address`, `encode`/`decode` | the backend interface and its key           |
 | `sqliteBlobs`, `blobSchema`           | the table backend, and its DDL              |
 | `blobRead(v, layout)`                 | the @yaks/sql read overrides                |
+| `blobText(v, layout)`                 | an address resolved, for a search index     |
 | `hydrate(v, store, bundles)`          | the read side for a non-SQL backend         |
 | `fileBlobs(dir)`                      | the directory backend                       |
 | `objectBlobs(bucket, prefix?)`        | the bucket backend                          |

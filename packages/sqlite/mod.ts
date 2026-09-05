@@ -34,13 +34,13 @@ import type { BindOpts } from '@yaks/sql'
 import type { Bundle, Entity, ReadOpts } from '@yaks/graph'
 import type { Driver, Row } from './driver.ts'
 import type { Query } from './read.ts'
-import { grown, indexed, schema, tabled } from './ddl.ts'
+import { grown, indexed, schema, tabled, type Text } from './ddl.ts'
 import { get, read, rows } from './read.ts'
 import { patch, remove } from './write.ts'
 
 export * from './driver.ts'
 export * from './bundle.ts'
-export { grown, indexed, schema, tabled } from './ddl.ts'
+export { grown, indexed, schema, tabled, type Text } from './ddl.ts'
 export { compSql, get, type Query, read, rows } from './read.ts'
 export { buried, patch, remove } from './write.ts'
 export type { Storage } from '@yaks/graph'
@@ -126,6 +126,16 @@ let unit = <R>(driver: Driver, body: () => R): R => {
 }
 
 /**
+ * What `storage()` is bound with: @yaks/sql's read options (a derived-column
+ * registry, a fixed `now` for time phrases), plus `text` — how a column whose
+ * stored value is not its own words reads as text, which is what keeps the
+ * full-text index holding prose rather than, say, a blob's address
+ * (`blobText(vocab)` from @yaks/blob is one). The read options ride every read;
+ * `text` rides the schema.
+ */
+export type Opts = BindOpts & { text?: Text }
+
+/**
  * Bind a store to a driver and a vocabulary — a {@link Storage} @yaks/graph
  * can apply changes to. `base` options (a derived-column registry, a fixed
  * `now` for time phrases) ride every read; a per-call `opts` merges over them.
@@ -133,7 +143,7 @@ let unit = <R>(driver: Driver, body: () => R): R => {
 export let storage = (
   driver: Driver,
   vocab: Vocab,
-  base: BindOpts = {},
+  base: Opts = {},
 ): Store => {
   let tx: Tx = {
     read: (query, opts) => read(driver, vocab, query, { ...base, ...opts }),
@@ -142,10 +152,10 @@ export let storage = (
     remove: (entities) => remove(driver, vocab, entities),
   }
   return {
-    ddl: () => schema(vocab),
+    ddl: () => schema(vocab, base.text),
     grown: () => grown(driver, vocab),
     install: () => {
-      for (let stmt of tabled(vocab)) driver.exec(stmt)
+      for (let stmt of tabled(vocab, base.text)) driver.exec(stmt)
       // Then the columns a component grew since its table was raised — the half
       // `create table if not exists` cannot say (ddl.ts `grown`), read after
       // the creates so a brand-new table is already there to interrogate.

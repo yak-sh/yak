@@ -31,6 +31,18 @@ export let fields = (vocab: Vocab, pick: Pick = textual): Field[] =>
       .map((c) => ({ comp, prop: c.prop }))
   )
 
+// How a STORED column reads as the text to index, keyed `comp.prop`: given SQL
+// naming the stored value, the entry answers SQL naming the words it stands
+// for. A column with no entry indexes as it stands, which is every ordinary
+// text column.
+//
+// It exists because a value is not always its own text: @yaks/blob swaps a body
+// for its SHA-256 and keeps the prose in a store beside the rows, so a trigger
+// reading the column would index the address. `blobText(vocab)` is a map of
+// this shape, and the type is declared structurally here so this package
+// depends on nothing to accept one.
+export type Text = Record<string, (stored: string) => string>
+
 // One component's search index: the component it mirrors and the columns it
 // covers, in the order they are declared to FTS5.
 export type Index = { comp: string; props: string[] }
@@ -44,3 +56,8 @@ export let indexes = (fields: Field[]): Index[] => {
 
 // The name of the index mirroring a component: `book` → `book_fts`.
 export let indexName = (comp: string): string => `${comp}_fts`
+
+// The name of the view a component reads as TEXT: `doc` → `doc_text`. It exists
+// only for a component some of whose indexed columns resolve (see {@link Text});
+// an index whose columns are their own text mirrors the table itself.
+export let textName = (comp: string): string => `${comp}_text`

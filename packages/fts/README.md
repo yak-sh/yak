@@ -48,10 +48,15 @@ a query without ever calling `find`.
 - **`fields(vocab, pick?)`** reads the text properties off a
   [@yaks/vocab](https://jsr.io/@yaks/vocab) schema. The default takes every
   stored text column; a `pick` narrows it (titles only, say).
-- **`schema(fields)`** emits one FTS5 index per component — external-content, so
-  the prose is never stored twice — plus the three triggers that follow the
-  table. **`heal(db, fields)`** checks each index against its table and rebuilds
-  one that drifted.
+- **`schema(fields, text?)`** emits one FTS5 index per component —
+  external-content, so the prose is never stored twice — plus the three triggers
+  that follow the table. `text` says which columns are not their own words:
+  `@yaks/blob` swaps a body for its SHA-256, and
+  `schema(fields,
+  blobText(vocab))` resolves it in both trigger sides and in
+  the `<comp>_text` view the index reads back through, so the index holds prose
+  rather than hashes. **`heal(db, fields)`** checks each index against its table
+  and rebuilds one that drifted.
 - **`search(fields)`** is the [@yaks/sql](https://jsr.io/@yaks/sql) extension:
   it claims the `text` clause and compiles it to a `match` over every index.
   What a person typed is always spelled as a quoted phrase, so match syntax in a

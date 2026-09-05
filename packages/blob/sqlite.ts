@@ -7,7 +7,9 @@
 // It also gives the read side something no other backend can: the resolution is
 // a SQL EXPRESSION, so a query and a whole-entity gather both read text without
 // a second round trip. {@link blobRead} builds that expression as an @yaks/sql
-// read override, one per content-addressed column.
+// read override, one per content-addressed column; {@link blobText} builds its
+// smaller half — the address alone, resolved — for the places that already hold
+// one, chiefly a full-text index's triggers and the view it reads back through.
 //
 // The table holds TEXT, not bytes — which is what lets the read be an ordinary
 // string expression — so this backend is for prose. Binary content belongs in
@@ -89,15 +91,58 @@ export let sqliteBlobs = (driver: Driver, layout: Layout = {}): Blobs => {
   }
 }
 
+/**
+ * How a stored address reads as its text, keyed `comp.prop`: given SQL naming
+ * the ADDRESS, each entry answers SQL naming the text it stands for. It is the
+ * smaller half of a read override — no entity, no join, just the value — which
+ * is the form a place that already holds the address needs: an FTS5 trigger
+ * (`new."body"`), a view column, a report.
+ *
+ * @yaks/fts and @yaks/sqlite take a map of this shape so their indexes hold
+ * WORDS rather than addresses; both declare it structurally, so neither has to
+ * depend on this package to be handed one.
+ */
+export type Text = Record<string, (address: string) => string>
+
+// The text an address stands for: one row of the blob table, found by its key.
+let textExpr = (l: Named) => (address: string) =>
+  `(select __b.${q(l.value)} from ${q(l.table)} __b` +
+  ` where __b.${q(l.key)} = ${address})`
+
+/**
+ * The resolution of every content-addressed column in a vocabulary, as
+ * {@link Text}. Hand it to `@yaks/sqlite`'s `storage()` (or to @yaks/fts's
+ * `schema()`) and a full-text index over a body column holds the prose instead
+ * of the hash that stands for it:
+ *
+ * ```ts
+ * import { storage } from '@yaks/sqlite'
+ * import { blobText } from '@yaks/blob'
+ *
+ * let store = storage(driver, vocab, { text: blobText(vocab) })
+ * ```
+ *
+ * A blob is immutable and content-addressed, so resolving one in a trigger is
+ * sound: the text an address stands for is the same before and after the row
+ * that names it moves, which is exactly what an external-content index needs
+ * from a delete.
+ */
+export let blobText = (vocab: Vocab, layout: Layout = {}): Text => {
+  let text = textExpr(named(layout))
+  return Object.fromEntries(
+    bodies(vocab).map(({ comp, prop }) => [`${comp}.${prop}`, text]),
+  )
+}
+
 // The read expression for one column: the stored text, found by joining the
 // column's address to the blob table. It is written self-contained — it names
 // its own component table rather than assuming the query joined one — so the
 // same expression serves a membership predicate, a dereferenced path, and a
 // whole-entity gather.
 let readExpr = (l: Named, comp: string, prop: string) => (owner: string) =>
-  `(select __b.${q(l.value)} from ${q(l.table)} __b` +
-  ` where __b.${q(l.key)} = (select __c.${q(prop)} from ${q(comp)} __c` +
-  ` where __c."entity" = ${owner}))`
+  textExpr(l)(
+    `(select __c.${q(prop)} from ${q(comp)} __c where __c."entity" = ${owner})`,
+  )
 
 /**
  * The read side, as @yaks/sql read overrides: one entry per content-addressed

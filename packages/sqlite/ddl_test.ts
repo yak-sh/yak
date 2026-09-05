@@ -51,6 +51,29 @@ Deno.test('a boolean column takes integer affinity, a text column text', () => {
 Deno.test('a doc vocabulary gets a doc_value view and a full-text index', () => {
   assert(all.includes('create view if not exists doc_value'), all)
   assert(/using fts5\(\s*"title", "body"/.test(all), all)
+  // The index reads a column back out of the view, never the table: that is
+  // the one seam a resolved column can be applied at (`snippet`, `rebuild`).
+  assert(all.includes(`content='doc_value', content_rowid='entity'`), all)
+})
+
+// A column whose stored value is not its own words — @yaks/blob swaps a body
+// for its address. Both the view and the two trigger sides resolve it, or the
+// index holds hashes and a search finds a body by its title alone.
+Deno.test('a resolved doc column is read as text by the view and the triggers', () => {
+  let resolved = schema(shop, {
+    'doc.body': (stored) =>
+      `(select "words" from "stash" where "k" = ${stored})`,
+  }).join('\n')
+  assert(resolved.includes(`"k" = "body") as "body"`), resolved)
+  assert(resolved.includes(`"k" = new."body")`), resolved)
+  assert(resolved.includes(`"k" = old."body")`), resolved)
+  // The column that IS its own text is untouched, on both sides.
+  assert(resolved.includes(`coalesce(new."title", '')`), resolved)
+  // And the view still publishes every stored column, since @yaks/sql reads
+  // whole `doc` rows through it.
+  for (let col of ['"entity"', '"title" as "title"', 'as "body"']) {
+    assert(resolved.includes(col), col)
+  }
 })
 
 Deno.test('the statements list in dependency order — spine first', () => {

@@ -288,13 +288,21 @@ Deno.test('the page wire: apply, query and search round-trip', async () => {
 
   // Full text over the docs, and the platform's own rows stay out of the
   // answer: the store minted a `person` row for the writer.
-  //
-  // Over the TITLE only, today: `doc.body` is swapped for its blob address
-  // before the index sees it (@yaks/blob `store: "blob"`), so a word that is
-  // only in the body matches nothing.
   let hits = await page.search('drizzle')
   assertEquals(hits.length, 1)
   assertEquals((hits[0].entity as { eid: string }).eid, eid)
+  // And over the BODY, which is the half a blob address could have eaten:
+  // `doc.body` is swapped for its SHA-256 before the row is written
+  // (@yaks/blob `store: "blob"`), so the index is told how to read one back
+  // (T-33978) — a word only the body says still finds the doc, and the
+  // snippet it comes back with is the prose, not the hash.
+  let deep = await page.search('lemons')
+  assertEquals(deep.length, 1)
+  assertEquals((deep[0].entity as { eid: string }).eid, eid)
+  assert(
+    String((deep[0].rank as { snip: string }).snip).includes('lemons'),
+    JSON.stringify(deep[0].rank),
+  )
   // The store minted a `person` row for the writer, and it is the platform's
   // bookkeeping rather than anything anyone saved: it stays out of a question
   // that did not name it (C-32607 item 4 — `.created!` dragged every one in),

@@ -8,7 +8,7 @@
 import { Database } from '@db/sqlite'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import type { Driver } from './driver.ts'
-import { fields, schema } from './mod.ts'
+import { fields, schema, type Text } from './mod.ts'
 
 // A Driver over a fresh in-memory database.
 export let mem = (): Driver => {
@@ -52,6 +52,15 @@ let doc: VocabDoc = {
 
 export let shop: Vocab = loadVocab(doc)
 
+// A shop whose blurbs live somewhere else: the column holds an ADDRESS and the
+// prose is a row in `stash` under it — @yaks/blob's shape, said here without
+// depending on it, so the index's own half is what the tests exercise.
+export let STASH = `create table stash (key text primary key, words text)`
+export let stashed: Text = {
+  'book.blurb': (address) =>
+    `(select __s."words" from "stash" __s where __s."key" = ${address})`,
+}
+
 // The spine and the two component tables, hand-written: this package indexes
 // tables, it does not create them (that is a storage adapter's job).
 let TABLES = [
@@ -61,17 +70,35 @@ let TABLES = [
   `create table review (entity integer primary key references entity(id), prose text, stars real, book integer references entity(id))`,
 ]
 
-// A stocked shop: the tables, the indexes, and a few rows to find.
-export let shelf = (): Driver => {
+// A stocked shop: the tables, the indexes, and a few rows to find. Pass `text`
+// and the blurbs are stashed under an address instead of written into the row,
+// which is the same shelf seen through a content-addressed column.
+export let shelf = (text: Text = {}): Driver => {
   let db = mem()
-  for (let stmt of [...TABLES, ...schema(fields(shop))]) db.exec(stmt)
+  let away = !!text['book.blurb']
+  for (
+    let stmt of [
+      ...TABLES,
+      ...(away ? [STASH] : []),
+      ...schema(fields(shop), text),
+    ]
+  ) db.exec(stmt)
   let entity = (id: number, eid: string) =>
     db.exec(`insert into entity (id, eid, num) values (${id}, '${eid}', ${id})`)
+  // The address a stashed blurb is written under. Content-addressed for real
+  // is a hash; here it only has to be the same key on both sides.
+  let key = (blurb: string) => `words-${blurb.length}`
   let book = (id: number, title: string, blurb: string, price: number) => {
     entity(id, `book-${id}`)
+    if (away) {
+      db.query(`insert or ignore into stash (key, words) values (?, ?)`, [
+        key(blurb),
+        blurb,
+      ])
+    }
     db.query(
       `insert into book (entity, title, blurb, price) values (?, ?, ?, ?)`,
-      [id, title, blurb, price],
+      [id, title, away ? key(blurb) : blurb, price],
     )
   }
   let review = (id: number, prose: string, of: number) => {

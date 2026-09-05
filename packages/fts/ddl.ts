@@ -14,26 +14,72 @@
 // the same way — the stored text, or '' for a null — and an update is spelled
 // as the delete then the insert.
 //
+// WHEN A COLUMN IS NOT ITS OWN TEXT. @yaks/blob swaps a body for its SHA-256
+// and keeps the prose in a store beside the rows, so a trigger reading the
+// column would index the address and a search would find the body by title
+// alone. A {@link Text} entry says how to resolve one, and it is applied on
+// BOTH sides of the mirror:
+//
+//   - the triggers write the resolved words, so every write path indexes prose
+//     — the plugin's, a plain `insert into doc`, a restore;
+//   - the index's content becomes a VIEW that resolves the same way
+//     (`<comp>_text`), because FTS5 reads the content back for `snippet()` and
+//     for `rebuild`, and both would otherwise answer with the hash.
+//
+// Resolving in a trigger is sound because a blob is immutable and
+// content-addressed: the text an address stands for is the same when the delete
+// side reads it as when the insert side did, which is the whole of what the
+// mirror rule asks. And a body written in the same batch is already there — the
+// bytes go in before the row that names them.
+//
 // `heal()` is the other half. An index that drifts from its table (a trigger
 // that did not run, a file restored around it) answers wrong quietly, so it is
 // checked and rebuilt rather than trusted.
 
-import { type Field, indexes, indexName } from './fields.ts'
+import {
+  type Field,
+  indexes,
+  indexName,
+  type Text,
+  textName,
+} from './fields.ts'
 import type { Driver } from './driver.ts'
 
 let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
 
-// One component's index and the triggers that follow its table.
-let index = (comp: string, props: string[]): string[] => {
+let lit = (s: string): string => s.replaceAll("'", "''")
+
+// One component's index and the triggers that follow its table, plus the view
+// the index reads back through when any of its columns resolves.
+let index = (comp: string, props: string[], text: Text): string[] => {
   let fts = indexName(comp)
   let cols = props.map(q).join(', ')
-  // The values a trigger writes: the stored text, or '' for a null — the index
-  // never holds a null term, and delete must mirror insert exactly.
+  // How one column reads as text, given SQL naming its stored value. Absent a
+  // resolution the value IS the text, which is every ordinary column.
+  let read = (prop: string, stored: string) =>
+    text[`${comp}.${prop}`]?.(stored) ?? stored
+  let resolved = props.filter((p) => text[`${comp}.${p}`])
+  // The values a trigger writes: the column read as text, or '' for a null —
+  // the index never holds a null term, and delete must mirror insert exactly.
   let side = (s: string) =>
-    props.map((p) => `coalesce(${s}.${q(p)}, '')`).join(', ')
+    props.map((p) => `coalesce(${read(p, `${s}.${q(p)}`)}, '')`).join(', ')
+  // What FTS5 reads a column back out of: the table itself, or the view that
+  // resolves it. `<comp>_text` is this package's own name, deliberately not
+  // @yaks/sqlite's `doc_value` — that view is the read source for whole `doc`
+  // rows, and a narrower one standing in its place under `if not exists` would
+  // hide the columns a query needs.
+  let content = resolved.length ? textName(comp) : comp
   return [
+    ...(resolved.length
+      ? [
+        `create view if not exists ${q(content)} as
+      select "entity", ${
+          props.map((p) => `${read(p, q(p))} as ${q(p)}`).join(', ')
+        }, "entity" as rowid from ${q(comp)}`,
+      ]
+      : []),
     `create virtual table if not exists ${q(fts)} using fts5(
-      ${cols}, content='${comp.replaceAll("'", "''")}', content_rowid='entity'
+      ${cols}, content='${lit(content)}', content_rowid='entity'
     )`,
     `create trigger if not exists ${q(`${fts}_insert`)} after insert on ${
       q(comp)
@@ -57,10 +103,13 @@ let index = (comp: string, props: string[]): string[] => {
 }
 
 // The whole search schema for a set of fields, as ordered statements: per
-// component, the index then its three triggers. Run them after the component
-// tables exist — an external-content index names the table it mirrors.
-export let schema = (fields: Field[]): string[] =>
-  indexes(fields).flatMap(({ comp, props }) => index(comp, props))
+// component, its text view where one is needed, then the index and its three
+// triggers. Run them after the component tables exist — an external-content
+// index names the table it mirrors. `text` says which columns are not their own
+// text (`blobText(vocab)` from @yaks/blob is one); with none, every column
+// indexes as it stands.
+export let schema = (fields: Field[], text: Text = {}): string[] =>
+  indexes(fields).flatMap(({ comp, props }) => index(comp, props, text))
 
 // Is this index still telling the truth about its table? Two questions, cheap
 // then thorough: does it hold a row per row of the component, and does FTS5's
