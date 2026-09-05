@@ -44,6 +44,10 @@ In dependency order:
   `edge{from, to}` an entity carries, the id it derives from the sentence it
   states, the relations a vocabulary declares, and traversal — as a walk over
   storage, and as the `@yaks/sql` extension compiling `.reaches`/`.edges`.
+- **[@yaks/effects](./effects)** — what a graph DOES about what it commits:
+  `created`/`changed`/`removed` handlers per component, run after the
+  transaction, each isolated, with an optional durable ledger. The mechanism —
+  it ships no effect of its own.
 - **[@yaks/api](./api)** — the transport: a plain `Request` → `Response` handler
   over a graph (`/apply`, `/query`, `/ws`), where the door authenticates the
   writer, and a subscription is a saved query whose answer is pushed again when
@@ -88,6 +92,10 @@ on its own:
   your entities carry, and a clause compiler registered with `@yaks/sql` — so
   `.reaches[cites,<=3]=p1` is answered by the database rather than by a walk in
   your own code.
+- `@yaks/effects` is the other end of a write: the graph's phases decide what a
+  batch MEANS, and this decides what to do about it once it is true — a
+  notification, a receipt, a spawned process — registered per component, run
+  post-commit, and isolated so a broken observer never breaks a write.
 - `@yaks/api` puts the whole stack behind three routes. It composes
   `@yaks/graph` (for writes) with a storage adapter (for reads) and
   `@yaks/match` (to decide cheaply which subscription a committed batch
