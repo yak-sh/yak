@@ -111,11 +111,11 @@ platform path still loses to it at the door.
 ## Two rules
 
 **It fails open.** The kernel stays the outer router and the front page's worker
-is middleware it consults. One that throws, times out, or answers 404 is
-skipped, and the kernel routes as if it were not there — the request lands on
-the app that owns it, exactly as it did before anyone wrote a `first`. A break
-is recorded as an `exception` on the front page, so `app_errors` lists it and
-the person's agent hears about it (<https://yaks.app/guide/errors.md>).
+is middleware it consults. One that throws, answers 404, or takes longer than a
+second is skipped, and the kernel routes as if it were not there — the request
+lands on the app that owns it, exactly as it did before anyone wrote a `first`.
+A break is recorded as an `exception` on the front page, so `app_errors` lists
+it and the person's agent hears about it (<https://yaks.app/guide/errors.md>).
 
 A broken router means the customizations stop applying. It never means the space
 is down.
