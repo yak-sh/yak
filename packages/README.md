@@ -30,6 +30,9 @@ In dependency order:
 - **[@yaks/fts](./fts)** — full-text search over any text property: the FTS5
   index a vocabulary implies, and the `@yaks/sql` extension that compiles a bare
   word in a query line to a `match`.
+- **[@yaks/match](./match)** — the other evaluator of the same grammar: a
+  `@yaks/query` AST run as a predicate over bundles held in memory, with no
+  database. Tested query by query for parity with `@yaks/sql`.
 
 ## How they compose
 
@@ -48,6 +51,9 @@ on its own:
 - `@yaks/fts` adds search on top: it indexes the text properties and registers a
   clause compiler with `@yaks/sql`, which is the same seam the other search and
   traversal packages use.
+- `@yaks/match` is the path with no storage at all: hand it the same AST and
+  vocabulary and it filters the bundles you already hold, so a saved filter
+  means one thing in the database and in the page.
 
 ## Publishing requirements
 

@@ -1,0 +1,149 @@
+# @yaks/match
+
+Evaluate a [@yaks/query](https://jsr.io/@yaks/query) AST as a predicate over
+entity **bundles held in memory**. No database, no SQL: the same query line a
+server answers from storage, answered from an array.
+
+A query is one grammar with two evaluators. Where the data lives in a database,
+[@yaks/sql](https://jsr.io/@yaks/sql) compiles the query into a statement. Where
+the data is already in hand — a page's local state, a cache, a worker's working
+set, a test fixture — there is nothing to compile against, so this package
+evaluates the same AST directly. A filter written once selects the same entities
+on both sides; that agreement is tested query by query against a real SQLite
+database (`parity_test.ts`).
+
+## Install
+
+```sh
+deno add jsr:@yaks/match
+# or: npx jsr add @yaks/match
+```
+
+## Use
+
+```ts
+import { matcher } from '@yaks/match'
+
+let live = matcher('.status=live&.price<20&.order=-price', vocab)
+live(bundles) // the matching bundles, dearest first
+```
+
+A **bundle** is one entity, whole: its identity under `entity`, every component
+it wears under that component's name — the shape
+[@yaks/graph](https://jsr.io/@yaks/graph) defines and
+[@yaks/sqlite](https://jsr.io/@yaks/sqlite) reads back.
+
+```ts
+{ entity: { eid: 'b1', num: 3 },
+  doc: { title: 'The Left Hand of Spring' },
+  book: { price: 12, status: 'shelved', author: 'a1' } }
+```
+
+`matcher(query, vocab, opts?)` compiles a query into a selection over a bundle
+**set**. The set is the whole world for that run: a reference followed to its
+target, the backlinks of an id, and the children of a reverse hop are all
+answered from it, and an entity it does not hold reads as absent — the same
+answer a missing row gives. Deleted entities (a `tombstone` component, or
+`$delete`) are excluded, the way a database excludes its graves.
+
+`filter(query, vocab, opts?)` compiles the same query into a per-bundle test,
+for a caller re-checking the one bundle that just changed rather than sweeping
+the set:
+
+```ts
+import { filter } from '@yaks/match'
+
+let mine = filter('.status=live&.author=a1', vocab)
+mine(bundle) // does this one belong?
+mine(bundle, everything) // …judged against a set, for references and hops
+```
+
+`opts.now` fixes the moment relative time phrases (`today`, `1 hour ago`)
+resolve against — pass the same value a compiled query is given and both sides
+answer alike.
+
+## The grammar it answers
+
+Everything on @yaks/sql's common path:
+
+- `.p=v` equals · `.p=a,b,c` any-of · `.p=1..5` inclusive range, `1...5`
+  exclusive end · `.p=` absent · `.p!` present · `.p!=v` not · `.p~=v` contains
+  (case-insensitive) · `.p<v .p<=v .p>v .p>=v` comparisons · `.p?` want (a
+  projection request, never a filter).
+- A number column compares numerically, everything else as text; a boolean is
+  read as it is stored (0/1); an operand no number can equal selects nothing.
+- **Time**: a time-typed column reads its operand as a phrase first — a phrase
+  names a span and the operator picks its edge (`=` within, `>=` from the start,
+  `<=` until the end, `>` and `<` strictly outside) — and falls back to the
+  plain rules when the operand is no phrase.
+- **Kinds**: `.kind=book` — the entity wears that kind and every kind sorting
+  before it is absent.
+- **References**: `.author=a1`, and dereference paths through them,
+  `.book.author.doc.title~=vale`.
+- **Reverse hops**: `.reviews!` has one, `.reviews=` has none, `.reviews>=5` a
+  count, `.reviews.stars=5` an existential over a filtered child.
+- **Backlinks**: `.refs=<id>` — every entity holding a reference to that one.
+- **Bare words**: a full-text term over every stored text or body column, by
+  whole word (so `cat` does not find "catalogue"); a trailing `*`
+  prefix-matches, and quoting glues a phrase.
+- **Ordering and windows**: `.order=field`, `-field` descending, `.limit=n`,
+  `.after=num`.
+
+## Ordering
+
+`.order=` sorts by a column, absent values first, then numbers, then text — the
+order a SQL `ORDER BY` gives over the same values; ties keep the order the
+bundles were given. A `.limit`/`.after` window pages newest-first by entity
+number and overrides any `.order=`, exactly as the compiled statement does.
+
+With no ordering directive the bundles come back in the order they were given. A
+database leaves that order to its query plan, so **membership** is what the two
+evaluators promise there, and order is promised for the queries that ask for
+one.
+
+## Declines
+
+A question this package cannot answer **exactly** throws
+[`Unsupported`](https://jsr.io/@yaks/sql/doc/~/Unsupported) — the same error
+@yaks/sql throws (its `by` field names which package refused), so a caller with
+both has one decline contract and one `catch`. Every decline happens when the
+query is compiled, before a bundle is read:
+
+- **`.near`** — nearest-neighbour needs vectors; **`.edges!`** and `.reaches`
+  need a stored link table. None of that rides in a bundle.
+- **`.count!`, `.distinct=`, `.tally=`** — an aggregate is a row shape, not a
+  selection of entities. Count what comes back instead.
+- **A computed column** (`persist: false` in the vocabulary) — its value is
+  derived elsewhere and no bundle holds it. (@yaks/sql takes an expression for
+  these through its `derived` hook; there is no in-memory equivalent yet.)
+- **`.refs!` / `.refs=`** (presence and absence) — only `.refs=<id>` is a
+  question about backlinks.
+- **A predicate the column's type cannot answer** — `.price>cheap`, a comparison
+  against a number the column cannot hold — and **a path whose root is not a
+  reference**, and **a reverse hop** that is neither a count nor a child filter.
+
+Two places where it deliberately answers MORE than @yaks/sql, both because a
+JavaScript evaluator can and SQLite cannot:
+
+- `~=` with a non-ASCII needle. SQLite's `lower()` folds ASCII only, so the SQL
+  compiler refuses rather than answer almost-right; here the fold is
+  JavaScript's own.
+- A bare word searches every stored text column. @yaks/sql's built-in SQLite
+  lowering searches one `doc` index, so bare-word parity holds for a vocabulary
+  whose prose lives in `doc`, or for a compile that registers
+  [@yaks/fts](https://jsr.io/@yaks/fts) (whose default field choice is the one
+  used here). Word breaking and case folding are JavaScript's; text outside the
+  ASCII alphabet is where an index and this package can part.
+
+## Compatibility
+
+Pure TypeScript. It imports no platform API — no `Deno`, no Node built-in, no
+DOM global — and type-checks under `lib: ["dom", "esnext"]`, so it runs
+unchanged in a **browser**, on **Deno**, and on **Node** (via JSR / npm). Its
+only dependencies are the sibling packages: a `@yaks/query` AST, a `@yaks/vocab`
+schema, `@yaks/graph`'s bundle types, and `@yaks/sql`'s `Unsupported` and column
+type categories.
+
+## License
+
+Apache-2.0

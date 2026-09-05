@@ -27,6 +27,7 @@
     "./packages/names",
     "./packages/sql",
     "./packages/sqlite",
+    "./packages/match",
     "./packages/graph",
     "./packages/durable-object",
     "./packages/d1",
