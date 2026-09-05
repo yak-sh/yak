@@ -2545,49 +2545,35 @@ Deno.test('loaded: a row no projected sub holds is full', () => {
 // T-21283: a per-rendered-row reverse-lookup (commentCount on every tile) must
 // NEVER open a per-entity server sub — that scales with rows on screen and
 // floods the leader (1363 subs measured). ONE shared aggregate sub serves every
-// tile: the first read may open it; later reads — any target — open nothing.
+// tile, opened once at boot beside the socket — so a READ, any target, opens
+// nothing at all (T-33921: it used to open on first read, from inside the
+// computed, which dialled the wire from a render).
 Deno.test('commentCount shares one aggregate sub across targets (T-21283)', () => {
-  let RealWS = (globalThis as { WebSocket: unknown }).WebSocket
-  ;(globalThis as { WebSocket: unknown }).WebSocket = class {
-    readyState = 0
-    onopen: unknown = null
-    onmessage: unknown = null
-    onclose: unknown = null
-    send() {}
-    addEventListener() {}
-    close() {}
-  }
   let probe =
     (globalThis as unknown as { __probe: { subN: () => number } }).__probe
   let X = 'cccc0000-0000-4000-8000-000000000001'
   let Y = 'cccc0000-0000-4000-8000-000000000002'
+  cache.value = {
+    [X]: { entity: { eid: X, num: 1 }, canvas: { eid: X } },
+    c1: { entity: { eid: 'c1', num: 2 }, comment: { eid: 'c1', target: X } },
+    c2: { entity: { eid: 'c2', num: 3 }, comment: { eid: 'c2', target: X } },
+  }
+  // Count every frame that leaves while the tallies are read: NOTHING may.
+  let sent = 0
+  let restore = useRoute(() => sent++)
+  let n0 = probe.subN()
   try {
-    cache.value = {
-      [X]: { entity: { eid: X, num: 1 }, canvas: { eid: X } },
-      c1: { entity: { eid: 'c1', num: 2 }, comment: { eid: 'c1', target: X } },
-      c2: { entity: { eid: 'c2', num: 3 }, comment: { eid: 'c2', target: X } },
-    }
-    // Prime the shared agg sub (idempotent across the file), then count every
-    // subscribe frame that leaves: per-target reads must send NOTHING.
     assertEquals(commentCount(X).value, 2)
-    let sent = 0
-    let restore = useRoute(() => sent++)
-    let n0 = probe.subN()
-    try {
-      assertEquals(commentCount(X).value, 2)
-      assertEquals(commentCount(Y).value, 0)
-      assertEquals(sent, 0)
-      assertEquals(probe.subN(), n0)
-      // A defining presence query DOES open its (bounded) server sub.
-      let preds = resolveRefs(parseQuery('.canvas!'), findEid)
-      holdQuery(preds)
-      assertEquals(probe.subN(), n0 + 1)
-      dropQuery(preds)
-    } finally {
-      useRoute(restore)
-    }
+    assertEquals(commentCount(Y).value, 0)
+    assertEquals(sent, 0)
+    assertEquals(probe.subN(), n0)
+    // A defining presence query DOES open its (bounded) server sub.
+    let preds = resolveRefs(parseQuery('.canvas!'), findEid)
+    holdQuery(preds)
+    assertEquals(probe.subN(), n0 + 1)
+    dropQuery(preds)
   } finally {
-    ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
+    useRoute(restore)
   }
 })
 

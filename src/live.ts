@@ -2617,7 +2617,7 @@ export let boot = async () => {
     await once()
     await attachStore()
     connect()
-    return
+    return openCommentTally()
   }
   let nav = (globalThis as { navigator: Navigator }).navigator
   let bus = new BroadcastChannel('tasks-sync')
@@ -2661,6 +2661,9 @@ export let boot = async () => {
   )
   addEventListener('pagehide', owner.leave)
   await owner.start()
+  // The tally rides the transport, so it opens once the topology exists: a
+  // follower asks through its leader, never a socket of its own.
+  openCommentTally()
 }
 ;(globalThis as {
   __sync?: () => {
@@ -3172,19 +3175,28 @@ type AggSet = {
   live: Signal<boolean>
   map: Signal<Record<string, number>>
   line: string
+  open: boolean
   n: number
 }
 let aggSets = new Map<string, AggSet>()
-// Get-or-open, and RE-ASK when the line moved under a name that is already open
-// (a board's query edited beneath its tile). Re-asking keeps the SAME set, so
-// every reader stays bound to it and simply sees the answer go un-live and then
-// land again — the way boardQuery replaces a member sub without tearing down
-// its ownership.
-let aggQuery = (name: string, line: string): AggSet => {
+// The local half: get-or-make the set a reader binds to. Bookkeeping only — it
+// dials nothing, so a render may reach it.
+let aggSet = (name: string, line: string): AggSet => {
   let found = aggSets.get(name)
-  if (!found) {
-    found = { live: signal(false), map: signal({}), line, n: 0 }
-    aggSets.set(name, found)
+  if (found) return found
+  found = { live: signal(false), map: signal({}), line, open: false, n: 0 }
+  aggSets.set(name, found)
+  return found
+}
+// The wire half: ask the server for the set, and RE-ASK when the line moved
+// under a name that is already open (a board's query edited beneath its tile).
+// Re-asking keeps the SAME set, so every reader stays bound to it and simply
+// sees the answer go un-live and then land again — the way boardQuery replaces
+// a member sub without tearing down its ownership.
+let aggQuery = (name: string, line: string): AggSet => {
+  let found = aggSet(name, line)
+  if (!found.open) {
+    found.open = true
     ownBoard(name, line)
   } else if (found.line != line) {
     found.line = line
@@ -3194,9 +3206,16 @@ let aggQuery = (name: string, line: string): AggSet => {
   }
   return found
 }
+// boot() OPENS the tally, beside the socket it rides; a tile only READS the
+// shared map. A read must not open it (T-33921): the read is a computed, so
+// dialling the wire from inside it subscribes mid-diff — and in a process that
+// named no server (a bench, a test) reaches for one it was never given.
+let COMMENTS = 'agg:comments'
+let COMMENT_TALLY = '.comment!&.tally=comment.target'
+let openCommentTally = () => void aggQuery(COMMENTS, COMMENT_TALLY)
 export let commentCount = (target: string): Signal<number> =>
   computed(() => {
-    let t = aggQuery('agg:comments', '.comment!&.tally=comment.target')
+    let t = aggSet(COMMENTS, COMMENT_TALLY)
     return t.live.value
       ? t.map.value[target] ?? 0
       : localEids([eq('comment', 'target', target)]).value.length

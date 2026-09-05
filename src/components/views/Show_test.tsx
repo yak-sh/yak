@@ -4,7 +4,7 @@
 // never on a bare call's vnode tree.
 import { h } from 'preact'
 import { assertEquals, assertExists } from '@std/assert'
-import { cache, deps, ent, useRoute } from '../../live.ts'
+import { cache, config, deps, dropAgg, ent, useRoute } from '../../live.ts'
 import { resolve } from '../registry.ts'
 import { mount } from '../mount.ts'
 import '../Entity.tsx'
@@ -72,6 +72,44 @@ Deno.test('document meta paints no tally when it has no comments', () => {
   assertEquals(root.querySelector('.Show_Comments'), null)
   free()
   cache.value = {}
+})
+
+// T-33921: a row render reaches NO transport. The comment tally is the
+// client's one aggregate, opened at boot beside the socket it rides; a tile
+// only reads the shared map, with the local working-set count until the server
+// answers. It used to open from inside commentCount's computed — a wire dial
+// mid-diff, which in a process that named no server (a bench, a test) reached
+// for one it was never given.
+Deno.test('the meta row renders its tally without reaching live', () => {
+  let host = config.host
+  config.host = ''
+  // Cold: whatever an earlier mount left open, the render below must face an
+  // unopened tally and still open nothing.
+  dropAgg('agg:comments')
+  let restore = useRoute(() => {
+    throw new Error('a row render reached the transport')
+  })
+  cache.value = {
+    task: {
+      entity: { eid: 'task', num: 1 },
+      doc: { eid: 'task', title: 'Talked about', body: '' },
+      task: { eid: 'task', priority: 1 },
+    },
+    c1: {
+      entity: { eid: 'c1', num: 2 },
+      comment: { eid: 'c1', target: 'task' },
+    },
+  }
+  let e = ent('task')
+  let { root, free } = mount(h(resolve(e, 'Meta').Render, { e, id: true }))
+  try {
+    assertEquals(root.querySelector('.Show_Comments')?.textContent, '1')
+  } finally {
+    free()
+    useRoute(restore)
+    config.host = host
+    cache.value = {}
+  }
 })
 
 Deno.test('empty document meta remains a first-class null', () => {
