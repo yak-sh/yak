@@ -20,8 +20,8 @@
 //   - `.near` / `.edges` / `.reaches` throw Unsupported through the adapter — the
 //     app compiles these (sql.ts), @yaks/sql does not, so a no-fallback read-path
 //     swap is blocked on them (filed under V-33493).
-//   - A reverse-hop (`.comments`) declines as a plain routing Error, not
-//     Unsupported — the decline contract leaks (filed).
+//   - The reverse-hop grammar (`.comments!`, `.comments>=5`, `.comments.<path>`)
+//     compiles and agrees with the app (T-33540).
 //   - `read()` gathers doc.body straight off the `doc` table, but the app stores
 //     body as a blob_text FK behind the `doc_value` view, so a gathered bundle's
 //     doc.body is the blob's integer id, not the text (filed).
@@ -206,21 +206,25 @@ Deno.test('gap: advanced directives decline through the adapter', () => {
   }
 })
 
-Deno.test('gap: a reverse-hop declines, but NOT as Unsupported', () => {
-  // The app's grammar has `.comments` (reverse of comment.target); @yaks/vocab's
-  // forward routing has no such name, so aim() throws a plain "unknown prop"
-  // Error — the honest-decline contract (catch Unsupported) does not cover it.
-  let threw: unknown
-  try {
-    compile(parse('.comments>=5'), V, { derived: fleetDerived, now: NOW })
-  } catch (e) {
-    threw = e
-  }
-  assert(threw instanceof Error, 'reverse-hop must throw')
-  assert(
-    !(threw instanceof Unsupported),
-    'reverse-hop leaks a non-Unsupported Error',
-  )
+Deno.test('spike: the reverse-hop grammar agrees with the app', () => {
+  // `.comments` is the reverse of comment.target — the association @yaks/vocab
+  // derives from the reference columns and @yaks/sql compiles as a correlated
+  // EXISTS/count, the same shape src/sql.ts's revSql builds. Presence, absence,
+  // cardinality and a child filter, each held against the app's own reader.
+  for (
+    let q of [
+      '.comments!',
+      '.comments=',
+      '.comments>=1',
+      '.comments>=5',
+      '.comments.doc.title~=alpha',
+      '.comments.doc.title~=nothing',
+      '.comments!&.status=open',
+    ]
+  ) agree(q)
+  // and the agreement is not vacuous: the seeded comment puts T1 in the set
+  assertEquals(mine('.comments!'), [T1])
+  assertEquals(mine('.comments.doc.title~=alpha'), [T1])
 })
 
 Deno.test('gap: read() gathers doc.body off the wrong layout', () => {

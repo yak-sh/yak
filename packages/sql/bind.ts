@@ -11,17 +11,17 @@
 //
 // Scope. The COMMON query path is here and exact: predicates (every operator),
 // any-of lists, ranges, time phrases, boolean composition, reference-deref
-// paths, full-text terms, the `.kind` scope, presence/absence, ordering,
+// paths, reverse hops (`.reviews!`, `.reviews>=5`, `.reviews.stars=5`),
+// full-text terms, the `.kind` scope, presence/absence, ordering,
 // `.limit`/`.after` windows, `.count`/`.distinct`/`.tally` aggregates,
 // `.fields` projections, and the `.refs=` backlink union. A column the schema
 // marks computed (`persist: false`) reads through the DERIVED hook or, absent a
 // registration, DECLINES — the binder never invents a value it cannot read.
 //
 // What is NOT here declines LOUDLY (an `Unsupported` throw, never a silent
-// wrong answer): the `.near` KNN, the `.edges`/`.reaches` graph walks and the
-// lazy entry partition they read (their edge-nature normalization is
-// application logic the vocab does not carry), and the reverse-hop grammar (`.comments`,
-// `.comments>=5`), which @yaks/vocab's forward `aim` does not resolve.
+// wrong answer): the `.near` KNN and the `.edges`/`.reaches` graph walks and the
+// lazy partition they read (their edge-nature normalization is application
+// logic the vocab does not carry).
 
 import type {
   After,
@@ -39,17 +39,19 @@ import type {
   Tally,
   Value,
 } from '@yaks/query'
-import type { Hop, Vocab } from '@yaks/vocab'
+import type { Assoc, Hop, Vocab } from '@yaks/vocab'
 import {
   and,
   type Cond,
   FALSE,
   type Frag,
   type Join,
+  joined,
   or,
   raw,
   type Rel,
   rel,
+  renderCond,
   TRUE,
 } from './ir.ts'
 import { type Dialect, sqlite, type Tag, tagOf } from './sqlite.ts'
@@ -321,6 +323,81 @@ let refsUnion = (ctx: Ctx, r: Refs): Cond => {
   })
 }
 
+// The LEFT joins for the tables a bind touched, keyed on the row they hang off:
+// the spine for a membership, the child table inside a reverse hop's subquery
+// (which is the FROM there, so it is never re-joined).
+let joinsOf = (ctx: Ctx, base = 'entity'): Join[] =>
+  [...ctx.tables]
+    .filter((t) => t != 'entity' && t != base)
+    .map((t) => ({ source: ctx.d.table(t), on: ctx.d.joinOn(t, base) }))
+
+// The operators a cardinality test compares its count with.
+let COUNT_OPS: Record<string, string> = {
+  '=': '=',
+  '!=': '!=',
+  '<': '<',
+  '<=': '<=',
+  '>': '>',
+  '>=': '>=',
+}
+
+// A REVERSE HOP: the entities whose child rows point back at them, named by the
+// vocab's derived association (`.reviews` = the reviews whose `book` is this
+// row). `.reviews!` is presence, `.reviews=` absence, `.reviews>=5` a
+// cardinality test, and `.reviews.stars=5` an existential over a filtered child.
+//
+// Each compiles to a correlated EXISTS (or count) over the child's reference
+// column — an index search per candidate rather than a join that widens the
+// selection. A child filter rides the SAME clause compiler over the child row,
+// so anything that declines there declines the whole hop and exactness holds
+// across the correlation. A child predicate naming the spine declines outright:
+// inside the subquery `entity` is the correlation to the OUTER row, so binding
+// it there would silently ask a different question.
+let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Cond => {
+  let child = ctx.d.table(a.comp)
+  let corr = `"${a.comp}"."${a.prop}" = "entity"."id"`
+  let rest = p.path.slice(1)
+  let value = flat(p.value)
+  if (!rest.length) {
+    if (p.op == '!' || (p.op == '~=' && !value)) {
+      return raw({
+        sql: `exists (select 1 from ${child} where ${corr})`,
+        params: [],
+      })
+    }
+    if (p.op == '=' && !value) {
+      return raw({
+        sql: `not exists (select 1 from ${child} where ${corr})`,
+        params: [],
+      })
+    }
+    let op = COUNT_OPS[p.op]
+    if (!op || !/^\d+$/.test(value)) {
+      throw new Unsupported(
+        'a reverse hop',
+        `.${name}${p.op}${value} is neither a count nor a child filter`,
+      )
+    }
+    return raw({
+      sql: `(select count(*) from ${child} where ${corr}) ${op} ?`,
+      params: [Number(value)],
+    })
+  }
+  if (ctx.v.aim(rest.join('.')).some((h) => h.comp == 'entity')) {
+    throw new Unsupported(
+      'a reverse hop through the spine',
+      `.${name}.${rest.join('.')}`,
+    )
+  }
+  let sub: Ctx = { ...ctx, tables: new Set() }
+  let inner = renderCond(clause(sub, { ...p, path: rest }))
+  return raw({
+    sql: `exists (select 1 from ${child}${joined(joinsOf(sub, a.comp))}` +
+      ` where ${corr}${inner.sql == '1' ? '' : ` and ${inner.sql}`})`,
+    params: inner.params,
+  })
+}
+
 // One filter clause to a condition. Directives are stripped before this runs.
 let clause = (ctx: Ctx, c: Clause): Cond => {
   if (c.kind == 'never') return FALSE
@@ -335,6 +412,10 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
     if (c.path[0] == 'kind' && c.path.length == 1) {
       return kindScope(ctx, flat(c.value))
     }
+    // A plural leading the path is a reverse association, read from the far
+    // side; anything else routes forward through the vocab.
+    let assoc = ctx.v.assoc(c.path[0])
+    if (assoc) return reverse(ctx, c.path[0], assoc, c)
     let hops = ctx.v.aim(c.path.join('.'))
     return hops.length == 1 ? single(ctx, hops[0], c) : path(ctx, hops, c)
   }
@@ -357,12 +438,6 @@ let DIRECTIVES = new Set([
 ])
 let find = <T extends Clause>(cs: Clause[], kind: string): T | undefined =>
   cs.find((c) => c.kind == kind) as T | undefined
-
-// The LEFT joins for the tables a bind touched.
-let joinsOf = (ctx: Ctx): Join[] =>
-  [...ctx.tables]
-    .filter((t) => t != 'entity')
-    .map((t) => ({ source: ctx.d.table(t), on: ctx.d.joinOn(t, 'entity') }))
 
 // A path resolved for a directive value (order, fields): its column expression.
 let resolveField = (

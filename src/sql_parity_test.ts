@@ -107,6 +107,8 @@ put('e9', {
   cancelled: { at: '2026-08-03T00:00:00.000Z', by: null, reason: 'superseded' },
 })
 put('e8', { proposed: { at: '', by: null, via: null } })
+put('c1', { doc: { title: 'a note on alpha' }, comment: { target: 'e1' } })
+put('c2', { doc: { title: 'a second note' }, comment: { target: 'e1' } })
 put('pt', { task: { priority: 1, domain: '' }, project: {} })
 
 // ---- the two compilers, one graph ------------------------------------------
@@ -164,6 +166,15 @@ let CORPUS = [
   // reference-deref path (task.project → doc.title)
   '.task.project.doc.title~=project',
   '.task.project.doc.title~=nothing',
+  // reverse hop (comment.target seen from the far side): presence, absence,
+  // cardinality, and a filter over the child row
+  '.comments!',
+  '.comments=',
+  '.comments=2',
+  '.comments>=1',
+  '.comments>=5',
+  '.comments.doc.title~=note',
+  '.comments.doc.title~=nothing',
   // full-text
   'widget',
   'gamma',

@@ -36,6 +36,13 @@ let doc: VocabDoc = {
         status: { enum: ['open', 'wip', 'done'], persist: false },
       },
     },
+    note: {
+      type: 'object',
+      properties: {
+        about: { type: 'string', ref: 'entity', death: 'cascade' },
+        stars: { type: 'number' },
+      },
+    },
   },
 }
 let v = loadVocab(doc)
@@ -83,6 +90,45 @@ Deno.test('the .kind scope expands to present-and-earlier-absent', () => {
   let { sql } = compile(parse('.kind=doc'), v)
   assert(sql.includes('"doc"."entity" is not null'), sql)
   assert(sql.includes('"task"."entity" is null'), sql)
+})
+
+Deno.test('a reverse hop compiles to a correlated EXISTS', () => {
+  let { sql, params } = compile(parse('.notes!'), v)
+  assert(
+    sql.includes('exists (select 1 from "note" where "note"."about" ='),
+    sql,
+  )
+  assertEquals(params, [])
+  assert(compile(parse('.notes='), v).sql.includes('not exists'), 'absence')
+})
+
+Deno.test('a reverse cardinality binds its count', () => {
+  let { sql, params } = compile(parse('.notes>=5'), v)
+  assert(sql.includes('count(*) from "note"'), sql)
+  assert(sql.includes(') >= ?'), sql)
+  assertEquals(params, [5])
+})
+
+Deno.test('a reverse child filter screens the child row', () => {
+  let { sql, params } = compile(parse('.notes.stars=5'), v)
+  assert(sql.includes('"note"."stars" = ?'), sql)
+  assertEquals(params, [5])
+  // a child column in another component is LEFT JOINed inside the subquery
+  let joinSql = compile(parse('.notes.title~=hi'), v).sql
+  assert(
+    joinSql.includes(
+      'left join "doc_value" as "doc" on "doc"."entity" = ' +
+        '"note"."entity"',
+    ),
+    joinSql,
+  )
+})
+
+Deno.test('a reverse hop with no count and no child filter declines', () => {
+  let e = assertThrows(() => compile(parse('.notes~=lots'), v), Unsupported)
+  assertEquals((e as Unsupported).feature, 'a reverse hop')
+  // and one reaching for the spine, whose name means the OUTER row down there
+  assertThrows(() => compile(parse('.notes.num=3'), v), Unsupported)
 })
 
 Deno.test('an unreachable directive throws Unsupported naming the feature', () => {

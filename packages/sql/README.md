@@ -63,15 +63,34 @@ compile(ast, vocab, { derived })
 ## Honest coverage
 
 The common query path is exact: predicates (every operator), any-of lists,
-ranges, time phrases, boolean composition, reference-deref paths, full-text
-terms, the `.kind` scope, presence/absence, ordering, `.limit`/`.after` windows,
-`.count`/`.distinct`/`.tally` aggregates, `.fields` projections, and the
-`.refs=` backlink union.
+ranges, time phrases, boolean composition, reference-deref paths, reverse hops,
+full-text terms, the `.kind` scope, presence/absence, ordering,
+`.limit`/`.after` windows, `.count`/`.distinct`/`.tally` aggregates, `.fields`
+projections, and the `.refs=` backlink union.
 
 Advanced directives it cannot yet reach throw **`Unsupported`** rather than
 answer almost-right — a caller catches it to fall back to a JS matcher or to
-report the gap. The current gaps are the `.near` KNN, the `.edges`/`.reaches`
-graph walks, and the reverse-hop grammar (`bind.ts` has the exact list).
+report the gap. The current gaps are the `.near` KNN and the `.edges`/`.reaches`
+graph walks (`bind.ts` has the exact list).
+
+## Reverse hops
+
+A reference column is a name on the far side too: with a `review` component
+whose `book` column points at a book, `@yaks/vocab` derives the association
+`.reviews`, and this package compiles it as a correlated `EXISTS` (or `count`)
+over that column — an index search per candidate, never a widening join.
+
+```
+.reviews!          the books that have a review
+.reviews=          the books that have none
+.reviews>=5        five or more reviews
+.reviews.stars=5   a review of five stars exists
+```
+
+A child filter rides the same compiler over the child row, so a clause that
+declines there declines the whole hop; a child predicate naming the spine
+declines too, since inside the subquery that name is the correlation to the
+outer row.
 
 ## Compatibility
 
