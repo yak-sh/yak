@@ -19,6 +19,11 @@
 // A registered expression is what lets a computed column (a status rolled up
 // from other rows, say) compile through the index instead of a JS scan.
 //
+// A clause this package declines may still be answered by ANOTHER package: an
+// `Extension` (./extend.ts) claims a clause kind and lowers it to a condition
+// over the same IR. That is the seam a full-text, vector, or graph-walk package
+// registers through — `compile(ast, vocab, { extend: [...] })`.
+//
 // Coverage is stated plainly. The common query path is exact — reverse hops
 // (`.reviews>=5`, `.reviews.stars=5`) included; the advanced directives it
 // cannot yet reach throw `Unsupported` rather than answer almost-right — see
@@ -33,6 +38,7 @@ import { type Frag, render } from './ir.ts'
 export * from './ir.ts'
 export * from './sqlite.ts'
 export * from './derived.ts'
+export * from './extend.ts'
 export { bind, type BindOpts, Unsupported } from './bind.ts'
 
 // The compiled statement: a SQL string and the params it binds, in order.
@@ -40,8 +46,9 @@ export type Compiled = { sql: string; params: Frag['params'] }
 
 // Compile an AST against a vocabulary to SQL + params. `opts.dialect` chooses
 // the backend (SQLite by default), `opts.derived` supplies computed-column
-// expressions, `opts.now` fixes the moment a time phrase resolves against.
-// Throws `Unsupported` for a clause outside the common path.
+// expressions, `opts.extend` registers other packages' clause compilers, and
+// `opts.now` fixes the moment a time phrase resolves against. Throws
+// `Unsupported` for a clause outside the common path that nothing claims.
 export let compile = (
   ast: And,
   vocab: Vocab,

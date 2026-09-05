@@ -60,6 +60,50 @@ let derived: Derived = {
 compile(ast, vocab, { derived })
 ```
 
+## The extension seam
+
+Some clauses need machinery this package does not own — a full-text term needs a
+search index, `.near` needs vectors, `.edges` needs a link table. Each of those
+lives in its own package, and each contributes one thing: how ITS clause becomes
+a condition over this IR.
+
+An **`Extension`** (`extend.ts`) is that contribution, registered the way a
+plugin contributes a vocabulary — a named object passed to `compile`:
+
+```ts
+import { compile, type Extension, raw } from '@yaks/sql'
+
+let shelves: Extension = {
+  name: 'shelves',
+  compile: {
+    // one entry per clause kind it claims; `null` declines
+    text: (clause, site) =>
+      clause.kind == 'text'
+        ? raw({
+          sql: `${site.owner} in (select entity from "shelf" where label = ?)`,
+          params: [clause.value],
+        })
+        : null,
+  },
+}
+compile(ast, vocab, { extend: [shelves] })
+```
+
+The contract, whole:
+
+- A compiler takes the clause and a **`Site`** — the bound `vocab`, the
+  `dialect`, `now`, `owner` (the SQL naming this row's integer id), and
+  `join(comp)`, which pulls a component table into the statement as a LEFT join
+  and answers its owner column.
+- It returns a `Cond` (build one with `raw`/`and`/`or`/`not` from `ir.ts`), or
+  `null` to **decline** — the binder then compiles the clause itself, or refuses
+  it as `Unsupported`.
+- Extensions run in registration order, first non-null wins, and always **before
+  the built-in** compilation, so one may replace a built-in lowering as well as
+  supply a missing one.
+- Claiming a directive kind that would otherwise decline (`near`, `edges`,
+  `reaches`) makes it compile as a filter instead of throwing.
+
 ## Honest coverage
 
 The common query path is exact: predicates (every operator), any-of lists,

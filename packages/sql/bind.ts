@@ -9,6 +9,11 @@
 // algebraic condition tree. Swap the dialect and the same AST binds against a
 // different store.
 //
+// A clause this compiler cannot answer alone may still be answered by another
+// PACKAGE: an `Extension` (./extend.ts) claims a clause kind and lowers it to a
+// condition over the same IR. Extensions are consulted before the built-in
+// compilation, and a claimed directive stops declining.
+//
 // Scope. The COMMON query path is here and exact: predicates (every operator),
 // any-of lists, ranges, time phrases, boolean composition, reference-deref
 // paths, reverse hops (`.reviews!`, `.reviews>=5`, `.reviews.stars=5`),
@@ -56,6 +61,7 @@ import {
 } from './ir.ts'
 import { type Dialect, sqlite, type Tag, tagOf } from './sqlite.ts'
 import type { Derived } from './derived.ts'
+import type { Extension, Site } from './extend.ts'
 
 // Thrown for a clause the binder cannot express EXACTLY. A caller catches it to
 // fall back to a JS matcher, or to report the gap.
@@ -71,18 +77,46 @@ export class Unsupported extends Error {
 export type BindOpts = {
   dialect?: Dialect
   derived?: Derived
+  extend?: Extension[]
   now?: number
 }
 
 // The mutable knot a single bind threads: the schema, the dialect, the derived
-// registry, the reference moment, and the growing set of component tables to
-// LEFT JOIN. Everything else is a pure function of a clause.
+// registry, the contributed compilers, the reference moment, and the growing
+// set of component tables to LEFT JOIN. Everything else is a pure function of a
+// clause.
 type Ctx = {
   v: Vocab
   d: Dialect
   derived: Derived
+  ext: Extension[]
   now: number
   tables: Set<string>
+}
+
+// The extension seam, both halves. `claims` answers whether any registered
+// extension speaks for a clause kind (so a directive that would decline stops
+// declining); `extended` runs them in registration order, first non-null wins.
+let claims = (ctx: Ctx, kind: Clause['kind']): boolean =>
+  ctx.ext.some((e) => e.compile[kind])
+
+let site = (ctx: Ctx): Site => ({
+  vocab: ctx.v,
+  dialect: ctx.d,
+  now: ctx.now,
+  owner: ctx.d.ownerKey('entity'),
+  join: (comp) => {
+    ctx.tables.add(comp)
+    return ctx.d.ownerKey(comp)
+  },
+})
+
+let extended = (ctx: Ctx, c: Clause): Cond | null => {
+  for (let e of ctx.ext) {
+    let cond = e.compile[c.kind]?.(c, site(ctx))
+    if (cond) return cond
+  }
+  return null
 }
 
 // A structured @yaks/query value flattened back to the one string the dialect's
@@ -400,6 +434,8 @@ let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Cond => {
 
 // One filter clause to a condition. Directives are stripped before this runs.
 let clause = (ctx: Ctx, c: Clause): Cond => {
+  let ext = extended(ctx, c)
+  if (ext) return ext
   if (c.kind == 'never') return FALSE
   if (c.kind == 'text') {
     ctx.tables.add('doc')
@@ -423,7 +459,9 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
 }
 
 // The directives, read off the top-level clause list. Order/limit/after ride a
-// membership; count/distinct/tally reshape it; near/edges/reaches decline.
+// membership; count/distinct/tally reshape it; near/edges/reaches decline
+// unless an extension claims them, in which case they filter like any clause.
+let UNREACHED = new Set(['near', 'edges', 'reaches'])
 let DIRECTIVES = new Set([
   'order',
   'near',
@@ -461,16 +499,17 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
     v: vocab,
     d: opts.dialect ?? sqlite,
     derived: opts.derived ?? {},
+    ext: opts.extend ?? [],
     now: opts.now ?? Date.now(),
     tables: new Set(),
   }
   let cs = ast.clauses
   for (let c of cs) {
-    if (c.kind == 'near' || c.kind == 'edges' || c.kind == 'reaches') {
+    if (UNREACHED.has(c.kind) && !claims(ctx, c.kind)) {
       throw new Unsupported(`.${c.kind}`)
     }
   }
-  let filters = cs.filter((c) => !DIRECTIVES.has(c.kind))
+  let filters = cs.filter((c) => !DIRECTIVES.has(c.kind) || claims(ctx, c.kind))
   let where = and(...filters.map((c) => clause(ctx, c)), raw(ctx.d.live()))
 
   let count = find<Count>(cs, 'count')
