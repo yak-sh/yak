@@ -11,12 +11,38 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Help · yaks.app</title>
+    <title>Help: building, sharing and exporting your apps · yaks.app</title>
     <meta
       name="description"
       content="Answers about building apps, connecting an assistant, sharing, access, exports, and support."
     />
     <meta name="color-scheme" content="light dark" />
+    <link rel="canonical" href="https://yaks.app/help" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="yaks.app" />
+    <meta property="og:url" content="https://yaks.app/help" />
+    <meta property="og:title"
+      content="Help: building, sharing and exporting your apps" />
+    <meta
+      property="og:description"
+      content="Answers about building apps, connecting an assistant, sharing, access, exports, and support."
+    />
+    <meta property="og:image" content="https://yaks.app/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt"
+      content="yaks.app: apps your assistant builds for you, at your own address" />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title"
+      content="Help: building, sharing and exporting your apps" />
+    <meta
+      name="twitter:description"
+      content="Answers about building apps, connecting an assistant, sharing, access, exports, and support."
+    />
+    <meta name="twitter:image" content="https://yaks.app/og.png" />
+    <meta name="twitter:image:alt"
+      content="yaks.app: apps your assistant builds for you, at your own address" />
     <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -26,6 +52,102 @@
       href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap"
     />
     <link rel="stylesheet" href="style.css" />
+    <!--
+      This page is already questions and answers, so it says so (T-34288). Each
+      answer below is the first paragraph of the section it names, verbatim: a
+      FAQ block that says something the page does not is the one way this markup
+      goes wrong. Move a section's words and move them here too — site_test.ts
+      checks that every question here names a heading on the page.
+    -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "url": "https://yaks.app/help",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What can I make?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "yaks.app supports personal and shared web apps: a recipe box, garden diary, book club schedule, potluck signup sheet, running log, or birthday guestbook."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How do I start?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Open the connect page and follow the steps for Claude or ChatGPT. You will sign in by email with a six-digit code; yaks.app does not use passwords. After connecting, ask your assistant to build an app."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How do I request an app or a change?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Describe what you want in your own words. Your assistant builds the app and gives you its link. Request changes the same way. You do not need to specify every detail before the first version is built."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Where are my apps and data?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Your apps are hosted under a name you choose. For example, a recipe box can use yourname.yaks.app/recipes. Visitors open the URL in a browser and do not need to install anything."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Who can see them?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Set access separately for each app: anyone with the link can read it, anyone with the link can write in it too, or only you and the people you invite. You can change it later."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How do invitations work?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Tell your assistant who, and why. They receive an email with your note and the link, and sign in with the same email address. No prior account or installation is required."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What should I do when an app breaks?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Tell your assistant what you saw. You do not need to diagnose the problem first. Apps record errors automatically, and your assistant receives those errors the next time you use it."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How do I export or delete an app?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Ask your assistant to export the app. It can return the app's data as a list or spreadsheet and provide the app files. To delete it, ask it to delete the app; that permanently deletes the app, its saved data, and its URL."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How do I contact support?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Email hello@yaks.app for help from a person. You can also ask your assistant to report a problem, which sends your message to the same support inbox."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Where are the technical details?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "The technical page covers hosting, data storage, limits, and current limitations. The developer guide documents app data, files, sharing, invitations, errors, and the tools available to an assistant."
+          }
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
     <header class="Top">

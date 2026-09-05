@@ -45,6 +45,8 @@
 //     /api/stripe/webhook     billing.ts: what Stripe says happened
 //     /api/billing/*          billing.ts: checkout and the customer portal
 //     /mcp, /api/*            mcp.ts (T-32329; a JSON 404 until then)
+//     /robots.txt, /sitemap.xml, /llms.txt, /llms-full.txt
+//                             seo.ts: the site said as a list, generated
 //     anything else           ./public, else a soft 404
 //   <space>.yaks.app          apps.ts, and one door of its own:
 //     POST /deploy            drop.ts: a zip of files, or one index.html,
@@ -91,6 +93,7 @@ import {
   sameOrigin,
   shared,
 } from './route.ts'
+import * as seo from './seo.ts'
 import { metaBreaks, noted, refusal } from './unseen.ts'
 import { metered } from './usage.ts'
 
@@ -168,6 +171,14 @@ let serve = async (req: Request, env: Env, r: Route) => {
       { headers: { 'content-type': 'text/plain; charset=utf-8' } },
     )
   }
+  // What the apex says about itself to a crawler or a model (seo.ts): the
+  // robots file, the sitemap, and the two llms.txt addresses. Generated rather
+  // than static, because each is a LIST — of the pages, of the guide — and a
+  // list kept by hand goes stale the first time a page is added. Here, in the
+  // apex branch, because a space's hostname is the customer's face and its
+  // robots file is its own (route.ts).
+  let said = await seo.answer(path, env)
+  if (said) return said
   let page = await env.ASSETS.fetch(req)
   return page.status == 404 ? lost() : page
 }

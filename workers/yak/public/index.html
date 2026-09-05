@@ -3,12 +3,40 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>yaks.app</title>
+    <title>
+      yaks.app — apps your assistant builds for you, at your own address
+    </title>
     <meta
       name="description"
-      content="Build an app by asking Claude or ChatGPT. Your assistant builds it, and yaks.app keeps it online. Save things, invite friends, and open it on any phone."
+      content="Ask Claude or ChatGPT for an app and yaks.app hosts it at your own address, with its own data. yaks.app is not Yik Yak: it is where your assistant builds apps."
     />
     <meta name="color-scheme" content="light dark" />
+    <link rel="canonical" href="https://yaks.app/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="yaks.app" />
+    <meta property="og:url" content="https://yaks.app/" />
+    <meta property="og:title"
+      content="yaks.app — apps your assistant builds for you, at your own address" />
+    <meta
+      property="og:description"
+      content="Ask Claude or ChatGPT for an app and yaks.app hosts it at your own address, with its own data. yaks.app is not Yik Yak: it is where your assistant builds apps."
+    />
+    <meta property="og:image" content="https://yaks.app/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt"
+      content="yaks.app: apps your assistant builds for you, at your own address" />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title"
+      content="yaks.app — apps your assistant builds for you, at your own address" />
+    <meta
+      name="twitter:description"
+      content="Ask Claude or ChatGPT for an app and yaks.app hosts it at your own address, with its own data. yaks.app is not Yik Yak: it is where your assistant builds apps."
+    />
+    <meta name="twitter:image" content="https://yaks.app/og.png" />
+    <meta name="twitter:image:alt"
+      content="yaks.app: apps your assistant builds for you, at your own address" />
     <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -18,6 +46,88 @@
       href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap"
     />
     <link rel="stylesheet" href="style.css" />
+    <!--
+      What this place is, said for a machine (T-34288). One block on one page,
+      because a second copy of the prices is a second thing to change: the
+      numbers are meter.ts `PRICE`, and site_test.ts holds this block to them,
+      so a price change is that line, this block, and the Stripe price id in
+      wrangler.toml.
+
+      No `sameAs`: yaks.app has no profile anywhere else to name yet, and an
+      empty claim is worse than none.
+    -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://yaks.app/#website",
+          "url": "https://yaks.app/",
+          "name": "yaks.app",
+          "alternateName": "Yak Shaving",
+          "description": "Apps your assistant builds for you, at your own address. yaks.app is not Yik Yak: it is where Claude or ChatGPT builds you an app and keeps it online.",
+          "inLanguage": "en-US",
+          "publisher": { "@id": "https://yaks.app/#organization" }
+        },
+        {
+          "@type": "Organization",
+          "@id": "https://yaks.app/#organization",
+          "name": "Yak Shaving LLC",
+          "url": "https://yaks.app/",
+          "logo": "https://yaks.app/icon-512.png",
+          "email": "hello@yaks.app"
+        },
+        {
+          "@type": "SoftwareApplication",
+          "@id": "https://yaks.app/#software",
+          "name": "yaks.app",
+          "url": "https://yaks.app/",
+          "applicationCategory": "DeveloperApplication",
+          "operatingSystem": "Web browser",
+          "description": "Ask Claude or ChatGPT for a web app — a recipe box, a sign-up sheet, a trip planner — and yaks.app builds and hosts it at yourname.yaks.app, with its own data store, file uploads, email address and optional custom domain. No install, no build step.",
+          "featureList": [
+            "Apps built by an AI assistant over MCP",
+            "A graph data store per app, shared across devices",
+            "File and photo uploads",
+            "An email address per app",
+            "Publish an app for other people to install",
+            "A custom domain of your own"
+          ],
+          "publisher": { "@id": "https://yaks.app/#organization" },
+          "offers": [
+            {
+              "@type": "Offer",
+              "name": "Free",
+              "price": "0",
+              "priceCurrency": "USD",
+              "url": "https://yaks.app/pricing",
+              "availability": "https://schema.org/InStock",
+              "description": "Five apps, one app built for you, 50,000 visits a month, 1 GB of app data, 100 emails a month."
+            },
+            {
+              "@type": "Offer",
+              "name": "Plus",
+              "price": "4",
+              "priceCurrency": "USD",
+              "url": "https://yaks.app/pricing",
+              "availability": "https://schema.org/InStock",
+              "description": "As many apps as you like, 30 apps built for you a month, 500,000 visits a month, 5 GB of app data, 1,000 emails a month, and a domain of your own.",
+              "priceSpecification": {
+                "@type": "UnitPriceSpecification",
+                "price": "4",
+                "priceCurrency": "USD",
+                "valueAddedTaxIncluded": true,
+                "billingDuration": 1,
+                "billingIncrement": 1,
+                "unitCode": "MON"
+              }
+            }
+          ]
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
     <header class="Top Top-home">
@@ -43,13 +153,16 @@
             height="743"
             alt=""
           />
+          <!-- The one heading a search engine reads first, so it says what
+               this place is in the words somebody would type (T-34288). -->
           <h1 id="hello" class="Title Title-hero">
-            Build an app by asking Claude or ChatGPT.
+            yaks.app: apps your assistant builds for you, at your own address.
           </h1>
           <p class="Note Note-lead">
-            A recipe box, a trip planner, a sign-up sheet — your assistant
-            builds it, and yaks.app keeps it online. Your app saves your data
-            and works in a browser. Use it on your phone or share it with friends.
+            Ask Claude or ChatGPT for a recipe box, a trip planner, a sign-up
+            sheet — your assistant builds it, and yaks.app keeps it online.
+            Your app saves your data and works in a browser. Use it on your
+            phone or share it with friends.
           </p>
           <div class="Hello_Doors">
             <a class="Button" href="/connect">Start free</a>
@@ -58,6 +171,13 @@
           </div>
           <p class="Note Note-small">
             Free for five apps. <a href="#cost">$4 a month</a> for more.
+          </p>
+          <!-- Said once, here, and nowhere else on the site: a search for
+               "yaks" returns the defunct Yik Yak, and somebody who arrives
+               looking for that should know in one line that this is not it. -->
+          <p class="Note Note-small">
+            yaks.app is not Yik Yak: it is where Claude or ChatGPT builds you
+            an app and keeps it online.
           </p>
         </div>
 

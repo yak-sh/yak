@@ -1,0 +1,214 @@
+// What the apex says about itself to something that is not a person (T-34288):
+// `/robots.txt`, `/sitemap.xml`, `/llms.txt` and `/llms-full.txt`. The pages'
+// own `<head>` carries the rest — title, description, canonical, Open Graph,
+// JSON-LD — because that half belongs with the words it describes; this file is
+// the site said as a LIST, which no single page can say.
+//
+// Owner, 2026-09-05: "can you also ensure we are maximizing SEO for engines and
+// agents? i see them searching and getting mostly 'yik yak' app stuff". Two
+// audiences, one address: a crawler that indexes and a model that reads. They
+// want different files and the same truth, so both are generated from the same
+// two lists — `SITE` here and `PAGES` in guide.ts — and neither can go stale
+// against the other.
+//
+// APEX ONLY. A space's hostname is the customer's face and its `robots.txt` is
+// its own (route.ts): what a person publishes there is theirs to say. index.ts
+// calls `answer` on the apex branch and nowhere else.
+import type { Env } from './env.ts'
+import { PAGES, uriOf, WHOLE } from './guide.ts'
+import { PLATFORM } from './route.ts'
+
+export let SITE_URL = `https://${PLATFORM}`
+
+let at = (path: string) => `${SITE_URL}${path}`
+
+// The apex's public pages, in the order a stranger should meet them. Every one
+// is a file in `public/` served at an extensionless path, and this is the list
+// the sitemap and `llms.txt` are both built from.
+//
+// `style-guide.html` is deliberately absent and carries `robots: noindex`
+// instead: it is the design reference, public because it costs nothing to be,
+// and a search result for it helps nobody. The apps and errors pages are not
+// pages at all — they are the MCP widgets' bytes (mcp.ts).
+export let SITE = [
+  '/',
+  '/pricing',
+  '/technical',
+  '/help',
+  '/terms',
+  '/privacy',
+  '/acceptable-use',
+  '/cookies',
+]
+
+// Every address the sitemap lists: the pages above, then the guide — the map
+// and one page per subject, at the same `.md` addresses the connector hands an
+// agent (guide.ts). They are markdown rather than HTML and they are indexed
+// anyway, which is the point of publishing them at a URL.
+export let ADDRESSES = [
+  ...SITE.map(at),
+  WHOLE,
+  ...PAGES.map((p) => uriOf(p.slug)),
+]
+
+// The crawlers named one by one. `*` allows everything already, so naming these
+// grants nothing extra — it is a STATEMENT, and the several that read a robots
+// file for training or retrieval consent (Google-Extended is only that; it
+// governs no crawl) have no other place to read it. A named group REPLACES the
+// wildcard group for that agent rather than adding to it, so each gets the
+// same disallow list rather than a bare `Allow: /` that would quietly open the
+// doors below to exactly the agents we most want here.
+export let CRAWLERS = [
+  'GPTBot',
+  'ClaudeBot',
+  'Claude-SearchBot',
+  'Claude-User',
+  'PerplexityBot',
+  'Google-Extended',
+  'Googlebot',
+  'Bingbot',
+  '*',
+]
+
+// What no crawler should spend itself on: the sign-in doors, which answer a
+// form to nobody, and the machine doors, which answer JSON to a client that
+// authenticated. None of them is a secret — a robots file grants nothing and
+// hides nothing — they are simply not pages.
+export let CLOSED = ['/login', '/connect', '/mcp', '/api/']
+
+export let robots = () =>
+  [
+    '# yaks.app — apps your assistant builds for you, at your own address.',
+    '# Not Yik Yak. Crawling and reading here is welcome; the guide is at',
+    `# ${WHOLE}, and ${at('/llms.txt')} is the short index of it.`,
+    '',
+    ...CRAWLERS.flatMap((agent) => [
+      `User-agent: ${agent}`,
+      'Allow: /',
+      ...CLOSED.map((path) => `Disallow: ${path}`),
+      '',
+    ]),
+    `Sitemap: ${at('/sitemap.xml')}`,
+    '',
+  ].join('\n')
+
+// The deploy's own timestamp as a sitemap `lastmod`. Cloudflare mints version
+// metadata on every `wrangler deploy` (wrangler.toml `[version_metadata]`), so
+// the date a page was last published is a fact the platform already holds and
+// nothing has to be maintained by hand. Absent under `wrangler dev` and the
+// probes, where the element is simply left off — a sitemap with no `lastmod` is
+// valid, and a made-up date is worse than none.
+export let deployed = (env: Env) => env.CF_VERSION_METADATA?.timestamp ?? null
+
+let escaped = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+export let sitemap = (lastmod: string | null) =>
+  [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ...ADDRESSES.map((url) =>
+      `  <url><loc>${escaped(url)}</loc>${
+        lastmod ? `<lastmod>${escaped(lastmod)}</lastmod>` : ''
+      }</url>`
+    ),
+    '</urlset>',
+    '',
+  ].join('\n')
+
+// What a page says about itself, read back out of the page (`<title>` and
+// `<meta name=description>`). llms.txt wants a label and a sentence per link
+// and both are already written down in the HTML, so they are read from there
+// rather than kept a second time here, where the two copies would drift.
+export let said = (html: string) => {
+  // The pages are formatted, so both the title and the attribute below are
+  // spread over several lines in the file they are read from.
+  let flat = html.replace(/\s+/g, ' ')
+  return {
+    title: /<title>([^<]*)<\/title>/.exec(flat)?.[1]?.trim() ?? '',
+    description: /<meta name="description" content="([^"]*)"/.exec(flat)?.[1]
+      ?.trim() ?? '',
+  }
+}
+
+let fetched = async (env: Env, url: string) => {
+  let res = await env.ASSETS.fetch(new Request(url))
+  return res.ok ? await res.text() : ''
+}
+
+/** The llms.txt convention: what this is, then links with a line on each. */
+export let llms = (
+  site: { url: string; title: string; description: string }[],
+) =>
+  [
+    '# yaks.app',
+    '',
+    '> Apps your assistant builds for you, at your own address. Ask Claude or',
+    '> ChatGPT for a recipe box, a sign-up sheet or a trip planner; it is built',
+    '> and hosted at yourname.yaks.app, keeps its own data, and opens in any',
+    '> browser. yaks.app is not Yik Yak: it is a hosting platform for apps an',
+    '> AI assistant writes, connected over MCP.',
+    '',
+    'An app is an index.html and the files beside it, served live, with a graph',
+    'store behind it and no build step. An assistant connects over MCP at',
+    `${at('/mcp')} and makes apps with the tools it finds there.`,
+    '',
+    '## Pages',
+    '',
+    ...site.map((p) =>
+      `- [${p.title}](${p.url})${p.description ? `: ${p.description}` : ''}`
+    ),
+    '',
+    '## The guide',
+    '',
+    `- [The guide](${WHOLE}): the map of everything an app can do, briefly.`,
+    ...PAGES.map((p) => `- [${p.title}](${uriOf(p.slug)}): ${p.description}`),
+    '',
+    '## Optional',
+    '',
+    `- [llms-full.txt](${
+      at('/llms-full.txt')
+    }): the guide and every page of it,`,
+    '  concatenated, in one fetch.',
+    '',
+  ].join('\n')
+
+// Every guide page after the guide itself, one document. Each part keeps its
+// own `# ` heading, so the only thing added is the address it came from — a
+// model that wants to link back, or fetch one page fresh, has it.
+export let full = (parts: { url: string; text: string }[]) =>
+  parts.map((p) => `<!-- ${p.url} -->\n\n${p.text.trim()}\n`).join(
+    '\n\n---\n\n',
+  )
+
+// The four addresses, answered here. Null for anything else, so index.ts falls
+// through to the assets the way it always did.
+export let answer = async (
+  path: string,
+  env: Env,
+): Promise<Response | null> => {
+  if (path == '/robots.txt') return text(robots())
+  if (path == '/sitemap.xml') {
+    return text(sitemap(deployed(env)), 'application/xml')
+  }
+  if (path == '/llms.txt') {
+    let pages = await Promise.all(SITE.map(async (path) => ({
+      url: at(path),
+      ...said(await fetched(env, at(path))),
+    })))
+    return text(llms(pages.filter((p) => p.title)))
+  }
+  if (path == '/llms-full.txt') {
+    let all = [WHOLE, ...PAGES.map((p) => uriOf(p.slug))]
+    let parts = await Promise.all(
+      all.map(async (url) => ({ url, text: await fetched(env, url) })),
+    )
+    return text(full(parts.filter((p) => p.text)))
+  }
+  return null
+}
+
+let text = (body: string, type = 'text/plain') =>
+  new Response(body, {
+    headers: { 'content-type': `${type}; charset=utf-8` },
+  })
