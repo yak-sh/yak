@@ -4,7 +4,8 @@
 // in this graph stamps `notified` on each line it delivers (client.ts
 // notices()); this does the same, so an item rides one reply and then only
 // `app_errors` shows it again. Open means not `archived`: a later deploy
-// that stops producing it, or the agent marking it fixed, archives it.
+// ({@link healed}), a write of the file it named ({@link rewrote}), or the
+// agent saying so ({@link archive}) archives it.
 // Reads and marks go through the store's own doors with the caller vouched,
 // never SQL; the apps of a space come from the directory part. The same
 // rows fold into `cards` for the errors view (public/errors.html), where the
@@ -329,10 +330,31 @@ export let openIn = async (
   return hits
 }
 
+// What the app has already moved past, for the RIDER only (T-34338). A break
+// names the version it happened on, read past the directory's cache
+// ({@link serving}), so one naming a version under the app's own was produced
+// by code a later release replaced — `healed` archived its cohort at that
+// release and this one only arrived afterwards. A break naming no version at
+// all predates the counter and goes with them.
+//
+// It stays OPEN, and `app_errors` still lists it: this decides only what is
+// worth interrupting a reply with. Unseen means unheard, not merely unstamped,
+// and news about code that no longer runs is neither.
+export let past = (app: { version?: number | null }, h: Hit) => {
+  let was = broke(h).version
+  return was == null || was < (app.version ?? 0)
+}
+
 // Serve, then mark: what is open, and `notified` on each item that had
 // none, so the next reply is quiet about them. The mark is the PLATFORM's own
 // stamp, so it rides the kernel's door — a viewer who may read an app's breaks
 // is not thereby a writer of it.
+//
+// `all` is the difference between the two callers: `app_errors` asks for the
+// whole open list and gets it, while the rider asks for what is news and gets
+// the fresh ones only. A stale break is still STAMPED here — it was offered
+// and passed over, and offering it again on the next reply would be the same
+// noise a reply later.
 export let serve = async (
   env: Env,
   space: Space,
@@ -344,7 +366,8 @@ export let serve = async (
   let seen: Seen[] = []
   for (let a of apps) {
     let hits = await openIn(env, space, a, who, all)
-    seen.push(...hits.map((hit) => ({ app: a, hit })))
+    let said = all ? hits : hits.filter((h) => !past(a, h))
+    seen.push(...said.map((hit) => ({ app: a, hit })))
     let fresh = hits.filter((h) => !('notified' in h))
     if (!fresh.length) continue
     await graphAt(env, space, a, who).mark(fresh, 'notified')
@@ -359,23 +382,59 @@ let close = async (env: Env, space: Space, app: App, who: Who, hits: Hit[]) => {
   return hits.length
 }
 
-// Fixed, so it stops showing. An id is whatever the caller read: the human id
-// off a line, or the eid a card carries, since the view's button hands back
-// the whole fold. Nothing matched is worth saying; a stale id is how a person
-// learns it is already archived.
+// A day on its own, and anything that starts with one — `2026-08-14`, or the
+// whole instant a line printed. Only these are read as a moment, so a uuid or
+// an `E-84` can never be mistaken for one.
+let WHEN = /^\d{4}-\d{2}-\d{2}([T ].*)?$/
+let DAY = /^\d{4}-\d{2}-\d{2}$/
+let VERSION = /^v(\d+)$/i
+
+// A bound as a moment: a bare day means the END of it, because "everything
+// through the 14th" is what a person says and midnight is not what they mean.
+let moment = (word: string) =>
+  Date.parse(DAY.test(word) ? `${word}T23:59:59.999Z` : word)
+
+// One word of what a caller says is behind them, against one open break.
+//
+// An id is the plainest — the human id off a line, or the eid a card carries,
+// since the view's button hands back the whole fold. But listing ids is
+// exactly what nobody can do cheaply when a page filed six breaks for a file
+// that did not exist yet (T-34338), so a word may be a BOUND instead, and one
+// word closes the lot: `all`, `v<n>` for everything up to and including that
+// deploy, or a day or an instant for everything at or before it.
+//
+// A break naming no version, or no moment, goes with any bound of its kind: it
+// predates the counter, and nothing can ever say whether it is still true —
+// the rule {@link healed} already keeps.
+export let named = (word: string, h: Hit) => {
+  if (word == 'all') return true
+  let v = VERSION.exec(word)
+  if (v) {
+    let was = broke(h).version
+    return was == null || was <= Number(v[1])
+  }
+  if (WHEN.test(word)) {
+    let at = Date.parse(broke(h).at ?? '')
+    return !Number.isFinite(at) || at <= moment(word)
+  }
+  return word == h.entity.eid ||
+    word == idOf({ eid: h.entity.eid, kind: h.kind, num: h.entity.num })
+}
+
+// Behind us, so it stops showing — whether the caller fixed it or is only
+// saying it is stale. Nothing matched is worth saying; a stale id is how a
+// person learns it is already archived.
 export let archive = async (
   env: Env,
   space: Space,
   app: App,
   who: Who,
-  ids: string[],
+  words: string[],
 ) => {
-  let want = new Set(ids)
   let hits = (await openIn(env, space, app, who, true)).filter((h) =>
-    want.has(h.entity.eid) ||
-    want.has(idOf({ eid: h.entity.eid, kind: h.kind, num: h.entity.num }))
+    words.some((w) => named(w, h))
   )
-  if (!hits.length) throw new Error(`nothing open here by ${ids.join(', ')}`)
+  if (!hits.length) throw new Error(`nothing open here by ${words.join(', ')}`)
   return close(env, space, app, who, hits)
 }
 
@@ -397,6 +456,44 @@ export let healed = async (
   let old = (await openIn(env, space, app, who, true)).filter((h) => {
     let was = broke(h).version
     return was == null || was < version
+  })
+  return old.length ? close(env, space, app, who, old) : 0
+}
+
+// The app's OWN file a break happened on, if it names one. A request reads
+// `<type> <path>` (apps.ts `broken`) where the path is the address as the
+// browser asked for it — `page /recipes/app.js` — so the app's own name comes
+// off the front and a directory answers with its index. An app serving the
+// space's front page is asked for at the root, and its request carries no
+// slug to strip.
+export let fileOf = (slug: string, request = '') => {
+  let at = request.split(' ').pop() ?? ''
+  if (!at.startsWith('/')) return ''
+  let head = `/${slug}/`
+  let path = at == `/${slug}` || at.startsWith(head)
+    ? at.slice(head.length)
+    : at.slice(1)
+  return path && !path.endsWith('/') ? path : `${path}index.html`
+}
+
+// And fixed by a WRITE, which is the other way a break ends without anyone
+// saying so (T-34338). An app's files serve live — a write IS the fix, with
+// the deploy only naming it — so a break open against a path this write just
+// changed was produced by bytes that are not there any more. That is the same
+// bargain {@link healed} makes, and it is why six "failed to load app.js" from
+// before app.js existed stop riding along the moment app.js is written: a
+// break the new bytes still produce is written again the next time it happens.
+export let rewrote = async (
+  env: Env,
+  space: Space,
+  app: App,
+  who: Who,
+  paths: string[],
+) => {
+  let want = new Set(paths.map((p) => p.replace(/^\/+/, '')))
+  let old = (await openIn(env, space, app, who, true)).filter((h) => {
+    let file = fileOf(app.slug, broke(h).request)
+    return !!file && want.has(file)
   })
   return old.length ? close(env, space, app, who, old) : 0
 }

@@ -130,7 +130,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     // The member guard again, and this time it is the tool's own: `inApp` is
     // what every write in tools.ts goes through.
     let it = await inApp(ctx, { space: space.slug, app: slug }, true)
-    let paths = await wrote(env, space, it.app, files)
+    let paths = await wrote(env, space, it.app, it.who, files)
     await call(ctx, 'app_deploy', { space: space.slug, app: slug })
     // The version this drop became, read back rather than parsed out of the
     // tool's sentence: the row is where a version lives.

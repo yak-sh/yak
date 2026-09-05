@@ -150,9 +150,15 @@ New breaks ride the end of your next tool reply, under a heading, one line each:
 Serving them stamps each one, so the next reply is quiet about them. That mark
 is the delivery, not a fix: `app_errors` still lists them.
 
+Only what is still **news** rides along. A break naming a version under the one
+the app serves now was made by code a later release replaced, and one naming no
+version at all predates the counter; neither interrupts a reply. Both are still
+open, and `app_errors` still lists them — this decides what is worth saying, not
+what is true.
+
 ## app_errors
 
-    app_errors(app, fixed?, space?)
+    app_errors(app, fixed?, seen?, space?)
 
 Everything still open in that app — what a page threw in someone's browser, what
 a request threw on the way, what the platform reported — whether or not you have
@@ -163,6 +169,18 @@ showing here and in the unseen block. An id off a line (`E-84`) or a bare eid
 both work; a list, or a single one bare. Nothing matched is refused, saying so —
 that is how you learn one was already archived.
 
+`seen` archives the same way, for breaks you are done with whether or not you
+fixed them, and it takes a **bound** so you never have to list six ids:
+
+- `all` — everything open in the app.
+- `v3` — everything up to and including that deploy.
+- `2026-08-14`, or a whole instant off a line — everything at or before it. A
+  bare day means the end of that day.
+
+Ids work there too, so one call can mix them. A break naming no version goes
+with any version bound, and one naming no time with any time bound: nothing can
+say whether those are still true.
+
 Archiving is a write, so it needs a writer. Reading the list does not: a viewer
 of the space still gets to see what is broken.
 
@@ -171,12 +189,14 @@ app, a message and a place into one card with a count — a render loop that thr
 twenty times is one thing to fix — with a button on each that calls the tool
 back to archive the whole fold.
 
-You will rarely archive by hand, because **a release closes what the releases
-before it broke.** Every `app_deploy`, `app_install` and `app_rollback` archives
-every open break from an earlier version (and every one that names no version at
-all, since nothing can say whether those are still true). The deploy's answer
-says how many. A break the new code still produces is written again the next
-time it happens.
+You will rarely archive by hand, because **new bytes close what the old ones
+broke.** Every `app_deploy`, `app_install` and `app_rollback` archives every
+open break from an earlier version (and every one that names no version at all,
+since nothing can say whether those are still true); the deploy's answer says
+how many. And every `app_files` write archives the open breaks that named the
+files it just wrote — a page's "failed to load app.js" is answered by writing
+app.js, without waiting for a deploy, because the files serve live. A break the
+new bytes still produce is written again the next time it happens.
 
 ## app_versions
 

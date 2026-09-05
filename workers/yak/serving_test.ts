@@ -33,7 +33,8 @@ import { scriptName } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { platform as inMemory } from './harness.ts'
 import { emptied } from './erase.ts'
-import { openIn, serve } from './unseen.ts'
+import { wrote } from './tools.ts'
+import { archive, openIn, serve } from './unseen.ts'
 import { PLATFORM_STORE } from './vocab.ts'
 
 let SECRET = 'a probe secret'
@@ -279,6 +280,52 @@ Deno.test('a break is the platform writing about the app, not in it', async () =
   // Served once, and marked so the next reply is quiet about it.
   assertEquals((await serve(env, space, who, app)).length, 1)
   assertEquals((await openIn(env, space, app, who)).length, 0)
+})
+
+Deno.test('writing the file a break named closes it (T-34338)', async () => {
+  let { env } = platform()
+  let { space, app } = await seeded(env)
+  let who = { person: ADA, role: 'owner' as const }
+  // The break the feedback letter was about: a page reporting that the script
+  // it wanted never loaded, from before anyone had written that script.
+  for (let url of ['/cookbook/app.js', '/cookbook/']) {
+    await apps.fetch(
+      visit('/cookbook/api/report', {
+        method: 'POST',
+        body: JSON.stringify({ message: `failed to load ${url}`, url }),
+      }),
+      env,
+    )
+  }
+  assertEquals((await openIn(env, space, app, who, true)).length, 2)
+
+  await wrote(env, space, app, who, [
+    { path: 'app.js', bytes: new TextEncoder().encode('let go = 1') },
+  ])
+
+  // The one that named app.js is answered by those bytes; the one on the page
+  // itself is not, and stays open.
+  let open = await openIn(env, space, app, who, true)
+  assertEquals(open.length, 1)
+  assertEquals(open[0].exception?.request, 'page /cookbook/')
+})
+
+Deno.test('seen closes a whole deploy at once (T-34338)', async () => {
+  let { env } = platform()
+  let { space, app } = await seeded(env)
+  let who = { person: ADA, role: 'owner' as const }
+  for (let n of [1, 2]) {
+    await apps.fetch(
+      visit('/cookbook/api/report', {
+        method: 'POST',
+        body: JSON.stringify({ message: `boom ${n}`, url: '/cookbook/' }),
+      }),
+      env,
+    )
+  }
+  // One word, no ids: everything up to and including the version they are on.
+  assertEquals(await archive(env, space, app, who, ['v1']), 2)
+  assertEquals((await openIn(env, space, app, who, true)).length, 0)
 })
 
 Deno.test('DELETE / empties the app store and bears it again', async () => {

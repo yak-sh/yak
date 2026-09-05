@@ -121,7 +121,15 @@ import { titling, vouched, type Who } from './session.ts'
 import { mode, reads, writes } from '@yaks/member'
 import { canon, nameOf, personOf } from './signin.ts'
 import { type Door, storeOf } from './door.ts'
-import { archive, cards, healed, line, openIn, serve } from './unseen.ts'
+import {
+  archive,
+  cards,
+  healed,
+  line,
+  openIn,
+  rewrote,
+  serve,
+} from './unseen.ts'
 import {
   atCeiling,
   builds,
@@ -833,6 +841,7 @@ export let wrote = async (
   env: Env,
   space: Space,
   app: App,
+  who: Who,
   files: { path: string; bytes: Uint8Array }[],
 ) => {
   let blobs = r2Blobs(env.BLOBS)
@@ -842,7 +851,15 @@ export let wrote = async (
   // app, not the file, so writing ten files empties the edge once (cache.ts
   // `tagsOf`).
   await purged(env, app)
-  return files.map((f) => fileKey(space, app, f.path).slice(prefix.length))
+  let paths = files.map((f) => fileKey(space, app, f.path).slice(prefix.length))
+  // What these bytes replaced is closed by them (unseen.ts `rewrote`,
+  // T-34338), the way a release closes what the versions under it broke. The
+  // bytes are already out, so a store that cannot be asked leaves the breaks
+  // open rather than failing a write that landed.
+  try {
+    await rewrote(env, space, app, who, paths)
+  } catch { /* the files are out; an open break is the softer wrong */ }
+  return paths
 }
 
 /**
@@ -1239,7 +1256,7 @@ export let TOOLS: Tool[] = [
             'files: [{path, content}] for several at once',
         )
       }
-      let { space, app } = await inApp(
+      let { space, app, who } = await inApp(
         ctx,
         args,
         op == 'write' || op == 'delete',
@@ -1271,7 +1288,7 @@ export let TOOLS: Tool[] = [
         path: text(args.path, 'path'),
         bytes: bytesOf(args),
       }]
-      let paths = await wrote(ctx.env, space, app, sent)
+      let paths = await wrote(ctx.env, space, app, who, sent)
       return {
         text: paths.length == 1
           ? `wrote ${paths[0]} → ${url(space, app)}${paths[0]}`
@@ -1411,7 +1428,7 @@ export let TOOLS: Tool[] = [
       required: ['app', 'paths'],
     },
     run: async (ctx, args) => {
-      let { space, app } = await inApp(ctx, args, true)
+      let { space, app, who } = await inApp(ctx, args, true)
       let asked = list(args.paths, 'paths').map(shipPath)
       if (!asked.length) throw new Error('paths: at least one file to copy in')
       let files = await bench(ctx, space, async (box) => {
@@ -1438,7 +1455,7 @@ export let TOOLS: Tool[] = [
           ),
         })))
       })
-      let paths = await wrote(ctx.env, space, app, files)
+      let paths = await wrote(ctx.env, space, app, who, files)
       return {
         text: `shipped ${paths.length} ${
           paths.length == 1 ? 'file' : 'files'
@@ -1918,8 +1935,10 @@ export let TOOLS: Tool[] = [
       'reported. Each is an entity in the app store. New ones also ride the ' +
       'end of your next reply, once. Pass `fixed` with the ids you have ' +
       'fixed and they are archived, which is what stops them showing here ' +
-      'and there. It draws itself where the person can see it, with the ' +
-      'same button on each break.',
+      'and there; pass `seen` to say the same about breaks you are done with ' +
+      'without listing every id — `all`, `v3` for everything up to and ' +
+      'including that deploy, or a day. It draws itself where the person can ' +
+      'see it, with the same button on each break.',
     view: ERRORS_VIEW,
     // The view's fixed button calls this tool back to archive a break.
     visibility: ['model', 'app'],
@@ -1935,17 +1954,30 @@ export let TOOLS: Tool[] = [
             'ids of breaks that are fixed — each is archived and stops ' +
             'being listed. An id off a line here, or an eid.',
         },
+        seen: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'breaks you are done with, whether or not you fixed them — the ' +
+            'same archiving `fixed` does, said without listing ids. `all`, ' +
+            '`v3` for everything up to and including that deploy, or a day ' +
+            '(2026-08-14) or an instant for everything at or before it. Ids ' +
+            'work here too, so one call can mix them.',
+        },
       },
       required: ['app'],
     },
     run: async (ctx, args) => {
-      let fixed = list(args.fixed, 'fixed')
+      // Two words for one act, because the two sentences differ: `fixed` is
+      // "I have fixed these" — what the view's button says — and `seen` is
+      // "these are behind me", which is how a page's six breaks from before
+      // its file existed are answered without typing six ids (T-34338). Both
+      // archive, so both go through one door.
+      let done = [...list(args.fixed, 'fixed'), ...list(args.seen, 'seen')]
       // Archiving is a write, so it wants a writer; reading the list does
       // not, and a viewer of the space still gets to see what is broken.
-      let { space, app, who } = await inApp(ctx, args, !!fixed.length)
-      let gone = fixed.length
-        ? await archive(ctx.env, space, app, who, fixed)
-        : 0
+      let { space, app, who } = await inApp(ctx, args, !!done.length)
+      let gone = done.length ? await archive(ctx.env, space, app, who, done) : 0
       let seen = await serve(ctx.env, space, who, app, true)
       let said = [
         ...(gone ? [`archived ${gone}`] : []),
