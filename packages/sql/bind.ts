@@ -490,11 +490,27 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
     if (c.path[0] == 'kind' && c.path.length == 1) {
       return kindScope(ctx, flat(c.value))
     }
+    // A REQUEST for a word this vocabulary never planted asks, and asking is
+    // not asserting: `.loan!` over an unknown word must refuse, because an
+    // empty answer would say there are none, but `.loan?` only asks for the
+    // component beside the filter — a store that has none gives none, and says
+    // so by leaving it off the row. That is what makes one line askable of
+    // every store in a fan-out (workers/yak/reach.ts) instead of one line per
+    // store. Only the bare one-word form is forgiven; a path or a column name
+    // still routes, and still refuses.
+    let unplanted = opOf(c) == 'want' && c.path.length == 1 &&
+      !ctx.v.all.includes(c.path[0])
     // A plural leading the path is a reverse association, read from the far
     // side; anything else routes forward through the vocab.
     let assoc = ctx.v.assoc(c.path[0])
     if (assoc) return reverse(ctx, c.path[0], assoc, c)
-    let hops = ctx.v.aim(c.path.join('.'), bare(c))
+    let hops: Hop[]
+    try {
+      hops = ctx.v.aim(c.path.join('.'), bare(c))
+    } catch (e) {
+      if (!unplanted) throw e
+      return TRUE
+    }
     return hops.length == 1 ? single(ctx, hops[0], c) : path(ctx, hops, c)
   }
   throw new Unsupported(`the ${(c as Clause).kind} directive`)
@@ -635,7 +651,14 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
     where: after ? and(where, raw(keyset(ctx, sort, after.n))) : where,
   })
   if (sort) out.order.push(`${sort.row}${sort.desc ? ' desc' : ''}`)
-  if (sort || limit || after) out.order.push(`"entity"."num" desc`)
+  // A WINDOW is newest-first, which is what makes a prefix mean something and
+  // a `.after` cursor able to continue it. A whole answer is OLDEST-first: it
+  // is not a page of anything, and the order rows were written in is the one
+  // sequence a caller can predict — a list reads down the way it was made.
+  // Either way the sequence is stated, never left to the query plan: two
+  // engines, or one engine with a different index, must not answer a bare
+  // `.doc!` in two different orders.
+  out.order.push(`"entity"."num"${sort || limit || after ? ' desc' : ''}`)
   if (limit) out.limit = limit.n
   return out
 }

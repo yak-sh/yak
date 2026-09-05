@@ -226,3 +226,15 @@ Deno.test('the membership statement excludes graves and answers one eid', () => 
   assert(sql.startsWith('select "entity"."eid" as eid from "entity"'), sql)
   assert(sql.includes('not exists (select 1 from tombstone'), sql)
 })
+
+Deno.test('a request for a word this vocabulary never planted asks, and passes', () => {
+  // `.loan?` names a component nobody here declares. Asking is not asserting:
+  // it narrows nothing, so the statement stands and the row simply carries no
+  // loan — which is what lets one line be asked of every store in a fan-out.
+  let { sql } = compile(parse('.task!&.loan?'), v)
+  assert(!sql.includes('loan'), sql)
+  // The assertion form still refuses: an empty answer would say there are none.
+  assertThrows(() => compile(parse('.loan!'), v))
+  // And so does a request that is not a bare component name.
+  assertThrows(() => compile(parse('.loan.to?'), v))
+})

@@ -30,6 +30,7 @@
 // points at and stays key-free.
 
 import type { Column, Index, Vocab } from '@yaks/vocab'
+import type { Driver } from './driver.ts'
 
 // The identity table and the graveyard. Fixed shape — every layout has exactly
 // this spine, whatever components ride on it.
@@ -135,15 +136,56 @@ let docDdl = (v: Vocab): string[] => {
 // a component table), then the indexes those tables declare, then the doc view
 // and its search index. `install()` in ./mod.ts runs them; a caller may also
 // read them to inspect or migrate by hand.
-export let schema = (vocab: Vocab): string[] => {
+export let schema = (vocab: Vocab): string[] => [
+  ...tabled(vocab),
+  // After every table: an index names a column the create above just raised.
+  ...indexed(vocab),
+]
+
+// The spine and one table per component, with the doc view and its search
+// index. Everything an index may need to already exist.
+export let tabled = (vocab: Vocab): string[] => {
   let comps = vocab.all.filter((name) => name != 'entity')
   return [
     ...SPINE,
     ...comps.map((name) => tableDdl(vocab, name)),
-    // After every table: an index names a column the create above just raised.
-    ...comps.flatMap((name) =>
-      vocab.indexes(name).map((i) => indexDdl(name, i))
-    ),
     ...docDdl(vocab),
   ]
 }
+
+// The indexes the components declare. Raised last, after `grown()`: an index
+// may name a column its table only gained on this boot, and SQLite refuses one
+// over a column that is not there yet.
+export let indexed = (vocab: Vocab): string[] =>
+  vocab.all
+    .filter((name) => name != 'entity')
+    .flatMap((name) => vocab.indexes(name).map((i) => indexDdl(name, i)))
+
+// What `schema()` alone cannot say: the columns a component GREW after its
+// table was already raised. `create table if not exists` is silent about a
+// table that exists, so a vocabulary that gained a column leaves the table at
+// the shape it was first created with, and every read naming the new column
+// fails at the engine ("no such column"). SQLite has no
+// `add column if not exists`, so the live shape is interrogated and only the
+// missing columns are added.
+//
+// Additive only, and deliberately: nothing is dropped and nothing is retyped,
+// because rows are already written under the words the table has. A column
+// arrives nullable with no default, which is the one form SQLite accepts an
+// `add column` carrying a foreign key in.
+//
+// Known gap: `doc_fts` indexes the text columns `doc` had when it was created,
+// so a `doc` that grows a text column is not searchable on it until the index
+// is rebuilt. Nothing in the platform grows `doc`; an app grows its own words.
+export let grown = (driver: Driver, vocab: Vocab): string[] =>
+  vocab.all
+    .filter((name) => name != 'entity')
+    .flatMap((comp) => {
+      let has = new Set(
+        driver.query(`pragma table_info(${q(comp)})`, [])
+          .map((r) => String(r.name)),
+      )
+      return stored(vocab, comp)
+        .filter((c) => !has.has(c.prop))
+        .map((c) => `alter table ${q(comp)} add column ${colDdl(c)}`)
+    })

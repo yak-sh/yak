@@ -34,13 +34,13 @@ import type { BindOpts } from '@yaks/sql'
 import type { Bundle, Entity, ReadOpts } from '@yaks/graph'
 import type { Driver, Row } from './driver.ts'
 import type { Query } from './read.ts'
-import { schema } from './ddl.ts'
+import { grown, indexed, schema, tabled } from './ddl.ts'
 import { get, read, rows } from './read.ts'
 import { patch, remove } from './write.ts'
 
 export * from './driver.ts'
 export * from './bundle.ts'
-export { schema } from './ddl.ts'
+export { grown, indexed, schema, tabled } from './ddl.ts'
 export { compSql, get, type Query, read, rows } from './read.ts'
 export { buried, patch, remove } from './write.ts'
 export type { Storage } from '@yaks/graph'
@@ -77,6 +77,12 @@ export type Tx = {
 export type Store = {
   /** the schema statements the bound vocabulary implies */
   ddl: () => string[]
+  /**
+   * the `add column` statements the LIVE tables are missing — what `ddl()`
+   * cannot say, since `create table if not exists` is silent about a table
+   * that already exists (ddl.ts `grown`). Read after `ddl()` has run.
+   */
+  grown: () => string[]
   /** run them — create the tables and indexes the vocabulary needs */
   install: () => void
   /** a query → the matching entities as whole bundles */
@@ -137,8 +143,15 @@ export let storage = (
   }
   return {
     ddl: () => schema(vocab),
+    grown: () => grown(driver, vocab),
     install: () => {
-      for (let stmt of schema(vocab)) driver.exec(stmt)
+      for (let stmt of tabled(vocab)) driver.exec(stmt)
+      // Then the columns a component grew since its table was raised — the half
+      // `create table if not exists` cannot say (ddl.ts `grown`), read after
+      // the creates so a brand-new table is already there to interrogate.
+      for (let stmt of grown(driver, vocab)) driver.exec(stmt)
+      // The indexes last: one may name a column this boot just added.
+      for (let stmt of indexed(vocab)) driver.exec(stmt)
     },
     read: (query, opts) => read(driver, vocab, query, { ...base, ...opts }),
     rows: (query, opts) => rows(driver, vocab, query, { ...base, ...opts }),

@@ -2,10 +2,17 @@
 // per component, and the doc view plus its search index.
 
 import { assert, assertEquals } from '@std/assert'
+import { loadVocab } from '@yaks/vocab'
 import { schema } from './ddl.ts'
-import { shop } from './harness.ts'
+import { storage } from './mod.ts'
+import type { Driver } from './driver.ts'
+import { mem, shop } from './harness.ts'
 
 let all = schema(shop).join('\n')
+
+// The live shape of a table, in declaration order.
+let cols = (d: Driver, table: string) =>
+  d.query(`pragma table_info("${table}")`, []).map((r) => String(r.name))
 
 Deno.test('the shop vocabulary loads with its kinds and death words', () => {
   assertEquals(shop.all.includes('product'), true)
@@ -82,4 +89,41 @@ Deno.test('an index comes after the table it covers', () => {
   let table = stmts.findIndex((s) => s.includes('exists "shelf"'))
   let index = stmts.findIndex((s) => s.includes('shelf_aisle_slot'))
   assert(table >= 0 && index > table, `${table} ${index}`)
+})
+
+// A vocabulary that GREW: `create table if not exists` is silent about a table
+// that is already there, so a column added to a word has to arrive by
+// `alter table` or every read naming it fails at the engine.
+Deno.test('a column a component grew is added to the live table', () => {
+  let spine = { type: 'object', wire: false, properties: {} } as const
+  let text = { type: 'string' } as const
+  let d = mem()
+  let was = loadVocab({
+    $defs: {
+      entity: spine,
+      book: { type: 'object', properties: { title: text } },
+    },
+  })
+  let now = loadVocab({
+    $defs: {
+      entity: spine,
+      book: {
+        type: 'object',
+        properties: {
+          title: text,
+          isbn: text,
+          of: { type: 'string', ref: 'entity', death: 'detach' },
+        },
+      },
+    },
+  })
+  storage(d, was).install()
+  assertEquals(cols(d, 'book'), ['entity', 'title'])
+  // The grown vocabulary over the SAME database: the two new columns arrive,
+  // the reference carrying its foreign key, and nothing already there moves.
+  let grew = storage(d, now)
+  grew.install()
+  assertEquals(cols(d, 'book'), ['entity', 'title', 'isbn', 'of'])
+  // And a wake under a vocabulary the tables already match adds nothing.
+  assertEquals(grew.grown(), [])
 })

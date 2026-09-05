@@ -35,9 +35,15 @@ export let rows = (
   return driver.query(sql, params as (string | number)[])
 }
 
-// A component's stored columns (the computed ones have no row to read).
-let stored = (v: Vocab, comp: string): Column[] =>
-  v.columns(comp).map((p) => v.column(comp, p)!).filter((c) => c.persist)
+// The columns a gather READS: the stored ones, plus any computed column the
+// caller registered an expression for. A computed column has no row to read, so
+// without a registration there is nothing to select — but with one it is a
+// column like any other, and leaving it out of the bundle while the FILTER
+// resolves it would make `.task.status=open` select rows whose `status` the
+// answer does not carry.
+let read1 = (v: Vocab, comp: string, derived: Derived): Column[] =>
+  v.columns(comp).map((p) => v.column(comp, p)!)
+    .filter((c) => c.persist || derived[`${comp}.${c.prop}`])
 
 // The projected read for one component: each scalar straight off the row, each
 // reference joined back to its target's eid, keyed by the owner eid. A
@@ -69,7 +75,7 @@ export let compSql = (
   let sel: string[] = []
   let joins: string[] = []
   let deps = new Set<string>()
-  for (let c of stored(v, comp)) {
+  for (let c of read1(v, comp, derived)) {
     let own = derived[`${comp}.${c.prop}`]
     if (own) {
       for (let d of own.deps ?? []) deps.add(d)

@@ -70,9 +70,16 @@ export let hits = (
   let screen = opts.screen ? ` and "entity"."eid" in (${opts.screen.sql})` : ''
   if (opts.screen) params.push(...opts.screen.params)
   params.push(opts.limit ?? 20)
+  // MATERIALIZED, and it is not decoration: fts5's `bm25` and `snippet` may
+  // only be read where the index is being MATCHed, and SQLite's flattener will
+  // fold a plain subquery into the join above it — which moves them out of that
+  // context and answers "unable to use function bm25 in the requested context".
+  // Several arms compound into a UNION ALL, which is never flattened, so the
+  // fault only ever showed for a vocabulary with ONE indexed component.
   return {
-    sql: `select "entity"."eid" as entity, min("hit"."rank") as rank,` +
-      ` "hit"."snippet" as snippet from (${union}) as "hit"` +
+    sql: `with "hit" as materialized (${union})` +
+      ` select "entity"."eid" as entity, min("hit"."rank") as rank,` +
+      ` "hit"."snippet" as snippet from "hit"` +
       ` join "entity" on "entity"."id" = "hit"."owner"` +
       ` where not exists (select 1 from "tombstone" "t"` +
       ` where "t"."entity" = "entity"."id")${screen}` +
