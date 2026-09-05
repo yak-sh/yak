@@ -53,6 +53,7 @@ import { purged } from './files.ts'
 import {
   type Access,
   type App,
+  appStore,
   bornAt,
   type Directory,
   META,
@@ -372,7 +373,7 @@ let inApp = async (ctx: Ctx, args: Args, write = false) => {
     space,
     app,
     who,
-    store: storeOf(ctx.env.STORE, storeName(space, app)),
+    store: appStore(ctx.env.STORE, space, app),
   }
 }
 

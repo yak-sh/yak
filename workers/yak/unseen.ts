@@ -13,6 +13,7 @@ import { idOf } from '../../src/types.ts'
 import * as dirPart from './directory.ts'
 import {
   type App,
+  appStore,
   directory,
   type Space,
   stamp,
@@ -290,7 +291,7 @@ export let openIn = async (
   who: Who,
   all = false,
 ) => {
-  let store = storeOf(env.STORE, storeName(space, app))
+  let store = appStore(env.STORE, space, app)
   let seen = all ? '' : '&.notified='
   let hits: Hit[] = []
   for (let facet of ['exception', 'error']) {

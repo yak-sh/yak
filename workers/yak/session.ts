@@ -1,15 +1,23 @@
 // Who is asking (D-32318 §Auth): the platform session cookie, verified with
 // the shared secret (src/token.ts), joined to the person's membership in the
 // space the request is for. The kernel is the one reader of the cookie —
-// what serves an app gets `x-yak-person` and `x-yak-role` instead, and never
-// the cookie — and the only writer of the two headers, so a client cannot
-// send them: every internal request is built from scratch (app.ts).
+// what serves an app gets the VOUCH instead, and never the cookie — and the
+// only writer of it, so a client cannot send one: every request to a store is
+// built from scratch by `storeOf` (store.ts), which strips the set before it
+// stamps its own.
 //
-// The write rule, one line: a member with role owner or editor writes; a
-// viewer, a signed-in stranger, and nobody read. An app may widen or narrow
-// that for its own data with `app.access` (T-32504), which `reads` and
-// `writes` below answer; the app's FILES are never widened — a deploy is a
-// member's, whatever the app lets its visitors save.
+// THE RULE IS NOT KEPT HERE. `member`, `grant` and `access` are @yaks/member's
+// components, and the two questions they answer — may this level read a thing
+// in this mode, may it write one — are that package's own words (`reads`,
+// `edits`). The kernel's `Role` is member's `Level` and the kernel's `Access`
+// is its `Mode`, so the three predicates below are the same two questions
+// asked with a `Who` in hand, and the graph that enforces them (graph.ts's
+// `authenticating`, @yaks/member's precondition guard) cannot drift from the
+// door that gates them.
+//
+// T-33807 takes the three away with the old store path; until then they are
+// what apps.ts, reach.ts and the tools ask.
+import { edits, mode, reads as seen, writes as byLevel } from '@yaks/member'
 import { cookieValue, verify } from '../../src/token.ts'
 import type { Access, Role } from './directory.ts'
 
@@ -29,15 +37,16 @@ export let whoIs = async (
   return { person: claims.person, role: await roleOf(claims.person) }
 }
 
-export let mayWrite = (who: Who) => who.role == 'owner' || who.role == 'editor'
+export let mayWrite = (who: Who) => byLevel(who.role)
 
 // What an app lets someone who is not a member do with its store. Absent is
-// `public` — every app born before the word keeps what it had.
+// `public` — every app born before the word keeps what it had, which is what
+// @yaks/member's `mode()` reads out of an unwritten one.
 export let reads = (who: Who, access: Access | null) =>
-  access != 'private' || !!who.role
+  seen(mode(access), who.role)
 
 export let writes = (who: Who, access: Access | null) =>
-  access == 'open' || mayWrite(who)
+  edits(mode(access), who.role)
 
 // The headers an app is handed in the cookie's place.
 export let vouched = (who: Who): Record<string, string> => ({

@@ -28,6 +28,7 @@ import * as files from './files.ts'
 import { keyed, PREFIX, prefixOf, purged, SHA } from './files.ts'
 import {
   type App,
+  appStore,
   directory,
   META,
   type Space,
@@ -599,7 +600,7 @@ let homeOf = async (
   let slugs = [...new Set(names.map((n) => uses[n]))]
   if (slugs.length != 1) return null
   let [home] = await appsAt(env, space, slugs)
-  return home ? storeOf(env.STORE, storeName(space, home)) : null
+  return home ? appStore(env.STORE, space, home) : null
 }
 
 // The app's two acts, as one person: what a page does through the doors
@@ -609,7 +610,7 @@ let homeOf = async (
 // rule shapes the answer — and a refusal is the sentence a page would read.
 // Anything a tool can do here, the person calling it could do on the page.
 export let acting = (env: Env, space: Space, app: App, who: Who) => {
-  let store = storeOf(env.STORE, storeName(space, app))
+  let store = appStore(env.STORE, space, app)
   // Signed in and refused, it is the owner's to grant, so the sentence says
   // so; nobody reaches this door signed out, since the agent door has an
   // identity before it has a call (mcp.ts).
@@ -684,7 +685,7 @@ let api = async (
   if (path == '/client.js' || path == '/report.js') {
     return env.ASSETS.fetch(new Request(new URL(path, req.url)))
   }
-  let store = storeOf(env.STORE, storeName(space, app))
+  let store = appStore(env.STORE, space, app)
   // What the page (or the browser itself) says broke. Anyone may report —
   // a break belongs to whoever was looking at the page, and asking a
   // stranger to sign in first would lose exactly the breaks nobody sees.

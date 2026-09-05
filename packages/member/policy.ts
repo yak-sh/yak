@@ -18,8 +18,10 @@
 // the batch with is the grant's own entity. `levelOn` therefore looks at the
 // actor itself before it looks for a grant about the actor.
 //
-// The read rules are the write rules' mirror and they are stated once, here,
-// so the door and `apply()` cannot drift apart:
+// The two rules themselves are `reads` and `edits` in words.ts — pure, over a
+// mode and a level — and everything here is the ladder that finds the level to
+// ask them about. Said once there, the door, `apply()` and a host that already
+// knows both answers cannot drift apart:
 //
 //   read   the mode is not `private`, OR the asker holds any level
 //   write  the mode is `open`, OR the asker holds owner or editor
@@ -30,7 +32,7 @@
 import type { Bundle, Comp, Eid, Storage, Tx } from '@yaks/graph'
 import { detached, then } from '@yaks/graph'
 import { ACCESS, GRANT, MEMBER } from './comp.ts'
-import { type Level, level, type Mode, mode, writes } from './words.ts'
+import { edits, type Level, level, type Mode, mode, reads } from './words.ts'
 
 /** Who is asking: the entity a door signed the request with, or `null` for
  * nobody — an anonymous visitor with only the link. */
@@ -117,8 +119,10 @@ export let readsOn = (
 ): boolean | Promise<boolean> =>
   then(
     modeOn(tx, app),
+    // Nobody's answer first: a mode that admits nobody in particular admits
+    // everybody, and the ladder is never climbed.
     (m) =>
-      m != 'private' || then(levelOn(tx, who, app, where), (l) => l != null),
+      reads(m, null) || then(levelOn(tx, who, app, where), (l) => reads(m, l)),
   ) as boolean | Promise<boolean>
 
 /** May they write it? The mode is `open`, or they hold owner or editor. */
@@ -130,7 +134,8 @@ export let writesOn = (
 ): boolean | Promise<boolean> =>
   then(
     modeOn(tx, app),
-    (m) => m == 'open' || then(levelOn(tx, who, app, where), writes),
+    (m) =>
+      edits(m, null) || then(levelOn(tx, who, app, where), (l) => edits(m, l)),
   ) as boolean | Promise<boolean>
 
 /**

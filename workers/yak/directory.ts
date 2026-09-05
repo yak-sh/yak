@@ -27,7 +27,7 @@ import { slugsOf } from '../../src/types.ts'
 import type { Env, Fetcher } from './env.ts'
 import { SLUG } from './route.ts'
 import { nameOf } from './signin.ts'
-import { storeOf } from './store.ts'
+import { type Door, type Namespace, storeOf } from './store.ts'
 
 export let META = { space: 'yak', app: 'platform' }
 // The meta space's own store, named the way every app's is. Its slugs are
@@ -420,6 +420,15 @@ export let storeName = (space: Space, app: App) =>
 
 // What app_new pins, and what a rename must therefore leave alone.
 export let bornAt = (space: Space, slug: string) => `${space.slug}/${slug}`
+
+// The door onto one app's store, told WHICH app it holds and what this
+// directory says its access mode is (T-33813). A store keeps both (graph.ts
+// `#learn`) and answers @yaks/member's questions with them, so every caller
+// that has an App in hand opens its store this way; the ones that only have a
+// name — the meta store, the usage sweep — have no app to name and use
+// `storeOf` directly.
+export let appStore = (ns: Namespace, space: Space, app: App): Door =>
+  storeOf(ns, storeName(space, app), { eid: app.eid, access: app.access })
 
 // The address a person is handed for an app. A space's front page IS its
 // bare hostname (T-33040, apps.ts `fetch`) — its own `/<app>/` only forwards

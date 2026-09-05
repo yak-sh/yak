@@ -244,14 +244,14 @@ Deno.test('a stranger is refused on a private app', async () => {
     200,
   )
 
-  // A stranger with the link — nobody at all — is refused, in @yaks/member's
-  // own words.
+  // A stranger with the link — nobody at all — is refused at the door: a
+  // private app is not readable by nobody, and the way in is to sign in.
   let no = await post(store, '/apply', [{
     entity: { eid: CAKE },
     recipe: { serves: 1 },
   }], { app: APP })
-  assertEquals(no.status, 403)
-  assertEquals((await no.json()).error, 'Denied')
+  assertEquals(no.status, 401)
+  assertEquals((await no.json()).error, 'Unauthorized')
   // And nothing landed.
   let [cake] = await (await get(store, '/query?q=.recipe!', mine)).json()
   assertEquals(cake.recipe.serves, 8)

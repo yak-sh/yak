@@ -691,12 +691,43 @@ export type Door = (
   headers?: Record<string, string>,
 ) => Promise<Response>
 
-export let storeOf = (ns: Namespace, name: string): Door => {
+// The statement only the kernel may make, and therefore the set every request
+// to a store is scrubbed of before the kernel makes it. An init that IS a
+// Request carries its headers across — that is how a socket upgrade reaches
+// the object with its `Upgrade` header on it — so a visitor's own
+// `x-yak-person` would ride along with it and the object would believe it
+// (store.ts `writerOf`, graph.ts `vouchOf`). Stripped here, at the one door
+// onto a store, "the kernel builds every request from scratch" is a fact
+// about this function rather than a hope about its callers.
+let VOUCH = [
+  'x-store',
+  'x-yak-app',
+  'x-yak-access',
+  'x-yak-person',
+  'x-yak-role',
+  'x-yak-title',
+  'x-yak-write',
+  'x-yak-kernel',
+  'x-via',
+]
+
+/** Which app this door serves, as the directory has it: the entity the
+ * @yaks/member guard asks about, and the access mode that is the last word on
+ * a caller holding no level. The store remembers both (graph.ts `#learn`), so
+ * a door that cannot name its app simply says nothing about it. */
+export type Served = { eid: string; access: string | null }
+
+export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
   let stub = ns.get(ns.idFromName(name))
   return (path, init = {}, headers = {}) => {
     let req = new Request(`http://store${path}`, init)
+    for (let h of VOUCH) req.headers.delete(h)
     for (let [k, v] of Object.entries(headers)) req.headers.set(k, v)
     req.headers.set('x-store', name)
+    if (app) {
+      req.headers.set('x-yak-app', app.eid)
+      if (app.access) req.headers.set('x-yak-access', app.access)
+    }
     return stub.fetch(req)
   }
 }

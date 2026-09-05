@@ -14,7 +14,13 @@
 // filter line, and a store that cannot speak one is simply silent about it.
 import { asking, listed, type Row } from './listing.ts'
 import { EVERY } from './query.ts'
-import { type App, META_STORE, type Space, storeName } from './directory.ts'
+import {
+  type App,
+  appStore,
+  META_STORE,
+  type Space,
+  storeName,
+} from './directory.ts'
 import type { Env } from './env.ts'
 import { vouched, type Who, writes } from './session.ts'
 import { storeOf } from './store.ts'
@@ -51,7 +57,7 @@ export let at = (r: Reach) => `${r.space.slug}/${r.app.slug}`
 let doorOf = (env: Env, r: Reach, said?: string) => async (line: string) => {
   let asked = line.replace(/^[?&]+/, '')
   let mine = at(r) == META_STORE ? asked : asking(asked)
-  let door = storeOf(env.STORE, storeName(r.space, r.app))
+  let door = appStore(env.STORE, r.space, r.app)
   let res = await door(`/query?${mine}`, {}, vouched(r.who))
   let body = await res.text()
   if (!res.ok) throw new Error(body)
@@ -541,7 +547,7 @@ let sent = async (
   if (!writes(r.who, r.app.access)) {
     throw new Error(`not a writer of ${at(r)}`)
   }
-  let door = storeOf(env.STORE, storeName(r.space, r.app))
+  let door = appStore(env.STORE, r.space, r.app)
   let res = await door(`/apply${check ? '?check=1' : ''}`, {
     method: 'POST',
     body: JSON.stringify({ entities: part.entities }),

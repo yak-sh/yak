@@ -53,3 +53,22 @@ export let mode = (v: unknown): Mode =>
 /** May someone holding this level write? An `owner` and an `editor` write; a
  * `viewer`, and nobody at all, do not. */
 export let writes = (l: Level | null): boolean => l == 'owner' || l == 'editor'
+
+// THE TWO RULES, said once. Everything else in this package — the `policy`
+// a door asks, the `precondition` a batch passes — reads the ladder out of
+// storage and then asks one of these two questions. A host that already knows
+// both answers (a platform that authenticated the caller at its edge and holds
+// the mode in a directory) asks them here, with no storage at all, and cannot
+// drift from the graph that enforces them.
+
+/** May someone holding this level READ a thing in this mode? Anything not
+ * `private` is readable by anyone with the link; a `private` thing is readable
+ * by whoever holds any level on it. */
+export let reads = (m: Mode, l: Level | null): boolean =>
+  m != 'private' || l != null
+
+/** May someone holding this level WRITE a thing in this mode? An `open` thing
+ * is written by anyone, signed in or not; anything else wants owner or
+ * editor. */
+export let edits = (m: Mode, l: Level | null): boolean =>
+  m == 'open' || writes(l)
