@@ -137,6 +137,66 @@ export let bucket = () => {
   }
 }
 
+/** One command, as the stand-in sandbox was told to answer it. */
+export type Ran = { stdout?: string; stderr?: string; exitCode?: number }
+
+/**
+ * The builder's workbench, in memory (sandbox.ts): a scripted answer per
+ * command and a Map for a filesystem. It is here beside the Store and the
+ * bucket for the same reason they are — a second copy of what a sandbox
+ * answers is a second answer to what a sandbox is — and it keeps the tools
+ * that reach for one testable with no container anywhere.
+ *
+ * `answer` is asked for every command; what it returns is what `exec` says.
+ * Undefined is a command that did nothing and exited 0.
+ */
+export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
+  let ran: string[] = []
+  let files = new Map<string, string>()
+  let alive = new Set<string>()
+  let box = (name: string) => ({
+    exec: (cmd: string, opts?: { cwd?: string; timeout?: number }) => {
+      alive.add(name)
+      ran.push(cmd)
+      let said = answer(cmd) ?? {}
+      return Promise.resolve({
+        stdout: said.stdout ?? '',
+        stderr: said.stderr ?? '',
+        exitCode: said.exitCode ?? 0,
+        cwd: opts?.cwd,
+      })
+    },
+    writeFile: (path: string, content: string) => {
+      alive.add(name)
+      files.set(path, content)
+      return Promise.resolve({ success: true })
+    },
+    readFile: (path: string, opts?: { encoding?: string }) => {
+      alive.add(name)
+      let held = files.get(path)
+      if (held == null) return Promise.reject(new Error(`no file ${path}`))
+      return Promise.resolve({
+        content: opts?.encoding == 'base64'
+          ? btoa(String.fromCharCode(...new TextEncoder().encode(held)))
+          : held,
+      })
+    },
+    destroy: () => Promise.resolve(void alive.delete(name)),
+  })
+  return {
+    ran,
+    files,
+    alive,
+    // `getSandbox` addresses one by name off the namespace; nothing here
+    // needs an id object, so the name IS the id.
+    SANDBOX: {
+      idFromName: (n: string) => n,
+      getByName: (n: string) => box(n),
+      get: (n: unknown) => box(String(n)),
+    },
+  }
+}
+
 /**
  * One platform: a Store per name the kernel spells, the bucket its files are
  * in, and the platform's own assets off disk (the client an app imports, the

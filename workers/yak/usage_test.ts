@@ -129,6 +129,7 @@ let space = (meter: Partial<Meter> = {}, tier: Tier | null = null): Space => ({
     emails: 0,
     builds: 0,
     tokens: 0,
+    seconds: 0,
     built: 0,
     at: NOW.toISOString(),
     ...meter,
@@ -232,11 +233,12 @@ let writes = () => {
 Deno.test('a free space is built for once, for the life of the space', async () => {
   assertEquals(refusedBuild(space(), NOW), null)
   let { sent, env } = writes()
-  await countedBuild(env, space(), { input: 900, output: 100 }, NOW)
+  await countedBuild(env, space(), { input: 900, output: 100 }, 0, NOW)
   assertEquals(sent[0].meter, {
     month: '2026-09',
     builds: 1,
     tokens: 1_000,
+    seconds: 0,
     built: 1,
   })
 
@@ -281,12 +283,16 @@ Deno.test('a paid space counts its builds down, and the month gives them back', 
     env,
     space({ builds: 2, tokens: 5_000, built: 40 }, 'plus'),
     { input: 1_200, output: 300 },
+    // And the container seconds ride the same write, because both are derived
+    // from one reading of the space (sandbox.ts, T-34264).
+    12,
     NOW,
   )
   assertEquals(sent[0].meter, {
     month: '2026-09',
     builds: 3,
     tokens: 6_500,
+    seconds: 12,
     built: 41,
   })
 })

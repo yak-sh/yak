@@ -127,6 +127,7 @@ let empty = (month: string, built = 0): Meter => ({
   emails: 0,
   builds: 0,
   tokens: 0,
+  seconds: 0,
   built,
   at: '',
 })
@@ -331,18 +332,25 @@ export let refusedBuild = (space: Space, now = new Date()) =>
     : null
 
 /**
- * One completed build and what it cost: the month's builds and tokens, and the
- * space's lifetime builds, each one higher.
+ * One completed build and what it cost: the month's builds, tokens and
+ * container seconds, and the space's lifetime builds, each one higher.
  *
  * This is the call the builder's loop makes with the `usage` its `build()`
- * returns (T-34239). A build that was REFUSED never reaches it, so a refusal
- * costs a person nothing — not a build, and not the tokens of the sentence
- * that turned it down.
+ * returns (T-34239) and the seconds its workbench held (sandbox.ts
+ * `released`). A build that was REFUSED never reaches it, so a refusal costs
+ * a person nothing — not a build, and not the tokens of the sentence that
+ * turned it down.
+ *
+ * The seconds ride HERE rather than in a second call because both figures are
+ * derived from one reading of the space: on a month with no row yet each
+ * write starts from `empty()`, and the second would put the first one's
+ * columns back at zero.
  */
 export let countedBuild = async (
   env: { STORE: Namespace },
   space: Space,
   usage: Usage,
+  seconds = 0,
   now = new Date(),
 ) => {
   let month = monthOf(now)
@@ -357,9 +365,52 @@ export let countedBuild = async (
           month,
           builds: held.builds + 1,
           tokens: held.tokens + tokens,
+          seconds: held.seconds + seconds,
           built,
         }
-        : { ...empty(month), builds: 1, tokens, built },
+        : { ...empty(month), builds: 1, tokens, seconds, built },
+    }],
+  })
+}
+
+// ---- the workbench (T-34264) ------------------------------------------------
+//
+// Container seconds, counted where they happen like the letters and the
+// builds: nothing in the analytics knows what the builder compiled. The unit
+// is ONE SECOND OF CONTAINER WALL TIME — what Cloudflare bills on — measured
+// from the first sandbox call in a build to the moment the build lets the
+// container go (sandbox.ts `Spend`), rounded up.
+//
+// There is no ceiling on the PLAN here, only the per-build budget the tools
+// refuse at (sandbox.ts `BUDGET`), because the builds ceiling already bounds
+// how many builds a plan gets and a build cannot spend more than its budget.
+// What `meter.seconds` is for is the bill: the one place a month of container
+// time is written down.
+
+/**
+ * The container seconds spent, on the space's month, on their own.
+ *
+ * The door for the seconds that ride BESIDE no build: a conversation that
+ * compiled something and shipped nothing (builder.ts `end`), and a lone
+ * sandbox tool call somebody's own agent made over the connector (tools.ts
+ * `bench`). Where a build IS being counted the seconds go with it
+ * ({@link countedBuild}), so that one reading of the space makes one write.
+ */
+export let countedSandbox = async (
+  env: { STORE: Namespace },
+  space: Space,
+  seconds: number,
+  now = new Date(),
+) => {
+  if (seconds <= 0) return
+  let month = monthOf(now)
+  let held = thisMonth(space.meter, month)
+  await stamp(env, {
+    entities: [{
+      entity: { eid: space.eid },
+      meter: held
+        ? { month, seconds: held.seconds + seconds }
+        : { ...empty(month, space.meter?.built ?? 0), seconds },
     }],
   })
 }

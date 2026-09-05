@@ -478,6 +478,7 @@ export let platformDoc: VocabDoc = {
         emails: num,
         builds: num,
         tokens: num,
+        seconds: num,
         built: num,
         at: time,
       },

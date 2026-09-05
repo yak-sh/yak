@@ -275,6 +275,13 @@
           not limited by this.
         </p>
         <p>
+          When something must be compiled — Rust to WebAssembly, say — the
+          builder can run it in a Linux container and copy the result into your
+          app. One build gets <b>10 minutes</b> of container time; past that
+          the build says so and keeps whatever it has already shipped. The
+          container is thrown away when the build ends.
+        </p>
+        <p>
           Visits are counted but not refused. Apps remain available after the
           plan's monthly visit amount is exceeded.
           <a href="/pricing">The pricing page</a> has both plans in full.

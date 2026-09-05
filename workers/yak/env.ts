@@ -14,6 +14,7 @@ import type { R2 } from '../../src/blobs_r2.ts'
 import type { Dispatch } from './dispatch.ts'
 import type { Binding } from './post.ts'
 import type { Fetcher, Namespace } from './door.ts'
+import type { Sandboxes } from './sandbox.ts'
 
 // The door's own word, said again here: every part of this kernel names its
 // bindings out of env.ts, and where a request may be handed is the door's to
@@ -143,6 +144,12 @@ export type Env = {
   OPENAI_API?: string
   BUILDER_MODEL_FREE?: string
   BUILDER_MODEL_PAID?: string
+  // The builder's workbench (sandbox.ts, T-34264): the Cloudflare Container
+  // one build compiles in, bound as a Durable Object namespace
+  // (wrangler.toml `[[containers]]`). Absent under `deno test` and the
+  // workerd probes, where the sandbox tools say so rather than half-running —
+  // and absent under `wrangler dev` on a machine with no container engine.
+  SANDBOX?: Sandboxes
   // The single static token OpenAI's apps directory fetches to verify the
   // domain (index.ts serves it at /.well-known/openai-apps-challenge). A
   // secret so the open-source repo carries no token; unset, that path 404s.

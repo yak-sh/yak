@@ -43,8 +43,9 @@ import { directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { INSTRUCTIONS, WHOLE } from './guide.ts'
-import { countedBuild, refusedBuild } from './meter.ts'
+import { countedBuild, countedSandbox, refusedBuild } from './meter.ts'
 import { asset } from './preauth.ts'
+import { released, spending } from './sandbox.ts'
 import type { Who } from './session.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 
@@ -516,12 +517,24 @@ export let build = async (
       console.warn('builder: a listener threw', e)
     }
   }
+  // The workbench this build may reach for (sandbox.ts, T-34264). It is minted
+  // whether or not anything wants a container: the sandbox tools read it off
+  // the `Ctx` to know they are inside a build, and one that never woke a
+  // container costs nothing and destroys nothing.
+  let spend = spending()
   // Every way out of the loop, including the refusals: a build that HAPPENED
   // is counted whichever end the conversation came to, and a conversation
-  // that deployed nothing is counted nowhere (meter.ts `countedBuild`).
+  // that deployed nothing is counted nowhere (meter.ts `countedBuild`). The
+  // container goes on every one of those ends too — a refusal is not a reason
+  // to leave one running.
   let end = async (refused?: string): Promise<Built> => {
     if (refused) lines.push({ said: 'builder', text: refused })
-    if (built) await countedBuild(env, space, usage)
+    let seconds = await released(env, space, spend)
+    // ONE write, from one reading of the space: the build and the seconds it
+    // compiled for go together, and a conversation that compiled something
+    // and shipped nothing pays for the container alone (meter.ts).
+    if (built) await countedBuild(env, space, usage, seconds)
+    else if (seconds) await countedSandbox(env, space, seconds)
     let last = [...lines].reverse().find((l) => l.said == 'builder')
     let text = last?.said == 'builder' ? last.text : ''
     on({ beat: 'done', text, ...(refused ? { refused } : {}) })
@@ -547,6 +560,7 @@ export let build = async (
     // (directory.ts, mcp.ts).
     dir: directory(bound(env.DIRECTORY, dirPart.fetch, env), true),
     person: who.person,
+    spend,
   }
   let model = opts.model ?? modelOf(env, opts.id ?? idOf(env, space))
   let tools = roster(ctx)

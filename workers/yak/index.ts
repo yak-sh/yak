@@ -105,6 +105,14 @@ export { Store } from './graph.ts'
 export { Wire } from './stream.ts'
 export { Builder } from './build.ts'
 
+// The builder's workbench (sandbox.ts, T-34264): Cloudflare's own Sandbox
+// Durable Object, whose container the deploy builds from
+// workers/yak/sandbox/Dockerfile. This is the ONE place the package is named
+// as a value — it imports `cloudflare:workers`, which only the runtime can
+// load, and sandbox.ts types the binding instead so every test can reach the
+// tools that use it.
+export { Sandbox } from '@cloudflare/sandbox'
+
 // The kernel's SECOND entrypoint, and the only one with a cache in front of it
 // (cache.ts, wrangler.toml `[exports.Files]`). The default entrypoint below is
 // the gateway: it runs on every request, because the cache key does not

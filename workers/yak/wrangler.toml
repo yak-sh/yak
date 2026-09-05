@@ -126,6 +126,13 @@ class_name = "Wire"
 name = "BUILDER"
 class_name = "Builder"
 
+# The builder's workbench (sandbox.ts, T-34264): one Cloudflare Container per
+# build session, holding a Rust toolchain and the wasm target, so the agent can
+# compile the things a browser cannot and ship the artifact into the app.
+[[durable_objects.bindings]]
+name = "SANDBOX"
+class_name = "Sandbox"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Store"]
@@ -137,6 +144,35 @@ new_sqlite_classes = ["Wire"]
 [[migrations]]
 tag = "v3"
 new_sqlite_classes = ["Builder"]
+
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = ["Sandbox"]
+
+# The container behind that object. `image` is a path, so the deploy BUILDS
+# it, and wrangler needs a container engine to do that — EVEN FOR A DRY RUN.
+# Workers Builds has one and a developer box may not, so the gate here is
+# `deno task deploy:yak --dry-run --containers-rollout=none`: that flag skips
+# the image and the rollout, and the config is still parsed and the Worker
+# still bundles. What holds the block itself is sandbox_test.ts, which reads it
+# and checks that the image tag and the @cloudflare/sandbox pin in package.json
+# are the same release — the one thing here that would rot silently.
+#
+# `standard-2` — 1 vCPU, 6 GiB, 12 GB of disk — is chosen for rustc: `lite`'s
+# sixteenth of a core would spend the whole ten-minute budget (sandbox.ts
+# BUDGET) on one crate, and the image plus a `target/` directory does not fit
+# in `lite`'s 2 GB (an image may be as large as the instance's disk). At
+# Cloudflare's rates that is about $0.000035 a second, so a build that spends
+# its whole budget costs about two cents.
+#
+# `max_instances` bounds what can be running at once — one sandbox per space,
+# so five spaces building simultaneously. Nothing here is a fleet yet; raising
+# it is one number.
+[[containers]]
+class_name = "Sandbox"
+image = "./sandbox/Dockerfile"
+instance_type = "standard-2"
+max_instances = 5
 
 # Outbound mail as a binding rather than the REST API (T-33684): Cloudflare
 # Email Sending, authorized by this deploy instead of by a token, so nothing

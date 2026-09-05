@@ -396,6 +396,7 @@ export let comps: Record<string, Record<string, PropType>> = {
     emails: 'number',
     builds: 'number',
     tokens: 'number',
+    seconds: 'number',
     built: 'number',
     at: 'time',
   },

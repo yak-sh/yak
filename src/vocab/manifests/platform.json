@@ -140,6 +140,7 @@
         "emails": "number",
         "builds": "number",
         "tokens": "number",
+        "seconds": "number",
         "built": "number",
         "at": "time"
       }

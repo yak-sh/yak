@@ -102,6 +102,17 @@ import type { Env } from './env.ts'
 import { mail, REPLY_TO } from './mail.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { asset, NO_ARGS, PUBLIC } from './preauth.ts'
+import {
+  type Box,
+  boxOf,
+  BUDGET,
+  CAP,
+  CWD,
+  paid,
+  type Spend,
+  spending,
+  TIMEOUT,
+} from './sandbox.ts'
 import { foreign, SLUG } from './route.ts'
 import { globs } from './router.ts'
 import type { Reach } from './reach.ts'
@@ -114,6 +125,7 @@ import {
   atCeiling,
   builds,
   ceilings,
+  countedSandbox,
   letters,
   monthOf,
   size,
@@ -140,6 +152,12 @@ export type Ctx = {
   // T-34277). Set after the tools are assembled, since it is made OF them, so
   // only a tool RUNNING sees it — which `about` is.
   roster?: { version: string; names: string[] }
+  // The container time this BUILD has spent (sandbox.ts `Spend`), where a
+  // build is what is running: builder.ts mints one per loop and pays for it
+  // at the end. A connector call arrives without one and gets a fresh one, so
+  // a single tool call is its own budget — which is as much as one call could
+  // spend anyway, since a command is capped at sandbox.ts `TIMEOUT`.
+  spend?: Spend
 }
 type Args = Record<string, unknown>
 // What a tool answers: the text, the space it worked in (so the door can
@@ -804,9 +822,11 @@ let fileKey = (space: Space, app: App, path: string) =>
 /**
  * Bytes into an app's files, and the edge emptied once after the last one —
  * the write half of app_files, with no tool call in it, because bytes arrive
- * by another door too: a zip somebody dropped on their space's page carries
- * pictures, and a picture is not `content: string` (drop.ts, T-34230). Answers
- * the paths as the app serves them.
+ * by other doors too: a zip somebody dropped on their space's page carries
+ * pictures (drop.ts, T-34230), and `sandbox_ship` carries what a compiler
+ * made (T-34264). Neither is `content: string` — a `.wasm` would not survive
+ * a decode — which is why this takes BYTES. Answers the paths as the app
+ * serves them.
  */
 export let wrote = async (
   env: Env,
@@ -835,6 +855,71 @@ export let call = (ctx: Ctx, name: string, args: Args): Promise<Out> => {
   if (!tool) throw new Error(`no tool ${name}`)
   return tool.run(ctx, args)
 }
+
+// ---- the workbench (sandbox.ts, T-34264) -----------------------------------
+
+/**
+ * One turn at the build session's workbench: the container, and the seconds
+ * it cost.
+ *
+ * A BUILD holds its own `spend` and pays for the whole thing when it ends,
+ * destroying the container with it (builder.ts). A lone connector call arrives
+ * with none, mints one, and pays for its own seconds here — leaving the
+ * container to sleep on its own (sandbox.ts `SLEEP`), because the person may
+ * well call again in a moment and a fresh container is a fresh `cargo build`.
+ */
+let bench = async <T>(
+  ctx: Ctx,
+  space: Space,
+  body: (box: Box) => Promise<T>,
+): Promise<T> => {
+  let spend = ctx.spend ?? spending()
+  let box = boxOf(ctx.env, space, spend)
+  try {
+    return await body(box)
+  } finally {
+    if (!ctx.spend) {
+      await paid(spend, (s) => countedSandbox(ctx.env, space, s))
+    }
+  }
+}
+
+// What a tool hands back of a command's output. A compiler that failed says
+// why in its first lines; past that it is the same warning again, and a model
+// paying by the token should not read it twice.
+let capped = (said: string) =>
+  said.length > CAP
+    ? `${said.slice(0, CAP)}\n… and ${said.length - CAP} more characters`
+    : said
+
+// A path this may hand to a shell for globbing: what a path and a glob are
+// made of, and nothing a shell reads as punctuation. It is tidiness rather
+// than a boundary — the sandbox is the caller's own and sandbox_exec runs
+// anything in it — and it keeps one `ls` from becoming three commands.
+let SHIP = /^[A-Za-z0-9._\-/*?[\]]+$/
+
+let shipPath = (v: unknown) => {
+  let said = text(v, 'paths')
+  if (!SHIP.test(said) || said.split('/').includes('..')) {
+    throw new Error(
+      `paths: ${said} — a path inside the sandbox, e.g. pkg/app.wasm or ` +
+        'pkg/*.js',
+    )
+  }
+  return said
+}
+
+// Where that path IS: from the sandbox's working directory, or as written
+// where a model wrote an absolute one. There is nowhere to escape to — the
+// sandbox is the caller's own and sandbox_exec reaches all of it — so this is
+// about `/workspace//workspace/x`, not about a boundary.
+let inBox = (path: string) => path.startsWith('/') ? path : `${CWD}/${path}`
+
+// The bytes of a file read out of the container. base64 whatever it is: a
+// .wasm is not text and would not survive being decoded as text (files.ts
+// serves it by its extension either way).
+let unbase64 = (said: string) =>
+  Uint8Array.from(atob(said.trim()), (c) => c.charCodeAt(0))
 
 // What an app's access means where it is felt: what happens when the person
 // sends someone the link. Said on every tool that sets it, so the agent can
@@ -1192,6 +1277,171 @@ export let TOOLS: Tool[] = [
           : `wrote ${paths.length} files → ${url(space, app)}: ${
             paths.join(', ')
           }`,
+        space,
+      }
+    },
+  },
+  // The workbench (sandbox.ts, T-34264). Four tools, and they are here rather
+  // than in a tier of their own because they are the platform's verbs like the
+  // rest: an owner or editor of the space calls them, the builder we run calls
+  // them through the same table (builder.ts `roster`), and a person's own
+  // agent calls them over the connector.
+  {
+    name: 'sandbox_exec',
+    description:
+      "Run one command in this space's build sandbox — a Linux container " +
+      'with a Rust toolchain, the wasm32-unknown-unknown target, ' +
+      'wasm-bindgen and wasm-opt. It is for the things a browser cannot do ' +
+      'for itself: compile Rust to WebAssembly, run a generator, minify ' +
+      'something. Write the source with sandbox_write, build it here, then ' +
+      'sandbox_ship the artifact into the app. An app needs none of this — ' +
+      'html, css and js run as they are, so reach for the sandbox only when ' +
+      'something must be COMPILED. The container is metered: every second it ' +
+      `is awake is charged to the space, and one build gets ${BUDGET} of ` +
+      'them, so plan the build and run it once rather than poking at it. It ' +
+      'is destroyed when the build ends, and everything in it with it.',
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        cmd: str('the command, run in a shell, e.g. cargo build --release'),
+        cwd: str(`where to run it (default ${CWD})`),
+        timeout: {
+          type: 'number',
+          description: `seconds to allow it (default and most, ${
+            TIMEOUT / 1000
+          })`,
+        },
+      },
+      required: ['cmd'],
+    },
+    run: async (ctx, args) => {
+      let { space } = await inSpace(ctx, args, true)
+      let cmd = text(args.cmd, 'cmd')
+      let asked = Number(args.timeout ?? 0) * 1000
+      let out = await bench(ctx, space, (box) =>
+        box.exec(cmd, {
+          cwd: args.cwd == null ? CWD : text(args.cwd, 'cwd'),
+          timeout: asked > 0 ? Math.min(asked, TIMEOUT) : TIMEOUT,
+        }))
+      return {
+        text: `code ${out.exitCode}` +
+          `\n\nstdout:\n${capped(out.stdout) || '(nothing)'}` +
+          `\n\nstderr:\n${capped(out.stderr) || '(nothing)'}`,
+        space,
+      }
+    },
+  },
+  {
+    name: 'sandbox_write',
+    description:
+      "Write one file inside this space's build sandbox — a Cargo.toml, a " +
+      "src/lib.rs, whatever the build needs. These are NOT the app's files: " +
+      'nothing here is served, and everything here is gone when the build ' +
+      'ends. app_files writes what the app serves; sandbox_ship moves a built ' +
+      'artifact from here to there. Waking the sandbox is metered by the ' +
+      'second, like sandbox_exec.',
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        path: str(`the path in the sandbox, e.g. src/lib.rs (from ${CWD})`),
+        content: str('the file text'),
+      },
+      required: ['path', 'content'],
+    },
+    run: async (ctx, args) => {
+      let { space } = await inSpace(ctx, args, true)
+      let path = shipPath(args.path)
+      let content = text(args.content, 'content')
+      await bench(
+        ctx,
+        space,
+        (box) => Promise.resolve(box.writeFile(inBox(path), content)),
+      )
+      return { text: `wrote ${path} in the sandbox`, space }
+    },
+  },
+  {
+    name: 'sandbox_read',
+    description:
+      "Read one file back out of this space's build sandbox — a generated " +
+      'source, a build log, whatever the last command left behind. Waking the ' +
+      'sandbox is metered by the second, like sandbox_exec.',
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        path: str(`the path in the sandbox, e.g. pkg/app.js (from ${CWD})`),
+      },
+      required: ['path'],
+    },
+    run: async (ctx, args) => {
+      let { space } = await inSpace(ctx, args, true)
+      let path = shipPath(args.path)
+      let got = await bench(
+        ctx,
+        space,
+        (box) => box.readFile(inBox(path)),
+      )
+      return { text: capped(got.content), space }
+    },
+  },
+  {
+    name: 'sandbox_ship',
+    description:
+      'Copy what the build made into the app, where it is served: name the ' +
+      'files in the sandbox — pkg/*.wasm, pkg/*.js — and each lands beside ' +
+      'index.html under its own name, as if app_files had written it. This ' +
+      'is the last step of a compile: the sandbox is thrown away and the app ' +
+      'keeps the artifact. Bytes are carried as bytes, so a .wasm arrives ' +
+      'whole. Waking the sandbox is metered by the second, like sandbox_exec.',
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        app: APP,
+        paths: {
+          type: 'array',
+          items: str('a path or glob in the sandbox, e.g. pkg/*.wasm'),
+          description: 'the files to copy in; a glob may name several',
+        },
+      },
+      required: ['app', 'paths'],
+    },
+    run: async (ctx, args) => {
+      let { space, app } = await inApp(ctx, args, true)
+      let asked = list(args.paths, 'paths').map(shipPath)
+      if (!asked.length) throw new Error('paths: at least one file to copy in')
+      let files = await bench(ctx, space, async (box) => {
+        // One `ls` expands every glob at once, so a batch of artifacts costs
+        // one command rather than one each.
+        let found = await box.exec(`ls -1d -- ${asked.join(' ')}`, { cwd: CWD })
+        let paths = found.stdout.split('\n').map((l) => l.trim()).filter(
+          Boolean,
+        )
+        if (!paths.length) {
+          throw new Error(
+            `nothing in the sandbox matches ${asked.join(', ')} — ` +
+              'sandbox_exec `ls` to see what the build left',
+          )
+        }
+        return await Promise.all(paths.map(async (path) => ({
+          // The app serves it under its own name: `pkg/app_bg.wasm` arrives
+          // as `app_bg.wasm`, beside index.html, which is where a page's
+          // relative import looks for it.
+          path: path.split('/').pop()!,
+          bytes: unbase64(
+            (await box.readFile(inBox(path), { encoding: 'base64' }))
+              .content,
+          ),
+        })))
+      })
+      let paths = await wrote(ctx.env, space, app, files)
+      return {
+        text: `shipped ${paths.length} ${
+          paths.length == 1 ? 'file' : 'files'
+        } → ${url(space, app)}: ${paths.join(', ')}`,
         space,
       }
     },

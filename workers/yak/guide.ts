@@ -149,6 +149,18 @@ It reads the app's store as the person looking (env.STORE), its files
 what a page must not hold and nothing can read back. Call guide with page code
 for a whole one.
 
+Almost nothing needs COMPILING: an app is html, css and js, served as
+written, and reaching for a build step where none is needed is the commonest
+way to waste an afternoon. When something genuinely must be compiled — Rust
+to WebAssembly for a chess engine, an image codec, a solver — there is a
+sandbox: sandbox_write the sources, sandbox_exec the build (a Linux container
+with a pinned Rust toolchain, the wasm32-unknown-unknown target, wasm-bindgen
+and wasm-opt), then sandbox_ship the artifact — pkg/*.wasm, pkg/*.js — into
+the app, where it is served beside index.html and the page imports it. Its
+files are gone when the build ends; only what you ship survives. Every second
+the container is awake is charged to the space, so plan the build, run it
+once, and ship.
+
 Asked to save things from OTHER sites — a recipe, a listing, an article —
 give the app a /clip route on its worker.js: it fetches the address, reads
 what the page says about itself (JSON-LD first, then og: meta tags, then the

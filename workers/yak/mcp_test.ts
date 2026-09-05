@@ -97,6 +97,12 @@ slow(
         'space_delete',
         'app_new',
         'app_files',
+        // The builder's workbench, offered to a person's own agent on the
+        // same terms it is offered to ours (sandbox.ts, T-34264).
+        'sandbox_exec',
+        'sandbox_write',
+        'sandbox_read',
+        'sandbox_ship',
         'app_deploy',
         'app_versions',
         'app_rollback',

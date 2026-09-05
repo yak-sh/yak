@@ -208,6 +208,7 @@ export let sweep = async (env: Env, now = new Date()) => {
       emails: was.emails,
       builds: was.builds,
       tokens: was.tokens,
+      seconds: was.seconds,
       built: was.built,
       at,
     }

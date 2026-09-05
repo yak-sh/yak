@@ -57,6 +57,11 @@ export type Meter = {
   // build is for the life of the space rather than the month.
   builds: number
   tokens: number
+  // The seconds the builder's workbench spent awake (sandbox.ts, T-34264).
+  // Its own column beside `tokens` because a token and a container-second are
+  // priced differently, and one number made of both is a number nobody can
+  // add up.
+  seconds: number
   built: number
   at: string
 }
@@ -231,6 +236,7 @@ let meterOf = (r: Row): Meter | null =>
       emails: r.meter.emails ?? 0,
       builds: r.meter.builds ?? 0,
       tokens: r.meter.tokens ?? 0,
+      seconds: r.meter.seconds ?? 0,
       built: r.meter.built ?? 0,
       at: r.meter.at ?? '',
     }

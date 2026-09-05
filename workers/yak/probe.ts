@@ -82,6 +82,14 @@ export let kernel = async (vars: Record<string, string> = {}) => {
       // Any extra vars a test asks for: a domain-verification token
       // (index.ts), or a kernel wearing CIMD=off (identity.ts).
       ...Object.entries(vars).flatMap(([k, v]) => ['--var', `${k}:${v}`]),
+      // The builder's workbench is a CONTAINER (wrangler.toml
+      // `[[containers]]`, sandbox.ts), and `wrangler dev` builds its image
+      // from the Dockerfile before it serves anything — which needs a
+      // container engine. No probe here calls a sandbox tool, and a test
+      // suite may not require a daemon to be running on the box, so the
+      // kernel boots with containers off and `env.SANDBOX` unbound, which is
+      // the case the tools already answer in a sentence (`NO_BOX`).
+      '--enable-containers=false',
       '--show-interactive-dev-session=false',
     ],
     cwd: root,
