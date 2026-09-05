@@ -62,6 +62,27 @@ mine(bundle, everything) // …judged against a set, for references and hops
 resolve against — pass the same value a compiled query is given and both sides
 answer alike.
 
+## Computed columns
+
+A column a vocabulary declares but never stores (`persist: false`) has no value
+in a bundle to read: its formula belongs to the application, not the schema. So
+this package takes it the way [@yaks/sql](https://jsr.io/@yaks/sql) takes its
+`derived` hook — from the caller, keyed `comp.prop`:
+
+```ts
+import { compute, derived } from '@yaks/task'
+
+// one rule, two evaluators
+matcher('.status=open', vocab, { computed: compute() }) // in memory
+compile(ast, vocab, { derived: derived() }) // in a database
+```
+
+`opts.computed` maps `comp.prop` to a function of the bundle. The column's TYPE
+still comes from the vocabulary — it declares the column, the registration only
+says how to read it — and ordering by a computed column works the same way. A
+registration also serves as a plain read override for a stored column. A
+computed column nobody registered still declines (below).
+
 ## The grammar it answers
 
 Everything on @yaks/sql's common path:
@@ -132,9 +153,10 @@ query is compiled, before a bundle is read:
   need a stored link table. None of that rides in a bundle.
 - **`.count!`, `.distinct=`, `.tally=`** — an aggregate is a row shape, not a
   selection of entities. Count what comes back instead.
-- **A computed column** (`persist: false` in the vocabulary) — its value is
-  derived elsewhere and no bundle holds it. (@yaks/sql takes an expression for
-  these through its `derived` hook; there is no in-memory equivalent yet.)
+- **A computed column** (`persist: false` in the vocabulary) **nobody
+  registered** — no bundle holds its value and no rule was handed in for it.
+  Register it through `opts.computed` (above) and it answers; @yaks/sql declines
+  the same column for the same reason when its `derived` hook has no entry.
 - **`.refs!` / `.refs=`** (presence and absence) — only `.refs=<id>` is a
   question about backlinks.
 - **A predicate the column's type cannot answer** — `.price>cheap`, a comparison

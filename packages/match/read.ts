@@ -66,11 +66,27 @@ let held = (v: unknown): unknown =>
 export type Read = { read: (b: Bundle) => unknown; tag: Tag }
 
 /**
- * How to read `comp.prop` off an entity, or `null` when there is nothing to
- * read: a column the vocabulary does not declare, or a computed one whose value
- * is derived rather than stored. The caller reports that as a decline.
+ * The computed-column registry, keyed `comp.prop`: the rule that READS a column
+ * the vocabulary declares but never stores (`persist: false`). It is the
+ * in-memory twin of {@link https://jsr.io/@yaks/sql/doc/~/Derived | @yaks/sql}'s
+ * `derived` hook — the formula belongs to the application, not the schema, so
+ * both compilers take it from the caller and one rule answers on both sides.
+ * A registration also serves as a plain READ OVERRIDE for a stored column, the
+ * way a derived entry does.
  */
-export let column = (v: Vocab, name: string, prop: string): Read | null => {
+export type Computed = Record<string, (b: Bundle) => unknown>
+
+/**
+ * How to read `comp.prop` off an entity, or `null` when there is nothing to
+ * read: a column the vocabulary does not declare, or a computed one no rule was
+ * registered for. The caller reports that as a decline.
+ */
+export let column = (
+  v: Vocab,
+  name: string,
+  prop: string,
+  computed: Computed = {},
+): Read | null => {
   if (name == 'entity') {
     return {
       read: (b) => held((b.entity as Record<string, unknown>)[prop]),
@@ -81,6 +97,12 @@ export let column = (v: Vocab, name: string, prop: string): Read | null => {
     return { read: (b) => wears(b, name) ? b.entity.eid : null, tag: 'eid' }
   }
   let col = v.column(name, prop)
-  if (!col || !col.persist) return null
+  if (!col) return null
+  // The registered rule wins, computed column or not — the same order the SQL
+  // binder consults its `derived` map in. The TYPE stays the vocabulary's: it
+  // declares the column, the caller only says how to read it.
+  let own = computed[`${name}.${prop}`]
+  if (own) return { read: (b) => held(own(b)), tag: tagOf(col) }
+  if (!col.persist) return null
   return { read: (b) => held(comp(b, name)?.[prop]), tag: tagOf(col) }
 }

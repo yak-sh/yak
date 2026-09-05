@@ -9,12 +9,21 @@
 
 import { assertEquals, assertThrows } from '@std/assert'
 import { Database } from '@db/sqlite'
+import type { Bundle } from '@yaks/graph'
 import { storage } from '@yaks/sqlite'
+import { type Derived, Unsupported } from '@yaks/sql'
+import { compute, derived as taskDerived, taskDoc } from '@yaks/task'
+import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { matcher } from './match.ts'
 import { bundles, corpus, DEAD, NOW, shop } from './harness.ts'
 
-// The corpus in a fresh in-memory database, with the deleted entity deleted.
-let sql = () => {
+// Bundles in a fresh in-memory database, read through the vocabulary they were
+// written under and whatever computed columns it declares.
+//
+// Straight into storage: this test is about READS, so it skips the graph's
+// apply() and puts the rows where the two evaluators can be held against each
+// other.
+let loaded = (v: Vocab, rows: Bundle[], derived: Derived = {}) => {
   let db = new Database(':memory:')
   db.exec('pragma foreign_keys = on')
   let s = storage(
@@ -22,15 +31,18 @@ let sql = () => {
       query: (q, params) => db.prepare(q).all(...params),
       exec: (q) => db.exec(q),
     },
-    shop,
-    { now: NOW },
+    v,
+    { now: NOW, derived },
   )
   s.install()
-  // Straight into storage: this test is about READS, so it skips the graph's
-  // apply() and puts the rows where the two evaluators can be held against
-  // each other. `remove` tombstones the one deleted entity (it is a review
-  // nothing points at, so there is no cascade to decide).
-  s.tx((tx) => tx.patch(corpus))
+  s.tx((tx) => tx.patch(rows))
+  return s
+}
+
+// The corpus, with the deleted entity deleted — `remove` tombstones it (it is a
+// review nothing points at, so there is no cascade to decide).
+let sql = () => {
+  let s = loaded(shop, corpus)
   s.tx((tx) => tx.remove([{ eid: DEAD }]))
   return s
 }
@@ -198,4 +210,97 @@ Deno.test('a query neither side can answer is declined by both', () => {
     assertThrows(() => s.read(q), Error, 'cannot compile', q)
     assertThrows(() => matcher(q, shop), Error, 'cannot compile', q)
   }
+})
+
+// ---- a computed column, one rule, both evaluators ---------------------------
+//
+// `task.status` (@yaks/task) is declared `persist: false`: no row holds it, and
+// its value is read off the marks a task wears. The package states that rule
+// ONCE and hands each side its own reader — `derived()` the SQL expression,
+// `compute()` the function over a bundle — so this is the agreement that makes
+// a status board portable: the same filter, the same tasks, database or page.
+
+let spine: VocabDoc = {
+  $defs: {
+    entity: {
+      type: 'object',
+      wire: false,
+      properties: { num: { type: 'number', stamped: true } },
+    },
+  },
+}
+let todo: Vocab = loadVocab([taskDoc, spine])
+
+let ROWS: Bundle[] = [
+  { entity: { eid: 't1' }, task: { priority: 1 } },
+  {
+    entity: { eid: 't2' },
+    task: { priority: 2 },
+    completed: { at: '2024-06-14T08:00:00.000Z' },
+  },
+  {
+    entity: { eid: 't3' },
+    task: { priority: 3 },
+    cancelled: { at: '2024-06-13T08:00:00.000Z', reason: 'moved on' },
+  },
+  // both marks: cancelled outranks done, in the ladder's order
+  {
+    entity: { eid: 't4' },
+    task: { priority: 4 },
+    completed: { at: '2024-06-12T08:00:00.000Z' },
+    cancelled: { at: '2024-06-15T08:00:00.000Z' },
+  },
+  // not a task at all: no status, the way a database reads NULL for it
+  { entity: { eid: 'p1' }, project: {} },
+]
+let todos: Bundle[] = ROWS.map((b, i) => ({
+  ...b,
+  entity: { ...b.entity, num: i + 1 },
+}))
+
+let STATUS = [
+  '.status=open',
+  '.status=done',
+  '.status=cancelled',
+  '.status=open,done',
+  '.status!=done',
+  '.status~=cancel',
+  // absence and presence: a non-task has no status to read
+  '.status=',
+  '.status!',
+  // beside an ordinary column, the way a board actually reads
+  '.status=open&.priority=1',
+  '.status!=cancelled&.priority>=2',
+  '.kind=task&.status=done',
+  // and ordered by the computed column itself, windowed as a page would ask
+  '.status!&.order=status',
+  '.status!&.order=-status',
+  '.status!&.order=status&.limit=2',
+  '.status!&.order=status&.after=2',
+]
+
+Deno.test('a computed column agrees when both sides are given the rule', () => {
+  let s = loaded(todo, ROWS, taskDerived())
+  let select = (q: string) =>
+    matcher(q, todo, { now: NOW, computed: compute() })
+  for (let q of STATUS) {
+    let mine = eids(select(q)(todos))
+    let theirs = eids(fromSql(s, q))
+    let label = `query: ${q}`
+    if (asks(q)) assertEquals(mine, theirs, label)
+    else assertEquals(mine.sort(), theirs.sort(), label)
+  }
+  // and the agreement is not vacuous
+  assertEquals(eids(select('.status=open')(todos)), ['t1'])
+  assertEquals(eids(select('.status=cancelled')(todos)).sort(), ['t3', 't4'])
+})
+
+Deno.test('a computed column nobody registered still declines', () => {
+  let e = assertThrows(
+    () => matcher('.status=open', todo),
+    Unsupported,
+  ) as Unsupported
+  assertEquals(e.by, '@yaks/match')
+  // ordering by one declines the same way
+  assertThrows(() => matcher('.task!&.order=status', todo), Unsupported)
 })

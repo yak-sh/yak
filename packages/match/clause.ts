@@ -20,7 +20,7 @@ import {
 } from '@yaks/query'
 import { identity, Unsupported } from '@yaks/sql'
 import type { Assoc, Hop, Vocab } from '@yaks/vocab'
-import { column, comp, type Index, wears } from './read.ts'
+import { column, comp, type Computed, type Index, wears } from './read.ts'
 import { check, EXISTS } from './value.ts'
 import { search } from './text.ts'
 
@@ -34,8 +34,11 @@ export let BY = '@yaks/match'
  */
 export type Test = (bundle: Bundle, among: Index) => boolean
 
-/** What a run needs besides the clause: the vocabulary and the reference moment. */
-export type Ctx = { v: Vocab; now: number }
+/**
+ * What a run needs besides the clause: the vocabulary, the reference moment,
+ * and the rules that read the vocabulary's computed columns.
+ */
+export type Ctx = { v: Vocab; now: number; computed: Computed }
 
 let YES: Test = () => true
 let NO: Test = () => false
@@ -69,11 +72,11 @@ let opOf = (p: Pred): string =>
 
 // A test over a column read off one entity, or a decline naming the predicate.
 let scalar = (ctx: Ctx, hop: Hop, p: Pred): (b?: Bundle) => boolean => {
-  let read = column(ctx.v, hop.comp, hop.prop)
+  let read = column(ctx.v, hop.comp, hop.prop, ctx.computed)
   if (!read) {
     throw new Unsupported(
       'a computed column',
-      `.${hop.comp}.${hop.prop} has no value to read`,
+      `.${hop.comp}.${hop.prop} has no registered rule`,
       BY,
     )
   }

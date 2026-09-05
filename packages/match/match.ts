@@ -26,15 +26,20 @@ import type { Bundle } from '@yaks/graph'
 import { Unsupported } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { BY, clause, type Ctx, type Test } from './clause.ts'
-import { column, index, live, type Read } from './read.ts'
+import { column, type Computed, index, live, type Read } from './read.ts'
 
 /** A query, as text (parsed by @yaks/query) or an already-built AST. */
 export type Query = string | Ast
 
-/** What rides a run: the moment a relative time phrase resolves against. */
+/** What rides a run: the moment a relative time phrase resolves against, and
+ * the rules that read the vocabulary's computed columns. */
 export type MatchOpts = {
   /** the reference moment for time phrases (default: now) */
   now?: number
+  /** `comp.prop` → the value for one bundle, for a column the vocabulary
+   * declares but never stores. The in-memory twin of @yaks/sql's `derived`
+   * hook: an unregistered computed column declines, as it does there. */
+  computed?: Computed
 }
 
 /** A compiled query: the bundles of a set that it selects, in order. */
@@ -95,7 +100,11 @@ let compiled = (
   vocab: Vocab,
   opts: MatchOpts,
 ): { ctx: Ctx; cs: Clause[]; test: Test } => {
-  let ctx: Ctx = { v: vocab, now: opts.now ?? Date.now() }
+  let ctx: Ctx = {
+    v: vocab,
+    now: opts.now ?? Date.now(),
+    computed: opts.computed ?? {},
+  }
   let cs = ast(query).clauses
   for (let c of cs) {
     if (DECLINED.has(c.kind)) throw new Unsupported(`.${c.kind}`, '', BY)
@@ -108,7 +117,7 @@ let compiled = (
 let field = (ctx: Ctx, path: string): Read => {
   let hops = ctx.v.aim(path)
   if (hops.length != 1) throw new Unsupported('an ordered path', path, BY)
-  let read = column(ctx.v, hops[0].comp, hops[0].prop)
+  let read = column(ctx.v, hops[0].comp, hops[0].prop, ctx.computed)
   if (!read) throw new Unsupported('a computed column here', path, BY)
   return read
 }

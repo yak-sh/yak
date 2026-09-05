@@ -24,6 +24,11 @@
  * window apply to). {@link filter} compiles the same query into a per-bundle
  * test, for a caller re-checking one bundle that changed.
  *
+ * A column a vocabulary declares but never stores (`persist: false`) is read
+ * through `opts.computed` — `comp.prop` → the value for one bundle — the way
+ * @yaks/sql reads it through its `derived` hook, so an application states the
+ * rule once and both evaluators answer alike.
+ *
  * ## Declines
  * A question this package cannot answer EXACTLY throws
  * {@link https://jsr.io/@yaks/sql/doc/~/Unsupported | Unsupported} — the same
@@ -41,7 +46,7 @@ export {
   type Query,
   type Select,
 } from './match.ts'
-export { live } from './read.ts'
+export { type Computed, live } from './read.ts'
 // The value and text rules, on their own: the vocabulary the two doors above are
 // composed from, for a caller testing one value or one word by hand.
 export {

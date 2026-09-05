@@ -12,9 +12,10 @@
 //
 // The boundary this pins, executable at the bottom:
 //   - The covered query subset agrees exactly, windows included.
-//   - `.status` is a COMPUTED fleet column: @yaks/sql reads it through the
-//     derived hook, @yaks/match has no such hook and declines. Every fleet board
-//     filtering on status needs that gap closed before it can run in a page.
+//   - `.status` is a COMPUTED fleet column, and both sides now read it from one
+//     rule: @yaks/sql through its derived hook, @yaks/match through `computed`.
+//     The fleet's ladder is the package's two marks plus the lease rung (a held
+//     claim reads `wip`), and a status filter agrees task for task.
 //   - A bare word agrees on doc titles. It cannot agree on doc BODIES here,
 //     because the app stores a body as a blob id the gathered bundle carries
 //     verbatim (the gap the spike filed), and because @yaks/match searches every
@@ -25,6 +26,7 @@ import { storage } from '@yaks/sqlite'
 import type { Bundle, Driver } from '@yaks/sqlite'
 import { Unsupported } from '@yaks/sql'
 import { matcher } from '@yaks/match'
+import { compute, type Mark, MARKS } from '@yaks/task'
 
 import { fleetVocab } from '../vocab/fleet_vocab.ts'
 
@@ -56,6 +58,7 @@ apply(db, [
   { eid: T2, name: 'claim', comp: { session: S } },
   { eid: T3, name: 'doc', comp: { title: 'gamma' } },
   { eid: T3, name: 'task', comp: { priority: 0, domain: 'Eng' } },
+  { eid: T3, name: 'completed', comp: {} },
   { eid: C1, name: 'doc', comp: { title: 'a note about alpha' } },
   { eid: C1, name: 'comment', comp: { target: T1 } },
 ])
@@ -74,10 +77,21 @@ let store = storage(driver, V, { derived: fleetDerived, now: NOW })
 // spine number, and the query grammar has no spelling for "everything".
 let bundles: Bundle[] = [...store.read('.num!'), ...store.read('.num=')]
 
+// The fleet's status ladder: the package's two marks, plus the lease rung — a
+// held claim reads `wip`, and says the work is not settled. One list, and both
+// evaluators are built from it: @yaks/sql from sql_derived.ts, @yaks/match from
+// the `computed` rules below.
+let LADDER: Mark[] = [...MARKS, {
+  status: 'wip',
+  comp: 'claim',
+  settled: false,
+}]
+let OPTS = { now: NOW, computed: compute(LADDER) }
+
 let sql = (q: string): string[] =>
   store.rows(q).map((r) => r.eid as string).filter((e) => e != null).sort()
 let ram = (q: string): string[] =>
-  matcher(q, V, { now: NOW })(bundles).map((b) => b.entity.eid).sort()
+  matcher(q, V, OPTS)(bundles).map((b) => b.entity.eid).sort()
 
 let agree = (q: string) => assertEquals(ram(q), sql(q), `disagreed on: ${q}`)
 
@@ -121,6 +135,15 @@ let CORPUS = [
   // boolean composition
   '.priority=1&.domain=Eng',
   '.kind=task&.priority>=1',
+  // the computed status column, read from one rule on both sides
+  '.status=open',
+  '.status=done',
+  '.status=wip',
+  '.status=open,wip',
+  '.status!=done',
+  '.status=',
+  '.status!',
+  '.status=open&.domain=Eng',
 ]
 
 Deno.test('fleet: the seed materialized', () => {
@@ -139,9 +162,17 @@ Deno.test('fleet: @yaks/match agrees with @yaks/sql over the real graph', () => 
 })
 
 Deno.test('fleet: a window pages identically', () => {
-  for (let q of ['.kind=task&.limit=2', '.kind=task&.order=priority']) {
+  for (
+    let q of [
+      '.kind=task&.limit=2',
+      '.kind=task&.order=priority',
+      // ordered by the computed column itself
+      '.kind=task&.order=status',
+      '.kind=task&.order=-status&.limit=2',
+    ]
+  ) {
     assertEquals(
-      matcher(q, V, { now: NOW })(bundles).map((b) => b.entity.eid),
+      matcher(q, V, OPTS)(bundles).map((b) => b.entity.eid),
       store.rows(q).map((r) => r.eid),
       q,
     )
@@ -152,12 +183,16 @@ Deno.test('fleet: a bare word agrees on titles', () => {
   for (let q of ['widget', 'gamma', 'nothinghere']) agree(q)
 })
 
-Deno.test('gap: the computed status column declines in memory', () => {
+Deno.test('fleet: the computed status column answers in memory too', () => {
   // The fleet's `.status` is rolled up from cancelled/completed/claim rows;
-  // @yaks/sql reads it through the derived hook it is handed, and @yaks/match
-  // has no in-memory equivalent yet, so it refuses rather than answer
-  // almost-right. Every status board is blocked on this.
-  assertEquals(sql('.status=open'), [T1, T3].sort())
+  // @yaks/sql reads it through the derived hook it is handed, @yaks/match
+  // through the `computed` rules, and both come from the one ladder above. So
+  // a status board runs in a page.
+  assertEquals(sql('.status=open'), [T1])
+  assertEquals(ram('.status=open'), [T1])
+  assertEquals(ram('.status=wip'), [T2])
+  assertEquals(ram('.status=done'), [T3])
+  // and the rule is what answers: without it the column has nothing to read
   let e = assertThrows(
     () => matcher('.status=open', V, { now: NOW }),
     Unsupported,

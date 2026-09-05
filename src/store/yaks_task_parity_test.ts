@@ -288,13 +288,11 @@ Deno.test('parity: the agreement is not vacuous', () => {
   assertEquals(mine('.status=cancelled'), [T4])
 })
 
-Deno.test('gap: the in-memory reader has the rule but no hook to take it', () => {
-  // @yaks/task supplies the status rule for BOTH evaluators from one list.
-  // @yaks/sql takes its half through the `derived` hook (proved above);
-  // @yaks/match has no computed-column hook yet (T-33611), so it declines a
-  // status filter rather than answering it almost-right. This pins the gap from
-  // the package's side: the rule is ready and correct, and the reader is what
-  // is missing.
+Deno.test('parity: the in-memory reader answers from the same rule', () => {
+  // @yaks/task supplies the status rule for BOTH evaluators from one list:
+  // @yaks/sql takes its half through the `derived` hook (proved above),
+  // @yaks/match takes this half through its `computed` hook. So a board filter
+  // written once selects the same tasks in the database and in a page.
   let read = compute(LADDER)['task.status']
   let bundle = (comps: Record<string, unknown>) => ({
     entity: { eid: 'x' },
@@ -304,17 +302,16 @@ Deno.test('gap: the in-memory reader has the rule but no hook to take it', () =>
   assertEquals(read(bundle({ task: {}, claim: {} })), 'wip')
   assertEquals(read(bundle({ task: {}, completed: {} })), 'done')
   assertEquals(read(bundle({ task: {}, cancelled: {} })), 'cancelled')
-  // and it agrees with the database, task for task, over the seeded graph
+  // and read through the door, over the gathered bundles, it agrees with the
+  // database task for task
+  let bundles = [T1, T2, T3, T4].map(whole)
+  let ram = (q: string) =>
+    matcher(q, FLEET, { now: NOW, computed: compute(LADDER) })(bundles)
+      .map((b) => b.entity.eid).sort()
   for (let status of ['open', 'wip', 'done', 'cancelled']) {
-    let inSql = mine(`.status=${status}`)
-    let inRam = [T1, T2, T3, T4]
-      .map((eid) => ({ eid, b: whole(eid) }))
-      .filter(({ b }) => read(b) == status)
-      .map(({ eid }) => eid)
-      .sort()
-    assertEquals(inRam, inSql, status)
+    assertEquals(ram(`.status=${status}`), mine(`.status=${status}`), status)
   }
-  // the decline itself stays pinned in yaks_match_parity_test.ts
+  // and the rule is what answers: unregistered, the column declines
   assertThrows(() => matcher('.status=open', FLEET, { now: NOW }), Unsupported)
 })
 

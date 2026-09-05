@@ -20,9 +20,8 @@
 //
 // The in-memory side answers the same way: a bundle not wearing `task` reads
 // null. Its shape — a map from `comp.prop` to a function of the bundle — is what
-// @yaks/match's computed-column hook takes; until that hook lands (T-33611) this
-// export is the rule waiting for its second reader, and `matcher()` declines a
-// status filter rather than answering it almost-right.
+// @yaks/match's `computed` hook takes, so `matcher(q, vocab, { computed:
+// compute() })` selects the tasks the database selects.
 
 import type { Bundle } from '@yaks/graph'
 import type { DerivedCol } from '@yaks/sql'
@@ -64,9 +63,12 @@ export type Compute = Record<string, (b: Bundle) => unknown>
  * page filtering `.status=open` over bundles it already holds answers the way
  * the database does.
  *
- * Hand it to @yaks/match's computed-column hook once that hook exists
- * (T-33611); today it is the rule in the shape that hook takes, and the in-memory
- * side declines a status filter rather than guessing.
+ * ```ts
+ * import { matcher } from '@yaks/match'
+ * import { compute } from '@yaks/task'
+ *
+ * matcher('.status=open', vocab, { computed: compute() })(bundles)
+ * ```
  */
 export let compute = (marks: Mark[] = MARKS): Compute => ({
   [`${TASK}.status`]: (b) => statusOf(b, marks),
