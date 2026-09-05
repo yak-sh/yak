@@ -178,12 +178,20 @@ The adapter never constructs a connection. It calls two methods:
 type Driver = {
   query: (sql: string, params: Param[]) => Row[]
   exec: (sql: string) => void
+  tx?: <R>(body: () => R) => R // only when the engine owns transactions
 }
 ```
 
 Back it with an in-process SQLite for a test, a pooled handle for a server, or
 any engine that can run parameterized SQL — the values always ride as bound
 params, never concatenated into the statement.
+
+`tx` is for an engine that will not open a transaction from SQL: a Cloudflare
+Durable Object refuses `savepoint` as a statement and hands out
+`transactionSync` instead
+([@yaks/durable-object](https://jsr.io/@yaks/durable-object) passes it here).
+Omit it and the store opens its own SAVEPOINTs, which is what every ordinary
+SQLite connection wants.
 
 ## The storage layout
 

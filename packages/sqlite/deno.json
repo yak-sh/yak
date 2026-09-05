@@ -11,7 +11,8 @@
   "publish": {
     "exclude": [
       "**/*_test.ts",
-      "harness.ts"
+      "harness.ts",
+      "parity.ts"
     ]
   }
 }

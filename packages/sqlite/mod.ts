@@ -94,6 +94,31 @@ export type Store = {
 // outer savepoint can never be released by an inner one's name.
 let seq = 0
 
+// One all-or-nothing unit of work. A driver that owns its own transactions
+// (see `Driver.tx`) is asked for one; otherwise it is a SAVEPOINT in plain
+// SQL. An async body is settled before the savepoint closes, so a batch that
+// went async is still rolled back by a rejection.
+let unit = <R>(driver: Driver, body: () => R): R => {
+  if (driver.tx) return driver.tx(body)
+  let name = `yaks_tx_${seq++}`
+  driver.exec(`savepoint ${name}`)
+  let undo = (e: unknown): never => {
+    driver.exec(`rollback to ${name}`)
+    driver.exec(`release ${name}`)
+    throw e
+  }
+  let done = <T>(out: T): T => {
+    driver.exec(`release ${name}`)
+    return out
+  }
+  try {
+    let out = body()
+    return (out instanceof Promise ? out.then(done, undo) : done(out)) as R
+  } catch (e) {
+    return undo(e)
+  }
+}
+
 /**
  * Bind a store to a driver and a vocabulary — a {@link Storage} @yaks/graph
  * can apply changes to. `base` options (a derived-column registry, a fixed
@@ -117,26 +142,6 @@ export let storage = (
     },
     read: (query, opts) => read(driver, vocab, query, { ...base, ...opts }),
     rows: (query, opts) => rows(driver, vocab, query, { ...base, ...opts }),
-    tx: (body) => {
-      let name = `yaks_tx_${seq++}`
-      driver.exec(`savepoint ${name}`)
-      let undo = (e: unknown) => {
-        driver.exec(`rollback to ${name}`)
-        driver.exec(`release ${name}`)
-        throw e
-      }
-      let done = <R>(out: R): R => {
-        driver.exec(`release ${name}`)
-        return out
-      }
-      try {
-        let out = body(tx)
-        return (out instanceof Promise
-          ? out.then(done, undo)
-          : done(out)) as typeof out
-      } catch (e) {
-        return undo(e)
-      }
-    },
+    tx: (body) => unit(driver, () => body(tx)),
   }
 }

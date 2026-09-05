@@ -21,6 +21,38 @@ Deno.test('install() is idempotent', () => {
   assertEquals((s.read('.title~=hi') as Bundle[])[0].entity.eid, 'x')
 })
 
+Deno.test('a driver that owns transactions is asked for them', () => {
+  let base = mem()
+  let seen: string[] = []
+  let depth = 0
+  let s = storage({
+    ...base,
+    exec: (sql) => {
+      seen.push(sql)
+      base.exec(sql)
+    },
+    // Stands in for an engine whose transactions are not SQL (a Durable
+    // Object's `transactionSync`): the store must call this and emit no
+    // savepoint of its own.
+    tx: (body) => {
+      depth++
+      try {
+        return body()
+      } finally {
+        depth--
+      }
+    },
+  }, shop)
+  s.install()
+  let inside = s.tx((tx) => {
+    tx.patch([{ entity: { eid: 'p1' }, doc: { title: 'Kettle' } }])
+    return depth
+  })
+  assertEquals(inside, 1)
+  assert(!seen.some((sql) => /savepoint|rollback|release/.test(sql)))
+  assertEquals((s.read('.title~=kettle') as Bundle[])[0].entity.eid, 'p1')
+})
+
 Deno.test('a bundle written and read back is the same entity', () => {
   let s = storage(mem(), shop)
   s.install()

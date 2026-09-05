@@ -19,7 +19,18 @@ export type Param = string | number | bigint | boolean | null | Uint8Array
 // The connection, reduced to what the adapter calls:
 //   query  run a parameterized statement and return every row
 //   exec   run one or more statements for effect (DDL, writes) — no rows back
+//   tx     optional: the engine's own transaction, when SQL cannot open one
 export type Driver = {
   query: (sql: string, params: Param[]) => Row[]
   exec: (sql: string) => void
+  /**
+   * Run `body` as one all-or-nothing unit — commit when it returns, roll back
+   * when it throws — for an engine that owns transactions itself. Most drivers
+   * omit this and the store opens a SAVEPOINT with plain SQL; a Cloudflare
+   * Durable Object refuses `savepoint` as a statement and hands out
+   * `transactionSync` instead, which is what this seam is for. It must nest,
+   * and it is SYNCHRONOUS: a body that returns a promise commits when the body
+   * returns, not when the promise settles.
+   */
+  tx?: <R>(body: () => R) => R
 }
