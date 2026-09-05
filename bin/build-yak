@@ -1,0 +1,50 @@
+#!/bin/sh
+# bin/build-yak — the gate, run by Cloudflare Workers Builds before it deploys
+# the kernel Worker (T-34165). The dashboard holds one line, `../bin/build-yak`;
+# what that line MEANS lives here, in the repo, where it is reviewed and
+# versioned like everything else.
+#
+# Workers Builds is the whole deploy: the Cloudflare GitHub App watches
+# yak-sh/yak, and on a push to main it clones, runs this, then runs
+# `npx wrangler deploy` with a token it mints for itself — nothing is minted by
+# hand and no secret lives in the repo or on the Actions runner. A non-zero
+# exit here deploys NOTHING. The dashboard settings are written down in
+# workers/yak/README.md.
+#
+# The image is Ubuntu 24.04 with node and npm; Deno is NOT on it, so the first
+# thing this does is fetch one. The build runs with the ROOT DIRECTORY set to
+# workers/yak, so nothing here may assume a working directory — every path is
+# derived from this file's own location.
+#
+# What it does not do: `deno task test` (the fast tier boots probe servers and
+# is the Actions runner's job, .github/workflows/gate.yml) and bin/verify-deploy
+# (Builds runs the build BEFORE the deploy, so there is nothing yet to verify —
+# see the README).
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+
+if ! command -v deno >/dev/null 2>&1; then
+  echo "--- installing deno (not on the Workers Builds image)"
+  # DENO_INSTALL is where install.sh puts it; naming it keeps the PATH line
+  # below true whatever the script's default becomes.
+  DENO_INSTALL="$HOME/.deno"
+  export DENO_INSTALL
+  # -y answers the prompts; --no-modify-path keeps it out of the image's shell
+  # rc files, which nothing in a build container ever sources anyway. The PATH
+  # this build needs is the line below, not a login shell's.
+  curl -fsSL https://deno.land/install.sh | sh -s -- -y --no-modify-path
+  PATH="$DENO_INSTALL/bin:$PATH"
+  export PATH
+fi
+deno --version
+
+cd "$root"
+
+echo "--- deno task check"
+deno task check
+
+echo "--- deno test -A workers/yak/"
+deno test -A workers/yak/
+
+echo "--- build ok; Workers Builds deploys from here"

@@ -1,0 +1,55 @@
+# The GitHub Actions self-hosted runner for yak-sh/yak (T-34163).
+#
+# We pay for no Actions minutes (M-9560), so CI runs here. The runner is
+# registered with the single label `yak`; every workflow in .github/workflows
+# asks for `runs-on: [self-hosted, yak]`, so nothing of ours can land on a
+# hosted runner by accident.
+#
+# It lives under the USER manager (user-<uid>.slice) for the same reason
+# tasks-tmux.service does: a restart of a system service must not kill a job
+# mid-run, and the runner's own lifetime is unrelated to tasksd's.
+#
+# PATH is spelled out because a systemd unit gets none of the login shell's
+# environment: the workflows call deno, node/npm/npx, wrangler, git and gh,
+# and linuxbrew's bin is where four of those live. Add to this line rather
+# than teaching a workflow an absolute path.
+#
+# The repo is public, so the runner is exposed to whatever a fork PR can make
+# a workflow do. Two guards, neither of them this file: workflows carry
+# `if: github.event.pull_request.head.repo.full_name == github.repository`,
+# and the repository requires approval before any fork PR workflow runs at all
+# (`gh api repos/yak-sh/yak/actions/permissions/workflow`).
+#
+# Install:
+#   ln -sf "$PWD/etc/actions-runner.service" ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now actions-runner.service
+#   loginctl enable-linger "$USER"   # so it runs without a login session
+#
+# Remove (unregister from GitHub, then drop the unit — reversible in full):
+#   systemctl --user disable --now actions-runner.service
+#   cd ~/actions-runner && ./config.sh remove \
+#     --token "$(gh api -X POST repos/yak-sh/yak/actions/runners/remove-token --jq .token)"
+#   rm ~/.config/systemd/user/actions-runner.service && systemctl --user daemon-reload
+#   rm -rf ~/actions-runner
+
+[Unit]
+Description=GitHub Actions self-hosted runner (yak-sh/yak, label `yak`)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/home/yaks/actions-runner
+ExecStart=/home/yaks/actions-runner/run.sh
+Environment=PATH=/home/yaks/.local/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# The runner's own updater exits 3 to ask to be restarted; anything else that
+# stops it should also come back. `KillMode=process` leaves a job's own
+# processes to the runner's shutdown rather than mass-killing the cgroup.
+Restart=always
+RestartSec=5
+KillMode=process
+KillSignal=SIGTERM
+TimeoutStopSec=5min
+
+[Install]
+WantedBy=default.target

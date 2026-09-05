@@ -1,0 +1,55 @@
+# The gate: what `deno task check` and the test tiers say about a commit.
+#
+# It does not deploy. The kernel Worker ships through Cloudflare Workers Builds,
+# which runs its own build (bin/build-yak) and mints its own token — see
+# workers/yak/README.md. Nothing here holds a Cloudflare credential.
+#
+# Runs on THIS box, not GitHub's — we buy no Actions minutes (M-9560). The
+# runner is a `systemd --user` unit; its install, its PATH and the command that
+# removes it are all in etc/actions-runner.service. `runs-on` names the custom
+# label `yak`, so a workflow can never silently fall back to a hosted runner.
+#
+#   systemctl --user status actions-runner    # is it listening
+#   gh api repos/yak-sh/yak/actions/runners   # does GitHub agree
+#
+# The repo is public, so a fork PR must never reach this box: the `if` below
+# refuses one, and the repository requires approval before a fork PR workflow
+# runs at all (`actions/permissions/fork-pr-contributor-approval` =
+# all_external_contributors).
+name: gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# One gate per ref. A second push supersedes the first — nobody reads the
+# verdict on a commit that is already history.
+concurrency:
+  group: gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, yak]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: deno task check
+        run: deno task check
+
+      # Quoted: a bare YAML scalar cannot carry a `: ` — the runner would never
+      # see this line, the file would fail to parse.
+      - name: tests
+        run: 'DB_PATH=:memory: deno task test'
+
+      # No install step: the Worker's npm dependencies are gitignored, and
+      # since T-34159 the probe fills them itself (workers/yak/wrangler.ts
+      # `ready()`, called from probe.ts) before workerd reads them.
+      - name: worker tests
+        run: deno test -A workers/yak/
+
+      - name: bench gate
+        run: deno task bench:gate

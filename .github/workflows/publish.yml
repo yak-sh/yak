@@ -1,0 +1,71 @@
+# Publish the @yaks/* family to JSR.
+#
+# Two triggers, and only one of them publishes:
+#
+#   push to main   `deno publish --dry-run` over every workspace package, so a
+#                  package that would be refused at release time is refused now
+#   tag v*         the publish itself, from the tag bin/release.ts cut
+#
+# No token. JSR takes GitHub's OIDC identity (`id-token: write`) and trusts it
+# because the package is LINKED to this repository on jsr.io — which is the
+# owner's to do, once (T-34168). Until then the publish step would fail on
+# every tag with an authorization error, so it is guarded by a repository
+# variable the owner sets in the same sitting:
+#
+#   gh variable set JSR_LINKED --body 1
+#
+# Set it only after every @yaks/* package on jsr.io names yak-sh/yak as its
+# linked repository. A version cannot be unpublished.
+name: publish
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Every package, checked the way JSR will check it. Cheap, and it is the only
+  # thing that catches a slow-type or a missing export before a tag is cut.
+  dry-run:
+    if: startsWith(github.ref, 'refs/tags/v') == false
+    runs-on: [self-hosted, yak]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      # One command for the whole workspace: deno walks `workspace` in the root
+      # deno.json, simulates every member that is a package, and skips the one
+      # that is npm-only (workers/yak). It fails if ANY member would be
+      # refused. `--allow-dirty` because a dry run publishes nothing, and a
+      # stray file on the runner must not turn this red.
+      - name: deno publish --dry-run
+        run: deno publish --dry-run --allow-dirty
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: [self-hosted, yak]
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: are the packages linked on jsr.io yet
+        id: linked
+        run: |
+          if [ "${{ vars.JSR_LINKED }}" != "1" ]; then
+            echo "JSR_LINKED is not 1 — the @yaks/* packages are not linked to this repo on jsr.io yet (T-34168 is the owner's). Not publishing ${{ github.ref_name }}."
+            echo "go=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The same one command, without `--allow-dirty`: a tag's checkout is
+      # pristine, and a tree that is not is a reason to stop.
+      - name: deno publish
+        if: steps.linked.outputs.go == 'yes'
+        run: deno publish
