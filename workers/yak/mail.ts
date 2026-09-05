@@ -20,7 +20,10 @@
 import type { Env } from './env.ts'
 import { esc } from './pages.ts'
 
-export type Letter = { to: string; subject: string; body: string }
+// `to` is one address or several. Email Sending takes a list, and one send to
+// several recipients is ONE letter: it either reaches every reader or none, so
+// a caller never has to say which half of a delivery worked.
+export type Letter = { to: string | string[]; subject: string; body: string }
 export type Mail = (l: Letter) => Promise<void>
 
 // Who the platform writes as. The envelope sender must be an address the
@@ -32,6 +35,16 @@ export type Mail = (l: Letter) => Promise<void>
 // its login will want its own pair; that is a later leaf's.
 export let FROM = 'hello@bot.yak.sh'
 export let REPLY_TO = 'hello@yaks.app'
+
+// The fleet's task graph, addressed as a reader. hello@yaks.app forwards to a
+// person's mailbox and nowhere else, so a letter sent only there is invisible
+// to every agent: it waits for that person to relay it by hand. This is the
+// address the tasks server's inbound sweep pulls into `mail` entities aimed at
+// P-19 (src/inbound.ts `routeTo`, the address book's entry for the project),
+// which is what puts a letter in `task inbox` and on the comms bus. FROM is a
+// bot.yak.sh address, so the arrival is DKIM-aligned and grades VERIFIED —
+// the sweep delivers nothing else to the bus.
+export let GRAPH = 'task@bot.yak.sh'
 
 // One line, JSON, tagged: a person reads it at a glance and a probe parses
 // the letter back out of the log (probe.ts `mailed`).
@@ -51,7 +64,7 @@ export let sending =
       },
       body: JSON.stringify({
         from: { address: FROM, name: 'yaks.app' },
-        to: [l.to],
+        to: [l.to].flat(),
         reply_to: REPLY_TO,
         subject: l.subject,
         text: l.body,

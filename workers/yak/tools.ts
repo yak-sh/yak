@@ -100,7 +100,7 @@ import {
   steps,
 } from './domains.ts'
 import type { Env } from './env.ts'
-import { mail, REPLY_TO } from './mail.ts'
+import { GRAPH, mail, REPLY_TO } from './mail.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { asset, NO_ARGS, PUBLIC } from './preauth.ts'
 import {
@@ -2853,17 +2853,21 @@ export let TOOLS: Tool[] = [
         ...await titling(ctx.dir, ctx.person),
       })
       let eid = minted(wrote).$said ?? ''
-      // The letter, to the platform's own address — the one a person reading
-      // it would reply to (mail.ts REPLY_TO). It leads with the WORDS: what
-      // was said is the report, and everything else is a line of context
-      // under a rule, so a person takes it in at a glance.
+      // The letter, to two readers at once: the platform's own address, which
+      // is the one a person reading it would reply to (mail.ts REPLY_TO), and
+      // the fleet's task graph (mail.ts GRAPH), where the sweep turns it into
+      // mail an operator is notified of instead of one a person must relay.
+      // One send, so it reaches both or neither and the answer below stays
+      // true either way. It leads with the WORDS: what was said is the report,
+      // and everything else is a line of context under a rule, so a person
+      // takes it in at a glance.
       let by = await ctx.dir.nameAt(ctx.person)
       let email = await ctx.dir.emailAt(ctx.person)
       let where = app && space
         ? `${space.slug}/${app.slug}${app.version ? ` v${app.version}` : ''}`
         : space?.slug ?? ''
       let sent = await mail(ctx.env)({
-        to: REPLY_TO,
+        to: [REPLY_TO, GRAPH],
         subject: `feedback: ${opening}`,
         body: `${said.trim()}\n\n—\n` +
           `${by ?? 'someone'}${email ? ` <${email}>` : ''}\n` +

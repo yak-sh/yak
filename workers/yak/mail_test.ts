@@ -17,8 +17,10 @@ import type { Frame } from '@yaks/api'
 import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/harness.ts'
+import { canon, fleetAddress } from '../../src/mailaddr.ts'
 import { slow, until } from '../../src/testing.ts'
 import { type Namespace, storeOf } from './door.ts'
+import { FROM, GRAPH, REPLY_TO, sending } from './mail.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { monthOf } from './meter.ts'
@@ -51,6 +53,44 @@ Deno.test('every address an app writes from is one it can be written to', () => 
   for (let [space, app] of [['ada', 'cookbook'], ['ada', null]] as const) {
     assertEquals(mailedTo(mailFrom(space, app)), { space, app })
   }
+})
+
+// The PLATFORM's own letter (mail.ts), which is a different sender: one send
+// carries every reader, so a feedback report cannot reach the person at
+// REPLY_TO and miss the fleet's graph inbox at GRAPH (or the other way).
+// Whatever the list, the letter still comes FROM the bot address — the only
+// domain Email Sending will sign for — and is still answered at REPLY_TO.
+Deno.test('one send carries every reader, from one address', async () => {
+  let posted: {
+    to: string[]
+    reply_to: string
+    from: { address: string }
+  }[] = []
+  let real = globalThis.fetch
+  globalThis.fetch = ((_url: string, init: RequestInit) => {
+    posted.push(JSON.parse(String(init.body)))
+    return Promise.resolve(new Response('{}'))
+  }) as unknown as typeof fetch
+  try {
+    let send = sending('token', 'account', 'https://api.test')
+    await send({ to: REPLY_TO, subject: 's', body: 'b' })
+    await send({ to: [REPLY_TO, GRAPH], subject: 's', body: 'b' })
+  } finally {
+    globalThis.fetch = real
+  }
+  assertEquals(posted.map((p) => p.to), [
+    ['hello@yaks.app'],
+    ['hello@yaks.app', 'task@bot.yak.sh'],
+  ])
+  assertEquals(posted.map((p) => p.from.address), [FROM, FROM])
+  assertEquals(posted.map((p) => p.reply_to), [REPLY_TO, REPLY_TO])
+})
+
+// The graph inbox is an address in the FLEET's mail namespace, not a spelling
+// of its own: src/mailaddr.ts is what the tasks server's sweep routes by, and
+// the two must name the same mailbox or the report lands nowhere.
+Deno.test('the graph inbox is the fleet address the sweep routes', () => {
+  assertEquals(GRAPH, canon(fleetAddress('task')))
 })
 
 // The binding, faked: what it was handed, and a refusal on demand — the

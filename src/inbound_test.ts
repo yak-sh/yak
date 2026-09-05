@@ -431,6 +431,35 @@ Deno.test('the sweep: an arriving letter is authored by its sender', async () =>
   assertEquals(by(alien), null)
 })
 
+// yaks.app writes home: its feedback tool mails a report FROM a fleet address
+// (workers/yak/mail.ts FROM) TO the graph's own inbox (GRAPH), so a letter
+// wearing the fleet's own domain has to land like anyone else's — minted,
+// routed by the address it was sent to, and keeping the DKIM verdict, which is
+// the only thing the comms bus delivers on. A letter we sent ourselves is not
+// an echo: an echo is one of OUR mail entities coming home (`sent_id`), and
+// this one was never a row here.
+Deno.test('the sweep: a letter from the fleet itself is not an echo', async () => {
+  let id = 'msg:1752000003000:yak'
+  await inboundSweep(
+    cast,
+    fakeApi([msg({
+      id,
+      from: 'hello@bot.test',
+      from_header: 'yaks.app <hello@bot.test>',
+      to: 'venture@bot.test',
+      subject: 'feedback: the board scrolls sideways',
+    })], null).api,
+  )
+  let row = db.prepare(
+    `select ${MAIL} from mail m join entity o on o.id = m.entity
+     where m.message_id = ?`,
+  ).get(id) as Record<string, string | number | null>
+  assertEquals(row.target, operator)
+  assertEquals(row.from, 'hello@bot.test')
+  assertEquals(row.verified, 1)
+  assertEquals(row.sent_id, null)
+})
+
 Deno.test('the sweep: an echo arrives on the sent entity, once', async () => {
   let letter = uid()
   apply(db, [

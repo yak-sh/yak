@@ -390,12 +390,14 @@ export let connector = (k: Kernel, cookie?: string) => {
 // Every letter the kernel has sent to an address, oldest first, read off its
 // own log: MAIL_DEV prints one line per letter (mail.ts `printed`), so no
 // store anywhere holds a code a read could spend.
-export type Letter = { to: string; subject: string; body: string }
+// A letter may be addressed to several readers at once (mail.ts `Letter`), so
+// "to this address" is membership, not equality.
+export type Letter = { to: string | string[]; subject: string; body: string }
 
 export let letters = (k: Kernel, to: string): Letter[] =>
   [...Deno.readTextFileSync(k.log).matchAll(/yak-mail (\{.*\})/g)]
     .map((m) => JSON.parse(m[1]) as Letter)
-    .filter((l) => l.to == to)
+    .filter((l) => [l.to].flat().includes(to))
 
 // The latest letter to an address that says a thing, waited for — an
 // invitation is sent while the tool is answering (T-32629).
