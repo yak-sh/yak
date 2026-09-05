@@ -25,7 +25,6 @@ import type { Frag } from './ir.ts'
 // word the lowering switches on.
 export type Tag =
   | 'text'
-  | 'body'
   | 'number'
   | 'priority'
   | 'bool'

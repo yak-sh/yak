@@ -35,14 +35,13 @@ let carried = (
 }
 
 // One property schema → the column it describes. The scalar spelling is
-// reconstructed from native JSON Schema (`type` + `format` + `store`), so a
-// vocab authored in plain JSON Schema round-trips to this compact type set.
+// reconstructed from native JSON Schema (`type` + `format`), so a vocab
+// authored in plain JSON Schema round-trips to this compact type set.
 let scalarOf = (s: PropSchema): Scalar => {
   if (s.type == 'boolean') return 'bool'
   if (s.type == 'number' || s.type == 'integer') {
     return s.format == 'priority' ? 'priority' : 'number'
   }
-  if (s.store == 'blob') return 'body'
   if (s.format == 'date-time') return 'time'
   if (s.format == 'uri') return 'url'
   if (s.format == 'query') return 'query'
@@ -90,7 +89,6 @@ let columnOf = (
     death,
     stamped: !!s.stamped,
     persist: s.persist !== false,
-    store: s.store == 'blob' ? 'blob' : undefined,
     affinity: affinityOf(category, scalar),
     // A reference carries an FK to entity(id) unless its death is 'keep' — a
     // kept ref outlives its target's tombstone, so it stays FK-free (ddl.ts).

@@ -22,7 +22,7 @@ let doc: VocabDoc = {
       kind: true,
       properties: {
         title: { type: 'string' },
-        body: { type: 'string', store: 'blob' },
+        body: { type: 'string' },
       },
     },
     // A book on sale: what it costs, when it came out, whether it is in stock,

@@ -24,7 +24,7 @@ let doc: VocabDoc = {
       kind: true,
       properties: {
         title: { type: 'string' },
-        body: { type: 'string', store: 'blob' },
+        body: { type: 'string' },
       },
     },
     task: {

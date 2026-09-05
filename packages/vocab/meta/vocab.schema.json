@@ -64,7 +64,6 @@
         "death": { "enum": ["cascade", "detach", "release", "keep"] },
         "persist": { "type": "boolean" },
         "stamped": { "type": "boolean" },
-        "store": { "enum": ["blob"] },
         "bare": { "type": "boolean" },
         "aliases": {
           "type": "object",

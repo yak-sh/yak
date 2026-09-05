@@ -4,6 +4,7 @@
   "$vocabulary": {
     "https://json-schema.org/draft/2020-12/vocab/core": true,
     "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/blob": true,
     "https://yaks.sh/vocab/fleet": true
   },
   "title": "fleet slice",

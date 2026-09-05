@@ -16,15 +16,16 @@
 export type Death = 'cascade' | 'detach' | 'release' | 'keep'
 
 // The scalar spellings a column reconstructs to — a compact type vocabulary
-// recovered from native JSON Schema (`type` + `format` + `store`):
+// recovered from native JSON Schema (`type` + `format`):
 //   text   string, no format          number  number
-//   body   string, store:blob         priority number, format:priority
-//   time   string, format:date-time   bool    boolean
-//   url    string, format:uri
+//   time   string, format:date-time   priority number, format:priority
+//   url    string, format:uri         bool    boolean
 //   query  string, format:query
+//
+// Where a string column KEEPS its value is a separate question, and not this
+// meta-model's: @yaks/blob owns the `store` keyword and answers it.
 export type Scalar =
   | 'text'
-  | 'body'
   | 'number'
   | 'priority'
   | 'bool'
@@ -47,7 +48,6 @@ export type Column = {
   death?: Death
   stamped: boolean // server-owned: readable, never wire-writable
   persist: boolean // false = computed/never-stored (query-only rank, aggregates)
-  store?: 'blob' // a body column, backed by a content-addressed blob
   affinity: 'text' | 'real' | 'integer' // the SQLite column affinity it stores as
   fk: boolean // a reference carrying a foreign key to entity(id)
   keywords: Record<string, unknown> // registered extension keywords, verbatim
@@ -108,7 +108,6 @@ export type PropSchema = {
   // legal spelling too — the loader carries it, it never reads it.
   persist?: boolean | string
   stamped?: boolean
-  store?: string
   kind?: boolean
   before?: string[]
   wire?: boolean

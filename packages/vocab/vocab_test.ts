@@ -27,7 +27,6 @@ Deno.test('columns interrogate to their whole shape', () => {
     death: undefined,
     stamped: false,
     persist: true,
-    store: undefined,
     affinity: 'real',
     fk: false,
     keywords: {},
@@ -39,13 +38,10 @@ Deno.test('columns interrogate to their whole shape', () => {
   )
   // a kept reference carries no foreign key
   assertEquals(v.column('memory', 'scope')!.fk, false)
-  // a body is a blob-backed string column
+  // where a string column keeps its value is no concern of the meta-model:
+  // a body is an ordinary text column here (@yaks/blob owns `store`)
   let body = v.column('doc', 'body')!
-  assertEquals([body.scalar, body.store, body.affinity], [
-    'body',
-    'blob',
-    'text',
-  ])
+  assertEquals([body.scalar, body.affinity], ['text', 'text'])
   // scalars reconstruct from native type+format
   assertEquals(v.column('board', 'query')!.scalar, 'query')
   assertEquals(v.column('claim', 'claimed_at')!.scalar, 'time')
@@ -84,7 +80,7 @@ Deno.test('dotted paths aim to hops', () => {
   assertThrows(
     () => v.aim('doc.nope'),
     Error,
-    'doc has title (text), body (body)',
+    'doc has title (text), body (text)',
   )
 })
 

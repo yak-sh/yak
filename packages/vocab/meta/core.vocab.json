@@ -22,10 +22,6 @@
       "description": "true = server-owned: readable but never wire-writable.",
       "type": "boolean"
     },
-    "store": {
-      "description": "Backing store for a string column. \"blob\" = a content-addressed markdown body.",
-      "enum": ["blob"]
-    },
     "kind": {
       "description": "true = this component names a display kind (feeds kindOf / kindOrder).",
       "type": "boolean"

@@ -33,7 +33,7 @@ let doc: VocabDoc = {
       kind: true,
       properties: {
         title: { type: 'string' },
-        blurb: { type: 'string', store: 'blob' },
+        blurb: { type: 'string' },
         price: { type: 'number' },
       },
     },

@@ -37,7 +37,7 @@ let doc: VocabDoc = {
       kind: true,
       properties: {
         title: { type: 'string' },
-        body: { type: 'string', store: 'blob' },
+        body: { type: 'string' },
       },
     },
     // Something for sale: a price, a state, and the maker who made it. Deleting

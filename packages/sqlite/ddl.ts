@@ -76,14 +76,11 @@ let tableDdl = (v: Vocab, comp: string): string => {
 // `rowid` alias (the owner id) so `doc_fts` — which matches by rowid — lines up
 // with it. The index is EXTERNAL-CONTENT over `doc` itself (it stores no second
 // copy, just the inverted index) and is kept current by triggers. It covers the
-// text-shaped columns (plain text and body); a `doc` with none gets a view but
-// no index, and a text query over it declines upstream rather than hit a
-// missing table.
+// text columns; a `doc` with none gets a view but no index, and a text query
+// over it declines upstream rather than hit a missing table.
 let textCols = (v: Vocab, comp: string): string[] =>
   stored(v, comp)
-    .filter((c) =>
-      c.category == 'scalar' && (c.scalar == 'text' || c.scalar == 'body')
-    )
+    .filter((c) => c.category == 'scalar' && c.scalar == 'text')
     .map((c) => c.prop)
 
 let docDdl = (v: Vocab): string[] => {

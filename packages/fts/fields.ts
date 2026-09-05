@@ -17,11 +17,10 @@ export type Field = { comp: string; prop: string }
 // less than everything textual — say, titles only.
 export type Pick = (column: Column) => boolean
 
-// The default choice: every STORED text-shaped column. A computed column has no
-// row to index, and a number, a stamp or a reference is not prose.
+// The default choice: every STORED text column. A computed column has no row to
+// index, and a number, a stamp or a reference is not prose.
 export let textual: Pick = (c) =>
-  c.persist && c.category == 'scalar' &&
-  (c.scalar == 'text' || c.scalar == 'body')
+  c.persist && c.category == 'scalar' && c.scalar == 'text'
 
 // The indexed fields of a vocabulary, by component then declaration order.
 export let fields = (vocab: Vocab, pick: Pick = textual): Field[] =>
