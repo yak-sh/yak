@@ -42,7 +42,10 @@ Deno.test('a reference-deref path filters through the target', () => {
 Deno.test('a bare-word query matches document title and body', () => {
   let s = store()
   s.write([
-    { entity: { eid: 'a' }, doc: { title: 'Blue mug', body: 'ceramic and glazed' } },
+    {
+      entity: { eid: 'a' },
+      doc: { title: 'Blue mug', body: 'ceramic and glazed' },
+    },
     { entity: { eid: 'b' }, doc: { title: 'Red plate', body: 'enamel' } },
   ])
   assertEquals(eids(s.read('mug')), ['a'])
