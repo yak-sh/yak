@@ -417,7 +417,7 @@ export let composeWorn = (
 // It takes the homes, not the graph, because every door that returns edges
 // owes these: snapshot() folds them into `deps` off the persona table, and
 // the keyed reading (db.ts depsOf) off the same table screened by eid. A
-// door that reads only the `dependency` table silently loses them.
+// door that reads only the stored edges silently loses them.
 export let homeReads = (
   homes: { eid: string; home: unknown }[],
   deps: Dep[],

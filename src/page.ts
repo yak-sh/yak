@@ -18,6 +18,7 @@
 // with scrub on, because these bytes come off the open web and must
 // render from themselves alone. Server-only.
 import { apply, human, locate, webAt } from './db.ts'
+import { link } from './edge.ts'
 import { db } from './live_db.ts'
 import { dbReader } from './graph_query.ts'
 import { commitEffects } from './effects.ts'
@@ -93,11 +94,7 @@ export let filed = async (body: Filing, cast: Cast) => {
     ]
     changes.push(
       ...out.changes,
-      ...filed.map((from) => ({
-        eid: from,
-        name: 'dependency',
-        comp: { type: 'about', child: eid },
-      })),
+      ...filed.flatMap((from) => link(from, 'about', eid)),
     )
   }
 

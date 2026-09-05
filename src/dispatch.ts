@@ -9,7 +9,7 @@
 // A sweep like the others (scribe.ts is the sibling) — graduates to a
 // `system` entity under T-3906.
 import { apply, depsOf, settingValue } from './db.ts'
-import { sentences } from './edge.ts'
+import { sentences, unlink } from './edge.ts'
 import { db } from './live_db.ts'
 import { commitEffects } from './effects.ts'
 import { type Change, type Dep, statusOf } from './types.ts'
@@ -272,15 +272,11 @@ export let dispatchCandidates = (
       spends: true,
     })
   }
-  let drop = (d: Dep) => ({
-    eid: d.parent,
-    name: 'dependency',
-    comp: { type: 'wants', child: d.child, gone: true },
-  })
+  let drop = (d: Dep) => unlink(d.parent, 'wants', d.child)
   for (let d of wanted(all, deps)) {
     let t = by.get(d.child)!
     if (settled(t) || hotRun(all, d.parent, t)) {
-      candidates.push({ target: t, changes: [drop(d)], spends: false })
+      candidates.push({ target: t, changes: drop(d), spends: false })
       continue
     }
     // A different active persona may be attending the task. Keep this mark
@@ -306,7 +302,11 @@ export let dispatchCandidates = (
         persona: d.parent,
         deps,
       }).changes
-      candidates.push({ target: t, changes: [...made, drop(d)], spends: true })
+      candidates.push({
+        target: t,
+        changes: [...made, ...drop(d)],
+        spends: true,
+      })
       spawned.add(t.eid)
     } catch (error) {
       candidates.push({ target: t, error, spends: true })

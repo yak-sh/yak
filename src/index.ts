@@ -55,7 +55,7 @@ export type Index = {
   // component name → the eids carrying it (kind resolves through here via
   // kindPreds — no stored by-kind map to drift from kindOf)
   byComp: Map<string, Set<string>>
-  // the `dependency` triples by endpoint (replaces relationIndex/childIndex)
+  // the edge triples by endpoint (replaces relationIndex/childIndex)
   byParent: Map<string, Dep[]>
   byChild: Map<string, Dep[]>
 }

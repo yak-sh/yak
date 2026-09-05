@@ -355,13 +355,13 @@ export let emit = (a: ReturnType<typeof assemble>): string => {
   // Edge vocabulary + one-off lists.
   out.push(
     '// The edge vocabulary — every edge reads as a sentence, parent',
-    '// first. The list is the source of truth: db.ts bakes it into the',
-    '// dependency check constraint.',
+    '// first. The list is the source of truth: edge.ts derives each',
+    '// nature comp from it, and every read speaks these spellings.',
     'export let edges = [',
     ...a.edges.map((e) => `  ${q(e)},`),
     '] as const',
     '',
-    '// Durable work/knowledge facets governed by project-rooted dependency paths.',
+    '// Durable work/knowledge facets governed by project-rooted edge paths.',
     `export let governed = [${strList(a.governed)}] as const`,
     '',
     '// A managed session is still going in exactly these statuses.',

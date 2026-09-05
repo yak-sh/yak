@@ -18,7 +18,7 @@ import { apply, human, rowsOf } from './db.ts'
 import { db } from './live_db.ts'
 import { commitEffects } from './effects.ts'
 import { belongs, type Scoped, scopeFor } from './client.ts'
-import { sentences } from './edge.ts'
+import { link, sentences } from './edge.ts'
 import { type Change } from './types.ts'
 
 export type Floater = { id: string; eid: string; title: string; score: number }
@@ -149,11 +149,7 @@ export let writeRecall = (
     comp: { body: floaters.map((f) => `${f.id} · ${f.title}`).join('\n') },
   },
   { eid: rid, name: 'recalled', comp: { source } },
-  ...floaters.map((f): Change => ({
-    eid: rid,
-    name: 'dependency',
-    comp: { type: 'recalled', child: f.eid },
-  })),
+  ...floaters.flatMap((f) => link(rid, 'recalled', f.eid)),
 ]
 
 // The session's project: the same resolver the boot digest scopes by — an

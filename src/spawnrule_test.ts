@@ -3,6 +3,7 @@
 // subscriptions on an event's target yield a pending mark. The effect shell
 // is the same apply/dispatch machinery every other effect rides.
 import { type Snapshot } from './types.ts'
+import { link } from './edge.ts'
 import { rows } from './client.ts'
 import { hotRun, isPersona, spawnMarks } from './spawnrule.ts'
 import { assertEquals } from '@std/assert'
@@ -45,11 +46,7 @@ let sub = (
 let pick = (all: ReturnType<typeof rows>, ...eids: string[]) =>
   all.filter((r) => eids.includes(r.eid))
 
-let want = (persona: string, target: string) => ({
-  eid: persona,
-  name: 'dependency',
-  comp: { type: 'wants', child: target },
-})
+let want = (persona: string, target: string) => link(persona, 'wants', target)
 
 Deno.test('isPersona: the persona comp decides — a bare project or person is not one', () => {
   let all = rows(graph([
@@ -92,7 +89,7 @@ Deno.test('spawnMarks: a persona watcher marks; a human watcher stays a delivery
   ]))
   let target = all.find((r) => r.eid == T1)
   let marks = spawnMarks(target, pick(all, W1, W2), pick(all, N1, H1), [], [])
-  assertEquals(marks, [want(N1, T1)])
+  assertEquals(marks, want(N1, T1))
 })
 
 Deno.test('spawnMarks: mute, non-task targets, and foreign subs yield nothing', () => {
@@ -145,7 +142,7 @@ Deno.test('spawnMarks: a hot run or a pending mark debounces; a cold one does no
   ]))
   assertEquals(
     spawnMarks(target, subs, actors, pick(cold, S1), []),
-    [want(N1, T1)],
+    want(N1, T1),
   )
 })
 
@@ -157,6 +154,6 @@ Deno.test('spawnMarks: two watching personas each get their own mark', () => {
   let target = all.find((r) => r.eid == T1)
   assertEquals(
     spawnMarks(target, pick(all, W1, W2), pick(all, N1, N2), [], []),
-    [want(N1, T1), want(N2, T1)],
+    [...want(N1, T1), ...want(N2, T1)],
   )
 })

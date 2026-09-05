@@ -4,6 +4,7 @@
 // the way a headless client drives the Deno server. Slow tier only — a real
 // runtime boots.
 import { assert, assertEquals, assertMatch } from '@std/assert'
+import { link } from '../edge.ts'
 import { slow, until } from '../testing.ts'
 import { client, kernel, relay, seed } from '../../workers/yak/probe.ts'
 
@@ -26,7 +27,7 @@ slow('the store on Durable Object SQLite serves the wire', async () => {
       { eid: task, name: 'task', comp: { priority: 1 } },
       { eid: dep, name: 'doc', comp: { title: 'needed' } },
       { eid: dep, name: 'task', comp: {} },
-      { eid: task, name: 'dependency', comp: { type: 'requires', child: dep } },
+      ...link(task, 'requires', dep),
       { eid: note, name: 'doc', comp: { title: 'a comment', body: 'hi' } },
       { eid: note, name: 'comment', comp: { target: task } },
     ])
@@ -64,7 +65,7 @@ slow('the store on Durable Object SQLite serves the wire', async () => {
     // rolled back with it.
     let bad = await post([
       { eid: task, name: 'doc', comp: { title: 'renamed' } },
-      { eid: task, name: 'dependency', comp: { type: 'requires', child: 'x' } },
+      ...link(task, 'requires', 'x'),
       { eid: task, name: 'task', comp: { priority: 'not a number' } },
     ])
     assertEquals(bad.status, 400)

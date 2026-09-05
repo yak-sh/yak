@@ -2,6 +2,7 @@
 // policy tests own each predicate and race; this file composes one happy path
 // through the same stateless JSON-RPC door a Desktop host uses.
 import { assert, assertEquals, assertMatch } from '@std/assert'
+import { link } from './edge.ts'
 import { slow, until } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -229,16 +230,8 @@ slow(
     })
     await ok('graph_apply', {
       changes: [
-        {
-          eid: targetId,
-          name: 'dependency',
-          comp: { type: 'requires', child: prerequisiteId },
-        },
-        {
-          eid: targetId,
-          name: 'dependency',
-          comp: { type: 'reads', child: designId },
-        },
+        ...link(targetId, 'requires', prerequisiteId),
+        ...link(targetId, 'reads', designId),
       ],
       session: builder.sid,
     })

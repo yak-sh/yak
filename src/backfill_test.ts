@@ -11,7 +11,7 @@ let { historicalPrompts, landBackfill, readBackfill } = await import(
 )
 let { append } = await import('./entries.ts')
 let { graph } = await import('./reload.ts')
-let { edgeEid } = await import('./edge.ts')
+let { edgeEid, link } = await import('./edge.ts')
 
 let uid = () => crypto.randomUUID()
 let idOf = `(select id from entity where eid = ?)`
@@ -40,11 +40,7 @@ Deno.test('readBackfill scans SQLite while landBackfill owns no write path', asy
   db.close()
 
   let pending = readBackfill(path, 'worked')
-  assertEquals(pending, [{
-    eid: session,
-    name: 'dependency',
-    comp: { type: 'worked', child: task },
-  }])
+  assertEquals(pending, [...link(session, 'worked', task)])
 
   // The read did not land its own result. Only the injected generic writer
   // makes progress, matching CLI send() and MCP io.write().
@@ -54,7 +50,8 @@ Deno.test('readBackfill scans SQLite while landBackfill owns no write path', asy
     pending,
     (batch) => Promise.resolve(apply(writer, batch)),
   )
-  assertEquals(out, { found: 1, submitted: 1, landed: 1 })
+  // One sentence, two changes: the edge's ends and its nature tag.
+  assertEquals(out, { found: 2, submitted: 2, landed: 1 })
   writer.close()
   assertEquals(readBackfill(path, 'worked'), [])
   await Deno.remove(path)
@@ -63,8 +60,8 @@ Deno.test('readBackfill scans SQLite while landBackfill owns no write path', asy
 Deno.test('landBackfill reports each bounded batch', async () => {
   let pending: Change[] = Array.from({ length: 450 }, (_, i) => ({
     eid: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
-    name: 'dependency',
-    comp: { type: 'worked', child: crypto.randomUUID() },
+    name: 'edge',
+    comp: { from: crypto.randomUUID(), to: crypto.randomUUID() },
   }))
   let batches: number[] = []
   let progress: { found: number; submitted: number; landed: number }[] = []

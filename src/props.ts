@@ -4,7 +4,6 @@ import {
   type Change,
   comps,
   derivedProps,
-  edges,
   type PropType,
   stamped,
 } from './types.ts'
@@ -258,22 +257,6 @@ let ref = (name: string): Prop => ({
   name,
   type: { eid: 'entity', death: 'keep' },
 })
-let dep: Record<string, Prop> = {
-  type: {
-    comp: 'dependency',
-    prop: 'type',
-    name: 'dependency.type',
-    type: { enum: [...edges] },
-  },
-  child: ref('child'),
-  gone: {
-    comp: 'dependency',
-    prop: 'gone',
-    name: 'dependency.gone',
-    type: 'bool',
-  },
-}
-
 let requiredRef = (
   p: Prop,
   value: unknown,
@@ -294,7 +277,7 @@ let isFieldOp = (v: unknown): boolean =>
 
 // A batch gets one value language before any writer observes it. Unknown
 // components and server-owned columns stay untouched for the db allowlist;
-// every declared scalar and dependency word leaves in canonical form.
+// every declared scalar leaves in canonical form.
 export let normalizeChanges = (
   changes: Change[],
   ctx: PropContext = {},
@@ -302,19 +285,19 @@ export let normalizeChanges = (
   changes.map((change) => {
     let eid = requiredRef(ref('eid'), change.eid, ctx)
     if (change.comp == null) return { ...change, eid }
-    let props = change.name == 'dependency' ? dep : undefined
     let comp = Object.fromEntries(
       Object.entries(change.comp).map(([name, value]) => {
         // A field OPERATOR (e.g. { $edit }) is not a literal — pass it through
         // untouched for apply() to resolve against the current stored value.
         // A scalar parser would (rightly) reject the object as non-text.
         if (isFieldOp(value)) return [name, value]
-        let p = props?.[name] ??
-          (name in (comps[change.name] ?? {})
-            ? propAt(change.name, name)
-            : undefined)
+        let p = name in (comps[change.name] ?? {})
+          ? propAt(change.name, name)
+          : undefined
         if (!p) return [name, value]
-        if (change.name == 'dependency' && name == 'child') {
+        // An edge's ends ARE its identity: a value that resolves to nothing is
+        // a name nobody can hold, refused here rather than stored as null.
+        if (change.name == 'edge' && name != 'ord') {
           return [name, requiredRef(p, value, ctx)]
         }
         return [name, parseProp(p, value, ctx)]

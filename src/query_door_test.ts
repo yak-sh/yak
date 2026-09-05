@@ -10,6 +10,7 @@
 // adapters over these — segments in, JSON out — so what they can still differ
 // about is serialization, which their own tests cover.
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
+import { link } from './edge.ts'
 import { uuid } from './types.ts'
 import { askOf, askRows, layered, localQuery } from './graph_query.ts'
 import { queryArgs } from './client.ts'
@@ -32,7 +33,7 @@ apply(db, [
   { eid: a, name: 'task', comp: { priority: 1 } },
   { eid: b, name: 'doc', comp: { title: 'beta' } },
   { eid: b, name: 'task', comp: { priority: 2 } },
-  { eid: a, name: 'dependency', comp: { type: 'requires', child: b } },
+  ...link(a, 'requires', b),
   { eid: hidden, name: 'doc', comp: { title: 'buried treasure' } },
   { eid: hidden, name: 'task', comp: {} },
   { eid: hidden, name: 'quarantined', comp: {} },

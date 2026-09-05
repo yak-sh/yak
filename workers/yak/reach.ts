@@ -447,7 +447,7 @@ export let read = async (
 // A write is routed the same way a read is composed (T-32700): a bundle is
 // split by component and each part goes to the app that word belongs to. One
 // home per component — a word an app DECLARED is that app's row wherever the
-// call was aimed, and a word the platform shares (doc, comment, dependency)
+// call was aimed, and a word the platform shares (doc, comment, edge)
 // goes where the call, the entity's own history, or the rest of its bundle
 // says.
 
@@ -504,7 +504,7 @@ let minted = (batch: EntityLiteral[]) => {
     }
     return elsewhere(e) ? null : crypto.randomUUID()
   })
-  // An alias stands wherever an eid goes — a ref column, a dependency child,
+  // An alias stands wherever an eid goes — a ref column, an edge's end,
   // a nested bundle's address — so the swap is the whole batch's, by value.
   let swap = (v: unknown): unknown =>
     typeof v == 'string'

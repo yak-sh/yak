@@ -7,6 +7,7 @@ Deno.env.set('DB_PATH', ':memory:')
 let { apply, depsOf, eager, inverseBatch, lastBatch, mutate, snapshot } =
   await import('./db.ts')
 let { freshDb } = await import('./testdb.ts')
+let { link, moves } = await import('./edge.ts')
 let { jsonOf } = await import('./client.ts')
 let { rowed } = await import('./graph_query.ts')
 let { statusOf } = await import('./types.ts')
@@ -94,9 +95,7 @@ Deno.test('the mutation capability normalizes nested literals atomically', () =>
     }],
   )
   assertEquals(
-    result.changes.some((c) =>
-      c.eid == result.aliases.goal && c.name == 'dependency'
-    ),
+    moves(result.changes).some((m) => m.dep.parent == result.aliases.goal),
     true,
   )
 })
@@ -139,7 +138,7 @@ Deno.test('a $alias in a column lands before the entity that names it', () => {
         entity: { eid: '$t' },
         doc: { title: 't', body: '' },
         task: { project: '$p' },
-        dependency: { type: 'requires', child: { doc: { title: 'gate' } } },
+        edges: { type: 'requires', child: { doc: { title: 'gate' } } },
       },
       { entity: { eid: '$p' }, doc: { title: 'p', body: '' }, project: {} },
     ],
@@ -294,11 +293,7 @@ Deno.test('undo flips an edge: a link becomes an unlink', () => {
   let db = freshDb(), a = uid(), b = uid()
   born(db, a)
   born(db, b)
-  apply(db, [{
-    eid: a,
-    name: 'dependency',
-    comp: { type: 'requires', child: b },
-  }])
+  apply(db, [...link(a, 'requires', b)])
   assertEquals(
     snapshot(db).deps.some((d) => d.parent == a && d.child == b),
     true,

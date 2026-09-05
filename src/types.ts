@@ -971,8 +971,8 @@ let irregular: Record<string, string> = {
 }
 
 // The edge vocabulary — every edge reads as a sentence, parent
-// first. The list is the source of truth: db.ts bakes it into the
-// dependency check constraint.
+// first. The list is the source of truth: edge.ts derives each
+// nature comp from it, and every read speaks these spellings.
 export let edges = [
   'requires',
   'contains',
@@ -988,7 +988,7 @@ export let edges = [
   'satisfies',
 ] as const
 
-// Durable work/knowledge facets governed by project-rooted dependency paths.
+// Durable work/knowledge facets governed by project-rooted edge paths.
 export let governed = ['task', 'architecture', 'memory', 'persona'] as const
 
 // A managed session is still going in exactly these statuses.
@@ -2200,13 +2200,12 @@ export type Pinned = Pin & { target: string; view: string }
 // bunch is just a long batch. Client-minted UUID eids are welcome — the
 // spine (and its num) appears on first touch.
 //
-// Edges ride the same shape with name 'dependency', but a triple has no
-// row key, so the comp names the WHOLE sentence: {type, child} links
-// eid→child, and the same sentence with gone: true unlinks it (comp: null
-// could never say which edge). Both endpoints must exist. An optional
-// `ord` on the comp is the edge's listing order (types.ts Dep) — carrying
-// it re-links the same sentence to set it (an editable patch, not a second
-// edge); omitting it leaves an existing edge's ord untouched.
+// An EDGE is an entity of its own, named by the sentence it says
+// (edge.ts edgeEid): `edge{from, to}` beside the nature tag that is its
+// verb, both written to link and both taken away to unlink. Both endpoints
+// must exist. `edge.ord` is the listing order (types.ts Dep) — a patch on
+// the same entity, never a second edge; omitting it leaves the stored one
+// untouched.
 // `was` is a PRECONDITION — the graph's --ff-only. It names the value the
 // caller read, column by column (SHA-256 of it, or null for "I read no
 // value"), and apply() refuses the whole batch if any guarded column has

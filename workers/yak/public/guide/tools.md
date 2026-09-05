@@ -160,8 +160,8 @@ Two entities in one call, the second pointing at the first by its alias:
 An eid can be an argument, so a tool may change a row somebody names rather than
 mint one: put `{{run}}` where the eid goes and the bundle patches the columns it
 says, leaving the rest. The wire's own words work in a template beside the
-components — `entity`, `dependency`, `tombstone`, `was` — so a tool can draw an
-edge or delete a row:
+components — `entity`, `edges`, `tombstone`, `was` — so a tool can draw an edge
+or delete a row:
 
     { "drop_run": {
         "description": "Delete a run somebody logged by mistake",

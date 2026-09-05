@@ -79,7 +79,7 @@ let object = (v: unknown): v is Record<string, unknown> =>
 
 // The wire's own keys beside the components: what an entity bundle may say
 // that is not a component name (src/mutation.ts EntityLiteral).
-let WIRE = ['entity', 'dependency', 'tombstone', 'was']
+let WIRE = ['entity', 'edges', 'tombstone', 'was']
 
 // Every hole in a template, wherever the strings are.
 let holes = (v: unknown, found: Set<string> = new Set()): Set<string> => {

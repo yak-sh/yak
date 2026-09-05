@@ -10,6 +10,7 @@
 // its verdict on the row; nothing executes on content. SERVER-ONLY
 // (imports db).
 import { apply, readComp } from './db.ts'
+import { link } from './edge.ts'
 import { db } from './live_db.ts'
 import { commitEffects } from './effects.ts'
 import { named, rfcId } from './mail.ts'
@@ -362,15 +363,7 @@ export let hookChanges = (r: SpoolReq, target: string | null) => {
   let wire: Change[] = [
     { eid, name: 'doc', comp: { title: `${source}: ${event}`, body: '' } },
     { eid, name: 'hook', comp: {} },
-    ...(target
-      ? [
-        {
-          eid,
-          name: 'dependency',
-          comp: { type: 'about', child: target },
-        } satisfies Change,
-      ]
-      : []),
+    ...(target ? link(eid, 'about', target) : []),
   ]
   let stamp: Row = {
     source,

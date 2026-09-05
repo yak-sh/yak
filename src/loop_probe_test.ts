@@ -11,6 +11,7 @@
 // (parkable, runCommand :park, reapLeases, unblocking, backlog) against one
 // scenario. Runs under TASKS_SLOW.
 import { type Change } from './types.ts'
+import { link } from './edge.ts'
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, depsOf, eager } = await import('./db.ts')
 let { open } = await import('./store/sqlite.ts')
@@ -41,11 +42,7 @@ let session = () => {
   return eid
 }
 let requires = (parent: string, child: string) =>
-  apply(db, [{
-    eid: parent,
-    name: 'dependency',
-    comp: { type: 'requires', child },
-  }])
+  apply(db, link(parent, 'requires', child))
 let claim = (task: string, session: string) =>
   apply(db, [{ eid: task, name: 'claim', comp: { session } }])
 let row = (eid: string) => rowed({ eid, comps: eager(db, eid) })

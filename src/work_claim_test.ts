@@ -3,6 +3,7 @@
 // These cases hold the named mutation to the same boundaries as the build lane
 // and prove a refusal rolls back session reification and approval with it.
 import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
+import { link } from './edge.ts'
 import type { Sql } from './store/sql.ts'
 import type { WorkClaimMutation } from './mutation.ts'
 import { type Change, uuid } from './types.ts'
@@ -81,11 +82,7 @@ Deno.test('claim_work takes direct and inherited approved work', () => {
     ...task(direct, project, [{ eid: direct, name: 'decided', comp: {} }]),
     ...task(root, project, [{ eid: root, name: 'decided', comp: {} }]),
     ...task(child, project),
-    {
-      eid: root,
-      name: 'dependency',
-      comp: { type: 'requires', child },
-    },
+    ...link(root, 'requires', child),
   ])
   take(db, direct, 'direct-worker')
   take(db, child, 'inherited-worker')
@@ -99,11 +96,7 @@ Deno.test('claim_work direct policy refuses inherited authorization', () => {
   apply(db, [
     ...task(root, project, [{ eid: root, name: 'decided', comp: {} }]),
     ...task(child, project),
-    {
-      eid: root,
-      name: 'dependency',
-      comp: { type: 'requires', child },
-    },
+    ...link(root, 'requires', child),
   ])
   assertThrows(
     () => take(db, child, 'worker', 'ready', false),
@@ -204,8 +197,8 @@ Deno.test('claim_work gates unresolved and hidden dependencies', () => {
     ...task(hidden, project, [{ eid: hidden, name: 'quarantined', comp: {} }]),
     ...task(a, project, [{ eid: a, name: 'decided', comp: {} }]),
     ...task(b, project, [{ eid: b, name: 'decided', comp: {} }]),
-    { eid: a, name: 'dependency', comp: { type: 'requires', child: open } },
-    { eid: b, name: 'dependency', comp: { type: 'requires', child: hidden } },
+    ...link(a, 'requires', open),
+    ...link(b, 'requires', hidden),
   ])
   assertThrows(
     () => take(db, a, 'open-blocked'),
@@ -214,7 +207,7 @@ Deno.test('claim_work gates unresolved and hidden dependencies', () => {
   )
   let hiddenId = human(db, hidden)
   let e = assertThrows(() => take(db, b, 'hidden-blocked')) as Error
-  assertMatch(e.message, /requires a hidden unresolved dependency/)
+  assertMatch(e.message, /requires something hidden and unresolved/)
   assertEquals(e.message.includes(hiddenId), false)
 })
 

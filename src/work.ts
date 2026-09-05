@@ -156,16 +156,16 @@ export let workLineageSql = (seed: string) =>
   `lineage(origin, entity) as (
      select origin, entity from ${seed}
      union
-     select lineage.origin, dependency.parent
+     select lineage.origin, req.parent
        from lineage
        join entity current on current.id = lineage.entity
        left join tombstone current_dead on current_dead.entity = current.id
        left join proposed on proposed.entity = current.id
        left join decided choice on choice.entity = current.id
        left join quarantined hidden on hidden.entity = current.id
-       join (${sentences('requires')}) dependency
-         on dependency.child = current.id
-       join entity parent on parent.id = dependency.parent
+       join (${sentences('requires')}) req
+         on req.child = current.id
+       join entity parent on parent.id = req.parent
        left join tombstone parent_dead on parent_dead.entity = parent.id
       where not (proposed.entity is not null and choice.entity is null)
         and coalesce(choice.verdict, '') != 'declined'

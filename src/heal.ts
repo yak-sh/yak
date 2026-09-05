@@ -15,7 +15,7 @@
 // handler, and the handler re-reads the graph, so it is idempotent: dedup and
 // the tri-state recovery check hold whoever calls it.
 import { apply, human, locate, readComp } from './db.ts'
-import { sentences } from './edge.ts'
+import { link, sentences } from './edge.ts'
 import { db } from './live_db.ts'
 import { type Change, kindOf, sessionActive } from './types.ts'
 import { spawnChanges } from './client.ts'
@@ -450,11 +450,7 @@ export let fileBug =
         },
         // Every affected entity links to the one ticket, so the sweep can tell
         // a filed break from an unfiled one purely by the about edge.
-        {
-          eid: open.eid,
-          name: 'dependency',
-          comp: { type: 'about', child: eid },
-        },
+        ...link(open.eid, 'about', eid),
       ]))
       return
     }
@@ -477,7 +473,7 @@ export let fileBug =
         },
       },
       { eid: bug, name: 'bug', comp: { fault: key, hits: 1, last: at } },
-      { eid: bug, name: 'dependency', comp: { type: 'about', child: eid } },
+      ...link(bug, 'about', eid),
     ]))
     // Phase 2: a NEW ticket also summons a fixer, behind the guardrails. The
     // cast above does not dispatch, so the spawn is minted here — the same

@@ -352,7 +352,7 @@ export let integrityReport = (a: Anomalies | null): Report[] => {
 }
 
 // Governed durable work and knowledge must be reachable from a project through
-// dependency parent→child edges. The raw recursive scan is server-side because
+// parent→child edges. The raw recursive scan is server-side because
 // detached cycles look internally connected to any client-side local walk; the
 // project-root seed is what proves they are orphans.
 export let projectOrphans = (a: Anomalies | null): Report[] => {
@@ -370,7 +370,7 @@ export let projectOrphans = (a: Anomalies | null): Report[] => {
   return [{
     level: 'fail',
     text: `${a.unrooted.length} governed entity(s) are outside every ` +
-      `project-rooted dependency closure: ${sample}. Inspect all: ` +
+      `project-rooted edge closure: ${sample}. Inspect all: ` +
       'curl -fsS "http://${TASKS_HOST:-127.0.0.1:5173}/integrity" | ' +
       `jq -r '.unrooted[]'`,
   }]

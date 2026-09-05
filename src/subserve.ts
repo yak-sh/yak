@@ -41,6 +41,7 @@ import {
   textMatches,
   vocabOf,
 } from './db.ts'
+import { edgeEid, moves, natureOf } from './edge.ts'
 import { record } from './telemetry.ts'
 import { evalAgg, evalSub, walker, workingSet } from './graph_query.ts'
 import {
@@ -110,7 +111,7 @@ type Sub = {
     counts: Map<string, number>
   }
   // Query-result components are ordinary result data backed by declared,
-  // bounded graph inputs. Standing dependency sets let one input edit refresh
+  // bounded graph inputs. Standing input sets let one input edit refresh
   // one result without enumerating members or graph rows.
   results?: {
     names: ResultComp[]
@@ -323,8 +324,8 @@ let selectedRiderDelta = (
   let select = r.select!
   let dirty = !!joined.length || moved ||
     batch.some((c) =>
-      c.name == select.via?.comp ||
-      (c.name == 'dependency' && c.comp?.type == select.type) ||
+      c.name == select.via?.comp || c.name == 'edge' ||
+      c.name == natureOf[select.type] ||
       (c.name == 'entity' && c.comp == null)
     )
   let add: Dep[] = []
@@ -430,20 +431,22 @@ let riderDelta = (
   // screen — so rather than re-deciding it here, ask the same reader about the
   // endpoints the batch named and believe what comes back. An unlink needs no
   // such ask: gone is gone.
-  let linked = batch.filter((c) => c.name == 'dependency' && c.comp)
+  // An unlink names only the edge's eid, so the rider's own held sentences
+  // answer for it — holding one is what makes its loss news here.
+  let byEdge = new Map(
+    [...r.keys.values()].map((
+      d,
+    ) => [edgeEid(d.parent, natureOf[d.type], d.child), d]),
+  )
+  let said = moves(batch, (eid) => byEdge.get(eid))
   let admits = new Set<string>()
-  if (linked.some((c) => !c.comp!.gone)) {
-    let ends = linked.flatMap((c) => [c.eid, String(c.comp!.child)])
+  if (said.some((m) => !m.gone)) {
+    let ends = said.flatMap((m) => [m.dep.parent, m.dep.child])
     for (let d of eagerDeps(db, ends)) admits.add(depKey(d))
   }
-  for (let c of linked) {
-    let d: Dep = {
-      parent: c.eid,
-      type: String(c.comp!.type) as Dep['type'],
-      child: String(c.comp!.child),
-    }
+  for (let { dep: d, gone: went } of said) {
     let ours = members.has(d.parent) || members.has(d.child)
-    if (c.comp!.gone || !ours || !admits.has(depKey(d))) lose(depKey(d))
+    if (went || !ours || !admits.has(depKey(d))) lose(depKey(d))
     else take(d)
   }
   if (gone.size || moved) {

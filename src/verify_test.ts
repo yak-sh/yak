@@ -9,6 +9,7 @@ import {
   assertStringIncludes,
   assertThrows,
 } from '@std/assert'
+import { link } from './edge.ts'
 import type { Change } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -93,11 +94,7 @@ apply(
       },
     },
     { eid: memory, name: 'memory', comp: { scope: project } },
-    {
-      eid: persona,
-      name: 'dependency',
-      comp: { type: 'contains', child: memory },
-    },
+    ...link(persona, 'contains', memory),
   ],
   undefined,
   jeff,

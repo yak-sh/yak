@@ -16,6 +16,7 @@
 // edits. SERVER-ONLY (imports db). The model call is injectable so tests never
 // spawn a provider (like recall.ts's recallFn).
 import { apply, human, locate, touch } from './db.ts'
+import { link } from './edge.ts'
 import { db } from './live_db.ts'
 import { type Change, uuid } from './types.ts'
 import { commitEffects } from './effects.ts'
@@ -231,7 +232,7 @@ export let considerChanges = (
       name: 'doc',
       comp: { title: `consider: ${f.title}`.slice(0, 100), body: f.body },
     },
-    { eid, name: 'dependency', comp: { type: 'about', child: source } },
+    ...link(eid, 'about', source),
   ]
 }
 

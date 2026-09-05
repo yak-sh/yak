@@ -52,7 +52,7 @@ Deno.test('reindex builds and maintains the reverse {eid} index', () => {
   assertEquals(ix.byComp.get('wake'), new Set(['w1', 'w3']))
 })
 
-Deno.test('reindexEdge indexes dependency triples by both endpoints', () => {
+Deno.test('reindexEdge indexes edge triples by both endpoints', () => {
   let ix = emptyIndex()
   let d = { parent: 'a', type: 'requires' as const, child: 'b' }
   reindexEdge(ix, d, false)

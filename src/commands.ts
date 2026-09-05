@@ -108,7 +108,7 @@ export type Reader = {
   // Every entity a filter matches — the kind/component enumerations (`.repo!`,
   // busy desk sessions, an existing dream cursor).
   select: (filter: string) => Row[]
-  // The dependency edges touching these entities — persona ownership at spawn.
+  // The edges touching these entities — persona ownership at spawn.
   deps: (eids: string[]) => Dep[]
 }
 

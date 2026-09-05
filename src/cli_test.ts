@@ -55,7 +55,7 @@ import { type Change, edges, type Snapshot } from './types.ts'
 import { slow } from './testing.ts'
 import { VERSION } from './version.ts'
 import { sha } from './sha.ts'
-import { edgeEid } from './edge.ts'
+import { edgeEid, link } from './edge.ts'
 
 let transcript = (...events: unknown[]) => {
   let path = Deno.makeTempFileSync()
@@ -1884,11 +1884,7 @@ slow(
       assertEquals(out.code, 0, text(out.stderr))
       assertEquals(text(out.stdout), 'worked: 1/1 historical edges landed\n')
       assertEquals(fake.seen, ['/apply'])
-      assertEquals(fake.acked, [{
-        eid: session,
-        name: 'dependency',
-        comp: { type: 'worked', child: task },
-      }])
+      assertEquals(fake.acked, [...link(session, 'worked', task)])
     } finally {
       await fake.server.shutdown()
       await Deno.remove(path)
@@ -1940,11 +1936,7 @@ slow(
         name: 'task',
         comp: { priority: 1, project },
       },
-      {
-        eid: project,
-        name: 'dependency',
-        comp: { type: 'wants', child: item },
-      },
+      ...link(project, 'wants', item),
     ])
     let id = human(db, item)
     record(db, {
@@ -2113,11 +2105,7 @@ slow('task require writes the subject-first requires edge', async () => {
     }).output()
     assertEquals(out.code, 0)
     assertEquals(text(out.stdout).trim(), 'T-2 requires T-4')
-    assertEquals(fake.acked, [{
-      eid: T,
-      name: 'dependency',
-      comp: { type: 'requires', child: O },
-    }])
+    assertEquals(fake.acked, [...link(T, 'requires', O)])
   } finally {
     await fake.server.shutdown()
   }

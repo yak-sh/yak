@@ -1,6 +1,19 @@
 // The edge identity derivation and the transition table (D-23820, T-23825).
-import { assertEquals, assertMatch, assertNotEquals } from '@std/assert'
-import { edgeEid, natureOf, natures, typeOf } from './edge.ts'
+import {
+  assertEquals,
+  assertMatch,
+  assertNotEquals,
+  assertThrows,
+} from '@std/assert'
+import {
+  edgeEid,
+  link,
+  moves,
+  natureOf,
+  natures,
+  typeOf,
+  unlink,
+} from './edge.ts'
 import { comps, edges } from './types.ts'
 
 let UUID8 =
@@ -62,4 +75,65 @@ Deno.test('natureOf: every edge type, present tense but the event, each a comp',
     assertEquals(n in comps, true, `${n} is not a comp`)
     assertEquals(natureOf[typeOf[n]], n)
   }
+})
+
+// The two changes that SAY a sentence, and the reader that takes them back
+// apart — the seam every consumer of the wire now goes through.
+Deno.test('link/unlink: the entity is the sentence, both halves or neither', () => {
+  let said = edgeEid('a', 'references', 'b')
+  assertEquals(link('a', 'referenced', 'b'), [
+    { eid: said, name: 'edge', comp: { from: 'a', to: 'b' } },
+    { eid: said, name: 'references', comp: {} },
+  ])
+  // ord is patch-shaped: naming it sets the listing order, omitting it leaves
+  // the stored one alone.
+  assertEquals(link('a', 'referenced', 'b', 3)[0].comp, {
+    from: 'a',
+    to: 'b',
+    ord: 3,
+  })
+  // An unlink takes the comps, never the spine: the eid IS the sentence, so a
+  // grave would make it unsayable forever.
+  assertEquals(unlink('a', 'referenced', 'b'), [
+    { eid: said, name: 'references', comp: null },
+    { eid: said, name: 'edge', comp: null },
+  ])
+  // The recalling edge is the one that is an EVENT, so it carries a clock.
+  assertMatch(String(link('e', 'recalled', 'm')[1].comp?.at), /^20\d\d-/)
+  assertThrows(() => link('a', 'blocks', 'b'), Error, 'unknown edge type')
+})
+
+Deno.test('moves: a batch read back as the sentences it says and unsays', () => {
+  let said = edgeEid('a', 'requires', 'b')
+  assertEquals(moves(link('a', 'requires', 'b')), [{
+    dep: { parent: 'a', type: 'requires', child: 'b' },
+    gone: false,
+  }])
+  // An unlink names only the eid, so whoever HELD the sentence answers.
+  let held = (eid: string) =>
+    eid == said
+      ? { parent: 'a', type: 'requires' as const, child: 'b' }
+      : undefined
+  assertEquals(moves(unlink('a', 'requires', 'b'), held), [{
+    dep: { parent: 'a', type: 'requires', child: 'b' },
+    gone: true,
+  }])
+  // Without a holder there is nothing to name, so the loss is silent rather
+  // than a sentence with a hole in it.
+  assertEquals(moves(unlink('a', 'requires', 'b')), [])
+  // A tag written beside a stored sentence is that sentence, said again.
+  assertEquals(moves([{ eid: said, name: 'requires', comp: {} }], held), [{
+    dep: { parent: 'a', type: 'requires', child: 'b' },
+    gone: false,
+  }])
+  // Order decides: a stream that mints an edge and then reaps it is a LOSS.
+  assertEquals(
+    moves([
+      ...link('a', 'requires', 'b'),
+      { eid: said, name: 'entity', comp: null },
+    ]),
+    [{ dep: { parent: 'a', type: 'requires', child: 'b' }, gone: true }],
+  )
+  // An ordinary entity's death is not an edge move.
+  assertEquals(moves([{ eid: 'x', name: 'entity', comp: null }]), [])
 })

@@ -210,8 +210,8 @@ Deno.test('normalizeChanges: component values, ids, and edges canonicalize', () 
       },
       {
         eid: 'parent',
-        name: 'dependency',
-        comp: { type: 'REQUIRES', child: 'T-2', gone: 'no' },
+        name: 'edge',
+        comp: { from: 'parent', to: 'T-2' },
       },
     ], { resolve }),
     [
@@ -222,8 +222,8 @@ Deno.test('normalizeChanges: component values, ids, and edges canonicalize', () 
       },
       {
         eid: parent,
-        name: 'dependency',
-        comp: { type: 'requires', child: child, gone: 0 },
+        name: 'edge',
+        comp: { from: parent, to: child },
       },
     ],
   )

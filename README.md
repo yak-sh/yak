@@ -60,19 +60,19 @@ A read is also a write. `POST /apply` and MCP `graph_apply` take
 existing entity or, as a `$alias`, one the batch mints (the result's `aliases`
 maps `$alias → eid`) — as does an eid the client minted itself, a uuid or a
 content hash naming nothing yet, on an entry carrying components; components
-ride flat beside it as patches; edges are the `dependency` component,
-`{type, child}` or a list of them. Wherever an eid goes — `entity.eid`, a ref
-column, a dependency child — a `$alias`, a human id, or a nested bundle stands
-in. `was` beside the components guards per column. `kind`, `num`, `refs`,
-`backrefs`, `comments`, and stamped or derived columns are ignored, so a read
-edited and sent back writes just the edit:
+ride flat beside it as patches; edges ride `edges`, `{type, child}` or a list of
+them. Wherever an eid goes — `entity.eid`, a ref column, an edge's child — a
+`$alias`, a human id, or a nested bundle stands in. `was` beside the components
+guards per column. `kind`, `num`, `refs`, `backrefs`, `comments`, and stamped or
+derived columns are ignored, so a read edited and sent back writes just the
+edit:
 
 ```json
 [{
   "entity": { "eid": "$box" },
   "doc": { "title": "Recipe box" },
   "project": {},
-  "dependency": [
+  "edges": [
     { "type": "requires", "child": "T-3" },
     {
       "type": "contains",

@@ -65,7 +65,7 @@ export let ahead = (
     ? stored.epoch != next.epoch || (stored.cursor ?? -1) < next.cursor
     : stored.epoch == next.epoch && (stored.cursor ?? -1) < next.cursor
 
-// The edge key: a dependency triple has no row id, so its three parts name
+// The edge key: a sentence has no row id, so its three parts name
 // the whole sentence (mirrors applyLocal and the snapshot deps shape).
 let depKey = (d: Dep) => `${d.parent}|${d.type}|${d.child}`
 

@@ -2,6 +2,7 @@
 // every task that requires it and is now fully unblocked. Against an in-memory
 // db, no server — the effect is a pure function of the graph a completion left.
 import { type Change } from './types.ts'
+import { link } from './edge.ts'
 Deno.env.set('DB_PATH', ':memory:')
 let { apply } = await import('./db.ts')
 let { open } = await import('./store/sqlite.ts')
@@ -29,11 +30,7 @@ let session = () => {
   return eid
 }
 let requires = (parent: string, child: string) =>
-  apply(db, [{
-    eid: parent,
-    name: 'dependency',
-    comp: { type: 'requires', child },
-  }])
+  apply(db, link(parent, 'requires', child))
 let claim = (taskEid: string, session: string) =>
   apply(db, [{ eid: taskEid, name: 'claim', comp: { session } }])
 // End a dep for real: land its terminal MARK (D-24102) — `completed` for done,

@@ -38,6 +38,7 @@ import type {
 } from './mutation.ts'
 export type { EntityLiteral, LiteralRef } from './mutation.ts'
 import { idOf, SHORT, shortId, slugsOf } from './types.ts'
+import { link, moves, typeOf } from './edge.ts'
 import { formatProp, parseProp, propAt, refOf } from './props.ts'
 import { local } from './time.ts'
 import { nearest, offer } from './near.ts'
@@ -817,8 +818,16 @@ export let ledger = (entries: JournalEntry[], all: Row[]): string[] => {
       }
       seen.add(eid)
     }
+    for (let { dep, gone } of moves(e.changes)) {
+      lines.push(
+        `- ∴ ${gone ? 'unlinked' : 'linked'} ${name(dep.parent)} ${dep.type} ${
+          name(dep.child)
+        }`,
+      )
+    }
     for (let c of e.changes) {
-      if (seen.has(c.eid) && c.name != 'dependency') continue
+      if (seen.has(c.eid)) continue
+      if (c.name == 'edge' || typeOf[c.name]) continue
       if (c.name == 'claim') {
         lines.push(
           c.comp == null
@@ -836,11 +845,6 @@ export let ledger = (entries: JournalEntry[], all: Row[]): string[] => {
           : 'cancelled'
         lines.push(`- → ${name(c.eid)} ${word}`)
         seen.add(c.eid)
-      } else if (c.name == 'dependency' && c.comp) {
-        let verb = c.comp.gone ? 'unlinked' : 'linked'
-        lines.push(
-          `- ∴ ${verb} ${name(c.eid)} ${c.comp.type} ${name(c.comp.child)}`,
-        )
       } else if (c.comp && c.name != 'entity' && c.name != 'journal') {
         let cols = Object.keys(c.comp).filter((k) => k != 'eid').join(' ')
         lines.push(`- · ${c.name}{${cols}} on ${name(c.eid)}`)
@@ -1160,7 +1164,7 @@ export let around = async (id: string, quarantined = false) => {
   return { deps, all, row }
 }
 
-// The dependency edges touching these entities — /query's deps=1 layer with
+// The edges touching these entities — /query's deps=1 layer with
 // the rows discarded, deduped across hits (an edge between two asked-for
 // entities rides back on both). The server binds depsOf directly in-process;
 // every deps-driven reader takes one so both callers exist. `reveal` lifts the
@@ -1186,7 +1190,7 @@ export let httpDeps: DepsFn = async (eids, reveal = false) => {
   return [...seen.values()]
 }
 
-// Several entities' dependency neighborhoods in bounded keyed reads. The rows
+// Several entities' edge neighborhoods in bounded keyed reads. The rows
 // the edges name ride back too, including their typed refs (claim sessions), so
 // a renderer can humanize every endpoint without opening the corpus.
 export let neighborhoods = async (
@@ -1205,7 +1209,7 @@ export let neighborhoods = async (
   return { deps, rows: uniq([...hits, ...ends, ...refs]) }
 }
 
-// The task context supplier walks dependency PARENTS from the addressed work
+// The task context supplier walks edge PARENTS from the addressed work
 // until it reaches every project root. This is deliberately not a `contains`
 // tree: every semantic edge can establish ancestry, while its type still says
 // what inherited context means below. Caps bound both graph reads and prompt
@@ -1535,8 +1539,8 @@ export let taskChanges = (
 
 // A graph literal is the read shape written back (mutation.ts EntityLiteral):
 // components flat beside `entity`, a `$alias` or a nested bundle wherever an
-// eid goes, edges as `dependency` sentences. `was` stays beside each component
-// patch, exactly where Change carries it.
+// eid goes, edges as `edges: [{type, child}]` sentences. `was` stays beside
+// each component patch, exactly where Change carries it.
 export type LiteralPlan = {
   changes: Change[]
   aliases: Record<string, string>
@@ -1575,7 +1579,7 @@ let MINTABLE = new RegExp(`${UUID.source}|^[0-9a-f]{64}$`, 'i')
 
 // The bundle shape lowered onto the older key/id/comps/deps literal, so one
 // compiler serves both: a `$` eid is a batch-local key, any other eid names an
-// existing entity, and each `dependency` sentence files under its edge type.
+// existing entity, and each `edges` sentence files under its edge type.
 // What a read carries beyond its components — kind, refs, backrefs, comments,
 // derived and stamped columns — is a projection, dropped here so a read sent
 // back unchanged writes nothing. `tombstone` is not a component but the
@@ -1584,7 +1588,7 @@ let LEGACY = ['key', 'id', 'comps', 'deps']
 let PROJECTED = new Set(['kind', 'refs', 'backrefs', 'comments'])
 let lowered = (literal: EntityLiteral): EntityLiteral => {
   if (LEGACY.some((field) => owns(literal, field))) return literal
-  let { entity, dependency, was, tombstone, ...rest } = literal
+  let { entity, edges: said, was, tombstone, ...rest } = literal
   if (entity != null && !object(entity)) {
     throw new Error('entity must be an object')
   }
@@ -1603,14 +1607,10 @@ let lowered = (literal: EntityLiteral): EntityLiteral => {
       : comp as Record<string, unknown> | null
   }
   let deps: Record<string, LiteralRef[]> = {}
-  let sentences = dependency == null
-    ? []
-    : Array.isArray(dependency)
-    ? dependency
-    : [dependency]
+  let sentences = said == null ? [] : Array.isArray(said) ? said : [said]
   for (let dep of sentences) {
     if (!object(dep) || typeof dep.type != 'string' || dep.child == null) {
-      throw new Error('a dependency is {type, child}')
+      throw new Error('an edge is {type, child}')
     }
     ;(deps[dep.type] ??= []).push(dep.child as LiteralRef)
   }
@@ -1625,8 +1625,8 @@ let lowered = (literal: EntityLiteral): EntityLiteral => {
 
 // Pure compile first, write later. The resolver is caller-owned (rows, SQL,
 // or another index); local aliases win only when they are unambiguous with
-// that external namespace. Components and dependency types come solely from
-// the generated vocabulary, so adding either expands this language without a
+// that external namespace. Components and edge types come solely from the
+// generated vocabulary, so adding either expands this language without a
 // hand-kept parser edit.
 export let normalizeLiterals = (
   literals: EntityLiteral[],
@@ -1727,7 +1727,7 @@ export let normalizeLiterals = (
     if (!object(declaredDeps)) throw new Error('literal deps must be an object')
     for (let name of Object.keys(declaredDeps)) {
       if (!(edges as readonly string[]).includes(name)) {
-        throw new Error(`unknown dependency: ${name}`)
+        throw new Error(`unknown edge type: ${name}`)
       }
     }
     for (let type of edges) {
@@ -1735,7 +1735,7 @@ export let normalizeLiterals = (
       let value = declaredDeps[type]
       let targets = Array.isArray(value) ? value : [value]
       for (let target of targets) {
-        node.deps.push({ type, target: where(target, `${type} dependency`) })
+        node.deps.push({ type, target: where(target, `${type} edge`) })
       }
     }
     // `tombstone` is the bundle's spelling of death (D-23827), lowered to the
@@ -1814,7 +1814,7 @@ export let normalizeLiterals = (
   // Component patches with every reference resolved to an eid. A ref column
   // must name a spine that exists when its change lands, so an entity this
   // batch mints is written before any entity whose column names it: those
-  // are the `needs` edges, walked with the dependency edges for cycles and
+  // are the `needs` edges, walked with the stored edges for cycles and
   // again to order the writes.
   let needs = new Map<LiteralNode, LiteralNode[]>()
   let patches = new Map<
@@ -1888,11 +1888,7 @@ export let normalizeLiterals = (
   }
   for (let node of nodes) write(node)
   for (let { parent, type, eid } of deps) {
-    changes.push({
-      eid: parent.eid,
-      name: 'dependency',
-      comp: { type, child: eid },
-    })
+    changes.push(...link(parent.eid, type, eid))
   }
   return { changes, aliases }
 }
@@ -2098,7 +2094,7 @@ export let taskTreePlan = async (
   let root: EntityLiteral = { entity: { eid: project.eid } }
   let named = (key: string) => literalByKey.get(key)!.entity!.eid!
   let add = (literal: EntityLiteral, type: Edge, child: string) => {
-    literal.dependency = [...[literal.dependency ?? []].flat(), { type, child }]
+    literal.edges = [...[literal.edges ?? []].flat(), { type, child }]
   }
   for (let node of plans) {
     add(
@@ -2653,11 +2649,7 @@ export let commitChanges = (
   let eid = git.sha.toLowerCase()
   let prior = all.find((r) => r.eid == eid && r.comps.commit)
   if (prior) {
-    return prior.comps.commit.target == target ? [] : [{
-      eid,
-      name: 'dependency',
-      comp: { type: 'about', child: target },
-    }]
+    return prior.comps.commit.target == target ? [] : link(eid, 'about', target)
   }
   let s = session
     ? sessionFor(all, session, undefined, undefined, {

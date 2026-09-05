@@ -8,6 +8,7 @@
 // walk from every card to whatever it pointed at. Each has a subscription now,
 // so a future edit that puts either back in the boot fails here.
 import { assertEquals } from '@std/assert'
+import { link } from './edge.ts'
 import { uuid } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -90,7 +91,7 @@ Deno.test('working set carries NO edges — a rider delivers them scoped', () =>
     // (4,909 on a copy of the live graph — 557 KB, 81% of the whole join frame)
     // because an edge had no other way to reach a client; the rider is that way
     // now.
-    { eid: card, name: 'dependency', comp: { type: 'requires', child: task } },
+    ...link(card, 'requires', task),
   ])
   let snap = workingSet(db)
   assertEquals(snap.deps, [], 'no edge rides the boot')

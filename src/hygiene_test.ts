@@ -4,6 +4,7 @@
 Deno.env.set('DB_PATH', ':memory:')
 let { apply } = await import('./db.ts')
 let { db } = await import('./live_db.ts')
+let { link } = await import('./edge.ts')
 let {
   candidates,
   HARD_SCOPE,
@@ -95,11 +96,7 @@ slow(
     put([
       { eid: persona, name: 'doc', comp: { title: 'Large persona', body: '' } },
       { eid: persona, name: 'persona', comp: { home: p } },
-      {
-        eid: persona,
-        name: 'dependency',
-        comp: { type: 'contains', child: a },
-      },
+      ...link(persona, 'contains', a),
     ])
 
     let got = candidates(p)

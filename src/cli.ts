@@ -105,6 +105,7 @@ import {
   wrapChanges,
 } from './client.ts'
 import { inflate, isFile, unreadPipe } from './client_host.ts'
+import { link, unlink } from './edge.ts'
 import { editChange, parsePropPatch } from './edit.ts'
 import { entityUrl } from './url.ts'
 import { prune, reap, sweep } from './probes.ts'
@@ -2016,11 +2017,9 @@ let dep = async (got: Got) => {
   }
   let row = await needed(id)
   let child = await needed(childId)
-  await send([{
-    eid: row.eid,
-    name: 'dependency',
-    comp: { type, child: child.eid, ...(gone ? { gone: true } : {}) },
-  }])
+  await send(
+    gone ? unlink(row.eid, type, child.eid) : link(row.eid, type, child.eid),
+  )
   print(`${idOf(row)} ${type} ${idOf(child)}${gone ? ' — unlinked' : ''}`)
   // A tier that renders nothing yet says so, so nobody assumes the prompt moved.
   if (!gone) {

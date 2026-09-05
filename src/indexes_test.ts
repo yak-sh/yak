@@ -83,7 +83,7 @@ Deno.test('every {eid} ref yields exactly one single-column index', () => {
 // alike, since open() now realizes indexDdl over the whole vocabulary (T-17678)
 // rather than only the DERIVED tables (T-12764). A drift here means the source
 // of truth no longer describes the schema it claims to.
-Deno.test('indexes map matches the db and dependency plans use both ends', () => {
+Deno.test('indexes map matches the db and edge plans use both ends', () => {
   let d = open(':memory:')
   let tables = d.prepare(
     "select name from sqlite_master where type='table' and name not like 'sqlite_%'",
@@ -119,13 +119,8 @@ Deno.test('indexes map matches the db and dependency plans use both ends', () =>
       detail: string
     }[])
       .map((r) => r.detail)
-  let parent = plan('select * from dependency where parent = ?', 'p')
-  let child = plan('select * from dependency where child = ?', 'c')
-  let death = plan(
-    'delete from dependency where parent = ? or child = ?',
-    'x',
-    'x',
-  )
+  let parent = plan('select * from edge where "from" = ?', 'p')
+  let child = plan('select * from edge where "to" = ?', 'c')
   let newest = plan('select * from completed order by at desc limit 1')
   d.close()
 
@@ -147,8 +142,9 @@ Deno.test('indexes map matches the db and dependency plans use both ends', () =>
 
   assertEquals(new Set(live.keys()), new Set(declared.keys()))
   for (let [key, unique] of declared) assertEquals(live.get(key), unique, key)
-  assertEquals(parent.some((x) => x.includes('SCAN dependency')), false)
-  assertEquals(child.some((x) => x.includes('dependency_child')), true)
-  assertEquals(death.some((x) => x.includes('SCAN dependency')), false)
+  // Both ends of a sentence are seekable: the edge table's own {eid} indexes
+  // carry backlinks and endpoint deletion without walking every edge.
+  assertEquals(parent.some((x) => x.includes('SCAN edge')), false)
+  assertEquals(child.some((x) => x.includes('SCAN edge')), false)
   assertEquals(newest.some((x) => x.includes('completed_at')), true)
 })

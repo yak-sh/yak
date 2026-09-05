@@ -13,7 +13,7 @@ let {
 } = await import('./referenced.ts')
 let { assertEquals } = await import('@std/assert')
 import type { Change } from './types.ts'
-import { sentences } from './edge.ts'
+import { link, moves, sentences } from './edge.ts'
 
 let uid = (): string => crypto.randomUUID()
 let idOf = `(select id from entity where eid = ?)`
@@ -98,7 +98,7 @@ Deno.test('referencedChanges: a cited entity becomes an edge, once', () => {
   let e = entry(sess(), `working ${t.id} now`)
   let out = referencedChanges(db, e, `working ${t.id} now`)
   assertEquals(out, [
-    { eid: e, name: 'dependency', comp: { type: 'referenced', child: t.eid } },
+    ...link(e, 'referenced', t.eid),
   ])
   apply(db, out)
   assertEquals(children(e), [t.eid])
@@ -144,7 +144,7 @@ Deno.test('referencedChanges: a cited page url lands on its page entity', () => 
     e,
     'per https://example.com/spec?utm_source=mail, yes',
   )
-  assertEquals(out.map((c) => c.comp?.child), [p])
+  assertEquals(moves(out).map((m) => m.dep.child), [p])
 })
 
 Deno.test('referencedEntry: the effect mints and casts the edges', () => {
@@ -177,10 +177,13 @@ Deno.test('referencedEntry: no content, no edges', () => {
 Deno.test('historicalReferenced: the sweep finds what the effect would have', () => {
   let t = task('historical target')
   let e = entry(sess(), `once said ${t.id}`)
-  let pending = historicalReferenced(db)
-  let mine = pending.filter((c) => c.eid == e)
-  assertEquals(mine.map((c) => c.comp?.child), [t.eid])
-  apply(db, mine)
+  let mine = moves(historicalReferenced(db))
+    .filter((m) => m.dep.parent == e)
+  assertEquals(mine.map((m) => m.dep.child), [t.eid])
+  apply(db, historicalReferenced(db))
   // resumable: a rerun finds only what the last run missed — here, nothing
-  assertEquals(historicalReferenced(db).filter((c) => c.eid == e), [])
+  assertEquals(
+    moves(historicalReferenced(db)).filter((m) => m.dep.parent == e),
+    [],
+  )
 })

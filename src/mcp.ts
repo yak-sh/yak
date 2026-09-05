@@ -163,7 +163,7 @@ export type IO = {
   // hits — find() over the wire, for target resolution and bounded reference
   // expansion in derived read faces.
   get: (ids: string[], filters?: string[]) => Promise<Row[]>
-  // The dependency edges touching these entities, both directions, quarantine-
+  // The edges touching these entities, both directions, quarantine-
   // screened; `reveal` lifts the screen the way quarantined=1 does.
   deps: (eids: string[], reveal?: boolean) => Promise<Dep[]>
   // `via` is journal attribution — the calling session's id, when the
@@ -700,7 +700,7 @@ covered). ${FILTERS}`,
     'work_list',
     `List bounded candidate envelopes from a derived work lane. evaluate is
 proposed and undecided, newest first. build is approved, open, unclaimed,
-unblocked, and dependency-ready, ordered by priority then newest; recursive
+unblocked, and prerequisite-ready, ordered by priority then newest; recursive
 also includes descendants authorized by an approved open ancestor, but never
 crosses a pending proposal or declined decision. verify is completed,
 acceptance-bearing work still awaiting an independent approving review, newest
@@ -1090,7 +1090,7 @@ with the same stable session identifier you claim with.`,
   tool(
     'task_claim',
     `Atomically claim ready, approved work for your session. Readiness is the
-same predicate as work_list lane=build: open, unblocked, dependency-ready,
+same predicate as work_list lane=build: open, unblocked, prerequisite-ready,
 not quarantined, and directly or recursively approved. Pass a STABLE
 identifier for yourself and reuse it for the whole session. Set approve only
 when you evaluated the task and are also its best builder; approval and claim
@@ -1561,7 +1561,7 @@ it is a redo. ${BUS}`,
   tool(
     'backfill',
     `Run an explicit historical materialization from the co-located SQLite
-graph. The scan is read-only; generated dependency changes are submitted in
+graph. The scan is read-only; generated edge changes are submitted in
 bounded batches through the ordinary graph write boundary, so validation,
 effects, attribution, and live delivery stay identical to graph_apply. Each
 kind is idempotent: rerunning it finds only work not already landed.`,
@@ -2004,7 +2004,7 @@ empty. ${GRAMMAR} ${FILTERS}`,
     componentLiterals[name] = z.record(z.unknown()).nullable().optional()
     guardedLiterals[name] = z.record(z.string().nullable()).optional()
   }
-  let dependencyLiterals: Record<string, z.ZodTypeAny> = {}
+  let edgeLiterals: Record<string, z.ZodTypeAny> = {}
   let literalRef = z.union([
     z.string(),
     z.number(),
@@ -2013,13 +2013,12 @@ empty. ${GRAMMAR} ${FILTERS}`,
         'that entity; with components it defines one here.',
     ),
   ])
-  let dependencyLiteral = z.object({
+  let edgeLiteral = z.object({
     type: z.enum(edges),
     child: literalRef,
   }).strict()
   for (let type of edges) {
-    dependencyLiterals[type] = z.union([literalRef, z.array(literalRef)])
-      .optional()
+    edgeLiterals[type] = z.union([literalRef, z.array(literalRef)]).optional()
   }
   let entityLiteral = z.object({
     entity: z.object({
@@ -2029,8 +2028,7 @@ empty. ${GRAMMAR} ${FILTERS}`,
     ...componentLiterals,
     // Death, worn: it lowers to the entity-null change and stands alone.
     tombstone: z.object({}).strict().optional(),
-    dependency: z.union([dependencyLiteral, z.array(dependencyLiteral)])
-      .optional(),
+    edges: z.union([edgeLiteral, z.array(edgeLiteral)]).optional(),
     was: z.object(guardedLiterals).strict().optional(),
     // A read's projections: accepted and ignored so a read goes straight back.
     kind: z.unknown().optional(),
@@ -2041,7 +2039,7 @@ empty. ${GRAMMAR} ${FILTERS}`,
     key: z.string().optional(),
     id: z.string().optional(),
     comps: z.object(componentLiterals).strict().optional(),
-    deps: z.object(dependencyLiterals).strict().optional(),
+    deps: z.object(edgeLiterals).strict().optional(),
   }).strict()
 
   tool(
@@ -2053,10 +2051,10 @@ entity, each a PATCH (omitted columns untouched, prop: null clears a column,
 comp: null deletes the component). entity.eid names an existing entity (uuid
 or a human id such as T-3) or, as a $alias ({entity: {eid: '$goal'}}), one
 this batch mints; the result's aliases map $alias → eid. Wherever an eid goes
-— entity.eid, a ref column such as task.project or comment.target, a
-dependency child — a $alias, a human id, or a nested bundle stands in
+— entity.eid, a ref column such as task.project or comment.target, an
+edge's child — a $alias, a human id, or a nested bundle stands in
 ({entity: {eid: 'T-3'}} alone references; with components it defines).
-Edges are the dependency component: dependency: {type: ${
+Edges ride the bundle's edges field: {type: ${
       edges.join('|')
     }, child}, a list when there are several. A bundle that wears tombstone
 ({entity: {eid: 'T-3'}, tombstone: {}}) DELETES that entity, and since a dead
@@ -2070,9 +2068,9 @@ and apply() refuses the WHOLE batch if any named column has moved since, so
 a stale guarded write is rejected while the newer value is preserved. The
 older {key|id, comps, deps, was} literal is still accepted. A change is
 {eid, name, comp} — the lowered form: comp a PATCH as above, {name:'entity',
-comp:null} deletes the entity, name 'dependency' with comp {type, child}
-links eid→child and gone: true unlinks (a triple has no row key, so the comp
-names the whole edge), was rides beside comp per column. Unknown component
+comp:null} deletes the entity, and an EDGE is an entity of its own: write
+edge{from, to} on eid edgeEid(from, nature, to) beside its nature tag, and
+take both comps away to unlink. was rides beside comp per column. Unknown component
 names are forward-compatible no-ops. Same allowlist and claim-lease rules as
 every other client; writes broadcast live to all screens. The result reports
 submitted intent and the authoritative effective batch returned by apply(),

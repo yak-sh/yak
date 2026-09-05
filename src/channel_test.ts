@@ -5,6 +5,7 @@
 // the behavior the eight former per-name scans produced.
 
 import { assertEquals } from '@std/assert'
+import { link } from './edge.ts'
 import { attentionOf, channelEvents, type Ctx } from './channel.ts'
 import type { Change } from './types.ts'
 
@@ -29,17 +30,9 @@ let ctx: Ctx = {
 Deno.test('attentionOf derives model receipt from transcript references', () => {
   let changes: Change[] = [
     { eid: 'E1', name: 'entry', comp: { session: 'S' } },
-    {
-      eid: 'E1',
-      name: 'dependency',
-      comp: { type: 'referenced', child: 'C1' },
-    },
+    ...link('E1', 'referenced', 'C1'),
     { eid: 'E2', name: 'entry', comp: { session: 'OTHER' } },
-    {
-      eid: 'E2',
-      name: 'dependency',
-      comp: { type: 'referenced', child: 'C2' },
-    },
+    ...link('E2', 'referenced', 'C2'),
   ]
   assertEquals([...attentionOf(changes, 'S')].sort(), ['C1', 'E1'])
 })

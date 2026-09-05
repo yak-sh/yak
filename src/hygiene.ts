@@ -4,7 +4,7 @@
 // supersedes authored graph data. SERVER-ONLY (imports db).
 import { createHash } from 'node:crypto'
 import { apply, human } from './db.ts'
-import { sentences } from './edge.ts'
+import { link, sentences } from './edge.ts'
 import { db } from './live_db.ts'
 import { commitEffects } from './effects.ts'
 import { FLOOR, similar, stored, textOf } from './embed.ts'
@@ -315,11 +315,7 @@ let file = (a: Artifact, cast: Cast): Filing => {
       name: 'finding',
       comp: { key: a.key, hits: 1, last: new Date().toISOString() },
     },
-    ...a.targets.map((child) => ({
-      eid,
-      name: 'dependency',
-      comp: { type: 'about', child },
-    } as Change)),
+    ...a.targets.flatMap((child) => link(eid, 'about', child)),
   ], cast)
   let after = filed(a.key)
   if (after?.eid != eid || after.hits != 1 || !after.proposed) {

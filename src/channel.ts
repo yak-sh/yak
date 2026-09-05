@@ -8,6 +8,7 @@
 // events about work ITS session owns and turns each into one channel event.
 
 import { type Change, idOf, kindOf } from './types.ts'
+import { moves } from './edge.ts'
 import { type Seat, served } from './served.ts'
 
 // A rendered channel event: `{content, meta}` is the notification params shape
@@ -133,12 +134,9 @@ export let attentionOf = (changes: Change[], session: string) => {
   let out = new Set(
     [...entries].filter(([, owner]) => owner == session).map(([eid]) => eid),
   )
-  for (let c of changes) {
-    if (
-      c.name != 'dependency' || !c.comp || c.comp.gone == true ||
-      c.comp.type != 'referenced' || entries.get(c.eid) != session
-    ) continue
-    if (typeof c.comp.child == 'string') out.add(c.comp.child)
+  for (let { dep, gone } of moves(changes)) {
+    if (gone || dep.type != 'referenced') continue
+    if (entries.get(dep.parent) == session) out.add(dep.child)
   }
   return out
 }
@@ -176,8 +174,6 @@ export let learn = (index: Index, changes: Change[]) => {
       }
       continue
     }
-    // Edges carry no component identity — they never name a kind.
-    if (c.name == 'dependency') continue
     let row = index.get(c.eid) ?? { num: 0, comps: new Set<string>() }
     if (c.comp == null) row.comps.delete(c.name)
     else row.comps.add(c.name)

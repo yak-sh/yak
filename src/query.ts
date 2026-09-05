@@ -78,7 +78,7 @@ import type { Vocab } from './store/vocab.ts'
 // leaf tested against op/value.
 export type Hop = { comp: string; prop: string }
 
-// A stored-edge selector carried by the EDGES rider. `type` narrows dependency
+// A stored-edge selector carried by the EDGES rider. `type` narrows edge
 // sentences; `via` replaces an endpoint wearing that component with the entity
 // its reference column names. The projection is what lets an entry-owned edge
 // read as session-owned without loading the entry partition.
@@ -337,20 +337,21 @@ export let teaches = (line: string) => {
   taught = line
 }
 
-// The names agents reach for that are EDGES — a dependency has no column
-// and never will, so the sketch answers the wrong question in either
-// grammar. The door says what it DOES ('link one'), because from a filter
-// this is the shape of the mistake, not a listing verb.
+// The names agents reach for that are EDGES — a relation has no column and
+// never will, so the sketch answers the wrong question in either grammar. The
+// door says what it DOES ('link one'), because from a filter this is the shape
+// of the mistake, not a listing verb.
 export let edgeish = /block|depend|require|parent|child|subtask/i
-export let EDGE_DOOR = 'a dependency is an EDGE, not a prop: ' +
-  'write one as the `dependency` component, {type, child}' +
+export let EDGE_DOOR =
+  'a relation is an EDGE, not a prop: an edge is its own ' +
+  'entity, edge{from, to} wearing its nature' +
   " — or 'task <parent> requires <child>'"
 
-// An edge word used as a path HOP: walking `dependency` triples is one-to-many
-// (any/all semantics), a different traversal than this {eid}-column deref, and
-// its own ticket. The refusal names it so the two are never conflated.
+// An edge word used as a path HOP: walking edges is one-to-many (any/all
+// semantics), a different traversal than this {eid}-column deref, and its own
+// ticket. The refusal names it so the two are never conflated.
 export let EDGE_HOP = (word: string) =>
-  `.${word} walks dependency edges, not an {eid} column — edge-hop traversal ` +
+  `.${word} walks edges, not an {eid} column — edge-hop traversal ` +
   'is not served; a column path derefs reference props ' +
   '(.comment.target.doc.title)'
 
@@ -443,7 +444,7 @@ export let route = (
     prop in (comps[name] ?? {}) || prop in (derivedProps[name] ?? {})
   )
   if (preferred.length) own = preferred
-  // Parent/child words are the dependency vocabulary. Their component refs
+  // Parent/child words are the edge vocabulary. Their component refs
   // remain available through `.pane.parent` / `.session.parent`; bare keeps
   // teaching the edge door instead of silently changing an old mistake.
   // A real component is never edge vocabulary, though — `blocked` merely
@@ -1009,7 +1010,7 @@ export let preds = (token: string, vocab: Vocab = NONE): Pred[] | null => {
       reach: { type, depth: Number(depth) },
     }]
   }
-  // `.edges[referenced,entry.session]!` — select one STORED dependency type
+  // `.edges[referenced,entry.session]!` — select one STORED edge type
   // and optionally project either endpoint through one `{eid}` column. The
   // member set is tested after projection, so a Session selects the referenced
   // edges owned by its entries without selecting or enumerating those entries.

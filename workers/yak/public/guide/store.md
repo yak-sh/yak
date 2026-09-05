@@ -133,18 +133,18 @@ set of columns; the entity is whatever its components make it.
 
 A `$alias` — or a whole nested bundle — stands in wherever an eid goes: in
 `entity.eid`, in a column that references an entity, in an edge's child. Edges
-are sentences, not columns, and ride as `dependency`:
+are sentences, not columns, and ride as `edges`:
 
     await apply({
       entity: { eid: '$note' },
       doc: { body: 'needs a lemon' },
       comment: { target: { entity: { eid: cake } } },   // or just `cake`
-      dependency: [{ type: 'about', child: cake }],
+      edges: [{ type: 'about', child: cake }],
     })
 
 Both ends of an edge must exist, or be minted in the same batch. The `type` is
 the wire's own spelling: the referencing edge is `referenced`, never
-`references` — the latter is refused as `unknown dependency: references`.
+`references` — the latter is refused as `unknown edge type: references`.
 
 ### Patching, clearing, deleting
 

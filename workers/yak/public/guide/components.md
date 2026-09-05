@@ -161,7 +161,8 @@ about your app: what a route threw, what a page reported. Nothing you write.
 They stay out of every listing unless the filter names one (`.exception!`), and
 `app_errors` is the door meant for them.
 
-Not listed: `dependency`, which is an edge and not a component — last section.
+Not listed: `edge`, which is a sentence and not a row on either end — last
+section.
 
 ## The column types
 
@@ -195,10 +196,10 @@ word — a foreign key, a set to enforce, a hash.
 **No eid column of your own**, then: a component of yours cannot point at
 another entity by declaring one. Where a row of yours needs to be ABOUT another
 row, the platform already has the word for it — `comment.target` is an eid aimed
-at any entity, and a `dependency` edge is the other way to say it. A history
-component (a chore's ticks, a diary's plantings) is the case that wants this;
-until it can be declared, hang the ticks off `comment.target` or make each tick
-its own entity carrying the parent's eid in `comment.target`.
+at any entity, and an edge is the other way to say it. A history component (a
+chore's ticks, a diary's plantings) is the case that wants this; until it can be
+declared, hang the ticks off `comment.target` or make each tick its own entity
+carrying the parent's eid in `comment.target`.
 
 ## What a refusal tells you
 
@@ -418,13 +419,13 @@ the columns are born together and die together — `image` is `w` and `h`.
 
 ## Edges are sentences, not columns
 
-A relation between two entities is not a column on either. It is a `dependency`
-— a whole sentence naming its verb and its far end:
+A relation between two entities is not a column on either. It is an EDGE — a
+whole sentence naming its verb and its far end:
 
     await apply({ entity: { eid: menu },
-      dependency: { type: 'contains', child: recipe } })
+      edges: { type: 'contains', child: recipe } })
 
-    await apply({ entity: { eid: menu }, dependency: [
+    await apply({ entity: { eid: menu }, edges: [
       { type: 'contains', child: starter },
       { type: 'contains', child: pudding },
     ] })

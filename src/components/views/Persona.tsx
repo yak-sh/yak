@@ -1,5 +1,6 @@
 import { type Change, type Ent } from '../../types.ts'
 import { byWarmth, ent, mutate, relations } from '../../live.ts'
+import { link, unlink } from '../../edge.ts'
 import { block } from '../ui.tsx'
 import { dragData } from '../drag.ts'
 import { Entity } from '../Entity.tsx'
@@ -64,21 +65,9 @@ export let Persona = ({ e }: { e: Ent }) => {
     let has = (t: string) => mine.some((d) => d.type == t && d.child == target)
     let batch: Change[] = []
     for (let t of ['contains', 'reads']) {
-      if (t != tier && has(t)) {
-        batch.push({
-          eid: e.eid,
-          name: 'dependency',
-          comp: { type: t, child: target, gone: true },
-        })
-      }
+      if (t != tier && has(t)) batch.push(...unlink(e.eid, t, target))
     }
-    if (tier && !has(tier)) {
-      batch.push({
-        eid: e.eid,
-        name: 'dependency',
-        comp: { type: tier, child: target },
-      })
-    }
+    if (tier && !has(tier)) batch.push(...link(e.eid, tier, target))
     if (batch.length) mutate(...batch)
   }
 

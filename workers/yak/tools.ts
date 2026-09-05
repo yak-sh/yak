@@ -2459,7 +2459,7 @@ export let TOOLS: Tool[] = [
       'page wrote. An entity is {entity: {eid}, ...components}, where a ' +
       "'$alias' eid mints a new one (the answer maps it to its eid), as does a " +
       'uuid of your own that names nothing yet, a nested bundle stands in ' +
-      'wherever an eid goes, and edges are the `dependency` component. The ' +
+      "wherever an eid goes, and edges ride the bundle's edges field. The " +
       "app's pages write this same shape through ./api/client.js. The " +
       'components every app shares are ' +
       '— doc (title, body), task (status, priority, project), project, ' +

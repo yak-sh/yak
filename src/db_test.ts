@@ -1,9 +1,10 @@
 // apply()/snapshot() semantics against an in-memory db — the wire's
 // contract: patches, creates, deletes, tombstones, and the claim lease.
+import type { Dep } from './types.ts'
 Deno.env.set('DB_PATH', ':memory:')
+let { link, moves, typeOf, unlink } = await import('./edge.ts')
 let {
   apply,
-  backfillEdges,
   backfillLineage,
   backfillOpened,
   backfillVia,
@@ -196,30 +197,25 @@ Deno.test('correct: optimistic edge add/removal each snap back to the stored set
   apply(d, [
     { eid: p, name: 'doc', comp: { title: 'p', body: '' } },
     { eid: c, name: 'doc', comp: { title: 'c', body: '' } },
-    { eid: p, name: 'dependency', comp: { type: 'contains', child: c } },
+    ...link(p, 'contains', c),
   ])
-  // An optimistic UNLINK of the stored edge is reverted — re-asserted present.
-  let unlink = correct(d, [
-    {
-      eid: p,
-      name: 'dependency',
-      comp: { type: 'contains', child: c, gone: true },
-    },
-  ])
-  let re = unlink.find((x) =>
-    x.name == 'dependency' && (x.comp as { child?: string })?.child == c
+  // An optimistic UNLINK of the stored edge is reverted — the sentence's own
+  // entity is re-asserted, comps and all.
+  let said = edgeEid(p, 'contains', c)
+  let back = correct(d, unlink(p, 'contains', c))
+  assertEquals(
+    back.filter((x) => x.eid == said && x.name == 'contains'),
+    [{ eid: said, name: 'contains', comp: { eid: said } }],
   )
-  assertEquals((re!.comp as { gone?: boolean }).gone, undefined)
-  // An optimistic LINK of an absent edge is reverted — sent back gone.
+  // An optimistic LINK of an absent edge is reverted: the sentence's entity
+  // was never committed, so the phantom leaves whole.
   let ghost = uid()
   apply(d, [{ eid: ghost, name: 'doc', comp: { title: 'g', body: '' } }])
-  let link = correct(d, [
-    { eid: p, name: 'dependency', comp: { type: 'contains', child: ghost } },
-  ])
-  let dropped = link.find((x) =>
-    x.name == 'dependency' && (x.comp as { child?: string })?.child == ghost
+  let never = edgeEid(p, 'contains', ghost)
+  assertEquals(
+    correct(d, link(p, 'contains', ghost)),
+    [{ eid: never, name: 'entity', comp: null }],
   )
-  assertEquals((dropped!.comp as { gone?: boolean }).gone, true)
 })
 
 slow('epochOf: durable across re-open, distinct per graph', () => {
@@ -787,7 +783,6 @@ Deno.test('graph-out carries declared columns only', () => {
 // This list IS the contract — an addition to it is a decision, so each entry
 // says why it is not a component.
 let outsideVocabulary: Record<string, string> = {
-  dependency: 'edges: a triple keyed by (parent, type, child), no eid row',
   tombstone: 'death record: the eid is dead, nothing reads a component back',
   journal_tx: 'the journal: one row per applied batch, log data',
   journal_change: 'the journal: one ordered operation per Change',
@@ -938,16 +933,19 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
   let logged = JSON.stringify(rowChanges(journalSince(db, 0).at(-1)!))
   assertEquals(logged.includes('P02'), false)
 
+  // An edge's ends are references like any other, so a human id or a bare num
+  // canonicalizes to the eid the store keeps.
   let num = Number(comp(target, 'entity')?.num)
+  let said = edgeEid(subject, 'about', target)
   let [edge] = apply(db, [{
-    eid: 'typed-subject',
-    name: 'dependency',
-    comp: { type: 'ABOUT', child: String(num), gone: 'no' },
-  }])
+    eid: said,
+    name: 'edge',
+    comp: { from: 'typed-subject', to: String(num) },
+  }, { eid: said, name: 'about', comp: {} }])
   assertEquals(edge, {
-    eid: subject,
-    name: 'dependency',
-    comp: { type: 'about', child: target, gone: 0 },
+    eid: said,
+    name: 'edge',
+    comp: { from: subject, to: target, ord: null },
   })
 })
 
@@ -1475,11 +1473,7 @@ Deno.test('backfillLineage lifts stored parent columns into delegates edges once
     { eid: child, name: 'session', comp: { id: uid(), parent: p } },
   ])
   // Simulate a pre-edge store: drop the mirrored edge, keep the column.
-  apply(d, [{
-    eid: p,
-    name: 'dependency',
-    comp: { type: 'delegates', child, gone: true },
-  }])
+  apply(d, unlink(p, 'delegates', child))
   assertEquals(
     snapshot(d).deps.some((x) => x.type == 'delegates' && x.child == child),
     false,
@@ -3125,17 +3119,13 @@ Deno.test('edges: link once, unlink by the same sentence', () => {
   apply(db, [
     { eid: p, name: 'doc', comp: { title: 'epic' } },
     { eid: c, name: 'doc', comp: { title: 'step' } },
-    { eid: p, name: 'dependency', comp: { type: 'contains', child: c } },
-    { eid: p, name: 'dependency', comp: { type: 'contains', child: c } },
+    ...link(p, 'contains', c),
+    ...link(p, 'contains', c),
   ])
   let edges = () =>
     snapshot(db).deps.filter((d) => d.parent == p && d.child == c)
   assertEquals(edges(), [{ parent: p, type: 'contains', child: c }]) // once
-  apply(db, [{
-    eid: p,
-    name: 'dependency',
-    comp: { type: 'contains', child: c, gone: true },
-  }])
+  apply(db, [...unlink(p, 'contains', c)])
   assertEquals(edges(), [])
 })
 
@@ -3145,30 +3135,22 @@ Deno.test('edges: ord round-trips, patches on re-link, untouched when absent (T-
   apply(db, [
     { eid: p, name: 'doc', comp: { title: 'persona' } },
     { eid: c, name: 'doc', comp: { title: 'memory' } },
-    {
-      eid: p,
-      name: 'dependency',
-      comp: { type: 'contains', child: c, ord: 3 },
-    },
+    ...link(p, 'contains', c, 3),
   ])
   assertEquals(dep(), { parent: p, type: 'contains', child: c, ord: 3 })
   // re-linking the same sentence with a new ord PATCHes it (not a second edge)
-  apply(db, [{
-    eid: p,
-    name: 'dependency',
-    comp: { type: 'contains', child: c, ord: 1 },
-  }])
+  apply(db, [...link(p, 'contains', c, 1)])
   assertEquals(dep(), { parent: p, type: 'contains', child: c, ord: 1 })
   // re-linking WITHOUT ord leaves the stored order untouched (PATCH semantics)
   apply(db, [
-    { eid: p, name: 'dependency', comp: { type: 'contains', child: c } },
+    ...link(p, 'contains', c),
   ])
   assertEquals(dep(), { parent: p, type: 'contains', child: c, ord: 1 })
   // an edge that never declared an ord carries none — Dep stays bare
   let c2 = uid()
   apply(db, [
     { eid: c2, name: 'doc', comp: { title: 'other' } },
-    { eid: p, name: 'dependency', comp: { type: 'contains', child: c2 } },
+    ...link(p, 'contains', c2),
   ])
   assertEquals(
     snapshot(db).deps.find((d) => d.parent == p && d.child == c2),
@@ -3190,32 +3172,12 @@ Deno.test('project reachability crosses every edge type and reports detached cyc
     { eid: memory, name: 'memory', comp: {} },
     { eid: peer, name: 'memory', comp: {} },
     { eid: note, name: 'doc', comp: { title: 'ungoverned' } },
-    { eid: p, name: 'dependency', comp: { type: 'wants', child: task } },
-    {
-      eid: task,
-      name: 'dependency',
-      comp: { type: 'requires', child: design },
-    },
-    {
-      eid: design,
-      name: 'dependency',
-      comp: { type: 'reads', child: architecture },
-    },
-    {
-      eid: architecture,
-      name: 'dependency',
-      comp: { type: 'contains', child: persona },
-    },
-    {
-      eid: memory,
-      name: 'dependency',
-      comp: { type: 'supersedes', child: peer },
-    },
-    {
-      eid: peer,
-      name: 'dependency',
-      comp: { type: 'about', child: memory },
-    },
+    ...link(p, 'wants', task),
+    ...link(task, 'requires', design),
+    ...link(design, 'reads', architecture),
+    ...link(architecture, 'contains', persona),
+    ...link(memory, 'supersedes', peer),
+    ...link(peer, 'about', memory),
   ])
 
   let r = projectReachability(d)
@@ -3229,9 +3191,9 @@ Deno.test('project reachability crosses every edge type and reports detached cyc
   d.close()
 })
 
-// Every verb in the vocabulary must clear the table's baked check — the
-// 'about' verb once shipped in types.ts alone and every about edge
-// bounced off the constraint silently.
+// Every verb in the vocabulary must round-trip: a nature the vocabulary names
+// has a comp table of its own, and a verb missing one leaves the sentence with
+// no word in the middle.
 slow('edges: every vocabulary verb round-trips', async () => {
   let { edges } = await import('./types.ts')
   for (let type of edges) {
@@ -3239,7 +3201,7 @@ slow('edges: every vocabulary verb round-trips', async () => {
     apply(db, [
       { eid: p, name: 'doc', comp: { title: `parent ${type}` } },
       { eid: c, name: 'doc', comp: { title: `child ${type}` } },
-      { eid: p, name: 'dependency', comp: { type, child: c } },
+      ...link(p, type, c),
     ])
     assertEquals(
       snapshot(db).deps.filter((d) => d.parent == p),
@@ -3254,18 +3216,22 @@ Deno.test('edges: a bad type rejects its batch; a missing endpoint drops', () =>
     { eid: p, name: 'doc', comp: { title: 'solid' } },
     { eid: c, name: 'doc', comp: { title: 'other' } },
   ])
+  // The writer's door refuses a verb the vocabulary does not have...
+  assertThrows(() => link(p, 'blocks', c), Error, 'unknown edge type: blocks')
+  // ...and so does apply()'s, for a batch that reached it without one: the
+  // whole batch rolls back rather than landing an edge with no word in it.
   assertThrows(
     () =>
       apply(db, [
-        { eid: p, name: 'dependency', comp: { type: 'blocks', child: c } },
+        { eid: uid(), name: 'edge', comp: { from: p, to: c } },
         { eid: p, name: 'doc', comp: { body: 'rolled back' } },
       ]),
     Error,
-    'dependency.type is one of',
+    'needs a nature',
   )
   assertEquals(comp(p, 'doc')?.body, '')
   apply(db, [
-    { eid: p, name: 'dependency', comp: { type: 'reads', child: uid() } },
+    ...link(p, 'reads', uid()),
     { eid: p, name: 'doc', comp: { body: 'survives' } }, // batch lives on
   ])
   assertEquals(snapshot(db).deps.some((d) => d.parent == p), false)
@@ -3277,19 +3243,18 @@ Deno.test('edges: a dead endpoint voids the link; delete prunes edges', () => {
   apply(db, [
     { eid: p, name: 'doc', comp: { title: 'parent' } },
     { eid: c, name: 'doc', comp: { title: 'child' } },
-    { eid: p, name: 'dependency', comp: { type: 'requires', child: c } },
+    ...link(p, 'requires', c),
   ])
   apply(db, [{ eid: c, name: 'entity', comp: null }])
   assertEquals(snapshot(db).deps.some((d) => d.parent == p), false) // pruned
   apply(db, [
-    { eid: p, name: 'dependency', comp: { type: 'requires', child: c } },
+    ...link(p, 'requires', c),
   ])
   assertEquals(snapshot(db).deps.some((d) => d.parent == p), false) // voided
 })
 
 // Edges as entities (D-23820, T-23825): every edge lands in both stores
-// while `dependency` is still live. `pair()` mints two docs; `dep()` reads
-// the dependency rows out of P.
+// `pair()` mints two docs; `dep()` reads the sentences said by P.
 let pair = () => {
   let p = uid(), c = uid()
   apply(db, [
@@ -3305,45 +3270,35 @@ let edgeRows = (p: string) =>
     p,
   ) as { n: number }
 
-Deno.test('edge: a dependency write mints the sentence entity, once', () => {
+Deno.test('edge: a link mints the sentence entity, once', () => {
   let [p, c] = pair()
   let e = edgeEid(p, 'references', c)
-  let link = {
-    eid: p,
-    name: 'dependency',
-    comp: { type: 'referenced', child: c },
-  }
-  apply(db, [link])
+  apply(db, link(p, 'referenced', c))
   assertEquals(comp(e, 'edge'), { eid: e, from: p, to: c, ord: null })
   assertEquals(comp(e, 'references'), { eid: e })
   assertEquals(comp(e, 'entity')?.num, null) // an edge is num-less
-  let again = apply(db, [link])
+  let again = apply(db, link(p, 'referenced', c))
   assertEquals(again.some((ch) => ch.eid == e), false) // nothing new to say
   assertEquals(edgeRows(p).n, 1)
 })
 
-Deno.test('edge: gone unsays the sentence, and it can be said again', () => {
+Deno.test('edge: unlink unsays the sentence, and it can be said again', () => {
   let [p, c] = pair()
   let e = edgeEid(p, 'requires', c)
-  let link = {
-    eid: p,
-    name: 'dependency',
-    comp: { type: 'requires', child: c },
-  }
-  apply(db, [link])
-  apply(db, [{ ...link, comp: { ...link.comp, gone: true } }])
+  apply(db, link(p, 'requires', c))
+  apply(db, unlink(p, 'requires', c))
   assertEquals(comp(e, 'edge'), undefined)
   assertEquals(comp(e, 'requires'), undefined)
   assertEquals(dep(p), [])
   // NOT buried: the eid is the sentence, so a grave would make `p requires c`
   // unsayable forever. The spine stays, wearing nothing.
   assertEquals(buried(db, e), false)
-  apply(db, [link])
+  apply(db, link(p, 'requires', c))
   assertEquals(comp(e, 'edge'), { eid: e, from: p, to: c, ord: null })
   assertEquals(dep(p), [['requires', c]])
 })
 
-Deno.test('edge: a native write lands the dependency row; its delete drops it', () => {
+Deno.test('edge: a native write lands the sentence; its delete drops it', () => {
   let [p, c] = pair()
   let e = edgeEid(p, 'contains', c)
   apply(db, [
@@ -3361,7 +3316,7 @@ Deno.test('edge: deleting either endpoint reaps it through edge.from/to', () => 
     let [p, c] = pair()
     let e = edgeEid(p, 'wants', c)
     apply(db, [
-      { eid: p, name: 'dependency', comp: { type: 'wants', child: c } },
+      ...link(p, 'wants', c),
     ])
     let out = apply(db, [{ eid: [p, c][end], name: 'entity', comp: null }])
     assertEquals(comp(e, 'edge'), undefined)
@@ -3398,7 +3353,7 @@ Deno.test('edge: a missing endpoint drops the entity with the row, never the bat
   let [p] = pair()
   let ghost = uid()
   apply(db, [
-    { eid: p, name: 'dependency', comp: { type: 'reads', child: ghost } },
+    ...link(p, 'reads', ghost),
     { eid: p, name: 'doc', comp: { body: 'survives' } },
   ])
   assertEquals(comp(edgeEid(p, 'reads', ghost), 'edge'), undefined)
@@ -3429,7 +3384,7 @@ Deno.test('recalled: the sentence carries the clock, the entry the marker', () =
   apply(db, [
     { eid: rid, name: 'entry', comp: { session } },
     { eid: rid, name: 'recalled', comp: { source: src } },
-    { eid: rid, name: 'dependency', comp: { type: 'recalled', child: m } },
+    ...link(rid, 'recalled', m),
   ])
   let e = edgeEid(rid, 'recalled', m)
   assertEquals(comp(e, 'edge'), { eid: e, from: rid, to: m, ord: null })
@@ -3440,91 +3395,16 @@ Deno.test('recalled: the sentence carries the clock, the entry the marker', () =
   assertEquals(comp(rid, 'recalled')?.at, null)
 })
 
-// The boot backfill (T-23822): every row the dependency store held before the
-// dual-write, as its sentence entity. A legacy row is written straight into
-// the table here, the way every row in the owner's graph was written.
-let legacy = (d: ReturnType<typeof open>, p: string, t: string, c: string) =>
-  d.prepare(
-    `insert into dependency (parent, type, child) values (${idOf}, ?, ${idOf})`,
-  ).run(p, t, c)
-
-Deno.test('backfill: stored rows become sentence entities, once per graph', () => {
+// The retired row store (T-23821). A live graph carried its rows over to the
+// sentence entities before the drop shipped; migrate() takes the table itself,
+// and a fresh graph never plants one.
+Deno.test('edge: the retired dependency table is gone from every graph', () => {
   let d = fresh()
-  let p = uid(), c = uid(), voice = uid(), m = uid()
-  apply(d, [
-    { eid: p, name: 'doc', comp: { title: 'parent' } },
-    { eid: c, name: 'doc', comp: { title: 'child' } },
-    { eid: voice, name: 'persona', comp: {} },
-    { eid: m, name: 'memory', comp: {} },
-  ])
-  legacy(d, p, 'requires', c)
-  // A persona tier arriving through the legacy table: the dual-write's
-  // dependency echo says nothing, because the row it would write stands.
-  legacy(d, voice, 'contains', m)
-  // A row the dual-write already minted is skipped, not re-minted: this is
-  // also how an interrupted sweep resumes where it stopped.
-  apply(d, [{ eid: p, name: 'dependency', comp: { type: 'wants', child: c } }])
-  assertEquals(backfillEdges(d), 2)
-  let e = edgeEid(p, 'requires', c)
-  assertEquals(compOf(d, e, 'edge'), { eid: e, from: p, to: c, ord: null })
-  assertEquals(compOf(d, e, 'requires'), { eid: e })
-  assertEquals(compOf(d, e, 'entity')?.num, null) // an edge is num-less
-  assertEquals(compOf(d, edgeEid(voice, 'contains', m), 'contains'), {
-    eid: edgeEid(voice, 'contains', m),
-  })
-  // Marked: a later boot walks nothing, however the graph has grown.
-  legacy(d, c, 'reads', p)
-  assertEquals(backfillEdges(d), 0)
-  assertEquals(compOf(d, edgeEid(c, 'reads', p), 'edge'), undefined)
-})
-
-Deno.test('backfill: a recalled row is a sentence timed by the entry', () => {
-  let d = fresh()
-  let s = uid(), e = uid(), m = uid()
-  apply(d, [
-    { eid: s, name: 'session', comp: { id: s } },
-    { eid: m, name: 'memory', comp: {} },
-  ])
-  apply(d, [{ eid: e, name: 'entry', comp: { session: s } }])
-  legacy(d, e, 'recalled', m)
-  assertEquals(backfillEdges(d), 1)
-  let edge = edgeEid(e, 'recalled', m)
-  assertEquals(compOf(d, edge, 'edge'), {
-    eid: edge,
-    from: e,
-    to: m,
-    ord: null,
-  })
-  // The stored row offers no clock of its own, so the recall is dated by the
-  // entry whose birth it was.
-  assertEquals(compOf(d, edge, 'recalled')?.at, compOf(d, e, 'created')?.at)
-  assertEquals(backfillEdges(d), 0)
-})
-
-// The graph the first pass (a7dbea85) left: its mark set, and the clock stamped
-// on the entry instead of the sentence. The second mark walks only the recalls
-// and takes that stamp back — one meaning for `recalled.at`, and it is the
-// edge's.
-Deno.test('backfill: the recalls sweep alone, and the entry clock goes', () => {
-  let d = fresh()
-  let s = uid(), e = uid(), m = uid()
-  apply(d, [
-    { eid: s, name: 'session', comp: { id: s } },
-    { eid: m, name: 'memory', comp: {} },
-  ])
-  apply(d, [{ eid: e, name: 'entry', comp: { session: s } }])
-  legacy(d, e, 'recalled', m)
-  legacy(d, e, 'referenced', m)
-  d.prepare(`insert into server_meta (k, v) values ('edge_backfill', '1')`)
-    .run()
-  d.prepare(`insert into recalled (entity, at) values (${idOf}, ?)`)
-    .run(e, '2026-01-01T00:00:00.000Z')
-  assertEquals(backfillEdges(d), 1) // the recall only — the first mark holds
-  assertEquals(compOf(d, edgeEid(e, 'references', m), 'edge'), undefined)
-  assertEquals(compOf(d, e, 'recalled')?.at, null)
   assertEquals(
-    compOf(d, edgeEid(e, 'recalled', m), 'recalled')?.at,
-    compOf(d, e, 'created')?.at,
+    d.prepare(
+      `select 1 from sqlite_schema where type = 'table' and name = ?`,
+    ).get('dependency'),
+    undefined,
   )
 })
 
@@ -3538,7 +3418,7 @@ Deno.test('edges: supersedes marks the old, never hides it; both ends answer', (
   apply(db, [
     { eid: old, name: 'doc', comp: { title: '8.5×8.5 square' } },
     { eid: cur, name: 'doc', comp: { title: '8×10 portrait' } },
-    { eid: cur, name: 'dependency', comp: { type: 'supersedes', child: old } },
+    ...link(cur, 'supersedes', old),
   ])
   let deps = () => snapshot(db).deps
   // The current end answers "what did I replace?" (its outgoing ref); the
@@ -3555,20 +3435,12 @@ Deno.test('edges: supersedes marks the old, never hides it; both ends answer', (
   assertEquals(comp(old, 'doc')?.title, '8.5×8.5 square')
 
   // gone unlinks the same sentence.
-  apply(db, [{
-    eid: cur,
-    name: 'dependency',
-    comp: { type: 'supersedes', child: old, gone: true },
-  }])
+  apply(db, [...unlink(cur, 'supersedes', old)])
   assertEquals(deps().some((d) => d.child == old), false)
 
   // Deleting the successor prunes the edge; the survivor stays coherent
   // rather than erroring or resurrecting — the chain degrades to "gone".
-  apply(db, [{
-    eid: cur,
-    name: 'dependency',
-    comp: { type: 'supersedes', child: old },
-  }])
+  apply(db, [...link(cur, 'supersedes', old)])
   apply(db, [{ eid: cur, name: 'entity', comp: null }])
   assertEquals(deps().some((d) => d.child == old), false) // pruned
   assertEquals(comp(old, 'doc')?.title, '8.5×8.5 square') // survivor intact
@@ -3683,11 +3555,7 @@ slow('open renames every reference key, its filters, and its history', () => {
       },
     },
     { eid: persona, name: 'persona', comp: {} },
-    {
-      eid: project,
-      name: 'dependency',
-      comp: { type: 'about', child: task },
-    },
+    ...link(project, 'about', task),
   ])
   legacy.prepare(`update board set query = ? where ${OWNED}`).run(
     `.project_eid=${project}&.task.assignee_eid=` +
@@ -3728,8 +3596,6 @@ slow('open renames every reference key, its filters, and its history', () => {
     ['comment', 'target', 'target_eid'],
     ['persona', 'home', 'home_eid'],
     ['memory', 'scope', 'scope_eid'],
-    ['dependency', 'parent', 'parent_eid'],
-    ['dependency', 'child', 'child_eid'],
   ]
   for (let [table, col, old] of renames) {
     legacy.exec(`alter table ${table} rename column ${col} to ${old}`)
@@ -4354,11 +4220,12 @@ Deno.test('claim leaves one durable worked edge after its lease is released', ()
     { eid: two, name: 'doc', comp: { title: 'two' } },
     { eid: two, name: 'task', comp: { priority: 1 } },
   ])
+  let worked = edgeEid(session, 'worked', one)
   let first = apply(db, [{ eid: one, name: 'claim', comp: { session } }])
   assertEquals(
     first.some((c) =>
-      c.eid == session && c.name == 'dependency' &&
-      c.comp?.type == 'worked' && c.comp.child == one
+      c.eid == worked && c.name == 'edge' && c.comp?.from == session &&
+      c.comp.to == one
     ),
     true,
   )
@@ -4366,7 +4233,7 @@ Deno.test('claim leaves one durable worked edge after its lease is released', ()
   apply(db, [{ eid: two, name: 'claim', comp: { session } }])
   apply(db, [{ eid: two, name: 'claim', comp: null }])
   let again = apply(db, [{ eid: one, name: 'claim', comp: { session } }])
-  assertEquals(again.some((c) => c.name == 'dependency'), false)
+  assertEquals(again.some((c) => c.eid == worked), false)
 
   assertEquals(
     snapshot(db).deps.filter((d) => d.parent == session && d.type == 'worked')
@@ -4391,11 +4258,7 @@ Deno.test('historical worked edges materialize explicitly and idempotently', () 
   db.prepare(`delete from worked where entity = ${idOf}`).run(sentence)
 
   let missing = historicalWorked(db)
-  assertEquals(missing, [{
-    eid: session,
-    name: 'dependency',
-    comp: { type: 'worked', child: task },
-  }])
+  assertEquals(missing, [...link(session, 'worked', task)])
   apply(db, missing)
   assertEquals(historicalWorked(db), [])
 })
@@ -4808,40 +4671,48 @@ Deno.test('search hides quarantined content until the query names the facet', ()
 
 // Land changes into a plain {cache, deps} the same way live.ts applyLocal
 // does — column-merge, comp:null drops the component, entity:null drops the
-// entity and every edge touching it, dependency names its whole triple. A
+// entity and every edge touching it, an edge write names its sentence. A
 // local twin (not the signal-backed applyLocal, which needs the browser) so
 // the delta round-trip can assert on the net cache + deps.
 type Wire = { eid: string; name: string; comp: Record<string, unknown> | null }
 type Bag = {
   cache: Record<string, Record<string, Record<string, unknown>>>
-  deps: { parent: string; type: string; child: string }[]
+  deps: Dep[]
+}
+// The sentence a cached edge entity says — live.ts depOf, in the twin's own
+// cache shape. An unlink names only the eid, so this is what answers for it.
+let said = (b: Bag, eid: string) => {
+  let row = b.cache[eid]
+  let ends = row?.edge as { from?: string; to?: string } | undefined
+  if (!ends?.from || !ends.to) return
+  for (let name of Object.keys(row)) {
+    let type = typeOf[name]
+    if (type) {
+      return { parent: ends.from, type, child: ends.to } as Dep
+    }
+  }
 }
 let land = (b: Bag, changes: Wire[]) => {
+  // Read the sentences BEFORE the rows move, exactly as applyLocal does.
+  let moved = moves(changes, (eid: string) => said(b, eid) as Dep)
   for (let { eid, name, comp } of changes) {
     if (name == 'entity' && comp == null) {
       delete b.cache[eid]
       b.deps = b.deps.filter((d) => d.parent != eid && d.child != eid)
       continue
     }
-    if (name == 'dependency') {
-      if (!comp) continue
-      let d = {
-        parent: eid,
-        type: String(comp.type),
-        child: String(comp.child),
-      }
-      let same = (x: typeof d) =>
-        x.parent == d.parent && x.type == d.type && x.child == d.child
-      b.deps = comp.gone
-        ? b.deps.filter((x) => !same(x))
-        : b.deps.some(same)
-        ? b.deps
-        : [...b.deps, d]
-      continue
-    }
     let row = b.cache[eid] ?? (b.cache[eid] = {})
     if (comp == null) delete row[name]
     else row[name] = { ...(row[name] ?? {}), ...comp }
+  }
+  for (let { dep: d, gone } of moved) {
+    let same = (x: typeof d) =>
+      x.parent == d.parent && x.type == d.type && x.child == d.child
+    b.deps = gone
+      ? b.deps.filter((x) => !same(x))
+      : b.deps.some(same)
+      ? b.deps
+      : [...b.deps, d]
   }
 }
 let fromSnap = (s: ReturnType<typeof snapshot>): Bag => {
@@ -4879,11 +4750,7 @@ Deno.test('delta: snapshot@C0 + delta(C0) matches the live broadcast stream, cas
     [
       { eid: other, name: 'doc', comp: { title: 'blocker' } },
       { eid: other, name: 'task', comp: {} },
-      {
-        eid: other,
-        name: 'dependency',
-        comp: { type: 'requires', child: t },
-      },
+      ...link(other, 'requires', t),
     ],
     [{ eid: t, name: 'doc', comp: { title: 'doomed', body: 'v2 edit' } }],
     [{ eid: other, name: 'task', comp: { priority: 1 } }], // survivor re-touched
@@ -4903,8 +4770,8 @@ Deno.test('delta: snapshot@C0 + delta(C0) matches the live broadcast stream, cas
   let d = delta(db, c0)
 
   // Reconstruct from the delta: hydrate the C0 snapshot, then replay the
-  // delta stream (deps ride in it as dependency changes — no separate deps
-  // array, unlike /snapshot).
+  // delta stream (edge entities ride in it as ordinary changes — no separate
+  // deps array, unlike /snapshot).
   let recon: Bag = { cache: {}, deps: base.deps.map((x) => ({ ...x })) }
   land(recon, base.changes)
   land(recon, d.changes)
@@ -5778,21 +5645,18 @@ Deno.test("persona composition is an agent's; acceptance is the owner's", () => 
     undefined,
     jeff,
   )
-  let ties = (child: string, gone = false, type = 'contains') => ({
-    eid: p,
-    name: 'dependency',
-    comp: { type, child, ...(gone ? { gone: true } : {}) },
-  })
+  let ties = (child: string, gone = false, type = 'contains') =>
+    gone ? unlink(p, type, child) : link(p, type, child)
   let tied = (child: string, type = 'contains') =>
     !!readComp(d, edgeEid(p, type, child), 'edge')
   // an accepted memory (jeff wrote it, so it is accepted as written)
-  apply(d, [ties(m)])
+  apply(d, ties(m))
   assertEquals(tied(m), true)
   // a whole base bundle
-  apply(d, [ties(base)])
+  apply(d, ties(base))
   assertEquals(tied(base), true)
   // the index tier, and cutting one back out
-  apply(d, [ties(m, false, 'reads'), ties(base, true)])
+  apply(d, [...ties(m, false, 'reads'), ...ties(base, true)])
   assertEquals(tied(m, 'reads'), true)
   assertEquals(tied(base), false)
   // a persona's own words: they name the file, they reach no prompt
@@ -5806,7 +5670,7 @@ Deno.test("persona composition is an agent's; acceptance is the owner's", () => 
     { eid: mine, name: 'memory', comp: {} },
   ])
   assertEquals(!!readComp(d, mine, 'proposed'), true)
-  apply(d, [ties(mine)])
+  apply(d, ties(mine))
   assertEquals(tied(mine), true)
   assertThrows(
     () => apply(d, [{ eid: mine, name: 'decided', comp: {} }]),

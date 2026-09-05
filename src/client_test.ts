@@ -71,6 +71,7 @@ import {
   workClaimMutation,
   wrapChanges,
 } from './client.ts'
+import { link, typeOf } from './edge.ts'
 import { inflate } from './client_host.ts'
 import { matchQuery, parseQuery, resolveRefs } from './query.ts'
 import { local } from './time.ts'
@@ -766,14 +767,10 @@ Deno.test('taskTreePlan: one rooted batch covers new and existing nodes', async 
   }, q)
   let made = plan.nodes.find((n) => n.key == 'build')!
   assertEquals(
-    plan.changes.filter((c) => c.name == 'dependency'),
+    plan.changes.filter((c) => c.name == 'edge' || typeOf[c.name]),
     [
-      { eid: P, name: 'dependency', comp: { type: 'wants', child: OLD } },
-      {
-        eid: OLD,
-        name: 'dependency',
-        comp: { type: 'requires', child: made.eid },
-      },
+      ...link(P, 'wants', OLD),
+      ...link(OLD, 'requires', made.eid),
     ],
   )
   assertEquals(
@@ -886,7 +883,13 @@ Deno.test('normalizeLiterals: nested aliases compile to one canonical batch', ()
     recall: 'eeeeeeee-0000-4000-8000-000000000003',
   })
   assertEquals(plan.changes[0].was === was, true, 'was rides unchanged')
-  assertEquals(plan.changes, [
+  // The recalling edge is an EVENT, so its tag carries the moment it was
+  // said — compared for its shape, not for a clock two calls apart.
+  let recalled = plan.changes.find((c) => c.name == 'recalled' && c.comp?.at)
+  assertMatch(String(recalled?.comp?.at), /^20\d\d-/)
+  let timeless = (c: Change) =>
+    c.name == 'recalled' && c.comp && 'at' in c.comp ? { ...c, comp: {} } : c
+  assertEquals(plan.changes.map(timeless), [
     {
       eid: plan.aliases.goal,
       name: 'doc',
@@ -913,21 +916,9 @@ Deno.test('normalizeLiterals: nested aliases compile to one canonical batch', ()
       name: 'recalled',
       comp: { source: M },
     },
-    {
-      eid: plan.aliases.goal,
-      name: 'dependency',
-      comp: { type: 'requires', child: plan.aliases.gate },
-    },
-    {
-      eid: plan.aliases.gate,
-      name: 'dependency',
-      comp: { type: 'reads', child: M },
-    },
-    {
-      eid: plan.aliases.recall,
-      name: 'dependency',
-      comp: { type: 'recalled', child: M },
-    },
+    ...link(plan.aliases.goal, 'requires', plan.aliases.gate),
+    ...link(plan.aliases.gate, 'reads', M),
+    ...link(plan.aliases.recall, 'recalled', M).map(timeless),
   ])
 })
 
@@ -950,7 +941,7 @@ Deno.test('normalizeLiterals: the read shape writes — $alias, nesting, human i
       doc: { title: 'Goal' },
       task: { project: '$space' },
       was: { doc: was },
-      dependency: [
+      edges: [
         { type: 'requires', child: 'T-3' },
         {
           type: 'requires',
@@ -993,8 +984,8 @@ Deno.test('normalizeLiterals: the read shape writes — $alias, nesting, human i
     { eid: m, name: 'memory', comp: {} },
     { eid: note, name: 'comment', comp: { target: P, body: 'note' } },
     { eid: note, name: 'recalled', comp: { source: m } },
-    { eid: goal, name: 'dependency', comp: { type: 'requires', child: T } },
-    { eid: goal, name: 'dependency', comp: { type: 'requires', child: gate } },
+    ...link(goal, 'requires', T),
+    ...link(goal, 'requires', gate),
   ])
   let bad: [string, Record<string, unknown>[], string][] = [
     [
@@ -1024,9 +1015,9 @@ Deno.test('normalizeLiterals: the read shape writes — $alias, nesting, human i
       'literal cycle at $a',
     ],
     [
-      'shapeless dependency',
-      [{ doc: {}, dependency: { type: 'requires' } }],
-      'a dependency is {type, child}',
+      'shapeless edge',
+      [{ doc: {}, edges: { type: 'requires' } }],
+      'an edge is {type, child}',
     ],
   ]
   for (let [name, literals, message] of bad) {
@@ -1073,7 +1064,7 @@ Deno.test('normalizeLiterals: a bundle wearing tombstone deletes the entity', ()
       [{
         entity: { eid: 'T-3' },
         tombstone: {},
-        dependency: { type: 'requires', child: 'T-3' },
+        edges: { type: 'requires', child: 'T-3' },
       }],
       'a dead entity takes no patch: tombstone cannot ride beside requires',
     ],
@@ -1191,9 +1182,9 @@ Deno.test('normalizeLiterals: invalid aliases, references, keys, and cycles reje
       'unknown component: invented',
     ],
     [
-      'unknown dependency',
+      'unknown edge type',
       [{ key: 'a', deps: { invented: [] } }],
-      'unknown dependency: invented',
+      'unknown edge type: invented',
     ],
     [
       'cycle',
@@ -3802,11 +3793,7 @@ let DAY: import('./client.ts').JournalEntry[] = [
     ts: '2026-07-20T12:00:00Z',
     actor: 'sess-x',
     changes: [
-      {
-        eid: T1,
-        name: 'dependency',
-        comp: { type: 'requires', child: T2 },
-      },
+      ...link(T1, 'requires', T2),
     ],
   },
   {
@@ -4575,9 +4562,7 @@ Deno.test('commitChanges: the sha is the eid; a known sha is found, not minted',
     comps: { commit: { target: T1, sha: sha.toLowerCase() } },
   } as Row]
   assertEquals(commitChanges(known, T1, git), [])
-  assertEquals(commitChanges(known, T2, git), [{
-    eid: sha.toLowerCase(),
-    name: 'dependency',
-    comp: { type: 'about', child: T2 },
-  }])
+  assertEquals(commitChanges(known, T2, git), [
+    ...link(sha.toLowerCase(), 'about', T2),
+  ])
 })

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { type Ent, uuid } from '../../types.ts'
 import { mutate } from '../../live.ts'
+import { link } from '../../edge.ts'
 import { spec, taskChanges } from '../../client.ts'
 import { peek, useDraft } from '../drafts.ts'
 import { block } from '../ui.tsx'
@@ -73,19 +74,9 @@ export let Relate = ({ e }: { e: Ent }) => {
   let fresh = q.trim() ? spec(q).title : ''
 
   let edge = (v: V, other: string) =>
-    v.out
-      ? {
-        eid: e.eid,
-        name: 'dependency',
-        comp: { type: v.type, child: other },
-      }
-      : {
-        eid: other,
-        name: 'dependency',
-        comp: { type: v.type, child: e.eid },
-      }
-  let link = (other: string) => {
-    if (verb) mutate(edge(verb, other))
+    v.out ? link(e.eid, v.type, other) : link(other, v.type, e.eid)
+  let tie = (other: string) => {
+    if (verb) mutate(...edge(verb, other))
     spend()
     close()
   }
@@ -103,7 +94,7 @@ export let Relate = ({ e }: { e: Ent }) => {
           ...grouped.task,
         },
       }),
-      edge(verb, id),
+      ...edge(verb, id),
     )
     spend()
     close()
@@ -115,7 +106,7 @@ export let Relate = ({ e }: { e: Ent }) => {
     }
     if (ev.key == 'Enter') {
       ev.preventDefault()
-      return hits[pick] ? link(hits[pick].eid) : create()
+      return hits[pick] ? tie(hits[pick].eid) : create()
     }
     let d = ev.key == 'ArrowDown' ? 1 : ev.key == 'ArrowUp' ? -1 : 0
     if (!d) return
@@ -165,7 +156,7 @@ export let Relate = ({ e }: { e: Ent }) => {
                   key={t.eid}
                   mod={i == pick && 'sel'}
                   onMouseEnter={() => setPick(i)}
-                  onMouseDown={(ev: MouseEvent) => grab(ev, () => link(t.eid))}
+                  onMouseDown={(ev: MouseEvent) => grab(ev, () => tie(t.eid))}
                 >
                   {suggest.label(t)}
                 </Row>

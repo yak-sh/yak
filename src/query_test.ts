@@ -1051,7 +1051,7 @@ Deno.test('bareRenamesOf: only a changed column name earns a bare redirect', () 
   assertEquals(bareRenamesOf({}), {})
 })
 
-// A dependency is an edge in EITHER grammar, so the miss teaches the edge
+// A relation is an edge in EITHER grammar, so the miss teaches the edge
 // door instead of the sketch — every door through route() inherits it.
 Deno.test('an edge-ish prop names the edge door, not the sketch', () => {
   for (let prop of ['blocked-by', 'depends_on', 'parent', 'subtasks']) {
@@ -1060,7 +1060,7 @@ Deno.test('an edge-ish prop names the edge door, not the sketch', () => {
     assertThrows(
       () => route(prop),
       Error,
-      'write one as the `dependency` component, {type, child}',
+      'an edge is its own entity, edge{from, to} wearing its nature',
     )
     assertThrows(
       () => route(prop),
@@ -1382,7 +1382,7 @@ Deno.test('paths: a non-reference middle hop is refused', () => {
 
 Deno.test('paths: an edge word as a hop says traversal is not served', () => {
   assertThrows(
-    () => pred('.dependency.child.task.status=open'),
+    () => pred('.depends_on.child.task.status=open'),
     Error,
     'edge-hop traversal is not served',
   )

@@ -4,6 +4,7 @@
 // dispatch promise always resolves). db.ts comes in dynamically, AFTER
 // the env points it at :memory:.
 import { assert, assertEquals } from '@std/assert'
+import { edgeEid, link, unlink } from './edge.ts'
 import { tick } from './testing.ts'
 import { type Change } from './types.ts'
 import { commitEffects, dispatch, docs, on, relay, trace } from './effects.ts'
@@ -84,22 +85,27 @@ Deno.test('removed fires for a comp delete and for an entity death', async () =>
   assertEquals(seen, [`removed ${whole}`])
 })
 
-Deno.test('an edge fires dependency handlers, spoken or unsaid', async () => {
+// An edge is an entity, so its handlers are the ordinary ones: the NATURE tag
+// is the verb arriving, and `edge` is the sentence's ends. Both are heard the
+// way every other component is — created when the sentence is said, removed
+// when it is unsaid.
+Deno.test('an edge fires its nature handlers, spoken and unsaid', async () => {
   let heard: unknown[] = []
-  on('dependency', { created: (eid, comp) => heard.push([eid, comp]) })
+  on('reads', {
+    created: (eid) => heard.push(['said', eid]),
+    removed: (eid) => heard.push(['unsaid', eid]),
+  })
   let a = uid(), b = uid()
   await write([
     { eid: a, name: 'doc', comp: { title: 'a' } },
     { eid: b, name: 'doc', comp: { title: 'b' } },
   ]).done
   heard = []
-  let comp = { type: 'reads', child: b }
-  await write([{ eid: a, name: 'dependency', comp }]).done
-  assertEquals(heard, [[a, comp]])
-  // unlinking is the same sentence with gone — the handler hears it too
-  let gone = { ...comp, gone: true }
-  await write([{ eid: a, name: 'dependency', comp: gone }]).done
-  assertEquals(heard.at(-1), [a, { ...comp, gone: 1 }])
+  let said = edgeEid(a, 'reads', b)
+  await write(link(a, 'reads', b)).done
+  assertEquals(heard, [['said', said]])
+  await write(unlink(a, 'reads', b)).done
+  assertEquals(heard.at(-1), ['unsaid', said])
 })
 
 Deno.test('a throwing handler reaches oops; the rest still fire', async () => {

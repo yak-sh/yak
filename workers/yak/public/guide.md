@@ -273,7 +273,7 @@ renders as the day before for anyone west of Greenwich.
 - `image` — `w` (number), `h` (number). What a picture measures, on the blob
   itself; `upload` reads it off the file's own header (png, jpeg, gif, webp).
 
-An edge is a sentence, not a column: `dependency` is `{type, child}`, where type
+An edge is a sentence, not a column: `edges` takes `{type, child}`, where type
 is one of `contains`, `requires`, `about`, `referenced`, `supersedes`.
 
 ## Components of your own

@@ -26,6 +26,7 @@ import {
   type Snapshot,
   statusOf,
 } from './types.ts'
+import { moves, typeOf } from './edge.ts'
 import { isUnread, type Row } from './client.ts'
 import type { WorkClaimMutation } from './mutation.ts'
 import {
@@ -612,8 +613,8 @@ export let row = (eid: string) => {
 
 // Edges by endpoint come from the derived index (index.ts byParent/byChild),
 // not a bespoke computed: the same `{eid}`-derived mechanism that indexes
-// references indexes the `dependency` triples, maintained incrementally rather
-// than rebuilt per edge patch. syncIx heals a wholesale deps replacement.
+// references indexes the edge triples, maintained incrementally rather than
+// rebuilt per edge patch. syncIx heals a wholesale deps replacement.
 export let relations = (eid: string) => {
   syncIx()
   let current = ix.byParent.get(eid) ?? noRelations
@@ -862,6 +863,20 @@ export let references = (eid: string): References => {
   }
 }
 
+// The sentence a cached edge entity says. An edge wears `edge{from, to}` and
+// exactly one nature tag, so the row IS the triple — this is how a client that
+// holds the entity answers for a sentence its unlink no longer names.
+let depOf = (row?: Comps): Dep | undefined => {
+  let ends = row?.edge as { from?: string; to?: string } | undefined
+  if (!ends?.from || !ends.to) return
+  for (let name of Object.keys(row!)) {
+    let type = typeOf[name]
+    if (type) {
+      return { parent: ends.from, type: type as Dep['type'], child: ends.to }
+    }
+  }
+}
+
 // A live hand on the entity: its claim's session is awake — a managed
 // run still going, or an external door still open. The wip pip pulses
 // on this instead of sitting half-filled; a stale claim doesn't count.
@@ -911,6 +926,14 @@ export let applyLocal = (changes: Change[]) => {
     changes.every((c) => motion(c) || stacking(c))
   let next = quiet ? cache.value : { ...cache.value }
   let zs = new Map<string, number>()
+  // An edge is an ENTITY, so its rows land through the ordinary loop below —
+  // but the edge TABLE this client renders from is keyed by the sentence, so
+  // read the sentences out first, while the cache still holds what an unlink
+  // is about to take away. This is the FULL-BROADCAST arm; a filtered client
+  // hears its edges through the `.edges!` rider instead, so the stream itself
+  // is the holder, and a rider holding the same triple keeps it when the
+  // stream lets go.
+  let said = moves(changes, (e) => depOf(graph[e]))
   for (let { eid, name, comp } of changes) {
     if (name == 'entity' && comp == null) {
       let before = next[eid]
@@ -933,30 +956,6 @@ export let applyLocal = (changes: Change[]) => {
         reindexEdge(ix, d, true)
         changedParents.add(d.parent)
         changedChildren.add(d.child)
-        depsMoved = true
-      }
-      continue
-    }
-    // An edge change names its whole triple (see db.ts): gone removes it,
-    // otherwise it joins the edge list once. This is the FULL-BROADCAST arm —
-    // a filtered client hears its edges through the `.edges!` rider instead —
-    // so the stream itself is the holder, and a rider holding the same triple
-    // keeps it when the stream lets go.
-    if (name == 'dependency') {
-      if (!comp) continue
-      let d = {
-        parent: eid,
-        type: comp.type as Dep['type'],
-        child: String(comp.child),
-      }
-      edges.push(d)
-      let moved = comp.gone
-        ? holdEdges(LIVE_EDGES, [], [d])
-        : holdEdges(LIVE_EDGES, [d], [])
-      for (let x of [...moved.gained, ...moved.lost]) {
-        reindexEdge(ix, x, !!comp.gone)
-        changedParents.add(x.parent)
-        changedChildren.add(x.child)
         depsMoved = true
       }
       continue
@@ -1002,6 +1001,18 @@ export let applyLocal = (changes: Change[]) => {
         reindex(ix, eid, graph[eid], next[eid])
       }
       idGraph = next
+    }
+  }
+  for (let { dep, gone } of said) {
+    edges.push(dep)
+    let moved = gone
+      ? holdEdges(LIVE_EDGES, [], [dep])
+      : holdEdges(LIVE_EDGES, [dep], [])
+    for (let x of [...moved.gained, ...moved.lost]) {
+      reindexEdge(ix, x, gone)
+      changedParents.add(x.parent)
+      changedChildren.add(x.child)
+      depsMoved = true
     }
   }
   if (depsMoved) {
@@ -1692,7 +1703,7 @@ let subPeers = new Map<string, Set<string>>()
 let edgeKey = (d: Dep) => `${d.parent}\0${d.type}\0${d.child}`
 
 // Two holders that are not subscriptions. LIVE_EDGES is the complete broadcast
-// itself — a shadow client (TUI, tests) still hears every `dependency` patch and
+// itself — a shadow client (TUI, tests) still hears every edge write and
 // nothing else keeps those edges. SEED_EDGES is a legacy whole-graph snapshot's
 // `deps`, held forever because nothing ever hands them back. A filtered browser
 // has neither: every edge it holds arrives on a rider and leaves with it.
@@ -1779,7 +1790,7 @@ let freeEdges = (sub: string): Dep[] => {
 
 // Fold a gained/lost set into the deps signal and the derived edge index, then
 // wake exactly the endpoints that moved — the same maintenance applyLocal does
-// for a live `dependency` patch, which is why relations() needs no new door.
+// for a live edge write, which is why relations() needs no new door.
 let settleEdges = (gained: Dep[], lost: Dep[]) => {
   if (!gained.length && !lost.length) return
   let parents = new Set<string>()
@@ -3334,7 +3345,7 @@ export let jobOf = (e: Ent): string | null => {
     )[0] ?? e.session?.requested_task ?? null
 }
 
-// The edges that hold an entity FROM ABOVE — every dependency whose child
+// The edges that hold an entity FROM ABOVE — every edge whose child
 // is this eid. refs/kids read downward; this is the climb back up, how a
 // task names the parents that contain or require it.
 export let parents = (eid: string) => childRelations(eid).value

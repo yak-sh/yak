@@ -16,6 +16,7 @@
 // ruled() is the effect shell (SERVER-ONLY: imports db); the decision table
 // above it is pure over Rows and fast-tier tested.
 import { apply, depsOf } from './db.ts'
+import { link } from './edge.ts'
 import { db } from './live_db.ts'
 import { commitEffects } from './effects.ts'
 import { type Change, type Dep, sessionActive } from './types.ts'
@@ -70,11 +71,7 @@ export let spawnMarks = (
       d.type == 'wants' && d.parent == actor!.eid && d.child == target.eid
     )
     if (pending) continue
-    out.push({
-      eid: actor!.eid,
-      name: 'dependency',
-      comp: { type: 'wants', child: target.eid },
-    })
+    out.push(...link(actor!.eid, 'wants', target.eid))
   }
   return out
 }

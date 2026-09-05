@@ -19,6 +19,7 @@
 // writes before it enqueued.
 
 import { assertEquals, assertStringIncludes } from '@std/assert'
+import { link } from './edge.ts'
 import { slow } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -272,11 +273,7 @@ slow(
       { eid: tier, name: 'memory', comp: { scope: project } },
       { eid: loose, name: 'doc', comp: { title: 'Loose' } },
       { eid: loose, name: 'memory', comp: { scope: project } },
-      {
-        eid: persona,
-        name: 'dependency',
-        comp: { type: 'contains', child: tier },
-      },
+      ...link(persona, 'contains', tier),
     ], jeff)
     let q = `id=${persona}&.materialized!`
     let http = async () => {
@@ -1255,7 +1252,7 @@ slow(
 //
 // Derived `reads` are the half that would go missing quietly: home is the
 // one truth, so snapshot() computes a project→persona edge on its way out
-// rather than storing it, and a narrow door reading only the `dependency`
+// rather than storing it, and a narrow door reading only the stored
 // table would drop it — deps=1 has to surface it the same way.
 type Dep = { parent: string; type: string; child: string }
 let sentences = (deps: Dep[], eid: string) =>
@@ -1284,16 +1281,8 @@ slow(
       { eid: common, name: 'persona', comp: { home: proj } },
       { eid: spec, name: 'doc', comp: { title: 'probe specialist' } },
       { eid: spec, name: 'persona', comp: { home: proj } },
-      {
-        eid: a.eid,
-        name: 'dependency',
-        comp: { type: 'requires', child: b.eid },
-      },
-      {
-        eid: proj,
-        name: 'dependency',
-        comp: { type: 'contains', child: common },
-      },
+      ...link(a.eid, 'requires', b.eid),
+      ...link(proj, 'contains', common),
     ])
     // The stored edge both ways round, and the specialist's derived one — while
     // the common persona rides its `contains` and derives nothing on top.

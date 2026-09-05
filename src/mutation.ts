@@ -8,21 +8,21 @@ import type { Change, Edge } from './types.ts'
 // existing entity, or — as a `$alias`, or as an eid a client minted itself (a
 // uuid or a content hash) that names nothing yet — one this batch mints
 // alongside the components it carries; components ride
-// flat beside it exactly as a read shows them; edges are `dependency`
-// sentences, a list when there are several. Wherever an eid goes — entity.eid,
-// a ref column, a dependency child — a `$alias`, a human id, or a nested
-// bundle stands in. `was` guards per column beside the components. A read's
+// flat beside it exactly as a read shows them; edges ride `edges` as
+// `{type, child}` sentences, a list when there are several. Wherever an eid
+// goes — entity.eid, a ref column, an edge's child — a `$alias`, a human id, or
+// a nested bundle stands in. `was` guards per column beside the components. A read's
 // projections (kind, num, refs, backrefs, comments, derived and stamped
 // columns) are ignored, so a read edits and goes straight back. `tombstone` is
 // death: it lowers to the flat entity-null change and, since a dead entity
 // takes no patch, stands alone beside `entity`. The older key/id/comps/deps
 // literal is still accepted through the same door.
 export type LiteralRef = string | number | EntityLiteral
-export type DependencyLiteral = { type: Edge; child: LiteralRef }
+export type EdgeLiteral = { type: Edge; child: LiteralRef }
 export type EntityLiteral = {
   entity?: { eid?: string; num?: number }
   tombstone?: Record<string, never>
-  dependency?: DependencyLiteral | DependencyLiteral[]
+  edges?: EdgeLiteral | EdgeLiteral[]
   was?: Record<string, Record<string, string | null>>
   key?: string
   id?: string

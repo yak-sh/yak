@@ -40,6 +40,7 @@ import {
   learn,
   printRun,
 } from '../../src/channel.ts'
+import { moves } from '../../src/edge.ts'
 import { argsOf, claudePid } from '../../src/proc.ts'
 import { liveChanges } from '../../src/wire.ts'
 
@@ -276,12 +277,9 @@ let attention = (changes: Change[], session: string, reset = false) => {
     for (let eid of attentionOf(changes, session)) taken.add(eid)
     return
   }
-  for (let c of changes) {
-    if (
-      c.name != 'dependency' || !c.comp || c.comp.gone == true ||
-      c.comp.type != 'referenced' || entries.get(c.eid) != session
-    ) continue
-    if (typeof c.comp.child == 'string') taken.add(c.comp.child)
+  for (let { dep, gone } of moves(changes)) {
+    if (gone || dep.type != 'referenced') continue
+    if (entries.get(dep.parent) == session) taken.add(dep.child)
   }
 }
 

@@ -9,6 +9,7 @@
 // (a new uuid per call), so those are masked; every RESOLVED reference
 // (requested_task, persona, actor, memory scope) is held to the last field.
 import { assertEquals } from '@std/assert'
+import { link } from './edge.ts'
 import { uuid } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -67,7 +68,7 @@ let seed = () => {
     { eid: SC, name: 'alias', comp: { slug: DESK.persona } },
     { eid: SC, name: 'created', comp: { at: ago(9999) } },
     // The persona's ownership edge — spawnChanges reads it for the run's actor.
-    { eid: P, name: 'dependency', comp: { type: 'contains', child: SC } },
+    ...link(P, 'contains', SC),
 
     { eid: SESS, name: 'entity', comp: { eid: SESS } },
     { eid: SESS, name: 'doc', comp: { title: 'a run' } },

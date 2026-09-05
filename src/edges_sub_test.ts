@@ -14,6 +14,7 @@
 // landSub().
 
 import { assert, assertEquals } from '@std/assert'
+import { link, typeOf, unlink } from './edge.ts'
 import { slow } from './testing.ts'
 import type { Change, Dep } from './types.ts'
 
@@ -105,12 +106,8 @@ slow('an edges rider answers scoped, then speaks deltas', alone, async () => {
   assertEquals(await post(task(other, 'also unrelated')), 200)
   assertEquals(
     await post([
-      { eid: a, name: 'dependency', comp: { type: 'requires', child: b } },
-      {
-        eid: far,
-        name: 'dependency',
-        comp: { type: 'requires', child: other },
-      },
+      ...link(a, 'requires', b),
+      ...link(far, 'requires', other),
     ]),
     200,
   )
@@ -151,7 +148,7 @@ slow('an edges rider answers scoped, then speaks deltas', alone, async () => {
   // A new edge arrives as a delta, with its new peer beside it.
   assertEquals(
     await post([
-      { eid: a, name: 'dependency', comp: { type: 'requires', child: c } },
+      ...link(a, 'requires', c),
     ]),
     200,
   )
@@ -164,11 +161,7 @@ slow('an edges rider answers scoped, then speaks deltas', alone, async () => {
   // the peer nothing points at any more.
   assertEquals(
     await post([
-      {
-        eid: a,
-        name: 'dependency',
-        comp: { type: 'requires', child: b, gone: true },
-      },
+      ...unlink(a, 'requires', b),
     ]),
     200,
   )
@@ -176,8 +169,8 @@ slow('an edges rider answers scoped, then speaks deltas', alone, async () => {
   assertEquals(holds(cut.unedges, a, b), true)
   assertEquals(cut.unpeers, [b])
 
-  // A peer's DEATH takes its edge with it: apply() deletes the dependency rows
-  // outright and casts no per-edge change, so the rider has to answer for them.
+  // A peer's DEATH takes its edge with it: apply() reaps the sentence's own
+  // entity through edge.from/to, so the rider has to answer for it.
   assertEquals(await post([{ eid: c, name: 'entity', comp: null }]), 200)
   let dead = await next()
   assertEquals(holds(dead.unedges, a, c), true)
@@ -214,16 +207,8 @@ slow(
     )
     assertEquals(
       await post([
-        {
-          eid: log,
-          name: 'dependency',
-          comp: { type: 'referenced', child: a },
-        },
-        {
-          eid: plain,
-          name: 'dependency',
-          comp: { type: 'referenced', child: a },
-        },
+        ...link(log, 'referenced', a),
+        ...link(plain, 'referenced', a),
       ]),
       200,
     )
@@ -253,11 +238,7 @@ slow(
     )
     assertEquals(
       await post([
-        {
-          eid: log2,
-          name: 'dependency',
-          comp: { type: 'referenced', child: a },
-        },
+        ...link(log2, 'referenced', a),
         { eid: a, name: 'doc', comp: { title: 'renamed to force a frame' } },
       ]),
       200,
@@ -281,16 +262,8 @@ slow(
         { eid: session, name: 'session', comp: { id: `s-${session}` } },
         { eid: one, name: 'entry', comp: { session, seq: 1 } },
         { eid: two, name: 'entry', comp: { session, seq: 2 } },
-        {
-          eid: one,
-          name: 'dependency',
-          comp: { type: 'referenced', child: target },
-        },
-        {
-          eid: two,
-          name: 'dependency',
-          comp: { type: 'referenced', child: target },
-        },
+        ...link(one, 'referenced', target),
+        ...link(two, 'referenced', target),
       ]),
       200,
     )
@@ -315,11 +288,7 @@ slow(
     // keeps it; the target edit forces a frame so the empty edge diff is proven.
     assertEquals(
       await post([
-        {
-          eid: one,
-          name: 'dependency',
-          comp: { type: 'referenced', child: target, gone: true },
-        },
+        ...unlink(one, 'referenced', target),
         { eid: target, name: 'doc', comp: { title: 'still cited' } },
       ]),
       200,
@@ -331,11 +300,7 @@ slow(
 
     assertEquals(
       await post([
-        {
-          eid: two,
-          name: 'dependency',
-          comp: { type: 'referenced', child: target, gone: true },
-        },
+        ...unlink(two, 'referenced', target),
       ]),
       200,
     )
@@ -356,7 +321,7 @@ slow('a sub that never asks is delivered no edges at all', alone, async () => {
   assertEquals(await post(task(b, 'plain child')), 200)
   assertEquals(
     await post([
-      { eid: a, name: 'dependency', comp: { type: 'requires', child: b } },
+      ...link(a, 'requires', b),
     ]),
     200,
   )
@@ -374,16 +339,16 @@ slow('a sub that never asks is delivered no edges at all', alone, async () => {
   assertEquals(
     await post([
       { eid: a, name: 'doc', comp: { title: 'renamed' } },
-      { eid: a, name: 'dependency', comp: { type: 'requires', child: b } },
+      ...link(a, 'requires', b),
     ]),
     200,
   )
   let f = await next()
   assertEquals(f.edges, undefined)
   assertEquals(
-    (f.changes ?? []).some((c) => c.name == 'dependency'),
+    (f.changes ?? []).some((c) => c.name == 'edge' || typeOf[c.name]),
     false,
-    'a dependency change never rides a row payload',
+    'an edge entity never rides a row payload',
   )
 
   sock.close()

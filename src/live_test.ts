@@ -66,6 +66,7 @@ import {
   unsubscribe,
   useRoute,
 } from './live.ts'
+import { edgeEid, link } from './edge.ts'
 import { EXISTS, parseQuery, PROJECT, resolveRefs } from './query.ts'
 import { type Ent } from './types.ts'
 import { effect } from '@preact/signals'
@@ -1430,11 +1431,7 @@ Deno.test('relationship indices wake only their affected targets', () => {
         name: 'task',
         comp: { assignee: 'index_target' },
       },
-      {
-        eid: 'index_parent',
-        name: 'dependency',
-        comp: { type: 'reads', child: 'index_target' },
-      },
+      ...link('index_parent', 'reads', 'index_target'),
       {
         eid: 'index_target',
         name: 'claim',
@@ -1633,9 +1630,10 @@ Deno.test('camera motion and card stacking stay off the graph signal', () => {
 })
 
 // applyLocal returns the keys it touched, the map the IDB persist tail
-// writes (T-6823). A component merge/delete touches its eid; a dependency
-// change names its edge; an entity death touches the eid AND every edge it
-// swept from deps — the cascade the shadow must drop too.
+// writes (T-6823). A component merge/delete touches its eid; an edge write
+// names its sentence AND the edge entity that says it; an entity death touches
+// the eid AND every edge it swept from deps — the cascade the shadow must drop
+// too.
 Deno.test('applyLocal: reports touched eids and edges', () => {
   let sp = (eid: string) => ({
     entity: { eid, num: 0 },
@@ -1650,15 +1648,10 @@ Deno.test('applyLocal: reports touched eids and edges', () => {
   ])
   assertEquals(t1.eids.toSorted(), ['a', 'b'])
   assertEquals(t1.edges, [])
-  // an edge add names its whole triple
-  let t2 = applyLocal([
-    {
-      eid: 'a',
-      name: 'dependency',
-      comp: { type: 'requires', child: 'b' },
-    },
-  ])
-  assertEquals(t2.eids, [])
+  // an edge add names its whole triple, on the entity that says it
+  let said = edgeEid('a', 'requires', 'b')
+  let t2 = applyLocal(link('a', 'requires', 'b'))
+  assertEquals(t2.eids, [said])
   assertEquals(t2.edges, [{ parent: 'a', type: 'requires', child: 'b' }])
   assertEquals(deps.value.length, 1)
 })
@@ -1744,11 +1737,7 @@ Deno.test('applyLocal: narrow signals wake only touched graph slices', () => {
     }])
     assertEquals(runs, { a: 2, b: 1, pa: 1, pb: 1 })
 
-    applyLocal([{
-      eid: 'narrow_a',
-      name: 'dependency',
-      comp: { type: 'reads', child: 'narrow_b' },
-    }])
+    applyLocal([...link('narrow_a', 'reads', 'narrow_b')])
     assertEquals(runs, { a: 2, b: 1, pa: 2, pb: 1 })
 
     applyLocal([{

@@ -4,7 +4,7 @@
 import type { Sql } from './store/sql.ts'
 import { human, resolveId } from './db.ts'
 import { entityId, normalize } from './url.ts'
-import { sentences } from './edge.ts'
+import { link, sentences } from './edge.ts'
 import { type Change } from './types.ts'
 
 let idOf = `(select id from entity where eid = ?)`
@@ -63,11 +63,8 @@ export let referencedChanges = (
         where d.parent = ${idOf}`,
     ).all(eid) as { child: string }[]).map((r) => r.child),
   )
-  return [...targets].filter((t) => !worn.has(t)).map((child): Change => ({
-    eid,
-    name: 'dependency',
-    comp: { type: 'referenced', child },
-  }))
+  return [...targets].filter((t) => !worn.has(t))
+    .flatMap((child) => link(eid, 'referenced', child))
 }
 
 // The one historical sweep: every stored entry's missing referenced edges.

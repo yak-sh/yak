@@ -174,7 +174,7 @@ export let manuals = declare({
     ],
     detail: 'Evaluate is proposed and undecided, newest first. Build reuses ' +
       'managed dispatch readiness — approved, open, unclaimed, unblocked, ' +
-      'and dependency-ready — but presents priority then newest. ' +
+      'and prerequisite-ready — but presents priority then newest. ' +
       '`--recursive` includes authorization inherited from an approved open ' +
       'ancestor without crossing a pending proposal or declined decision. ' +
       'Verify is completed acceptance-bearing work awaiting an independent ' +

@@ -586,10 +586,24 @@ export let wirePersonaSync = (
     removed: (eid) => personaish(eid) && syncSoon(),
     doc: 'adding or removing role on a persona re-renders its human header',
   })
-  on('dependency', {
-    created: (eid, comp) => personaish(eid, comp.child as string) && syncSoon(),
-    doc: 'a tier edge (or common flip) at a persona re-renders its files',
-  })
+  // A tier edge is an ENTITY wearing its nature, so the tag's arrival is the
+  // link and the edge's own row names the two ends. An unlink leaves nothing to
+  // read — the row went with it — and a tier flip is rare enough that
+  // re-rendering unconditionally beats keeping a shadow copy of the sentence.
+  for (let tier of ['contains', 'reads'] as const) {
+    on(tier, {
+      created: (eid) => {
+        let ends = store.prepare(
+          `select f.eid as "from", t.eid as "to" from edge e
+             join entity f on f.id = e."from" join entity t on t.id = e."to"
+            where e.entity = (select id from entity where eid = ?)`,
+        ).get(eid) as { from: string; to: string } | undefined
+        return !!ends && personaish(ends.from, ends.to) && syncSoon()
+      },
+      removed: syncSoon,
+      doc: 'a tier edge (or common flip) at a persona re-renders its files',
+    })
+  }
   // Every rendered persona lists the standing goals, so a goal's birth, death,
   // or retitling is a persona change too.
   let goalish = (eid: string) =>
@@ -852,8 +866,8 @@ export let bootDoing = (d: Doing, syncSoon: () => void) => {
       removed: dispatchSoon,
       doc: 'a released claim can return a ready task — dispatch sweeps soon',
     })
-    on('dependency', {
-      created: (_eid, comp) => comp.type == 'wants' && dispatchSoon(),
+    on('wants', {
+      created: dispatchSoon,
       doc: 'a spawn-rule mark wants a persona run — dispatch sweeps soon',
     })
   } else {

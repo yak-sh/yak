@@ -7,7 +7,7 @@
 // entries lives in sql_test.ts; this proves the door on top of it.
 import { assertEquals, assertThrows } from '@std/assert'
 import { kindOf, uuid } from './types.ts'
-import { edgeEid } from './edge.ts'
+import { edgeEid, link } from './edge.ts'
 import {
   evalAgg,
   evalCapped as evalCappedDoor,
@@ -559,7 +559,7 @@ Deno.test('an edge answers the plain grammar: .edge.to=X & .<nature>!', () => {
   apply(db, [
     { eid: p, name: 'doc', comp: { title: 'parent' } },
     { eid: c, name: 'doc', comp: { title: 'child' } },
-    { eid: p, name: 'dependency', comp: { type: 'requires', child: c } },
+    ...link(p, 'requires', c),
   ])
   let sentence = edgeEid(p, 'requires', c)
   let eids = (q: string) => evalGraph(db, q).hits.map((r) => r.eid)

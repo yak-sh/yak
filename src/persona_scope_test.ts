@@ -7,6 +7,7 @@
 // index tier, a specialist homed but not contained, and noise rows that
 // must change nothing.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import { link } from './edge.ts'
 import { idOf, uuid } from './types.ts'
 import { evalGraph, personaGraph, projectionGraph } from './graph_query.ts'
 import { resultStates } from './result_component.ts'
@@ -31,7 +32,7 @@ let seed = () => {
   let doc = (eid: string, title: string, body = `${title} body`) =>
     put([{ eid, name: 'doc', comp: { title, body } }])
   let edge = (parent: string, type: string, child: string) =>
-    put([{ eid: parent, name: 'dependency', comp: { type, child } }])
+    put(link(parent, type, child))
 
   let proj = e() // managed venture
   doc(proj, 'Venture')

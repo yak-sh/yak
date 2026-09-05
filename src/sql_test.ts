@@ -200,21 +200,15 @@ put('c3', {
   created: { by: 'p1', at: '2026-08-04T00:00:00.000Z', via: null },
 })
 
-// Dependency edges — the one non-component table. `.reaches[type,<=N]=id` walks
-// these, so the compiler's recursive CTE and an ordinary JS breadth-first walk
-// have to name the same set. The chain is a CYCLE on purpose (e1→e2→e3→e1): an
+// The stored edges. `.reaches[type,<=N]=id` walks these, so the compiler's
+// recursive CTE and an ordinary JS breadth-first walk have to name the same
+// set. The chain is a CYCLE on purpose (e1→e2→e3→e1): an
 // unbounded closure over it would never terminate, so the depth cap is what
 // makes the traversal an answer at all, and both readers must cap identically.
 // The `contains` edge beside it proves the walk stays inside ONE edge type.
 let link = (parent: string, type: string, child: string) => {
-  db.prepare(
-    `insert into dependency (parent, type, child) values (
-       (select id from entity where eid = ?), ?,
-       (select id from entity where eid = ?))`,
-  ).run(parent, type, child)
-  // The SENTENCE entity beside the row, written just as straight: the compiler
-  // reads the edge store now (edge.ts sentences), and this fixture's whole
-  // point is to compare two readers of what is STORED.
+  // The SENTENCE entity, written straight into the tables: this fixture's
+  // whole point is to compare two readers of what is STORED.
   let eid = edgeEid(parent, natureOf[type], child)
   db.prepare('insert into entity (eid) values (?)').run(eid)
   db.prepare(

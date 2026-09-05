@@ -2,6 +2,7 @@
 // generation retry eligibility, and the batches a sweep would mint. The sweep
 // is the same apply/dispatch machinery every other sweep rides.
 import { type Snapshot } from './types.ts'
+import { unlink } from './edge.ts'
 import { rows } from './client.ts'
 import { type Provider } from './providers.ts'
 import {
@@ -611,11 +612,9 @@ Deno.test('on: 1/true/on/yes enable; empty and anything else are off', () => {
 let N = id(8)
 let persona = () => mk(N, 8, ago(9999), { doc: { title: 'desk' }, persona: {} })
 let mark = { parent: N, type: 'wants' as const, child: T3 }
-let gone = {
-  eid: N,
-  name: 'dependency',
-  comp: { type: 'wants', child: T3, gone: true },
-}
+let gone = unlink(N, 'wants', T3)
+// An edge write is the sentence's own entity: its `edge` row and its nature.
+let edgy = (c: { name: string }) => c.name == 'edge' || c.name == 'wants'
 
 Deno.test('wanted: persona parent + task child, most urgent target first', () => {
   let all = rows(graph([...persona()]))
@@ -659,7 +658,7 @@ Deno.test('dispatchSpawn: a mark spawns its persona onto the target and clears t
   // T3 is unapproved — the watch is the standing yes — and the mark
   // outranks the ready backlog (which waits: cap 1 is spent)
   assertEquals([s.requested_task, s.persona], [T3, N])
-  assertEquals(out.filter((c) => c.name == 'dependency'), [gone])
+  assertEquals(out.filter((c) => edgy(c)), gone)
   // a prior failed ask never blocks a mark — events re-instantiate
   let again = rows(graph([
     ...persona(),
@@ -676,7 +675,7 @@ Deno.test('a watched spawn birth and wants removal are one candidate batch', () 
   let candidates = dispatchCandidates(all, [mark], ps)
   let watched = candidates.find((c) => c.spends)!
   assertEquals(watched.changes?.some((c) => c.name == 'session'), true)
-  assertEquals(watched.changes?.filter((c) => c.name == 'dependency'), [gone])
+  assertEquals(watched.changes?.filter((c) => edgy(c)), gone)
 })
 
 Deno.test('dispatchSpawn: a hot or settled mark clears unspent; a capped one waits', () => {
@@ -689,7 +688,7 @@ Deno.test('dispatchSpawn: a hot or settled mark clears unspent; a capped one wai
   // the event already reached the hot run — the edge clears, nothing spawns
   // (the persona run holds a slot, so the ready backlog gets the other)
   let out = dispatchSpawn(hot, [mark], ps, 2)
-  assertEquals(out.filter((c) => c.name == 'dependency'), [gone])
+  assertEquals(out.filter((c) => edgy(c)), gone)
   assertEquals(
     out.filter((c) => c.name == 'session').map((c) => c.comp!.requested_task),
     [T1],
@@ -698,7 +697,7 @@ Deno.test('dispatchSpawn: a hot or settled mark clears unspent; a capped one wai
     ...persona(),
     { eid: T3, name: 'completed', comp: {} }, // T3 wears its end mark → settled
   ]))
-  assertEquals(dispatchSpawn(done, [mark], ps, 0), [gone])
+  assertEquals(dispatchSpawn(done, [mark], ps, 0), gone)
   // no free slot: the mark stays pending for the next sweep
   assertEquals(dispatchSpawn(rows(graph([...persona()])), [mark], ps, 0), [])
 })

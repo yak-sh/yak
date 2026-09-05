@@ -1560,8 +1560,8 @@ Deno.test('MCP schemas document parameters and derive closed vocabularies', asyn
 Deno.test('backfill reads locally and submits bounded ordinary writes', async () => {
   let pending: Change[] = Array.from({ length: 201 }, (_, i) => ({
     eid: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
-    name: 'dependency',
-    comp: { type: 'worked', child: crypto.randomUUID() },
+    name: 'edge',
+    comp: { from: crypto.randomUUID(), to: crypto.randomUUID() },
   }))
   let writes: { changes: Change[]; via?: string }[] = []
   let io = blank()
@@ -2221,7 +2221,7 @@ Deno.test('graph_apply accepts nested literals and reports aliases', async () =>
             entity: { eid: '$box' },
             doc: { title: 'recipe box' },
             task: {},
-            dependency: [
+            edges: [
               { type: 'requires', child: result.aliases.step },
               {
                 type: 'contains',

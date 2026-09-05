@@ -17,7 +17,7 @@ import {
   assertStringIncludes,
   assertThrows,
 } from '@std/assert'
-import { sentences } from './edge.ts'
+import { link, sentences } from './edge.ts'
 import { existsSync } from 'node:fs'
 import { type Change } from './types.ts'
 import { adapters } from './adapters.ts'
@@ -1129,11 +1129,7 @@ slow('a worn persona rides the prompt whole — tiers and all', async () => {
     { eid: per, name: 'doc', comp: { title: 'probe', body: 'Be terse.' } },
     { eid: per, name: 'persona', comp: {} },
     { eid: mem, name: 'doc', comp: { title: 'lesson', body: 'Front door.' } },
-    {
-      eid: per,
-      name: 'dependency',
-      comp: { type: 'contains', child: mem },
-    },
+    ...link(per, 'contains', mem),
   ])
   let { eid, done } = begin(t, { persona: per })
   await done
@@ -1161,8 +1157,8 @@ slow('a bare spawn wears the project common persona (T-12867)', async () => {
       name: 'doc',
       comp: { title: 'house lore', body: 'Wear the voice.' },
     },
-    { eid: p, name: 'dependency', comp: { type: 'contains', child: per } },
-    { eid: per, name: 'dependency', comp: { type: 'contains', child: mem } },
+    ...link(p, 'contains', per),
+    ...link(per, 'contains', mem),
   ])
   let { eid, done } = begin(t) // no --persona
   await done
@@ -2540,7 +2536,7 @@ Deno.test('reapLeases retains a parked-waiting claim, reaps the rest', () => {
         { eid: b, name: 'doc', comp: { title: 'blocker', body: '' } },
         { eid: b, name: 'task', comp: {} },
         ...mark,
-        { eid: task, name: 'dependency', comp: { type: 'requires', child: b } },
+        ...link(task, 'requires', b),
       ])
     }
     if (opts.wake) {

@@ -124,7 +124,7 @@ Deno.test('configured driver journals nested cross-owner effects exactly once', 
   let serving = open(path)
   let daemon = open(path)
   // Boot writes journal rows of its own (the edge backfill over the seed's
-  // dependency rows, T-23822) and they carry no trace. This test's window
+  // edge sentences, T-23822) and they carry no trace. This test's window
   // starts after them.
   let booted = journalSince(writer, 0).at(-1)?.rowid ?? 0
   let serveCalls = 0

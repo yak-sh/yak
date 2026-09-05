@@ -941,12 +941,12 @@ export let workBlockers = (
     `with ranked as (
        select parent.eid as parent, child.eid as child,
               row_number() over (
-                partition by dependency.parent
-                order by dependency.ord, child.num
+                partition by req.parent
+                order by req.ord, child.num
               ) as position
-         from (${sentences('requires')}) dependency
-         join entity parent on parent.id = dependency.parent
-         join entity child on child.id = dependency.child
+         from (${sentences('requires')}) req
+         join entity parent on parent.id = req.parent
+         join entity child on child.id = req.child
          left join completed on completed.entity = child.id
          left join cancelled on cancelled.entity = child.id
          left join quarantined on quarantined.entity = child.id

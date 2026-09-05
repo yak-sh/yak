@@ -8,6 +8,7 @@ import {
   assertRejects,
   assertThrows,
 } from '@std/assert'
+import { link } from './edge.ts'
 import { type Change, idOf, uuid } from './types.ts'
 import {
   buildWorkSql,
@@ -169,11 +170,7 @@ let world = () => {
     }]),
     ...task(blocker, 'Open blocker', 2, P),
     ...task(gated, 'Gated', 0, P, [{ eid: gated, name: 'decided', comp: {} }]),
-    {
-      eid: gated,
-      name: 'dependency',
-      comp: { type: 'requires', child: blocker },
-    },
+    ...link(gated, 'requires', blocker),
     ...task(pending, 'Needs decision', 0, P, [{
       eid: pending,
       name: 'proposed',
@@ -201,28 +198,16 @@ let world = () => {
       comp: {},
     }]),
     ...task(child, 'Inherited child', 2, P),
-    { eid: root, name: 'dependency', comp: { type: 'requires', child } },
-    {
-      eid: root,
-      name: 'dependency',
-      comp: { type: 'requires', child: declined },
-    },
+    ...link(root, 'requires', child),
+    ...link(root, 'requires', declined),
     ...task(heldGate, 'Pending boundary', 2, P, [{
       eid: heldGate,
       name: 'proposed',
       comp: {},
     }]),
     ...task(grandchild, 'Behind pending boundary', 2, P),
-    {
-      eid: root,
-      name: 'dependency',
-      comp: { type: 'requires', child: heldGate },
-    },
-    {
-      eid: heldGate,
-      name: 'dependency',
-      comp: { type: 'requires', child: grandchild },
-    },
+    ...link(root, 'requires', heldGate),
+    ...link(heldGate, 'requires', grandchild),
   ])
   let read = readFor(db)
   return {
@@ -361,26 +346,17 @@ Deno.test('recursive DB selection stops beyond a high-fanout pending boundary', 
     ...task(target, 'Must stay held', -3, P),
   )
   for (let i = 0; i < 450; i++) {
-    changes.push({
-      eid: root,
-      name: 'dependency',
-      comp: {
-        type: 'requires',
-        child: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
-      },
-    })
+    changes.push(
+      ...link(
+        root,
+        'requires',
+        `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+      ),
+    )
   }
   changes.push(
-    {
-      eid: root,
-      name: 'dependency',
-      comp: { type: 'requires', child: boundary },
-    },
-    {
-      eid: boundary,
-      name: 'dependency',
-      comp: { type: 'requires', child: target },
-    },
+    ...link(root, 'requires', boundary),
+    ...link(boundary, 'requires', target),
   )
   apply(db, changes)
   let ids = (await workCandidates(readFor(db), 'build', {
@@ -409,11 +385,7 @@ Deno.test('evaluate bounds high-fanout blockers and emits only human ids', async
     comp: {},
   }]))
   for (let child of blockers) {
-    changes.push({
-      eid: candidate,
-      name: 'dependency',
-      comp: { type: 'requires', child },
-    })
+    changes.push(...link(candidate, 'requires', child))
   }
   apply(db, changes)
   let [found] = await workCandidates(readFor(db), 'evaluate', { limit: 1 })
@@ -464,16 +436,8 @@ Deno.test('recursive authorization traverses non-task intermediates', async () =
     { eid: design, name: 'doc', comp: { title: 'Design', body: '' } },
     { eid: design, name: 'design', comp: {} },
     ...task(leaf, 'Build leaf', 1, P),
-    {
-      eid: root,
-      name: 'dependency',
-      comp: { type: 'requires', child: design },
-    },
-    {
-      eid: design,
-      name: 'dependency',
-      comp: { type: 'requires', child: leaf },
-    },
+    ...link(root, 'requires', design),
+    ...link(design, 'requires', leaf),
   ])
   let candidates = await workCandidates(readFor(db), 'build', {
     recursive: true,
@@ -507,10 +471,10 @@ Deno.test('managed dispatch shares the complete recursive DB membership', async 
       name: 'decided',
       comp: {},
     }]),
-    { eid: root, name: 'dependency', comp: { type: 'requires', child: a } },
-    { eid: a, name: 'dependency', comp: { type: 'requires', child: b } },
-    { eid: b, name: 'dependency', comp: { type: 'requires', child: a } },
-    { eid: b, name: 'dependency', comp: { type: 'requires', child: leaf } },
+    ...link(root, 'requires', a),
+    ...link(a, 'requires', b),
+    ...link(b, 'requires', a),
+    ...link(b, 'requires', leaf),
   ])
   // created.at is server-stamped and therefore cannot be supplied on the
   // wire. Put the higher-numbered direct task first in time so a num-only
@@ -656,26 +620,14 @@ Deno.test('quarantine is private in blocker and authorization projections', asyn
       name: 'spawn',
       comp: { provider: 'codex', persona: hiddenPersona },
     }]),
-    {
-      eid: proposed,
-      name: 'dependency',
-      comp: { type: 'requires', child: hidden },
-    },
-    {
-      eid: proposed,
-      name: 'dependency',
-      comp: { type: 'requires', child: visible },
-    },
+    ...link(proposed, 'requires', hidden),
+    ...link(proposed, 'requires', visible),
     ...task(approved, 'Gated by hidden work', 1, P, [{
       eid: approved,
       name: 'decided',
       comp: {},
     }]),
-    {
-      eid: approved,
-      name: 'dependency',
-      comp: { type: 'requires', child: hidden },
-    },
+    ...link(approved, 'requires', hidden),
     ...task(hiddenRoot, 'SECRET ROOT', 1, P, [{
       eid: hiddenRoot,
       name: 'decided',
@@ -683,11 +635,7 @@ Deno.test('quarantine is private in blocker and authorization projections', asyn
     }]),
     { eid: hiddenRoot, name: 'quarantined', comp: {} },
     ...task(leaf, 'Unapproved leaf', 1, P),
-    {
-      eid: hiddenRoot,
-      name: 'dependency',
-      comp: { type: 'requires', child: leaf },
-    },
+    ...link(hiddenRoot, 'requires', leaf),
   ])
   let [candidate] = await workCandidates(readFor(db), 'evaluate', { limit: 20 })
   assertEquals(candidate.blockers, {
@@ -730,19 +678,11 @@ Deno.test('deep authorization is one bounded query projection', async () => {
     changes.push(
       { eid, name: 'doc', comp: { title: `Design ${i}`, body: '' } },
       { eid, name: 'design', comp: {} },
-      {
-        eid: parent,
-        name: 'dependency',
-        comp: { type: 'requires', child: eid },
-      },
+      ...link(parent, 'requires', eid),
     )
     parent = eid
   }
-  changes.push({
-    eid: parent,
-    name: 'dependency',
-    comp: { type: 'requires', child: leaf },
-  })
+  changes.push(...link(parent, 'requires', leaf))
   apply(db, changes)
   let local = readFor(db)
   let queries = 0, gets = 0
@@ -781,11 +721,7 @@ Deno.test('authorization sources are capped and say when truncated', async () =>
         name: 'decided',
         comp: {},
       }]),
-      {
-        eid: root,
-        name: 'dependency',
-        comp: { type: 'requires', child: leaf },
-      },
+      ...link(root, 'requires', leaf),
     )
   }
   apply(db, changes)

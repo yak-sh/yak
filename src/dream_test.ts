@@ -7,7 +7,7 @@
 Deno.env.set('DB_PATH', ':memory:')
 let { apply } = await import('./db.ts')
 let { db } = await import('./live_db.ts')
-let { sentences } = await import('./edge.ts')
+let { moves, sentences } = await import('./edge.ts')
 let {
   bounds,
   CADENCE,
@@ -241,9 +241,9 @@ Deno.test('considerChanges: a drift finding is a doc about its source, NOT a tas
   // Off the board: a fresh finding carries no task (it earns one only on
   // recurrence, in fileFinding).
   assertEquals(cs.some((c) => c.name == 'task'), false)
-  let edge = cs.find((c) => c.name == 'dependency')!.comp!
-  assertEquals(edge.type, 'about')
-  assertEquals(edge.child, 's-eid')
+  let [{ dep }] = moves(cs)
+  assertEquals(dep.type, 'about')
+  assertEquals(dep.child, 's-eid')
 })
 
 Deno.test('unwoken/seedWake: a dream with no pending wake is seeded once, then left alone', () => {

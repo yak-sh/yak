@@ -4,7 +4,7 @@
 // anywhere but here).
 import type { Change } from './types.ts'
 import type { FleetMsg, SpoolReq } from './inbound.ts'
-import { sentences } from './edge.ts'
+import { moves, sentences } from './edge.ts'
 Deno.env.set('DB_PATH', ':memory:')
 Deno.env.set('TASKS_MAIL_DOMAIN', 'bot.test')
 let { apply } = await import('./db.ts')
@@ -294,9 +294,9 @@ Deno.test('hookChanges: event derives; captured request stays verbatim', () => {
   assertEquals(named.stamp.sig_ok, 0) // routing never upgrades trust
   let doc = named.wire.find((c) => c.name == 'doc')!.comp!
   assertEquals(doc.title, 'github: issues')
-  let edge = named.wire.find((c) => c.name == 'dependency')!.comp!
-  assertEquals(edge.type, 'about')
-  assertEquals(edge.child, holdco)
+  let [{ dep }] = moves(named.wire)
+  assertEquals(dep.type, 'about')
+  assertEquals(dep.child, holdco)
   // a JSON body's own word, when no header names it
   let bodied = hookChanges({
     ...base,

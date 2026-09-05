@@ -4,6 +4,7 @@
 import type { Sql } from './store/sql.ts'
 import type { Change } from './types.ts'
 import { eager } from './db.ts'
+import { moves, typeOf } from './edge.ts'
 import { materialize } from './persona.ts'
 import { personaGraph } from './persona_graph.ts'
 import { EXISTS, type Pred, type ResultComp, resultComps } from './query.ts'
@@ -63,14 +64,16 @@ let materializedDirty = (
   batch: Change[],
 ) => {
   let home = (state.meta as { home?: string | null } | undefined)?.home ?? null
+  for (let { dep } of moves(batch)) {
+    if (
+      (dep.type == 'contains' || dep.type == 'reads') &&
+      state.depends.has(dep.parent)
+    ) return true
+  }
   for (let c of batch) {
-    if (c.name == 'dependency') {
-      let type = c.comp?.type
-      if (
-        (type == 'contains' || type == 'reads') && state.depends.has(c.eid)
-      ) return true
-      continue
-    }
+    // An edge is an entity of its own, so the sentence — not the change's
+    // eid — says whose materialization went stale.
+    if (c.name == 'edge' || typeOf[c.name]) continue
     if (state.depends.has(c.eid)) {
       if (
         c.name == 'entity' || c.name == 'doc' || c.name == 'persona' ||

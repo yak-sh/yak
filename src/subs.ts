@@ -10,6 +10,7 @@
 // as cheap as an add: no client can say that today because no client knows
 // another's query — centralizing the matcher on the server is what makes it
 // expressible (design §2).
+import { typeOf } from './edge.ts'
 import { bodyCols, propAt } from './props.ts'
 import { type Field, leafOf, type Pred } from './query.ts'
 import { span } from './time.ts'
@@ -121,13 +122,13 @@ export let projected = (fields: Field[]) => {
 
 // Edges never ride a ROW payload. A subscription's changes are its members'
 // own components; its EDGES are the `.edges!` rider's delivery — refcounted per
-// sub and released with it. A `dependency` change slipping into `changes`
-// (a standing member whose batch happened to link something) would land in the
-// client's edge table with NO sub holding it, which is exactly the unreleasable
-// state the rider exists to end: it would never be evicted, and a sub that never
-// asked for edges would quietly accumulate them.
+// sub and released with it. An edge ENTITY slipping into `changes` (a query
+// whose members happen to include one) would land in the client's edge table
+// with NO sub holding it, which is exactly the unreleasable state the rider
+// exists to end: it would never be evicted, and a sub that never asked for
+// edges would quietly accumulate them.
 export let unedged = (changes: Change[]) =>
-  changes.filter((c) => c.name != 'dependency')
+  changes.filter((c) => c.name != 'edge' && !typeOf[c.name])
 
 // Agreement is hard for moving time: membership can change with no write.
 // Path membership is maintained from far-side reference invalidation.

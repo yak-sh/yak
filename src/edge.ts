@@ -1,10 +1,10 @@
-// An edge's identity, and the transition table between the two edge stores
-// (D-23820, T-23825). An edge entity is content-addressed from its SENTENCE,
-// the way a blob's eid is its bytes' hash and a commit's is its sha: writing
-// the same sentence twice finds one entity, and an unlink names it with no
-// lookup. This is THE derivation — apply()'s dual-write, the CLI and any client
-// compute it here and nowhere else.
+// An edge's identity, and the two changes that say one (D-23820). An edge
+// entity is content-addressed from its SENTENCE, the way a blob's eid is its
+// bytes' hash and a commit's is its sha: writing the same sentence twice finds
+// one entity, and an unlink names it with no lookup. This is THE derivation —
+// every door, client and reader computes it here and nowhere else.
 import { sha } from './sha.ts'
+import type { Change, Dep, Edge } from './types.ts'
 import { edges } from './types.ts'
 
 // eid = the leading 16 bytes of sha256(`${from}|${nature}|${to}`), worn as a
@@ -21,12 +21,13 @@ export let edgeEid = (from: string, nature: string, to: string): string => {
   }-${s.slice(20)}`
 }
 
-// The transition table, dual-write only (T-23825; T-23821 removes it with the
-// dependency table): each `dependency.type` and its nature comp, present tense
-// for a live relationship (`references` for `referenced`). `recalled` keeps its
-// past tense because it is the one nature that is an EVENT: the edge wears
-// `recalled{at}` — the case D-23820 names, a relation with a time carried by
-// the sentence rather than forced onto either end (T-32471).
+// A relation has two spellings and they are not interchangeable: the TYPE is
+// what every read and every query says (`referenced`), the NATURE is the comp
+// the edge entity wears (`references`, present tense for a live relationship).
+// `recalled` keeps its past tense because it is the one nature that is an
+// EVENT: the edge wears `recalled{at}` — the case D-23820 names, a relation
+// with a time carried by the sentence rather than forced onto either end
+// (T-32471).
 export let natureOf: Record<string, string> = Object.fromEntries(
   edges.map((t) => [t, t == 'referenced' ? 'references' : t]),
 )
@@ -35,13 +36,127 @@ export let typeOf: Record<string, string> = Object.fromEntries(
 )
 export let natures = Object.values(natureOf)
 
+let verbOf = (type: string) => {
+  let nature = natureOf[type]
+  if (!nature) throw new Error(`unknown edge type: ${type}`)
+  return nature
+}
+
+// SAYING a sentence: the edge entity's two ends, and the nature tag that is its
+// verb. This is the only way to write an edge — there is no edge row and no
+// component that names a triple, so a writer says the entity the sentence
+// derives. `ord` is PATCH-shaped: naming it sets the listing order, omitting it
+// leaves the stored one alone.
+export let link = (
+  from: string,
+  type: Edge | string,
+  to: string,
+  ord?: number,
+): Change[] => {
+  let nature = verbOf(type)
+  let eid = edgeEid(from, nature, to)
+  return [
+    {
+      eid,
+      name: 'edge',
+      comp: ord === undefined ? { from, to } : { from, to, ord },
+    },
+    {
+      eid,
+      name: nature,
+      // Every nature is a bare tag but `recalled`, which is an event: the edge
+      // carries the recall's clock (D-23820, T-32471). Now IS the recalling
+      // entry's birth — recall.ts mints the entry and its links in one batch.
+      comp: nature == 'recalled' ? { at: new Date().toISOString() } : {},
+    },
+  ]
+}
+
+// Unlinking is not a DEATH. The sentence is no longer said, and the same
+// sentence may be said again tomorrow — so its COMPS go and the spine stays.
+// An entity wearing nothing is invisible to every reader; deleting the entity
+// instead would tombstone an eid that is DERIVED from the sentence, and a
+// tombstone is forever, so `A requires B` could never be said again (T-23824).
+// An endpoint's death still reaps the whole entity through edge's own cascades:
+// that sentence cannot become true again, because one of its ends is gone.
+export let unlink = (
+  from: string,
+  type: Edge | string,
+  to: string,
+): Change[] => {
+  let nature = verbOf(type)
+  let eid = edgeEid(from, nature, to)
+  return [{ eid, name: nature, comp: null }, { eid, name: 'edge', comp: null }]
+}
+
+// The sentences a BATCH says or unsays, read back out of its edge writes — the
+// one reader for every consumer that used to scan the batch for edge rows
+// (live caches, the subscription riders, the comms bus).
+//
+// A link names its whole triple: `edge{from, to}` beside the nature tag. An
+// unlink names only the edge's EID — its ends have left the batch and the graph
+// — so whoever HELD the sentence answers for it, which every such consumer can
+// do because holding it is what makes the loss news.
+export type Move = { dep: Dep; gone: boolean }
+type Told = { from?: string; to?: string; type?: Edge; ord?: number }
+export let moves = (
+  changes: Change[],
+  held: (eid: string) => Dep | undefined = () => undefined,
+): Move[] => {
+  // One record per edge entity, folded IN ORDER: the last thing a change says
+  // about a sentence is what the batch says. A catch-up stream that mints an
+  // edge and then reaps it must read as a loss, not as the link it opened with.
+  let told = new Map<string, Told & { gone: boolean }>()
+  let order: string[] = []
+  let at = (eid: string) => {
+    let t = told.get(eid)
+    if (!t) {
+      told.set(eid, t = { gone: false })
+      order.push(eid)
+    }
+    return t
+  }
+  for (let { eid, name, comp } of changes) {
+    let nature = typeOf[name]
+    if (name == 'edge') {
+      let t = at(eid)
+      if (comp == null) t.gone = true
+      else if (comp.from != null && comp.to != null) {
+        t.gone = false
+        t.from = String(comp.from)
+        t.to = String(comp.to)
+        if (comp.ord != null) t.ord = Number(comp.ord)
+      }
+    } else if (nature) {
+      let t = at(eid)
+      t.gone = comp == null
+      if (comp != null) t.type = nature as Edge
+    } else if (name == 'entity' && comp == null) at(eid).gone = true
+  }
+  let out: Move[] = []
+  for (let eid of order) {
+    // What the batch did not name, whoever HELD the sentence answers for.
+    let was = held(eid)
+    let t = told.get(eid)!
+    let parent = t.from ?? was?.parent
+    let child = t.to ?? was?.child
+    let type = t.type ?? was?.type
+    if (!parent || !child || !type) continue
+    let ord = t.ord ?? was?.ord
+    out.push({
+      dep: { parent, type, child, ...(ord == null ? {} : { ord }) },
+      gone: t.gone,
+    })
+  }
+  return out
+}
+
 // The sentence store as SQL, read from the edge ENTITIES (T-23824). `edge`
 // names the two ends and its listing order; the nature comp names the verb. The
-// columns are exactly what `dependency` had — parent, type, child, ord — so
-// every reader keeps the shape it has always spoken and no client learns a new
-// word. `type` is the WIRE's spelling (`referenced`, never `references`): the
-// read shape is what it was. The nature list is the vocabulary's, so a new
-// nature joins every reader here with no further edit.
+// projected columns — parent, type, child, ord — are the read shape every
+// client has always spoken, and `type` is the read's spelling (`referenced`,
+// never `references`). The nature list is the vocabulary's, so a new nature
+// joins every reader here with no further edit.
 //
 // `only` is a WHERE over the EDGE's own columns (`g."from"`, `g."to"`,
 // `g.entity`), and it belongs INSIDE: a narrowing left to the caller's outer

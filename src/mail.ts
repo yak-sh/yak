@@ -13,7 +13,7 @@
 // an addressed project's tasks — the graph's replacement for holdco's
 // delivery.js. SERVER-ONLY (imports db).
 import { apply, human, readComp } from './db.ts'
-import { sentences } from './edge.ts'
+import { link, sentences } from './edge.ts'
 import { db } from './live_db.ts'
 import { delivered, errored, settled, toOf } from './deliver.ts'
 import { commitEffects } from './effects.ts'
@@ -422,11 +422,7 @@ export let fanout =
               // WHERE it goes rides the shared deliver.to — the project reference,
               // resolved to its address at delivery like any other.
               { eid: sid, name: 'deliver', comp: { to: t.project } },
-              {
-                eid: sid,
-                name: 'dependency',
-                comp: { type: 'about', child: eid },
-              },
+              ...link(sid, 'about', eid),
               // The relay carries someone's WORDS, so it is signed by whoever
               // wrote them. Without a writer named here the sender would resolve
               // by fallback, and a comment relayed from any venture would leave

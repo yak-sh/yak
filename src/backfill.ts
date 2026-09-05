@@ -148,7 +148,7 @@ export let landBackfill = async (
       ...state,
       submitted: state.submitted + batch.length,
       landed: state.landed +
-        out.filter((c) => c.name == 'dependency' || c.name == 'prompt').length,
+        out.filter((c) => c.name == 'edge' || c.name == 'prompt').length,
     }
     progress(state)
     // The old server route yielded between chunks so a large historical sweep
