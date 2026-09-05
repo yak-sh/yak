@@ -37,10 +37,16 @@ let pointing = (
     (bs) => bs.map((b) => b.entity.eid),
   )
 
-// The transitive closure of `cascade` references over the batch's dead: an
-// entity that exists ABOUT a doomed one dies with it, and so does anything
-// about THAT. Breadth-first over a growing worklist, so a chain all falls.
-let doomed = (
+/**
+ * The transitive closure of `cascade` references over a set of dying entities:
+ * everything that exists ABOUT one of them dies with it, and so does anything
+ * about THAT. Breadth-first over a growing worklist, so a chain all falls.
+ *
+ * This phase's own worklist, exported because a plugin sometimes has to know
+ * who is about to die BEFORE they do — an observer that reads a casualty's
+ * components has one chance, before the rows go.
+ */
+export let doomed = (
   tx: Tx,
   vocab: Vocab,
   killed: Eid[],
