@@ -73,6 +73,10 @@ In dependency order:
   and the recurrence — a duration or a cron line — that moves one on. It fires
   nothing itself; a server tick, a Durable Object `alarm()` and a browser tab
   all run the same `due()`.
+- **[@yaks/mail](./mail)** — letters as entities: a `mail` addressed to any
+  entity, the `deliver` that asks for it to go, the `delivered`/`bounced` it
+  comes to rest as, the `created(mail)` effect that hands it to an injected
+  sender, and an arrival read into bundles.
 - **[@yaks/api](./api)** — the transport: a plain `Request` → `Response` handler
   over a graph (`/apply`, `/query`, `/ws`), where the door authenticates the
   writer, and a subscription is a saved query whose answer is pushed again when
@@ -158,6 +162,13 @@ on its own:
   that a task's status is not stored: it is derived from the marks a task wears,
   and the rule is a list the package hands to both evaluators, so a saved board
   filter means the same thing in a database and in a page.
+- `@yaks/mail` is what a domain plugin looks like once both halves are there: it
+  contributes components like `@yaks/edge` and registers an effect like the
+  mechanism `@yaks/effects` ships empty. Sending is post-commit, so a mail
+  server that is down cannot refuse a write; the outcome is written back as
+  components, so what became of a letter is a query. It also fills the
+  `created(member)` slot `@yaks/member` documents and leaves for it — an
+  invitation is a letter, written through the same `apply()` as everything else.
 - `@yaks/api` puts the whole stack behind three routes. It composes
   `@yaks/graph` (for writes) with a storage adapter (for reads) and
   `@yaks/match` (to decide cheaply which subscription a committed batch

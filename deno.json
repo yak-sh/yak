@@ -1,8 +1,8 @@
 {
   "tasks": {
     "check": "deno fmt --check && deno lint && deno check && deno task check:browser && deno task check:workers && deno task codegen --check && deno task test:packages",
-    "check:browser": "deno check --config packages/graph/browser.json packages/graph/mod.ts && deno check --config packages/memory/browser.json packages/memory/mod.ts && deno check --config packages/sync/browser.json packages/sync/mod.ts && deno check --config packages/client/browser.json packages/client/mod.ts && deno check --config packages/edge/browser.json packages/edge/mod.ts && deno check --config packages/effects/browser.json packages/effects/mod.ts && deno check --config packages/journal/browser.json packages/journal/mod.ts && deno check --config packages/blob/browser.json packages/blob/mod.ts && deno check --config packages/member/browser.json packages/member/mod.ts && deno check --config packages/session/browser.json packages/session/mod.ts && deno check --config packages/canvas/browser.json packages/canvas/mod.ts && deno check --config packages/task/browser.json packages/task/mod.ts && deno check --no-lock --config packages/wake/browser.json packages/wake/mod.ts",
-    "check:workers": "deno check --no-lock --config packages/workers/workers.json packages/workers/conform.ts && deno check --no-lock --config packages/durable-object/workers.json packages/durable-object/conform.ts && deno check --no-lock --config packages/blob/workers.json packages/blob/conform.ts && deno check --no-lock --config packages/d1/workers.json packages/d1/conform.ts",
+    "check:browser": "deno check --config packages/graph/browser.json packages/graph/mod.ts && deno check --config packages/memory/browser.json packages/memory/mod.ts && deno check --config packages/sync/browser.json packages/sync/mod.ts && deno check --config packages/client/browser.json packages/client/mod.ts && deno check --config packages/edge/browser.json packages/edge/mod.ts && deno check --config packages/effects/browser.json packages/effects/mod.ts && deno check --config packages/journal/browser.json packages/journal/mod.ts && deno check --config packages/blob/browser.json packages/blob/mod.ts && deno check --config packages/member/browser.json packages/member/mod.ts && deno check --config packages/session/browser.json packages/session/mod.ts && deno check --config packages/canvas/browser.json packages/canvas/mod.ts && deno check --config packages/task/browser.json packages/task/mod.ts && deno check --no-lock --config packages/wake/browser.json packages/wake/mod.ts && deno check --config packages/mail/browser.json packages/mail/mod.ts",
+    "check:workers": "deno check --no-lock --config packages/workers/workers.json packages/workers/conform.ts && deno check --no-lock --config packages/durable-object/workers.json packages/durable-object/conform.ts && deno check --no-lock --config packages/blob/workers.json packages/blob/conform.ts && deno check --no-lock --config packages/d1/workers.json packages/d1/conform.ts && deno check --no-lock --config packages/mail/workers.json packages/mail/conform.ts",
     "codegen": "deno run --allow-read --allow-write --allow-run=deno src/vocab/gen.ts",
     "test:packages": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno test -A packages/",
     "gate": "deno task check && deno task test && deno task bench:gate && deno task bench:gate:web && deno run -A src/cli.ts sync --check",
@@ -58,6 +58,7 @@
     "packages/durable-object/conform.ts",
     "packages/blob/conform.ts",
     "packages/d1/conform.ts",
+    "packages/mail/conform.ts",
     "**/.wrangler",
     ".tasks",
     ".claude",

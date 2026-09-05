@@ -1,0 +1,14 @@
+{
+  "_": "The Cloudflare gate: the shipped source, type-checked with the RUNTIME's own types in scope — the message an Email Worker is handed is the one ./inbound.ts names structurally, and a Worker's fetch is the one ./cloudflare.ts calls through. `deno check --config packages/mail/workers.json packages/mail/conform.ts` is the check; it is part of `deno task check`. It stands alone because those types are global: in scope, every other file in the repo would be checked against a Worker it does not run in.",
+  "compilerOptions": {
+    "lib": ["esnext", "dom"],
+    "strict": true
+  },
+  "imports": {
+    "@cloudflare/workers-types": "npm:@cloudflare/workers-types@^4.20260702.1",
+    "@yaks/effects": "../effects/mod.ts",
+    "@yaks/graph": "../graph/mod.ts",
+    "@yaks/query": "../query/mod.ts",
+    "@yaks/vocab": "../vocab/mod.ts"
+  }
+}
