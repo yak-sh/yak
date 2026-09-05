@@ -26,8 +26,8 @@ import {
   type Depth,
   outputSchema,
   showSchema,
-  vocabSchema,
 } from './schema.ts'
+import { detail, type Guide, index, ofKind, schemaSchema } from './words.ts'
 
 /**
  * Ranked full-text search, when the host has it. Compose
@@ -49,6 +49,9 @@ export type CoreOpts = {
   /** a column this host answers or takes differently than the vocabulary
    * declares — see {@link BundleOpts} */
   column?: BundleOpts['column']
+  /** where a component is documented at length, when this host has such a
+   * page — see {@link Guide} */
+  guide?: Guide
   /** the ranked search seam; without it there is no `search` tool */
   search?: Search
 }
@@ -200,15 +203,47 @@ export let core = (opts: CoreOpts): Tool[] => {
       readOnly: true,
       title: 'The schema',
       description:
-        `The schema of this graph: every component, its columns and their ` +
-        `types, as the JSON Schema documents the vocabulary was loaded from. ` +
-        `Read it before writing a component you have not written before.`,
-      output: outputSchema(vocabSchema),
-      run: (_args, ctx) => ({
-        comps: ctx.graph.vocab.comps,
-        kinds: ctx.graph.vocab.kinds,
-        docs: ctx.graph.vocab.docs,
-      }),
+        `The schema of this graph, in three sizes. Bare: the INDEX — every ` +
+        `component, what it means in a line, and its column names. With ` +
+        `component (one name or several): that component in full — each ` +
+        `column's type and meaning, what is server-owned or unique, what ` +
+        `points at it and what it points at, and a bundle that writes it. ` +
+        `With kind: what an entity of that kind is made of. Read the index ` +
+        `first and ask for the word you are about to write.`,
+      input: {
+        component: z.union([z.string(), z.array(z.string())]).optional()
+          .describe('a component to read in full, or several'),
+        kind: z.string().optional().describe(
+          'a display kind, answered as the words an entity of it wears',
+        ),
+      },
+      output: outputSchema(schemaSchema),
+      run: (args, ctx) => {
+        let v = ctx.graph.vocab
+        let named = [
+          ...(typeof args.component == 'string' ? [args.component] : []),
+          ...strings(args.component),
+        ]
+        let kind = str(args.kind)
+        for (let name of [...named, ...(kind ? [kind] : [])]) {
+          if (v.comp(name)) continue
+          throw new Refused(
+            `no component '${name}' — call graph_schema with no arguments ` +
+              `for the index of every word this graph knows`,
+          )
+        }
+        if (kind && !v.comp(kind)!.kind) {
+          throw new Refused(
+            `'${kind}' is a component, not a kind — the kinds are ` +
+              `${v.kinds.join(', ')}; ask for it as component instead`,
+          )
+        }
+        return kind
+          ? ofKind(v, kind, opts.guide)
+          : named.length
+          ? { comps: named.map((name) => detail(v, name, opts.guide)) }
+          : index(v)
+      },
     },
   ]
 

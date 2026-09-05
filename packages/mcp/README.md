@@ -53,7 +53,7 @@ your vocabulary declares.
 | `graph_apply`  | bundles in, the batch as applied out                           |
 | `graph_query`  | a query line in, bundles out                                   |
 | `graph_show`   | entities whole, with what points at them and the edges between |
-| `graph_schema` | every component, its columns and their types                   |
+| `graph_schema` | the index of your words, or one of them in full                |
 | `search`       | words, ranked — only when you pass a `search` seam             |
 
 ```jsonc
@@ -71,16 +71,25 @@ your vocabulary declares.
 { "ids": ["b1"] }
 // → { bundles: [the book, and each review of it],
 //     edges: [{ from: "r1", to: "b1", comp: "review", prop: "book" }] }
+
+// graph_schema — bare, one word, or a kind
+{}                      // the index: every component, its line, its columns
+{ "component": "book" } // that one whole: types, meaning, references, example
+{ "kind": "book" }      // what an entity of that kind is made of
 ```
 
 `graph_query` takes the query line [@yaks/query](https://jsr.io/@yaks/query)
 owns, and an optional `filters` list joined onto it with `&` — dot-param sugar,
 one thin layer over the same grammar, not a second one.
 
-An agent that has never seen your vocabulary calls `graph_schema` first: it
-hands back the JSON Schema documents the vocabulary was loaded from, which is
-every component and every column it may write. It rarely has to: `graph_apply`'s
-own input schema is that vocabulary, typed, so the write door teaches itself.
+An agent that has never seen your vocabulary calls `graph_schema` first. Bare,
+it answers the INDEX — every component, the line its schema says about it, and
+its column names — small enough to read whole. Named, it answers that component
+in full: each column's type and meaning, what is server-owned or unique or kept
+as bytes, what points at it and what it points at, a bundle that writes it, and
+the page your host documents it on (`guide`). It rarely has to ask at all:
+`graph_apply`'s own input schema is that vocabulary, typed, so the write door
+teaches itself.
 
 ## Output schemas, and what they cost
 

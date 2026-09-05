@@ -25,6 +25,7 @@ import {
 import { signed } from '@yaks/api'
 import type { BundleOpts, Depth } from './schema.ts'
 import { core, type Search } from './tools.ts'
+import type { Guide } from './words.ts'
 
 /** How an MCP server over a graph is built. */
 export type Options = {
@@ -46,6 +47,9 @@ export type Options = {
    * declares — a reference that reads back as a named object, a column two of
    * its stores spell differently (see {@link BundleOpts}) */
   column?: BundleOpts['column']
+  /** where a component is documented at length, when this host has such a
+   * page — `graph_schema` hands it over beside the columns */
+  guide?: Guide
   /** ranked full-text search; without it there is no `search` tool */
   search?: Search
   /** tools beside the generic tier and the graph's plugins' */
@@ -158,6 +162,7 @@ export let server = (opts: Options): McpServer => {
       vocab: graph.vocab,
       depth: opts.schema,
       column: opts.column,
+      guide: opts.guide,
       search: opts.search,
     }),
     ...toolsOf(graph.plugins),

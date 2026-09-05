@@ -56,6 +56,7 @@ import { answered, inputOf, reaching, searching } from './agent.ts'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
+import { pageFor } from './guide.ts'
 import { unauthorized, withAuth } from './identity.ts'
 import { callDeclared, listDeclared, listViews, readView } from './declared.ts'
 import { answer, asset, type Doc, DOCS } from './preauth.ts'
@@ -129,8 +130,11 @@ guessing; graph_apply, graph_query and search are the same store from here,
 for seeding and fixing.
 
 Never guess at a component's columns: graph_apply's own input schema is the
-vocabulary you can reach — every component, every column, every type — and
-graph_schema answers the same thing on demand, in full.
+vocabulary you can reach — every component, every column, every type. And
+graph_schema says what the words MEAN: bare, the index of every one of them;
+graph_schema({component: 'mail'}) for that word whole — each column's type and
+meaning, what points at it, a bundle that writes it, the guide page for it;
+graph_schema({kind: 'mail'}) for what an entity of that kind is made of.
 
 An eid is the same thing in every app. Two apps can write about one entity —
 a reading list app saves the book, a lending app saves the loan — and each
@@ -406,6 +410,9 @@ let door = async (ctx: Ctx) => {
     // union of every store in reach, so those 33 KB are the least exact part
     // of it, paid on every connection.
     schema: 'names',
+    // And where a word is written about at length, so graph_schema hands over
+    // the page beside the columns (guide.ts `pageFor`).
+    guide: pageFor,
     authenticate: () => ({ eid: ctx.person }),
     name: 'yaks.app',
     version: VERSION,

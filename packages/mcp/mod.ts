@@ -9,8 +9,9 @@
  * - **`graph_query`** — a query line in, bundles out;
  * - **`graph_show`** — entities whole, with what points at them and the edges
  *   between them;
- * - **`graph_schema`** — every component, its columns and their types, so an
- *   agent can learn the shape before it writes;
+ * - **`graph_schema`** — the index of every component, or one of them in full:
+ *   each column's type and meaning, what points at it, and a bundle that
+ *   writes it;
  * - **`search`** — words, ranked, when a {@link Search} is passed.
  *
  * ```ts
@@ -63,6 +64,13 @@ export {
   edgeSchema,
   outputSchema,
   showSchema,
-  vocabSchema,
 } from './schema.ts'
+export {
+  detail as compDetail,
+  type Guide,
+  index as compIndex,
+  ofKind,
+  schemaSchema,
+  summary as compSummary,
+} from './words.ts'
 export type { Handler } from '@yaks/api'

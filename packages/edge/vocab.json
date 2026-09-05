@@ -8,6 +8,7 @@
     "edge": {
       "type": "object",
       "kind": true,
+      "description": "a link between two entities — the relation it means is a tag component riding beside it",
       "properties": {
         "from": {
           "type": "string",

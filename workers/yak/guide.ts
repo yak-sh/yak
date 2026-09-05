@@ -136,3 +136,25 @@ export let PAGES: Page[] = [
       'what is wrong.',
   },
 ]
+
+// Which page covers a WORD, for the schema door (@yaks/mcp `graph_schema`,
+// T-34156): an agent reading what `mail` is should be told where the whole of
+// sending a letter is written down. Only the words a page actually goes deep
+// on are listed — the rest are answered by the schema alone, which is the
+// truthful answer when no page says more than the vocabulary does.
+let COVERS: Record<string, string[]> = {
+  mail: ['mail', 'email', 'deliver', 'delivered', 'bounced'],
+  entities: ['edge'],
+  errors: ['exception', 'error', 'archived'],
+  files: ['blob', 'image', 'attachment'],
+  components: ['doc', 'task', 'project', 'comment', 'favorite', 'web'],
+}
+
+let PAGE_OF: Record<string, string> = Object.fromEntries(
+  Object.entries(COVERS).flatMap(([slug, comps]) =>
+    comps.map((comp) => [comp, uriOf(slug)])
+  ),
+)
+
+/** Where a component is written about at length, when a page covers it. */
+export let pageFor = (comp: string): string | undefined => PAGE_OF[comp]

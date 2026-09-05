@@ -151,12 +151,23 @@ Deno.test('graph_show answers the entity, what points at it, and the edges', asy
   assertEquals(bundles(alone.bundles).map((b) => b.entity.eid), ['b1'])
 })
 
-Deno.test('graph_schema hands over the loaded documents', async () => {
+// The three sizes are words_test.ts's; this is only that the tool is listed
+// and answers the vocabulary it was built over.
+Deno.test('graph_schema hands over the words of this graph', async () => {
   let client = await connect()
-  let out = result(await called(client, 'graph_schema'))
-  assert(out && typeof out == 'object' && 'comps' in out && 'docs' in out)
-  assertEquals(out.comps, ['book', 'created', 'doc', 'review', 'updated'])
-  assert(Array.isArray(out.docs) && out.docs.length == 1)
+  let out = result(await called(client, 'graph_schema')) as {
+    comps: { name: string }[]
+    kinds: string[]
+  }
+  assertEquals(out.comps.map((c) => c.name), [
+    'book',
+    'created',
+    'doc',
+    'entity',
+    'review',
+    'updated',
+  ])
+  assertEquals(out.kinds, ['book', 'doc', 'review'])
 })
 
 Deno.test('a refusal is the tool error the agent reads, not a broken call', async () => {

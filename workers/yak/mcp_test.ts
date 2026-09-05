@@ -1636,6 +1636,91 @@ slow("the door lists an app's tools, and says when they moved", async () => {
   }
 })
 
+// And the schema DOOR (T-34156). Jeff: "can we otherwise add some vocab tools?
+// for getting specific parts and also the full thing probably? should come
+// with docs, i expect, to explain the meaning". Three sizes over the caller's
+// own words: the index, one component whole, and a kind.
+slow('graph_schema answers the index, a word whole, and a kind', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    await agent.tool('app_new', { slug: 'cookbook', title: 'Cookbook' })
+    await agent.tool('app_files', {
+      app: 'cookbook',
+      op: 'write',
+      path: 'vocab.json',
+      content: JSON.stringify({ recipe: { serves: 'number' } }),
+    })
+    await agent.tool('app_deploy', { app: 'cookbook' })
+    type Word = {
+      name: string
+      description?: string
+      kind: boolean
+      columns: (string | { prop: string; type: string; description?: string })[]
+      worn_with?: string[]
+      references?: { out: unknown[]; in: { comp: string; prop: string }[] }
+      example?: Record<string, Record<string, unknown>>
+      guide?: string
+    }
+    let said = async (args: Record<string, unknown>) =>
+      JSON.parse(await agent.tool('graph_schema', args)) as {
+        comps: Word[]
+        kinds?: string[]
+        kind?: string
+      }
+
+    // The index: every word the caller can reach, its line, its columns — the
+    // app's own word among the platform's.
+    let index = await said({})
+    let names = index.comps.map((c) => c.name)
+    assert(names.includes('recipe'), 'the app own word is in the index')
+    assert(names.includes('mail'))
+    assertEquals(
+      index.comps.find((c) => c.name == 'doc')!.columns,
+      ['title', 'body'],
+    )
+    assert(index.kinds!.includes('recipe'))
+
+    // One word whole: the meaning its vocab.json carries, every column typed
+    // and described, what points at it, a bundle that writes it, and the page
+    // that covers it.
+    let [mail] = (await said({ component: 'mail' })).comps
+    assertStringIncludes(mail.description!, 'envelope')
+    let verified = mail.columns.find((c) =>
+      typeof c != 'string' && c.prop == 'verified'
+    ) as { type: string; description: string }
+    assertEquals(verified.type, 'bool')
+    assertStringIncludes(verified.description, 'DKIM')
+    assertEquals(mail.guide, 'https://yaks.app/guide/mail.md')
+    assertEquals(mail.worn_with, ['doc'])
+    assertEquals(Object.keys(mail.example!.mail).includes('from'), true)
+    // What points AT a letter, from anywhere in reach: its own `reply_to`,
+    // which is how a thread hangs together.
+    assertEquals(
+      mail.references!.in.some((r) => r.comp == 'mail' && r.prop == 'reply_to'),
+      true,
+      JSON.stringify(mail.references),
+    )
+
+    // A kind is what an entity of it is made of: the word itself, then a line
+    // for each word it is worn with.
+    let letter = await said({ kind: 'mail' })
+    assertEquals(letter.kind, 'mail')
+    assertEquals(letter.comps.map((c) => c.name), ['mail', 'doc'])
+
+    // And a word nobody declared is a refusal that says where to look.
+    let missing = (await assertRejects(
+      () => agent.tool('graph_schema', { component: 'recipy' }),
+      Error,
+    )).message
+    assertStringIncludes(missing, "no component 'recipy'")
+    assertStringIncludes(missing, 'index')
+  } finally {
+    await k.stop()
+  }
+})
+
 // The WRITE door's schema is the caller's vocabulary (T-34153). Jeff, on an
 // agent trying to send a letter with graph_apply: "how are agents supposed to
 // learn our comp schema? claude was trying to send mail ... but is just

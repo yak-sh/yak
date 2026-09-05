@@ -6,6 +6,7 @@
   "$defs": {
     "batch": {
       "type": "object",
+      "description": "one committed write, in the total order everything else is read against",
       "properties": {
         "seq": {
           "type": "number",
@@ -36,6 +37,7 @@
     },
     "delta": {
       "type": "object",
+      "description": "one column that moved inside a batch — the before and the after",
       "properties": {
         "seq": {
           "type": "number",

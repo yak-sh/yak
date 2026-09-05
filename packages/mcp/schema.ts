@@ -200,14 +200,6 @@ export let showSchema = (bundle: z.ZodTypeAny): z.ZodTypeAny =>
     edges: z.array(edgeSchema),
   })
 
-/** `vocab`'s answer: the loaded vocabulary as the JSON Schema documents it was
- * loaded from, plus the two lists an agent reads first. */
-export let vocabSchema: z.ZodTypeAny = z.object({
-  comps: z.array(z.string()),
-  kinds: z.array(z.string()),
-  docs: z.array(z.record(z.unknown())),
-})
-
 /**
  * A tool's declared output: its structured result under `result`. MCP's
  * `structuredContent` must be an object, so an answer that is a list rides
