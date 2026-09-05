@@ -33,6 +33,7 @@
 // answered at all. A deploy in v1 is a version bump, since an
 // app's files serve live from its blob store — and the version it bumps to is
 // kept, files and all, so app_rollback can put it back.
+import type { Security } from '@yaks/mcp'
 import type { Blobs } from '../../src/blobs.ts'
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { parseTools, TOOLS_EXAMPLE, viewsOf } from '../../src/store/tools.ts'
@@ -103,7 +104,7 @@ import {
 import type { Env } from './env.ts'
 import { GRAPH, mail, REPLY_TO } from './mail.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
-import { asset, NO_ARGS, PUBLIC } from './preauth.ts'
+import { asset, NO_ARGS, NOAUTH, PUBLIC } from './preauth.ts'
 import {
   type Box,
   boxOf,
@@ -215,6 +216,10 @@ export type Tool = {
   // always; add 'app' for a tool a view's own button calls back through the
   // host, which the host refuses for any tool that does not say so.
   visibility?: ('model' | 'app')[]
+  // What it declares about signing in (`_meta.securitySchemes`), where that is
+  // not what the door declares for everything it lists: a tool anybody may
+  // call says `noauth` (preauth.ts NOAUTH, mcp.ts SIGNIN).
+  security?: Security[]
   input: Shape
   run: (ctx: Ctx, args: Args) => Promise<Out>
 }
@@ -3347,6 +3352,9 @@ export let TOOLS: Tool[] = [
     // It says one fixed paragraph and looks nothing up — the readable tool
     // there is, and the one a host should never stop to ask about.
     readOnly: true,
+    // And they say so in the signed-in list too, since the same tool cannot
+    // need signing in on one list and not the other.
+    security: NOAUTH,
     // Signed in, `about` also says what this door is listing right now and the
     // version naming that list (T-34277) — so an agent whose cached list is
     // old has one call that settles what it has, without reconnecting. Before

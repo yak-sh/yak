@@ -358,3 +358,56 @@ Deno.test('a host with more than tools registers them on the same server', async
   assert((await listed(client)).includes('graph_query'))
   await client.close()
 })
+
+Deno.test('every tool says how a client signs in for it', async () => {
+  // Nothing said, nothing declared: a server whose tools need no sign-in
+  // leaves the field off rather than guessing at one.
+  let plain = await connect()
+  let quiet = (await plain.listTools()).tools as { _meta?: unknown }[]
+  assertEquals(quiet.map((t) => t._meta), quiet.map(() => undefined))
+  await plain.close()
+
+  // A door that needs signing in says so on EVERY tool it lists — the generic
+  // tier included, which no host writes out — and a tool that declares its own
+  // schemes keeps them, which is how one mixed-auth surface offers an open
+  // tool beside closed ones.
+  let graph = shopGraph()
+  graph.use({
+    name: 'shelf',
+    tools: [{
+      name: 'about',
+      description: 'what this shop is',
+      input: {},
+      meta: { securitySchemes: [{ type: 'noauth' }] },
+      run: () => new Say('a bookshop'),
+    }, {
+      name: 'shelve',
+      description: 'put a book on the shelf',
+      input: {},
+      meta: { ui: { resourceUri: 'ui://shelf' } },
+      run: () => new Say('shelved'),
+    }],
+  })
+  let client = await connect({
+    graph,
+    security: [{ type: 'oauth2', scopes: ['shop'] }],
+  })
+  let said = new Map(
+    ((await client.listTools()).tools as {
+      name: string
+      _meta?: { securitySchemes?: unknown; ui?: unknown }
+    }[]).map((t) => [t.name, t._meta]),
+  )
+  assertEquals(said.get('graph_query')?.securitySchemes, [{
+    type: 'oauth2',
+    scopes: ['shop'],
+  }])
+  assertEquals(said.get('about')?.securitySchemes, [{ type: 'noauth' }])
+  // The schemes JOIN what the tool already said; they never replace it.
+  assertEquals(said.get('shelve')?.ui, { resourceUri: 'ui://shelf' })
+  assertEquals(said.get('shelve')?.securitySchemes, [{
+    type: 'oauth2',
+    scopes: ['shop'],
+  }])
+  await client.close()
+})

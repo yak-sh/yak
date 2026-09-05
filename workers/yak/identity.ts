@@ -141,25 +141,30 @@ export let withAuth = async (
 // with: where to find the metadata that names this platform's authorization
 // server. It is how an MCP client discovers the door at all, so it lives
 // here beside the door rather than in each resource.
-// A refusal is read by a person's agent, so it says a SENTENCE beside its
-// code and names where signing in happens — the treatment every other door
-// already had, and the one this one missed (C-32607 item 1, apps.ts SAYS).
-export let unauthorized = (req: Request) => {
-  let url = new URL(req.url)
-  return Response.json({
-    error: {
-      code: 'unauthorized',
-      message: `sign in at https://${PLATFORM} to reach your apps from here`,
-      signIn: `https://${PLATFORM}/login`,
-    },
+//
+// It is its own export because the challenge is said TWICE for one refusal:
+// as this header, which is what an MCP client follows into the OAuth flow, and
+// inside the refused tool call's `_meta['mcp/www_authenticate']`, which is what
+// ChatGPT reads to draw its sign-in button (mcp.ts `refused`). One builder, so
+// the two halves cannot come to disagree.
+export let challenge = (url: URL) =>
+  'Bearer realm="OAuth", resource_metadata=' +
+  `"${url.origin}/.well-known/oauth-protected-resource${url.pathname}"`
+
+// Where signing in happens, and the sentence a refusal says about it. A
+// refusal is read by a person's agent, so it says a SENTENCE beside its code
+// and names where signing in happens — the treatment every other door already
+// had, and the one this one missed (C-32607 item 1, apps.ts SAYS).
+export let SIGN_IN = `https://${PLATFORM}/login`
+export let SAYS = `sign in at ${SIGN_IN} to reach your apps from here`
+
+export let unauthorized = (req: Request) =>
+  Response.json({
+    error: { code: 'unauthorized', message: SAYS, signIn: SIGN_IN },
   }, {
     status: 401,
-    headers: {
-      'www-authenticate': 'Bearer realm="OAuth", resource_metadata=' +
-        `"${url.origin}/.well-known/oauth-protected-resource${url.pathname}"`,
-    },
+    headers: { 'www-authenticate': challenge(new URL(req.url)) },
   })
-}
 
 let redirect = (to: string, set?: string, status = 302) =>
   new Response(null, {

@@ -42,7 +42,9 @@
 // and this door is at the apex reading a request straight off the internet,
 // where the header is only ever a client's claim about itself. A 401 carries
 // identity's `WWW-Authenticate` challenge, the line an MCP client follows into
-// the OAuth flow.
+// the OAuth flow, and a caller that named a JSON-RPC id gets that same
+// challenge in the refusal's own `_meta['mcp/www_authenticate']` too
+// (`refused` below) — one door, said the two ways the two directories read it.
 //
 // Nobody at all is answered too, by preauth.ts (T-33030): what this platform
 // is, and the guide, which the web already serves to anybody who asks for it.
@@ -52,14 +54,14 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { SetLevelRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
-import { mcp, roster, rosterVersion } from '@yaks/mcp'
+import { mcp, roster, rosterVersion, type Security } from '@yaks/mcp'
 import { VERSION } from '../../src/version.ts'
 import { answered, inputOf, reaching, searching } from './agent.ts'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { INSTRUCTIONS, pageFor } from './guide.ts'
-import { asking, unauthorized } from './identity.ts'
+import { asking, challenge, SAYS, unauthorized } from './identity.ts'
 import { callDeclared, listDeclared, listViews, readView } from './declared.ts'
 import { answer, asset, type Doc, DOCS } from './preauth.ts'
 import { PROMPTS } from './prompts.ts'
@@ -120,6 +122,37 @@ let json = (status: number, body: unknown) => Response.json(body, { status })
 
 let result = (id: unknown, result: unknown) =>
   json(200, { jsonrpc: '2.0', id, result })
+
+// What everything but the public tools declares about signing in: an access
+// token from our own authorization server, for the one scope its metadata
+// names (identity.ts `scopesSupported`). @yaks/mcp puts it on every tool it
+// lists that does not say its own — which `about` does, `noauth` (preauth.ts).
+let SIGNIN: Security[] = [{ type: 'oauth2', scopes: ['graph'] }]
+
+// A refusal, said to a caller that named a JSON-RPC id. The status and the
+// `WWW-Authenticate` header are what they always were — the half every MCP
+// client follows into the OAuth flow — and the body carries the SAME challenge
+// a second way, in `_meta['mcp/www_authenticate']` with the `error` and
+// `error_description` that half wants, because that is the half ChatGPT reads
+// to draw its sign-in button. Without it the tool it refused has no link to
+// offer and the person is simply stuck
+// (developers.openai.com/plugins/build/auth).
+let refused = (req: Request, id: unknown) => {
+  let said = challenge(new URL(req.url))
+  return Response.json({
+    jsonrpc: '2.0',
+    id,
+    result: {
+      content: [{ type: 'text', text: SAYS }],
+      _meta: {
+        'mcp/www_authenticate': [
+          `${said}, error="invalid_token", error_description="${SAYS}"`,
+        ],
+      },
+      isError: true,
+    },
+  }, { status: 401, headers: { 'www-authenticate': said } })
+}
 
 // The tools an app of the person's OWN declares (declared.ts, T-32686), for
 // every app in every space they belong to. They are not a plugin — nobody
@@ -293,6 +326,7 @@ let door = async (ctx: Ctx, session: string) => {
     version: VERSION,
     instructions: INSTRUCTIONS,
     search: searching(ctx, reach),
+    security: SIGNIN,
     tools: await declared(ctx),
     extend: extend(ctx),
   }
@@ -398,7 +432,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     let open = await answer(String(rpc.method), rpc.params ?? {}, {
       ASSETS: env.ASSETS,
     })
-    return open ? result(rpc.id, open) : unauthorized(req)
+    return open ? result(rpc.id, open) : refused(req, rpc.id)
   }
   let ctx: Ctx = {
     env,

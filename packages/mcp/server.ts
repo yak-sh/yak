@@ -27,6 +27,17 @@ import type { BundleOpts, Depth } from './schema.ts'
 import { core, type Search } from './tools.ts'
 import type { Guide } from './words.ts'
 
+/**
+ * How a client signs in to call a tool: `noauth` is callable by anybody,
+ * `oauth2` needs an access token, and both together say anonymous calls work
+ * and linking unlocks more. It rides on the tool as `_meta.securitySchemes`,
+ * which is how a host tells a mixed-auth server's open tools from its closed
+ * ones without calling one to find out.
+ */
+export type Security =
+  | { type: 'noauth' }
+  | { type: 'oauth2'; scopes?: string[] }
+
 /** How an MCP server over a graph is built. */
 export type Options = {
   /** the graph its tools read and write */
@@ -52,6 +63,10 @@ export type Options = {
   guide?: Guide
   /** ranked full-text search; without it there is no `search` tool */
   search?: Search
+  /** what every tool this server lists declares about signing in
+   * ({@link Security}), said per TOOL because that is where a host reads it —
+   * a tool carrying `securitySchemes` in its own `meta` keeps that instead */
+  security?: Security[]
   /** tools beside the generic tier and the graph's plugins' */
   tools?: Tool[]
   /** what a result should ALSO say, given the names this server is listing
@@ -135,6 +150,19 @@ let noting = (out: CallToolResult, line: string | undefined): CallToolResult =>
   line
     ? { ...out, content: [...out.content, { type: 'text', text: line }] }
     : out
+
+// What the client is told about a tool beside its schemas: whatever the tool
+// says itself, plus this server's own security schemes where the tool declares
+// none. Per tool even when every tool is the same, because a host reads it
+// there — a mixed-auth server's open tools are told apart from its closed ones
+// by this field alone.
+let metaOf = (
+  tool: Tool,
+  security: Security[] | undefined,
+): Record<string, unknown> | undefined =>
+  security && !tool.meta?.securitySchemes
+    ? { ...tool.meta, securitySchemes: security }
+    : tool.meta
 
 let shapeOf = (tool: Tool): Record<string, z.ZodTypeAny> =>
   Object.fromEntries(
@@ -220,12 +248,13 @@ export let server = (opts: Options): McpServer => {
 
   for (let t of tools) {
     let output = zodOf(t.name, 'output', t.output)
+    let meta = metaOf(t, opts.security)
     let config = {
       ...(t.title ? { title: t.title } : {}),
       description: t.description,
       inputSchema: shapeOf(t),
       annotations: annotated(t),
-      ...(t.meta ? { _meta: t.meta } : {}),
+      ...(meta ? { _meta: meta } : {}),
     }
     let run = async (args: Record<string, unknown>) => {
       let out: CallToolResult

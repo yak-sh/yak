@@ -34,6 +34,7 @@
 // "upgrade" inside a tool reply (usage.ts) is what would quietly contradict
 // that declaration; here, before anyone has even signed in, is the last place
 // it would belong.
+import type { Security } from '@yaks/mcp'
 import { VERSION } from '../../src/version.ts'
 import type { Env } from './env.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
@@ -107,6 +108,15 @@ is the map, and a page per subject sits beside it.`,
 }
 
 export let PUBLIC: Says[] = [ABOUT]
+
+// What these tools declare about signing in, per tool: nothing is needed for
+// any of them. It is said out loud rather than left off, because a host reads
+// a MIXED-auth server one tool at a time — `securitySchemes` is the only place
+// this door says which of its tools a stranger may call, and a tool that says
+// nothing is a tool ChatGPT will not offer a sign-in button for
+// (developers.openai.com/plugins/reference). The tools that DO need signing in
+// say `oauth2` the same way (mcp.ts `SIGNIN`).
+export let NOAUTH: Security[] = [{ type: 'noauth' }]
 
 // What a resource of this door's own is: a listing entry, plus the address
 // its bytes come off the assets at (`page`), which for everything here is the
@@ -222,6 +232,7 @@ export let answer = async (
           idempotentHint: false,
           openWorldHint: false,
         },
+        _meta: { securitySchemes: NOAUTH },
       })),
     }
   }

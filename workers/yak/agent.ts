@@ -127,6 +127,20 @@ export let answered = async (ctx: Ctx, out: Out): Promise<Say> => {
 export let running = (ctx: Ctx, t: Sugar) => (args: Record<string, unknown>) =>
   t.run(ctx, args).then((out) => answered(ctx, out))
 
+// What the transport says about a tool beside its schemas: the page a host
+// renders its answer in (MCP Apps), and what it declares about signing in
+// where that is not the door's own (preauth.ts NOAUTH — every other tool takes
+// the door's, stamped by @yaks/mcp from `Options.security`).
+let metaOf = (t: Sugar): Pick<Tool, 'meta'> => {
+  let meta = {
+    ...(t.view
+      ? { ui: { resourceUri: t.view, visibility: t.visibility ?? ['model'] } }
+      : {}),
+    ...(t.security ? { securitySchemes: t.security } : {}),
+  }
+  return Object.keys(meta).length ? { meta } : {}
+}
+
 /** One of the platform's own tools, as a graph `Tool`. The answer is the same
  * sentence it always was, and the view's data beside it where it draws one. */
 export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
@@ -147,13 +161,7 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
   ...(t.output ? { output: outputOf(t.output) } : {}),
   // The page a host renders this answer in (MCP Apps): the tool names it, the
   // transport hands it over verbatim, and a host without views ignores it.
-  ...(t.view
-    ? {
-      meta: {
-        ui: { resourceUri: t.view, visibility: t.visibility ?? ['model'] },
-      },
-    }
-    : {}),
+  ...metaOf(t),
   run: (args) => running(ctx, t)(args),
 })
 

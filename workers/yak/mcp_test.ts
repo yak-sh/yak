@@ -63,7 +63,8 @@ slow(
       let agent = connector(k, await signedIn(k, jeff))
       // Nobody is answered anything of the person's — and the refusal says
       // so in a sentence, with where signing in happens, like every other
-      // door (C-32607 item 1). What nobody IS answered is the pre-auth
+      // door (C-32607 item 1), and carries the challenge a host reads to
+      // offer signing in (T-34349). What nobody IS answered is the pre-auth
       // surface, held in its own test below (T-33030).
       let shut = await k.at('yaks.app', '/mcp', {
         method: 'POST',
@@ -72,10 +73,16 @@ slow(
           '"params":{"name":"app_list"}}',
       })
       assertEquals(shut.status, 401)
-      let refusal = (await shut.json()).error
-      assertEquals(refusal.code, 'unauthorized')
-      assertStringIncludes(refusal.message, 'sign in at https://yaks.app')
-      assertEquals(refusal.signIn, 'https://yaks.app/login')
+      let refusal = (await shut.json()).result
+      assertEquals(refusal.isError, true)
+      assertStringIncludes(
+        refusal.content[0].text,
+        'sign in at https://yaks.app',
+      )
+      assertStringIncludes(
+        refusal._meta['mcp/www_authenticate'][0],
+        'resource_metadata=',
+      )
       await assertRejects(() => connector(k).call('prompts/list'), Error, '401')
       let init = await agent.call('initialize', {
         protocolVersion: '2025-03-26',
@@ -1337,10 +1344,18 @@ slow('the door before anyone signs in', async () => {
     assertEquals(await anon.call('ping'), {})
 
     // One tool, and it is the one that reads nothing.
+    let schemes = async (of: typeof anon) =>
+      Object.fromEntries(
+        ((await of.call('tools/list')).tools as {
+          name: string
+          _meta?: { securitySchemes?: unknown }
+        }[]).map((t) => [t.name, t._meta?.securitySchemes]),
+      )
     let listed = (await anon.call('tools/list')).tools as {
       name: string
       title: string
       annotations: Record<string, boolean>
+      _meta?: { securitySchemes?: unknown }
     }[]
     assertEquals(listed.map((t) => t.name), ['about'])
     // It wears the same title and hints signed in and out (tools.ts lifts it
@@ -1353,6 +1368,10 @@ slow('the door before anyone signs in', async () => {
       idempotentHint: false,
       openWorldHint: false,
     })
+    // And it says out loud that it needs nobody to sign in (T-34349): a host
+    // reads a mixed-auth server one tool at a time, so an open tool that
+    // declares no scheme is a tool it will not offer.
+    assertEquals(listed[0]._meta?.securitySchemes, [{ type: 'noauth' }])
     let said = await anon.tool('about')
     for (
       let word of [
@@ -1455,8 +1474,26 @@ slow('the door before anyone signs in', async () => {
       )
       challenge = challenge || said
       assertEquals(said, challenge, method)
-      assertEquals(body.error.code, 'unauthorized')
-      assertEquals(body.error.signIn, 'https://yaks.app/login')
+      // And the same challenge said a second way, inside the refusal itself:
+      // ChatGPT draws its sign-in button off `_meta['mcp/www_authenticate']`
+      // and not off the header, so the two halves ride together or the person
+      // is stuck (T-34349). It carries the `error` and `error_description`
+      // that half wants, and the sentence says where signing in happens.
+      // One builder makes both (identity.ts `challenge`); they are compared by
+      // shape and not spelling because wrangler's dev proxy puts its public
+      // port into a header and never into a body, so only here do the two
+      // origins read differently.
+      assertEquals(body.result.isError, true)
+      assertStringIncludes(
+        body.result.content[0].text,
+        'https://yaks.app/login',
+      )
+      let carried = body.result._meta['mcp/www_authenticate'] as string[]
+      assertEquals(carried.length, 1)
+      assertMatch(
+        carried[0],
+        /^Bearer realm="OAuth", resource_metadata="http.*\/\.well-known\/oauth-protected-resource\/mcp", error="invalid_token", error_description="sign in at https:\/\/yaks\.app\/login[^"]*"$/,
+      )
     }
     // A tool of the platform's, one of the app's own, and one nobody wrote:
     // one answer for all three, so nothing here says which apps exist.
@@ -1536,9 +1573,21 @@ slow('the door before anyone signs in', async () => {
     // Signing in adds; it never swaps one surface for another. Every public
     // tool is in the full list, saying the same words, and every public
     // resource is still listed.
-    let full = ((await agent.call('tools/list')).tools as { name: string }[])
-      .map((t) => t.name)
+    let fullSchemes = await schemes(agent)
+    let full = Object.keys(fullSchemes)
     let open = listed.map((t) => t.name)
+    // Every tool says how it is reached, and `about` says the same thing on
+    // both lists — one tool cannot need signing in on one and not the other.
+    // The scope is the one our resource metadata names (identity.ts).
+    assertEquals(fullSchemes.about, [{ type: 'noauth' }])
+    for (let name of full.filter((n) => n != 'about')) {
+      assertEquals(fullSchemes[name], [{
+        type: 'oauth2',
+        scopes: ['graph'],
+      }], name)
+    }
+    // An app's own tool is listed by the same rule, view and all.
+    assert(full.includes('runs__leaderboard'))
     assert(open.every((n) => full.includes(n)), 'the public list is a subset')
     assert(full.length > open.length, 'signing in has to be worth something')
     // The same words, and one thing more: the list this door is serving them

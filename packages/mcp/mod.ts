@@ -69,6 +69,7 @@ export {
   type Options,
   roster,
   Say,
+  type Security,
   server,
 } from './server.ts'
 export { rosterLine, rosterVersion } from './roster.ts'
