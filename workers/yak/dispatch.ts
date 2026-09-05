@@ -35,7 +35,7 @@ import { storeName } from './directory.ts'
 import type { Env, Fetcher } from './env.ts'
 import { oops } from './pages.ts'
 import type { Who } from './session.ts'
-import { storeOf } from './store.ts'
+import { storeOf } from './door.ts'
 import { appBreaks, failed, noted, refusal, serving } from './unseen.ts'
 
 // The dispatch namespace binding, the slice we ask of it (env.ts): a name in,

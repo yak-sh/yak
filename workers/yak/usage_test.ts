@@ -13,7 +13,8 @@ import {
   assertThrows,
 } from '@std/assert'
 import type { Meter, Space, Tier } from './directory.ts'
-import { atCeiling, FREE, level, read, size, standing } from './usage.ts'
+import { read } from './usage.ts'
+import { atCeiling, FREE, level, size, standing } from './meter.ts'
 
 let ANSWER = {
   data: {
@@ -113,6 +114,7 @@ let space = (meter: Partial<Meter> = {}, tier: Tier | null = null): Space => ({
     rows_read: 0,
     rows_written: 0,
     bytes: 0,
+    emails: 0,
     at: NOW.toISOString(),
     ...meter,
   },
@@ -126,7 +128,12 @@ Deno.test('a space is near a ceiling at 80% and over it at 100%', () => {
   // Any of the four is enough, and the apps are counted, not metered.
   assertEquals(level(space(), 4, NOW), 'near')
   assertEquals(level(space(), 5, NOW), 'over')
+  assertEquals(level(space({ emails: 81 }), 1, NOW), 'near')
   assertEquals(level(space({ bytes: FREE.bytes }), 1, NOW), 'over')
+  // The letters are the one allowance a paid space still has, so a plus space
+  // is not simply beyond every line (T-33688).
+  assertEquals(level(space({}, 'plus'), 9, NOW), 'ok')
+  assertEquals(level(space({ emails: 1_000 }, 'plus'), 9, NOW), 'over')
   // Last month's reading is not this month's usage.
   assertEquals(
     level(space({ month: '2026-08', requests: 60_000 }), 1, NOW),
@@ -143,6 +150,7 @@ Deno.test('the line says every number against its ceiling', () => {
   assertStringIncludes(said, '3 of 5 apps')
   assertStringIncludes(said, '41,000 of 50,000 requests')
   assertStringIncludes(said, '900 MB of 1 GB')
+  assertStringIncludes(said, '0 of 100 emails')
   // The hour those figures were read: the meter is an hourly rollup, and a
   // bare number reads as live (C-32869 item 6).
   assertStringIncludes(said, '(as of 12:00 UTC)')
@@ -150,9 +158,12 @@ Deno.test('the line says every number against its ceiling', () => {
 })
 
 Deno.test('before the first sweep the line says so, not zero', () => {
-  let said = standing(space({ at: '' }), 1, NOW)
+  let said = standing(space({ at: '', emails: 3 }), 1, NOW)
   assertStringIncludes(said, '1 of 5 apps')
   assertStringIncludes(said, 'have not been read yet')
+  // The letters are counted as they happen rather than swept, so they are a
+  // number even here (T-33688).
+  assertStringIncludes(said, '3 of 100 emails')
   assert(!said.includes('of 50,000 requests'), 'it claimed a request count')
   assertStringIncludes(said, 'Requests are never refused')
 })
@@ -161,13 +172,21 @@ Deno.test('before the first sweep the line says so, not zero', () => {
 // that starts a purchase — the agent surface's policy line (C-33033 on
 // D-32751), which is why the assertion is on both halves.
 Deno.test('a refusal names the ceiling and where the plans are written', () => {
-  for (let what of ['apps', 'bytes'] as const) {
+  for (let what of ['apps', 'bytes', 'emails'] as const) {
     let said = atCeiling(space(), what)
     assertStringIncludes(said, 'free tier')
     assertStringIncludes(said, 'https://yaks.app/pricing')
     assert(!/checkout|billing|subscribe|upgrade/i.test(said), said)
   }
   assertStringIncludes(atCeiling(space(), 'apps'), '5 apps')
+  // The letters are the one refusal that is not the free tier's alone, and
+  // the one that only stops the SEND (T-33688).
+  assertStringIncludes(atCeiling(space(), 'emails'), '100 emails a month')
+  assertStringIncludes(atCeiling(space(), 'emails'), 'still arrive')
+  assertStringIncludes(
+    atCeiling(space({}, 'plus'), 'emails'),
+    '1,000 emails a month',
+  )
   assert(
     !/checkout|billing/i.test(standing(space(), 3)),
     'the standing line names no purchase either',

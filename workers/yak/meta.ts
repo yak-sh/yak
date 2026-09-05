@@ -18,8 +18,7 @@
 // ordinary door. It is never forwarded from anywhere a client can reach
 // (directory.ts VOUCH), so it cannot arrive from outside.
 import type { Bundle } from '@yaks/graph'
-import type { Env } from './env.ts'
-import { type Door, storeOf } from './store.ts'
+import { type Door, type Namespace, storeOf } from './door.ts'
 import { PLATFORM_STORE } from './vocab.ts'
 
 /** The meta store, in the graph's own wire. */
@@ -72,8 +71,10 @@ export let minted = (applied: Bundle[]): Record<string, string> =>
 // memoized per isolate, and a test that builds its own gets its own.
 let doors = new WeakMap<object, Meta>()
 
-/** The directory's store. */
-export let meta = (env: Env): Meta => {
+/** The directory's store. The env is the one binding it reads, so a Store
+ * object — which holds the namespace and no service binding — reaches the
+ * directory the way the kernel does (meter.ts `metering`). */
+export let meta = (env: { STORE: Namespace }): Meta => {
   let ns = env.STORE as unknown as object
   let held = doors.get(ns)
   if (!held) doors.set(ns, held = metaOf(storeOf(env.STORE, PLATFORM_STORE)))

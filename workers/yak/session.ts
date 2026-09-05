@@ -3,7 +3,7 @@
 // space the request is for. The kernel is the one reader of the cookie —
 // what serves an app gets the VOUCH instead, and never the cookie — and the
 // only writer of it, so a client cannot send one: every request to a store is
-// built from scratch by `storeOf` (store.ts), which strips the set before it
+// built from scratch by `storeOf` (door.ts), which strips the set before it
 // stamps its own.
 //
 // THE RULE IS NOT KEPT HERE. `member`, `grant` and `access` are @yaks/member's

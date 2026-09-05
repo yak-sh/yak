@@ -27,7 +27,7 @@ import {
 import { type Ctx, type Out, VIEW_MIME } from './tools.ts'
 import type { Who } from './session.ts'
 import { r2Blobs } from '../../src/blobs_r2.ts'
-import { storeOf } from './store.ts'
+import { storeOf } from './door.ts'
 import { told } from './stream.ts'
 
 // The two halves of a namespaced name. An app slug is `[a-z0-9-]` and a tool

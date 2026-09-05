@@ -38,7 +38,7 @@ import {
 } from './directory.ts'
 import type { Env } from './env.ts'
 import { vouched, type Who, writes } from './session.ts'
-import { storeOf } from './store.ts'
+import { storeOf } from './door.ts'
 import { appDoc, appKeywords, coreDocs } from './vocab.ts'
 import { type Bundle, dead, type Entity } from '@yaks/graph'
 import { matcher } from '@yaks/match'

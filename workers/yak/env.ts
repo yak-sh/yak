@@ -13,9 +13,12 @@
 import type { R2 } from '../../src/blobs_r2.ts'
 import type { Dispatch } from './dispatch.ts'
 import type { Binding } from './post.ts'
-import type { Namespace } from './store.ts'
+import type { Fetcher, Namespace } from './door.ts'
 
-export type Fetcher = { fetch(req: Request): Promise<Response> }
+// The door's own word, said again here: every part of this kernel names its
+// bindings out of env.ts, and where a request may be handed is the door's to
+// define (door.ts) so that a Store object can hold one without holding this.
+export type { Fetcher }
 
 // One inbound message, as Email Routing hands it to `email()` (index.ts).
 // The slice we read: who the envelope said it was from and for, the letter's

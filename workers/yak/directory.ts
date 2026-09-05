@@ -26,12 +26,11 @@
 import type { Bundle } from '@yaks/graph'
 import type { Mutation } from '../../src/mutation.ts'
 import { slugsOf } from '../../src/types.ts'
-import type { Env, Fetcher } from './env.ts'
+import { type Door, type Fetcher, type Namespace, storeOf } from './door.ts'
 import { KERNEL, type Meta, meta as metaStore } from './meta.ts'
 import { mailFrom } from './post.ts'
 import { SLUG } from './route.ts'
 import { nameOf } from './signin.ts'
-import { type Door, type Namespace, storeOf } from './store.ts'
 import { PLATFORM_STORE } from './vocab.ts'
 
 export let META = { space: 'yak', app: 'platform' }
@@ -42,13 +41,15 @@ export let META_STORE = PLATFORM_STORE
 
 // What a space or an app spent this calendar month (platform.rs `Meter`,
 // usage.ts writes it): on an app its own store's, on a space every app of it
-// summed. Null where nothing has been metered yet.
+// summed plus the letters it sent and received. Null where nothing has been
+// metered yet.
 export type Meter = {
   month: string
   requests: number
   rows_read: number
   rows_written: number
   bytes: number
+  emails: number
   at: string
 }
 export type Tier = 'free' | 'plus'
@@ -214,6 +215,7 @@ let meterOf = (r: Row): Meter | null =>
       rows_read: r.meter.rows_read ?? 0,
       rows_written: r.meter.rows_written ?? 0,
       bytes: r.meter.bytes ?? 0,
+      emails: r.meter.emails ?? 0,
       at: r.meter.at ?? '',
     }
     : null
@@ -328,9 +330,13 @@ export let over = (store: Meta) => async (req: Request): Promise<Response> => {
   })
 }
 
-/** The part, over the directory's own store. */
-export let fetch = (req: Request, env: Env): Promise<Response> =>
-  over(metaStore(env))(req)
+/** The part, over the directory's own store. The env it asks for is the one
+ * binding it reads, so a caller holding the namespace and nothing else — a
+ * Store object metering a letter (meter.ts `metering`) — can call it too. */
+export let fetch = (
+  req: Request,
+  env: { STORE: Namespace },
+): Promise<Response> => over(metaStore(env))(req)
 
 // The applied batch in the shape this part's callers read: the flat changes a
 // tool inspects for the eid it just wrote, and the aliases a mint is looked up
@@ -349,12 +355,16 @@ let resulted = (applied: Bundle[]) => ({
 })
 
 // A write the kernel makes ABOUT the directory rather than for a person: the
-// hourly meter and the plan a space is on (usage.ts), which are the
+// hourly meter (usage.ts), a letter counted as it goes or arrives (meter.ts
+// `counted`) and the plan a space is on, which are the
 // platform's word and never a person's. It goes straight at the meta store
 // carrying the kernel flag — `fetch` above forwards only what vouches for a
 // person, so that flag can never arrive from outside — and empties the cache,
 // because what it just changed is what the next read answers.
-export let stamp = async (env: Env, mutation: { entities: Bundle[] }) => {
+export let stamp = async (
+  env: { STORE: Namespace },
+  mutation: { entities: Bundle[] },
+) => {
   await metaStore(env).apply(mutation.entities, KERNEL)
   cache.clear()
 }

@@ -102,9 +102,17 @@ import { foreign, SLUG } from './route.ts'
 import type { Reach } from './reach.ts'
 import { mayWrite, reads, titling, vouched, type Who } from './session.ts'
 import { canon, nameOf, personOf } from './signin.ts'
-import { type Door, storeOf } from './store.ts'
+import { type Door, storeOf } from './door.ts'
 import { archive, cards, healed, line, openIn, serve } from './unseen.ts'
-import { atCeiling, ceilings, monthOf, size, spent, standing } from './usage.ts'
+import {
+  atCeiling,
+  ceilings,
+  letters,
+  monthOf,
+  size,
+  spent,
+  standing,
+} from './meter.ts'
 import {
   manifest,
   own,
@@ -1629,7 +1637,12 @@ export let TOOLS: Tool[] = [
           apps: listed,
           tier: space.tier ?? 'free',
           usage: spent(space),
-          ceilings: ceilings(space.tier),
+          // The letters are the one allowance every plan carries, so they are
+          // beside the three a free space alone answers to (meter.ts).
+          ceilings: {
+            ...(ceilings(space.tier) ?? {}),
+            emails: letters(space.tier),
+          },
         })
       }
       return {

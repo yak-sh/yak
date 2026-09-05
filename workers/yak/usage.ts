@@ -8,9 +8,10 @@
 // The sweep is the Worker's `scheduled` handler (index.ts, wrangler.toml
 // `[triggers] crons`): one GraphQL call for the month so far, one `/graph`
 // read per app for the bytes it holds, and one write into the meta store —
-// `meter` on each app, `meter` on each space (its apps summed), and
-// `plan{free}` on a space that has none yet. The write carries the kernel
-// flag, because a person never states their own bill.
+// `meter` on each app, `meter` on each space (its apps summed, its letters
+// left where the mail doors count them), and `plan{free}` on a space that has
+// none yet. The write carries the kernel flag, because a person never states
+// their own bill.
 //
 // Two datasets, because one does not carry both numbers:
 // `durableObjectsInvocationsAdaptiveGroups` has `sum.requests`,
@@ -26,20 +27,31 @@
 // Without CF_ANALYTICS_TOKEN there is nothing to ask, so the sweep says one
 // line on the log and returns: the secret is the owner's to set (T-32759), and
 // a deploy standing before they do must not fail every hour.
+//
+// What a space is ALLOWED — the ceilings, the letters, the line the agent
+// reads and the sentence a door says no with — is meter.ts, which this half
+// reads and the Store object reads too.
 import type { Bundle } from '@yaks/graph'
 import * as dirPart from './directory.ts'
 import {
   type App,
   directory,
-  type Meter,
   type Space,
   stamp,
   storeName,
-  type Tier,
 } from './directory.ts'
+import { storeOf } from './door.ts'
 import { bound, type Env } from './env.ts'
-import { PRICING } from './route.ts'
-import { storeOf } from './store.ts'
+import {
+  atCeiling,
+  ceilings,
+  type Counts,
+  level,
+  monthOf,
+  none,
+  thisMonth,
+  WARN,
+} from './meter.ts'
 
 export let GRAPHQL = 'https://api.cloudflare.com/client/v4/graphql'
 
@@ -69,15 +81,6 @@ export let QUERY =
   }
 }`
 
-// What one store did, as the analytics answer them. Bytes come from the store
-// itself, and the month from the row being written (directory.ts `Meter` is
-// the whole component).
-export type Counts = {
-  requests: number
-  rows_read: number
-  rows_written: number
-}
-
 type Group = { dimensions?: { name?: string }; sum?: Record<string, number> }
 type Answer = {
   data?: {
@@ -90,25 +93,6 @@ type Answer = {
   }
   errors?: { message?: string }[] | null
 }
-
-export let monthOf = (at: Date) => at.toISOString().slice(0, 7)
-
-// Bytes as a person says them. The meter is read out loud in tool answers,
-// where `241 MB` is the number and `252706816` is noise.
-export let size = (bytes: number) => {
-  let units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let n = 0
-  while (bytes >= 1024 && n < units.length - 1) {
-    bytes /= 1024
-    n++
-  }
-  // A tenth where it says something — 1.5 KB — and never where it does not:
-  // the ceiling is 1 GB, and `1.0 GB` reads like a measurement of it.
-  let round = !n || bytes >= 10 || Number.isInteger(bytes)
-  return `${round ? Math.round(bytes) : bytes.toFixed(1)} ${units[n]}`
-}
-
-let none = (): Counts => ({ requests: 0, rows_read: 0, rows_written: 0 })
 
 // The answer as rows, by store name. A group with no name is nothing to
 // attribute — and a name that is no app of ours (`cf-singleton-container`) is
@@ -175,11 +159,6 @@ export let bytesOf = async (env: Env, name: string) => {
   return Number((await r.json() as { bytes?: number }).bytes ?? 0)
 }
 
-// The month's counters for an entity that may have none, or whose row is a
-// month behind: a new month is a fresh reading, never a running total.
-export let thisMonth = (meter: Meter | null, month: string) =>
-  meter && meter.month == month ? meter : null
-
 // The hourly reading. Returns how many rows it wrote, so a caller (and the
 // log) can say whether it found anything at all.
 export let sweep = async (env: Env, now = new Date()) => {
@@ -215,8 +194,16 @@ export let sweep = async (env: Env, now = new Date()) => {
       total.rows_written += got.rows_written
       total.bytes += bytes
     }
-    // The space's own reading: its apps summed.
-    let meter = { month, ...total, at }
+    // The space's own reading: its apps summed, and the letters it sent and
+    // received left alone — the mail doors count those as they happen (mail
+    // rides no store), and this sweep is only what starts them over when the
+    // month turns.
+    let meter = {
+      month,
+      ...total,
+      emails: thisMonth(space.meter, month)?.emails ?? 0,
+      at,
+    }
     // A space that has just crossed a line — or fallen back under one — has
     // something new to hear, so the mark that it was told goes (unseen.ts
     // `ceiling` writes it back). A level that has not moved keeps its mark,
@@ -241,114 +228,6 @@ export let metered = async (env: Env, now = new Date()) => {
   let n = await sweep(env, now)
   if (n) console.log(`yak-meter: ${n} rows at ${now.toISOString()}`)
   return n
-}
-
-// ---- the ceilings (T-32758) ------------------------------------------------
-//
-// Adoption over revenue (T-32756): a ceiling is something the person's agent
-// SEES COMING and is told about, not a wall the person hits. So only what
-// costs money is refused outright — a sixth app, data past the ceiling — and
-// requests past 50,000 are served and reported. At 80% of
-// any of them the agent gets one line on the unseen channel (unseen.ts
-// `ceiling`), marked the way an error is, so it rides one reply.
-
-let GB = 1024 ** 3
-
-// The free tier, as decided (D-32751): what a space gets for nothing.
-export let FREE = { apps: 5, requests: 50_000, bytes: GB }
-
-// Where the warning line sits, as a fraction of a ceiling.
-export let WARN = 0.8
-
-// What a tier is held to. Nothing is on `plus` yet — it waits on Stripe
-// (T-32760) — and a space that somehow is answers to no ceiling here rather
-// than to the free one.
-export let ceilings = (tier: Tier | null) => tier == 'plus' ? null : FREE
-
-let empty = (month: string): Meter => ({ month, ...none(), bytes: 0, at: '' })
-
-// This month's reading, whatever the row holds — a month behind is nothing
-// spent, and no row at all is the same.
-export let spent = (space: Space, now = new Date()) =>
-  thisMonth(space.meter, monthOf(now)) ?? empty(monthOf(now))
-
-// How full a space is, per ceiling, as a fraction: 1 is at it.
-export let fullness = (space: Space, apps: number, now = new Date()) => {
-  let free = ceilings(space.tier)
-  let m = spent(space, now)
-  return free
-    ? {
-      apps: apps / free.apps,
-      requests: m.requests / free.requests,
-      bytes: m.bytes / free.bytes,
-    }
-    : null
-}
-
-// Where a space stands: nothing to say, near a ceiling, or past one. The
-// sweep watches this for a change, which is what un-tells the agent.
-export let level = (space: Space, apps: number, now = new Date()) => {
-  let full = fullness(space, apps, now)
-  if (!full) return 'ok'
-  let worst = Math.max(...Object.values(full))
-  return worst >= 1 ? 'over' : worst >= WARN ? 'near' : 'ok'
-}
-
-let count = (n: number) => n.toLocaleString('en-US')
-
-// When the metered figures were last read. Everything but the app count comes
-// from the hourly sweep above, not from a live counter, so a line that prints
-// those numbers bare reads as live and looks broken: the ninth user test made
-// ~25 requests to a new app and was told `0 of 50,000 requests` (C-32869
-// item 6). A reading says its hour; no reading says so instead of saying zero.
-let asOf = (at: string) => {
-  let read = new Date(at)
-  return Number.isNaN(read.getTime())
-    ? ''
-    : ` (as of ${read.toISOString().slice(11, 16)} UTC)`
-}
-
-// The line the agent reads: every number against its ceiling, and what
-// happens at each. One line, because the agent has work to get back to.
-export let standing = (space: Space, apps: number, now = new Date()) => {
-  let free = ceilings(space.tier)
-  if (!free) return `${space.slug}: no ceilings on this plan.`
-  let m = spent(space, now)
-  let refused = `Requests are never refused; a sixth app, or data past ${
-    size(free.bytes)
-  }, is. What the plans hold: ${PRICING}`
-  let head = `${space.slug} (free tier, ${m.month}): ${apps} of ${free.apps} ` +
-    'apps'
-  let read = asOf(m.at)
-  // The apps are counted here and now; the rest waits on the sweep. Before
-  // the first one this month there is no reading at all, and zero would be a
-  // claim rather than a number.
-  if (!read) {
-    return `${head}. The month's requests and data have not been ` +
-      `read yet — the meter sweeps hourly. ${refused}`
-  }
-  return `${head}, ${count(m.requests)} of ${count(free.requests)} requests, ` +
-    `${size(m.bytes)} of ${size(free.bytes)}${read}. ${refused}`
-}
-
-// The refusal, one sentence: what the ceiling is, and where the plans are
-// written down. Every door that says no says it this way.
-//
-// It names the PRICING PAGE and never a checkout link, and that is a policy
-// line rather than a preference (C-33033 on D-32751): an agent surface may
-// explain that a feature needs a plan and may link to a page describing the
-// plans; it may not hand back anything that starts a purchase. Paying is the
-// signed-in web page's door (billing.ts).
-export let atCeiling = (space: Space, what: 'apps' | 'bytes') => {
-  let free = ceilings(space.tier)!
-  let said = {
-    apps: `${space.slug} is on the free tier, which is ${free.apps} apps` +
-      ` — delete one (app_delete) to make another`,
-    bytes: `${space.slug} is on the free tier, which is ${
-      size(free.bytes)
-    } of app data — delete what it no longer needs to save more`,
-  }[what]
-  return `${said}. Plus lifts it: ${PRICING}`
 }
 
 // The byte ceiling, at the two doors that add data (apps.ts): the space's

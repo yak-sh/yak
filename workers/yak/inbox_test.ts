@@ -18,12 +18,14 @@
 //                        arrive without asking
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { slow, until } from '../../src/testing.ts'
+import { monthOf } from './meter.ts'
 import {
   arrives,
   browser,
   client,
   connector,
   kernel,
+  meta,
   relay,
   rfc822,
   seed,
@@ -37,6 +39,11 @@ type Row = {
   mail: { from: string; to: string; at: string; verified?: number | null }
   attachment: { mime: string; name: string }
 }
+
+// Three eids a test writes at, so a letter it wrote can be read back whole.
+let ANA = 'c0000000-0000-4000-8000-000000000003'
+let FIRST = 'd0000000-0000-4000-8000-000000000004'
+let SECOND = 'd0000000-0000-4000-8000-000000000005'
 
 // A signed letter, as the receiving MTA hands one over: the verdict is a
 // header it wrote, and the parser's own words are what a person reads.
@@ -273,6 +280,91 @@ slow(
       let rows = await client(k, 'jeff.yaks.app', 'recipes').get('.mail!')
       assertEquals(rows, [])
       assert(true)
+    } finally {
+      await k.stop()
+    }
+  },
+)
+
+// The meter, on the receiving side (T-33688). A letter that arrives is one
+// letter on the space's month, the same column a letter that LEAVES is counted
+// on (meter.ts `metering`, mail_test.ts) — and it is counted past the
+// allowance rather than refused there, because a letter turned away at the
+// door is somebody else's words lost.
+slow(
+  'an arrival is one letter on the month, over the ceiling too',
+  async () => {
+    let k = await kernel()
+    try {
+      let them = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
+      let agent = connector(k, them.cookie)
+      let dir = meta(k, them.cookie)
+      let spent = async () => {
+        let [row] = await dir.query(`.eid=${them.eids.jeff}&.meter?`)
+        return ((row?.meter ?? {}) as { emails?: number }).emails ?? 0
+      }
+      let write = async (subject: string) =>
+        assertEquals(
+          (await arrives(k, {
+            from: 'ana@books.example',
+            to: 'jeff.recipes@yaks.app',
+            raw: rfc822({ Subject: subject }, 'Hello in there.'),
+          })).status,
+          200,
+        )
+      await write('One')
+      assertEquals(await spent(), 1)
+      await write('Two')
+      assertEquals(await spent(), 2)
+
+      // The other direction, in the same runtime: the store object itself
+      // reads the space's month off the directory before it hands a letter
+      // over (meter.ts `metering`) — one Durable Object asking another. No
+      // letter can leave a probe, so this one comes to rest on the local
+      // binding's own refusal, whatever it says; what the meter cares about is
+      // that an attempt which never left costs the space nothing.
+      let page = client(k, 'jeff.yaks.app', 'recipes', them.cookie)
+      let outbound = async (eid: string) => {
+        await page.applied([
+          { entity: { eid: ANA }, email: { address: 'ana@books.example' } },
+          {
+            entity: { eid },
+            doc: { title: 'Potluck', body: 'Bring a dish.' },
+            mail: {},
+            deliver: { to: ANA },
+          },
+        ])
+        return String(
+          await until(async () => {
+            let [row] = await page.get(
+              `.entity.eid=${eid}&.bounced?`,
+            ) as unknown as { bounced?: { reason: string } }[]
+            return row?.bounced?.reason
+          }, { timeout: 15_000, label: 'the letter to come to rest' }),
+        )
+      }
+      let refused = await outbound(FIRST)
+      assert(!refused.includes('emails a month'), refused)
+      assertEquals(await spent(), 2)
+
+      // At the allowance. The seeding goes in through the graph tier, which is
+      // not the directory's own write door, so the kernel's 30-second read cache
+      // is emptied by a write that is (mcp_test.ts says the same).
+      await dir.apply([{
+        entity: { eid: them.eids.jeff },
+        meter: { month: monthOf(new Date()), emails: 100 },
+      }])
+      await agent.tool('space_new', { slug: 'elsewhere', title: 'Elsewhere' })
+      await write('The hundred and first')
+      assertEquals(await spent(), 101)
+      assertEquals(
+        (await page.get('.doc.title=The hundred and first&.doc!')).length,
+        1,
+      )
+      // And the SEND door, past the same allowance, says so on the letter.
+      let why = await outbound(SECOND)
+      assertStringIncludes(why, '100 emails a month')
+      assertStringIncludes(why, 'still arrive')
     } finally {
       await k.stop()
     }

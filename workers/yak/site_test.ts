@@ -3,6 +3,7 @@
 // silently — a renamed file leaves a 404 nobody clicks until a stranger does.
 // So: each link names a file that exists, and each page carries the whole set.
 import { assert, assertEquals } from '@std/assert'
+import { LETTERS } from './meter.ts'
 
 let read = (name: string) =>
   Deno.readTextFileSync(new URL(`./public/${name}`, import.meta.url))
@@ -90,6 +91,27 @@ Deno.test('every page carries the same four nav links', () => {
       page,
     )
   }
+})
+
+// What the pages SELL is what the code holds a space to (T-33688). The two
+// allowances live in one place — meter.ts `LETTERS`, which the send door and
+// the standing line both read — so a page quoting a number nothing enforces is
+// exactly the copy this test exists to prevent: it was pulled once for saying
+// "100 emails a month" of a platform that could not send one at all.
+let flat = (html: string) => html.replace(/\s+/g, ' ')
+
+Deno.test('the plan pages carry the email allowance the code enforces', () => {
+  let free = `${LETTERS.free} emails a month`
+  let plus = `${LETTERS.plus.toLocaleString('en-US')} emails a month`
+  for (let page of ['index.html', 'pricing.html', 'technical.html']) {
+    let html = flat(read(page))
+    assert(html.includes(free), `${page} does not say ${free}`)
+    assert(html.includes(plus), `${page} does not say ${plus}`)
+  }
+  // And the one rule that number needs beside it: only the SEND stops, so a
+  // letter written to an app is never turned away at the door.
+  assert(flat(read('technical.html')).includes('only SENDING stops'))
+  assert(flat(read('pricing.html')).includes('Letters written to you always'))
 })
 
 Deno.test('every footer link names a page that is there', () => {

@@ -207,9 +207,16 @@ The numbers are in the plan table at <https://yaks.app/pricing>. Read them
 there, not from a page that copies them, this one included; `app_list` prints
 where a space stands against what it is allowed.
 
-Over the ceiling a letter does not go out, and the refusal is the sentence every
-ceiling here uses: what the ceiling is, and where the plans are written down. It
-never hands back a checkout link — paying is a page the person opens themselves,
+Only the SEND stops there. A letter written to the app lands however many the
+space has spent — and is counted like any other — because refusing one at the
+door loses the sender's words rather than limiting the app's. So an inbox keeps
+filling past the ceiling; what waits for the 1st is the answer.
+
+Over the ceiling a letter does not go out: it comes to rest on the entity as
+`bounced{reason}`, the way a provider's own refusal does, so nothing is lost and
+the words can be sent again next month. The reason is the sentence every ceiling
+here uses: what the ceiling is, and where the plans are written down. It never
+hands back a checkout link — paying is a page the person opens themselves,
 signed in. Say what the tool said, and offer to delete or slow down rather than
 guessing at a number.
 

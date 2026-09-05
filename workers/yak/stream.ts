@@ -35,7 +35,7 @@
 // and silence is the worse failure.
 import { VERSION } from '../../src/version.ts'
 import type { Env } from './env.ts'
-import type { Namespace, Stub } from './store.ts'
+import type { Namespace, Stub } from './door.ts'
 
 // The slice of the Durable Object runtime this object touches, structurally,
 // so `deno check` reads it without @cloudflare/workers-types.

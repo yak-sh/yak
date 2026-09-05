@@ -56,7 +56,7 @@ import { reachable, release } from './domains.ts'
 import type { Env } from './env.ts'
 import { PLATFORM } from './route.ts'
 import { vouched, type Who } from './session.ts'
-import { storeOf } from './store.ts'
+import { storeOf } from './door.ts'
 import { own } from './versions.ts'
 
 // An hour to walk over to the inbox and read the letter. Longer than a

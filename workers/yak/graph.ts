@@ -55,7 +55,7 @@
 //
 // WHY THE VOUCH IS BELIEVED. Not because it is signed — it is not — but
 // because nothing else can say it. A Durable Object is reachable only through
-// its binding, from this Worker, and the one door onto a store (store.ts
+// its binding, from this Worker, and the one door onto a store (door.ts
 // `storeOf`) STRIPS the whole vouch set from any request it is handed before
 // it stamps its own. So the set is the kernel's by construction, in one place
 // that can be read, rather than by every caller remembering not to forward a
@@ -124,6 +124,8 @@ import { parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import { named, type Row } from './listing.ts'
 import { type Binding, posting } from './post.ts'
+import type { Namespace } from './door.ts'
+import { metering } from './meter.ts'
 import { PLATFORM } from './route.ts'
 import {
   type Bucket,
@@ -180,10 +182,16 @@ export type State = Hibernation & {
 }
 
 /** The bindings this object is handed — the Worker's whole `env`, of which it
- * reads two: the bucket a migration writes the object's whole old graph to
- * before it moves a row (migrate.ts), and Cloudflare Email Sending, which is
- * how a letter written here leaves (post.ts, T-33686). */
-export type Bindings = { EXPORTS?: Bucket; MAIL?: Binding }
+ * reads three: the bucket a migration writes the object's whole old graph to
+ * before it moves a row (migrate.ts), Cloudflare Email Sending, which is how a
+ * letter written here leaves (post.ts, T-33686), and the store namespace, which
+ * is how the letter it just sent reaches the space's meter — the directory is
+ * another object in that namespace (meter.ts `metering`, T-33688). */
+export type Bindings = {
+  EXPORTS?: Bucket
+  MAIL?: Binding
+  STORE?: Namespace
+}
 
 // What the object remembers about itself, and the table it remembers it in.
 // One row per word — the object's SQLite is the only memory that survives an
@@ -429,8 +437,14 @@ export class Store {
     // platform's own store writes its sign-in codes through mail.ts from the
     // fleet's own address, and has no app whose name a letter could leave
     // under. No binding is a sender that refuses (post.ts), so a deploy
-    // without one bounces a letter rather than swallowing it.
-    let post = meta || !app ? null : posting(this.#bind.MAIL)
+    // without one bounces a letter rather than swallowing it — and the send is
+    // metered against the space's month on the way through (meter.ts), which
+    // is why the address is read at SEND time and not at boot.
+    let post = meta || !app ? null : metering(
+      this.#bind,
+      () => this.#get('mail'),
+      posting(this.#bind.MAIL),
+    )
     let g = graph({
       storage: store,
       vocab,
@@ -762,7 +776,7 @@ export class Store {
    * actor — it writes ABOUT the app rather than in it: the break it noted
    * (unseen.ts `noted`), the mark on a line it served. That door is
    * {@link Store.fetch}'s `x-yak-kernel` branch, which no client can reach
-   * (store.ts `storeOf` strips the whole vouch set), and a batch through it
+   * (door.ts `storeOf` strips the whole vouch set), and a batch through it
    * carries no person to hold a level — so the rule as written would refuse
    * exactly the writes the platform must always be able to make.
    *
@@ -1303,7 +1317,7 @@ export class Store {
   // them, and this one admits them by handing @yaks/graph `trusted`.
   //
   // The flag is the kernel's by construction: a store is only ever reached
-  // through a request the Worker builds from scratch, and store.ts `storeOf`
+  // through a request the Worker builds from scratch, and door.ts `storeOf`
   // strips the whole vouch set from any request it is handed, so
   // `x-yak-kernel` can never arrive from outside.
   async #kernel(request: Request): Promise<Response> {

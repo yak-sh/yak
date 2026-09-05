@@ -10,7 +10,7 @@
 //                  down what it was told about them
 //   the forgery    a bundle's own `$actor` never survives the door
 //   the strip      a visitor's headers cannot ride into an object on a request
-//                  the kernel forwards (store.ts `storeOf`, the /ws hop)
+//                  the kernel forwards (door.ts `storeOf`, the /ws hop)
 //   the grant      an app worker's sealed grant is admitted at the level it
 //                  names, and is nothing at all once it has expired
 //   the mount      @yaks/mcp over the same graph under the same seam
@@ -31,7 +31,7 @@ import { Store } from './graph.ts'
 import { vouchOf } from './graph.ts'
 import type { Who } from './session.ts'
 import { vouched } from './session.ts'
-import { storeOf } from './store.ts'
+import { storeOf } from './door.ts'
 
 let state = () => ({
   storage: durable(),

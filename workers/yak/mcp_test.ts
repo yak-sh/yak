@@ -22,7 +22,7 @@ import {
   signedIn,
   signIn,
 } from './probe.ts'
-import { monthOf } from './usage.ts'
+import { monthOf } from './meter.ts'
 import { PAGES, uriOf } from './guide.ts'
 import { PROMPTS } from './prompts.ts'
 import { VERSION } from '../../src/version.ts'

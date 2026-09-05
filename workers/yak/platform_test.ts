@@ -22,7 +22,7 @@ import { directory, META, over, storeName } from './directory.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
 import { mint, personOf, spend } from './signin.ts'
-import type { Door } from './store.ts'
+import type { Door } from './door.ts'
 import { noted } from './unseen.ts'
 import { PLATFORM_STORE } from './vocab.ts'
 

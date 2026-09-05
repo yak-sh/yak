@@ -49,6 +49,7 @@ import { type App, appStore, directory, type Space } from './directory.ts'
 import { bound, type Env, type Inbound } from './env.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { mailedTo, mailFrom } from './post.ts'
+import { counted } from './meter.ts'
 
 /** A letter refused at the door: the sender is told, and nothing is written. */
 export class Refused extends Error {}
@@ -187,5 +188,11 @@ export let arrived = async (m: Inbound, env: Env): Promise<string> => {
     ...letter,
     ...(await carried(env, space, app, mail, eid)),
   ], KERNEL)
+  // The month's letters, one higher (meter.ts). AFTER the letter is filed and
+  // never before it: the count is what the space received, and a meter that
+  // ran ahead of the graph would bill for words nobody can read. Over the
+  // allowance it still lands — the ceiling is the SEND door's (`metering`),
+  // because a letter refused here is somebody else's words lost.
+  await counted(env, space)
   return eid
 }

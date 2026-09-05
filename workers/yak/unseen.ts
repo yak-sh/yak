@@ -22,9 +22,9 @@ import {
 import { bound, type Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
-import type { Door } from './store.ts'
+import type { Door } from './door.ts'
 import { told } from './stream.ts'
-import { level, standing } from './usage.ts'
+import { level, standing } from './meter.ts'
 
 // A refusal is NOT a break (C-32652 item 3, T-32655; C-32869 item 5) — one
 // rule, read off whichever half of the answer the platform is holding.

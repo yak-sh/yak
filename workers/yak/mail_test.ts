@@ -7,13 +7,22 @@
 // the vocabulary is loaded, the tables are planted, @yaks/graph's apply()
 // runs the guard and the effects, and what the transport was handed is what
 // @yaks/mail composed out of the rows.
+//
+// The METER is here too (T-33688), and for the same reason: the second store
+// in these tests is the DIRECTORY — the same class, woken on the platform's own
+// vocabulary because of the name it is given — so a letter counted against a
+// space is counted through the wire that counts it in life.
 import { assert, assertEquals } from '@std/assert'
 import type { Frame } from '@yaks/api'
 import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/harness.ts'
+import { type Namespace, storeOf } from './door.ts'
 import { Store } from './graph.ts'
+import { KERNEL, metaOf } from './meta.ts'
+import { monthOf } from './meter.ts'
 import { mailedTo, mailFrom, posting } from './post.ts'
+import { PLATFORM_STORE } from './vocab.ts'
 
 Deno.test('an app writes from a local part at the apex', () => {
   assertEquals(mailFrom('ada', 'cookbook'), 'ada.cookbook@yaks.app')
@@ -110,9 +119,42 @@ let post = (store: Store, path: string, body: unknown, v?: Vouch) =>
     }),
   )
 
-// A store holding the cookbook, with a post room bound to `mail`.
-let cookbook = async (mail = outbox(), v = owner, ctx = state()) => {
-  let store = new Store(ctx, { MAIL: mail })
+// The directory, as a namespace with one object in it: the Store class again,
+// woken on the platform's vocabulary because `storeOf` names it `yak/platform`.
+// This is what a letter's meter is written through (meter.ts `metering`), so
+// nothing about the count is stubbed either.
+let SPACE = 'e0000000-0000-4000-8000-000000000005'
+
+let platform = async (meter?: Record<string, unknown>) => {
+  let dir = new Store(state(), {})
+  let ns: Namespace = {
+    idFromName: (name: string) => name,
+    get: () => ({ fetch: (req: Request) => dir.fetch(req) }),
+  }
+  let store = metaOf(storeOf(ns, PLATFORM_STORE))
+  await store.apply([{
+    entity: { eid: SPACE },
+    space: { slug: 'ada' },
+    doc: { title: 'Ada' },
+    ...(meter ? { meter: { month: monthOf(new Date()), ...meter } } : {}),
+  }], KERNEL)
+  // What the space has spent this month, as the directory holds it.
+  let spent = async () => {
+    let [row] = await store.query(`.eid=${SPACE}&.meter?`)
+    return (row?.meter ?? {}) as { emails?: number }
+  }
+  return { ns, spent }
+}
+
+// A store holding the cookbook, with a post room bound to `mail` and, unless a
+// test says otherwise, a directory to meter against.
+let cookbook = async (
+  mail = outbox(),
+  v = owner,
+  ctx = state(),
+  ns?: Namespace,
+) => {
+  let store = new Store(ctx, { MAIL: mail, ...(ns ? { STORE: ns } : {}) })
   assertEquals((await post(store, '/vocab', {}, v)).status, 200)
   return { store, mail, ctx }
 }
@@ -275,6 +317,63 @@ Deno.test('a letter with no ask to send is kept, not sent', async () => {
     200,
   )
   assertEquals(mail.sent.length, 1)
+})
+
+// ---- the meter (T-33688) ----------------------------------------------------
+
+Deno.test('a letter delivered is one letter on the month', async () => {
+  let { ns, spent } = await platform()
+  let { store, mail } = await cookbook(outbox(), owner, state(), ns)
+  assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
+  assertEquals(mail.sent.length, 1)
+  assertEquals((await spent()).emails, 1)
+  // And the count is per LETTER, not per batch or per boot.
+  assertEquals(
+    (await post(store, '/apply', [
+      { entity: { eid: ANA }, email: { address: 'ana@example.com' } },
+      {
+        entity: { eid: 'd0000000-0000-4000-8000-000000000009' },
+        doc: { title: 'Second' },
+        mail: {},
+        deliver: { to: ANA },
+      },
+    ], owner)).status,
+    200,
+  )
+  assertEquals((await spent()).emails, 2)
+})
+
+Deno.test('a letter that bounced costs the space nothing', async () => {
+  let { ns, spent } = await platform()
+  let { store } = await cookbook(
+    outbox('550 mailbox unavailable'),
+    owner,
+    state(),
+    ns,
+  )
+  assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
+  assertEquals(
+    ((await read(store, NOTE)).bounced as { reason?: string }).reason,
+    '550 mailbox unavailable',
+  )
+  // An attempt is not a letter: nothing left, so nothing is counted.
+  assertEquals((await spent()).emails ?? 0, 0)
+})
+
+Deno.test('past the month allowance a send bounces naming the ceiling', async () => {
+  let { ns, spent } = await platform({ emails: 100 })
+  let { store, mail } = await cookbook(outbox(), owner, state(), ns)
+  assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
+  // The transport is never reached, and the refusal is data on the letter.
+  assertEquals(mail.sent.length, 0)
+  let why = String(
+    ((await read(store, NOTE)).bounced as { reason: string })
+      .reason,
+  )
+  assert(why.includes('100 emails a month'), why)
+  assert(why.includes('still arrive'), why)
+  // Nothing went, so nothing was counted on top of the hundred.
+  assertEquals((await spent()).emails, 100)
 })
 
 Deno.test('no binding, no letter: the sender that refuses says why', async () => {

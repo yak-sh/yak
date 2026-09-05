@@ -54,7 +54,7 @@ import {
 } from './session.ts'
 import { type Reach, split, written } from './reach.ts'
 import type { Bundle } from '@yaks/graph'
-import { type Door, storeOf } from './store.ts'
+import { type Door, storeOf } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { appBreaks, noted, refusal, serving } from './unseen.ts'
 import { full } from './usage.ts'

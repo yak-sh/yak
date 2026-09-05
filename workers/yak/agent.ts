@@ -28,7 +28,7 @@ import type { Vocab } from '@yaks/vocab'
 import { storeName } from './directory.ts'
 import { composed, type Reach, read, written } from './reach.ts'
 import { titling } from './session.ts'
-import { storeOf } from './store.ts'
+import { storeOf } from './door.ts'
 import {
   type Ctx,
   inApp,

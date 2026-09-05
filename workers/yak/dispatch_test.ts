@@ -60,7 +60,7 @@ let app: App = {
 }
 
 // Every entity the kernel wrote while a test ran, and WHICH store it went
-// into (store.ts `storeOf` names it on every request) — so a break can be read
+// into (door.ts `storeOf` names it on every request) — so a break can be read
 // back the way `app_errors` reads one, and whose store it landed in is part of
 // what a test can say.
 type Wrote = {
