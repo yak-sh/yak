@@ -285,3 +285,100 @@ Deno.test('the guide and its page point a domain where the code does', () => {
     )
   }
 })
+
+// The clipping page teaches JSON-LD extraction as code somebody copies whole
+// (T-33614), and a schema.org document is messier than an example makes it
+// look: one object or a `@graph` of them, a value that is a string here and
+// an object there, instructions in four shapes. So the page's own helpers are
+// lifted out of it and run against a document wearing all of that. What is
+// NOT exercised is the HTMLRewriter pass around them, which needs the Workers
+// runtime; the helpers are where every shape is decided.
+// The page's indented code blocks, whole: a block runs from its first
+// indented line through every indented or blank line after it, since the
+// examples have blank lines inside them.
+let fenced = (slug: string) => {
+  let out: string[] = []
+  let block: string[] = []
+  for (let line of pageText(slug).split('\n')) {
+    if (line.startsWith('    ')) block.push(line.slice(4))
+    else if (line.trim() == '') block.length && block.push('')
+    else {
+      if (block.length) out.push(block.join('\n').trimEnd())
+      block = []
+    }
+  }
+  if (block.length) out.push(block.join('\n').trimEnd())
+  return out
+}
+
+let helpers = () => {
+  let code = fenced('clipping')
+    .filter((b) => /^let (things|minutes) =/m.test(b))
+    .join('\n')
+  assert(/let cooking =/.test(code), 'the page no longer shows the recipe read')
+  return new Function(
+    `${code}\nreturn {things, str, src, typed, minutes, steps, cooking}`,
+  )() as {
+    things: (blocks: string[]) => Record<string, unknown>[]
+    str: (v: unknown) => string
+    src: (v: unknown) => string
+    minutes: (iso: unknown) => number
+    cooking: (blocks: string[]) => {
+      title: string
+      serves: number | null
+      minutes: number | null
+      picture: string
+      body: string
+    } | null
+  }
+}
+
+// Every awkwardness on one page: a `@graph`, a WebSite beside the Recipe, an
+// ImageObject instead of a URL, a yield that is a sentence, a section holding
+// the steps, and a block of broken JSON before all of it.
+let PAGE = [
+  '{"@type": "Recipe", "name": "not json",',
+  JSON.stringify({
+    '@context': 'https://schema.org',
+    '@graph': [
+      { '@type': 'WebSite', name: 'Some Site' },
+      {
+        '@type': ['Recipe', 'NewsArticle'],
+        name: 'Lemon drizzle',
+        recipeYield: '8 servings',
+        totalTime: 'PT1H20M',
+        image: { '@type': 'ImageObject', url: 'https://x.test/cake.jpg' },
+        recipeIngredient: ['3 lemons', '200g butter'],
+        recipeInstructions: [{
+          '@type': 'HowToSection',
+          itemListElement: [
+            { '@type': 'HowToStep', text: 'Zest the lemons.' },
+            { '@type': 'HowToStep', text: 'Cream the butter.' },
+          ],
+        }],
+      },
+    ],
+  }),
+]
+
+Deno.test("the clipping page's own reader handles a schema.org page", () => {
+  let h = helpers()
+  // The broken block is skipped rather than fatal, and @graph is flattened.
+  assertEquals(h.things(PAGE).length, 3)
+  let dish = h.cooking(PAGE)!
+  assert(dish, 'no recipe was found')
+  assertEquals(dish.title, 'Lemon drizzle')
+  assertEquals(dish.serves, 8)
+  assertEquals(dish.minutes, 80)
+  assertEquals(dish.picture, 'https://x.test/cake.jpg')
+  assert(dish.body.includes('- 3 lemons'), dish.body)
+  assert(dish.body.includes('1. Zest the lemons.'), dish.body)
+  assert(dish.body.includes('2. Cream the butter.'), dish.body)
+  // A page with no Recipe still clips — as a doc and a source, never a
+  // refusal.
+  assertEquals(h.cooking(['{"@type": "WebSite", "name": "Some Site"}']), null)
+  assertEquals(h.minutes('PT30M'), 30)
+  assertEquals(h.minutes(undefined), 0)
+  assertEquals(h.str({ name: 'a name' }), 'a name')
+  assertEquals(h.src(['https://x.test/a.png']), 'https://x.test/a.png')
+})

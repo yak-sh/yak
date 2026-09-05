@@ -91,6 +91,15 @@ export let PAGES: Page[] = [
       'workers to copy.',
   },
   {
+    slug: 'clipping',
+    title: 'Saving from another site',
+    description:
+      "Clipping a page somebody is reading into the app's store: a worker " +
+      'route that fetches it and reads its JSON-LD, Open Graph and title, a ' +
+      'bookmarklet that launches it, why a script on another site cannot ' +
+      'write here, and what to say when a site refuses a robot.',
+  },
+  {
     slug: 'sharing',
     title: 'Publishing and installing an app',
     description:

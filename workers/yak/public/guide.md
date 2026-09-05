@@ -548,6 +548,33 @@ A throw, or a 5xx, becomes the same `exception` the pages file — the person's
 agent hears about it on its next reply, and `app_errors` lists what is open. So
 let it throw: a break you can see is worth more than a `catch` that hides it.
 
+## Saving from another site
+
+Deeper: <https://yaks.app/guide/clipping.md> — the whole clipper, the
+bookmarklet, and what to do when a site refuses.
+
+An app can take a page off somebody else's website — a recipe, a listing, an
+article — and keep it. Two pieces, and a `worker.js` is what makes it possible:
+
+- **A route that clips.** `/clip?url=…` fetches the address, reads what the page
+  says about itself, and writes one bundle. Take the highest rung the page
+  offers: a `<script type="application/ld+json">` block (schema.org — a recipe
+  arrives with its ingredients in a list), then `og:title`/`og:description`/
+  `og:image`, then the `<title>` and the address. `HTMLRewriter` is in the
+  runtime, so there is no parser to install and no megabyte to regex.
+- **A bookmarklet that launches it.** A link the person drags to their bookmarks
+  bar once; pressing it opens the app's clip page with the address of the page
+  they are on. It LAUNCHES rather than posts because an app's `./api/` write
+  doors take same-origin, cookie-carrying requests only — a script on another
+  site cannot write here, today, with or without a token.
+
+Keep where it came from, in a component of your own —
+`{"source": {"url": "url", "at": "time"}}` — and make the entity's eid the
+address's own hash, so clipping the same page twice patches one row instead of
+making two. When a site refuses a robot, save the link and the title the browser
+already had and tell the person plainly; answer 200, not 5xx, or every blocked
+page files a break in their app.
+
 ## Sharing an app
 
 Deeper: <https://yaks.app/guide/sharing.md> — access, members, publishing,

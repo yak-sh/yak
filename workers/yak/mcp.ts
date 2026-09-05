@@ -135,6 +135,14 @@ It reads the app's store as the person looking (env.STORE), its files
 what a page must not hold and nothing can read back. The guide has a whole
 one.
 
+Asked to save things from OTHER sites — a recipe, a listing, an article —
+give the app a /clip route on its worker.js: it fetches the address, reads
+what the page says about itself (JSON-LD first, then og: meta tags, then the
+title), and applies one bundle with a source component of its own. The person
+starts it with a bookmarklet the app hands them, because an app's write doors
+take same-origin requests only, so a script on somebody else's page cannot
+write here. https://yaks.app/guide/clipping.md is the whole thing.
+
 An app is a plugin. app_publish offers one to every other space here by
 name, and app_published lists what is on offer; app_install takes one into
 the person's own space, where it is an ordinary app of theirs — its own
