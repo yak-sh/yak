@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yaks.sh/vocab/blob",
+  "title": "yaks blob keyword vocabulary",
+  "description": "The keyword @yaks/blob adds to a component vocabulary. A string column declaring `store: \"blob\"` keeps its value in a content-addressed store instead of in the row: the row holds the value's hash, the store holds the bytes, and both the write and the read go through unchanged — a writer sends text and a reader gets text back.",
+  "$comment": "A vocabulary declaration in the JSON Schema sense: a URI naming this keyword set, plus the schema of each keyword. A vocab file declares it under $vocabulary; a loader registers it with loadVocab(docs, [blobKeywords]).",
+  "$defs": {
+    "store": {
+      "description": "Where this column's value is kept. \"blob\" moves it to a content-addressed store, keyed by the SHA-256 of the text — so two rows holding the same long value hold one copy of it. The column stays an ordinary string column everywhere else: it is declared, queried and written as text.",
+      "enum": ["blob"]
+    }
+  }
+}

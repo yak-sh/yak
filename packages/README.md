@@ -27,6 +27,10 @@ In dependency order:
 - **@yaks/sqlite** — the storage adapter: composes the three packages above to
   answer queries as result bundles and write bundles back to a SQLite database.
   (In development.)
+- **[@yaks/blob](./blob)** — content-addressed storage for a text column,
+  applied without anybody noticing: mark the column, and the row keeps the
+  value's hash while the value itself goes to a table, a directory or a bucket —
+  once, however many rows hold it.
 - **[@yaks/fts](./fts)** — full-text search over any text property: the FTS5
   index a vocabulary implies, and the `@yaks/sql` extension that compiles a bare
   word in a query line to a `match`.
@@ -84,6 +88,10 @@ on its own:
 - `@yaks/sqlite` is the batteries-included path: point it at a SQLite database
   and it handles reading and writing entities for you, built entirely from the
   three packages above.
+- `@yaks/blob` moves the long values out of the rows without telling anyone: one
+  keyword on the column, a plugin that swaps the text for its hash inside the
+  write's own transaction, and a read override that resolves it back in the
+  statement — so a writer sends text and a reader gets text.
 - `@yaks/fts` adds search on top: it indexes the text properties and registers a
   clause compiler with `@yaks/sql`, which is the same seam the other search and
   traversal packages use.

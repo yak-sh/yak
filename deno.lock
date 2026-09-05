@@ -1338,6 +1338,12 @@
           "jsr:@std/assert@1"
         ]
       },
+      "packages/blob": {
+        "dependencies": [
+          "jsr:@db/sqlite@0.13.0",
+          "jsr:@std/assert@1"
+        ]
+      },
       "packages/canvas": {
         "dependencies": [
           "jsr:@std/assert@1"

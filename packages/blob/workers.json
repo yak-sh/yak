@@ -1,0 +1,13 @@
+{
+  "_": "The Cloudflare gate: `objectBlobs`' structural Bucket must accept the runtime's own R2Bucket. `deno check --config packages/blob/workers.json packages/blob/conform.ts` is the check; it is part of `deno task check`.",
+  "compilerOptions": {
+    "lib": ["esnext", "dom"],
+    "strict": true
+  },
+  "imports": {
+    "@yaks/graph": "../graph/mod.ts",
+    "@yaks/query": "../query/mod.ts",
+    "@yaks/vocab": "../vocab/mod.ts",
+    "@yaks/sql": "../sql/mod.ts"
+  }
+}
