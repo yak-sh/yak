@@ -41,7 +41,9 @@ export {
   type Query,
   type Select,
 } from './match.ts'
-export { type Index, index, live, type Read } from './read.ts'
+export { live } from './read.ts'
+// The value and text rules, on their own: the vocabulary the two doors above are
+// composed from, for a caller testing one value or one word by hand.
 export {
   type Check,
   check,
@@ -53,5 +55,4 @@ export {
   time,
 } from './value.ts'
 export { search, tokens } from './text.ts'
-export { clause, type Ctx, type Test } from './clause.ts'
 export { Unsupported } from '@yaks/sql'
