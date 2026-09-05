@@ -38,7 +38,7 @@ import type {
 } from './mutation.ts'
 export type { EntityLiteral, LiteralRef } from './mutation.ts'
 import { EID, idOf, SHORT, shortId, slugsOf } from './types.ts'
-import { link, moves, typeOf } from './edge.ts'
+import { link, moves, saidEid, typeOf } from './edge.ts'
 import { formatProp, parseProp, propAt, refOf } from './props.ts'
 import { local } from './time.ts'
 import { nearest, offer } from './near.ts'
@@ -1761,33 +1761,38 @@ export let normalizeLiterals = (
   }
   let aliasEntries: [string, string][] = []
   let eids = new Set<string>()
+  let byEid = new Map<string, LiteralNode>()
+  let settle = (node: LiteralNode, eid: string, found: boolean) => {
+    if (eids.has(eid)) throw new Error(`entity appears twice: ${eid}`)
+    eids.add(eid)
+    node.eid = eid
+    node.minted = !found
+    byEid.set(eid, node)
+    if (node.key) aliasEntries.push([node.key, eid])
+    return eid
+  }
+  // An eid a literal NAMES is decided by nothing else in the batch, and it is
+  // what a derived eid's endpoints resolve against, so those settle first.
   for (let node of nodes) {
-    let found = node.id ? external(node.id) : undefined
+    if (!node.id) continue
+    let found = external(node.id)
     // Clients mint their own eids, so an `entity.eid` already SHAPED like one
     // — a uuid, or the hash a blob or commit is named by (types.ts EID) —
     // that names nothing yet and carries comps DEFINES the entity here, the
     // same freedom the flat wire has. A human id, a bare num, or a slug that
     // resolves to nothing is a typo, and an eid with nothing to define is a
     // reference.
-    let coined = !found && node.id && EID.test(node.id) &&
-        Object.keys(node.comps).length
+    let coined = !found && EID.test(node.id) && Object.keys(node.comps).length
       ? node.id.toLowerCase()
       : undefined
-    let eid = found ?? coined ?? (node.id ? undefined : mint())
-    if (node.id && !eid) throw new Error(`no entity: ${node.id}`)
-    if (!eid) throw new Error('literal mint returned no eid')
-    if (eids.has(eid)) throw new Error(`entity appears twice: ${eid}`)
-    eids.add(eid)
-    node.eid = eid
-    node.minted = !found
-    if (node.key) aliasEntries.push([node.key, eid])
+    let eid = found ?? coined
+    if (!eid) throw new Error(`no entity: ${node.id}`)
+    settle(node, eid, !!found)
   }
-  let aliases = Object.fromEntries(aliasEntries)
-  let byEid = new Map(nodes.map((node) => [node.eid, node]))
 
   let ref = (value: string | number, where = '') => {
     let name = String(value)
-    let local = keys.get(name)?.eid
+    let local = keys.get(name)
     let found = external(name)
     if (local && found) {
       throw new Error(`ambiguous literal reference: ${name}`)
@@ -1795,10 +1800,34 @@ export let normalizeLiterals = (
     // An eid this batch mints at names its own entity, the way a $alias does.
     let low = name.toLowerCase()
     let mine = byEid.get(low)?.minted ? low : undefined
-    let eid = local ?? found ?? mine
+    let eid = local ? assign(local) : found ?? mine
     if (!eid) throw new Error(`no entity or literal key: ${name}${where}`)
     return eid
   }
+  // What the batch MINTS. An ordinary entity gets a uuid; a content-addressed
+  // one is not chosen but derived from what it says (edge.ts saidEid), so its
+  // endpoints must be settled first — hence the walk, and the cycle guard for
+  // a sentence that would have to name itself.
+  let minting = new Set<LiteralNode>()
+  let assign = (node: LiteralNode): string => {
+    if (node.eid) return node.eid
+    if (minting.has(node)) {
+      throw new Error(`literal cycle at ${node.key ?? node.id ?? 'an entity'}`)
+    }
+    minting.add(node)
+    let eid = saidEid(
+      node.comps,
+      (end) =>
+        typeof end == 'object'
+          ? assign(end as LiteralNode)
+          : ref(end as string),
+    ) ?? mint()
+    minting.delete(node)
+    if (!eid) throw new Error('literal mint returned no eid')
+    return settle(node, eid, false)
+  }
+  for (let node of nodes) assign(node)
+  let aliases = Object.fromEntries(aliasEntries)
   let deps = nodes.flatMap((node) =>
     node.deps.map(({ type, target }) => ({
       parent: node,

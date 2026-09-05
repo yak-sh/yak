@@ -35,6 +35,7 @@ let {
   migrateErrors,
   migrateTombstone,
   mintEpoch,
+  mutate,
   numbered,
   projectReachability,
   readComp,
@@ -3347,6 +3348,21 @@ Deno.test('edge: the eid is the sentence — a random one, or no nature, refuses
     'must be edgeEid',
   )
   assertEquals(dep(p), [])
+})
+
+Deno.test('edge: a bundle says one under a $alias, which reports the sentence', () => {
+  let [p, c] = pair()
+  let out = mutate(db, {
+    entities: [{
+      entity: { eid: '$said' },
+      edge: { from: p, to: c },
+      requires: {},
+    }],
+  })
+  let e = edgeEid(p, 'requires', c)
+  assertEquals(out.aliases, { $said: e })
+  assertEquals(comp(e, 'edge'), { eid: e, from: p, to: c, ord: null })
+  assertEquals(dep(p), [['requires', c]])
 })
 
 Deno.test('edge: a missing endpoint drops the entity with the row, never the batch', () => {

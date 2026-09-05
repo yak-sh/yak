@@ -85,6 +85,19 @@ edit:
 }]
 ```
 
+An edge is an entity of its own, so a bundle may also say one outright: `edge`
+beside its nature tag. Under a `$alias` that eid is DERIVED from the sentence
+rather than minted — the same sentence said twice is one entity, and `aliases`
+reports what it derived:
+
+```json
+[{
+  "entity": { "eid": "$said" },
+  "edge": { "from": "T-1", "to": "T-2" },
+  "requires": {}
+}]
+```
+
 A bundle wearing `tombstone` — `{"entity": {"eid": "T-3"}, "tombstone": {}}` —
 deletes that entity, and because a dead entity takes no patch it is refused
 beside any other component or a `$alias`. `apply()` lowers bundles to the flat

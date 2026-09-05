@@ -71,7 +71,7 @@ import {
   workClaimMutation,
   wrapChanges,
 } from './client.ts'
-import { link, typeOf } from './edge.ts'
+import { edgeEid, link, typeOf } from './edge.ts'
 import { inflate } from './client_host.ts'
 import { matchQuery, parseQuery, resolveRefs } from './query.ts'
 import { local } from './time.ts'
@@ -1163,6 +1163,56 @@ Deno.test('normalizeLiterals: a bundle mints at a client-chosen eid', () => {
   for (let [name, literals, message] of bad) {
     assertThrows(() => plan(literals), Error, message, name)
   }
+})
+
+Deno.test('normalizeLiterals: an edge bundle under $alias mints at edgeEid', () => {
+  let A = 'dddddddd-0000-4000-8000-00000000000a'
+  let B = 'dddddddd-0000-4000-8000-00000000000b'
+  let known: Record<string, string> = { 'T-1': A, 'T-2': B, [A]: A, [B]: B }
+  let plan = (literals: Record<string, unknown>[]) =>
+    normalizeLiterals(literals, {
+      resolve: (id) => known[id],
+      // A uuid nothing derives — if it ever appears, the eid was CHOSEN
+      // where it should have been derived.
+      mint: () => 'dddddddd-0000-4000-8000-00000000000f',
+    })
+  // A $alias asks the door to choose; for a sentence, choosing is deriving,
+  // so the alias reports the eid apply() demands (db.ts, 'must be edgeEid').
+  let said = edgeEid(A, 'requires', B)
+  let out = plan([
+    {
+      entity: { eid: '$said' },
+      edge: { from: 'T-1', to: 'T-2' },
+      requires: {},
+    },
+  ])
+  assertEquals(out.aliases, { $said: said })
+  assertEquals(out.changes, [
+    { eid: said, name: 'edge', comp: { from: A, to: B } },
+    { eid: said, name: 'requires', comp: {} },
+  ])
+  // The ends may be anything an eid may be spelled as, a bundle this batch
+  // mints included — the derivation waits for what it names.
+  let minted = 'dddddddd-0000-4000-8000-00000000000f'
+  assertEquals(
+    plan([{
+      entity: { eid: '$said' },
+      edge: { from: { entity: { eid: '$doc' }, doc: { title: 'end' } }, to: A },
+      about: {},
+    }]).aliases,
+    { $doc: minted, $said: edgeEid(minted, 'about', A) },
+  )
+  // A sentence that would have to name itself has no eid to derive.
+  assertThrows(
+    () =>
+      plan([{
+        entity: { eid: '$said' },
+        edge: { from: '$said', to: A },
+        about: {},
+      }]),
+    Error,
+    'literal cycle at $said',
+  )
 })
 
 Deno.test('normalizeLiterals: invalid aliases, references, keys, and cycles reject', () => {

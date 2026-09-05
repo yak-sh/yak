@@ -2056,7 +2056,12 @@ edge's child — a $alias, a human id, or a nested bundle stands in
 ({entity: {eid: 'T-3'}} alone references; with components it defines).
 Edges ride the bundle's edges field: {type: ${
       edges.join('|')
-    }, child}, a list when there are several. A bundle that wears tombstone
+    }, child}, a list when there are several. An edge is also an entity of its
+own, so a bundle may say one outright — edge: {from, to} beside its nature tag
+({entity: {eid: '$said'}, edge: {from: 'T-1', to: 'T-2'}, requires: {}}) — and
+under a $alias its eid is DERIVED from that sentence rather than minted, so
+saying the same sentence twice finds one entity and the aliases map reports
+the derived eid. A bundle that wears tombstone
 ({entity: {eid: 'T-3'}, tombstone: {}}) DELETES that entity, and since a dead
 entity takes no patch it is refused beside any other component or a $alias.
 A read's kind, num, refs,

@@ -36,6 +36,29 @@ export let typeOf: Record<string, string> = Object.fromEntries(
 )
 export let natures = Object.values(natureOf)
 
+// The eid a BUNDLE derives from what it says. A `$alias` means the door
+// chooses the eid; for a content-addressed entity choosing IS deriving, so an
+// edge bundle — `edge{from, to}` beside its nature tag — resolves to the
+// sentence's own eid, and the alias map reports it (T-33622). `ends` answers
+// what an endpoint names, since a bundle may spell one as another alias, a
+// nested bundle, or a human id. An incomplete sentence derives nothing and
+// falls back to a minted eid, where apply() says exactly what it lacks.
+//
+// A blob and a commit are content-addressed too, and neither can be derived
+// here: their content never enters the graph (`blob{bytes}` is a LENGTH, the
+// bytes live beside the db), so those writers name the hash they already hold
+// and the bundle door mints at it (client.ts `coined`).
+export let saidEid = (
+  comps: Record<string, Record<string, unknown> | null>,
+  ends: (target: unknown) => string,
+): string | undefined => {
+  let said = comps.edge
+  if (!said) return undefined
+  let nature = Object.keys(comps).find((n) => comps[n] && typeOf[n])
+  if (!nature || said.from == null || said.to == null) return undefined
+  return edgeEid(ends(said.from), nature, ends(said.to))
+}
+
 let verbOf = (type: string) => {
   let nature = natureOf[type]
   if (!nature) throw new Error(`unknown edge type: ${type}`)
