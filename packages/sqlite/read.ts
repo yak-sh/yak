@@ -15,13 +15,15 @@ import type { Column, Vocab } from '@yaks/vocab'
 import {
   type BindOpts,
   compile,
+  DEEP,
   type Derived,
   doomSql,
   looseSql,
+  narrow,
 } from '@yaks/sql'
 import type { Driver, Row } from './driver.ts'
 import type { Bundle, Comp } from './bundle.ts'
-import type { Doom } from '@yaks/graph'
+import type { Doom, Gone } from '@yaks/graph'
 import { tombstoned } from '@yaks/graph'
 
 // A query, as text or as an already-built AST. Text is parsed; an AST passes
@@ -211,31 +213,55 @@ let bundleOf = (
 }
 
 /**
- * The death cascade's whole question, answered as two statements: everything
- * that dies with these entities, and every soft reference that has to let go of
- * them (@yaks/sql's `doomSql`/`looseSql`). @yaks/graph would otherwise walk the
- * chain a read per rung — free here, a round trip each over a network — and the
- * walk is what an adapter that cannot compile this still gets.
+ * The death cascade's whole question, answered by statement rather than walked:
+ * everything that dies with these entities, and every soft reference that has
+ * to let go of them (@yaks/sql's `doomSql`/`looseSql`). @yaks/graph would
+ * otherwise read once per rung of the chain — free here, a round trip each over
+ * a network — and that walk is what an adapter unable to compile this still
+ * gets.
+ *
+ * A vocabulary too wide to say in one statement (@yaks/sql `narrow`) is asked
+ * in ROUNDS: each statement is transitive within its own tables, so the answer
+ * is complete when a round turns up nothing the last one had not.
  *
  * Asked INSIDE the transaction, after the batch's patches have gone in, which
  * is what makes the answer the one the cascade wants: who points at the dying
  * as the batch LEAVES the graph.
  */
 export let doom = (driver: Driver, vocab: Vocab, eids: string[]): Doom => {
-  let dying = doomSql(vocab, eids)
-  let soft = looseSql(vocab, eids)
+  let ask = (s: { sql: string; params: (string | number)[] }) =>
+    driver.query(s.sql, s.params)
+  let depth = new Map<string, number>()
+  let gone: Gone[] = []
+  let seed = eids
+  let base = 0
+  for (;;) {
+    let fresh: string[] = []
+    let least = DEEP
+    for (let s of doomSql(vocab, seed)) {
+      for (let r of ask(s)) {
+        let eid = String(r.eid)
+        if (depth.has(eid)) continue
+        let rung = base + Number(r.depth)
+        depth.set(eid, rung)
+        gone.push({ eid, depth: rung })
+        fresh.push(eid)
+        least = Math.min(least, rung)
+      }
+    }
+    if (narrow(vocab) || !fresh.length) break
+    seed = fresh
+    base = least
+  }
   return {
-    gone: driver.query(dying.sql, dying.params).map((r) => ({
-      eid: String(r.eid),
-      depth: Number(r.depth),
-    })),
-    loose: soft
-      ? driver.query(soft.sql, soft.params).map((r) => ({
+    gone,
+    loose: looseSql(vocab, [...depth.keys()]).flatMap((s) =>
+      ask(s).map((r) => ({
         eid: String(r.eid),
         comp: String(r.comp),
         prop: String(r.prop),
       }))
-      : [],
+    ),
   }
 }
 

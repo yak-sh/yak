@@ -9,8 +9,16 @@
 // The vocabulary is a bare skeleton on purpose: a node that exists about
 // another node (so a chain is expressible, and so is a cycle), and one soft
 // reference of each word.
+//
+// A SECOND vocabulary is WIDE — more tables bearing a cascade column than one
+// compound SELECT may carry (@yaks/sql `ARMS`) — because that is the shape the
+// platform's own vocabulary has, and the shape that cannot be said in one
+// statement. Its cascade is asked in rounds instead, and a chain that
+// alternates between the two halves is what proves the rounds are run to a
+// fixed point rather than once.
 
-import { assertEquals } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
+import { ARMS, doomSql, looseSql, narrow } from '@yaks/sql'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Change, type Graph, graph } from '@yaks/graph'
 import { memory } from '@yaks/memory'
@@ -53,10 +61,37 @@ let doc: VocabDoc = {
 
 let words: Vocab = loadVocab(doc)
 
+// Six tables bearing a cascade column, which is two statements' worth: `n1..n4`
+// in the first, `n5`/`n6` in the second. One soft reference, so the survivors
+// are answered after the closure has settled rather than during it.
+let wide: Vocab = loadVocab({
+  $defs: {
+    entity: {
+      type: 'object',
+      wire: false,
+      properties: { num: { type: 'number', stamped: true } },
+    },
+    ...Object.fromEntries(
+      [1, 2, 3, 4, 5, 6].map((i) => [`n${i}`, {
+        type: 'object',
+        properties: {
+          of: { type: 'string', ref: 'entity', death: 'cascade' },
+        },
+      }]),
+    ),
+    mark: {
+      type: 'object',
+      properties: {
+        at: { type: 'string', ref: 'entity', death: 'release' },
+      },
+    },
+  } as VocabDoc['$defs'],
+})
+
 let AT = '2026-03-01T00:00:00.000Z'
 
-let db = (): Store => {
-  let s = storage(mem(), words)
+let db = (v: Vocab = words): Store => {
+  let s = storage(mem(), v)
   s.install()
   return s
 }
@@ -64,13 +99,13 @@ let db = (): Store => {
 // The same batches through a graph over SQLite and a graph over a Map: what
 // the last one answered, asserted equal. The compiled closure and the walk are
 // the same rule or one of them is wrong.
-let both = (seed: Change, kill: Change): Bundle[] => {
+let both = (seed: Change, kill: Change, v: Vocab = words): Bundle[] => {
   let run = (g: Graph): Bundle[] => {
     g.apply(seed, { now: AT })
     return g.apply(kill, { now: AT }) as Bundle[]
   }
-  let sql = run(graph({ storage: db(), vocab: words }))
-  assertEquals(sql, run(graph({ storage: memory(words), vocab: words })))
+  let sql = run(graph({ storage: db(v), vocab: v }))
+  assertEquals(sql, run(graph({ storage: memory(v), vocab: v })))
   return sql
 }
 
@@ -171,6 +206,47 @@ Deno.test('a chain longer than the rung count still falls whole', () => {
   let gone = s.tx((tx) => tx.doom(['n0'])).gone
   assertEquals(gone.length, n)
   assertEquals(gone.at(-1)?.eid, `n${n - 1}`)
+})
+
+Deno.test('a wide vocabulary is asked in rounds until nothing is new', () => {
+  // Every rung crosses from one statement's tables to the other's, so one
+  // round of asking finds one rung and no more. The whole chain still falls.
+  let out = both(
+    [
+      { entity: { eid: 'k' }, n1: {} },
+      { entity: { eid: 'a' }, n5: { of: 'k' } },
+      { entity: { eid: 'b' }, n1: { of: 'a' } },
+      { entity: { eid: 'c' }, n6: { of: 'b' } },
+      { entity: { eid: 'd' }, n2: { of: 'c' } },
+      // A survivor holding the last casualty: the soft references are read after
+      // the closure settles, so an owner of the DEEPEST one still lets go.
+      { entity: { eid: 'm' }, mark: { at: 'd' } },
+      { entity: { eid: 'z' }, n1: {} },
+    ],
+    [{ entity: { eid: 'k' }, $delete: true }],
+    wide,
+  )
+  assertEquals(dead(out), ['a', 'b', 'c', 'd'])
+  assertEquals(out.find((b) => b.mark !== undefined), {
+    entity: { eid: 'm' },
+    mark: null,
+  })
+})
+
+Deno.test('a wide vocabulary asks no statement more than it may carry', () => {
+  // Workerd caps a compound SELECT at five terms and answers a wider one with
+  // `too many terms in compound SELECT` — which is not a limit an embedded
+  // SQLite (500) will ever show, so the shape is what a fast test can hold.
+  let terms = (sql: string) => sql.split(/\bunion\b/i).length
+  for (let v of [words, wide]) {
+    for (let s of [...doomSql(v, ['x']), ...looseSql(v, ['x'])]) {
+      assert(
+        terms(s.sql) <= ARMS + 1,
+        `${terms(s.sql)} terms in a compound SELECT:\n${s.sql}`,
+      )
+    }
+  }
+  assert(narrow(words) && !narrow(wide))
 })
 
 Deno.test('a grave is not a casualty twice', () => {

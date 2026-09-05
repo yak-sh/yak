@@ -52,10 +52,19 @@
 // A nested `tx()` is a separate batch, since D1 has no savepoints. Nothing in
 // `apply()` nests one.
 
-import type { Bundle, Comp, Doom, Eid, Entity, Loose, Tx } from '@yaks/graph'
+import type {
+  Bundle,
+  Comp,
+  Doom,
+  Eid,
+  Entity,
+  Gone,
+  Loose,
+  Tx,
+} from '@yaks/graph'
 import { comps, tombstoned } from '@yaks/graph'
 import { matcher } from '@yaks/match'
-import { type BindOpts, doomSql, looseSql } from '@yaks/sql'
+import { type BindOpts, DEEP, doomSql, looseSql, narrow } from '@yaks/sql'
 import {
   minted,
   mintSql,
@@ -287,32 +296,62 @@ export let storage = <S extends Stmt<S>>(
       return [...all.filter((b) => !dirty.has(b.entity.eid)), ...mine]
     }
 
-    // Who dies with these entities, and what has to let go of them: two
-    // statements — the recursive closure over the cascade columns and the soft
-    // references into it (@yaks/sql) — sent as ONE batch, where the walk they
-    // replace cost a read per rung and another per frontier. The casualties'
-    // identities are kept as they come back, so `remove`, which is the next
-    // thing that happens to them, asks nothing more.
+    // Who dies with these entities, and what has to let go of them: the
+    // recursive closure over the cascade columns and the soft references into
+    // it (@yaks/sql), sent as ONE batch where the walk they replace cost a read
+    // per rung and another per frontier. The casualties' identities are kept as
+    // they come back, so `remove`, which is the next thing that happens to
+    // them, asks nothing more.
+    //
+    // A vocabulary too wide for one statement (workerd caps a compound SELECT
+    // at five terms) is asked in ROUNDS, each still one batch: the arms are cut
+    // into statements, so a round is complete only when it turns up nothing the
+    // last one had not. The soft references ride every round bound to what was
+    // known when it began — which is the whole of the dead exactly when the
+    // round proves it, so the last round's answer is the one kept.
     let doom = async (eids: Eid[]): Promise<Doom | null> => {
       if (moved) return null
-      let soft = looseSql(vocab, eids)
-      let asks = [doomSql(vocab, eids), ...(soft ? [soft] : [])]
-      let [dying, letting = []] = await send(asks)
-      let gone = dying.map((r) => {
-        let eid = String(r.eid)
-        if (!known.has(eid)) {
-          known.set(eid, {
-            ...(r.num == null ? {} : { num: Number(r.num) }),
-            dead: false,
-          })
+      let depth = new Map<Eid, number>()
+      let gone: Gone[] = []
+      let loose: Loose[] = []
+      let seed = eids
+      let dead = eids
+      let base = 0
+      for (;;) {
+        let dying = doomSql(vocab, seed)
+        let letting = looseSql(vocab, dead)
+        let out = await send([...dying, ...letting])
+        let fresh: Eid[] = []
+        let least = DEEP
+        for (let rows of out.slice(0, dying.length)) {
+          for (let r of rows) {
+            let eid = String(r.eid)
+            if (depth.has(eid)) continue
+            if (!known.has(eid)) {
+              known.set(eid, {
+                ...(r.num == null ? {} : { num: Number(r.num) }),
+                dead: false,
+              })
+            }
+            let rung = base + Number(r.depth)
+            depth.set(eid, rung)
+            gone.push({ eid, depth: rung })
+            fresh.push(eid)
+            least = Math.min(least, rung)
+          }
         }
-        return { eid, depth: Number(r.depth) }
-      })
-      let loose: Loose[] = letting.map((r) => ({
-        eid: String(r.eid),
-        comp: String(r.comp),
-        prop: String(r.prop),
-      }))
+        loose = out.slice(dying.length).flatMap((rows) =>
+          rows.map((r) => ({
+            eid: String(r.eid),
+            comp: String(r.comp),
+            prop: String(r.prop),
+          }))
+        )
+        if (narrow(vocab) || !fresh.length) break
+        seed = fresh
+        dead = [...depth.keys()]
+        base = least
+      }
       return { gone, loose }
     }
 

@@ -191,7 +191,7 @@ of it — but "who dies with these, and who has to let go" is a transitive
 question, and walked it costs a read per rung. `cascade.ts` compiles it instead:
 
 ```ts
-import { doomSql, looseSql } from '@yaks/sql'
+import { doomSql, looseSql, narrow } from '@yaks/sql'
 
 // with recursive __doom(id, depth) as (
 //   select "entity"."id", 0 from "entity" where "entity"."eid" in (?)
@@ -202,10 +202,20 @@ doomSql(vocab, ['p1']) //  every casualty, with the rung it fell on
 looseSql(vocab, ['p1']) // the survivors' detach/release columns into it
 ```
 
-Both statements re-state the same CTE, so they ride one batch. The rung count
-saturates at 32 rather than climbing, which is what makes a reference cycle
-terminate; the SET is complete at any depth. A storage answers `Tx.doom` with
-them (`@yaks/sqlite`, `@yaks/d1`); one that cannot is walked by `@yaks/graph`.
+The rung count saturates at 32 rather than climbing, which is what makes a
+reference cycle terminate; the SET is complete at any depth. A storage answers
+`Tx.doom` with these (`@yaks/sqlite`, `@yaks/d1`); one that cannot compile them
+is walked by `@yaks/graph`.
+
+Both return a LIST. Every backwards arm is a term of one compound SELECT, and
+workerd — the runtime under a Durable Object and under D1 — allows five
+(SQLite's own default is 500), so a table's death columns are OR'd into one arm
+and the arms are cut into statements of `ARMS`. A vocabulary `narrow(vocab)`
+enough for one statement is answered whole, and `looseSql` re-states its closure
+so both ride one batch. A wider one is asked in ROUNDS: each statement is
+transitive within its own tables, so the caller re-asks with what the last round
+turned up until nothing new comes back, and hands `looseSql` a set already
+closed.
 
 ## Compatibility
 

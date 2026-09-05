@@ -7,11 +7,20 @@
 //
 // Walked, that question is a read per rung of the chain and another per soft
 // column. Over a database on the far side of a network each of those is a
-// round trip, so here it is one statement: a `with recursive` over the cascade
+// round trip, so here it is a statement: a `with recursive` over the cascade
 // columns, seeded with the named dead, that follows every reference backwards
-// at once. The second statement finds the soft references the same closure
-// touches, and rides in the same batch — it re-states the CTE rather than
-// waiting to be told what the first one found.
+// at once — a chain of any length for one ask.
+//
+// A STATEMENT, not necessarily one. Every backwards arm is a term of the same
+// compound SELECT, and workerd — the runtime under a Durable Object and under
+// D1 — caps a compound at FIVE terms (`too many terms in compound SELECT`,
+// measured 2026-09-05; SQLite's own default is 500). So the arms are grouped
+// by table (a table's death columns are one arm, OR'd) and cut into statements
+// of {@link ARMS}, each seeded the same way. A vocabulary {@link narrow}
+// enough for one statement is answered whole; a wider one is asked in ROUNDS —
+// each statement is transitive within its own tables, so the caller re-asks
+// with what the last round turned up until nothing new comes back. Two rounds
+// answer the ordinary cascade, however deep it runs.
 //
 // The COUNT saturates where the walk would loop. A cycle among cascade columns
 // (an entity that exists about an entity that exists about it) would grow the
@@ -32,6 +41,10 @@ import { type Dialect, sqlite } from './sqlite.ts'
  * the order the casualties come back in, never a bound on who dies. */
 export let DEEP = 32
 
+/** How many backwards arms one statement may carry. Workerd allows five terms
+ * in a compound SELECT and the seed is one of them. */
+export let ARMS = 4
+
 // The CTE's name, and the alias the spine is read through. Both are spelled so
 // no component can collide with them — a vocabulary owns every ordinary name.
 let W = '"__doom"'
@@ -45,55 +58,91 @@ let marks = (n: number): string =>
 let alive = (owner: string): string =>
   `not exists (select 1 from "tombstone" where "tombstone"."entity" = ${owner})`
 
-/**
- * The recursive CTE both statements open with: every entity that dies with the
- * named ones. The seed is the batch's own dead (depth 0); each arm follows one
- * `cascade` column backwards — the rows whose column points at something
- * already doomed — and `union` both deduplicates and, with the saturating
- * depth, terminates.
- */
-let cte = (v: Vocab, eids: string[], d: Dialect): Frag => {
-  let arms = v.deaths('cascade').map(([comp, prop]) => {
-    let own = d.ownerKey(comp)
-    return `  union select ${own}, min(${W}."depth" + 1, ${DEEP})` +
-      ` from ${d.table(comp)}, ${W}` +
-      ` where "${comp}"."${prop}" = ${W}."id" and ${alive(own)}\n`
-  })
-  return {
-    sql: `with recursive ${W}("id", "depth") as (\n` +
-      `  select "entity"."id", 0 from "entity"` +
-      ` where "entity"."eid" in (${marks(eids.length)})\n` +
-      arms.join('') + `)\n`,
-    params: [...eids],
-  }
+/** One backwards arm: a table, and every death column of it wearing this word.
+ * Two columns of one table are ONE arm — a term is scarce, and `or` is not. */
+type Arm = [comp: string, props: string[]]
+
+let arms = (cols: [string, string][]): Arm[] => {
+  let by = new Map<string, string[]>()
+  for (let [comp, prop] of cols) by.set(comp, [...(by.get(comp) ?? []), prop])
+  return [...by]
 }
+
+// The arms, cut into what one statement may carry. Always at least one group,
+// so a vocabulary with no cascade column still states its seed.
+let cut = <T>(xs: T[], n: number): T[][] =>
+  xs.length <= n ? [xs] : [xs.slice(0, n), ...cut(xs.slice(n), n)]
+
+/**
+ * Is this vocabulary's whole cascade sayable in one statement? When it is, one
+ * ask is the complete answer and {@link looseSql} can re-state the closure
+ * inside itself; when it is not, the caller asks in rounds (see the header).
+ */
+export let narrow = (v: Vocab): boolean =>
+  arms(v.deaths('cascade')).length <= ARMS
+
+// The recursive CTE one statement opens with: the seed at depth 0, then this
+// group's arms — the rows whose death column points at something already
+// doomed. `union` both deduplicates and, with the saturating depth, terminates.
+let closure = (eids: string[], group: Arm[], d: Dialect): Frag => ({
+  sql: `with recursive ${W}("id", "depth") as (\n` +
+    `  select "entity"."id", 0 from "entity"` +
+    ` where "entity"."eid" in (${marks(eids.length)})\n` +
+    group.map(([comp, props]) => {
+      let own = d.ownerKey(comp)
+      let hits = props.map((p) => `"${comp}"."${p}" = ${W}."id"`).join(' or ')
+      return `  union select ${own}, min(${W}."depth" + 1, ${DEEP})` +
+        ` from ${d.table(comp)}, ${W} where (${hits}) and ${alive(own)}\n`
+    }).join('') + `)\n`,
+  params: [...eids],
+})
+
+// The same name over a set already known: what a soft-reference statement
+// stands on when the cascade was too wide to re-state (see {@link narrow}).
+let named = (eids: string[]): Frag => ({
+  sql: `with ${W}("id") as (` +
+    `select "id" from "entity" where "eid" in (${marks(eids.length)}))\n`,
+  params: [...eids],
+})
 
 /**
  * Everything that dies with these entities, the named ones included: one row
  * per casualty, with the eid, the spine number, and the rung it fell on. In
  * rung order, and within a rung in the order the entities were created, which
  * is the order the walk this replaces answered in.
+ *
+ * One statement when the vocabulary is {@link narrow}, and otherwise one per
+ * group of arms — each a complete closure over ITS tables, to be re-asked with
+ * what the others turned up until nothing new comes back.
  */
 export let doomSql = (
   v: Vocab,
   eids: string[],
   d: Dialect = sqlite,
-): Frag => {
-  let head = cte(v, eids, d)
-  return {
-    sql: head.sql +
-      `select ${E}."eid" as eid, ${E}."num" as num, min(${W}."depth") as depth` +
-      ` from ${W} join "entity" ${E} on ${E}."id" = ${W}."id"` +
-      ` group by ${W}."id" order by depth, ${W}."id"`,
-    params: head.params,
-  }
-}
+): Frag[] =>
+  cut(arms(v.deaths('cascade')), ARMS).map((group) => {
+    let head = closure(eids, group, d)
+    return {
+      sql: head.sql +
+        `select ${E}."eid" as eid, ${E}."num" as num,` +
+        ` min(${W}."depth") as depth` +
+        ` from ${W} join "entity" ${E} on ${E}."id" = ${W}."id"` +
+        ` group by ${W}."id" order by depth, ${W}."id"`,
+      params: head.params,
+    }
+  })
 
 /**
- * Every soft reference into that same closure: a SURVIVOR's `detach` or
- * `release` column pointing at one of the dead, as (component, column, owner).
- * `null` when the vocabulary declares no soft reference at all, which is the
- * whole statement asked for nothing.
+ * Every soft reference into the closure of these entities: a SURVIVOR's
+ * `detach` or `release` column pointing at one of the dead, as (component,
+ * column, owner). Empty when the vocabulary declares no soft reference at all.
+ *
+ * The closure is re-stated inside the statement when the vocabulary is
+ * {@link narrow} — which is what lets it ride the same batch as
+ * {@link doomSql}, before anyone has read the answer. When it is not, one
+ * statement cannot say the closure, so what it is handed IS the set it answers
+ * about: the caller passes a set already closed (the last round's, which added
+ * nothing).
  *
  * The dead are excluded on purpose — a casualty's own tombstone already says
  * everything about it, so only a survivor is told to let go.
@@ -102,19 +151,23 @@ export let looseSql = (
   v: Vocab,
   eids: string[],
   d: Dialect = sqlite,
-): Frag | null => {
+): Frag[] => {
   let soft = [...v.deaths('release'), ...v.deaths('detach')]
-  if (!soft.length) return null
-  let head = cte(v, eids, d)
-  let arms = soft.map(([comp, prop]) => {
-    let own = d.ownerKey(comp)
-    return `select ? as comp, ? as prop, ${E}."eid" as eid, ${E}."id" as ord` +
-      ` from ${d.table(comp)} join "entity" ${E} on ${E}."id" = ${own}` +
-      ` where "${comp}"."${prop}" in (select "id" from ${W})` +
-      ` and ${own} not in (select "id" from ${W}) and ${alive(own)}`
+  if (!soft.length) return []
+  let head = () =>
+    narrow(v) ? closure(eids, arms(v.deaths('cascade')), d) : named(eids)
+  return cut(soft, ARMS).map((group) => {
+    let open = head()
+    return {
+      sql: open.sql + group.map(([comp, prop]) => {
+        let own = d.ownerKey(comp)
+        return `select ? as comp, ? as prop, ${E}."eid" as eid,` +
+          ` ${E}."id" as ord` +
+          ` from ${d.table(comp)} join "entity" ${E} on ${E}."id" = ${own}` +
+          ` where "${comp}"."${prop}" in (select "id" from ${W})` +
+          ` and ${own} not in (select "id" from ${W}) and ${alive(own)}`
+      }).join('\n union all ') + ` order by "ord"`,
+      params: [...open.params, ...group.flat()],
+    }
   })
-  return {
-    sql: head.sql + arms.join('\n union all ') + ` order by "ord"`,
-    params: [...head.params, ...soft.flat()],
-  }
 }
