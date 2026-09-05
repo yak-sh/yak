@@ -29,7 +29,11 @@
  * Reserved keys ride beside the components as components of their own, read by
  * `apply()` rather than written as columns: `$delete` (delete the entity, also
  * spelled as a `tombstone` component), `$was` (a per-column precondition — see
- * {@link Was}), and `$actor` (who is writing — see {@link Actor}).
+ * {@link Was}), and `$actor` (who is writing — see {@link Actor}). They are the
+ * PIPELINE's, and the pipeline is where they stop: the answer is the batch as
+ * applied, {@link composed} one bundle per entity, carrying the components,
+ * the stamps, the minted `num` and the `$alias` it was named by — and no other
+ * `$` key.
  *
  * ## Apply is pluggable, in fixed phases
  * A change runs through an ordered list of {@link Phase}s — normalize, admit,
@@ -66,4 +70,5 @@ export * from './guard.ts'
 export * from './mutate.ts'
 export * from './cascade.ts'
 export * from './stamp.ts'
+export * from './compose.ts'
 export * from './graph.ts'

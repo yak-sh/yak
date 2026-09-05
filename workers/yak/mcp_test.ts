@@ -2543,13 +2543,27 @@ slow('a write with no app routes each component to its own app', async () => {
 
     // ONE bundle wearing two apps' words: the loan is the lending app's row,
     // the retitle lands where the title already lives, and the call is one.
-    await agent.tool('graph_apply', {
-      entities: [{
-        entity: { eid: cake },
-        doc: { title: 'Lemon drizzle' },
-        loan: { to: 'Maya' },
-      }],
-    })
+    let spans = JSON.parse(
+      await agent.tool('graph_apply', {
+        entities: [{
+          entity: { eid: cake },
+          doc: { title: 'Lemon drizzle' },
+          loan: { to: 'Maya' },
+        }],
+      }),
+    ) as {
+      entity: { eid: string }
+      doc?: { title: string }
+      loan?: { to: string }
+      $actor?: unknown
+    }[]
+    // And ONE bundle back, though two stores each answered their own half
+    // (T-34294) — with none of the `$` words the pipeline speaks in.
+    assertEquals(spans.length, 1)
+    assertEquals(spans[0].entity.eid, cake)
+    assertEquals(spans[0].doc!.title, 'Lemon drizzle')
+    assertEquals(spans[0].loan!.to, 'Maya')
+    assertEquals(spans[0].$actor, undefined)
     // Where each half landed is what the stores themselves say.
     assertEquals(
       (await rows(`id=${cake}`, 'recipes'))[0].doc!.title,

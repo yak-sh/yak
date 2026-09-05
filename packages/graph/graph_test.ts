@@ -38,6 +38,40 @@ Deno.test('a batch lands, and the return carries the births', () => {
   assertEquals(comp(stored, 'book').pages, 412)
 })
 
+Deno.test('the answer is one bundle per entity, and no pipeline key', () => {
+  let one = g()
+  // A write: the caller's patch, the stamp and the birth are one bundle, and
+  // the `$actor` that made the stamp does not leave apply() (T-34294).
+  let wrote = sync(one.apply([{
+    entity: { eid: 'b1' },
+    doc: { title: 'Dune' },
+    book: { pages: 412 },
+    $actor: { by: 'ada' },
+  }], { now: '2026-01-01T00:00:00.000Z' }))
+  assertEquals(wrote.length, 1)
+  assertEquals(wrote[0], {
+    entity: { eid: 'b1', num: 1 },
+    doc: { title: 'Dune' },
+    book: { pages: 412 },
+    created: { at: '2026-01-01T00:00:00.000Z', by: 'ada' },
+  })
+  // A mint keeps the word the caller named it by, and nothing else.
+  let [minted] = sync(one.apply([{
+    entity: { eid: '$new' },
+    doc: { title: 'Emma' },
+    $actor: { by: 'ada' },
+  }]))
+  assertEquals(minted.$alias, '$new')
+  assert(minted.entity.eid != '$new' && minted.entity.num != null)
+  assertEquals(comp(minted, 'doc').title, 'Emma')
+  // A delete answers as the tombstone alone: `$delete` is the pipeline's word
+  // for it, and a dead entity's components are a ghost.
+  let died = sync(one.apply([
+    { entity: { eid: 'b1' }, doc: { title: 'too late' }, $delete: true },
+  ]))
+  assertEquals(died, [{ entity: { eid: 'b1' }, tombstone: {} }])
+})
+
 Deno.test('a patch touches only the columns it names; null clears one', () => {
   let one = g()
   sync(one.apply([{

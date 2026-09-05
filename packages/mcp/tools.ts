@@ -153,8 +153,11 @@ export let core = (opts: CoreOpts): Tool[] => {
         `null column is cleared, a null component is dropped, and ` +
         `$delete: true kills the entity. Mint an id yourself, or write ` +
         `'$name' as the eid and read back what the graph named it. The answer ` +
-        `is the batch AS APPLIED, including everything the graph synthesized: ` +
-        `stamps, minted numbers, and a tombstone per casualty. This tool's ` +
+        `is the batch AS APPLIED, one bundle per entity: {entity: {eid, num}}, ` +
+        `every component as written, the stamps the graph made (created, ` +
+        `updated), and the '$alias' you named it by. Anything that died — ` +
+        `what you deleted, and whatever fell with it — answers as ` +
+        `{entity, tombstone: {}} and nothing else. This tool's ` +
         `own input schema is the vocabulary — every component, every column ` +
         `and every type — and graph_schema says the same thing at length. ` +
         `The schema describes and the server decides: it is open, so a word ` +

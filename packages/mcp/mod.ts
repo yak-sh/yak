@@ -5,7 +5,8 @@
  * It ships the GENERIC tier and nothing else — five tools over any vocabulary,
  * no tool per component:
  *
- * - **`graph_apply`** — bundles in, the batch as applied out;
+ * - **`graph_apply`** — bundles in, the batch as applied out, one bundle per
+ *   entity;
  * - **`graph_query`** — a query line in, bundles out;
  * - **`graph_show`** — entities whole, with what points at them and the edges
  *   between them;

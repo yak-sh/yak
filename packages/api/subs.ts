@@ -21,7 +21,7 @@
 // that stopped matching — so the server is what remembers who is in.
 
 import type { Bundle, Eid, Graph } from '@yaks/graph'
-import { detached, isPromise, over, then } from '@yaks/graph'
+import { composed, detached, isPromise, over, then } from '@yaks/graph'
 import { type Filter, filter } from '@yaks/match'
 import { bare, type Clause, parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
@@ -29,15 +29,16 @@ import { type Refusal, refusal } from './refuse.ts'
 
 /**
  * One push to one subscriber. `bundles` are whole entities that are now in the
- * set — for the raw feed (`subscribe: true`), the batch exactly as it was
- * applied. `gone` names the entities that LEFT the set, whether they were
- * deleted or merely stopped matching. `refused` replaces both when the
- * subscription could not be opened.
+ * set — for the raw feed (`subscribe: true`), the batch as it was applied, one
+ * bundle per entity, exactly as its writer was answered. `gone` names the
+ * entities that LEFT the set, whether they were deleted or merely stopped
+ * matching. `refused` replaces both when the subscription could not be opened.
  */
 export type Frame = {
   /** the subscription this frame answers */
   id: string
-  /** the entities now in the set (whole), or the applied batch for a raw feed */
+  /** the entities now in the set (whole), or the composed batch for a raw
+   * feed */
   bundles?: Bundle[]
   /** entities that left the set — deleted, or no longer matching */
   gone?: Eid[]
@@ -193,7 +194,15 @@ export let subscriptions = (graph: Graph): Subs => {
 
   let commit = (applied: Bundle[]) => {
     let subs = all()
-    for (let s of subs) if (s.raw) s.sink({ id: s.id, bundles: applied })
+    // A raw feed carries the batch to a CLIENT, and this hook is handed what
+    // the phases said to each other — one patch each, the `$` keys still on.
+    // So it is composed here, the same way `apply()` composes its own answer:
+    // a subscriber hears exactly what the writer was told.
+    let raw = subs.filter((s) => s.raw)
+    if (raw.length) {
+      let batch = composed(applied)
+      for (let s of raw) s.sink({ id: s.id, bundles: batch })
+    }
     let queries = subs.filter((s) => !s.raw)
     if (!queries.length) return
     let touched = [...new Set(applied.map((b) => b.entity.eid))]

@@ -13,7 +13,10 @@
 // `tombstone` component both mean "this entity dies"; `$was` carries a
 // per-column precondition; `$actor` names who is writing. They are components
 // in every sense that matters — data associated with an entity — they just
-// live on the wire and inside `apply()` rather than in a table.
+// live on the wire and inside `apply()` rather than in a table. And that is
+// where they stop: `apply()`'s answer is composed (./compose.ts) with every `$`
+// key off it but `$alias`, which is the graph telling the caller which id its
+// `$name` became.
 
 /** An entity's id: a client-minted string (a uuid, or a content hash). A
  * reference column reads back as the target's `eid`, so this is also the type

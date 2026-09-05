@@ -50,7 +50,7 @@ your vocabulary declares.
 
 | tool           | what it does                                                   |
 | -------------- | -------------------------------------------------------------- |
-| `graph_apply`  | bundles in, the batch as applied out                           |
+| `graph_apply`  | bundles in, the batch as applied out — one bundle per entity   |
 | `graph_query`  | a query line in, bundles out                                   |
 | `graph_show`   | entities whole, with what points at them and the edges between |
 | `graph_schema` | the index of your words, or one of them in full                |

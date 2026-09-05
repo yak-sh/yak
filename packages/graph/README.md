@@ -49,11 +49,16 @@ let out = g.apply([
 `apply()` returns the batch **as applied**, plus everything it synthesized — the
 entities a delete took with it, the identities storage minted, the provenance
 stamps — so a client that applies the return to its cache lands exactly where
-the graph is.
+the graph is. It is answered **one bundle per entity**: the phases each add
+their own patch, and `composed()` puts them back together as the last thing
+`apply()` does, so nothing on the far end merges three bundles to see one
+entity. An entity the batch killed answers as `{entity, tombstone: {}}` and
+nothing else.
 
 Reserved keys ride beside the components. They are components in every sense
 that matters (data about an entity); they just live on the wire and inside
-`apply()` rather than in a table:
+`apply()` rather than in a table — the PIPELINE's, which is where they stop: the
+only one on the answer is the `$alias` a mint was named by.
 
 - `$delete: true` — delete the whole entity (it is tombstoned, and death
   spreads; a delete may also be spelled as a `tombstone` component);

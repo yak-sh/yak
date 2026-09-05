@@ -6,11 +6,11 @@ plain request handler that runs in any JavaScript environment.
 Three routes, no framework, no environment: a `Request` goes in and a `Response`
 comes out. Point it at a graph and you have a server.
 
-- **`POST /apply`** — a batch of bundles in, the batch as applied out. Add
-  `?check=1` to rehearse it: every phase runs and the transaction rolls back, so
-  nothing is written and no effect observes it, while a refusal is still a
-  refusal. That is how one batch is spread over several graphs — ask them all,
-  then commit.
+- **`POST /apply`** — a batch of bundles in, the batch as applied out, one
+  bundle per entity (@yaks/graph `composed`). Add `?check=1` to rehearse it:
+  every phase runs and the transaction rolls back, so nothing is written and no
+  effect observes it, while a refusal is still a refusal. That is how one batch
+  is spread over several graphs — ask them all, then commit.
 - **`GET /query?q=…`** (or `POST /query`) — a query line in, bundles out.
 - **`/ws`** — subscriptions: a saved query whose answer is pushed again whenever
   a committed batch changes it.
@@ -47,9 +47,9 @@ curl 'localhost:8000/query?q=.status=shelved%26.price<20'
 
 A **bundle** is one entity, whole: its identity under `entity`, every component
 it wears under that component's name. `/apply` takes a JSON array of them (a
-`Change`) and answers with the array `apply()` returned — the patches as they
-landed, plus everything the graph synthesized: the `num` it minted, the
-`created` stamp it wrote, a tombstone for each casualty of a delete.
+`Change`) and answers with the array `apply()` returned — one bundle per entity,
+the patches as they landed plus everything the graph synthesized: the `num` it
+minted, the `created` stamp it wrote, a tombstone for anything that died.
 
 ## The door is where trust lives
 

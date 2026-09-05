@@ -27,7 +27,12 @@
 //
 // `apply()` returns the batch AS APPLIED plus everything it synthesized —
 // casualties, births with their number, stamps — so a client that applies the
-// return to its cache lands exactly where the graph is.
+// return to its cache lands exactly where the graph is. It is answered ONE
+// BUNDLE PER ENTITY (./compose.ts): the phases each add their own patch, and
+// composing them is the last thing this file does, so no caller has to merge
+// three bundles to see the one entity it just wrote. The `$` keys are the
+// pipeline's and come off there; the raw phase output is what every hook sees
+// inside the pipeline, and what a dry run's {@link Checked} carries.
 //
 // `check: true` runs that whole list and then refuses the commit, so a caller
 // spreading one batch over several graphs can ask them all "would you take
@@ -42,6 +47,7 @@ import { detached, type Query, type ReadOpts } from './storage.ts'
 import type { Hook, Phase, Plugin } from './plugin.ts'
 import { type Derive, resolve } from './alias.ts'
 import { admit } from './admit.ts'
+import { composed } from './compose.ts'
 import { type Ask, gather, holding, reached } from './gather.ts'
 import { guard } from './guard.ts'
 import { mutate } from './mutate.ts'
@@ -58,9 +64,9 @@ export type ApplyOpts = {
   now?: string
   /** a DRY RUN: every phase runs and the transaction is rolled back instead of
    * committed, so nothing is written and no effect observes it. The answer is
-   * the batch as the phases made it — a refusal still throws, which is the
-   * whole point of asking. The audit hooks see the rollback (see
-   * {@link Checked}). */
+   * the batch the phases made, composed like any other — a refusal still
+   * throws, which is the whole point of asking. The audit hooks see the
+   * rollback (see {@link Checked}). */
   check?: boolean
 }
 
@@ -77,7 +83,8 @@ export type ApplyOpts = {
  * refused, and a rehearsal is not an incident.
  */
 export class Checked extends Error {
-  /** the batch as the phases made it, which is a check's whole answer */
+  /** the batch as the phases made it, RAW — one patch per phase, the `$` keys
+   * still on. `apply()` composes it (./compose.ts) before answering. */
   bundles: Bundle[]
   constructor(bundles: Bundle[]) {
     super('checked')
@@ -119,8 +126,8 @@ export type Graph = {
   read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
   /** a query → the compiled statement's raw rows */
   rows: (query: Query, opts?: ReadOpts) => Row[] | Promise<Row[]>
-  /** apply a batch atomically → the batch as applied, plus what it
-   * synthesized */
+  /** apply a batch atomically → the batch as applied, one bundle per entity,
+   * plus what it synthesized */
   apply: (change: Change, opts?: ApplyOpts) => Bundle[] | Promise<Bundle[]>
 }
 
@@ -278,17 +285,19 @@ export let graph = (opts: Options): Graph => {
         : effects(committed)
     }
 
-    return then(
-      each(
-        [
-          phase('normalize', outside),
-          phase('admit', outside, (b) => admit(b, vocab, o.trusted)),
-          phase('mint', outside, (b) => resolve(b, vocab, derives(), mint)),
-        ],
-        change,
-        (b, step) => step(b),
-      ),
-      inside,
+    // The run, end to end: the phases before the transaction, the transaction,
+    // and then the ANSWER — composed once, where every way out of `apply()`
+    // passes, the commit and a dry run's rollback alike.
+    return each(
+      [
+        phase('normalize', outside),
+        phase('admit', outside, (b) => admit(b, vocab, o.trusted)),
+        phase('mint', outside, (b) => resolve(b, vocab, derives(), mint)),
+        inside,
+        composed,
+      ],
+      change,
+      (b, step) => step(b),
     )
   }
 

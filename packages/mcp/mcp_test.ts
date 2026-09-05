@@ -57,13 +57,40 @@ Deno.test('a search seam adds its tool, and answers through it', async () => {
 })
 
 Deno.test('a batch applied comes back as it landed, and reads back', async () => {
-  let client = await connect()
+  let client = await connect({ actor: ada })
   let wrote = bundles(result(
     await called(client, 'graph_apply', {
       change: [spring],
     }),
   ))
+  // One bundle for the one entity — its components, its number and its stamp
+  // together — and no `$actor`, which is the pipeline's and stops in apply()
+  // (T-34294).
+  assertEquals(wrote.length, 1)
   assertEquals(wrote[0].entity.eid, 'b1')
+  assertEquals(typeof wrote[0].entity.num, 'number')
+  assertEquals(comp(wrote[0], 'book').price, 12)
+  assertEquals(comp(wrote[0], 'created').by, 'm1')
+  assertEquals(wrote[0].$actor, undefined)
+
+  // A mint answers the word the caller named it by, and a delete answers the
+  // tombstone alone.
+  let [minted] = bundles(result(
+    await called(client, 'graph_apply', {
+      change: [{ entity: { eid: '$new' }, doc: { title: 'Emma' } }],
+    }),
+  ))
+  assertEquals(minted.$alias, '$new')
+  assert(minted.entity.eid != '$new')
+  let [died] = bundles(result(
+    await called(client, 'graph_apply', {
+      change: [{ entity: { eid: minted.entity.eid }, $delete: true }],
+    }),
+  ))
+  assertEquals(died, {
+    entity: { eid: minted.entity.eid },
+    tombstone: {},
+  })
 
   let found = bundles(result(
     await called(client, 'graph_query', {

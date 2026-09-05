@@ -104,11 +104,21 @@ Deno.test('the raw feed carries the batch exactly as it was applied', () => {
   subs.open(to, 'all', true)
   assertEquals(take(), []) // a raw feed has no opening set
 
-  graph.apply([{ entity: { eid: 'b1' }, doc: { title: 'Spring' } }])
+  // The same answer the writer got: one bundle per entity, its patch and its
+  // stamp together — and none of the `$` keys the phases spoke with (T-34294).
+  graph.apply([{
+    entity: { eid: 'b1' },
+    doc: { title: 'Spring' },
+    $actor: { by: 'ada' },
+  }])
   let [batch] = take()
   assertEquals(batch.id, 'all')
-  assertEquals(comp(batch.bundles![0], 'doc'), { title: 'Spring' })
-  assert(batch.bundles!.some((b) => comp(b, 'created').at != null))
+  assertEquals(batch.bundles!.length, 1)
+  let [one] = batch.bundles!
+  assertEquals(comp(one, 'doc'), { title: 'Spring' })
+  assertEquals(comp(one, 'created').by, 'ada')
+  assert(comp(one, 'created').at != null)
+  assertEquals(one.$actor, undefined)
 })
 
 Deno.test('a windowed query re-reads its whole answer', () => {

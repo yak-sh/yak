@@ -120,8 +120,11 @@ Deno.test('a chain falls to the end, rung by rung', () => {
     { entity: { eid: 'd' }, node: { name: 'd', of: 'c' } },
     { entity: { eid: 'z' }, node: { name: 'z' } },
   ], [{ entity: { eid: 'a' }, $delete: true }])
-  // In rung order, and the bystander is untouched.
-  assertEquals(dead(out), ['b', 'c', 'd'])
+  // The named dead leads, then the rungs in order, and the bystander is
+  // untouched. Every death is spelled `tombstone` in the answer, the batch's
+  // own included: `$delete` is the pipeline's word and stops there
+  // (@yaks/graph `composed`).
+  assertEquals(dead(out), ['a', 'b', 'c', 'd'])
 })
 
 Deno.test('a fork takes both arms, and stops at what points nowhere', () => {
@@ -131,7 +134,7 @@ Deno.test('a fork takes both arms, and stops at what points nowhere', () => {
     { entity: { eid: 'c' }, node: { name: 'c', of: 'a' } },
     { entity: { eid: 'd' }, node: { name: 'd', of: 'b' } },
   ], [{ entity: { eid: 'a' }, $delete: true }])
-  assertEquals(dead(out), ['b', 'c', 'd'])
+  assertEquals(dead(out), ['a', 'b', 'c', 'd'])
 })
 
 Deno.test('a cycle of cascade references terminates', () => {
@@ -142,7 +145,7 @@ Deno.test('a cycle of cascade references terminates', () => {
     { entity: { eid: 'y' }, node: { name: 'y', of: 'x' } },
     { entity: { eid: 'x' }, node: { of: 'y' } },
   ], [{ entity: { eid: 'x' }, $delete: true }])
-  assertEquals(dead(out), ['y'])
+  assertEquals(dead(out), ['x', 'y'])
 })
 
 Deno.test('only survivors let go', () => {
@@ -164,7 +167,7 @@ Deno.test('only survivors let go', () => {
       { entity: { eid: 'l1' }, link: { to: null } },
     ],
   )
-  assertEquals(dead(out), ['b', 'c'])
+  assertEquals(dead(out), ['a', 'b', 'c'])
 })
 
 Deno.test('the closure carries the rung it fell on', () => {
@@ -226,7 +229,7 @@ Deno.test('a wide vocabulary is asked in rounds until nothing is new', () => {
     [{ entity: { eid: 'k' }, $delete: true }],
     wide,
   )
-  assertEquals(dead(out), ['a', 'b', 'c', 'd'])
+  assertEquals(dead(out), ['k', 'a', 'b', 'c', 'd'])
   assertEquals(out.find((b) => b.mark !== undefined), {
     entity: { eid: 'm' },
     mark: null,

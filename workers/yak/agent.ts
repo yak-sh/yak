@@ -25,6 +25,7 @@
 // actually write.
 import { z } from 'zod'
 import type { Bundle, Graph, Plugin, Row, Storage, Tool, Tx } from '@yaks/graph'
+import { composed as perEntity } from '@yaks/graph'
 import { Say, type Search } from '@yaks/mcp'
 import type { Column, Vocab } from '@yaks/vocab'
 import { META, storeName } from './directory.ts'
@@ -306,17 +307,22 @@ export let reading =
       ? z.union([z.string(), z.object({ eid: z.string() }).passthrough()])
       : undefined
 
-// The batch as applied, as `graph_apply` promises it: what the stores answered
-// (reach.ts `written`), each entity minted under an alias carrying the name the
-// batch called it by — which is how a caller matches the id it just minted to
-// the word it asked for.
+// The batch as applied, as `graph_apply` promises it: one bundle per entity,
+// each minted under an alias carrying the name the batch called it by — which
+// is how a caller matches the id it just minted to the word it asked for.
+//
+// Each store composed its own answer (@yaks/graph `composed`), and an entity
+// SPANNING apps was answered once per store it landed in (reach.ts `written`);
+// composing the parts is what makes that one entity again. The alias is put on
+// after, because this door minted the aliases itself before the batch was
+// split, so no store ever saw one.
 let aliased = (
   out: { bundles: Bundle[]; aliases: Record<string, string> },
 ): Bundle[] => {
   let named = new Map(
     Object.entries(out.aliases).map(([alias, eid]) => [eid, alias]),
   )
-  return out.bundles.map((b) =>
+  return perEntity(out.bundles).map((b) =>
     named.has(b.entity.eid) ? { $alias: named.get(b.entity.eid), ...b } : b
   )
 }

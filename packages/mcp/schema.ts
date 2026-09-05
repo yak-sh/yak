@@ -168,6 +168,17 @@ export let bundleSchema = (
       kind: z.string().optional().describe(
         'the derived display kind — what the components make this entity',
       ),
+      // The one `$` key that leaves `apply()` (@yaks/graph `composed`), and
+      // only on the batch it answers: the caller's own word for an entity
+      // whose id it could not know. `nulls` is that door — a read answers
+      // neither a null component nor an alias.
+      ...(opts.nulls
+        ? {
+          $alias: z.string().optional().describe(
+            "the '$name' this batch called the entity, when it named one",
+          ),
+        }
+        : {}),
     }),
     entity: z.object({
       eid: opts.write

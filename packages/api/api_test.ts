@@ -30,7 +30,15 @@ Deno.test('a batch applied comes back as it landed, and reads back', async () =>
   ]))
   assertEquals(wrote.status, 200)
   let applied: Bundle[] = await body(wrote)
+  // One bundle for the one entity: its patch, its number and the stamp the
+  // door's own actor made — and nothing the pipeline said (T-34294).
+  assertEquals(applied.length, 1)
+  assertEquals(applied[0].entity.eid, 'b1')
+  assertEquals(typeof applied[0].entity.num, 'number')
   assertEquals(comp(applied[0], 'book'), { price: 12 })
+  assertEquals(comp(applied[0], 'doc'), { title: 'Spring' })
+  assertEquals(comp(applied[0], 'created').by, 'm1')
+  assertEquals(applied[0].$actor, undefined)
 
   let read = await handler(ask('.price<20'))
   assertEquals(read.status, 200)
