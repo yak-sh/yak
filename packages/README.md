@@ -52,6 +52,10 @@ In dependency order:
   `created`/`changed`/`removed` handlers per component, run after the
   transaction, each isolated, with an optional durable ledger. The mechanism —
   it ships no effect of its own.
+- **[@yaks/journal](./journal)** — who wrote what, when: every committed batch
+  recorded inside its own transaction as `batch`/`delta` components, and the
+  three things that fall out — the history of one entity, the inverse of a batch
+  (undo), and a cursor feed of what has committed since.
 - **[@yaks/member](./member)** — who belongs and what they may touch: a space
   roster (`member`), per-thing grants (`grant`), an access mode (`access`), the
   `precondition` hook that refuses a write the actor's role does not allow, and
@@ -120,6 +124,10 @@ on its own:
   batch MEANS, and this decides what to do about it once it is true — a
   notification, a receipt, a spawned process — registered per component, run
   post-commit, and isolated so a broken observer never breaks a write.
+- `@yaks/journal` is the memory of the same write: it records what each batch
+  moved as components of its own, inside the transaction, so a refused batch
+  leaves nothing and a committed one always left a record. History, undo and the
+  delta feed a live client replays are three readings of that one log.
 - `@yaks/member` is the other kind of rule over the same `apply()`: not what a
   batch MEANS but who is allowed to say it, enforced as a `precondition` hook so
   a refusal rolls the batch back, and mirrored as a `canRead` the door asks for
