@@ -64,7 +64,7 @@ for (
 
 // nav.tsx captures location/history at module init, so import it only after
 // the fakes are installed (restore_test's rule); live.ts reads globals lazily.
-let { follows, navigate, route } = await import('./nav.tsx')
+let { navigate, route } = await import('./nav.tsx')
 
 // The graph the app opens on: a root canvas and a task to walk into.
 let graph = () => {
@@ -106,50 +106,19 @@ Deno.test('the cursor row is idempotent — one per client', () => {
   assertEquals(myCursor(CLIENT)?.eid, first)
 })
 
-Deno.test('an agent moving the cursor navigates the tab (show)', () => {
+// The cursor is UPDATE-ONLY: a write to this client's cursor row — by an agent's
+// `show`, another client, or a stale server row — must NOT move the tab. This is
+// the bug that made P-19 inescapable: a cursor left pointing there yanked every
+// attempt to open something else straight back.
+Deno.test('a cursor write never navigates the tab (update-only)', () => {
   graph()
   go('/') // the tab sits on the root canvas
-  // Seed this client's cursor at the canvas, then arm the follow AFTER — the
-  // first run records the baseline so the boot snapshot never yanks the tab.
   let cur = '00000000-0000-4000-8000-0000000000f0'
-  applyLocal([{
-    eid: cur,
-    name: 'cursor',
-    comp: { eid: cur, client: CLIENT, target: CANVAS },
-  }])
-  follows()
-  assertEquals(route.value, '/') // baseline: still on the canvas
-
-  // An agent (or another client) points this cursor at the task — the tab
-  // follows, navigation driven as data.
+  // Point this client's cursor at the task, the way `show` would.
   applyLocal([{
     eid: cur,
     name: 'cursor',
     comp: { eid: cur, client: CLIENT, target: TASK },
   }])
-  assertEquals(route.value, '/T-7')
-})
-
-Deno.test('a cursor aimed at a dead entity leaves the tab put', () => {
-  graph()
-  go('/')
-  let cur = '00000000-0000-4000-8000-0000000000f1'
-  applyLocal([{
-    eid: cur,
-    name: 'cursor',
-    comp: { eid: cur, client: CLIENT, target: CANVAS },
-  }])
-  follows()
-  // A target the cache can't name (dead or unloaded) — no navigate, no repair
-  // write: the fallback is read-time and write-free.
-  applyLocal([{
-    eid: cur,
-    name: 'cursor',
-    comp: {
-      eid: cur,
-      client: CLIENT,
-      target: '00000000-0000-4000-8000-00000000dead',
-    },
-  }])
-  assertEquals(route.value, '/')
+  assertEquals(route.value, '/') // stays: rendering ignores the cursor read
 })

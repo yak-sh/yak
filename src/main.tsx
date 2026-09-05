@@ -1,7 +1,7 @@
 import { render } from 'preact'
 import { agreementProbe, boot, cache, clientId, config, ent } from './live.ts'
 import { idOf, slugsOf } from './types.ts'
-import { follows, restore, route } from './components/nav.tsx'
+import { restore, route } from './components/nav.tsx'
 import { App } from './components/App.tsx'
 import { loadPlugins } from './plugins.ts'
 
@@ -58,10 +58,9 @@ if (legacy) {
 // (a remembered entity that died falls back) and nothing has painted yet.
 restore()
 
-// Follow this client's cursor from here on — after restore() has published
-// where the device landed, so the graph cursor only DRIVES live moves (an
-// agent showing you something), never overrides the per-device boot position.
-follows()
+// The cursor is update-only: nav.tsx publishes where this client
+// looks, but nothing reads it back to move the tab. Rendering answers to the
+// URL and to gestures, never to graph state, so there is no follow to arm here.
 
 // Load configured plugins before the first render, so their renderers, actions
 // and editors are registered when App mounts (D-18663 seam 1). The server hands

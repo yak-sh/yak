@@ -3402,11 +3402,9 @@ export let myCamera = (client: string, canvas: string) => {
 // This client's cursor — WHERE it's looking, one row per client (T-12788).
 // Resolved LOCALLY (the client column anchors the derived unique index) over
 // the rows the tab's client sub streams (T-21490), never a whole-cache scan, so
-// reading it in nav.tsx's follow effect stays O(1) and the hot render path
-// never pays (M-17862). Reactive on BOTH the
-// eid set (queryEids) AND the row's content (the per-row signal, not a peek), so
-// an agent moving THIS cursor's target re-fires the follow — a peek would miss a
-// same-eid target change, the whole point of "show you something".
+// mark()'s idempotency check and ui_state's tab report stay O(1) and the hot
+// render path never pays (M-17862). The cursor is UPDATE-ONLY: it is published,
+// never read back to drive navigation (nav.tsx), so no reader here yanks a tab.
 export let myCursor = (client: string) => {
   ensureClientRows(client)
   return localEids([eq('cursor', 'client', client)])

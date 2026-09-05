@@ -1,4 +1,4 @@
-import { effect, signal } from '@preact/signals'
+import { signal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import { block, copy, setFollow } from './ui.tsx'
 import { usePlaceAt } from './overlay.tsx'
@@ -334,13 +334,14 @@ export let restore = () => {
 }
 
 // The cursor's twin of keep(): publish WHERE this client now looks into the
-// GRAPH (T-12788), so the fleet can see it — and, through follows() below, so
-// an agent can MOVE it ("show you something"). One row per client, minted
-// lazily beside the client entity the way the camera mints on first pan.
-// Written on navigation only, never mid-gesture (the same gesture-end rule
-// keep() uses), and IDEMPOTENT: a write naming where the cursor already points
-// is skipped, so the follow effect's own navigate never loops back into a
-// write. Guarded for the TUI (no client, no localStorage) via loc/his.
+// GRAPH (T-12788), so the fleet can see it (ui_state reports every open tab).
+// UPDATE-ONLY: this write publishes position, and nothing reads it back to
+// drive navigation — a cursor read must never influence rendering.
+// One row per client (db.ts unique(client)), minted lazily beside the client
+// entity the way the camera mints on first pan. Written on navigation only,
+// never mid-gesture (the same gesture-end rule keep() uses), and IDEMPOTENT: a
+// write naming where the cursor already points is skipped, so a re-render never
+// churns the row. Guarded for the TUI (no client, no localStorage) via loc/his.
 let mark = () => {
   if (!loc || !his) return
   let t = screenTarget()
@@ -374,42 +375,15 @@ let mark = () => {
   } catch { /* the position is published best-effort, like keep() */ }
 }
 
-// Arm the receiving half of "an agent can show you something": whenever the
-// graph moves THIS client's cursor somewhere other than where this tab is, go
-// there — navigation driven as data, the knock's hand-on-your-shoulder.
-// main.tsx calls this AFTER restore(), so the device's own boot position
-// (localStorage, deliberately per-device) wins the cold launch and the cursor
-// only DRIVES live moves after: the effect's first run records the baseline
-// and never navigates, so a cursor already in the boot snapshot can't yank the
-// tab. A cursor aimed at a dead-or-unloaded entity is left alone — the fallback
-// is read-time and WRITE-FREE (no repair storm). My own mark() writes name
-// where I already am, so they no-op here and the loop closes. queryEids anchors
-// on the client index, so this reads O(1), never a per-change scan (M-17862).
-export let follows = () => {
-  if (!loc || !his) return
-  let last: string | undefined
-  let first = true
-  effect(() => {
-    let cur = myCursor(clientId())
-    let key = cur ? `${cur.target ?? ''}|${cur.view ?? ''}` : ''
-    if (first) {
-      first = false
-      last = key
-      return
-    }
-    if (key == last) return
-    last = key
-    let target = cur?.target
-    if (!target) return
-    if (!cache.peek()[target]?.entity) return // dead/unloaded → stay put
-    if (screenTarget()?.eid == target) return
-    navigate(
-      `/${idOf(ent(target))}${
-        cur?.view ? `?v=${encodeURIComponent(cur.view)}` : ''
-      }`,
-    )
-  })
-}
+// The cursor is UPDATE-ONLY: the client PUBLISHES where it looks
+// (mark() above) but never reads a cursor back to drive navigation. The read
+// half — an effect that navigated the tab wherever the graph moved this
+// client's cursor — let any writer (an agent's `show`, a stale server row)
+// yank the tab, and did: a cursor left pointing at P-19 pulled every attempt to
+// open something else straight back. Rendering answers to the URL and to
+// gestures, not to graph state, so the coupling is gone rather than guarded.
+// The `show` tool's "move a human's tab" rides on this read half and is
+// withdrawn with it (see nav follow-up if it's ever wanted back read-free).
 
 // The entity context menu: navigation first ("open here" is the
 // deliberate in-place root change; new tab beside it), then whatever
