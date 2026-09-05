@@ -36,14 +36,13 @@ export let META_STORE = `${META.space}/${META.app}`
 
 // What a space or an app spent this calendar month (platform.rs `Meter`,
 // usage.ts writes it): on an app its own store's, on a space every app of it
-// summed plus the letters it sent. Null where nothing has been metered yet.
+// summed. Null where nothing has been metered yet.
 export type Meter = {
   month: string
   requests: number
   rows_read: number
   rows_written: number
   bytes: number
-  emails: number
   at: string
 }
 export type Tier = 'free' | 'plus'
@@ -209,7 +208,6 @@ let meterOf = (r: Row): Meter | null =>
       rows_read: r.meter.rows_read ?? 0,
       rows_written: r.meter.rows_written ?? 0,
       bytes: r.meter.bytes ?? 0,
-      emails: r.meter.emails ?? 0,
       at: r.meter.at ?? '',
     }
     : null

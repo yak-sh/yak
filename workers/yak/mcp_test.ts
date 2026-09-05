@@ -2219,12 +2219,12 @@ slow('app_list answers what the month cost', async () => {
     await meta(k, cookie).apply([
       {
         entity: { eid: eids['metered/recipes'] },
-        meter: { ...spent, emails: 0 },
+        meter: spent,
       },
       {
         entity: { eid: eids.metered },
         plan: { tier: 'free' },
-        meter: { ...spent, emails: 4 },
+        meter: spent,
       },
     ])
     // A directory write empties the kernel's 30-second read cache
@@ -2249,7 +2249,6 @@ slow('app_list answers what the month cost', async () => {
     // same answer: nothing here is near a ceiling, so it is only the numbers.
     assertStringIncludes(said, 'metered (free tier')
     assertStringIncludes(said, '1 of 5 apps')
-    assertStringIncludes(said, '4 of 100 emails')
   } finally {
     await k.stop()
   }
@@ -2271,7 +2270,6 @@ slow('the free tier: a warning once, then the refusals', async () => {
       month,
       rows_read: 0,
       rows_written: 0,
-      emails: 0,
       at,
     }
     await meta(k, cookie).apply([

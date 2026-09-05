@@ -8,10 +8,9 @@
 // The sweep is the Worker's `scheduled` handler (index.ts, wrangler.toml
 // `[triggers] crons`): one GraphQL call for the month so far, one `/graph`
 // read per app for the bytes it holds, and one write into the meta store —
-// `meter` on each app, `meter` on each space (its apps summed, its letters
-// left where the send door counts them), and `plan{free}` on a space that has
-// none yet. The write carries the kernel flag, because a person never states
-// their own bill.
+// `meter` on each app, `meter` on each space (its apps summed), and
+// `plan{free}` on a space that has none yet. The write carries the kernel
+// flag, because a person never states their own bill.
 //
 // Two datasets, because one does not carry both numbers:
 // `durableObjectsInvocationsAdaptiveGroups` has `sum.requests`,
@@ -71,8 +70,8 @@ export let QUERY =
 }`
 
 // What one store did, as the analytics answer them. Bytes come from the store
-// itself, and the month and the letters from the row being written
-// (directory.ts `Meter` is the whole component).
+// itself, and the month from the row being written (directory.ts `Meter` is
+// the whole component).
 export type Counts = {
   requests: number
   rows_read: number
@@ -216,15 +215,8 @@ export let sweep = async (env: Env, now = new Date()) => {
       total.rows_written += got.rows_written
       total.bytes += bytes
     }
-    // The space's own reading: its apps summed, and the letters it sent left
-    // alone — the send door counts those (mail rides no store), and this
-    // sweep is only what starts them over when the month turns.
-    let meter = {
-      month,
-      ...total,
-      emails: thisMonth(space.meter, month)?.emails ?? 0,
-      at,
-    }
+    // The space's own reading: its apps summed.
+    let meter = { month, ...total, at }
     // A space that has just crossed a line — or fallen back under one — has
     // something new to hear, so the mark that it was told goes (unseen.ts
     // `ceiling` writes it back). A level that has not moved keeps its mark,
@@ -255,15 +247,15 @@ export let metered = async (env: Env, now = new Date()) => {
 //
 // Adoption over revenue (T-32756): a ceiling is something the person's agent
 // SEES COMING and is told about, not a wall the person hits. So only what
-// costs money is refused outright — a sixth app, data past the ceiling, the
-// 101st letter — and requests past 50,000 are served and reported. At 80% of
+// costs money is refused outright — a sixth app, data past the ceiling — and
+// requests past 50,000 are served and reported. At 80% of
 // any of them the agent gets one line on the unseen channel (unseen.ts
 // `ceiling`), marked the way an error is, so it rides one reply.
 
 let GB = 1024 ** 3
 
 // The free tier, as decided (D-32751): what a space gets for nothing.
-export let FREE = { apps: 5, requests: 50_000, bytes: GB, emails: 100 }
+export let FREE = { apps: 5, requests: 50_000, bytes: GB }
 
 // Where the warning line sits, as a fraction of a ceiling.
 export let WARN = 0.8
@@ -273,13 +265,7 @@ export let WARN = 0.8
 // than to the free one.
 export let ceilings = (tier: Tier | null) => tier == 'plus' ? null : FREE
 
-let empty = (month: string): Meter => ({
-  month,
-  ...none(),
-  bytes: 0,
-  emails: 0,
-  at: '',
-})
+let empty = (month: string): Meter => ({ month, ...none(), bytes: 0, at: '' })
 
 // This month's reading, whatever the row holds — a month behind is nothing
 // spent, and no row at all is the same.
@@ -295,7 +281,6 @@ export let fullness = (space: Space, apps: number, now = new Date()) => {
       apps: apps / free.apps,
       requests: m.requests / free.requests,
       bytes: m.bytes / free.bytes,
-      emails: m.emails / free.emails,
     }
     : null
 }
@@ -329,9 +314,9 @@ export let standing = (space: Space, apps: number, now = new Date()) => {
   let free = ceilings(space.tier)
   if (!free) return `${space.slug}: no ceilings on this plan.`
   let m = spent(space, now)
-  let refused = `Requests are never refused; a sixth app, data past ${
+  let refused = `Requests are never refused; a sixth app, or data past ${
     size(free.bytes)
-  }, or the ${free.emails + 1}st letter is. What the plans hold: ${PRICING}`
+  }, is. What the plans hold: ${PRICING}`
   let head = `${space.slug} (free tier, ${m.month}): ${apps} of ${free.apps} ` +
     'apps'
   let read = asOf(m.at)
@@ -339,12 +324,11 @@ export let standing = (space: Space, apps: number, now = new Date()) => {
   // the first one this month there is no reading at all, and zero would be a
   // claim rather than a number.
   if (!read) {
-    return `${head}. The month's requests, data and letters have not been ` +
+    return `${head}. The month's requests and data have not been ` +
       `read yet — the meter sweeps hourly. ${refused}`
   }
   return `${head}, ${count(m.requests)} of ${count(free.requests)} requests, ` +
-    `${size(m.bytes)} of ${size(free.bytes)}, ` +
-    `${m.emails} of ${free.emails} emails${read}. ${refused}`
+    `${size(m.bytes)} of ${size(free.bytes)}${read}. ${refused}`
 }
 
 // The refusal, one sentence: what the ceiling is, and where the plans are
@@ -355,7 +339,7 @@ export let standing = (space: Space, apps: number, now = new Date()) => {
 // explain that a feature needs a plan and may link to a page describing the
 // plans; it may not hand back anything that starts a purchase. Paying is the
 // signed-in web page's door (billing.ts).
-export let atCeiling = (space: Space, what: 'apps' | 'bytes' | 'emails') => {
+export let atCeiling = (space: Space, what: 'apps' | 'bytes') => {
   let free = ceilings(space.tier)!
   let said = {
     apps: `${space.slug} is on the free tier, which is ${free.apps} apps` +
@@ -363,8 +347,6 @@ export let atCeiling = (space: Space, what: 'apps' | 'bytes' | 'emails') => {
     bytes: `${space.slug} is on the free tier, which is ${
       size(free.bytes)
     } of app data — delete what it no longer needs to save more`,
-    emails: `${space.slug} is on the free tier, which is ${free.emails}` +
-      ` emails a month — it can send again on the 1st`,
   }[what]
   return `${said}. Plus lifts it: ${PRICING}`
 }
@@ -395,33 +377,4 @@ export let full = async (
   return held - mine + live + extra > free.bytes
     ? atCeiling(space, 'bytes')
     : ''
-}
-
-// A letter counted against the space that sent it, before it goes: the
-// refusal when the month's hundred are gone, else the count, one higher. The
-// month turning is a fresh row here as it is in the sweep — the counters that
-// are the analytics' to answer wait for the next reading rather than carrying
-// last month's numbers under this month's name.
-//
-// The sign-in letter is NOT counted here, deliberately: the login door reads
-// nothing about an address but whether anyone has named it (identity.ts), and
-// counting would make it read whose space an address belongs to. Refusing one
-// would also lock a person out of the platform over a third of a cent, which
-// is the wall T-32756 says not to build.
-export let sending = async (env: Env, space: Space, now = new Date()) => {
-  let free = ceilings(space.tier)
-  if (!free) return
-  let month = monthOf(now)
-  let held = thisMonth(space.meter, month)
-  if ((held?.emails ?? 0) >= free.emails) {
-    throw new Error(atCeiling(space, 'emails'))
-  }
-  await stamp(env, {
-    entities: [{
-      entity: { eid: space.eid },
-      meter: held
-        ? { month, emails: held.emails + 1 }
-        : { ...empty(month), emails: 1, at: now.toISOString() },
-    }],
-  })
 }

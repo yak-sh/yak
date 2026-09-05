@@ -103,15 +103,7 @@ import { mayWrite, reads, titling, vouched, type Who } from './session.ts'
 import { canon, nameOf, personOf } from './signin.ts'
 import { type Door, storeOf } from './store.ts'
 import { archive, cards, healed, line, openIn, serve } from './unseen.ts'
-import {
-  atCeiling,
-  ceilings,
-  monthOf,
-  sending,
-  size,
-  spent,
-  standing,
-} from './usage.ts'
+import { atCeiling, ceilings, monthOf, size, spent, standing } from './usage.ts'
 import {
   manifest,
   own,
@@ -2377,14 +2369,7 @@ export let TOOLS: Tool[] = [
       // Who invited them, by name — an address is what the letter is sent
       // to, never what a person is called (T-32654).
       let by = await ctx.dir.nameAt(ctx.person)
-      // The month's letters (T-32758): counted before this one goes, and past
-      // the free tier's hundred there is no letter. The membership stands
-      // either way — it costs nothing — so a ceiling here reads like a letter
-      // that could not be sent, and the answer hands over the link to relay.
-      let stopped = await sending(ctx.env, space).then(() => '').catch((e) =>
-        e instanceof Error ? e.message : String(e)
-      )
-      let sent = !stopped && await mail(ctx.env)({
+      let sent = await mail(ctx.env)({
         to: email,
         subject: `${by ?? 'Someone'} invited you to ${what}`,
         body: (name ? `Hi ${name},\n\n` : '') +
@@ -2406,8 +2391,6 @@ export let TOOLS: Tool[] = [
             ? `the invitation${
               note ? ' and your note are' : ' is'
             } on its way to them, with the link: ${link}`
-            : stopped
-            ? `${stopped} So send them the link yourself: ${link}`
             : `the invitation could not be mailed, so send them the link ` +
               `yourself: ${link}`) +
           `. They sign in there with that address, and it is theirs to ` +
@@ -2701,9 +2684,6 @@ export let TOOLS: Tool[] = [
       let where = app && space
         ? `${space.slug}/${app.slug}${app.version ? ` v${app.version}` : ''}`
         : space?.slug ?? ''
-      // Feedback is the platform's own letter, so it is not counted against
-      // the space's monthly hundred (usage.ts) the way an invitation is: a
-      // space at its ceiling is exactly a space with something to say.
       let sent = await mail(ctx.env)({
         to: REPLY_TO,
         subject: `feedback: ${opening}`,

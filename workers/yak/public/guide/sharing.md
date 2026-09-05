@@ -72,9 +72,8 @@ signing in there with that address is all it takes — there is nothing to insta
 and no account to make first. They land on the page the link names.
 
 The membership stands whatever the mail does. If the letter cannot go — the
-platform's mail is misconfigured, or the space is past the free tier's hundred
-emails a month — the answer hands you the link to relay by hand and says why.
-Never re-invite to "retry"; give them the link.
+platform's mail is misconfigured — the answer hands you the link to relay by
+hand and says why. Never re-invite to "retry"; give them the link.
 
 `member_remove` refuses to remove the last owner: a space with nobody to say who
 belongs is one nobody can open again. Removing someone leaves their sign-in

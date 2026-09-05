@@ -113,7 +113,6 @@ let space = (meter: Partial<Meter> = {}, tier: Tier | null = null): Space => ({
     rows_read: 0,
     rows_written: 0,
     bytes: 0,
-    emails: 0,
     at: NOW.toISOString(),
     ...meter,
   },
@@ -127,7 +126,6 @@ Deno.test('a space is near a ceiling at 80% and over it at 100%', () => {
   // Any of the four is enough, and the apps are counted, not metered.
   assertEquals(level(space(), 4, NOW), 'near')
   assertEquals(level(space(), 5, NOW), 'over')
-  assertEquals(level(space({ emails: 81 }), 1, NOW), 'near')
   assertEquals(level(space({ bytes: FREE.bytes }), 1, NOW), 'over')
   // Last month's reading is not this month's usage.
   assertEquals(
@@ -145,7 +143,6 @@ Deno.test('the line says every number against its ceiling', () => {
   assertStringIncludes(said, '3 of 5 apps')
   assertStringIncludes(said, '41,000 of 50,000 requests')
   assertStringIncludes(said, '900 MB of 1 GB')
-  assertStringIncludes(said, '0 of 100 emails')
   // The hour those figures were read: the meter is an hourly rollup, and a
   // bare number reads as live (C-32869 item 6).
   assertStringIncludes(said, '(as of 12:00 UTC)')
@@ -164,7 +161,7 @@ Deno.test('before the first sweep the line says so, not zero', () => {
 // that starts a purchase — the agent surface's policy line (C-33033 on
 // D-32751), which is why the assertion is on both halves.
 Deno.test('a refusal names the ceiling and where the plans are written', () => {
-  for (let what of ['apps', 'bytes', 'emails'] as const) {
+  for (let what of ['apps', 'bytes'] as const) {
     let said = atCeiling(space(), what)
     assertStringIncludes(said, 'free tier')
     assertStringIncludes(said, 'https://yaks.app/pricing')
