@@ -80,6 +80,10 @@ type Grant = {
 // spell the same script.
 export let scriptName = (store: string) => store.replaceAll('/', '_')
 
+// The app's own entry, the one file the platform looks for and the name the
+// shim imports.
+export let WORKER = 'worker.js'
+
 // What the platform runs, with the app's own module inside it. Uploaded as
 // the script's `main_module` beside `worker.js`, which it imports — a
 // multipart upload may carry several ES modules, and the entry is whichever
@@ -88,7 +92,7 @@ export let scriptName = (store: string) => store.replaceAll('/', '_')
 //
 // It is deliberately tiny and deliberately first: it is the only thing
 // between the app's code and the grant.
-export let SHIM = `import app from './worker.js'
+export let SHIM = `import app from './${WORKER}'
 
 let GRANT = '${GRANT}'
 
@@ -434,7 +438,104 @@ let sent = (env: Env, path: string, init: RequestInit) =>
     },
   })
 
-// The app's worker.js into the namespace, wearing the shim. Multipart: one
+// ── The modules a script is made of (T-34263) ──────────────────────────────
+//
+// An app's worker is not always one file: a worker compiled from another
+// language is a `.wasm` beside the `.js` that imports it, and an app may
+// simply split its server code in two. The upload carries every one of them.
+
+// One module of the app's script: the name it is imported by — which is the
+// app's own path for the file — and its bytes.
+export type Module = { name: string; bytes: Uint8Array<ArrayBuffer> }
+
+// What Cloudflare calls each kind of module, by the extension the app spelled
+// it with (wrangler's own `moduleTypeMimeType`). The type is what decides how
+// the runtime treats the part: an ES module is linked, a `.wasm` arrives as a
+// `WebAssembly.Module` the worker instantiates
+// (https://developers.cloudflare.com/workers/runtime-apis/webassembly/javascript/),
+// a `.txt` as a string, and anything else as an ArrayBuffer. A wasm part sent
+// as JavaScript is a syntax error at upload, which is what a mislabelled
+// module looks like from the agent's side.
+let TYPES: Record<string, string> = {
+  js: 'application/javascript+module',
+  mjs: 'application/javascript+module',
+  wasm: 'application/wasm',
+  txt: 'text/plain',
+}
+
+let ESM = TYPES.js
+
+export let moduleType = (name: string) =>
+  TYPES[name.slice(name.lastIndexOf('.') + 1)] ?? 'application/octet-stream'
+
+// The two shapes a static specifier sits in: after `from` (`import x from
+// './y'`, `export * from './y'`) and after `import` itself (a bare
+// `import './y'`, and `import('./y')` with a literal). Over-matching costs
+// nothing — a word in a string that reads like an import names a file the app
+// does not have, and a file that is not there is skipped — while missing one
+// would leave a module out of the upload, which is the bug this ends.
+let FROM = /\bfrom\s*(['"])([^'"\n]+)\1/g
+let IMPORT = /\bimport\s*\(?\s*(['"])([^'"\n]+)\1/g
+
+// In the order the file names them, so the module list is the app's own
+// reading order and not an artefact of which pattern matched first. Only the
+// app's OWN files: a bare specifier is the runtime's (`cloudflare:`, `node:`),
+// and it resolves without us.
+let specifiers = (source: string) =>
+  [...source.matchAll(FROM), ...source.matchAll(IMPORT)]
+    .sort((a, b) => a.index - b.index)
+    .map((m) => m[2])
+    .filter((s) => s.startsWith('./') || s.startsWith('../'))
+
+// A specifier against the module that named it, the way the runtime resolves
+// one: module names are the app's own paths, so `./lib.wasm` from `worker.js`
+// is `lib.wasm` and `../lib.wasm` from `a/b.js` is `lib.wasm`. Walking it by
+// hand rather than through URL keeps the name spelled exactly as the file
+// store holds it, and `..` past the top pops nothing, so no specifier can
+// name a file outside the app.
+let resolved = (from: string, spec: string) => {
+  let at = from.split('/').slice(0, -1)
+  for (let seg of spec.split('/')) {
+    if (seg == '.' || seg == '') continue
+    if (seg == '..') at.pop()
+    else at.push(seg)
+  }
+  return at.join('/')
+}
+
+/**
+ * The modules the script carries: `worker.js`, everything it imports, and
+ * everything those import, read out of the app's own files by `read`.
+ *
+ * A specifier naming a file the app never wrote is left out, and Cloudflare
+ * refuses the upload naming the module it cannot find — a better sentence
+ * than any this could invent, and the deploy is refused either way.
+ */
+export let carried = async (
+  read: (path: string) => Promise<Uint8Array<ArrayBuffer> | null>,
+): Promise<Module[]> => {
+  let out: Module[] = []
+  // `entry.js` is OURS: an app file by that name is never walked to and never
+  // replaces the shim.
+  let seen = new Set(['entry.js'])
+  let walk = async (name: string) => {
+    if (seen.has(name)) return
+    seen.add(name)
+    let bytes = await read(name)
+    if (!bytes) return
+    out.push({ name, bytes })
+    // Only a JavaScript module has imports to follow; a wasm module's own
+    // imports are satisfied by the JavaScript that instantiates it.
+    if (moduleType(name) != ESM) return
+    for (let spec of specifiers(new TextDecoder().decode(bytes))) {
+      await walk(resolved(name, spec))
+    }
+  }
+  await walk(WORKER)
+  return out
+}
+
+// The app's worker into the namespace, wearing the shim. Multipart: one
 // `metadata` part naming the entry module and the bindings, and one part per
 // module named by its own filename
 // (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/reference/platform-examples/,
@@ -460,7 +561,7 @@ let sent = (env: Env, path: string, init: RequestInit) =>
 // is read, and none of them is what a rollback restores FROM: putting an app
 // back re-uploads the worker.js its version pinned, so it never depends on
 // Cloudflare having kept anything.
-export let upload = async (env: Env, store: string, source: string) => {
+export let upload = async (env: Env, store: string, modules: Module[]) => {
   let body = new FormData()
   body.append(
     'metadata',
@@ -474,14 +575,16 @@ export let upload = async (env: Env, store: string, source: string) => {
       }),
     ], { type: 'application/json' }),
   )
-  let module_ = (name: string, text: string) =>
-    body.append(
-      name,
-      new Blob([text], { type: 'application/javascript+module' }),
-      name,
-    )
-  module_('entry.js', SHIM)
-  module_('worker.js', source)
+  // Each part is named by the module name that imports it, and typed by what
+  // it IS — a `.wasm` as `application/wasm`, so the runtime compiles it
+  // instead of trying to parse it as JavaScript.
+  let part = (
+    name: string,
+    bytes: string | Uint8Array<ArrayBuffer>,
+    type: string,
+  ) => body.append(name, new Blob([bytes], { type }), name)
+  part('entry.js', SHIM, ESM)
+  for (let m of modules) part(m.name, m.bytes, moduleType(m.name))
   return named(
     await answered(
       await sent(env, `/${scriptName(store)}`, {

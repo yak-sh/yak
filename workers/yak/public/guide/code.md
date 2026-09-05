@@ -46,6 +46,28 @@ write is what runs:
 `ctx` is the runtime's. There is no build step: the file is uploaded as-is at
 `app_deploy` and run as-is.
 
+### More than one file
+
+`worker.js` may import the files beside it, and the deploy carries every module
+it names and every module those name. Nothing else goes up: the app's page
+scripts stay pages.
+
+That is also how a worker compiled from another language runs here. A `.wasm`
+arrives as a compiled `WebAssembly.Module`, instantiated once at the top level
+rather than per request:
+
+    import wasm from './add.wasm'
+
+    let { exports } = new WebAssembly.Instance(wasm, {})
+
+    export default {
+      fetch: () => new Response(String(exports.add(2, 3))),
+    }
+
+Bytes are not text, so a `.wasm` is written with `base64` in place of `content`:
+
+    app_files(app, files: [{path: 'add.wasm', base64: '<the bytes>'}])
+
 ## The fall-through rule
 
 Every request for the app that is not under `/api/` reaches the worker first,

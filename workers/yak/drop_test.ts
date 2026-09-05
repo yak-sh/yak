@@ -88,6 +88,50 @@ slow('a dropped zip becomes an app at its own address', async () => {
   }
 })
 
+// The other door a wasm-compiled worker can arrive by (T-34263). A zip is the
+// natural way one travels — the compiler wrote a `.wasm` and a `.js` beside
+// it — so what has to hold here is that the bytes survive the trip: a drop
+// carries a file that is not text through unchanged, and the deploy behind it
+// is the same `app_deploy` that walks worker.js's imports.
+slow('a dropped zip carries a worker and the wasm it imports', async () => {
+  let k = await kernel()
+  try {
+    let them = await seed(k, [{ slug: 'jeff', apps: [] }])
+    let wasm = Deno.readFileSync(
+      new URL('./fixtures/add.wasm', import.meta.url),
+    )
+    let out = await drops(
+      k,
+      'jeff.yaks.app',
+      await zip('adder.zip', [
+        { path: 'index.html', content: '<h1>2 + 3</h1>' },
+        {
+          path: 'worker.js',
+          content: Deno.readFileSync(
+            new URL('./fixtures/worker.js', import.meta.url),
+          ),
+        },
+        { path: 'add.wasm', content: wasm, deflate: true },
+      ]),
+      'adder',
+      them.cookie,
+    )
+    assertEquals(out.status, 200)
+    assertStringIncludes(await out.text(), 'https://jeff.yaks.app/adder/')
+    // Byte for byte, and typed as wasm — a file the door decoded as text
+    // would arrive as mojibake and never compile.
+    let back = await k.at('jeff.yaks.app', '/adder/add.wasm')
+    assertEquals(back.status, 200)
+    assertEquals(back.headers.get('content-type'), 'application/wasm')
+    assertEquals(new Uint8Array(await back.arrayBuffer()), wasm)
+    // The worker is the app's inside, here as anywhere: it is deployed, not
+    // served (apps.ts MANIFEST).
+    assertEquals((await k.at('jeff.yaks.app', '/adder/worker.js')).status, 404)
+  } finally {
+    await k.stop()
+  }
+})
+
 slow('a bare index.html is an app, once it is named', async () => {
   let k = await kernel()
   try {

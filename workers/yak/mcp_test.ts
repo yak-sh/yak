@@ -492,6 +492,34 @@ slow(
         (await k.at('jeff.yaks.app', '/recipes/draft.html')).status,
         404,
       )
+      // A file that is NOT text goes as base64 (T-34263): the `.wasm` an
+      // app's worker imports cannot be `content: string`, and a deploy that
+      // cannot carry it is a worker compiled from another language that can
+      // never be uploaded. The bytes come back byte for byte, typed as wasm.
+      let wasm = Deno.readFileSync(
+        new URL('./fixtures/add.wasm', import.meta.url),
+      )
+      await agent.tool('app_files', {
+        ...app,
+        op: 'write',
+        path: 'add.wasm',
+        base64: btoa(String.fromCharCode(...wasm)),
+      })
+      let back = await k.at('jeff.yaks.app', '/recipes/add.wasm')
+      assertEquals(back.headers.get('content-type'), 'application/wasm')
+      assertEquals(new Uint8Array(await back.arrayBuffer()), wasm)
+      await assertRejects(
+        () =>
+          agent.tool('app_files', {
+            ...app,
+            op: 'write',
+            path: 'x.wasm',
+            base64: 'not base64!',
+          }),
+        Error,
+        'base64: not base64',
+      )
+      await agent.tool('app_files', { ...app, op: 'delete', path: 'add.wasm' })
       assertMatch(await agent.tool('app_deploy', app), /v1/)
       assertMatch(await agent.tool('app_deploy', app), /v2/)
       let served = await k.at('jeff.yaks.app', '/recipes/')

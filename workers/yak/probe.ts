@@ -9,6 +9,10 @@
 // the process is its own session so `stop` takes workerd down with it, and
 // proves the port closed before it returns.
 //
+// `script` below boots workerd the same way for a THROWAWAY Worker that is
+// not the kernel at all — the modules an app's own script is made of, run in
+// the runtime that would run them.
+//
 // TWO ports, both free ones: the server's, and the devtools inspector's.
 // Wrangler binds the inspector on a FIXED 9229 unless told otherwise, so a
 // second `wrangler dev` anywhere on the box dies with "Address already in
@@ -122,6 +126,90 @@ export let kernel = async (vars: Record<string, string> = {}) => {
     throw e
   }
   return { base, secret, at, stop, log }
+}
+
+/**
+ * A THROWAWAY Worker under workerd — not the kernel: a directory of files, a
+ * wrangler.toml naming the entry, `wrangler dev` on two free ports of its
+ * own, and one `at(path)`.
+ *
+ * It is how a test runs code the platform would UPLOAD rather than serve. A
+ * dispatch namespace has no local implementation (dispatch.ts), so an app's
+ * own script can otherwise only be asserted as a multipart body; this runs
+ * the same module set in the same runtime, which is where a module that is
+ * mislabelled or missing shows itself (T-34263).
+ */
+export let script = async (
+  files: Record<string, string | Uint8Array>,
+  main = 'entry.js',
+) => {
+  let dir = Deno.makeTempDirSync({ prefix: 'yak-script-' })
+  for (let [name, body] of Object.entries(files)) {
+    let at = `${dir}/${name}`
+    Deno.mkdirSync(at.slice(0, at.lastIndexOf('/')), { recursive: true })
+    if (typeof body == 'string') Deno.writeTextFileSync(at, body)
+    else Deno.writeFileSync(at, body)
+  }
+  Deno.writeTextFileSync(
+    `${dir}/wrangler.toml`,
+    `name = "probe"\nmain = "${main}"\ncompatibility_date = "2025-05-08"\n`,
+  )
+  let port = freePort()
+  let inspector = freePort()
+  let log = Deno.makeTempFileSync({ prefix: 'yak-script-', suffix: '.log' })
+  let child = new Deno.Command('setsid', {
+    args: [
+      'sh',
+      '-c',
+      'exec "$@" >>"$0" 2>&1',
+      log,
+      ...wrangler,
+      'dev',
+      '--port',
+      String(port),
+      '--inspector-port',
+      String(inspector),
+      '--ip',
+      '127.0.0.1',
+      '--show-interactive-dev-session=false',
+    ],
+    cwd: dir,
+    stdin: 'null',
+    stdout: 'null',
+    stderr: 'null',
+  }).spawn()
+  let at = (path: string, init?: RequestInit) =>
+    fetch(`http://127.0.0.1:${port}${path}`, init)
+  let stop = async () => {
+    try {
+      await new Deno.Command('kill', { args: ['-TERM', `-${child.pid}`] })
+        .output()
+    } catch { /* already gone */ }
+    await until(async () => !(await listening(port)), {
+      timeout: 15_000,
+      poll: 100,
+      label: 'the script port to close',
+    })
+    await child.status
+    Deno.removeSync(dir, { recursive: true })
+    Deno.removeSync(log)
+  }
+  try {
+    // Any answer at all means workerd linked the modules and is running them;
+    // a script that does not link never listens, and the log says why.
+    await until(async () => {
+      try {
+        await (await at('/')).body?.cancel()
+        return true
+      } catch {
+        return false
+      }
+    }, { timeout: 60_000, poll: 250, label: () => Deno.readTextFileSync(log) })
+  } catch (e) {
+    await stop()
+    throw e
+  }
+  return { at, stop, log }
 }
 
 // An origin that stands in for `<space>.yaks.app` over HTTP: every request

@@ -9,7 +9,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Blobs } from '../../src/blobs.ts'
 import type { App, Directory } from './directory.ts'
-import { upload } from './dispatch.ts'
+import { carried, upload } from './dispatch.ts'
 import type { Env } from './env.ts'
 import type { Who } from './session.ts'
 import {
@@ -218,12 +218,12 @@ Deno.test('the worker a rollback put back is the source uploaded', async () => {
     })
   }) as typeof fetch
   try {
-    // What tools.ts `deployed` hands the namespace: the worker.js among the
-    // app's files, whichever deploy put it there.
+    // What tools.ts `released` hands the namespace: the worker.js among the
+    // app's files, whichever deploy put it there, and everything it imports.
     let version = await upload(
       { CF_ACCOUNT: 'acct', CF_WORKERS_TOKEN: 'a-token' } as Env,
       'jeff/recipes',
-      await read(blobs, 'worker.js'),
+      await carried((path) => blobs.read(PREFIX + path)),
     )
     // And what the deploy records beside its manifest: Cloudflare's own name
     // for the release.

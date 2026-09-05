@@ -207,7 +207,7 @@ Deno.test('the guide prints the limits an app is really held to', async () => {
     return Response.json({ success: true, errors: [], result: {} })
   }) as typeof fetch
   try {
-    await upload({ CF_ACCOUNT: 'a', CF_WORKERS_TOKEN: 't' } as Env, 'a/b', '')
+    await upload({ CF_ACCOUNT: 'a', CF_WORKERS_TOKEN: 't' } as Env, 'a/b', [])
   } finally {
     globalThis.fetch = was
   }

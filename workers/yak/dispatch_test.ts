@@ -15,13 +15,18 @@
 //     platform-wide session cookie
 //   - a 404 from the worker, and no worker at all, both mean the files
 //   - a 5xx is written where the person's agent reads it
+//   - the script carries every module the app's worker imports, each typed by
+//     what the runtime must do with it — a wasm compiled, a `.js` linked
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { COOKIE, seal, sign } from '../../src/token.ts'
+import { slow } from '../../src/testing.ts'
 import type { App, Space } from './directory.ts'
 import {
+  carried,
   dropSecret,
   granted,
   granting,
+  moduleType,
   NO_WORKER,
   ran,
   scriptName,
@@ -31,6 +36,7 @@ import {
   upload,
 } from './dispatch.ts'
 import type { Env } from './env.ts'
+import { script } from './probe.ts'
 import { nobody } from './session.ts'
 
 let SECRET = 'a-probe-secret'
@@ -140,8 +146,8 @@ Deno.test('the worker is handed who is looking, and never the cookie', async () 
 Deno.test('a worker acts as the visitor, and only on its own store', async () => {
   let m = mirror()
   await ran(envOf(m.get), space, app, visit(), who)
-  let carried = m.seen().headers.get('x-yak-grant')!
-  assert(carried, 'the worker was handed no grant')
+  let held = m.seen().headers.get('x-yak-grant')!
+  assert(held, 'the worker was handed no grant')
   let back = (grant: string, store = 'jeff/recipes') =>
     granted(
       new Request('https://jeff.yaks.app/recipes/api/query', {
@@ -150,9 +156,9 @@ Deno.test('a worker acts as the visitor, and only on its own store', async () =>
       SECRET,
       store,
     )
-  assertEquals(await back(carried), who)
+  assertEquals(await back(held), who)
   // Another app's store is not what this grant names.
-  assertEquals(await back(carried, 'jeff/photos'), null)
+  assertEquals(await back(held, 'jeff/photos'), null)
   // Nor is a grant anyone else signed, or one that has run out.
   assertEquals(
     await back(await granting('another-secret', 'jeff/recipes', who)),
@@ -378,10 +384,18 @@ let ok = (result: unknown) =>
 let AT = 'https://api.cloudflare.com/client/v4/accounts/acct/workers/dispatch' +
   '/namespaces/yak-apps/scripts'
 
+let source = (text: string) => new TextEncoder().encode(text)
+
 Deno.test('an upload sends the shim, the app, and one way home', async () => {
   let { calls } = await recorded(
     () => ok({ startup_time_ms: 3, id: 'jeff_recipes' }),
-    () => upload(api, 'jeff/recipes', 'export default { fetch: () => {} }'),
+    () =>
+      upload(api, 'jeff/recipes', [
+        {
+          name: 'worker.js',
+          bytes: source('export default { fetch: () => {} }'),
+        },
+      ]),
   )
   assertEquals(calls.length, 1)
   assertEquals(calls[0].method, 'PUT')
@@ -489,9 +503,135 @@ Deno.test("cloudflare's refusal is what the agent is told", async () => {
       }, { status: 400 }),
     () =>
       assertRejects(
-        () => upload(api, 'jeff/recipes', 'export default {'),
+        () =>
+          upload(api, 'jeff/recipes', [
+            { name: 'worker.js', bytes: source('export default {') },
+          ]),
         Error,
         'Uncaught SyntaxError',
       ),
   )
+})
+
+// ── A worker of more than one file, wasm included (T-34263) ────────────────
+//
+// An app's worker used to be exactly one string: `worker.js` read out of the
+// bucket and sent as the only module beside the shim. A worker compiled from
+// another language is not one file — it is a `.wasm` and the `.js` that
+// instantiates it — so the wasm was never uploaded, the script did not link,
+// and a deploy answered Cloudflare's `No such module`.
+
+let fixture = (name: string) =>
+  Deno.readFileSync(new URL(`./fixtures/${name}`, import.meta.url))
+
+let WASM = fixture('add.wasm')
+let APP = fixture('worker.js')
+
+// The app's files, as `carried` reads them: what a worker imports, and what
+// only its pages use.
+let filesOf =
+  (files: Record<string, Uint8Array<ArrayBuffer>>) => (path: string) =>
+    Promise.resolve(files[path] ?? null)
+
+Deno.test('a module is typed by what it IS, not by what a file is served as', () => {
+  // The serving mime and the module type are different questions: `.js` is
+  // served as text/javascript and uploaded as an ES module, and anything the
+  // runtime has no module kind for arrives as bytes.
+  assertEquals(moduleType('worker.js'), 'application/javascript+module')
+  assertEquals(moduleType('lib/thing.mjs'), 'application/javascript+module')
+  assertEquals(moduleType('add.wasm'), 'application/wasm')
+  assertEquals(moduleType('rows.txt'), 'text/plain')
+  assertEquals(moduleType('table.bin'), 'application/octet-stream')
+})
+
+Deno.test('the script carries worker.js and everything it imports', async () => {
+  let got = await carried(filesOf({
+    'worker.js': APP,
+    'add.wasm': WASM,
+    // The page's own script, which no worker imports: it is the app's, not
+    // the script's, and uploading it would put a page's code in the worker.
+    'app.js': source('export let go = () => {}'),
+    'index.html': source('<h1>hi</h1>'),
+  }))
+  assertEquals(got.map((m) => m.name), ['worker.js', 'add.wasm'])
+  assertEquals(got[1].bytes, WASM)
+})
+
+Deno.test('the walk follows a chain, survives a cycle, and stays inside the app', async () => {
+  let got = await carried(filesOf({
+    'worker.js': source(
+      `import './lib/a.js'\nimport gone from './nowhere.js'\n` +
+        `import w from '../add.wasm'\n`,
+    ),
+    'lib/a.js': source(`export * from './b.js'`),
+    // Names its own importer: the walk must not follow it back round.
+    'lib/b.js': source(`import '../worker.js'\nimport d from './data.bin'`),
+    'lib/data.bin': new Uint8Array([1, 2, 3]),
+    // `../` from the top pops nothing, so this is the file the specifier
+    // above names — no specifier can reach outside the app.
+    'add.wasm': WASM,
+  }))
+  assertEquals(got.map((m) => m.name), [
+    'worker.js',
+    'lib/a.js',
+    'lib/b.js',
+    'lib/data.bin',
+    'add.wasm',
+  ])
+})
+
+Deno.test('a wasm module goes up as a module part of its own type', async () => {
+  let { calls } = await recorded(
+    () => ok({ startup_time_ms: 5, id: 'jeff_adder' }),
+    async () =>
+      upload(
+        api,
+        'jeff/adder',
+        await carried(filesOf({ 'worker.js': APP, 'add.wasm': WASM })),
+      ),
+  )
+  let form = calls[0].body as FormData
+  let meta = JSON.parse(await (form.get('metadata') as File).text())
+  assertEquals(meta.main_module, 'entry.js')
+  // Every part named by the module name that imports it, and typed by what
+  // the runtime must do with it: link the two ES modules, compile the wasm.
+  let part = (name: string) => form.get(name) as File
+  assertEquals(part('entry.js').type, 'application/javascript+module')
+  assertEquals(part('worker.js').type, 'application/javascript+module')
+  assertEquals(part('add.wasm').type, 'application/wasm')
+  // And the wasm's bytes are the file's, unchanged — a module the upload
+  // decoded as text would arrive as mojibake and fail to compile.
+  assertEquals(
+    new Uint8Array(await part('add.wasm').arrayBuffer()),
+    WASM,
+  )
+  assertEquals(await part('worker.js').text(), new TextDecoder().decode(APP))
+})
+
+/**
+ * And the modules RUN. A dispatch namespace has no local implementation, so
+ * what the account would run cannot be exercised here; this runs the same
+ * module set — the shim, the app's worker.js, and the wasm it imports — in
+ * the same runtime (probe.ts `script`), which is where a mislabelled or
+ * missing module shows itself. The upload's own shape is the test above,
+ * against the API's documented multipart form.
+ */
+slow('workerd links the shim, the app, and its wasm', async () => {
+  let w = await script({
+    'entry.js': SHIM,
+    'worker.js': new TextDecoder().decode(APP),
+    'add.wasm': WASM,
+  })
+  try {
+    let r = await w.at('/api/add?a=2&b=3')
+    assertEquals(r.status, 200)
+    assertEquals(await r.text(), '5')
+    // The worker's 404 is the pass verdict the kernel reads (`ran`), so the
+    // fixture answers one for everything that is not its route.
+    let pass = await w.at('/index.html')
+    assertEquals(pass.status, 404)
+    await pass.body?.cancel()
+  } finally {
+    await w.stop()
+  }
 })

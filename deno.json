@@ -65,6 +65,7 @@
     "packages/d1/conform.ts",
     "packages/mail/conform.ts",
     "workers/yak/conform.ts",
+    "workers/yak/fixtures",
     "**/.wrangler",
     ".tasks",
     ".claude",

@@ -76,6 +76,7 @@ import {
   ticket,
 } from './erase.ts'
 import {
+  carried,
   drop,
   dropSecret,
   NEEDS_TOKEN,
@@ -83,6 +84,7 @@ import {
   secrets,
   setSecret,
   upload,
+  WORKER,
 } from './dispatch.ts'
 import {
   apex,
@@ -210,10 +212,29 @@ let text = (v: unknown, what: string) => {
 let list = (v: unknown, what: string) =>
   v == null ? [] : (Array.isArray(v) ? v : [v]).map((one) => text(one, what))
 
+// A file's BYTES, from either spelling of them (T-34263): `content` is the
+// text an app is almost always made of, and `base64` is what a file that is
+// not text arrives as — the `.wasm` an app's worker imports, a picture. One
+// of the two; naming neither is the `content` refusal, since text is what a
+// model reaching for this tool means.
+let bytesOf = (f: Record<string, unknown>, at = '') => {
+  if (f.base64 == null) {
+    return new TextEncoder().encode(text(f.content, `${at}content`))
+  }
+  // Wrapped at some width is still base64: a model that pretty-prints a long
+  // string has not made a mistake, and `atob` would refuse the newlines.
+  let sent = text(f.base64, `${at}base64`).replace(/\s+/g, '')
+  try {
+    return Uint8Array.from(atob(sent), (c) => c.charCodeAt(0))
+  } catch {
+    throw new Error(`${at}base64: not base64`)
+  }
+}
+
 // The many-file form of a write: `files: [{path, content}]`, so an app is one
 // call and not one call per file (C-32624 item 5). Each refusal says which
 // entry was wrong, since the model sent them all at once.
-let files = (v: unknown): { path: string; content: string }[] => {
+let files = (v: unknown): { path: string; bytes: Uint8Array }[] => {
   if (v == null) return []
   if (!Array.isArray(v)) {
     throw new Error('files: a list of {path, content}')
@@ -225,7 +246,7 @@ let files = (v: unknown): { path: string; content: string }[] => {
     let f = one as Record<string, unknown>
     return {
       path: text(f.path, `files[${i}].path`),
-      content: text(f.content, `files[${i}].content`),
+      bytes: bytesOf(f, `files[${i}].`),
     }
   })
 }
@@ -605,7 +626,11 @@ let released = async (
   // serves is what the files say. Without the platform's Cloudflare token
   // there is nothing to upload with — the files are already live, so the
   // release stands and says what is missing rather than failing (T-32781).
-  let workerKey = fileKey(space, app, 'worker.js')
+  //
+  // What goes up is worker.js AND everything it imports (`carried`, T-34263):
+  // a worker compiled to wasm is a `.wasm` beside the `.js` that instantiates
+  // it, and a script missing a module does not link at all.
+  let workerKey = fileKey(space, app, WORKER)
   let ran = ''
   let worker = ''
   if (!(await blobs.has(workerKey))) {
@@ -615,7 +640,7 @@ let released = async (
     worker = await upload(
       ctx.env,
       storeName(space, app),
-      new TextDecoder().decode(await blobs.get(workerKey)),
+      await carried((path) => blobs.read(fileKey(space, app, path))),
     )
     ran = '\nworker: worker.js answers first; a 404 from it serves the files'
   }
@@ -1036,7 +1061,8 @@ export let TOOLS: Tool[] = [
       'it — or list them, read one back, or delete one. Write a whole app in ' +
       'ONE call with files: [{path, content}, …] — a files batch IS the ' +
       'write, so leave op out; path and content write a ' +
-      'single file. They serve live at ' +
+      'single file, and base64 in place of content writes one that is not ' +
+      'text — a picture, or the .wasm a worker.js imports. They serve live at ' +
       '<space>.yaks.app/<app>/<path>; index.html answers the directory. Keep ' +
       'what the app remembers in its own store, never localStorage: the page ' +
       'reads and writes it with `import { apply, query, search } from ' +
@@ -1058,6 +1084,10 @@ export let TOOLS: Tool[] = [
         },
         path: str('the file path, e.g. index.html'),
         content: str('the file text, for write'),
+        base64: str(
+          'the file BYTES, base64, instead of content — for a file that is ' +
+            'not text, such as the .wasm a worker.js imports',
+        ),
         files: {
           type: 'array',
           items: {
@@ -1065,8 +1095,9 @@ export let TOOLS: Tool[] = [
             properties: {
               path: str('the file path'),
               content: str('the file text'),
+              base64: str('the file bytes, base64, instead of content'),
             },
-            required: ['path', 'content'],
+            required: ['path'],
           },
           description: 'several files to write at once, instead of ' +
             'path and content — the whole app in one call',
@@ -1116,17 +1147,9 @@ export let TOOLS: Tool[] = [
       }
       let sent = batch.length ? batch : [{
         path: text(args.path, 'path'),
-        content: text(args.content, 'content'),
+        bytes: bytesOf(args),
       }]
-      let paths = await wrote(
-        ctx.env,
-        space,
-        app,
-        sent.map((f) => ({
-          path: f.path,
-          bytes: new TextEncoder().encode(f.content),
-        })),
-      )
+      let paths = await wrote(ctx.env, space, app, sent)
       return {
         text: paths.length == 1
           ? `wrote ${paths[0]} → ${url(space, app)}${paths[0]}`
