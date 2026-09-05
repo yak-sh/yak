@@ -59,15 +59,18 @@ slow('a space with no front page lists what you may open', async () => {
     assertStringIncludes(cold, 'private')
     assertStringIncludes(cold, 'https://yaks.app/login?return=')
     assertStringIncludes(cold, 'What is yaks.app?')
-    // Nothing about the page being theirs to set: it is not theirs.
-    assert(!cold.includes('yours to set'), cold)
+    // Nothing about choosing a front page: the choice is not a stranger's.
+    // The words move (7b586b44 reworded them); what has to hold is that only
+    // the owner is offered the choice, so both halves name the thing the
+    // block is ABOUT rather than the sentence it says it in.
+    assert(!cold.includes('front page'), cold)
 
-    // The owner: both apps, the sentence that says this page is a choice, and
-    // no pitch or sign-in — they are home.
+    // The owner: both apps, the block offering the front-page choice, and no
+    // pitch or sign-in — they are home.
     let mine = await (await at(them.cookie)).text()
     assertStringIncludes(mine, 'href="/recipes/"')
     assertStringIncludes(mine, 'href="/garden/"')
-    assertStringIncludes(mine, 'yours to set')
+    assertStringIncludes(mine, 'front page')
     assert(!mine.includes('What is yaks.app?'), mine)
     assert(!mine.includes('login?return='), mine)
     // And nothing is being held back from them, so nothing says so.
