@@ -58,6 +58,12 @@ let doc: VocabDoc = {
       persist: 'local',
       properties: { text: { type: 'string' } },
     },
+    // The words in the search box: gone when the tab closes.
+    sieve: {
+      type: 'object',
+      persist: 'none',
+      properties: { text: { type: 'string' } },
+    },
     created: {
       type: 'object',
       properties: {
