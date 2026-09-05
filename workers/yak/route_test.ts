@@ -92,8 +92,13 @@ Deno.test('onZone: our own https hostnames, and nothing else', () => {
     // guard against an open redirect stays pure.
     ['https://herbusiness.com/', null],
     ['https://example.com/?to=https://yaks.app/', null],
+    // A bare path is our own zone by construction — it is what the platform's
+    // own returns are spelled as — while a path that starts a hostname is not
+    // a path at all. `/\` is `//` to a browser.
+    ['/notes/', '/notes/'],
+    ['/', '/'],
     ['//jeff.yaks.app/notes/', null],
-    ['/notes/', null],
+    ['/\\evil.example/', null],
     ['javascript:alert(1)', null],
     ['', null],
   ]

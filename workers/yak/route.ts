@@ -97,6 +97,12 @@ export let foreign = (host: string) =>
 // someone on their own hostname needs its own verified return, not a wider
 // `onZone`.
 export let onZone = (href: string) => {
+  // A bare path is on the zone by construction, and it is what the platform's
+  // own returns are made of (`/login?return=/connect`), so refusing one threw
+  // away every address we minted ourselves. `//host` — and `/\host`, which a
+  // browser reads the same way — is a stranger's URL wearing a path's
+  // clothes, and is refused with the rest.
+  if (href.startsWith('/')) return /^\/[/\\]/.test(href) ? null : href
   let url
   try {
     url = new URL(href)

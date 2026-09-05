@@ -16,7 +16,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { slow, until } from '../../src/testing.ts'
-import { type Kernel, kernel, letters, mailed, meta } from './probe.ts'
+import { type Kernel, kernel, letters, mailed, meta, signIn } from './probe.ts'
 import { SENDS } from './signin.ts'
 
 let form = (
@@ -434,6 +434,51 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
         /resource_metadata=/,
       )
     }
+  } finally {
+    await k.stop()
+  }
+})
+
+// The sign-in box is for somebody signed OUT (T-34209). A browser carrying a
+// session is never asked again: `GET /login` reads the cookie first and sends
+// them on — to the page they were headed for when it is ours to send them to,
+// and to where a fresh sign-in lands when it is nowhere or a stranger's, which
+// is the same guard closing the same open redirect.
+slow('/login never draws the box for a browser already signed in', async () => {
+  let k = await kernel()
+  try {
+    let get = (path: string, cookie?: string) =>
+      k.at('yaks.app', path, {
+        redirect: 'manual',
+        headers: cookie ? { cookie } : {},
+      })
+    let sent = async (path: string, cookie: string) => {
+      let r = await get(path, cookie)
+      await r.body?.cancel()
+      assertEquals(r.status, 303, path)
+      return r.headers.get('location')
+    }
+    let aimed = (back: string) => `/login?return=${encodeURIComponent(back)}`
+    let { cookie } = await signIn(k)
+
+    // Aimed nowhere: the page that teaches attaching an assistant, which is
+    // where a fresh sign-in with no return goes too.
+    assertEquals(await sent('/login', cookie), '/connect')
+
+    // Aimed at a page of ours, spelled either way it is ever spelled: the
+    // platform's own returns are bare paths, a card's may be an address.
+    assertEquals(await sent(aimed('/recipes/'), cookie), '/recipes/')
+    let notes = 'https://someone.yaks.app/notes/'
+    assertEquals(await sent(aimed(notes), cookie), notes)
+
+    // A stranger's address is nowhere we send anyone, however it is spelled.
+    assertEquals(await sent(aimed('https://evil.example/'), cookie), '/connect')
+    assertEquals(await sent(aimed('//evil.example/'), cookie), '/connect')
+
+    // Signed out, the card is what it always was.
+    let card = await get('/login')
+    assertEquals(card.status, 200)
+    assertMatch(await card.text(), /Send me a code/)
   } finally {
     await k.stop()
   }

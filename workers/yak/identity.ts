@@ -22,7 +22,9 @@
 // A person sent here from a page they could not use arrives as
 // `/login?return=<url>`:
 // both cards carry that address forward, and the spent code lands them back on
-// it when it is one of ours (T-32593).
+// it when it is one of ours (T-32593). Somebody already signed in is never
+// shown the box at all — `GET /login` reads the session first and sends them
+// on to that address, or to where a fresh sign-in would land them (T-34209).
 //
 // An agent proves who it is with a bearer token from
 // `@cloudflare/workers-oauth-provider`, which owns `/oauth/token`,
@@ -559,14 +561,16 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
 
   if (path == '/login' && req.method == 'GET') {
     let back = url.searchParams.get('return')
-    // Already signed in with a return to go to? Then the platform has nothing
-    // to ask: honor the session and send them on — a return on a customer's
-    // own hostname becomes a handoff (`landed`), never the code form again.
-    // This is what carries the platform session across to a custom domain
-    // without a second sign-in, and it matches the consent page, which hands
-    // an already-signed-in browser one Allow rather than a fresh sign-in.
-    let who = back ? await withAuth(env, req) : null
-    if (who) return landed(req, env, who.person, '', back!)
+    // Already signed in? Then the platform has nothing to ask, so the box is
+    // never drawn (T-34209): honor the session and send them where they were
+    // going, which is `landed`'s one landing rule — a return on a customer's
+    // own hostname becomes a handoff, one on our zone is followed, a
+    // stranger's is refused and aimed nowhere in particular they land where a
+    // fresh sign-in lands them (`backTo`: `/connect` until an assistant is
+    // attached). It matches the consent page, which hands an already-signed-in
+    // browser one Allow rather than a fresh sign-in.
+    let who = await withAuth(env, req)
+    if (who) return landed(req, env, who.person, '', back ?? '')
     return askEmail(null, back)
   }
 
