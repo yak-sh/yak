@@ -50,7 +50,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { SetLevelRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
-import { mcp } from '@yaks/mcp'
+import { mcp, roster, rosterVersion } from '@yaks/mcp'
 import { VERSION } from '../../src/version.ts'
 import { answered, inputOf, reaching, searching } from './agent.ts'
 import * as dirPart from './directory.ts'
@@ -68,7 +68,7 @@ import {
   inReach,
   VIEW_MIME,
 } from './tools.ts'
-import { listen } from './stream.ts'
+import { listen, rostered } from './stream.ts'
 
 // The views this door offers beside the guide, whose resources are
 // preauth.ts's — the guide is world-readable and served to anybody, and these
@@ -250,18 +250,28 @@ let heard = (name: string, args: Record<string, unknown>) => {
   return rest
 }
 
+// The release this door is serving: Cloudflare's per-deploy version id, which
+// the runtime mints on every deploy — so a release moves the roster version
+// with no file edit. Absent under `wrangler dev` and the workerd probes, where
+// the human VERSION stands in.
+let markOf = (env: Env) => env.CF_VERSION_METADATA?.id ?? VERSION
+
 // The door itself, built per request around the person the edge verified: the
 // caller's whole reach as one graph, the platform's verbs on it as a plugin,
 // and the same `Authenticate` seam every other door onto this data takes —
 // here it has already run, so it hands back what the edge decided.
-let door = async (ctx: Ctx) => {
+//
+// It answers the handler and the ROSTER it is about to serve (T-34277): the
+// tool names, and the version naming them, which `initialize` records for this
+// session and every later call is compared against.
+let door = async (ctx: Ctx, session: string) => {
   let reach = await inReach(ctx, {})
   // The graph, and how a column of it reads and writes: a reference answers
   // human, and a word two of the caller's spaces spell differently is typed
   // nowhere (agent.ts `reading`). The schemas in the tool list are derived
   // through it, so they describe what this door actually says.
   let { graph, column } = await reaching(ctx, reach)
-  return mcp({
+  let opts = {
     graph,
     column,
     // What a READ answers is left at names here, while the write door is
@@ -271,7 +281,7 @@ let door = async (ctx: Ctx) => {
     // read hands over the values themselves — and this door's vocabulary is a
     // union of every store in reach, so those 33 KB are the least exact part
     // of it, paid on every connection.
-    schema: 'names',
+    schema: 'names' as const,
     // And where a word is written about at length, so graph_schema hands over
     // the page beside the columns (guide.ts `pageFor`).
     guide: pageFor,
@@ -282,7 +292,23 @@ let door = async (ctx: Ctx) => {
     search: searching(ctx, reach),
     tools: await declared(ctx),
     extend: extend(ctx),
-  })
+  }
+  // What this door lists right now, and the name for it. `about` says both
+  // (tools.ts), so a client that suspects its list is old has one call that
+  // settles it without reconnecting.
+  let names = roster(opts)
+  let listed = { version: rosterVersion(names, markOf(ctx.env)), names }
+  ctx.roster = listed
+  return {
+    listed,
+    // Every result carries the line when this session connected against
+    // another roster — the news `notifications/tools/list_changed` carries to
+    // a client holding a stream, said where a client without one is reading.
+    handle: mcp({
+      ...opts,
+      roster: () => rostered(ctx.env, ctx.person, { session, ...listed }),
+    }),
+  }
 }
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
@@ -373,20 +399,28 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     dir: directory(bound(env.DIRECTORY, dirPart.fetch, env), true),
     person: auth.person,
   }
-  let out = await (await door(ctx))(
+  // The session id, per the transport: minted at `initialize` and sent back by
+  // the client on every later request. It names which of this person's streams
+  // is which (the GET above), and which roster this client cached (stream.ts
+  // `roster`). It is not required and never checked — a POST carries its own
+  // answer to who is asking, and a client that has never seen this header
+  // still works, sharing the nameless session with every other such client.
+  let session = rpc.method == 'initialize'
+    ? crypto.randomUUID()
+    : req.headers.get('mcp-session-id') ?? ''
+  let built = await door(ctx, session)
+  let out = await built.handle(
     new Request(req.url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: said,
     }),
   )
-  // The session id, per the transport: the client sends it back on every later
-  // request, and the one place it means anything is the GET above, where it
-  // names which of this person's streams is which. It is not required and
-  // never checked — a POST carries its own answer to who is asking, and a
-  // client that has never seen this header still works.
   if (rpc.method != 'initialize') return out
+  // The list this client is about to cache, remembered for the session it is
+  // caching it under: every later reply is compared against this.
+  await rostered(env, auth.person, { session, ...built.listed, init: true })
   let named = new Response(out.body, out)
-  named.headers.set('mcp-session-id', crypto.randomUUID())
+  named.headers.set('mcp-session-id', session)
   return named
 }

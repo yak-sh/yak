@@ -107,6 +107,12 @@ It is a tool here, so nothing has to be fetched off the web; the same words
 are at https://yaks.app/guide.md for a person. graph_apply, graph_query and
 search are the same store from here, for seeding and fixing.
 
+Call about at the start of a conversation: it names the tools this connector
+has right now and the version of that list, so a list your host cached in an
+earlier session — missing tools you have, naming tools you no longer do — is
+caught before you try to use it. A reply saying the tool list changed is the
+same thing happening mid-conversation.
+
 Never guess at a component's columns: graph_apply's own input schema is the
 vocabulary you can reach — every component, every column, every type. And
 graph_schema says what the words MEAN: bare, the index of every one of them;

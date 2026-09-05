@@ -132,7 +132,15 @@ import {
   whatChanged,
 } from './versions.ts'
 
-export type Ctx = { env: Env; dir: Directory; person: string }
+export type Ctx = {
+  env: Env
+  dir: Directory
+  person: string
+  // The tool list this door is serving and the version naming it (mcp.ts,
+  // T-34277). Set after the tools are assembled, since it is made OF them, so
+  // only a tool RUNNING sees it — which `about` is.
+  roster?: { version: string; names: string[] }
+}
 type Args = Record<string, unknown>
 // What a tool answers: the text, the space it worked in (so the door can
 // append what is unseen there), and, for a tool with a view, the same answer
@@ -165,6 +173,17 @@ export type Tool = {
   input: Shape
   run: (ctx: Ctx, args: Args) => Promise<Out>
 }
+
+// The tool list, said out loud: the version that names it and every tool in
+// it. It is what `about` adds for a signed-in caller — the answer to "is my
+// list still the list", which a client cannot ask any other way.
+let rostered = (ctx: Ctx) =>
+  ctx.roster
+    ? `\n\nThe tools here right now, roster ${ctx.roster.version}:\n` +
+      `${ctx.roster.names.join(', ')}\n\nIf a reply ever says the tool list ` +
+      'changed, that is this version moving: reconnect, or call about again ' +
+      'to see what is here.'
+    : ''
 
 let str = (description: string) => ({ type: 'string', description })
 
@@ -2667,6 +2686,11 @@ export let TOOLS: Tool[] = [
     name: t.name,
     description: t.description,
     input: NO_ARGS,
-    run: () => Promise.resolve({ text: t.text }),
+    // Signed in, `about` also says what this door is listing right now and the
+    // version naming that list (T-34277) — so an agent whose cached list is
+    // old has one call that settles what it has, without reconnecting. Before
+    // signing in the same words are said with no roster (preauth.ts): the
+    // public list is one tool, and it is this one.
+    run: (ctx) => Promise.resolve({ text: t.text + rostered(ctx) }),
   })),
 ]

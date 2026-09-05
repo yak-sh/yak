@@ -687,9 +687,11 @@ slow(
       )
       assertEquals(own.entity.eid, box)
       assertEquals(own.recipe, { title: 'Pancakes', serves: 4 })
-      // A column the manifest never named is still a typo, not a new word —
-      // and since the write door's schema IS the vocabulary (T-34153), it is
-      // refused at the door, with the component and the column named.
+      // A column the manifest never named is still a typo, not a new word.
+      // The write schema DESCRIBES the vocabulary (T-34153) and stays open, so
+      // a client's cached copy cannot refuse a word deployed since it
+      // connected (T-34277) — the SERVER refuses this, naming the column, the
+      // columns that do exist, and where to read them.
       let typo = (await assertRejects(
         () =>
           agent.tool('graph_apply', {
@@ -697,8 +699,9 @@ slow(
           }),
         Error,
       )).message
-      assertStringIncludes(typo, '"recipe"')
-      assertStringIncludes(typo, 'calories')
+      assertStringIncludes(typo, 'unknown column: recipe.calories')
+      assertStringIncludes(typo, 'recipe declares title, serves')
+      assertStringIncludes(typo, 'graph_schema')
 
       // A manifest that reaches for one of the platform's words is refused
       // WHOLE and before anything is planted, naming every collision at once
@@ -1361,7 +1364,14 @@ slow('the door before anyone signs in', async () => {
       .map((t) => t.name)
     assert(open.every((n) => full.includes(n)), 'the public list is a subset')
     assert(full.length > open.length, 'signing in has to be worth something')
-    assertEquals(await agent.tool('about'), said)
+    // The same words, and one thing more: the list this door is serving them
+    // and the version naming it (T-34277), which is the answer to "is my tool
+    // list still the tool list". Nobody signed in has a roster to be told
+    // about — the public list is this one tool.
+    let ours = await agent.tool('about')
+    assertStringIncludes(ours, said)
+    assertMatch(ours, /The tools here right now, roster [0-9a-f]{8}:/)
+    for (let name of full) assertStringIncludes(ours, name)
     let mine = ((await agent.call('resources/list')).resources as {
       uri: string
     }[]).map((r) => r.uri)
@@ -1842,15 +1852,24 @@ slow(
         },
       ]
       assert(takes(first.input, sending), JSON.stringify(ajv.errors))
-      // A column nobody declared is refused by the schema, where the agent is,
-      // rather than by the store at the far end of the wire.
-      assertEquals(
-        takes(first.input, [{
-          entity: { eid: '$ana' },
-          email: { adress: 'ana@example.com' },
-        }]),
-        false,
-      )
+      // A column nobody declared is NOT refused by the schema (T-34277): a
+      // client holds this copy for the whole conversation while the vocabulary
+      // grows under it, so a closed schema would refuse a column that exists.
+      // The schema describes; the server decides, and says which columns are
+      // declared and where to read them.
+      let misspelt = [{
+        entity: { eid: '$ana' },
+        $app: 'cookbook',
+        email: { adress: 'ana@example.com' },
+      }]
+      assertEquals(takes(first.input, misspelt), true)
+      let refused = (await assertRejects(
+        () => agent.tool('graph_apply', { change: misspelt }),
+        Error,
+      )).message
+      assertStringIncludes(refused, 'unknown column: email.adress')
+      assertStringIncludes(refused, 'email declares address')
+      assertStringIncludes(refused, 'graph_schema')
       // And the type is there to be read: `mail.verified` is a boolean, and the
       // vocabulary's own sentence about it rides along.
       let mail = JSON.stringify(
@@ -2041,6 +2060,86 @@ slow('the stream names its session and replays a missed line', async () => {
     await k.stop()
   }
 })
+
+// The ROSTER (T-34277). Jeff: "is there anything else we can do about claude
+// having stale mcp tools?" A client lists the tools once and holds that list;
+// `notifications/tools/list_changed` reaches one holding a stream and willing
+// to act on it, and nobody else. So the server says it again where the agent
+// is certainly reading — on the next result, naming what moved — and `about`
+// is the one call that says what is here right now.
+slow(
+  'a stale tool list is named on the next result, and about says it',
+  async () => {
+    let k = await kernel()
+    try {
+      let jeff = await signIn(k)
+      let agent = connector(k, jeff.cookie)
+      // The list this client caches, recorded against the session id the
+      // transport just minted for it (probe.ts sends it back from here on).
+      await agent.call('initialize', HELLO)
+      let first = await agent.tool('about')
+      let version = /roster ([0-9a-f]{8})/.exec(first)![1]
+      assertStringIncludes(first, 'graph_apply')
+      assertEquals(first.includes('runs__log_run'), false)
+
+      // An app of his own declares a tool, and the deploy plants it: the roster
+      // moved under a client that listed a minute ago.
+      let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/
+        .exec(
+          await agent.tool('app_new', { slug: 'runs', title: 'Run club' }),
+        )![1]
+      await agent.tool('app_files', {
+        space,
+        app: 'runs',
+        files: [
+          { path: 'vocab.json', content: '{"jog":{"miles":"number"}}' },
+          {
+            path: 'tools.json',
+            content: JSON.stringify({
+              log_run: {
+                description: 'Log a run',
+                input: { miles: 'number' },
+                apply: { jog: { miles: '{{miles}}' } },
+              },
+            }),
+          },
+        ],
+      })
+      await agent.tool('app_deploy', { space, app: 'runs' })
+
+      // The very next reply says so, naming the tool — as its own block, so the
+      // answer above it is still the answer.
+      let told = await agent.call('tools/call', {
+        name: 'app_list',
+        arguments: {},
+      })
+      let blocks = told.content as { text: string }[]
+      assertEquals(blocks.length, 2)
+      assertEquals(
+        blocks[1].text,
+        'The tool list changed since you connected (new: runs__log_run). ' +
+          'Reconnect to see them, or ask `about`.',
+      )
+      // Once per changed set: the next reply is quiet again.
+      let quiet = await agent.call('tools/call', {
+        name: 'app_list',
+        arguments: {},
+      })
+      assertEquals((quiet.content as unknown[]).length, 1)
+
+      // And `about` is the call that settles it without reconnecting: the new
+      // tool, and a version that moved with it.
+      let now = await agent.tool('about')
+      assertStringIncludes(now, 'runs__log_run')
+      assert(
+        !now.includes(`roster ${version}`),
+        'the version moved with the list',
+      )
+    } finally {
+      await k.stop()
+    }
+  },
+)
 
 // A release can move the view set without the tool set (T-33004): the tool
 // half of tools.json is what tools/list is made of, the views are what

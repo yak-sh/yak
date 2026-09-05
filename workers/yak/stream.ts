@@ -27,12 +27,19 @@
 // transport's resumability). So the object being evicted between two deploys
 // costs nothing, and neither does a connection that blinked.
 //
+// The object also holds what each session LISTED at connect (`roster`,
+// T-34277). A notification only reaches a client holding a stream and willing
+// to act on it; the roster is how the same news reaches one that is not, as a
+// line on the next tool result naming which tools moved. Both are per session,
+// so both live here.
+//
 // One log per person, one cursor per stream, and at most one copy of a line
 // per session: the transport forbids broadcasting one message across two
 // streams of the SAME session, while two sessions are two clients and each
 // needs its own copy. A stream that names no session is a client that was
 // never told an id, and every one of those hears — they cannot be told apart,
 // and silence is the worse failure.
+import { rosterLine } from '@yaks/mcp'
 import { VERSION } from '../../src/version.ts'
 import type { Env } from './env.ts'
 import type { Namespace, Stub } from './door.ts'
@@ -55,6 +62,13 @@ let BEAT = 30_000
 type Line = { id: number; frame: string }
 type News = { seq: number; lines: Line[] }
 type Told = { method: string; params?: unknown }
+
+// The tool list one session connected against (T-34277): its version and the
+// names themselves, so what a later call compares against is not "it moved"
+// but which tools moved. Recorded at `initialize` — the moment the client
+// cached the list — and replaced when the session is told.
+type Roster = { version: string; names: string[] }
+type Asked = Roster & { session: string; init?: boolean }
 
 type Held = {
   session: string
@@ -163,6 +177,63 @@ export class Wire {
     await this.state.storage.put('spoke', spoke)
   }
 
+  // A release nobody here has spoken for yet. `crossed` above catches a
+  // stream ATTACHING after one; this catches a stream that was already open
+  // when the platform moved under it, which is possible whenever this object
+  // outlives the isolate that made it — a rolling deploy, where one request
+  // arrives from the new version while a stream opened under the old one is
+  // still held. A deploy that restarts this object finds `open` empty and
+  // only writes the marker; the streams then reconnect and `crossed` tells
+  // each of them.
+  async released() {
+    let was = await this.state.storage.get<string>('mark')
+    if (was == this.mark) return
+    await this.state.storage.put('mark', this.mark)
+    // Nothing has ever been spoken for here: a first boot moved nothing.
+    if (was == null || !this.open.size) return
+    let spoke = await this.state.storage.get<Record<string, string>>('spoke') ??
+      {}
+    let sent = new Set<string>()
+    for (let held of [...this.open].reverse()) {
+      if (held.session && sent.has(held.session)) continue
+      if (held.session) sent.add(held.session)
+      for (let list of LISTS) {
+        held.send(bare({ method: `notifications/${list}/list_changed` }))
+      }
+      spoke[held.session] = this.mark
+    }
+    await this.state.storage.put('spoke', spoke)
+  }
+
+  // What one session is holding, against what this door lists now (T-34277).
+  // `init` is the client caching the list at connect: recorded, never
+  // compared. Otherwise the version is compared and the line said ONCE per
+  // changed set — the new roster is recorded with it, so a client that never
+  // reconnects is told about the next move and not about this one again.
+  //
+  // A session never recorded here is recorded silently: it either just
+  // listed, or it is a client that sends no session id at all, and those
+  // cannot be told apart from each other.
+  async roster(said: Asked): Promise<{ line?: string }> {
+    let all = await this.state.storage.get<Record<string, Roster>>('listed') ??
+      {}
+    let was = all[said.session]
+    let keep = async () => {
+      delete all[said.session]
+      all[said.session] = { version: said.version, names: said.names }
+      for (let old of Object.keys(all).slice(0, -KEPT)) delete all[old]
+      await this.state.storage.put('listed', all)
+    }
+    if (said.init || !was) {
+      await keep()
+      return {}
+    }
+    if (was.version == said.version) return {}
+    let line = rosterLine(was.names, said.names)
+    await keep()
+    return line ? { line } : {}
+  }
+
   // A client attaching its stream: what it missed, then the line stays open.
   // `Last-Event-ID` is the last id it saw; absent, it has seen nothing and is
   // handed nothing, because a client that never listened lists its tools at
@@ -232,8 +303,15 @@ export class Wire {
 
   async fetch(req: Request): Promise<Response> {
     let path = new URL(req.url).pathname
+    // Every way in passes the release check first: this object is the one
+    // place that sees both the deploy it is running and the streams held
+    // open, and either kind of request may be the first after a release.
+    await this.released()
     if (path == '/open') return this.attach(req)
     if (path == '/tell') return this.tell(await req.json() as Told)
+    if (path == '/roster') {
+      return Response.json(await this.roster(await req.json() as Asked))
+    }
     return new Response('not found', { status: 404 })
   }
 }
@@ -257,6 +335,26 @@ export let listen = (env: Env, person: string, req: Request) =>
       ),
     }),
   )
+
+// The roster a session is holding, against the one this door lists now: the
+// line to say on this reply, or nothing. `init` records what a client just
+// cached instead of comparing. It lives on the same object as the stream
+// because a session's durable state is one thing, and because a session that
+// hears the notification on its stream and one that hears the line on a reply
+// are the same session.
+export let rostered = async (
+  env: Env,
+  person: string,
+  said: { session: string; version: string; names: string[]; init?: boolean },
+): Promise<string | undefined> => {
+  let r = await wireOf(env.WIRE, person).fetch(
+    new Request('http://wire/roster', {
+      method: 'POST',
+      body: JSON.stringify(said),
+    }),
+  )
+  return ((await r.json()) as { line?: string }).line
+}
 
 // News for one person, whether or not they are listening this second.
 export let told = async (

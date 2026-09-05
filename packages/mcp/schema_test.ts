@@ -152,7 +152,7 @@ Deno.test('a host spells its own reading of a column, read and write', async () 
   assertEquals(at(author, 'type'), ['string', 'null'])
 })
 
-Deno.test('the write door is closed: a stamped or misspelled column is not in it', async () => {
+Deno.test('the write door names its own words, and stays open to newer ones', async () => {
   let schema = await writing()
   let comp = (name: string) =>
     at(
@@ -169,7 +169,9 @@ Deno.test('the write door is closed: a stamped or misspelled column is not in it
   // never typed: a client that read a bundle and sent it back is not punished
   // for the stamps riding along, and nothing invites it to write one.
   assertEquals(at(comp('created'), 'properties'), { at: {}, by: {} })
-  // And a column nobody declared is refused by the schema itself, which is
-  // what `apply()` does with it anyway.
-  assertEquals(at(comp('book'), 'additionalProperties'), false)
+  // And each component is OPEN (T-34277): a client caches this schema with the
+  // tool list it came in and the vocabulary grows under it, so a closed one
+  // would have that stale copy refuse a column that now exists. The schema
+  // describes; the server decides, and says which columns are declared.
+  assertEquals(at(comp('book'), 'additionalProperties'), true)
 })

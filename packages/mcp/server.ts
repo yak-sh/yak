@@ -54,6 +54,12 @@ export type Options = {
   search?: Search
   /** tools beside the generic tier and the graph's plugins' */
   tools?: Tool[]
+  /** what a result should ALSO say, given the names this server is listing
+   * right now: the staleness line for a client whose cached tool list has
+   * moved under it (roster.ts). Called once per tool result, and what it
+   * answers rides as a trailing content block — a JSON answer stays JSON. */
+  roster?: (names: string[]) => string | undefined | Promise<string | undefined>
+
   /** a host with more than tools to serve — resources, prompts, a capability
    * of its own — registers them on the same server here, after its tools are
    * on it. It is handed the SDK's own server, and it is awaited. */
@@ -121,12 +127,46 @@ let zodOf = (
   throw new Error(`${tool}: ${where} must be a Zod schema`)
 }
 
+// One more thing said at the end of a reply, as its own content block. It is
+// not appended to the text because a text may be JSON — the generic tier
+// answers a described value — and a sentence glued to it would be a value the
+// caller can no longer parse.
+let noting = (out: CallToolResult, line: string | undefined): CallToolResult =>
+  line
+    ? { ...out, content: [...out.content, { type: 'text', text: line }] }
+    : out
+
 let shapeOf = (tool: Tool): Record<string, z.ZodTypeAny> =>
   Object.fromEntries(
     Object.entries(tool.input ?? {}).map((
       [name, s],
     ) => [name, zodOf(tool.name, `argument '${name}'`, s)!]),
   )
+
+/**
+ * Every tool this server lists, in the order it registers them: the generic
+ * tier, then the graph's plugins', then the host's own.
+ *
+ * ```ts
+ * let names = listing(opts).map((t) => t.name)
+ * ```
+ */
+export let listing = (opts: Options): Tool[] => [
+  ...core({
+    vocab: opts.graph.vocab,
+    depth: opts.schema,
+    column: opts.column,
+    guide: opts.guide,
+    search: opts.search,
+  }),
+  ...toolsOf(opts.graph.plugins),
+  ...(opts.tools ?? []),
+]
+
+/** The ROSTER this server serves: the names it lists, in listing order. What a
+ * client caches at connect, and what {@link rosterVersion} names. */
+export let roster = (opts: Options): string[] =>
+  listing(opts).map((t) => t.name)
 
 /**
  * Build the MCP server for a graph: the generic tier (`graph_apply`,
@@ -157,17 +197,8 @@ export let server = (opts: Options): McpServer => {
     read: (query, readOpts) => graph.read(query, readOpts),
   }
 
-  let tools = [
-    ...core({
-      vocab: graph.vocab,
-      depth: opts.schema,
-      column: opts.column,
-      guide: opts.guide,
-      search: opts.search,
-    }),
-    ...toolsOf(graph.plugins),
-    ...(opts.tools ?? []),
-  ]
+  let tools = listing(opts)
+  let names = tools.map((t) => t.name)
 
   for (let t of tools) {
     let output = zodOf(t.name, 'output', t.output)
@@ -183,16 +214,20 @@ export let server = (opts: Options): McpServer => {
       ...(t.meta ? { _meta: t.meta } : {}),
     }
     let run = async (args: Record<string, unknown>) => {
+      let out: CallToolResult
       try {
         let value = await t.run(args, ctx)
-        return value instanceof Say
+        out = value instanceof Say
           ? spoke(value)
           : output
           ? said(value)
           : bare(value)
       } catch (err) {
-        return failed(err)
+        out = failed(err)
       }
+      // A refusal carries it too: an agent holding a stale list is likelier to
+      // be refused than served, and that is the reply worth telling.
+      return noting(out, await opts.roster?.(names))
     }
     if (output) {
       mcp.registerTool(t.name, { ...config, outputSchema: output }, run)

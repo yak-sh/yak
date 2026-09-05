@@ -53,13 +53,17 @@ let admitComp = (
   patch: Comp,
   trusted: boolean,
 ): Comp | undefined => {
-  let declared = new Set(v.columns(name))
+  let columns = v.columns(name)
+  let declared = new Set(columns)
   let alien = Object.keys(patch).filter((c) => !declared.has(c))
   if (alien.length) {
+    // The refusal names the VOCABULARY, not just the mistake: a caller writing
+    // a column that does not exist is a caller whose picture of this component
+    // is wrong, and the columns it does have are the shortest way to fix it.
     throw new Refused(
       `unknown column${alien.length > 1 ? 's' : ''}: ${
         alien.map((c) => `${name}.${c}`).join(', ')
-      }`,
+      } — ${name} declares ${columns.join(', ')}`,
     )
   }
   let keep = allowed(v, name, trusted)

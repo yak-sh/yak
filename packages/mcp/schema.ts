@@ -40,11 +40,10 @@ export type BundleOpts = {
    * so a read door leaves this off (default: `false`) */
   nulls?: boolean
   /** the WRITE door's reading: the wire-writable components and their
-   * writable columns, each component CLOSED — a column the vocabulary does
-   * not declare is refused by the schema, which is what `apply()` does with
-   * it anyway. A read is the other way around: it stays open, because a
-   * reader must not break on a column the server learned after it was
-   * written (default: `false`) */
+   * writable columns, each typed and described. It is OPEN, like a read: a
+   * client caches this schema at connect and the vocabulary grows under it,
+   * so a schema that refused an unknown column would refuse a column that now
+   * exists. The schema describes; the server decides (default: `false`) */
   write?: boolean
   /** a column your own door answers (or takes) differently than the
    * vocabulary declares — a reference that reads back as a named object, a
@@ -79,11 +78,17 @@ let saying = <T extends z.ZodTypeAny>(
 ): T => said && o.depth == 'full' ? s.describe(said) : s
 
 // One component as it appears in a bundle: a flat bag of its columns, each
-// carrying what the vocabulary says about it. A READ is passthrough, never
-// strict — a reader must not break on a column the server learned to send
-// after this client was written — while a WRITE is CLOSED, so a guessed column
-// is refused where it was typed rather than at the far end of the wire. The
-// component itself is optional, since a bundle carries only what its entity
+// carrying what the vocabulary says about it. Both directions are PASSTHROUGH,
+// never strict. A reader must not break on a column the server learned to send
+// after this client was written — and a WRITER holds this schema for the whole
+// conversation, cached with the tool list it came in, while the vocabulary
+// grows under it (roster.ts). A closed write door would have that stale copy
+// refuse a column that exists, in the client, where no server can explain it.
+// So the schema DESCRIBES — every declared column typed, named and described —
+// and the server DECIDES: admission refuses a column nobody declared and names
+// the ones that are declared (@yaks/graph `admit`).
+//
+// The component itself is optional, since a bundle carries only what its entity
 // wears; `nulls` adds the other reading, for the door that echoes a batch back
 // and the write that drops a component.
 let compSchema = (
@@ -116,7 +121,7 @@ let compSchema = (
       ]
     }),
   )
-  return o.write ? z.object(shape).strict() : z.object(shape).passthrough()
+  return z.object(shape).passthrough()
 }
 
 // The keys a WRITE says that no vocabulary declares: the two sugars `apply()`
@@ -173,12 +178,12 @@ export let bundleSchema = (
         : z.string(),
       num: z.number().nullable().optional(),
     }).passthrough(),
-    // Open at the top even where a write is closed per component: the `$`
-    // words are the HOST's to add — yaks.app says `$app` on a bundle — and a
-    // vocabulary GROWS mid-connection, so a component this schema was derived
-    // before still reaches the graph that has since learned it. That is the
-    // whole free-form escape a write needs; the door announces the growth with
-    // `tools/list_changed` and a client re-reads.
+    // Open at the top as well as per component: the `$` words are the HOST's
+    // to add — yaks.app says `$app` on a bundle — and a vocabulary GROWS
+    // mid-connection, so a component this schema was derived before still
+    // reaches the graph that has since learned it. The door announces the
+    // growth with `tools/list_changed` and the roster line (roster.ts), and a
+    // client re-reads.
   }).passthrough()
 
 /**

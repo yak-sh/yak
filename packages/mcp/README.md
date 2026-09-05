@@ -122,6 +122,50 @@ import { bundleSchema } from '@yaks/mcp'
 let bundle = bundleSchema(shop, { depth: 'full' })
 ```
 
+## The schema describes, the server decides
+
+A client lists the tools once, at `initialize`, and holds that list — with the
+schemas in it — for the whole conversation. Your vocabulary keeps growing under
+it. So the write schema is **open**: every declared column is typed, named and
+described, and an undeclared one is not refused there. A closed schema would
+have a client's stale copy refuse a column that now exists, in the client, where
+no server can explain it.
+
+Admission is the authority. A column nobody declared is refused by
+[@yaks/graph](https://jsr.io/@yaks/graph), naming the column, naming the columns
+the component does declare, and pointing at `graph_schema` — which answers what
+this graph knows _right now_.
+
+## A tool list goes stale
+
+The other half of the same problem: a tool a release added is one the agent
+cannot see, and a tool that went is one it calls into a refusal.
+`notifications/tools/list_changed` is the protocol's answer, and a host that
+holds a stream should send it. But a client without one hears nothing, so say it
+again where the agent is certainly reading — on the next result:
+
+```ts
+import { roster, rosterLine, rosterVersion } from '@yaks/mcp'
+
+let version = rosterVersion(roster(opts), release) // name the list you serve
+// …remember it per session at initialize, then:
+mcp({ ...opts, roster: (names) => rosterLine(cached[session], names) })
+```
+
+`roster` is the names this server lists; `rosterVersion` hashes them with your
+release id, so it moves when either does; `rosterLine` is the sentence:
+
+> The tool list changed since you connected (new: mail_list, mail_send; gone:
+> vocab). Reconnect to see them, or ask `about`.
+
+What it answers rides as a trailing content block, so a JSON answer stays JSON.
+Say it once per changed set — record the new roster when you say it.
+
+**New capability = new component, not a new tool.** The generic tier already
+writes anything your vocabulary declares, and a component appears in
+`graph_schema` and in the write schema by itself. A tool per feature is a roster
+that moves under every client you have.
+
 ## The door is where trust lives
 
 A bundle can say anything, including whose name is on it. So a server is built

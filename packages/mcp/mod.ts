@@ -44,6 +44,14 @@
  * `tools` the same way it contributes components and hooks; they are listed
  * beside the generic tier, with the same signing and the same reply shape.
  *
+ * ## A tool list goes stale
+ * A client lists the tools once and holds that list. {@link roster} is what
+ * this server is listing right now and {@link rosterVersion} names it; a host
+ * that remembers the version a session connected under passes
+ * {@link Options.roster}, and every result then carries the one line naming
+ * what moved ({@link rosterLine}). The write schema is open for the same
+ * reason: the schema describes, the server decides.
+ *
  * ## When a host serves more than tools
  * {@link Options.extend} is handed the SDK's own server once the tools are on
  * it, so resources, prompts and a capability of the host's own go on the SAME
@@ -54,7 +62,8 @@
  */
 
 export { mcp, type MountOptions } from './mount.ts'
-export { type Options, Say, server } from './server.ts'
+export { listing, type Options, roster, Say, server } from './server.ts'
+export { rosterLine, rosterVersion } from './roster.ts'
 export { core, type CoreOpts, type Search } from './tools.ts'
 export { type Edge, edges } from './edges.ts'
 export {

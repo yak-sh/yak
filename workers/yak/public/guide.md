@@ -329,6 +329,30 @@ taken:
 Anything the columns don't cover still lives in `doc.body`: it is text, so
 markdown or JSON both keep there.
 
+## The tool list, and when it moves
+
+Your host listed these tools once, when it connected, and is holding that list.
+Ours keeps moving: a release adds one, an app of theirs declares one, a space
+they joined brings a few. So:
+
+- `about` says what is here **right now** — every tool name, and a roster
+  version naming that list. Call it at the start of a conversation; the answer
+  is the whole list, not a summary of it.
+- When the list moves under you, a reply carries one line saying so and naming
+  what moved: _the tool list changed since you connected (new: mail_send)_.
+  Reconnect, or call `about`, before you act on the old list.
+- `graph_schema` is the same thing for WORDS. `graph_apply`'s input schema is
+  the vocabulary, and it is open on purpose: a column your cached copy has never
+  heard of still reaches the store, and a column nobody declared is refused
+  there, naming the ones that are. The schema describes; the server decides.
+
+**A new capability is a new component, not a new tool.** `graph_apply` already
+writes anything the vocabulary declares, so a thing an app needs to keep — a
+`rating`, a `loan`, a `shift` — is a line in its `vocab.json`, discoverable by
+everyone through `graph_schema` the moment it deploys. Reach for a tool of your
+own (below) only when the app wants a VERB said in a sentence for someone else's
+agent. Every tool is a name every connected client has to learn again.
+
 ## An entity spans apps
 
 Deeper: <https://yaks.app/guide/entities.md> — where a word lives, and a two-app

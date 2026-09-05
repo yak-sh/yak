@@ -348,15 +348,21 @@ export let client = (
 // says it erred, so a test reads the words and not the envelope.
 export let connector = (k: Kernel, cookie?: string) => {
   let n = 0
+  // The transport's session id: minted at `initialize` and sent back on every
+  // later request, the way a client does — it names this client's stream and
+  // the tool list it cached (mcp.ts).
+  let session = ''
   let call = async (method: string, params: unknown = {}) => {
     let r = await k.at('yaks.app', '/mcp', {
       method: 'POST',
       headers: {
         ...(cookie ? { cookie } : {}),
+        ...(session ? { 'mcp-session-id': session } : {}),
         'content-type': 'application/json',
       },
       body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method, params }),
     })
+    session = r.headers.get('mcp-session-id') ?? session
     if (r.status != 200) throw new Error(`mcp ${r.status}: ${await r.text()}`)
     let reply = await r.json()
     if (reply.error) {

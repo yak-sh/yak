@@ -80,6 +80,23 @@ let batch = (v: unknown): Bundle[] => {
   })
 }
 
+// A write refused for a word this graph does not know, pointed at the door
+// that has the words. The input schema is OPEN (schema.ts) precisely so a
+// client's cached copy cannot refuse a column that now exists — which leaves
+// the server the only authority on what a component takes, and this the only
+// place a caller learns its picture was stale.
+// The refusal is matched by its WORDS rather than its class: a graph may be a
+// composition over stores of its own, where admission ran on the far side of a
+// hop and what arrives here is the sentence it wrote, not the error it threw.
+let pointed = (err: unknown): never => {
+  let said = err instanceof Error ? err.message : ''
+  if (!said.includes('unknown column')) throw err
+  throw new Refused(
+    `${said}. Your tool list may be from before this word moved — ` +
+      'graph_schema says what this graph knows right now.',
+  )
+}
+
 // The entities, then everything pointing at them, each one whole and each one
 // once. `.refs=<id>` is the query grammar's backlink union, so the incoming
 // half of an entity's edges costs one query, not one per reference column.
@@ -139,12 +156,21 @@ export let core = (opts: CoreOpts): Tool[] => {
         `is the batch AS APPLIED, including everything the graph synthesized: ` +
         `stamps, minted numbers, and a tombstone per casualty. This tool's ` +
         `own input schema is the vocabulary — every component, every column ` +
-        `and every type — and graph_schema says the same thing at length.`,
+        `and every type — and graph_schema says the same thing at length. ` +
+        `The schema describes and the server decides: it is open, so a word ` +
+        `learned since you connected still reaches the graph, and a column ` +
+        `nobody declared is refused here with the ones that are.`,
       input: {
         change: writes.describe('the bundles to apply, atomically'),
       },
       output: applied,
-      run: (args, ctx) => ctx.apply(batch(args.change)),
+      run: async (args, ctx) => {
+        try {
+          return await ctx.apply(batch(args.change))
+        } catch (err) {
+          return pointed(err)
+        }
+      },
     },
     {
       name: 'graph_query',

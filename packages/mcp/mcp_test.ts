@@ -7,7 +7,8 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { comp, connect, result, shopGraph } from './harness.ts'
-import { Say } from './server.ts'
+import { roster, Say } from './server.ts'
+import { rosterLine, rosterVersion } from './roster.ts'
 
 let ada = { eid: 'm1' }
 let spring: Bundle = {
@@ -173,8 +174,8 @@ Deno.test('graph_schema hands over the words of this graph', async () => {
 Deno.test('a refusal is the tool error the agent reads, not a broken call', async () => {
   let client = await connect()
   // The write door's schema IS the vocabulary (T-34153), so a bundle with no
-  // identity, a column nobody declared and a value of the wrong type are each
-  // refused where they were typed — with the path that names them.
+  // identity and a value of the wrong type are each refused where they were
+  // typed — with the path that names them.
   let said = async (change: unknown) => {
     let out = await called(client, 'graph_apply', { change })
     assertEquals(out.isError, true)
@@ -182,8 +183,14 @@ Deno.test('a refusal is the tool error the agent reads, not a broken call', asyn
     return String(out.content[0].text)
   }
   assert((await said([{ book: {} }])).includes('"entity"'))
+  // A column nobody declared is the SERVER's refusal, not the schema's: the
+  // schema is open so a client's cached copy cannot refuse a word this graph
+  // has since learned. It names the columns that do exist, and where to read
+  // them (T-34277).
   let colour = await said([{ entity: { eid: 'b1' }, book: { colour: 'red' } }])
-  assert(colour.includes('colour'), colour)
+  assert(colour.includes('unknown column: book.colour'), colour)
+  assert(colour.includes('book declares price, status, author'), colour)
+  assert(colour.includes('graph_schema'), colour)
   let price = await said([{ entity: { eid: 'b1' }, book: { price: 'lots' } }])
   assert(price.includes('Expected number'), price)
 
@@ -246,6 +253,63 @@ Deno.test('a tool that says its own words says them, and its data beside', async
   assertEquals(out.content[0].text, 'two books here')
   // Unwrapped — a host that renders this was told which page to render it in.
   assertEquals(out.structuredContent, { books: 2 })
+  await client.close()
+})
+
+// The ROSTER (T-34277): a client lists the tools once and holds that list, so
+// a tool a release added is one it will never call and one that went is one it
+// calls into a refusal. The version names the list, the host remembers which
+// one a session connected under, and every result carries the diff.
+Deno.test('the roster version moves with the names and with the release', () => {
+  let a = ['graph_query', 'about']
+  assertEquals(rosterVersion(a, 'v1'), rosterVersion([...a].reverse(), 'v1'))
+  assert(rosterVersion(a, 'v1') != rosterVersion([...a, 'mail_send'], 'v1'))
+  assert(rosterVersion(a, 'v1') != rosterVersion(a, 'v2'))
+})
+
+Deno.test('the line names what moved, and says nothing when nothing did', () => {
+  assertEquals(rosterLine(['about'], ['about']), undefined)
+  assertEquals(
+    rosterLine(['about', 'vocab'], ['about', 'mail_list', 'mail_send']),
+    'The tool list changed since you connected (new: mail_list, mail_send; ' +
+      'gone: vocab). Reconnect to see them, or ask `about`.',
+  )
+})
+
+Deno.test('a session that connected against another roster is told, once', async () => {
+  let graph = shopGraph()
+  // What this client cached at connect — a roster from before the release
+  // that added `search` and took `vocab` away. It is the host that remembers
+  // this; here it is a variable.
+  let now = roster({ graph, search: () => [] })
+  let was: string[] = [...now.filter((n) => n != 'search'), 'vocab']
+  let told = 0
+  let client = await connect({
+    graph,
+    search: () => [],
+    roster: (names) => {
+      let line = rosterLine(was, names)
+      if (line) {
+        told++
+        was = names // once per changed set, not once per call
+      }
+      return line
+    },
+  })
+  let out = await called(client, 'graph_query', { q: '.price!' })
+  let blocks = out.content as { text: string }[]
+  assertEquals(blocks.length, 2)
+  assertEquals(
+    blocks[1].text,
+    'The tool list changed since you connected (new: search; gone: vocab). ' +
+      'Reconnect to see them, or ask `about`.',
+  )
+  // The answer itself is untouched — a described value stays parsable.
+  assertEquals(JSON.parse(blocks[0].text), [])
+  // Once per changed set: the next reply is quiet again.
+  let quiet = await called(client, 'graph_query', { q: '.price!' })
+  assertEquals((quiet.content as { text: string }[]).length, 1)
+  assertEquals(told, 1)
   await client.close()
 })
 

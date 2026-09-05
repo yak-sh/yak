@@ -112,6 +112,73 @@ Deno.test('the deploy id drives the marker, not the human VERSION', async () => 
   }
 })
 
+// The ROSTER a session connected against (T-34277): recorded at initialize,
+// compared on every later call, and the line said once per changed set — for
+// the client that holds no stream, or whose host ignores the notification.
+Deno.test('a session is told which tools moved, once per changed set', async () => {
+  let wire = new Wire({ storage: kv() }, {})
+  let listed = (names: string[]) => ({
+    session: 'abc',
+    version: names.join(','),
+    names,
+  })
+  // What it cached at connect: recorded, never answered.
+  assertEquals(
+    await wire.roster({ ...listed(['about', 'vocab']), init: true }),
+    {},
+  )
+  // The same list is no news.
+  assertEquals(await wire.roster(listed(['about', 'vocab'])), {})
+  let { line } = await wire.roster(listed(['about', 'mail_list', 'mail_send']))
+  assertEquals(
+    line,
+    'The tool list changed since you connected (new: mail_list, mail_send; ' +
+      'gone: vocab). Reconnect to see them, or ask `about`.',
+  )
+  // Once: the roster it was told about is the one it is holding now.
+  assertEquals(
+    await wire.roster(listed(['about', 'mail_list', 'mail_send'])),
+    {},
+  )
+  // A session nobody recorded just listed, or cannot be told from any other
+  // client: remembered silently.
+  assertEquals(
+    await wire.roster({ session: 'fresh', version: 'v', names: ['about'] }),
+    {},
+  )
+})
+
+// A release the object was already awake for (a rolling deploy, where a stream
+// opened under the old version is still held): whoever is listening hears it
+// now rather than at their next attach.
+Deno.test('a release reaches a stream that was already open', async () => {
+  let storage = kv()
+  storage.map.set('mark', 'deploy-1')
+  let wire = new Wire({ storage }, { CF_VERSION_METADATA: { id: 'deploy-2' } })
+  try {
+    let ear = await attached(wire, 'abc')
+    assertStringIncludes(await ear.read(), ': open')
+    await wire.released()
+    for (let list of ['tools', 'resources', 'prompts']) {
+      assertStringIncludes(
+        await ear.read(),
+        `notifications/${list}/list_changed`,
+      )
+    }
+    // Said once: the session is marked as spoken for at this release, so its
+    // next attach is quiet.
+    assertEquals(
+      (storage.map.get('spoke') as Record<string, string>).abc,
+      'deploy-2',
+    )
+    await wire.released()
+    await wire.tell({ method: 'probe' })
+    assertStringIncludes(await ear.read(), 'probe')
+  } finally {
+    drained(wire)
+  }
+})
+
 Deno.test('the same deploy id stays quiet', async () => {
   let storage = kv()
   storage.map.set('spoke', { abc: 'deploy-2' })
