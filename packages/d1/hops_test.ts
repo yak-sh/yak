@@ -28,14 +28,15 @@
 //   flush     one `batch()`: every write of the whole batch, atomic.
 //
 // Measured 2026-09-05, with the gather in (T-34032), the write path speaking
-// RETURNING (T-34033) and the backwards read down to one trip (T-34077) — in
-// brackets, what the same case cost before the three:
+// RETURNING (T-34033), the backwards read down to one trip (T-34077) and the
+// death cascade asked as one statement (T-34076) — in brackets, what the same
+// case cost before the four:
 //
 //   case                     trips  batch  all  prepare
 //   ──────────────────────────────────────────────────
 //   a plain write              2 (3)   2     0     11
 //   a write with $was          2 (2)   2     0     10
-//   a $delete with a cascade   6 (12)  6     0     59
+//   a $delete with a cascade   4 (12)  4     0     35
 //   a member-guarded write     3 (9)   3     0     44
 //   a batch of 50 bundles      2 (3)   2     0    550
 //
@@ -48,11 +49,13 @@
 //                             nothing is minted at all.
 //   a $delete with a cascade  the gather (two: the entities named, then what
 //                             points at them), then the cascade phase, which
-//                             has to read AFTER the patches and so takes a
-//                             gather of its own: one backwards read for the
-//                             frontier that turned up, one `learn` for the
-//                             survivor whose reference is let go, one for the
-//                             identities the batch never named, and the flush.
+//                             reads AFTER the patches and asks its whole
+//                             question at once (store.ts `doom`): the recursive
+//                             closure and the soft references into it, two
+//                             statements in one batch. Then one `learn` for the
+//                             survivor whose reference is let go — an entity
+//                             nothing had read — and the flush. A cascade with
+//                             no soft reference to let go costs one less.
 //   a member-guarded write    the gather — the entities the ladder names, then
 //                             everything filed about the actor, which is the
 //                             roster and the grants in one — then the flush.
@@ -71,7 +74,7 @@ import { counted, type Hops, shop } from './harness.ts'
 let PINS: Record<string, number> = {
   'a plain write': 2,
   'a write with $was': 2,
-  'a $delete with a cascade': 6,
+  'a $delete with a cascade': 4,
   'a member-guarded write': 3,
   'a batch of 50 bundles': 2,
 }
@@ -134,9 +137,9 @@ Deno.test('a write with $was', async () => {
 Deno.test('a $delete with a cascade', async () => {
   let name = 'a $delete with a cascade'
   // A review cascades with its product, a bookmark of it is released, and a
-  // maker would be detached. One backwards read per rung of the walk, and the
-  // casualties the batch never named still have to be identified before they
-  // can be removed — which is why a delete costs more than a write.
+  // maker would be detached. The closure and the soft references are one batch
+  // however long the chain is; what a delete still costs over a write is the
+  // survivor the release patches, whom nothing had read.
   holds(
     name,
     await shopHops([

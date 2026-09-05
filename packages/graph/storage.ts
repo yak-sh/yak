@@ -21,6 +21,20 @@ export type Query = string | Ast
 /** Options that ride a read, such as a fixed `now` for relative time phrases. */
 export type ReadOpts = { now?: number }
 
+/** One entity the cascade takes, and the rung it fell on: the entities the
+ * batch named are depth 0, what died with them 1, and so on. The order the
+ * casualties are answered in. */
+export type Gone = { eid: Eid; depth: number }
+
+/** One soft reference letting go: a SURVIVOR's `detach` or `release` column
+ * pointing at one of the dead. */
+export type Loose = { eid: Eid; comp: string; prop: string }
+
+/** Who dies with a batch's dead, and what has to let go of them — the whole of
+ * ./cascade.ts's question, so a storage that can answer it in one statement
+ * answers it in one call. */
+export type Doom = { gone: Gone[]; loose: Loose[] }
+
 /**
  * An open transaction. Every phase of `apply()` between `precondition` and
  * `commit` runs against one of these, so a guard reads what the batch will
@@ -48,6 +62,13 @@ export type Tx = {
    * `holding`); read it through `about()` rather than by hand, which falls back
    * to a `read` when no gather took one. */
   about?: (eids: Eid[], comps?: string[]) => Bundle[] | Promise<Bundle[]>
+  /** the death cascade's whole question, asked once: who dies with these, and
+   * what has to let go of them (see {@link Doom}). Optional, and it may DECLINE
+   * with `null` — a storage that can compile the closure into one statement
+   * (@yaks/sql's `doomSql`) answers, one that cannot, or whose answer would be
+   * about rows it has not written yet, says nothing and is walked instead
+   * (./cascade.ts). */
+  doom?: (eids: Eid[]) => Doom | null | Promise<Doom | null>
   /** patch the bundles in → the entities this patch MINTED, with their `num`
    * when the adapter mints one. An adapter whose numbers are the database's to
    * pick may not know them yet — it fills each `num` into the very entity it

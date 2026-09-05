@@ -215,6 +215,11 @@ export let gather = (
  */
 export let holding = (tx: Tx, vocab: Vocab, snap: Snap): Tx => ({
   ...tx,
+  // Not the storage's own death cascade: it would answer about the rows the
+  // storage HOLDS, and this transaction is the one place where a hook's
+  // pending write is not among them. A phase reading through the snapshot
+  // walks (./cascade.ts `doomed`).
+  doom: undefined,
   patch: (bundles) =>
     then(tx.patch(bundles), (born) => {
       for (let b of bundles) {

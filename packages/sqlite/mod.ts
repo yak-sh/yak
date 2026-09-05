@@ -37,17 +37,26 @@
 
 import type { Vocab } from '@yaks/vocab'
 import type { BindOpts } from '@yaks/sql'
-import type { Bundle, Entity, ReadOpts } from '@yaks/graph'
+import type { Bundle, Doom, Entity, ReadOpts } from '@yaks/graph'
 import type { Driver, Row } from './driver.ts'
 import type { Query } from './read.ts'
 import { grown, indexed, schema, tabled, type Text } from './ddl.ts'
-import { get, read, rows } from './read.ts'
+import { doom, get, read, rows } from './read.ts'
 import { patch, remove } from './write.ts'
 
 export * from './driver.ts'
 export * from './bundle.ts'
 export { grown, indexed, schema, tabled, type Text } from './ddl.ts'
-export { compSql, get, OWNER, type Query, read, rows, setSql } from './read.ts'
+export {
+  compSql,
+  doom,
+  get,
+  OWNER,
+  type Query,
+  read,
+  rows,
+  setSql,
+} from './read.ts'
 export {
   buried,
   dropSql,
@@ -76,6 +85,9 @@ export type Tx = {
   read: (query: Query, opts?: ReadOpts) => Bundle[]
   /** identity, not search: these entities as they stand, whole */
   get: (eids: string[]) => Bundle[]
+  /** who dies with these entities, and what has to let go of them — the death
+   * cascade's question as one recursive statement rather than a read per rung */
+  doom: (eids: string[]) => Doom
   /** patch the bundles in → the entities this patch minted */
   patch: (bundles: Bundle[]) => Entity[]
   /** remove these entities: rows gone, identity tombstoned */
@@ -168,6 +180,7 @@ export let storage = (
   let tx: Tx = {
     read: (query, opts) => read(driver, vocab, query, { ...base, ...opts }),
     get: (eids) => get(driver, vocab, eids, base),
+    doom: (eids) => doom(driver, vocab, eids),
     patch: (bundles) => patch(driver, vocab, bundles),
     remove: (entities) => remove(driver, vocab, entities),
   }

@@ -183,6 +183,30 @@ declines there declines the whole hop; a child predicate naming the spine
 declines too, since inside the subquery that name is the correlation to the
 outer row.
 
+## The death cascade
+
+One thing here is not a query. A reference column's `death` word says what
+happens to it when the entity it points at dies, and `@yaks/graph` decides all
+of it — but "who dies with these, and who has to let go" is a transitive
+question, and walked it costs a read per rung. `cascade.ts` compiles it instead:
+
+```ts
+import { doomSql, looseSql } from '@yaks/sql'
+
+// with recursive __doom(id, depth) as (
+//   select "entity"."id", 0 from "entity" where "entity"."eid" in (?)
+//   union select "review"."entity", min(__doom."depth" + 1, 32)
+//     from "review", __doom where "review"."product" = __doom."id" and …
+// ) select eid, num, min(depth) …
+doomSql(vocab, ['p1']) //  every casualty, with the rung it fell on
+looseSql(vocab, ['p1']) // the survivors' detach/release columns into it
+```
+
+Both statements re-state the same CTE, so they ride one batch. The rung count
+saturates at 32 rather than climbing, which is what makes a reference cycle
+terminate; the SET is complete at any depth. A storage answers `Tx.doom` with
+them (`@yaks/sqlite`, `@yaks/d1`); one that cannot is walked by `@yaks/graph`.
+
 ## Compatibility
 
 Pure TypeScript with no runtime dependency beyond a `@yaks/query` AST, a

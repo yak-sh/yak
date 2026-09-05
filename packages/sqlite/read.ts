@@ -12,9 +12,16 @@
 
 import { type And, parse } from '@yaks/query'
 import type { Column, Vocab } from '@yaks/vocab'
-import { type BindOpts, compile, type Derived } from '@yaks/sql'
+import {
+  type BindOpts,
+  compile,
+  type Derived,
+  doomSql,
+  looseSql,
+} from '@yaks/sql'
 import type { Driver, Row } from './driver.ts'
 import type { Bundle, Comp } from './bundle.ts'
+import type { Doom } from '@yaks/graph'
 import { tombstoned } from '@yaks/graph'
 
 // A query, as text or as an already-built AST. Text is parsed; an AST passes
@@ -201,6 +208,35 @@ let bundleOf = (
     out[comp] = row as Comp
   }
   return out
+}
+
+/**
+ * The death cascade's whole question, answered as two statements: everything
+ * that dies with these entities, and every soft reference that has to let go of
+ * them (@yaks/sql's `doomSql`/`looseSql`). @yaks/graph would otherwise walk the
+ * chain a read per rung — free here, a round trip each over a network — and the
+ * walk is what an adapter that cannot compile this still gets.
+ *
+ * Asked INSIDE the transaction, after the batch's patches have gone in, which
+ * is what makes the answer the one the cascade wants: who points at the dying
+ * as the batch LEAVES the graph.
+ */
+export let doom = (driver: Driver, vocab: Vocab, eids: string[]): Doom => {
+  let dying = doomSql(vocab, eids)
+  let soft = looseSql(vocab, eids)
+  return {
+    gone: driver.query(dying.sql, dying.params).map((r) => ({
+      eid: String(r.eid),
+      depth: Number(r.depth),
+    })),
+    loose: soft
+      ? driver.query(soft.sql, soft.params).map((r) => ({
+        eid: String(r.eid),
+        comp: String(r.comp),
+        prop: String(r.prop),
+      }))
+      : [],
+  }
 }
 
 // The matched entities as whole bundles. Built for a membership query — one

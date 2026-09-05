@@ -52,10 +52,10 @@
 // A nested `tx()` is a separate batch, since D1 has no savepoints. Nothing in
 // `apply()` nests one.
 
-import type { Bundle, Comp, Eid, Entity, Tx } from '@yaks/graph'
+import type { Bundle, Comp, Doom, Eid, Entity, Loose, Tx } from '@yaks/graph'
 import { comps, tombstoned } from '@yaks/graph'
 import { matcher } from '@yaks/match'
-import type { BindOpts } from '@yaks/sql'
+import { type BindOpts, doomSql, looseSql } from '@yaks/sql'
 import {
   minted,
   mintSql,
@@ -137,11 +137,21 @@ let merged = (v: Vocab, held: Bundle, b: Bundle): Bundle => {
  * // await g.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }])
  * ```
  */
+// The components bearing a reference whose death word means something — a
+// patch touching one of these is a patch the death cascade would have to read,
+// and the database has not seen it yet.
+let deadly = (v: Vocab): Set<string> =>
+  new Set(
+    (['cascade', 'detach', 'release'] as const)
+      .flatMap((word) => v.deaths(word).map(([comp]) => comp)),
+  )
+
 export let storage = <S extends Stmt<S>>(
   db: D1Like<S>,
   vocab: Vocab,
   base: BindOpts = {},
 ): Store => {
+  let bears = deadly(vocab)
   // `bind` at the door, so a statement may be built in the plain SQLite values
   // @yaks/sqlite's shared write path speaks (a bigint, a byte array) and D1's
   // narrower type table is met in exactly one place.
@@ -212,6 +222,14 @@ export let storage = <S extends Stmt<S>>(
     // its insert in `pending` — that statement's RETURNING is where its number
     // comes from once the batch lands.
     let births: { at: number; entity: Entity }[] = []
+    // Whether this transaction has written something the database cannot see
+    // that the death cascade would have to read: a patch touching a component
+    // that bears a death column, or a removal. Until it has, the rows the
+    // database holds ARE the rows the batch leaves behind, and the cascade's
+    // question is one statement; once it has, that statement would be
+    // answering about rows that have moved, so the question is declined and
+    // @yaks/graph walks it through the overlay instead.
+    let moved = false
 
     // Learn about these eids, asking the database only about the ones no
     // question has covered yet.
@@ -269,6 +287,35 @@ export let storage = <S extends Stmt<S>>(
       return [...all.filter((b) => !dirty.has(b.entity.eid)), ...mine]
     }
 
+    // Who dies with these entities, and what has to let go of them: two
+    // statements — the recursive closure over the cascade columns and the soft
+    // references into it (@yaks/sql) — sent as ONE batch, where the walk they
+    // replace cost a read per rung and another per frontier. The casualties'
+    // identities are kept as they come back, so `remove`, which is the next
+    // thing that happens to them, asks nothing more.
+    let doom = async (eids: Eid[]): Promise<Doom | null> => {
+      if (moved) return null
+      let soft = looseSql(vocab, eids)
+      let asks = [doomSql(vocab, eids), ...(soft ? [soft] : [])]
+      let [dying, letting = []] = await send(asks)
+      let gone = dying.map((r) => {
+        let eid = String(r.eid)
+        if (!known.has(eid)) {
+          known.set(eid, {
+            ...(r.num == null ? {} : { num: Number(r.num) }),
+            dead: false,
+          })
+        }
+        return { eid, depth: Number(r.depth) }
+      })
+      let loose: Loose[] = letting.map((r) => ({
+        eid: String(r.eid),
+        comp: String(r.comp),
+        prop: String(r.prop),
+      }))
+      return { gone, loose }
+    }
+
     let tx: Tx = {
       read: async (query, opts) =>
         overlaid(
@@ -289,7 +336,9 @@ export let storage = <S extends Stmt<S>>(
           return b ? [b] : []
         })
       },
+      doom,
       patch: async (bs) => {
+        moved ||= bs.some((b) => comps(b).some(([name]) => bears.has(name)))
         await learn(touched(vocab, bs))
         let born: Entity[] = []
         // `touched` puts the bundle's own eid first, then what it points at, so
@@ -307,9 +356,13 @@ export let storage = <S extends Stmt<S>>(
         return born
       },
       remove: async (entities) => {
+        // A tombstoned row is a row the database has not seen go, so nothing
+        // after this may ask it who dies.
+        moved = true
         // The cascade names casualties this transaction never read — an entity
-        // that existed only because something else did. Learn them, so the
-        // overlay knows their identity and a later read sees them as dead.
+        // that existed only because something else did. Learn the ones nothing
+        // has identified yet, so the overlay knows their identity and a later
+        // read sees them as dead; `doom` has usually named them already.
         await learn(entities.map((e) => e.eid))
         let now = new Date().toISOString()
         for (let e of entities) {
@@ -317,7 +370,12 @@ export let storage = <S extends Stmt<S>>(
           if (!spine) continue
           pending.push(...removeSql(vocab, e, now))
           known.set(e.eid, { ...spine, dead: true })
-          dirty.set(e.eid, tombstoned(at(e.eid)?.entity ?? e))
+          // Its identity as this transaction knows it: the bundle when one was
+          // read, else the spine `doom` or `learn` named — a tombstone still
+          // carries the number the entity was given.
+          let entity = at(e.eid)?.entity ??
+            { eid: e.eid, ...(spine.num == null ? {} : { num: spine.num }) }
+          dirty.set(e.eid, tombstoned(entity))
         }
       },
     }

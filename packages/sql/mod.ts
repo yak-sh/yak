@@ -25,6 +25,12 @@
 // is the seam a full-text, vector, or graph-walk package registers through —
 // `compile(ast, vocab, { extend: [...] })`.
 //
+// One thing here is not a query at all. The DEATH CASCADE (./cascade.ts) is a
+// question about the vocabulary's reference death words rather than about a
+// filter, and it compiles to a `with recursive` closure — the answer @yaks/graph's
+// cascade phase asks a storage for, shared so @yaks/sqlite and @yaks/d1 do not
+// each write it.
+//
 // Coverage is stated plainly. The common query path is exact — reverse hops
 // (`.reviews>=5`, `.reviews.stars=5`) included; the advanced directives it
 // cannot yet reach throw `Unsupported` rather than answer almost-right — see
@@ -38,6 +44,7 @@ import { type Frag, render } from './ir.ts'
 
 export * from './ir.ts'
 export * from './sqlite.ts'
+export * from './cascade.ts'
 export * from './derived.ts'
 export * from './extend.ts'
 export * from './ident.ts'
