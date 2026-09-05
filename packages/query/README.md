@@ -78,6 +78,12 @@ Vocabulary: `eq ne contains lt le gt ge present absent want pred` (predicates);
   `.edges[watches,author.team]!` `.reaches[blocks,<=3]=42`.
 - Quotes glue a value across whitespace and `&`; the empty query selects nothing
   (`{ kind: 'never' }`).
+- `.after=<num>` is the window's cursor: the spine number of the entity to
+  continue past, and the ONLY cursor spelling. It is order-agnostic on purpose —
+  an evaluator derives the anchor's place in whatever order the query asked for,
+  so a caller pages without ever learning the order key. This parser only says
+  which entity it names; where that sits is evaluation (`@yaks/sql`,
+  `@yaks/match`).
 
 ## Time literals
 

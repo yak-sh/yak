@@ -115,11 +115,24 @@ let QUERIES = [
   '.kind=book&.order=title',
   '.kind=book&.order=released',
   '.kind=book&.order=-released',
-  // windows (newest first, whatever else the query asked for)
+  // windows: newest first when nothing else is asked, and WITHIN the asked
+  // order when there is one — `.after` naming the entity to continue past,
+  // wherever it sits in that order.
   '.kind=book&.limit=2',
   '.kind=book&.after=4',
   '.kind=book&.limit=2&.after=6',
   '.kind=book&.order=price&.limit=2',
+  '.kind=book&.order=price&.after=5',
+  '.kind=book&.order=price&.limit=2&.after=6',
+  '.kind=book&.order=-price&.limit=2&.after=4',
+  '.kind=book&.order=title&.after=4',
+  '.kind=book&.order=-released&.limit=2&.after=5',
+  // an anchor with no value for the ordered column pages by its num alone
+  '.order=price&.limit=3&.after=2',
+  // an anchor outside the selection still names a place in the order
+  '.kind=book&.order=price&.after=9',
+  // an anchor no entity has restarts from the first page
+  '.kind=book&.order=price&.limit=2&.after=99999',
   // combinations
   'spring .price<20',
   '.kind=book&.available=1&.price<10',

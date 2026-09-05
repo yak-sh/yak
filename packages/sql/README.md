@@ -109,7 +109,28 @@ The contract, whole:
   expression, or `null` to let the value route to a column as usual. The
   expression carries no bound params (the IR's `ORDER BY` holds none), so a
   ranking lowers to an expression over values it can spell safely — the integer
-  ids it already resolved, or a joined column.
+  ids it already resolved, or a joined column. `site.owner` names the row the
+  expression speaks about: a `.after` cursor asks the same hook a second time
+  with the ANCHOR's owner id, so a ranking is pageable without a second seam.
+
+## Ordering and paging
+
+`.order=` sorts by a column (a leading `-` descending) or by an extension's
+ranking, and `"entity"."num" desc` breaks its ties, so the order is total.
+
+A `.limit`/`.after` window pages **within** that order — a window says how much
+of a sequence to answer with, never which sequence. With no `.order=` the
+sequence is newest-first by spine num, as it always was.
+
+`.after=<num>` names the entity to continue past, the same spelling however the
+answer is ordered. It compiles to a **keyset** on the anchor's own place in the
+order: the anchor's value is read back through a correlated subselect and
+compared against each row's, with the spine num breaking ties. Three fallbacks
+fall out of that shape rather than being cased — an anchor that no longer
+matches the query still has an order value to page from, one with no value pages
+by its num alone, and one that no entity has leaves the guard true, which is the
+first page. `@yaks/match` answers the same rule in memory, and its
+`parity_test.ts` pins the agreement.
 
 ## Honest coverage
 

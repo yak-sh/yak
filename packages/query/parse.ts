@@ -117,7 +117,10 @@ export let parseDot = (token: string): Clause[] | null => {
     return [{ kind: 'fields', fields }]
   }
   // `.limit=200` / `.after=13882` — the window. A bound that is a guess is
-  // worse than none, so a non-integer is refused, not dropped.
+  // worse than none, so a non-integer is refused, not dropped. `.after` names an
+  // ENTITY by its spine number, never a position or an order key: an evaluator
+  // derives where that entity sits in whatever order the query asked for, so
+  // one cursor spelling serves every ordering.
   if (pathStr == 'limit' || pathStr == 'after') {
     if (op != '=' || !/^\d+$/.test(val)) {
       throw new Error(`.${pathStr} takes a whole number: .${pathStr}=200`)

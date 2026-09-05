@@ -89,12 +89,23 @@ Everything on @yaks/sql's common path:
 - **Ordering and windows**: `.order=field`, `-field` descending, `.limit=n`,
   `.after=num`.
 
-## Ordering
+## Ordering and paging
 
 `.order=` sorts by a column, absent values first, then numbers, then text — the
-order a SQL `ORDER BY` gives over the same values; ties keep the order the
-bundles were given. A `.limit`/`.after` window pages newest-first by entity
-number and overrides any `.order=`, exactly as the compiled statement does.
+order a SQL `ORDER BY` gives over the same values — and the entity number breaks
+its ties, so the order is total.
+
+A `.limit`/`.after` window pages **within** that order: a window says how much
+of a sequence to answer with, never which sequence. With no `.order=` the
+sequence is newest-first by entity number, as it always was.
+
+`.after=<num>` names the entity to continue past — one cursor spelling however
+the answer is ordered, so a caller pages without ever learning the order key.
+The anchor is looked up in the whole set, not the hits, so an anchor that no
+longer matches the query still names a place in the order; an anchor with no
+value for the ordered column pages by its number alone; and an anchor no entity
+in the set has leaves the page whole, which is the first page. @yaks/sql
+compiles the same rule as a keyset, and `parity_test.ts` pins the agreement.
 
 With no ordering directive the bundles come back in the order they were given. A
 database leaves that order to its query plan, so **membership** is what the two

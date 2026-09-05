@@ -18,7 +18,9 @@
 // any-of lists, ranges, time phrases, boolean composition, reference-deref
 // paths, reverse hops (`.reviews!`, `.reviews>=5`, `.reviews.stars=5`),
 // full-text terms, the `.kind` scope, presence/absence, ordering,
-// `.limit`/`.after` windows, `.count`/`.distinct`/`.tally` aggregates,
+// `.limit`/`.after` windows (which page WITHIN an asked-for `.order`, by a
+// keyset on the anchor entity's own place in it),
+// `.count`/`.distinct`/`.tally` aggregates,
 // `.fields` projections, and the `.refs=` backlink union. A column the schema
 // marks computed (`persist: false`) reads through the DERIVED hook or, absent a
 // registration, DECLINES — the binder never invents a value it cannot read.
@@ -48,6 +50,7 @@ import type {
 import type { Assoc, Hop, Vocab } from '@yaks/vocab'
 import {
   and,
+  type Bind,
   type Cond,
   FALSE,
   type Frag,
@@ -106,11 +109,16 @@ type Ctx = {
 let claims = (ctx: Ctx, kind: Clause['kind']): boolean =>
   ctx.ext.some((e) => e.compile[kind])
 
-let site = (ctx: Ctx): Site => ({
+// `owner` names the row a contributed compiler speaks about. It defaults to the
+// selected row's spine id; a `.after` cursor hands the ANCHOR's id instead, so
+// an extension that spells an ordering spells the anchor's place in it through
+// the same hook — a ranking is a pure function of the owner, and a cursor into
+// one needs no second seam.
+let site = (ctx: Ctx, owner = ctx.d.ownerKey('entity')): Site => ({
   vocab: ctx.v,
   dialect: ctx.d,
   now: ctx.now,
-  owner: ctx.d.ownerKey('entity'),
+  owner,
   join: (comp) => {
     ctx.tables.add(comp)
     return ctx.d.ownerKey(comp)
@@ -580,48 +588,97 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
       cols.push(`${expr} as "${f.path.join('.')}"`)
     }
   }
-  // Ordering, then the window. `.order=-field` is descending. The window is
-  // newest-first by spine num, with `.after` continuing below a num cursor, and
-  // it REPLACES any ordering asked for — a cursor pages down one sequence, and
+  // Ordering, then the window WITHIN it. `.order=-field` is descending, and an
+  // explicit order SURVIVES a `.limit`/`.after` window: a window states how much
+  // of a sequence to answer with, never which sequence — so a page of
+  // `.order=price&.limit=5` is the five cheapest, not the five newest. With no
+  // `.order` the sequence is newest-first by spine num, as it always was.
   // @yaks/match answers a window the same way (its parity_test pins it).
   // The ordered column is resolved BEFORE the joins are read off: ordering by a
   // column no filter mentions is what pulls its table in, and a join list taken
   // any earlier would not have it.
   let order = find<Order>(cs, 'order')
-  let sort = order ? orderExpr(ctx, order.value) : null
-  let out = rel(ctx.d.spine, { cols, joins: joinsOf(ctx), where })
-  if (sort) out.order.push(sort)
+  let sort = order ? sortOf(ctx, order.value) : null
   let limit = find<Limit>(cs, 'limit')
   let after = find<After>(cs, 'after')
-  if (limit || after) {
-    if (after) {
-      out.where = and(
-        out.where,
-        raw({ sql: `"entity"."num" < ?`, params: [after.n] }),
-      )
-    }
-    out.order = [`"entity"."num" desc`]
-    if (limit) out.limit = limit.n
-  }
+  let out = rel(ctx.d.spine, {
+    cols,
+    joins: joinsOf(ctx),
+    where: after ? and(where, raw(keyset(ctx, sort, after.n))) : where,
+  })
+  if (sort) out.order.push(`${sort.row}${sort.desc ? ' desc' : ''}`)
+  if (sort || limit || after) out.order.push(`"entity"."num" desc`)
+  if (limit) out.limit = limit.n
   return out
 }
 
-// An order value to an ORDER BY expression. A leading '-' is descending; the
-// rest is offered to the extensions first — a ranking (`.order=similar`) names
-// no column, so only the package holding the ranks can spell it — and routes to
-// a column when none claims it. (An in-memory matcher would sort these in JS;
-// compiling them into the statement is a capability this IR adds.)
-let orderExpr = (ctx: Ctx, value: string): string => {
+// One order value, read two ways: over the SELECTED row (through the joins the
+// binder already made) and over the `.after` ANCHOR (a correlated read on its
+// owner id). Both come from one place so a cursor can never page down a
+// different sequence than the one being ordered.
+//
+// A leading '-' is descending; the rest is offered to the extensions first — a
+// ranking (`.order=similar`) names no column, so only the package holding the
+// ranks can spell it — and routes to a column when none claims it. (An
+// in-memory matcher would sort these in JS; compiling them into the statement
+// is a capability this IR adds.)
+type Sort = { row: string; at: (owner: string) => string; desc: boolean }
+let sortOf = (ctx: Ctx, value: string): Sort => {
   let desc = value.startsWith('-')
   let field = desc ? value.slice(1) : value
-  let expr = ranked(ctx, field) ?? resolveField(ctx, field).expr
-  return `${expr}${desc ? ' desc' : ''}`
+  let rank = ranked(ctx, field)
+  if (rank) return { row: rank, at: (o) => ranked(ctx, field, o)!, desc }
+  let row = resolveField(ctx, field).expr
+  let hop = ctx.v.aim(field)[0]
+  return {
+    row,
+    at: (o) => {
+      let read = leafRead(ctx, hop, o)
+      if (!read) throw new Unsupported('a computed column here', field)
+      return read.expr
+    },
+    desc,
+  }
 }
 
-let ranked = (ctx: Ctx, field: string): string | null => {
+let ranked = (ctx: Ctx, field: string, owner?: string): string | null => {
   for (let e of ctx.ext) {
-    let expr = e.order?.(field, site(ctx))
+    let expr = e.order?.(field, site(ctx, owner))
     if (expr) return expr
   }
   return null
+}
+
+// The `.after` anchor as an owner id. The cursor names an ENTITY by its spine
+// num — the same spelling however the answer is ordered, so a client pages
+// without ever learning the order key — and the num is a whole number the
+// grammar already validated, spelled inline because an order expression carries
+// no bound params (Site.owner is a string, and the IR's ORDER BY holds none).
+let anchor = (ctx: Ctx, n: number) =>
+  `(select "__cur"."id" from ${ctx.d.spine} as "__cur" where "__cur"."num" = ${n})`
+
+// `.after` as a KEYSET over the effective order: the rows strictly past the
+// anchor's own place in it, with the spine num breaking ties (descending, so an
+// unordered window still reads newest-first). Absent values sort first
+// ascending — SQLite's NULLs-first, which @yaks/match mirrors — and comparing
+// to NULL yields NULL rather than a boolean, so each null arm is spelled out.
+//
+// The fallbacks fall out of the keyset rather than being cased: an anchor that
+// no longer matches the query still has an order value to page from, one with
+// no value pages by its num alone (the tie arm), and one that never existed
+// leaves the guard true, which is the first page.
+let keyset = (ctx: Ctx, sort: Sort | null, n: number): Frag => {
+  let tie = { sql: `"entity"."num" < ?`, params: [n] as Bind[] }
+  if (!sort) return tie
+  let a = sort.at(anchor(ctx, n))
+  let v = sort.row
+  let past = sort.desc
+    ? `(${v} is null and ${a} is not null) or ${v} < ${a}`
+    : `(${a} is null and ${v} is not null) or ${v} > ${a}`
+  return {
+    sql:
+      `(not exists (select 1 from ${ctx.d.spine} as "__cur" where "__cur"."num" = ${n})` +
+      ` or ${past} or (${v} is ${a} and ${tie.sql}))`,
+    params: tie.params,
+  }
 }

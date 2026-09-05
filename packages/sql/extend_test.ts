@@ -93,12 +93,42 @@ Deno.test('an extension spells an order value that names no column', () => {
   // with nothing to claim it, `similar` routes to a column and names none
   assertThrows(() => compile(parse('.order=similar'), v))
   let { sql } = compile(parse('.order=similar'), v, { extend: [ranks] })
-  assert(sql.endsWith('order by case "entity"."id" when 7 then 0 else 1 end'))
+  assert(
+    sql.endsWith(
+      'order by case "entity"."id" when 7 then 0 else 1 end, ' +
+        '"entity"."num" desc',
+    ),
+    sql,
+  )
   // a leading '-' still reverses it, and a column value still routes to a column
   let down = compile(parse('.order=-similar'), v, { extend: [ranks] })
-  assert(down.sql.endsWith('else 1 end desc'), down.sql)
+  assert(down.sql.includes('else 1 end desc'), down.sql)
   let col = compile(parse('.order=title'), v, { extend: [ranks] })
-  assert(col.sql.endsWith('order by "doc"."title"'), col.sql)
+  assert(
+    col.sql.endsWith('order by "doc"."title", "entity"."num" desc'),
+    col.sql,
+  )
+})
+
+Deno.test('a cursor pages within an extension ranking', () => {
+  let ranks: Extension = {
+    name: 'ranks',
+    compile: {},
+    order: (value, site) =>
+      value == 'similar' ? `case ${site.owner} when 7 then 0 else 1 end` : null,
+  }
+  let { sql } = compile(parse('.order=similar&.after=3'), v, {
+    extend: [ranks],
+  })
+  // the hook is asked a second time with the ANCHOR's owner id, so the cursor
+  // is the anchor's own place in the ranking — no second seam, no new spelling
+  assert(
+    sql.includes(
+      'case (select "__cur"."id" from "entity" as "__cur" ' +
+        'where "__cur"."num" = 3) when 7 then 0 else 1 end',
+    ),
+    sql,
+  )
 })
 
 Deno.test('extensions run in registration order, first answer wins', () => {

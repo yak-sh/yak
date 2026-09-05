@@ -142,7 +142,47 @@ Deno.test('an unreachable directive throws Unsupported naming the feature', () =
 Deno.test('ordering by an unfiltered column still joins its table', () => {
   let { sql } = compile(parse('.priority=1&.order=title'), v)
   assert(sql.includes('left join "doc_value" as "doc"'), sql)
-  assert(sql.endsWith('order by "doc"."title"'), sql)
+  // the spine num breaks ties, so the order a query asks for is TOTAL and a
+  // page of it is the same page wherever it is cut
+  assert(sql.endsWith('order by "doc"."title", "entity"."num" desc'), sql)
+})
+
+Deno.test('a window with no .order is newest-first by spine num', () => {
+  let { sql, params } = compile(parse('.priority=1&.limit=2&.after=7'), v)
+  assert(sql.includes('order by "entity"."num" desc'), sql)
+  assert(sql.includes('"entity"."num" < ?'), sql)
+  assertEquals(params, [1, 7, 2])
+})
+
+Deno.test('an explicit .order survives a window', () => {
+  let { sql } = compile(parse('.priority=1&.order=-title&.limit=2'), v)
+  assert(
+    sql.endsWith('order by "doc"."title" desc, "entity"."num" desc limit ?'),
+    sql,
+  )
+})
+
+Deno.test('.after pages within the asked order, keyed on the anchor', () => {
+  let { sql, params } = compile(parse('.order=title&.limit=2&.after=7'), v)
+  // the cursor names an ENTITY by its num — the same spelling whatever the
+  // order — and the anchor's own value is read back to page past it
+  assert(sql.includes('where "__cur"."num" = 7'), sql)
+  assert(sql.includes('"doc"."title" > (select'), sql)
+  // ties fall to the spine num, and an anchor no entity has is the first page
+  assert(sql.includes(`"entity"."num" < ?`), sql)
+  assert(sql.includes('not exists (select 1 from "entity" as "__cur"'), sql)
+  assertEquals(params, [7, 2])
+})
+
+Deno.test('.after over a derived order reads the anchor through the hook', () => {
+  let { sql } = compile(parse('.order=status&.after=7'), v, { derived: status })
+  // the derived expression is spelled twice: once over the row, once over the
+  // anchor's own owner id
+  assert(sql.includes(`(case when "task"."entity" is null`), sql)
+  assert(
+    sql.includes('(case when (select "__cur"."id" from "entity" as "__cur"'),
+    sql,
+  )
 })
 
 Deno.test('the membership statement excludes graves and answers one eid', () => {

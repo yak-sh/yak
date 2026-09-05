@@ -6,9 +6,11 @@
 // when it is compiled, not halfway through a set.
 //
 // The order a selection comes back in is the order the query asks for:
-// `.order=field` sorts by that column (a leading `-` descending), and a
-// `.limit`/`.after` window pages newest-first by entity number, the way a
-// database answers the same directives. With neither, the bundles keep the
+// `.order=field` sorts by that column (a leading `-` descending), the entity
+// number breaks its ties, and a `.limit`/`.after` window pages WITHIN that
+// order — `.after` naming the entity to continue past, wherever it sits in the
+// sequence. A window with no `.order` is newest-first by entity number, the way
+// a database answers the same directives. With neither, the bundles keep the
 // order they were given.
 
 import {
@@ -111,23 +113,24 @@ let field = (ctx: Ctx, path: string): Read => {
   return read
 }
 
-// The sort a query asks for, or null to keep the order given. A window pages
-// newest-first by entity number, which overrides any `.order` — the same
-// precedence the compiled statement has.
+// The sort a query asks for, or null to keep the order given. An explicit
+// `.order` SURVIVES a window — a window says how much of a sequence to answer
+// with, never which sequence — and the entity number breaks its ties, so the
+// order is TOTAL and a page cut here holds the rows a page cut in SQL holds. A
+// window with no `.order` is that tiebreak alone: newest first.
 let sorter = (
   ctx: Ctx,
   cs: Clause[],
   windowed: boolean,
 ): ((a: Bundle, b: Bundle) => number) | null => {
-  if (windowed) {
-    return (a, b) => -compare(a.entity.num ?? null, b.entity.num ?? null)
-  }
   let order = find<Order>(cs, 'order')
-  if (!order) return null
+  if (!order) return windowed ? newest : null
   let desc = order.value.startsWith('-')
   let read = field(ctx, desc ? order.value.slice(1) : order.value).read
-  return (a, b) => (desc ? -1 : 1) * compare(read(a), read(b))
+  return (a, b) => (desc ? -1 : 1) * compare(read(a), read(b)) || newest(a, b)
 }
+let newest = (a: Bundle, b: Bundle) =>
+  -compare(a.entity.num ?? null, b.entity.num ?? null)
 
 /**
  * Compile a query into the selection it names: the bundles of a set that match,
@@ -155,14 +158,27 @@ export let matcher = (
   let sort = sorter(ctx, cs, !!(limit || after))
   return (bundles) => {
     let among = index(bundles)
-    let hits = bundles.filter((b) =>
-      live(b) &&
-      (!after || (b.entity.num != null && b.entity.num < after.n)) &&
-      test(b, among)
-    )
+    let hits = bundles.filter((b) => live(b) && test(b, among))
     let out = sort ? [...hits].sort(sort) : [...hits]
+    if (after && sort) out = past(out, bundles, after.n, sort)
     return limit ? out.slice(0, limit.n) : out
   }
+}
+
+// The `.after` cursor: the rows strictly past the anchor entity's own place in
+// the order. The anchor is found by its spine number — one cursor spelling
+// however the answer is ordered — and it is looked up in the WHOLE set rather
+// than the hits, because an anchor that no longer matches the query still names
+// a place in the order. An anchor that is not in the set at all leaves the page
+// whole, which is the first page. This is the keyset @yaks/sql compiles.
+let past = (
+  out: Bundle[],
+  bundles: readonly Bundle[],
+  n: number,
+  sort: (a: Bundle, b: Bundle) => number,
+): Bundle[] => {
+  let at = bundles.find((b) => b.entity.num == n)
+  return at ? out.filter((b) => sort(at, b) < 0) : out
 }
 
 /**

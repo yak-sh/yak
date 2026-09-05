@@ -57,6 +57,9 @@ export type Tally = { kind: 'tally'; path: string[] }
 export type FieldSel = { path: string[]; wake: boolean }
 export type Fields = { kind: 'fields'; fields: FieldSel[] }
 export type Limit = { kind: 'limit'; n: number }
+// The window's cursor: the spine NUMBER of the entity to continue past. It names
+// an entity, never a position or an order key, so one spelling pages any
+// ordering — an evaluator derives where that entity sits.
 export type After = { kind: 'after'; n: number }
 // A stored-edge rider. `select` picks one edge type and optionally projects an
 // endpoint through a reference column (`via`, raw segments); `peers` names the

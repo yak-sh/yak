@@ -73,10 +73,27 @@ Deno.test('an ordering sorts, with absent values first', () => {
   assertEquals(sel('.kind=book&.order=-released'), ['b1', 'b3', 'b2', 'b4'])
 })
 
-Deno.test('a window pages newest first, whatever else was asked', () => {
+Deno.test('a window with no order pages newest first', () => {
   assertEquals(sel('.kind=book&.limit=2'), ['b4', 'b3'])
   assertEquals(sel('.kind=book&.after=5'), ['b2', 'b1'])
-  assertEquals(sel('.kind=book&.order=price&.limit=2'), ['b4', 'b3'])
+})
+
+Deno.test('a window pages WITHIN the order it was asked for', () => {
+  assertEquals(sel('.kind=book&.order=price&.limit=2'), ['b3', 'b4'])
+  // the cursor names an entity, and paging continues from ITS place in the
+  // order — b4 is the second cheapest, so the next page is the two dearest
+  assertEquals(sel('.kind=book&.order=price&.limit=2&.after=6'), ['b1', 'b2'])
+  assertEquals(sel('.kind=book&.order=-price&.after=4'), ['b1', 'b4', 'b3'])
+  // an anchor no entity has is the first page again
+  assertEquals(sel('.kind=book&.order=price&.limit=2&.after=99'), ['b3', 'b4'])
+  // an anchor outside the selection still names a place in the order (r3 has
+  // no price, and absent values sort first)
+  assertEquals(sel('.kind=book&.order=price&.after=9'), [
+    'b3',
+    'b4',
+    'b1',
+    'b2',
+  ])
 })
 
 Deno.test('a deleted entity is never selected', () => {
