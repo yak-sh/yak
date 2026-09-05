@@ -13,7 +13,8 @@
  * fields the error carried (a {@link https://jsr.io/@yaks/graph | Stale}
  * precondition's `eid`, `comp`, `column` and `current`, say). */
 export type Refusal = {
-  /** the error's name — `Refused`, `Stale`, `Unsupported`, `Unauthorized` */
+  /** the error's name — `Refused`, `Stale`, `Unsupported`, `Unauthorized`,
+   * `Denied` */
   error: string
   /** what was wrong, in the error's own words */
   message: string
@@ -39,6 +40,9 @@ export let STATUS: Record<string, number> = {
   Unsupported: 400,
   SyntaxError: 400,
   Unauthorized: 401,
+  // The door knows who is asking; the answer is still no. @yaks/member's
+  // `Denied` is this, and so is any other policy refusal that names itself so.
+  Denied: 403,
   NotFound: 404,
   Stale: 409,
 }
