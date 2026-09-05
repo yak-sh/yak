@@ -21,13 +21,26 @@ import {
   signIn,
 } from './probe.ts'
 
+// What the apex says about itself, read from the page the apex serves rather
+// than pinned a second time here (T-34319). A copy of the copy goes red the
+// next time the words are rewritten — 27979054 rewrote the h1 and this test
+// stayed behind, unseen, because it is slow-tier. The h1 is the sentence a
+// search result is built out of (site_test.ts holds it to that), so it is the
+// one line worth proving reached the wire.
+let flat = (html: string) => html.replace(/\s+/g, ' ')
+let hello = flat(
+  /<h1[^>]*>([\s\S]*?)<\/h1>/.exec(
+    Deno.readTextFileSync(new URL('./public/index.html', import.meta.url)),
+  )![1],
+).trim()
+
 slow('the kernel routes, vouches, serves, and surfaces', async () => {
   let k = await kernel()
   try {
     // The apex: the home page, its assets, and a soft 404 in its voice.
     let home = await k.at('yaks.app', '/')
     assertEquals(home.status, 200)
-    assertMatch(await home.text(), /Build an app by asking Claude or ChatGPT\./)
+    assertStringIncludes(flat(await home.text()), hello)
     let css = await k.at('yaks.app', '/style.css')
     assertMatch(css.headers.get('content-type') ?? '', /text\/css/)
     await css.body?.cancel()
