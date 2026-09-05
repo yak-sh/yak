@@ -48,6 +48,10 @@ In dependency order:
   over a graph (`/apply`, `/query`, `/ws`), where the door authenticates the
   writer, and a subscription is a saved query whose answer is pushed again when
   a committed batch changes it.
+- **[@yaks/workers](./workers)** — that handler as a Cloudflare Worker: the
+  `WebSocketPair` upgrade `/ws` needs, the `fetch` entrypoint a Worker exports,
+  a door that reads a cookie or a bearer token, and the hop to a Durable Object
+  when the graph lives in one.
 
 ## How they compose
 
@@ -84,6 +88,10 @@ on its own:
   `@yaks/match` (to decide cheaply which subscription a committed batch
   changed), and speaks only web-standard types, so the same handler serves on
   Deno, Node and a Worker.
+- `@yaks/workers` is the last inch of that on Cloudflare: the three things a
+  Worker does differently — make a socket, export a `fetch`, name the writer —
+  so a graph is served from the edge without `@yaks/api` learning a Cloudflare
+  name.
 
 ## Publishing requirements
 
