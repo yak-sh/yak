@@ -1,0 +1,15 @@
+{
+  "name": "@yaks/graph",
+  "version": "0.0.0",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "The yaks entity/component graph core: the Bundle wire and a phased, pluggable apply().",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts"
+    ]
+  }
+}

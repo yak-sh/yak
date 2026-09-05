@@ -1327,7 +1327,72 @@
       "npm:zod@^3.24.0"
     ],
     "members": {
+      "packages/api": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/canvas": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/d1": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/durable-object": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/edge": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/effects": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/embedding": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/fts": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/graph": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/journal": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/mail": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/member": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
       "packages/query": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/session": {
         "dependencies": [
           "jsr:@std/assert@1"
         ]
@@ -1343,7 +1408,22 @@
           "jsr:@std/assert@1"
         ]
       },
+      "packages/task": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
       "packages/vocab": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/wake": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/workers": {
         "dependencies": [
           "jsr:@std/assert@1"
         ]

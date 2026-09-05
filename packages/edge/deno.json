@@ -1,0 +1,15 @@
+{
+  "name": "@yaks/edge",
+  "version": "0.0.0",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "The edge component for a yaks graph: typed links between entities, and traversal over them.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts"
+    ]
+  }
+}
