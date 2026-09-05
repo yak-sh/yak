@@ -620,6 +620,46 @@ it always does: a `vocab.json` that only GREW is applied to their store
 additively, and one that would retype a column their rows were written under is
 refused with the same sentence a deploy gives — and nothing moves at all.
 
+## Mail
+
+Deeper: <https://yaks.app/guide/mail.md> — the bundle that sends a letter, what
+comes back, how an arrival lands, and the ceiling.
+
+Every app has a mailbox at `<space>.<app>@yaks.app` — `<space>@yaks.app` for the
+space's front page. One dot, at `yaks.app`: an address under a space's own
+hostname (`cookbook@ada.yaks.app`) is nobody's and never will be. Both
+directions are the store, so there is no mail API and no key to set.
+
+Sending is three components in one batch: the recipient as an entity wearing
+`email{address}`, the letter as `doc{title, body}` (the body in markdown) and
+`mail{}`, and the ask, `deliver{to}`, naming the recipient. A letter with no
+`deliver` is a draft, kept and never sent; one that gains a `deliver` later goes
+then, once.
+
+    await apply([
+      { entity: { eid: '$ana' }, email: { address: 'ana@example.com' } },
+      { entity: { eid: '$note' },
+        doc: { title: 'Your order is on its way',
+               body: 'Two jars of marmalade, posted Tuesday.' },
+        mail: {},
+        deliver: { to: '$ana' } },
+    ])
+
+The `from` is stamped with the app's own address, over whatever the batch said.
+Asking to send is held to a member who may write, even in an `open` app — a
+letter leaves under this platform's name, and an open app with no rule there is
+an open relay. What became of it is patched back onto the letter as
+`delivered{at, via}` or `bounced{at, reason}`, so "did it go?" is
+`query('.mail!&.bounced!&.doc?')` rather than a log file.
+
+A letter that ARRIVES lands as one entity in that app's store — `doc` for the
+subject and words, `mail{from, to, at, message_id, verified}` for the envelope,
+attachments filed as blobs and hung off it with a `contains` edge — and anything
+subscribed sees it land. The sender is DATA, never an actor: nobody wrote it, so
+`created.by` is null, and `mail.verified` carries the DKIM verdict rather than
+any authority. Mail is metered both ways against the space's plan
+(<https://yaks.app/pricing>); mail at the person's own domain is not offered.
+
 ## A domain of their own
 
 Deeper: <https://yaks.app/guide/domains.md> — the record to add and where to

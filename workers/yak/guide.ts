@@ -109,6 +109,15 @@ export let PAGES: Page[] = [
       'what people saved.',
   },
   {
+    slug: 'mail',
+    title: "Mail: an app's own address",
+    description:
+      'Sending and receiving email from an app: the address a space and an ' +
+      'app make, the bundle that sends a letter and who may ask for one, the ' +
+      'delivered and bounced rows that come back, how an arrival lands with ' +
+      'its attachments, and what mail here does not do.',
+  },
+  {
     slug: 'domains',
     title: 'A domain of their own',
     description:
