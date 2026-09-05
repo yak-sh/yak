@@ -19,10 +19,11 @@
 // A registered expression is what lets a computed column (a status rolled up
 // from other rows, say) compile through the index instead of a JS scan.
 //
-// Coverage is honest. The common query path is exact; the advanced directives
-// it cannot yet reach throw `Unsupported` rather than answer almost-right — see
-// ./bind.ts for the exact list (the `.near` KNN, the `.edges`/`.reaches` graph
-// walks, and the reverse-hop grammar).
+// Coverage is stated plainly. The common query path is exact — reverse hops
+// (`.reviews>=5`, `.reviews.stars=5`) included; the advanced directives it
+// cannot yet reach throw `Unsupported` rather than answer almost-right — see
+// ./bind.ts for the exact list (the `.near` KNN and the `.edges`/`.reaches`
+// graph walks).
 
 import type { And } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
