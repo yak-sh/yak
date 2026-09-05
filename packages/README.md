@@ -56,6 +56,10 @@ In dependency order:
   `WebSocketPair` upgrade `/ws` needs, the `fetch` entrypoint a Worker exports,
   a door that reads a cookie or a bearer token, and the hop to a Durable Object
   when the graph lives in one.
+- **[@yaks/durable-object](./durable-object)** — the storage adapter inside that
+  Durable Object: its embedded SQLite driven through `@yaks/sqlite`, plus the
+  plumbing that hands a hibernatable WebSocket's frames to `@yaks/api`'s
+  subscriptions.
 - **[@yaks/sync](./sync)** — the other end of that transport: a plugin that
   forwards a client graph's committed writes to a server, applies what the
   server pushes back, and reconciles — or reverts — the optimistic write in
@@ -105,6 +109,9 @@ on its own:
   Worker does differently — make a socket, export a `fetch`, name the writer —
   so a graph is served from the edge without `@yaks/api` learning a Cloudflare
   name.
+- `@yaks/durable-object` is the storage under it, where the database comes with
+  the host: one Durable Object is one graph, strongly consistent, with nothing
+  to connect to — and its hibernatable sockets are where the subscriptions live.
 - `@yaks/sync` closes the loop: a `@yaks/graph` over `@yaks/memory` in a page,
   plus this plugin, is a client that writes locally at once and agrees with the
   `@yaks/api` at the other end afterwards. Both transports are injected, so the

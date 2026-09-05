@@ -1,57 +1,58 @@
 /**
- * @yaks/durable-object — a storage adapter that backs a yaks graph with a
- * Cloudflare Durable Object's embedded SQLite, and keeps every connected client
- * in sync over the object's WebSockets.
+ * @yaks/durable-object — a yaks graph inside a Cloudflare **Durable Object**:
+ * its embedded SQLite is the storage, and its hibernatable WebSockets are the
+ * live-sync fan-out.
  *
  * A Durable Object is a single-threaded, strongly-consistent home for one
- * graph: its `SqlStorage` handle is a synchronous SQLite engine, and its
- * hibernatable WebSockets are the live-sync fan-out. This package composes the
- * yaks query/vocabulary/SQL stack over that handle to satisfy the
- * {@link https://jsr.io/@yaks/graph | @yaks/graph} {@link Storage} seam:
- * queries in as bundles out, a change patched into rows, and — its own job —
- * every committed change broadcast to the other sockets so open tabs converge.
+ * graph. `ctx.storage.sql` is a synchronous SQLite engine, so
+ * {@link https://jsr.io/@yaks/graph | @yaks/graph}'s `apply()` stays
+ * synchronous here; `ctx.storage.transactionSync` is the transaction it runs
+ * its in-transaction phases inside.
  *
- * It is a sibling of `@yaks/d1` (the async D1 adapter) and
- * {@link https://jsr.io/@yaks/sqlite | @yaks/sqlite} (the in-process adapter);
- * all three implement the same seam, so a graph is portable across them.
+ * ## Two halves
+ * {@link storage} is the `Storage` seam — and it is one line of composition:
+ * {@link driver} turns the object's SQLite into a
+ * {@link https://jsr.io/@yaks/sqlite | @yaks/sqlite} `Driver`, and that package
+ * owns the schema, the compiled reads, the patches and the death cascade. No
+ * SQL is written twice.
+ *
+ * {@link sockets} is the plumbing between the object's WebSockets and
+ * {@link https://jsr.io/@yaks/api | @yaks/api}'s subscriptions — accept a
+ * socket for hibernation, hand its frames to the registry, and rebuild the
+ * subscriptions of a woken object from what its sockets hold. What a
+ * subscription MEANS lives in @yaks/api; only the wire is here.
+ *
+ * ```ts
+ * import { graph } from '@yaks/graph'
+ * import { api, subscriptions } from '@yaks/api'
+ * import { sockets, storage } from '@yaks/durable-object'
+ *
+ * // let store = storage(ctx.storage, vocab)
+ * // store.install()
+ * // let g = graph({ storage: store, vocab })
+ * // let subs = subscriptions(g)
+ * // let live = sockets(subs, ctx)
+ * // let handler = api({ graph: g, subs })
+ * ```
+ *
+ * See the README for the whole object as a class — `fetch`,
+ * `webSocketMessage`, `webSocketClose` — which is the one place a class is the
+ * platform's requirement.
  *
  * @module
  */
 
-import type { Storage } from '@yaks/graph'
-import type { Vocab } from '@yaks/vocab'
-
-/**
- * The synchronous SQLite surface this adapter needs from a Durable Object —
- * the shape of `DurableObjectState.storage.sql`. Naming just this keeps the
- * adapter free of any concrete Workers types.
- */
-export type DurableSql = {
-  /** run a parameterized statement and yield its rows */
-  exec: <T = Record<string, unknown>>(
-    sql: string,
-    ...bindings: unknown[]
-  ) => Iterable<T>
-}
-
-/**
- * A live-sync fan-out: the adapter hands each committed change to `broadcast`,
- * which relays it to every connected client except its origin. A Durable
- * Object supplies this over its hibernatable WebSockets.
- */
-export type LiveSync = {
-  /** relay a committed change to the other connected clients */
-  broadcast: (message: string, except?: unknown) => void
-}
-
-/**
- * Bind a store to a Durable Object's SQLite handle and a vocabulary, optionally
- * wiring live-sync. Returns the {@link Storage} seam whose `write` also
- * broadcasts. The implementation lands with the package; this is the shape it
- * satisfies.
- */
-export type openStore = (
-  sql: DurableSql,
-  vocab: Vocab,
-  live?: LiveSync,
-) => Storage
+export {
+  driver,
+  type DurableSql,
+  type DurableStorage,
+  type SqlCursor,
+  type SqlValue,
+} from './sql.ts'
+export { storage, type Store } from './store.ts'
+export {
+  type Hibernation,
+  type Sockets,
+  sockets,
+  type Wire,
+} from './sockets.ts'

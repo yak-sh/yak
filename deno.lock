@@ -19,6 +19,7 @@
     "jsr:@std/testing@1": "1.0.20",
     "jsr:@std/toml@1": "1.0.11",
     "npm:@cloudflare/workers-oauth-provider@0.10.3": "0.10.3",
+    "npm:@cloudflare/workers-types@^4.20260702.1": "4.20260702.1",
     "npm:@huggingface/transformers@3": "3.8.1",
     "npm:@modelcontextprotocol/sdk@^1.12.0": "1.29.0_zod@3.25.76",
     "npm:@preact/signals-core@^1.14.0": "1.14.4",
@@ -109,6 +110,9 @@
   "npm": {
     "@cloudflare/workers-oauth-provider@0.10.3": {
       "integrity": "sha512-25ufMONJir9PllqVpK4GwOOoSFgpYm3+bM6NBedj7ufMCIfNf5jk4OI0LPuTJBaJgLl2lGCLqFqEPJXcSuPopQ=="
+    },
+    "@cloudflare/workers-types@4.20260702.1": {
+      "integrity": "sha512-mOhf5TUEB1m2vPrxtqoIGfz0fUC9xyxRDx5gWHy5s+OCo6dcV+g7wI1R7gYCMFohhqF/2y2xeKVwMwCJjfn/WA=="
     },
     "@emnapi/runtime@1.11.2": {
       "integrity": "sha512-kyOl3X0DuTiT1h2ft8r2fYO8JYtU9a9Xis/zBSiGArNaagCOWx90N1k2wxp18czFDH+OgcWGb5ZP/XMt3dcyPA==",
@@ -1345,7 +1349,9 @@
       },
       "packages/durable-object": {
         "dependencies": [
-          "jsr:@std/assert@1"
+          "jsr:@db/sqlite@0.13.0",
+          "jsr:@std/assert@1",
+          "npm:@cloudflare/workers-types@^4.20260702.1"
         ]
       },
       "packages/edge": {
