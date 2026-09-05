@@ -11,6 +11,7 @@ import {
   settled,
   stamped,
   standing,
+  statusOf,
   viewRenames,
 } from './types.ts'
 import { assertEquals } from '@std/assert'
@@ -204,6 +205,31 @@ Deno.test('stamped: declared, and still not wire-writable', () => {
         `${comp}.${col} leaked into the allowlist`,
       )
     }
+  }
+})
+
+// The marks are the evidence; a materialized `task.status` is the floor under
+// them. An edge rider's peer arrives PROJECTED — spine, kind, and the columns
+// `.edges.peers=task.status,doc.title` named — so it carries the derived value
+// and none of the comps it was derived from; reading marks alone painted every
+// done dependency as open on its parent's card.
+Deno.test('statusOf: marks first, a projected task.status beneath them', () => {
+  let cases: [Record<string, unknown>, string][] = [
+    [{ task: {} }, 'open'],
+    [{ task: {}, completed: {} }, 'done'],
+    [{ task: {}, cancelled: {} }, 'cancelled'],
+    [{ task: {}, claim: {} }, 'wip'],
+    // A peer: the projection, no marks.
+    [{ task: { status: 'done' } }, 'done'],
+    [{ task: { status: 'cancelled' } }, 'cancelled'],
+    [{ task: { status: 'wip' } }, 'wip'],
+    [{ task: { status: 'open' } }, 'open'],
+    // Both: the row's own evidence beats an older projected snapshot.
+    [{ task: { status: 'open' }, completed: {} }, 'done'],
+    [{ task: { status: 'done' }, cancelled: {} }, 'cancelled'],
+  ]
+  for (let [has, want] of cases) {
+    assertEquals(statusOf(has), want, JSON.stringify(has))
   }
 })
 
