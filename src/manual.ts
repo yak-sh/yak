@@ -1612,7 +1612,6 @@ let parsed = (
   let flags = new Set<string>()
   let provided = new Set<string>()
   let params: Param[] = []
-  let paramAs: string[] = []
   let reads: Record<string, { raw: string; as: string }> = {}
   let present = new Set<string>()
   let literal = false
@@ -1653,10 +1652,12 @@ let parsed = (
         continue
       }
       if (manual.dots == 'params' && arg.startsWith('.')) {
-        let p = param(arg)
+        // The value convention rides INTO param(), which reads the file
+        // before it reads the value — so `.body=@edit.json` carries the
+        // $edit operator the file holds, not the file's text (T-33956).
+        let p = param(arg, read ? (p) => inflate(p, io, arg) : undefined)
         if (p) {
           params.push(p)
-          paramAs.push(arg)
           continue
         }
       }
@@ -1804,7 +1805,6 @@ let parsed = (
         ).value,
       )
     }
-    params = params.map((p, i) => inflate(p, io, paramAs[i]))
   }
   let body: string | undefined
   if (manual.body == 'body') {

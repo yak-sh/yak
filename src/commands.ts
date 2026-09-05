@@ -335,9 +335,9 @@ export let cardCommands = ['task', 'session', 'doc', 'memory'] as const
 let readParams = (args: string[], ctx: Ctx) => {
   let read = ctx.read ?? ((p: Param) => p)
   return args.map((arg) => {
-    let p = param(arg)
+    let p = param(arg, read)
     if (!p) throw new Error(`not a param: ${arg}`)
-    return read(p)
+    return p
   })
 }
 
@@ -571,13 +571,11 @@ export let commands: Record<string, Command> = {
     run: (rest, ctx) => {
       let r = here(ctx)
       let text = rest.trim()
-      let p = param(text)
+      let p = param(text, ctx.read)
       if (p && (p.comp != 'doc' || p.prop != 'body')) {
         throw new Error(`comment: cannot set ${p.comp}.${p.prop}`)
       }
-      let body = p
-        ? String((ctx.read ?? ((p: Param) => p))(p).value)
-        : page(text, ctx)
+      let body = p ? String(p.value) : page(text, ctx)
       if (!body) throw new Error('comment: needs words or .body=<text>')
       let made = commentChanges(
         corpus(r, ctx.session ? graphOf(ctx).session(ctx.session) : undefined),

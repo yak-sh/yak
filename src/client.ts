@@ -915,7 +915,14 @@ let legacySessionProp = (name: string) =>
 // name the pattern rejected returned null, and cli.ts's split() files
 // every non-param token under `words`: `.blocked-by=T-1` became part of
 // a task's TITLE. Silence, not an edge and not an error.
-export let param = (arg: string): Param | null => {
+// `read` is the door's value convention (inflate, where there's a filesystem)
+// and it runs HERE, before the value is READ: `.body=@edit.json` routes a
+// $edit operator exactly as `--body=@edit.json` does. Applied after param()
+// it only ever saw an already-parsed value, so the file's text landed as prose.
+export let param = (
+  arg: string,
+  read: (p: Param) => Param = (p) => p,
+): Param | null => {
   let m = arg.match(/^\.([A-Za-z_-]+)(?:\.([A-Za-z_-]+))?=(.*)$/s)
   if (!m) return null
   let [, a, b, raw] = m
@@ -974,17 +981,19 @@ export let param = (arg: string): Param | null => {
     )
     return { ...p, value: !!present }
   }
+  // The @file / @- doors first: what the door reads is what gets read below.
+  let val = String(read({ ...p, value: raw }).value)
   // A `$`-sigil object value is a field OPERATOR, not a literal — the same
   // value graph_apply takes as a comp value, so the update doors speak the one
   // operator too. It rides through untouched (no scalar parse, no deref) for
   // apply() to resolve against the CURRENT stored value; apply() also owns
   // every refusal — an unknown `$op`, a non-text column, a hunk that misses.
-  let op = fieldOp(raw)
+  let op = fieldOp(val)
   if (op) return { ...p, value: op }
   let declared = propAt(p.comp, p.prop)!
-  if (!(typeof declared.type == 'object' && 'eid' in declared.type)) {
-    p.value = parseProp(declared, raw)
-  }
+  p.value = typeof declared.type == 'object' && 'eid' in declared.type
+    ? val
+    : parseProp(declared, val)
   return p
 }
 
@@ -1518,8 +1527,11 @@ export let spec = (text: string, read: (p: Param) => Param = (p) => p) => {
       try {
         d = param(w)
       } catch { /* not a real prop: a word after all */ }
+      // A param, so parse it again through the door's value convention —
+      // OUTSIDE the catch, so a missing @file is an error and never a word
+      // swallowed into the title.
       if (d) {
-        ps.push(read(d))
+        ps.push(param(w, read)!)
         continue
       }
     }

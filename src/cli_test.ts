@@ -1271,9 +1271,13 @@ slow('task set --body patches the document body', async () => {
 // takes as a comp value rides through as the operator, in BOTH body spellings,
 // instead of being stored as the body it was meant to patch. The server
 // resolves it against the current value — what leaves here is the operator.
+// Said from a FILE, both spellings agree too (T-33956), since an operator is
+// exactly the kind of long value @file exists for.
 slow('task set sends a $edit body as the operator, not as text', async () => {
   let fake = graphServer()
   let edit = '{"$edit":{"old":"teh","new":"the"}}'
+  let f = Deno.makeTempFileSync()
+  Deno.writeTextFileSync(f, `${edit}\n`)
   let run = (arg: string) =>
     new Deno.Command(Deno.execPath(), {
       args: [
@@ -1287,17 +1291,26 @@ slow('task set sends a $edit body as the operator, not as text', async () => {
       clearEnv: true,
       env: { TASKS_HOST: fake.host },
     }).output()
+  let said = [`.body=${edit}`, `--body=${edit}`, `.body=@${f}`, `--body=@${f}`]
   try {
-    for (let arg of [`.body=${edit}`, `--body=${edit}`]) {
+    for (let arg of said) {
       let out = await run(arg)
       assertEquals(out.code, 0, `${arg}: ${text(out.stderr)}`)
     }
     let op = { body: { $edit: { old: 'teh', new: 'the' } } }
+    assertEquals(
+      fake.acked,
+      said.map(() => ({ eid: T, name: 'doc', comp: op })),
+    )
+    // Prose from a file is still prose at the same door.
+    fake.acked.length = 0
+    Deno.writeTextFileSync(f, 'plain words\n')
+    assertEquals((await run(`.body=@${f}`)).code, 0)
     assertEquals(fake.acked, [
-      { eid: T, name: 'doc', comp: op },
-      { eid: T, name: 'doc', comp: op },
+      { eid: T, name: 'doc', comp: { body: 'plain words\n' } },
     ])
   } finally {
+    Deno.removeSync(f)
     await fake.server.shutdown()
   }
 })
@@ -3022,6 +3035,29 @@ Deno.test('parse: every misplaced-body spelling is refused, and @file still read
     'names a file that exists',
   )
   assertEquals(commentBody([`@${f}`], tty), 'the whole ruling\n')
+  Deno.removeSync(f)
+})
+
+// The @file door reads the value BEFORE param() reads it (T-33956): a `$edit`
+// operator written to a file routes as the operator at `.body=@file`, exactly
+// as it does when the JSON is typed. Inflating afterwards, param() only ever
+// saw the path, so the file's text was stored as the body it meant to patch.
+Deno.test('parse: .body=@file is inflated before the value is read', () => {
+  let tty = { terminal: () => true, read: () => '' }
+  let f = Deno.makeTempFileSync()
+  let value = (arg: string) =>
+    parse('set', manuals.set, ['T-1', arg], tty)
+      .params.find((p) => p.prop == 'body')?.value
+
+  Deno.writeTextFileSync(f, '{"$edit":{"old":"teh","new":"the"}}\n')
+  let op = { $edit: { old: 'teh', new: 'the' } }
+  assertEquals(value(`.body=@${f}`), op)
+  // The typed spelling reads the same operator — the control.
+  assertEquals(value('.body={"$edit":{"old":"teh","new":"the"}}'), op)
+
+  // Prose in a file is still prose: only a `$`-keyed JSON value is an operator.
+  Deno.writeTextFileSync(f, 'the whole ruling\n')
+  assertEquals(value(`.body=@${f}`), 'the whole ruling\n')
   Deno.removeSync(f)
 })
 
