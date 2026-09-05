@@ -64,6 +64,10 @@ In dependency order:
   (`session`), its lock on any entity (`claim`), the `stop_request` lever, the
   `brief` it leaves, and the `conflict` written down when two runs want one
   thing — a `precondition` hook that refuses, an `audit` hook that remembers.
+- **[@yaks/task](./task)** — a to-do list as a component domain: tasks,
+  projects, boards that are saved queries rather than stored membership, and a
+  status nobody writes — read off the `completed` and `cancelled` marks a task
+  wears, by one rule both `@yaks/sql` and `@yaks/match` are given.
 - **[@yaks/api](./api)** — the transport: a plain `Request` → `Response` handler
   over a graph (`/apply`, `/query`, `/ws`), where the door authenticates the
   writer, and a subscription is a saved query whose answer is pushed again when
@@ -144,6 +148,11 @@ on its own:
   now and what they hold while they do it. A lock rides the entity it locks, a
   take of somebody else's rolls the batch back, and the collision is written
   down on the `audit` phase — after the rollback, where the record survives.
+- `@yaks/task` is a domain rather than a mechanism — the shape a plugin takes
+  when it ships components instead of machinery. Its one interesting move is
+  that a task's status is not stored: it is derived from the marks a task wears,
+  and the rule is a list the package hands to both evaluators, so a saved board
+  filter means the same thing in a database and in a page.
 - `@yaks/api` puts the whole stack behind three routes. It composes
   `@yaks/graph` (for writes) with a storage adapter (for reads) and
   `@yaks/match` (to decide cheaply which subscription a committed batch

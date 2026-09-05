@@ -1,6 +1,7 @@
 # @yaks/task
 
-A to-do list as a component domain for a [@yaks/graph](https://jsr.io/@yaks/graph).
+A to-do list as a component domain for a
+[@yaks/graph](https://jsr.io/@yaks/graph).
 
 ## Install
 
@@ -19,20 +20,20 @@ a to-do item. It is a facet, not a record — the same entity carries your `doc`
 your `estimate`, whatever else it is. Adding `task` to something makes it
 something to do without making it stop being what it was.
 
-**Where does it stand?** Nowhere in a column. A task wearing `completed` is done,
-one wearing `cancelled` is cancelled, and one wearing neither is open. `status`
-is computed from those marks, so finishing something records _when_ and _by
-whom_, and un-finishing it is dropping a component rather than guessing what the
-status used to say.
+**Where does it stand?** Nowhere in a column. A task wearing `completed` is
+done, one wearing `cancelled` is cancelled, and one wearing neither is open.
+`status` is computed from those marks, so finishing something records _when_ and
+_by whom_, and un-finishing it is dropping a component rather than guessing what
+the status used to say.
 
 **How do you look at the list?** A `board{query}` is a saved filter. Membership
-is never stored — nothing anywhere says "this task is on that board" — so a board
-is always current, and a task that starts matching is simply on it. The empty
-query selects nothing, on purpose.
+is never stored — nothing anywhere says "this task is on that board" — so a
+board is always current, and a task that starts matching is simply on it. The
+empty query selects nothing, on purpose.
 
 **What is it waiting for?** `requires` and `contains` relate one task to another
-through [@yaks/edge](https://jsr.io/@yaks/edge), and `blocked{on}` says something
-outside the list is in the way.
+through [@yaks/edge](https://jsr.io/@yaks/edge), and `blocked{on}` says
+something outside the list is in the way.
 
 ## Use
 
@@ -46,10 +47,22 @@ let vocab = loadVocab([edgeDoc, taskDoc, mine], [edgeKeywords])
 let g = graph({ storage, vocab, plugins: [edges(vocab), tasks(vocab)] })
 
 g.apply([
-  { entity: { eid: 't1' }, doc: { title: 'Buy the cake' }, task: { priority: 1 } },
-  { entity: { eid: 't2' }, doc: { title: 'Book the room' }, task: { priority: 0 } },
+  {
+    entity: { eid: 't1' },
+    doc: { title: 'Buy the cake' },
+    task: { priority: 1 },
+  },
+  {
+    entity: { eid: 't2' },
+    doc: { title: 'Book the room' },
+    task: { priority: 0 },
+  },
   link('t1', 'requires', 't2'),
-  { entity: { eid: 'b1' }, doc: { title: 'Up next' }, board: { query: '.status=open&.order=priority' } },
+  {
+    entity: { eid: 'b1' },
+    doc: { title: 'Up next' },
+    board: { query: '.status=open&.order=priority' },
+  },
 ])
 ```
 
@@ -64,9 +77,9 @@ g.apply([{
 
 ## The status rule is said once
 
-`task.status` is declared `persist: false` — no column holds it. Its value is the
-first mark the task wears, and that one ordered list is what all three readers
-are built from:
+`task.status` is declared `persist: false` — no column holds it. Its value is
+the first mark the task wears, and that one ordered list is what all three
+readers are built from:
 
 ```ts
 import { compute, derived, statusOf } from '@yaks/task'
@@ -109,8 +122,8 @@ openDeps(storage, 't1') // how many children are unfinished — a count
 
 `openDeps` follows `requires` and `contains` and counts what has not settled. A
 task with three unfinished children is a task in progress, not a task in
-trouble: it renders as "3 left", and zero renders as nothing at all. A child that
-is not a task cannot settle, so it stays counted.
+trouble: it renders as "3 left", and zero renders as nothing at all. A child
+that is not a task cannot settle, so it stays counted.
 
 ## The board guard
 
@@ -136,7 +149,8 @@ with [@yaks/edge](https://jsr.io/@yaks/edge) for the two relations,
 
 ## Compatibility
 
-Runs on Deno, Node, browsers and Cloudflare Workers — it imports no platform API.
+Runs on Deno, Node, browsers and Cloudflare Workers — it imports no platform
+API.
 
 ## Interface
 
