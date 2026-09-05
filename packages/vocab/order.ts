@@ -1,8 +1,8 @@
-// Ordering is DERIVED, never hand-ranked (fleet commit e76da081). Component and
-// stamped order are plain alphabetical; kindOrder is alphabetical refined by the
-// local `before` constraints each kind declares, topologically sorted into one
-// total order. This module owns that derivation so the runtime and any tool
-// reproduce the fleet's order exactly — there is no rank keyword to drift from.
+// Ordering is DERIVED, never hand-ranked. Component and stamped order are plain
+// alphabetical; kindOrder is alphabetical refined by the local `before`
+// constraints each kind declares, topologically sorted into one total order.
+// This module owns that derivation so the runtime and any tool reproduce the
+// same order — the order is a function of the vocabulary, not a stored rank.
 
 // A priority topological sort: emit the alphabetically-smallest kind whose
 // `before`-predecessors are all placed, so alphabetical is both the base order

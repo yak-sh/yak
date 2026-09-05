@@ -3,8 +3,8 @@
 // instance answers with, so a downstream binder (@yaks/sql) never reads a raw
 // schema — it reads a `Column`, a `Hop`, a `Kind`.
 //
-// Nothing here is fleet-specific: `Death`, `Scalar`, and the keyword names are
-// the meta-model, and the fleet's ~90 components are just one instance of it.
+// Nothing here is application-specific: `Death`, `Scalar`, and the keyword
+// names are the meta-model, and any set of components is one instance of it.
 
 // What the reaper does to a reference column when its TARGET entity dies. The
 // four words are the whole vocabulary — a reference without one is refused, so
@@ -15,8 +15,8 @@
 //   keep     the reference stands as history (no FK; the tombstone is the mark)
 export type Death = 'cascade' | 'detach' | 'release' | 'keep'
 
-// The scalar spellings a column reconstructs to — the fleet's tiny type
-// vocabulary, recovered from native JSON Schema (`type` + `format` + `store`):
+// The scalar spellings a column reconstructs to — a compact type vocabulary
+// recovered from native JSON Schema (`type` + `format` + `store`):
 //   text   string, no format          number  number
 //   body   string, store:blob         priority number, format:priority
 //   time   string, format:date-time   bool    boolean
@@ -33,7 +33,7 @@ export type Scalar =
   | 'url'
 
 // One column, interrogated. `kind` is the coarse category a binder switches on;
-// `scalar` refines a scalar column to its fleet spelling; `values`/`ref` carry
+// `scalar` refines a scalar column to its type spelling; `values`/`ref` carry
 // the closed set or the pointed-at entity kind. `affinity` and `fk` are the two
 // answers a SQLite lowering needs and nothing else has to recompute.
 export type Column = {
@@ -53,8 +53,8 @@ export type Column = {
 }
 
 // A component, interrogated: its columns split writable/stamped, its display
-// facts, its id prefix (a fleet keyword), whether its doc title is a typeable
-// name (by_name, a fleet keyword).
+// facts, and two comp keywords the loader records but does not act on — an id
+// `prefix` and whether its title is a name a caller can resolve.
 export type CompInfo = {
   name: string
   wire: boolean // false = readable-not-writable component (the spine)
@@ -62,8 +62,8 @@ export type CompInfo = {
   before: string[] // kinds this kind sorts before (feeds kindOrder)
   writable: string[] // wire-writable column names
   stamped: string[] // server-owned column names
-  prefix?: string // fleet: human id prefix (T, P, …)
-  byName?: boolean // fleet: title is a typeable name
+  prefix?: string // a human id prefix (T, P, …) — carried, behavior deferred
+  byName?: boolean // the title is a typeable name — carried, behavior deferred
 }
 
 // One deref step of a dotted path: the component a segment landed in and the
@@ -106,7 +106,7 @@ export type PropSchema = {
   wire?: boolean
   bare?: boolean
   aliases?: Record<string, string>
-  // yaks fleet keywords
+  // comp keywords the loader records but does not act on
   prefix?: string
   by_name?: boolean
   [k: string]: unknown

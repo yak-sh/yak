@@ -85,3 +85,8 @@ written under the old word.
 
 `fleet/slice.schema.json` (not published) is a hand-authored example vocabulary
 in this format; the package's tests load it to exercise the runtime end to end.
+
+## Compatibility
+
+Pure TypeScript with no runtime dependency — a vocabulary is plain JSON Schema.
+Runs on **Deno** and **Node** (via JSR / npm).

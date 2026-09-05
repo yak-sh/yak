@@ -2,12 +2,12 @@
 // into an in-memory `Vocab` and exposes the interrogation + routing API a binder
 // (@yaks/sql) consumes: what a column IS, how a dotted path routes to
 // {comp, prop} hops, the derived kindOrder and the kind an entity carries, and
-// whether an instance is well-formed. It is a GENERALIZATION of what the fleet's
-// hand-generated src/types.ts + src/query.ts answer over the one hardcoded
-// vocabulary — the same questions, over a LOADED instance, parameterized.
+// whether an instance is well-formed. The same questions a hand-generated set
+// of types answers over one hardcoded vocabulary, answered here over a LOADED
+// instance instead — parameterized, not hardcoded.
 //
-// A vocab ships zero components: the fleet's ~90 comps are an instance it loads,
-// and a customer app is a smaller instance in the same format.
+// A vocab ships zero components: your components are an instance it loads, and a
+// small app is a smaller instance in the same format.
 
 import type {
   Column,
@@ -22,7 +22,7 @@ import { kindOrder as deriveKindOrder } from './order.ts'
 
 // One property schema → the column it describes. The scalar spelling is
 // reconstructed from native JSON Schema (`type` + `format` + `store`), so a
-// vocab authored in plain JSON Schema round-trips to the fleet's tiny type set.
+// vocab authored in plain JSON Schema round-trips to this compact type set.
 let scalarOf = (s: PropSchema): Scalar => {
   if (s.type == 'boolean') return 'bool'
   if (s.type == 'number' || s.type == 'integer') {

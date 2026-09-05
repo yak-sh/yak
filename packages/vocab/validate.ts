@@ -1,7 +1,7 @@
-// Validating a vocab DOCUMENT — ordinary well-formedness, the same checks the
-// fleet's store/vocab.ts runs today over a hand-written app manifest, said over
-// JSON Schema instead. Three refusals, each naming the file and the fix, because
-// the agent reading it has no other source:
+// Validating a vocab DOCUMENT — ordinary well-formedness, the checks a store
+// runs over a hand-written app manifest, said over JSON Schema instead. Three
+// refusals, each naming the file and the fix, because the agent reading it has
+// no other source:
 //   storable  the shape a table can lower — a top-level object of scalar / ref /
 //             enum columns, no nesting, no arrays, no recursive $ref
 //   reserved  a name the base vocabulary already owns is refused
