@@ -3,7 +3,8 @@
 Nothing here is swallowed. This page is what a refused call answers and how a
 page shows it, what the reporter in every page catches on its own, where a break
 is filed and how you hear about it once, `app_errors`, `app_versions` and
-`app_rollback`, and `feedback` for when the platform itself is what is wrong.
+`app_rollback`, and `feedback` for anything either of you has to say about the
+platform itself.
 
 ## A refusal
 
@@ -231,14 +232,15 @@ oldest rollback an app still offers always has its files.
 
     feedback(text, app?, space?)
 
-For when **the platform** is what is wrong — this connector, its tools, its
-guide, the way an app is built or served here. A tool that refused for no reason
-you could find, a door that is not there, an answer that disagreed with what was
-documented, a step the person found baffling.
+The door for **all** feedback about the platform — this connector, its tools,
+its guide, the way an app is built or served here. A tool that refused for no
+reason you could find, a door that is not there, an answer that disagreed with
+what was documented, a step the person found baffling; and equally a rough edge,
+a wish, a feature idea, a thing that went well. Whether you ran into it yourself
+or the person said it, it is wanted.
 
-Reach for it the moment you hit one and cannot fix it from where you are. Then
-work around it and carry on: nobody sees the workaround, and this is what is
-seen instead.
+Reach for it the moment it comes up. Where something is broken, work around it
+and carry on: nobody sees the workaround, and this is what is seen instead.
 
 Send two things and nothing else — **what the person said, in their own words,
 and what you tried and what happened.** Who they are, their address, their

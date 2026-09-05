@@ -867,18 +867,20 @@ one back — every file of it, its components, its tools and its worker — as a
 version, so a rollback can itself be rolled back. Only the files move; what the
 app has saved is never touched.
 
-## When the platform is what's wrong
+## What you make of this place
 
-Not everything is the app's. A tool that refused for no reason you could find, a
-door that isn't there, a page here that taught you the wrong thing, a step the
-person found baffling — `feedback(text, app?)` says so to the people who run
-yaks.app, and it reaches them as mail they can answer.
+Not everything is the app's. Anything either of you has to say about yaks.app
+itself — a tool that refused for no reason you could find, a door that isn't
+there, a page here that taught you the wrong thing, a step the person found
+baffling, a rough edge, a wish, a feature idea, a thing that went well —
+`feedback(text, app?)` says it to the people who run yaks.app, and it reaches
+them as mail they can answer.
 
 Send what the PERSON said, in their own words, and what you tried and what
 happened. Nothing else: who they are, their space, the app if you name one, and
-both versions ride along on their own. Then work around it and carry on — the
-workaround is invisible, and this is what is seen instead. A few an hour is
-plenty; past that it waits.
+both versions ride along on their own. Where something is broken, work around it
+and carry on — the workaround is invisible, and this is what is seen instead. A
+few an hour is plenty; past that it waits.
 
 An error inside the person's own app is not this. That is theirs, it is already
 in `app_errors`, and fixing it is yours.

@@ -2781,27 +2781,29 @@ export let TOOLS: Tool[] = [
   {
     name: 'feedback',
     description:
-      'Tell the people who run yaks.app that something is wrong with THE ' +
-      'PLATFORM — this connector, its tools, its guide, the way an app is ' +
-      'built or served here. Not the app you are building for the person: ' +
-      'a break inside their own app is theirs and yours to fix (app_errors ' +
-      'lists those). Reach for this the moment something here is broken, ' +
-      'confusing or missing and you cannot fix it from where you are — a ' +
-      'tool that refused for no reason you could find, a door that does not ' +
-      'exist, an answer that disagreed with what was documented, a step the ' +
-      'person found baffling. Then go on and work around it: nobody sees ' +
-      'the workaround, and this is what they see instead. Say what the ' +
-      'PERSON said, in their own words, and what YOU tried and what ' +
-      'happened — those two are the whole report. Who they are, their ' +
-      'space, the app if you name one, and the versions ride along on their ' +
-      'own; do not repeat them. It reaches a person by mail, and they can ' +
-      'write back.',
+      'The door for ALL feedback about yaks.app itself — this connector, its ' +
+      'tools, its guide, the way an app is built or served here. A bug, a ' +
+      'rough edge, a step that took three tries, a confusing answer, a wish, ' +
+      'a feature idea, a thing that went well: all of it is wanted, from ' +
+      "what YOU ran into working here or in the PERSON's own words. Not the " +
+      'app you are building for the person: a break inside their own app is ' +
+      'theirs and yours to fix (app_errors lists those). Reach for this the ' +
+      'moment it comes up — a tool that refused for no reason you could ' +
+      'find, a door that does not exist, an answer that disagreed with what ' +
+      'was documented, a step the person found baffling, something they ' +
+      'wished this place did, a sentence they said about any of it. Where ' +
+      'something is broken, go on and work around it: nobody sees the ' +
+      'workaround, and this is what they see instead. Say what the PERSON ' +
+      'said, in their own words, and what YOU tried and what happened — ' +
+      'those two are the whole report. Who they are, their space, the app if ' +
+      'you name one, and the versions ride along on their own; do not repeat ' +
+      'them. It reaches a person by mail, and they can write back.',
     input: {
       type: 'object',
       properties: {
         text: str(
-          'what is wrong, confusing or missing: the words the person used, ' +
-            'and what you tried',
+          'the feedback itself — what is wrong, clumsy, missing, wished for ' +
+            'or good: the words the person used, and what you tried',
         ),
         app: str(
           'the app they were looking at when it came up, if there was one',
