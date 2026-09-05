@@ -1,0 +1,23 @@
+{
+  "name": "@yaks/memory",
+  "version": "0.0.0",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "An in-memory storage adapter for @yaks/graph: a Map of bundles, queries answered by @yaks/match, transactions that roll back.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "@db/sqlite": "jsr:@db/sqlite@0.13.0"
+  },
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "esnext"
+    ]
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "./browser.json"
+    ]
+  }
+}
