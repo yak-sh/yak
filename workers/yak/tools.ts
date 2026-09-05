@@ -100,7 +100,8 @@ import { mail, REPLY_TO } from './mail.ts'
 import { NO_ARGS, PUBLIC } from './preauth.ts'
 import { foreign, SLUG } from './route.ts'
 import type { Reach } from './reach.ts'
-import { mayWrite, reads, titling, vouched, type Who } from './session.ts'
+import { titling, vouched, type Who } from './session.ts'
+import { mode, reads, writes } from '@yaks/member'
 import { canon, nameOf, personOf } from './signin.ts'
 import { type Door, storeOf } from './door.ts'
 import { archive, cards, healed, line, openIn, serve } from './unseen.ts'
@@ -360,7 +361,9 @@ let inSpace = async (ctx: Ctx, args: Args, write = false) => {
     role: await ctx.dir.role(space, ctx.person),
   }
   if (!who.role) throw new Error(`not a member of ${space.slug}`)
-  if (write && !mayWrite(who)) throw new Error(`not a writer of ${space.slug}`)
+  if (write && !writes(who.role)) {
+    throw new Error(`not a writer of ${space.slug}`)
+  }
   return { space, who }
 }
 
@@ -716,7 +719,7 @@ export let inReach = async (ctx: Ctx, args: Args): Promise<Reach[]> => {
     }
     if (!who.role) continue
     for (let app of await ctx.dir.apps(space)) {
-      if (reads(who, app.access)) out.push({ space, app, who })
+      if (reads(mode(app.access), who.role)) out.push({ space, app, who })
     }
   }
   return out

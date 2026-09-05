@@ -1,7 +1,7 @@
 // What a LISTING carries, in one place, because a filter line has one answer:
 // the same query asked by the person's agent (tools.ts graph_query), by their
 // page (apps.ts `/api/query`) and by the socket that keeps answering it
-// (store.ts `/ws`) is the same question, and the doors answered it differently
+// (graph.ts `/ws`) is the same question, and the doors answered it differently
 // — the tools hid the platform's stamps, the page's door returned them
 // (C-32574 item 5), and the live door sent raw changes, so a page's rows
 // changed shape the moment they moved (C-32624 item 2). The rule lives here
@@ -29,7 +29,7 @@ export let STAMPS = ['created', 'updated', 'notified', 'opened', 'quarantined']
 export let KERNEL = ['exception', 'error']
 
 // A PERSON is the platform's row too — a store mints one for whoever writes to
-// it, so `created.by` has a name to resolve (store.ts `knows`) — but only in an
+// it, so `created.by` has a name to resolve (graph.ts `#vouching`) — but only in an
 // APP's store: the directory's own graph is made of people, and the agent tier
 // reads that through the same listing. So a person is screened out of the
 // QUESTION, which only a page's doors ask, and never out of an answer.
@@ -84,7 +84,7 @@ export let listed = (rows: Row[], asked: string): Row[] => {
 //
 // Which columns REFERENCE, and what the store calls the people among them, are
 // the caller's word: the rule is the same over a fetch and over a socket, and
-// only the caller holds a db to ask with (query.ts).
+// only the caller holds a store to ask with (graph.ts).
 export type Ref = (comp: string, col: string) => boolean
 export type Names = (eids: string[]) => Map<string, string>
 

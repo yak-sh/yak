@@ -1,5 +1,8 @@
-// The one-pass move from the fleet-shaped store (store.ts, src/store/schema.json)
-// to the packages-shaped one (graph.ts, @yaks/sqlite from a loaded vocabulary).
+// The one-pass move from the fleet-shaped store (src/store/schema.json, whose
+// Durable Object class went with T-33807) to the packages-shaped one (graph.ts,
+// @yaks/sqlite from a loaded vocabulary). Nothing here imports that class: the
+// pass reads the old tables BY NAME, which is why it outlives the code that
+// wrote them and must stay until every deployed object has been touched once.
 // Jeff, 2026-09-05: "there are a few users! can't just drop" — so this is a DATA
 // migration, and the rows a deployed object holds are the whole subject.
 //

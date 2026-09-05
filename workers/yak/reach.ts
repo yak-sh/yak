@@ -17,9 +17,8 @@
 // `GET /query?q=…` with bundles, takes a batch of bundles at `POST /apply`,
 // and answers that with the batch as applied. The merge is therefore what
 // bundles are for — one entity, the components it wears, gathered from
-// wherever they are kept. That is the Store on the packages (graph.ts), which
-// index.ts binds once T-33807 takes the older object away; the wire here is
-// that one's, and only that one's.
+// wherever they are kept. That is the Store on the packages (graph.ts), the one
+// object index.ts binds; the wire here is that one's, and only that one's.
 //
 // Two things this module does that no single store can. An ORDER over a
 // spanning answer is settled HERE, over the merged bundles, with @yaks/match:
@@ -28,7 +27,6 @@
 // declare — the language a merged bundle is written in, and the one @yaks/match
 // reads an order out of.
 import { asking, listed, PLATFORM, type Row } from './listing.ts'
-import { EVERY } from './query.ts'
 import {
   type App,
   appStore,
@@ -37,11 +35,13 @@ import {
   storeName,
 } from './directory.ts'
 import type { Env } from './env.ts'
-import { vouched, type Who, writes } from './session.ts'
+import { vouched, type Who } from './session.ts'
+import { edits, mode } from '@yaks/member'
 import { storeOf } from './door.ts'
 import { appDoc, appKeywords, coreDocs } from './vocab.ts'
 import { type Bundle, dead, type Entity } from '@yaks/graph'
 import { matcher } from '@yaks/match'
+import { parse } from '@yaks/query'
 import {
   loadVocab,
   type PropSchema,
@@ -81,7 +81,7 @@ export let at = (r: Reach) => `${r.space.slug}/${r.app.slug}`
 //
 // The QUESTION carries the same door's screen an app's page asks with
 // (listing.ts `asking`), because an APP's store keeps person rows as its own
-// bookkeeping — one per writer, so a byline has a name (store.ts `knows`) —
+// bookkeeping — one per writer, so a byline has a name (graph.ts `#vouching`) —
 // and a person titled with what to call them matches `.doc!` like any row.
 // The directory's own store is the exception: there people ARE the data, and
 // its reads are its own (identity.ts).
@@ -131,6 +131,19 @@ let aggOf = (line: string) =>
 let limitOf = (line: string) =>
   Number(segsOf(line).find((s) => /^\.?limit=/.test(s))?.split('=')[1]) ||
   undefined
+
+// Does this line ask for EVERY component? `*` is a directive in the grammar
+// (@yaks/query, T-34070), not a word a door cuts out of the line, so this asks
+// the parser rather than the text — the same question graph.ts `#wanted` asks.
+// A line this door was handed in pieces need not parse; one that does not asks
+// for nothing wider than what it named.
+let every = (line: string) => {
+  try {
+    return parse(line).clauses.some((c) => c.kind == 'every')
+  } catch {
+    return false
+  }
+}
 
 // The directives that settle a SEQUENCE rather than a set. An `.order=` is
 // what moves that decision past the merge: the column it names may be a word
@@ -525,12 +538,14 @@ export let read = async (
   // count an entity that lives in two of them twice.
   if (agg == 'count') return { count: eids.length }
   // The bundle is read from the stores that speak a word the line named, and
-  // carries those components — the store's own rule (query.ts `wanted`),
+  // carries those components — the store's own rule (graph.ts `#wanted`),
   // applied here because the composing read addresses the eids and names no
   // component. A part this door cannot confirm IS a component (an unqualified
-  // prop, a reference path) asks for the whole bundle rather than guess.
+  // prop, a reference path) asks for the whole bundle rather than guess. `*` is
+  // the grammar's widest projection (@yaks/query `every`, T-34070), read off the
+  // parsed line the way the store reads it, so both doors agree about one word.
   let named = [...parts.keys()]
-  let want = named.length && !segsOf(line).includes(EVERY) &&
+  let want = named.length && !every(line) &&
       named.every((n) => words.has(n) || CORE.all.includes(n))
     ? new Set(named)
     : null
@@ -681,7 +696,7 @@ let sent = async (
   headers: Record<string, string> = {},
 ) => {
   let r = part.r
-  if (!writes(r.who, r.app.access)) {
+  if (!edits(mode(r.app.access), r.who.role)) {
     throw new Error(`not a writer of ${at(r)}`)
   }
   let door = appStore(env.STORE, r.space, r.app)

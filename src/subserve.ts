@@ -635,7 +635,7 @@ let rowsFor = (
 
 // What this half hands its socket: a frame, as a VALUE. Serializing it is the
 // socket's business, not the subscription machinery's — which is what lets a
-// door project a frame before it goes out (workers/yak/store.ts answers an
+// door project a frame before it goes out (workers/yak/graph.ts answers an
 // app's page with the listing rows its /query door answers with).
 export type Frame = Record<string, unknown> | Change[]
 

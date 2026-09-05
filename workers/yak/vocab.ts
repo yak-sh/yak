@@ -18,7 +18,7 @@
 //   updated     stamp phase is their only writer, and it writes whichever of
 //               `at`/`by`/`via` the vocabulary declares.
 //   person      the writer a store mints the first time it meets one
-//               (store.ts `knows`) — what `created.by` points at.
+//               (graph.ts `#vouching`) — what `created.by` points at.
 //   memberDoc   @yaks/member: who belongs to a space, what they may touch.
 //   edgeDoc     @yaks/edge: the link itself, `edge{from, to, ord}`.
 //   relationDoc the twelve verbs an edge may WEAR. @yaks/edge ships the link

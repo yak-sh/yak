@@ -3873,7 +3873,7 @@ export type SchemaOp =
 
 // The ordered schema-shaping DDL a fresh migrate() runs, classified — the ONE
 // source the codegen emits src/store/schema.json from, so a backend that plants
-// at runtime (workers/yak/store.ts) owns schema CREATE + ADDITIVE migration off
+// at runtime (workers/yak/graph.ts) owns schema CREATE + ADDITIVE migration off
 // db.ts's own schema (D-22804 §8), never a hand-kept copy. Captured by RECORDING
 // db.exec over a
 // migrate() of the EMPTY handle the caller passes (the file adapter's :memory:,

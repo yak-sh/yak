@@ -1,13 +1,15 @@
 /// <reference lib="deno.ns" />
-// The one pass, end to end (T-33809): an object is SEEDED through the store it
-// replaces — store.ts's own doors, its own DDL out of src/store/schema.json, its
-// own wire — and then woken as the Store on the packages, which finds the old
-// rows and moves them.
+// The one pass, end to end (T-33809): an object is SEEDED the way the store
+// this replaces seeded one — its DDL out of src/store/schema.json, its own
+// apply() (src/db.ts), its own key-value slots — and then woken as the Store on
+// the packages, which finds the old rows and moves them.
 //
-// Nothing is stubbed between the two: the fixtures are written by the code that
-// wrote the rows a deployed object is holding right now, and the assertions read
-// the new store through its own `/query` door. What this proves is what the
-// cutover deploy (T-33808) turns on.
+// The old Durable Object class went with T-33807, and what it wrapped did not:
+// {@link older} is the three calls that class made on a write (`plant`,
+// `plantVocab`, `mutate`), so the fixtures are still written by the code that
+// wrote the rows a deployed object is holding right now — only the HTTP
+// envelope around them is gone, and this pass never reads one. The assertions
+// read the new store through its own `/query` door.
 //
 // SLOW tier: every one of these plants the fleet's whole 328-op schema to have
 // something to migrate, which is a third of a second an object — the cost of
@@ -27,7 +29,17 @@ import {
   Refused as Unreconciled,
   type Report,
 } from './migrate.ts'
-import { Store as Legacy } from './store.ts'
+import {
+  mutate,
+  plant,
+  plantVocab,
+  type SchemaOp,
+  schemaStamp,
+} from '../../src/db.ts'
+import { fed } from '../../src/effects.ts'
+import { DoSql, type DoStorage } from '../../src/store/do.ts'
+import { parseVocab } from '../../src/store/vocab.ts'
+import ops from '../../src/store/schema.json' with { type: 'json' }
 import { appVocab, PLATFORM_STORE } from './vocab.ts'
 
 // One object's whole state, kept across incarnations: its storage, the key-value
@@ -84,31 +96,27 @@ type Change = {
   comp: Record<string, unknown> | null
 }
 
-// The old store, over one object's storage: its doors, its wire, its DDL.
+// The old store's birth and its writes, over one object's storage: the fleet's
+// whole schema planted from src/store/schema.json, the slots the object
+// remembered its name and its schema stamp in, and apply() in server-writer
+// mode — which is what every request the kernel made carried (`x-yak-kernel`).
 let older = (ctx: State, name: string) => {
-  let store = new Legacy(
-    ctx as unknown as ConstructorParameters<typeof Legacy>[0],
-    null,
-  )
-  let door = (path: string, init: RequestInit = {}) => {
-    let req = new Request(`http://store${path}`, init)
-    req.headers.set('x-store', name)
-    req.headers.set('x-yak-kernel', '1')
-    return store.fetch(req)
-  }
+  let db = new DoSql(ctx.storage as unknown as DoStorage)
+  plant(db, ops as SchemaOp[])
+  ctx.slots.set('name', name)
+  ctx.slots.set('schema', schemaStamp(ops as SchemaOp[]))
   return {
-    store,
-    door,
-    apply: async (changes: Change[]) => {
-      let r = await door('/apply', {
-        method: 'POST',
-        body: JSON.stringify(changes),
-      })
-      if (!r.ok) throw new Error(`old store refused: ${await r.text()}`)
-      return await r.json()
+    db,
+    apply: (changes: Change[]) => mutate(db, changes, fed(), null, true),
+    // The app's own vocab.json, as the `/vocab` door planted it: the tables and
+    // columns it names, then the manifest itself in the slot the object woke
+    // with. A fresh store has nothing to grow from, so this is the whole of it.
+    vocab: (manifest: unknown) => {
+      let vocab = parseVocab(manifest)
+      plantVocab(db, vocab)
+      ctx.slots.set('vocab', JSON.stringify(vocab))
+      return vocab
     },
-    vocab: (manifest: unknown) =>
-      door('/vocab', { method: 'POST', body: JSON.stringify(manifest) }),
   }
 }
 

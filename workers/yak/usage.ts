@@ -18,7 +18,7 @@
 // `durableObjectsPeriodicGroups` has `sum.rowsRead`/`sum.rowsWritten`, and
 // both carry `dimensions.name`. Stored bytes are NOT from analytics:
 // `durableObjectsStorageGroups` is account-wide, with no per-object dimension,
-// so an app's size is what its own store reports (store.ts `/graph`).
+// so an app's size is what its own store reports (graph.ts `/graph`).
 // The datasets are documented at
 // https://developers.cloudflare.com/durable-objects/observability/metrics-and-analytics/
 // which names introspection as the way to read their fields; these field

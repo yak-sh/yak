@@ -23,9 +23,9 @@
 // one composition, two vocabularies.
 //
 // This class carries the DO's own NAME, `Store`, so wrangler's migration list
-// never moves; the old store.ts wears the same name beside it until T-33807
-// takes it away, and index.ts says which one the binding is. T-33809 carries
-// the data across.
+// never moves: it took the name from the fleet-shaped object it replaced, which
+// is gone (T-33807), and migrate.ts carries that object's rows across on the
+// first request that reaches one (T-33809).
 //
 // ## What the object remembers
 // A Durable Object's memory does not survive an eviction, so everything this
@@ -1025,7 +1025,7 @@ export class Store {
       // An AGGREGATE is not a listing — `.count!` answers one number — and
       // @yaks/api's read door answers bundles, which is the wrong half of the
       // compiled statement. So it is answered here, off the raw rows, in the
-      // shape every door on this platform says it in (query.ts).
+      // shape every door on this platform says it in.
       let agg = aggOf(line)
       if (agg) {
         try {

@@ -2000,7 +2000,7 @@ slow('a read with no app composes every app the caller can reach', async () => {
     )
     // `.doc!` is a platform word both stores speak, so the answer is both
     // apps' rows — and the cake is one row, not two. The person row each
-    // store mints for its writer wears a title too (store.ts `knows`), and
+    // store mints for its writer wears a title too (graph.ts `#vouching`), and
     // is the platform's bookkeeping, never a row in the person's own list.
     assertEquals(
       (await rows('.doc!')).map((r) => r.doc!.title),
@@ -2244,7 +2244,7 @@ slow('app_list answers what the month cost', async () => {
     assertStringIncludes(said, '241 MB')
 
     // The one number analytics cannot answer: what a store weighs. It comes
-    // off the store itself (store.ts `/graph`), which is where the sweep
+    // off the store itself (graph.ts `/graph`), which is where the sweep
     // reads it, so a planted store already weighs something.
     let graph = await k.at('metered.yaks.app', '/recipes/api/graph', {
       headers: { cookie },

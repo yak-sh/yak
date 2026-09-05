@@ -91,6 +91,13 @@ export let lined = (search: string): string =>
 // bundle was the wire. It says exactly what a bundle says, so it is lowered
 // here rather than refused: this is the door whose job is that both spellings
 // mean one thing at the store.
+//
+// It STAYS, after the store that spoke it natively was deleted (T-33807).
+// `public/client.js` is ours and moved with the store, but this door is a
+// PUBLIC one: a page or a headless client written against the flat spelling is
+// somebody else's code, on somebody else's machine, and nothing here can know
+// whether one exists. Lowering it costs six lines; refusing it would break a
+// caller we cannot see and cannot warn.
 let bundled = (one: unknown, n: number): Bundle => {
   let held = one as Record<string, unknown>
   if (typeof held?.name == 'string' && 'comp' in held) {

@@ -495,7 +495,7 @@ export let EXISTS = 'exists'
 // presence, requested. It selects nothing and screens nothing — `.book!` says
 // which entities the answer is about, `.book!&.loan?` says the answer should
 // carry their loans too, where they have one. A door that projects reads it
-// (workers/yak/query.ts); every evaluator lets it through like a ranking.
+// (workers/yak/graph.ts); every evaluator lets it through like a ranking.
 export let WANT = 'want'
 let OPS: Record<string, string> = {
   '=': '',

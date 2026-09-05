@@ -22,7 +22,6 @@ import {
 import { bound, type Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
-import type { Door } from './door.ts'
 import { told } from './stream.ts'
 import { level, standing } from './meter.ts'
 
@@ -133,14 +132,11 @@ let hushed = (space: Space, app: App) => {
 // store ({@link metaBreaks}); an app's go to that app's store.
 export type Breaks = (bundles: Bundle[]) => Promise<unknown>
 
-/** The platform's own breaks: the directory's store, in the graph's wire. */
+/** The platform's own breaks: the directory's store, in the graph's wire. An
+ * APP's breaks go to that app's own store the same way — `metaOf(door).apply`
+ * at the call site — because it is the same Store class and the same wire. */
 export let metaBreaks = (env: Env): Breaks => (bundles) =>
   meta(env).apply(bundles, KERNEL)
-
-/** One app's breaks, through its own store's door — the same wire the meta
- * half speaks, because it is the same Store class (graph.ts). */
-export let appBreaks = (store: Door): Breaks => (bundles) =>
-  metaOf(store).apply(bundles, KERNEL)
 
 export let noted = async (breaks: Breaks, broke: {
   request: string

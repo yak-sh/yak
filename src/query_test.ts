@@ -1715,7 +1715,7 @@ Deno.test('a blob row answers only a filter that names one — `image` names one
 
 // `.comp?` — a component ASKED FOR beside the filter, never filtered on: it
 // selects nothing, screens nothing, and names the component a door projects
-// (workers/yak/query.ts).
+// (workers/yak/graph.ts).
 Deno.test('query: a trailing question asks for a component, never about it', () => {
   let fix = row({})
   let idea = row({}, { proposed: { at: '2026-08-01T00:00:00.000Z' } })

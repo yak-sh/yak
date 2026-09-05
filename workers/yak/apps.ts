@@ -39,24 +39,17 @@ import { granted, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { type Size, sizeOf } from './image.ts'
 import { asking, listed, type Row } from './listing.ts'
-import { metaOf, minted } from './meta.ts'
+import { KERNEL, metaOf, minted } from './meta.ts'
 import { batched, lined, lowered } from './wire.ts'
 import { nothingHere, spaceIndex } from './pages.ts'
 import { hostOf, MOUNT, PLATFORM, route } from './route.ts'
-import {
-  mayWrite,
-  reads,
-  titling,
-  vouched,
-  type Who,
-  whoIs,
-  writes,
-} from './session.ts'
+import { titling, vouched, type Who, whoIs } from './session.ts'
 import { type Reach, split, written } from './reach.ts'
 import type { Bundle } from '@yaks/graph'
+import { edits, mode, reads, writes } from '@yaks/member'
 import { type Door, storeOf } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
-import { appBreaks, noted, refusal, serving } from './unseen.ts'
+import { noted, refusal, serving } from './unseen.ts'
 import { full } from './usage.ts'
 import { sha256 } from './versions.ts'
 
@@ -641,7 +634,7 @@ export let acting = (env: Env, space: Space, app: App, who: Who) => {
   }
   return {
     apply: async (mutation: unknown) => {
-      if (!writes(who, app.access)) no('not_a_writer')
+      if (!edits(mode(app.access), who.role)) no('not_a_writer')
       let mine = { space, app, who }
       let homes = await borrowed(env, space, app, who)
       // A word this app USES lives in another app's store (T-32728), so a
@@ -674,7 +667,7 @@ export let acting = (env: Env, space: Space, app: App, who: Who) => {
       }
     },
     query: async (line: string) => {
-      if (!reads(who, app.access)) no('not_a_reader')
+      if (!reads(mode(app.access), who.role)) no('not_a_reader')
       let asked = asking(lined(line))
       // A line about a borrowed word is asked where that word lives. One
       // home per line: a filter spanning two stores is a composition, and
@@ -722,7 +715,11 @@ let api = async (
     // (unseen.ts `serving`, C-32869 item 4).
     let version = reports.length ? await serving(env, space, app) : null
     for (let broke of reports) {
-      await noted(appBreaks(store), { ...broke, version }, { env, space, app })
+      await noted(
+        (bundles) => metaOf(store).apply(bundles, KERNEL),
+        { ...broke, version },
+        { env, space, app },
+      )
     }
     return new Response(null, { status: 204 })
   }
@@ -736,8 +733,8 @@ let api = async (
       SAYS[what],
       signInAt(req.headers.get('referer') || req.url),
     )
-  let mayRead = reads(who, app.access)
-  let mayPost = writes(who, app.access)
+  let mayRead = reads(mode(app.access), who.role)
+  let mayPost = edits(mode(app.access), who.role)
   // Who is looking, BEFORE the first write (T-32679). A page could only learn
   // this from a refusal, which is too late twice over: on an `open` app a
   // signed-out write has no `created.by`, so the page must ask a guest their
@@ -850,7 +847,7 @@ let api = async (
   }
   if (path.startsWith('/files/')) {
     if (req.method != 'PUT') return json(405, 'method_not_allowed')
-    if (!mayWrite(who)) return refused()
+    if (!writes(who.role)) return refused()
     let key = keyOf(space, app, path.slice('/files'.length))
     await r2Blobs(env.BLOBS).put(key, new Uint8Array(await req.arrayBuffer()))
     await purged(env, app)
@@ -880,7 +877,7 @@ let index = async (
 ) => {
   let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
   let all = (await dir.apps(space)).filter((a) => !kernels(space, a.slug))
-  let mine = all.filter((a) => reads(who, a.access))
+  let mine = all.filter((a) => reads(mode(a.access), who.role))
   return spaceIndex({
     space: space.slug,
     title: space.title,
@@ -992,7 +989,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // the page (T-32593); someone signed in who is nobody here gets the same
   // nothing-here a wrong address gets — whether the app exists at all is its
   // owner's to tell. The `/api/` doors keep their own refusals, which speak.
-  if (!path.startsWith('/api/') && !reads(who, app.access)) {
+  if (!path.startsWith('/api/') && !reads(mode(app.access), who.role)) {
     return who.person ? nothingHere() : redirect(signInAt(req.url), 303)
   }
   // The app's own code answers first, where it has any: `ran` is null when

@@ -3,7 +3,7 @@
 // `fetch(req, env)` — identity.ts, mcp.ts, directory.ts, apps.ts — and the
 // router composes them by calling those handlers; a part split into its own
 // Worker later is a service binding in env.ts and no change here. The Store
-// Durable Object (store.ts) is its own module for the same reason: a DO may
+// Durable Object (graph.ts) is its own module for the same reason: a DO may
 // live in a different Worker from the one that binds it, and so is the Wire
 // object (stream.ts), which holds a person's open agent stream. Every route
 // runs inside one catch: a throw becomes an exception entity in the META
@@ -89,8 +89,8 @@ import { metered } from './usage.ts'
 
 // THE Store, at every address the binding names — the directory at
 // `yak/platform` and every app's own beside it (T-33815). It carries the DO's
-// own name, so wrangler's migration list never moves; store.ts is the object
-// this replaced and has no caller left, which T-33807 takes away.
+// own name, so wrangler's migration list never moves — the name is the one the
+// fleet-shaped object it replaced wore, and that object is gone (T-33807).
 export { Store } from './graph.ts'
 export { Wire } from './stream.ts'
 

@@ -1,15 +1,15 @@
 // The kernel's door onto one store: the Durable Object namespace as a slice,
 // and `storeOf`, which builds every request the kernel makes to an object.
 //
-// It is its OWN module rather than a corner of store.ts because two kinds of
-// caller reach a store and only one of them may carry the kernel with it. The
-// Worker's parts (apps.ts, tools.ts, directory.ts, …) hold the whole kernel;
-// the Store object itself holds nothing but its bindings — it is checked
-// against the runtime's own types with no Deno anywhere in its graph
-// (conform.ts) — and it too has one question to ask the directory: what the
-// space that just sent a letter has spent this month (meter.ts `metering`).
-// A door that lived beside the legacy Store class would drag src/db.ts into
-// that object's graph and fail that check.
+// It is its OWN module because two kinds of caller reach a store and only one
+// of them may carry the kernel with it. The Worker's parts (apps.ts, tools.ts,
+// directory.ts, …) hold the whole kernel; the Store object itself holds nothing
+// but its bindings — it is checked against the runtime's own types with no Deno
+// anywhere in its graph (conform.ts) — and it too has one question to ask the
+// directory: what the space that just sent a letter has spent this month
+// (meter.ts `metering`). This is why the door was lifted out of the store that
+// graph.ts replaced: living beside that class dragged src/db.ts into the
+// object's graph and failed that check. That class is gone (T-33807).
 /** Anything a request can be handed to: a service binding, or a part of this
  * Worker called in-process (env.ts `bound`). */
 export type Fetcher = { fetch(req: Request): Promise<Response> }
@@ -37,9 +37,9 @@ export type Door = (
 // Request carries its headers across — that is how a socket upgrade reaches
 // the object with its `Upgrade` header on it — so a visitor's own
 // `x-yak-person` would ride along with it and the object would believe it
-// (store.ts `writerOf`, graph.ts `vouchOf`). Stripped here, at the one door
-// onto a store, "the kernel builds every request from scratch" is a fact
-// about this function rather than a hope about its callers.
+// (graph.ts `vouchOf`). Stripped here, at the one door onto a store, "the
+// kernel builds every request from scratch" is a fact about this function
+// rather than a hope about its callers.
 let VOUCH = [
   'x-store',
   'x-yak-app',

@@ -383,7 +383,7 @@ export let emit = (a: ReturnType<typeof assemble>): string => {
 // The ordered DDL a fresh src/db.ts migrate() runs, classified as SchemaOp and
 // captured out-of-process (see captureSchema below) so it reflects the freshly-
 // emitted types.ts. Written out as src/store/schema.json for a backend that
-// plants at runtime and cannot capture the ops itself (workers/yak/store.ts).
+// plants at runtime and cannot capture the ops itself (workers/yak/graph.ts).
 
 type SchemaOp =
   | { kind: 'exec'; sql: string }

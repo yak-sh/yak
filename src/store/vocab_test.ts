@@ -9,7 +9,21 @@ let { GUIDE, borrowed, dropOps, grow, homed, livesIn, parseVocab, vocabOps } =
   await import('./vocab.ts')
 let { eager, mutate, plantVocab } = await import('../db.ts')
 let { bareDb } = await import('../testdb.ts')
-let { query } = await import('../../workers/yak/query.ts')
+let { askOf, askRows, layered } = await import('../graph_query.ts')
+
+type Db = ReturnType<typeof bareDb>
+
+// The /query door, as every door on this graph spells it (server_runtime.ts's
+// route, the CLI's local arm, the MCP tool): segments in, rows out, through the
+// one askOf → askRows → layered pipeline. It reads the store's OWN vocabulary,
+// which is the whole point here — a filter naming a word this handle planted
+// answers, and one naming a word it did not is refused in that store's words.
+let query = async (db: Db, search: string) => {
+  let ask = askOf(
+    search.slice(1).split('&').filter(Boolean).map(decodeURIComponent),
+  )
+  return layered(db, await askRows(db, ask), ask)
+}
 
 // The migrated template is built once at load, the way db_test.ts does it:
 // that one-time cost is setup, not what the per-test budget measures.
@@ -189,7 +203,7 @@ Deno.test('a store lists its own word in creation order', async () => {
     ((await query(db, q)) as { doc: { title: string } }[])
       .map((r) => r.doc.title)
   // A listing carries the components its filter NAMES, so a recipe listing
-  // that wants the title asks for it (workers/yak/query.ts).
+  // that wants the title asks for it (workers/yak/graph.ts).
   assertEquals(await listed('?.recipe!&.doc?'), titles)
   assertEquals(await listed('?.doc!'), titles)
   // A window is the NEWEST page of that same order.

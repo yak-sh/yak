@@ -11,9 +11,9 @@
 // uniques are planted, the batch goes through @yaks/graph's apply(), and the
 // answer comes back out of @yaks/sql's compiled read.
 //
-// What this proves is exactly what the DO export flip turns on: the wire every
-// listed caller speaks is the graph's already, so the flip is deleting meta.ts's
-// `legacy` (see the TODO there) and pointing `meta` at `metaOf`.
+// What this proves is what the DO export flip turned on (T-33808): every listed
+// caller speaks the graph's own wire, `meta` is `metaOf` over the platform's
+// door, and the fleet-shaped object they used to reach is gone (T-33807).
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'

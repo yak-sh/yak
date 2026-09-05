@@ -782,7 +782,7 @@ Deno.test('a body column the index does not cover declines', () => {
 
 // A request (`.loan?`) names a component to CARRY, not one to test: its
 // condition is `1`, so joining its table buys nothing — and a hosted app's
-// store holds only the words it planted (workers/yak/store.ts), so there may
+// store holds only the words it planted (workers/yak/graph.ts), so there may
 // be no such table to join at all. Left in, the join compiled `no such table:
 // loan` against the reading list's own store for the guide's own
 // `.book!&.loan?` (C-32800 item 2). Membership is unmoved: a request selects

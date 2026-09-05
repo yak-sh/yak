@@ -369,7 +369,7 @@ export let stamp = async (
   cache.clear()
 }
 
-// A listing carries the components the filter NAMES (workers/yak/query.ts),
+// A listing carries the components the filter NAMES (graph.ts `#wanted`),
 // so every read here asks for what it reads: a space with its title, plan and
 // meter, an app with its title, the alias its store is named by, and its
 // meter. `.eid=` names no component and answers the whole bundle, which is why
