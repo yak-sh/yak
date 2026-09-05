@@ -26,8 +26,12 @@ let sql = () => {
     { now: NOW },
   )
   s.install()
-  s.write(corpus)
-  s.write([{ entity: { eid: DEAD }, $delete: true }])
+  // Straight into storage: this test is about READS, so it skips the graph's
+  // apply() and puts the rows where the two evaluators can be held against
+  // each other. `remove` tombstones the one deleted entity (it is a review
+  // nothing points at, so there is no cascade to decide).
+  s.tx((tx) => tx.patch(corpus))
+  s.tx((tx) => tx.remove([{ eid: DEAD }]))
   return s
 }
 

@@ -404,11 +404,13 @@ Deno.test("gap: $edit field operators are the app's, not the core's", () => {
   assert(/scalar/.test(String((threw as Error)?.message)), String(threw))
 })
 
-Deno.test('gap: an edge under an alias — the app refuses, the core mints', () => {
-  // The app makes the CLIENT compute a content-addressed id: an `edge` bundle
-  // whose eid is not edgeEid(from, nature, to) is refused. @yaks/graph gives
-  // the batch an alias instead and derives the id itself, which is what the
-  // `mint` phase and a plugin's `derive` are for.
+Deno.test('a content-addressed id is derived, not demanded of the caller', () => {
+  // Not a gap — the same rule, in two places. The app hard-codes it: an `edge`
+  // whose eid is not edgeEid(from, nature, to) is refused, and its bundle door
+  // derives that id for a `$alias` (508d83c9, edge.ts saidEid). @yaks/graph
+  // has no edges and no idea what one is: the `mint` phase asks the PLUGIN
+  // that owns the component how it names itself, which is the same behavior
+  // with the fleet's knowledge in the fleet's plugin.
   let [p, c] = [uuid(), uuid()]
   apply(appDb, [
     { eid: p, name: 'task', comp: { priority: 1 } },
