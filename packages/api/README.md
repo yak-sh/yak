@@ -6,7 +6,11 @@ plain request handler that runs in any JavaScript environment.
 Three routes, no framework, no environment: a `Request` goes in and a `Response`
 comes out. Point it at a graph and you have a server.
 
-- **`POST /apply`** — a batch of bundles in, the batch as applied out.
+- **`POST /apply`** — a batch of bundles in, the batch as applied out. Add
+  `?check=1` to rehearse it: every phase runs and the transaction rolls back, so
+  nothing is written and no effect observes it, while a refusal is still a
+  refusal. That is how one batch is spread over several graphs — ask them all,
+  then commit.
 - **`GET /query?q=…`** (or `POST /query`) — a query line in, bundles out.
 - **`/ws`** — subscriptions: a saved query whose answer is pushed again whenever
   a committed batch changes it.

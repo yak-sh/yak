@@ -27,6 +27,10 @@
 // `apply()` returns the batch AS APPLIED plus everything it synthesized —
 // casualties, births with their number, stamps — so a client that applies the
 // return to its cache lands exactly where the graph is.
+//
+// `check: true` runs that whole list and then refuses the commit, so a caller
+// spreading one batch over several graphs can ask them all "would you take
+// this?" before any of them keeps it.
 
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Change, Eid } from './bundle.ts'
@@ -48,6 +52,24 @@ export type ApplyOpts = {
   trusted?: boolean
   /** the instant every stamp in this batch reads, ISO-8601 (default: now) */
   now?: string
+  /** a DRY RUN: every phase runs and the transaction is rolled back instead of
+   * committed, so nothing is written and no effect observes it. The answer is
+   * the batch as the phases made it — a refusal still throws, which is the
+   * whole point of asking. */
+  check?: boolean
+}
+
+// A check's way out of a transaction that has done all its work. The phases
+// ran; the only thing left is the commit, which is exactly what a check must
+// not do — so the body throws, the adapter rolls back, and this is caught
+// here. It never reaches an audit hook: nothing was refused.
+class Checked extends Error {
+  bundles: Bundle[]
+  constructor(bundles: Bundle[]) {
+    super('checked')
+    this.name = 'Checked'
+    this.bundles = bundles
+  }
 }
 
 /** How a graph is built: what it knows, where it keeps it, what extends it. */
@@ -182,26 +204,36 @@ export let graph = (opts: Options): Graph => {
 
     let inside = (bundles: Bundle[]) => {
       let run = (tx: Tx) =>
-        each(
-          [
-            phase('precondition', tx, (b) => guard(b, tx, vocab)),
-            phase('mutate', tx, (b) => mutate(b, tx, st)),
-            phase('cascade', tx, (b) => cascade(b, tx, vocab, st)),
-            phase('stamp', tx, (b) => stamp(b, tx, vocab, st, now)),
-            phase('journal', tx),
-            phase('commit', tx),
-          ],
-          bundles,
-          (b, step) => step(b),
+        then(
+          each(
+            [
+              phase('precondition', tx, (b) => guard(b, tx, vocab)),
+              phase('mutate', tx, (b) => mutate(b, tx, st)),
+              phase('cascade', tx, (b) => cascade(b, tx, vocab, st)),
+              phase('stamp', tx, (b) => stamp(b, tx, vocab, st, now)),
+              phase('journal', tx),
+              phase('commit', tx),
+            ],
+            bundles,
+            (b, step) => step(b),
+          ),
+          (b) => {
+            if (o.check) throw new Checked(b)
+            return b
+          },
         )
+      // A rolled-back check is not a refusal: it answers with what the phases
+      // made, and skips the effects, which observe committed data only.
+      let fell = (e: unknown) =>
+        e instanceof Checked ? e.bundles : audited(bundles, e)
       let committed: Bundle[] | Promise<Bundle[]>
       try {
         committed = storage.tx(run)
       } catch (e) {
-        return audited(bundles, e)
+        return fell(e)
       }
       return isPromise(committed)
-        ? committed.then(effects, (e) => audited(bundles, e))
+        ? committed.then(effects, fell)
         : effects(committed)
     }
 

@@ -101,6 +101,24 @@ Deno.test('a moved precondition answers 409, naming what it holds now', async ()
   })
 })
 
+Deno.test('/apply?check=1 answers the batch it would take, and keeps none of it', async () => {
+  let handler = shop()
+  let asked = await handler(post('/apply?check=1', [
+    { entity: { eid: 'b1' }, doc: { title: 'Spring' }, book: { price: 12 } },
+  ]))
+  assertEquals(asked.status, 200)
+  let applied: Bundle[] = await body(asked)
+  assertEquals(comp(applied[0], 'book'), { price: 12 })
+  assertEquals(await body(await handler(ask('.price<20'))), [])
+  // And a batch it would refuse is refused at the same status a commit is.
+  let no = await handler(post('/apply?check=1', [{
+    entity: { eid: 'b1' },
+    book: { price: 20 },
+    $was: { book: { price: token(99) } },
+  }]))
+  assertEquals(no.status, 409)
+})
+
 Deno.test('a body that is not a batch is refused', async () => {
   let r = await shop()(post('/apply', { entity: { eid: 'b1' } }))
   assertEquals(r.status, 400)

@@ -262,6 +262,41 @@ Deno.test('effects run after the commit and a failing one is telemetry', () => {
   assert(out.length > 0) // and the batch was not broken by the broken effect
 })
 
+Deno.test('a check runs every phase, writes nothing, and refuses what it must', () => {
+  let ran: string[] = []
+  let one = graph({
+    storage: memory(),
+    vocab: books,
+    plugins: [{
+      name: 'watcher',
+      hooks: {
+        commit: (b) => (ran.push('commit'), b),
+        effect: (b) => (ran.push('effect'), b),
+      },
+    }],
+  })
+  let out = sync(one.apply(
+    [{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }],
+    { check: true },
+  ))
+  // Every phase inside the transaction ran, and the answer is stamped —
+  assertEquals(ran, ['commit'])
+  assert(at(out, 'b1', 'created').at)
+  // — but nothing was committed, and no effect saw it.
+  assertEquals(one.storage.tx((tx) => tx.get(['b1'])), [])
+  // A batch that would be refused is refused just as loudly — which is the
+  // whole reason to ask.
+  assertThrows(
+    () =>
+      sync(one.apply([{
+        entity: { eid: 'b1' },
+        doc: { title: 'Dune' },
+        $was: { doc: { title: token('Emma') } },
+      }], { check: true })),
+    Stale,
+  )
+})
+
 Deno.test('an audit hook runs after the rollback, with the refusal', () => {
   let audited: unknown[] = []
   let one = g([{
@@ -280,6 +315,16 @@ Deno.test('an audit hook runs after the rollback, with the refusal', () => {
     sync(one.apply([{ entity: { eid: 'b1' }, doc: { title: 'x' } }]))
   )
   assertEquals((audited[0] as Error).message, 'refused')
+})
+
+Deno.test('a check over an asynchronous storage rolls back the same way', async () => {
+  let one = graph({ storage: slow(memory()), vocab: books })
+  let out = await one.apply(
+    [{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }],
+    { check: true },
+  )
+  assertEquals(out[0].entity.eid, 'b1')
+  assertEquals(await one.storage.tx((tx) => tx.get(['b1'])), [])
 })
 
 Deno.test('the same batches run over an asynchronous storage', async () => {

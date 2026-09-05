@@ -12,6 +12,11 @@ import { json } from './refuse.ts'
  * `POST /apply` — a batch of bundles in, the batch as applied out. The body is
  * a JSON array (a `Change`); the response is the array `apply()` returned,
  * casualties and stamps included.
+ *
+ * `?check=1` asks only whether the batch would be taken: every phase runs and
+ * the transaction is rolled back, so nothing is written and no effect observes
+ * it, while a refusal is still a refusal. That is what lets one batch be
+ * spread over several graphs — ask them all, then commit.
  */
 export let write = async (
   graph: Graph,
@@ -22,7 +27,8 @@ export let write = async (
   if (!Array.isArray(body)) {
     throw new Refused('/apply takes a JSON array of bundles')
   }
-  return json(await graph.apply(signed(body, who)))
+  let check = new URL(request.url).searchParams.has('check')
+  return json(await graph.apply(signed(body, who), { check }))
 }
 
 // The query line a request names: `?q=` on a GET, and on a POST either a bare

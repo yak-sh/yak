@@ -6,6 +6,9 @@
  * package answers the three routes a client needs and nothing more:
  *
  * - **`POST /apply`** — a batch of bundles in, the batch as applied out;
+ *   `?check=1` rehearses it instead, rolling back at the commit so a caller
+ *   spreading one batch over several graphs can ask before any of them keeps
+ *   it;
  * - **`GET /query?q=…`** (or `POST /query`) — a query line in, bundles out;
  * - **`/ws`** — subscriptions: a saved query whose answer is pushed again
  *   whenever a committed batch changes it.
