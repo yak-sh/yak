@@ -35,7 +35,7 @@ import {
   storeName,
 } from './directory.ts'
 import * as dirPart from './directory.ts'
-import { granted, ran } from './dispatch.ts'
+import { ahead, bearing, granted, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { type Size, sizeOf } from './image.ts'
 import { asking, listed, type Row } from './listing.ts'
@@ -43,6 +43,7 @@ import { KERNEL, metaOf, minted } from './meta.ts'
 import { batched, lined, lowered } from './wire.ts'
 import { nothingHere, spaceIndex } from './pages.ts'
 import { hostOf, MOUNT, PLATFORM, route } from './route.ts'
+import { covers, PLATFORM_PATHS } from './router.ts'
 import { titling, vouched, type Who, whoIs } from './session.ts'
 import { type Reach, split, written } from './reach.ts'
 import type { Bundle } from '@yaks/graph'
@@ -892,6 +893,33 @@ let index = async (
   })
 }
 
+// Rung 1½ (D-34197): the home app is the space's ROUTER, and `router.first`
+// names the paths its worker sees BEFORE the app whose slug owns them. Null is
+// "the order is unchanged" — no home app, no glob over this path, or a router
+// that passed, threw or hung (dispatch.ts `ahead`, which fails open).
+//
+// The kernel's own paths are never routed, whatever the column holds
+// (router.ts PLATFORM_PATHS): `app_set` refuses a glob that names one, and
+// this is that same rule again at the door, since the graph tier writes the
+// column too and a `/garden/*` an owner wrote in good faith already covers
+// `/garden/api/query`.
+let firstly = async (
+  env: Env,
+  dir: ReturnType<typeof directory>,
+  space: Space,
+  req: Request,
+  who: Who,
+  c: Clock,
+) => {
+  let path = new URL(req.url).pathname
+  if (PLATFORM_PATHS.some((p) => covers(p, path))) return null
+  // No home app is no read past this: `dir.home` answers null off the column
+  // the space already carries, without asking the store.
+  let home = await c.time('home', () => dir.home(space))
+  if (!home || !home.first.some((g) => covers(g, path))) return null
+  return await c.time('first', () => ahead(env, space, home, req, who))
+}
+
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let c = clock()
   return timed(await served(req, env, c), c)
@@ -929,6 +957,12 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
 // and answers 404 to PASS (dispatch.ts `ran`), leaving the rest to its files.
 // So rung 4 is what is left when neither half of the home app has anything at
 // `/`, and rung 5's 404 is what is left when there is no home app at all.
+//
+// And ONE rung is opted into, between 1 and 2: the paths the home app named
+// in `router.first` are its worker's before they are the owning app's
+// (`firstly` below). Empty for almost every space, and it can only ever move
+// a path from the app that owns it to the home app — never off the platform's
+// own (rung 1), and never onto a space that asked for nothing.
 let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   let r = route(hostOf(req), new URL(req.url).pathname)
   if (r.space == null) return nothingHere()
@@ -1001,6 +1035,19 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
       'who',
       () => whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p)),
     )
+  // Rung 1½: the home app's router, where it named this path. Ahead of the app
+  // whose slug owns it — and ahead of that app's own access rule, since what
+  // answers is the HOME app's page and not this one's. Not for the home app's
+  // own addresses, where its worker is already what rungs 3 and 5 ask, and
+  // never for a request an app's worker made: the router's own onward call
+  // carries the grant it was handed, and without that guard it would arrive
+  // back at the path it just intercepted (dispatch.ts `bearing`).
+  if (!front && !bearing(req)) {
+    let early = await firstly(env, dir, space, req, who, c)
+    // The answer is the home app's, so it reports as the home app: at the
+    // bare hostname, which is where the home app is mounted.
+    if (early) return reporting(early, req, '/')
+  }
   // A private app hides its PAGE too, not only its data (C-32607 item 5):
   // `access: private` says only its members can see it, and its files are
   // part of what they see. A stranger is sent to sign in and handed back to

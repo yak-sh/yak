@@ -128,6 +128,15 @@ export let granting = (secret: string, store: string, who: Who) =>
     secret,
   )
 
+// Whether this request is an app's worker coming back through the service
+// binding at all — ANY app's, whoever the grant names and whether or not it
+// still opens. It is the loop guard on the home app's router (apps.ts
+// `served`, D-34197): the router's own onward request carries the grant it was
+// handed, so this is what keeps a path it just intercepted from arriving back
+// at it. `granted` below is the other question — who this grant says the
+// caller is — and only its own app can ask that one.
+export let bearing = (req: Request) => req.headers.has(GRANT)
+
 // Who this request is, when it is an app's own worker coming back through
 // its service binding — and null for anything else: no header, a forged or
 // expired one, or one minted for a store that is not this app's. Null means
@@ -204,10 +213,6 @@ let broke = (
     }, { env, space, app })
   )
 
-// The app's own worker, or null to serve the files instead — which is what
-// no worker means, and what a worker's own 404 means, so an app can answer
-// its routes and leave its pages to the platform.
-//
 // THE SEAM (T-33234). `worker.fetch` below is the one line in the whole
 // kernel where the code running is the app's and not ours, so it is the one
 // place a throw may be filed as the APP's break. Everything on either side of
@@ -220,7 +225,12 @@ let broke = (
 // Store object on a platform deploy wrote "your app broke" into a customer's
 // store, on their version, against their metered writes, to every member of
 // their space. The catch-all cannot tell whose code it was; here we know.
-export let ran = async (
+//
+// Null is "there is no script": no dispatch namespace (local dev), or an app
+// that never deployed a worker. A throw is the app's code falling over, and
+// what that MEANS is the callers' — it ends the request for the app that owns
+// the path (`ran`) and is skipped for the home app's router (`ahead`).
+let called = async (
   env: Env,
   space: Space,
   app: App,
@@ -237,34 +247,50 @@ export let ran = async (
     if (missing(e)) return null
     throw e
   }
-  let res
   try {
-    res = await worker.fetch(
+    return await worker.fetch(
       await handed(req, app, store, who, env.SESSION_SECRET),
     )
   } catch (e) {
     if (missing(e)) return null
-    // The app's code fell over. A no it relayed by THROWING what a door
-    // answered it is not a break, the same rule the answered status reads
-    // below (unseen.ts `refusal`); anything else is written here and the
-    // visitor gets the soft page, which is what the catch-all gave them
-    // before and all it ever gave them.
-    let said = e instanceof Error ? e.message : String(e)
-    if (!refusal(said)) {
-      await broke(env, space, app, req, {
-        message: said,
-        stack: e instanceof Error ? e.stack ?? '' : '',
-      })
-    }
-    return oops()
+    throw e
   }
+}
+
+// The app's code fell over, written where its agent reads it. A no it relayed
+// by THROWING what a door answered it is not a break, the same rule the
+// answered status reads (unseen.ts `refusal`).
+let threw = async (
+  env: Env,
+  space: Space,
+  app: App,
+  req: Request,
+  e: unknown,
+) => {
+  let said = e instanceof Error ? e.message : String(e)
+  if (refusal(said)) return
+  await broke(env, space, app, req, {
+    message: said,
+    stack: e instanceof Error ? e.stack ?? '' : '',
+  })
+}
+
+// What the worker's answer MEANS, whichever caller asked for it: a 404 is the
+// PASS verdict — null, so the files answer behind it — a 4xx is the app's own
+// deliberate no and files nothing (unseen.ts `refusal`), and a 5xx is not a
+// throw and would otherwise go unseen, so it is written here.
+let verdict = async (
+  env: Env,
+  space: Space,
+  app: App,
+  req: Request,
+  res: Response | null,
+) => {
+  if (!res) return null
   if (res.status == 404) {
     await res.body?.cancel()
     return null
   }
-  // A 4xx the worker answered is its own deliberate no and files nothing —
-  // the same rule the report door reads (unseen.ts `refusal`). A 5xx is not
-  // a throw and would otherwise go unseen, so it is written here.
   if (failed(res.status)) {
     await broke(env, space, app, req, {
       message: `the app's worker answered ${res.status}`,
@@ -272,6 +298,80 @@ export let ran = async (
     })
   }
   return res
+}
+
+// The app's own worker, or null to serve the files instead — which is what
+// no worker means, and what a worker's own 404 means, so an app can answer
+// its routes and leave its pages to the platform. A throw ends the request:
+// this app is the one that owes an answer, so the visitor gets the soft page,
+// which is what the catch-all gave them before and all it ever gave them.
+export let ran = async (
+  env: Env,
+  space: Space,
+  app: App,
+  req: Request,
+  who: Who,
+): Promise<Response | null> => {
+  let res
+  try {
+    res = await called(env, space, app, req, who)
+  } catch (e) {
+    await threw(env, space, app, req, e)
+    return oops()
+  }
+  return verdict(env, space, app, req, res)
+}
+
+// How long the home app's router has to answer before the kernel routes
+// without it. It sits in FRONT of another app's page, so this is time the
+// visitor waits before the page they asked for even begins: long enough for a
+// store read and an outside call, short enough that a stuck router costs the
+// page a beat rather than the request. The grant it is handed outlives it by
+// far (LIFE above), so nothing here is bounded by that.
+let PATIENCE = 1_000
+
+let LATE = `the router did not answer in ${PATIENCE}ms`
+
+// The work, or that sentence, whichever comes first. Both halves of the race
+// are handled, so a worker that answers after we stopped waiting is not an
+// unhandled rejection.
+let patient = <T>(work: Promise<T>) => {
+  let timer: ReturnType<typeof setTimeout>
+  return Promise.race([
+    work.finally(() => clearTimeout(timer)),
+    new Promise<never>((_, no) => {
+      timer = setTimeout(() => no(new Error(LATE)), PATIENCE)
+    }),
+  ])
+}
+
+/**
+ * The HOME app's worker, run AHEAD of the app whose slug owns the path
+ * (`router.first`, router.ts, D-34197). The same call `ran` makes, so the
+ * router acts as the CALLER — `handed` seals the visitor's own grant on the
+ * home app's store, and there is no other store it may name — and its 404 is
+ * the same pass verdict every app worker already speaks.
+ *
+ * What differs is the other rule: FAIL OPEN. A throw or a hang is written on
+ * the home app and answered null, so the owning app answers as if the router
+ * were not there. A broken router costs a space its customizations, never its
+ * pages.
+ */
+export let ahead = async (
+  env: Env,
+  space: Space,
+  home: App,
+  req: Request,
+  who: Who,
+): Promise<Response | null> => {
+  let res
+  try {
+    res = await patient(called(env, space, home, req, who))
+  } catch (e) {
+    await threw(env, space, home, req, e)
+    return null
+  }
+  return verdict(env, space, home, req, res)
 }
 
 // ── The upload side: what app_deploy does with a worker.js ─────────────────

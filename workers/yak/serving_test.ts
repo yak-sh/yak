@@ -19,9 +19,10 @@
 // path — an app, the home app, the platform's own index — is the same door
 // asked the same way, and the stand-in is where a home app with a worker can
 // be stood up at all (apps.ts `served`, D-34197).
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/harness.ts'
+import { slow } from '../../src/testing.ts'
 import { sign } from '../../src/token.ts'
 import * as apps from './apps.ts'
 import { directory, storeName } from './directory.ts'
@@ -452,8 +453,12 @@ Deno.test('DELETE / empties the app store and bears it again', async () => {
 
 // The space, `cookbook` as its home app, `garden` beside it, and a home worker
 // where one is given: an app answering `.get` for no other script is an app
-// with no worker, which is the message the runtime knows one by.
-let router = async (worker?: (req: Request) => Response) => {
+// with no worker, which is the message the runtime knows one by. `first` is
+// the home app's `router` component, written the way `app_set` writes it.
+let router = async (
+  worker?: (req: Request) => Response | Promise<Response>,
+  first?: string[],
+) => {
   let { env, files } = platform()
   let { dir, space, app } = await seeded(env)
   let by = { 'x-yak-person': ADA, 'x-yak-role': 'owner' }
@@ -466,6 +471,12 @@ let router = async (worker?: (req: Request) => Response) => {
         alias: { slug: 'ada/garden' },
       },
       { entity: { eid: space.eid }, space: { home: app.eid } },
+      ...(first
+        ? [{
+          entity: { eid: app.eid },
+          router: { first: JSON.stringify(first) },
+        }]
+        : []),
     ],
   }, by)
   let script = scriptName(storeName(space, app))
@@ -479,6 +490,9 @@ let router = async (worker?: (req: Request) => Response) => {
   }
   return {
     env,
+    dir,
+    space,
+    app,
     at: (path: string) => apps.fetch(visit(path), env),
     put: (key: string, body: string) =>
       files.held.set(key, new TextEncoder().encode(body)),
@@ -566,4 +580,109 @@ Deno.test('rung 5: everything else is the home worker, else 404', async () => {
   // No worker and no file is the 404 at the end of the order.
   let plain = await router()
   assertEquals((await plain.at('/nothing.txt')).status, 404)
+})
+
+// ---- rung 1½: `router.first` (T-34201) --------------------------------------
+
+// The home app has named `/garden/*`, so the garden app's own paths are the
+// home worker's first. Garden's page is what "the router was skipped" looks
+// like: whatever else happened, the app that owns the path answered.
+let ADA_OWNS = { 'x-yak-person': ADA, 'x-yak-role': 'owner' }
+let OWNER = { person: ADA, role: 'owner' as const }
+
+let fronted = async (
+  worker: (req: Request) => Response | Promise<Response>,
+) => {
+  let k = await router(worker, ['/garden/*'])
+  k.put('ada/garden/index.html', '<!doctype html><body>garden</body>')
+  return k
+}
+
+Deno.test('rung 1½: a `first` glob hands the path to the home worker', async () => {
+  let seen: string[] = []
+  let k = await fronted((req) => {
+    seen.push(new URL(req.url).pathname)
+    return new Response('the router')
+  })
+  assertEquals(await (await k.at('/garden/print')).text(), 'the router')
+  // The path as the visitor asked it, whole — not the `/print` the garden
+  // app's own worker would have been handed.
+  assertEquals(seen, ['/garden/print'])
+})
+
+Deno.test("rung 1½: the router's 404 passes, and the app answers", async () => {
+  let k = await fronted(() => new Response('no', { status: 404 }))
+  assertStringIncludes(await (await k.at('/garden/print')).text(), 'garden')
+})
+
+Deno.test('rung 1½: a router that throws is skipped, and written on the home app', async () => {
+  let k = await fronted(() => {
+    throw new Error('the router fell over')
+  })
+  assertStringIncludes(await (await k.at('/garden/print')).text(), 'garden')
+  // The break is the HOME app's — its code fell over — and it names the path
+  // it fell over on. The app that answered wears nothing.
+  let open = await openIn(k.env, k.space, k.app, OWNER, true)
+  assertEquals(open.length, 1)
+  assertEquals(open[0].exception?.message, 'the router fell over')
+  assertStringIncludes(open[0].exception?.request ?? '', '/garden/print')
+  let garden = (await k.dir.app(k.space, 'garden'))!
+  assertEquals((await openIn(k.env, k.space, garden, OWNER, true)).length, 0)
+})
+
+slow(
+  'rung 1½: a router that hangs is skipped when its patience runs out',
+  async () => {
+    let k = await fronted(() => new Promise<Response>(() => {}))
+    assertStringIncludes(await (await k.at('/garden/print')).text(), 'garden')
+    let open = await openIn(k.env, k.space, k.app, OWNER, true)
+    assertEquals(open.length, 1)
+    assertStringIncludes(open[0].exception?.message ?? '', 'did not answer')
+  },
+)
+
+Deno.test('rung 1½: a glob over a store door never takes it', async () => {
+  let k = await fronted(() => new Response('the router'))
+  // `/garden/*` covers `/garden/api/…` by its own shape, and the store doors
+  // are the kernel's however the column is written (router.ts PLATFORM_PATHS).
+  assertEquals(
+    (await (await k.at('/garden/api/graph')).json()).db,
+    'do:ada/garden',
+  )
+})
+
+Deno.test('rung 1½: the router acts as the caller, not as the app it fronts', async () => {
+  let env: Env
+  let k = await fronted(async () => {
+    let asked = await apps.fetch(visit('/garden/api/query?.doc!'), env)
+    return new Response(String(asked.status))
+  })
+  env = k.env
+  // Garden shuts its door: only its members see it at all.
+  let garden = (await k.dir.app(k.space, 'garden'))!
+  await k.dir.apply({
+    entities: [{ entity: { eid: garden.eid }, app: { access: 'private' } }],
+  }, ADA_OWNS)
+  // The visitor is nobody, so the router is nobody: what it reads at another
+  // app's store is the refusal the visitor would have read.
+  assertEquals(await (await k.at('/garden/print')).text(), '401')
+})
+
+Deno.test("rung 1½: the router's own onward request is not intercepted again", async () => {
+  let env: Env
+  let ran = 0
+  let k = await fronted(async (req) => {
+    ran++
+    // The grant the kernel handed it, forwarded — which is what the router's
+    // own `env.STORE`/`env.FILES` calls carry (dispatch.ts SHIM). A request
+    // wearing one lands on the app that owns the path, or this is a loop.
+    let asked = await apps.fetch(
+      new Request(visit('/garden/print'), { headers: req.headers }),
+      env,
+    )
+    return new Response(`behind me: ${await asked.text()}`)
+  })
+  env = k.env
+  assertStringIncludes(await (await k.at('/garden/print')).text(), 'garden')
+  assertEquals(ran, 1)
 })
