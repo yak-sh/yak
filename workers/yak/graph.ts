@@ -389,8 +389,10 @@ export class Store {
         }
         return then(tx.patch(out), () => bundles)
       },
-      // The batch was refused and its transaction is gone, taking the rows
-      // above with it — so what this object believes it has written down goes
+      // The transaction is gone, taking the rows above with it — because the
+      // batch was refused, or because it was only ever a rehearsal
+      // (@yaks/graph `Checked`, the `?check=1` half of a write that spans two
+      // stores). Either way what this object believes it has written down goes
       // too, or the next batch by that person would skip a row that is not
       // there.
       audit: (bundles) => {

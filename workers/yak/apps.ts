@@ -51,7 +51,7 @@ import {
   writes,
 } from './session.ts'
 import { type Reach, split, written } from './reach.ts'
-import type { EntityLiteral } from '../../src/mutation.ts'
+import type { Bundle } from '@yaks/graph'
 import { type Door, storeOf } from './store.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { appBreaks, noted, refusal, serving } from './unseen.ts'
@@ -546,11 +546,10 @@ let gave = async (
 let named = (env: Env, who: Who) =>
   titling(directory(bound(env.DIRECTORY, dirPart.fetch, env)), who.person)
 
-// What a write answers, either way it was routed.
-type Wrote = {
-  changes?: { eid: string; name: string; comp: unknown }[]
-  aliases?: Record<string, string>
-}
+// What a write answers, either way it was routed: the entities it touched, and
+// the aliases the batch minted for the `$alias` names it was written with. One
+// shape for both paths, so a caller never has to know which one ran.
+type Wrote = { entities: string[]; aliases: Record<string, string> }
 
 // The words this app USES but does not home (T-32728), as its own store last
 // accepted them: the word, and the app in this space whose store holds its
@@ -627,17 +626,19 @@ export let acting = (env: Env, space: Space, app: App, who: Who) => {
       // borrowed word to its home, everything else here. One logical batch —
       // every part is admitted before any of them commits.
       if (homes.length) {
-        let batch = (mutation as { entities?: EntityLiteral[] }).entities
+        let batch = (mutation as { entities?: Bundle[] }).entities
         if (batch) {
-          return JSON.parse(
-            (await written(
-              env,
-              [mine, ...homes],
-              mine,
-              batch,
-              await named(env, who),
-            )).body,
-          ) as Wrote
+          let out = await written(
+            env,
+            [mine, ...homes],
+            mine,
+            batch,
+            await named(env, who),
+          )
+          return {
+            entities: [...new Set(out.bundles.map((b) => b.entity.eid))],
+            aliases: out.aliases,
+          }
         }
       }
       let r = await store('/apply', {
@@ -646,7 +647,14 @@ export let acting = (env: Env, space: Space, app: App, who: Who) => {
       }, { ...vouched(who), ...await named(env, who) })
       let body = await r.text()
       if (!r.ok) throw new Error(body)
-      return JSON.parse(body) as Wrote
+      let said = JSON.parse(body) as {
+        changes?: { eid: string }[]
+        aliases?: Record<string, string>
+      }
+      return {
+        entities: [...new Set((said.changes ?? []).map((c) => c.eid))],
+        aliases: said.aliases ?? {},
+      }
     },
     query: async (line: string) => {
       if (!reads(who, app.access)) no('not_a_reader')

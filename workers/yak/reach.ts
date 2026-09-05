@@ -6,13 +6,28 @@
 // the fan-out, the split a mixed filter needs, and the merge — and tools.ts
 // owns which stores are in reach.
 //
-// The split is HERE and not in src/query.ts: a store refuses a word it never
+// The split is HERE and not in a store: a store refuses a word it never
 // planted ("unknown prop: .book"), so `.recipe!&.book!` cannot be asked of
 // either store whole. The line is cut on its own `&` seams — one part per
 // component named — each part asked of every store, and the eids in common
 // are the answer. The grammar itself is untouched: every part is an ordinary
 // filter line, and a store that cannot speak one is simply silent about it.
-import { asking, listed, type Row } from './listing.ts'
+//
+// Everything that crosses this seam is a BUNDLE (@yaks/graph): a store answers
+// `GET /query?q=…` with bundles, takes a batch of bundles at `POST /apply`,
+// and answers that with the batch as applied. The merge is therefore what
+// bundles are for — one entity, the components it wears, gathered from
+// wherever they are kept. That is the Store on the packages (graph.ts), which
+// index.ts binds once T-33807 takes the older object away; the wire here is
+// that one's, and only that one's.
+//
+// Two things this module does that no single store can. An ORDER over a
+// spanning answer is settled HERE, over the merged bundles, with @yaks/match:
+// each store can only order what it holds, and two stores' orders say nothing
+// about each other. And the space's VOCABULARY is the union of what its apps
+// declare — the language a merged bundle is written in, and the one @yaks/match
+// reads an order out of.
+import { asking, listed, PLATFORM, type Row } from './listing.ts'
 import { EVERY } from './query.ts'
 import {
   type App,
@@ -24,10 +39,26 @@ import {
 import type { Env } from './env.ts'
 import { vouched, type Who, writes } from './session.ts'
 import { storeOf } from './store.ts'
-import type { EntityLiteral } from '../../src/mutation.ts'
-import { comps, kindOrder } from '../../src/types.ts'
-import type { Vocab } from '../../src/store/vocab.ts'
-import type { Change } from '../../src/types.ts'
+import { appDoc, appKeywords, coreDocs } from './vocab.ts'
+import { type Bundle, dead, type Entity } from '@yaks/graph'
+import { matcher } from '@yaks/match'
+import {
+  loadVocab,
+  type PropSchema,
+  type Vocab,
+  type VocabDoc,
+} from '@yaks/vocab'
+
+// The words the PLATFORM says in every store — core, member, edge, the twelve
+// relations. A word outside this list was declared by an app, which is what
+// makes it the most specific thing said about a row.
+let CORE: Vocab = loadVocab(coreDocs, appKeywords)
+
+// The platform's own rows, screened out of the QUESTION (listing.ts `asking`)
+// — but only the ones a store actually plants. A store refuses a filter naming
+// a component it has no table for, so screening for a word the platform does
+// not declare would refuse the whole read instead of narrowing it.
+let SCREEN = PLATFORM.filter((k) => CORE.all.includes(k))
 
 // One store in reach: the app, the space it is in, and who the caller is
 // there. `at` is what a bundle names as the component's home.
@@ -56,13 +87,19 @@ export let at = (r: Reach) => `${r.space.slug}/${r.app.slug}`
 // its reads are its own (identity.ts).
 let doorOf = (env: Env, r: Reach, said?: string) => async (line: string) => {
   let asked = line.replace(/^[?&]+/, '')
-  let mine = at(r) == META_STORE ? asked : asking(asked)
+  let mine = at(r) == META_STORE ? asked : asking(asked, SCREEN)
   let door = appStore(env.STORE, r.space, r.app)
-  let res = await door(`/query?${mine}`, {}, vouched(r.who))
+  let res = await door(
+    `/query?q=${encodeURIComponent(mine)}`,
+    {},
+    vouched(r.who),
+  )
   let body = await res.text()
   if (!res.ok) throw new Error(body)
-  let rows = JSON.parse(body)
-  return Array.isArray(rows) ? listed(rows as Row[], said ?? asked) : rows
+  let bundles = JSON.parse(body)
+  return Array.isArray(bundles)
+    ? listed(bundles as Row[], said ?? asked) as Bundle[]
+    : bundles
 }
 
 // The words a dotted segment can open with that name no component: the
@@ -95,6 +132,38 @@ let limitOf = (line: string) =>
   Number(segsOf(line).find((s) => /^\.?limit=/.test(s))?.split('=')[1]) ||
   undefined
 
+// The directives that settle a SEQUENCE rather than a set. An `.order=` is
+// what moves that decision past the merge: the column it names may be a word
+// only the other store speaks, so neither store can be asked to sort by it —
+// and neither may cut its answer short, or the rows the order wanted would be
+// gone before the merge saw them. So when the caller asks for an order, these
+// leave the per-store lines entirely and @yaks/match settles them once, over
+// the merged bundles (`sorted`).
+let ORDERS = ['order', 'limit', 'after']
+
+let orderWord = (seg: string) => {
+  let w = /^\.([a-z0-9_]+)=/i.exec(seg)?.[1] ?? ''
+  return ORDERS.includes(w) ? w : ''
+}
+
+let window = (line: string) => {
+  let segs = segsOf(line).filter(orderWord)
+  return { segs, order: segs.some((s) => orderWord(s) == 'order') }
+}
+
+// The order and its window, over the merged bundles, in the space's own
+// vocabulary. @yaks/match evaluates the same query grammar a store compiles to
+// SQL, so a line ordered here and a line ordered in one store agree. A
+// directive this vocabulary cannot answer exactly throws (@yaks/match
+// `Unsupported`) — a read that quietly answered in some other order would be
+// worse than one that says so.
+let sorted = (
+  bundles: Bundle[],
+  orders: { segs: string[]; order: boolean },
+  vocab: Vocab,
+): Bundle[] =>
+  orders.order ? matcher(orders.segs.join('&'), vocab)(bundles) : bundles
+
 // A filter line cut into parts: the segments that name each component, and
 // the ones that ride with every part. A part whose every segment is a REQUEST
 // (`.loan?`) narrows nothing — it asks for the component, so it is fetched
@@ -115,29 +184,29 @@ export let split = (line: string) => {
   return { parts, global }
 }
 
-let eidOf = (r: Row) => String((r.entity as { eid?: string })?.eid ?? '')
+let eidOf = (b: Bundle) => b.entity?.eid ?? ''
 
 // One line, asked of every store at once. A store that refuses contributes
 // nothing — the word is another app's, or this one is not the caller's to
 // read — but a line EVERY store refuses is a line nobody can answer, and then
 // the first store's sentence is what the caller reads.
+type Heard = { at: string; bundles: Bundle[] }
+
 let asked = async (
   env: Env,
   reach: Reach[],
   line: string,
   said?: string,
-) => {
+): Promise<Heard[]> => {
   let tried = await Promise.all(reach.map(async (r) => {
     try {
-      return { at: at(r), rows: await doorOf(env, r, said)(line) }
+      let out = await doorOf(env, r, said)(line)
+      return { at: at(r), bundles: (Array.isArray(out) ? out : []) as Bundle[] }
     } catch (e) {
       return { at: at(r), why: e instanceof Error ? e.message : String(e) }
     }
   }))
-  let heard = tried.filter((t) => 'rows' in t) as {
-    at: string
-    rows: unknown
-  }[]
+  let heard = tried.filter((t) => 'bundles' in t) as Heard[]
   if (!heard.length && tried.length) {
     throw new Error((tried[0] as { why: string }).why)
   }
@@ -154,30 +223,30 @@ let asked = async (
 // `rank`), kept off the CANDIDATE rows: the composing read addresses eids and
 // carries no text pred, so the snippet and the score would be lost between
 // the two halves of one search.
-let ranksIn = (heard: { at: string; rows: unknown }[]) => {
+let ranksIn = (heard: Heard[]) => {
   let ranks = new Map<string, unknown>()
   for (let h of heard) {
-    for (let row of Array.isArray(h.rows) ? h.rows as Row[] : []) {
-      if (row.rank && !ranks.has(eidOf(row))) ranks.set(eidOf(row), row.rank)
+    for (let b of h.bundles) {
+      if (b.rank && !ranks.has(eidOf(b))) ranks.set(eidOf(b), b.rank)
     }
   }
   return ranks
 }
 
-let ordered = (heard: { at: string; rows: unknown }[]) => {
-  let lists = heard.map((h) => (Array.isArray(h.rows) ? h.rows as Row[] : []))
-  let ranked = lists.some((rows) => rows.some((r) => 'rank' in r))
+let ordered = (heard: Heard[]) => {
+  let lists = heard.map((h) => h.bundles)
+  let ranked = lists.some((bundles) => bundles.some((b) => 'rank' in b))
   let out: string[] = []
   if (ranked) {
     for (let i = 0; i < Math.max(0, ...lists.map((l) => l.length)); i++) {
-      for (let rows of lists) if (rows[i]) out.push(eidOf(rows[i]))
+      for (let bundles of lists) if (bundles[i]) out.push(eidOf(bundles[i]))
     }
-  } else for (let rows of lists) for (let r of rows) out.push(eidOf(r))
+  } else for (let bundles of lists) for (let b of bundles) out.push(eidOf(b))
   return [...new Set(out.filter(Boolean))]
 }
 
 // A store's own word is the most specific thing said about a row, wherever it
-// was said (types.ts kindOf, C-32574 item 7) — so an app's kind outranks a
+// was said (@yaks/vocab kindOf, C-32574 item 7) — so an app's kind outranks a
 // platform kind from another store, and the union decides the rest.
 //
 // Between two app words the filter itself decides, and `must` names the
@@ -190,23 +259,32 @@ let kindFrom = (
   comps: Record<string, unknown>,
   must: string[] = [],
 ) => {
-  let own = kinds.filter((k) => k && !kindOrder.includes(k))
+  let own = kinds.filter((k) => k && !CORE.kinds.includes(k))
   return own.find((k) => must.includes(k)) ?? own[0] ??
-    kindOrder.find((k) => k in comps) ?? 'entity'
+    CORE.kinds.find((k) => k in comps) ?? 'entity'
 }
+
+// One component's columns as its schema spells them: column → the type word,
+// which is all a disagreement is read out of.
+let colsOf = (schema: PropSchema): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(schema.properties ?? {}).map((
+      [col, p],
+    ) => [col, p.enum ? p.enum.join('|') : String(p.type ?? '?')]),
+  )
 
 // Where one name means two things: the same word declared in two SPACES with
 // a column they spell differently (T-32728). Within a space a word has one
 // home and the other apps use it, so a disagreement can only be across
 // spaces — and there the name is two words. Columns only ONE side declares
 // agree by construction: a vocabulary only ever grows.
-let apartIn = (vocabs: { r: Reach; vocab: Vocab }[]) => {
+let apartIn = (vocabs: { r: Reach; doc: VocabDoc }[]) => {
   let seen = new Map<string, Map<string, Record<string, string>>>()
-  for (let { r, vocab } of vocabs) {
-    for (let [name, cols] of Object.entries(vocab)) {
+  for (let { r, doc } of vocabs) {
+    for (let [name, schema] of Object.entries(doc.$defs ?? {})) {
       let by = seen.get(name) ?? new Map()
       seen.set(name, by)
-      by.set(r.space.slug, { ...by.get(r.space.slug), ...cols })
+      by.set(r.space.slug, { ...by.get(r.space.slug), ...colsOf(schema) })
     }
   }
   let apart = new Set<string>()
@@ -224,6 +302,9 @@ let apartIn = (vocabs: { r: Reach; vocab: Vocab }[]) => {
 }
 
 type Held = {
+  // The spine as the first store that answered spelled it: the eid is what the
+  // entity is called everywhere, the num is that store's own counter.
+  entity: Entity
   comps: Record<string, unknown>
   // The kind each store called the row, by the store that said it.
   kinds: Record<string, string>
@@ -252,17 +333,18 @@ let gathered = async (
   let held = new Map<string, Held>()
   if (!eids.length) return held
   for (
-    let { at, rows } of await asked(
+    let { at, bundles } of await asked(
       env,
       reach,
-      `id=${eids.join(',')}`,
+      `.eid=${eids.join(',')}`,
       said,
     )
   ) {
-    for (let row of Array.isArray(rows) ? rows as Row[] : []) {
+    for (let row of bundles) {
       let eid = eidOf(row)
       if (!eid) continue
-      let one = held.get(eid) ?? { comps: {}, kinds: {}, home: {}, split: {} }
+      let one = held.get(eid) ??
+        { entity: row.entity, comps: {}, kinds: {}, home: {}, split: {} }
       held.set(eid, one)
       for (let [name, comp] of Object.entries(row)) {
         if (name == 'kind') continue
@@ -306,7 +388,7 @@ export let composed = async (
   reach: Reach[],
   eids: string[],
   ask: Ask = {},
-) => {
+): Promise<Bundle[]> => {
   let { want = null, apart = new Set<string>(), said, must } = ask
   let held = await gathered(env, reach, eids, apart, said)
   let keeps = (name: string) => !want || want.has(name)
@@ -315,7 +397,7 @@ export let composed = async (
     extra: Record<string, unknown>,
     home: Record<string, string>,
     space?: string,
-  ) => {
+  ): Bundle => {
     let comps = Object.fromEntries([
       ...Object.entries(one.comps).filter(([n]) => n == 'entity' || keeps(n)),
       ...Object.entries(extra).filter(([n]) => keeps(n)),
@@ -331,6 +413,7 @@ export let composed = async (
         comps,
         must,
       ),
+      entity: one.entity,
       // Two spaces mean two things by this word, so the row says which one it
       // is answering for (T-32728).
       ...(space ? { space } : {}),
@@ -381,6 +464,12 @@ export let composed = async (
 // A window is the one place the split shows: `limit=` bounds each PART before
 // the parts meet, so a mixed filter's window is the newest of each side, then
 // the newest of what they had in common.
+//
+// Unless the caller asked for an ORDER, and then the sequence is nobody's to
+// cut until the bundles are one: `sorted` runs the order and the window over
+// the merged answer, in the space's own vocabulary (@yaks/match). A store can
+// only sort what it holds, and the column being sorted by may live in the
+// other store.
 export let read = async (
   env: Env,
   reach: Reach[],
@@ -395,12 +484,15 @@ export let read = async (
     )
   }
   let { parts, global } = split(line)
-  let plain = global.filter((s) => !AGGS.includes(firstWord(s)))
+  let orders = window(line)
+  let plain = global.filter((s) =>
+    !AGGS.includes(firstWord(s)) && !(orders.order && orderWord(s))
+  )
   // Which stores a word is asked of: the ones whose vocabulary DECLARES it
   // (T-32728 — a word has one home, and a second app declaring it uses that
   // home), and every store for a word nobody declares, which is the
   // platform's and spoken everywhere.
-  let { words, apart } = await spoken(env, reach)
+  let { words, apart, vocab } = await spoken(env, reach)
   let speak = (name: string) => words.get(name) ?? reach
   let need = [...parts].filter(([, part]) => !part.asks)
   let lines: [Reach[], string][] = need.length
@@ -422,7 +514,12 @@ export let read = async (
     first ?? [],
   )
   let limit = limitOf(line)
-  if (limit != null && eids.length > limit) eids = eids.slice(0, limit)
+  // The window is cut here only while the answer's sequence is already
+  // settled. An ORDER moves that decision past the merge, where the column it
+  // sorts by is in hand — so every candidate is gathered and `sorted` cuts.
+  if (!orders.order && limit != null && eids.length > limit) {
+    eids = eids.slice(0, limit)
+  }
   // `.count!` over a fan-out is how many ENTITIES the filter selects, which
   // is the size of the composed set — summing each store's own count would
   // count an entity that lives in two of them twice.
@@ -434,7 +531,7 @@ export let read = async (
   // prop, a reference path) asks for the whole bundle rather than guess.
   let named = [...parts.keys()]
   let want = named.length && !segsOf(line).includes(EVERY) &&
-      named.every((n) => words.has(n) || n in comps)
+      named.every((n) => words.has(n) || CORE.all.includes(n))
     ? new Set(named)
     : null
   let from = named.length ? [...new Set(named.flatMap(speak))] : reach
@@ -443,11 +540,15 @@ export let read = async (
     apart,
     said: line,
     must: need.map(([name]) => name),
-  }) as Row[]
-  return bundles.map((b) => {
-    let rank = ranks.get(eidOf(b))
-    return rank ? { ...b, rank } : b
   })
+  return sorted(
+    bundles.map((b) => {
+      let rank = ranks.get(eidOf(b))
+      return rank ? { ...b, rank } : b
+    }),
+    orders,
+    vocab,
+  )
 }
 
 // A write is routed the same way a read is composed (T-32700): a bundle is
@@ -457,51 +558,85 @@ export let read = async (
 // goes where the call, the entity's own history, or the rest of its bundle
 // says.
 
-// The words one store declares as its own (its vocab.json, T-32502, as the
-// store last accepted it). A component nobody declares is the platform's, and
-// every store speaks it.
-let vocabAt = async (env: Env, r: Reach): Promise<Vocab> => {
+// The words one store declares as its own — its `vocab.json` as the store last
+// accepted it (T-32502), read back through the same door the deploy wrote it
+// at and loaded as the document it means, either spelling (vocab.ts `appDoc`).
+// A component nobody declares is the platform's, and every store speaks it. A
+// store that cannot answer says nothing, which reads as an app with no words
+// of its own.
+let vocabAt = async (env: Env, r: Reach): Promise<VocabDoc> => {
   let res = await storeOf(env.STORE, storeName(r.space, r.app))('/vocab')
   if (!res.ok) {
     await res.body?.cancel()
     return {}
   }
-  return await res.json() as Vocab
+  try {
+    return appDoc(await res.json())
+  } catch {
+    return {}
+  }
+}
+
+// Every word in reach as ONE vocabulary: the platform's core plus each app's
+// own, so a merged bundle can be read in the language it is written in. A word
+// two apps declare is loaded ONCE, from its first declarer — a word has one
+// home (T-32728), and @yaks/vocab refuses a name declared twice. A word two
+// SPACES mean two things by is `apart`, and a merged bundle keeps those
+// unmerged rather than letting the union decide which one it is.
+let union = (docs: VocabDoc[]): Vocab => {
+  let seen = new Set<string>()
+  let defs: Record<string, PropSchema> = {}
+  for (let doc of docs) {
+    for (let [name, schema] of Object.entries(doc.$defs ?? {})) {
+      if (seen.has(name) || CORE.all.includes(name)) continue
+      seen.add(name)
+      defs[name] = schema
+    }
+  }
+  return loadVocab([...coreDocs, { title: 'space', $defs: defs }], appKeywords)
 }
 
 // Which stores declare which word — the routing table a write follows and the
 // reach set a read narrows by, in app order (oldest first), so the first
 // declarer is the word's home. `apart` is the other half of the same read:
-// the words two SPACES mean two things by, which a bundle must not merge.
+// the words two SPACES mean two things by, which a bundle must not merge. And
+// `vocab` is the union: the space's whole language, which is what orders an
+// answer no single store could have ordered.
 let spoken = async (env: Env, reach: Reach[]) => {
   let own = await Promise.all(
-    reach.map(async (r) => ({ r, vocab: await vocabAt(env, r) })),
+    reach.map(async (r) => ({ r, doc: await vocabAt(env, r) })),
   )
   let words = new Map<string, Reach[]>()
-  for (let { r, vocab } of own) {
-    for (let w of Object.keys(vocab)) {
+  for (let { r, doc } of own) {
+    for (let w of Object.keys(doc.$defs ?? {})) {
       words.set(w, [...(words.get(w) ?? []), r])
     }
   }
-  return { words, apart: apartIn(own) }
+  return {
+    words,
+    apart: apartIn(own),
+    vocab: union(own.map((o) => o.doc)),
+  }
 }
 
-// The keys of a bundle that name no component: its address, its
-// preconditions, and its death.
-let NOT_A_COMP = ['entity', 'was', 'tombstone']
+// The keys of a bundle that name no component: its address and its death.
+// Everything a `$` opens is the wire's own sugar (`$was`, `$delete`, `$actor`)
+// and never a column either.
+let NOT_A_COMP = ['entity', 'tombstone']
 
-// A bundle addressed by anything but an eid — a spine num, the older key/id
-// literal — cannot be split, because the halves would have to find each other
-// by an address only one store can resolve.
-let elsewhere = (e: EntityLiteral) =>
-  e.entity?.num != null || e.key != null || e.id != null
+let isComp = (k: string) => !NOT_A_COMP.includes(k) && !k.startsWith('$')
+
+// A bundle addressed by anything but an eid — a spine num — cannot be split,
+// because the halves would have to find each other by an address only one
+// store can resolve.
+let elsewhere = (e: Bundle) => e.entity?.num != null
 
 // Every `$alias` in the batch, minted HERE. A bundle that lands in two stores
 // must land under ONE eid, and two stores minting their own would make two
 // entities out of one — so the door mints, the answer maps the alias to what
 // it minted, and each store is handed an eid it has only to accept. A bundle
 // with no address at all is minted the same way, for the same reason.
-let minted = (batch: EntityLiteral[]) => {
+let minted = (batch: Bundle[]) => {
   let aliases: Record<string, string> = {}
   let eids = batch.map((e) => {
     let eid = e.entity?.eid
@@ -525,18 +660,20 @@ let minted = (batch: EntityLiteral[]) => {
       )
       : v
   let entities = batch.map((e, i) => {
-    let one = swap(e) as EntityLiteral
+    let one = swap(e) as Bundle
     return eids[i] ? { ...one, entity: { ...one.entity, eid: eids[i]! } } : one
   })
   return { entities, eids, aliases }
 }
 
-type Part = { r: Reach; entities: EntityLiteral[] }
+type Part = { r: Reach; entities: Bundle[] }
 
-// One store's /apply door, vouched. `check` asks only whether the batch would
-// be admitted (store.ts) — nothing is written and nothing is cast. The access
-// rule is the page's: an owner or editor writes, and so does anyone at all
-// when the app is open.
+// One store's /apply door, vouched. `check` REHEARSES the batch — every phase
+// runs and the transaction is rolled back (@yaks/graph `check`), so a refusal
+// is a refusal while nothing is written and no effect observes it. That is
+// what lets a batch spanning two stores be admitted everywhere before either
+// keeps it. The access rule is the page's: an owner or editor writes, and so
+// does anyone at all when the app is open.
 let sent = async (
   env: Env,
   part: Part,
@@ -550,14 +687,11 @@ let sent = async (
   let door = appStore(env.STORE, r.space, r.app)
   let res = await door(`/apply${check ? '?check=1' : ''}`, {
     method: 'POST',
-    body: JSON.stringify({ entities: part.entities }),
+    body: JSON.stringify(part.entities),
   }, { ...vouched(r.who), ...headers })
   let body = await res.text()
   if (!res.ok) throw new Error(`${at(r)}: ${body}`)
-  return JSON.parse(body) as {
-    changes?: Change[]
-    aliases?: Record<string, string>
-  }
+  return JSON.parse(body) as Bundle[]
 }
 
 // The batch, split by component into one part per store.
@@ -565,7 +699,7 @@ let routed = async (
   env: Env,
   reach: Reach[],
   named: Reach | undefined,
-  batch: EntityLiteral[],
+  batch: Bundle[],
 ) => {
   let { entities, eids, aliases } = minted(batch)
   let { words, apart } = await spoken(env, reach)
@@ -573,9 +707,8 @@ let routed = async (
   // a death fans out to whoever holds the eid, and a shared word with no app
   // named goes to the app that already wears it.
   let asking = entities.flatMap((e, i) =>
-    eids[i] && (e.tombstone != null ||
-        (!named &&
-          Object.keys(e).some((k) => !NOT_A_COMP.includes(k) && !words.has(k))))
+    eids[i] && (dead(e) ||
+        (!named && Object.keys(e).some((k) => isComp(k) && !words.has(k))))
       ? [eids[i]!]
       : []
   )
@@ -630,9 +763,8 @@ let routed = async (
       }`,
     )
   }
-  let parts = new Map<Reach, EntityLiteral[]>()
-  let add = (r: Reach, e: EntityLiteral) =>
-    parts.set(r, [...(parts.get(r) ?? []), e])
+  let parts = new Map<Reach, Bundle[]>()
+  let add = (r: Reach, e: Bundle) => parts.set(r, [...(parts.get(r) ?? []), e])
   for (let [i, e] of entities.entries()) {
     let eid = eids[i]
     if (!eid) {
@@ -641,7 +773,7 @@ let routed = async (
     }
     // Death is the whole entity's, so it goes wherever the entity is: every
     // store holding a piece of it, and the app named when none does yet.
-    if (e.tombstone) {
+    if (dead(e)) {
       let holders = [...new Set(Object.values(held.get(eid)?.home ?? {}))]
         .map(by).filter(Boolean) as Reach[]
       for (let r of holders.length ? holders : [only()]) {
@@ -649,14 +781,12 @@ let routed = async (
       }
       continue
     }
-    // A `was` guard rides with the component it guards, whether or not this
+    // A `$was` guard rides with the component it guards, whether or not this
     // batch also writes that component — a precondition that lost its part
     // would silently stop guarding.
+    let guards = (e.$was ?? {}) as Record<string, unknown>
     let names = [
-      ...new Set([
-        ...Object.keys(e).filter((k) => !NOT_A_COMP.includes(k)),
-        ...Object.keys(e.was ?? {}),
-      ]),
+      ...new Set([...Object.keys(e).filter(isComp), ...Object.keys(guards)]),
     ]
     let mine = new Map<Reach, string[]>()
     let take = (r: Reach, name: string) =>
@@ -671,15 +801,15 @@ let routed = async (
     }
     for (let [r, keys] of mine) {
       let was = Object.fromEntries(
-        Object.entries(e.was ?? {}).filter(([n]) => keys.includes(n)),
+        Object.entries(guards).filter(([n]) => keys.includes(n)),
       )
       add(r, {
         entity: { ...e.entity, eid },
         ...Object.fromEntries(
           keys.filter((n) => n in e).map((n) => [n, e[n]]),
         ),
-        ...(Object.keys(was).length ? { was } : {}),
-      })
+        ...(Object.keys(was).length ? { $was: was } : {}),
+      } as Bundle)
     }
   }
   return {
@@ -688,17 +818,24 @@ let routed = async (
   }
 }
 
-// The write, whole: routed, admitted everywhere, then committed. A refusal in
+// The write, whole: routed, rehearsed everywhere, then committed. A refusal in
 // any store is the caller's error and leaves every other store unwritten,
-// because admission ran first (store.ts `check`) — a single part needs no
-// second round trip, since its commit IS its admission.
+// because the dry run went first (`/apply?check=1`, @yaks/graph `check`) — a
+// single part needs no second round trip, since its commit IS its rehearsal.
+//
+// The answer is what every part answered: the bundles as applied, and the
+// aliases this door minted so a caller can find what it just wrote.
 export let written = async (
   env: Env,
   reach: Reach[],
   named: Reach | undefined,
-  batch: EntityLiteral[],
+  batch: Bundle[],
   headers: Record<string, string> = {},
-) => {
+): Promise<{
+  bundles: Bundle[]
+  aliases: Record<string, string>
+  where: string
+}> => {
   let { parts, aliases } = await routed(env, reach, named, batch)
   if (!parts.length) throw new Error('entities: nothing to write')
   if (parts.length > 1) {
@@ -706,10 +843,8 @@ export let written = async (
   }
   let outs = await Promise.all(parts.map((p) => sent(env, p, false, headers)))
   return {
-    body: JSON.stringify({
-      changes: outs.flatMap((o) => o.changes ?? []),
-      aliases: outs.reduce((all, o) => ({ ...all, ...o.aliases }), aliases),
-    }),
+    bundles: outs.flat(),
+    aliases,
     where: parts.map((p) => at(p.r)).join(' and '),
   }
 }

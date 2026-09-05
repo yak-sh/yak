@@ -22,7 +22,7 @@
 //   commit      hooks    the last word inside the transaction
 //   ───────────────────  the transaction commits (or rolls back on a throw)
 //   effect      hooks    post-commit observers, each isolated
-//   audit       hooks    after a rollback, with the refusal
+//   audit       hooks    after a rollback, with what ended it
 //
 // `apply()` returns the batch AS APPLIED plus everything it synthesized —
 // casualties, births with their number, stamps — so a client that applies the
@@ -30,7 +30,9 @@
 //
 // `check: true` runs that whole list and then refuses the commit, so a caller
 // spreading one batch over several graphs can ask them all "would you take
-// this?" before any of them keeps it.
+// this?" before any of them keeps it. That rollback is a rollback like any
+// other — the audit hooks see it, wearing a `Checked` — so a hook that wrote
+// inside the transaction is never left believing its rows are still there.
 
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Change, Eid } from './bundle.ts'
@@ -55,15 +57,25 @@ export type ApplyOpts = {
   /** a DRY RUN: every phase runs and the transaction is rolled back instead of
    * committed, so nothing is written and no effect observes it. The answer is
    * the batch as the phases made it — a refusal still throws, which is the
-   * whole point of asking. */
+   * whole point of asking. The audit hooks see the rollback (see
+   * {@link Checked}). */
   check?: boolean
 }
 
-// A check's way out of a transaction that has done all its work. The phases
-// ran; the only thing left is the commit, which is exactly what a check must
-// not do — so the body throws, the adapter rolls back, and this is caught
-// here. It never reaches an audit hook: nothing was refused.
-class Checked extends Error {
+/**
+ * A dry run's way out of a transaction that has done all its work. The phases
+ * ran; the only thing left is the commit, which is exactly what a check must
+ * not do — so the body throws this, the adapter rolls back, and `apply()`
+ * catches it and answers with the batch instead.
+ *
+ * It reaches the `audit` hooks, which is the whole reason it is a value a hook
+ * can name: a hook that wrote inside the transaction — or that KEPT A NOTE of
+ * having written — must hear that the rows are gone, and `audit` is where this
+ * package says so. A hook that RECORDS a refusal should ignore it: nothing was
+ * refused, and a rehearsal is not an incident.
+ */
+export class Checked extends Error {
+  /** the batch as the phases made it, which is a check's whole answer */
   bundles: Bundle[]
   constructor(bundles: Bundle[]) {
     super('checked')
@@ -178,11 +190,13 @@ export let graph = (opts: Options): Graph => {
         () => applied,
       )
 
-    // After a rollback: the audit hooks, with the refusal that caused it. They
-    // run OUTSIDE the dead transaction (an audit row cannot ride the batch it
-    // condemns), and then the refusal is rethrown — auditing never swallows.
-    let audited = (bundles: Bundle[], err: unknown): never | Promise<never> => {
-      let done = each(hooks('audit'), bundles, (b, [plugin, hook]) => {
+    // After a rollback: the audit hooks, with what caused it — a refusal, or
+    // the {@link Checked} marker a dry run rolls back with. They run OUTSIDE
+    // the dead transaction (an audit row cannot ride the batch it condemns).
+    // Every rollback runs them, because a hook that wrote inside the
+    // transaction has to hear that its rows are gone whichever ended it.
+    let auditing = (bundles: Bundle[], err: unknown) =>
+      each(hooks('audit'), bundles, (b, [plugin, hook]) => {
         try {
           let out = hook(b, outside, err)
           return isPromise(out)
@@ -196,9 +210,13 @@ export let graph = (opts: Options): Graph => {
           return b
         }
       })
+
+    // A refusal is audited and then rethrown — auditing never swallows.
+    let audited = (bundles: Bundle[], err: unknown): never | Promise<never> => {
       let raise = (): never => {
         throw err
       }
+      let done = auditing(bundles, err)
       return isPromise(done) ? done.then(raise) : raise()
     }
 
@@ -222,10 +240,13 @@ export let graph = (opts: Options): Graph => {
             return b
           },
         )
-      // A rolled-back check is not a refusal: it answers with what the phases
-      // made, and skips the effects, which observe committed data only.
+      // A rolled-back check is not a refusal: it is audited like any other
+      // rollback, then answers with what the phases made, and skips the
+      // effects, which observe committed data only.
       let fell = (e: unknown) =>
-        e instanceof Checked ? e.bundles : audited(bundles, e)
+        e instanceof Checked
+          ? then(auditing(bundles, e), () => e.bundles)
+          : audited(bundles, e)
       let committed: Bundle[] | Promise<Bundle[]>
       try {
         committed = storage.tx(run)

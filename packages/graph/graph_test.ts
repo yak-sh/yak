@@ -4,7 +4,7 @@
 // synchronous.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import { graph } from './graph.ts'
+import { Checked, graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
 import type { Plugin } from './plugin.ts'
 import { Stale, token } from './guard.ts'
@@ -272,6 +272,12 @@ Deno.test('a check runs every phase, writes nothing, and refuses what it must', 
       hooks: {
         commit: (b) => (ran.push('commit'), b),
         effect: (b) => (ran.push('effect'), b),
+        // The rollback is a rollback: a hook that wrote inside the
+        // transaction hears that its rows are gone, and can tell a rehearsal
+        // from a refusal by what it is handed.
+        audit: (b, _tx, err) => (
+          ran.push(err instanceof Checked ? 'checked' : 'refused'), b
+        ),
       },
     }],
   })
@@ -280,7 +286,7 @@ Deno.test('a check runs every phase, writes nothing, and refuses what it must', 
     { check: true },
   ))
   // Every phase inside the transaction ran, and the answer is stamped —
-  assertEquals(ran, ['commit'])
+  assertEquals(ran, ['commit', 'checked'])
   assert(at(out, 'b1', 'created').at)
   // — but nothing was committed, and no effect saw it.
   assertEquals(one.storage.tx((tx) => tx.get(['b1'])), [])

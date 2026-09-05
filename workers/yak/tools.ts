@@ -100,6 +100,7 @@ import { mail, REPLY_TO } from './mail.ts'
 import { NO_ARGS, PUBLIC } from './preauth.ts'
 import { foreign, SLUG } from './route.ts'
 import { type Reach, read, written } from './reach.ts'
+import { type Bundle, dead } from '@yaks/graph'
 import { mayWrite, reads, titling, vouched, type Who } from './session.ts'
 import { canon, nameOf, personOf } from './signin.ts'
 import { type Door, storeOf } from './store.ts'
@@ -723,30 +724,19 @@ type Change = { eid: string; name: string; comp: unknown }
 // (declared.ts), and as a JSON line under the sentence, since that is the
 // channel an agent reading the text actually has. `graph_query` answers JSON
 // in its text already, so this is the write door catching up to the read one.
-let wrote = (body: string, where: string): Out => {
-  let out: { changes?: Change[]; aliases?: Record<string, string> }
-  try {
-    out = JSON.parse(body)
-  } catch {
-    return { text: body }
-  }
-  let changes = out.changes ?? []
-  // A doc's body is stored as a content-addressed blob entity (db.ts
-  // textBlob), so a batch of one recipe writes two rows. The person wrote
-  // the recipe; the blob is the store's own business, the way it is in a
-  // listing (query.ts selected()).
-  let blobs = new Set(
-    changes.filter((c) => c.name == 'blob').map((c) => c.eid),
-  )
-  changes = changes.filter((c) => !blobs.has(c.eid))
+let wrote = (
+  out: { bundles: Bundle[]; aliases: Record<string, string>; where: string },
+): Out => {
+  let where = out.where
+  // A doc's body is stored as a content-addressed blob entity (@yaks/blob), so
+  // a batch of one recipe writes two rows. The person wrote the recipe; the
+  // blob is the store's own business, the way it is in a listing.
+  let mine = out.bundles.filter((b) => b.blob == null)
   let named = new Map(
-    Object.entries(out.aliases ?? {}).map(([alias, eid]) => [eid, alias]),
+    Object.entries(out.aliases).map(([alias, eid]) => [eid, alias]),
   )
-  let gone = new Set(
-    changes.filter((c) => c.name == 'entity' && c.comp == null)
-      .map((c) => c.eid),
-  )
-  let ids = [...new Set(changes.map((c) => c.eid))]
+  let gone = new Set(mine.filter(dead).map((b) => b.entity.eid))
+  let ids = [...new Set(mine.map((b) => b.entity.eid))]
   let said = ids.slice(0, 10).map((id) =>
     `${named.has(id) ? `${named.get(id)}=` : ''}${id}${
       gone.has(id) ? ' (deleted)' : ''
@@ -756,7 +746,7 @@ let wrote = (body: string, where: string): Out => {
   let data = {
     in: where,
     entities: ids,
-    aliases: out.aliases ?? {},
+    aliases: out.aliases,
     deleted: [...gone],
   }
   return {
@@ -2482,13 +2472,13 @@ export let TOOLS: Tool[] = [
         ctx.env,
         reach,
         named && (reach.find((r) => r.app.eid == named.app.eid) ?? named),
-        args.entities as EntityLiteral[],
+        args.entities as Bundle[],
         // The same vouch a page's write carries (apps.ts `acting`), so a
         // store this write routes into knows the writer by name and not by
         // uuid alone (session.ts `titling`, C-32800 item 5).
         await titling(ctx.dir, ctx.person),
       )
-      let answer = wrote(out.body, out.where)
+      let answer = wrote(out)
       return {
         ...answer,
         text: answer.text +

@@ -44,9 +44,14 @@ export type Row = Record<string, unknown>
 // Screening the ask is what makes an aggregate, a search and a list agree, and
 // every door that serves a PAGE asks this way. Naming one asks for it back,
 // and an address asks for its row whatever kind of row it is.
-export let asking = (line: string) => {
+// `words` names which of them to screen for, because a store refuses a filter
+// naming a component it never planted — screening for a word this store has no
+// table for would refuse the whole read rather than narrow it. A caller that
+// knows the store's vocabulary passes the ones it declares; the default is
+// every platform word.
+export let asking = (line: string, words: string[] = PLATFORM) => {
   if (!line.replace(/^[?&]+/, '') || line.includes('id=')) return line
-  let screen = PLATFORM.filter((k) => !line.includes(`.${k}`))
+  let screen = words.filter((k) => !line.includes(`.${k}`))
     .map((k) => `.${k}=`)
   return screen.length ? `${line}&${screen.join('&')}` : line
 }

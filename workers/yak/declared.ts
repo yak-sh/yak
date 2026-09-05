@@ -126,8 +126,8 @@ let ran = async (
   // The entities this call wrote, by the alias the template minted them at
   // where it had one — an app's page reads a row back by eid, and so does the
   // agent's next call (tools.ts `wrote` says the same thing in words).
-  let aliases = out.aliases ?? {}
-  let ids = [...new Set((out.changes ?? []).map((c) => c.eid))]
+  let aliases = out.aliases
+  let ids = out.entities
   let said = Object.entries(aliases).map(([alias, eid]) => `${alias}=${eid}`)
   return {
     text: `${named(app, name)}: wrote ${ids.length} ${
