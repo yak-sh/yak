@@ -213,11 +213,15 @@
              zone, HTTP DV, one CNAME to ORIGIN (route.ts). Apex is a hint,
              not a special case; the guide's answer is CNAME flattening. -->
         <p>
-          An app can use a domain you own in addition to
-          <code>yourname.yaks.app</code>. It's a Cloudflare for SaaS custom
-          hostname. Add a <code>CNAME</code> record at your registrar pointing
-          to <code>origin.saas.yaks.app</code>. Cloudflare issues and renews the
-          TLS certificate.
+          Plus includes a free domain. You can also connect a domain you
+          already own. Your app remains available at its
+          <code>yourname.yaks.app</code> address.
+        </p>
+        <p>
+          To connect a domain you already own, add a <code>CNAME</code> record
+          at your DNS provider pointing to <code>origin.saas.yaks.app</code>.
+          Cloudflare for SaaS manages the custom hostname and issues and
+          renews the TLS certificate.
         </p>
         <p>
           Your assistant can report whether the DNS record is visible, the
