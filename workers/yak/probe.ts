@@ -314,6 +314,40 @@ export let mailed = (k: Kernel, to: string) =>
     { timeout: 20_000, poll: 100, label: `a letter for ${to}` },
   )
 
+// A letter INTO the kernel, at the door workerd keeps for exactly this: the
+// runtime's local email endpoint hands the body to `email()` as a message
+// (index.ts, inbox.ts). The envelope rides the query string — `from` and `to`
+// as the SMTP session gave them, which is why a message may be addressed at an
+// app whose name is nowhere in its own headers — and the body is raw RFC 5322,
+// which must carry a `Message-ID` or the runtime refuses to parse it.
+//
+// The answer is the handler's: 200 where the letter landed, 400 carrying the
+// reason where it was rejected. A rejection only reaches the status because
+// index.ts AWAITS `setReject` — the message is an RPC stub, and a rejection
+// that is not awaited lands after the answer is built.
+export let arrives = (
+  k: Kernel,
+  m: { from: string; to: string; raw: string },
+) =>
+  fetch(
+    `${k.base}/cdn-cgi/handler/email?from=${encodeURIComponent(m.from)}` +
+      `&to=${encodeURIComponent(m.to)}`,
+    { method: 'POST', body: m.raw },
+  )
+
+/**
+ * One letter as it travels: headers, a blank line, the words. `Message-ID` and
+ * `From` are defaulted because the runtime's local door refuses a message
+ * missing either — it parses both to build the message it hands the handler —
+ * and a letter in life always carries them.
+ */
+export let rfc822 = (head: Record<string, string>, body: string) =>
+  Object.entries({
+    'Message-ID': `<${crypto.randomUUID()}@probe.example>`,
+    From: 'Someone <someone@probe.example>',
+    ...head,
+  }).map(([k, v]) => `${k}: ${v}`).join('\r\n') + `\r\n\r\n${body}`
+
 // A person signs in the way a browser does — an address, the code off the
 // log, the cookie back — and the kernel mints their person row and their own
 // space. The FIRST sign-in on a fresh kernel owns the meta space, which is

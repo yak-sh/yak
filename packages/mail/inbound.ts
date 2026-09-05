@@ -49,6 +49,31 @@ export type Arrival = {
   target?: Eid
   /** when it arrived (default: the Date header, else now) */
   at?: string
+  /**
+   * whether the sending domain signed for it — the receiving MTA's verdict,
+   * which only the caller has. Left out, the letter records none; `false` is
+   * recorded and never a reason to drop the letter (see {@link verdict}).
+   */
+  verified?: boolean
+}
+
+/**
+ * The DKIM verdict off an `Authentication-Results` header, as every receiving
+ * MTA writes one: `true` only where the header says `dkim=pass`, `null` where
+ * there is no header to read at all — nobody checked, which is not the same as
+ * a check that failed.
+ *
+ * ```ts
+ * import { verdict } from '@yaks/mail'
+ * let head = (v: string | null) => ({ get: () => v })
+ * verdict(head('mx.example; dkim=pass header.i=@books.example; spf=pass')) // true
+ * verdict(head('mx.example; dkim=fail; spf=pass'))                         // false
+ * verdict(head(null))                                                      // null
+ * ```
+ */
+export let verdict = (m: Head): boolean | null => {
+  let said = m.get('authentication-results')
+  return said == null ? null : /\bdkim\s*=\s*pass\b/i.test(said)
 }
 
 /**
@@ -101,6 +126,7 @@ export let inbound = (m: Received, arrival: Arrival = {}): Bundle[] => {
       at,
       message_id: messageId(m),
       ...(arrival.target ? { target: arrival.target } : {}),
+      ...(arrival.verified == null ? {} : { verified: arrival.verified }),
     },
   }]
 }

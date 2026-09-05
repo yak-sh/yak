@@ -18,12 +18,19 @@ import type { Namespace } from './store.ts'
 export type Fetcher = { fetch(req: Request): Promise<Response> }
 
 // One inbound message, as Email Routing hands it to `email()` (index.ts).
-// The slice we read: who the envelope said it was for, and the one way to
-// refuse it — a refusal bounces to the sender, where a drop is silence.
+// The slice we read: who the envelope said it was from and for, the letter's
+// own headers and bytes (inbox.ts parses the MIME), and the one way to refuse
+// it — a refusal bounces to the sender, where a drop is silence.
+//
+// `setReject` is awaited: across the runtime's own RPC boundary it answers a
+// promise, and a rejection that is not awaited can land after the message is
+// already accepted.
 export type Inbound = {
   from: string
   to: string
-  setReject(reason: string): void
+  headers: { get(name: string): string | null }
+  raw: ReadableStream
+  setReject(reason: string): void | Promise<void>
 }
 
 export type Env = {

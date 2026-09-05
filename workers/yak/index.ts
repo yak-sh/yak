@@ -69,6 +69,7 @@ import { directory } from './directory.ts'
 import { customOf, reading, stageOf, type Step, steps } from './domains.ts'
 import { bound, type Env, type Inbound } from './env.ts'
 import * as identity from './identity.ts'
+import { arrived, Refused } from './inbox.ts'
 import * as mcp from './mcp.ts'
 import { lost, oops, provisioning } from './pages.ts'
 import {
@@ -418,21 +419,36 @@ export default {
     }
   },
 
-  // The third entry point, and the one no URL names: a letter (T-33684).
-  // Email Routing's catch-all on the yaks.app zone points every address the
-  // specific rules did not claim at this Worker.
+  // The third entry point, and the one no URL names: a letter (T-33684,
+  // T-33687). Email Routing's catch-all on the yaks.app zone points every
+  // address the specific rules did not claim at this Worker, and inbox.ts
+  // files it in the store its local part named.
   //
-  // There is no mailbox to deliver to yet — an app owns one from T-33687 —
-  // so every message is REFUSED at the door rather than accepted and
-  // dropped. A refusal is a bounce the sender reads; a drop is silence, and
-  // silence is the one answer that cannot be corrected later.
+  // Three outcomes, and they are not interchangeable. A letter that lands is
+  // an entity in an app's store. An address that is nobody's is REFUSED — a
+  // bounce the sender reads, since a drop is silence and silence is the one
+  // answer that cannot be corrected later. And a failure of OURS is neither:
+  // it is written where every other break is, and the message is left
+  // unanswered so the sending server tries again — refusing there would turn
+  // our outage into somebody's lost mail.
   //
   // The log carries the recipient's DOMAIN and nothing else: not the local
   // part, not the sender, never the body. A letter is somebody's, and the
   // question this line answers is only which of our names people write to.
-  email(message: Inbound): void {
-    console.log(`yak: mail refused for ${message.to.split('@').pop()}`)
-    message.setReject(`no mailbox for ${message.to}`)
+  async email(message: Inbound, env: Env): Promise<void> {
+    try {
+      await arrived(message, env)
+    } catch (e) {
+      if (!(e instanceof Refused)) {
+        await report(env, `EMAIL ${message.to.split('@').pop()}`, e)
+          .catch((why) =>
+            console.error('yak: could not report', why, 'after', e)
+          )
+        throw e
+      }
+      console.log(`yak: mail refused for ${message.to.split('@').pop()}`)
+      await message.setReject(e.message)
+    }
   },
 
   // The hour striking (wrangler.toml `[triggers] crons`): the meter reads

@@ -37,7 +37,7 @@ import {
 import * as dirPart from './directory.ts'
 import { granted, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
-import { sizeOf } from './image.ts'
+import { type Size, sizeOf } from './image.ts'
 import { asking, listed, type Row } from './listing.ts'
 import { metaOf, minted } from './meta.ts'
 import { batched, lined, lowered } from './wire.ts'
@@ -433,10 +433,64 @@ let nameSent = (req: Request) => {
   }
 }
 
-// A page hands the app bytes and gets back an address (T-32677). The object
-// lands in the bucket first and the row second, because a row pointing at
-// nothing is the failure a reader sees, while bytes nobody has named yet are
-// invisible until the next upload of the same file names them. The row is
+/**
+ * Bytes into the app's bucket, and the two rows that name them there — the
+ * write half of an upload, without a request anywhere in it, because bytes
+ * arrive by other doors too (inbox.ts: a letter's attachments).
+ *
+ * The object lands in the bucket FIRST and the rows are only returned, because
+ * a row pointing at nothing is the failure a reader sees, while bytes nobody
+ * has named yet are invisible until the next arrival of the same file names
+ * them. The caller applies the bundles, as whoever it decided is writing.
+ *
+ * Two rows, the way the fleet shapes a file (src/blob.ts): the CONTENT,
+ * addressed by its sha and carrying what is true of the bytes — how many they
+ * are, and what they measure (image.ts `sizeOf`, off the file's own header) —
+ * and the USE of it, carrying what it is called and what it is. They stay
+ * apart because they are two things, and because a component may not point at
+ * its own entity. The use is addressed off the content, so the same bytes sent
+ * twice are one attachment renamed rather than a second row saying the same
+ * thing. A listing shows the use and not the content, which is right: a doc's
+ * body is a blob row as well, and nobody saved that.
+ */
+export let filed = async (
+  env: Env,
+  space: Space,
+  app: App,
+  bytes: Uint8Array<ArrayBuffer>,
+  mime: string,
+  name: string,
+): Promise<
+  { sha: string; use: string; size: Size | undefined; bundles: Bundle[] }
+> => {
+  let sha = await sha256(bytes)
+  let blobs = r2Blobs(env.BLOBS)
+  let key = blobKey(space, app, sha)
+  if (!(await blobs.has(key))) await blobs.put(key, bytes)
+  let size = sizeOf(bytes)
+  let use = await useOf(sha)
+  return {
+    sha,
+    use,
+    size,
+    bundles: [
+      {
+        entity: { eid: sha },
+        blob: { bytes: bytes.byteLength },
+        ...(size ? { image: size } : {}),
+      },
+      {
+        entity: { eid: use },
+        // A patch, so an arrival that names nothing leaves the name the
+        // first one gave these bytes: the same file is the same file,
+        // whatever the page had to call it the second time.
+        attachment: { blob: sha, mime, ...(name ? { name } : {}) },
+      },
+    ],
+  }
+}
+
+// A page hands the app bytes and gets back an address (T-32677). The rows are
 // the uploader's, written through the app's own /apply with them vouched for,
 // so `.created!` says who put it there.
 let took = async (
@@ -452,52 +506,18 @@ let took = async (
   let bytes = new Uint8Array(await req.arrayBuffer())
   if (!bytes.byteLength) return json(400, 'no_bytes')
   if (bytes.byteLength > MAX) return json(413, 'too_large')
-  let sha = await sha256(bytes)
-  let blobs = r2Blobs(env.BLOBS)
-  let key = blobKey(space, app, sha)
-  if (!(await blobs.has(key))) await blobs.put(key, bytes)
-  let mime = mimeSent(req)
-  let name = nameSent(req)
-  // What the file says it measures, off its header (image.ts). A wall wants
-  // to reserve a photo's space before its bytes arrive, and only the door
-  // ever holds the bytes; a file that states no size gets no `image`. It
-  // rides the CONTENT row, where a dimension belongs — the bytes are that
-  // wide however many attachments name them — and where a page already has
-  // the eid, since the sha is what its own row points at.
-  let size = sizeOf(bytes)
-  // Two rows, the way the fleet shapes a file (src/blob.ts): the CONTENT,
-  // addressed by its sha and carrying what is true of the bytes — how many
-  // they are, and what they measure — and the USE of it, carrying what it is
-  // called and what it is. They stay apart because they
-  // are two things — and because a component may not point at its own entity.
-  // The use is addressed too, off the content's address, so the same bytes
-  // sent twice are one attachment renamed rather than a second row saying the
-  // same thing. A listing shows the use and not the content, which is right:
-  // a doc's body is a blob row as well, and nobody saved that.
+  let file = await filed(env, space, app, bytes, mimeSent(req), nameSent(req))
   try {
-    await metaOf(store).apply([
-      {
-        entity: { eid: sha },
-        blob: { bytes: bytes.byteLength },
-        ...(size ? { image: size } : {}),
-      },
-      {
-        entity: { eid: await useOf(sha) },
-        // A patch, so an upload that names nothing leaves the name the
-        // first one gave these bytes: the same file is the same file,
-        // whatever the page had to call it the second time.
-        attachment: { blob: sha, mime, ...(name ? { name } : {}) },
-      },
-    ], headers)
+    await metaOf(store).apply(file.bundles, headers)
   } catch (e) {
     return json(400, 'refused', e instanceof Error ? e.message : String(e))
   }
   return Response.json({
-    eid: sha,
-    url: `/${app.slug}/api/blob/${sha}`,
-    mime,
+    eid: file.sha,
+    url: `/${app.slug}/api/blob/${file.sha}`,
+    mime: mimeSent(req),
     bytes: bytes.byteLength,
-    ...size,
+    ...file.size,
   })
 }
 

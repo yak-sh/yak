@@ -1,5 +1,11 @@
 import { assertEquals } from '@std/assert'
-import { author, inbound, messageId, type Received } from './inbound.ts'
+import {
+  author,
+  inbound,
+  messageId,
+  type Received,
+  verdict,
+} from './inbound.ts'
 
 let got = (headers: Record<string, string>, from = 'bounces@relay.example') =>
   ({
@@ -46,6 +52,27 @@ Deno.test('inbound: one letter, as it arrived', () => {
       target: 'club',
     },
   }])
+})
+
+Deno.test('verdict: the DKIM line, and the difference between failed and unasked', () => {
+  let head = (v: string | null) => ({ get: () => v })
+  assertEquals(
+    verdict(head('mx.example; dkim=pass header.i=@books.example; spf=pass')),
+    true,
+  )
+  assertEquals(verdict(head('mx.example; dkim=fail; spf=pass')), false)
+  assertEquals(verdict(head('mx.example; spf=pass')), false)
+  assertEquals(verdict(head(null)), null)
+})
+
+Deno.test('inbound: an unsigned letter is recorded, never dropped', () => {
+  let [b] = inbound(got({ subject: 'hi' }), { eid: 'e-3', verified: false })
+  assertEquals((b.mail as Record<string, unknown>).verified, false)
+  assertEquals(
+    (inbound(got({}), { eid: 'e-4' })[0].mail as Record<string, unknown>)
+      .verified,
+    undefined,
+  )
 })
 
 Deno.test('inbound: a letter with no subject still has one, and never asks to go', () => {

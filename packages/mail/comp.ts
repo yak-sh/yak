@@ -1,7 +1,8 @@
 // The components this package ships, as one vocabulary document to load beside
 // your own.
 //
-//   mail{from, to, at, target, reply_to, message_id}   one letter's envelope
+//   mail{from, to, at, target, reply_to, message_id, verified}
+//                                                      one letter's envelope
 //   email{address}                                     an address, as an entity
 //   deliver{to}                                        who it is for, as an entity
 //   delivered{at, via}                                 it left
@@ -34,6 +35,12 @@
 // in a graph this size already owns the word: `.to` is the recipient
 // (`deliver.to`), and `.at` is stamped by half a dozen components. Say those in
 // full — `.mail.to`, `.mail.at`.
+//
+// `verified` is the RECEIVING side's verdict on an arrival: whether the sending
+// domain signed for the letter (DKIM). It is a column and not a gate — a letter
+// nobody signed for is recorded with `verified: false` rather than dropped,
+// because dropping is silence and the reader is the one who decides what an
+// unsigned letter is worth.
 //
 // `delivered` and `bounced` are the two ends of one outcome, and exactly one of
 // them lands on a letter. Both are stamped: they are the sender's account of

@@ -40,6 +40,10 @@
         "message_id": {
           "type": "string",
           "description": "the Message-ID the world knows this letter by — written from what arrived, and what a reply threads on"
+        },
+        "verified": {
+          "type": "boolean",
+          "description": "whether the sending domain signed for this letter (DKIM) — false is recorded, never dropped: a letter nobody signed for is still a letter, and the reader is the one who decides what to trust"
         }
       }
     },

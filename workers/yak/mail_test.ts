@@ -26,6 +26,9 @@ Deno.test('the same derivation reads an arrival back', () => {
   assertEquals(mailedTo('Ada@Yaks.App'), { space: 'ada', app: null })
   // Not ours, not a name, not one dot: three ways to be nobody here.
   assertEquals(mailedTo('ana@example.com'), null)
+  // A space's own hostname is not a mail domain and cannot become one
+  // (C-33769), so an address there is nobody's rather than that space's.
+  assertEquals(mailedTo('cookbook@ada.yaks.app'), null)
   assertEquals(mailedTo('a.b.c@yaks.app'), null)
   assertEquals(mailedTo('ada.@yaks.app'), null)
   assertEquals(mailedTo('Ada_Lovelace@yaks.app'), null)
