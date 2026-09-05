@@ -171,6 +171,16 @@ starts it with a bookmarklet the app hands them, because an app's write doors
 take same-origin requests only, so a script on somebody else's page cannot
 write here. https://yaks.app/guide/clipping.md is the whole thing.
 
+One app in a space can be its FRONT PAGE — app_set(app, home: true) — and it is
+the space's router as well as its homepage: served AT <space>.yaks.app/, and
+asked for every path no other app's slug claims, its worker first and its files
+behind it. app_set(app, first: ['/recipes/*']) opts it into paths another app
+owns, before that app sees them; the platform keeps /login, /connect, /mcp and
+every /api/ door, so a glob naming one is refused. A front-page worker that
+throws or answers 404 is skipped and the request routes as if it were not there,
+and it acts as the visitor, never as the app it routes to.
+https://yaks.app/guide/home.md is the whole thing.
+
 Every app has a MAILBOX, at <space>.<app>@yaks.app — <space>@yaks.app for the
 space's front page. Both directions are the store. Sending is one batch: the
 recipient as an entity wearing email {address}, the letter as doc {title, body}

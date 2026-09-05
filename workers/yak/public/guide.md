@@ -23,8 +23,8 @@ A front page IS the bare address: it is served there rather than redirected to,
 and that address is the one to hand out, since its own `/<app>/` forwards there.
 It answers for every path in the space no other app claims, so `/photo.png` is
 its file and `/about` its page. The space's apps own the first path segment,
-though — `/garden` is the garden app — so a front page cannot have a page at an
-address another app in the space already has.
+though — `/garden` is the garden app — so a front page's own page at that
+address is not reached unless it asks for it (Home, below).
 
 A page with more than one screen routes itself. The simplest way is the hash —
 `location.hash`, and a `hashchange` listener redrawing — which needs nothing
@@ -547,6 +547,38 @@ an outside call with room to spare; it is not a place to loop.
 A throw, or a 5xx, becomes the same `exception` the pages file — the person's
 agent hears about it on its next reply, and `app_errors` lists what is open. So
 let it throw: a break you can see is worth more than a `catch` that hides it.
+
+## Home
+
+Deeper: <https://yaks.app/guide/home.md> — the five rungs a request is answered
+in, the `first` globs, fail-open, and where the space's mail lands.
+
+The front page is the space's router as well as its homepage. A request to
+`<space>.yaks.app<path>` is answered by the first of five rungs that has
+anything: the platform's own paths (`/login`, `/connect`, `/mcp`, every app's
+`/api/…`), then the app whose slug owns the first segment, then the front page's
+files, then the space's index at `/`, and everything else is the front page's
+`worker.js` where it has one. So the front page sees every path no other app
+claims, and a 404 from its worker falls through to its files the same way any
+app's does.
+
+It can also answer paths another app owns, by asking for them:
+
+    app_set(app: 'home', first: ['/recipes/*', '/*/print'])
+
+Those globs go in `router{first}` on the app, and only the front page's are
+read. `*` is any run of characters, slashes included. The platform's own paths
+are nobody's, so a glob naming one is refused before anything is written.
+
+Two rules hold. It **fails open**: a worker that throws, times out or answers
+404 is skipped, the request lands on the app that owns it, and the break is an
+`exception` on the front page — a broken router stops the customizations, never
+the space. And it **acts as the visitor**, carrying the person looking rather
+than the app it routes to, so it can never read a store they could not.
+
+`<space>@yaks.app` is the front page's mailbox, so a letter to the space lands
+in ITS store as an ordinary row; custom mail behavior for a space is what that
+app does about those rows. `mail_list` and `mail_send` are unchanged.
 
 ## Saving from another site
 

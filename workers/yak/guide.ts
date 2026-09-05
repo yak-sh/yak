@@ -109,6 +109,15 @@ export let PAGES: Page[] = [
       'what people saved.',
   },
   {
+    slug: 'home',
+    title: 'The front page, and routing the space',
+    description:
+      'The app served at <space>.yaks.app/ and how it routes the space: the ' +
+      'five rungs a request is answered in, app_set home, the first globs ' +
+      "that send another app's paths to it, why a broken router fails open, " +
+      "and where the space's own mail lands.",
+  },
+  {
     slug: 'mail',
     title: "Mail: an app's own address",
     description:
