@@ -139,6 +139,12 @@ Deno.test('an unreachable directive throws Unsupported naming the feature', () =
   assertEquals(e.feature, '.near')
 })
 
+Deno.test('ordering by an unfiltered column still joins its table', () => {
+  let { sql } = compile(parse('.priority=1&.order=title'), v)
+  assert(sql.includes('left join "doc_value" as "doc"'), sql)
+  assert(sql.endsWith('order by "doc"."title"'), sql)
+})
+
 Deno.test('the membership statement excludes graves and answers one eid', () => {
   let { sql } = compile(parse('.priority>=1'), v)
   assert(sql.startsWith('select "entity"."eid" as eid from "entity"'), sql)

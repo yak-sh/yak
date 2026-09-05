@@ -64,12 +64,17 @@ import type { Derived } from './derived.ts'
 import type { Extension, Site } from './extend.ts'
 
 // Thrown for a clause the binder cannot express EXACTLY. A caller catches it to
-// fall back to a JS matcher, or to report the gap.
+// fall back to another evaluator, or to report the gap. `by` names the package
+// that declined, so another evaluator of the same grammar (@yaks/match compiles
+// the AST to an in-memory predicate) can refuse through this one class and
+// leave every caller with a single decline contract to catch.
 export class Unsupported extends Error {
   feature: string
-  constructor(feature: string, detail = '') {
-    super(`@yaks/sql cannot compile ${feature}${detail ? `: ${detail}` : ''}`)
+  by: string
+  constructor(feature: string, detail = '', by = '@yaks/sql') {
+    super(`${by} cannot compile ${feature}${detail ? `: ${detail}` : ''}`)
     this.feature = feature
+    this.by = by
     this.name = 'Unsupported'
   }
 }
@@ -574,12 +579,15 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
       cols.push(`${expr} as "${f.path.join('.')}"`)
     }
   }
-  let out = rel(ctx.d.spine, { cols, joins: joinsOf(ctx), where })
-
   // Ordering, then the window. `.order=-field` is descending. The window is
   // newest-first by spine num, with `.after` continuing below a num cursor.
+  // The ordered column is resolved BEFORE the joins are read off: ordering by a
+  // column no filter mentions is what pulls its table in, and a join list taken
+  // any earlier would not have it.
   let order = find<Order>(cs, 'order')
-  if (order) out.order.push(orderExpr(ctx, order.value))
+  let sort = order ? orderExpr(ctx, order.value) : null
+  let out = rel(ctx.d.spine, { cols, joins: joinsOf(ctx), where })
+  if (sort) out.order.push(sort)
   let limit = find<Limit>(cs, 'limit')
   let after = find<After>(cs, 'after')
   if (limit || after) {
