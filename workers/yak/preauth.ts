@@ -58,7 +58,12 @@ export let spoken = (asked: unknown) =>
 // the same words for every caller. That is the only shape a tool can have
 // before anyone has signed in, and it is what makes the public list safe to
 // serve without knowing who is asking.
-export type Says = { name: string; description: string; text: string }
+export type Says = {
+  name: string
+  title: string
+  description: string
+  text: string
+}
 
 export let NO_ARGS = { type: 'object' as const, properties: {} }
 
@@ -68,6 +73,7 @@ export let NO_ARGS = { type: 'object' as const, properties: {} }
 // already read.
 let ABOUT: Says = {
   name: 'about',
+  title: 'What yaks.app is',
   description:
     'What yaks.app is and what gets made here. Call it when someone asks ' +
     'what this place is, or when you have not signed in and want to know ' +
@@ -201,10 +207,21 @@ export let answer = async (
   if (method == 'ping') return {}
   if (method == 'tools/list') {
     return {
+      // The same title and hints the signed-in list carries (tools.ts lifts
+      // these into TOOLS), because this is the list a directory reviewer sees
+      // first: a door whose one tool arrives bare reads as a door with no
+      // annotations at all.
       tools: PUBLIC.map((t) => ({
         name: t.name,
+        title: t.title,
         description: t.description,
         inputSchema: NO_ARGS,
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
       })),
     }
   }

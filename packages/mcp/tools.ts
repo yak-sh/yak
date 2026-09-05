@@ -147,6 +147,10 @@ export let core = (opts: CoreOpts): Tool[] => {
     {
       name: 'graph_apply',
       title: 'Apply a batch',
+      // The one write here, and it can delete: a null component drops one, a
+      // null entity tombstones the whole row. Nothing else in this tier
+      // writes at all.
+      destructive: true,
       description:
         `Apply entity bundles to this store: create, patch or delete ` +
         `entities and their components, atomically. A batch is an array of ` +

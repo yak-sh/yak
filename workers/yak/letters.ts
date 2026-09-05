@@ -134,6 +134,10 @@ let listing = (ctx: Ctx, vocab: Vocab): Tool => ({
 let sending = (ctx: Ctx, vocab: Vocab): Tool => ({
   name: 'mail_send',
   title: "Send from an app's address",
+  // A letter to a stranger's inbox: it leaves the platform, and no second
+  // call takes it back.
+  destructive: true,
+  openWorld: true,
   description:
     `Send one letter from an app's own address to one recipient — an email ` +
     `address, or the eid of an entity in the app already wearing ` +

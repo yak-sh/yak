@@ -189,12 +189,24 @@ type Shape = {
 
 export type Tool = {
   name: string
+  // A short human title — a noun phrase, not a sentence. Both connector
+  // directories require one on every tool, and a person picking through a
+  // permission prompt reads it instead of the snake_case name.
+  title: string
   description: string
   // The `ui://` resource that draws this tool's answer, if it has one.
   view?: string
-  // This one only READS, so a client may call it without asking first
-  // (@yaks/graph `Tool.readOnly`, the MCP `readOnlyHint`).
+  // What this one DOES, as the four MCP hints (@yaks/graph `Tool`, emitted by
+  // @yaks/mcp `annotated`). A host reads them to decide what it may call
+  // without asking, so they say what the tool does and not what would be
+  // convenient: readOnly for a pure look-up, destructive for what deletes or
+  // cannot be undone, idempotent for a setter that converges, openWorld for
+  // anything reaching past yaks.app. A write that says nothing is taken to be
+  // destructive, so silence can only ever tighten a prompt.
   readOnly?: boolean
+  destructive?: boolean
+  idempotent?: boolean
+  openWorld?: boolean
   // What its `data` is shaped like, when it answers a value beside its words.
   // JSON Schema, like `input` — agent.ts turns both into the Zod the MCP SDK
   // wants, so nothing here depends on a validation library.
@@ -1201,6 +1213,8 @@ let COVERING = PAGES.map((p) => `${p.slug} (${p.brief})`).join(', ')
 export let TOOLS: Tool[] = [
   {
     name: 'space_new',
+    title: 'A new space',
+    destructive: false,
     description:
       'Another corner of yaks.app, at <slug>.yaks.app, with the person as its ' +
       'owner. They already have one from signing in, and every other tool ' +
@@ -1241,6 +1255,8 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'space_delete',
+    title: 'Close a space',
+    destructive: true,
     description:
       'Close a space for good: every app in it, everything those apps have ' +
       'saved, their files, any domain aimed at them, and the address itself ' +
@@ -1306,6 +1322,8 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'app_new',
+    title: 'A new app',
+    destructive: false,
     description:
       'Start a new app — the thing you are making for the person. It lives at ' +
       '<space>.yaks.app/<slug>/ and the first app in a space also answers the ' +
@@ -1380,6 +1398,9 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'app_files',
+    title: "The app's files",
+    destructive: true,
+    openWorld: true,
     description:
       "Write the app's files — index.html and any css, js or images beside " +
       'it — or list them, read one back, or delete one. Write a whole app in ' +
@@ -1560,6 +1581,9 @@ export let TOOLS: Tool[] = [
   // agent calls them over the connector.
   {
     name: 'sandbox_exec',
+    title: 'Run a build command',
+    destructive: true,
+    openWorld: true,
     description:
       "Run one command in this space's build sandbox — a Linux container " +
       'with a Rust toolchain, the wasm32-unknown-unknown target, ' +
@@ -1606,6 +1630,11 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'sandbox_write',
+    title: 'Write a build file',
+    // A path that already holds something is overwritten, which is the one
+    // thing here that is not purely additive.
+    destructive: true,
+    idempotent: true,
     description:
       "Write one file inside this space's build sandbox — a Cargo.toml, a " +
       "src/lib.rs, whatever the build needs. These are NOT the app's files: " +
@@ -1636,6 +1665,8 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'sandbox_read',
+    title: 'Read a build file',
+    readOnly: true,
     description:
       "Read one file back out of this space's build sandbox — a generated " +
       'source, a build log, whatever the last command left behind. Waking the ' +
@@ -1661,6 +1692,9 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'sandbox_ship',
+    title: 'Ship a build artifact',
+    destructive: true,
+    openWorld: true,
     description:
       'Copy what the build made into the app, where it is served: name the ' +
       'files in the sandbox — pkg/*.wasm, pkg/*.js — and each lands beside ' +
@@ -1720,6 +1754,9 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'app_deploy',
+    title: 'Release a version',
+    destructive: false,
+    openWorld: true,
     description:
       'Release what you have written: the files are already live, so this is ' +
       'the mark that they are one version — the one an error will name. Do ' +
@@ -1764,6 +1801,8 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'app_versions',
+    title: 'Deploy history',
+    readOnly: true,
     description:
       'Every deploy of the app, newest first, with when it went out and what ' +
       'changed in it. Read it when the person says the app used to work, or ' +
@@ -1807,6 +1846,9 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'app_rollback',
+    title: 'Roll back a release',
+    destructive: true,
+    openWorld: true,
     description:
       'Put the app back the way it was — every file of an earlier deploy, ' +
       'its components, its tools and its own code with them. This is the ' +
@@ -1875,6 +1917,9 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'app_set',
+    title: 'Rename or reshare an app',
+    destructive: false,
+    idempotent: true,
     description:
       'Rename an app, change its title, or change who may use it. The title ' +
       'is what it is called; the slug is its address, so changing it moves ' +
@@ -2048,6 +2093,9 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'app_secret_set',
+    title: 'Set a worker key',
+    destructive: false,
+    idempotent: true,
     description:
       "Give the app's worker a key for an outside service — an API key, a " +
       'token — without the page ever holding it. The value goes onto the ' +
@@ -2088,6 +2136,8 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'app_secret_list',
+    title: 'The worker keys',
+    readOnly: true,
     description:
       "The names of the keys the app's worker can read. Values are never " +
       'answered — by this tool or any other. Use it to see what a worker.js ' +
@@ -2114,6 +2164,9 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'app_secret_remove',
+    title: 'Remove a worker key',
+    destructive: true,
+    idempotent: true,
     description:
       "Take a key away from the app's worker. Its code stops seeing " +
       'env.NAME at the next request; nothing else about the app changes.',
@@ -2132,6 +2185,8 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'app_delete',
+    title: 'Throw an app away',
+    destructive: true,
     description:
       'Throw an app away: its files, everything it saved, and its address, ' +
       'all gone for good — there is no undo and nothing is kept. Only when ' +
@@ -2187,6 +2242,9 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'app_errors',
+    title: 'What is broken',
+    destructive: false,
+    idempotent: true,
     description:
       "Everything still broken in the app: what a page threw in someone's " +
       'browser, what a request threw on the way, and what the platform ' +
@@ -2257,6 +2315,8 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'app_list',
+    title: 'Every app they have',
+    readOnly: true,
     description:
       'What the person already has here: every app in every space of theirs, ' +
       'with its address, the mailbox it sends and receives at, the version ' +
@@ -2352,6 +2412,10 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'domain_attach',
+    title: 'Attach a domain',
+    destructive: false,
+    idempotent: true,
+    openWorld: true,
     description:
       "Serve one of the person's apps at a domain they already own — " +
       'herbusiness.com instead of jeff.yaks.app/recipes. It provisions the ' +
@@ -2450,6 +2514,9 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'domain_status',
+    title: 'Domain progress',
+    readOnly: true,
+    openWorld: true,
     description:
       'How far a domain has come: whether the DNS record has arrived, ' +
       'whether Cloudflare has accepted the hostname, and whether the ' +
@@ -2534,6 +2601,10 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'domain_detach',
+    title: 'Detach a domain',
+    destructive: true,
+    idempotent: true,
+    openWorld: true,
     description:
       'Stop serving an app at a domain. The hostname is given back to ' +
       'Cloudflare and the app is untouched — it still answers at its ' +
@@ -2579,6 +2650,10 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'app_publish',
+    title: 'Offer the app to others',
+    destructive: false,
+    idempotent: true,
+    openWorld: true,
     description:
       'Offer this app to every other space, by name. Someone else then ' +
       'app_installs it and gets their OWN copy — their own store, their own ' +
@@ -2663,6 +2738,10 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'app_unpublish',
+    title: 'Stop offering the app',
+    destructive: true,
+    idempotent: true,
+    openWorld: true,
     description:
       'Stop offering the app. It stays exactly as it is and so does every ' +
       'copy anyone installed — their data is theirs — but nobody new can ' +
@@ -2692,6 +2771,8 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'app_published',
+    title: 'Published apps',
+    readOnly: true,
     description:
       'What other people have published here, newest first: the name to ' +
       'install by, what it is, and which space it came from. Read it when ' +
@@ -2716,6 +2797,8 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'app_install',
+    title: 'Install a published app',
+    destructive: false,
     description:
       'Take an app somebody published (app_published lists them) and give ' +
       'the person their OWN copy of it: their own address, their own data ' +
@@ -2829,6 +2912,11 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'app_update',
+    title: 'Update an installed app',
+    // The copy's files are replaced by the publisher's current ones and the
+    // version it was on is not offered again — app_rollback's shape, and its
+    // hint. Their DATA is untouched, which is a different promise.
+    destructive: true,
     description:
       'Move an installed app to whatever version its publisher offers now. ' +
       "The person's data stays — every row they saved is theirs and is not " +
@@ -2900,6 +2988,11 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'member_add',
+    title: 'Invite someone',
+    // The seat is additive and member_remove takes it back; the LETTER is
+    // what leaves, and asking twice mails twice — so not idempotent either.
+    destructive: false,
+    openWorld: true,
     description:
       'Invite someone into the space by email address, so they can change ' +
       'what its apps hold: an editor writes, a viewer only reads, an owner ' +
@@ -3034,6 +3127,9 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'member_remove',
+    title: 'Remove someone',
+    destructive: true,
+    idempotent: true,
     description:
       'Take someone back out of the space: they keep their sign-in and lose ' +
       'this space. Only the space owner may, and the last owner cannot be ' +
@@ -3070,6 +3166,9 @@ export let TOOLS: Tool[] = [
   },
   {
     name: 'feedback',
+    title: 'Send feedback',
+    destructive: false,
+    openWorld: true,
     description:
       'The door for ALL feedback about yaks.app itself — this connector, its ' +
       'tools, its guide, the way an app is built or served here. A bug, a ' +
@@ -3189,6 +3288,7 @@ export let TOOLS: Tool[] = [
   // disagree.
   {
     name: 'guide',
+    title: 'The guide',
     description: 'The guide, read here instead of fetched off the web. With ' +
       'no page: the map — what an app is, how its pages read and write its ' +
       'store, and a passage on every feature there is. Read that first. With ' +
@@ -3241,8 +3341,12 @@ export let TOOLS: Tool[] = [
   // instead of a second surface that could drift from it.
   ...PUBLIC.map((t): Tool => ({
     name: t.name,
+    title: t.title,
     description: t.description,
     input: NO_ARGS,
+    // It says one fixed paragraph and looks nothing up — the readable tool
+    // there is, and the one a host should never stop to ask about.
+    readOnly: true,
     // Signed in, `about` also says what this door is listing right now and the
     // version naming that list (T-34277) — so an agent whose cached list is
     // old has one call that settles what it has, without reconnecting. Before

@@ -131,9 +131,16 @@ export let running = (ctx: Ctx, t: Sugar) => (args: Record<string, unknown>) =>
  * sentence it always was, and the view's data beside it where it draws one. */
 export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
   name: t.name,
+  title: t.title,
   description: t.description,
   input: inputOf(t.input),
+  // What it does, carried whole — the transport turns these four into the
+  // MCP annotations (@yaks/mcp `annotated`), and a hint dropped here is a
+  // tool the host mis-prompts about.
   ...(t.readOnly ? { readOnly: true } : {}),
+  ...(t.destructive == null ? {} : { destructive: t.destructive }),
+  ...(t.idempotent ? { idempotent: true } : {}),
+  ...(t.openWorld ? { openWorld: true } : {}),
   // What it answers, where it says: the `Say`'s data rides as the reply's
   // structuredContent unwrapped (@yaks/mcp `server`), so the schema describes
   // that object itself rather than a value under a key.

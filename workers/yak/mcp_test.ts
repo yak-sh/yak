@@ -137,6 +137,41 @@ slow(
         'mail_send',
       ])
       assert(tools.every((t: { inputSchema: unknown }) => t.inputSchema))
+      // Every one arrives with a title and the four hints (T-34345, T-34346),
+      // because a host decides what it may call without asking from these and
+      // both directories check them mechanically. hints_test.ts pins which
+      // tool is which; here is the proof they survive the wire — the audit
+      // found `about` reaching a client as a bare name and nothing else.
+      type Listed = { title?: string; annotations?: Record<string, boolean> }
+      for (let t of tools as (Listed & { name: string })[]) {
+        assert(t.title, `${t.name} arrived with no title`)
+        assertEquals(Object.keys(t.annotations ?? {}).sort(), [
+          'destructiveHint',
+          'idempotentHint',
+          'openWorldHint',
+          'readOnlyHint',
+        ], t.name)
+      }
+      let hints = (name: string) =>
+        (tools as (Listed & { name: string })[]).find((t) => t.name == name)
+          ?.annotations
+      // Listing a person's own apps is not a thing to stop and ask about;
+      // throwing one away is.
+      assertEquals(hints('app_list'), {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      })
+      assertEquals(hints('app_delete'), {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: false,
+      })
+      // A create only adds; a letter leaves the platform for good.
+      assertEquals(hints('app_new')?.destructiveHint, false)
+      assertEquals(hints('mail_send')?.openWorldHint, true)
       // The generic tier promises the shape of its answer, so a caller reads a
       // described value instead of parsing prose (@yaks/mcp `outputSchema`).
       // The mail tools answer bundles too, so they promise the same.
@@ -1302,9 +1337,22 @@ slow('the door before anyone signs in', async () => {
     assertEquals(await anon.call('ping'), {})
 
     // One tool, and it is the one that reads nothing.
-    let open = ((await anon.call('tools/list')).tools as { name: string }[])
-      .map((t) => t.name)
-    assertEquals(open, ['about'])
+    let listed = (await anon.call('tools/list')).tools as {
+      name: string
+      title: string
+      annotations: Record<string, boolean>
+    }[]
+    assertEquals(listed.map((t) => t.name), ['about'])
+    // It wears the same title and hints signed in and out (tools.ts lifts it
+    // from preauth.ts): this is the list a directory reviewer sees first, and
+    // a bare entry here reads as a door with no annotations at all.
+    assertEquals(listed[0].title, 'What yaks.app is')
+    assertEquals(listed[0].annotations, {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    })
     let said = await anon.tool('about')
     for (
       let word of [
@@ -1490,6 +1538,7 @@ slow('the door before anyone signs in', async () => {
     // resource is still listed.
     let full = ((await agent.call('tools/list')).tools as { name: string }[])
       .map((t) => t.name)
+    let open = listed.map((t) => t.name)
     assert(open.every((n) => full.includes(n)), 'the public list is a subset')
     assert(full.length > open.length, 'signing in has to be worth something')
     // The same words, and one thing more: the list this door is serving them

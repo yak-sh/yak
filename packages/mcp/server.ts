@@ -169,6 +169,24 @@ export let roster = (opts: Options): string[] =>
   listing(opts).map((t) => t.name)
 
 /**
+ * One tool's behavior, as MCP's four hints (`ToolAnnotations`). A host reads
+ * them to decide what it may call without asking, so they are a contract and
+ * not decoration — both directories review them against what the tool does.
+ *
+ * Only `destructive` has a default, and it is the safe one: a tool that writes
+ * and has not said otherwise is taken to be destructive, so forgetting the
+ * word can never loosen a prompt. A reading tool is never destructive.
+ */
+export let annotated = (
+  t: Pick<Tool, 'readOnly' | 'destructive' | 'idempotent' | 'openWorld'>,
+) => ({
+  readOnlyHint: !!t.readOnly,
+  destructiveHint: t.readOnly ? false : t.destructive ?? true,
+  idempotentHint: !!t.idempotent,
+  openWorldHint: !!t.openWorld,
+})
+
+/**
  * Build the MCP server for a graph: the generic tier (`graph_apply`,
  * `graph_query`, `graph_show`, `graph_schema`, and `search` when a
  * {@link https://jsr.io/@yaks/mcp/doc/~/Search | Search} was passed), plus
@@ -206,11 +224,7 @@ export let server = (opts: Options): McpServer => {
       ...(t.title ? { title: t.title } : {}),
       description: t.description,
       inputSchema: shapeOf(t),
-      annotations: {
-        readOnlyHint: !!t.readOnly,
-        destructiveHint: !t.readOnly,
-        openWorldHint: false,
-      },
+      annotations: annotated(t),
       ...(t.meta ? { _meta: t.meta } : {}),
     }
     let run = async (args: Record<string, unknown>) => {

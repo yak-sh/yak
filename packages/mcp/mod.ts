@@ -63,7 +63,14 @@
  */
 
 export { mcp, type MountOptions } from './mount.ts'
-export { listing, type Options, roster, Say, server } from './server.ts'
+export {
+  annotated,
+  listing,
+  type Options,
+  roster,
+  Say,
+  server,
+} from './server.ts'
 export { rosterLine, rosterVersion } from './roster.ts'
 export { core, type CoreOpts, type Search } from './tools.ts'
 export { type Edge, edges } from './edges.ts'

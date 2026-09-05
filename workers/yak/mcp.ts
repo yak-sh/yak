@@ -130,6 +130,7 @@ let declared = async (ctx: Ctx) =>
     name: t.name,
     title: t.title,
     description: t.description,
+    ...(t.readOnly ? { readOnly: true } : {}),
     input: inputOf(t.inputSchema),
     ...(t._meta ? { meta: t._meta } : {}),
     run: async (args: Record<string, unknown>) => {

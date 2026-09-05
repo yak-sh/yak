@@ -137,6 +137,18 @@ export type Tool = {
   output?: Schema
   /** this tool only reads — a client may call it without asking first */
   readOnly?: boolean
+  /** this tool can DELETE or otherwise irreversibly change what it touches, so
+   * a client should ask before every call. A create is not destructive: it
+   * only adds, and undoing it is the delete that IS. Left unsaid, a writing
+   * tool is taken to be destructive — the safe reading of silence. */
+  destructive?: boolean
+  /** calling it twice with the same arguments leaves the same world as calling
+   * it once — a setter that converges on a value, not an appender. */
+  idempotent?: boolean
+  /** it reaches OUTSIDE this graph: mail to a stranger, a page anyone on the
+   * web can then read, a record at another company. A tool that only touches
+   * what is stored here is closed-world, whatever it writes. */
+  openWorld?: boolean
   /** what the TRANSPORT should say about this tool beside its schemas, handed
    * to the client verbatim — an MCP `_meta`, say, naming the page a host
    * renders the answer in. Opaque here, like {@link Schema}. */

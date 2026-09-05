@@ -148,6 +148,7 @@ export let listDeclared = async (ctx: Ctx) => {
     name: string
     title: string
     description: string
+    readOnly: boolean
     inputSchema: unknown
     _meta?: { ui: { resourceUri: string; visibility: string[] } }
   }[] = []
@@ -164,6 +165,12 @@ export let listDeclared = async (ctx: Ctx) => {
         title: `${app.title || app.slug}: ${name}`,
         description: `${tool.description} — ${app.title || app.slug}, an app ` +
           `at ${space.slug}.yaks.app/${app.slug}/`,
+        // The declaration says which it is: a `query` tool is a filter line
+        // and reads, an `apply` tool is a template and writes. Nothing an app
+        // writes here leaves the platform, so none of them is open-world, and
+        // a template carrying nulls can drop a component — so a writer takes
+        // the destructive default rather than a promise this side cannot keep.
+        readOnly: tool.query != null,
         inputSchema: schemaOf(tool),
         // The page this tool's answer draws itself in, where it named one
         // (T-32687). `app` beside `model` in the visibility is what lets the
