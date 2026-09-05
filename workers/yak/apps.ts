@@ -11,7 +11,10 @@
 // content-addressed into the same bucket and named by a row in the app's
 // store (T-32677). An app's OWN Worker answers before the files do, where it
 // deployed one (dispatch.ts `ran`, T-32778): the same `vouched` headers, a
-// 404 from it falling back to the files, and `/api/` never its.
+// 404 from it falling back to the files, and `/api/` never its. It answers
+// ahead of the `private` gate as well (T-34303) — an app with a worker is one
+// whose gatekeeper is its own code, and `env.APP` is what that code writes
+// with.
 //
 // A page's own breaks come back here too (T-32486), without the page asking:
 // every HTML response is rewritten on its way out to carry the reporter
@@ -36,7 +39,7 @@ import {
   storeName,
 } from './directory.ts'
 import * as dirPart from './directory.ts'
-import { ahead, bearing, granted, ran } from './dispatch.ts'
+import { ahead, bearing, granted, itsApp, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { type Size, sizeOf } from './image.ts'
 import { asking, listed, type Row } from './listing.ts'
@@ -561,9 +564,13 @@ let gave = async (
 
 // What to call this person, for the store to write beside their rows: the
 // write door's half of the vouch (session.ts `titling`), over this door's own
-// directory.
-let named = (env: Env, who: Who) =>
-  titling(directory(bound(env.DIRECTORY, dirPart.fetch, env)), who.person)
+// directory. An app writing as ITSELF (dispatch.ts `owning`, `env.APP`) is not
+// a person, so the directory is not asked to name one — the store knows the
+// app it holds and writes no person row for it (graph.ts `#vouching`).
+let named = (env: Env, who: Who, app?: App) =>
+  app && itsApp(who, app)
+    ? Promise.resolve({} as Record<string, string>)
+    : titling(directory(bound(env.DIRECTORY, dirPart.fetch, env)), who.person)
 
 // What a write answers, either way it was routed: the entities it touched, and
 // the aliases the batch minted for the `$alias` names it was written with. One
@@ -816,7 +823,7 @@ let api = async (
         lowered(
           await metaOf(store).apply(batched(JSON.parse(body)), {
             ...headers,
-            ...(await named(env, who)),
+            ...(await named(env, who, app)),
           }),
         ),
       )
@@ -840,7 +847,7 @@ let api = async (
     if (stopped) return json(413, 'space_full', stopped)
     return took(req, env, space, app, store, {
       ...headers,
-      ...(await named(env, who)),
+      ...(await named(env, who, app)),
     })
   }
   if (path.startsWith('/blob/')) {
@@ -1152,19 +1159,8 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     // bare hostname, which is where the home app is mounted.
     if (early) return reporting(early, req, '/')
   }
-  // A private app hides its PAGE too, not only its data (C-32607 item 5):
-  // `access: private` says only its members can see it, and its files are
-  // part of what they see. A stranger is sent to sign in and handed back to
-  // the page (T-32593); someone signed in who is nobody here gets the same
-  // nothing-here a wrong address gets — whether the app exists at all is its
-  // owner's to tell. The `/api/` doors keep their own refusals, which speak.
-  if (!path.startsWith('/api/') && !reads(mode(app.access), who.role)) {
-    return who.person ? nothingHere() : redirect(signInAt(req.url), 303)
-  }
-  // The app's own code answers first, where it has any: `ran` is null when
-  // the app deployed no worker.js and when the worker answered 404, which is
-  // how a worker owns its routes and leaves its pages to the platform. The
-  // `/api/` doors stay the kernel's, always.
+  // The `/api/` doors stay the kernel's, always, and keep their own refusals,
+  // which speak.
   if (path.startsWith('/api/')) {
     return reporting(
       await c.time(
@@ -1175,6 +1171,25 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
       at,
     )
   }
+  // A private app hides its PAGE too, not only its data (C-32607 item 5):
+  // `access: private` says only its members can see it, and its files are
+  // part of what they see. A stranger is sent to sign in and handed back to
+  // the page (T-32593); someone signed in who is nobody here gets the same
+  // nothing-here a wrong address gets — whether the app exists at all is its
+  // owner's to tell.
+  //
+  // ITS OWN WORKER IS THE EXCEPTION, both ways round (T-34303). The worker
+  // runs ahead of this gate, and a request coming BACK from it passes the gate
+  // — `itself` is a grant the kernel minted for this store and this request,
+  // which nothing but this app's own worker can hold, so `env.FILES` reads the
+  // app's pages where a stranger asking directly is refused. On a private app
+  // the worker IS the gatekeeper: `access` is one word about the whole store,
+  // and a rule finer than that — the invitation code that opens one
+  // household's row and no other — can only live in the app's own code. What
+  // that code may do AS the app is `env.APP` and nothing else; its `env.STORE`
+  // is still the visitor, so a worker that only passes a store read on refuses
+  // exactly what the page would have.
+  let mayRead = !!itself || reads(mode(app.access), who.role)
   // Both at once, because they are two halves of one answer and neither
   // needs the other's result (T-33176). The app's own worker answers first
   // where it has one and the file is what it falls back to, so asking the
@@ -1186,12 +1201,16 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // The wasted read is the rare case — an app whose worker answers — and it
   // is one small GET. The `catch` is there because a promise nobody awaits
   // must not surface as an unhandled rejection.
-  let file = asset(req, env, space, app, path, at, c)
-  file.catch(() => {})
+  let file = mayRead ? asset(req, env, space, app, path, at, c) : null
+  file?.catch(() => {})
   let own = itself
     ? null
     : await c.time('worker', () => ran(env, space!, app!, req, who))
-  let page = own ?? await file
+  // The worker passed, and the files are not this visitor's to see.
+  if (!own && !file) {
+    return who.person ? nothingHere() : redirect(signInAt(req.url), 303)
+  }
+  let page = own ?? await file!
   // Rung 4, and it is last rather than fourth in the code because rungs 3 and
   // 5 are the one call above: the space's index answers `/` when the home app
   // has nothing there — its worker passed and its files have no front page.

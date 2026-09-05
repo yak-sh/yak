@@ -26,8 +26,10 @@ import {
   dropSecret,
   granted,
   granting,
+  itsApp,
   moduleType,
   NO_WORKER,
+  owning,
   ran,
   scriptName,
   secrets,
@@ -188,13 +190,64 @@ Deno.test('a client cannot send its own grant, or say who it is', async () => {
     envOf(m.get),
     space,
     app,
-    visit('/hello', { 'x-yak-grant': 'mine', 'x-yak-app': 'photos' }),
+    visit('/hello', {
+      'x-yak-grant': 'mine',
+      'x-yak-app-grant': 'mine too',
+      'x-yak-app': 'photos',
+    }),
     nobody,
   )
   let sent = m.seen()
   assertEquals(sent.headers.get('x-yak-app'), 'recipes')
   assertEquals(sent.headers.get('x-yak-person'), null)
   assertEquals(await granted(sent, SECRET, 'jeff/recipes'), nobody)
+  // The app's own grant is the kernel's word too, and what a client sent
+  // under that name is gone before the kernel wrote it.
+  assertEquals(
+    await granted(
+      new Request('https://jeff.yaks.app/recipes/api/apply', {
+        headers: { 'x-yak-grant': sent.headers.get('x-yak-app-grant')! },
+      }),
+      SECRET,
+      'jeff/recipes',
+    ),
+    { person: 'a1', role: 'editor' },
+  )
+})
+
+// ── env.APP (T-34303): the second grant, naming the APP as the actor, so a
+// worker can be the gatekeeper on a store its visitors may not touch.
+
+Deno.test('a worker is handed the app itself, and only on its own store', async () => {
+  let m = mirror()
+  await ran(envOf(m.get), space, app, visit(), who)
+  let mine = m.seen().headers.get('x-yak-app-grant')!
+  assert(mine, 'the worker was handed no grant of its own')
+  assert(mine != m.seen().headers.get('x-yak-grant'), 'the visitor grant again')
+  let back = (grant: string, store = 'jeff/recipes') =>
+    granted(
+      new Request('https://jeff.yaks.app/recipes/api/apply', {
+        headers: { 'x-yak-grant': grant },
+      }),
+      SECRET,
+      store,
+    )
+  // The app entity, at editor — the level that carries it past its own access
+  // mode and no further: an editor writes the data and not the roster.
+  assertEquals(await back(mine), { person: 'a1', role: 'editor' })
+  // And it opens nowhere else, exactly like the visitor's.
+  assertEquals(await back(mine, 'jeff/photos'), null)
+  assertEquals(
+    await back(await owning('another-secret', 'jeff/recipes', app)),
+    null,
+  )
+})
+
+Deno.test('the app acting as itself is told apart from any visitor', () => {
+  assert(itsApp({ person: 'a1', role: 'editor' }, app))
+  assert(!itsApp(who, app))
+  assert(!itsApp(nobody, app))
+  assert(!itsApp(null, app))
 })
 
 Deno.test('a 404 from the worker, and no worker, both mean the files', async () => {
@@ -288,11 +341,13 @@ Deno.test('the shim gives the app its doors and keeps the grant', async () => {
         async fetch(req, env) {
           let rows = await env.STORE.fetch('/query?.doc!')
           let page = await env.FILES.fetch('style.css')
+          let mine = await env.APP.fetch('/apply', { method: 'POST' })
           return Response.json({
             grant: req.headers.get('x-yak-grant'),
+            self: req.headers.get('x-yak-app-grant'),
             person: req.headers.get('x-yak-person'),
             secret: env.SPOON,
-            asked: [await rows.text(), await page.text()],
+            asked: [await rows.text(), await page.text(), await mine.text()],
           })
         },
       }`,
@@ -312,6 +367,7 @@ Deno.test('the shim gives the app its doors and keeps the grant', async () => {
       new Request('https://jeff.yaks.app/recipes/hello', {
         headers: {
           'x-yak-grant': 'the-grant',
+          'x-yak-app-grant': 'the-app-grant',
           'x-yak-app': 'recipes',
           'x-yak-person': 'p1',
         },
@@ -320,16 +376,23 @@ Deno.test('the shim gives the app its doors and keeps the grant', async () => {
       {},
     )
     let said = await out.json()
-    // The app's code never sees the grant — it sees who is looking, and its
-    // own secrets.
+    // The app's code never sees either grant — it sees who is looking, and
+    // its own secrets.
     assertEquals(said.grant, null)
+    assertEquals(said.self, null)
     assertEquals(said.person, 'p1')
     assertEquals(said.secret, 'the app is told its own secrets')
-    // A leading slash is the APP's root, not the hostname's, both doors.
-    assertEquals(said.asked, ['/recipes/api/query', '/recipes/style.css'])
+    // A leading slash is the APP's root, not the hostname's, every door.
+    assertEquals(said.asked, [
+      '/recipes/api/query',
+      '/recipes/style.css',
+      '/recipes/api/apply',
+    ])
+    // `APP` is the same doors as `STORE`; the grant it spends is the whole
+    // difference between them.
     assertEquals(
       asked.map((r) => r.headers.get('x-yak-grant')),
-      ['the-grant', 'the-grant'],
+      ['the-grant', 'the-grant', 'the-app-grant'],
     )
     assertEquals(
       asked[0].url,

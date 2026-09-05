@@ -685,7 +685,12 @@ export class Store {
         let said = `${app ?? ''} ${v.level ?? ''} ${v.title ?? ''}`
         if (this.#told.get(who) == said) return bundles
         this.#told.set(who, said)
-        let out: Bundle[] = [{
+        // The APP writing as itself (dispatch.ts `owning`, `env.APP`) is the
+        // one actor that is not a person: it is already a row here, carrying
+        // this store's `access`, and calling it a person would put the app in
+        // its own `.person!` listing. Its grant is still written — that is
+        // what @yaks/member's guard reads to admit the write.
+        let out: Bundle[] = who == app ? [] : [{
           entity: { eid: who },
           person: {},
           ...(v.title ? { doc: { title: v.title } } : {}),
@@ -696,6 +701,7 @@ export class Store {
             grant: { app, person: who, access: v.level },
           })
         }
+        if (!out.length) return bundles
         return then(tx.patch(out), () => bundles)
       },
       // The transaction is gone, taking the rows above with it — because the

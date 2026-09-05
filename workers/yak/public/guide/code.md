@@ -126,10 +126,12 @@ app's own `/api/`. Two things about it:
 - **It acts as the person looking.** The kernel seals a grant naming this store,
   this visitor and their role, good for a minute, and the shim adds it to every
   call the worker makes through `STORE` and `FILES`. So the app's `access`
-  decides what your worker can do exactly as it decides what their page can do —
-  a worker is not a way around it. A grant minted for one app's store is refused
-  by any other, and app code never sees the grant itself: the shim takes the
-  header off before your module is called.
+  decides what your worker can do exactly as it decides what their page can do.
+  Reaching past it is `env.APP`, the next section, and it is a deliberate door
+  with a rule of its own — not something `env.STORE` will do for you by
+  accident. A grant minted for one app's store is refused by any other, and app
+  code never sees the grant itself: the shim takes the header off before your
+  module is called.
 
 It answers a `Response`, not parsed rows, so read the status yourself:
 
@@ -148,6 +150,123 @@ it already knows how to show.
 The whole filter grammar works here, because it is the same door: `.doc!`,
 `.recipe.minutes<=30`, `id=<eid>`, `limit=`, `.count!`, a bare word for full
 text. Ask for the components you will use.
+
+## env.APP — the app's graph, as the app itself
+
+    let r = await env.APP.fetch('/query?.household.code=' + hash)
+
+`env.APP.fetch(path, init)` is the same doors at the same addresses as
+`env.STORE`, with one difference: it acts as the APP, at `editor`, on the app's
+own store. It reads and writes whatever the app's `access` says — `private`
+included — and a write through it is signed by the app, so `created.by` is the
+app's own entity and not a guest.
+
+It exists for one shape of app: **the worker is the gatekeeper.** `access` is
+one word about the whole store, so it cannot say "each household edits its own
+row and nobody else's". That rule is code, and code needs a door that is not
+already refusing. `env.APP` is that door.
+
+**A private app's worker runs anyway.** `private` sends a stranger to the login
+page — but not before your worker has had the request, and not for the calls
+your worker makes back through `env.FILES`. So the guest holding an invitation
+card reaches your route, and your route can hand them a page. Everything else
+about `private` holds: they cannot reach the store doors, and they cannot ask
+for a file directly.
+
+Everything true of `env.STORE` is true of this one. It is a path, not a URL. The
+grant naming your store is refused by every other store. Your code never sees
+it: the kernel mints it per request and the shim keeps it in a closure, so there
+is no header a caller can send you that turns into one.
+
+Two things it is not:
+
+- **Not the owner.** An editor writes the app's data and never its roster. A
+  batch touching `member`, `grant` or `access` is refused through this door the
+  same as any other, so a worker cannot promote anyone, itself included.
+- **Not for the whole worker.** Use `env.STORE` for everything the visitor is
+  allowed to do, and `env.APP` only on the path where you have checked
+  something. A worker that reaches for `env.APP` everywhere has an `open` app
+  with extra steps.
+
+### The RSVP pattern
+
+A wedding site. Every household has an invitation code; that household may see
+and change its own reply and nothing else. Set the app `private`, so the store
+answers a stranger nothing at all, and let the worker be the way in — it still
+runs, and it can still read the app's pages with `env.FILES` to hand one back.
+
+Store a **hash** of the code, never the code. The codes are on paper cards in
+the post; the graph is a thing you will export, back up and read over someone's
+shoulder, and a code that leaks is a household's row.
+
+    // Seeding, once, as the owner: a household per card.
+    { entity: { eid: '$h' },
+      doc: { title: 'The Okonkwos' },
+      household: { code: '<sha-256 of the code>', seats: 2 } }
+
+The route takes the code, hashes it, finds the one row that matches, and touches
+only that row:
+
+    let hashed = async (code) => {
+      let bytes = new TextEncoder().encode(code.trim().toUpperCase())
+      let sum = await crypto.subtle.digest('SHA-256', bytes)
+      return [...new Uint8Array(sum)]
+        .map((b) => b.toString(16).padStart(2, '0')).join('')
+    }
+
+    export default {
+      async fetch(req, env) {
+        let url = new URL(req.url)
+        if (!url.pathname.endsWith('/rsvp')) {
+          return new Response('not found', { status: 404 })
+        }
+        let sent = await req.json()
+        let code = String(sent.code ?? '')
+        // THE CHECK COMES FIRST. Nothing below it may run without it.
+        if (!code) return new Response('no code', { status: 403 })
+        let r = await env.APP.fetch(
+          '/query?.household.code=' + await hashed(code) + '&.doc?&limit=1',
+        )
+        let [found] = await r.json()
+        // A wrong code and a missing household are the same answer: 403, and
+        // nothing about which it was.
+        if (!found) return new Response('no invitation by that code', {
+          status: 403,
+        })
+        // The eid comes from the row the code found — never from the body.
+        let w = await env.APP.fetch('/apply', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            entities: [{
+              entity: { eid: found.entity.eid },
+              household: { coming: Number(sent.coming ?? 0) },
+            }],
+          }),
+        })
+        if (!w.ok) return new Response(await w.text(), { status: w.status })
+        return Response.json({ ok: true, title: found.doc?.title })
+      },
+    }
+
+**This is the one place where your own check IS the permission.** Everywhere
+else the store is behind you: you can write a check, forget a case, and the
+store still refuses. Through `env.APP` there is nothing behind you. So:
+
+- **The check comes first**, before the first `env.APP` call on that path, with
+  nothing between the two.
+- **The refusal is 403**, and it says nothing more. Not 404, not "no such
+  household", not a different sentence for a wrong code than for a missing one —
+  a difference is a way to read the guest list.
+- **The eid comes from the row the check found**, never from the request body.
+  Taking an eid from the caller and writing it is the whole rule handed back to
+  the caller.
+- **Nothing else on that path is reached through `env.APP`.** Listing every
+  household to find one is the private app made public by your own hand; ask for
+  the row, not the table.
+
+Rate-limit the guess if the code is short — a four-character code is ten
+thousand tries — or make it long enough not to be worth guessing.
 
 ## env.FILES — the app's own files
 
@@ -172,9 +291,10 @@ A request from your worker never re-enters your worker, so
 ## The rest of env
 
 Every secret you set is on `env` under the name you gave it — `env.WEATHER_KEY`,
-`env.STRIPE`. The service binding the platform uses to build `STORE` and `FILES`
-is there too, as `env.KERNEL`; it is plumbing, it wants absolute URLs and the
-grant header, and `STORE` and `FILES` are what it is for. Reach for those.
+`env.STRIPE`. The service binding the platform uses to build `STORE`, `APP` and
+`FILES` is there too, as `env.KERNEL`; it is plumbing, it wants absolute URLs
+and a grant header it will not give you, and the three doors are what it is for.
+Reach for those.
 
 There is nothing else. No KV, no D1, no R2 binding, no environment variables of
 your own: the app's graph is its storage.

@@ -559,3 +559,86 @@ Deno.test("rung 1½: the router's own onward request is not intercepted again", 
   assertStringIncludes(await (await k.at('/garden/print')).text(), 'garden')
   assertEquals(ran, 1)
 })
+
+// ---- env.APP: the worker as the app's own gatekeeper (T-34303) --------------
+
+// The RSVP shape, end to end over the same stand-in: a `private` app nobody
+// may read, and a worker route that checks an invitation code and writes the
+// one row it names as the APP. The grant is spent the way the shim spends it
+// (dispatch.ts SHIM) — under GRANT, on the app's own door — because the shim
+// runs inside the dispatch namespace and this harness stands where that
+// namespace would be.
+Deno.test('env.APP: a private app is written by its own worker, and by nobody else', async () => {
+  let env: Env
+  let door = (req: Request, path: string, init: RequestInit = {}) =>
+    apps.fetch(
+      new Request(visit(path), {
+        ...init,
+        headers: {
+          ...(init.headers as object),
+          // `env.APP`: the app itself. `env.STORE` and `env.FILES` forward
+          // `x-yak-grant`, which is this visitor.
+          'x-yak-grant': req.headers.get('x-yak-app-grant') ?? '',
+        },
+      }),
+      env,
+    )
+  let k = await router(async (req) => {
+    let url = new URL(req.url)
+    if (url.pathname == '/rsvp') {
+      // THE CHECK COMES FIRST, and its refusal says nothing else.
+      if (url.searchParams.get('code') != 'OPEN-SESAME') {
+        return new Response('no invitation by that code', { status: 403 })
+      }
+      let wrote = await door(req, '/api/apply', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          entities: [{ doc: { title: 'The Okonkwos' } }],
+        }),
+      })
+      return new Response(await wrote.text(), { status: wrote.status })
+    }
+    // The app's own page, which the gate would otherwise hide from the guest
+    // holding the card: the worker reads it and decides.
+    if (url.pathname == '/card') {
+      return apps.fetch(
+        new Request(visit('/index.html'), { headers: req.headers }),
+        env,
+      )
+    }
+    return new Response('no', { status: 404 })
+  })
+  env = k.env
+  k.put('ada/cookbook/index.html', '<!doctype html><body>rsvp</body>')
+  await k.dir.apply({
+    entities: [{ entity: { eid: k.app.eid }, app: { access: 'private' } }],
+  }, ADA_OWNS)
+
+  // The guest holds a code and nothing else — no session, no role.
+  assertEquals((await k.at('/rsvp?code=OPEN-SESAME')).status, 200)
+  // A wrong code is the app's own no, and it reached nothing.
+  assertEquals((await k.at('/rsvp?code=guess')).status, 403)
+  // The worker read its own page for them; asking for it directly is the
+  // sign-in bounce a private app gives a stranger.
+  assertStringIncludes(await (await k.at('/card')).text(), 'rsvp')
+  assertEquals((await k.at('/index.html')).status, 303)
+  // And the store door is still shut: `env.APP` is a door on the worker's own
+  // path, never a hole in the app's mode.
+  assertEquals((await k.at('/api/query?.doc!')).status, 401)
+
+  // One household row, signed by the APP — not by a guest, and not by Ada.
+  let cookie = await as(ADA)
+  let asAda = (path: string) =>
+    apps.fetch(visit(path, { headers: { cookie } }), env)
+  let rows = await (await asAda(
+    '/api/query?.doc.title=The Okonkwos&.created?',
+  )).json()
+  assertEquals(rows.length, 1)
+  // A bare eid, because the app is not a person and has no name in this store
+  // to resolve one to (listing.ts `named`) — and it is the app's own entity,
+  // so `.created.by=<the app>` finds everything the worker wrote.
+  assertEquals(rows[0].created.by, k.app.eid)
+  // And the app is not a person for having written (graph.ts `#vouching`).
+  assertEquals((await (await asAda('/api/query?.person!')).json()).length, 0)
+})

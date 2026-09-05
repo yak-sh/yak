@@ -18,6 +18,17 @@
 // binding has no grant that names it. Nothing durable is handed to app code:
 // the grant dies in a minute and belongs to one request.
 //
+// THE SECOND DOOR is `env.APP`, and it is the same machinery pointed at a
+// different actor (T-34303). The kernel seals a second grant naming the APP
+// ENTITY with `editor`, sends it in its own header, and the shim holds that
+// one too — so `env.APP.fetch('/apply', …)` writes the app's own store
+// whatever the app's `access` says, and the batch is signed by the app. It is
+// what makes a per-row rule buildable at all: an app that is `private` to the
+// world, with a worker that checks an invitation code and then writes the one
+// row that code names. Both grants are the kernel's own word, minted per
+// request from the directory's row and never from anything a client sent, and
+// both name ONE store, so neither opens anywhere else.
+//
 // The platform's session cookie never crosses into app code either — it is
 // stripped on the way in (session.ts: what serves an app gets the vouched
 // headers and never the cookie), because it is a credential for every space
@@ -57,6 +68,12 @@ export let NAMESPACE = 'yak-apps'
 // sees is the kernel's.
 export let GRANT = 'x-yak-grant'
 
+// The APP's own grant, on the way IN only. The shim takes it off and spends
+// it under `GRANT` like any other, so the kernel has one header to open and
+// the inner hop cannot tell the two apart — which is the point: `granted`
+// answers who a grant names, and this one names the app.
+export let SELF = 'x-yak-app-grant'
+
 // The app the request is for, so the shim can spell its own doors, and who
 // is looking, so the app's code can greet them. A client cannot send these
 // either.
@@ -95,28 +112,34 @@ export let WORKER = 'worker.js'
 export let SHIM = `import app from './${WORKER}'
 
 let GRANT = '${GRANT}'
+let SELF = '${SELF}'
 
 export default {
   fetch(req, env, ctx) {
     let grant = req.headers.get(GRANT) || ''
+    let self = req.headers.get(SELF) || ''
     let headers = new Headers(req.headers)
     headers.delete(GRANT)
+    headers.delete(SELF)
     let origin = new URL(req.url).origin
     let slug = req.headers.get('x-yak-app') || ''
     // A path onto the app's own doors, never a URL: a leading slash is the
-    // app's root and not the hostname's, so the two are joined by hand.
-    let door = (under) => ({
+    // app's root and not the hostname's, so the two are joined by hand. The
+    // grant it spends is the whole difference between the doors.
+    let door = (under, held) => ({
       fetch: (path, init) => {
         let to = origin + under + String(path).replace(/^\\/+/, '')
         let out = new Request(to, init)
-        out.headers.set(GRANT, grant)
+        out.headers.set(GRANT, held)
         return env.KERNEL.fetch(out)
       },
     })
+    let api = '/' + slug + '/api/'
     return app.fetch(new Request(req, { headers }), {
       ...env,
-      STORE: door('/' + slug + '/api/'),
-      FILES: door('/' + slug + '/'),
+      STORE: door(api, grant),
+      FILES: door('/' + slug + '/', grant),
+      APP: door(api, self),
     }, ctx)
   },
 }
@@ -133,6 +156,22 @@ export let granting = (secret: string, store: string, who: Who) =>
     } satisfies Grant,
     secret,
   )
+
+// The APP acting as itself, for the same minute, on the same one store: the
+// app entity as the actor, at `editor`, which is what puts it past its own
+// `access` mode and no further — the two rules @yaks/member keeps for an
+// editor still hold, so `env.APP` writes the app's data and never its roster
+// (@yaks/member `guarding`, `governs`). The eid comes from the directory's own
+// row for the app, never from the request.
+export let owning = (secret: string, store: string, app: App) =>
+  granting(secret, store, { person: app.eid, role: 'editor' })
+
+/** Whether this caller is the app acting as itself rather than as its visitor
+ * — the app entity is not a person, so nothing asks the directory to name it
+ * and nothing writes a person row for it (graph.ts `#vouching`). Only the
+ * kernel's own `owning` grant can say this: a person's eid is never an app's. */
+export let itsApp = (who: Who | null, app: App) =>
+  !!who && who.person == app.eid
 
 // Whether this request is an app's worker coming back through the service
 // binding at all — ANY app's, whoever the grant names and whether or not it
@@ -173,7 +212,8 @@ let uncookied = (headers: Headers) => {
 // The request an app's worker is handed: the visitor's own, minus what only
 // the kernel may say and minus the platform's cookie, plus who is looking
 // (session.ts `vouched`, said the same way everything else the kernel serves
-// says it) and the grant that lets the worker act as them.
+// says it) and the two grants — the visitor the worker answers, and the app
+// itself.
 let handed = async (
   req: Request,
   app: App,
@@ -182,12 +222,13 @@ let handed = async (
   secret: string,
 ) => {
   let headers = new Headers(req.headers)
-  for (let h of [...VOUCH, GRANT]) headers.delete(h)
+  for (let h of [...VOUCH, GRANT, SELF]) headers.delete(h)
   uncookied(headers)
   headers.set('x-yak-app', app.slug)
   if (who.person) headers.set('x-yak-person', who.person)
   if (who.role) headers.set('x-yak-role', who.role)
   headers.set(GRANT, await granting(secret, store, who))
+  headers.set(SELF, await owning(secret, store, app))
   return new Request(req, { headers })
 }
 

@@ -36,6 +36,12 @@ the same "Nothing here yet." a wrong address gets — whether the app exists at
 all is its owner's to tell. The `/api/` doors answer `not_a_reader` rather than
 pretending.
 
+The app's own `worker.js` is the exception, and the only one: it runs ahead of
+that bounce, so a private app with a worker is an app whose gatekeeper is its
+own code. That is how a rule finer than one word gets written — an invitation
+code that opens one household's row and no other. See `env.APP` in
+[Code of your own](./code.md).
+
 One rule sits above all three: **the file door is never widened.** Writing an
 app's bytes is always a member's act, whatever the app lets its visitors save
 into its store. An `open` app takes a guest's rows and never a guest's deploy.

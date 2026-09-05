@@ -279,6 +279,51 @@ Deno.test('an expired grant is nobody, and nobody reads a private app', async ()
   assertEquals(no.status, 401)
 })
 
+// ── The app as its own actor (dispatch.ts `owning`, `env.APP`, T-34303): the
+// one caller a `private` app admits without a person behind it, because on
+// that path the app's own worker is the gatekeeper.
+
+Deno.test('an app writing as itself is signed by the app, and is not a person', async () => {
+  let { store, head } = await cookbook('private')
+  // What the kernel vouches for an `env.APP` call: the app entity, at editor.
+  let mine = vouch({ person: APP, role: 'editor' }, 'private')
+  let wrote = await post(store, '/apply', [{
+    entity: { eid: CAKE },
+    doc: { title: 'The Okonkwos' },
+  }], mine)
+  assertEquals(wrote.status, 200)
+  assert((await wrote.json() as Bundle[]).some((b) => by(b) == APP))
+
+  // A private app, and the app reads it back through the same door.
+  let read = await get(store, '/query?q=.doc.title=The Okonkwos', mine)
+  assertEquals(read.status, 200)
+  assertEquals((await read.json()).length, 1)
+
+  // The grant is written down — it is what @yaks/member's guard reads — and
+  // the app is not called a person for it.
+  let [grant] = await (await get(store, '/query?q=.grant!', head)).json()
+  assertEquals(idOf(grant.grant.person), APP)
+  assertEquals(grant.grant.access, 'editor')
+  assertEquals(
+    (await (await get(store, '/query?q=.person!', head)).json())
+      .length,
+    0,
+  )
+})
+
+Deno.test('an app acting as itself still may not touch the roster', async () => {
+  let { store } = await cookbook('private')
+  let mine = vouch({ person: APP, role: 'editor' }, 'private')
+  // An editor writes the data and never hands out keys — the app included,
+  // which is what keeps `env.APP` from being a way to make the app public.
+  let no = await post(store, '/apply', [{
+    entity: { eid: APP },
+    access: { mode: 'open' },
+  }], mine)
+  assertEquals(no.status, 403)
+  assertEquals((await no.json()).error, 'Denied')
+})
+
 // ── The agent door: @yaks/mcp over the same graph, under the same seam.
 
 let call = (
