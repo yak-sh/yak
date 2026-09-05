@@ -307,6 +307,26 @@ Your words are yours. No other app's store has heard of them, and no other app's
 rows can collide with them — unless a sibling app of the same person names the
 same word, which is the next page.
 
+## The same manifest, as JSON Schema
+
+A `vocab.json` may also be written as a JSON Schema document, which is what the
+platform speaks underneath and the form to reach for in a new app. One `$defs`
+entry per component, one `properties` entry per column:
+
+    { "$defs": {
+        "recipe": { "type": "object", "properties": {
+          "serves":  { "type": "number" },
+          "minutes": { "type": "number" },
+          "source":  { "type": "string" } } } } }
+
+The short form above is that said shorter, and it is still accepted: a manifest
+with no `$defs` is read as `{"component": {"column": "type"}}` and converted on
+the way in. `text` is `{"type": "string"}`, `number` is `{"type": "number"}`,
+`bool` is `{"type": "boolean"}`, `time` is
+`{"type": "string", "format": "date-time"}`, and `url` is
+`{"type": "string", "format": "uri"}`. Both spellings plant the same columns, so
+nothing about an app already deployed changes.
+
 ## How a vocabulary evolves
 
 The rule is one sentence: **columns only ever arrive.**
