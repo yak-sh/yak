@@ -705,6 +705,12 @@ let sameProps = (
 let loc = (globalThis as {
   location?: { host: string; protocol?: string; reload(): void }
 }).location
+// The host a process starts with: a page's own, or NONE. A location-less
+// process names its server (the TUI, from TASKS_HOST) or has none. This used
+// to fall back to the dev port, which made every location-less process that
+// mounted a view — every `deno test` — stream the owner's live graph into
+// `cache` and read it back as fixture data.
+export let hostFrom = (loc?: { host: string }) => loc?.host ?? ''
 export let config: {
   host: string
   secure: boolean
@@ -730,7 +736,7 @@ export let config: {
   swap?: (gen: number) => void
   css?: (gen: number) => void
 } = {
-  host: loc?.host ?? '127.0.0.1:5173',
+  host: hostFrom(loc),
   // Behind an https front door the page's scheme must carry through to
   // the socket and fetches — a hardcoded http:// is mixed content there.
   secure: loc?.protocol == 'https:',
@@ -743,7 +749,14 @@ export let agreementProbe = (search: string) =>
   new URLSearchParams(search).get('probe') == 'subscriptions'
 export let storeProbe = (search: string) =>
   new URLSearchParams(search).get('store') == 'idb'
-export let base = () => `http${config.secure ? 's' : ''}://${config.host}`
+// THE server address — every socket and fetch in this module goes through it,
+// and there is no host to guess. Refuse, so a process that never named a
+// server says so instead of reaching one it was never pointed at.
+export let serverHost = () => {
+  if (config.host) return config.host
+  throw new Error('live: no server host — set config.host (TASKS_HOST)')
+}
+export let base = () => `http${config.secure ? 's' : ''}://${serverHost()}`
 
 // The column sort: priority first (lower sorts higher), num as tiebreak.
 export { settled, statuses, statusOf, uuid } from './types.ts'
@@ -1508,7 +1521,7 @@ let hot = (data: unknown): data is Hot => {
 let connect = () => {
   if (ws && ws.readyState <= WebSocket.OPEN) return ws
   let socket = new WebSocket(
-    `ws${config.secure ? 's' : ''}://${config.host}/ws${
+    `ws${config.secure ? 's' : ''}://${serverHost()}/ws${
       config.client ? `?client=${config.client}` : ''
     }`,
   )

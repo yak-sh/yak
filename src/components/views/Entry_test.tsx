@@ -4,7 +4,7 @@ import { h, render } from 'preact'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { type Ent } from '../../types.ts'
-import { cache, ent } from '../../live.ts'
+import { cache, ent, useRoute } from '../../live.ts'
 import { resolve } from '../Entity.tsx'
 import {
   CommandFull,
@@ -18,6 +18,11 @@ import {
   ResultFull,
   ResultSummary,
 } from './Entry.tsx'
+
+// A mounted view holds subscriptions. In a test there is no server to hold
+// them against, so control frames go nowhere through live.ts's transport
+// seam — the cache here is only ever what the test seeds.
+useRoute(() => {})
 
 let withDom = (run: (root: HTMLElement) => void) => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')

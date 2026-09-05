@@ -3,7 +3,12 @@
 // fakes go in FIRST and the module is imported after. Everything a launch
 // can be — cold, warm, deep-linked, a second tab — is then one line.
 import { assertEquals } from '@std/assert'
-import { cache, census } from '../live.ts'
+import { cache, census, useRoute } from '../live.ts'
+
+// A mounted view holds subscriptions. In a test there is no server to hold
+// them against, so control frames go nowhere through live.ts's transport
+// seam — the cache here is only ever what the test seeds.
+useRoute(() => {})
 
 let place = { pathname: '/', search: '' }
 let entries: string[] = ['/']

@@ -5,7 +5,12 @@
 // restore_test's synthetic 'canvas'/'task'), because mark() writes them through
 // the same eid grammar apply() enforces, which only a UUID clears.
 import { assertEquals } from '@std/assert'
-import { applyLocal, cache, census, myCursor } from '../live.ts'
+import { applyLocal, cache, census, myCursor, useRoute } from '../live.ts'
+
+// A mounted view holds subscriptions. In a test there is no server to hold
+// them against, so control frames go nowhere through live.ts's transport
+// seam — the cache here is only ever what the test seeds.
+useRoute(() => {})
 
 let CLIENT = '00000000-0000-4000-8000-0000000000c1'
 let CANVAS = '00000000-0000-4000-8000-000000000001'

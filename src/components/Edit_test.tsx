@@ -101,6 +101,9 @@ let typeInto = (body: string | undefined, text: string) => {
       configurable: true,
     },
   })
+  // This test names its own dead server; put back whatever the process had,
+  // so a sibling file never inherits a host it did not ask for.
+  let priorHost = config.host
   config.host = '127.0.0.1:0'
   sent = []
   let eid = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -127,6 +130,7 @@ let typeInto = (body: string | undefined, text: string) => {
   } finally {
     render(null, root)
     cache.value = {}
+    config.host = priorHost
     for (let [name, d] of prior) {
       if (d) Object.defineProperty(globalThis, name, d)
       else delete (globalThis as Record<string, unknown>)[name]

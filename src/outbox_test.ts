@@ -122,7 +122,7 @@ slow(
 
 // ——— the client half, no server: mutate parks, only an ack releases ———
 
-let stubSockets = () => {
+let stubSockets = async () => {
   let real = (globalThis as { WebSocket: unknown }).WebSocket
   ;(globalThis as { WebSocket: unknown }).WebSocket = class {
     readyState = 0
@@ -133,13 +133,19 @@ let stubSockets = () => {
     addEventListener() {}
     close() {}
   }
+  // A fake transport needs a fake address: live.ts refuses to dial a host
+  // nobody named, and `.invalid` resolves nowhere if this stub ever slips.
+  let { config } = await import('./live.ts')
+  let host = config.host
+  config.host = 'stub.invalid'
   return () => {
     ;(globalThis as { WebSocket: unknown }).WebSocket = real
+    config.host = host
   }
 }
 
 Deno.test('mutate holds the write in the outbox until acked', async () => {
-  let restore = stubSockets()
+  let restore = await stubSockets()
   let { mutate, unsent, acked } = await import('./live.ts')
   try {
     let before = unsent().length
@@ -172,7 +178,7 @@ Deno.test('backoff doubles the gap and caps at RESEND_MAX', async () => {
 })
 
 Deno.test('a wedged server is retried on a widening gap, and an ack halts it', async () => {
-  let restore = stubSockets()
+  let restore = await stubSockets()
   let live = await import('./live.ts')
   // The transport is wedged: record each send's id, and NEVER ack.
   let sends: string[] = []
@@ -206,7 +212,7 @@ Deno.test('a wedged server is retried on a widening gap, and an ack halts it', a
 })
 
 Deno.test('an empty mutate ships nothing', async () => {
-  let restore = stubSockets()
+  let restore = await stubSockets()
   let { mutate, unsent } = await import('./live.ts')
   try {
     let before = unsent().length
@@ -236,7 +242,7 @@ let fakeStore = () => {
 }
 
 Deno.test('deliver parks the write durably; ack unparks it', async () => {
-  let restore = stubSockets()
+  let restore = await stubSockets()
   let live = await import('./live.ts')
   let store = fakeStore()
   let prev = live.useOutboxStore(store)
@@ -257,7 +263,7 @@ Deno.test('deliver parks the write durably; ack unparks it', async () => {
 })
 
 Deno.test("boot replays a prior life's parked writes", async () => {
-  let restore = stubSockets()
+  let restore = await stubSockets()
   let live = await import('./live.ts')
   let store = fakeStore()
   // A write the last tab parked but a dying socket never saw acked.
@@ -281,7 +287,7 @@ Deno.test("boot replays a prior life's parked writes", async () => {
 })
 
 Deno.test('replay is idempotent across two hydrators', async () => {
-  let restore = stubSockets()
+  let restore = await stubSockets()
   let live = await import('./live.ts')
   let store = fakeStore()
   let id = uid()

@@ -5,6 +5,7 @@ import {
   applyLocal,
   assertAgree,
   backlinks,
+  base,
   boardAll,
   boardPost,
   boardsOver,
@@ -26,6 +27,7 @@ import {
   foldFor,
   gated,
   holdQuery,
+  hostFrom,
   inbox,
   isPing,
   jobOf,
@@ -59,6 +61,7 @@ import {
   socketStale,
   statusOf,
   subEids,
+  subscribe,
   subscriptionChecks,
   subscriptionState,
   topZ,
@@ -75,6 +78,7 @@ import {
   assertEquals,
   assertNotStrictEquals,
   assertStrictEquals,
+  assertThrows,
 } from '@std/assert'
 import { until } from './testing.ts'
 
@@ -88,6 +92,48 @@ let mark = (status: string, eid: string): Record<string, unknown> =>
     : status == 'wip'
     ? { claim: { eid, session: 's' } }
     : {}
+
+// These are cache derivations: nothing here wants a socket, so control frames
+// go nowhere through the transport seam. The few tests that drive connect()
+// put the wire back with wired(); everything else can hold a subscription
+// without a server existing.
+let transport = useRoute(() => {})
+let wired = <T>(fn: () => T): T => {
+  useRoute(transport)
+  try {
+    return fn()
+  } finally {
+    useRoute(() => {})
+  }
+}
+
+// A location-less process (a test) has NO server until it names one. The
+// default used to be the owner's dev port, so any test that mounted a view
+// streamed the live graph into the module-global cache and read it back as
+// fixture data. Two halves: the default is nothing, and nothing refuses.
+Deno.test('no location, no host: nothing dials a server we never named', () => {
+  assertEquals(hostFrom(undefined), '')
+  assertEquals(hostFrom({ host: 'graph.example:8080' }), 'graph.example:8080')
+  let prior = config.host
+  config.host = ''
+  let RealWS = (globalThis as { WebSocket: unknown }).WebSocket
+  let dialed: string[] = []
+  ;(globalThis as { WebSocket: unknown }).WebSocket = class {
+    constructor(url: string) {
+      dialed.push(url)
+    }
+  }
+  try {
+    assertThrows(() => base(), Error, 'no server host')
+    wired(() =>
+      assertThrows(() => subscribe('probe', '.task!'), Error, 'no server host')
+    )
+    assertEquals(dialed, [])
+  } finally {
+    ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
+    config.host = prior
+  }
+})
 
 Deno.test('findEid indexes human ids, aliases, and short handles', () => {
   cache.value = {

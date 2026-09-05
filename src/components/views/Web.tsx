@@ -1,5 +1,5 @@
 import { type Ent } from '../../types.ts'
-import { config } from '../../live.ts'
+import { base } from '../../live.ts'
 import { block, el } from '../ui.tsx'
 
 let Frame = el('iframe', 'Web')
@@ -32,8 +32,7 @@ export let Web = ({ e }: { e: Ent }) =>
           : <Url>freezing {e.web!.url} …</Url>}
         <Go
           type='button'
-          onClick={() =>
-            fetch(`http://${config.host}/freeze?eid=${e.eid}`).catch(() => {})}
+          onClick={() => fetch(`${base()}/freeze?eid=${e.eid}`).catch(() => {})}
         >
           ↻ retry
         </Go>

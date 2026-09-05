@@ -4,10 +4,15 @@
 // never on a bare call's vnode tree.
 import { h } from 'preact'
 import { assertEquals, assertExists } from '@std/assert'
-import { cache, deps, ent } from '../../live.ts'
+import { cache, deps, ent, useRoute } from '../../live.ts'
 import { resolve } from '../registry.ts'
 import { mount } from '../mount.ts'
 import '../Entity.tsx'
+
+// A mounted view holds subscriptions. In a test there is no server to hold
+// them against, so control frames go nowhere through live.ts's transport
+// seam — the cache here is only ever what the test seeds.
+useRoute(() => {})
 
 Deno.test('task acceptance is a distinct Markdown section', () => {
   cache.value = {

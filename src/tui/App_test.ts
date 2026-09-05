@@ -2,7 +2,7 @@
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { type Change, type Ent } from '../types.ts'
-import { config as liveConfig, mode } from '../live.ts'
+import { config as liveConfig, mode, useRoute } from '../live.ts'
 import {
   accountCallback,
   configKey,
@@ -28,6 +28,11 @@ import { ansi, pane } from './paint.ts'
 import { account, type AccountDoor } from '../account_client.ts'
 import { config, type CredStatus, type SettingRow } from '../config_client.ts'
 import type { AccountStatus } from '../accounts.ts'
+
+// A mounted view holds subscriptions. In a test there is no server to hold
+// them against, so control frames go nowhere through live.ts's transport
+// seam — the cache here is only ever what the test seeds.
+useRoute(() => {})
 
 let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 let task = (body?: string): Ent => ({

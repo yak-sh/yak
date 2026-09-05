@@ -2,8 +2,13 @@
 import { render } from 'preact'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { cache, ent, rows, setInbox } from '../../live.ts'
+import { cache, ent, rows, setInbox, useRoute } from '../../live.ts'
 import { Inbox } from './Inbox.tsx'
+
+// A mounted view holds subscriptions. In a test there is no server to hold
+// them against, so control frames go nowhere through live.ts's transport
+// seam — the cache here is only ever what the test seeds.
+useRoute(() => {})
 
 // Membership now comes from ordinary query subscriptions, so these rendering
 // tests plant finished rows directly and assert only the view's job: naming,

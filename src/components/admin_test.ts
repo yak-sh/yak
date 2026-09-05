@@ -10,6 +10,11 @@ import { cache, landSub, useRoute } from '../live.ts'
 import { assertEquals } from '@std/assert'
 import { until } from '../testing.ts'
 
+// A mounted view holds subscriptions. In a test there is no server to hold
+// them against, so control frames go nowhere through live.ts's transport
+// seam — the cache here is only ever what the test seeds.
+useRoute(() => {})
+
 // The index is a DB renderer: each section fetches `/query?.{kind}!`. Answer
 // that fetch from the seeded cache bags, so these tests keep one source of
 // truth; everything else falls through to the real fetch.

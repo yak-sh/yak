@@ -15,7 +15,7 @@ let uid = () => crypto.randomUUID()
 
 // A stubbed WebSocket so mutate() can route through deliver without a server —
 // the same door outbox_test uses.
-let stubSockets = () => {
+let stubSockets = async () => {
   let real = (globalThis as { WebSocket: unknown }).WebSocket
   ;(globalThis as { WebSocket: unknown }).WebSocket = class {
     readyState = 0
@@ -26,8 +26,14 @@ let stubSockets = () => {
     addEventListener() {}
     close() {}
   }
+  // A fake transport needs a fake address: live.ts refuses to dial a host
+  // nobody named, and `.invalid` resolves nowhere if this stub ever slips.
+  let { config } = await import('./live.ts')
+  let host = config.host
+  config.host = 'stub.invalid'
   return () => {
     ;(globalThis as { WebSocket: unknown }).WebSocket = real
+    config.host = host
   }
 }
 
@@ -44,7 +50,7 @@ let fakeOutbox = () => {
 }
 
 Deno.test('the indicator mirrors the outbox: a mutate adds, an ack clears', async () => {
-  let restore = stubSockets()
+  let restore = await stubSockets()
   let live = await import('./live.ts')
   let prev = live.useOutboxStore(fakeOutbox())
   try {

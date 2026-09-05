@@ -1,9 +1,22 @@
 // The action menu names claim holders with the same chip id as every claim
 // flag.
 import { assertEquals } from '@std/assert'
-import { backlinks, cache, ent, reveal, revealed, shown } from '../live.ts'
+import {
+  backlinks,
+  cache,
+  ent,
+  reveal,
+  revealed,
+  shown,
+  useRoute,
+} from '../live.ts'
 import { actionsFor, applicable, resolve } from './registry.ts'
 import './Entity.tsx'
+
+// A mounted view holds subscriptions. In a test there is no server to hold
+// them against, so control frames go nowhere through live.ts's transport
+// seam — the cache here is only ever what the test seeds.
+useRoute(() => {})
 
 Deno.test('boards open on Board with List still available', () => {
   cache.value = {
