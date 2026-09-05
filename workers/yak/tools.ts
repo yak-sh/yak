@@ -1,9 +1,9 @@
 // The connector's PLATFORM tools (D-32318 §Code, build, deploy): the least
 // that makes an app. The generic graph tier is no longer here — @yaks/mcp
-// brings graph_apply, graph_query, graph_show, vocab and search over the
-// caller's reach as one graph (agent.ts, T-33812), and a second copy of them
-// scoped to a (space, app) would be a dimmer one. What is here is the sugar:
-// space_new, app_new,
+// brings graph_apply, graph_query, graph_show, graph_schema and search over
+// the caller's reach as one graph (agent.ts, T-33812), and a second copy of
+// them scoped to a (space, app) would be a dimmer one. What is here is the
+// sugar: space_new, app_new,
 // app_files, app_deploy, app_versions and app_rollback — the deploys an app
 // keeps and the word that puts one back (versions.ts, T-32886) — app_set,
 // app_delete, app_errors, app_list, the three
@@ -587,8 +587,14 @@ let released = async (
   // this app, and so is a view list that did — each said with its own
   // list_changed, since a release can move one without the other
   // (declared.ts, T-32686, T-33004).
+  //
+  // A moved VOCABULARY is the same news (T-34153): graph_apply's input schema
+  // IS the caller's words, so a component planted or a column grown here
+  // changed the tool list of everyone in the space, whether or not this app
+  // declares a tool at all.
+  let grown = !!(added.length || dropped.length)
   await moved(ctx, space, [
-    ...(tooled.changed ? ['tools' as const] : []),
+    ...(tooled.changed || grown ? ['tools' as const] : []),
     ...(tooled.views ? ['resources' as const] : []),
   ])
   // And the app's OWN code, if it wrote any (dispatch.ts, T-32778): the

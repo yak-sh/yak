@@ -127,6 +127,10 @@ your own, code of your own — so read the one the work calls for rather than
 guessing; graph_apply, graph_query and search are the same store from here,
 for seeding and fixing.
 
+Never guess at a component's columns: graph_apply's own input schema is the
+vocabulary you can reach — every component, every column, every type — and
+graph_schema answers the same thing on demand, in full.
+
 An eid is the same thing in every app. Two apps can write about one entity —
 a reading list app saves the book, a lending app saves the loan — and each
 component lives with the app that declares it, so nothing is copied and
@@ -385,8 +389,22 @@ let heard = (name: string, args: Record<string, unknown>) => {
 // here it has already run, so it hands back what the edge decided.
 let door = async (ctx: Ctx) => {
   let reach = await inReach(ctx, {})
+  // The graph, and how a column of it reads and writes: a reference answers
+  // human, and a word two of the caller's spaces spell differently is typed
+  // nowhere (agent.ts `reading`). The schemas in the tool list are derived
+  // through it, so they describe what this door actually says.
+  let { graph, column } = await reaching(ctx, reach)
   return mcp({
-    graph: await reaching(ctx, reach),
+    graph,
+    column,
+    // What a READ answers is left at names here, while the write door is
+    // typed whole (@yaks/mcp, T-34153). Measured over a space of three apps:
+    // 54 KB of tool list before, 63 KB with the typed write door, 97 KB with
+    // the four read schemas typed too. The types are what a WRITE needs — a
+    // read hands over the values themselves — and this door's vocabulary is a
+    // union of every store in reach, so the extra 33 KB is the least exact
+    // part of it, paid on every connection.
+    schema: 'names',
     authenticate: () => ({ eid: ctx.person }),
     name: 'yaks.app',
     version: VERSION,

@@ -11,6 +11,9 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
+// A client's own reading of the published schema: the tool list is JSON
+// Schema, so what proves it describes a batch is a JSON Schema validator.
+import { Ajv } from 'ajv'
 import { slow, until } from '../../src/testing.ts'
 import {
   arrives,
@@ -87,7 +90,7 @@ slow(
         'graph_apply',
         'graph_query',
         'graph_show',
-        'vocab',
+        'graph_schema',
         'search',
         // And the platform's own verbs beside them, one plugin's tools.
         'space_new',
@@ -612,15 +615,18 @@ slow(
       )
       assertEquals(own.entity.eid, box)
       assertEquals(own.recipe, { title: 'Pancakes', serves: 4 })
-      // A column the manifest never named is still a typo, not a new word.
-      await assertRejects(
+      // A column the manifest never named is still a typo, not a new word —
+      // and since the write door's schema IS the vocabulary (T-34153), it is
+      // refused at the door, with the component and the column named.
+      let typo = (await assertRejects(
         () =>
           agent.tool('graph_apply', {
             change: [{ entity: { eid: box }, recipe: { calories: 500 } }],
           }),
         Error,
-        'unknown column: recipe.calories',
-      )
+      )).message
+      assertStringIncludes(typo, '"recipe"')
+      assertStringIncludes(typo, 'calories')
 
       // A manifest that reaches for one of the platform's words is refused
       // WHOLE and before anything is planted, naming every collision at once
@@ -1629,6 +1635,134 @@ slow("the door lists an app's tools, and says when they moved", async () => {
     await k.stop()
   }
 })
+
+// The WRITE door's schema is the caller's vocabulary (T-34153). Jeff, on an
+// agent trying to send a letter with graph_apply: "how are agents supposed to
+// learn our comp schema? claude was trying to send mail ... but is just
+// guessing at the comp types". So the published input schema is checked here
+// the way a client checks it — with a JSON Schema validator, against the
+// letter bundle the guide teaches (public/guide/mail.md §Sending a letter).
+slow(
+  "graph_apply's input schema is the vocabulary a client can write",
+  async () => {
+    let k = await kernel()
+    let ear: ReturnType<typeof hearing> | undefined
+    try {
+      let jeff = await signIn(k)
+      let agent = connector(k, jeff.cookie)
+      let apps = ['cookbook', 'lending', 'runs']
+      for (let slug of apps) {
+        await agent.tool('app_new', { slug, title: slug })
+      }
+      let schema = async () => {
+        let { tools } = await agent.call('tools/list')
+        let one = (tools as { name: string; inputSchema: object }[])
+          .find((t) => t.name == 'graph_apply')!
+        return {
+          input: one.inputSchema,
+          // What a tool list COSTS the agent that reads it, before it has asked
+          // anything: the number worth watching when the schema grows.
+          bytes: JSON.stringify(tools).length,
+        }
+      }
+      let first = await schema()
+      let ajv = new Ajv({ strict: false })
+      let takes = (input: object, change: unknown) =>
+        ajv.compile(input)({ change })
+
+      // The guide's own letter: a recipient wearing `email{address}`, the letter
+      // as `doc` + `mail`, and the ask, `deliver{to}`.
+      let sending = [
+        { entity: { eid: '$ana' }, email: { address: 'ana@example.com' } },
+        {
+          entity: { eid: '$note' },
+          doc: { title: 'Your order is on its way', body: 'Two jars.' },
+          mail: {},
+          deliver: { to: '$ana' },
+        },
+      ]
+      assert(takes(first.input, sending), JSON.stringify(ajv.errors))
+      // A column nobody declared is refused by the schema, where the agent is,
+      // rather than by the store at the far end of the wire.
+      assertEquals(
+        takes(first.input, [{
+          entity: { eid: '$ana' },
+          email: { adress: 'ana@example.com' },
+        }]),
+        false,
+      )
+      // And the type is there to be read: `mail.verified` is a boolean, and the
+      // vocabulary's own sentence about it rides along.
+      let mail = JSON.stringify(
+        (first.input as { properties: Record<string, unknown> }).properties,
+      )
+      assertStringIncludes(mail, 'the address it came from')
+      assertEquals(
+        takes(first.input, [{
+          entity: { eid: 'e1' },
+          mail: { verified: 'yes' },
+        }]),
+        false,
+      )
+
+      // A vocabulary GROWS mid-connection, and the schema a client is holding
+      // goes stale with it: app_deploy plants the words, so the door says the
+      // tool list moved and a client re-reads it.
+      let stream = await k.at('yaks.app', '/mcp', {
+        headers: { cookie: jeff.cookie, accept: 'text/event-stream' },
+      })
+      ear = hearing(stream)
+      await until(() => ear!.said().includes(': open'), {
+        timeout: 10_000,
+        poll: 50,
+        label: 'the stream to open',
+      })
+      await agent.tool('app_files', {
+        app: 'cookbook',
+        op: 'write',
+        path: 'vocab.json',
+        content: JSON.stringify({ recipe: { serves: 'number' } }),
+      })
+      await agent.tool('app_deploy', { app: 'cookbook' })
+      await until(
+        () => ear!.said().includes('notifications/tools/list_changed'),
+        {
+          timeout: 10_000,
+          poll: 50,
+          label: 'the tool list to be called stale',
+        },
+      )
+      let grown = await schema()
+      assert(
+        takes(grown.input, [{ entity: { eid: 'r1' }, recipe: { serves: 4 } }]),
+      )
+      assertEquals(
+        takes(grown.input, [{
+          entity: { eid: 'r1' },
+          recipe: { serves: 'four' },
+        }]),
+        false,
+      )
+      // The stale schema is why the announcement matters: it typed nothing
+      // about a word nobody had declared yet, so a client holding it would have
+      // sent `serves` as anything at all and learned from a refusal instead.
+      assertEquals(
+        takes(first.input, [{
+          entity: { eid: 'r1' },
+          recipe: { serves: 'four' },
+        }]),
+        true,
+      )
+      console.log(
+        `tools/list: ${first.bytes} bytes over ${apps.length} apps, ` +
+          `${grown.bytes} with a component of their own`,
+      )
+    } finally {
+      await ear?.stop()
+      await k.stop()
+    }
+  },
+)
 
 // The stream is DURABLE and resumable (T-32734): it lives in a Durable Object
 // of the person's own, so the request that deploys reaches the stream a

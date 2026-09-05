@@ -31,6 +31,7 @@
     "npm:@sqliteai/sqlite-vector-linux-arm64@1.0.0": "1.0.0",
     "npm:@sqliteai/sqlite-vector-linux-x86_64@1.0.0": "1.0.0",
     "npm:@sqliteai/sqlite-vector-win32-x86_64@1.0.0": "1.0.0",
+    "npm:ajv@^8.17.1": "8.20.0",
     "npm:fake-indexeddb@6": "6.2.5",
     "npm:fake-indexeddb@^6.2.2": "6.2.5",
     "npm:linkedom@~0.18.12": "0.18.13",
@@ -38,6 +39,7 @@
     "npm:postal-mime@3.0.0": "3.0.0",
     "npm:preact@^10.29.1": "10.29.7",
     "npm:sucrase@^3.35.0": "3.35.1",
+    "npm:zod-to-json-schema@^3.25.1": "3.25.2_zod@3.25.76",
     "npm:zod@^3.24.0": "3.25.76"
   },
   "jsr": {
@@ -1334,6 +1336,7 @@
       "npm:@sqliteai/sqlite-vector-linux-arm64@1.0.0",
       "npm:@sqliteai/sqlite-vector-linux-x86_64@1.0.0",
       "npm:@sqliteai/sqlite-vector-win32-x86_64@1.0.0",
+      "npm:ajv@^8.17.1",
       "npm:linkedom@~0.18.12",
       "npm:lucide-preact@^1.31.0",
       "npm:postal-mime@3.0.0",

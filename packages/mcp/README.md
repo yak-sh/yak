@@ -48,13 +48,13 @@ There is no tool per component here — no `book_shelve`, no `review_write`. A
 components, which columns), so an agent that knows the wire can write anything
 your vocabulary declares.
 
-| tool          | what it does                                                   |
-| ------------- | -------------------------------------------------------------- |
-| `graph_apply` | bundles in, the batch as applied out                           |
-| `graph_query` | a query line in, bundles out                                   |
-| `graph_show`  | entities whole, with what points at them and the edges between |
-| `vocab`       | the loaded vocabulary as JSON Schema                           |
-| `search`      | words, ranked — only when you pass a `search` seam             |
+| tool           | what it does                                                   |
+| -------------- | -------------------------------------------------------------- |
+| `graph_apply`  | bundles in, the batch as applied out                           |
+| `graph_query`  | a query line in, bundles out                                   |
+| `graph_show`   | entities whole, with what points at them and the edges between |
+| `graph_schema` | every component, its columns and their types                   |
+| `search`       | words, ranked — only when you pass a `search` seam             |
 
 ```jsonc
 // graph_apply
@@ -77,9 +77,10 @@ your vocabulary declares.
 owns, and an optional `filters` list joined onto it with `&` — dot-param sugar,
 one thin layer over the same grammar, not a second one.
 
-An agent that has never seen your vocabulary calls `vocab` first: it hands back
-the JSON Schema documents the vocabulary was loaded from, which is every
-component and every column it may write.
+An agent that has never seen your vocabulary calls `graph_schema` first: it
+hands back the JSON Schema documents the vocabulary was loaded from, which is
+every component and every column it may write. It rarely has to: `graph_apply`'s
+own input schema is that vocabulary, typed, so the write door teaches itself.
 
 ## Output schemas, and what they cost
 

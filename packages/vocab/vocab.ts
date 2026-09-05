@@ -82,6 +82,7 @@ let columnOf = (
   return {
     comp,
     prop,
+    description: s.description,
     category,
     scalar,
     values: s.enum ? [...s.enum] : undefined,
@@ -229,6 +230,7 @@ export let loadVocab = (
     let entries = Object.keys(props(name))
     return {
       name,
+      description: d.description,
       wire: d.wire !== false,
       kind: !!d.kind,
       before: d.before ?? [],

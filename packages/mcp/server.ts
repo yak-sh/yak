@@ -23,7 +23,7 @@ import {
   toolsOf,
 } from '@yaks/graph'
 import { signed } from '@yaks/api'
-import type { Depth } from './schema.ts'
+import type { BundleOpts, Depth } from './schema.ts'
 import { core, type Search } from './tools.ts'
 
 /** How an MCP server over a graph is built. */
@@ -40,8 +40,12 @@ export type Options = {
   /** what the agent should read before anything else */
   instructions?: string
   /** how deeply each tool's output schema spells out the vocabulary
-   * (default: `names` — see {@link Depth}) */
+   * (default: `full` — see {@link Depth}; the write door is always `full`) */
   schema?: Depth
+  /** a column this host answers or takes differently than the vocabulary
+   * declares — a reference that reads back as a named object, a column two of
+   * its stores spell differently (see {@link BundleOpts}) */
+  column?: BundleOpts['column']
   /** ranked full-text search; without it there is no `search` tool */
   search?: Search
   /** tools beside the generic tier and the graph's plugins' */
@@ -122,7 +126,7 @@ let shapeOf = (tool: Tool): Record<string, z.ZodTypeAny> =>
 
 /**
  * Build the MCP server for a graph: the generic tier (`graph_apply`,
- * `graph_query`, `graph_show`, `vocab`, and `search` when a
+ * `graph_query`, `graph_show`, `graph_schema`, and `search` when a
  * {@link https://jsr.io/@yaks/mcp/doc/~/Search | Search} was passed), plus
  * every tool the graph's plugins contribute and any you pass yourself.
  *
@@ -150,7 +154,12 @@ export let server = (opts: Options): McpServer => {
   }
 
   let tools = [
-    ...core({ vocab: graph.vocab, depth: opts.schema, search: opts.search }),
+    ...core({
+      vocab: graph.vocab,
+      depth: opts.schema,
+      column: opts.column,
+      search: opts.search,
+    }),
     ...toolsOf(graph.plugins),
     ...(opts.tools ?? []),
   ]

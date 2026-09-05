@@ -26,7 +26,7 @@
 import { z } from 'zod'
 import type { Bundle, Graph, Plugin, Row, Storage, Tool, Tx } from '@yaks/graph'
 import { Say, type Search } from '@yaks/mcp'
-import type { Vocab } from '@yaks/vocab'
+import type { Column, Vocab } from '@yaks/vocab'
 import { storeName } from './directory.ts'
 import { letters } from './letters.ts'
 import { composed, type Reach, read, written } from './reach.ts'
@@ -207,7 +207,16 @@ let held = (ctx: Ctx, reach: Reach[]): Storage => {
 // Every reachable app's `vocab.json`, merged over the core documents. First
 // declaration wins, which is where a word LIVES (T-32728), so the schema an
 // agent is handed says each column the way the store that owns it does.
-let spoken = async (ctx: Ctx, reach: Reach[]): Promise<Vocab> => {
+//
+// It also says which columns the reach CANNOT agree on: two spaces may spell
+// one word differently (mcp_test.ts "a word two spaces spell differently
+// stays two words"), and the merged vocabulary keeps one of the two. A schema
+// derived from it would then refuse a write the other store takes, so those
+// columns are named here and typed nowhere (`reading` below).
+let spoken = async (
+  ctx: Ctx,
+  reach: Reach[],
+): Promise<{ vocab: Vocab; clashes: Set<string> }> => {
   let said = await Promise.all(reach.map(async (r) => {
     let door = storeOf(ctx.env.STORE, storeName(r.space, r.app))
     let got = await door('/vocab')
@@ -218,13 +227,40 @@ let spoken = async (ctx: Ctx, reach: Reach[]): Promise<Vocab> => {
     return await got.json() as Record<string, unknown>
   }))
   let all: Record<string, unknown> = {}
+  let clashes = new Set<string>()
+  let cols = (v: unknown) => (v ?? {}) as Record<string, unknown>
   for (let one of said) {
-    for (let [name, cols] of Object.entries(one)) {
-      if (!(name in all)) all[name] = cols
+    for (let [name, held] of Object.entries(one)) {
+      if (!(name in all)) {
+        all[name] = held
+        continue
+      }
+      let mine = cols(all[name])
+      for (let [col, type] of Object.entries(cols(held))) {
+        if (col in mine && mine[col] != type) clashes.add(`${name}.${col}`)
+      }
     }
   }
-  return appVocab(all)
+  return { vocab: appVocab(all), clashes }
 }
+
+/**
+ * How this door's columns read and write, where that is not what the
+ * vocabulary declares (@yaks/mcp `BundleOpts.column`):
+ *
+ * - a REFERENCE reads back as the eid or as `{eid, name}`, because outputs
+ *   speak human (graph.ts `#speak`); a write takes the id;
+ * - a column two reachable apps spell differently is typed nowhere, since the
+ *   store that owns the word is the one that decides.
+ */
+export let reading =
+  (clashes: Set<string>) =>
+  (col: Column, o: { write?: boolean }): z.ZodTypeAny | undefined =>
+    clashes.has(`${col.comp}.${col.prop}`)
+      ? z.unknown()
+      : col.category == 'ref' && !o.write
+      ? z.union([z.string(), z.object({ eid: z.string() }).passthrough()])
+      : undefined
 
 // The batch as applied, as `graph_apply` promises it: what the stores answered
 // (reach.ts `written`), each entity minted under an alias carrying the name the
@@ -286,14 +322,19 @@ export let searching =
 
 /**
  * The caller's reach as ONE graph: every app they can read, asked together and
- * answered as one bundle per entity, with the platform's tools on it.
+ * answered as one bundle per entity, with the platform's tools on it — and
+ * beside it how a column of this graph reads and writes ({@link reading}),
+ * which the schema an agent is handed is derived through.
  *
  * A write routes each component to the app that declares it (reach.ts
  * `written`), which is what an entity spanning apps means — so `graph_apply`
  * needs no app named and never had one to name here.
  */
-export let reaching = async (ctx: Ctx, reach: Reach[]): Promise<Graph> => {
-  let vocab = await spoken(ctx, reach)
+export let reaching = async (
+  ctx: Ctx,
+  reach: Reach[],
+): Promise<{ graph: Graph; column: ReturnType<typeof reading> }> => {
+  let { vocab, clashes } = await spoken(ctx, reach)
   let storage = held(ctx, reach)
   let plugins = [platform(ctx), post(ctx, vocab)]
   let self: Graph = {
@@ -323,5 +364,5 @@ export let reaching = async (ctx: Ctx, reach: Reach[]): Promise<Graph> => {
       return aliased(out)
     },
   }
-  return self
+  return { graph: self, column: reading(clashes) }
 }

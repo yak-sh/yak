@@ -9,8 +9,8 @@
  * - **`graph_query`** — a query line in, bundles out;
  * - **`graph_show`** — entities whole, with what points at them and the edges
  *   between them;
- * - **`vocab`** — the loaded vocabulary as JSON Schema, so an agent can learn
- *   the shape before it writes;
+ * - **`graph_schema`** — every component, its columns and their types, so an
+ *   agent can learn the shape before it writes;
  * - **`search`** — words, ranked, when a {@link Search} is passed.
  *
  * ```ts

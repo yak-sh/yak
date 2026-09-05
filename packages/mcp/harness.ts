@@ -32,8 +32,9 @@ let doc: VocabDoc = {
       type: 'object',
       kind: true,
       before: ['doc'],
+      description: 'a book on sale here',
       properties: {
-        price: { type: 'number' },
+        price: { type: 'number', description: 'what it costs, in pounds' },
         status: { enum: ['draft', 'shelved', 'sold'] },
         author: { type: 'string', ref: 'entity', death: 'detach' },
       },

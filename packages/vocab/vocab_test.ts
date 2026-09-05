@@ -19,6 +19,7 @@ Deno.test('columns interrogate to their whole shape', () => {
   assertEquals(v.column('task', 'priority'), {
     comp: 'task',
     prop: 'priority',
+    description: undefined,
     category: 'scalar',
     scalar: 'priority',
     values: undefined,
@@ -31,6 +32,12 @@ Deno.test('columns interrogate to their whole shape', () => {
     fk: false,
     keywords: {},
   })
+  // What a schema SAYS about a word rides with it, so a door that hands an
+  // agent the vocabulary hands over its meaning too.
+  assertEquals(
+    v.comp('doc')?.description,
+    'The written face of an entity: a title and a markdown body.',
+  )
   let target = v.column('comment', 'target')!
   assertEquals(
     [target.category, target.ref, target.death, target.affinity, target.fk],

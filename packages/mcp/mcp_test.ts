@@ -37,7 +37,12 @@ let called = async (
 Deno.test('the generic tier is what it lists', async () => {
   let client = await connect()
   let names = (await listed(client)).sort()
-  assertEquals(names, ['graph_apply', 'graph_query', 'graph_show', 'vocab'])
+  assertEquals(names, [
+    'graph_apply',
+    'graph_query',
+    'graph_schema',
+    'graph_show',
+  ])
   await client.close()
 })
 
@@ -146,9 +151,9 @@ Deno.test('graph_show answers the entity, what points at it, and the edges', asy
   assertEquals(bundles(alone.bundles).map((b) => b.entity.eid), ['b1'])
 })
 
-Deno.test('vocab hands over the loaded documents', async () => {
+Deno.test('graph_schema hands over the loaded documents', async () => {
   let client = await connect()
-  let out = result(await called(client, 'vocab'))
+  let out = result(await called(client, 'graph_schema'))
   assert(out && typeof out == 'object' && 'comps' in out && 'docs' in out)
   assertEquals(out.comps, ['book', 'created', 'doc', 'review', 'updated'])
   assert(Array.isArray(out.docs) && out.docs.length == 1)
@@ -156,16 +161,25 @@ Deno.test('vocab hands over the loaded documents', async () => {
 
 Deno.test('a refusal is the tool error the agent reads, not a broken call', async () => {
   let client = await connect()
-  let out = await called(client, 'graph_apply', { change: [{ book: {} }] })
-  assertEquals(out.isError, true)
-  assert(Array.isArray(out.content))
-  assert(String(out.content[0].text).includes('needs an entity'))
+  // The write door's schema IS the vocabulary (T-34153), so a bundle with no
+  // identity, a column nobody declared and a value of the wrong type are each
+  // refused where they were typed — with the path that names them.
+  let said = async (change: unknown) => {
+    let out = await called(client, 'graph_apply', { change })
+    assertEquals(out.isError, true)
+    assert(Array.isArray(out.content))
+    return String(out.content[0].text)
+  }
+  assert((await said([{ book: {} }])).includes('"entity"'))
+  let colour = await said([{ entity: { eid: 'b1' }, book: { colour: 'red' } }])
+  assert(colour.includes('colour'), colour)
+  let price = await said([{ entity: { eid: 'b1' }, book: { price: 'lots' } }])
+  assert(price.includes('Expected number'), price)
 
-  let refused = await called(client, 'graph_apply', {
-    change: [{ entity: { eid: 'b1' }, book: { colour: 'red' } }],
-  })
-  assertEquals(refused.isError, true)
-  assert(String(refused.content[0].text).includes('book.colour'))
+  // And what the schema cannot see — a batch that is not an array of bundles
+  // at all — the tool still says for itself.
+  let bare = await called(client, 'graph_apply', { change: 'a book' })
+  assertEquals(bare.isError, true)
 })
 
 Deno.test('a plugin contributes tools the way it contributes components', async () => {

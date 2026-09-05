@@ -40,6 +40,9 @@ export type Scalar =
 export type Column = {
   comp: string
   prop: string
+  /** what the column MEANS, as its schema says it — the sentence a schema
+   * door hands an agent so a column is not read off its name alone */
+  description?: string
   category: 'scalar' | 'enum' | 'ref'
   scalar?: Scalar
   values?: string[] // enum members
@@ -58,6 +61,7 @@ export type Column = {
 // carried verbatim, never interpreted here.
 export type CompInfo = {
   name: string
+  description?: string // what the component means, as its schema says it
   wire: boolean // false = readable-not-writable component (the spine)
   kind: boolean // this comp names a display kind
   before: string[] // kinds this kind sorts before (feeds kindOrder)
