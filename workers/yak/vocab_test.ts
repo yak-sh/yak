@@ -215,6 +215,13 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
       'comment',
       'favorite',
       'web',
+      // @yaks/mail — the app's own mailbox: the letter, the address, the ask
+      // to send it and the two ends of what became of it
+      'mail',
+      'email',
+      'deliver',
+      'delivered',
+      'bounced',
       // the app's own
       'recipe',
       'cooked',

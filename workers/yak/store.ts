@@ -703,6 +703,7 @@ let VOUCH = [
   'x-store',
   'x-yak-app',
   'x-yak-access',
+  'x-yak-mail',
   'x-yak-person',
   'x-yak-role',
   'x-yak-title',
@@ -712,10 +713,15 @@ let VOUCH = [
 ]
 
 /** Which app this door serves, as the directory has it: the entity the
- * @yaks/member guard asks about, and the access mode that is the last word on
- * a caller holding no level. The store remembers both (graph.ts `#learn`), so
- * a door that cannot name its app simply says nothing about it. */
-export type Served = { eid: string; access: string | null }
+ * @yaks/member guard asks about, the access mode that is the last word on a
+ * caller holding no level, and the address its letters leave from (post.ts
+ * `mailFrom`). The store remembers all three (graph.ts `#learn`), so a door
+ * that cannot name its app simply says nothing about it.
+ *
+ * The address is the DIRECTORY's to derive rather than the store's, because
+ * only the directory knows the app's current slug and whether it is the
+ * space's home — a store is named at birth and never renamed (`storeName`). */
+export type Served = { eid: string; access: string | null; mail?: string }
 
 export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
   return (path, init = {}, headers = {}) => {
@@ -731,6 +737,7 @@ export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
     if (app) {
       req.headers.set('x-yak-app', app.eid)
       if (app.access) req.headers.set('x-yak-access', app.access)
+      if (app.mail) req.headers.set('x-yak-mail', app.mail)
     }
     return stub.fetch(req)
   }

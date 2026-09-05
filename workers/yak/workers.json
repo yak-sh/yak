@@ -15,6 +15,7 @@
     "@yaks/fts": "../../packages/fts/mod.ts",
     "@yaks/graph": "../../packages/graph/mod.ts",
     "@yaks/id": "../../packages/id/mod.ts",
+    "@yaks/mail": "../../packages/mail/mod.ts",
     "@yaks/match": "../../packages/match/mod.ts",
     "@yaks/member": "../../packages/member/mod.ts",
     "@yaks/query": "../../packages/query/mod.ts",

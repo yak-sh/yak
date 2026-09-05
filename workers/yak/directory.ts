@@ -28,6 +28,7 @@ import type { Mutation } from '../../src/mutation.ts'
 import { slugsOf } from '../../src/types.ts'
 import type { Env, Fetcher } from './env.ts'
 import { KERNEL, type Meta, meta as metaStore } from './meta.ts'
+import { mailFrom } from './post.ts'
 import { SLUG } from './route.ts'
 import { nameOf } from './signin.ts'
 import { type Door, type Namespace, storeOf } from './store.ts'
@@ -462,7 +463,20 @@ export let bornAt = (space: Space, slug: string) => `${space.slug}/${slug}`
 // name — the meta store, the usage sweep — have no app to name and use
 // `storeOf` directly.
 export let appStore = (ns: Namespace, space: Space, app: App): Door =>
-  storeOf(ns, storeName(space, app), { eid: app.eid, access: app.access })
+  storeOf(ns, storeName(space, app), {
+    eid: app.eid,
+    access: app.access,
+    mail: mailbox(space, app),
+  })
+
+// The other address a (space, app) has, beside {@link url}: what its letters
+// leave from, and what a reader writes back to (post.ts `mailFrom`, T-33686).
+// The home app's is the bare space name, for the same reason its page is the
+// bare hostname. Derived HERE and carried to the store on every request,
+// because the store is named at birth and knows neither the app's current slug
+// nor which app the space's front page is.
+export let mailbox = (space: Space, app: App) =>
+  mailFrom(space.slug, app.eid == space.home ? null : app.slug)
 
 // The address a person is handed for an app. A space's front page IS its
 // bare hostname (T-33040, apps.ts `fetch`) — its own `/<app>/` only forwards

@@ -6,7 +6,7 @@
 //   storage(ctx.storage, vocab) the object's SQLite as @yaks/graph's Storage
 //                               (@yaks/durable-object → @yaks/sqlite)
 //   graph(storage, plugins)     the phased apply(): edges, members, blobs,
-//                               effects                    (@yaks/graph)
+//                               effects, the mailbox        (@yaks/graph)
 //   subscriptions(graph)        a saved query that keeps answering (@yaks/api)
 //   api({graph, subs})          POST /apply, GET /query            (@yaks/api)
 //   sockets(subs, ctx)          /ws, over hibernatable sockets
@@ -30,8 +30,9 @@
 // ## What the object remembers
 // A Durable Object's memory does not survive an eviction, so everything this
 // one is told rides in its own SQLite: the address it was born at, the app's
-// `vocab.json` as deployed, the app entity it holds, and what the directory
-// says that app's access mode is. Each is learned from the header that first
+// `vocab.json` as deployed, the app entity it holds, what the directory says
+// that app's access mode is, and the address its letters leave from
+// (directory.ts `mailbox`). Each is learned from the header that first
 // carries it — the kernel builds every request to a store from scratch, so a
 // client can never send one — and each is written down, because the next
 // request may reach a fresh incarnation.
@@ -94,6 +95,7 @@ import { edges } from '@yaks/edge'
 import { type Driver, fields, find } from '@yaks/fts'
 import {
   type Bundle,
+  type Comp,
   comps,
   detached,
   type Graph,
@@ -103,21 +105,26 @@ import {
   sha256,
   then,
 } from '@yaks/graph'
+import { DELIVER, MAIL, mailbox, sending } from '@yaks/mail'
 import {
   actorOf,
   Denied,
   type Level,
   level,
+  levelOn,
   members,
   type Mode,
   mode,
   type Policy,
   policy,
   reads,
+  writes,
 } from '@yaks/member'
 import { parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import { named, type Row } from './listing.ts'
+import { type Binding, posting } from './post.ts'
+import { PLATFORM } from './route.ts'
 import {
   type Bucket,
   carry,
@@ -172,9 +179,11 @@ export type State = Hibernation & {
   blockConcurrencyWhile?<T>(body: () => Promise<T>): Promise<T>
 }
 
-/** The bindings this object is handed. One: the bucket a migration writes the
- * object's whole old graph to before it moves a row (migrate.ts). */
-export type Bindings = { EXPORTS?: Bucket }
+/** The bindings this object is handed — the Worker's whole `env`, of which it
+ * reads two: the bucket a migration writes the object's whole old graph to
+ * before it moves a row (migrate.ts), and Cloudflare Email Sending, which is
+ * how a letter written here leaves (post.ts, T-33686). */
+export type Bindings = { EXPORTS?: Bucket; MAIL?: Binding }
 
 // What the object remembers about itself, and the table it remembers it in.
 // One row per word — the object's SQLite is the only memory that survives an
@@ -187,6 +196,7 @@ type Word =
   | 'tools'
   | 'app'
   | 'access'
+  | 'mail'
   | 'schema'
   | 'migrated'
 let KV = `create table if not exists yak_kv (
@@ -404,6 +414,18 @@ export class Store {
       this.#put('schema', stamp)
     }
     let app = this.#get('app')
+    // The registry an app's own effects register on (T-33816), and the one
+    // this platform puts on it: a letter leaves through the Email Sending
+    // binding, post-commit (T-33686). It is FRESH on every boot, so the
+    // registration below happens once per incarnation however often a store
+    // is rebuilt.
+    let fx = effects(vocab)
+    // Who carries a letter out of THIS store, and only for an app: the
+    // platform's own store writes its sign-in codes through mail.ts from the
+    // fleet's own address, and has no app whose name a letter could leave
+    // under. No binding is a sender that refuses (post.ts), so a deploy
+    // without one bounces a letter rather than swallowing it.
+    let post = meta || !app ? null : posting(this.#bind.MAIL)
     let g = graph({
       storage: store,
       vocab,
@@ -421,14 +443,30 @@ export class Store {
         this.#lowering,
         edges(vocab),
         blobs(vocab, bytes),
-        // The registry an app's own effects register on (T-33816). It ships
-        // no handler, and with none it is not in the write path at all.
-        effects(vocab),
+        fx,
         // Before the guard, because it is what the guard reads.
         this.#vouching,
         ...(app ? [this.#guarding(app)] : []),
+        // The post room. `mailbox()` is @yaks/mail's own plugin: the address
+        // canonicalizer, so a mailbox is stored in one spelling and only one.
+        // @yaks/doc is composed beside it rather than inside it, and here a
+        // step further out still — `doc` is one of the words every store on
+        // this platform already speaks (vocab.ts `coreDocs`), so there is
+        // nothing left for a `docs()` to declare.
+        ...(post && app
+          ? [this.#posting(app), mailbox({ domain: PLATFORM })]
+          : []),
       ],
     })
+    // A letter goes when it asks to, whichever of its two components arrives
+    // last: `sending` reads the whole entity rather than the patch that woke
+    // it, so a letter written whole and one that gains its recipient later go
+    // the same way. It is idempotent — a letter already carrying `delivered`
+    // or `bounced` is left alone — so two slots are still one send.
+    if (post) {
+      fx.created(MAIL, sending({ sender: post }))
+      fx.created(DELIVER, sending({ sender: post }))
+    }
     this.#vocab = vocab
     this.#graph = g
     let subs = subscriptions(g)
@@ -504,6 +542,13 @@ export class Store {
       this.#put('access', said)
       this.#mode(mode(said))
     }
+    // The address this app's letters leave from (directory.ts `mailbox`). Like
+    // the access mode it is the directory's word and is followed rather than
+    // argued with — an app renamed, or made the space's front page, writes
+    // from its new address on the very next request. Nothing is rebuilt for
+    // it: `#posting` reads the word at write time.
+    let from = req.headers.get('x-yak-mail')
+    if (from && this.#get('mail') != from) this.#put('mail', from)
   }
 
   // The app's access mode, in this store's own rows — what @yaks/member reads
@@ -636,6 +681,55 @@ export class Store {
         return bundles
       },
     },
+  }
+
+  /**
+   * An app's letters: the address they leave from, and who may ask for one.
+   *
+   * THE `from` IS THE PLATFORM'S WORD, stamped over whatever the batch said.
+   * The address is a claim about who wrote — a letter from
+   * `ada.cookbook@yaks.app` is DKIM-signed by us and read by the world as
+   * ours — and a column a client may write is a column a client may forge. A
+   * letter the KERNEL writes is left alone: that is an ARRIVAL (T-33687),
+   * whose `from` is the sender's own, out on the web.
+   *
+   * WHO MAY SEND is the roster, not the app's mode. @yaks/member's rule is
+   * about the APP, and an `open` app admits an anonymous visitor's write on
+   * purpose — that is what open means. But a letter does not stay in the app:
+   * it leaves under the platform's name, so an open app with no rule here is
+   * an open relay, and the first spam run would take the zone's reputation
+   * with it. So the ASK to send — the `deliver` component — is held to a level
+   * that writes: a member or an editor, and never nobody at all. Writing the
+   * letter is not held to anything; a draft is ordinary data.
+   */
+  #posting(app: string): Plugin {
+    let letter = (b: Bundle): Bundle => {
+      let mail = b[MAIL] as Comp | null | undefined
+      // Dropping the envelope is not writing one, and a bundle that is neither
+      // a letter nor an ask to send has nothing to say about an address.
+      if (mail === null || (!mail && !b[DELIVER])) return b
+      return {
+        ...b,
+        [MAIL]: { ...(mail ?? {}), from: this.#get('mail') ?? '' },
+      }
+    }
+    return {
+      name: 'yak/post',
+      hooks: {
+        normalize: (bundles) =>
+          this.#kernelling ? bundles : bundles.map(letter),
+        precondition: (bundles, tx) => {
+          if (this.#kernelling || !bundles.some((b) => b[DELIVER])) {
+            return bundles
+          }
+          let who = actorOf(bundles)
+          return then(levelOn(tx, who, app), (held) => {
+            if (!writes(held)) throw new Denied(who, app, 'editor')
+            return bundles
+          }) as Bundle[] | Promise<Bundle[]>
+        },
+      },
+    }
   }
 
   // Whether the batch running RIGHT NOW came in at the kernel's door. A Durable

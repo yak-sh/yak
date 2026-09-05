@@ -336,6 +336,12 @@ Deno.test('the object plants core + member + edge + the app, and nothing else', 
       'comment',
       'favorite',
       'web',
+      // @yaks/mail — the app's own mailbox (T-33686)
+      'mail',
+      'email',
+      'deliver',
+      'delivered',
+      'bounced',
       // the app's own
       'recipe',
     ].sort(),

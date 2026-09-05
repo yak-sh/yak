@@ -52,6 +52,7 @@ import { blobKeywords } from '@yaks/blob'
 import { docDoc } from '@yaks/doc'
 import { EDGE_URI, edgeDoc, edgeKeywords } from '@yaks/edge'
 import { idKeywords } from '@yaks/id'
+import { mailDoc } from '@yaks/mail'
 import { memberDoc } from '@yaks/member'
 
 // The column shapes these documents are written out of. A `ref` names another
@@ -176,7 +177,6 @@ export let kernelDoc: VocabDoc = {
       properties: { at: owned(time), message: owned(text) },
     },
     archived: { type: 'object', properties: stampCols },
-    notified: { type: 'object', properties: stampCols },
     opened: { type: 'object', properties: stampCols },
     quarantined: { type: 'object', properties: stampCols },
     // The two rows a page's upload makes (apps.ts `took`): the CONTENT,
@@ -192,6 +192,20 @@ export let kernelDoc: VocabDoc = {
       properties: { blob: ref('cascade'), mime: text, name: text },
     },
   },
+}
+
+/**
+ * The one mark with two homes: `notified{at, by, via}`, which @yaks/mail also
+ * declares. An app's store takes the word from that package (see
+ * {@link coreDocs}) because an app has a mailbox; the directory has none, so it
+ * declares the word here instead. A vocabulary refuses a component declared
+ * twice, and both stores need the mark — the unseen block reads it in every
+ * one of them — so the word has one home in each rather than one home overall.
+ */
+export let notifiedDoc: VocabDoc = {
+  $vocabulary: { [CORE_URI]: true },
+  title: 'notified',
+  $defs: { notified: { type: 'object', properties: stampCols } },
 }
 
 /** Where the whole of it is written, and what an app's store says when it is
@@ -297,7 +311,12 @@ export let appDerived = (): Record<
   },
 })
 
-/** The documents an app's vocabulary is built on, in load order. */
+/** The documents an app's vocabulary is built on, in load order.
+ *
+ * `mailDoc` is among them because every app has a mailbox (T-33686): a letter
+ * is an entity here like anywhere else, and the same six words say the one it
+ * sends and the one that arrives. It brings `notified` with it, which is why
+ * {@link kernelDoc} does not. */
 export let coreDocs: VocabDoc[] = [
   coreDoc,
   docDoc,
@@ -306,6 +325,7 @@ export let coreDocs: VocabDoc[] = [
   relationDoc,
   kernelDoc,
   appsDoc,
+  mailDoc,
 ]
 
 // ---- the platform's own store (T-33814) -------------------------------------
@@ -484,6 +504,7 @@ export let platformDocs: VocabDoc[] = [
   edgeDoc,
   relationDoc,
   kernelDoc,
+  notifiedDoc,
   platformDoc,
 ]
 

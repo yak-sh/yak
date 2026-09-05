@@ -14,6 +14,12 @@
 // keep the same gate, for the same reason.
 
 import { type State, Store } from './graph.ts'
+import type { Binding } from './post.ts'
+
+// The Email Sending binding one letter leaves through (T-33686): what post.ts
+// asks for structurally is the builder overload of the runtime's own
+// `SendEmail.send`, and the receipt it reads back is the runtime's result.
+let _mail: Binding = null as unknown as SendEmail
 
 let ctx = null as unknown as DurableObjectState
 
