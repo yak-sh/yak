@@ -4333,3 +4333,175 @@ slow("an app's letters, listed and sent through the connector", async () => {
     await k.stop()
   }
 })
+
+// The data an app comes with (seed.ts, T-34327). Owner, 2026-09-05: "so when
+// the app is first launced or installed, it comes with some initial data."
+// The whole of it: one batch out of a file and a folder, an alias resolving
+// across them, the app's OWN component seeded because the vocabulary is
+// planted first, a redeploy that writes nothing more, and files the web never
+// sees.
+slow(
+  'a deploy seeds the store once, and the seed is not on the web',
+  async () => {
+    let k = await kernel()
+    try {
+      let jeff = await signIn(k)
+      let agent = connector(k, jeff.cookie)
+      let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/
+        .exec(
+          await agent.tool('app_new', { slug: 'cookbook', title: 'Cookbook' }),
+        )![1]
+      let app = { space, app: 'cookbook' }
+      await agent.tool('app_files', {
+        ...app,
+        files: [
+          { path: 'index.html', content: '<!doctype html><h1>Cookbook' },
+          { path: 'vocab.json', content: '{"recipe":{"serves":"number"}}' },
+          {
+            path: 'seed.json',
+            content: JSON.stringify([{
+              entity: { eid: '$soup' },
+              doc: { title: 'Lentil soup' },
+              recipe: { serves: 4 },
+            }]),
+          },
+          // A folder as well, because the data can be large and an agent writes
+          // it a call at a time — and the alias `seed.json` minted resolves
+          // here, which is what says the two are ONE batch.
+          {
+            path: 'seed/01-notes.json',
+            content: JSON.stringify([{
+              entity: { eid: '$note' },
+              doc: { body: 'double the cumin' },
+              comment: { target: '$soup' },
+            }]),
+          },
+        ],
+      })
+      let out = await agent.tool('app_deploy', app)
+      assertStringIncludes(out, 'components: recipe')
+      assertStringIncludes(
+        out,
+        'seeded 2 entities from seed.json, seed/01-notes.json',
+      )
+      // The rows are there, wearing the app's own word — so the seed ran AFTER
+      // the vocabulary was planted — and the comment points at the entity the
+      // other file minted.
+      let [soup] = JSON.parse(
+        await agent.tool('graph_query', { q: '.recipe!&.doc?' }),
+      ) as { entity: { eid: string }; doc: { title: string } }[]
+      assertEquals(soup.doc.title, 'Lentil soup')
+      let [note] = JSON.parse(
+        await agent.tool('graph_query', { q: '.comment!' }),
+      ) as { comment: { target: { eid: string } | string } }[]
+      let target = note.comment.target
+      assertEquals(
+        typeof target == 'string' ? target : target.eid,
+        soup.entity.eid,
+      )
+
+      // Once per store: the person renames the recipe, deploys again, and the
+      // seed does not put the old title back.
+      await agent.tool('graph_apply', {
+        change: [{ entity: { eid: soup.entity.eid }, doc: { title: 'Dal' } }],
+      })
+      let again = await agent.tool('app_deploy', app)
+      assertEquals(again.includes('seeded'), false)
+      let all = JSON.parse(
+        await agent.tool('graph_query', { q: '.recipe!&.doc?' }),
+      ) as { doc: { title: string } }[]
+      assertEquals(all.map((r) => r.doc.title), ['Dal'])
+
+      // And the seed is the app's INSIDE, like vocab.json: deployed, never
+      // served (apps.ts MANIFEST).
+      for (
+        let path of ['/cookbook/seed.json', '/cookbook/seed/01-notes.json']
+      ) {
+        let r = await k.at(`${space}.yaks.app`, path)
+        assertEquals(r.status, 404, path)
+        await r.body?.cancel()
+      }
+      // A member still reads them back.
+      assertStringIncludes(
+        await agent.tool('app_files', {
+          ...app,
+          op: 'read',
+          path: 'seed.json',
+        }),
+        'Lentil soup',
+      )
+
+      // And a SECOND person taking the app gets their own store seeded — which
+      // is the other half of the ask: an app arrives furnished wherever it is
+      // installed, and what he renamed to `Dal` is his and travels with neither.
+      await agent.tool('app_publish', {
+        ...app,
+        about: 'Recipes to start from',
+      })
+      let ann = await signIn(
+        k,
+        `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`,
+      )
+      let hers = connector(k, ann.cookie)
+      assertStringIncludes(
+        await hers.tool('app_install', { name: 'cookbook' }),
+        'seeded 2 entities',
+      )
+      let theirs = JSON.parse(
+        await hers.tool('graph_query', { q: '.recipe!&.doc?' }),
+      ) as { doc: { title: string } }[]
+      assertEquals(theirs.map((r) => r.doc.title), ['Lentil soup'])
+    } finally {
+      await k.stop()
+    }
+  },
+)
+
+// And a bundle the store refuses refuses the DEPLOY, naming the file and the
+// entry: an agent that wrote ten seed files needs to know which one it
+// mistyped, and the refusal itself only ever names the word.
+slow('a refused seed bundle names its file and index', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    await agent.tool('app_new', { slug: 'cellar', title: 'Cellar' })
+    let app = { app: 'cellar' }
+    await agent.tool('app_files', {
+      ...app,
+      files: [
+        { path: 'index.html', content: '<!doctype html><h1>Cellar' },
+        { path: 'vocab.json', content: '{"bottle":{"year":"number"}}' },
+        {
+          path: 'seed/01-bottles.json',
+          content: JSON.stringify([
+            { entity: { eid: '$a' }, bottle: { year: 2019 } },
+            { entity: { eid: '$b' }, bottle: { vintage: 2020 } },
+          ]),
+        },
+      ],
+    })
+    let why = (await assertRejects(() => agent.tool('app_deploy', app), Error))
+      .message
+    assertStringIncludes(why, 'seed/01-bottles.json[1] was refused')
+    assertStringIncludes(why, 'bottle.vintage')
+    // Nothing was written: the batch is atomic and the mark is only made when
+    // it lands, so fixing the file and deploying again seeds the whole thing.
+    assertEquals(await agent.tool('graph_query', { q: '.bottle!' }), '[]')
+    await agent.tool('app_files', {
+      ...app,
+      op: 'write',
+      path: 'seed/01-bottles.json',
+      content: JSON.stringify([
+        { entity: { eid: '$a' }, bottle: { year: 2019 } },
+        { entity: { eid: '$b' }, bottle: { year: 2020 } },
+      ]),
+    })
+    assertStringIncludes(
+      await agent.tool('app_deploy', app),
+      'seeded 2 entities',
+    )
+  } finally {
+    await k.stop()
+  }
+})

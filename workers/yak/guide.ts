@@ -108,6 +108,12 @@ It is a tool here, so nothing has to be fetched off the web; the same words
 are at https://yaks.app/guide.md for a person. graph_apply, graph_query and
 search are the same store from here, for seeding and fixing.
 
+An app can come with DATA: a seed.json beside index.html — a list of the same
+bundles apply takes, or a seed/ folder of *.json files when there is a lot of
+it — is written into the app's store by the first app_deploy, once, and again
+into the copy an app_install makes, so an app opens furnished rather than blank.
+Call guide with page store for the whole thing.
+
 Call about at the start of a conversation: it names the tools this connector
 has right now and the version of that list, so a list your host cached in an
 earlier session — missing tools you have, naming tools you no longer do — is
@@ -231,8 +237,8 @@ export let PAGES: Page[] = [
     description:
       './api/client.js in full — apply, query, search, subscribe, upload ' +
       'and me — the shape of an entity bundle, patching and deleting, who ' +
-      'may read and write, the byline on a row, and the HTTP doors ' +
-      'underneath.',
+      'may read and write, the byline on a row, seed.json for the data an ' +
+      'app comes with, and the HTTP doors underneath.',
     brief: 'reading and writing from a page',
   },
   {

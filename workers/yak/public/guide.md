@@ -140,6 +140,12 @@ To change one, send its eid with just the fields you are changing; omitted
 fields are left alone, and `null` clears one. `{entity: {eid}, tombstone: {}}`
 deletes it.
 
+An app can come with data already in it: a `seed.json` beside `index.html` — a
+JSON list of those same bundles, or a `seed/` folder of `*.json` files when
+there is a lot of it — is written into the store by the first `app_deploy`, and
+into the copy an `app_install` makes. Once per store, so a later deploy leaves
+what the person has changed alone.
+
 ## Who wrote it
 
 The store stamps every row with who saved it, and the stamp says their NAME: ask

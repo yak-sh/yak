@@ -49,6 +49,7 @@ import { nothingHere, spaceIndex } from './pages.ts'
 import { hostOf, MOUNT, PLATFORM, route, sameOrigin } from './route.ts'
 import { covers, PLATFORM_PATHS } from './router.ts'
 import { titling, vouched, type Who, whoIs } from './session.ts'
+import { seedy } from './seed.ts'
 import { nameOf } from './signin.ts'
 import { type Reach, split, written } from './reach.ts'
 import type { Bundle } from '@yaks/graph'
@@ -195,16 +196,19 @@ export let based = (href: string, page: string) => {
 }
 
 // The files that ARE the app's platform manifest rather than its page: the
-// server code the dispatch namespace runs (dispatch.ts) and the two
-// declarations a deploy reads (tools.ts). Those are the app's INSIDE — the
-// platform reads them out of the blob store, and a member reads them back
-// through `app_files` — so the door that serves the app's pages does not
-// serve them to the web. Before this, `GET /weather/worker.js` answered the
-// whole server source to anyone with the link (C-32869 item 3).
+// server code the dispatch namespace runs (dispatch.ts), the two declarations
+// a deploy reads and the data it seeds the store with (tools.ts, seed.ts).
+// Those are the app's INSIDE — the platform reads them out of the blob store,
+// and a member reads them back through `app_files` — so the door that serves
+// the app's pages does not serve them to the web. Before this, `GET
+// /weather/worker.js` answered the whole server source to anyone with the link
+// (C-32869 item 3).
 //
 // The test is on the decoded KEY, not the path, because `/%77orker.js` names
 // the same file.
 let MANIFEST = new Set(['/worker.js', '/vocab.json', '/tools.json'])
+
+let inside = (path: string) => MANIFEST.has(path) || seedy(path.slice(1))
 
 // What the browser may keep, and for how long. An app's files are LIVE — a
 // written file serves the moment app_files puts it, with no deploy in
@@ -249,9 +253,7 @@ let asset = async (
   c: Clock,
 ) => {
   let prefix = prefixOf(space, app)
-  if (MANIFEST.has(keyed(prefix, path).slice(prefix.length))) {
-    return nothingHere()
-  }
+  if (inside(keyed(prefix, path).slice(prefix.length))) return nothingHere()
   // The bytes, through the cache (cache.ts): `Files` is a second entrypoint
   // with Cloudflare's cache in front of it, addressed by the app's eid and
   // this path, so a warm edge answers without the bucket being touched. It is

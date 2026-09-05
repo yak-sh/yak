@@ -66,6 +66,7 @@ let app: App = {
   meter: null,
   published: null,
   installed: null,
+  seeded: null,
 }
 
 // Every entity the kernel wrote while a test ran, and WHICH store it went

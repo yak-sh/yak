@@ -148,6 +148,9 @@ export type App = {
   // it was installed from, null unless it was.
   published: Offer | null
   installed: Pin | null
+  // When this app's store was seeded and by which release (seed.ts), null
+  // until it has been. A release reads it to know the seed has already run.
+  seeded: Sowed | null
 }
 export type Role = 'owner' | 'editor' | 'viewer'
 export type Access = 'public' | 'open' | 'private'
@@ -164,6 +167,10 @@ export type Offer = {
 // Where an installed app came from, and the version it took (T-32889). The
 // pin is what makes `app_update` a deliberate act.
 export type Pin = { of: string; version: number }
+
+// That the app's store carries the data its files seed it with, and the
+// release that put it there (seed.ts, T-34327).
+export type Sowed = { at: string; version: number }
 
 // A hostname a person owns, aimed at one app (platform.rs `Hostname`,
 // T-33037). How far provisioning has come, and when that was last read from
@@ -200,6 +207,7 @@ type Row = {
     about?: string | null
   }
   installed?: { of?: Id | null; version?: number | null }
+  seeded?: { at?: string | null; version?: number | null }
   hostname?: {
     name: string
     app: Id
@@ -402,7 +410,7 @@ export let stamp = async (
 // What every read of an APP asks for beside the app row itself, in one place
 // because `appOf` reads all of it and a filter that forgets one answers null
 // where there is a value.
-let ABOUT = '.doc?&.alias?&.home?&.meter?&.published?&.installed?'
+let ABOUT = '.doc?&.alias?&.home?&.meter?&.published?&.installed?&.seeded?'
 
 // The plan as a whole row, however little of it is written: a column nobody
 // has filled reads empty, the way `meterOf` does, so nothing downstream tests
@@ -452,6 +460,9 @@ export let appOf = (r: Row): App => ({
     : null,
   installed: r.installed?.of
     ? { of: idOf(r.installed.of), version: r.installed.version ?? 0 }
+    : null,
+  seeded: r.seeded
+    ? { at: r.seeded.at ?? '', version: r.seeded.version ?? 0 }
     : null,
 })
 

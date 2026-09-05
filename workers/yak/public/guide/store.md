@@ -310,6 +310,42 @@ straight back means the entity it named:
 A guest on an `open` app has nothing to name. Their `created.by` is null, which
 is exactly what `me()` told the page before they typed.
 
+## The data it comes with
+
+A store can start with rows in it. Write a `seed.json` beside `index.html` — a
+JSON list of the same bundles `apply` takes — and the first `app_deploy` writes
+them into the app's store:
+
+    [ {"entity": {"eid": "$soup"}, "doc": {"title": "Lentil soup"},
+       "recipe": {"serves": 4}},
+      {"entity": {"eid": "$note"}, "doc": {"body": "double the cumin"},
+       "comment": {"target": "$soup"}} ]
+
+When there is a lot of it, write a `seed/` folder of `*.json` files instead —
+`seed/01-places.json`, `seed/02-menu.json` — and write them a call at a time.
+All of them are ONE batch, read in filename order, so an alias minted in one
+file resolves in the next and the pieces can point at each other. Either
+spelling works, and a `seed.json` with a `seed/` folder beside it is still that
+one batch, the file first.
+
+Four things to know:
+
+- It runs ONCE per store, after the app's own `vocab.json` is planted — so a
+  seed may write components of your own — and it is marked as done. Deploy again
+  and nothing is seeded: what the person has changed since is theirs.
+- `app_install` gives the copy its own store, so the seed runs again there. That
+  is how a published app arrives furnished in somebody else's space.
+- A bundle the store refuses refuses the whole deploy, and nothing is written.
+  The refusal names the file and the entry, then says what was wrong:
+  `seed/02-menu.json[7] was refused: unknown column: recipe.serving`. A file
+  that is not JSON names itself the same way.
+- The seed files are the app's inside, like `vocab.json` and `tools.json`: they
+  are never served to the web. `app_files` reads them back.
+
+For data the person is meant to edit, that is all there is to it. For a table of
+constants your page reads — an emoji list, a lookup — a plain `.js` file beside
+the page is simpler, and it is not data anyone can change.
+
 ## The doors underneath
 
 `client.js` is a wrapper over ordinary same-origin HTTP. Use them directly from

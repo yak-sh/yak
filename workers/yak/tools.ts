@@ -33,6 +33,7 @@
 // answered at all. A deploy in v1 is a version bump, since an
 // app's files serve live from its blob store — and the version it bumps to is
 // kept, files and all, so app_rollback can put it back.
+import type { Blobs } from '../../src/blobs.ts'
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { parseTools, TOOLS_EXAMPLE, viewsOf } from '../../src/store/tools.ts'
 import {
@@ -121,6 +122,7 @@ import { titling, vouched, type Who } from './session.ts'
 import { mode, reads, writes } from '@yaks/member'
 import { canon, nameOf, personOf } from './signin.ts'
 import { type Door, storeOf } from './door.ts'
+import { type Applying, seedy, sow, type Sown, type Text } from './seed.ts'
 import {
   archive,
   cards,
@@ -516,6 +518,40 @@ let homesIn = async (ctx: Ctx, space: Space, app: App) => {
   return { said, homes }
 }
 
+// The app's seed files, as text (seed.ts). Only the seed ones are read: an
+// app's bytes are its pictures as well as its pages, and a release has no
+// business decoding those.
+let seeds = async (blobs: Blobs, space: Space, app: App): Promise<Text[]> => {
+  let prefix = fileKey(space, app, '')
+  let paths = (await blobs.list(prefix))
+    .map((k) => k.slice(prefix.length))
+    .filter(seedy)
+  return await Promise.all(paths.map(async (path) => ({
+    path,
+    text: new TextDecoder().decode(await blobs.get(prefix + path)),
+  })))
+}
+
+// A seed batch through the app's own write door, as the caller: the refusal's
+// own sentence back where the store said no, null where it took the batch.
+// `check` is @yaks/api's dry run — every phase, then a rollback — which is how
+// the refused bundle is found (seed.ts `blamed`).
+let applying =
+  (store: Door, head: Record<string, string>): Applying =>
+  async (batch, check) => {
+    let r = await store(`/apply${check ? '?check=1' : ''}`, {
+      method: 'POST',
+      body: JSON.stringify(batch),
+    }, head)
+    let body = await r.text()
+    if (r.ok) return null
+    try {
+      return (JSON.parse(body) as { message?: string }).message ?? body
+    } catch {
+      return body
+    }
+  }
+
 // Whether a manifest can land on this app AT ALL, asked before anything moves
 // (app_update). The same two rules a deploy holds it to, both of which throw
 // rather than answer: a word another app in the space homes keeps that home's
@@ -556,6 +592,10 @@ let released = async (
   // release that dies on a manifest it refuses still leaves the bucket
   // changed, and the stale edge would outlive the failure.
   await purged(ctx.env, app)
+  // What this release will be called, read here because the seed below is
+  // marked with it the moment it lands and the version row is written at the
+  // end.
+  let version = (app.version ?? 0) + 1
   // The app's own components, if it declares any. A manifest the store
   // refuses fails the release: the words and the tables must agree, and a
   // half-planted vocabulary is what `unknown component` is made of.
@@ -613,6 +653,30 @@ let released = async (
         body: JSON.stringify(uses),
       }, vouched(who)),
     )
+  }
+  // And the data the app comes with (seed.ts, T-34327), AFTER the words it is
+  // written in — an app's own components seed like the platform's — and once
+  // per store: `app.seeded` is the mark, so a redeploy leaves what the person
+  // has changed since exactly as they left it. It writes through the app's
+  // ordinary door as the caller, so the rows carry their byline and nothing
+  // server-owned can ride in on a seed file.
+  let sowed: Sown[] = []
+  if (!app.seeded) {
+    sowed = await sow(
+      await seeds(blobs, space, app),
+      applying(store, {
+        ...vouched(who),
+        ...await titling(ctx.dir, who.person),
+      }),
+    )
+    if (sowed.length) {
+      await ctx.dir.apply({
+        entities: [{
+          entity: { eid: app.eid },
+          seeded: { at: new Date().toISOString(), version },
+        }],
+      }, vouched(who))
+    }
   }
   // And the app's own MCP tools (tools.json, T-32685), read the same way and
   // after the components, since a tool may write a word this very release
@@ -707,7 +771,6 @@ let released = async (
   // app's version counter and the row that records the version move together.
   let prefix = fileKey(space, app, '')
   let pinned = await snapshot(blobs, prefix)
-  let version = (app.version ?? 0) + 1
   await record(ctx.dir, blobs, prefix, who, app, version, pinned, worker)
   // What the versions before this one broke is closed by this one: the code
   // that produced it is not what serves any more (unseen.ts `healed`,
@@ -740,6 +803,13 @@ let released = async (
         ? `\ntools: ${declared.map((t) => `${app.slug}__${t}`).join(', ')}`
         : '') +
       (planted.length ? `\ncomponents: ${planted.join(', ')}` : '') +
+      // The data the app came with, said once — the deploy after this one
+      // finds the mark and seeds nothing.
+      (sowed.length
+        ? `\nseeded ${sowed.length} ${
+          sowed.length == 1 ? 'entity' : 'entities'
+        } from ${[...new Set(sowed.map((s) => s.file))].join(', ')}`
+        : '') +
       // A word another app in the space already homes: this app writes it,
       // and the answer says where its rows land (T-32728).
       livesIn(uses).map((one) => `\n${one}`).join('') +
@@ -1477,7 +1547,11 @@ export let TOOLS: Tool[] = [
       'holds no rows, goes. It answers the columns it ADDED and the ones the ' +
       'store still has that this manifest did not name — a column is never ' +
       'renamed or retyped, so a new spelling arrives beside the old one, ' +
-      'which keeps every row already written under it. A tools.json beside ' +
+      'which keeps every row already written under it. A seed.json beside ' +
+      'index.html — a list of bundles, or a seed/ folder of *.json files when ' +
+      "there is a lot of them — is written into the app's store here, once " +
+      'per store and after the components, so the app opens with data in it; ' +
+      'deploy again and nothing is seeded. A tools.json beside ' +
       'it gives the app its own MCP tools — ' +
       `${TOOLS_EXAMPLE} — listed here as <app>__<tool> for everyone who can ` +
       'reach the app, so the person and their agent act on the app through ' +

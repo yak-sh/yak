@@ -455,6 +455,13 @@ export let platformDoc: VocabDoc = {
       type: 'object',
       properties: { of: ref('detach'), version: num },
     },
+    // That this app's store has been SEEDED, and by which release (seed.ts,
+    // T-34327). The mark is what makes the seed a once — a redeploy finds it
+    // and writes nothing, so the data an app comes with never lands on top of
+    // what the person has changed since. It lives on the app rather than in
+    // the store because an install mints a new app row and a new store
+    // together, and the copy is meant to be seeded again.
+    seeded: { type: 'object', properties: { at: time, version: num } },
     plan: {
       type: 'object',
       properties: {
