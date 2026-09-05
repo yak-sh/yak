@@ -16,6 +16,25 @@ compatibility_date = "2025-05-08"
 # same-zone routing would make that URL an SSRF into our own origin.
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 
+# The apex and every first-level space hostname, both on the yaks.app zone;
+# the zone's Universal certificate covers the wildcard. `*/*` is the third
+# because a customer's own hostname is not spelled `yaks.app` at all
+# (T-33035): traffic for a custom hostname enters this zone and only a
+# zone-wide pattern matches it, which is Cloudflare's own instruction for a
+# Worker as the fallback origin. The two above are the same Worker and are
+# kept for what they say.
+#
+# This sits ABOVE every table header on purpose. TOML gives a bare key to the
+# last table declared, so under `[observability.logs]` these three read as
+# `observability.logs.routes` — a field wrangler warns about and ignores, and
+# the deploy stops managing the routes rather than saying so (T-33684). The
+# routes survived only because they were already on the zone.
+routes = [
+  { pattern = "yaks.app/*", zone_name = "yaks.app" },
+  { pattern = "*.yaks.app/*", zone_name = "yaks.app" },
+  { pattern = "*/*", zone_name = "yaks.app" },
+]
+
 # Workers logs (T-33178). Off until 2026-09-03, which is why "where did that
 # second go" could only be answered by guessing: the platform had no logs at
 # all, and every deploy was pushing observability_enabled: false. `logs` is
@@ -29,19 +48,6 @@ compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 [observability.logs]
 enabled = true
 invocation_logs = true
-
-# The apex and every first-level space hostname, both on the yaks.app zone;
-# the zone's Universal certificate covers the wildcard. `*/*` is the third
-# because a customer's own hostname is not spelled `yaks.app` at all
-# (T-33035): traffic for a custom hostname enters this zone and only a
-# zone-wide pattern matches it, which is Cloudflare's own instruction for a
-# Worker as the fallback origin. The two above are the same Worker and are
-# kept for what they say.
-routes = [
-  { pattern = "yaks.app/*", zone_name = "yaks.app" },
-  { pattern = "*.yaks.app/*", zone_name = "yaks.app" },
-  { pattern = "*/*", zone_name = "yaks.app" },
-]
 
 # Under `wrangler dev` a request's URL carries the first route's hostname
 # unless told otherwise; the loopback keeps local dev a dev host (route.ts),

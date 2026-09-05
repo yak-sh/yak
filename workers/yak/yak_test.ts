@@ -27,7 +27,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     // The apex: the home page, its assets, and a soft 404 in its voice.
     let home = await k.at('yaks.app', '/')
     assertEquals(home.status, 200)
-    assertMatch(await home.text(), /Your ideas, made into real apps/)
+    assertMatch(await home.text(), /Ask for an app\. Get a website\./)
     let css = await k.at('yaks.app', '/style.css')
     assertMatch(css.headers.get('content-type') ?? '', /text\/css/)
     await css.body?.cancel()
