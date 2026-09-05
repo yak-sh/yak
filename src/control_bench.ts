@@ -22,12 +22,20 @@
 // must change this op, lengthen it to stay the slowest and bump the gate
 // VERSION so the baselines re-establish (bin/bench-gate.ts).
 Deno.bench('control: fixed reference (LCG)', () => {
-  // ~3ms of deterministic work: an LCG, each step dependent on the last — a true
-  // dependency chain the JIT can't vectorize or eliminate, so the cost scales
-  // LINEARLY and stays stable run-to-run (unlike a foldable arithmetic loop,
-  // which the optimizer times unpredictably). 600k steps ≈ 3ms here, comfortably
-  // slower than the slowest gated bench (~1.5ms).
+  // ~42ms of deterministic work: an LCG, each step dependent on the last — a
+  // true dependency chain the JIT can't vectorize or eliminate, so the cost
+  // scales LINEARLY and stays stable run-to-run (unlike a foldable arithmetic
+  // loop, which the optimizer times unpredictably). 600k steps ≈ 3ms here, so
+  // 8M ≈ 42ms.
+  //
+  // It was 600k until the SERVER query benches landed (query_bench.ts,
+  // subserve_bench.ts): every read that touches the graph pays a sweep of ~89
+  // component tables, so its FLOOR is milliseconds — hydrating a 600-row
+  // selection is ~21ms and no corpus small enough to fit under 3ms would still
+  // expose an O(rows) mistake. Lengthening the control (and bumping the gate's
+  // VERSION so the baselines re-establish) is what this file's contract says to
+  // do in that case, and it keeps ~2x margin over the slowest gated bench.
   let s = 1
-  for (let i = 0; i < 600_000; i++) s = (s * 1103515245 + 12345) >>> 0
+  for (let i = 0; i < 8_000_000; i++) s = (s * 1103515245 + 12345) >>> 0
   if (s === 0) throw new Error('unreachable') // keep the work observable
 })

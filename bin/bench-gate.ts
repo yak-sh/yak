@@ -41,7 +41,11 @@
 // ratio as the new baseline, regressions INCLUDED — the explicit, logged path
 // for a justified speed-for-correctness tradeoff. Loud on purpose.
 
-let VERSION = 3 // bump when the metric or the control op changes -> re-baseline
+let VERSION = 4 // bump when the metric or the control op changes -> re-baseline
+//   v4: the control op grew 600k -> 8M LCG steps so it stays the SLOWEST op
+//   once the server query benches joined the suite (their floor is the ~89
+//   component-table sweep, milliseconds). Every stored ratio shifts by that
+//   factor, so v3's numbers are incomparable and the gate re-baselines.
 let CONTROL = 'control: fixed reference (LCG)' // src/control_bench.ts
 let TOL = +(Deno.env.get('BENCH_TOL') ?? '0.25') // the box's measurement noise floor
 //   is ~15-20% (shared, virtualized; sub-µs benches jitter hardest as ratios), so a
@@ -58,6 +62,8 @@ let BASELINE = 'bench/baseline.json'
 let FILES = [
   'src/control_bench.ts', // the yardstick — must run alongside the rest
   'src/db_bench.ts',
+  'src/query_bench.ts',
+  'src/subserve_bench.ts',
   'src/client_bench.ts',
   'src/render_bench.ts',
   'src/recall_bench.ts',

@@ -19,6 +19,9 @@ import { SessionDot } from './components/session_status.tsx'
 import { cache, type Comps, ent } from './live.ts'
 import { propAt, propOwners } from './props.ts'
 import { threadMentions } from './components/views/Session.tsx'
+import { md, mdInline, mdMentions } from './md.ts'
+import { TElement, TText } from './tui/dom.ts'
+import { ansi, pane } from './tui/paint.ts'
 
 // --- hot pure functions ----------------------------------------------------
 // Memoized over the immutable vocabulary (props.ts). A regression here — the
@@ -105,4 +108,65 @@ let se = ent('s')
 Deno.bench('render: native SessionDot (O(1) standing)', () => {
   let m = mount(h(SessionDot, { e: se }))
   m.free()
+})
+
+// --- markdown: the one door every body goes through ------------------------
+// md.ts is the single markdown door (the invariant: web content never speaks
+// HTML), so every rendered doc body, every comment and every outbound letter
+// pays it — a card list pays it per card. The parser is memoized per
+// (ref, repo) so it is built once, not per call; a regression that rebuilds it
+// per body, or adds a second lexer pass beside the first, shows here.
+let BODY = [
+  '# A task body',
+  '',
+  'Some prose with a [link](https://example.test/a) and `code`, plus an',
+  'entity reference T-123 and a **bold** run.',
+  '',
+  '- one',
+  '- two',
+  '- three',
+  '',
+  '```ts',
+  'let x = 1',
+  'let y = x + 1',
+  '```',
+  '',
+  '> a quote, and a trailing paragraph about widgets.',
+].join('\n')
+
+Deno.bench('md: render one task body', () => {
+  md(BODY)
+})
+Deno.bench('mdInline: render one title', () => {
+  mdInline('A **title** with a T-123 and a [link](https://example.test/a)')
+})
+// The second reading of the same body — the mention scan that feeds a
+// session's aside and the reference index.
+Deno.bench('mdMentions: scan one body for references', () => {
+  mdMentions(BODY)
+})
+
+// --- the TUI repaint -------------------------------------------------------
+// pane() walks the WHOLE rendered tree into Line[] on every repaint (the clip
+// to the visible window happens after), and ansi() turns one line into the
+// bytes the terminal sees. Both are pure over the shim DOM, so they measure
+// without a terminal. A regression here is felt as keystroke lag.
+let screen = new TElement('root')
+for (let i = 0; i < 200; i++) {
+  let row = new TElement('div')
+  row.className = i == 40 ? 'TRow TRow-on' : 'TRow'
+  row.appendChild(new TText(`T-${1000 + i}  a task title for row ${i}`))
+  screen.appendChild(row)
+}
+let footer = new TElement('div')
+footer.className = 'footer'
+footer.appendChild(new TText('status'))
+screen.appendChild(footer)
+let painted = pane(screen)
+
+Deno.bench('pane: walk a 200-row TUI tree into lines', () => {
+  pane(screen)
+})
+Deno.bench('ansi: one painted line to terminal bytes', () => {
+  ansi(painted.lines[40])
 })

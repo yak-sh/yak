@@ -215,3 +215,37 @@ let nWho: Reader = {
 Deno.bench('notices: comms bus over 2k graph', () => {
   notices(nAll, nWho)
 })
+
+// --- the client's own cache build (live.ts) ---------------------------------
+// What a browser tab and the TUI both pay between the socket's seed frame and
+// first paint: applyLocal folds the frame into the cache, then resetSignals
+// rebuilds the id index, the derived index and every partition in ONE pass
+// (D-18055 — the per-row maintenance during a seed was the dominant boot CPU).
+// A regression that re-introduces per-row indexing under a seed, or turns the
+// one index pass into a per-row one, shows up here as a multiple.
+//
+// The corpus is working-set sized (what workingSet() actually sends a cold
+// boot), not a whole graph.
+let { applyLocal, cache, resetSignals } = await import('./live.ts')
+
+let seed: Change[] = []
+for (let i = 0; i < 200; i++) {
+  let eid = crypto.randomUUID()
+  seed.push(
+    { eid, name: 'entity', comp: { eid, num: 10_000 + i } },
+    { eid, name: 'doc', comp: { title: `Seeded ${i}`, body: 'b'.repeat(120) } },
+    { eid, name: 'task', comp: { priority: i % 3 } },
+  )
+}
+
+Deno.bench('applyLocal: fold a working-set seed into the cache', () => {
+  cache.value = {}
+  applyLocal(seed)
+})
+
+// The index rebuild a seed ends with — one pass over the whole cache.
+cache.value = {}
+applyLocal(seed)
+Deno.bench('resetSignals: rebuild every index from the cache', () => {
+  resetSignals()
+})
