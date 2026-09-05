@@ -24,6 +24,37 @@ import type { Column, Vocab } from '@yaks/vocab'
  * so the host that has one says so. */
 export type Guide = (comp: string) => string | undefined
 
+/** One column, said: its type in a word, whatever the vocabulary says it
+ * means, its closed set or the kind it points at, and what else is true of
+ * it. */
+export type Col = {
+  prop: string
+  type: string
+  description?: string
+  values?: string[]
+  ref?: string
+  notes?: string[]
+}
+
+/** One component, said. The index answers the first three fields; asking for
+ * the component fills the rest in and spells each column out. */
+export type Word = {
+  name: string
+  description?: string
+  kind: boolean
+  columns: string[] | Col[]
+  worn_with?: string[]
+  references?: {
+    out: { prop: string; to: string }[]
+    in: { comp: string; prop: string }[]
+  }
+  example?: Record<string, unknown>
+  guide?: string
+}
+
+/** What `graph_schema` answers, in any of its three sizes. */
+export type Said = { comps: Word[]; kinds?: string[]; kind?: string }
+
 // What death means for the entity holding the reference, said the way the
 // person reading it would ask: what happens to my row when that one dies.
 let DEATH: Record<string, string> = {
@@ -76,7 +107,7 @@ let sample = (col: Column): unknown =>
 
 /** One component as the index says it: the line an agent reads to decide
  * whether to ask for the whole of it. */
-export let summary = (vocab: Vocab, name: string) => {
+export let summary = (vocab: Vocab, name: string): Word => {
   let info = vocab.comp(name)!
   return {
     name,
@@ -89,7 +120,7 @@ export let summary = (vocab: Vocab, name: string) => {
 /** One component in full: every column with its type, its meaning and what is
  * true of it, the references either way, a bundle that writes it, and the page
  * that covers it where the host has one. */
-export let detail = (vocab: Vocab, name: string, guide?: Guide) => {
+export let detail = (vocab: Vocab, name: string, guide?: Guide): Word => {
   let info = vocab.comp(name)!
   let cols = vocab.columns(name).map((prop) => vocab.column(name, prop)!)
   let out = cols.filter((c) => c.category == 'ref')
@@ -127,7 +158,7 @@ export let detail = (vocab: Vocab, name: string, guide?: Guide) => {
 
 /** The index: every component, one line each, and the display kinds in the
  * order the vocabulary sorts them. */
-export let index = (vocab: Vocab) => ({
+export let index = (vocab: Vocab): Said => ({
   comps: vocab.all.map((name) => summary(vocab, name)),
   kinds: vocab.kinds,
 })
@@ -135,7 +166,7 @@ export let index = (vocab: Vocab) => ({
 /** What an entity of one KIND is made of: the component that names it, whole,
  * and a line each for the words it is worn with — a letter is a `mail` wearing
  * a `doc`, which is the same fact as `mail` sorting before `doc`. */
-export let ofKind = (vocab: Vocab, kind: string, guide?: Guide) => ({
+export let ofKind = (vocab: Vocab, kind: string, guide?: Guide): Said => ({
   kind,
   comps: [
     detail(vocab, kind, guide),

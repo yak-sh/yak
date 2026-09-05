@@ -66,11 +66,14 @@ export {
   showSchema,
 } from './schema.ts'
 export {
+  type Col,
   detail as compDetail,
   type Guide,
   index as compIndex,
   ofKind,
+  type Said,
   schemaSchema,
   summary as compSummary,
+  type Word,
 } from './words.ts'
 export type { Handler } from '@yaks/api'
