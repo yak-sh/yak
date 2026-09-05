@@ -47,8 +47,10 @@ must meet JSR's bar before it ships. When you add or change a package:
   comment (`/** … */` at the top) describing what the package is.
 - **`deno.json` has a `description`.** One clear sentence naming what the
   package does.
-- **At least two runtimes are marked compatible.** Declare the runtimes the
-  package supports so JSR shows its compatibility.
+- **Works on at least two runtimes.** JSR derives runtime compatibility by
+  analysing the published code, so keep each package runtime-agnostic (Deno and
+  Node at minimum) and state its supported runtimes in the README's
+  Compatibility section — there is no `deno.json` field for it.
 
 Run `deno publish --dry-run` in a package to check it before landing — it
 reports missing docs, slow types, and metadata gaps.
