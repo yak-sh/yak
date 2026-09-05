@@ -337,9 +337,12 @@ export let coreDocs: VocabDoc[] = [
 // instead of an app's `vocab.json`.
 //
 // It does not load @yaks/member's document. That package's `member.role` is
-// `owner|member`, and the platform's roster has three seats
-// (`owner|editor|viewer`), so the word is declared here at the platform's own
-// meaning. Nothing installs @yaks/member's guard on this store either: the
+// `owner|member` — belonging, with access spelled as a grant or the app's mode
+// — and the platform's roster IS its access ladder, three seats
+// (`owner|editor|viewer`) read space-wide by apps.ts, so the word is declared
+// here at the platform's own meaning. A door that can address BOTH stores
+// therefore types that column nowhere ({@link PLATFORM_APART}). Nothing
+// installs @yaks/member's guard on this store either: the
 // kernel decides who may read and write the directory before the request
 // reaches the object (directory.ts), and there is no app to be a member OF.
 
@@ -527,6 +530,42 @@ export let platformDocs: VocabDoc[] = [
  * in is the meta store (graph.ts).
  */
 export let platformVocab = (): Vocab => loadVocab(platformDocs, appKeywords)
+
+// What a column ADMITS, as a comparison makes it: the closed set, or the type.
+// The same rule reach.ts `colsOf` holds two spaces to.
+let shapeOf = (s: PropSchema): string =>
+  s.enum ? s.enum.join('|') : String(s.type ?? '?')
+
+/**
+ * The columns the DIRECTORY spells at the platform's own meaning while every
+ * app store spells them at a package's — today `member.role` alone: three
+ * seats here ({@link platformDoc}) against @yaks/member's two, because the
+ * platform's roster IS its access ladder and the package keeps belonging and
+ * access apart.
+ *
+ * One name meaning two things is two words. A door whose reach holds the
+ * directory AND an app therefore types these nowhere and leaves the answer to
+ * the store the bundle lands in (agent.ts `spoken`, `reading`) — the same rule
+ * a word two SPACES spell differently already gets (reach.ts `apartIn`).
+ *
+ * Derived rather than listed, so a platform column that starts disagreeing
+ * cannot quietly be typed as the package's.
+ */
+export let PLATFORM_APART: string[] = (() => {
+  let core: Record<string, PropSchema> = {}
+  for (let d of coreDocs) Object.assign(core, d.$defs ?? {})
+  let out: string[] = []
+  for (let [name, mine] of Object.entries(platformDoc.$defs ?? {})) {
+    let theirs = core[name]?.properties
+    if (!theirs) continue
+    for (let [col, s] of Object.entries(mine.properties ?? {})) {
+      if (theirs[col] && shapeOf(theirs[col]) != shapeOf(s)) {
+        out.push(`${name}.${col}`)
+      }
+    }
+  }
+  return out
+})()
 
 /** The keyword vocabularies those documents and an app's own may use. Each is
  * owned by the package that reads it — @yaks/id `prefix`, @yaks/blob `store`,

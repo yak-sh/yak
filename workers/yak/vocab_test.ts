@@ -10,6 +10,7 @@ import { PAGES } from './guide.ts'
 import {
   appDoc,
   appVocab,
+  PLATFORM_APART,
   platformVocab,
   RELATIONS,
   RESERVED,
@@ -231,6 +232,21 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
   assert(
     sql.some((s) => s.includes('create virtual table if not exists doc_fts')),
   )
+})
+
+Deno.test('the directory and an app spell one word apart: member.role', () => {
+  // The platform's roster IS its access ladder, read space-wide (apps.ts
+  // `reads`/`edits`, tools.ts `inSpace`); @yaks/member keeps belonging apart
+  // from access, which it spells as a grant or the app's mode. So the two
+  // stores mean two things by one column, and the MCP door types it nowhere
+  // rather than as either (agent.ts `spoken`, T-34273).
+  assertEquals(PLATFORM_APART, ['member.role'])
+  assertEquals(platformVocab().column('member', 'role')?.values, [
+    'owner',
+    'editor',
+    'viewer',
+  ])
+  assertEquals(appVocab().column('member', 'role')?.values, ['owner', 'member'])
 })
 
 Deno.test('the platform declares the uniques its races are decided by', () => {

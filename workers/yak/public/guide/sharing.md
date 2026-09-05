@@ -52,6 +52,13 @@ but does not hand out keys.
 `owner` (may also invite). Inviting an address that is already a member changes
 their role, and the answer says what it was.
 
+Those three words are the SPACE's roster — what `me()` answers as `role`, and
+the only place `viewer` is a seat. Inside an app's own store `member` is a
+different word: two seats, `owner` and `member`, saying whether someone belongs.
+Belonging is not access there, so read-only is the app's `access` (`public`,
+`private`) or a `grant` at `viewer`, never a seat. Write the roster with
+`member_add`, not by hand.
+
 `app` decides where the letter points. Name it and the invitation carries that
 app's own link; leave it out and it carries the space's own address, which is
 its front page when it has one and a list of the apps they may open when it does

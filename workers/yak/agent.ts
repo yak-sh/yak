@@ -27,7 +27,7 @@ import { z } from 'zod'
 import type { Bundle, Graph, Plugin, Row, Storage, Tool, Tx } from '@yaks/graph'
 import { Say, type Search } from '@yaks/mcp'
 import type { Column, Vocab } from '@yaks/vocab'
-import { storeName } from './directory.ts'
+import { META, storeName } from './directory.ts'
 import { letters } from './letters.ts'
 import { composed, type Reach, read, written } from './reach.ts'
 import { titling } from './session.ts'
@@ -40,7 +40,7 @@ import {
   TOOLS,
 } from './tools.ts'
 import { ceiling, serve, unseenBlock } from './unseen.ts'
-import { appVocab } from './vocab.ts'
+import { appVocab, PLATFORM_APART } from './vocab.ts'
 import { lined } from './wire.ts'
 
 // One JSON Schema property as Zod. The tool table spells plain shapes — a
@@ -224,6 +224,22 @@ let held = (ctx: Ctx, reach: Reach[]): Storage => {
 // stays two words"), and the merged vocabulary keeps one of the two. A schema
 // derived from it would then refuse a write the other store takes, so those
 // columns are named here and typed nowhere (`reading` below).
+//
+// The DIRECTORY is the other side of that same disagreement, and it is not an
+// app: it answers no `/vocab`, and the words it holds are the platform's own
+// (vocab.ts `platformDoc`), loaded into that store instead of the packages'
+// documents. One of them — `member.role` — both sides spell and MEAN
+// differently: the platform's roster is its access ladder
+// (`owner|editor|viewer`, read space-wide by apps.ts), while @yaks/member
+// keeps belonging (`owner|member`) apart from access, which it spells as a
+// grant or the app's mode. Typed as the package's, the door refused a seat the
+// directory itself takes (T-34273).
+//
+// It is never in the default REACH — `dir.spaces` leaves the meta space out,
+// so a person who owns `yak` still means their own space when they name none
+// — yet a batch may be AIMED at it by name (`$app: yak/platform`, `named`
+// below). So the question is who may address it, which is who holds a seat in
+// the meta space, and that is the same question `named` asks.
 let spoken = async (
   ctx: Ctx,
   reach: Reach[],
@@ -251,6 +267,10 @@ let spoken = async (
         if (col in mine && mine[col] != type) clashes.add(`${name}.${col}`)
       }
     }
+  }
+  let meta = await ctx.dir.space(META.space)
+  if (meta && await ctx.dir.role(meta, ctx.person)) {
+    for (let col of PLATFORM_APART) clashes.add(col)
   }
   return { vocab: appVocab(all), clashes }
 }
