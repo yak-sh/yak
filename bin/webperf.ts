@@ -51,9 +51,18 @@ let cleanup = async () => {
   try {
     await chrome.status
   } catch { /* */ }
-  try {
-    await Deno.remove(dir, { recursive: true })
-  } catch { /* */ }
+  // Chrome's children (zygote, gpu, network, crashpad) outlive the parent by a
+  // moment and keep writing into the profile, so a single remove races them and
+  // loses — silently, because the only symptom is /tmp slowly filling with
+  // wp* dirs (74 of them by the time anyone looked). Retry briefly instead.
+  for (let i = 0; i < 20; i++) {
+    try {
+      await Deno.remove(dir, { recursive: true })
+      break
+    } catch {
+      await new Promise((r) => setTimeout(r, 100))
+    }
+  }
 }
 
 // --- CDP plumbing ----------------------------------------------------------
