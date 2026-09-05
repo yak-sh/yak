@@ -17,6 +17,7 @@
 
 import type { Change, Comp, Eid } from '@yaks/graph'
 import type { Handler } from '@yaks/effects'
+import { DOC } from '@yaks/doc'
 import { DELIVER, MAIL } from './comp.ts'
 
 /** The seat that was just taken, as the letter's author sees it. */
@@ -104,10 +105,10 @@ export let invited = (
   if (!letter) return
   return apply([{
     entity: { eid: eid() },
+    // The words, in the component every readable thing wears (@yaks/doc).
+    [DOC]: { title: letter.subject, body: letter.body },
     [MAIL]: {
       from: letter.from,
-      subject: letter.subject,
-      body: letter.body,
       at: now(),
       // The letter is ABOUT the seat: correspondence hangs off the thing it
       // concerns, so the roster row reads back with its own invitation.

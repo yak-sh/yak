@@ -23,6 +23,7 @@
 // asks.
 
 import type { Bundle, Eid } from '@yaks/graph'
+import { DOC } from '@yaks/doc'
 import { MAIL } from './comp.ts'
 
 /** The head of a received message — a web `Headers` satisfies this. */
@@ -70,8 +71,9 @@ export let messageId = (m: Received): string =>
   (m.headers.get('message-id') ?? '').replace(/[<>]/g, '').trim()
 
 /**
- * A received message → the bundles that record it: one `mail` entity carrying
- * the letter as it arrived.
+ * A received message → the bundles that record it: one entity wearing the
+ * envelope it arrived in (`mail`) and the words it carried
+ * ({@link https://jsr.io/@yaks/doc | @yaks/doc}'s `doc{title, body}`).
  *
  * ```ts
  * import { inbound } from '@yaks/mail'
@@ -89,11 +91,13 @@ export let inbound = (m: Received, arrival: Arrival = {}): Bundle[] => {
   let at = arrival.at ?? m.headers.get('date') ?? new Date().toISOString()
   return [{
     entity: { eid: arrival.eid ?? crypto.randomUUID() },
+    [DOC]: {
+      title: m.headers.get('subject') || '(no subject)',
+      body: arrival.text ?? '',
+    },
     [MAIL]: {
       from: author(m),
       to: m.to,
-      subject: m.headers.get('subject') || '(no subject)',
-      body: arrival.text ?? '',
       at,
       message_id: messageId(m),
       ...(arrival.target ? { target: arrival.target } : {}),

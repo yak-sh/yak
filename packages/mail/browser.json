@@ -7,6 +7,7 @@
   "imports": {
     "@yaks/query": "../query/mod.ts",
     "@yaks/vocab": "../vocab/mod.ts",
+    "@yaks/doc": "../doc/mod.ts",
     "@yaks/graph": "../graph/mod.ts",
     "@yaks/effects": "../effects/mod.ts"
   }

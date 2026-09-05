@@ -70,8 +70,9 @@ export let CONTAINS = 'contains'
 /**
  * The task vocabulary, to load beside your own:
  * `loadVocab([taskDoc, ...mine], [edgeKeywords, ...])`. It declares nothing
- * about what a person or a document IS — bring your own `doc`, and whatever else
- * your tasks wear.
+ * about what a person or a document IS — bring your own `doc` (or
+ * {@link https://jsr.io/@yaks/doc | @yaks/doc}'s), and whatever else your tasks
+ * wear.
  *
  * `requires` and `contains` are declared through
  * {@link https://jsr.io/@yaks/edge | @yaks/edge}'s `relation` keyword, so an

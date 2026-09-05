@@ -15,10 +15,15 @@
 // The transport itself is INJECTED. This package composes a message and hands
 // it over; whether that is Cloudflare, an SMTP relay, or a list in memory is
 // the host's business (./cloudflare.ts and ./stash.ts are two answers).
+//
+// A letter is TWO components: the envelope is `mail` and the words a person
+// reads are @yaks/doc's `doc{title, body}`. So the composition works from the
+// whole entity, which is what the effect reads anyway.
 
 import type { Bundle, Comp, Entity, Tx } from '@yaks/graph'
 import { then } from '@yaks/graph'
 import type { Handler } from '@yaks/effects'
+import { BODY, DOC, TITLE } from '@yaks/doc'
 import { html, text } from './md.ts'
 import { BOUNCED, DELIVER, DELIVERED, EMAIL, MAIL } from './comp.ts'
 
@@ -94,19 +99,28 @@ let threadOf = (tx: Tx, eid: string): string | Promise<string> =>
  * The letter as a message: the subject and both body renderings, with the
  * addresses already resolved. Pure — the seam a test asserts on without a
  * transport anywhere.
+ *
+ * It takes the whole letter rather than one component, because a letter is two
+ * of them: the envelope is `mail` and the words are
+ * {@link https://jsr.io/@yaks/doc | @yaks/doc}'s `doc{title, body}`.
  */
 export let message = (
-  mail: Comp,
+  letter: Bundle,
   to: string,
   replyTo?: string,
-): Message => ({
-  from: str(mail, 'from'),
-  to,
-  subject: str(mail, 'subject'),
-  text: text(str(mail, 'body')),
-  html: html(str(mail, 'body')),
-  ...(replyTo ? { replyTo } : {}),
-})
+): Message => {
+  let mail = comp(letter, MAIL)
+  let doc = comp(letter, DOC)
+  let body = str(doc, BODY)
+  return {
+    from: str(mail, 'from'),
+    to,
+    subject: str(doc, TITLE),
+    text: text(body),
+    html: html(body),
+    ...(replyTo ? { replyTo } : {}),
+  }
+}
 
 /**
  * The `created(mail)` handler: hand an outbound letter to the sender, and
@@ -144,7 +158,7 @@ export let sending = ({ sender, now = clock }: Post): Handler => (event, tx) =>
       return then(
         answered ? threadOf(tx, answered) : '',
         (replyTo) =>
-          sender.send(message(mail, to, replyTo || undefined)).then(
+          sender.send(message(letter!, to, replyTo || undefined)).then(
             (receipt) =>
               tx.patch([{
                 entity: event.entity,

@@ -9,11 +9,11 @@
 //               table of its own: @yaks/sqlite raises `entity` and `tombstone`
 //               as the layout's fixed spine, and @yaks/graph reserves the
 //               tombstone word on the wire, so neither is declared.
-//   doc         title and body: the words a person reads, and the only thing
-//               search searches. `body` says `store: "blob"`, which is
-//               @yaks/blob's keyword — the text is swapped for its address on
-//               the way in and back on the way out, and neither `doc` nor the
-//               app is told.
+//   docDoc      @yaks/doc: title and body, the words a person reads and the
+//               only thing search searches. `body` says `store: "blob"`, which
+//               is @yaks/blob's keyword — the text is swapped for its address
+//               on the way in and back on the way out, and neither `doc` nor
+//               the app is told.
 //   created     the byline and the clock, both server-owned. @yaks/graph's
 //   updated     stamp phase is their only writer, and it writes whichever of
 //               `at`/`by`/`via` the vocabulary declares.
@@ -48,28 +48,23 @@ import {
   type Vocab,
   type VocabDoc,
 } from '@yaks/vocab'
-import { BLOB_URI, blobKeywords } from '@yaks/blob'
+import { blobKeywords } from '@yaks/blob'
+import { docDoc } from '@yaks/doc'
 import { EDGE_URI, edgeDoc, edgeKeywords } from '@yaks/edge'
 import { idKeywords } from '@yaks/id'
 import { memberDoc } from '@yaks/member'
 
-/** The components every app's store has, whatever it declares of its own. */
+/** The components every app's store has that no package owns: the spine, the
+ * writer, and the two server-owned stamps. `doc` is @yaks/doc's, `member`
+ * @yaks/member's, and both are loaded beside this one (see {@link coreDocs}). */
 export let coreDoc: VocabDoc = {
-  $vocabulary: { [CORE_URI]: true, [BLOB_URI]: true },
+  $vocabulary: { [CORE_URI]: true },
   title: 'core',
   $defs: {
     entity: {
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
-    },
-    doc: {
-      type: 'object',
-      kind: true,
-      properties: {
-        title: { type: 'string' },
-        body: { type: 'string', store: 'blob' },
-      },
     },
     person: { type: 'object', kind: true, before: ['doc'], properties: {} },
     created: {
@@ -126,7 +121,13 @@ export let relationDoc: VocabDoc = {
 }
 
 /** The documents an app's vocabulary is built on, in load order. */
-export let coreDocs: VocabDoc[] = [coreDoc, memberDoc, edgeDoc, relationDoc]
+export let coreDocs: VocabDoc[] = [
+  coreDoc,
+  docDoc,
+  memberDoc,
+  edgeDoc,
+  relationDoc,
+]
 
 /** The keyword vocabularies those documents and an app's own may use. Each is
  * owned by the package that reads it — @yaks/id `prefix`, @yaks/blob `store`,

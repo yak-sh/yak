@@ -37,11 +37,10 @@ Deno.test('inbound: one letter, as it arrived', () => {
   )
   assertEquals(bundles, [{
     entity: { eid: 'e-1' },
+    doc: { title: 'Is there soup?', body: 'Asking for a friend.' },
     mail: {
       from: 'ana@books.example',
       to: 'club@books.example',
-      subject: 'Is there soup?',
-      body: 'Asking for a friend.',
       at: '2026-09-05T12:00:00.000Z',
       message_id: 'a1@x.example',
       target: 'club',
@@ -51,6 +50,6 @@ Deno.test('inbound: one letter, as it arrived', () => {
 
 Deno.test('inbound: a letter with no subject still has one, and never asks to go', () => {
   let [b] = inbound(got({}), { eid: 'e-2', at: 'now' })
-  assertEquals((b.mail as Record<string, unknown>).subject, '(no subject)')
+  assertEquals((b.doc as Record<string, unknown>).title, '(no subject)')
   assertEquals(b.deliver, undefined)
 })

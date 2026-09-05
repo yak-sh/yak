@@ -27,11 +27,11 @@ Deno.test('a letter that asks to go, goes — and says so', async () => {
   let { g, post } = await seeded()
   await g.apply([{
     entity: { eid: letter },
-    mail: {
-      from: 'hello@books.example',
-      subject: 'Potluck Friday',
+    doc: {
+      title: 'Potluck Friday',
       body: 'Bring a dish. [Sign up](https://books.example/p)',
     },
+    mail: { from: 'hello@books.example' },
     deliver: { to: ana },
   }])
   assertEquals(post.sent.length, 1)
@@ -56,7 +56,8 @@ Deno.test('a letter with no ask is kept, not sent', async () => {
   let { g, post } = await seeded()
   await g.apply([{
     entity: { eid: letter },
-    mail: { from: 'hello@books.example', subject: 'A draft', body: 'later' },
+    doc: { title: 'A draft', body: 'later' },
+    mail: { from: 'hello@books.example' },
   }])
   assertEquals(post.sent.length, 0)
   assertEquals(comp(await read(g, letter), 'delivered'), undefined)
@@ -67,7 +68,8 @@ Deno.test('a recipient with no address bounces, and says whose fault it is', asy
   await g.apply([{ entity: { eid: 'p-bo' }, person: { name: 'Bo' } }])
   await g.apply([{
     entity: { eid: letter },
-    mail: { from: 'hello@books.example', subject: 'hi', body: 'hi' },
+    doc: { title: 'hi', body: 'hi' },
+    mail: { from: 'hello@books.example' },
     deliver: { to: 'p-bo' },
   }])
   assertEquals(post.sent.length, 0)
@@ -81,7 +83,8 @@ Deno.test('a letter with no sender bounces before the transport is troubled', as
   let { g, post } = await seeded()
   await g.apply([{
     entity: { eid: letter },
-    mail: { subject: 'hi', body: 'hi' },
+    doc: { title: 'hi', body: 'hi' },
+    mail: {},
     deliver: { to: ana },
   }])
   assertEquals(post.sent.length, 0)
@@ -95,7 +98,8 @@ Deno.test('a transport that refuses writes the reason it gave', async () => {
   let { g } = await seeded('no route to host')
   await g.apply([{
     entity: { eid: letter },
-    mail: { from: 'hello@books.example', subject: 'hi', body: 'hi' },
+    doc: { title: 'hi', body: 'hi' },
+    mail: { from: 'hello@books.example' },
     deliver: { to: ana },
   }])
   assertEquals(
@@ -108,17 +112,14 @@ Deno.test('a reply threads on what the answered letter went out as', async () =>
   let { g, post } = await seeded()
   await g.apply([{
     entity: { eid: letter },
-    mail: { from: 'hello@books.example', subject: 'hi', body: 'hi' },
+    doc: { title: 'hi', body: 'hi' },
+    mail: { from: 'hello@books.example' },
     deliver: { to: ana },
   }])
   await g.apply([{
     entity: { eid: 'e-reply' },
-    mail: {
-      from: 'hello@books.example',
-      subject: 'Re: hi',
-      body: 'again',
-      reply_to: letter,
-    },
+    doc: { title: 'Re: hi', body: 'again' },
+    mail: { from: 'hello@books.example', reply_to: letter },
     deliver: { to: ana },
   }])
   assertEquals(post.last()?.replyTo, 'stash-1')
@@ -140,7 +141,11 @@ Deno.test('the address is canonical however it was written', async () => {
 Deno.test('message: the composition, without a transport anywhere', () => {
   assertEquals(
     message(
-      { from: 'a@x.example', subject: 'S', body: '**b**' },
+      {
+        entity: { eid: 'e-1' },
+        doc: { title: 'S', body: '**b**' },
+        mail: { from: 'a@x.example' },
+      },
       'b@y.example',
     ),
     {

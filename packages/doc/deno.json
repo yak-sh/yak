@@ -1,0 +1,16 @@
+{
+  "name": "@yaks/doc",
+  "version": "0.0.0",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "The words a person reads: the doc{title, body} component domain for a yaks graph — one title and one body, worn by whatever else an entity is.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "./browser.json"
+    ]
+  }
+}

@@ -19,21 +19,22 @@ like everything else:
 ```ts
 await club.apply([{
   entity: { eid: 'e1' },
-  mail: {
-    from: 'hello@books.example',
-    subject: 'Potluck Friday',
+  doc: {
+    title: 'Potluck Friday',
     body: 'Bring a dish. [Sign up](https://books.example/potluck)',
-    target: potluck,
   },
+  mail: { from: 'hello@books.example', target: potluck },
   deliver: { to: ana },
 }])
 ```
 
 Three things are worth naming in that:
 
-- **`mail` is the whole letter** — from, subject, body, and when. Nothing hangs
-  off a separate content component, so a graph with only this document loaded
-  can hold correspondence.
+- **`mail` is the ENVELOPE** — from, to, when, what it is about, what it
+  answers. The subject and the body are `doc{title, body}`, from
+  [@yaks/doc](https://jsr.io/@yaks/doc), because the words a person reads live
+  in the one component every readable thing wears — so a letter is searched,
+  rendered and edited by whatever already handles a `doc`.
 - **`target` is what it is about**, and it is any entity at all. The potluck's
   page can therefore show the letters about the potluck, without anybody
   designing a mail feature into it.
@@ -55,9 +56,10 @@ batch commits, hands the letter to a `Sender`, and writes back what happened.
 
 ```ts
 import { effects } from '@yaks/effects'
+import { docDoc, docs } from '@yaks/doc'
 import { mailbox, mailDoc, stash } from '@yaks/mail'
 
-let vocab = loadVocab([mailDoc, club])
+let vocab = loadVocab([docDoc, mailDoc, club])
 let fx = effects(vocab)
 let post = stash()
 let g = graph({
@@ -65,10 +67,15 @@ let g = graph({
   vocab,
   plugins: [
     fx,
+    docs(),
     mailbox({ domain: 'books.example', sender: post, effects: fx }),
   ],
 })
 ```
+
+`docs()` is composed beside `mailbox()`, never inside it: a vocabulary refuses a
+component declared twice, so `doc` keeps one home and an application that
+already has it is not fought over it.
 
 So a write cannot fail because a mail server is down, and _what became of that
 letter_ is a query, not a log file:
@@ -172,11 +179,11 @@ prefer.
 
 | export                                             | is                                             |
 | -------------------------------------------------- | ---------------------------------------------- |
-| `mailDoc`                                          | the six components, to load beside your own    |
+| `mailDoc`                                          | the six components, beside `@yaks/doc`'s `doc` |
 | `MAIL`, `EMAIL`, `DELIVER`, …                      | their names                                    |
 | `mailbox(opts)`                                    | the @yaks/graph plugin — vocab, canon, sending |
 | `sending({ sender, now })`                         | the `created(mail)` handler                    |
-| `message(mail, to, replyTo?)`                      | a letter composed, purely                      |
+| `message(letter, to, replyTo?)`                    | a letter composed, purely                      |
 | `Sender`, `Message`, `Receipt`                     | the transport seam                             |
 | `cloudflare({ account, token })`, `payload`        | Cloudflare Email Sending, and its payload      |
 | `stash()`                                          | the sender that keeps them in a list           |

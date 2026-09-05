@@ -8,6 +8,7 @@
     "@cloudflare/workers-types": "npm:@cloudflare/workers-types@^4.20260702.1",
     "@yaks/api": "../../packages/api/mod.ts",
     "@yaks/blob": "../../packages/blob/mod.ts",
+    "@yaks/doc": "../../packages/doc/mod.ts",
     "@yaks/durable-object": "../../packages/durable-object/mod.ts",
     "@yaks/edge": "../../packages/edge/mod.ts",
     "@yaks/effects": "../../packages/effects/mod.ts",

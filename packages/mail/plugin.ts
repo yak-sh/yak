@@ -49,16 +49,22 @@ let clean = (fix: (a: string) => string) => (b: Bundle): Bundle => {
  * import { graph } from '@yaks/graph'
  * import { effects } from '@yaks/effects'
  * import { loadVocab } from '@yaks/vocab'
+ * import { docDoc, docs } from '@yaks/doc'
  * import { mailbox, mailDoc, stash } from '@yaks/mail'
  *
- * let vocab = loadVocab([mailDoc, club])
+ * let vocab = loadVocab([docDoc, mailDoc, club])
  * let fx = effects(vocab)
  * let g = graph({
  *   storage,
  *   vocab,
- *   plugins: [fx, mailbox({ domain: 'books.example', sender: stash(), effects: fx })],
+ *   plugins: [fx, docs(), mailbox({ domain: 'books.example', sender: stash(), effects: fx })],
  * })
  * ```
+ *
+ * {@link https://jsr.io/@yaks/doc | @yaks/doc} is composed BESIDE this plugin
+ * rather than inside it: a letter's subject and body are `doc{title, body}`, and
+ * a vocabulary refuses a component declared twice — so the word keeps one home
+ * and an application that already has `doc` is not fought over it.
  *
  * Pass `effects` and a `sender` together and outbound letters go on their own;
  * pass neither and this is the vocabulary and the canonicalizer, which is all

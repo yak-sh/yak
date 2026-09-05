@@ -56,6 +56,11 @@ In dependency order:
   recorded inside its own transaction as `batch`/`delta` components, and the
   three things that fall out — the history of one entity, the inverse of a batch
   (undo), and a cursor feed of what has committed since.
+- **[@yaks/doc](./doc)** — the words a person reads: `doc{title, body}`, the one
+  component a task, a letter and a recipe all wear, so search, editing and
+  rendering are written once. Its `body` NAMES `@yaks/blob`'s `store` keyword
+  without depending on the package that reads it — content-addressed where blob
+  is composed in, plain text everywhere else.
 - **[@yaks/member](./member)** — who belongs and what they may touch: a space
   roster (`member`), per-thing grants (`grant`), an access mode (`access`), the
   `precondition` hook that refuses a write the actor's role does not allow, and
@@ -149,6 +154,12 @@ on its own:
   moved as components of its own, inside the transaction, so a refused batch
   leaves nothing and a committed one always left a record. History, undo and the
   delta feed a live client replays are three readings of that one log.
+- `@yaks/doc` is the smallest domain plugin there is — one component, no hooks —
+  and it is here because a base word deserves one home: `@yaks/mail` keeps a
+  letter's subject and body in it, and anything else with a title reads through
+  the same renderer. It ships the `store: "blob"` declaration and none of the
+  machinery, which is what lets a graph grow into content-addressed bodies
+  without touching its vocabulary.
 - `@yaks/member` is the other kind of rule over the same `apply()`: not what a
   batch MEANS but who is allowed to say it, enforced as a `precondition` hook so
   a refusal rolls the batch back, and mirrored as a `canRead` the door asks for
@@ -163,12 +174,13 @@ on its own:
   and the rule is a list the package hands to both evaluators, so a saved board
   filter means the same thing in a database and in a page.
 - `@yaks/mail` is what a domain plugin looks like once both halves are there: it
-  contributes components like `@yaks/edge` and registers an effect like the
-  mechanism `@yaks/effects` ships empty. Sending is post-commit, so a mail
-  server that is down cannot refuse a write; the outcome is written back as
-  components, so what became of a letter is a query. It also fills the
-  `created(member)` slot `@yaks/member` documents and leaves for it — an
-  invitation is a letter, written through the same `apply()` as everything else.
+  contributes components like `@yaks/edge`, depends on `@yaks/doc` for the words
+  a letter carries, and registers an effect like the mechanism `@yaks/effects`
+  ships empty. Sending is post-commit, so a mail server that is down cannot
+  refuse a write; the outcome is written back as components, so what became of a
+  letter is a query. It also fills the `created(member)` slot `@yaks/member`
+  documents and leaves for it — an invitation is a letter, written through the
+  same `apply()` as everything else.
 - `@yaks/api` puts the whole stack behind three routes. It composes
   `@yaks/graph` (for writes) with a storage adapter (for reads) and
   `@yaks/match` (to decide cheaply which subscription a committed batch

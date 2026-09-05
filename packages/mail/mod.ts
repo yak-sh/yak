@@ -12,14 +12,25 @@
  * ```ts
  * import { mailDoc } from '@yaks/mail'
  * // { entity: { eid: 'e1' },
- * //   mail: { from: 'hello@books.example', subject: 'Potluck Friday',
- * //           body: 'Bring a dish.', target: potluck },
+ * //   doc: { title: 'Potluck Friday', body: 'Bring a dish.' },
+ * //   mail: { from: 'hello@books.example', target: potluck },
  * //   deliver: { to: ana } }
  * ```
- * `mail` is the letter, `deliver` is the ask to send it, and `target` is what
+ * `mail` is the ENVELOPE, `deliver` is the ask to send it, and `target` is what
  * it is about — any entity at all. Because the recipient is an ENTITY rather
  * than a string, the address it goes to is whatever their {@link mailDoc |
  * `email`} says at the moment it leaves.
+ *
+ * ## The subject and the body are a `doc`
+ * They are `doc{title, body}`, from
+ * {@link https://jsr.io/@yaks/doc | @yaks/doc}, which this package depends on.
+ * The words a person reads live in the one component every readable thing
+ * wears, so a letter is searched, rendered and edited by whatever already
+ * handles a `doc` — instead of by a second copy of the same two columns.
+ *
+ * Compose `docs()` BESIDE {@link mailbox}, never inside it: a vocabulary
+ * refuses a component declared twice, so an application that already has `doc`
+ * is not fought over it.
  *
  * ## Sending is an effect, not a write
  * Nothing in `apply()` talks to a mail server. {@link sending} is a
@@ -47,12 +58,13 @@
  * import { graph } from '@yaks/graph'
  * import { effects } from '@yaks/effects'
  * import { loadVocab } from '@yaks/vocab'
+ * import { docDoc, docs } from '@yaks/doc'
  * import { invited, mailbox, mailDoc, stash } from '@yaks/mail'
  *
- * let vocab = loadVocab([mailDoc, club])
+ * let vocab = loadVocab([docDoc, mailDoc, club])
  * let fx = effects(vocab)
  * let post = stash()
- * let g = graph({ storage, vocab, plugins: [fx, mailbox({ domain: 'books.example', sender: post, effects: fx })] })
+ * let g = graph({ storage, vocab, plugins: [fx, docs(), mailbox({ domain: 'books.example', sender: post, effects: fx })] })
  *
  * fx.created('member', invited({
  *   apply: (change) => g.apply(change),
