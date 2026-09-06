@@ -65,6 +65,7 @@ let app = (over: Partial<App> = {}): App => ({
   meter: null,
   published: null,
   installed: null,
+  gallery: null,
   seeded: null,
   trashed: null,
   ...over,

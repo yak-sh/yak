@@ -40,6 +40,7 @@ let app = (slug: string, spaceEid: string): App => ({
   meter: null,
   published: null,
   installed: null,
+  gallery: null,
   seeded: null,
   trashed: null,
 })

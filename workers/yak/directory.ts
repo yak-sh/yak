@@ -154,6 +154,9 @@ export type App = {
   // it was installed from, null unless it was.
   published: Offer | null
   installed: Pin | null
+  // Where this offer stands with the gallery (gallery.ts, T-34476): null for
+  // every app that never asked, which is almost all of them.
+  gallery: Gallery | null
   // When this app's store was seeded and by which release (seed.ts), null
   // until it has been. A release reads it to know the seed has already run.
   seeded: Sowed | null
@@ -179,6 +182,11 @@ export type Offer = {
 // Where an installed app came from, and the version it took (T-32889). The
 // pin is what makes `app_update` a deliberate act.
 export type Pin = { of: string; version: number }
+
+// Where a published app stands with the gallery (gallery.ts, T-34476): when
+// its owner asked to be shown on yaks.app, and when we said yes. Asked and not
+// yet listed is the waiting state; both empty is a row that never asked.
+export type Gallery = { askedAt: string; listedAt: string }
 
 // That the app's store carries the data its files seed it with, and the
 // release that put it there (seed.ts, T-34327).
@@ -224,6 +232,7 @@ type Row = {
     about?: string | null
   }
   installed?: { of?: Id | null; version?: number | null }
+  gallery?: { asked_at?: string | null; listed_at?: string | null }
   seeded?: { at?: string | null; version?: number | null }
   trashed?: { at?: string | null; by?: Id | null }
   hostname?: {
@@ -429,7 +438,8 @@ export let stamp = async (
 // because `appOf` reads all of it and a filter that forgets one answers null
 // where there is a value.
 let ABOUT =
-  '.doc?&.former?&.home?&.meter?&.published?&.installed?&.seeded?&.trashed?'
+  '.doc?&.former?&.home?&.meter?&.published?&.installed?&.gallery?&.seeded?' +
+  '&.trashed?'
 
 // And what every read of a SPACE asks for, for the same reason.
 let SPACE_ABOUT = '.doc?&.plan?&.meter?&.notified?&.trashed?'
@@ -491,6 +501,12 @@ export let appOf = (r: Row): App => ({
     : null,
   installed: r.installed?.of
     ? { of: idOf(r.installed.of), version: r.installed.version ?? 0 }
+    : null,
+  gallery: r.gallery
+    ? {
+      askedAt: r.gallery.asked_at ?? '',
+      listedAt: r.gallery.listed_at ?? '',
+    }
     : null,
   seeded: r.seeded
     ? { at: r.seeded.at ?? '', version: r.seeded.version ?? 0 }

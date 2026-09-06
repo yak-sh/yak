@@ -163,6 +163,53 @@ The answer names the address, the file count, and the pin:
 **`app_update(app, space?)`** — move an installed copy to whatever its publisher
 offers now. Below.
 
+## The gallery: being shown
+
+Publishing makes an app installable. The GALLERY is the other half — being
+SHOWN, on <https://yaks.app/gallery>, a public page of what people have made
+here. They are deliberately two acts: an offer is between whoever made the app
+and whoever goes looking for one, and a listing is yaks.app putting somebody's
+app on its own front door.
+
+**`app_publish(app, gallery: true)`**, or **`app_set(app, gallery: true)`**
+later, puts a published app forward. Only when the person has said they want it
+shown: it is their app, their name and their address on a public page, so it is
+never something to assume. The app must be published — a gallery entry nobody
+can install is a picture of an app.
+
+It is not listed on the spot. The ask sends a letter to yaks.app carrying the
+app's title, its address, the line its owner wrote about it and who made it,
+with the two links that answer. Nothing appears anywhere until somebody opens
+the one that says yes. That is the whole design and it does not have a faster
+path: the page is ours, under our name.
+
+The tool answers with where it stands, and so does the app's pill on the space's
+own page:
+
+    not in the gallery
+    waiting on us: it is not listed until we say yes, and a letter is on its
+      way to the desk that decides
+    listed in the gallery — https://yaks.app/gallery
+
+**Taking it back** is `app_set(app, gallery: false)`, and it is immediate. So is
+`app_unpublish`: an app nobody can install is not on the page. Both clear the
+ask as well as the listing, so putting it back later asks yaks.app once more.
+
+**Deleting** it takes it off the page at once too, and that one is different:
+nothing is written. A trashed app — and every app in a trashed space — simply
+stops being shown, and `app_restore` puts the listing back exactly as it was,
+with nobody asked twice.
+
+**`gallery_search(words, limit?)`** answers the listings by words, matched
+against each one's name and the line its maker wrote. It needs no account —
+signed out, it is one of the few tools this connector answers at all — and each
+result carries the `app_install` line that gives the person their own copy. Read
+it before building something from scratch.
+
+    - Tally — Count the votes
+      https://jeff.yaks.app/tally/
+      app_install(name: 'tally')
+
 ## What a copy shares: the code, and nothing else
 
 An installed app is an ordinary app of the installer's. Its own address, its own

@@ -7,6 +7,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { slow } from '../../src/testing.ts'
 import { REPLY_TO } from './mail.ts'
 import { BUILDS, CURRENCY, LETTERS, PRICE } from './meter.ts'
+import { page as galleryPage } from './gallery.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { askCode, askEmail, connect, spaceIndex } from './pages.ts'
 import { kernel } from './probe.ts'
@@ -15,7 +16,9 @@ import {
   CLOSED,
   CONNECTOR,
   CRAWLERS,
+  GALLERY,
   llms,
+  RENDERED,
   robots,
   said,
   SITE,
@@ -234,6 +237,48 @@ let fileAt = (path: string) =>
 let pathOf = (page: string) =>
   page == 'index.html' ? '/' : `/${page.replace('.html', '')}`
 
+// The gallery (T-34477) is a page of this site that is not a FILE: the worker
+// draws it from the directory, so its title and its line are written in seo.ts
+// and the page reads them from there. Everything the file pages are held to —
+// canonical, Open Graph, one h1, a place in the sitemap and in llms.txt — it is
+// held to here, against the page it actually serves.
+Deno.test('the gallery is a page of this site, drawn rather than filed', async () => {
+  assert(!SITE.includes(GALLERY.path), 'the gallery is not a file in public/')
+  assertEquals(RENDERED.map((p) => p.path), ['/gallery'])
+  let url = `https://yaks.app${GALLERY.path}`
+  let one = flat(await galleryPage([]).text())
+  assertStringIncludes(one, '<html lang="en">')
+  assertStringIncludes(one, `<title>${GALLERY.title}</title>`)
+  assertStringIncludes(
+    one,
+    `<meta name="description" content="${GALLERY.description}">`,
+  )
+  assertStringIncludes(one, `<link rel="canonical" href="${url}">`)
+  assertStringIncludes(one, `<meta property="og:url" content="${url}">`)
+  assertStringIncludes(
+    one,
+    '<meta property="og:image" content="https://yaks.app/og.png">',
+  )
+  for (let tag of ['og:title', 'og:description', 'og:site_name']) {
+    assert(one.includes(`property="${tag}"`), `the gallery has no ${tag}`)
+  }
+  assertEquals((one.match(/<h1[\s>]/g) ?? []).length, 1)
+  // The nav and the footer are the site's own, said the same way the files say
+  // them — a drawn page a visitor could tell apart is a page that got away.
+  let nav = one.split('<nav class="Nav"')[1].split('</nav>')[0]
+  assertEquals(
+    [...nav.matchAll(/href="([^"]+)"/g)].map((m) => m[1]),
+    ['/#how', '/pricing', '/technical', '/login'],
+  )
+  assertEquals(
+    links(one.split('<footer')[1]).map((l) => `${l}.html`),
+    pages.slice(1),
+  )
+  assertStringIncludes(sitemap(null), `<loc>${url}</loc>`)
+  // And the home page points at it, since it is in no nav.
+  assertStringIncludes(read('index.html'), 'href="/gallery"')
+})
+
 Deno.test('the sitemap and the pages on disk are one list', () => {
   assertEquals(SITE.map(fileAt).sort(), [...pages].sort())
   // The style guide is public and deliberately not in it, so it says noindex
@@ -420,6 +465,7 @@ Deno.test('the sitemap lists every address, and parses', () => {
     ADDRESSES,
     [
       ...SITE.map((p) => `https://yaks.app${p}`),
+      ...RENDERED.map((p) => `https://yaks.app${p.path}`),
       WHOLE,
       ...PAGES.map((p) => uriOf(p.slug)),
     ],
@@ -459,10 +505,13 @@ Deno.test('robots names every crawler and points at the sitemap', () => {
 })
 
 Deno.test('llms.txt links every page and every guide page', () => {
-  let site = SITE.map((path) => ({
-    url: `https://yaks.app${path}`,
-    ...said(read(fileAt(path))),
-  }))
+  let site = [
+    ...SITE.map((path) => ({
+      url: `https://yaks.app${path}`,
+      ...said(read(fileAt(path))),
+    })),
+    ...RENDERED.map((p) => ({ ...p, url: `https://yaks.app${p.path}` })),
+  ]
   let txt = llms(site)
   assert(txt.startsWith('# yaks.app\n'))
   assertStringIncludes(txt, 'not Yik Yak')

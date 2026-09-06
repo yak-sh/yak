@@ -113,6 +113,19 @@ import {
   steps,
 } from './domains.ts'
 import type { Env } from './env.ts'
+// The gallery is its own part (gallery.ts): the two stamps, the letter that
+// carries the decision, and the listing every door here reads.
+import {
+  ask as askGallery,
+  door as galleryDoor,
+  drop as unGallery,
+  letter as galleryLetter,
+  saying,
+  searched,
+  type Standing,
+  standing as onGallery,
+  ticket as ticketFor,
+} from './gallery.ts'
 import type { Caller } from './identity.ts'
 import { DEFAULT, HOURS, ledger, mint, revoke } from './grants.ts'
 import { GRAPH, mail, REPLY_TO } from './mail.ts'
@@ -595,6 +608,54 @@ let ownsApp = async (ctx: Ctx, args: Args) => {
     throw new Error(`not the owner of ${it.space.slug}`)
   }
   return it
+}
+
+// Asking for the gallery (gallery.ts, T-34476), from either door that takes
+// the word — `app_publish(gallery: true)` and `app_set(gallery: true)`. The
+// ask is one stamp and a letter to the desk that decides; the listing is not
+// ours to write, here or anywhere else, because the page it lands on is ours
+// (M-4522).
+//
+// Asking again while it is already listed changes nothing and says so: a
+// second letter about a decision already made is noise at the one mailbox this
+// whole mechanism depends on somebody reading.
+let toGallery = async (ctx: Ctx, space: Space, app: App) => {
+  if (!app.published) {
+    throw new Error(
+      `${space.slug}/${app.slug} is not published — the gallery shows what ` +
+        'people can install, so app_publish it first (or app_publish(app, ' +
+        'gallery: true), which does both)',
+    )
+  }
+  if (onGallery(app) == 'listed') return onGallery(app)
+  if (!ctx.env.SESSION_SECRET) {
+    throw new Error('the platform cannot sign a gallery link here')
+  }
+  let owner = await ctx.dir.nameAt(ctx.person) ?? space.slug
+  let secret = ctx.env.SESSION_SECRET
+  // The letter FIRST, the mark second: an ask nobody was told about is an app
+  // waiting on a decision no one was asked to make, and it would sit there
+  // saying so on the space page forever. A letter that will not send leaves
+  // the row exactly as it was, and asking again is the whole retry.
+  try {
+    await mail(ctx.env)(galleryLetter({
+      title: app.title,
+      about: app.published.about,
+      url: url(space, app),
+      owner,
+      yes: galleryDoor(await ticketFor(app, true, secret)),
+      no: galleryDoor(await ticketFor(app, false, secret)),
+    }))
+  } catch {
+    throw new Error(
+      `${space.slug}/${app.slug} is published, but the gallery could not be ` +
+        'asked: the letter that carries the decision would not send. ' +
+        'Nothing was changed — ask again, or leave it offered without being ' +
+        'shown',
+    )
+  }
+  await askGallery(ctx.env, app)
+  return 'asked' as const
 }
 
 // What every app in the space declares as its OWN, in app order, oldest
@@ -2356,7 +2417,10 @@ export let TOOLS: Tool[] = [
       'BEFORE the app whose name owns them, as globs — ["/recipes/*"] sends ' +
       'every address under /recipes/ to the front page instead of the recipes ' +
       'app. Leave it alone unless the front page is meant to route the whole ' +
-      'space; an empty list puts every path back where it was.',
+      'space; an empty list puts every path back where it was. gallery is ' +
+      'whether a published app is put forward for https://yaks.app/gallery, ' +
+      'the public page of apps made here: true asks, false takes it back at ' +
+      'once. Only when the person has said which they want.',
     input: {
       type: 'object',
       properties: {
@@ -2384,6 +2448,12 @@ export let TOOLS: Tool[] = [
             "/connect, /mcp and every app's /api/ door, so a glob naming one " +
             'is refused',
         },
+        gallery: {
+          type: 'boolean',
+          description: 'true to put this published app forward for ' +
+            'https://yaks.app/gallery — it appears there once yaks.app ' +
+            'agrees; false to take it off, or withdraw the ask, at once',
+        },
       },
       required: ['app'],
     },
@@ -2396,13 +2466,20 @@ export let TOOLS: Tool[] = [
       // The globs are checked BEFORE anything is written or any file moves:
       // a refusal here has to leave the app exactly as it was (router.ts).
       let first = args.first == null ? null : globs(args.first, [META.app])
+      let show = args.gallery == null ? null : flag(args.gallery, 'gallery')
       if (
         title == null && to == null && open == null && home == null &&
-        first == null
+        first == null && show == null
       ) {
         throw new Error(
-          'nothing to change: pass title, slug, access, home, first, or all',
+          'nothing to change: pass title, slug, access, home, first, ' +
+            'gallery, or all',
         )
+      }
+      // Being SHOWN is the space owner's, the way publishing is: an editor
+      // writes the app, and putting it on our own front page is not that.
+      if (show != null && who.role != 'owner') {
+        throw new Error(`not the owner of ${space.slug}`)
       }
       // Which app the bare hostname opens is the SPACE's, not this app's:
       // everyone who is given the space lands there, so it is the owner's
@@ -2480,6 +2557,16 @@ export let TOOLS: Tool[] = [
       await ctx.dir.apply({ entities }, vouched(who))
       for (let key of keys) await blobs.delete(key)
       let now = (await ctx.dir.app(space, to ?? app.slug))!
+      // The gallery, after the rest: what the letter names is the app as it
+      // stands when the ask goes, title and address included, so a rename in
+      // the same call is already in it.
+      let shown: Standing | null = null
+      if (show) {
+        shown = await toGallery(ctx, space, now)
+      } else if (show == false && onGallery(now) != 'no') {
+        await unGallery(ctx.env, now)
+        shown = 'no'
+      }
       return {
         text: `app ${space.slug}/${now.slug}${
           title == null ? '' : ` "${title}"`
@@ -2504,7 +2591,9 @@ export let TOOLS: Tool[] = [
             ? ` — it answers ${
               now.first.join(', ')
             } before the apps that own them`
-            : ' — it answers no path before the app that owns it'}`,
+            : ' — it answers no path before the app that owns it'}${
+          shown ? ` — ${saying(shown)}` : ''
+        }`,
         space,
       }
     },
@@ -3179,7 +3268,12 @@ export let TOOLS: Tool[] = [
       'under the name it already has — a name is claimed once, and only an ' +
       'explicit name moves it, which leaves the old one resolving to ' +
       'nothing; nobody who installed it moves until they app_update. Only ' +
-      'the space owner may publish, and only what the person asked to share.',
+      'the space owner may publish, and only what the person asked to share. ' +
+      'gallery: true also puts it forward to be SHOWN on ' +
+      'https://yaks.app/gallery — a public page of what people have made. ' +
+      "That is a separate thing from publishing and only ever the person's " +
+      'own choice: ask them, never assume it. It is not listed on the spot — ' +
+      'yaks.app reads the ask and answers, and the app is on offer either way.',
     input: {
       type: 'object',
       properties: {
@@ -3191,6 +3285,14 @@ export let TOOLS: Tool[] = [
             'already offered as, unless you say otherwise',
         ),
         about: str('one line saying what it is, for someone browsing'),
+        gallery: {
+          type: 'boolean',
+          description:
+            'true to put it forward for https://yaks.app/gallery, the ' +
+            'public page of apps made here. Only when the person has said ' +
+            'they want it shown. It goes on the page once yaks.app agrees; ' +
+            'app_set(app, gallery: false) takes it back at any time',
+        },
       },
       required: ['app'],
     },
@@ -3227,6 +3329,7 @@ export let TOOLS: Tool[] = [
       let about = args.about == null
         ? (app.published?.about ?? '')
         : text(args.about, 'about')
+      let show = args.gallery == null ? null : flag(args.gallery, 'gallery')
       await ctx.dir.apply({
         entities: [{
           entity: { eid: app.eid },
@@ -3244,9 +3347,22 @@ export let TOOLS: Tool[] = [
           'so everyone already told to install it still finds it'
         : `\nit was offered as ${was}, and that name no longer resolves: ` +
           `anyone holding it finds nothing, so tell them ${name}`
+      // The gallery, where the call said anything about it: true puts the
+      // offer forward, false takes it back. The row is read BACK first — the
+      // letter names the offer as it now stands, and on a first publish the
+      // app in hand has no offer on it at all.
+      let shown: Standing | null = null
+      if (show) {
+        let now = (await ctx.dir.app(space, app.slug, true))!
+        shown = await toGallery(ctx, space, now)
+      } else if (show == false && onGallery(app) != 'no') {
+        await unGallery(ctx.env, app)
+        shown = 'no'
+      }
       return {
         text: `published ${name} v${version} from ${space.slug}/${app.slug}` +
-          (about ? ` — ${about}` : '') + said,
+          (about ? ` — ${about}` : '') + said +
+          (shown ? `\n${saying(shown)}` : ''),
         space,
       }
     },
@@ -3260,7 +3376,8 @@ export let TOOLS: Tool[] = [
     description:
       'Stop offering the app. It stays exactly as it is and so does every ' +
       'copy anyone installed — their data is theirs — but nobody new can ' +
-      'install it, and the name is free again. Only the space owner may.',
+      'install it, and the name is free again. It leaves the gallery at the ' +
+      'same moment, if it was on it. Only the space owner may.',
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP },
@@ -3277,9 +3394,21 @@ export let TOOLS: Tool[] = [
         { entities: [{ entity: { eid: app.eid }, published: null }] },
         vouched(who),
       )
+      // And the gallery with it (gallery.ts): the page shows what a person can
+      // install, so an app nobody can install is not on it. The word comes
+      // OFF rather than being remembered — being shown is a thing we agreed
+      // to, and a later publish asks again.
+      let was = onGallery(app)
+      if (was != 'no') await unGallery(ctx.env, app)
       return {
         text: `${app.published.name} is no longer offered — whoever ` +
-          'installed it keeps their copy, data and all',
+          'installed it keeps their copy, data and all' +
+          (was == 'listed'
+            ? ', and it is off the gallery. Putting it back is app_publish ' +
+              'again with gallery: true, which asks yaks.app once more'
+            : was == 'asked'
+            ? ', and the gallery ask is withdrawn'
+            : ''),
         space,
       }
     },
@@ -4130,4 +4259,36 @@ export let TOOLS: Tool[] = [
       text: t.text + await whoami(ctx) + said(ctx) + rostered(ctx),
     }),
   })),
+  // And the gallery (gallery.ts, T-34478), which is the same list to a
+  // stranger and to somebody signed in — a listing is a public page, so there
+  // is nothing to narrow per caller. `app_published` above is the wider
+  // question, every offer anybody has made; this one is the shown few.
+  {
+    name: 'gallery_search',
+    title: 'Search the gallery',
+    readOnly: true,
+    // Both schemes: a token is welcome and none is needed, which is also how
+    // the anonymous door knows it may call this (anon.ts `openly`).
+    security: EITHER,
+    description: 'Find an app somebody has already made and shown at ' +
+      'https://yaks.app/gallery — a recipe box, a sign-up sheet, a tracker. ' +
+      'Give it the words the person used. Each answer carries the line that ' +
+      'gives them their own copy of it, at their own address with their own ' +
+      'data. Read it before building something from scratch, and signed out ' +
+      'too: the gallery is public.',
+    input: {
+      type: 'object',
+      properties: {
+        words: str(
+          'what to look for, in the words the person used — matched against ' +
+            "each listing's name and the line its maker wrote about it",
+        ),
+        limit: {
+          type: 'number',
+          description: 'how many at most (10 by default, 25 at the top)',
+        },
+      },
+    },
+    run: async (ctx, args) => ({ text: await searched(ctx.dir, args) }),
+  },
 ]

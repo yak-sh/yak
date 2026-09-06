@@ -172,8 +172,11 @@ slow(
         // The guide itself, so nothing has to be fetched off the web
         // (T-34284).
         'guide',
-        // The one anybody may call, signed in or not (preauth.ts, T-33030).
+        // The two anybody may call, signed in or not (preauth.ts, T-33030) —
+        // what this place is, and the gallery, which is a public page either
+        // way (gallery.ts, T-34478).
         'about',
+        'gallery_search',
         // And the post room's own two (letters.ts, T-34149), a plugin of
         // their own because they answer bundles rather than a sentence.
         'mail_list',
@@ -1499,6 +1502,9 @@ slow('the door before anyone signs in', async () => {
       'about',
       'app_published',
       'feedback',
+      // The gallery: a public page whether or not anybody has signed in
+      // (gallery.ts, T-34478).
+      'gallery_search',
       'guide',
       'graph_query',
       'graph_schema',
@@ -1739,7 +1745,13 @@ slow('the door before anyone signs in', async () => {
     // says the same thing on both lists — one tool cannot need signing in on
     // one and not the other. The scope is the one our resource metadata names
     // (identity.ts).
-    let openTools = ['about', 'app_published', 'feedback', 'guide']
+    let openTools = [
+      'about',
+      'app_published',
+      'feedback',
+      'gallery_search',
+      'guide',
+    ]
     for (let name of openTools) {
       assertEquals(fullSchemes[name], [
         { type: 'noauth' },
@@ -1855,6 +1867,7 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
       'about',
       'app_published',
       'feedback',
+      'gallery_search',
       'graph_query',
       'graph_schema',
       'graph_show',
@@ -4186,6 +4199,180 @@ slow('an app is published by name, and the name is one app', async () => {
         path: 'index.html',
       }),
       '<h1>recipes</h1>',
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
+// The whole of T-34475: an owner asks for the gallery, a letter carries the
+// decision, and the app is on the public page — and in a stranger's search —
+// only after somebody here opens the link that says yes (gallery.ts, M-4522).
+// Then the two ways off it: withdrawing, which clears the word, and the trash,
+// which writes nothing and gives the listing back on a restore.
+slow('an app reaches the gallery only when yaks.app says yes', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    let mine = jeff.email.split('@')[0]
+    await agent.tool('app_new', { slug: 'recipes', title: 'Recipe box' })
+    await agent.tool('app_files', {
+      space: mine,
+      app: 'recipes',
+      op: 'write',
+      path: 'index.html',
+      content:
+        '<meta property="og:image" content="card.png"><h1>Recipe box</h1>',
+    })
+    await agent.tool('app_deploy', { space: mine, app: 'recipes' })
+
+    // The ask: published, and put forward. Nothing is on the page yet, and the
+    // answer says exactly that rather than implying it landed.
+    let said = await agent.tool('app_publish', {
+      space: mine,
+      app: 'recipes',
+      about: 'Somewhere to keep recipes',
+      gallery: true,
+    })
+    assertStringIncludes(said, 'published recipes v1')
+    assertStringIncludes(said, 'waiting on us')
+    let empty = await k.at('yaks.app', '/gallery')
+    assertStringIncludes(await empty.text(), 'Nothing is listed yet')
+
+    // The letter, at the platform's own mailbox, carrying both answers.
+    let post = await letter(k, 'hello@yaks.app', 'Recipe box')
+    assertStringIncludes(post.body, 'asked to show an app')
+    assertStringIncludes(post.body, `https://${mine}.yaks.app/recipes/`)
+    assertStringIncludes(post.body, 'Somewhere to keep recipes')
+    let [yes, no] = [
+      ...post.body.matchAll(
+        /https:\/\/yaks\.app(\/gallery\/review\?t=[^\s]+)/g,
+      ),
+    ]
+      .map((m) => m[1])
+    assert(yes && no, 'the letter carries two links')
+
+    // The GET only ever DRAWS: a mail client that fetches every link in a
+    // letter must not be able to list an app by doing its job.
+    let drawn = await k.at('yaks.app', yes)
+    assertEquals(drawn.status, 200)
+    assertStringIncludes(await drawn.text(), 'List this app?')
+    assertStringIncludes(
+      await k.at('yaks.app', '/gallery').then((r) => r.text()),
+      'Nothing is listed yet',
+    )
+
+    // The POST acts. Now it is on the page, with its own share card and the
+    // line that gives somebody their own copy.
+    let token = new URLSearchParams(yes.split('?')[1]).get('t')!
+    let ok = await k.at('yaks.app', '/gallery/review', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ t: token }).toString(),
+    })
+    assertEquals(ok.status, 200)
+    assertStringIncludes(await ok.text(), 'is in the gallery')
+    let page = await k.at('yaks.app', '/gallery').then((r) => r.text())
+    assertStringIncludes(page, 'Recipe box')
+    assertStringIncludes(page, 'Somewhere to keep recipes')
+    assertStringIncludes(page, `https://${mine}.yaks.app/recipes/`)
+    // The app's own og:image, read off the bytes we hold and resolved against
+    // its address — never against ours.
+    assertStringIncludes(page, `https://${mine}.yaks.app/recipes/card.png`)
+    assertStringIncludes(page, 'app_install(name: &#39;recipes&#39;)')
+    // And on the home page, in place of the hand-written examples.
+    let home = await k.at('yaks.app', '/').then((r) => r.text())
+    assertStringIncludes(home, 'Recipe box')
+    assertEquals(home.includes('A garden diary'), false)
+
+    // A stranger finds it: no cookie, no bearer, the same answer with the
+    // install line on it.
+    let found = await connector(k).tool('gallery_search', { words: 'recipes' })
+    assertStringIncludes(found, 'Recipe box — Somewhere to keep recipes')
+    assertStringIncludes(found, "app_install(name: 'recipes')")
+    // Words in neither the name nor the line find nothing.
+    assertStringIncludes(
+      await connector(k).tool('gallery_search', { words: 'spreadsheet' }),
+      'nothing in the gallery answers',
+    )
+    // And the owner's own page says where it stands.
+    let space = await k.at(`${mine}.yaks.app`, '/', {
+      headers: { cookie: jeff.cookie },
+    }).then((r) => r.text())
+    assertStringIncludes(space, 'in the gallery')
+
+    // The trash writes NOTHING: the listing simply stops being drawn, and a
+    // restore gives it back with nobody asked twice.
+    await agent.tool('app_delete', { space: mine, app: 'recipes' })
+    assertStringIncludes(
+      await k.at('yaks.app', '/gallery').then((r) => r.text()),
+      'Nothing is listed yet',
+    )
+    await agent.tool('app_restore', { space: mine, app: 'recipes' })
+    assertStringIncludes(
+      await k.at('yaks.app', '/gallery').then((r) => r.text()),
+      'Recipe box',
+    )
+
+    // Withdrawing is the other direction, and it CLEARS the word: the app is
+    // off the page, and putting it back asks yaks.app once more.
+    assertStringIncludes(
+      await agent.tool('app_unpublish', { space: mine, app: 'recipes' }),
+      'off the gallery',
+    )
+    assertStringIncludes(
+      await k.at('yaks.app', '/gallery').then((r) => r.text()),
+      'Nothing is listed yet',
+    )
+    assertStringIncludes(
+      await connector(k).tool('gallery_search', { words: 'recipes' }),
+      'nothing in the gallery answers',
+    )
+    // The link out of the old letter is worth nothing now: there is no offer
+    // to list, and it says so rather than stamping a row nothing points at.
+    let stale = await k.at('yaks.app', yes)
+    assertEquals(stale.status, 409)
+    assertStringIncludes(await stale.text(), 'no longer on offer')
+
+    // Asked again, and declined this time: the ask is cleared and nothing is
+    // shown.
+    await agent.tool('app_publish', { space: mine, app: 'recipes' })
+    assertStringIncludes(
+      await agent.tool('app_set', {
+        space: mine,
+        app: 'recipes',
+        gallery: true,
+      }),
+      'waiting on us',
+    )
+    let second = await letter(k, 'hello@yaks.app', 'Recipe box')
+    let turned = [...second.body.matchAll(
+      /https:\/\/yaks\.app(\/gallery\/review\?t=[^\s]+)/g,
+    )]
+      .map((m) => m[1])[1]
+    let off = await k.at('yaks.app', '/gallery/review', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        t: new URLSearchParams(turned.split('?')[1]).get('t')!,
+      }).toString(),
+    })
+    assertStringIncludes(await off.text(), 'was not listed')
+    assertStringIncludes(
+      await k.at('yaks.app', '/gallery').then((r) => r.text()),
+      'Nothing is listed yet',
+    )
+    // An app that was never published cannot be shown: the gallery is what a
+    // person can install.
+    await agent.tool('app_new', { slug: 'draft', title: 'Draft' })
+    assertStringIncludes(
+      (await assertRejects(
+        () =>
+          agent.tool('app_set', { space: mine, app: 'draft', gallery: true }),
+        Error,
+      )).message,
+      'is not published',
     )
   } finally {
     await k.stop()

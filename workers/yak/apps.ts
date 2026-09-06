@@ -41,6 +41,7 @@ import {
 import * as dirPart from './directory.ts'
 import { ahead, bearing, granted, itsApp, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
+import { pilled, standing } from './gallery.ts'
 import { type Size, sizeOf } from './image.ts'
 import { asking, listed, type Row } from './listing.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
@@ -939,7 +940,14 @@ let index = async (
   return spaceIndex({
     space: space.slug,
     title: space.title,
-    apps: mine.map((a) => ({ slug: a.slug, title: a.title })),
+    // What the pill says about the gallery (gallery.ts, T-34476). LISTED is
+    // said to anybody — it is a public page — and WAITING only to the owner,
+    // who is the one it is news for.
+    apps: mine.map((a) => ({
+      slug: a.slug,
+      title: a.title,
+      gallery: owner || standing(a) == 'listed' ? pilled(standing(a)) : '',
+    })),
     hidden: all.length - mine.length,
     role: who.role,
     person: !!who.person,

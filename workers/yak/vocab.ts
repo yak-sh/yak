@@ -490,6 +490,21 @@ export let platformDoc: VocabDoc = {
     // app and a space share the word — it says one thing, thrown away and
     // since when, and every reader asks the row in front of it.
     trashed: { type: 'object', properties: { at: time, by: ref('keep') } },
+    // That this app's OFFER has been put forward for the gallery, and whether
+    // we said yes (gallery.ts, T-34476). Two stamps rather than a state word:
+    // `asked_at` is the owner of the app asking, `listed_at` is the platform
+    // answering, and a row wearing both is on https://yaks.app/gallery. The
+    // pair reads as one sentence in either direction — nothing is listed that
+    // was never asked for, and clearing the word un-asks and de-lists at once.
+    //
+    // Server-owned, both of them, and the only word on an app that is: the
+    // listing is on OUR site under OUR name (M-4522), so it may never be
+    // something a write can lift for itself. The tools stamp them through the
+    // kernel's own door (directory.ts `stamp`).
+    gallery: {
+      type: 'object',
+      properties: { asked_at: owned(time), listed_at: owned(time) },
+    },
     // That this app's store has been SEEDED, and by which release (seed.ts,
     // T-34327). The mark is what makes the seed a once — a redeploy finds it
     // and writes nothing, so the data an app comes with never lands on top of

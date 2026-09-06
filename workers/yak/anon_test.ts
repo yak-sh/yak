@@ -11,7 +11,15 @@ import { TOOLS } from './tools.ts'
 // The platform's own tools a caller who has not signed in may call. The
 // generic tier's reads are beside them (READS), and everything else meets the
 // challenge.
-let OPEN = ['about', 'app_published', 'feedback', 'guide']
+let OPEN = [
+  'about',
+  'app_published',
+  'feedback',
+  // The gallery: the apps their owners asked us to show, which is a public
+  // page whether or not anybody has signed in (gallery.ts, T-34478).
+  'gallery_search',
+  'guide',
+]
 
 Deno.test('the tools that need nobody are the pinned ones', () => {
   assertEquals(TOOLS.filter(openly).map((t) => t.name).sort(), OPEN)

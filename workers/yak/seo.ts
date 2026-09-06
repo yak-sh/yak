@@ -76,12 +76,29 @@ export let SITE = [
   '/cookies',
 ]
 
-// Every address the sitemap lists: the pages above, then the guide — the map
-// and one page per subject, at the same `.md` addresses the connector hands an
-// agent (guide.ts). They are markdown rather than HTML and they are indexed
-// anyway, which is the point of publishing them at a URL.
+// And the pages the WORKER draws (gallery.ts, T-34477), which are pages of
+// this site in every way but the one: there is no file under `public/` to read
+// a title and a line back out of. So both are written here, beside the list
+// they belong to, and the page reads them from this constant rather than the
+// other way round.
+export let GALLERY = {
+  path: '/gallery',
+  title: 'The gallery — apps made with yaks.app',
+  description:
+    'Apps people built here and asked us to show: what each one is, where ' +
+    'it lives, and the line an assistant runs to give you your own copy.',
+}
+
+export let RENDERED = [GALLERY]
+
+// Every address the sitemap lists: the pages above, the ones the worker draws,
+// then the guide — the map and one page per subject, at the same `.md`
+// addresses the connector hands an agent (guide.ts). They are markdown rather
+// than HTML and they are indexed anyway, which is the point of publishing them
+// at a URL.
 export let ADDRESSES = [
   ...SITE.map(at),
+  ...RENDERED.map((p) => at(p.path)),
   WHOLE,
   ...PAGES.map((p) => uriOf(p.slug)),
 ]
@@ -109,7 +126,11 @@ export let CRAWLERS = [
 // form to nobody, and the machine doors, which answer JSON to a client that
 // authenticated. None of them is a secret — a robots file grants nothing and
 // hides nothing — they are simply not pages.
-export let CLOSED = ['/login', '/connect', '/mcp', '/api/']
+// `/gallery/review` is one of them and the gallery itself is not: the page is
+// a list anybody may read, and the door under it answers one signed link out of
+// one letter (gallery.ts). It is nobody's secret — a crawler holding no ticket
+// is told the link expired — it is simply not a page.
+export let CLOSED = ['/login', '/connect', '/mcp', '/api/', '/gallery/review']
 
 export let robots = () =>
   [
@@ -231,7 +252,13 @@ export let answer = async (
       url: at(path),
       ...said(await fetched(env, at(path))),
     })))
-    return text(llms(pages.filter((p) => p.title)))
+    return text(llms([
+      ...pages.filter((p) => p.title),
+      // The drawn pages say their own title and line (above): there is no file
+      // to read them out of, and a page missing from this list is a page a
+      // model never learns is there.
+      ...RENDERED.map((p) => ({ ...p, url: at(p.path) })),
+    ]))
   }
   if (path == '/llms-full.txt') {
     let all = [WHOLE, ...PAGES.map((p) => uriOf(p.slug))]

@@ -734,6 +734,40 @@
     font-weight: 800;
   }
 
+  /* A gallery entry (gallery.ts): the card is the app's own link, and the line
+     under it is the one to copy, so it sits OUTSIDE the anchor — a link
+     swallows the selection. */
+  .Make_Card {
+    display: grid;
+    gap: var(--half-gap);
+  }
+
+  /* The app's own share card where it has one, and the platform tile where it
+     does not. A picture from somebody else's app is any shape it likes, so the
+     box is what fixes the row: cropped to fill, never stretched. */
+  .Make_Shot {
+    width: 100%;
+    aspect-ratio: 1200 / 630;
+    object-fit: cover;
+    border-radius: calc(var(--radius) / 2);
+    background: var(--ground);
+  }
+
+  .Make_Shot-none {
+    object-fit: contain;
+    padding: 1rem;
+  }
+
+  .Make_Line {
+    margin: 0;
+    overflow-x: auto;
+  }
+
+  .Make_Line code {
+    user-select: all;
+    white-space: nowrap;
+  }
+
   .Yours {
     display: grid;
     gap: 1.5rem;

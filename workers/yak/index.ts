@@ -77,6 +77,7 @@ import { directory } from './directory.ts'
 import { customOf, reading, stageOf, type Step, steps } from './domains.ts'
 import * as drop from './drop.ts'
 import { bound, type Env, type Inbound } from './env.ts'
+import * as gallery from './gallery.ts'
 import * as identity from './identity.ts'
 import { arrived, Refused } from './inbox.ts'
 import * as mcp from './mcp.ts'
@@ -188,8 +189,17 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // robots file is its own (route.ts).
   let said = await seo.answer(path, env)
   if (said) return said
+  // The gallery (gallery.ts, T-34477): the published apps their owners asked
+  // us to show, and the door the approval link in our own letter lands at.
+  // Drawn rather than a file, because it is a LIST of what the directory
+  // holds — and the same list is what the home page's showcase draws from,
+  // which is why the directory is read once here for both.
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let shown = await gallery.answer(req, env, path, dir)
+  if (shown) return shown
   let page = await env.ASSETS.fetch(req)
-  return page.status == 404 ? lost() : page
+  if (page.status == 404) return lost()
+  return path == '/' ? await gallery.made(env, dir, page) : page
 }
 
 // A foreign host that has reached the Worker (route.ts ORIGIN, T-33036) but

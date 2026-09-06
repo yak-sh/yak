@@ -23,6 +23,7 @@ let READS = [
   'app_secret_list',
   'app_versions',
   'domain_status',
+  'gallery_search',
   'guide',
   'memory_recall',
   'sandbox_read',

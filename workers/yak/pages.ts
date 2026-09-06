@@ -67,6 +67,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .Pills { display: flex; flex-wrap: wrap; justify-content: center; gap: .625rem; margin: 0 0 1.25rem }
 .Pill { display: inline-block; padding: .5rem 1rem; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--ink); font-weight: 700; text-decoration: none }
 .Pill:hover { border-color: var(--meadow) }
+.Pill_Tag { margin-left: .5rem; color: var(--soft-ink); font-weight: 400; font-size: .85rem }
 .Button { display: inline-block; padding: .75rem 1.75rem; border-radius: 999px; background: var(--meadow); color: var(--ground); font-weight: 800; text-decoration: none }
 .Pick { display: block; margin: .4rem 0; padding: .5rem .6rem; user-select: all }
 .Says { display: grid; gap: .5rem; margin: .75rem 0 1rem; padding: 0; list-style: none }
@@ -510,7 +511,12 @@ for (let go of document.querySelectorAll('.Copy_Go')) {
 export let spaceIndex = (at: {
   space: string
   title: string
-  apps: { slug: string; title: string }[]
+  // Where each app stands with the gallery, as the one word its pill wears
+  // (gallery.ts `pilled`) — empty for every app that never asked, which is
+  // almost all of them. Said to everybody where it is LISTED, since that is a
+  // public page anybody can read; the waiting state is the owner's own news
+  // and apps.ts only ever fills it in for them.
+  apps: { slug: string; title: string; gallery?: string }[]
   // What the owner deleted and can still have back, with the days each has
   // left (erase.ts, T-34430). Empty for everybody else — nobody but the owner
   // is told an app was ever here.
@@ -533,7 +539,9 @@ export let spaceIndex = (at: {
   let mine = at.apps.length
     ? `<nav class="Pills" aria-label="Apps here">${
       at.apps.map((a) =>
-        `<a class="Pill" href="/${esc(a.slug)}/">${esc(a.title || a.slug)}</a>`
+        `<a class="Pill" href="/${esc(a.slug)}/">${esc(a.title || a.slug)}${
+          a.gallery ? `<span class="Pill_Tag">${esc(a.gallery)}</span>` : ''
+        }</a>`
       ).join('')
     }</nav>`
     : ''
