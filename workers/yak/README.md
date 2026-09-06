@@ -42,6 +42,38 @@ Everything the build actually does is in `bin/build-yak`, so the dashboard holds
 one line: install Deno (not on the Ubuntu 24.04 image), `deno task check` from
 the repo root, `deno test -A workers/yak/`. A red build deploys nothing.
 
+## ANALYTICS_TOKEN — the one secret only the owner can mint
+
+"Who visited" on a space page, `<space>.yaks.app/<app>/api/stats` and the
+`app_stats` tool all read Workers Analytics Engine through its SQL API, which
+takes a **bearer token** rather than a binding — there is no read binding for a
+dataset. Nobody but the account's owner can create one. Until it is set the
+three doors say analytics are not switched on yet, in one sentence, and nothing
+errors; writing the data points needs none of this and is already happening.
+
+The dashboard steps, in full — a **new, finely scoped** token, never an existing
+one (M-4524):
+
+| step | where                                                                                                    |
+| ---- | -------------------------------------------------------------------------------------------------------- |
+| 1    | dash.cloudflare.com → the profile menu (top right) → **API Tokens**                                      |
+| 2    | **Create Token** → scroll to the bottom → **Create Custom Token** → Get started                          |
+| 3    | Token name: `yak analytics read`                                                                         |
+| 4    | Permissions: **Account** · **Account Analytics** · **Read** — that one row and no other                  |
+| 5    | Account Resources: **Include** · the account `yak` runs on (`0f9613df…`)                                 |
+| 6    | Client IP Address Filtering: leave empty. TTL: leave empty (no expiry), or set one and diary the renewal |
+| 7    | **Continue to summary** → **Create Token** → copy the value once; it is never shown again                |
+
+Then, from `workers/yak`:
+
+```sh
+npx wrangler secret put ANALYTICS_TOKEN   # paste the token
+```
+
+`CF_ACCOUNT` is already in `wrangler.toml` `[vars]`, so nothing else is needed.
+It is a **different** token from `CF_ANALYTICS_TOKEN`, which the meter uses —
+the same permission, a separate token, so revoking one does not stop the other.
+
 ## Verifying a deploy
 
 ```sh

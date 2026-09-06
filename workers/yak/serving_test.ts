@@ -31,7 +31,7 @@ import { directory, storeName } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { scriptName } from './dispatch.ts'
 import type { Env } from './env.ts'
-import { dataset, platform as inMemory } from './harness.ts'
+import { analytics, dataset, platform as inMemory } from './harness.ts'
 import { emptied, trash, trashSpace } from './erase.ts'
 import { wrote } from './tools.ts'
 import { archive, openIn, serve } from './unseen.ts'
@@ -251,6 +251,62 @@ Deno.test('a page view is one data point, and it names no visitor', async () => 
   await (await apps.fetch(visit('/'), env)).text()
   await (await apps.fetch(visit('/cookbook/api/query'), env)).text()
   assertEquals(seen.points.length, 1)
+})
+
+// What the fake SQL API answers each of the four queries with.
+let ROWS: Record<string, Record<string, unknown>[]> = {
+  day: [{ day: `${new Date().toISOString().slice(0, 10)} 00:00:00`, views: 5 }],
+  path: [{ path: '/cookbook/dinner', views: '4' }],
+  site: [{ site: 'news.example.com', views: 3 }],
+  country: [{ country: 'US', views: 5 }],
+}
+
+let rowsFor = (sql: string) =>
+  ROWS[Object.keys(ROWS).find((k) => sql.includes(` AS ${k},`)) ?? ''] ?? []
+
+Deno.test("/api/stats answers the app's own people, and nobody else", async () => {
+  let api = analytics(rowsFor)
+  try {
+    let { env } = inMemory(SECRET, {
+      CF_ACCOUNT: 'acc0unt',
+      ANALYTICS_TOKEN: 'a token',
+    })
+    await seeded(env)
+    let mine = await apps.fetch(
+      visit('/cookbook/api/stats', { headers: { cookie: await as(ADA) } }),
+      env,
+    )
+    assertEquals(mine.status, 200)
+    let said = await mine.json()
+    assertEquals(said.on, true)
+    assertEquals(said.total, 5)
+    assertEquals(said.daily.length, 30)
+    assertEquals(said.pages, [{ name: '/cookbook/dinner', views: 4 }])
+    assertEquals(said.from, [{ name: 'news.example.com', views: 3 }])
+    // Four queries, all of them scoped to this app and all of them sampled.
+    assertEquals(api.asked.length, 4)
+    for (let q of api.asked) assertStringIncludes(q, 'sum(_sample_interval)')
+
+    // A public app's PAGES are the world's; its visitor counts are not.
+    let theirs = await apps.fetch(visit('/cookbook/api/stats'), env)
+    assertEquals(theirs.status, 401)
+    await theirs.body?.cancel()
+  } finally {
+    api.done()
+  }
+})
+
+Deno.test('/api/stats with no analytics token is a sentence, not a failure', async () => {
+  let { env } = platform()
+  await seeded(env)
+  let door = await apps.fetch(
+    visit('/cookbook/api/stats', { headers: { cookie: await as(ADA) } }),
+    env,
+  )
+  assertEquals(door.status, 200)
+  let said = await door.json()
+  assertEquals(said.on, false)
+  assertStringIncludes(said.say, 'not switched on')
 })
 
 Deno.test('the page wire: apply, query and search round-trip', async () => {

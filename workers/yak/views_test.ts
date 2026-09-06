@@ -3,8 +3,25 @@
 // (views.ts, T-34496). The shape is the privacy promise: six blobs, one index,
 // no IP, no visitor id, no user-agent string — so it is pinned here rather
 // than left to whoever edits the call site next.
-import { assert, assertEquals } from '@std/assert'
-import { classed, point, referred } from './views.ts'
+// The other half is what is asked of the SQL API (T-34497): every count is
+// `sum(_sample_interval)` rather than `count()`, or a busy app under-reports
+// by exactly the factor that made it busy — so the queries are pinned too.
+import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
+import type { Env } from './env.ts'
+import {
+  classed,
+  daily,
+  NOT_ON,
+  perDay,
+  point,
+  ran,
+  referred,
+  sqlAt,
+  statsOf,
+  topCountries,
+  topFrom,
+  topPages,
+} from './views.ts'
 
 Deno.test('classed: an assistant, a crawler, a person, a script', () => {
   // The AI clients read first: almost all of them spell themselves `…Bot`.
@@ -103,4 +120,131 @@ Deno.test('point: inside every Analytics Engine limit, even given junk', () => {
     0,
   )
   assert(bytes <= 16 * 1024, `blobs are ${bytes} bytes, over the 16 KB budget`)
+})
+
+// ---- reading it back -------------------------------------------------------
+
+let APP = A_VIEW.app
+
+Deno.test('every query counts sampled rows, never rows', () => {
+  for (
+    let sql of [
+      perDay(APP),
+      topPages(APP),
+      topFrom(APP),
+      topCountries(APP),
+    ]
+  ) {
+    assert(
+      sql.includes('sum(_sample_interval)'),
+      `a count that is not sampled: ${sql}`,
+    )
+    assert(!/\bcount\(\)/.test(sql), `a raw count(): ${sql}`)
+    assert(sql.includes(`index1 = '${APP}'`), `not scoped to the app: ${sql}`)
+    assert(sql.includes('FROM yak_views'), sql)
+  }
+})
+
+Deno.test('the four queries, in full', () => {
+  assertEquals(
+    perDay(APP, 7),
+    "SELECT toStartOfInterval(timestamp, INTERVAL '1' DAY) AS day, " +
+      'sum(_sample_interval) AS views ' +
+      `FROM yak_views WHERE index1 = '${APP}' ` +
+      "AND timestamp >= NOW() - INTERVAL '7' DAY GROUP BY day ORDER BY day",
+  )
+  assertEquals(
+    topPages(APP, 30, 3),
+    'SELECT blob3 AS path, sum(_sample_interval) AS views ' +
+      `FROM yak_views WHERE index1 = '${APP}' ` +
+      "AND timestamp >= NOW() - INTERVAL '30' DAY " +
+      'GROUP BY path ORDER BY views DESC LIMIT 3',
+  )
+  // A direct visit refers nothing and an unknown country is not a country, so
+  // both lists drop the empty column rather than leading with it.
+  assert(topFrom(APP).includes("AND blob5 != ''"), topFrom(APP))
+  assert(topCountries(APP).includes("AND blob4 != ''"), topCountries(APP))
+  assert(!topPages(APP).includes("blob3 != ''"), 'every view has a path')
+})
+
+Deno.test('nothing reaches the SQL text unshaped', () => {
+  // There are no bound parameters, so an eid that is not one is refused
+  // rather than spliced in.
+  assertThrows(() => perDay("' OR 1=1 --"))
+  assertThrows(() => perDay('cookbook'))
+  // A window is clamped to what Cloudflare still holds, and a junk one is a
+  // day rather than a syntax error.
+  assert(perDay(APP, 9999).includes("INTERVAL '90' DAY"))
+  assert(perDay(APP, -3).includes("INTERVAL '1' DAY"))
+  assert(perDay(APP, NaN).includes("INTERVAL '1' DAY"))
+  assert(topPages(APP, 30, 1e9).includes('LIMIT 100'))
+})
+
+Deno.test("the endpoint is the account's own", () => {
+  assertEquals(
+    sqlAt('acc0unt'),
+    'https://api.cloudflare.com/client/v4/accounts/acc0unt/analytics_engine/sql',
+  )
+})
+
+Deno.test('daily: a dense series, gaps and all', () => {
+  let now = Date.parse('2026-09-06T11:00:00Z')
+  let series = daily(
+    // Cloudflare answers a DateTime, and a wide number as a string.
+    [
+      { day: '2026-09-06 00:00:00', views: '12' },
+      { day: '2026-09-04 00:00:00', views: 3 },
+    ],
+    4,
+    now,
+  )
+  assertEquals(series, [
+    { day: '2026-09-03', views: 0 },
+    { day: '2026-09-04', views: 3 },
+    { day: '2026-09-05', views: 0 },
+    { day: '2026-09-06', views: 12 },
+  ])
+})
+
+// The fake SQL API: what it was asked, and what it answers.
+let sql = (
+  answer: (q: string) => { status?: number; body: string },
+) => {
+  let asked: string[] = []
+  let real = globalThis.fetch
+  globalThis.fetch = ((_to: string | Request, init?: RequestInit) => {
+    asked.push(String(init?.body ?? ''))
+    let said = answer(asked[asked.length - 1])
+    return Promise.resolve(
+      new Response(said.body, { status: said.status ?? 200 }),
+    )
+  }) as typeof fetch
+  return { asked, done: () => void (globalThis.fetch = real) }
+}
+
+let env = (vars: Partial<Env> = {}) =>
+  ({ CF_ACCOUNT: 'acc0unt', ANALYTICS_TOKEN: 'a token', ...vars }) as Env
+
+Deno.test('a dataset nobody has written to is no views, not a failure', async () => {
+  let api = sql(() => ({ status: 404, body: 'unknown table yak_views' }))
+  try {
+    assertEquals(await ran(env(), perDay(APP)), [])
+  } finally {
+    api.done()
+  }
+})
+
+Deno.test('a refusal from the SQL API is said, not swallowed', async () => {
+  let api = sql(() => ({ status: 400, body: 'syntax error at line 1' }))
+  try {
+    await assertRejects(() => ran(env(), perDay(APP)), Error, 'analytics 400')
+  } finally {
+    api.done()
+  }
+})
+
+Deno.test('with no token there is nothing to ask, and one sentence to say', () => {
+  assertEquals(statsOf(env({ ANALYTICS_TOKEN: undefined }), APP), null)
+  assertEquals(statsOf(env({ CF_ACCOUNT: undefined }), APP), null)
+  assert(NOT_ON.includes('not switched on'))
 })

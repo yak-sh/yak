@@ -233,6 +233,88 @@ Deno.test('once an app is built it is one line, pointing at the apps', async () 
   assert(page.indexOf('<details') < page.indexOf('name="name"'), page)
 })
 
+// Who visited (views.ts, T-34497): the owner's block, drawn straight. What
+// matters here is that it is the OWNER's, that it draws itself without a
+// script, and that a platform with no analytics token says one sentence rather
+// than an empty chart.
+let VISITS = {
+  slug: 'recipes',
+  title: 'Recipes',
+  stats: {
+    days: 3,
+    total: 9,
+    daily: [
+      { day: '2026-09-04', views: 2 },
+      { day: '2026-09-05', views: 0 },
+      { day: '2026-09-06', views: 7 },
+    ],
+    pages: [{ name: '/dinner', views: 6 }],
+    from: [{ name: 'news.example.com', views: 4 }],
+    countries: [{ name: 'US', views: 9 }],
+  },
+}
+
+Deno.test('who visited: a bar per day and three lists, no script', async () => {
+  let page = await block({
+    apps: [{ slug: 'recipes', title: 'Recipes' }],
+    views: [VISITS],
+    viewDays: 3,
+  })
+  assertStringIncludes(page, 'Who visited')
+  assertStringIncludes(page, '9 visits')
+  // One rect per day, the tallest full height and the empty day absent.
+  let bars = page.match(/class="Views_Bar"/g)
+  assertEquals(bars?.length, 3)
+  assertStringIncludes(page, 'height="40.00"')
+  assertStringIncludes(page, 'height="0.00"')
+  // The three lists, and the ends of the axis.
+  assertStringIncludes(page, '/dinner')
+  assertStringIncludes(page, 'news.example.com')
+  assertStringIncludes(page, '>US<')
+  assertStringIncludes(page, '4 Sep')
+  assertStringIncludes(page, '6 Sep')
+  // Nothing here runs: the chart is markup, not a canvas somebody paints.
+  assertStringIncludes(page, '<svg class="Views_Chart"')
+
+  // Not the owner's, not their business.
+  let theirs = await block({
+    role: null,
+    apps: [{ slug: 'recipes', title: 'Recipes' }],
+    views: [VISITS],
+  })
+  assert(!theirs.includes('Who visited'), theirs)
+})
+
+Deno.test('who visited: no token is one sentence, no chart', async () => {
+  let page = await block({
+    apps: [{ slug: 'recipes', title: 'Recipes' }],
+    views: null,
+    viewsOff: 'Visitor counts are not switched on for this platform yet.',
+  })
+  assertStringIncludes(page, 'Who visited')
+  assertStringIncludes(page, 'not switched on')
+  assert(!page.includes('<svg'), 'an empty chart is worse than a line')
+})
+
+Deno.test('who visited: an app nobody opened says so', async () => {
+  let page = await block({
+    apps: [{ slug: 'recipes', title: 'Recipes' }],
+    views: [{
+      ...VISITS,
+      stats: {
+        ...VISITS.stats,
+        total: 0,
+        daily: [],
+        pages: [],
+        from: [],
+        countries: [],
+      },
+    }],
+  })
+  assertStringIncludes(page, 'Nobody has opened this one yet')
+  assert(!page.includes('<svg'), page)
+})
+
 // The trash, on the page a person can actually reach without an assistant
 // (T-34430): under the pills, one form per app, and one button that is the
 // whole restore.

@@ -82,6 +82,18 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .Attach > p { margin: .75rem 0 1rem }
 .Say { min-height: 1.3rem; margin: 0; font-size: .95rem }
 .Say-no { color: var(--warn) }
+.Views_App { display: grid; gap: .5rem; padding-top: 1rem }
+.Views_App + .Views_App { border-top: 1px solid var(--line) }
+.Views_App h3 { margin: 0; font-size: 1rem; font-weight: 800 }
+.Views_Total { color: var(--soft-ink); font-weight: 400; font-size: .9rem }
+.Views_Chart { display: block; width: 100%; height: 4rem }
+.Views_Bar { fill: var(--meadow) }
+.Views_Span { display: flex; justify-content: space-between; margin: 0; color: var(--soft-ink); font-size: .9rem }
+.Views_Tops { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)) }
+.Views_Column h4 { margin: 0 0 .25rem; color: var(--soft-ink); font-size: .9rem; font-weight: 700 }
+.Views_List { display: grid; gap: .25rem; margin: 0; padding: 0; list-style: none; font-size: .9rem }
+.Views_List li { display: flex; justify-content: space-between; gap: .5rem }
+.Views_List span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .Bill_Doors { display: flex; flex-wrap: wrap; gap: .625rem; margin: 1rem 0 .5rem }
 .Bill_Go-quiet { background: transparent; color: var(--meadow); border: 1px solid var(--line) }
 .Drop_Zone { display: grid; place-items: center; gap: .5rem; padding: 1.4rem 1rem; border: 2px dashed var(--soft-ink); border-radius: 1.25rem; background: var(--ground); text-align: center; cursor: pointer }
@@ -467,6 +479,95 @@ for (let go of document.querySelectorAll('.Copy_Go')) {
 }
 </script>`
 
+// Who visited, on the space page (views.ts, T-34497): a block per app, the
+// owner's alone. A bar per day for the window, then the three short lists —
+// the pages people opened, the sites that sent them, the countries they were
+// in — as tables, because a table reads on a phone and needs no script.
+//
+// The chart is inline SVG with `preserveAspectRatio="none"`: the viewBox is
+// one unit per day, the page stretches it to whatever width there is, and a
+// rectangle stretched is still a rectangle. No library, no canvas, no script —
+// and the whole series is in one `aria-label` for anyone who cannot see it.
+let count = (n: number) => n.toLocaleString('en-US')
+
+// Short enough for the ends of an axis: "7 Aug".
+let axisDay = (iso: string) => {
+  let at = new Date(`${iso}T00:00:00Z`)
+  return Number.isNaN(at.getTime()) ? '' : at.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  })
+}
+
+let chart = (days: { day: string; views: number }[], total: number) => {
+  let most = Math.max(...days.map((d) => d.views), 1)
+  let bars = days.map((d, i) =>
+    `<rect class="Views_Bar" x="${(i + 0.15).toFixed(2)}" y="${
+      (40 - (d.views / most) * 40).toFixed(2)
+    }" width="0.7" height="${((d.views / most) * 40).toFixed(2)}"></rect>`
+  ).join('')
+  return `<svg class="Views_Chart" viewBox="0 0 ${days.length} 40"
+preserveAspectRatio="none" role="img" aria-label="${
+    count(total)
+  } visits over ${days.length} days, ${
+    count(days[days.length - 1]?.views ?? 0)
+  } on the last day">${bars}</svg>
+<p class="Views_Span"><span>${esc(axisDay(days[0]?.day ?? ''))}</span><span>${
+    esc(axisDay(days[days.length - 1]?.day ?? ''))
+  }</span></p>`
+}
+
+let column = (head: string, rows: { name: string; views: number }[]) =>
+  rows.length
+    ? `<div class="Views_Column"><h4>${head}</h4>
+<ul class="Views_List">${
+      rows.map((r) =>
+        `<li><span>${esc(r.name)}</span><b>${count(r.views)}</b></li>`
+      ).join('')
+    }</ul></div>`
+    : ''
+
+/** One app's numbers, as `spaceIndex` is handed them. */
+export type Visits = {
+  slug: string
+  title: string
+  stats: {
+    days: number
+    total: number
+    daily: { day: string; views: number }[]
+    pages: { name: string; views: number }[]
+    from: { name: string; views: number }[]
+    countries: { name: string; views: number }[]
+  }
+}
+
+let visits = (v: Visits) =>
+  `<article class="Views_App"><h3>${esc(v.title || v.slug)} <span
+class="Views_Total">${count(v.stats.total)} ${
+    v.stats.total == 1 ? 'visit' : 'visits'
+  }</span></h3>${
+    v.stats.total
+      ? chart(v.stats.daily, v.stats.total) +
+        `<div class="Views_Tops">${
+          column('Pages', v.stats.pages) + column('Came from', v.stats.from) +
+          column('Countries', v.stats.countries)
+        }</div>`
+      : '<p class="Note">Nobody has opened this one yet.</p>'
+  }</article>`
+
+// `null` is the platform with no analytics token set (views.ts NOT_ON): one
+// sentence, because there is nothing here for the reader to do about it.
+let visited = (apps: Visits[] | null, days: number, off: string) =>
+  `<section class="Card"><h2>Who visited</h2>
+${
+    apps == null
+      ? `<p class="Note">${esc(off)}</p>`
+      : `<p class="Note">The last ${days} days. Counts only — no names, no
+addresses, nothing that says who anybody is.</p>${apps.map(visits).join('')}`
+  }
+</section>`
+
 // The space's own address when no app is its front page (T-33040). A space
 // that EXISTS is not a 404: this is a door, not a failure — and for its owner
 // it is where a fresh sign-in lands (T-34233), so it is also the page that
@@ -531,6 +632,13 @@ export let spaceIndex = (at: {
   name?: string
   connected?: boolean
   fixed?: boolean
+  // Who visited each app, the owner's alone (views.ts, T-34497). Absent for
+  // everybody else and for a space with no apps; `null` where the platform
+  // has no analytics token set, which is one sentence rather than an empty
+  // chart.
+  views?: Visits[] | null
+  viewDays?: number
+  viewsOff?: string
   // What the last save said, when one was refused.
   say?: string
   no?: boolean
@@ -671,8 +779,13 @@ one.</p>
 </section>`
   // The builder's own block: the one door that needs no assistant at all.
   let asking = owner ? chat(!!at.apps.length) : ''
+  // Who came, once there is something for anybody to have come to. `undefined`
+  // is nobody's business but the owner's, so the block is simply absent.
+  let seen = owner && at.views !== undefined
+    ? visited(at.views, at.viewDays ?? 30, at.viewsOff ?? '')
+    : ''
   let block = at.apps.length
-    ? `${attach}${asking}${settings}${next}`
+    ? `${attach}${asking}${settings}${next}${seen}`
     : `${settings}${next}${asking}${attach}`
   let lead = at.apps.length
     ? 'Here is what you can open.'

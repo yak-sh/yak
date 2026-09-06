@@ -155,6 +155,26 @@ export let dataset = () => {
 }
 
 /**
+ * The Analytics Engine SQL API, scripted (views.ts). There is no binding to
+ * swap — reading a dataset is an HTTP call with a token — so this stands in
+ * for `globalThis.fetch` and answers only that endpoint, passing everything
+ * else through. `rows` is handed the SQL and says what came back, so a test
+ * states rows rather than JSON.
+ */
+export let analytics = (rows: (sql: string) => Record<string, unknown>[]) => {
+  let asked: string[] = []
+  let real = globalThis.fetch
+  globalThis.fetch = ((to: string | Request, init?: RequestInit) => {
+    let at = typeof to == 'string' ? to : to.url
+    if (!at.includes('/analytics_engine/sql')) return real(to as Request, init)
+    let sql = String(init?.body ?? '')
+    asked.push(sql)
+    return Promise.resolve(Response.json({ data: rows(sql) }))
+  }) as typeof fetch
+  return { asked, done: () => void (globalThis.fetch = real) }
+}
+
+/**
  * A KV namespace in a Map, in the one shape the kernel asks of `OAUTH_KV`
  * (grants.ts, handoff.ts). TTL is not simulated: what expires here expires by
  * the value's own `exp`, which a test moves by handing a clock in.

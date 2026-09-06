@@ -46,7 +46,13 @@ import { type Size, sizeOf } from './image.ts'
 import { asking, listed, type Row } from './listing.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
 import { batched, lined, lowered } from './wire.ts'
-import { binned, nothingHere, spaceBinned, spaceIndex } from './pages.ts'
+import {
+  binned,
+  nothingHere,
+  spaceBinned,
+  spaceIndex,
+  type Visits,
+} from './pages.ts'
 import { daysLeft, untrash, untrashSpace } from './erase.ts'
 import { hostOf, MOUNT, PLATFORM, route, sameOrigin } from './route.ts'
 import { covers, PLATFORM_PATHS } from './router.ts'
@@ -61,7 +67,7 @@ import { type Clock, clock, timed } from './timing.ts'
 import { noted, refusal, serving } from './unseen.ts'
 import { full } from './usage.ts'
 import { sha256 } from './versions.ts'
-import { viewed } from './views.ts'
+import { DAYS, NOT_ON, type Stats, statsOf, viewed } from './views.ts'
 
 // The runtime's streaming HTML rewriter, the slice this file asks for, so
 // `deno check` reads the Worker without @cloudflare/workers-types (env.ts).
@@ -906,6 +912,22 @@ let api = async (
         : signInAt(req.headers.get('referer') || req.url),
     })
   }
+  // Who visited (views.ts, T-34497). The app's OWN PEOPLE, whatever its
+  // access says: a public app's pages are the world's to read and its
+  // visitor counts are not, so this asks for a role rather than for `mayRead`.
+  // Not switched on is a sentence and a 200, never a failure — the page
+  // showing it has nothing to do about a secret nobody set.
+  if (path == '/stats') {
+    if (!who.role) return refused('not_a_reader')
+    let days = new URL(req.url).searchParams.get('days')
+    let asked = statsOf(env, app.eid, days ? Number(days) : undefined)
+    if (!asked) return Response.json({ on: false, say: NOT_ON })
+    try {
+      return Response.json({ on: true, ...await asked })
+    } catch (e) {
+      return json(502, 'refused', e instanceof Error ? e.message : String(e))
+    }
+  }
   if (path == '/graph') {
     let r = await (await store('/graph', {}, headers)).json()
     return Response.json({ ...r, person: who.person, role: who.role })
@@ -1042,6 +1064,22 @@ let identity = () => import('./identity.ts')
 // carries the two things the sign-in card stopped asking — what to call them
 // and where their apps live — and the connect instructions, open until an
 // agent has ever been let in as them (T-34236).
+// Every app's visitors, for the owner's block. One read per app, all at once,
+// each already cached for a few minutes in views.ts — and a failure is `null`
+// rather than a throw, because this is the space's front door and it does not
+// go down because Cloudflare's analytics did.
+let visits = async (env: Env, apps: App[]): Promise<Visits[] | null> => {
+  let asked = apps.map((a) => statsOf(env, a.eid))
+  if (asked.some((s) => !s)) return null
+  try {
+    let all = await Promise.all(asked as Promise<Stats>[])
+    return apps.map((a, i) => ({ slug: a.slug, title: a.title, stats: all[i] }))
+  } catch (e) {
+    console.log(`views: ${e instanceof Error ? e.message : String(e)}`)
+    return null
+  }
+}
+
 let index = async (
   req: Request,
   env: Env,
@@ -1064,6 +1102,13 @@ let index = async (
   // row of ours: one grant, ever, is what shuts the block.
   let owner = who.role == 'owner' && who.person ? who.person : null
   return spaceIndex({
+    // Who visited, the owner's alone (views.ts, T-34497). `undefined` is
+    // everybody else, `null` is the platform with no analytics token set, and
+    // a read that fails is `null` too: this page is the space's front door,
+    // and it does not go down because Cloudflare's analytics did.
+    views: owner && all.length ? await visits(env, all) : undefined,
+    viewDays: DAYS,
+    viewsOff: NOT_ON,
     space: space.slug,
     title: space.title,
     // What the pill says about the gallery (gallery.ts, T-34476). LISTED is
