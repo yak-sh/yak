@@ -2141,7 +2141,9 @@ export let TOOLS: Tool[] = [
       'included — a bundle with $delete: true (or tombstone: {}) deletes ' +
       'that entity, and the store is the judge of whether you may. A bundle ' +
       'naming an eid patches that row; one naming a $alias mints a new ' +
-      'entity each run.',
+      'entity each run — unless it carries alias: {name: "…"}, which lands ' +
+      'on the entity already holding that name, so a file loaded twice is a ' +
+      'patch and not a second copy.',
     input: {
       type: 'object',
       properties: {

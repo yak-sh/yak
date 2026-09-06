@@ -363,9 +363,11 @@ already in the app — `data/cities.json` — or every `*.json` and `*.csv` unde
 folder you name, into the store now, as you. It is one batch, in filename order,
 aliases resolving across the files, and a refusal names the file and the entry
 exactly as a seed's does; unlike a seed there is no once-only mark, so calling
-it again loads the file again, and it applies whatever the file says — a bundle
-carrying `tombstone: {}` deletes that entity, and the store decides whether you
-may. That makes an import two calls and nothing transcribed:
+it again loads the file again — which is safe when the rows carry `alias{name}`,
+since a named row lands on the entity that already holds the name and the second
+load is a patch rather than a pile of copies. It applies whatever the file says
+— a bundle carrying `tombstone: {}` deletes that entity, and the store decides
+whether you may. That makes an import two calls and nothing transcribed:
 `app_files(op: 'fetch')` writes the bytes of a public dataset into the app, and
 `store_load` puts them in the store, answering the files it read and how many
 entities it wrote.
