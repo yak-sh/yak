@@ -96,6 +96,11 @@ export let parseVocab = (source: unknown): Vocab => {
   }
   let out: Vocab = {}
   for (let [name, cols] of Object.entries(source)) {
+    // The one word a manifest says about ITSELF rather than about a component:
+    // `"tools": false` turns off the two tools every kind is otherwise worth
+    // (workers/yak/kinds.ts, T-34513). A boolean is what tells it from a
+    // component named `tools`, which is an object of columns like any other.
+    if (name == 'tools' && typeof cols == 'boolean') continue
     if (!NAME.test(name)) {
       throw new Error(
         `vocab.json: ${JSON.stringify(name)} is not a component name ` +

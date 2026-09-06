@@ -2583,6 +2583,137 @@ slow('an app declares its own tools, and the door calls them', async () => {
   }
 })
 
+// The tools a KIND is worth (T-34513): an app that declares a `recipe` and no
+// tools.json at all still has a verb for adding one and a verb for finding it,
+// so the next agent the person talks to discovers the app the way it discovers
+// anything else here — by reading the tool list.
+slow('a kind an app declares is two tools, with no tools.json', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/
+      .exec(await agent.tool('app_new', { slug: 'box', title: 'Recipe box' }))![
+        1
+      ]
+    let app = { space, app: 'box' }
+    await agent.tool('app_files', {
+      ...app,
+      files: [
+        { path: 'index.html', content: '<!doctype html><p>recipes' },
+        {
+          path: 'vocab.json',
+          content: '{"recipe":{"serves":"number","cuisine":"text"}}',
+        },
+      ],
+    })
+    // The deploy says them in the same line it says a declared tool's name.
+    assertStringIncludes(
+      await agent.tool('app_deploy', app),
+      'tools: box__add_recipe, box__find_recipe',
+    )
+
+    // They are ordinary declared tools at the door: the app's title and
+    // address on the sentence, and the read half marked read-only.
+    let listed = (await agent.call('tools/list')).tools as {
+      name: string
+      description: string
+      annotations?: { readOnlyHint?: boolean }
+      inputSchema: { properties: Record<string, unknown>; required?: string[] }
+    }[]
+    let add = listed.find((t) => t.name == 'box__add_recipe')!
+    let find = listed.find((t) => t.name == 'box__find_recipe')!
+    assertStringIncludes(
+      add.description,
+      `Add a recipe to ${space}/box — Recipe box, an app at ` +
+        `${space}.yaks.app/box/`,
+    )
+    assertStringIncludes(find.description, `Find recipes in ${space}/box.`)
+    assertEquals(add.annotations?.readOnlyHint, false)
+    assertEquals(find.annotations?.readOnlyHint, true)
+    // The kind's own columns are the arguments, and only the title is owed.
+    assertEquals(Object.keys(add.inputSchema.properties), [
+      'title',
+      'body',
+      'alias',
+      'serves',
+      'cuisine',
+    ])
+    assertEquals(add.inputSchema.required, ['title'])
+    // Nothing at all is owed to the find: an empty `required` is dropped on
+    // the way out rather than published as a word.
+    assertEquals(find.inputSchema.required ?? [], [])
+
+    // Adding writes the row: the kind, the title, the columns given — and the
+    // name it answers to afterwards.
+    assertStringIncludes(
+      await agent.tool('box__add_recipe', {
+        title: 'Lemon cake',
+        body: '3 lemons',
+        alias: 'lemon-cake',
+        serves: 8,
+      }),
+      // Two: the recipe, and the name it answers to — a key is an entity of
+      // its own (@yaks/key).
+      'box__add_recipe: wrote 2 entities',
+    )
+    // A second one with nothing but a title still wears the kind, so the find
+    // answers it — and writes no nameless alias.
+    await agent.tool('box__add_recipe', { title: 'Toast' })
+    let found = async (args: Record<string, unknown>) =>
+      (await agent.call('tools/call', {
+        name: 'box__find_recipe',
+        arguments: args,
+      }))
+        .structuredContent.rows as { doc: { title: string } }[]
+    assertEquals((await found({})).map((r) => r.doc.title), [
+      'Lemon cake',
+      'Toast',
+    ])
+    // A clause whose argument is left out drops out of the filter line.
+    assertEquals((await found({ words: 'lemons' })).map((r) => r.doc.title), [
+      'Lemon cake',
+    ])
+    assertEquals((await found({ serves: 8 })).map((r) => r.doc.title), [
+      'Lemon cake',
+    ])
+
+    // And a tools.json spelling one of the names takes it over, whole: the
+    // app's own sentence and the app's own template, beside the other half
+    // still generated for it.
+    await agent.tool('app_files', {
+      ...app,
+      op: 'write',
+      path: 'tools.json',
+      content: JSON.stringify({
+        add_recipe: {
+          description: 'Add a recipe the way this box means it',
+          input: { title: 'text' },
+          apply: {
+            entity: { eid: '$r' },
+            doc: { title: '{{title}}' },
+            recipe: { cuisine: 'house' },
+          },
+        },
+      }),
+    })
+    assertStringIncludes(
+      await agent.tool('app_deploy', app),
+      'tools: box__add_recipe, box__find_recipe',
+    )
+    let mine = ((await agent.call('tools/list')).tools as { name: string }[])
+      .filter((t) => t.name.startsWith('box__')).map((t) => t.name)
+    assertEquals(mine, ['box__add_recipe', 'box__find_recipe'])
+    await agent.tool('box__add_recipe', { title: 'Fried rice' })
+    assertEquals(
+      (await found({ cuisine: 'house' })).map((r) => r.doc.title),
+      ['Fried rice'],
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
 // An SSE stream held open, as the text heard so far: a test asserts on what
 // has arrived, forgets it, and cancels when it is done.
 let hearing = (res: Response) => {
@@ -3130,8 +3261,11 @@ slow(
       assertEquals(blocks.length, 2)
       assertEquals(
         blocks[1].text,
-        'The tool list changed since you connected (new: runs__log_run). ' +
-          'Reconnect to see them, or ask `about`.',
+        // The declared tool, and the two the `jog` it declares is worth
+        // (kinds.ts, T-34513) — they ride the same list.
+        'The tool list changed since you connected (new: runs__log_run, ' +
+          'runs__add_jog, runs__find_jog). Reconnect to see them, or ask ' +
+          '`about`.',
       )
       // Once per changed set: the next reply is quiet again.
       let quiet = await agent.call('tools/call', {

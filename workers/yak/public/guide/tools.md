@@ -15,6 +15,42 @@ arguments, and a template you wrote once so nobody has to remember that a run is
 `jog{who, miles}` on a fresh entity. It is listed for everyone else in the space
 too, so an app for four people is four people's verb.
 
+## Every kind you declare is two tools already
+
+You get the first two for nothing. Every component an app's `vocab.json`
+declares is a KIND — a thing this app is about — and `app_deploy` gives each one
+a verb for adding one and a verb for finding one again:
+
+    vocab.json  { "recipe": { "serves": "number", "cuisine": "text" } }
+
+    →  recipes__add_recipe    title, body, alias, serves, cuisine
+       recipes__find_recipe   words, serves, cuisine, limit
+
+`add` mints an entity wearing the kind, with a `doc` for the title and body and
+an `alias` — a name the row answers to, so a later call reaches it without
+having kept the eid. Only the `title` is required; a column nobody names is a
+column nobody writes. `find` is a filter line over the same words: `words` is a
+full-text term over the title and body, each column is an equality, and every
+clause whose argument you leave out drops out of the line — so `find` with no
+arguments is everything of that kind.
+
+**This is how an app is DISCOVERED.** The person who asked for a recipe box in
+one conversation says "add this recipe" in the next one, to an agent that has
+never seen the app. Tools are the one surface every client reads, so the app
+answers there whether or not anybody wrote a `tools.json`.
+
+Two ways to say otherwise:
+
+- **Opt out** — `"tools": false` at the top of `vocab.json`, beside the
+  components. The app declares its kinds and gets no generated tools at all.
+- **Override** — declare `add_recipe` or `find_recipe` in `tools.json` yourself.
+  Your entry wins whole: your sentence, your arguments, your template. A
+  hand-written tool says what the app MEANS; a generated one only says what it
+  holds.
+
+A deploy regenerates them from the manifest as it then reads, so a column added
+to a kind is an argument added to its two tools.
+
 ## The file
 
 `tools.json` sits at the app's root, beside `vocab.json`, and the same
@@ -92,7 +128,9 @@ like 2026-09-01 or 2026-09-01T10:00:00Z.
 
 **Every declared argument is required.** There are no optional arguments and no
 defaults: a hole with nothing to fill it would splice the word `undefined` into
-your template. If something is genuinely optional, that is two tools.
+your template. If something is genuinely optional, that is two tools. (The two a
+kind is worth are generated rather than written, so those do let you leave an
+argument out — nobody's template is surprised when a clause drops out of one.)
 
 An argument arrives as whatever the model sent and is read under the type it was
 declared as: `"5"` for a `number` becomes `5`, `"true"` for a `bool` becomes

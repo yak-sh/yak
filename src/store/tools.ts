@@ -36,9 +36,21 @@ import { TYPES, type Vocab } from './vocab.ts'
 
 // One declared tool, as written. `apply` and `query` are the two acts; an
 // entry names exactly one.
+//
+// `optional` and `drop` are the two fields a tools.json cannot spell (see
+// KEYS): every argument an app DECLARES is required, because a hole with
+// nothing to fill it would splice the word `undefined` into the author's own
+// template. The tools a KIND is worth are generated instead
+// (workers/yak/kinds.ts) — nobody wrote their template, so nothing is surprised
+// when a clause drops out. `optional` names the arguments a caller may leave
+// out; `drop` names the components that GO when the caller named none of their
+// columns, since an empty component is a bare write and a bare `alias` is half
+// a sentence, while an empty `recipe` is still what makes the row a recipe.
 export type ToolDef = {
   description: string
   input: Record<string, PropType>
+  optional?: string[]
+  drop?: string[]
   apply?: unknown
   query?: string
   view?: string
@@ -232,9 +244,14 @@ export let viewsOf = (source: string): string[] => {
   return [...seen]
 }
 
+// Which arguments this tool lets a caller leave out — none, for anything a
+// person wrote.
+let loose = (tool: ToolDef) => tool.optional ?? []
+
 // The tool's arguments as JSON Schema, which is what a host shows the model.
-// Every declared input is required: a hole with nothing to fill it would be
-// spliced into the template as the word `undefined`.
+// Every declared input is required unless the tool named it optional: a hole
+// with nothing to fill it would be spliced into the template as the word
+// `undefined`, so a template that admits one says so.
 export let schemaOf = (tool: ToolDef) => ({
   type: 'object' as const,
   properties: Object.fromEntries(
@@ -247,7 +264,7 @@ export let schemaOf = (tool: ToolDef) => ({
         : {}),
     }]),
   ),
-  required: Object.keys(tool.input),
+  required: Object.keys(tool.input).filter((arg) => !loose(tool).includes(arg)),
 })
 
 // One argument, as the declared type says to read it. A model sends what it
@@ -272,13 +289,22 @@ let typed = (arg: string, type: PropType, v: unknown) => {
 
 // The call's arguments, read under the declared inputs. An argument nobody
 // declared is dropped: it can fill no hole, and refusing it would only teach
-// the model to guess again.
+// the model to guess again. An OPTIONAL one the caller left out is dropped
+// too, and what is missing from here is what makes a hole absent below.
 let args = (tool: ToolDef, sent: Record<string, unknown>) =>
   Object.fromEntries(
-    Object.entries(tool.input).map((
-      [arg, type],
-    ) => [arg, typed(arg, type, sent[arg])]),
+    Object.entries(tool.input)
+      .filter(([arg]) => sent[arg] != null || !loose(tool).includes(arg))
+      .map(([arg, type]) => [arg, typed(arg, type, sent[arg])]),
   )
+
+// A hole the caller left empty, travelling as a value. It takes the key that
+// held it with it: a column nobody named is a column nobody writes, never the
+// word `undefined` in the row.
+let ABSENT = Symbol('absent')
+
+let gaps = (s: string, vals: Record<string, unknown>) =>
+  [...s.matchAll(HOLE)].some((m) => !(m[1] in vals))
 
 // One template string, filled. A string that is NOTHING but a hole becomes
 // the value itself with its type — `"{{miles}}"` writes the number 5, not
@@ -288,6 +314,7 @@ let fill = (
   vals: Record<string, unknown>,
   encode: (v: unknown) => string,
 ) => {
+  if (gaps(s, vals)) return ABSENT
   let only = ONLY.exec(s)
   if (only) return vals[only[1]]
   return s.replace(HOLE, (_, arg) => encode(vals[arg]))
@@ -301,29 +328,62 @@ let filling = (
   typeof v == 'string'
     ? fill(v, vals, encode)
     : Array.isArray(v)
-    ? v.map((one) => filling(one, vals, encode))
+    ? v.map((one) => filling(one, vals, encode)).filter((one) => one !== ABSENT)
     : object(v)
     ? Object.fromEntries(
-      Object.entries(v).map(([k, one]) => [k, filling(one, vals, encode)]),
+      Object.entries(v)
+        .map(([k, one]) => [k, filling(one, vals, encode)])
+        .filter(([, one]) => one !== ABSENT),
     )
     : v
 
+// And the components a generated template lets go: one left with no columns is
+// a bare write, which says the thing for `recipe` and is half a sentence for
+// `alias{name}`. Nothing a person wrote names any, so nothing a person wrote
+// loses one.
+let dropped = (v: unknown, drop: string[]): unknown =>
+  Array.isArray(v)
+    ? v.map((one) => dropped(one, drop))
+    : object(v)
+    ? Object.fromEntries(
+      Object.entries(v).filter(([k, one]) =>
+        !(drop.includes(k) && object(one) && !Object.keys(one).length)
+      ),
+    )
+    : v
+
+// One `&`-clause of a filter line, or absent when the argument it asks about
+// is. A value is percent-encoded — a filter line is a query string, and a
+// title with an `&` in it would otherwise read as the next filter.
+let clause = (s: string, vals: Record<string, unknown>) =>
+  gaps(s, vals)
+    ? ABSENT
+    : s.replace(HOLE, (_, arg) => encodeURIComponent(String(vals[arg])))
+
 // The act this call makes: the bundle to write, or the filter line to read,
-// with the caller's arguments in it. A value in a filter line is
-// percent-encoded — a filter line is a query string, and a title with an `&`
-// in it would otherwise read as the next filter.
+// with the caller's arguments in it. A clause whose argument the caller left
+// out drops out of the line, and the rest of it still reads.
 export let filled = (
   tool: ToolDef,
   sent: Record<string, unknown>,
 ): { apply?: unknown; query?: string } => {
   let vals = args(tool, sent)
   if (tool.query != null) {
+    // A query that is nothing but a hole is a whole filter line passed
+    // through, so it keeps its `&`s rather than being read as one clause.
+    let only = ONLY.exec(tool.query)
+    if (only) return { query: String(vals[only[1]] ?? '') }
     return {
-      query: String(
-        fill(tool.query, vals, (v) => encodeURIComponent(String(v))) ??
-          tool.query,
-      ),
+      query: tool.query.split('&')
+        .map((one) => clause(one, vals))
+        .filter((one) => one !== ABSENT && one !== '')
+        .join('&'),
     }
   }
-  return { apply: filling(tool.apply, vals, (v) => String(v)) }
+  return {
+    apply: dropped(
+      filling(tool.apply, vals, (v) => String(v)),
+      tool.drop ?? [],
+    ),
+  }
 }

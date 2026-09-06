@@ -51,6 +51,8 @@ import type { EntityLiteral } from '../../src/mutation.ts'
 import { appAccess } from '../../src/types.ts'
 import { VERSION } from '../../src/version.ts'
 import { appDoc, coreDocs, shortOf, TEACH } from './vocab.ts'
+import { withKinds } from './kinds.ts'
+import type { VocabDoc } from '@yaks/vocab'
 import type { Cols, Sheet } from './csv.ts'
 import { mimeOf, purged } from './files.ts'
 import {
@@ -858,8 +860,14 @@ let released = async (
   let kept: string[] = []
   // And the words this app USES rather than homes (T-32728).
   let uses: Record<string, string> = {}
+  // The manifest as WRITTEN, which is where a kind says it is one and what it
+  // means — the store keeps the short form of its words (graph.ts) and neither
+  // survives the round trip. It is what the tools below are generated from.
+  let manifest: VocabDoc = {}
   if (await blobs.has(key)) {
-    let next = parseVocab(new TextDecoder().decode(await blobs.get(key)))
+    let source = new TextDecoder().decode(await blobs.get(key))
+    let next = parseVocab(source)
+    manifest = appDoc(source)
     // One word, one home: a word another app in the space already declares is
     // that app's, so this release records a USE of it instead of planting a
     // second table, and any column it adds grows the HOME's.
@@ -962,7 +970,15 @@ let released = async (
     string,
     string
   >
-  let checked = parseTools(sent, { ...words, ...borrowed(borrows) })
+  // And the two tools every KIND this app declares is worth (kinds.ts,
+  // T-34513), beside whatever the manifest said: an app that declared a recipe
+  // and no tools.json still has a verb for putting one in and one for finding
+  // it again, which is how the next agent discovers the app at all.
+  let checked = withKinds(
+    parseTools(sent, { ...words, ...borrowed(borrows) }),
+    manifest,
+    `${space.slug}/${app.slug}`,
+  )
   let tooled = JSON.parse(
     await answer(
       await store('/tools', {

@@ -71,7 +71,9 @@ An app is an index.html and whatever files sit beside it, served live at
 3. app_deploy — mark the release. The files are already live; this is the
    version an error will name. It also plants any components the app declares
    in a vocab.json beside index.html — {"recipe": {"serves": "number"}} and
-   the app has a recipe of its own, filterable like doc.
+   the app has a recipe of its own, filterable like doc, and two tools of its
+   own, <app>__add_recipe and <app>__find_recipe, so any agent finds the app
+   later.
 4. Give the person the URL.
 
 app_list is what they already have — every app, its address and what is

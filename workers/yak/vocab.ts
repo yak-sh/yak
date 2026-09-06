@@ -748,10 +748,11 @@ let compOf = (name: string, cols: unknown): PropSchema => {
  * The result is the APP half of a load — its components sort before `doc`, so
  * it is loaded beside {@link coreDocs}, never alone.
  */
-// The short word a declared column is spelled with, for the inverse below and
-// for a refusal that says what a column already is. A column no short word
-// spells reads as `text`, which is what it stores as.
-let wordOf = (s: PropSchema): string =>
+/** The short word a declared column is spelled with, for the inverse below,
+ * for a refusal that says what a column already is, and for the tools a kind is
+ * worth (kinds.ts) — a tool's input speaks the same five words a column does. A
+ * column no short word spells reads as `text`, which is what it stores as. */
+export let wordOf = (s: PropSchema): string =>
   Object.entries(SHORT).find(([, one]) =>
     one.type == s.type && one.format == s.format
   )?.[0] ?? 'text'
@@ -846,6 +847,12 @@ export let schemaOf = (manifest: Record<string, unknown>): VocabDoc => ({
  *
  * It is checked here rather than at the load: a name the platform already owns
  * is refused, and so is anything a column cannot hold.
+ *
+ * `"tools": false` is the one word a manifest says about ITSELF rather than
+ * about a component — no tools synthesized for its kinds (kinds.ts, T-34513) —
+ * so it is lifted off in either spelling and carried on the document. A boolean
+ * tells it from a component named `tools`, which is an object of columns like
+ * any other.
  */
 export let appDoc = (source: unknown): VocabDoc => {
   let held = source
@@ -858,9 +865,14 @@ export let appDoc = (source: unknown): VocabDoc => {
   }
   if (held == null) held = {}
   if (!object(held)) throw new Error(`vocab.json is an object — ${EXAMPLE}`)
-  let doc = Object.keys(held).some((k) => k.startsWith('$'))
-    ? held as VocabDoc
-    : schemaOf(held)
+  let off = typeof held.tools == 'boolean' ? held.tools : undefined
+  let body = off === undefined
+    ? held
+    : Object.fromEntries(Object.entries(held).filter(([k]) => k != 'tools'))
+  let doc = Object.keys(body).some((k) => k.startsWith('$'))
+    ? body as VocabDoc
+    : schemaOf(body)
+  if (off !== undefined) doc = { ...doc, tools: off }
   let errs = [...reserved(doc, RESERVED), ...storable(doc)]
   if (errs.length) throw new Error(`vocab.json: ${errs.join('; ')}`)
   return doc
