@@ -819,6 +819,18 @@ let api = async (
     // the way it shows every other.
     let stopped = await full(env, space, app, body.length)
     if (stopped) return json(413, 'space_full', stopped)
+    // A BULK load says so in its content-type: one bundle per line, applied in
+    // chunks of 50 and answered a line at a time (@yaks/api `pour`). It is
+    // handed to the store as it came and its answer handed back the same way —
+    // the page's envelope is a shape for one batch, and this is a file. So this
+    // door only counts the bytes, which is the one thing the store cannot.
+    if ((req.headers.get('content-type') ?? '').includes('ndjson')) {
+      return store('/apply', {
+        method: 'POST',
+        body,
+        headers: { 'content-type': 'application/x-ndjson' },
+      }, { ...headers, ...(await named(env, who, app)) })
+    }
     // The page's envelope in, the page's answer out (wire.ts): the Store takes
     // a bare array of bundles and answers the batch as applied, and every app
     // already deployed reads `{ok, changes, aliases}` off its own client.

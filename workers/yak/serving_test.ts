@@ -192,6 +192,59 @@ Deno.test('the page wire: apply, query and search round-trip', async () => {
   assertEquals((await page.query('.person!')).length, 1)
 })
 
+Deno.test('a bulk load is NDJSON in and NDJSON out, refusal and all', async () => {
+  let { env } = platform()
+  await seeded(env)
+  let cookie = await as(ADA)
+  let page = client(env, cookie)
+  // The door counts the bytes and hands the load to the store as it came: one
+  // bundle per line, applied in chunks (@yaks/api `pour`), and its answer
+  // handed back the same way rather than folded into the page's envelope.
+  let poured = (body: string) =>
+    apps.fetch(
+      visit('/cookbook/api/apply', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-ndjson', cookie },
+        body,
+      }),
+      env,
+    )
+  let lines = async (r: Response) =>
+    (await r.text()).split('\n').filter((l) => l.trim()).map((l) =>
+      JSON.parse(l)
+    )
+
+  let made = Array.from(
+    { length: 3 },
+    (_, i) =>
+      JSON.stringify({
+        entity: { eid: `$r${i}` },
+        doc: { title: `Recipe ${i}` },
+      }),
+  )
+  let wrote = await poured(made.join('\n'))
+  assertEquals(wrote.status, 200)
+  assertEquals(wrote.headers.get('content-type'), 'application/x-ndjson')
+  let saved = await lines(wrote)
+  assertEquals(saved.length, 3)
+  assertEquals(saved[0].doc.title, 'Recipe 0')
+  assertEquals((await page.query('.doc!')).length, 3)
+
+  // A bad line is the LAST line of the answer, and it says which line it was.
+  let no = await lines(
+    await poured([
+      JSON.stringify({ entity: { eid: '$ok' }, doc: { title: 'Fine' } }),
+      JSON.stringify({ entity: { eid: '$no' }, doc: { name: 'not a column' } }),
+    ].join('\n')),
+  )
+  assertEquals(no.length, 1)
+  assertEquals(no[0].error, 'Refused')
+  assertEquals(no[0].line, 2)
+  assertEquals(no[0].committed, 0)
+  // Its chunk rolled back whole: the good line beside it landed nothing.
+  assertEquals((await page.query('.doc!')).length, 3)
+})
+
 Deno.test('a subscription is that query still answering', async () => {
   let { env, object, sockets } = platform()
   await seeded(env)

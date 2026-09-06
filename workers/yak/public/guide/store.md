@@ -356,6 +356,13 @@ the page is simpler, and it is not data anyone can change.
     {"entities": [ {"entity": {"eid": "$r"}, "doc": {"title": "Lemon cake"}} ]}
     → {"ok": true, "changes": [...], "aliases": {"$r": "4f3c…"}}
 
+    POST ./api/apply
+    content-type: application/x-ndjson
+    {"entity": {"eid": "$1"}, "doc": {"title": "Lemon cake"}}
+    {"entity": {"eid": "$2"}, "doc": {"title": "Fig tart"}}
+    → {"entity": {"eid": "4f3c…", "num": 12}, "doc": {"title": "Lemon cake"}}
+      {"entity": {"eid": "8b91…", "num": 13}, "doc": {"title": "Fig tart"}}
+
     GET ./api/query?.doc!
     → [ {"kind": "doc", "entity": {"eid": "4f3c…", "num": 12},
          "doc": {"title": "Lemon cake"}} ]
@@ -381,6 +388,24 @@ The blob door takes a 64-character lowercase hex address and nothing else;
 anything else is `no_such_file`. Bytes come back with the mime and filename from
 their `attachment` row, `nosniff`, and a sandbox CSP, so an uploaded page or SVG
 stays inert when someone opens it in a tab.
+
+**Loading a lot at once.** A file too big for one `apply` goes to the same door
+as NDJSON — one bundle per line, blank lines skipped — and is applied 50 lines
+at a time, so neither the parse nor the transaction is ever the whole file:
+
+    curl -X POST https://ada.yaks.app/cookbook/api/apply \
+      -H 'content-type: application/x-ndjson' \
+      --data-binary @rows.ndjson
+
+The answer is NDJSON too — one saved row per line, as each fifty commit — and it
+is a 200 whatever happens, because the first rows are answered long before a
+later line can be refused. So a refusal is the LAST line instead:
+`{"error": "Refused", "message": "unknown column: recipe.serving", "line": 137,
+"committed": 100}`
+— the line the bad bundle was on, and how many landed before it. Nothing after
+that line is read, and the fifty it was in rolled back whole. One thing to
+watch: an alias resolves inside its own run of 50 lines and nowhere else, so
+write `$cake` and the row pointing at it near each other.
 
 Each door is governed by the app's `access` — its read rule for `query`,
 `blob/<eid>` and the live socket, its write rule for `apply` and `blob`, and

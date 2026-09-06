@@ -15,6 +15,9 @@ comes out. Point it at a graph and you have a server.
 - **`/ws`** — subscriptions: a saved query whose answer is pushed again whenever
   a committed batch changes it.
 
+`/apply` has a second spelling for a load that will not fit in one parse or one
+transaction — see [A load, a line at a time](#a-load-a-line-at-a-time).
+
 ## Install
 
 ```sh
@@ -50,6 +53,46 @@ it wears under that component's name. `/apply` takes a JSON array of them (a
 `Change`) and answers with the array `apply()` returned — one bundle per entity,
 the patches as they landed plus everything the graph synthesized: the `num` it
 minted, the `created` stamp it wrote, a tombstone for anything that died.
+
+## A load, a line at a time
+
+A 10 MB import is the same door with a different content-type. Send
+`application/x-ndjson` and the body is read as a stream, one bundle per line
+(blank lines skipped), applied **50 at a time** through the same `apply()` — so
+nothing is ever one parse or one transaction, at either end:
+
+```sh
+curl -X POST localhost:8000/apply \
+  -H 'content-type: application/x-ndjson' \
+  --data-binary @rows.ndjson
+```
+
+The answer is NDJSON too: the composed bundles, one JSON object per line,
+written as each chunk commits rather than at the end. The status is 200 whatever
+happens — the first bundles are on the wire long before a later line can refuse
+— so a refusal is the **last line of the body** instead, and it is the refusal
+`apply()` threw plus two numbers:
+
+```json
+{
+  "error": "Refused",
+  "message": "unknown column: book.colour",
+  "line": 137,
+  "committed": 100
+}
+```
+
+`line` is the 1-based line the offending bundle was on, and `committed` how many
+bundles landed before it; nothing after that line is read. A chunk is atomic, so
+the refusal names a batch and not a line — the line is found by rehearsing the
+refused chunk with one bundle left out at a time (`check`, rolled back), which
+costs nothing until something has already gone wrong.
+
+**An alias resolves within its own chunk and nowhere else.** A bundle naming
+`$x` and the bundle that mints it have to fall in the same run of 50 lines,
+because that run is the whole batch the graph is ever shown. Order a file so
+each entity is minted beside the ones that point at it, or send the pointers as
+a second load once the eids are known.
 
 ## The door is where trust lives
 
