@@ -22,12 +22,7 @@
 // The runtime this Worker is written against — the HTML rewriter, a Durable
 // Object's state, the bucket, the Store namespace — is harness.ts's, shared
 // with builder_test.ts.
-import {
-  assert,
-  assertEquals,
-  assertStringIncludes,
-  assertThrows,
-} from '@std/assert'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { Wire } from '@yaks/durable-object'
 import { slow } from '../../src/testing.ts'
 import { sign } from '../../src/token.ts'
@@ -1051,9 +1046,8 @@ Deno.test('env.APP: a private app is written by its own worker, and by nobody el
 // account (T-34525) — so the app holds no key, writes no worker, and has
 // exactly one obligation: the items it posts must name products this store
 // has, and must carry no money, because the door reads `price_cents` off the
-// row itself. `priced()` below stands in for that door until it lands, and
-// asserts exactly that contract. The order row and the buyer's letter are
-// written by the Connect webhook (T-34526) and belong to its own test.
+// row itself. The order row and the buyer's letter are written by the Connect
+// webhook (T-34526) and belong to its own test.
 let SHOP = new URL('./examples/shop/', import.meta.url)
 
 // Every file of the example, the way `app_files` takes a whole app in one
@@ -1116,37 +1110,33 @@ let shopping = async () => {
   return { env, files, dir, space, app, ctx, deploy, shirts }
 }
 
-// The platform's checkout door, as T-34525 specifies it and until it exists:
-// `{items: [{product, qty, options?}]}` in, `{url}` out, every price read off
-// the app's own `product` rows. A shop that posted a price would have nothing
-// read from it here, which is the whole point of asserting against this.
-let priced = (
-  rows: Awaited<ReturnType<Awaited<ReturnType<typeof shopping>>['shirts']>>,
-  items: Record<string, string | number>[],
-) => {
-  let by = new Map(rows.map((r) => [r.entity.eid, r]))
-  let lines = []
-  for (let one of items) {
-    let row = by.get(String(one.product))
-    if (!row) throw new Error(`no product ${one.product}`)
-    let cents = Number(row.product.price_cents)
-    if (!cents) throw new Error('that product has no price')
-    lines.push({
-      name: one.options ? `${row.doc.title} (${one.options})` : row.doc.title,
-      unit_amount: cents,
-      quantity: Number(one.qty),
-    })
-  }
-  return { lines, url: 'https://checkout.stripe.com/c/pay/cs_test_probe' }
+// The platform's checkout door, as a page reaches it: same origin, under the
+// app's own `/api/`, and no credential — the person buying has no account here
+// and never will.
+let paying = async (env: Env, body: unknown, cookie?: string) => {
+  let res = await apps.fetch(
+    visit('/shop/api/pay/checkout', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: {
+        'content-type': 'application/json',
+        ...(cookie ? { cookie } : {}),
+      },
+    }),
+    env,
+  )
+  return { status: res.status, body: await res.json() }
 }
 
 Deno.test('the shop example deploys, seeds itself and serves its front', async () => {
   let k = await shopping()
   let out = await k.deploy()
-  // The app's own word, planted from vocab.json — and `order` is NOT among
-  // them: that one is the platform's, written when Stripe says money moved.
-  assertStringIncludes(out, 'components: product')
-  assertEquals(/\border\b/.test(out), false)
+  // The shop declares NO components of its own, and that is the point: both
+  // words it is made of are the platform's — `product`, which the checkout
+  // door reads a price off, and `order`, which the platform writes when Stripe
+  // says money moved — so there is no vocab.json here and nothing to plant.
+  assertEquals(/\bcomponents:/.test(out), false, out)
+  assertStringIncludes(out, 'seeded 3 entities')
 
   let shirts = await k.shirts()
   assertEquals(
@@ -1201,22 +1191,124 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
   ])
   assertEquals(/price|amount|cent/.test(JSON.stringify(items)), false)
 
-  let paid = priced(shirts, items)
-  // The door priced it off the store, and carried the size into the name the
-  // buyer reads on Stripe's own page.
-  assertEquals(paid.lines, [
-    { name: 'Everyday Tee — Charcoal (M)', unit_amount: 2800, quantity: 2 },
-    { name: 'Long Sleeve — Moss', unit_amount: 3600, quantity: 1 },
-  ])
-  assertStringIncludes(paid.url, 'checkout.stripe.com')
-
-  // A product this store does not have is refused before Stripe is asked —
-  // an eid off another app, or one somebody made up.
-  assertThrows(
-    () => priced(shirts, [{ product: CAKE, qty: 1 }]),
-    Error,
-    'no product',
+  // ---- and through the platform's own door, with Stripe stood in for -------
+  let fake = stripe(({ path, sent }) =>
+    path == '/v1/checkout/sessions'
+      ? {
+        id: 'cs_test_probe',
+        url: `https://checkout.stripe.com/c/pay/cs_test_probe#${
+          sent.get('line_items[0][price_data][unit_amount]')
+        }`,
+      }
+      : null
   )
+  try {
+    // A platform with no Stripe key of its own says so, in one sentence.
+    let off = await paying(k.env, { items })
+    assertEquals(off.status, 503)
+    assertEquals(off.body.error.code, 'no_selling')
+
+    k.env.STRIPE_KEY = 'sk_probe'
+    k.env.STRIPE_API = fake.url
+
+    // The shop is deployed and the space has NOT connected Stripe. That is the
+    // refusal a page will actually meet — a seller deploys before they finish
+    // Stripe's form nearly every time — so it is refused by name, with the way
+    // out in the sentence.
+    let early = await paying(k.env, { items })
+    assertEquals(early.status, 409)
+    assertEquals(early.body.error.code, 'not_selling')
+    assertStringIncludes(early.body.error.message, 'has not connected')
+    assertEquals(fake.calls.length, 0, 'Stripe was never asked')
+
+    // Now the seller is ready.
+    await stamp(k.env, {
+      entities: [{
+        entity: { eid: k.space.eid },
+        stripe: {
+          account: 'acct_seller',
+          charges_enabled: true,
+          details_submitted: true,
+        },
+      }],
+    })
+
+    let paid = await paying(k.env, {
+      items,
+      email: 'ana@example.com',
+      success: '?ordered={CHECKOUT_SESSION_ID}',
+    })
+    assertEquals(paid.status, 200, JSON.stringify(paid.body))
+    assertStringIncludes(paid.body.url, 'checkout.stripe.com')
+
+    // THE ONE HEADER that makes it the seller's charge and not ours.
+    let made = fake.at('/v1/checkout/sessions')!
+    assertEquals(made.on, 'acct_seller')
+    // The door priced it off the store, and carried the size into the name the
+    // buyer reads on Stripe's own page.
+    assertEquals(made.sent.get('mode'), 'payment')
+    assertEquals(
+      made.sent.get('line_items[0][price_data][product_data][name]'),
+      'Everyday Tee — Charcoal (M)',
+    )
+    assertEquals(
+      made.sent.get('line_items[0][price_data][unit_amount]'),
+      '2800',
+    )
+    assertEquals(made.sent.get('line_items[0][quantity]'), '2')
+    assertEquals(
+      made.sent.get('line_items[1][price_data][product_data][name]'),
+      'Long Sleeve — Moss',
+    )
+    assertEquals(
+      made.sent.get('line_items[1][price_data][unit_amount]'),
+      '3600',
+    )
+    assertEquals(made.sent.get('customer_email'), 'ana@example.com')
+    // Back inside the app, with Stripe's own literal intact.
+    assertEquals(
+      made.sent.get('success_url'),
+      'https://ada.yaks.app/shop/?ordered={CHECKOUT_SESSION_ID}',
+    )
+    assertEquals(made.sent.get('cancel_url'), 'https://ada.yaks.app/shop/')
+    // The two words the webhook routes by, on the session AND on the intent —
+    // a refund arrives as a charge and knows nothing of the session.
+    assertEquals(made.sent.get('metadata[space]'), k.space.eid)
+    assertEquals(made.sent.get('metadata[app]'), 'shop')
+    assertEquals(
+      made.sent.get('payment_intent_data[metadata][items]'),
+      made.sent.get('metadata[items]'),
+    )
+    // The owner has set no rate, so no fee is sent at all: Stripe wants a
+    // POSITIVE application fee, and a fee of nothing is no fee.
+    assertEquals(
+      made.sent.get('payment_intent_data[application_fee_amount]'),
+      null,
+    )
+
+    // A product this store does not have is refused before Stripe is asked —
+    // an eid off another app, or one somebody made up.
+    let wrong = await paying(k.env, { items: [{ product: CAKE, qty: 1 }] })
+    assertEquals(wrong.status, 400)
+    assertStringIncludes(wrong.body.error.message, 'no product')
+    // And a buyer cannot name their own price: there is nowhere to put one.
+    let cheap = await paying(k.env, {
+      items: [{ product: tee.entity.eid, qty: 1, price_cents: 1 }],
+    })
+    assertEquals(cheap.status, 200)
+    assertEquals(
+      fake.at('/v1/checkout/sessions')!.sent.get(
+        'line_items[0][price_data][unit_amount]',
+      ),
+      '2800',
+    )
+    // Nor send the buyer anywhere but back into the app.
+    let away = await paying(k.env, { items, success: 'https://evil.example/' })
+    assertEquals(away.status, 400)
+    assertStringIncludes(away.body.error.message, 'stay inside this app')
+  } finally {
+    await fake.stop()
+  }
 })
 
 // ---- selling (sell.ts, T-34524) --------------------------------------------

@@ -278,6 +278,29 @@ export let appsDoc: VocabDoc = {
       before: ['doc'],
       properties: { target: ref('cascade') },
     },
+    // Something for sale (sell.ts, T-34525). Platform's rather than each app's
+    // for the reason every other word here is platform's — a `product` in one
+    // shop is the same word as a `product` in the next, so one filter reads
+    // both — and for one more: the CHECKOUT DOOR reads `price_cents` off this
+    // row, and a door that took the price off the wire would take a price a
+    // buyer can edit. A word the platform charges money against is a word the
+    // platform declares.
+    //
+    // `sizes` is the variants the seller offers, comma-separated, and what a
+    // page turns into the `options` on a cart line. `stock` is the seller's own
+    // count — nothing here decrements it, because a shop that oversells by one
+    // is a conversation and a shop that loses an order to a race is a bug.
+    product: {
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      properties: {
+        price_cents: num,
+        sizes: text,
+        stock: num,
+        image: { type: 'string', format: 'uri' },
+      },
+    },
     favorite: { type: 'object', properties: { at: owned(time) } },
     web: {
       type: 'object',

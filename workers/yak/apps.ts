@@ -37,13 +37,21 @@ import {
   META,
   type Space,
   storeName,
+  url as urlOf,
 } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { ahead, bearing, granted, itsApp, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { pilled, standing } from './gallery.ts'
 import { broke } from './billing.ts'
-import { connect, disconnect, rate, selling } from './sell.ts'
+import {
+  buying,
+  connect,
+  disconnect,
+  type Product,
+  rate,
+  selling,
+} from './sell.ts'
 import { type Size, sizeOf } from './image.ts'
 import { asking, listed, type Row } from './listing.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
@@ -929,6 +937,26 @@ let api = async (
     } catch (e) {
       return json(502, 'refused', e instanceof Error ? e.message : String(e))
     }
+  }
+  // Taking money (sell.ts, T-34525). A READ door as far as this app is
+  // concerned — it reads the products the cart names and writes nothing — so it
+  // asks `mayRead` and not `mayPost`: a public shop sells to a stranger, which
+  // is what a shop is, and a private one sells to its members. The price comes
+  // off the rows, never off the request, so what a caller can do here is buy
+  // what the seller put on the shelf at the price the seller wrote.
+  if (path == '/pay/checkout') {
+    if (req.method != 'POST') return json(405, 'method_not_allowed')
+    if (!mayRead) return refused('not_a_reader')
+    let body = await req.json().catch(() => null)
+    return buying(
+      env,
+      { space, app: app.slug, root: urlOf(space, app) },
+      async (line) =>
+        await metaOf((to, init, sent) =>
+          store(to, init, { ...headers, ...sent })
+        ).query(line) as Product[],
+      body,
+    )
   }
   if (path == '/graph') {
     let r = await (await store('/graph', {}, headers)).json()

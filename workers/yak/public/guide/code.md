@@ -299,6 +299,16 @@ Reach for those.
 There is nothing else. No KV, no D1, no R2 binding, no environment variables of
 your own: the app's graph is its storage.
 
+### Taking money is not one of your secrets
+
+A worker that charges somebody does **not** hold a Stripe key. Selling is a
+platform door — `POST ./api/pay/checkout`, which your worker reaches through
+`env.STORE` exactly as a page reaches it — and the seller's own connected
+account is what the charge lands on. You post a cart of product eids and
+quantities; the price is read off each `product` row in the app's own store, so
+nothing about money crosses the wire and there is no key for your worker to
+leak. <https://yaks.app/guide/selling.md> is the whole of it.
+
 ## Who is asking
 
 The kernel sets three headers on the request it hands you, and strips any a

@@ -18,8 +18,7 @@ Then, once per space and not per app, the seller connects Stripe — `space_sell
 or the button on their space page — and finishes Stripe's onboarding. Until they
 have, the Pay button says so instead of charging anybody.
 
-The first deploy plants `product` from `vocab.json` and writes the three shirts
-in `seed/` into the store, once.
+The first deploy writes the three shirts in `seed/` into the store, once.
 
 ## The files
 
@@ -27,13 +26,14 @@ in `seed/` into the store, once.
 | ------------ | ------------------------------------------------------ |
 | `index.html` | the storefront: products, sizes, cart, seller's orders |
 | `cart.js`    | the cart as a vocabulary — no DOM, no prices           |
-| `vocab.json` | `product`                                              |
 | `seed/`      | three shirts, written once per store                   |
 | `tee-*.svg`  | the pictures those shirts point at                     |
 | `AGENTS.md`  | how to add a product, and what not to change           |
 
-`order` is not declared here: it is the platform's own word, written by the
-platform when Stripe says a payment landed.
+**There is no `vocab.json` here, and that is the point.** Both words this shop
+is made of are the platform's own — `product`, which the checkout door reads a
+price off, and `order`, which the platform writes when Stripe says a payment
+landed — so every app already has them and this one declares nothing.
 
 ## A note on who can read an order
 

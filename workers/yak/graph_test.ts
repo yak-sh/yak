@@ -412,6 +412,9 @@ Deno.test('the object plants core + member + edge + the app, and nothing else', 
       'cancelled',
       'project',
       'comment',
+      // what a shop sells: the platform's word, because the platform's own
+      // checkout door reads a price off it (sell.ts)
+      'product',
       'favorite',
       'web',
       // @yaks/mail — the app's own mailbox (T-33686)

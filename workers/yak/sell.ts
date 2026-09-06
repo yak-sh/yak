@@ -35,10 +35,12 @@
 // exception entity in the meta store, a refusal is a sentence the person reads,
 // and the webhook's filing is capped so a stranger posting garbage at a public
 // door cannot write rows without end.
+
 import { ask, broke, moved, verified } from './billing.ts'
 import * as dirPart from './directory.ts'
 import { directory, type Space, stamp } from './directory.ts'
 import { bound, type Env } from './env.ts'
+
 import { PLATFORM } from './route.ts'
 
 // ---- the fee ---------------------------------------------------------------
@@ -267,6 +269,276 @@ export let connect = async (env: Env, space: Space, email: string) => {
  * exactly where they were, and connecting again is one call.
  */
 export let disconnect = (env: Env, space: Space) => wrote(env, space, null)
+
+// ---- the checkout door -----------------------------------------------------
+//
+// `POST /<app>/api/pay/checkout` (apps.ts): a cart in, a Stripe address out.
+// The whole reason it is the PLATFORM's door and not something an app writes is
+// that it is the only place the platform key is spent — an app holds no Stripe
+// key, writes no worker, and cannot charge anybody a penny it did not ask for.
+//
+// NOTHING ABOUT MONEY COMES OFF THE WIRE. The caller names a product and how
+// many; the price is read off that product's own row in the app's store. A page
+// that posted a price would be a page a buyer can edit with the developer
+// tools, and the first person to try it would buy a shirt for a cent.
+
+/** One line of a cart, as a page or a worker posts it. `options` is a variant
+ * the seller offers — a size, a colour — appended to the name the buyer reads
+ * on Stripe's page, and kept on the order so the seller knows what to put in
+ * the box. */
+export type Item = { product: string; qty: number; options?: string }
+
+/** The cart, read off a request body. Throws the sentence the caller reads:
+ * this is the door a guest reaches, so a refusal has to say what to fix. */
+export let cart = (body: unknown): Item[] => {
+  let items = (body as { items?: unknown })?.items
+  if (!Array.isArray(items) || !items.length) {
+    throw new Error('items: a list of {product, qty} to sell, and not empty')
+  }
+  return items.map((one, i) => {
+    let it = one as Record<string, unknown>
+    let product = String(it?.product ?? '')
+    if (!product) throw new Error(`items[${i}].product: name a product`)
+    let qty = Math.floor(Number(it?.qty ?? 1))
+    if (!(qty > 0)) throw new Error(`items[${i}].qty: how many, at least one`)
+    let options = String(it?.options ?? '').trim().slice(0, 60)
+    return { product, qty, ...(options ? { options } : {}) }
+  })
+}
+
+/** A product row, as the store answers it. */
+export type Product = {
+  entity: { eid: string }
+  doc?: { title?: string | null }
+  product?: { price_cents?: number | null }
+}
+
+/**
+ * Stripe's metadata takes 500 characters per value, and the order's items ride
+ * one of them — so this is how many lines fit in an order, and the door refuses
+ * a bigger cart by name rather than sending Stripe something it will truncate.
+ * A uuid with its dashes off is 32 characters and a line is about 45, so it
+ * lands near ten.
+ */
+export let META = 500
+
+/** The items as they ride to Stripe and come back on the event: the product,
+ * how many, and the variant, at the shortest spelling that survives a round
+ * trip. Dashes come off the uuid to buy back four characters a line. */
+export let packed = (items: Item[]) =>
+  JSON.stringify(
+    items.map((i) => ({
+      p: i.product.replace(/-/g, ''),
+      q: i.qty,
+      ...(i.options ? { o: i.options } : {}),
+    })),
+  )
+
+/**
+ * The cart priced against the store's own rows: Stripe's `line_items`, the
+ * total in cents, and the items packed for the metadata.
+ *
+ * Every refusal here happens BEFORE Stripe is asked, and each says which line
+ * is wrong: a product this store does not have (an eid off another app, or one
+ * somebody made up), and a product with no price, which is a seller's row that
+ * is not finished rather than a free shirt.
+ */
+export let priced = (rows: Product[], items: Item[]) => {
+  let by = new Map(rows.map((r) => [r.entity.eid, r]))
+  let total = 0
+  let lines = items.map((one) => {
+    let row = by.get(one.product)
+    if (!row?.product) throw new Error(`no product ${one.product} in this app`)
+    let cents = Math.floor(Number(row.product.price_cents ?? 0))
+    if (!(cents > 0)) {
+      throw new Error(`${row.doc?.title || one.product} has no price`)
+    }
+    let name = row.doc?.title || 'Item'
+    total += cents * one.qty
+    return {
+      price_data: {
+        currency: 'usd',
+        product_data: { name: one.options ? `${name} (${one.options})` : name },
+        unit_amount: cents,
+      },
+      quantity: one.qty,
+    }
+  })
+  let meta = packed(items)
+  if (meta.length > META) {
+    throw new Error(
+      `that is too many different things in one order — about ` +
+        `${Math.floor(items.length * META / meta.length)} lines fit`,
+    )
+  }
+  return { lines, total, packed: meta }
+}
+
+/**
+ * Where Stripe sends the buyer, from what the caller asked for. RELATIVE to the
+ * app's own root, always — so nothing in a page spells the app's name and an
+ * installed copy sends its buyers back to itself.
+ *
+ * And it may not leave that root. This door is callable by a GUEST on an open
+ * app, so an absolute URL from the wire would let a stranger have yaks.app's
+ * own checkout hand buyers to a page they wrote. `new URL(asked, root)` resolves
+ * the ordinary relative case and swallows the absolute one, so what is checked
+ * is the ANSWER rather than the input — a filter over the input would be a list
+ * of the escapes somebody thought of.
+ *
+ * The braces come back afterwards, and only those two characters.
+ * `{CHECKOUT_SESSION_ID}` is a literal Stripe substitutes the session id for on
+ * the way back, `new URL` percent-encodes braces in a query, and
+ * `%7BCHECKOUT_SESSION_ID%7D` is a string Stripe does not recognise — so the
+ * buyer would land on a page that never learns which order it is about. Undone
+ * AFTER the check, so nothing about where this points has been decided by it.
+ */
+export let backAt = (root: string, asked: unknown) => {
+  let at = String(asked ?? '').trim()
+  if (!at) return root
+  let out: URL
+  try {
+    out = new URL(at, root)
+  } catch {
+    throw new Error(`${at} is not an address`)
+  }
+  if (!out.href.startsWith(root)) {
+    throw new Error(`success and cancel stay inside this app (${root})`)
+  }
+  return out.href.replaceAll('%7B', '{').replaceAll('%7D', '}')
+}
+
+/**
+ * The Checkout Session, as the form fields of `POST /v1/checkout/sessions` —
+ * created ON the seller's account (the `Stripe-Account` header, which the
+ * caller adds).
+ *
+ * `payment_intent_data[application_fee_amount]` is the platform's cut, and it
+ * is the ONLY place Stripe takes one for a Checkout Session — there is no
+ * top-level spelling. It is left out entirely when it is zero: Stripe requires a
+ * positive amount, so a fee of nothing has to be no fee rather than a fee of 0,
+ * and with `FEE_BPS` unset that is every sale today.
+ *
+ * `metadata` says whose sale this is in the two words the webhook routes by,
+ * plus the cart. It is copied onto `payment_intent_data[metadata]` as well, and
+ * that is not redundancy: a REFUND arrives as a `charge.refunded`, whose object
+ * inherits the PaymentIntent's metadata and knows nothing of the session, so
+ * without this the refund of a sale could not be told whose it was.
+ */
+export let session = (at: {
+  space: string
+  app: string
+  root: string
+  lines: unknown[]
+  total: number
+  packed: string
+  email?: string
+  success: string
+  cancel: string
+}) => {
+  let cut = fee(at.total)
+  let metadata = { space: at.space, app: at.app, items: at.packed }
+  return {
+    mode: 'payment',
+    line_items: Object.fromEntries(at.lines.map((l, i) => [i, l])),
+    success_url: at.success,
+    cancel_url: at.cancel,
+    ...(at.email ? { customer_email: at.email } : {}),
+    metadata,
+    payment_intent_data: {
+      ...(cut > 0 ? { application_fee_amount: cut } : {}),
+      metadata,
+    },
+  }
+}
+
+/**
+ * The door itself (apps.ts routes `/<app>/api/pay/checkout` here).
+ *
+ * `rows` is how the caller reads the app's store — the same read `/api/query`
+ * makes, as whoever is asking, so a private app's shelf is its members' and a
+ * public one's is the world's. The door adds no reading power of its own.
+ *
+ * A space that is not ready is refused BY NAME with the way out, because that
+ * refusal is the one a page will actually meet: a seller deploys their shop
+ * before they finish Stripe's form nearly every time.
+ */
+export let buying = async (
+  env: Env,
+  at: { space: Space; app: string; root: string },
+  rows: (line: string) => Promise<Product[]>,
+  body: unknown,
+) => {
+  let no = (status: number, code: string, message: string) =>
+    Response.json({ error: { code, message } }, { status })
+  if (!env.STRIPE_KEY) {
+    return no(503, 'no_selling', 'selling is not switched on here')
+  }
+  let where = selling(at.space)
+  if (where != 'ready') {
+    return no(
+      409,
+      'not_selling',
+      where == 'none'
+        ? `${at.space.slug} has not connected a Stripe account — ask whoever ` +
+          'runs this space to start selling, and nothing here can charge ' +
+          'anybody until they have'
+        : `${at.space.slug} has connected Stripe but has not finished ` +
+          'setting up — Stripe has not said they may take payments yet',
+    )
+  }
+  let items: Item[]
+  let priceless: ReturnType<typeof priced>
+  let success: string
+  let cancel: string
+  try {
+    items = cart(body)
+    // One read, whatever the cart's length: the products it names, whole.
+    // `.eid=` and not `id=` — the bare spelling is the PAGE's grammar and this
+    // is a line built for the STORE (wire.ts `RIDERS` is the translation, and
+    // this side of it never sees one).
+    priceless = priced(
+      await rows(`.eid=${items.map((i) => i.product).join(',')}`),
+      items,
+    )
+    let asked = body as { success?: unknown; cancel?: unknown; email?: unknown }
+    success = backAt(at.root, asked.success)
+    cancel = backAt(at.root, asked.cancel)
+  } catch (e) {
+    return no(400, 'refused', e instanceof Error ? e.message : String(e))
+  }
+  let email = String((body as { email?: unknown })?.email ?? '').trim()
+  try {
+    let made = await ask(
+      env,
+      '/v1/checkout/sessions',
+      session({
+        space: at.space.eid,
+        app: at.app,
+        root: at.root,
+        lines: priceless.lines,
+        total: priceless.total,
+        packed: priceless.packed,
+        ...(email ? { email } : {}),
+        success,
+        cancel,
+      }),
+      // The seller's account. This one header is the whole of what makes it
+      // their charge rather than ours.
+      at.space.stripe!.account,
+    )
+    let url = String(made.url ?? '')
+    if (!url) throw new Error('stripe made a checkout session with no url')
+    return Response.json({ url })
+  } catch (e) {
+    await broke(env, `POST /${at.app}/api/pay/checkout`, e)
+    return no(
+      502,
+      'checkout_failed',
+      "we couldn't start that — it's been logged, try again in a minute",
+    )
+  }
+}
 
 // ---- the Connect webhook ---------------------------------------------------
 

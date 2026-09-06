@@ -9,10 +9,10 @@ address.
 
 There is no key to set, no webhook to receive and no `worker.js` to write. The
 charge is made ON the seller's Stripe account, in the seller's name — this
-platform passes the ask along and takes a small fee out of it, the way an app
-store does. The rest settles into the seller's own balance, on their own payout
-schedule, and refunds and disputes are theirs to handle in their own Stripe
-dashboard.
+platform passes the ask along and takes a fee out of it, the way an app store
+does; what that fee is, is on the <https://yaks.app/pricing> page. The rest
+settles into the seller's own balance, on their own payout schedule, and refunds
+and disputes are theirs to handle in their own Stripe dashboard.
 
 Back to the map: <https://yaks.app/guide.md>
 
@@ -55,11 +55,17 @@ their refunds. What they never do: paste a secret key anywhere. There is no
 
 ## What the app sells
 
-A product is an entity like any other — `doc` for the words, and a component of
-your own for the rest:
+A product is an entity like any other: `doc` for the words, and `product` for
+the rest. **`product` is one of the platform's own words** — like `task` and
+`comment` — so every app already has it and no `vocab.json` declares it. It has
+to be the platform's: the checkout door reads `price_cents` off this row, and a
+word the platform charges money against is a word the platform defines.
 
-    { "product": { "price_cents": "number", "sizes": "text",
-                   "stock": "number", "image": "url" } }
+    product { price_cents, sizes, stock, image }
+
+`sizes` is the variants you offer, comma separated, and what a page turns into
+the `options` on a cart line. `stock` is your own count — nothing on the
+platform decrements it.
 
     { "entity": { "eid": "$tee" },
       "alias": { "name": "shirt:everyday-charcoal" },
@@ -97,7 +103,10 @@ trusted with.
 - **`items`** is what to sell: the product's eid, how many, and `options` for a
   variant — a size, a colour — which is appended to the line the buyer reads on
   Stripe's page. The door reads the title and the price off each row. A product
-  it cannot find, or one priced at zero, is refused before Stripe is asked.
+  it cannot find, or one priced at zero, is refused before Stripe is asked. An
+  order runs to about ten different lines: the cart rides one Stripe metadata
+  value on its way to the webhook, and those hold 500 characters. A bigger cart
+  is refused saying how many fit, rather than truncated.
 - **`email`** is optional and only fills the field in for them.
 - **`success`** and **`cancel`** are relative to the app's own root, so nothing
   in your page spells the app's name and an installed copy sends its buyers back
@@ -164,8 +173,8 @@ something from the deployed app and watch the order land in the store and the
 letter go out. Nothing about the app changes between test and live — the key is
 the platform's, and which mode it is in is the platform's business.
 
-A whole shop written out — storefront with sizes and a cart, `vocab.json`,
-seeded products, the seller's order list, `AGENTS.md`, and not one line of
+A whole shop written out — storefront with sizes and a cart, seeded products,
+the seller's order list, `AGENTS.md`, no `vocab.json` at all and not one line of
 Stripe code — is in this repository at `workers/yak/examples/shop/`. Copy it and
 change the shirts.
 
