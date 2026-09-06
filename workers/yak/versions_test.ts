@@ -13,9 +13,14 @@ import { carried, upload } from './dispatch.ts'
 import type { Env } from './env.ts'
 import type { Who } from './session.ts'
 import {
+  held,
+  history,
   KEEP,
   own,
+  pinned,
+  pruned,
   record,
+  replaced,
   restore,
   restored,
   snapshot,
@@ -235,4 +240,101 @@ Deno.test('the worker a rollback put back is the source uploaded', async () => {
     await (sent!.get('worker.js') as File).text(),
     'export default { fetch: one }',
   )
+})
+
+// ---- what a write replaced (T-34508) ---------------------------------------
+
+let ago = (days: number) => new Date(Date.now() - days * 24 * 60 * 60_000)
+
+Deno.test('a write pins what it replaced, and a path answers its own past', async () => {
+  let { blobs } = memory()
+  // A file that did not exist has no previous version, and nothing is written
+  // down about it.
+  assertEquals(await replaced(blobs, PREFIX, 'index.html', 'p1'), null)
+  assertEquals(await history(blobs, PREFIX, 'index.html'), [])
+
+  await blobs.put(PREFIX + 'index.html', bytes('<h1>one</h1>'))
+  let was = await replaced(blobs, PREFIX, 'index.html', 'p1', ago(2))
+  await blobs.put(PREFIX + 'index.html', bytes('<h1>two</h1>'))
+  assertEquals(was!.size, 12)
+  assertEquals(was!.by, 'p1')
+  // The bytes are pinned by their content, so the history can hand them back.
+  assertEquals(
+    new TextDecoder().decode(await blobs.get(pinned(PREFIX, was!.sha))),
+    '<h1>one</h1>',
+  )
+
+  let then = await replaced(blobs, PREFIX, 'index.html', 'p2', ago(1))
+  await blobs.put(PREFIX + 'index.html', bytes('<h1>three</h1>'))
+  let all = await history(blobs, PREFIX, 'index.html')
+  // Newest first: the last thing it was is the first thing offered back.
+  assertEquals(all.map((w) => w.sha), [then!.sha, was!.sha])
+
+  // What it held at a moment is the bytes the first write AFTER that moment
+  // took away.
+  assertEquals(held(all, ago(3).getTime())!.sha, was!.sha)
+  assertEquals(held(all, ago(1.5).getTime())!.sha, then!.sha)
+  // And nothing at all once no write has happened since: the file already is
+  // what it was.
+  assertEquals(held(all, Date.now()), null)
+
+  // A path's history is not one of the app's files, so nothing lists it, no
+  // deploy snapshots it and no install carries it.
+  assertEquals(Object.keys(await snapshot(blobs, PREFIX)), ['index.html'])
+})
+
+Deno.test('the prune lets go only of bytes nothing names any more', async () => {
+  let { blobs } = memory()
+  let { dir } = directory()
+  // One deploy, so a version names the page it went out with.
+  await blobs.put(PREFIX + 'index.html', bytes('<h1>shipped</h1>'))
+  let one = await snapshot(blobs, PREFIX)
+  await record(dir, blobs, PREFIX, WHO, APP, 1, one, '')
+
+  // Then two writes over it, forty days apart, so one entry is inside the
+  // window and one is well outside it.
+  let old = await replaced(blobs, PREFIX, 'index.html', 'p1', ago(40))
+  await blobs.put(PREFIX + 'index.html', bytes('<h1>middle</h1>'))
+  let recent = await replaced(blobs, PREFIX, 'index.html', 'p1', ago(1))
+  await blobs.put(PREFIX + 'index.html', bytes('<h1>now</h1>'))
+  // The forty-day-old entry names the DEPLOYED bytes, which is the case that
+  // matters: an entry aging out must not take a version's bytes with it.
+  assertEquals(old!.sha, one['index.html'])
+
+  // KEEP is a floor under the age, so nothing goes while there are only two.
+  assertEquals(await pruned(dir, blobs, PREFIX, APP), 0)
+  assertEquals((await history(blobs, PREFIX, 'index.html')).length, 2)
+
+  // Past KEEP, the old entry ages out — and its bytes stay, because the kept
+  // version still names them.
+  for (let i = 0; i < KEEP; i++) {
+    await replaced(blobs, PREFIX, 'index.html', 'p1', ago(1))
+    await blobs.put(PREFIX + 'index.html', bytes(`<h1>${i}</h1>`))
+  }
+  await pruned(dir, blobs, PREFIX, APP)
+  let all = await history(blobs, PREFIX, 'index.html')
+  // The newest KEEP, plus everything inside the thirty days — which is the
+  // day-old one sitting just past KEEP, and not the forty-day-old one.
+  assertEquals(all.length, KEEP + 1)
+  assertEquals(all[KEEP].sha, recent!.sha)
+  assertEquals(all.some((w) => w.at == old!.at), false)
+  assert(await blobs.has(pinned(PREFIX, old!.sha)), 'the deploy still names it')
+  assert(await blobs.has(pinned(PREFIX, recent!.sha)), 'inside the window')
+
+  // And what is left pinned is exactly what something names: nothing is kept
+  // for its own sake.
+  let named = new Set([...all.map((w) => w.sha), ...Object.values(one)])
+  for (let key of await blobs.list(`${PREFIX}versions/`)) {
+    assert(named.has(key.slice(`${PREFIX}versions/`.length)), key)
+  }
+})
+
+Deno.test('a history that cannot be read is a history with nothing in it', async () => {
+  let { blobs } = memory()
+  await blobs.put(PREFIX + 'history/index.html.json', bytes('{ not json'))
+  await blobs.put(PREFIX + 'index.html', bytes('<h1>one</h1>'))
+  // The write still lands and still keeps what it replaced: losing the
+  // sentence about the bytes must never take the bytes with it.
+  let was = await replaced(blobs, PREFIX, 'index.html', 'p1')
+  assertEquals((await history(blobs, PREFIX, 'index.html'))[0].sha, was!.sha)
 })

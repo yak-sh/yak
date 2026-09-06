@@ -4717,6 +4717,70 @@ slow('a deploy is a version, and one word puts it back', async () => {
       ['broken.js', 'index.html'],
     )
 
+    // A size down from a deploy: every WRITE keeps what it replaced
+    // (versions.ts, T-34508). The page has been written three times by now, so
+    // the path can already answer its own past.
+    let past = await agent.tool('app_files', {
+      ...app,
+      op: 'history',
+      path: 'index.html',
+    })
+    assertStringIncludes(past, 'index.html in undo/recipes:')
+    assertMatch(past, /now — 13 B, sha256 [0-9a-f]{64}/)
+    assertMatch(past, /- until 20\d\d-\d\d-\d\dT[\d:.]+Z — 19 B, sha256 /)
+    // Undo the last write, with nothing to remember: the newest entry.
+    assertStringIncludes(
+      await agent.tool('app_files', {
+        ...app,
+        op: 'restore',
+        path: 'index.html',
+      }),
+      'put index.html back to what it was until',
+    )
+    // A restore is itself a write, so the history grew rather than being
+    // rewritten, and the bytes it replaced are the newest thing on it.
+    assertEquals(
+      (await agent.tool('app_files', {
+        ...app,
+        op: 'read',
+        path: 'index.html',
+      }))
+        .trim(),
+      '<h1>lemon cake</h1>',
+    )
+    assert(
+      (await agent.tool('app_files', {
+        ...app,
+        op: 'history',
+        path: 'index.html',
+      })).split('\n').length >
+        past.split('\n').length,
+    )
+    // A file deleted is kept the same way, and comes back by the same word.
+    await agent.tool('app_files', {
+      ...app,
+      op: 'delete',
+      path: 'broken.js',
+    })
+    await agent.tool('app_files', { ...app, op: 'restore', path: 'broken.js' })
+    assertEquals(
+      await agent.tool('app_files', { ...app, op: 'read', path: 'broken.js' }),
+      'throw new Error("no")',
+    )
+    // A path nothing has ever replaced says so rather than answering nothing.
+    assertStringIncludes(
+      (await assertRejects(
+        () =>
+          agent.tool('app_files', {
+            ...app,
+            op: 'restore',
+            path: 'nothing.css',
+          }),
+        Error,
+      )).message,
+      'nothing has replaced it',
+    )
+
     // And the other half of the same word (recover.ts, T-34507): the STORE's
     // way back. With no moment named it says the window and does nothing —
     // which is all this can be held to here, because local workerd answers

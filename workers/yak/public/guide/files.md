@@ -46,6 +46,46 @@ so a page that goes on loading the file from a CDN can be pinned to the bytes
 this fetch got. What the app SERVES it as comes from the path's extension, not
 from the response — name it `.js` and it is javascript.
 
+## Every write keeps what it replaced
+
+**No write and no delete throws bytes away.** Before anything lands at a path,
+whatever was there is kept — addressed by its own sha256, beside the app — and
+noted in that path's history. So the file you just overwrote is one call away,
+and you never have to remember what it used to say.
+
+    app_files(app, op: 'history', path: 'index.html')
+    → index.html in jeff/recipes:
+      now — 4213 bytes, sha256 9f2a…
+      - until 2026-09-06T14:20:11Z — 3980 bytes, sha256 c41d…, by Jeff
+      - until 2026-09-04T09:02:47Z — 1204 bytes, sha256 7b19…, by Jeff
+
+An entry reads **"the file was these bytes until then"** — the time and the name
+are the write that took them away. So the top entry is one step back from now,
+and `now` is what the app is serving this second.
+
+**`op: restore` puts one back.** With just a `path` it is the newest entry —
+undo the last write:
+
+    app_files(app, op: 'restore', path: 'index.html')
+
+`sha` names one exactly, off the history. `at` asks for a moment —
+`at: '2026-09-05T00:00:00Z'` puts the file back to what it was serving then,
+which is the useful form when what you know is _when_ it was still right and not
+_what_ it said.
+
+A restore is **itself a write**, so the bytes it replaces are kept in turn and a
+restore can be undone by another. Nothing rewrites the history.
+
+The bytes are kept for **30 days**, and always at least the last 20 versions of
+a file, whichever reaches further back. After that a version is let go — and
+only ever a version nothing else needs: bytes a kept deploy names are never
+removed, so `app_rollback` keeps working for every version `app_versions` still
+lists.
+
+This is the FILE-sized way back. Beside it: `app_rollback` puts back every file
+of a whole deploy at once, `store_restore` puts back everything the app has
+_saved_, and `app_restore` brings back an app that was deleted.
+
 ## An icon for the home screen
 
 Write an **`icon.png` beside `index.html`** — square, 512×512, on its own

@@ -79,7 +79,7 @@ import { PLATFORM } from './route.ts'
 import { destroyed } from './sandbox.ts'
 import { vouched, type Who } from './session.ts'
 import { storeOf } from './door.ts'
-import { own } from './versions.ts'
+import { own, pruned } from './versions.ts'
 
 // An hour to walk over to the inbox and read the letter. Longer than a
 // sign-in code's ten minutes, because nobody is standing at the form waiting
@@ -552,6 +552,7 @@ export let DAILY = '20 4 * * *'
 export let collected = async (env: Env, now = new Date()) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let gone = 0
+  let unpinned = 0
   for (let space of await dir.all()) {
     // Never the directory itself, whatever its row says: the app that holds
     // every space on the platform is not one a sweep may erase (`refused`
@@ -565,14 +566,32 @@ export let collected = async (env: Env, now = new Date()) => {
       gone++
       continue
     }
-    for (let app of overdue(await dir.apps(space), now.getTime())) {
+    let apps = await dir.apps(space)
+    for (let app of overdue(apps, now.getTime())) {
       await erased(env, dir, space, app, {
         person: app.trashed!.by,
         role: 'owner',
       })
       gone++
     }
+    // And, on the same walk, what the LIVING apps are still holding on to: the
+    // bytes a write or a deploy pinned that nothing names any more (versions.ts
+    // `pruned`, T-34508). It rides here rather than on every write because the
+    // rule needs to see the whole app at once, and rather than only on a deploy
+    // because an app that stopped deploying would then keep its pins forever.
+    let blobs = r2Blobs(env.BLOBS)
+    for (let app of apps) {
+      if (app.trashed) continue
+      unpinned += await pruned(
+        dir,
+        blobs,
+        under(space, app),
+        app,
+        now.getTime(),
+      )
+    }
   }
   if (gone) console.log(`yak-trash: ${gone} erased at ${now.toISOString()}`)
+  if (unpinned) console.log(`yak-trash: ${unpinned} pinned blobs let go`)
   return gone
 }

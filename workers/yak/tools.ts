@@ -183,9 +183,13 @@ import {
   standing,
 } from './meter.ts'
 import {
+  held,
+  history,
   manifest,
   own,
+  pinned,
   record,
+  replaced,
   restore,
   restored,
   sha256,
@@ -193,6 +197,7 @@ import {
   type Version,
   versions,
   whatChanged,
+  when,
 } from './versions.ts'
 // The one ceiling on bytes going into an app's store, wherever they arrive
 // from: an upload, a drop, or `app_files` fetch.
@@ -365,10 +370,19 @@ let ACCESS = {
 let ROLES: Role[] = ['owner', 'editor', 'viewer']
 
 // What app_files does to a file, in the order an app is built.
-let OPS = ['list', 'read', 'write', 'patch', 'fetch', 'delete']
+let OPS = [
+  'list',
+  'read',
+  'write',
+  'patch',
+  'fetch',
+  'delete',
+  'history',
+  'restore',
+]
 
 // The ops that need a writer, which is every one that changes a byte.
-let WRITES = ['write', 'patch', 'fetch', 'delete']
+let WRITES = ['write', 'patch', 'fetch', 'delete', 'restore']
 
 /**
  * What an `app_files` call is asking for, when it did not say. BYTES say what
@@ -1166,7 +1180,17 @@ export let wrote = async (
     let no = tooLong(f.path, f.bytes.byteLength)
     if (no) throw new Error(no)
   }
-  for (let f of files) await blobs.put(fileKey(space, app, f.path), f.bytes)
+  // What each path held goes into its own history first, pinned by its content
+  // (versions.ts `replaced`, T-34508), so the bytes about to be replaced can be
+  // put back. Before the put, per file, because after it they are gone: a
+  // deploy is the release a person names, and this is the twenty minutes
+  // between two of them, where the page somebody was using gets overwritten.
+  let at = new Date()
+  for (let f of files) {
+    let path = fileKey(space, app, f.path).slice(prefix.length)
+    await replaced(blobs, prefix, path, who.person ?? '', at)
+    await blobs.put(prefix + path, f.bytes)
+  }
   // One purge for the whole batch, after the last byte lands: the tag is the
   // app, not the file, so writing ten files empties the edge once (cache.ts
   // `tagsOf`).
@@ -1804,7 +1828,12 @@ export let TOOLS: Tool[] = [
       'and replace edits one file in place: find is exact and must match ' +
       'exactly once. op: fetch with path and url writes an https response ' +
       'body to path, which is how a library is vendored without transcribing ' +
-      'it, and answers an integrity hash for it. Call guide for the whole of ' +
+      'it, and answers an integrity hash for it. Nothing a write or a delete ' +
+      'takes away is lost: each keeps the bytes it replaced for 30 days, ' +
+      'op: history with path lists them newest first — sha256, size, when it ' +
+      'was replaced and by whom — and op: restore with path puts one back, ' +
+      'the newest by default or the one sha or at names. A restore is itself ' +
+      'a write, so it too can be undone. Call guide for the whole of ' +
       'it, in a page (https://yaks.app/guide.md).',
     input: {
       type: 'object',
@@ -1834,6 +1863,14 @@ export let TOOLS: Tool[] = [
         url: str(
           'for fetch: the https address whose body is written to path — a ' +
             'library vendored into the app rather than transcribed',
+        ),
+        sha: str(
+          'for restore: the sha256 of the version to put back, off op ' +
+            'history. Left out with at, the newest is put back',
+        ),
+        at: str(
+          'for restore: put the file back to what it was at this moment — ' +
+            '2026-09-06T14:20:00Z',
         ),
         files: {
           type: 'array',
@@ -1880,12 +1917,95 @@ export let TOOLS: Tool[] = [
       if (op == 'read' || op == 'delete') {
         let key = fileKey(space, app, text(args.path, 'path'))
         if (!(await blobs.has(key))) throw new Error(`no file ${args.path}`)
+        let path = key.slice(prefix.length)
         if (op == 'read') {
           return { text: new TextDecoder().decode(await blobs.get(key)), space }
         }
+        // A delete takes bytes away like a write does, so it keeps them the
+        // same way: the file is in its own history the moment it stops being a
+        // file, and op restore brings it back (T-34508).
+        await replaced(blobs, prefix, path, who.person ?? '')
         await blobs.delete(key)
         await purged(ctx.env, app)
-        return { text: `deleted ${key.slice(prefix.length)}`, space }
+        return {
+          text: `deleted ${path} — app_files(app: '${app.slug}', op: ` +
+            `'restore', path: '${path}') brings it back`,
+          space,
+        }
+      }
+      // What this file has been (T-34508). Every write pins what it replaced,
+      // so a path answers its own past — and `now` is at the top because "what
+      // is there this second" is half of what somebody reading a history is
+      // trying to work out.
+      if (op == 'history') {
+        let path = fileKey(space, app, text(args.path, 'path'))
+          .slice(prefix.length)
+        let all = await history(blobs, prefix, path)
+        let live = await blobs.read(prefix + path)
+        return {
+          text: [
+            `${path} in ${space.slug}/${app.slug}:`,
+            live
+              ? `now — ${size(live.byteLength)}, sha256 ${await sha256(live)}`
+              : 'now — no file there',
+            ...await Promise.all(
+              all.map(async (w) =>
+                `- until ${w.at} — ${size(w.size)}, sha256 ${w.sha}, by ${
+                  (w.by && await ctx.dir.nameAt(w.by)) || w.by || 'someone'
+                }`
+              ),
+            ),
+            all.length
+              ? `app_files(app: '${app.slug}', op: 'restore', path: ` +
+                `'${path}') puts back the newest of those; sha or at names ` +
+                'another'
+              : 'Nothing has replaced it, so there is nothing to put back.',
+          ].join('\n'),
+          space,
+        }
+      }
+      // And putting one back, as a NEW write — so the bytes it replaces are
+      // themselves kept, and a restore can be undone by another.
+      if (op == 'restore') {
+        let path = fileKey(space, app, text(args.path, 'path'))
+          .slice(prefix.length)
+        let all = await history(blobs, prefix, path)
+        if (!all.length) {
+          throw new Error(
+            `no history for ${path} in ${space.slug}/${app.slug} — nothing ` +
+              'has replaced it, so what is there is what there has been',
+          )
+        }
+        let want = args.sha != null
+          ? all.find((w) => w.sha == text(args.sha, 'sha'))
+          : args.at != null
+          ? held(all, when(text(args.at, 'at')).getTime())
+          : all[0]
+        if (!want) {
+          throw new Error(
+            args.sha != null
+              ? `no ${args.sha} in ${path}'s history — op history lists what ` +
+                'it keeps'
+              : `${path} has not been written since ${args.at}, so what is ` +
+                'there is already what it was then',
+          )
+        }
+        let bytes = await blobs.read(pinned(prefix, want.sha))
+        if (!bytes) {
+          throw new Error(
+            `${path}'s bytes from ${want.at} are no longer kept — the history ` +
+              'goes back 30 days',
+          )
+        }
+        let [p] = await wrote(ctx.env, space, app, who, [{ path, bytes }])
+        return {
+          text: `put ${p} back to what it was until ${want.at} → ` +
+            `${url(space, app)}${p} — ${
+              stored(p, bytes, want.sha)
+            }. This is itself a write, so op history now has the bytes it ` +
+            'replaced.',
+          space,
+        }
       }
       // A read-modify-write of one file, in one call: the loop an agent that
       // miscounted a bracket in a 46 KB file had no cheap way to run.
