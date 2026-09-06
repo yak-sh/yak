@@ -25,12 +25,18 @@ let isolated = new Set([
 ])
 
 let tests: string[] = []
+// Ours only. `node_modules` is walked into otherwise, and a dependency that
+// ships its own `*_test.ts` — `@jsr/std__streams` does — is then run as if it
+// were this repo's, against an import map that is not its own. The workerd
+// probes install one under workers/yak, so this fires for anybody who runs
+// them before the suite.
+let SKIP = new Set(['vendor', 'node_modules'])
 let collect = async (dir: string): Promise<void> => {
   for await (let entry of Deno.readDir(dir)) {
     let path = `${dir}/${entry.name}`
     if (entry.isFile && /_test\.tsx?$/.test(entry.name)) {
       tests.push(path)
-    } else if (entry.isDirectory && entry.name != 'vendor') {
+    } else if (entry.isDirectory && !SKIP.has(entry.name)) {
       await collect(path)
     }
   }
