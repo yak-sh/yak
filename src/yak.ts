@@ -1,13 +1,13 @@
-// The `yaks` CLI: operate the live yaks.app platform as a signed-in account,
+// The `yak` CLI: operate the live yaks.app platform as a signed-in account,
 // without hand-rolling curl (T-33385). A CLIENT and nothing more — every verb
 // here is something a person could do in a browser, and the server-side
 // operator tier (T-33164) is deliberately absent.
 //
-//   yaks test                    mint a throwaway @bot.yak.sh account, signed in
-//   yaks whoami                  the account, its spaces, and its role in each
-//   yaks tool app_list           any connector tool, its reply printed plainly
-//   yaks query jeff/recipes .doc!    an app's store, through the filter grammar
-//   yaks apply jeff/recipes @batch.json
+//   yak test                    mint a throwaway @bot.yak.sh account, signed in
+//   yak whoami                  the account, its spaces, and its role in each
+//   yak tool app_list           any connector tool, its reply printed plainly
+//   yak query jeff/recipes .doc!    an app's store, through the filter grammar
+//   yak apply jeff/recipes @batch.json
 //
 // The one rule the whole program is shaped around: A TEST ACCOUNT IS THE
 // DEFAULT AND THE OWNER'S IS A NAMED ACT. No chain of defaults arrives at an
@@ -261,7 +261,7 @@ let verbs: Record<string, Verb> = {
       'mint a throwaway <name>@bot.yak.sh account, sign in, make it current',
     args: [arg('name', false)],
     door: ['cli'],
-    examples: ['yaks test', 'yaks test cookbook'],
+    examples: ['yak test', 'yak test cookbook'],
     run: async (said) => {
       let address = said.words[0] ? `${said.words[0]}@bot.yak.sh` : throwaway()
       await signIn(address)
@@ -277,8 +277,8 @@ let verbs: Record<string, Verb> = {
     opts: [{ name: '--code', kind: text }],
     door: ['cli'],
     examples: [
-      'yaks login probe@bot.yak.sh',
-      'yaks login you@example.com --owner',
+      'yak login probe@bot.yak.sh',
+      'yak login you@example.com --owner',
     ],
     run: async (said) => {
       let address = said.words[0].trim().toLowerCase()
@@ -286,7 +286,7 @@ let verbs: Record<string, Verb> = {
       if (!address.endsWith(BOT) && !said.flags.has('--owner')) {
         throw new Refused(
           `${address} is not a test address. Signing in as somebody is a ` +
-            'named act: add --owner. A throwaway is `yaks test`.',
+            'named act: add --owner. A throwaway is `yak test`.',
         )
       }
       await signIn(address, said.opts['--code'])
@@ -346,8 +346,8 @@ let verbs: Record<string, Verb> = {
     opts: [{ name: '--json' }],
     door: ['cli'],
     examples: [
-      'yaks tool app_list',
-      "yaks tool app_new slug=notes title='Notes'",
+      'yak tool app_list',
+      "yak tool app_new slug=notes title='Notes'",
     ],
     run: async (said) => {
       let at = acting(said)
@@ -367,7 +367,7 @@ let verbs: Record<string, Verb> = {
       'domains, and the address',
     args: [arg('space')],
     door: ['cli'],
-    examples: ['yaks delete probe-1a2b', 'yaks delete shoplab --owner'],
+    examples: ['yak delete probe-1a2b', 'yak delete shoplab --owner'],
     run: async (said) => {
       let at = acting(said)
       let slug = said.words[0]
@@ -384,7 +384,7 @@ let verbs: Record<string, Verb> = {
     about: 'an app’s store through the filter grammar',
     args: [arg('space/app'), arg('filter', false, true)],
     door: ['cli'],
-    examples: ['yaks query jeff/recipes .doc!', 'yaks query jeff .kind=note'],
+    examples: ['yak query jeff/recipes .doc!', 'yak query jeff .kind=note'],
     run: async (said) => {
       let at = acting(said)
       let [where, ...filters] = said.words
@@ -398,8 +398,8 @@ let verbs: Record<string, Verb> = {
     args: [arg('space/app'), arg('batch')],
     door: ['cli'],
     examples: [
-      'yaks apply jeff/recipes \'{"entities":[…]}\'',
-      'yaks apply jeff/recipes @batch.json',
+      'yak apply jeff/recipes \'{"entities":[…]}\'',
+      'yak apply jeff/recipes @batch.json',
     ],
     run: async (said) => {
       let at = acting(said)
@@ -422,7 +422,7 @@ let read = async (word: string) => {
 let helpFor = (name: string) => {
   let verb = verbs[name]
   return [
-    `yaks ${usageOf(verb)} [--as=ACCOUNT] [--owner]`,
+    `yak ${usageOf(verb)} [--as=ACCOUNT] [--owner]`,
     `  ${verb.about}`,
     ...(verb.examples ?? []).map((e) => `\n  ${e}`),
   ].join('\n')
@@ -430,7 +430,7 @@ let helpFor = (name: string) => {
 
 let usage = () =>
   [
-    'yaks — operate yaks.app as a signed-in account',
+    'yak — operate yaks.app as a signed-in account',
     '',
     ...Object.keys(verbs).map((n) =>
       `  ${usageOf(verbs[n]).padEnd(34)} ${verbs[n].about}`
@@ -439,7 +439,7 @@ let usage = () =>
     '  --as=ACCOUNT   which signed-in account (address or its local part)',
     '  --owner        act as a NON-test account. Required, never implied.',
     '',
-    'A test account is the default and the easy path: `yaks test` mints one.',
+    'A test account is the default and the easy path: `yak test` mints one.',
   ].join('\n')
 
 if (import.meta.main) {
@@ -447,7 +447,7 @@ if (import.meta.main) {
   try {
     if (!cmd || cmd == '--help' || cmd == '-h') print(usage())
     else if (!verbs[cmd]) {
-      warn(`yaks: no such verb: ${cmd}`)
+      warn(`yak: no such verb: ${cmd}`)
       print(usage())
       Deno.exit(2)
     } else if (rest.includes('--help') || rest.includes('-h')) {
@@ -456,7 +456,7 @@ if (import.meta.main) {
       await verbs[cmd].run(parse(cmd, verbs[cmd], rest))
     }
   } catch (e) {
-    warn(`yaks: ${(e as Error).message}`)
+    warn(`yak: ${(e as Error).message}`)
     if (e instanceof Usage && verbs[cmd]) warn(helpFor(cmd))
     Deno.exit(1)
   }

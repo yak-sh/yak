@@ -49,7 +49,7 @@ Deno.test('no chain of defaults reaches an owner account', () => {
   // asked for by name without the flag: refused, and the refusal teaches.
   let no = assertThrows(() => pick(all, { as: 'jeff' }), Refused)
   assertStringIncludes((no as Error).message, '--owner')
-  assertStringIncludes((no as Error).message, 'yaks test')
+  assertStringIncludes((no as Error).message, 'yak test')
   // with the flag, either spelling reaches it.
   assertEquals(pick(all, { as: 'jeff', owner: true }).address, 'jeff@yak.sh')
   assertEquals(pick(all, { owner: true }).address, 'jeff@yak.sh')
@@ -60,12 +60,12 @@ Deno.test('no chain of defaults reaches an owner account', () => {
 
 Deno.test('with no throwaway signed in, the answer is how to mint one', () => {
   let no = assertThrows(() => pick([jeff], {}), Refused)
-  assertStringIncludes((no as Error).message, 'yaks test')
+  assertStringIncludes((no as Error).message, 'yak test')
   let many = assertThrows(
     () => pick([bot('a'), bot('b')], {}),
     Refused,
   )
-  assertStringIncludes((many as Error).message, 'yaks use')
+  assertStringIncludes((many as Error).message, 'yak use')
   assertEquals(pick([bot('a'), bot('b')], { current: 'b' }).name, 'b')
 })
 

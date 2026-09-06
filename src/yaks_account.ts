@@ -173,7 +173,7 @@ export let pick = (
     let theirs = all.filter((a) => !isTest(a))
     if (!theirs.length) {
       throw new Refused(
-        'no owner account signed in — `yaks login <address> --owner`',
+        'no owner account signed in — `yak login <address> --owner`',
       )
     }
     if (theirs.length > 1) {
@@ -190,10 +190,10 @@ export let pick = (
   }
   if (tests.length == 1) return tests[0]
   if (!tests.length) {
-    throw new Refused('no test account — `yaks test` mints one and signs in')
+    throw new Refused('no test account — `yak test` mints one and signs in')
   }
   throw new Refused(
-    `${tests.length} test accounts and none current — \`yaks use <name>\`, ` +
+    `${tests.length} test accounts and none current — \`yak use <name>\`, ` +
       `or --as:\n${say(tests)}`,
   )
 }
@@ -201,7 +201,7 @@ export let pick = (
 let ownerRefusal = (a: Account) =>
   new Refused(
     `${a.address || a.name} is not a test account. Acting as its owner is a ` +
-      'named act: add --owner. A throwaway is `yaks test`.',
+      'named act: add --owner. A throwaway is `yak test`.',
   )
 
 // `use` remembers a test account and REFUSES an owner one, so the remembered
@@ -233,7 +233,7 @@ export let render = (all: Account[], current: string, at?: Account) =>
         a.address && a.address == current ? ' · current' : ''
       }`
     ).join('\n')
-    : 'no accounts — `yaks test` mints a throwaway and signs in'
+    : 'no accounts — `yak test` mints a throwaway and signs in'
 
 // Where the `.env` is: the MAIN checkout's, so every worktree shares one
 // sign-in and a throwaway worktree does not carry a session away with it.
