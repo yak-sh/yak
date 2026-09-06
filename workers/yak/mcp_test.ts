@@ -133,6 +133,8 @@ slow(
         'app_update',
         'member_add',
         'member_remove',
+        // The token that signs a terminal in (grants.ts, T-34385).
+        'grant',
         'feedback',
         // The guide itself, so nothing has to be fetched off the web
         // (T-34284).
@@ -4819,3 +4821,79 @@ slow('store_load writes a file already in the app into its store', async () => {
     await k.stop()
   }
 })
+// The token that signs a terminal in (grants.ts, T-34385): the connector mints
+// it, the same door takes it as the same person, `about` says who is holding
+// it and until when, a grant cannot mint another, and revoking it shuts the
+// door that bearer was walking through — the 401 every credential that did not
+// verify gets (T-34344), rather than the surface a stranger sees.
+slow(
+  'a grant signs a terminal in, and revoking it shuts the door',
+  async () => {
+    let k = await kernel()
+    try {
+      let them = await seed(k, [
+        { slug: `one-${crypto.randomUUID().slice(0, 6)}`, apps: ['notes'] },
+        { slug: `two-${crypto.randomUUID().slice(0, 6)}`, apps: ['lists'] },
+      ])
+      let [one, two] = Object.keys(them.eids).filter((s) => !s.includes('/'))
+      let agent = connector(k, them.cookie)
+      await agent.call('initialize', HELLO)
+      let said = await agent.tool('grant', {})
+      // The answer is the line to paste, and what the token is worth beside it.
+      let token = /^yaks login (\S+)$/m.exec(said)![1]
+      assertStringIncludes(said, 'shown once')
+      assertStringIncludes(said, 'exactly the access they have here')
+      let id = /revoke (\w+)\./.exec(said)![1]
+
+      // The terminal: the same door, the same tools, the same person — carrying
+      // no cookie at all.
+      let cli = connector(k, undefined, token)
+      let listed = await cli.call('tools/list')
+      assert(listed.tools.some((t: { name: string }) => t.name == 'app_new'))
+      let me = await cli.tool('about')
+      assertStringIncludes(me, `<${them.email}>`)
+      assertStringIncludes(me, 'with a CLI grant')
+      assertStringIncludes(me, id)
+      assertStringIncludes(await cli.tool('app_list'), 'notes')
+
+      // A grant cannot mint another: a short life that renews itself is not one.
+      assertStringIncludes(
+        (await assertRejects(() => cli.tool('grant'), Error)).message,
+        'cannot mint another',
+      )
+
+      // Narrowed to one space it reaches that space and no other — and cannot
+      // make a third to escape into.
+      let narrow = await agent.tool('grant', { space: two, hours: 6 })
+      assertStringIncludes(narrow, `It reaches ${two} and no other space`)
+      let only = connector(k, undefined, /^yaks login (\S+)$/m.exec(narrow)![1])
+      assertStringIncludes(await only.tool('app_list'), 'lists')
+      assertStringIncludes(
+        (await assertRejects(
+          () => only.tool('app_list', { space: one }),
+          Error,
+        ))
+          .message,
+        `no space ${one}`,
+      )
+      assertStringIncludes(
+        (await assertRejects(
+          () => only.tool('space_new', { slug: 'three', title: 'three' }),
+          Error,
+        )).message,
+        'and no other space',
+      )
+
+      // Revoked, that bearer is refused — and the narrowed one still works,
+      // since only the grant named went.
+      assertStringIncludes(await agent.tool('grant', { revoke: id }), id)
+      assertStringIncludes(
+        (await assertRejects(() => cli.call('tools/list'), Error)).message,
+        'mcp 401',
+      )
+      assert(await only.call('tools/list'))
+    } finally {
+      await k.stop()
+    }
+  },
+)

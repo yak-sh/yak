@@ -14,7 +14,8 @@ import { annotated } from '@yaks/mcp'
 import { TOOLS } from './tools.ts'
 
 // A pure look-up: it fetches, lists or retrieves and changes nothing. `about`
-// is here too — it says one fixed paragraph and reads nothing about anybody.
+// is here too — it says one fixed paragraph, plus who the caller is signed in
+// as, and writes nothing.
 let READS = [
   'about',
   'app_list',

@@ -62,6 +62,7 @@ import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { INSTRUCTIONS, pageFor } from './guide.ts'
 import { asking, challenge, SAYS, unauthorized } from './identity.ts'
+import { narrowed } from './grants.ts'
 import { callDeclared, listDeclared, listViews, readView } from './declared.ts'
 import { answer, asset, type Doc, DOCS } from './preauth.ts'
 import { PROMPTS } from './prompts.ts'
@@ -434,14 +435,20 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     })
     return open ? result(rpc.id, open) : refused(req, rpc.id)
   }
+  // Fresh, every read: a tool answers about what a tool just wrote, and the
+  // directory's read cache belongs to whichever isolate warmed it
+  // (directory.ts). A deploy from anywhere else is news this door has to
+  // have (C-32905 item 5).
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
   let ctx: Ctx = {
     env,
-    // Fresh, every read: a tool answers about what a tool just wrote, and the
-    // directory's read cache belongs to whichever isolate warmed it
-    // (directory.ts). A deploy from anywhere else is news this door has to
-    // have (C-32905 item 5).
-    dir: directory(bound(env.DIRECTORY, dirPart.fetch, env), true),
+    // A grant narrowed to one space is narrowed HERE, over the directory every
+    // tool reads membership out of (grants.ts `narrowed`), so the narrowing
+    // holds for the generic tier, the platform tier and an app's own tools at
+    // once rather than tool by tool.
+    dir: auth.space ? narrowed(dir, auth.space) : dir,
     person: auth.person,
+    who: auth,
   }
   // The session id, per the transport: minted at `initialize` and sent back by
   // the client on every later request. It names which of this person's streams

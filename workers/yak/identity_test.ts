@@ -384,7 +384,15 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
       headers: { authorization: `Bearer ${bearer}` },
     })
     assertEquals(mine.status, 200)
-    assertEquals(await mine.json(), { person: me, via: 'oauth' })
+    let said = await mine.json()
+    assertEquals({ person: said.person, via: said.via }, {
+      person: me,
+      via: 'oauth',
+    })
+    // And until when: every credential says when it dies now (T-34385), so a
+    // caller holding one can ask how long it has rather than finding out by
+    // being refused.
+    assert(said.until > Math.floor(Date.now() / 1000), 'the token expires')
 
     // And the connector door takes it: the bearer is the same person there,
     // which is the whole point of the OAuth half (mcp.ts `withAuth`).

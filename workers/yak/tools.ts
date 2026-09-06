@@ -102,6 +102,8 @@ import {
   steps,
 } from './domains.ts'
 import type { Env } from './env.ts'
+import type { Caller } from './identity.ts'
+import { DEFAULT, HOURS, ledger, mint, revoke } from './grants.ts'
 import { GRAPH, mail, REPLY_TO } from './mail.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { asset, NO_ARGS, NOAUTH, PUBLIC } from './preauth.ts'
@@ -173,6 +175,13 @@ export type Ctx = {
   env: Env
   dir: Directory
   person: string
+  // How this caller got in, when a door knows (mcp.ts sets it from
+  // identity.ts `asking`): the session, a connector's token, or a CLI grant,
+  // with what that credential says about itself. `about` reads it to answer
+  // who is asking and until when, and `grant` reads it to refuse minting a
+  // grant from a grant. Absent where nobody asked — the builder's own loop
+  // runs these tools for a person it already knows (builder.ts).
+  who?: Caller
   // The tool list this door is serving and the version naming it (mcp.ts,
   // T-34277). Set after the tools are assembled, since it is made OF them, so
   // only a tool RUNNING sees it — which `about` is.
@@ -243,6 +252,34 @@ let rostered = (ctx: Ctx) =>
       'changed, that is this version moving: reconnect, or call about again ' +
       'to see what is here.'
     : ''
+
+// How a caller got in, said the way a person would say it (identity.ts
+// `Caller`).
+let HOW: Record<Caller['via'], string> = {
+  session: 'in a signed-in browser',
+  oauth: 'through a connector you signed in to',
+  grant: 'with a CLI grant',
+}
+
+// Who is asking, how they got in, and until when — the whoami a CLI has to
+// have and had nowhere to ask (T-34385). It rides on `about` rather than
+// standing as a tool of its own: "what is this place" and "who am I here" are
+// one question, and `about` is the one tool every client may call, signed in
+// or not — before signing in the answer to the second half is nobody, which is
+// what the fixed text already says.
+let whoami = async (ctx: Ctx) => {
+  let who = ctx.who
+  if (!who) return ''
+  let name = await ctx.dir.nameAt(ctx.person)
+  let email = await ctx.dir.emailAt(ctx.person)
+  return `\n\nYou are signed in as ${name ?? ctx.person}` +
+    `${email ? ` <${email}>` : ''}, ${HOW[who.via]}` +
+    `${who.grant ? ` ${who.grant}` : ''}` +
+    `${
+      who.space ? `, which reaches the space ${who.space} and no other` : ''
+    }` +
+    `${who.until ? `, until ${new Date(who.until * 1000).toISOString()}` : ''}.`
+}
 
 let str = (description: string) => ({ type: 'string', description })
 
@@ -1250,6 +1287,16 @@ export let TOOLS: Tool[] = [
     },
     run: async (ctx, args) => {
       let s = slug(args.slug, 'slug')
+      // A grant narrowed to one space reaches that space and no other
+      // (grants.ts `narrowed`), and a space it made would be a space outside
+      // it. Said here because minting one is the single act that does not go
+      // through the directory's membership at all.
+      if (ctx.who?.space) {
+        throw new Error(
+          `this grant reaches ${ctx.who.space} and no other space, so it ` +
+            'cannot make one',
+        )
+      }
       if (await ctx.dir.space(s)) throw new Error(`space ${s} is taken`)
       // The space, its owner, and the owner's person row in one batch. The
       // person is keyed by the caller's sign-in, and a bundle mints at an eid
@@ -3256,6 +3303,97 @@ export let TOOLS: Tool[] = [
       }
     },
   },
+  // The token that signs a terminal in (grants.ts, T-34385). It is the one
+  // tool here whose answer is a secret, so the words around it say what to do
+  // with it in one line and what it is worth in the next.
+  {
+    name: 'grant',
+    title: 'A token for the CLI',
+    // It mints; the undo of a mint is the revoke that is also here, and a
+    // revoke ends a token that was going to end anyway.
+    destructive: false,
+    description:
+      'A short-lived token that signs the `yaks` CLI in as this person — the ' +
+      'same identity and exactly the same access they have here, never more. ' +
+      'Reach for it when someone wants to work from their own terminal, or ' +
+      'wants a script to reach their apps: the answer is the one line they ' +
+      'paste. It lasts an hour unless `hours` says otherwise (24 at most), ' +
+      'and `space` narrows it to one space, which is what to do when it is ' +
+      'going somewhere less careful than a laptop. Show them the answer as ' +
+      'it is: the token is said ONCE and kept nowhere it can be read back. ' +
+      '`revoke` takes one back before it expires, by the id the minting ' +
+      'answer named.',
+    input: {
+      type: 'object',
+      properties: {
+        hours: {
+          type: 'number',
+          description: `how long it lasts, in hours — ${DEFAULT} by ` +
+            `default, ${HOURS} at most`,
+        },
+        space: str(
+          'narrow it to this one space: a grant naming one reaches that ' +
+            "space's apps and nothing else of the person's",
+        ),
+        revoke: str(
+          'take a grant back instead of minting one: its id, or the front of ' +
+            'one. Nothing else here is read when this is given',
+        ),
+      },
+    },
+    run: async (ctx, args) => {
+      // A grant cannot mint a grant. Otherwise a token that leaked would keep
+      // minting itself a fresh one for as long as anybody held it, and a
+      // short life that renews itself is not a short life. One comes from
+      // where the person actually signed in.
+      if (ctx.who?.via == 'grant') {
+        throw new Error(
+          'This call is signed in with a grant, and a grant cannot mint ' +
+            'another. Ask for one where you signed in — the connector, or ' +
+            'the browser.',
+        )
+      }
+      let secret = ctx.env.SESSION_SECRET
+      let book = ledger(ctx.env.OAUTH_KV)
+      if (!secret || !book) {
+        throw new Error('grants are not switched on here')
+      }
+      if (args.revoke != null) {
+        let said = text(args.revoke, 'revoke')
+        let gone = await revoke(book, ctx.person, said)
+        return {
+          text: gone.length
+            ? `Revoked ${gone.join(', ')}. Whatever was holding ` +
+              `${gone.length > 1 ? 'those tokens' : 'that token'} is signed ` +
+              'out within the minute.'
+            : `Nothing of yours is named ${said}. A grant is gone the moment ` +
+              'it expires, so an old one needs no revoking.',
+        }
+      }
+      // Naming a space they cannot reach is refused HERE, where the refusal
+      // can say which — a grant is never more than the person, so a narrowing
+      // to somewhere they do not belong would only ever be a token that
+      // reaches nothing.
+      let space = args.space == null ? null : (await inSpace(ctx, args)).space
+      let hours = args.hours == null ? DEFAULT : Number(args.hours)
+      let { grant, token } = await mint(secret, book, {
+        person: ctx.person,
+        space: space?.slug ?? null,
+        hours,
+      })
+      return {
+        text: `yaks login ${token}\n\n` +
+          'Paste that line into a terminal where the `yaks` CLI is ' +
+          'installed. The token is shown once and kept nowhere it can be ' +
+          'read back — if it is lost, mint another. It is this person, with ' +
+          'exactly the access they have here and no more, until ' +
+          `${new Date(grant.exp * 1000).toISOString()} — ` +
+          `${hours} ${hours == 1 ? 'hour' : 'hours'} from now.` +
+          (space ? ` It reaches ${space.slug} and no other space.` : '') +
+          `\n\nTake it back sooner: grant with revoke ${grant.id}.`,
+      }
+    },
+  },
   {
     name: 'feedback',
     title: 'Send feedback',
@@ -3442,11 +3580,12 @@ export let TOOLS: Tool[] = [
     // And they say so in the signed-in list too, since the same tool cannot
     // need signing in on one list and not the other.
     security: NOAUTH,
-    // Signed in, `about` also says what this door is listing right now and the
-    // version naming that list (T-34277) — so an agent whose cached list is
-    // old has one call that settles what it has, without reconnecting. Before
-    // signing in the same words are said with no roster (preauth.ts): the
+    // Signed in, `about` also says who is asking, how they got in and until
+    // when (`whoami`, T-34385), and what this door is listing right now with
+    // the version naming that list (T-34277) — so an agent whose cached list
+    // is old has one call that settles what it has, without reconnecting.
+    // Before signing in the same words are said with neither (preauth.ts): the
     // public list is one tool, and it is this one.
-    run: (ctx) => Promise.resolve({ text: t.text + rostered(ctx) }),
+    run: async (ctx) => ({ text: t.text + await whoami(ctx) + rostered(ctx) }),
   })),
 ]

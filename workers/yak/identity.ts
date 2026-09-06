@@ -36,6 +36,12 @@
 // browser gets one Allow button. The grant carries `{person}` as its props,
 // so a token resolves to the same eid a cookie does.
 //
+// A third way in is minted from the second: a GRANT (grants.ts, T-34385), the
+// short-lived bearer the connector hands a person for their own terminal.
+// This door verifies it — it is a sealed value of ours, not the provider's, so
+// `asking` opens it here — and it resolves to the same eid the other two do,
+// with a life of hours and a row that can be deleted to end it.
+//
 // Whether we CLAIM CIMD at all is the `CIMD` env var (`cimd` below), on
 // unless it says `off`. CIMD works — Claude's hosted document signs a person
 // in through it (T-32465) — but ChatGPT prefers CIMD wherever it is offered
@@ -63,6 +69,7 @@ import { HANDOFF, handoffTo, opener, safeNext, spender } from './handoff.ts'
 export { HANDOFF } from './handoff.ts'
 import { directory, META, type Space } from './directory.ts'
 import { doomed, erase, naming, refused, ticketed, went } from './erase.ts'
+import { GRANT, held, ledger } from './grants.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { mail } from './mail.ts'
@@ -87,7 +94,20 @@ let SESSION = 30 * 24 * 60 * 60
 // Membership is read from the directory at request time, never a claim.
 type Props = { person: string }
 
-export type Caller = { person: string; via: 'session' | 'oauth' }
+export type Caller = {
+  person: string
+  // How they got in. `grant` is the CLI's short-lived bearer (grants.ts),
+  // which this door mints for a caller and verifies itself.
+  via: 'session' | 'oauth' | 'grant'
+  // The unix second this credential dies at — a bearer's own expiry, a
+  // cookie's `exp`. `about` says it out loud (tools.ts), which is how a CLI
+  // asks how long it has left.
+  until?: number
+  // A grant, and only a grant: which one it is, so it can be revoked by name,
+  // and the one space it may reach when it was narrowed to one.
+  grant?: string
+  space?: string | null
+}
 
 // The provider's helpers over this env: parsing an authorize request,
 // naming a client, writing a grant, unwrapping a token. `opts` is the same
@@ -114,14 +134,39 @@ export let asking = async (
   let tried = !!said || !!cookied
   let bearer = /^Bearer\s+(\S+)$/i.exec(said)
   if (bearer) {
+    // A grant says so in its first characters (grants.ts): the provider has
+    // never heard of it, so it is opened here, under the session secret and
+    // against the ledger row that is what makes it revocable.
+    if (bearer[1].startsWith(GRANT)) {
+      let g = env.SESSION_SECRET
+        ? await held(bearer[1], env.SESSION_SECRET, ledger(env.OAUTH_KV))
+        : null
+      return {
+        who: g
+          ? {
+            person: g.person,
+            via: 'grant',
+            until: g.exp,
+            grant: g.id,
+            space: g.space,
+          }
+          : null,
+        tried,
+      }
+    }
     let token = await api(env).unwrapToken<Props>(bearer[1])
     let person = token?.grant.props?.person
-    return { who: person ? { person, via: 'oauth' } : null, tried }
+    return {
+      who: person ? { person, via: 'oauth', until: token?.expiresAt } : null,
+      tried,
+    }
   }
   if (!cookied || !env.SESSION_SECRET) return { who: null, tried }
   let claims = await verify(cookied, env.SESSION_SECRET)
   return {
-    who: claims ? { person: claims.person, via: 'session' } : null,
+    who: claims
+      ? { person: claims.person, via: 'session', until: claims.exp }
+      : null,
     tried,
   }
 }

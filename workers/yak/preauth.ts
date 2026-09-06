@@ -79,8 +79,10 @@ let ABOUT: Says = {
     'What yaks.app is and what gets made here. Call it when someone asks ' +
     'what this place is, or when you have not signed in and want to know ' +
     'what signing in would give you — it answers in a paragraph and says ' +
-    'where to sign in. It reads nothing about anybody: the same words for ' +
-    'everyone.',
+    'where to sign in. Signed in, it also says WHO you are signed in as, how ' +
+    '(a browser, a connector, a CLI grant) and until when, plus the tools ' +
+    'this door is listing right now. Signed out it reads nothing about ' +
+    'anybody: the same words for everyone.',
   text: `yaks.app is a place to make small web apps by asking for one. An app
 is an index.html and whatever files sit beside it — no build step, no
 framework, no install — served live at its own address,

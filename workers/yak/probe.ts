@@ -354,7 +354,11 @@ export let client = (
 // An agent on the connector: JSON-RPC over POST /mcp at the apex, as one
 // signed-in person. `tool` answers the reply's text, throwing when the tool
 // says it erred, so a test reads the words and not the envelope.
-export let connector = (k: Kernel, cookie?: string) => {
+//
+// `bearer` is the other credential the door takes — a CLI grant (grants.ts),
+// which is how the terminal talks to this same door and carries no cookie at
+// all.
+export let connector = (k: Kernel, cookie?: string, bearer?: string) => {
   let n = 0
   // The transport's session id: minted at `initialize` and sent back on every
   // later request, the way a client does — it names this client's stream and
@@ -365,6 +369,7 @@ export let connector = (k: Kernel, cookie?: string) => {
       method: 'POST',
       headers: {
         ...(cookie ? { cookie } : {}),
+        ...(bearer ? { authorization: `Bearer ${bearer}` } : {}),
         ...(session ? { 'mcp-session-id': session } : {}),
         'content-type': 'application/json',
       },
