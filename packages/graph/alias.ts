@@ -88,11 +88,11 @@ let rewrite = (
  * these ids, and every reference to one, rewritten to the id it stands for.
  * Anything the map does not name is left exactly alone.
  *
- * It is exported for a plugin that names entities of its OWN in the mint phase.
- * {@link https://jsr.io/@yaks/alias | @yaks/alias} is the one: a bundle
- * carrying a name some entity already holds is a patch OF that entity, so the
- * id this phase just minted has to give way to the holder's — in the bundle
- * itself and in everything pointing at it — which is this function.
+ * It is exported for a plugin that resolves ids of its OWN.
+ * {@link https://jsr.io/@yaks/key | @yaks/key} is the one: a bundle claiming a
+ * value some entity already holds is a patch OF that entity, so the id the mint
+ * phase just picked has to give way to the holder's — in the bundle itself and
+ * in everything pointing at it — which is this function.
  */
 export let substitute = (
   bundles: Bundle[],
