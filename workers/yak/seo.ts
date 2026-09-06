@@ -45,7 +45,7 @@ let at = (path: string) => `${SITE_URL}${path}`
 export let CONNECTOR = {
   name: PLATFORM,
   title: PLATFORM,
-  description: 'Apps your assistant builds for you, at your own address.',
+  description: 'Build an app by asking Claude or ChatGPT.',
   websiteUrl: SITE_URL,
   icons: [
     { src: at('/connector.svg'), mimeType: 'image/svg+xml', sizes: ['any'] },
@@ -134,7 +134,7 @@ export let CLOSED = ['/login', '/connect', '/mcp', '/api/', '/gallery/review']
 
 export let robots = () =>
   [
-    '# yaks.app — apps your assistant builds for you, at your own address.',
+    '# yaks.app — build an app by asking Claude or ChatGPT.',
     '# Crawling and reading here is welcome; the guide is at',
     `# ${WHOLE}, and ${at('/llms.txt')} is the short index of it.`,
     '',
@@ -199,10 +199,9 @@ export let llms = (
   [
     '# yaks.app',
     '',
-    '> Apps your assistant builds for you, at your own address. Ask Claude or',
-    '> ChatGPT for a recipe box, a sign-up sheet or a trip planner; it is built',
-    '> and hosted at yourname.yaks.app, keeps its own data, and opens in any',
-    '> browser.',
+    '> Build an app by asking Claude or ChatGPT. A recipe box, a sign-up sheet,',
+    '> a trip planner — your assistant builds it, and yaks.app keeps it online.',
+    '> Your app lives at yourname.yaks.app, saves your data, and works in a browser.',
     '',
     'An app is an index.html and the files beside it, served live, with a graph',
     'store behind it and no build step. An assistant connects over MCP at',

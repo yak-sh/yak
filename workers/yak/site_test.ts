@@ -71,10 +71,10 @@ let png = (name: string, width: number, height: number, kind = 6) => {
   assertEquals(bytes[25], kind, `${name} has the wrong color type`)
 }
 
-Deno.test('the yak exports have their intended transparent sizes', () => {
-  // The share card is the one that is not the yak alone: 1200×630 is what
+Deno.test('the yak exports have their intended sizes and transparency', () => {
+  // The opaque share card is not the yak alone: 1200×630 is what
   // every unfurler crops to, and og.svg beside it is what it is drawn from.
-  png('og.png', 1200, 630)
+  png('og.png', 1200, 630, 2)
   png('yak.png', 768, 743)
   png('favicon-32.png', 32, 32)
   png('apple-touch-icon.png', 180, 180)
@@ -323,18 +323,12 @@ Deno.test('every page carries the head an engine reads', () => {
   assertEquals(new Set(titles).size, titles.length, 'two pages share a title')
 })
 
-// The home page's own heading is what a search result is built out of, so it
-// says the whole thing rather than a verb.
-Deno.test('the home page names itself in its first heading', () => {
+Deno.test('the home page explains how to build an app in its first heading', () => {
   let h1 = /<h1[^>]*>([\s\S]*?)<\/h1>/.exec(read('index.html'))![1]
-  assertStringIncludes(flat(h1), 'yaks.app')
-  assertStringIncludes(flat(h1), 'your own address')
+  assertEquals(flat(h1).trim(), 'Build an app by asking Claude or ChatGPT.')
 })
 
-// The way in is sign-in, everywhere (T-34408). Attaching an assistant is the
-// SECOND step and its instructions live on the space a sign-in lands on, so no
-// public page hands a stranger `/connect` — and the home page's doors and copy
-// say the order: email, a code, your own space, connect your assistant there.
+// Setup links lead through sign-in; the homepage explains what people can do.
 Deno.test('every public page hands a stranger sign-in, never /connect', () => {
   for (let page of branded) {
     let body = read(page).split('</head>')[1] ?? ''
@@ -344,18 +338,10 @@ Deno.test('every public page hands a stranger sign-in, never /connect', () => {
   let doors = [...html.matchAll(/<a class="Button" href="([^"]+)"/g)]
     .map((m) => m[1])
   assertEquals(doors, ['/login', '/login'], 'a home-page door misses sign-in')
-  let how = flat(html.split('id="how"')[1].split('</section>')[0])
-  assertStringIncludes(how, 'Sign in with your email')
-  assertStringIncludes(how, 'six-digit code')
-  assertStringIncludes(how, 'Connect your assistant')
-  assert(
-    how.indexOf('Sign in with your email') <
-      how.indexOf('Connect your assistant'),
-    'the home page still connects before it signs in',
+  assertEquals(
+    [...html.matchAll(/<h3 class="Step_Name">([^<]+)<\/h3>/g)].map((m) => m[1]),
+    ['Connect your assistant', 'Describe what you need', 'Open it and use it'],
   )
-  let join = flat(html.split('id="join"')[1].split('</section>')[0])
-  assertStringIncludes(join, 'land on your own space')
-  assertStringIncludes(join, 'Connect your assistant there')
 })
 
 Deno.test('sign-in welcomes new visitors, including those from an assistant', async () => {
@@ -702,11 +688,11 @@ Deno.test('the connect page shows the connector its own face', async () => {
   assertStringIncludes(html, `<a href="${SITE_URL}/connector-512.png">`)
   assertEquals(
     CONNECTOR.description,
-    'Apps your assistant builds for you, at your own address.',
+    'Build an app by asking Claude or ChatGPT.',
   )
   assertStringIncludes(
     html,
-    '<span class="Pick">Apps your assistant builds for you, at your own address.</span>',
+    '<span class="Pick">Build an app by asking Claude or ChatGPT.</span>',
   )
   assertStringIncludes(html, '<span class="Pick">yaks.app</span>')
 })

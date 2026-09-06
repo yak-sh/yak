@@ -47,7 +47,7 @@ let facing = (info: Record<string, unknown>) => {
   assertEquals(info.title, 'yaks.app')
   assertEquals(
     info.description,
-    'Apps your assistant builds for you, at your own address.',
+    'Build an app by asking Claude or ChatGPT.',
   )
   assertEquals(info.websiteUrl, 'https://yaks.app')
   assertEquals(info.icons, [

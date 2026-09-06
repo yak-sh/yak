@@ -17,10 +17,10 @@
     font-weight="900" font-size="112" fill="#523828">yaks.app</text>
   <rect x="92" y="285" width="150" height="10" rx="5" fill="#4c773e" />
   <text x="90" y="378" font-family="Lato, sans-serif" font-weight="700"
-    font-size="44" fill="#785b47">Apps your assistant builds</text>
+    font-size="44" fill="#785b47">Build an app by asking</text>
   <text x="90" y="436" font-family="Lato, sans-serif" font-weight="700"
-    font-size="44" fill="#785b47">for you, at your own address.</text>
+    font-size="44" fill="#785b47">Claude or ChatGPT.</text>
   <text x="90" y="516" font-family="Lato, sans-serif" font-weight="400"
     font-size="30"
-    fill="#785b47">Ask Claude or ChatGPT. No install, no build step.</text>
+    fill="#785b47">Your assistant builds it. We keep it online.</text>
 </svg>
