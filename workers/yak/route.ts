@@ -20,6 +20,17 @@ export let PLATFORM = 'yaks.app'
 // link — checkout is the signed-in web page's, and email's.
 export let PRICING = `https://${PLATFORM}/pricing`
 
+// The agent door, as an address a person types into a connector form: two
+// spellings of ONE resource (mcp.ts). `MCP` is lazy — it tells a stranger
+// what this place is before anybody has signed in — and `MCP_ASK` never does,
+// so a host that decides whether a server needs OAuth by calling it with no
+// credential and reading the status gets the 401 and its challenge instead of
+// writing down "no auth" (T-34416). Here for the same reason PRICING is: the
+// door and the page that teaches somebody to type it must say the same
+// string, and pages.ts is identity.ts's, never the other way round.
+export let MCP = `https://${PLATFORM}/mcp`
+export let MCP_ASK = `${MCP}?auth=required`
+
 // The Cloudflare for SaaS fallback origin (T-33036): the name a customer's
 // own hostname is CNAME'd to, and the one place that name is written — the
 // attach flow and the guide both read it here.

@@ -43,13 +43,20 @@
 // with a life of hours and a row that can be deleted to end it.
 //
 // Whether we CLAIM CIMD at all is the `CIMD` env var (`cimd` below), on
-// unless it says `off`. CIMD works — Claude's hosted document signs a person
-// in through it (T-32465) — but ChatGPT prefers CIMD wherever it is offered
-// and names itself with a document that is a 404, so its flow dies before it
-// starts. The lever is the advertisement, not the code path: dropped, the
-// well-known stops claiming support and a URL client_id is looked for in the
-// store like any other, which is what leaves a client dynamic registration to
-// fall back to (T-33027).
+// unless it says `off`. It works for both: Claude's hosted document signs a
+// person in through it (T-32465), and ChatGPT's — chatgpt.com/oauth/client.json,
+// a 404 when T-33027 looked and published since — renders our consent page
+// under its own name (checked 2026-09-05). The lever is kept anyway, and it is
+// the advertisement rather than the code path: dropped, the well-known stops
+// claiming support and a URL client_id is looked for in the store like any
+// other, which leaves a client dynamic registration to fall back to.
+//
+// A connection, once made, does not lapse (T-34416). The owner: "the oauth
+// should never expire". So the refresh token has no expiry and the access
+// token lives a year (`opts`), and a public client's refresh is taken even
+// when it carries a `client_secret` it was never issued (`plain`), which is
+// what ChatGPT sends and what used to read to a person as an expired
+// connection. What closes a connector is the person closing it.
 //
 // The first person ever to sign in owns the meta space: while `yak` has no
 // members at all, this writes `member(yak, person, owner)` (directory.ts
@@ -718,6 +725,11 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
 // the header explains why a working feature has a lever at all.
 let cimd = (env: Env) => env.CIMD != 'off'
 
+// A year, in seconds: the access token's life (`opts` below says why).
+let YEAR = 365 * 24 * 60 * 60
+
+export let TOKEN = '/oauth/token'
+
 // The provider's configuration over this env, one value: `withAuth` reads it
 // to unwrap a bearer, and `fetch` runs it. `/oauth/me` is the one protected
 // resource the identity part serves itself — the door an agent calls to learn
@@ -734,9 +746,24 @@ let opts = (env: Env): OAuthProviderOptions<Env> => ({
     },
   },
   authorizeEndpoint: '/oauth/authorize',
-  tokenEndpoint: '/oauth/token',
+  tokenEndpoint: TOKEN,
   clientRegistrationEndpoint: '/oauth/register',
   clientIdMetadataDocumentEnabled: cimd(env),
+  // The owner, 2026-09-05: "the oauth should never expire". A connector is a
+  // door a person opened, and it closes when they close it and not before —
+  // so the refresh token has NO expiry (the library's own spelling for never
+  // is an explicit `undefined`, which leaves the grant's KV row with no
+  // expiration at all) and the access token lives a year, which is as near to
+  // never as an integer TTL gets: the library will not take a value under a
+  // minute and has no word for forever.
+  //
+  // Neither ceiling weakens revoking, which is what a person actually does:
+  // `revokeGrant` deletes every token row along with the grant, so a
+  // disconnected connector is refused on its next call whatever its token
+  // said. The CLI's grants are the opposite by design and stay hours
+  // (grants.ts) — those are pasted into a terminal, not held by a connector.
+  accessTokenTTL: YEAR,
+  refreshTokenTTL: undefined,
   scopesSupported: ['graph'],
   resourceMetadata: {
     scopes_supported: ['graph'],
@@ -754,8 +781,59 @@ let context = () => ({
   passThroughOnException: () => {},
 })
 
+// A secret a PUBLIC client was never issued, dropped before the provider sees
+// it (T-34416). ChatGPT registers itself `token_endpoint_auth_method: none`
+// and then puts a `client_secret` in the token request anyway — an empty one
+// counts, the provider only asks whether the field is there — and the mismatch
+// is refused `invalid_client`, which the person reads as "your yaks.app
+// connection has expired, reconnect it".
+//
+// Accepting it gives up nothing. A public client has no registered secret to
+// check the presented one against; what protects its code is PKCE, which is
+// unchanged, and the check that just fired only compares two labels. So the
+// field is removed and the request goes on as the `none` it always was — and
+// ONLY for a client that registered `none`. A client that registered a secret
+// method still has to present the right one, which is the check that matters.
+//
+// Basic is the same mistake said in a header, and it takes the client_id with
+// it, so the id moves into the form where the provider reads it next.
+let plain = async (req: Request, env: Env): Promise<Request> => {
+  if (req.method != 'POST' || new URL(req.url).pathname != TOKEN) return req
+  let basic = /^Basic\s+(\S+)$/i.exec(req.headers.get('authorization') ?? '')
+  // Anything unreadable here is the provider's to refuse, not ours to guess
+  // at: a body that will not parse and Basic credentials that are not base64
+  // go on untouched and meet the error they have coming.
+  let form: URLSearchParams
+  let named: [string, string | null]
+  try {
+    form = new URLSearchParams(await req.clone().text())
+    named = basic
+      ? atob(basic[1]).split(':').map(decodeURIComponent) as [string, string]
+      : [form.get('client_id') ?? '', form.get('client_secret')]
+  } catch {
+    return req
+  }
+  let [id, secret] = named
+  // Nothing to drop unless a secret was offered at all.
+  if (!id || secret == null) return req
+  let client = await getOAuthApi<Env>(opts(env), env).lookupClient(id)
+    .catch(() => null)
+  if (client?.tokenEndpointAuthMethod != 'none') return req
+  form.delete('client_secret')
+  form.set('client_id', id)
+  let headers = new Headers(req.headers)
+  headers.delete('authorization')
+  headers.delete('content-length')
+  return new Request(req.url, {
+    method: 'POST',
+    headers,
+    body: form.toString(),
+  })
+}
+
 // A provider per request, since its configuration is read from the env: the
 // library builds its own implementation per call anyway (`getOAuthApi`), so
 // this costs an object, not a connection.
-export let fetch = (req: Request, env: Env): Promise<Response> =>
-  new OAuthProvider<Env>(opts(env)).fetch(req, env, context() as never)
+export let fetch = async (req: Request, env: Env): Promise<Response> =>
+  new OAuthProvider<Env>(opts(env))
+    .fetch(await plain(req, env), env, context() as never)

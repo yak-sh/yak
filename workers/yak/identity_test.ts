@@ -497,6 +497,131 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
   }
 })
 
+// A connection stays connected (T-34416). The owner: "the oauth should never
+// expire" — so a connector holds its door until the person closes it, and the
+// two ways it used to be closed for them are shut: a refresh token with an
+// expiry, and a public client's refresh refused for carrying a `client_secret`
+// it was never issued, which is what ChatGPT sends and what a person reads as
+// "your connection has expired, reconnect it".
+slow('a connector keeps its door until the person closes it', async () => {
+  let k = await kernel()
+  try {
+    let { cookie } = await signIn(k)
+    let back = 'https://probe.invalid/cb'
+    // Exactly what ChatGPT registers: a public client, no secret to hold.
+    let open = await k.at('yaks.app', '/oauth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        client_name: 'A probing connector',
+        redirect_uris: [back],
+        token_endpoint_auth_method: 'none',
+        grant_types: ['authorization_code', 'refresh_token'],
+        response_types: ['code'],
+      }),
+    })
+    let client_id = (await open.json()).client_id
+    // And beside it one that DID take a secret, so the leniency below can be
+    // shown to be the public client's alone.
+    let shut = await k.at('yaks.app', '/oauth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        client_name: 'A connector with a secret',
+        redirect_uris: [back],
+        token_endpoint_auth_method: 'client_secret_post',
+        grant_types: ['authorization_code', 'refresh_token'],
+        response_types: ['code'],
+      }),
+    })
+    let closed = await shut.json()
+    assert(closed.client_secret, 'the confidential client got a secret')
+
+    let verifier = crypto.randomUUID() + crypto.randomUUID()
+    let q = new URLSearchParams({
+      response_type: 'code',
+      client_id,
+      redirect_uri: back,
+      state: 's',
+      scope: 'graph',
+      code_challenge: b64u(
+        await crypto.subtle.digest(
+          'SHA-256',
+          new TextEncoder().encode(verifier),
+        ),
+      ),
+      code_challenge_method: 'S256',
+    }).toString()
+    let granted = await form(k, '/oauth/allow', { q }, cookie)
+    let code = new URL(granted.headers.get('location') ?? '')
+      .searchParams.get('code') ?? ''
+    let token = (fields: Record<string, string>, auth?: string) =>
+      k.at('yaks.app', '/oauth/token', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          ...(auth ? { authorization: auth } : {}),
+        },
+        body: new URLSearchParams(fields).toString(),
+      })
+    let first = await token({
+      grant_type: 'authorization_code',
+      code,
+      client_id,
+      redirect_uri: back,
+      code_verifier: verifier,
+    })
+    assertEquals(first.status, 200)
+    let got = await first.json()
+    assert(got.refresh_token, 'a refresh token to keep the door with')
+    // A year, the nearest thing to never the library's integer TTL has: it
+    // takes no value under a minute and has no word for forever. The ceiling
+    // is written down here so a change to it is a change to this line.
+    assertEquals(got.expires_in, 365 * 24 * 60 * 60)
+
+    // Every way ChatGPT has been seen to spell the refresh, all one answer.
+    // The bare one is the spec's; the other two carry a secret this client was
+    // never issued, in the body and in the header, and are the same request.
+    let again = async (fields: Record<string, string>, auth?: string) => {
+      let r = await token({
+        grant_type: 'refresh_token',
+        refresh_token: got.refresh_token,
+        ...fields,
+      }, auth)
+      assertEquals(r.status, 200, await r.clone().text())
+      let next = await r.json()
+      assert(next.access_token)
+      // And the token it hands back is the person, at the door: the whole
+      // point of refreshing is that the connector keeps working.
+      let mine = await k.at('yaks.app', '/oauth/me', {
+        headers: { authorization: `Bearer ${next.access_token}` },
+      })
+      assertEquals(mine.status, 200)
+      return next.refresh_token as string
+    }
+    got.refresh_token = await again({ client_id })
+    got.refresh_token = await again({ client_id, client_secret: '' })
+    got.refresh_token = await again({ client_id, client_secret: 'invented' })
+    got.refresh_token = await again(
+      {},
+      `Basic ${btoa(`${client_id}:invented`)}`,
+    )
+
+    // The leniency is the public client's and nobody else's: a client that
+    // registered a secret still has to present the right one.
+    let wrong = await token({
+      grant_type: 'refresh_token',
+      refresh_token: got.refresh_token,
+      client_id: closed.client_id,
+      client_secret: 'invented',
+    })
+    assertEquals(wrong.status, 401)
+    assertEquals((await wrong.json()).error, 'invalid_client')
+  } finally {
+    await k.stop()
+  }
+})
+
 // The sign-in box is for somebody signed OUT (T-34209). A browser carrying a
 // session is never asked again: `GET /login` reads the cookie first and sends
 // them on — to the page they were headed for when it is ours to send them to,

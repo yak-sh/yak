@@ -10,6 +10,7 @@
 // HTML (the repo's md.ts rule, one floor down).
 
 import type { Frame } from './build.ts'
+import { MCP, MCP_ASK } from './route.ts'
 
 // The one escape: `&` first, so an escape is never escaped twice.
 export let esc = (s: string) =>
@@ -808,8 +809,6 @@ export type Yours = {
   paid?: boolean
 }
 
-let MCP = 'https://yaks.app/mcp'
-
 // The address card, for a person who is signed in. The form posts, so it
 // works with no script at all; the script below turns that into an inline
 // answer, which is what a person choosing a name expects.
@@ -919,13 +918,16 @@ let doors = [
       '<b>Developer mode</b>.',
       'Open <a href="https://chatgpt.com/plugins">chatgpt.com/plugins</a> and ' +
       'press the <b>+</b> button.',
-      'Give it a name, then enter <code>' + MCP + '</code> as the MCP server ' +
-      'URL — keep the <code>/mcp</code> on the end.',
+      'Give it a name, then enter <code>' + MCP_ASK + '</code> as the MCP ' +
+      'server URL — all of it, the <code>?auth=required</code> included.',
       'Create it and sign in when it asks. It appears under <b>Developer ' +
       'mode</b> below the message box.',
     ],
-    'The web app, not the phone one. On a Business or Enterprise workspace ' +
-      'an admin may have to allow developer mode first.',
+    'ChatGPT decides whether a server needs signing in by calling it first ' +
+      'with nobody signed in, so it needs the longer address: without it, it ' +
+      'connects as a stranger and never offers you the sign-in. The web app, ' +
+      'not the phone one. On a Business or Enterprise workspace an admin may ' +
+      'have to allow developer mode first.',
   ),
   steps('Anything else that speaks MCP', [
     `Give it <code>${MCP}</code>, over streamable HTTP. It will walk you ` +
