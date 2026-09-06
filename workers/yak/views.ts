@@ -169,9 +169,13 @@ export let TOP = 10
  */
 export let FRESH = 5 * 60_000
 
-/** The one endpoint. `account` is CF_ACCOUNT, which is not a secret. */
-export let sqlAt = (account: string) =>
-  `https://api.cloudflare.com/client/v4/accounts/${account}/analytics_engine/sql`
+/** Cloudflare's API, and the one endpoint on it that answers SQL. The account
+ * is CF_ACCOUNT, which is not a secret; ANALYTICS_API is a probe's door to
+ * somewhere other than Cloudflare, the way MAIL_API and STRIPE_API are. */
+export let API = 'https://api.cloudflare.com/client/v4'
+
+export let sqlAt = (env: Env) =>
+  `${env.ANALYTICS_API ?? API}/accounts/${env.CF_ACCOUNT}/analytics_engine/sql`
 
 // There are no bound parameters in the SQL API — a query is a string of text —
 // so the SHAPES are the guard. An eid comes out of our own directory and a day
@@ -242,7 +246,7 @@ export let ran = async (
   env: Env,
   sql: string,
 ): Promise<Record<string, unknown>[]> => {
-  let res = await fetch(sqlAt(env.CF_ACCOUNT ?? ''), {
+  let res = await globalThis.fetch(sqlAt(env), {
     method: 'POST',
     headers: { authorization: `Bearer ${env.ANALYTICS_TOKEN}` },
     body: sql,

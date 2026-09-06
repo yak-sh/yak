@@ -110,6 +110,7 @@ export type Env = {
     }): void
   }
   ANALYTICS_TOKEN?: string
+  ANALYTICS_API?: string
   // An app's OWN code (dispatch.ts): the Workers for Platforms namespace its
   // worker.js is uploaded into, and the token the upload speaks to the
   // Workers API with — the account tag above is the same one. The namespace

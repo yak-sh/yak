@@ -22,6 +22,7 @@ let READS = [
   'app_published',
   'app_secret_list',
   'app_versions',
+  'app_stats',
   'domain_status',
   'gallery_search',
   'guide',

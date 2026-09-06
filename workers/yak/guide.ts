@@ -245,6 +245,14 @@ same way: app_delete puts it in the trash for 30 days, keeping everything,
 and app_restore takes it back out — and a whole SPACE the same, with
 space_restore.
 
+When they ask whether anyone is reading the thing, app_stats answers: visits a
+day for the last month, the pages opened, the sites that linked there, the
+countries. Counts and nothing else — there is no address, no visitor id and no
+browser string in it, so it can never say WHO, and saying so plainly is the
+right answer to that question. Crawlers are in the number, so a handful of
+visits on a page nobody was sent is usually robots. Call guide with page stats
+for the whole thing (https://yaks.app/guide/stats.md).
+
 Anything either of you has to say about THIS PLATFORM rather than their app —
 a tool that refused for no reason you could find, a guide that taught the
 wrong thing, something missing you cannot work around, a rough edge, a wish,
@@ -397,6 +405,17 @@ export let PAGES: Page[] = [
       'rest, the apex problem and the three ways through it, what each ' +
       'pending state means, and why a domain stays stuck.',
     brief: 'pointing a domain at an app',
+  },
+  {
+    slug: 'stats',
+    title: 'Who visited',
+    description:
+      'Visitor counts for an app: what one page view records and the six ' +
+      'things it never does — no address, no visitor id, not even the ' +
+      "browser's own string — app_stats and the window it takes, the block " +
+      'on their space page, the door a page reads its own numbers at, and ' +
+      'why a small number is usually crawlers.',
+    brief: 'who opened an app, and from where',
   },
   {
     slug: 'errors',

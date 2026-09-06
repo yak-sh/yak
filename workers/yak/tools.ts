@@ -194,6 +194,7 @@ import {
 // The one ceiling on bytes going into an app's store, wherever they arrive
 // from: an upload, a drop, or `app_files` fetch.
 import { MAX } from './apps.ts'
+import { NOT_ON, statsOf } from './views.ts'
 
 export type Ctx = {
   env: Env
@@ -2873,6 +2874,67 @@ export let TOOLS: Tool[] = [
           url: url(space, app),
           version: app.version ?? 0,
           errors: cards(seen),
+        },
+      }
+    },
+  },
+  {
+    name: 'app_stats',
+    title: 'Who visited an app',
+    readOnly: true,
+    description:
+      'How many people opened the app, and where they came from: visits a ' +
+      'day for the last month, the pages they opened, the sites that linked ' +
+      'to them, and the countries they were in. Aggregate counts and nothing ' +
+      'else — there is no visitor here to identify, no address and no ' +
+      'session, so this can never answer who someone was or what one person ' +
+      'did. Reach for it when they ask whether anyone is reading the thing, ' +
+      "or which page is worth working on. Only the app's own people may ask.",
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        app: APP,
+        days: {
+          type: 'number',
+          description:
+            'how far back, in days (default 30). Cloudflare keeps three ' +
+            'months, so anything past 90 is the same answer as 90.',
+        },
+      },
+      required: ['app'],
+    },
+    run: async (ctx, args) => {
+      let { space, app } = await inApp(ctx, args)
+      let days = args.days == null ? undefined : Number(args.days)
+      // No token, no numbers — one sentence rather than an error, because
+      // there is nothing the agent or the person can do about it (views.ts).
+      let asked = statsOf(ctx.env, app.eid, days)
+      if (!asked) return { text: NOT_ON, space, data: { on: false } }
+      let seen = await asked
+      let list = (head: string, rows: { name: string; views: number }[]) =>
+        rows.length
+          ? [`${head}:`, ...rows.map((r) => `- ${r.name} — ${r.views}`)]
+          : []
+      let text = seen.total
+        ? [
+          `${space.slug}/${app.slug} — ${seen.total} visits in ${seen.days} ` +
+          `days (${url(space, app)})`,
+          ...list('Pages', seen.pages),
+          ...list('Came from', seen.from),
+          ...list('Countries', seen.countries),
+        ].join('\n')
+        : `${space.slug}/${app.slug} — nobody has opened it in ${seen.days} ` +
+          'days'
+      return {
+        text,
+        space,
+        data: {
+          on: true,
+          space: space.slug,
+          app: app.slug,
+          url: url(space, app),
+          ...seen,
         },
       }
     },

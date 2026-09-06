@@ -152,6 +152,8 @@ slow(
         'app_delete',
         'app_restore',
         'app_errors',
+        // Who visited, in counts and never in names (views.ts, T-34498).
+        'app_stats',
         'app_list',
         'domain_attach',
         'domain_status',
@@ -4785,6 +4787,96 @@ slow(
 
 // D-32318 §Errors, verbatim: "One is open until a later deploy stops
 // producing it or the agent marks it fixed." So the deploy that carries the
+// Who visited (views.ts, T-34498). The SQL API is an HTTP call rather than a
+// binding, so the probe aims it at a server of this test's own (ANALYTICS_API,
+// the way MAIL_API and STRIPE_API are aimed) and answers each of the four
+// queries fixed rows. What is being held here is the SENTENCE the agent reads
+// and the structured half beside it — and that the numbers can be had at all
+// without the account.
+slow('app_stats answers counts, and never a visitor', async () => {
+  let asked: string[] = []
+  let rows: Record<string, Record<string, unknown>[]> = {
+    day: [{
+      day: `${new Date().toISOString().slice(0, 10)} 00:00:00`,
+      views: 9,
+    }],
+    path: [{ path: '/weather/', views: '6' }, {
+      path: '/weather/map',
+      views: 3,
+    }],
+    site: [{ site: 'news.example.com', views: 5 }],
+    country: [{ country: 'US', views: 9 }],
+  }
+  let api = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
+    let sql = await req.text()
+    asked.push(sql)
+    let col = Object.keys(rows).find((k) => sql.includes(` AS ${k},`)) ?? ''
+    return Response.json({ data: rows[col] ?? [] })
+  })
+  let port = (api.addr as Deno.NetAddr).port
+  let k = await kernel({
+    ANALYTICS_TOKEN: 'a probe token',
+    ANALYTICS_API: `http://127.0.0.1:${port}`,
+  })
+  try {
+    let { cookie } = await seed(k, [{ slug: 'watch', apps: ['weather'] }])
+    let agent = connector(k, cookie)
+    let said = await agent.tool('app_stats', { space: 'watch', app: 'weather' })
+    assertStringIncludes(said, '9 visits in 30 days')
+    assertStringIncludes(said, '/weather/ — 6')
+    assertStringIncludes(said, 'news.example.com — 5')
+    assertStringIncludes(said, 'US — 9')
+    // Four queries, every one of them this app's and every one of them
+    // counting sampled rows rather than rows.
+    assertEquals(asked.length, 4)
+    for (let q of asked) {
+      assertStringIncludes(q, 'sum(_sample_interval)')
+      assertStringIncludes(q, 'FROM yak_views')
+    }
+    // A shorter window is a different question, and it says so.
+    assertStringIncludes(
+      await agent.tool('app_stats', {
+        space: 'watch',
+        app: 'weather',
+        days: 7,
+      }),
+      'in 7 days',
+    )
+    assert(
+      asked.slice(4).every((q) => q.includes("INTERVAL '7' DAY")),
+      'window',
+    )
+
+    // And somebody who is nobody here is refused, however public the app is.
+    let stranger = connector(k, (await signIn(k)).cookie)
+    await assertRejects(
+      () => stranger.tool('app_stats', { space: 'watch', app: 'weather' }),
+      Error,
+      'watch',
+    )
+  } finally {
+    await k.stop()
+    await api.shutdown()
+  }
+})
+
+// With no token there is nothing to read, and the agent is told so in one
+// sentence rather than handed a failure: the secret is the owner's to set and
+// there is nothing an agent can do about it (README.md).
+slow('app_stats with no analytics token says so, once', async () => {
+  let k = await kernel()
+  try {
+    let { cookie } = await seed(k, [{ slug: 'quiet', apps: ['weather'] }])
+    let said = await connector(k, cookie).tool('app_stats', {
+      space: 'quiet',
+      app: 'weather',
+    })
+    assertStringIncludes(said, 'not switched on')
+  } finally {
+    await k.stop()
+  }
+})
+
 // fix closes it, with nobody archiving by hand (T-32910, C-32905 item 7).
 slow('the deploy that fixes a break closes it', async () => {
   let k = await kernel()

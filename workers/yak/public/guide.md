@@ -925,6 +925,27 @@ one back — every file of it, its components, its tools and its worker — as a
 version, so a rollback can itself be rolled back. Only the files move; what the
 app has saved is never touched.
 
+## Who visited
+
+Deeper: <https://yaks.app/guide/stats.md> — what a page view records, what it
+never does, and the three places to read it.
+
+Every HTML page the platform answers for an app is counted, and nothing else —
+not a stylesheet, not an `./api/` call, not a 404. `app_stats(app: 'recipes')`
+answers the visits a day for the last month, the pages people opened, the sites
+that linked to them and the countries they were in; `days` shortens the window.
+Their space page carries the same thing as a block per app, and a member's page
+can read its own at `./api/stats`.
+
+There is no visitor in the data: no address, no id, no cookie, and not the
+browser's own string — only a country, a referring host and one of `browser`,
+`bot` or `agent`. So it can say how many and from where, and it can never say
+who. Say that plainly when somebody asks the other question.
+
+Counts are approximate under load and already scaled back up, kept about three
+months, and they include crawlers — eleven visits on a page nobody was sent is
+usually eleven robots.
+
 ## What you make of this place
 
 Not everything is the app's. Anything either of you has to say about yaks.app

@@ -182,8 +182,15 @@ Deno.test('nothing reaches the SQL text unshaped', () => {
 
 Deno.test("the endpoint is the account's own", () => {
   assertEquals(
-    sqlAt('acc0unt'),
+    sqlAt({ CF_ACCOUNT: 'acc0unt' } as Env),
     'https://api.cloudflare.com/client/v4/accounts/acc0unt/analytics_engine/sql',
+  )
+  // A probe aims it somewhere else, the way MAIL_API and STRIPE_API are aimed.
+  assertEquals(
+    sqlAt(
+      { CF_ACCOUNT: 'acc0unt', ANALYTICS_API: 'http://127.0.0.1:9' } as Env,
+    ),
+    'http://127.0.0.1:9/accounts/acc0unt/analytics_engine/sql',
   )
 })
 
