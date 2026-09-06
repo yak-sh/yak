@@ -14,9 +14,10 @@
   structuredContent). The view reports its height back with
   `ui/notifications/size-changed` so the host can size the frame.
 
-  Everything is inline on purpose: with no `ui.csp` metadata the host serves
-  this under `default-src 'none'`, so a stylesheet or a font from anywhere
-  else would simply not load.
+  Everything is inline on purpose, and the door says so: this page's `ui.csp`
+  (mcp.ts `PLATFORM_VIEW`) is an empty allowlist, which is the declaration
+  that it fetches nothing. Reach for a stylesheet or a font from anywhere else
+  and it will not load until that origin is named there.
 -->
 <html lang="en">
   <head>
@@ -203,20 +204,35 @@
         height: document.body.scrollHeight,
       })
 
-    window.addEventListener('message', (e) => {
-      let msg = e.data
-      if (!msg || msg.method != 'ui/notifications/tool-result') return
-      let result = msg.params || {}
-      // The data is the tool's structuredContent. A host that forwards only
-      // the text gets the same answer read out, which is what the model
-      // reads too.
-      if (result.structuredContent) return draw(result.structuredContent)
-      let said = (result.content || []).map((p) => p.text).join('\n')
+    let quiet = (said) => {
       let root = document.getElementById('apps')
       root.textContent = ''
       root.append(el('p', 'Apps_Quiet', said))
       sized()
+    }
+
+    // The answer, however it reaches us, and only once. The data is the
+    // tool's structuredContent; a host that forwards only the text gets the
+    // same answer read out, which is what the model reads too.
+    let told = false
+    let answer = (result) => {
+      told = true
+      if (result && result.structuredContent) {
+        return draw(result.structuredContent)
+      }
+      quiet(((result || {}).content || []).map((p) => p.text).join('\n'))
+    }
+
+    window.addEventListener('message', (e) => {
+      let msg = e.data
+      if (!msg || msg.method != 'ui/notifications/tool-result') return
+      answer(msg.params || {})
     })
+
+    // Nothing to draw is still an answer. A view that sits on "Looking…"
+    // forever reads as broken, and the tool's own sentence — which the model
+    // has either way — is the whole answer on its own.
+    setTimeout(() => told || quiet('The answer is in the reply.'), 4000)
 
     request('ui/initialize', {
       protocolVersion: '2026-01-26',
@@ -236,6 +252,12 @@
         if (theirs) document.documentElement.style.setProperty(ours, theirs)
       }
       call('ui/notifications/initialized', {})
+      // ChatGPT also leaves the answer on its own bridge, which is what a
+      // page that mounted after the notification went out still has.
+      let bridge = window.openai
+      if (!told && bridge && bridge.toolOutput) {
+        answer({ structuredContent: bridge.toolOutput })
+      }
       sized()
     })
 

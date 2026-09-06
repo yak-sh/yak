@@ -413,6 +413,12 @@ slow(
       assertStringIncludes(cards.text, "name: 'app_errors'")
       assertEquals(cards._meta.ui.domain, 'https://yaks.app')
       assertEquals(cards._meta.ui.csp, {})
+      // Neither view sits on "Looking…" when no answer ever arrives: the
+      // tool's own sentence is the whole answer, and the view says so.
+      for (let page of [drawn.text, cards.text]) {
+        assertStringIncludes(page, 'The answer is in the reply.')
+        assertStringIncludes(page, 'window.openai')
+      }
 
       // The doors a PERSON picks by name (T-32981): declared beside tools,
       // listed with the arguments a client asks them to fill in, and got as
