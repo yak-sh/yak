@@ -832,6 +832,16 @@ let sold = async (env: Env, space: Space, event: Event) => {
  *
  * A refund that finds no order is not a break: a merchant refunds charges they
  * made outside this platform too, on the same account.
+ *
+ * TODO, and it cannot bite while `FEE_BPS` is 0: Stripe does NOT refund an
+ * application fee when a charge is refunded, so the day the owner sets a rate,
+ * a seller who refunds from their own dashboard is out of pocket by our fee.
+ * The fix is ours to make here — `POST /v1/refunds` takes
+ * `refund_application_fee=true`, but the seller has already made the refund by
+ * the time we hear about it, so it is a `POST /v1/application_fees/<id>/refund`
+ * proportional to `amount_refunded`. Left unbuilt rather than built untested:
+ * there is no fee to give back today, and the first sale with a rate on it is
+ * what should drive the shape.
  */
 let settled = async (env: Env, space: Space, event: Event) => {
   let o = (event.data?.object ?? {}) as {
