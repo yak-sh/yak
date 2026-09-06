@@ -233,6 +233,21 @@ binding = "AI"
 binding = "VECTORIZE"
 index_name = "yak-memories"
 
+# Who visited an app (views.ts, T-34496): one data point per HTML page the
+# platform answers, in Cloudflare's own aggregate column store rather than a
+# log of ours. The dataset is created by the first write after this binding
+# exists — there is nothing to provision — and Cloudflare keeps a point for
+# three months, which is the retention privacy.html promises.
+#
+# What a point holds is the privacy rule and it is written down in views.ts:
+# the app's eid as the one index, six blobs (space, app, path, country,
+# referring host, one of browser/bot/agent), and the status. No IP, no visitor
+# id, no user-agent string. Reading it back is the SQL API, which needs a token
+# rather than a binding (ANALYTICS_TOKEN below).
+[[analytics_engine_datasets]]
+binding = "VIEWS"
+dataset = "yak_views"
+
 # An app's files. `wrangler dev` simulates the bucket.
 [[r2_buckets]]
 binding = "BLOBS"
@@ -313,6 +328,9 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 # store instead of going out. Never set it on a deploy.
 # CF_ANALYTICS_TOKEN is the meter's read-only Cloudflare API token (Account
 # Analytics Read, T-32759); unset, the hourly sweep meters nothing.
+# ANALYTICS_TOKEN is the one the Analytics Engine SQL API reads an app's page
+# views back with (views.ts, T-34497) — its own Account Analytics Read token,
+# never the meter's; unset, "Who visited" says analytics are not switched on.
 # CF_WORKERS_TOKEN is the one an app's own worker.js is uploaded to the
 # dispatch namespace with (Workers Scripts Edit, T-32781); unset, an app's
 # files deploy and its worker does not.

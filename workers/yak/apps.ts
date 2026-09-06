@@ -61,6 +61,7 @@ import { type Clock, clock, timed } from './timing.ts'
 import { noted, refusal, serving } from './unseen.ts'
 import { full } from './usage.ts'
 import { sha256 } from './versions.ts'
+import { viewed } from './views.ts'
 
 // The runtime's streaming HTML rewriter, the slice this file asks for, so
 // `deno check` reads the Worker without @cloudflare/workers-types (env.ts).
@@ -1228,7 +1229,11 @@ let firstly = async (
   // page at all.
   let home = await c.time('home', () => dir.home(space))
   if (!home || !home.first.some((g) => covers(g, path))) return null
-  return await c.time('first', () => ahead(env, space, home, req, who))
+  // The app comes back beside the answer because the answer is the HOME app's
+  // and the address is another app's: a page view is counted against whoever
+  // actually served it (views.ts).
+  let page = await c.time('first', () => ahead(env, space, home, req, who))
+  return page && { page, app: home }
 }
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
@@ -1404,9 +1409,13 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // back at the path it just intercepted (dispatch.ts `bearing`).
   if (!front && !bearing(req)) {
     let early = await firstly(env, dir, space, req, who, c)
-    // The answer is the home app's, so it reports as the home app: at the
-    // bare hostname, which is where the home app is mounted.
-    if (early) return reporting(early, req, '/')
+    // The answer is the home app's, so it reports as the home app — and is
+    // counted as the home app's page view — at the bare hostname, which is
+    // where the home app is mounted.
+    if (early) {
+      viewed(env, req, early.page, seen(space, early.app))
+      return reporting(early.page, req, '/')
+    }
   }
   // The `/api/` doors stay the kernel's, always, and keep their own refusals,
   // which speak.
@@ -1471,5 +1480,19 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     await page.body?.cancel()
     return await index(req, env, dir, space)
   }
+  // A page was served, so somebody saw it (views.ts, T-34496). Last, once, and
+  // only for what an APP answered: the `/api/` doors returned above, a file
+  // that is not HTML is not a page, and the platform's own pages — the space
+  // index, the trash, a wrong address — never come back through here.
+  viewed(env, req, page, seen(space, app))
   return reporting(page, req, at)
 }
+
+// One page view's identity: which app it was a page of, and the address it was
+// served under. The eid is the data point's one index, so every query groups
+// by the app and a rename never loses a day of history.
+let seen = (space: Space, app: App) => ({
+  app: app.eid,
+  space: space.slug,
+  slug: app.slug,
+})

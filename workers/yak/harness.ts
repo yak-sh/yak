@@ -138,6 +138,23 @@ export let bucket = () => {
 }
 
 /**
+ * The Analytics Engine dataset, as a list (views.ts). Cloudflare's own binding
+ * takes a point and says nothing back, so what a test can assert on is what
+ * was written — which is exactly what the privacy rule is about.
+ */
+export let dataset = () => {
+  let points: {
+    indexes?: string[]
+    blobs?: string[]
+    doubles?: number[]
+  }[] = []
+  return {
+    points,
+    writeDataPoint: (p: (typeof points)[number]) => void points.push(p),
+  }
+}
+
+/**
  * A KV namespace in a Map, in the one shape the kernel asks of `OAUTH_KV`
  * (grants.ts, handoff.ts). TTL is not simulated: what expires here expires by
  * the value's own `exp`, which a test moves by handing a clock in.

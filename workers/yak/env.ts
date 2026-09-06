@@ -94,6 +94,22 @@ export type Env = {
   // a secret and rides wrangler.toml's `[vars]`.
   CF_ANALYTICS_TOKEN?: string
   CF_ACCOUNT?: string
+  // Who visited an app (views.ts, T-34496): the Analytics Engine dataset one
+  // data point per page view is written to, and the token the SQL API reads
+  // those aggregates back with (an Account Analytics read token the owner
+  // mints — README.md's settings table has the steps). CF_ACCOUNT above is
+  // the account the SQL API is addressed at. The binding is absent under the
+  // workerd probes and the in-memory harness, where a view is counted nowhere
+  // and nothing says so; the token unset, the space page says analytics are
+  // not switched on rather than failing.
+  VIEWS?: {
+    writeDataPoint(point: {
+      indexes?: string[]
+      blobs?: string[]
+      doubles?: number[]
+    }): void
+  }
+  ANALYTICS_TOKEN?: string
   // An app's OWN code (dispatch.ts): the Workers for Platforms namespace its
   // worker.js is uploaded into, and the token the upload speaks to the
   // Workers API with — the account tag above is the same one. The namespace

@@ -31,7 +31,7 @@ import { directory, storeName } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { scriptName } from './dispatch.ts'
 import type { Env } from './env.ts'
-import { platform as inMemory } from './harness.ts'
+import { dataset, platform as inMemory } from './harness.ts'
 import { emptied, trash, trashSpace } from './erase.ts'
 import { wrote } from './tools.ts'
 import { archive, openIn, serve } from './unseen.ts'
@@ -202,6 +202,55 @@ Deno.test('an app is installable: the two links, the icon, the manifest', async 
   assertEquals(await own.text(), 'mine')
   let theirs = await apps.fetch(visit('/cookbook/manifest.webmanifest'), env)
   assertEquals(await theirs.json(), { name: 'Ours' })
+})
+
+Deno.test('a page view is one data point, and it names no visitor', async () => {
+  let seen = dataset()
+  let { env, files } = inMemory(SECRET, { VIEWS: seen })
+  let { app } = await seeded(env)
+  files.held.set(
+    'ada/cookbook/index.html',
+    new TextEncoder().encode('<!doctype html><body>hi</body>'),
+  )
+  files.held.set('ada/cookbook/style.css', new TextEncoder().encode('b{}'))
+  let visitor = {
+    'user-agent': 'Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Chrome/140.0.0.0',
+    referer: 'https://news.example.com/a/story?q=my+search',
+    // What a proxy in front of us would have added, and what an app's own
+    // worker sees: neither may reach the dataset.
+    'cf-connecting-ip': '203.0.113.7',
+    cookie: await as(ADA),
+  }
+  let page = await apps.fetch(visit('/cookbook/', { headers: visitor }), env)
+  assertEquals(page.status, 200)
+  await page.text()
+  assertEquals(seen.points.length, 1)
+  assertEquals(seen.points[0], {
+    indexes: [app.eid],
+    blobs: [
+      'ada',
+      'cookbook',
+      '/cookbook/',
+      // The harness is not workerd, so a request carries no `cf` — the column
+      // is there and empty, which is what an unknown country looks like.
+      '',
+      'news.example.com',
+      'browser',
+    ],
+    doubles: [200],
+  })
+  // Nothing about the person who asked is anywhere in the point.
+  let written = JSON.stringify(seen.points[0])
+  for (let secret of ['203.0.113.7', ADA, 'Mozilla', 'yak_session', 'Chrome']) {
+    assert(!written.includes(secret), `${secret} is in the data point`)
+  }
+  // A stylesheet is not a page, a wrong address is not a view, and the
+  // platform's own space index is not an app's page.
+  await (await apps.fetch(visit('/cookbook/style.css'), env)).text()
+  await (await apps.fetch(visit('/cookbook/gone.html'), env)).text()
+  await (await apps.fetch(visit('/'), env)).text()
+  await (await apps.fetch(visit('/cookbook/api/query'), env)).text()
+  assertEquals(seen.points.length, 1)
 })
 
 Deno.test('the page wire: apply, query and search round-trip', async () => {
