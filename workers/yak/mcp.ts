@@ -74,6 +74,7 @@ import { narrowed } from './grants.ts'
 import { callDeclared, listDeclared, listViews, readView } from './declared.ts'
 import { answer, asset, type Doc, DOCS } from './preauth.ts'
 import { PROMPTS } from './prompts.ts'
+import { CONNECTOR } from './seo.ts'
 import {
   APPS_VIEW,
   type Ctx,
@@ -331,7 +332,10 @@ let door = async (ctx: Ctx, session: string) => {
     // the page beside the columns (guide.ts `pageFor`).
     guide: pageFor,
     authenticate: () => ({ eid: ctx.person }),
-    name: 'yaks.app',
+    // The name, the line and the picture, from the one place they are written
+    // (seo.ts CONNECTOR, T-34415): a client that reads `serverInfo` shows this
+    // door with a face, and nobody has to type any of it into a form.
+    ...CONNECTOR,
     version: VERSION,
     instructions: INSTRUCTIONS,
     search: searching(ctx, reach),

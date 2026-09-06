@@ -22,6 +22,41 @@ export let SITE_URL = `https://${PLATFORM}`
 
 let at = (path: string) => `${SITE_URL}${path}`
 
+// The connector's face, in one place (T-34415). Owner, 2026-09-05: the
+// connector "provides no icon or description". Three things every connector
+// form asks for — a name, a line, a square picture — said once and read by
+// both audiences: the MCP `initialize` answer hands them to a client that
+// reads `serverInfo` (preauth.ts, mcp.ts), and the connect instructions show
+// them to a person who has to type them (pages.ts). The shape is MCP's
+// `Implementation` — `title`, `description`, `websiteUrl` and `icons`, each
+// `{src, mimeType, sizes}` — as of the 2025-11-25 revision, carried forward
+// into 2026-07-28.
+//
+// The description is the site's own line and not a second one written for
+// here: it is already the title of the home page and the alt of the share
+// card, so a connector saying anything else would be the platform introducing
+// itself two ways.
+//
+// ChatGPT reads none of this. Its connector form takes a name, a description
+// and an icon TYPED IN, and OpenAI publishes no manifest a server can answer
+// with (developers.openai.com/apps-sdk, read 2026-09-05; the `ai-plugin.json`
+// that once did was retired when they moved to MCP). That is precisely why
+// the same three things are ON the page beside the URL, ready to copy.
+export let CONNECTOR = {
+  name: PLATFORM,
+  title: PLATFORM,
+  description: 'Apps your assistant builds for you, at your own address.',
+  websiteUrl: SITE_URL,
+  icons: [
+    { src: at('/connector.svg'), mimeType: 'image/svg+xml', sizes: ['any'] },
+    {
+      src: at('/connector-512.png'),
+      mimeType: 'image/png',
+      sizes: ['512x512'],
+    },
+  ],
+}
+
 // The apex's public pages, in the order a stranger should meet them. Every one
 // is a file in `public/` served at an extensionless path, and this is the list
 // the sitemap and `llms.txt` are both built from.

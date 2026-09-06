@@ -11,6 +11,7 @@
 
 import type { Frame } from './build.ts'
 import { MCP, MCP_ASK } from './route.ts'
+import { CONNECTOR } from './seo.ts'
 
 // The one escape: `&` first, so an escape is never escaped twice.
 export let esc = (s: string) =>
@@ -102,6 +103,20 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .Chat_Ask { margin: 0 }
 .Chat_Ask textarea { min-width: 0; width: 100%; min-height: 4.5rem; font: inherit; padding: .7rem 1rem; border: 2px solid var(--soft-ink); border-radius: 1.25rem; background: var(--paper); color: var(--ink); resize: vertical }
 .Chat_Ask textarea:disabled { opacity: .6 }
+.Face { display: flex; align-items: flex-start; gap: 1rem }
+.Face_Icon { flex: none; width: 72px; height: 72px; border: 1px solid var(--line); border-radius: 1rem }
+.Face_Rows { display: grid; gap: .5rem; min-width: 0 }
+.Face_Rows p { display: flex; align-items: center; gap: .5rem; margin: 0; min-width: 0; font-size: .9rem }
+.Face_Rows b { flex: none; min-width: 5rem; color: var(--ink) }
+.Face_Rows .Copy { min-width: 0; flex: 1 }
+.Soon { color: var(--warn) }
+.Tabs { position: relative }
+.Tabs > input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none }
+.Tabs_Strip { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 .75rem }
+.Tabs_Tab { padding: .45rem .9rem; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--ink); font-size: .9rem; font-weight: 700; cursor: pointer }
+.Tabs_Tab:hover { border-color: var(--meadow) }
+.Tabs_Panel { display: none }
+${tabsCss}
 </style>
 </head>
 <body><main><h1>${title}</h1><p>${lead}</p>${inner}</main></body>
@@ -370,11 +385,17 @@ ${dropping}`,
 // One thing to say, and a button that puts it on the clipboard (T-34420). The
 // words are selectable on their own (`.Pick` is `user-select: all`), so a
 // browser that ran no script still takes them in one gesture — the button is
-// all the script below adds.
-let copyable = (said: string) =>
-  `<li class="Copy"><span class="Pick">${
+// all the script below adds, and it stays HIDDEN until that script un-hides
+// it, because a button that does nothing is worse than no button.
+//
+// One control, everywhere something is meant to be pasted: the three things to
+// say below, and each of the three a connector form asks for (T-34412).
+let copyable = (said: string, what = '') =>
+  `<span class="Copy"><span class="Pick">${
     esc(said)
-  }</span><button class="Copy_Go" type="button">Copy</button></li>`
+  }</span><button class="Copy_Go" type="button"${
+    what ? ` aria-label="Copy ${esc(what)}"` : ''
+  } hidden>Copy</button></span>`
 
 // The button's half. Constant text, no interpolation, and every write to the
 // page is textContent — the page never speaks HTML on a person's behalf. The
@@ -385,6 +406,7 @@ let copyable = (said: string) =>
 let copying = `<script>
 for (let go of document.querySelectorAll('.Copy_Go')) {
   let said = go.previousElementSibling
+  go.hidden = false
   go.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(said.textContent)
@@ -510,7 +532,6 @@ ${dropZone()}
 <summary>Connect your assistant</summary>
 <p>Add yaks.app in your assistant's settings using the steps below. Then ask
 it to build an app here.</p>
-<p class="Url"><code>${MCP}</code></p>
 ${doors}
 <p class="Note">Menus move. If yours doesn't look like this, search its
 settings for "connector" or "MCP" — the link is the same wherever it goes.
@@ -566,7 +587,7 @@ anything like it, in your own words.</p>
         'Make me a page for my book club',
         'Build a place to keep recipes',
         'Set up a sign-up sheet for the potluck',
-      ].map(copyable).join('')
+      ].map((s) => `<li>${copyable(s)}</li>`).join('')
     }</ul>
 <p class="Note">It builds the page and hands you back a link at
 <b>${esc(at.space)}.yaks.app</b> — yours to open, or to send to anyone.</p>
@@ -588,7 +609,7 @@ one.</p>
     lead,
     at.no ? 400 : 200,
     `${block}${mine}${ask}${yours}${inn}${pitch}${at.person ? home : ''}${
-      owner ? dropping + chatLive + copying : ''
+      owner ? dropping + chatLive + copying + tabbing : ''
     }`,
   )
 }
@@ -879,61 +900,182 @@ ${
 </section>`
 }
 
-let steps = (name: string, items: string[], note?: string) =>
-  `<section class="Card"><h2>${name}</h2>
-<ol>${items.map((s) => `<li>${s}</li>`).join('')}</ol>
-${note ? `<p class="Note">${note}</p>` : ''}
+// The three things every connector form asks for, ready to copy, and the
+// picture beside them (T-34415, seo.ts CONNECTOR). It sits above the tabs
+// because it is the same answer in all of them — only the form around it
+// changes — and because ChatGPT's form asks for all three by hand.
+let face = `<section class="Card"><h2>What the form asks for</h2>
+<div class="Face">
+<img class="Face_Icon" src="${
+  CONNECTOR.icons[0].src
+}" width="72" height="72" alt="The yaks.app yak">
+<div class="Face_Rows">
+<p><b>URL</b> ${copyable(MCP, 'the MCP URL')}</p>
+<p><b>Name</b> ${copyable(CONNECTOR.title, 'the name')}</p>
+<p><b>Description</b> ${copyable(CONNECTOR.description, 'the description')}</p>
+</div>
+</div>
+<p class="Note">Some forms want an icon too:
+<a href="${CONNECTOR.icons[1].src}">save the square yak</a>.</p>
 </section>`
+
+// The OAuth line each tab will carry, which is NOT written yet: what every
+// form asks for under "advanced" differs, and what ChatGPT needs has still to
+// be found out. It is a marked placeholder on purpose, so nobody reads it as
+// finished copy — T-34414 replaces it per tab once T-34416 has the answers.
+let oauth = '<p class="Note Soon">Advanced or OAuth settings: <b>to be ' +
+  'written</b>.</p>'
 
 // Nothing interpolated below is anybody's input, so it is written as the
 // markup it is; everything that IS a person's is escaped where it enters.
-let doors = [
-  steps(
-    'Claude — web, desktop and mobile',
-    [
+//
+// Step one is the URL, on the clipboard, in EVERY tab, and step two is the way
+// out to that agent's own form — owner, 2026-09-05: "the connect instructions
+// should have you copy the mcp url first (click to copy, also) before the link
+// to .../plugins. so you don't have to click back an extra time" (T-34412).
+//
+// Each provider's steps were read off its own documentation on 2026-09-05:
+// support.claude.com article 11176164, help.openai.com article 12584461,
+// code.claude.com/docs/en/mcp, cursor.com/docs/mcp. Menus move: the line under
+// the tabs says so, and says what to search for instead.
+let AGENTS = [
+  {
+    key: 'claude',
+    tab: 'Claude',
+    title: 'Claude — web, desktop and mobile',
+    steps: [
       'Open <a href="https://claude.ai/customize/connectors">Connectors</a> ' +
-      'in your settings.',
-      'Click <b>Add custom connector</b>.',
-      `Paste <code>${MCP}</code> as the URL and click <b>Add</b>.`,
+      'in your settings, press <b>+</b> and choose <b>Add custom ' +
+      'connector</b>.',
+      'Paste the URL, give it the name above, and click <b>Add</b>.',
       'Click <b>Connect</b>, and sign in with your email.',
     ],
-    'A remote connector follows you to every Claude — the phone too. On a ' +
-      'Team or Enterprise plan an owner adds it once under Organization ' +
+    note: 'A remote connector follows you to every Claude — the phone too. ' +
+      'On a Team or Enterprise plan an owner adds it once under Organization ' +
       'settings, and everyone else clicks Connect.',
-  ),
-  steps(
-    'Claude Code',
-    [
+  },
+  {
+    key: 'chatgpt',
+    tab: 'ChatGPT',
+    title: 'ChatGPT — on the web',
+    // The longer address, and only here (T-34416): ChatGPT decides whether a
+    // server needs signing in by calling it with nobody signed in, so it is
+    // the one client that must be given `?auth=required`. Step one hands it
+    // over whole, which is the point of copying the URL before leaving.
+    url: MCP_ASK,
+    steps: [
+      'Open <a href="https://chatgpt.com/plugins">chatgpt.com/plugins</a>. ' +
+      'If it is not there, turn on <b>Developer mode</b> first, under ' +
+      '<b>Settings</b> → <b>Connectors</b> → <b>Advanced settings</b>.',
+      'Press <b>Create</b>, and paste that URL as the MCP server URL — all ' +
+      'of it, the <code>?auth=required</code> included.',
+      'Give it the name, description and icon above: this form asks for all ' +
+      'three and reads none of them off the server.',
+      'Create it and sign in when it asks. It appears under <b>Developer ' +
+      'mode</b> below the message box.',
+    ],
+    note: 'Without <code>?auth=required</code> ChatGPT connects as a ' +
+      'stranger and never offers you the sign-in. The web app, not the phone ' +
+      'one. On a Business or Enterprise workspace an admin may have to allow ' +
+      'developer mode first.',
+  },
+  {
+    key: 'claude-code',
+    tab: 'Claude Code',
+    title: 'Claude Code',
+    steps: [
       `In your terminal: <code class="Pick">claude mcp add --transport http yaks ${MCP}</code>`,
       'Start Claude Code, run <code>/mcp</code>, pick <b>yaks</b> and choose ' +
       '<b>Authenticate</b>. It opens your browser to sign in.',
     ],
-    'Add <code>--scope user</code> to that first line to have it in every ' +
-      'project, not just this one.',
-  ),
-  steps(
-    'ChatGPT — on the web',
-    [
-      'In <b>Settings</b> → <b>Security and login</b>, turn on ' +
-      '<b>Developer mode</b>.',
-      'Open <a href="https://chatgpt.com/plugins">chatgpt.com/plugins</a> and ' +
-      'press the <b>+</b> button.',
-      'Give it a name, then enter <code>' + MCP_ASK + '</code> as the MCP ' +
-      'server URL — all of it, the <code>?auth=required</code> included.',
-      'Create it and sign in when it asks. It appears under <b>Developer ' +
-      'mode</b> below the message box.',
+    note: 'Add <code>--scope user</code> to that first line to have it in ' +
+      'every project, not just this one.',
+  },
+  {
+    key: 'cursor',
+    tab: 'Cursor',
+    title: 'Cursor',
+    steps: [
+      'Open <b>Cursor Settings</b> → <b>Tools &amp; Integrations</b> and ' +
+      'press <b>New MCP Server</b>. It opens <code>~/.cursor/mcp.json</code>.',
+      'Add the server, with the URL as its one field: <code class="Pick">' +
+      '{ "mcpServers": { "yaks": { "url": "' + MCP + '" } } }</code>',
+      'Back in <b>Tools &amp; Integrations</b>, click <b>yaks</b> and sign in.',
     ],
-    'ChatGPT decides whether a server needs signing in by calling it first ' +
-      'with nobody signed in, so it needs the longer address: without it, it ' +
-      'connects as a stranger and never offers you the sign-in. The web app, ' +
-      'not the phone one. On a Business or Enterprise workspace an admin may ' +
-      'have to allow developer mode first.',
-  ),
-  steps('Anything else that speaks MCP', [
-    `Give it <code>${MCP}</code>, over streamable HTTP. It will walk you ` +
-    'through signing in.',
-  ]),
-].join('')
+    note: 'A <code>.cursor/mcp.json</code> in a project folder does the same ' +
+      'thing for that project alone.',
+  },
+  {
+    key: 'other',
+    tab: 'Any MCP client',
+    title: 'Anything else that speaks MCP',
+    steps: [
+      'Give it that URL, over streamable HTTP. It will walk you through ' +
+      'signing in.',
+      'If it asks what to call the server, the name and description above ' +
+      'are what this one answers to.',
+    ],
+    note: '',
+  },
+]
+
+// The tab strip and its panels: radios, a row of labels, and a panel each,
+// all siblings so plain CSS `:checked ~` shows one at a time. The browser owns
+// the switching — no script runs for a tab to work, and the script below only
+// keeps the chosen one in the address.
+let tabsCss = AGENTS.map((a) =>
+  `#tab-${a.key}:checked ~ .Tabs_Strip label[for="tab-${a.key}"] { border-color: var(--meadow); background: var(--meadow); color: var(--ground) }
+#tab-${a.key}:focus-visible ~ .Tabs_Strip label[for="tab-${a.key}"] { outline: 3px solid var(--meadow); outline-offset: 3px }
+#tab-${a.key}:checked ~ .Tabs_Panel-${a.key} { display: block }`
+).join('\n')
+
+let doors = `${face}
+<div class="Tabs">
+${
+  AGENTS.map((a, i) =>
+    `<input type="radio" name="agent" id="tab-${a.key}" value="${a.key}"${
+      i ? '' : ' checked'
+    }>`
+  ).join('\n')
+}
+<nav class="Tabs_Strip" aria-label="Assistants">${
+  AGENTS.map((a) =>
+    `<label class="Tabs_Tab" for="tab-${a.key}">${a.tab}</label>`
+  ).join('')
+}</nav>
+${
+  AGENTS.map((a) =>
+    `<section class="Card Tabs_Panel Tabs_Panel-${a.key}"><h2>${a.title}</h2>
+<ol><li>Copy the URL:${copyable(a.url ?? MCP, 'the MCP URL')}</li>${
+      a.steps.map((s) => `<li>${s}</li>`).join('')
+    }</ol>
+${a.note ? `<p class="Note">${a.note}</p>` : ''}${oauth}
+</section>`
+  ).join('')
+}
+</div>`
+
+// The only script a tab needs, and it is not what switches one: the radios do
+// that with no script at all. This keeps the CHOSEN one in the address, so a
+// link can name a tab and a reload comes back to it. Matched by VALUE, never
+// built into a selector — a hash is whatever a stranger put in it.
+let tabbing = `<script>
+let tabs = document.querySelector('.Tabs')
+if (tabs) {
+  let all = [...tabs.querySelectorAll('input[name=agent]')]
+  let pick = () => {
+    let want = all.find((r) => r.value == decodeURIComponent(location.hash.slice(1)))
+    if (want) want.checked = true
+  }
+  pick()
+  addEventListener('hashchange', pick)
+  tabs.addEventListener('change', (e) => {
+    if (e.target.name == 'agent') {
+      history.replaceState(null, '', '#' + e.target.value)
+    }
+  })
+}
+</script>`
 
 // One listener, no framework: the form answers in place. Constant text, no
 // interpolation, and every write to the page is textContent — the page never
@@ -998,13 +1140,12 @@ export let connect = (yours: Yours, status = 200) =>
     'Connect your assistant',
     'Add yaks.app in your assistant’s settings using the steps below. Then ask it to build an app.',
     status,
-    `<p class="Url"><code>${MCP}</code></p>
-${mine(yours)}${plan(yours)}${doors}
+    `${mine(yours)}${plan(yours)}${doors}
 <p class="Note">Menus move. If yours doesn't look like this, search its
 settings for "connector" or "MCP" — the link is the same wherever it
 goes.</p>
 <p class="Note">New here? <a href="https://yaks.app/help">Help</a> answers the
 questions people ask most: what you can make, where your apps live, and who
 can see them.</p>
-${home}${inline}`,
+${home}${copying}${tabbing}${inline}`,
   )

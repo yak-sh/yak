@@ -38,6 +38,7 @@ import type { Security } from '@yaks/mcp'
 import { VERSION } from '../../src/version.ts'
 import type { Env } from './env.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
+import { CONNECTOR } from './seo.ts'
 
 // The whole world a public answer can see: the static site, which serves the
 // guide at the very addresses the listing names. Everything else in `Env` is
@@ -208,7 +209,10 @@ export let answer = async (
         tools: { listChanged: true },
         resources: { listChanged: true },
       },
-      serverInfo: { name: 'yaks.app', version: VERSION },
+      // The face, before signing in — the same one the signed-in door answers
+      // (seo.ts CONNECTOR, mcp.ts). It is what a directory reviewer and a
+      // connector form both read FIRST, so it must not wait on a grant.
+      serverInfo: { ...CONNECTOR, version: VERSION },
       // What a signed-in caller gets here is the whole recipe for building
       // (guide.ts INSTRUCTIONS). Before signing in, that would be instructions
       // for tools this caller has not got, so the orientation is the one

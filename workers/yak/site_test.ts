@@ -8,15 +8,18 @@ import { slow } from '../../src/testing.ts'
 import { REPLY_TO } from './mail.ts'
 import { BUILDS, CURRENCY, LETTERS, PRICE } from './meter.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
+import { connect, spaceIndex } from './pages.ts'
 import { kernel } from './probe.ts'
 import {
   ADDRESSES,
   CLOSED,
+  CONNECTOR,
   CRAWLERS,
   llms,
   robots,
   said,
   SITE,
+  SITE_URL,
   sitemap,
 } from './seo.ts'
 
@@ -55,12 +58,14 @@ Deno.test('every page wears the raster yak', () => {
   }
 })
 
-let png = (name: string, width: number, height: number) => {
+// Color type 6 is RGBA and 2 is opaque truecolor: an icon meant to sit on a
+// page carries its own ground, and one meant for a home screen carries none.
+let png = (name: string, width: number, height: number, kind = 6) => {
   let bytes = Deno.readFileSync(new URL(`./public/${name}`, import.meta.url))
   assertEquals([...bytes.slice(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10])
   let view = new DataView(bytes.buffer, bytes.byteOffset)
   assertEquals([view.getUint32(16), view.getUint32(20)], [width, height], name)
-  assertEquals(bytes[25], 6, `${name} is not RGBA`)
+  assertEquals(bytes[25], kind, `${name} has the wrong color type`)
 }
 
 Deno.test('the yak exports have their intended transparent sizes', () => {
@@ -72,6 +77,29 @@ Deno.test('the yak exports have their intended transparent sizes', () => {
   png('apple-touch-icon.png', 180, 180)
   png('icon-192.png', 192, 192)
   png('icon-512.png', 512, 512)
+})
+
+// The connector's own square (T-34415): the picture a connector form takes and
+// the one `serverInfo.icons` names. Both addresses in CONNECTOR are files that
+// exist, and the SVG carries its own bytes — an `<img>` loads nothing a
+// referenced SVG points at, so an external `href` here would render an empty
+// tile in every client that reads it.
+Deno.test('the connector icon is square, self-contained and on the ground', () => {
+  png('connector-512.png', 512, 512, 2)
+  let svg = read('connector.svg').replace(/<!--[^]*?-->/g, '')
+  assertStringIncludes(svg, 'viewBox="0 0 512 512"')
+  for (let el of svg.matchAll(/<image[^>]*>/g)) {
+    assertStringIncludes(el[0], 'href="data:image/png;base64,')
+    assertEquals(/href="(?!data:)/.test(el[0]), false)
+  }
+  for (let icon of CONNECTOR.icons) {
+    let file = new URL(
+      `./public/${icon.src.slice(SITE_URL.length + 1)}`,
+      import.meta.url,
+    )
+    assert(Deno.statSync(file).size > 0, `${icon.src} is not a file in public/`)
+  }
+  assertEquals(CONNECTOR.icons.map((i) => i.sizes), [['any'], ['512x512']])
 })
 
 // An extensionless link: the assets door serves `terms.html` for `/terms`
@@ -487,6 +515,109 @@ Deno.test('the help page answers its own questions in JSON-LD', () => {
     return q.name
   })
   assertEquals(asked, headings)
+})
+
+// The connect instructions, as they are served. One tab per agent, the URL on
+// the clipboard as step one of every one of them, and the three things a
+// connector form asks for above them all (T-34412, T-34413, T-34415).
+let tabs = ['Claude', 'ChatGPT', 'Claude Code', 'Cursor', 'Any MCP client']
+
+let count = (html: string, s: string) => html.split(s).length - 1
+
+// `/connect` is a signed-in page (T-34408), so it always has a space to say
+// something about; none of what is asserted below depends on which.
+let page = () =>
+  connect({
+    slug: 'dana',
+    fixed: false,
+    plan: { plus: false, ends: '', known: false },
+  }).text()
+
+Deno.test('the connect page teaches one agent at a time', async () => {
+  let html = await page()
+  assertEquals(
+    [...html.matchAll(/<label class="Tabs_Tab" for="tab-[a-z-]+">([^<]+)</g)]
+      .map((m) => m[1]),
+    tabs,
+  )
+  // The first tab is chosen in the markup, so the panels switch with no script
+  // at all — the radios do it, and the script only remembers which.
+  assertStringIncludes(
+    html,
+    '<input type="radio" name="agent" id="tab-claude" value="claude" checked>',
+  )
+  assertEquals(count(html, '<section class="Card Tabs_Panel'), tabs.length)
+  // Step one, everywhere: the URL in the page's one copy control (`copyable`,
+  // T-34420) — selectable text so it works with no script, beside a button
+  // that stays hidden until the script un-hides it. The words are written once,
+  // in the span the button reads, never in an attribute of its own.
+  assertEquals(count(html, '<li>Copy the URL:<span class="Copy">'), tabs.length)
+  // Four tabs and the card above them get the plain address; ChatGPT gets the
+  // longer one it needs (T-34416), and step one is where it is handed over.
+  assertEquals(
+    count(html, '<span class="Pick">https://yaks.app/mcp</span>'),
+    tabs.length,
+  )
+  assertStringIncludes(
+    html,
+    '<span class="Pick">https://yaks.app/mcp?auth=required</span>',
+  )
+  assertEquals(count(html, 'hidden>Copy</button>'), tabs.length + 3)
+  assertStringIncludes(
+    html,
+    'await navigator.clipboard.writeText(said.textContent)',
+  )
+  // Step two is the way out to that agent's own form, so nobody comes back for
+  // the URL: every tab names where it is added.
+  for (
+    let out of [
+      'https://claude.ai/customize/connectors',
+      'https://chatgpt.com/plugins',
+      'claude mcp add --transport http yaks https://yaks.app/mcp',
+      '~/.cursor/mcp.json',
+    ]
+  ) assertStringIncludes(html, out)
+  // And the OAuth line is a marked placeholder in each tab, not written copy.
+  assertEquals(count(html, 'class="Note Soon"'), tabs.length)
+})
+
+Deno.test('the connect page shows the connector its own face', async () => {
+  let html = await page()
+  assertStringIncludes(
+    html,
+    `<img class="Face_Icon" src="${SITE_URL}/connector.svg"`,
+  )
+  assertStringIncludes(html, `<a href="${SITE_URL}/connector-512.png">`)
+  assertEquals(
+    CONNECTOR.description,
+    'Apps your assistant builds for you, at your own address.',
+  )
+  assertStringIncludes(
+    html,
+    '<span class="Pick">Apps your assistant builds for you, at your own address.</span>',
+  )
+  assertStringIncludes(html, '<span class="Pick">yaks.app</span>')
+})
+
+// One source, two places: a space's owner block is the same instructions, so a
+// tab added here is a tab there (pages.ts `doors`).
+Deno.test('the space page owner block carries the same instructions', async () => {
+  let html = await (await spaceIndex({
+    space: 'dana',
+    title: 'Dana',
+    apps: [],
+    hidden: 0,
+    role: 'owner',
+    person: true,
+    signIn: 'https://yaks.app/login',
+    connected: false,
+  })).text()
+  assertStringIncludes(html, '<details class="Attach" open>')
+  for (let tab of tabs) assertStringIncludes(html, `>${tab}</label>`)
+  assertEquals(
+    count(html, '<li>Copy the URL:<span class="Copy">'),
+    tabs.length,
+  )
 })
 
 // The four addresses, in workerd, at the apex and NOT on a space's hostname —

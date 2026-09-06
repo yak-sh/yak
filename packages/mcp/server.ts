@@ -49,6 +49,25 @@ export type Options = {
   name?: string
   /** the server's version (default: `0.0.0`) */
   version?: string
+  /** the server's name as a person reads it, where `name` is the id a client
+   * keys it by (MCP `Implementation.title`) */
+  title?: string
+  /** one line saying what this server is, for a client that shows one
+   * (MCP `Implementation.description`) */
+  description?: string
+  /** where to read more about it (MCP `Implementation.websiteUrl`) */
+  websiteUrl?: string
+  /** the square picture a client shows beside the name (MCP
+   * `Implementation.icons`, the 2025-11-25 revision). `sizes` is `['any']` for
+   * a scalable one, else `['512x512']` and the like; a `src` is an http(s) or
+   * a data URI, and an SVG behind one had better carry its own bytes — an
+   * `<img>` loads nothing a referenced SVG points at. */
+  icons?: {
+    src: string
+    mimeType?: string
+    sizes?: string[]
+    theme?: 'light' | 'dark'
+  }[]
   /** what the agent should read before anything else */
   instructions?: string
   /** how deeply each tool's output schema spells out the vocabulary
@@ -231,6 +250,15 @@ export let server = (opts: Options): McpServer => {
   let mcp = new McpServer({
     name: opts.name ?? 'yaks',
     version: opts.version ?? '0.0.0',
+    // The face, when a host was given one: what `initialize` answers about
+    // itself beside its name, so a client that reads `serverInfo` needs
+    // nothing pasted into a form. Each is left OFF when unset rather than sent
+    // empty — an absent field is a server that says nothing, an empty one is a
+    // server that says nothing is its name.
+    ...(opts.title ? { title: opts.title } : {}),
+    ...(opts.description ? { description: opts.description } : {}),
+    ...(opts.websiteUrl ? { websiteUrl: opts.websiteUrl } : {}),
+    ...(opts.icons?.length ? { icons: opts.icons } : {}),
   }, {
     capabilities: { tools: {} },
     ...(opts.instructions ? { instructions: opts.instructions } : {}),

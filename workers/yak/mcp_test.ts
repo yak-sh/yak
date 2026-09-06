@@ -34,6 +34,33 @@ import { PROMPTS } from './prompts.ts'
 import { sha256 } from './versions.ts'
 import { VERSION } from '../../src/version.ts'
 
+// The connector's face, on BOTH doors (T-34415): the same name, line and
+// square picture whether the caller has signed in or not, because a directory
+// reviewer and a connector form both read it before any grant exists. Pinned
+// as literals here rather than compared against seo.ts CONNECTOR — a test that
+// reads the constant it is checking proves only that the constant is itself.
+let facing = (info: Record<string, unknown>) => {
+  assertEquals(info.name, 'yaks.app')
+  assertEquals(info.title, 'yaks.app')
+  assertEquals(
+    info.description,
+    'Apps your assistant builds for you, at your own address.',
+  )
+  assertEquals(info.websiteUrl, 'https://yaks.app')
+  assertEquals(info.icons, [
+    {
+      src: 'https://yaks.app/connector.svg',
+      mimeType: 'image/svg+xml',
+      sizes: ['any'],
+    },
+    {
+      src: 'https://yaks.app/connector-512.png',
+      mimeType: 'image/png',
+      sizes: ['512x512'],
+    },
+  ])
+}
+
 // The eid a batch minted under an alias, read off the batch AS APPLIED
 // (T-33812): graph_apply answers every entity the write touched, each carrying
 // the `$alias` the batch called it by.
@@ -90,7 +117,7 @@ slow(
         clientInfo: { name: 'probe', version: '0' },
       })
       assertEquals(init.protocolVersion, '2025-03-26')
-      assertEquals(init.serverInfo.name, 'yaks.app')
+      facing(init.serverInfo)
       let { tools } = await agent.call('tools/list')
       assertEquals(tools.map((t: { name: string }) => t.name), [
         // The generic tier, whole, from @yaks/mcp (T-33812) — bundles in and
@@ -1331,7 +1358,7 @@ slow('the door before anyone signs in', async () => {
       clientInfo: { name: 'probe', version: '0' },
     })
     assertEquals(init.protocolVersion, '2025-03-26')
-    assertEquals(init.serverInfo.name, 'yaks.app')
+    facing(init.serverInfo)
     assertEquals(init.capabilities.tools.listChanged, true)
     assertEquals(init.capabilities.resources.listChanged, true)
     // Not prompts, which are a person's own doors, and not logging, which is

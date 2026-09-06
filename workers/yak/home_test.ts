@@ -184,6 +184,12 @@ Deno.test('a fresh landing leads with the name and address form', async () => {
   assert(form < page.indexOf('<details'), page)
 })
 
+// The say-this list, on its own: the copy control is the page's one control
+// and the connect instructions carry it too (pages.ts `copyable`, T-34412), so
+// what this block is about is counted inside the block.
+let saysIn = (page: string) =>
+  page.split('<ul class="Says">')[1]?.split('</ul>')[0] ?? ''
+
 // T-34420. Jeff, 2026-09-05: "after connecting there is ZERO instruction on
 // what she should do next."
 Deno.test('a connected space with nothing built says what to do next', async () => {
@@ -202,7 +208,7 @@ Deno.test('a connected space with nothing built says what to do next', async () 
     // for one that did.
     assertStringIncludes(page, `<span class="Pick">${said}</span>`)
   }
-  assertEquals(page.match(/class="Copy_Go"/g)?.length, 3)
+  assertEquals(saysIn(page).match(/class="Copy_Go"/g)?.length, 3)
   // A link at their own address, and the door that needs no assistant.
   assertStringIncludes(page, '<b>dana.yaks.app</b>')
   assertStringIncludes(page, 'The box below does the first one without')
@@ -219,7 +225,7 @@ Deno.test('once an app is built it is one line, pointing at the apps', async () 
     apps: [{ slug: 'recipes', title: 'Recipes' }],
   })
   assert(!page.includes('What to do next'), page)
-  assert(!page.includes(String.raw`class="Copy_Go"`), page)
+  assertEquals(saysIn(page), '')
   let line = page.indexOf('Ask it for another app')
   assert(line > 0, page)
   assert(line < page.indexOf('class="Pills"'), page)
@@ -231,7 +237,7 @@ Deno.test("none of the owner block is anybody else's", async () => {
   let page = await block({ role: null, person: false, connected: true })
   assert(!page.includes('What to do next'), page)
   assert(!page.includes('name="name"'), page)
-  assert(!page.includes(String.raw`class="Copy_Go"`), page)
+  assertEquals(saysIn(page), '')
 })
 
 slow('the front page is served at the space root', async () => {

@@ -53,6 +53,44 @@ Deno.test('the door answers the protocol, and signs what a tool writes', async (
   assertEquals(comp(found[0], 'created').by, 'm1')
 })
 
+// A host with a face gives it to `initialize`, whole: MCP's `Implementation`
+// carries a title, a line and the square picture beside the name, so a client
+// that reads `serverInfo` shows this server without anybody typing it into a
+// form. What is not passed is not sent — an absent field says nothing, an
+// empty one says nothing is its name.
+Deno.test('the door hands over the face it was given', async () => {
+  let face = {
+    name: 'shop.test',
+    title: 'The Shop',
+    description: 'Books, and what they cost.',
+    websiteUrl: 'https://shop.test',
+    icons: [{
+      src: 'https://shop.test/icon.svg',
+      mimeType: 'image/svg+xml',
+      sizes: ['any'],
+    }],
+  }
+  let door = mcp({ graph: shopGraph(), authenticate: () => ada, ...face })
+  let hello = await (await door(rpc('initialize', {
+    protocolVersion: '2025-06-18',
+    capabilities: {},
+    clientInfo: { name: 'shop', version: '0' },
+  }))).json()
+  let info = hello.result.serverInfo
+  for (let [key, want] of Object.entries(face)) {
+    assertEquals(info[key], want, key)
+  }
+
+  let bare = mcp({ graph: shopGraph(), authenticate: () => ada })
+  let plain = await (await bare(rpc('initialize', {
+    protocolVersion: '2025-06-18',
+    capabilities: {},
+    clientInfo: { name: 'shop', version: '0' },
+  }))).json()
+  assertEquals(plain.result.serverInfo.title, undefined)
+  assertEquals(plain.result.serverInfo.icons, undefined)
+})
+
 Deno.test('a door that refuses to name a caller answers 401', async () => {
   let door = mcp({
     graph: shopGraph(),
