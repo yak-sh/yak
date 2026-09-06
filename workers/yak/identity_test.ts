@@ -309,6 +309,14 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     let fresh = await theirPage()
     assertMatch(fresh, /<details class="Attach" open>/)
     assertMatch(fresh, /Add custom connector/)
+    // And what they are called leads it — above the builder's question and
+    // above the steps, which at full height are two screens of page (T-34419).
+    // Nothing to do next yet: nobody has connected.
+    assert(
+      fresh.indexOf('name="name"') < fresh.indexOf('<details class="Attach"'),
+      fresh,
+    )
+    assertEquals(fresh.includes('What to do next'), false)
 
     // A client registers itself (RFC 7591) — what the Claude and ChatGPT
     // connectors do today.
@@ -444,6 +452,11 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     let working = await theirPage()
     assertMatch(working, /<details class="Attach">/)
     assertMatch(working, /Add custom connector/)
+    // And something stands where they were: what to say to the assistant that
+    // just connected, since nothing is built here yet (T-34420).
+    assertMatch(working, /What to do next/)
+    assertMatch(working, /Make me a page for my book club/)
+    assertMatch(working, /class="Copy_Go"/)
 
     // And signing in lands where it landed before it: their own space is the
     // signed-in home either way, and attaching an assistant is something on

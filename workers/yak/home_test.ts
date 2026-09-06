@@ -19,6 +19,7 @@
 // anonymous, member and owner are each asked separately.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { slow } from '../../src/testing.ts'
+import { spaceIndex } from './pages.ts'
 import { client, connector, kernel, seed, signIn } from './probe.ts'
 
 // What the browser would ask for, given a page and a URL written in it: the
@@ -107,12 +108,13 @@ slow('a space with no front page lists what you may open', async () => {
   }
 })
 
-// The owner block's order (T-34242). A space with nothing built opens with
-// the builder's question: it is the one door that needs no assistant of the
-// person's own, and somebody who has just signed in has nothing else to do
-// here. Once something IS built, connecting an assistant leads again and the
-// question moves under it.
-slow("the builder's chat leads a space with nothing in it", async () => {
+// The owner block's order (T-34242). On a space with nothing built the
+// builder's question stands ahead of the connect steps: it is the one door
+// that needs no assistant of the person's own, and somebody who has just
+// signed in can use it now (what they are called leads both — T-34419, in the
+// rendering tests below). Once something IS built, connecting an assistant
+// leads again and the question moves under it.
+slow("the builder's chat comes before the connect steps", async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [
@@ -148,6 +150,88 @@ slow("the builder's chat leads a space with nothing in it", async () => {
   } finally {
     await k.stop()
   }
+})
+
+// The owner block itself, drawn straight (pages.ts `spaceIndex` is pure): the
+// order it puts its blocks in, and what stands where the connect steps were.
+// Every state a person passes through is one call here — landed, connected,
+// something built — where reaching each through workerd is a sign-in, an
+// OAuth grant and an app apiece (identity_test.ts holds those ends).
+let block = (
+  at: Partial<Parameters<typeof spaceIndex>[0]> = {},
+) =>
+  spaceIndex({
+    space: 'dana',
+    title: 'dana',
+    apps: [],
+    hidden: 0,
+    role: 'owner',
+    person: true,
+    signIn: 'https://yaks.app/login',
+    name: 'dana',
+    ...at,
+  }).text()
+
+// T-34419. Jeff, 2026-09-05: "after putting in the code it didn't show the
+// page to change the user name i don't think." It was there — under the
+// builder's chat and under the connect steps at their full height, which is
+// two screens down on a phone.
+Deno.test('a fresh landing leads with the name and address form', async () => {
+  let page = await block()
+  let form = page.indexOf('name="name"')
+  assert(form > 0, page)
+  assert(form < page.indexOf('What do you want to build?'), page)
+  assert(form < page.indexOf('<details'), page)
+})
+
+// T-34420. Jeff, 2026-09-05: "after connecting there is ZERO instruction on
+// what she should do next."
+Deno.test('a connected space with nothing built says what to do next', async () => {
+  let quiet = await block()
+  assert(!quiet.includes('What to do next'), quiet)
+  let page = await block({ connected: true })
+  assertStringIncludes(page, 'What to do next')
+  for (
+    let said of [
+      'Make me a page for my book club',
+      'Build a place to keep recipes',
+      'Set up a sign-up sheet for the potluck',
+    ]
+  ) {
+    // Selectable on its own for a browser that ran no script, and a button
+    // for one that did.
+    assertStringIncludes(page, `<span class="Pick">${said}</span>`)
+  }
+  assertEquals(page.match(/class="Copy_Go"/g)?.length, 3)
+  // A link at their own address, and the door that needs no assistant.
+  assertStringIncludes(page, '<b>dana.yaks.app</b>')
+  assertStringIncludes(page, 'The box below does the first one without')
+  // Above the builder's chat it points at, and under the form they land on.
+  let next = page.indexOf('What to do next')
+  assert(page.indexOf('name="name"') < next, page)
+  assert(next < page.indexOf('What do you want to build?'), page)
+})
+
+Deno.test('once an app is built it is one line, pointing at the apps', async () => {
+  let page = await block({
+    connected: true,
+    fixed: true,
+    apps: [{ slug: 'recipes', title: 'Recipes' }],
+  })
+  assert(!page.includes('What to do next'), page)
+  assert(!page.includes(String.raw`class="Copy_Go"`), page)
+  let line = page.indexOf('Ask it for another app')
+  assert(line > 0, page)
+  assert(line < page.indexOf('class="Pills"'), page)
+  // And the form keeps the place it has always had, under the steps.
+  assert(page.indexOf('<details') < page.indexOf('name="name"'), page)
+})
+
+Deno.test("none of the owner block is anybody else's", async () => {
+  let page = await block({ role: null, person: false, connected: true })
+  assert(!page.includes('What to do next'), page)
+  assert(!page.includes('name="name"'), page)
+  assert(!page.includes(String.raw`class="Copy_Go"`), page)
 })
 
 slow('the front page is served at the space root', async () => {

@@ -67,6 +67,10 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .Pill:hover { border-color: var(--meadow) }
 .Button { display: inline-block; padding: .75rem 1.75rem; border-radius: 999px; background: var(--meadow); color: var(--ground); font-weight: 800; text-decoration: none }
 .Pick { display: block; margin: .4rem 0; padding: .5rem .6rem; user-select: all }
+.Says { display: grid; gap: .5rem; margin: .75rem 0 1rem; padding: 0; list-style: none }
+.Copy { display: flex; align-items: center; gap: .5rem }
+.Copy .Pick { flex: 1; margin: 0; border-radius: .7rem; background: var(--ground) }
+.Copy_Go { flex: none; padding: .4rem .9rem; font-size: .85rem; font-weight: 700; background: transparent; color: var(--meadow); border: 1px solid var(--line) }
 .At { display: flex; align-items: center; justify-content: center; gap: .3rem }
 .At input { flex: 0 1 13rem; text-align: right }
 .At span { color: var(--soft-ink) }
@@ -362,15 +366,51 @@ ${dropZone(at.slug)}
 ${dropping}`,
   )
 
+// One thing to say, and a button that puts it on the clipboard (T-34420). The
+// words are selectable on their own (`.Pick` is `user-select: all`), so a
+// browser that ran no script still takes them in one gesture — the button is
+// all the script below adds.
+let copyable = (said: string) =>
+  `<li class="Copy"><span class="Pick">${
+    esc(said)
+  }</span><button class="Copy_Go" type="button">Copy</button></li>`
+
+// The button's half. Constant text, no interpolation, and every write to the
+// page is textContent — the page never speaks HTML on a person's behalf. The
+// words come from the span beside it rather than an attribute of its own, so
+// there is one copy of them on the page and nothing to keep in step. Where the
+// clipboard is refused — an insecure origin, a browser that asks first — the
+// words are SELECTED instead, so the person's own copy keystroke lands.
+let copying = `<script>
+for (let go of document.querySelectorAll('.Copy_Go')) {
+  let said = go.previousElementSibling
+  go.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(said.textContent)
+      go.textContent = 'Copied'
+    } catch (_) {
+      let range = document.createRange()
+      range.selectNodeContents(said)
+      let sel = getSelection()
+      sel.removeAllRanges()
+      sel.addRange(range)
+      go.textContent = 'Copy it'
+    }
+    setTimeout(() => { go.textContent = 'Copy' }, 2000)
+  })
+}
+</script>`
+
 // The space's own address when no app is its front page (T-33040). A space
 // that EXISTS is not a 404: this is a door, not a failure — and for its owner
 // it is where a fresh sign-in lands (T-34233), so it is also the page that
 // gets them from an account to a working assistant. One page, of blocks that
 // appear when they are true of whoever is looking —
 //
-//   what do you want to build?      the owner; FIRST while nothing is built
+//   what to call you, and where     the owner; FIRST while nothing is built
+//   what to do next                 the owner, once an assistant has connected
+//   what do you want to build?      the owner
 //   attaching an assistant          the owner; OPEN until one ever has
-//   what to call you, and where     the owner, and nobody else
 //   the apps this person may open   whenever there are any
 //   asking for the rest             only when something is actually held back
 //   this page is a choice, and      the owner, and nobody else
@@ -378,15 +418,21 @@ ${dropping}`,
 //   signing in                      signed out
 //   what this place is              signed out; a stranger, not a neighbour
 //
-// The owner's four come FIRST (T-34236, T-34242), and which of the first two
-// leads depends on what is here. A space with NOTHING built opens with the
-// builder's question: it is the one door that needs no assistant at all, and a
-// person who has just signed in has nothing else to do. Once something is
-// built, connecting an assistant leads again — that is the way to keep
-// working on what is there — and the question moves under it. The connect
-// instructions collapse to their own one line once an agent has ever been let
-// in, rather than disappearing: the second assistant is added the same way as
-// the first.
+// The owner's blocks come FIRST (T-34236, T-34242), and their order turns on
+// whether anything is built here. With NOTHING built, whoever is reading has
+// just typed their sign-in code and landed: what they are called and where
+// they live leads, above the builder's question and above anything
+// collapsible (T-34419) — under both, and under the connect steps at their
+// full height, it was two screens down on a phone and nobody found it. Once
+// something IS built they are back on a page they know: connecting leads
+// again — that is the way to keep working on what is there — and the form
+// keeps the place it has always had.
+//
+// The connect instructions collapse to their own one line once an agent has
+// ever been let in, rather than disappearing: the second assistant is added
+// the same way as the first. What takes their place is `next` (T-34420) —
+// things to SAY, because a person who has just connected one is looking at a
+// page with nothing on it to do.
 //
 // The filtering is the part to get right: an app someone may not read is not
 // NAMED here (apps.ts asks `reads` per app), and the line about asking for
@@ -500,10 +546,37 @@ there.</p>
 </form>
 </section>`
     : ''
-  // The builder's own block, and where it sits: ahead of everything on a
-  // space with nothing built, under the connect instructions once there is.
+  // What to do next (T-34420), once an assistant has been let in. The connect
+  // steps shut the moment one ever connects, and nothing said what the person
+  // had just gained — so this is what stands where they were: three things to
+  // say, in the words somebody would use, each one ready to paste into
+  // whatever they were talking to. Once something is built it is a line rather
+  // than a block, because the apps right below it say the rest.
+  let next = !owner || !at.connected
+    ? ''
+    : at.apps.length
+    ? `<p class="Note">Your assistant is connected. Ask it for another app
+whenever you want one — here is what you have.</p>`
+    : `<section class="Card"><h2>What to do next</h2>
+<p class="Note">Your assistant can build here now. Say one of these to it — or
+anything like it, in your own words.</p>
+<ul class="Says">${
+      [
+        'Make me a page for my book club',
+        'Build a place to keep recipes',
+        'Set up a sign-up sheet for the potluck',
+      ].map(copyable).join('')
+    }</ul>
+<p class="Note">It builds the page and hands you back a link at
+<b>${esc(at.space)}.yaks.app</b> — yours to open, or to send to anyone.</p>
+<p class="Note">No assistant open? The box below does the first one without
+one.</p>
+</section>`
+  // The builder's own block: the one door that needs no assistant at all.
   let asking = owner ? chat(!!at.apps.length) : ''
-  let first = at.apps.length ? `${attach}${asking}` : `${asking}${attach}`
+  let block = at.apps.length
+    ? `${attach}${asking}${settings}${next}`
+    : `${settings}${next}${asking}${attach}`
   let lead = at.apps.length
     ? 'Here is what you can open.'
     : owner
@@ -513,9 +586,9 @@ there.</p>
     esc(at.title || at.space),
     lead,
     at.no ? 400 : 200,
-    `${first}${settings}${mine}${ask}${yours}${inn}${pitch}${
-      at.person ? home : ''
-    }${owner ? dropping + chatLive : ''}`,
+    `${block}${mine}${ask}${yours}${inn}${pitch}${at.person ? home : ''}${
+      owner ? dropping + chatLive + copying : ''
+    }`,
   )
 }
 
