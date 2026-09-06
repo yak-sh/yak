@@ -25,6 +25,7 @@ import { directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { platform } from './harness.ts'
+import { remember } from './memory.ts'
 import { BUILDS, monthOf } from './meter.ts'
 import type { Who } from './session.ts'
 
@@ -126,6 +127,28 @@ Deno.test('the fake model builds an app end to end, and it serves', async () => 
   assertEquals(after.meter?.built, 1)
   assertEquals(after.meter?.builds, 1)
   assertEquals(after.meter?.month, monthOf(new Date()))
+})
+
+// What the person said rides on the builder's prompt too (memory.ts,
+// T-34474): the agent we run and the agent somebody brings are taught one
+// page, so a preference kept through the connector is followed here.
+Deno.test('the builder is handed what the person has said', async () => {
+  let { env, space } = await seeded()
+  await remember(env, dirOf(env), space, owner, {
+    said: 'use grams, never cups',
+    context: 'setting up the recipe app',
+    about: 'recipes',
+  })
+  let model = fake([{ text: 'noted' }])
+  await build(env, owner, space, asked('a recipe box please'), { model })
+
+  let system = model.asked[0].system
+  // The rule for keeping the next one...
+  assertStringIncludes(system, 'keep their exact words with memory_save')
+  // ...and the last one, whole, in the words it was said in.
+  assertStringIncludes(system, '## What')
+  assertStringIncludes(system, '"use grams, never cups"')
+  assertStringIncludes(system, 'setting up the recipe app')
 })
 
 Deno.test('a conversation that ships nothing is no build at all', async () => {

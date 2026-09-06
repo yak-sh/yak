@@ -36,6 +36,7 @@ import { type App, type Space, storeName, url } from './directory.ts'
 import { storeOf } from './door.ts'
 import type { Env } from './env.ts'
 import { named, reachable, toolsOf } from './declared.ts'
+import { told } from './memory.ts'
 import type { Ctx } from './tools.ts'
 import { appDoc } from './vocab.ts'
 import { sha256 } from './versions.ts'
@@ -171,15 +172,31 @@ person left beside it. When an ask belongs in one of these — another recipe,
 another chore, another entry — put it there rather than making a second app
 for it, and follow whatever the app says below.`
 
+// What the person has SAID, one section per space they belong to (memory.ts,
+// T-34474). It rides here rather than beside it because it is the same
+// passage: what an agent is handed before it has been told anything, so a
+// preference said once is followed after. A space with no memories says
+// nothing.
+//
+// The spaces are the person's own rather than the reach's, because a memory
+// belongs to a space and not to an app — somebody with no apps yet has still
+// said how they want the first one built.
+let heard = async (ctx: Ctx): Promise<string[]> => {
+  let spaces = await ctx.dir.spaces(ctx.person)
+  return (await Promise.all(spaces.map((s) => told(ctx.env, s))))
+    .filter(Boolean)
+}
+
 /**
  * The passage itself, and a MARK naming it. The mark folds into the roster
  * version (mcp.ts), so an app that appeared, an app that changed what it
- * holds, and an edited AGENTS.md all move the version a client cached at
- * connect — and the door says so on the next reply (stream.ts `roster`).
+ * holds, an edited AGENTS.md and a memory just kept all move the version a
+ * client cached at connect — and the door says so on the next reply (stream.ts
+ * `roster`).
  *
- * A person with no apps gets no passage and no mark: there is nothing to say,
- * and saying it would put a heading with nothing under it at the top of every
- * agent's context.
+ * A person with no apps and nothing said gets no passage and no mark: there is
+ * nothing to say, and saying it would put a heading with nothing under it at
+ * the top of every agent's context.
  */
 export let standing = async (
   ctx: Ctx,
@@ -187,7 +204,7 @@ export let standing = async (
   tools?: string[],
 ): Promise<{ text: string; mark: string; apps: Entry[] }> => {
   let apps = await entries(ctx, reach, tools)
-  let text = passage(apps)
+  let text = [passage(apps), ...await heard(ctx)].filter(Boolean).join('\n\n')
   if (!text) return { text, mark: '', apps }
   let mark = await sha256(new TextEncoder().encode(text))
   return { text, mark: mark.slice(0, 16), apps }
