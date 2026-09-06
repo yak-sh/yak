@@ -64,6 +64,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .Card pre { margin: 0; white-space: pre-wrap; font: inherit; color: var(--soft-ink); text-align: left }
 .Card form { margin: 1rem 0 0 }
 .Note { font-size: .9rem; margin: .75rem 0 0 }
+details.Note > summary { color: var(--meadow); cursor: pointer }
 .Pills { display: flex; flex-wrap: wrap; justify-content: center; gap: .625rem; margin: 0 0 1.25rem }
 .Pill { display: inline-block; padding: .5rem 1rem; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--ink); font-weight: 700; text-decoration: none }
 .Pill:hover { border-color: var(--meadow) }
@@ -1214,18 +1215,7 @@ let at = (path: string) => `<code>https://${PLATFORM}${path}</code>`
 // identity.ts configures the provider with and what both `/.well-known`
 // documents serve — so this page cannot come to teach an address the door
 // does not answer.
-//
-// The honest answer for every assistant here is "nothing": they all register
-// themselves (RFC 7591) at the registration endpoint below, which is why the
-// client boxes stay empty and there is no secret anywhere. The values are for
-// the form that refuses an empty box, and for whatever asks instead of
-// looking.
-let ID =
-  'Leave <b>OAuth Client ID</b> and <b>OAuth Client Secret</b> empty. There ' +
-  'is no secret to enter: the connector registers itself the first time it ' +
-  'knocks, and what protects it is PKCE, not a password. Nothing needs ' +
-  'allow-listing here either — we take whichever redirect address it ' +
-  'registers.'
+let ID = 'Leave <b>OAuth Client ID</b> and <b>OAuth Client Secret</b> empty.'
 
 let BOXES = `<b>Authorization URL</b> ${
   at(OAUTH.authorize)
@@ -1233,7 +1223,10 @@ let BOXES = `<b>Authorization URL</b> ${
   at(OAUTH.register)
 }, <b>Scope</b> <code>${OAUTH.scope}</code>.`
 
-let URLS = `If a box will not take an empty value: ${BOXES}`
+let OAUTH_HELP =
+  'Your assistant registers automatically and uses PKCE to connect. ' +
+  'There is no secret to enter and no redirect URL to configure.' +
+  `<p class="Note">For clients that need manual setup: ${BOXES}</p>`
 
 // Nothing interpolated below is anybody's input, so it is written as the
 // markup it is; everything that IS a person's is escaped where it enters.
@@ -1262,9 +1255,7 @@ let AGENTS = [
     note: 'A remote connector follows you to every Claude — the phone too. ' +
       'On a Team or Enterprise plan an owner adds it once under Organization ' +
       'settings, and everyone else clicks Connect.',
-    oauth: 'Nothing to fill in. Claude finds all of this itself; the two ' +
-      'boxes under <b>Advanced settings</b> are the only ones it could ask ' +
-      'about. ' + ID,
+    oauth: ID,
   },
   {
     key: 'chatgpt',
@@ -1280,19 +1271,14 @@ let AGENTS = [
       'Create it and sign in when it asks. It appears under <b>Developer ' +
       'mode</b> below the message box.',
     ],
-    // Mixed auth is the path (T-34465): this door lists its whole surface to a
-    // stranger and says on each tool whether it wants a token, so ChatGPT asks
-    // for the sign-in the first time it reaches for one that does.
-    note: 'Mixed authentication works here too: the connector reads every ' +
-      'tool without signing in and asks you to sign in the first time it ' +
-      'uses one that needs it. If a client ever connects as a stranger and ' +
-      `never offers the sign-in, give it <code>${MCP_ASK}</code> instead — ` +
-      'the same door with the anonymous tools off. The web app, not the ' +
-      'phone one. On a Business or Enterprise workspace an admin may have to ' +
+    note: 'Use ChatGPT on the web. On a Business or Enterprise workspace, ' +
+      'an admin may have to ' +
       'allow developer mode first.',
-    oauth: 'Set <b>Authentication</b> to <b>OAuth</b> — not "no ' +
-      'authentication", and not an API key, which we do not take. ' + ID +
-      ' ' + URLS,
+    oauth: 'Set <b>Authentication</b> to <b>OAuth</b>. ' + ID,
+    details: OAUTH_HELP +
+      '<p class="Note">Mixed authentication is also supported: ChatGPT asks ' +
+      'you to sign in when a tool needs it. If it never offers sign-in, ' +
+      `use <code>${MCP_ASK}</code> as the server URL.</p>`,
   },
   {
     key: 'claude-code',
@@ -1305,8 +1291,6 @@ let AGENTS = [
     ],
     note: 'Add <code>--scope user</code> to that first line to have it in ' +
       'every project, not just this one.',
-    oauth: 'Nothing to fill in — there is no form. <b>Authenticate</b> opens ' +
-      'the browser, you sign in, and the terminal has the tools.',
   },
   {
     key: 'cursor',
@@ -1321,8 +1305,6 @@ let AGENTS = [
     ],
     note: 'A <code>.cursor/mcp.json</code> in a project folder does the same ' +
       'thing for that project alone.',
-    oauth: 'Nothing to fill in — that one field is the whole entry. Cursor ' +
-      'registers itself and opens the browser when you click sign in.',
   },
   {
     key: 'other',
@@ -1334,17 +1316,9 @@ let AGENTS = [
       'If it asks what to call the server, the name and description above ' +
       'are what this one answers to.',
     ],
-    note: 'A client that cannot do optional authentication — it calls with ' +
-      'no credential, reads the answer as "no sign-in needed" and never ' +
-      `offers you one — takes <code>${MCP_ASK}</code> instead, the same door ` +
-      'with the anonymous tools off.',
-    oauth:
-      `Anything that reads ${
-        at('/.well-known/oauth-authorization-server')
-      } needs nothing typed at all. For one that asks instead: ${BOXES} ` +
-      'Authorization code with PKCE (<code>S256</code>), a refresh token ' +
-      'that does not expire, and no client secret — the client registers ' +
-      'itself.',
+    details: OAUTH_HELP +
+      '<p class="Note">If your client never offers sign-in, use ' +
+      `<code>${MCP_ASK}</code> as the server URL.</p>`,
   },
 ]
 
@@ -1378,8 +1352,13 @@ ${
 <ol><li>Copy the URL:${copyable(MCP, 'the MCP URL')}</li>${
       a.steps.map((s) => `<li>${s}</li>`).join('')
     }</ol>
+${a.oauth ? `<p class="Note"><b>OAuth settings.</b> ${a.oauth}</p>` : ''}
 ${a.note ? `<p class="Note">${a.note}</p>` : ''}
-<p class="Note"><b>OAuth settings.</b> ${a.oauth}</p>
+${
+      a.details
+        ? `<details class="Note"><summary>More about authentication</summary><div class="Note">${a.details}</div></details>`
+        : ''
+    }
 </section>`
   ).join('')
 }

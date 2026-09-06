@@ -135,7 +135,7 @@ export let CLOSED = ['/login', '/connect', '/mcp', '/api/', '/gallery/review']
 export let robots = () =>
   [
     '# yaks.app — apps your assistant builds for you, at your own address.',
-    '# Not Yik Yak. Crawling and reading here is welcome; the guide is at',
+    '# Crawling and reading here is welcome; the guide is at',
     `# ${WHOLE}, and ${at('/llms.txt')} is the short index of it.`,
     '',
     ...CRAWLERS.flatMap((agent) => [
@@ -202,8 +202,7 @@ export let llms = (
     '> Apps your assistant builds for you, at your own address. Ask Claude or',
     '> ChatGPT for a recipe box, a sign-up sheet or a trip planner; it is built',
     '> and hosted at yourname.yaks.app, keeps its own data, and opens in any',
-    '> browser. yaks.app is not Yik Yak: it is a hosting platform for apps an',
-    '> AI assistant writes, connected over MCP.',
+    '> browser.',
     '',
     'An app is an index.html and the files beside it, served live, with a graph',
     'store behind it and no build step. An assistant connects over MCP at',

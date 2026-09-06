@@ -417,21 +417,12 @@ Deno.test('the code card says where signing in leads', async () => {
   }
 })
 
-// The owner's complaint, held to: a search for "yaks" returns Yik Yak, so the
-// home page says what this is not — plainly, in the description a result
-// shows, and once in the words a visitor reads.
-Deno.test('the home page says once that this is not Yik Yak', () => {
-  let html = read('index.html')
-  assertStringIncludes(said(html).description, 'yaks.app is not Yik Yak')
-  let body = flat(html.split('</head>')[1])
-  assertEquals(
-    (body.match(/yaks\.app is not Yik Yak: it is/g) ?? []).length,
-    1,
-    'the home page says it twice, or not at all',
-  )
-  for (let page of branded.filter((p) => p != 'index.html')) {
-    assert(!read(page).includes('Yik Yak'), `${page} repeats it`)
+Deno.test('the site describes itself without the Yik Yak comparison', () => {
+  for (let page of branded) {
+    assert(!read(page).includes('Yik Yak'), `${page} includes the comparison`)
   }
+  assert(!robots().includes('Yik Yak'))
+  assert(!llms([]).includes('Yik Yak'))
 })
 
 // Well-formedness by the only definition that matters here: every tag closes,
@@ -514,7 +505,6 @@ Deno.test('llms.txt links every page and every guide page', () => {
   ]
   let txt = llms(site)
   assert(txt.startsWith('# yaks.app\n'))
-  assertStringIncludes(txt, 'not Yik Yak')
   for (let p of site) {
     assertStringIncludes(txt, `- [${p.title}](${p.url}): ${p.description}`)
   }
@@ -684,13 +674,13 @@ Deno.test('the connect page teaches one agent at a time', async () => {
       '~/.cursor/mcp.json',
     ]
   ) assertStringIncludes(html, out)
-  // And the OAuth line, one per tab and written now (T-34414). Every tab says
-  // the same true thing — there is nothing to fill in, because each of these
-  // registers itself — and the two whose forms have boxes get the addresses
-  // to put in them. That those addresses are the ones the authorization
-  // server actually serves is held in identity_test.ts, which has a kernel to
-  // read the metadata off.
-  assertEquals(count(html, '<b>OAuth settings.</b>'), tabs.length)
+  // Only forms with OAuth fields need the short settings line. Manual setup
+  // and troubleshooting remain available in a closed disclosure.
+  assertEquals(count(html, '<b>OAuth settings.</b>'), 2)
+  assertEquals(
+    count(html, '<details class="Note"><summary>More about authentication'),
+    2,
+  )
   for (
     let said of [
       'Leave <b>OAuth Client ID</b> and <b>OAuth Client Secret</b> empty.',
