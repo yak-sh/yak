@@ -413,8 +413,10 @@ Deno.test('the object plants core + member + edge + the app, and nothing else', 
       'project',
       'comment',
       // what a shop sells: the platform's word, because the platform's own
-      // checkout door reads a price off it (sell.ts)
+      // checkout door reads a price off it (sell.ts), and what it sold, which
+      // the platform's own Connect webhook writes
       'product',
+      'order',
       'favorite',
       'web',
       // @yaks/mail — the app's own mailbox (T-33686)

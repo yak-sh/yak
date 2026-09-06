@@ -1200,8 +1200,19 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
           sent.get('line_items[0][price_data][unit_amount]')
         }`,
       }
+      // The charge a dispute is about, read back on the seller's account.
+      : path == '/v1/charges/ch_1'
+      ? {
+        id: 'ch_1',
+        payment_intent: 'pi_1',
+        metadata: { space: SPACE_EID.at, app: 'shop' },
+      }
       : null
   )
+  // The space's eid, filled in below once it is seeded — the fake answers
+  // before and after, so it reads the box rather than closing over a value.
+  let SPACE_EID: { at?: string } = {}
+  let cookie = await as(ADA)
   try {
     // A platform with no Stripe key of its own says so, in one sentence.
     let off = await paying(k.env, { items })
@@ -1232,6 +1243,7 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
         },
       }],
     })
+    SPACE_EID.at = k.space.eid
 
     let paid = await paying(k.env, {
       items,
@@ -1306,6 +1318,148 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
     let away = await paying(k.env, { items, success: 'https://evil.example/' })
     assertEquals(away.status, 400)
     assertStringIncludes(away.body.error.message, 'stay inside this app')
+
+    // ---- and the money moves (T-34526) ------------------------------------
+    //
+    // Stripe posts to the Connect door, and one row lands in the SHOP's own
+    // store — written by the platform, as the app, with a letter to the buyer
+    // beside it in the same batch.
+    k.env.STRIPE_CONNECT_WEBHOOK_SECRET = WHSEC
+    let session = made.sent
+    let bought = await connectHook(k.env, WHSEC, {
+      id: 'evt_paid',
+      type: 'checkout.session.completed',
+      account: 'acct_seller',
+      data: {
+        object: {
+          id: 'cs_test_1',
+          payment_intent: 'pi_1',
+          payment_status: 'paid',
+          amount_total: 2800 * 2 + 3600,
+          currency: 'usd',
+          customer_details: { email: 'ana@example.com' },
+          metadata: {
+            space: session.get('metadata[space]'),
+            app: 'shop',
+            items: session.get('metadata[items]'),
+          },
+        },
+      },
+    })
+    assertEquals(bought.status, 200)
+    assertEquals(bought.body.did, 'shop: paid 9200')
+
+    let orders = async () =>
+      await (await apps.fetch(
+        visit('/shop/api/query?.order!&.doc?', { headers: { cookie } }),
+        k.env,
+      )).json() as {
+        entity: { eid: string }
+        order: Record<string, string | number>
+        created?: { by?: { eid?: string } | string }
+      }[]
+    let [order] = await orders()
+    assertEquals(order.order.session, 'cs_test_1')
+    assertEquals(order.order.intent, 'pi_1')
+    assertEquals(order.order.account, 'acct_seller')
+    assertEquals(order.order.total_cents, 9200)
+    // No rate is set, so the platform took nothing.
+    assertEquals(order.order.fee_cents, 0)
+    assertEquals(order.order.email, 'ana@example.com')
+    assertEquals(order.order.status, 'paid')
+    // The cart came back whole, product eids and the size and all.
+    assertEquals(JSON.parse(String(order.order.items)).length, 2)
+
+    // The buyer's letter, in the same batch, aimed at the address they typed
+    // and carrying what they bought.
+    let post = await (await apps.fetch(
+      visit('/shop/api/query?.mail!&.doc?&.deliver?', {
+        headers: { cookie },
+      }),
+      k.env,
+    )).json() as { doc: { title: string; body: string } }[]
+    assertEquals(post.length, 1)
+    assertStringIncludes(post[0].doc.title, 'Your order from')
+    assertStringIncludes(post[0].doc.body, 'Everyday Tee — Charcoal (M) × 2')
+    assertStringIncludes(post[0].doc.body, '**Total $92.00**')
+
+    // ---- THE SAME EVENT AGAIN. At-least-once delivery is the normal case,
+    // and the order's eid is derived from the session — so this addresses the
+    // row already there, derives the same columns, and leaves ONE order.
+    await connectHook(k.env, WHSEC, {
+      id: 'evt_paid',
+      type: 'checkout.session.completed',
+      account: 'acct_seller',
+      data: {
+        object: {
+          id: 'cs_test_1',
+          payment_intent: 'pi_1',
+          payment_status: 'paid',
+          amount_total: 9200,
+          currency: 'usd',
+          customer_details: { email: 'ana@example.com' },
+          metadata: {
+            space: session.get('metadata[space]'),
+            app: 'shop',
+            items: session.get('metadata[items]'),
+          },
+        },
+      },
+    })
+    assertEquals((await orders()).length, 1, 'one sale, one order')
+
+    // ---- refunded. The charge inherits the PaymentIntent's metadata, which
+    // is why the door put it there: a refund knows nothing of a session.
+    let back = await connectHook(k.env, WHSEC, {
+      id: 'evt_refund',
+      type: 'charge.refunded',
+      account: 'acct_seller',
+      data: {
+        object: {
+          id: 'ch_1',
+          payment_intent: 'pi_1',
+          amount_refunded: 9200,
+          metadata: {
+            space: session.get('metadata[space]'),
+            app: 'shop',
+          },
+        },
+      },
+    })
+    assertEquals(back.body.did, 'shop: refunded')
+    assertEquals((await orders())[0].order.status, 'refunded')
+
+    // ---- disputed. A dispute carries no metadata at all, so its CHARGE is
+    // read back from Stripe on the seller's own account and the metadata
+    // comes off that.
+    let charged = false
+    let dispute = await connectHook(k.env, WHSEC, {
+      id: 'evt_dispute',
+      type: 'charge.dispute.created',
+      account: 'acct_seller',
+      data: { object: { id: 'dp_1', charge: 'ch_1', amount: 9200 } },
+    })
+    charged = fake.calls.some((c) => c.path == '/v1/charges/ch_1')
+    assert(charged, 'the charge was read back to find whose sale it was')
+    assertEquals(
+      fake.at('/v1/charges/ch_1')!.on,
+      'acct_seller',
+      'and on the SELLER account, where the charge lives',
+    )
+    assertEquals(dispute.body.did, 'shop: disputed')
+    assertEquals((await orders())[0].order.status, 'disputed')
+
+    // A charge the merchant made outside this platform, on the same account:
+    // not ours, and not a break.
+    assertEquals(
+      (await connectHook(k.env, WHSEC, {
+        id: 'evt_other',
+        type: 'charge.refunded',
+        account: 'acct_seller',
+        data: { object: { id: 'ch_2', payment_intent: 'pi_2' } },
+      })).body.did,
+      'not a sale of ours',
+    )
   } finally {
     await fake.stop()
   }

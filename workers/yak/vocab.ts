@@ -301,6 +301,36 @@ export let appsDoc: VocabDoc = {
         image: { type: 'string', format: 'uri' },
       },
     },
+    // Something SOLD (sell.ts, T-34526): one row per completed Stripe
+    // checkout, written into the app's own store by the Connect webhook, as
+    // the app. Platform's rather than each app's for the reason `product` is:
+    // the platform writes it, and a word the platform writes is a word the
+    // platform declares — an app that spelled its own `order` would have the
+    // platform writing into a shape it does not know.
+    //
+    // It is the WHOLE record of a sale on this side. The money itself is
+    // Stripe's: `session` and `intent` are how a seller finds it there, and
+    // `account` says whose books it landed on. Nothing here is authoritative
+    // about the payment — Stripe is — and the row exists so the seller knows
+    // what to put in the box and who to post it to.
+    //
+    // `items` is the cart as JSON in one text column, the way `home.first`
+    // is; a column is a scalar, and this is a list.
+    order: {
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      properties: {
+        session: text,
+        intent: text,
+        account: text,
+        items: text,
+        total_cents: num,
+        fee_cents: num,
+        email: text,
+        status: { enum: ['paid', 'refunded', 'disputed'] },
+      },
+    },
     favorite: { type: 'object', properties: { at: owned(time) } },
     web: {
       type: 'object',

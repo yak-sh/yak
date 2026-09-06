@@ -8,7 +8,13 @@
 // collects the identity documents — and every one of them is a promise made to
 // a seller on the terms page and a liability decision for the platform. A diff
 // that moves one is a diff that has to say so out loud.
-import { assert, assertEquals, assertThrows } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertMatch,
+  assertStringIncludes,
+  assertThrows,
+} from '@std/assert'
 import { moved } from './billing.ts'
 import {
   account,
@@ -18,13 +24,17 @@ import {
   held,
   link,
   META,
+  orderEid,
+  orderOf,
   packed,
   priced,
   type Product,
   rate,
+  receipt,
   sellerOf,
   selling,
   session,
+  unpacked,
 } from './sell.ts'
 import type { Space } from './directory.ts'
 
@@ -354,4 +364,99 @@ Deno.test('the fee rides payment_intent_data, and is absent when it is zero', ()
   // this parameter on a Checkout Session, so under `payment_intent_data` is not
   // a choice.
   assertEquals(fee(asked.total, 250), 250)
+})
+
+// ---- the order the webhook writes (T-34526) --------------------------------
+
+// THE IDEMPOTENCE, and it is the whole of it: the order's entity is DERIVED
+// from Stripe's session id, so a second delivery of `checkout.session.completed`
+// addresses the row the first one wrote instead of minting a second order.
+// There is no remembered-event list to keep correct.
+Deno.test('an order is written at an eid derived from its session', () => {
+  assertEquals(orderEid('cs_test_1'), orderEid('cs_test_1'))
+  assert(orderEid('cs_test_1') != orderEid('cs_test_2'))
+  // Shaped as a uuid, because that is what a store's eids are — VERSION 8,
+  // the one reserved for an id derived from a name rather than drawn at
+  // random, which is exactly what this is (src/edge.ts `edgeEid` again).
+  assertMatch(
+    orderEid('cs_test_1'),
+    /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+  )
+})
+
+Deno.test('the cart survives the round trip through Stripe metadata', () => {
+  let items = [
+    { product: TEE, qty: 2, options: 'M' },
+    { product: MUG, qty: 1 },
+  ]
+  assertEquals(unpacked(packed(items)), items)
+  // Junk is an empty cart, never a throw: an order whose label cannot be read
+  // is still an order somebody paid for, and losing the money over the label
+  // would be the worse mistake.
+  for (let bad of ['', 'not json', '{}', 'null', undefined]) {
+    assertEquals(unpacked(bad), [])
+  }
+})
+
+let sess = {
+  id: 'cs_test_1',
+  payment_intent: 'pi_1',
+  payment_status: 'paid',
+  amount_total: 6850,
+  currency: 'usd',
+  customer_email: 'prefilled@example.com',
+  customer_details: { email: 'ana@example.com' },
+  metadata: { space: 'e-space', app: 'shop', items: '[{"p":"x","q":1}]' },
+}
+
+Deno.test('the order row is what one completed session says', () => {
+  assertEquals(orderOf(sess, 'acct_seller'), {
+    session: 'cs_test_1',
+    intent: 'pi_1',
+    account: 'acct_seller',
+    items: '[{"p":"x","q":1}]',
+    total_cents: 6850,
+    fee_cents: 0,
+    // What they TYPED on Stripe's page, not the prefill the door sent: the
+    // receipt has to go where they said, and `customer_email` is only what we
+    // suggested.
+    email: 'ana@example.com',
+    status: 'paid',
+  })
+  // No details at all, and the prefill is the fallback rather than nothing.
+  assertEquals(
+    orderOf({ ...sess, customer_details: {} }, 'acct_seller').email,
+    'prefilled@example.com',
+  )
+  // An expanded PaymentIntent reads the same as a bare id.
+  assertEquals(
+    orderOf({ ...sess, payment_intent: { id: 'pi_1' } }, 'a').intent,
+    'pi_1',
+  )
+})
+
+// A redelivery derives the identical row, so `moved` finds nothing and the
+// store is never written to at all.
+Deno.test('the same completed session twice moves no column', () => {
+  let one = orderOf(sess, 'acct_seller')
+  assertEquals(moved(one, orderOf(sess, 'acct_seller')), {})
+  assertEquals(moved(one, { ...one, status: 'refunded' }), {
+    status: 'refunded',
+  })
+})
+
+Deno.test('the buyer is told what they bought and what it cost', () => {
+  let letter = receipt(
+    'The Shop',
+    orderOf(sess, 'acct_seller'),
+    [{ product: TEE, qty: 2, options: 'M' }, { product: MUG, qty: 1 }],
+    (p) => (p == TEE ? 'Everyday Tee' : 'Mug'),
+  )
+  assertEquals(letter.title, 'Your order from The Shop')
+  assertStringIncludes(letter.body, '- Everyday Tee (M) × 2')
+  assertStringIncludes(letter.body, '- Mug × 1')
+  assertStringIncludes(letter.body, '**Total $68.50**')
+  // It says where a reply goes, because a reply DOES go somewhere: an app's
+  // own address takes mail back into its store.
+  assertStringIncludes(letter.body, 'reaches the seller')
 })

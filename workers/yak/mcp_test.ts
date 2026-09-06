@@ -129,6 +129,8 @@ slow(
         'space_new',
         'space_delete',
         'space_restore',
+        // Connecting the space's own Stripe account, so its apps can take
+        // money (sell.ts, T-34524).
         'space_sell',
         'app_new',
         'app_files',

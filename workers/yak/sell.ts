@@ -35,12 +35,18 @@
 // exception entity in the meta store, a refusal is a sentence the person reads,
 // and the webhook's filing is capped so a stranger posting garbage at a public
 // door cannot write rows without end.
-
+import { sha256 } from '@yaks/graph'
 import { ask, broke, moved, verified } from './billing.ts'
 import * as dirPart from './directory.ts'
-import { directory, type Space, stamp } from './directory.ts'
+import {
+  type App,
+  appStore,
+  directory,
+  type Space,
+  stamp,
+} from './directory.ts'
 import { bound, type Env } from './env.ts'
-
+import { metaOf } from './meta.ts'
 import { PLATFORM } from './route.ts'
 
 // ---- the fee ---------------------------------------------------------------
@@ -557,6 +563,124 @@ export type Event = {
   data?: { object?: Record<string, unknown> }
 }
 
+// ---- the order (T-34526) ---------------------------------------------------
+
+/**
+ * The entity a sale is written at, derived from Stripe's own session id rather
+ * than minted.
+ *
+ * THIS IS THE IDEMPOTENCE, and it is stronger than remembering event ids would
+ * be. At-least-once delivery means `checkout.session.completed` arrives twice
+ * for one sale; a minted eid would make two orders and a remembered-event list
+ * would be a second thing to keep correct. Deriving it means the second
+ * delivery addresses the row the first one wrote, derives the same columns, and
+ * moves nothing — the same rule `moved` keeps for a seller's row, one level up.
+ *
+ * Shaped as a uuid because that is what a store's eids are (src/edge.ts
+ * `edgeEid` derives one the same way, off a sentence rather than a session).
+ */
+export let orderEid = (session: string): string => {
+  let h = sha256(`order\x00${session}`).slice(0, 32)
+  let variant = ((parseInt(h[16], 16) & 0x3) | 0x8).toString(16)
+  let s = `${h.slice(0, 12)}8${h.slice(13, 16)}${variant}${h.slice(17)}`
+  return `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${
+    s.slice(16, 20)
+  }-${s.slice(20)}`
+}
+
+/** The cart read back out of a session's metadata — {@link packed}, undone.
+ * Junk answers an empty list rather than throwing: an order whose items cannot
+ * be read is still an order somebody paid for, and losing the money over the
+ * label would be the worse mistake. */
+export let unpacked = (items: unknown): Item[] => {
+  try {
+    let out = JSON.parse(String(items ?? '[]')) as {
+      p?: string
+      q?: number
+      o?: string
+    }[]
+    return (Array.isArray(out) ? out : []).map((i) => ({
+      product: String(i.p ?? '').replace(
+        /^(.{8})(.{4})(.{4})(.{4})(.{12})$/,
+        '$1-$2-$3-$4-$5',
+      ),
+      qty: Number(i.q ?? 1),
+      ...(i.o ? { options: String(i.o) } : {}),
+    }))
+  } catch {
+    return []
+  }
+}
+
+/** The slice of a completed Checkout Session this reads. */
+export type Session = {
+  id?: string
+  payment_intent?: string | { id?: string }
+  payment_status?: string
+  amount_total?: number
+  currency?: string
+  customer_email?: string | null
+  customer_details?: { email?: string | null }
+  metadata?: Record<string, string>
+}
+
+let idOf = (v: string | { id?: string } | undefined | null) =>
+  typeof v == 'string' ? v : v?.id ?? ''
+
+/**
+ * The `order` row one completed session makes.
+ *
+ * The buyer's address is `customer_details.email` and only falls back to
+ * `customer_email`: the second is the PREFILL the door sent, and the person may
+ * have typed a different one on Stripe's page — which is the address the
+ * receipt has to go to.
+ *
+ * `fee_cents` is derived here rather than read back off Stripe. The session
+ * carries no application fee at all (it lives on the PaymentIntent), and one
+ * more round trip to learn a number we computed on the way out would be a call
+ * that can fail for nothing.
+ */
+export let orderOf = (o: Session, account: string) => {
+  let total = Math.max(0, Math.floor(Number(o.amount_total ?? 0)))
+  return {
+    session: String(o.id ?? ''),
+    intent: idOf(o.payment_intent),
+    account,
+    items: String(o.metadata?.items ?? '[]'),
+    total_cents: total,
+    fee_cents: fee(total),
+    email: String(o.customer_details?.email || o.customer_email || ''),
+    status: 'paid',
+  }
+}
+
+/** What the buyer is told, in the app's own voice. Markdown, because that is
+ * what an app's letters are (mail.ts, guide/mail.md) — one line per thing they
+ * bought, and the total under it. */
+export let receipt = (
+  app: string,
+  order: ReturnType<typeof orderOf>,
+  items: Item[],
+  named: (product: string) => string,
+) => {
+  let money = (cents: number) => `$${(cents / 100).toFixed(2)}`
+  return {
+    title: `Your order from ${app}`,
+    body: [
+      'Thank you — your payment went through. Here is what you bought:',
+      '',
+      ...items.map((i) =>
+        `- ${named(i.product)}${i.options ? ` (${i.options})` : ''} × ${i.qty}`
+      ),
+      '',
+      `**Total ${money(order.total_cents)}**`,
+      '',
+      'Reply to this letter if anything is wrong with it — it reaches the ' +
+      'seller directly.',
+    ].join('\n'),
+  }
+}
+
 /**
  * One verified event, applied. Answers what it did, which is what the door says
  * back — Stripe ignores the body, and a person reading the logs does not.
@@ -601,7 +725,149 @@ export let apply = async (env: Env, event: Event): Promise<string> => {
     await disconnect(env, space)
     return `${space.slug} disconnected`
   }
+  if (type == 'checkout.session.completed') return await sold(env, space, event)
+  if (type == 'charge.refunded' || type == 'charge.dispute.created') {
+    return await settled(env, space, event)
+  }
   return 'nothing to do'
+}
+
+// ---- the sale, written into the app's own store ----------------------------
+
+/** The app one of these events happened in, off the metadata we put on the
+ * session. Null for a sale in an app that has since been deleted, or for a
+ * charge somebody made on the seller's account outside this platform — which is
+ * a normal thing for a merchant to do and is none of our business. */
+let inApp = async (env: Env, space: Space, slug: string) => {
+  if (!slug) return null
+  let dir = dirOf(env)
+  let app = await dir.app(space, slug)
+  return app && !app.trashed ? app : null
+}
+
+/** The app's own store, opened as THE APP (dispatch.ts `owning`, T-34303). The
+ * platform is writing the app's data on its behalf, so the byline on the row is
+ * the app's entity and not a person's — nobody signed in, and the buyer is not
+ * a member here and never will be. `editor` is what puts that write past the
+ * app's own `access` and no further. */
+let asApp = (env: Env, space: Space, app: App) => {
+  let store = appStore(env.STORE, space, app)
+  let who = { 'x-yak-person': app.eid, 'x-yak-role': 'editor' }
+  return metaOf((path, init, sent) => store(path, init, { ...who, ...sent }))
+}
+
+/**
+ * A completed checkout, as one batch into the app's store: the order, the buyer
+ * as an entity, and the letter to them.
+ *
+ * ONE BATCH on purpose. A store applies it atomically, so there is no state
+ * where the money is recorded and the receipt is not, or the other way round —
+ * and because the order's eid is derived from the session, a redelivery writes
+ * the identical batch and the store moves nothing.
+ *
+ * `payment_status` is the gate and `status` is not: a session can be `complete`
+ * with a payment still processing (a bank debit, say), and `paid` is the word
+ * Stripe documents as "the funds are available". Anything else is left for the
+ * `async_payment_succeeded` that follows, and answered plainly here.
+ */
+let sold = async (env: Env, space: Space, event: Event) => {
+  let o = (event.data?.object ?? {}) as Session
+  if (o.payment_status != 'paid') return `not paid yet (${o.payment_status})`
+  let slug = String(o.metadata?.app ?? '')
+  let app = await inApp(env, space, slug)
+  if (!app) return `no app ${slug || '?'} in ${space.slug}`
+  let order = orderOf(o, event.account ?? '')
+  if (!order.session) return 'a session with no id'
+  let items = unpacked(order.items)
+  let store = asApp(env, space, app)
+  // What the products are CALLED, for the letter. Read from the app's own
+  // store, because the session carries the name the buyer saw and this is the
+  // name the seller wrote — and a product renamed between the sale and the
+  // receipt should read as it does today.
+  let named = new Map<string, string>()
+  if (items.length) {
+    for (
+      let row of await store.query(
+        `.eid=${items.map((i) => i.product).join(',')}`,
+      ) as Product[]
+    ) named.set(row.entity.eid, row.doc?.title ?? '')
+  }
+  let eid = orderEid(order.session)
+  let letter = receipt(
+    app.title || app.slug,
+    order,
+    items,
+    (p) => named.get(p) || 'Item',
+  )
+  await store.apply([
+    { entity: { eid }, doc: { title: letter.title }, order },
+    // The buyer as a row of their own, and the letter hanging off it — the
+    // shape every app's mailbox uses (guide/mail.md). No `deliver` where there
+    // is no address to deliver to, which is a sale Stripe took without one; the
+    // order still lands, because the money still moved.
+    ...(order.email
+      ? [
+        { entity: { eid: '$them' }, email: { address: order.email } },
+        {
+          entity: { eid: `${eid}-letter` },
+          doc: letter,
+          mail: {},
+          deliver: { to: '$them' },
+        },
+      ]
+      : []),
+  ])
+  return `${app.slug}: paid ${order.total_cents}`
+}
+
+/**
+ * A refund or a dispute, as one column moving on the order it is about.
+ *
+ * Neither event knows anything about a checkout session, so both are found by
+ * the PaymentIntent — which is why the door put its metadata on the intent as
+ * well as the session (`session` above). A charge inherits the intent's
+ * metadata, so a refund says which app it happened in; a dispute does not carry
+ * metadata at all, so its charge is read back from Stripe, on the seller's own
+ * account, and the metadata comes off that.
+ *
+ * A refund that finds no order is not a break: a merchant refunds charges they
+ * made outside this platform too, on the same account.
+ */
+let settled = async (env: Env, space: Space, event: Event) => {
+  let o = (event.data?.object ?? {}) as {
+    id?: string
+    charge?: string
+    payment_intent?: string | { id?: string }
+    metadata?: Record<string, string>
+  }
+  let dispute = event.type == 'charge.dispute.created'
+  let about = o
+  if (dispute) {
+    let charge = idOf(o.charge)
+    if (!charge) return 'a dispute about no charge'
+    about = await ask(
+      env,
+      `/v1/charges/${charge}`,
+      undefined,
+      event.account,
+    ) as typeof o
+  }
+  let intent = idOf(about.payment_intent)
+  let app = await inApp(env, space, String(about.metadata?.app ?? ''))
+  if (!intent || !app) return 'not a sale of ours'
+  let store = asApp(env, space, app)
+  let [row] = await store.query(`.order.intent=${intent}`) as {
+    entity: { eid: string }
+    order?: { status?: string }
+  }[]
+  if (!row) return 'no order for that payment'
+  let status = dispute ? 'disputed' : 'refunded'
+  // A dispute on an order already disputed, or a second `charge.refunded` for a
+  // partial refund that grew: the column is already where it is going, so
+  // nothing is written.
+  if (row.order?.status == status) return 'unchanged'
+  await store.apply([{ entity: { eid: row.entity.eid }, order: { status } }])
+  return `${app.slug}: ${status}`
 }
 
 // The webhook door is on the open internet, so what it FILES has a ceiling:
