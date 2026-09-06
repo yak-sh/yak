@@ -1611,6 +1611,119 @@ slow('the door before anyone signs in', async () => {
   }
 })
 
+// The address for a host that cannot do mixed auth (T-34416), walked in the
+// order such a host walks it: probe anonymously, read the status, follow the
+// challenge to the two metadata documents, and only then sign in. At `/mcp`
+// the probe answers 200 and the host writes down "no auth"; at
+// `/mcp?auth=required` it answers the challenge, which is the whole
+// difference — everything past signing in is the same door and the same list.
+slow('?auth=required answers the challenge a probing host needs', async () => {
+  let k = await kernel()
+  try {
+    let hello = (auth?: string) => ({
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        ...(auth ? { authorization: auth } : {}),
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: HELLO,
+      }),
+    })
+
+    // Step 1, the probe. Lazy at `/mcp` — this is what Claude is given and
+    // what T-33030 is for — and the challenge at the strict address.
+    let lazy = await k.at('yaks.app', '/mcp', hello())
+    assertEquals(lazy.status, 200)
+    assertEquals((await lazy.json()).result.serverInfo.name, 'yaks.app')
+    let probe = await k.at('yaks.app', '/mcp?auth=required', hello())
+    assertEquals(probe.status, 401)
+    await probe.body?.cancel()
+
+    // Step 2, the challenge names where the metadata is (RFC 9728). It names
+    // `/mcp`, not the query: the resource is one resource, said two ways.
+    let says = probe.headers.get('www-authenticate') ?? ''
+    let where = /resource_metadata="([^"]+)"/.exec(says)?.[1] ?? ''
+    assertEquals(
+      new URL(where).pathname,
+      '/.well-known/oauth-protected-resource/mcp',
+    )
+
+    // Step 3, the protected-resource document, and the authorization server
+    // it names.
+    let prm = await (await k.at('yaks.app', new URL(where).pathname)).json()
+    assertEquals(prm.scopes_supported, ['graph'])
+    assertMatch(prm.resource, /\/mcp$/)
+    assertEquals(prm.authorization_servers.length, 1)
+
+    // Step 4, the authorization server's own document: every endpoint the
+    // host has to be handed, and the two things it checks before it starts —
+    // that S256 is offered, and that it can name itself without a secret,
+    // either by registering (RFC 7591) or by CIMD.
+    let as = await (await k.at(
+      'yaks.app',
+      '/.well-known/oauth-authorization-server',
+    )).json()
+    assertMatch(as.authorization_endpoint, /\/oauth\/authorize$/)
+    assertMatch(as.token_endpoint, /\/oauth\/token$/)
+    assertMatch(as.registration_endpoint, /\/oauth\/register$/)
+    assertEquals(as.code_challenge_methods_supported, ['S256'])
+    assertEquals(as.scopes_supported, ['graph'])
+    assert(as.token_endpoint_auth_methods_supported.includes('none'))
+
+    // Step 5, a token that does not verify is still the challenge, at both
+    // addresses — a host that lets its token lapse must be asked again and
+    // never quietly handed the stranger's surface (T-34344).
+    for (let at of ['/mcp', '/mcp?auth=required']) {
+      let stale = await k.at('yaks.app', at, hello('Bearer nope'))
+      assertEquals(stale.status, 401)
+      assertMatch(stale.headers.get('www-authenticate') ?? '', /resource_meta/)
+      await stale.body?.cancel()
+    }
+    // And the stream, which was never public, is the challenge either way.
+    for (let at of ['/mcp', '/mcp?auth=required']) {
+      let held = await k.at('yaks.app', at, {
+        headers: { accept: 'text/event-stream' },
+      })
+      assertEquals(held.status, 401)
+      await held.body?.cancel()
+    }
+
+    // Step 6, signed in. The strict address is the SAME door: the whole tool
+    // list, not the stranger's one, and byte for byte what `/mcp` serves.
+    let jeff = await signIn(k)
+    let tools = async (at: string) => {
+      let r = await k.at('yaks.app', at, {
+        method: 'POST',
+        headers: {
+          cookie: jeff.cookie,
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/list',
+          params: {},
+        }),
+      })
+      assertEquals(r.status, 200)
+      return ((await r.json()).result.tools as { name: string }[])
+        .map((t) => t.name)
+    }
+    let strict = await tools('/mcp?auth=required')
+    assertEquals(strict, await tools('/mcp'))
+    assert(strict.includes('app_new'), 'the whole list, not the public one')
+    assert(strict.length > 1)
+  } finally {
+    await k.stop()
+  }
+})
+
 // An app's OWN tools (T-32685): a tools.json beside vocab.json, planted by
 // the same deploy, called at the same door as `<app>__<tool>` — and doing
 // through it exactly what the caller could do on the app's own page.

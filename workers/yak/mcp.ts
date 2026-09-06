@@ -51,6 +51,14 @@
 // That surface is handed a method and its params and no binding but the
 // static assets — no person, no `Ctx`, nothing to read anybody's data with —
 // and everything it does not answer meets the same challenge as ever.
+//
+// And `?auth=required` is that same door with the pre-auth surface switched
+// off (T-34416), for a host that decides whether to sign in by probing
+// anonymously and reading the status. Mixed auth is a conversation — answer
+// what you can, challenge the rest — and a host that only asks once cannot
+// have it: ours answers 200, the host writes down "no auth", and the person
+// gets a connector holding `about` and no way to sign in. The address is the
+// lever, since the client is not ours to fix.
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { SetLevelRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
@@ -350,12 +358,25 @@ let door = async (ctx: Ctx, session: string) => {
 }
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
-  if (new URL(req.url).pathname != '/mcp') {
+  let url = new URL(req.url)
+  if (url.pathname != '/mcp') {
     return json(404, { error: { code: 'not_found' } })
   }
   if (req.method != 'POST' && req.method != 'GET') {
     return json(405, { error: { code: 'method_not_allowed' } })
   }
+  // The same door, told to skip the pre-auth surface: `?auth=required`
+  // (T-34416). A host that decides whether a server has an authorization
+  // server by PROBING it anonymously reads our 200 as "no auth" and never
+  // looks at `WWW-Authenticate`, so it lands the connector on the one tool a
+  // stranger gets and never offers to sign in — which is what ChatGPT does.
+  // The address is the lever because the client's behaviour is not ours to
+  // change: a host that cannot ask twice is given an address that only ever
+  // answers the challenge, and `/mcp` stays lazy for the hosts that can.
+  // A query rather than a second path so there is still ONE resource here —
+  // one route, one `WWW-Authenticate`, one `/.well-known/…/mcp`, which the
+  // challenge already builds from the pathname.
+  let strict = url.searchParams.get('auth') == 'required'
   // Who is asking, if anybody. An anonymous request costs nothing to find
   // out — no header to unwrap, no cookie to verify (identity.ts) — and what
   // it gets is the pre-auth surface below rather than the door in its face.
@@ -366,7 +387,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // requires that 401, and Claude ignores `WWW-Authenticate` on a 200 — so
   // answering the public surface instead is a connector silently losing every
   // tool where it should have been asked to sign in again (T-34344).
-  if (!auth && tried) return unauthorized(req)
+  if (!auth && (tried || strict)) return unauthorized(req)
   // The GET is the session's STREAM (stream.ts): a client holds it open to
   // hear what the server says between its own calls, which today is one
   // thing — that its tool list moved, because an app of theirs deployed new
