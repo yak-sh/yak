@@ -1,0 +1,8 @@
+{
+  "product": {
+    "price_cents": "number",
+    "sizes": "text",
+    "stock": "number",
+    "image": "url"
+  }
+}

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img"
+  aria-label="A moss long sleeve">
+  <rect width="400" height="400" fill="#f4f1ea" />
+  <path
+    d="M150 78 L98 100 L44 210 L92 232 L128 168 L128 330 Q200 344 272 330 L272 168 L308 232 L356 210 L302 100 L250 78 Q200 112 150 78 Z"
+    fill="#7a8b6a" />
+  <path d="M150 78 Q200 112 250 78 L250 92 Q200 124 150 92 Z" fill="#637355" />
+</svg>

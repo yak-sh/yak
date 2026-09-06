@@ -232,6 +232,21 @@ whatever mail tool they have connected answers and this is not, and naming an
 app or its address is what makes it this. Call guide with page mail for the
 whole thing (https://yaks.app/guide/mail.md).
 
+A STORE is a known shape, and it needs no keys and no code. The seller connects
+a Stripe account of their own to their SPACE once (space_sell, or the button on
+their space page), and after that any app in it posts a cart to
+./api/pay/checkout — items: [{product: eid, qty, options}] — and is answered
+{url}, the Stripe payment page to send the buyer to. The door reads price_cents
+and the title off each product row in the app's own store, so a page never
+posts a price: a price that travels is a price the buyer can edit. When the
+money moves an order {session, account, items, total_cents, fee_cents, email,
+status} row lands in that app's store — order is the platform's own word, so no
+vocab.json declares it — and the buyer gets a confirmation from the app's own
+address. The charge is on the seller's account and the money is theirs, less a
+small platform fee; no card number ever reaches this platform or your app, and
+refunds are made in their own Stripe dashboard. Call guide with page selling
+for the whole thing (https://yaks.app/guide/selling.md).
+
 An app is a plugin. app_publish offers one to every other space here by
 name, and app_published lists what is on offer; app_install takes one into
 the person's own space, where it is an ordinary app of theirs — its own
@@ -400,6 +415,17 @@ export let PAGES: Page[] = [
       'delivered and bounced rows that come back, how an arrival lands with ' +
       'its attachments, and what mail here does not do.',
     brief: "an app's own email address",
+  },
+  {
+    slug: 'selling',
+    title: 'Selling things',
+    description:
+      'Taking money for something: how a seller connects their own Stripe ' +
+      'account to a space, the ./api/pay/checkout door a page posts a cart ' +
+      'to and what it answers, why a page never posts a price, the order row ' +
+      "and the buyer's letter that land when the money moves, who can read " +
+      'an order afterwards, and why a card number never reaches your app.',
+    brief: 'taking money for something an app sells',
   },
   {
     slug: 'domains',

@@ -785,6 +785,43 @@ subscribed sees it land. The sender is DATA, never an actor: nobody wrote it, so
 any authority. Mail is metered both ways against the space's plan
 (<https://yaks.app/pricing>); mail at the person's own domain is not offered.
 
+## Selling things
+
+Deeper: <https://yaks.app/guide/selling.md> — connecting the account, the door's
+whole shape, what lands in an order, and who can read one.
+
+A store is a known shape here, and it needs no keys and no code. The seller
+connects a Stripe account of their own to their SPACE once — `space_sell`, or
+the button on their space page — and after that any app in it posts a cart to
+`./api/pay/checkout`:
+
+    let r = await fetch('./api/pay/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        items: [{ product: eid, qty: 2, options: 'M' }],
+        success: '?ordered={CHECKOUT_SESSION_ID}',
+      }),
+    })
+    location.href = (await r.json()).url
+
+The door reads `price_cents` and the title off each `product` row in the app's
+own store, makes a Stripe payment page on the seller's connected account, and
+answers where to send the buyer. When Stripe says the money moved, an
+`order{session, account, items, total_cents, fee_cents, email, status}` row
+lands in that app's store — `order` is the platform's own word, so no
+`vocab.json` declares it — and the buyer gets a confirmation from the app's own
+address. The seller reads their orders with `query('.order!&.doc?')` and makes
+refunds in their own Stripe dashboard.
+
+The charge is on the seller's account and the money is theirs, less a small
+platform fee. **A card number never reaches your app** — the page somebody types
+one on is Stripe's, at Stripe's address. Two rules follow from the shape: a page
+never posts a PRICE, only which product and how many, because a price that
+travels is a price the buyer can edit; and an ORDER is never written by the page
+Stripe sends a buyer back to, because a buyer who closes that tab has still
+paid.
+
 ## A domain of their own
 
 Deeper: <https://yaks.app/guide/domains.md> — the record to add and where to

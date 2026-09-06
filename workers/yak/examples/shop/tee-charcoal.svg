@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img"
+  aria-label="A charcoal tee">
+  <rect width="400" height="400" fill="#f4f1ea" />
+  <path
+    d="M150 78 L110 96 L74 150 L110 178 L128 156 L128 330 Q200 344 272 330 L272 156 L290 178 L326 150 L290 96 L250 78 Q200 112 150 78 Z"
+    fill="#3c4650" />
+  <path d="M150 78 Q200 112 250 78 L250 92 Q200 124 150 92 Z" fill="#2b333b" />
+</svg>

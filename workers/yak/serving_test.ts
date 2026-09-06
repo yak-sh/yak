@@ -22,7 +22,12 @@
 // The runtime this Worker is written against — the HTML rewriter, a Durable
 // Object's state, the bucket, the Store namespace — is harness.ts's, shared
 // with builder_test.ts.
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertStringIncludes,
+  assertThrows,
+} from '@std/assert'
 import type { Wire } from '@yaks/durable-object'
 import { slow } from '../../src/testing.ts'
 import { sign } from '../../src/token.ts'
@@ -31,9 +36,10 @@ import { directory, storeName } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { scriptName } from './dispatch.ts'
 import type { Env } from './env.ts'
+import { added, asked } from './examples/shop/cart.js'
 import { analytics, dataset, platform as inMemory } from './harness.ts'
 import { emptied, trash, trashSpace } from './erase.ts'
-import { wrote } from './tools.ts'
+import { call, type Ctx, wrote } from './tools.ts'
 import { archive, openIn, serve } from './unseen.ts'
 import { PLATFORM_STORE } from './vocab.ts'
 
@@ -1028,4 +1034,185 @@ Deno.test('env.APP: a private app is written by its own worker, and by nobody el
   assertEquals(rows[0].created.by, k.app.eid)
   // And the app is not a person for having written (graph.ts `#vouching`).
   assertEquals((await (await asAda('/api/query?.person!')).json()).length, 0)
+})
+
+// ---- the shop example, deployed and shopped in (T-34517) --------------------
+
+// `workers/yak/examples/shop/` is the store recipe the selling guide teaches
+// (public/guide/selling.md), and this is the proof it is an app and not a
+// listing: the same bytes go up through `app_files`, `app_deploy` plants the
+// `product` word and writes the seeded shirts, the storefront is served with
+// its base and its reporter, and the inside of the app stays inside.
+//
+// Then the buying half, as far as this side of it goes. Taking money is the
+// PLATFORM's door — `POST /api/pay/checkout`, on the seller's connected Stripe
+// account (T-34525) — so the app holds no key, writes no worker, and has
+// exactly one obligation: the items it posts must name products this store
+// has, and must carry no money, because the door reads `price_cents` off the
+// row itself. `priced()` below stands in for that door until it lands, and
+// asserts exactly that contract. The order row and the buyer's letter are
+// written by the Connect webhook (T-34526) and belong to its own test.
+let SHOP = new URL('./examples/shop/', import.meta.url)
+
+// Every file of the example, the way `app_files` takes a whole app in one
+// call: text as text, and bytes as base64 (tools.ts `bytesOf` reads it back).
+let base64 = (bytes: Uint8Array) =>
+  btoa([...bytes].map((b) => String.fromCharCode(b)).join(''))
+
+let shopFiles = async () => {
+  let out: { path: string; content?: string; base64?: string }[] = []
+  let walk = async (at: URL, under: string) => {
+    for await (let e of Deno.readDir(at)) {
+      let path = `${under}${e.name}`
+      if (e.isDirectory) {
+        await walk(new URL(`${e.name}/`, at), `${path}/`)
+        continue
+      }
+      let bytes = await Deno.readFile(new URL(e.name, at))
+      out.push(
+        e.name.endsWith('.png')
+          ? { path, base64: base64(bytes) }
+          : { path, content: new TextDecoder().decode(bytes) },
+      )
+    }
+  }
+  await walk(SHOP, '')
+  return out.sort((a, b) => a.path.localeCompare(b.path))
+}
+
+// The space, the shop, and the tools' own context — the doors `app_files` and
+// `app_deploy` are reached through, so what is deployed here is deployed the
+// way an agent deploys it.
+let shopping = async () => {
+  let { env, files } = platform()
+  let { dir, space } = await seeded(env)
+  await dir.apply({
+    entities: [{
+      entity: { eid: '$shop' },
+      doc: { title: 'The Shop' },
+      app: { slug: 'shop', space: space.eid, version: 0, access: 'public' },
+      former: { slug: 'ada/shop' },
+    }],
+  }, ADA_OWNS)
+  let app = (await dir.app(space, 'shop'))!
+  let ctx = { env, dir, person: ADA } as unknown as Ctx
+  let deploy = async () => {
+    await call(ctx, 'app_files', {
+      space: 'ada',
+      app: 'shop',
+      files: await shopFiles(),
+    })
+    return (await call(ctx, 'app_deploy', { space: 'ada', app: 'shop' })).text
+  }
+  let shirts = async () =>
+    await (await apps.fetch(visit('/shop/api/query?.product!&.doc?'), env))
+      .json() as {
+        entity: { eid: string }
+        doc: { title: string }
+        product: { price_cents: number; sizes: string }
+      }[]
+  return { env, files, dir, space, app, ctx, deploy, shirts }
+}
+
+// The platform's checkout door, as T-34525 specifies it and until it exists:
+// `{items: [{product, qty, options?}]}` in, `{url}` out, every price read off
+// the app's own `product` rows. A shop that posted a price would have nothing
+// read from it here, which is the whole point of asserting against this.
+let priced = (
+  rows: Awaited<ReturnType<Awaited<ReturnType<typeof shopping>>['shirts']>>,
+  items: Record<string, string | number>[],
+) => {
+  let by = new Map(rows.map((r) => [r.entity.eid, r]))
+  let lines = []
+  for (let one of items) {
+    let row = by.get(String(one.product))
+    if (!row) throw new Error(`no product ${one.product}`)
+    let cents = Number(row.product.price_cents)
+    if (!cents) throw new Error('that product has no price')
+    lines.push({
+      name: one.options ? `${row.doc.title} (${one.options})` : row.doc.title,
+      unit_amount: cents,
+      quantity: Number(one.qty),
+    })
+  }
+  return { lines, url: 'https://checkout.stripe.com/c/pay/cs_test_probe' }
+}
+
+Deno.test('the shop example deploys, seeds itself and serves its front', async () => {
+  let k = await shopping()
+  let out = await k.deploy()
+  // The app's own word, planted from vocab.json — and `order` is NOT among
+  // them: that one is the platform's, written when Stripe says money moved.
+  assertStringIncludes(out, 'components: product')
+  assertEquals(/\border\b/.test(out), false)
+
+  let shirts = await k.shirts()
+  assertEquals(
+    shirts.map((r) => r.doc.title).sort(),
+    ['Everyday Tee — Charcoal', 'Everyday Tee — Oat', 'Long Sleeve — Moss'],
+  )
+  // Priced in whole cents, with the sizes the seller wrote.
+  let charcoal = shirts.find((r) => r.doc.title.endsWith('Charcoal'))!
+  assertEquals(charcoal.product.price_cents, 2800)
+  assertEquals(charcoal.product.sizes, 'S, M, L, XL')
+
+  // The storefront, as a shopper gets it.
+  let page = await (await apps.fetch(visit('/shop/'), k.env)).text()
+  assert(page.includes('<base href="/shop/">'), page.slice(0, 200))
+  assert(page.includes('./api/pay/checkout'))
+  // It holds no key and asks for none: an app that sells writes no Stripe
+  // code at all.
+  assertEquals(/sk_test|whsec_|api\.stripe\.com/.test(page), false)
+  // The module beside it is served; the app's inside is not.
+  assertEquals((await apps.fetch(visit('/shop/cart.js'), k.env)).status, 200)
+  for (let inside of ['/shop/vocab.json', '/shop/seed/01-shirts.json']) {
+    assertEquals((await apps.fetch(visit(inside), k.env)).status, 404, inside)
+  }
+  // And the icon it shipped, rather than the platform's tile.
+  let icon = await apps.fetch(visit('/shop/icon.png'), k.env)
+  assertEquals(icon.headers.get('content-type'), 'image/png')
+  assertEquals(
+    new Uint8Array(await icon.arrayBuffer()),
+    await Deno.readFile(new URL('icon.png', SHOP)),
+  )
+})
+
+Deno.test('a cart off the shop page is an ask the checkout door can price', async () => {
+  let k = await shopping()
+  await k.deploy()
+  let shirts = await k.shirts()
+  let tee = shirts.find((r) => r.doc.title.endsWith('Charcoal'))!
+  let long = shirts.find((r) => r.doc.title.startsWith('Long'))!
+
+  // The cart, built the way the page builds one, through the example's own
+  // module: two of a shirt in M, and one long sleeve, which has no size.
+  let cart = added(
+    added([], { product: tee.entity.eid, options: 'M', qty: 2 }),
+    { product: long.entity.eid },
+  )
+  let items = asked(cart)
+  // What goes to the door names rows this store HAS, and says nothing about
+  // money.
+  assertEquals(items.map((i: { product: string }) => i.product), [
+    tee.entity.eid,
+    long.entity.eid,
+  ])
+  assertEquals(/price|amount|cent/.test(JSON.stringify(items)), false)
+
+  let paid = priced(shirts, items)
+  // The door priced it off the store, and carried the size into the name the
+  // buyer reads on Stripe's own page.
+  assertEquals(paid.lines, [
+    { name: 'Everyday Tee — Charcoal (M)', unit_amount: 2800, quantity: 2 },
+    { name: 'Long Sleeve — Moss', unit_amount: 3600, quantity: 1 },
+  ])
+  assertStringIncludes(paid.url, 'checkout.stripe.com')
+
+  // A product this store does not have is refused before Stripe is asked —
+  // an eid off another app, or one somebody made up.
+  assertThrows(
+    () => priced(shirts, [{ product: CAKE, qty: 1 }]),
+    Error,
+    'no product',
+  )
 })

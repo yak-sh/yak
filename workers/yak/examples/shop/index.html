@@ -1,0 +1,406 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f4f1ea">
+<title>The Shop</title>
+
+<style>
+:root {
+  --ink: #22252a;
+  --soft: #6c7079;
+  --page: #f4f1ea;
+  --card: #fffdf8;
+  --line: #e0dacd;
+  --accent: #3c4650;
+  --danger: #8a3d33;
+  --gap: 1rem;
+  --half-gap: calc(var(--gap) / 2);
+  --radius: 10px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: var(--gap);
+  background: var(--page);
+  color: var(--ink);
+  font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+.Shop {
+  max-width: 62rem;
+  margin: 0 auto;
+}
+.Shop_Head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap);
+}
+.Shop_Head h1 {
+  font-size: 1.5rem;
+  margin: 0 auto 0 0;
+}
+.Shop_Note {
+  margin: var(--gap) 0;
+  padding: var(--gap);
+  border-radius: var(--radius);
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+.Shop_Note-wrong {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.Grid {
+  display: grid;
+  gap: var(--gap);
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  margin: var(--gap) 0;
+  padding: 0;
+  list-style: none;
+}
+
+.Card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.Card_Picture {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+.Card_Body {
+  padding: var(--gap);
+  display: grid;
+  gap: var(--half-gap);
+}
+.Card_Title {
+  font-weight: 600;
+}
+.Card_Words {
+  color: var(--soft);
+  font-size: .9rem;
+  margin: 0;
+}
+.Card_Price {
+  font-variant-numeric: tabular-nums;
+}
+.Card_Pick {
+  display: flex;
+  gap: var(--half-gap);
+  align-items: center;
+}
+.Card-out {
+  opacity: .55;
+}
+
+select,
+input[type=number] {
+  font: inherit;
+  padding: .35rem .4rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--page);
+  color: inherit;
+}
+input[type=number] {
+  width: 4rem;
+}
+
+.Button {
+  --background: var(--accent);
+  --color: var(--card);
+  font: inherit;
+  padding: .5rem .9rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--background);
+  color: var(--color);
+  cursor: pointer;
+}
+.Button-quiet {
+  --background: transparent;
+  --color: var(--ink);
+  border-color: var(--line);
+}
+.Button[disabled] {
+  opacity: .45;
+  cursor: default;
+}
+
+.Cart {
+  position: sticky;
+  bottom: 0;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--gap);
+  display: grid;
+  gap: var(--half-gap);
+}
+.Cart_List {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: .25rem;
+}
+.Cart_Line {
+  display: flex;
+  gap: var(--half-gap);
+  align-items: baseline;
+}
+.Cart_Line span:first-child {
+  flex: 1;
+}
+.Cart_Foot {
+  display: flex;
+  gap: var(--gap);
+  align-items: center;
+}
+.Cart_Total {
+  margin-left: auto;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.Orders {
+  margin-top: calc(var(--gap) * 2);
+}
+.Orders table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .9rem;
+}
+.Orders th,
+.Orders td {
+  text-align: left;
+  padding: .4rem .5rem;
+  border-bottom: 1px solid var(--line);
+}
+.Orders td:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+[hidden] {
+  display: none !important;
+}
+</style>
+
+<main class="Shop">
+  <header class="Shop_Head">
+    <h1>The Shop</h1>
+    <span class="Card_Words" id="who"></span>
+  </header>
+
+  <p class="Shop_Note" id="said" hidden></p>
+
+  <ul class="Grid" id="grid"></ul>
+
+  <section class="Cart" id="cart" hidden>
+    <ul class="Cart_List" id="lines"></ul>
+    <div class="Cart_Foot">
+      <button class="Button Button-quiet" type="button"
+        id="empty">Empty</button>
+      <span class="Cart_Total" id="total"></span>
+      <button class="Button" type="button" id="pay">Pay with card</button>
+    </div>
+  </section>
+
+  <section class="Orders" id="orders" hidden>
+    <h2>Orders</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Order</th>
+          <th>Who</th>
+          <th>State</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </section>
+</main>
+
+<script type="module">
+import { me, query, subscribe } from './api/client.js'
+import { added, asked, dropped, money, shown, sizes } from './cart.js'
+
+let $ = (id) => document.getElementById(id)
+let text = (s) => document.createTextNode(String(s ?? ''))
+
+let cart = []
+let shelf = new Map()
+
+let say = (words, wrong) => {
+  $('said').hidden = !words
+  $('said').className = wrong ? 'Shop_Note Shop_Note-wrong' : 'Shop_Note'
+  $('said').replaceChildren(text(words))
+}
+
+let card = (row) => {
+  let pick = sizes(row)
+  let out = Number(row.product.stock ?? 0) < 1
+  let li = document.createElement('li')
+  li.className = out ? 'Card Card-out' : 'Card'
+  if (row.product.image) {
+    let img = document.createElement('img')
+    img.className = 'Card_Picture'
+    img.src = row.product.image
+    img.alt = row.doc.title ?? ''
+    li.append(img)
+  }
+  let body = document.createElement('div')
+  body.className = 'Card_Body'
+  let title = document.createElement('div')
+  title.className = 'Card_Title'
+  title.append(text(row.doc.title))
+  let words = document.createElement('p')
+  words.className = 'Card_Words'
+  words.append(text(row.doc.body))
+  let price = document.createElement('div')
+  price.className = 'Card_Price'
+  price.append(text(money(row.product.price_cents)))
+  let row2 = document.createElement('div')
+  row2.className = 'Card_Pick'
+  let size = document.createElement('select')
+  size.setAttribute('aria-label', 'size')
+  for (let s of pick) {
+    let opt = document.createElement('option')
+    opt.value = s
+    opt.append(text(s))
+    size.append(opt)
+  }
+  if (!pick.length) size.hidden = true
+  let qty = document.createElement('input')
+  qty.type = 'number'
+  qty.min = '1'
+  qty.max = String(Math.max(Number(row.product.stock ?? 1), 1))
+  qty.value = '1'
+  qty.setAttribute('aria-label', 'how many')
+  let add = document.createElement('button')
+  add.className = 'Button'
+  add.type = 'button'
+  add.disabled = out
+  add.append(text(out ? 'Sold out' : 'Add'))
+  add.onclick = () => {
+    cart = added(cart, {
+      product: row.entity.eid,
+      options: size.value,
+      qty: Number(qty.value),
+    })
+    draw()
+  }
+  row2.append(size, qty, add)
+  body.append(title, words, price, row2)
+  li.append(body)
+  return li
+}
+
+let draw = () => {
+  let { lines, total } = shown(cart, shelf)
+  $('lines').replaceChildren(...lines.map((l) => {
+    let li = document.createElement('li')
+    li.className = 'Cart_Line'
+    let what = document.createElement('span')
+    what.append(text(`${l.qty} × ${l.title}`))
+    let sum = document.createElement('span')
+    sum.append(text(money(l.cents)))
+    let off = document.createElement('button')
+    off.className = 'Button Button-quiet'
+    off.type = 'button'
+    off.setAttribute('aria-label', `remove ${l.title}`)
+    off.append(text('×'))
+    off.onclick = () => {
+      cart = dropped(cart, l)
+      draw()
+    }
+    li.append(what, sum, off)
+    return li
+  }))
+  $('total').replaceChildren(text(money(total)))
+  $('cart').hidden = !lines.length
+}
+
+$('empty').onclick = () => {
+  cart = []
+  draw()
+}
+
+// The one call that takes money. It is the PLATFORM's door, under the app's
+// own /api/, so this page holds no key and the shop writes no code for it:
+// the door reads each product's price out of the store, makes a Checkout
+// Session on the seller's connected Stripe account, and answers where to send
+// the buyer. The page never sees a card.
+$('pay').onclick = async () => {
+  $('pay').disabled = true
+  say('')
+  try {
+    let r = await fetch('./api/pay/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        items: asked(cart),
+        success: '?ordered={CHECKOUT_SESSION_ID}',
+        cancel: '',
+      }),
+    })
+    let out = await r.json()
+    if (!r.ok) throw new Error(out.error?.message ?? `checkout ${r.status}`)
+    location.href = out.url
+  } catch (e) {
+    say(e.message, true)
+    $('pay').disabled = false
+  }
+}
+
+subscribe('.product!&.doc?', (rows) => {
+  shelf = new Map(rows.map((row) => [row.entity.eid, row]))
+  $('grid').replaceChildren(...rows.map(card))
+  draw()
+})
+
+// Back from Stripe. The order itself is written by the platform when Stripe
+// says the money moved, not here — a buyer who closes this tab has still paid.
+if (new URLSearchParams(location.search).get('ordered')) {
+  say('Thank you — your order is in, and a confirmation is on its way.')
+}
+
+// The seller's own view. Anyone who may write this app is shown what has been
+// sold; a shopper is shown nothing about anyone else's order.
+let mine = await me()
+if (mine.name) $('who').replaceChildren(text(mine.name))
+if (mine.writes) {
+  $('orders').hidden = false
+  let sold = await query('.order!&.doc?')
+  $('rows').replaceChildren(
+    ...sold.reverse().map((row) => {
+      let tr = document.createElement('tr')
+      for (
+        let cell of [
+          row.doc.title,
+          row.order.email,
+          row.order.status,
+          money(row.order.total_cents),
+        ]
+      ) {
+        let td = document.createElement('td')
+        td.append(text(cell))
+        tr.append(td)
+      }
+      return tr
+    }),
+  )
+}
+</script>

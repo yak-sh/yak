@@ -1,0 +1,44 @@
+[
+  {
+    "entity": { "eid": "$charcoal" },
+    "alias": { "name": "shirt:everyday-charcoal" },
+    "doc": {
+      "title": "Everyday Tee — Charcoal",
+      "body": "Heavyweight cotton, boxy cut, printed one at a time."
+    },
+    "product": {
+      "price_cents": 2800,
+      "sizes": "S, M, L, XL",
+      "stock": 24,
+      "image": "tee-charcoal.svg"
+    }
+  },
+  {
+    "entity": { "eid": "$oat" },
+    "alias": { "name": "shirt:everyday-oat" },
+    "doc": {
+      "title": "Everyday Tee — Oat",
+      "body": "The same tee, undyed. It softens for about a month and then stops."
+    },
+    "product": {
+      "price_cents": 2800,
+      "sizes": "S, M, L, XL",
+      "stock": 18,
+      "image": "tee-oat.svg"
+    }
+  },
+  {
+    "entity": { "eid": "$moss" },
+    "alias": { "name": "shirt:long-sleeve-moss" },
+    "doc": {
+      "title": "Long Sleeve — Moss",
+      "body": "Long sleeve, same cotton. Runs a size large on purpose."
+    },
+    "product": {
+      "price_cents": 3600,
+      "sizes": "M, L, XL",
+      "stock": 9,
+      "image": "tee-moss.svg"
+    }
+  }
+]
