@@ -20,6 +20,7 @@ import {
   connector,
   type Kernel,
   kernel,
+  letter,
   letters,
   mailed,
   meta,
@@ -1180,6 +1181,132 @@ slow('a cold sign-in stays well under the budget', async () => {
       took < BUDGET,
       `signing in cold took ${took.toFixed(0)}ms, over the ${BUDGET}ms budget`,
     )
+  } finally {
+    await k.stop()
+  }
+})
+
+// One click instead of six digits (link.ts, T-34351), and the standing link an
+// app directory's reviewer is given instead of a mailbox — OpenAI's review
+// refuses any credential that needs one. Both are the same door and the same
+// landing a typed code reaches; what tells them apart is how they die.
+slow('a link signs a person in, once or until it is revoked', async () => {
+  let k = await kernel()
+  try {
+    // THE LETTER'S ONE CLICK. The same code, said as a link.
+    let email = `probe-${crypto.randomUUID().slice(0, 8)}@yaks.app`
+    let sent = await form(k, '/login', { email })
+    assertEquals(sent.status, 200)
+    await sent.body?.cancel()
+    let click = (path: string) => k.at('yaks.app', path, { redirect: 'manual' })
+    let where = (body: string) => {
+      let url = /https:\/\/yaks\.app(\/login\/link\?t=\S+)/.exec(body)?.[1]
+      assert(url, `a sign-in link in: ${body}`)
+      return url
+    }
+    let one = where((await letter(k, email, 'sign in with one click')).body)
+
+    // It lands exactly where the code lands: their own space, with the
+    // platform cookie — and it says nothing about where it came from, so the
+    // pass never rides on to the next page in a Referer.
+    let inn = await click(one)
+    assertEquals(inn.status, 303)
+    await inn.body?.cancel()
+    assertEquals(
+      inn.headers.get('location'),
+      `https://${email.split('@')[0]}.yaks.app/`,
+    )
+    assertEquals(inn.headers.get('referrer-policy'), 'no-referrer')
+    let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
+    assertMatch(cookie, /^yak_session=/)
+
+    // SINGLE USE: the link WAS the code, and the code is spent. The card
+    // again, and no session with it.
+    let twice = await click(one)
+    assertEquals(twice.status, 400)
+    assertEquals(twice.headers.get('set-cookie'), null)
+    assertStringIncludes(await twice.text(), 'That link has expired')
+
+    // And the person wears the mark of how they last got in, which is what
+    // says whether a standing link was ever used at all.
+    let dir = meta(k, cookie)
+    let [them] = await dir.query(
+      `.person!&.email.address=${encodeURIComponent(email)}&.signed_in?`,
+    )
+    assertEquals((them.signed_in as { via: string }).via, 'link')
+
+    // A CONNECTION IN FLIGHT is finished by the link, because the authorize
+    // request rides inside the seal rather than on the URL.
+    let back = 'https://probe.invalid/cb'
+    let reg = await k.at('yaks.app', '/oauth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        client_name: 'A probing connector',
+        redirect_uris: [back],
+        token_endpoint_auth_method: 'none',
+        grant_types: ['authorization_code'],
+        response_types: ['code'],
+      }),
+    })
+    let client_id = (await reg.json()).client_id
+    let q = new URLSearchParams({
+      response_type: 'code',
+      client_id,
+      redirect_uri: back,
+      state: 'a-probe-state',
+      scope: 'graph',
+      code_challenge: b64u(
+        await crypto.subtle.digest('SHA-256', new TextEncoder().encode('v')),
+      ),
+      code_challenge_method: 'S256',
+    }).toString()
+    let asked = await form(k, '/login', { email, q })
+    assertEquals(asked.status, 200)
+    await asked.body?.cancel()
+    let linking = await click(
+      where((await letter(k, email, 'sign in with one click')).body),
+    )
+    assertEquals(linking.status, 302)
+    await linking.body?.cancel()
+    let to = new URL(linking.headers.get('location') ?? '')
+    assertEquals(to.origin + to.pathname, back)
+    assertEquals(to.searchParams.get('state'), 'a-probe-state')
+    assert(to.searchParams.get('code'), 'the connector got its code')
+
+    // THE STANDING LINK: minted by whoever is signed in, for themselves, and
+    // worth a session and nothing more.
+    let minted = await form(k, '/login/link', { days: '90' }, cookie)
+    assertEquals(minted.status, 200)
+    let got = await minted.json()
+    assertMatch(got.id, /^[0-9a-f]{12}$/)
+    assert(Date.parse(got.expires) > Date.now() + 89 * 86_400_000)
+    let at = new URL(got.url)
+    let standing = at.pathname + at.search
+
+    // Twice, which is the whole point: a reviewer signs in as often as they
+    // need to, with no mailbox anywhere in it.
+    for (let _ of [1, 2]) {
+      let r = await click(standing)
+      assertEquals(r.status, 303)
+      await r.body?.cancel()
+      assertMatch(r.headers.get('set-cookie') ?? '', /^yak_session=/)
+    }
+
+    // Nobody but the signed-in browser mints one: a stranger is refused, and
+    // an agent's bearer must not become a session it could mail anywhere.
+    let stranger = await form(k, '/login/link', {})
+    assertEquals(stranger.status, 401)
+    await stranger.body?.cancel()
+
+    // And it is revocable by name, which a cookie is not.
+    let gone = await form(k, '/login/link', { revoke: got.id }, cookie)
+    assertEquals(gone.status, 200)
+    assertEquals((await gone.json()).revoked, [got.id])
+    let dead = await click(standing)
+    assertEquals(dead.status, 400)
+    assertEquals(dead.headers.get('set-cookie'), null)
+    await dead.body?.cancel()
   } finally {
     await k.stop()
   }

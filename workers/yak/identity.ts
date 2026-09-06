@@ -22,6 +22,15 @@
 // shown the box at all — `GET /login` reads the session first and sends them
 // on to that address, or to where a fresh sign-in would land them (T-34209).
 //
+// Or they follow a LINK (link.ts, T-34351). Every code letter carries one that
+// spends that same code, so a person reading it on a phone types nothing; and
+// `POST /login/link` mints a STANDING one, which signs its holder in until the
+// expiry its minter set. That is the credential an app directory's reviewer is
+// given — OpenAI rejects anything behind a mailbox — and it is worth a session
+// and no more: it is minted BY the account it signs in, from a browser cookie
+// that is the longer-lived of the two, and `GET /login/link` lands whoever
+// follows it exactly where a spent code lands them.
+//
 // An agent proves who it is with a bearer token from
 // `@cloudflare/workers-oauth-provider`, which owns `/oauth/token`,
 // `/oauth/register`, and the two well-known metadata documents. Both ways a
@@ -88,6 +97,16 @@ import {
   went,
 } from './erase.ts'
 import { GRANT, held, ledger } from './grants.ts'
+import {
+  LINK,
+  links,
+  type Once,
+  onceLink,
+  passOf,
+  revoke,
+  stand,
+  whose,
+} from './link.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { mail } from './mail.ts'
@@ -531,12 +550,19 @@ export let handoff = async (req: Request, env: Env): Promise<Response> => {
 
 // The person is known: the cookie, the space that is theirs, the first-owner
 // bootstrap, and wherever they were going.
+//
+// `via` is how they proved it, when this visit proved anything — a code typed
+// or a link followed (link.ts). It is stamped on the person, one row, so it
+// says the LAST way in rather than a trail, which is the question a standing
+// link raises: has anybody used it at all. An already-signed-in browser lands
+// here too and names none, because nothing was proved.
 let landed = async (
   req: Request,
   env: Env,
   person: string,
   q: string,
   back: string,
+  via?: 'code' | 'link',
 ) => {
   let store = meta(env)
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
@@ -552,6 +578,12 @@ let landed = async (
       member: { space: space.eid, person, role: 'owner' },
     }], KERNEL)
   }
+  if (via) {
+    await store.apply([{
+      entity: { eid: person },
+      signed_in: { at: new Date().toISOString(), via },
+    }], KERNEL)
+  }
   let token = await sign(
     { person, space: null, exp: Math.floor(Date.now() / 1000) + SESSION },
     secret(env),
@@ -564,6 +596,25 @@ let landed = async (
   if (q) return allow(req, env, q, person, set)
   let hand = back ? await handoffTo(secret(env), dir, person, back) : null
   return redirect(hand ?? backTo(mine.slug, back), set, 303)
+}
+
+// A letter's one click, spent: the very code the form would have spent
+// (signin.ts), so following the link is single use, dies with the code, and
+// costs a try on every code standing for the address exactly as a mistyped one
+// does. The person is found or minted here and nowhere earlier, which is what
+// keeps asking for a code from writing a person for every address anyone types.
+let spent = async (env: Env, once: Once) =>
+  await spend(meta(env), secret(env), once.email, once.code)
+    ? await personOf(meta(env), once.email, nameOf(null, once.email))
+    : null
+
+// The same answer, saying nothing about where it came from: the address
+// carried the pass, and a redirect off this page — to an app, or to an OAuth
+// client's own redirect_uri — would otherwise hand the link on in a Referer.
+let quiet = (r: Response) => {
+  let headers = new Headers(r.headers)
+  headers.set('referrer-policy', 'no-referrer')
+  return new Response(r.body, { status: r.status, headers })
 }
 
 // The authorize request as the provider reads it, re-parsed from the query
@@ -697,14 +748,25 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     let email = canon(field('email'))
     let back = field('return') || null
     if (!email.includes('@')) {
-      return askEmail(field('q') || null, back, undefined, 400)
+      return askEmail(field('q') || null, back, undefined, undefined, 400)
     }
     let code = await mint(meta(env), secret(env), email)
     if (code) {
+      // The letter carries the code AND the one click that spends it
+      // (link.ts): the same code said as a link, so it lasts the same ten
+      // minutes and dies the moment either one is used. Somebody reading this
+      // on a phone should not have to retype anything.
+      let link = await onceLink(secret(env), {
+        email,
+        code,
+        q: field('q') || undefined,
+        back: back || undefined,
+      })
       await mail(env)({
         to: email,
         subject: `${code} is your yaks.app code`,
         body: `Your yaks.app sign-in code is ${code}.\n\n` +
+          `Or sign in with one click: ${link}\n\n` +
           'It lasts ten minutes. If you did not ask for it, nothing has ' +
           'happened and you can ignore this.',
       })
@@ -730,7 +792,78 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     // person by their title and a titleless one reads back as a bare eid
     // (T-32733). It is theirs to change on their own space page.
     let person = await personOf(meta(env), email, nameOf(null, email))
-    return landed(req, env, person, q, back)
+    return landed(req, env, person, q, back, 'code')
+  }
+
+  // One click instead of six digits (link.ts): the letter's own link, or a
+  // standing one somebody was handed. Both land where the code lands, and a
+  // pass that has been spent, revoked or expired is the sign-in card again,
+  // still carrying whatever the link was going to finish.
+  if (path == LINK && req.method == 'GET') {
+    let pass = await passOf(url.searchParams.get('t') ?? '', secret(env))
+    let once = pass?.once
+    let person = once
+      ? await spent(env, once)
+      : pass?.standing
+      ? await whose(pass.standing, links(env.OAUTH_KV))
+      : null
+    if (!person) {
+      return askEmail(
+        once?.q ?? null,
+        once?.back ?? null,
+        undefined,
+        'That link has expired or was already used. Ask for a fresh one?',
+        400,
+      )
+    }
+    return quiet(
+      await landed(req, env, person, once?.q ?? '', once?.back ?? '', 'link'),
+    )
+  }
+
+  // A STANDING link, minted for whoever is signed in and for nobody else — the
+  // reviewer credential an app directory asks for, since it needs no mailbox
+  // (T-34351). It grants nothing the request's own cookie does not already
+  // carry, a session being the longer-lived credential of the two, and unlike
+  // that cookie it can be taken back by name.
+  //
+  // The COOKIE is the only credential it takes (`browser`): an agent holding a
+  // bearer must not be able to turn API access into a browser session it could
+  // mail anywhere, which is the line billing.ts takes for a purchase (C-33033).
+  if (path == LINK && req.method == 'POST') {
+    let person = await browser(env, req)
+    if (!person) return unauthorized(req)
+    let book = links(env.OAUTH_KV)
+    if (!book) {
+      return Response.json({
+        error: {
+          code: 'no_ledger',
+          message: 'a link nothing could revoke is not minted',
+        },
+      }, { status: 503 })
+    }
+    let said = field('revoke')
+    if (said) {
+      return Response.json({ revoked: await revoke(book, person, said) })
+    }
+    try {
+      let { standing, url: link } = await stand(secret(env), book, {
+        person,
+        days: field('days') ? Number(field('days')) : undefined,
+      })
+      return Response.json({
+        url: link,
+        id: standing.id,
+        expires: new Date(standing.exp * 1000).toISOString(),
+        // Every standing link this person still has, so whoever mints one can
+        // see what else is outstanding and revoke it by name.
+        links: await book.ids(person),
+      })
+    } catch (e) {
+      return Response.json({
+        error: { code: 'refused', message: (e as Error).message },
+      }, { status: 400 })
+    }
   }
 
   // The consent page: the sign-in card wearing the client's name, or one

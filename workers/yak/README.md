@@ -74,6 +74,25 @@ npx wrangler secret put ANALYTICS_TOKEN   # paste the token
 It is a **different** token from `CF_ANALYTICS_TOKEN`, which the meter uses —
 the same permission, a separate token, so revoking one does not stop the other.
 
+## A reviewer's sign-in link
+
+An app directory's reviewer gets a link, never a mailbox: OpenAI rejects
+credentials behind an email code, and Anthropic asks for a fully populated test
+account (T-34351). A standing link signs its holder in until it expires and is
+worth a session and nothing more — so it is minted by the account it signs in,
+with `yak` (link.ts, identity.ts `/login/link`):
+
+| act    | command                                           |
+| ------ | ------------------------------------------------- |
+| mint   | `yak test chatgpt-reviewer && yak link --days=90` |
+| revoke | `yak link --revoke=<id> --as=chatgpt-reviewer`    |
+
+`yak test <name>` mints `<name>@bot.yak.sh`, signs it in, and makes it current;
+`yak link` prints the URL, the id that revokes it, and when it dies (30 days by
+asking for nothing, a year at most). Build the account out — an app or two —
+before handing the link over, since a reviewer is asked to walk a working
+account. `--as` picks the account when it is not the current one.
+
 ## Verifying a deploy
 
 ```sh

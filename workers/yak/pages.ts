@@ -858,17 +858,20 @@ let carried = (q: string | null, back?: string | null) =>
   held('q', q) + held('return', back)
 
 // Ask for an address. `who` names the app asking, when one is (the OAuth
-// consent page IS this page — signing in is the consent).
+// consent page IS this page — signing in is the consent), and `why` is the
+// soft refusal, when there was one: a sign-in link that had already been used
+// lands here, carrying whatever it was going to finish (identity.ts, T-34351).
 export let askEmail = (
   q: string | null,
   back: string | null,
   who?: string,
+  why?: string,
   status = 200,
 ) =>
   shell(
     'Sign in to yaks.app',
-    'Your assistant builds apps for you on yaks.app. ' +
-      'They live at your own address, with their own data.',
+    why ?? 'Your assistant builds apps for you on yaks.app. ' +
+        'They live at your own address, with their own data.',
     status,
     `<form method="post" action="/login">${carried(q, back)}
 <p>${

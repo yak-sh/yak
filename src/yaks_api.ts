@@ -12,6 +12,7 @@
 // The platform's own spellings are imported, never retyped: `PLATFORM` from
 // the router, `COOKIE` from the token. A drift on either side is a type error
 // rather than a puzzling 401.
+import { LINK } from '../workers/yak/link.ts'
 import { PLATFORM } from '../workers/yak/route.ts'
 import { COOKIE } from './token.ts'
 import { type Querier, query as graphQuery, type Row } from './client.ts'
@@ -92,6 +93,38 @@ export let spendCode = async (address: string, code: string) => {
     )
   }
   return session
+}
+
+/** What minting a standing link answers: the URL, the id that revokes it, when
+ * it dies, and every one this account still has standing. */
+export type Link = {
+  url: string
+  id: string
+  expires: string
+  links: string[]
+}
+
+// A STANDING sign-in link for this account (workers/yak/link.ts): one URL that
+// signs its holder in until it expires, which is what an app directory's
+// reviewer is given instead of a mailbox. Still no operator authority — a link
+// is worth a session and nothing more, and the cookie this call is made with is
+// the longer-lived credential of the two.
+export let linkFor = (session: string, days?: number): Promise<Link> =>
+  said(posted(apex(LINK), days ? { days: String(days) } : {}, session))
+
+/** Taking one back, by its id or the front of one. Answers the ids that went. */
+export let unlink = async (session: string, id: string): Promise<string[]> =>
+  (await said<{ revoked: string[] }>(
+    posted(apex(LINK), { revoke: id }, session),
+  )).revoked
+
+// The door answers JSON both ways: a refusal says why in the same shape every
+// other door here refuses in (identity.ts `unauthorized`).
+let said = async <T>(answer: Promise<Response>): Promise<T> => {
+  let r = await answer
+  let body = await bodyOf(r)
+  if (!r.ok) throw new Error(body?.error?.message ?? `${LINK} said ${r.status}`)
+  return body as T
 }
 
 let SUBJECT = /\b(\d{6})\b is your yaks\.app code/

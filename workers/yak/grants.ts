@@ -58,34 +58,58 @@ type Kv = {
 
 export type Ledger = NonNullable<ReturnType<typeof ledger>>
 
-// Where a grant is written down. Null when there is no KV at all (a probe with
-// none wired): minting refuses rather than handing out a token nothing could
-// ever take back.
-export let ledger = (kv: unknown) => {
+// What every revocable thing this kernel mints says about itself: whose it is,
+// which one it is, and the second it dies at.
+export type Row = { id: string; person: string; exp: number }
+
+// A shelf of those over the KV, keyed `<what>:<person>:<id>`. Both revocable
+// credentials here are one — a CLI grant, and the standing sign-in link beside
+// it (link.ts) — because a sealed value nobody can forge is still one nobody
+// could END: verifying asks whether the row is there, and revoking deletes it.
+// The row expires with what it names, so nothing has to sweep it, and a token
+// naming somebody else's id finds no row at all, since the person is in the
+// key.
+//
+// Null when there is no KV (a probe with none wired): minting refuses rather
+// than handing out something nothing could ever take back. `kv` and `ttl` are
+// answered too, for the rows a shelf's owner keeps BESIDE its own (`wearing`).
+export let shelf = <T extends Row>(kv: unknown, what: string) => {
   let store = kv as Kv | undefined
   if (!store?.get) return null
-  let key = (person: string, id: string) => `grant:${person}:${id}`
-  // What a long-lived holder is signed in with, by the holder's own name.
-  let worn = (holder: string) => `wearing:${holder}`
-  // A minute past the token's own death — KV's own floor is a minute — so a
-  // clock that disagrees slightly reads a live token as live.
-  let ttl = (g: Grant, now: number) =>
-    Math.max(60, g.exp - Math.floor(now / 1000) + 60)
+  let key = (person: string, id: string) => `${what}:${person}:${id}`
+  // A minute past the row's own death — KV's own floor is a minute — so a
+  // clock that disagrees slightly reads a live one as live.
+  let ttl = (r: Row, now = Date.now()) =>
+    Math.max(60, r.exp - Math.floor(now / 1000) + 60)
   return {
-    keep: async (g: Grant, now = Date.now()) => {
-      await store.put(key(g.person, g.id), JSON.stringify(g), {
-        expirationTtl: ttl(g, now),
+    kv: store,
+    ttl,
+    keep: async (r: T, now = Date.now()) => {
+      await store.put(key(r.person, r.id), JSON.stringify(r), {
+        expirationTtl: ttl(r, now),
       })
     },
-    held: async (person: string, id: string): Promise<Grant | null> =>
+    held: async (person: string, id: string): Promise<T | null> =>
       JSON.parse(await store.get(key(person, id)) ?? 'null'),
-    // Every grant of this person's still on the books, by id.
+    // Every one of this person's still on the books, by id.
     ids: async (person: string) =>
       (await store.list({ prefix: key(person, '') })).keys
         .map((k) => k.name.slice(key(person, '').length)),
     drop: async (person: string, id: string) => {
       await store.delete(key(person, id))
     },
+  }
+}
+
+// Where a grant is written down: the shelf above, plus the one row a grant has
+// that a sign-in link does not.
+export let ledger = (kv: unknown) => {
+  let book = shelf<Grant>(kv, 'grant')
+  if (!book) return null
+  // What a long-lived holder is signed in with, by the holder's own name.
+  let worn = (holder: string) => `wearing:${holder}`
+  return {
+    ...book,
     // WHICH grant a long-lived holder is wearing — one build container
     // (sandbox.ts). The token is answered once and kept nowhere, so this row
     // is not the token: it is whose grant and which one, which is enough for
@@ -93,19 +117,19 @@ export let ledger = (kv: unknown) => {
     // whoever ends the holder to take it back without having minted it. It
     // expires with the grant it names.
     wear: async (holder: string, g: Grant, now = Date.now()) => {
-      await store.put(worn(holder), `${g.person}:${g.id}`, {
-        expirationTtl: ttl(g, now),
+      await book.kv.put(worn(holder), `${g.person}:${g.id}`, {
+        expirationTtl: book.ttl(g, now),
       })
     },
     wearing: async (holder: string) => {
-      let said = await store.get(worn(holder))
+      let said = await book.kv.get(worn(holder))
       let cut = said?.indexOf(':') ?? -1
       return cut < 0
         ? null
         : { person: said!.slice(0, cut), id: said!.slice(cut + 1) }
     },
     bare: async (holder: string) => {
-      await store.delete(worn(holder))
+      await book.kv.delete(worn(holder))
     },
   }
 }

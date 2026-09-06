@@ -5,6 +5,7 @@
 //
 //   yak test                    mint a throwaway @bot.yak.sh account, signed in
 //   yak whoami                  the account, its spaces, and its role in each
+//   yak link                    a standing sign-in link for that account
 //   yak tool app_list           any connector tool, its reply printed plainly
 //   yak query jeff/recipes .doc!    an app's store, through the filter grammar
 //   yak apply jeff/recipes @batch.json
@@ -45,6 +46,7 @@ import {
   close,
   codeFor,
   doomedIn,
+  linkFor,
   meAt,
   rpc,
   saidBy,
@@ -52,10 +54,11 @@ import {
   storeApply,
   storeQuery,
   tools,
+  unlink,
   zone,
 } from './yaks_api.ts'
 import { safe } from './terminal.ts'
-import { type Arg, type Decl, type Opt, text, usageOf } from './verb.ts'
+import { type Arg, type Decl, num, type Opt, text, usageOf } from './verb.ts'
 
 let print = (line: string) => console.log(safe(line))
 let warn = (line: string) => console.error(safe(line))
@@ -357,6 +360,37 @@ let verbs: Record<string, Verb> = {
         arguments: argsOf(rest),
       })
       print(said.flags.has('--json') ? json(out) : saidBy(out))
+    },
+  },
+
+  link: {
+    name: 'link',
+    about:
+      'a standing sign-in link for this account — one URL that signs its ' +
+      'holder in until it expires',
+    opts: [{ name: '--days', kind: num }, { name: '--revoke', kind: text }],
+    door: ['cli'],
+    examples: [
+      'yak test reviewer && yak link --days=90',
+      'yak link --revoke=3f2a',
+    ],
+    run: async (said) => {
+      let at = acting(said)
+      let gone = said.opts['--revoke']
+      if (gone) {
+        let ids = await unlink(at.session, gone)
+        return print(
+          ids.length
+            ? `revoked ${ids.join(' ')}`
+            : `no link starts with ${gone}`,
+        )
+      }
+      let days = said.opts['--days']
+      let got = await linkFor(at.session, days ? Number(days) : undefined)
+      print(got.url)
+      print(`id        ${got.id}`)
+      print(`expires   ${got.expires}`)
+      if (got.links.length > 1) print(`standing  ${got.links.join(' ')}`)
     },
   },
 

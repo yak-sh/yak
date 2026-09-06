@@ -580,6 +580,17 @@ export let platformDoc: VocabDoc = {
         tries: owned(num),
       },
     },
+    // When this person last got in, and how (identity.ts `landed`, T-34351).
+    // One row, so it holds the LAST way in rather than a trail — which is the
+    // question a standing sign-in link raises: has anybody used it at all. Not
+    // `kind`: it is a mark a person wears, never a thing of its own.
+    signed_in: {
+      type: 'object',
+      properties: {
+        at: owned(time),
+        via: owned({ enum: ['code', 'link'] }),
+      },
+    },
     report: {
       type: 'object',
       kind: true,
