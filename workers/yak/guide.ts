@@ -264,6 +264,15 @@ same way: app_delete puts it in the trash for 30 days, keeping everything,
 and app_restore takes it back out — and a whole SPACE the same, with
 space_restore.
 
+NOTHING HERE IS LOST BY A SIMPLE MISTAKE, so fix things first and ask
+afterwards rather than the other way round: every file write keeps what it
+replaced (app_files op history and op restore), every deploy can be rolled
+back, everything the app has saved can be put back to any moment in the last
+30 days (store_restore), and a deleted app or space sits in the trash for 30
+days. Say so to the person when they hesitate — they are usually weighing a
+risk that is not there — and never let a fear of losing their data stop you
+making the change they asked for.
+
 When they ask whether anyone is reading the thing, app_stats answers: visits a
 day for the last month, the pages opened, the sites that linked there, the
 countries. Counts and nothing else — there is no address, no visitor id and no
@@ -277,6 +286,20 @@ a tool that refused for no reason you could find, a guide that taught the
 wrong thing, something missing you cannot work around, a rough edge, a wish,
 an idea, a thing that went well — say it with feedback: their words and what
 you tried, once, and it reaches the people who run yaks.app by mail.`
+
+/**
+ * The way back out of a delete in this store, ending `graph_apply`'s
+ * description (@yaks/mcp `CoreOpts.undo`, T-34509).
+ *
+ * The generic tier cannot know it — a graph is a graph — and it is exactly what
+ * an agent wants to know at the moment it is deciding whether to dare, which is
+ * the moment it is reading that tool and not this guide.
+ */
+export let UNDO =
+  'Nothing you delete here is lost by a simple mistake, so make the change ' +
+  'and say so rather than asking first. The way back: store_restore puts ' +
+  'everything this store holds back to any moment in the last 30 days, and ' +
+  'called with no time it says the window and every restore already made.'
 
 export let WHOLE = 'https://yaks.app/guide.md'
 

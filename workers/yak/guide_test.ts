@@ -12,7 +12,7 @@ import { RESERVED } from '../../src/store/vocab.ts'
 import { comps, typeName } from '../../src/types.ts'
 import { SHIM, upload } from './dispatch.ts'
 import type { Env } from './env.ts'
-import { PAGES, uriOf } from './guide.ts'
+import { INSTRUCTIONS, PAGES, uriOf } from './guide.ts'
 import { ORIGIN } from './route.ts'
 import { TOOLS } from './tools.ts'
 
@@ -47,6 +47,45 @@ Deno.test('every page offered is a file, and says what it is', () => {
     // And it points back, so nobody is stranded on one page of a guide.
     assert(text.includes('yaks.app/guide.md'), `${p.slug} points nowhere back`)
   }
+})
+
+// Nothing here is lost by a simple mistake (T-34509). The words are the point:
+// an agent that believes a change might destroy the person's data stops to ask
+// permission for every write, and the whole reason all this is kept is so it
+// does not have to. So the guide says it under its own heading, and the
+// instructions every agent is handed at connect say it in a sentence — the two
+// doors, because an agent reads the second and may never open the first.
+Deno.test('the guide and the instructions both say nothing is lost', () => {
+  assert(
+    guide.includes('## Nothing here is lost by a simple mistake'),
+    'the guide has no section on the way back',
+  )
+  // And it names all four ways back, since the point is that the reader can
+  // pick the one that covers what they are about to do.
+  for (
+    let word of [
+      'app_restore',
+      'space_restore',
+      'store_restore',
+      "op: 'history'",
+      "op: 'restore'",
+      'app_rollback',
+    ]
+  ) {
+    assert(guide.includes(word), `the guide never names ${word}`)
+  }
+  // The one honest exception, said out loud rather than left as a surprise.
+  assert(guide.includes('The one thing with no way back'), guide.slice(-200))
+
+  assert(
+    INSTRUCTIONS.includes('NOTHING HERE IS LOST BY A SIMPLE MISTAKE'),
+    'the instructions never say it',
+  )
+  assert(
+    INSTRUCTIONS.includes('fix things first and ask') &&
+      INSTRUCTIONS.includes('Say so to the person when they hesitate'),
+    'the instructions say it is recoverable but not what to DO about it',
+  )
 })
 
 // The description is the only thing an agent sees before deciding to read, so

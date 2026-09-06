@@ -1601,7 +1601,8 @@ export let TOOLS: Tool[] = [
       'to confirm, not yours. Only the owner of the space may ask, and ' +
       'app_delete is the smaller thing when they mean one app. Pass forever: ' +
       'true and the link erases it there and then instead, with nothing kept ' +
-      'and no undo — only when the person has said they mean exactly that.',
+      'and no undo — only when the person has said they mean exactly that. ' +
+      'The way back: space_restore, any time in those 30 days.',
     input: {
       type: 'object',
       properties: {
@@ -1926,7 +1927,9 @@ export let TOOLS: Tool[] = [
       'was replaced and by whom — and op: restore with path puts one back, ' +
       'the newest by default or the one sha or at names. A restore is itself ' +
       'a write, so it too can be undone. Call guide for the whole of ' +
-      'it, in a page (https://yaks.app/guide.md).',
+      'it, in a page (https://yaks.app/guide.md). ' +
+      'The way back from any write, patch, fetch or delete here: op: history, ' +
+      'then op: restore.',
     input: {
       type: 'object',
       properties: {
@@ -2200,7 +2203,10 @@ export let TOOLS: Tool[] = [
       'dies with the container. The container is metered: every second it ' +
       `is awake is charged to the space, and one build gets ${BUDGET} of ` +
       'them, so plan the build and run it once rather than poking at it. It ' +
-      'is destroyed when the build ends, and everything in it with it.',
+      'is destroyed when the build ends, and everything in it with it. ' +
+      'The way back: none is needed — nothing of the app is here. The ' +
+      'container is a throwaway machine, and only sandbox_ship moves ' +
+      'anything out of it.',
     input: {
       type: 'object',
       properties: {
@@ -2246,7 +2252,10 @@ export let TOOLS: Tool[] = [
       'nothing here is served, and everything here is gone when the build ' +
       'ends. app_files writes what the app serves; sandbox_ship moves a built ' +
       'artifact from here to there. Waking the sandbox is metered by the ' +
-      'second, like sandbox_exec.',
+      'second, like sandbox_exec. ' +
+      'The way back: none is needed — nothing of the app is here. The ' +
+      'container is a throwaway machine, and only sandbox_ship moves ' +
+      'anything out of it.',
     input: {
       type: 'object',
       properties: {
@@ -2306,7 +2315,9 @@ export let TOOLS: Tool[] = [
       'index.html under its own name, as if app_files had written it. This ' +
       'is the last step of a compile: the sandbox is thrown away and the app ' +
       'keeps the artifact. Bytes are carried as bytes, so a .wasm arrives ' +
-      'whole. Waking the sandbox is metered by the second, like sandbox_exec.',
+      'whole. Waking the sandbox is metered by the second, like sandbox_exec. ' +
+      'The way back: these land through app_files, so each keeps the bytes ' +
+      'it replaced — app_files op: history, then op: restore.',
     input: {
       type: 'object',
       properties: {
@@ -2387,7 +2398,9 @@ export let TOOLS: Tool[] = [
       'Every deploy is kept, so app_rollback can put this one back later. ' +
       'If the app is published, the offer does NOT move with it — what ' +
       'strangers install stays the version you published until you ' +
-      'app_publish again, and this says so when it starts trailing.',
+      'app_publish again, and this says so when it starts trailing. ' +
+      'The way back: app_rollback, which puts an earlier deploy back as a ' +
+      'new version.',
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP },
@@ -2559,7 +2572,9 @@ export let TOOLS: Tool[] = [
       'NEW version, so nothing is lost and a rollback can itself be rolled ' +
       'back. Leave version out for the deploy before the live one, or name ' +
       'one off app_versions. Give the person the URL and tell them what came ' +
-      'back. Their data is never touched — only the files.',
+      'back. Their data is never touched — only the files. ' +
+      'The way back: another app_rollback, since this goes out as a new ' +
+      'version and app_versions still lists the one you left.',
     input: {
       type: 'object',
       properties: {
@@ -2639,7 +2654,9 @@ export let TOOLS: Tool[] = [
       'costs is what was written since the moment asked for, so name the ' +
       'moment as late as it can be. The app is briefly restarted to pick the ' +
       "recovery up. The app's FILES are not part of this — app_rollback and " +
-      'app_files restore put those back.',
+      'app_files restore put those back. ' +
+      'The way back: another store_restore, to the moment just before this ' +
+      'one, which the answer hands you.',
     input: {
       type: 'object',
       properties: {
@@ -2978,7 +2995,10 @@ export let TOOLS: Tool[] = [
     idempotent: true,
     description:
       "Take a key away from the app's worker. Its code stops seeing " +
-      'env.NAME at the next request; nothing else about the app changes.',
+      'env.NAME at the next request; nothing else about the app changes. ' +
+      'The way back: app_secret_set with the value again — a secret is never ' +
+      'readable once set, so this is the one thing here nothing can restore ' +
+      'for you.',
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP, name: str('the secret to remove') },
@@ -3005,7 +3025,8 @@ export let TOOLS: Tool[] = [
       'person asks for the app to be deleted; app_files delete removes one ' +
       'file, and app_set moves an app rather than replacing it. Pass ' +
       'forever: true to skip the trash and erase it now — for the person ' +
-      'who means it, since nothing is kept and there is no undo.',
+      'who means it, since nothing is kept and there is no undo. ' +
+      'The way back: app_restore, any time in those 30 days.',
     input: {
       type: 'object',
       properties: {
@@ -3577,7 +3598,9 @@ export let TOOLS: Tool[] = [
       'Cloudflare and the app is untouched — it still answers at its ' +
       '<space>.yaks.app address, and its data and files are not involved. ' +
       "The person's DNS record is theirs to remove wherever their domain is " +
-      'managed; until they do it points at nothing. Only the space owner may.',
+      'managed; until they do it points at nothing. Only the space owner may. ' +
+      'The way back: domain_attach with the same hostname, which starts the ' +
+      'certificate again.',
     input: {
       type: 'object',
       properties: { space: SPACE, hostname: HOSTNAME },
@@ -3740,7 +3763,9 @@ export let TOOLS: Tool[] = [
       'Stop offering the app. It stays exactly as it is and so does every ' +
       'copy anyone installed — their data is theirs — but nobody new can ' +
       'install it, and the name is free again. It leaves the gallery at the ' +
-      'same moment, if it was on it. Only the space owner may.',
+      'same moment, if it was on it. Only the space owner may. ' +
+      'The way back: app_publish, which offers it again under the same name ' +
+      'unless somebody else has taken it meanwhile.',
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP },
@@ -3956,7 +3981,9 @@ export let TOOLS: Tool[] = [
       'the copy yourself is replaced too. A vocabulary that only grew is ' +
       'applied to their store; one that would retype a column their rows ' +
       'were written under is refused, and nothing moves. It answers what ' +
-      'changed.',
+      'changed. ' +
+      'The way back: app_rollback, since the update goes out as a version ' +
+      'like any other and app_versions lists the one before it.',
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP },
@@ -4166,7 +4193,9 @@ export let TOOLS: Tool[] = [
       'Take someone back out of the space: they keep their sign-in and lose ' +
       'this space. Only the space owner may, and the last owner cannot be ' +
       'removed — a space with nobody to say who belongs is one nobody can ' +
-      'ever open again.',
+      'ever open again. ' +
+      'The way back: member_add with the same address, which puts them back ' +
+      'where they were.',
     input: {
       type: 'object',
       properties: { space: SPACE, email: str('their email address') },

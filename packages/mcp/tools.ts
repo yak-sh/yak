@@ -59,6 +59,13 @@ export type CoreOpts = {
    * anybody may call — where the write is not a tool that refuses but a tool
    * that is not there. */
   readOnly?: boolean
+  /** this host's way back out of a delete, in its own words, ending
+   * `graph_apply`'s description — "everything this store held can be put back
+   * to any moment in the last 30 days with store_restore", say. A host that
+   * has one should say it there, because that is where an agent reads it at
+   * the moment it is deciding whether to dare. Absent where the host has no
+   * way back, since a promise nobody can keep is worse than silence. */
+  undo?: string
   /** extra arguments every READ here takes, merged into each read tool's
    * input, for a host whose reads are scoped by something of its own —
    * yaks.app's signed-out door names which app to read.
@@ -190,7 +197,8 @@ export let core = (opts: CoreOpts): Tool[] => {
         `and every type — and graph_schema says the same thing at length. ` +
         `The schema describes and the server decides: it is open, so a word ` +
         `learned since you connected still reaches the graph, and a column ` +
-        `nobody declared is refused here with the ones that are.`,
+        `nobody declared is refused here with the ones that are.` +
+        (opts.undo ? ` ${opts.undo}` : ''),
       input: {
         change: writes.describe('the bundles to apply, atomically'),
       },

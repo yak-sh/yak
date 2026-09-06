@@ -89,6 +89,9 @@ export type Options = {
   /** extra arguments every generic READ takes here — see
    * {@link CoreOpts.scope} */
   scope?: CoreOpts['scope']
+  /** this host's way back out of a delete, ending `graph_apply`'s description
+   * — see {@link CoreOpts.undo} */
+  undo?: CoreOpts['undo']
   /** what every tool this server lists declares about signing in
    * ({@link Security}), said per TOOL because that is where a host reads it —
    * a tool carrying `securitySchemes` in its own `meta` keeps that instead */
@@ -214,6 +217,7 @@ export let listing = (opts: Options): Tool[] => [
     search: opts.search,
     readOnly: opts.readOnly,
     scope: opts.scope,
+    undo: opts.undo,
   }),
   ...toolsOf(opts.graph.plugins),
   ...(opts.tools ?? []),

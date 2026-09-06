@@ -147,7 +147,9 @@ let sending = (ctx: Ctx, vocab: Vocab): Tool => ({
     `left lands on that same entity a moment later as delivered or bounced, ` +
     `so read it back with mail_list. The body is markdown. ${SCOPE} Asking ` +
     `to send takes a member who may write, even in an app anyone can write ` +
-    `to.`,
+    `to. The way back: none — a letter that has left cannot be recalled, ` +
+    `which makes this one of the very few things here a mistake is final in. ` +
+    `Read it back to the person before you send it.`,
   input: {
     app: z.string().describe(APP),
     space: z.string().optional().describe(SPACE),

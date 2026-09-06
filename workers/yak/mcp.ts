@@ -78,7 +78,7 @@ import { anonymous, opened, openly, READS, SCOPE } from './anon.ts'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { INSTRUCTIONS, pageFor } from './guide.ts'
+import { INSTRUCTIONS, pageFor, UNDO } from './guide.ts'
 import { asking, challenge, SAYS, unauthorized } from './identity.ts'
 import { narrowed } from './grants.ts'
 import { callDeclared, listDeclared, listViews, readView } from './declared.ts'
@@ -426,6 +426,9 @@ let door = async (ctx: Ctx, session: string) => {
     // And where a word is written about at length, so graph_schema hands over
     // the page beside the columns (guide.ts `pageFor`).
     guide: pageFor,
+    // And the way back out of a delete here, which the generic tier could not
+    // know: a store is not a place a mistake is final (recover.ts, T-34509).
+    undo: UNDO,
     authenticate: () => ({ eid: ctx.person }),
     // The name, the line and the picture, from the one place they are written
     // (seo.ts CONNECTOR, T-34415): a client that reads `serverInfo` shows this

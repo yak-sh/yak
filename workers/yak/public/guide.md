@@ -962,6 +962,39 @@ one back — every file of it, its components, its tools and its worker — as a
 version, so a rollback can itself be rolled back. Only the files move; what the
 app has saved is never touched.
 
+## Nothing here is lost by a simple mistake
+
+Every destructive thing on this platform has a way back, and each tool's own
+description ends by naming it. Four of them, at four sizes:
+
+- **A deleted app or space is in the trash for 30 days.** `app_delete` and
+  `space_delete` keep everything — the files, the data, the address — and
+  `app_restore` and `space_restore` bring the whole thing back. After 30 days it
+  is erased for good, and only then.
+- **A store can be put back to any moment in the last 30 days.** `store_restore`
+  winds everything the app has SAVED back to how it was at a time you name — a
+  bad import, rows deleted that should not have been. Where it stood before is
+  written down before anything moves, so the restore is itself undone by
+  restoring to a moment just before it, and the answer hands you that sentence.
+  Call it with no time first and it says the window and every restore already
+  made.
+- **Every file write keeps what it replaced**, for 30 days.
+  `app_files(op: 'history', path)` lists them newest first with the sha256, the
+  size, when it was replaced and by whom; `app_files(op: 'restore', path)` puts
+  one back as a new write, so a restore can be undone by another. A delete keeps
+  its bytes the same way.
+- **Every deploy can be rolled back**, above.
+
+So **fix things first and ask afterwards**, rather than the other way round. The
+whole point of keeping all of this is that a change is cheap to try: an agent
+that stops to ask permission before every write is paying a price nobody here is
+charging. And when the person hesitates — "will I lose everything?" — say which
+of these covers them. They are usually weighing a risk that is not there.
+
+The one thing with no way back is what somebody explicitly asked to erase:
+`app_delete(forever: true)` skips the trash, and a secret removed with
+`app_secret_remove` was never readable to put back.
+
 ## Who visited
 
 Deeper: <https://yaks.app/guide/stats.md> — what a page view records, what it
