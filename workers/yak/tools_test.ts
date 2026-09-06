@@ -10,7 +10,16 @@ import {
   assertThrows,
 } from '@std/assert'
 import { MAX } from './apps.ts'
-import { fetched, opOf, parses, patched, sri, stored, TOOLS } from './tools.ts'
+import {
+  fetched,
+  opOf,
+  parses,
+  patched,
+  sri,
+  stored,
+  TOOLS,
+  uiMeta,
+} from './tools.ts'
 import { sha256 } from './versions.ts'
 
 let bytes = (s: string) => new TextEncoder().encode(s)
@@ -171,4 +180,31 @@ Deno.test('the tool teaches every op it answers', () => {
   for (let word of ['sha256', 'parses', 'op: patch', 'op: fetch']) {
     assertStringIncludes(app_files.description, word)
   }
+})
+
+// What a host is told about a page it RENDERS (T-34350, T-34433). Both halves
+// are mandatory once a plugin ships UI — a dedicated sandbox origin and the
+// exact domains the page fetches from — and ChatGPT reads the older `openai/*`
+// spelling, so both go out at once.
+Deno.test('a view declares its sandbox origin and what it may reach', () => {
+  let bare = uiMeta('https://yaks.app')
+  assertEquals(bare.ui.domain, 'https://yaks.app')
+  assertEquals(bare['openai/widgetDomain'], 'https://yaks.app')
+  // An empty allowlist is a DECLARATION — this page fetches nothing — and is
+  // what the platform's own two inline views say. Saying nothing at all is
+  // what a host reads as no policy, and stamps "CSP off" on.
+  assertEquals(bare.ui.csp, {})
+  assertEquals(bare['openai/widgetCSP'], {
+    connect_domains: [],
+    resource_domains: [],
+  })
+  // An app's own view reaches back to its own site for the stylesheet beside
+  // it, and names that site again for its `<base href>` to be honored.
+  let site = 'https://jeff.yaks.app'
+  let its = uiMeta(site, { resourceDomains: [site], baseUriDomains: [site] })
+  assertEquals(its.ui.csp.resourceDomains, [site])
+  assertEquals(its.ui.csp.baseUriDomains, [site])
+  assertEquals(its['openai/widgetCSP'].resource_domains, [site])
+  // `base-uri` has no older spelling; the standard surface carries it alone.
+  assertEquals(its['openai/widgetCSP'].connect_domains, [])
 })

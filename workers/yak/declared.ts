@@ -24,7 +24,7 @@ import {
   type ToolDef,
   type Tools,
 } from '../../src/store/tools.ts'
-import { type Ctx, type Out, VIEW_MIME } from './tools.ts'
+import { type Ctx, type Out, uiMeta, VIEW_MIME } from './tools.ts'
 import type { Who } from './session.ts'
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { storeOf } from './door.ts'
@@ -254,15 +254,17 @@ let siteOf = (space: Space) => `https://${space.slug}.yaks.app`
 // image it then reaches for. What a view still cannot do this way is
 // `./api/…`: that is a cross-site request carrying no session cookie. Its
 // data arrives in the tool's answer, and a redraw is a `tools/call` back
-// through the host, which does carry who is asking.
-export let cspFor = (space: Space) => ({
-  ui: {
-    csp: {
-      baseUriDomains: [siteOf(space)],
-      resourceDomains: [siteOf(space)],
-    },
-  },
-})
+// through the host, which does carry who is asking — so nothing here is a
+// `connectDomains`.
+//
+// The same site is the view's sandbox `domain` (tools.ts `uiMeta`): one
+// origin per space, so one person's app view never shares a sandbox with
+// another's.
+export let metaFor = (space: Space) =>
+  uiMeta(siteOf(space), {
+    baseUriDomains: [siteOf(space)],
+    resourceDomains: [siteOf(space)],
+  })
 
 // The pages the caller can reach, one entry each however many tools draw in
 // them. What is listed is what a tool NAMED: an app's other files are the
@@ -274,7 +276,7 @@ export let listViews = async (ctx: Ctx) => {
     title: string
     description: string
     mimeType: string
-    _meta: ReturnType<typeof cspFor>
+    _meta: ReturnType<typeof metaFor>
   }[] = []
   let seen = new Set<string>()
   for (let { space, app } of await reachable(ctx)) {
@@ -290,7 +292,7 @@ export let listViews = async (ctx: Ctx) => {
         description: `A page ${app.title || app.slug} draws its own tools' ` +
           `answers in, from ${space.slug}.yaks.app/${app.slug}/.`,
         mimeType: VIEW_MIME,
-        _meta: cspFor(space),
+        _meta: metaFor(space),
       })
     }
   }
@@ -319,5 +321,5 @@ export let readView = async (ctx: Ctx, uri: string) => {
   // The same tag the app door gives every page it serves (apps.ts
   // `based`), at the absolute address a page rendered off-origin needs.
   let home = `${siteOf(space)}/${app.slug}/`
-  return { uri, text: based(home, page), _meta: cspFor(space) }
+  return { uri, text: based(home, page), _meta: metaFor(space) }
 }

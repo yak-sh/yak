@@ -132,6 +132,10 @@ export type Doc = {
   description: string
   mimeType: string
   page: string
+  // What a host is told about a page it RENDERS (tools.ts `uiMeta`) — the
+  // sandbox origin and the domains it may reach. A guide page is read, never
+  // rendered, so none of these carry it; the two `ui://` views do (mcp.ts).
+  _meta?: Record<string, unknown>
 }
 
 // The guide is how an app is built here, and how its pages save and list

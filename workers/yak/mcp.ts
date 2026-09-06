@@ -80,6 +80,7 @@ import {
   type Ctx,
   ERRORS_VIEW,
   inReach,
+  uiMeta,
   VIEW_MIME,
 } from './tools.ts'
 import { listen, rostered } from './stream.ts'
@@ -93,6 +94,14 @@ import { listen, rostered } from './stream.ts'
 // answer to over postMessage. app_list links to it by `_meta.ui.resourceUri`
 // below; its bytes are public/apps.html, served from the same assets. The
 // mimeType is the profile the spec requires, not plain text/html.
+//
+// Both views are ONE FILE each — every style and every script inline — so the
+// policy they declare is the whole truth about them: a sandbox origin of our
+// own, and an empty allowlist, because neither page fetches anything. Saying
+// nothing at all is what a host reads as no policy, and ChatGPT renders that
+// as a red "CSP off" or fails the widget outright (T-34433, T-34350).
+let PLATFORM_VIEW = uiMeta('https://yaks.app')
+
 let APPS: Doc = {
   uri: APPS_VIEW,
   name: 'apps',
@@ -100,6 +109,7 @@ let APPS: Doc = {
   description: 'Every app the person has here, as a page they can look at.',
   mimeType: VIEW_MIME,
   page: 'https://yaks.app/apps.html',
+  _meta: PLATFORM_VIEW,
 }
 
 // And the second (T-32601): what is still broken, one card per break,
@@ -114,6 +124,7 @@ let ERRORS: Doc = {
     'button.',
   mimeType: VIEW_MIME,
   page: 'https://yaks.app/errors.html',
+  _meta: PLATFORM_VIEW,
 }
 
 // A signed-in caller reads all of them, the public ones included: the whole
@@ -193,15 +204,21 @@ let declared = async (ctx: Ctx) =>
 // name (prompts.ts, T-32981).
 let extend = (ctx: Ctx) => async (server: McpServer) => {
   for (let doc of RESOURCES) {
+    // A view's `_meta` rides on the listing AND on the bytes: the listing is
+    // what a host reads to decide, the content item is what governs the frame
+    // it then builds, and the spec has it repeated on both.
+    let its = doc._meta ? { _meta: doc._meta } : {}
     server.registerResource(doc.name, doc.uri, {
       title: doc.title,
       description: doc.description,
       mimeType: doc.mimeType,
+      ...its,
     }, async () => ({
       contents: [{
         uri: doc.uri,
         mimeType: doc.mimeType,
         text: await (await asset(ctx.env, doc.page)).text(),
+        ...its,
       }],
     }))
   }

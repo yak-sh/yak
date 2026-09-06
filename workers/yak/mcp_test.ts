@@ -376,6 +376,24 @@ slow(
       assertEquals(drawn.mimeType, 'text/html;profile=mcp-app')
       assertStringIncludes(drawn.text, 'ui/notifications/tool-result')
       assertStringIncludes(drawn.text, 'ui/initialize')
+      // What a host is told ABOUT the page, on the listing and on the bytes
+      // both (T-34350): the sandbox origin the plugin gets, and an empty
+      // allowlist, since this page is one file that fetches nothing. Missing,
+      // ChatGPT stamps it "CSP off" and the widget fails to load (T-34433).
+      for (let said of [view, drawn]) {
+        assertEquals(said._meta.ui.domain, 'https://yaks.app')
+        assertEquals(said._meta.ui.csp, {})
+        assertEquals(said._meta['openai/widgetDomain'], 'https://yaks.app')
+        assertEquals(said._meta['openai/widgetCSP'], {
+          connect_domains: [],
+          resource_domains: [],
+        })
+      }
+      // And a page a host merely READS carries none of it.
+      assertEquals(
+        (resources.find((r: { uri: string }) => r.uri == GUIDE))._meta,
+        undefined,
+      )
       await assertRejects(
         () => agent.call('resources/read', { uri: 'https://yaks.app/nope' }),
         Error,
@@ -393,6 +411,8 @@ slow(
       assertEquals(cards.mimeType, 'text/html;profile=mcp-app')
       assertStringIncludes(cards.text, 'ui/notifications/tool-result')
       assertStringIncludes(cards.text, "name: 'app_errors'")
+      assertEquals(cards._meta.ui.domain, 'https://yaks.app')
+      assertEquals(cards._meta.ui.csp, {})
 
       // The doors a PERSON picks by name (T-32981): declared beside tools,
       // listed with the arguments a client asks them to fill in, and got as
@@ -1830,6 +1850,20 @@ slow('an app declares its own tools, and the door calls them', async () => {
     assertEquals(page._meta.ui.csp.resourceDomains, [
       `https://${space}.yaks.app`,
     ])
+    // The other half a plugin shipping UI owes a host (T-34350): the sandbox
+    // origin, which is the SPACE's own site — so one person's app view never
+    // shares an origin with another's — said in both spellings, on the
+    // listing and on the bytes.
+    for (let said of [listed, page]) {
+      assertEquals(said._meta.ui.domain, `https://${space}.yaks.app`)
+      assertEquals(
+        said._meta['openai/widgetDomain'],
+        `https://${space}.yaks.app`,
+      )
+      assertEquals(said._meta['openai/widgetCSP'].resource_domains, [
+        `https://${space}.yaks.app`,
+      ])
+    }
     // A page nobody declared, and an app nobody has: the same answer.
     for (
       let missing of [`ui://${space}/runs/secret.html`, 'ui://no/runs/x.html']
