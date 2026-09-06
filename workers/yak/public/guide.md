@@ -542,6 +542,24 @@ Beside it, the same passage names **every app the person can reach**, its
 address, what it holds and its own tools. That is how an agent asked to "add
 this recipe" knows there is already a recipe app to add it to.
 
+## What the person said
+
+Deeper: <https://yaks.app/guide/memory.md> — the shape of a memory, what context
+is for, and how a recall is ranked.
+
+An `AGENTS.md` is the rules for one app. The other half is what the PERSON said,
+in their own words, kept for the whole space:
+
+    memory_save { said: 'use grams, never cups',
+                  context: 'setting up the recipe app', about: 'recipes' }
+
+Save the sentence, verbatim, the moment they say how they want something built
+or handled — a paraphrase can only lose what they said, and nobody afterwards
+can get it back. Add only the line of context needed to read it later. The
+newest few are handed to every agent that connects here, and `memory_recall`
+finds the rest by what they are about — ask it before you build or change an
+app, so what they told somebody once is not something they have to say again.
+
 ## Code of your own
 
 Deeper: <https://yaks.app/guide/code.md> — env, routes, secrets, limits, and

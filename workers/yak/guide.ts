@@ -154,6 +154,18 @@ time, is handed it at the start of every conversation, so a rule is said once
 and followed after. Keep it under 4 KB and to the rules themselves. Call guide
 with page instructions for the whole thing.
 
+When the person says how they want something BUILT or HANDLED — grams not
+cups, soft and not technical, always show them the link, never mail anybody on
+a Sunday — keep their exact words with memory_save. Their sentence, verbatim:
+a paraphrase can only lose what they said, and nobody afterwards can get it
+back, including you next time. Save it with only the context needed to
+understand it — one line saying what was being talked about — and nothing you
+concluded from it. It is kept for the whole space, and the newest few are
+handed to every agent that connects here; memory_recall finds the rest by what
+they are about, so ask it before you build or change an app rather than making
+them say a thing they have already said. An AGENTS.md is the rules for one
+app, in your words; a memory is theirs. Call guide with page memory.
+
 An app can carry its own CODE too: a worker.js beside index.html answers
 every request that is not /api/ before the files do, and whatever it answers
 404 falls through to them, so it owns the routes it names and nothing else.
@@ -310,6 +322,17 @@ export let PAGES: Page[] = [
       'the size ceiling, how a person invokes it by name, and what an ' +
       'installed copy carries.',
     brief: 'standing rules an app carries',
+  },
+  {
+    slug: 'memory',
+    title: 'What the person said',
+    description:
+      'memory_save and memory_recall: keeping what the person said about how ' +
+      'they want things done, in their own words rather than your summary of ' +
+      'them — what belongs in a memory, what context is for and what it is ' +
+      'not, when to reach for each tool, how a recall is ranked, and how a ' +
+      "memory differs from an app's AGENTS.md.",
+    brief: 'the words a person wants remembered',
   },
   {
     slug: 'code',

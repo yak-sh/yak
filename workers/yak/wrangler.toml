@@ -214,6 +214,25 @@ name = "MAIL"
 [ai]
 binding = "AI"
 
+# The space's memories, ranked by MEANING (memory.ts, T-34473): the vectors of
+# what each person said, one per memory, filtered to the space they were said
+# in. Owner, 2026-09-06: "also, on CF we're gonna need to use their vector
+# service rather than sqlite vector".
+#
+# The index is made ONCE, by hand, before this binding means anything — a
+# deploy does not create one:
+#
+#   wrangler vectorize create yak-memories --dimensions=768 --metric=cosine
+#
+# 768 is what `@cf/baai/bge-base-en-v1.5` on the `[ai]` binding above answers
+# with, so a different model means a different index. Until it exists, and
+# under `wrangler dev` and the workerd probes where nothing is bound, recall
+# ranks by the words through the store's own full-text index and says so in
+# one log line.
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "yak-memories"
+
 # An app's files. `wrangler dev` simulates the bucket.
 [[r2_buckets]]
 binding = "BLOBS"
@@ -348,6 +367,7 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 "@yaks/match" = "../../packages/match/mod.ts"
 "@yaks/mcp" = "../../packages/mcp/mod.ts"
 "@yaks/member" = "../../packages/member/mod.ts"
+"@yaks/memory" = "../../packages/memory/mod.ts"
 "@yaks/ram" = "../../packages/ram/mod.ts"
 "@yaks/names" = "../../packages/names/mod.ts"
 "@yaks/query" = "../../packages/query/mod.ts"

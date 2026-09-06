@@ -24,6 +24,7 @@ let READS = [
   'app_versions',
   'domain_status',
   'guide',
+  'memory_recall',
   'sandbox_read',
 ]
 

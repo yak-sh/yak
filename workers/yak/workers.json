@@ -20,6 +20,7 @@
     "@yaks/mail": "../../packages/mail/mod.ts",
     "@yaks/match": "../../packages/match/mod.ts",
     "@yaks/member": "../../packages/member/mod.ts",
+    "@yaks/memory": "../../packages/memory/mod.ts",
     "@yaks/query": "../../packages/query/mod.ts",
     "@yaks/sql": "../../packages/sql/mod.ts",
     "@yaks/sqlite": "../../packages/sqlite/mod.ts",

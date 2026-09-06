@@ -1,0 +1,16 @@
+{
+  "name": "@yaks/memory",
+  "version": "0.0.0",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "What a person said, in their own words: the memory{space, about, context} component domain for a yaks graph, with the write that refuses a paraphrase and the passage an agent reads at the start of a conversation.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "./browser.json"
+    ]
+  }
+}

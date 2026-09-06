@@ -74,6 +74,7 @@ import { moved, reachChanged, toolsOf } from './declared.ts'
 // module's own body runs.
 import { tooLong } from './standing.ts'
 import { meta, minted } from './meta.ts'
+import { memories, remember } from './memory.ts'
 import {
   daysLeft,
   doomed,
@@ -3791,6 +3792,118 @@ export let TOOLS: Tool[] = [
           `${hours} ${hours == 1 ? 'hour' : 'hours'} from now.` +
           (space ? ` It reaches ${space.slug} and no other space.` : '') +
           `\n\nTake it back sooner: grant with revoke ${grant.id}.`,
+      }
+    },
+  },
+  // What the person said, kept as they said it (memory.ts, T-34473). Owner,
+  // 2026-09-06: "any user instruction about *how* they like their apps built
+  // (etc) could be saved. And we could incorporate our 'grapevine' problem
+  // learnings by prompting the agent to save what the user said verbatim
+  // along with only the required context to understand it." An AGENTS.md is
+  // the rules for ONE app, written by an agent; these are the person's own
+  // sentences, space-wide, and every agent who can reach the space is handed
+  // the newest few at connect (standing.ts).
+  {
+    name: 'memory_save',
+    title: 'Keep what they said',
+    destructive: false,
+    description:
+      'Keep what the person said about how they want something built or ' +
+      'handled — their words, as they said them. Reach for it the moment ' +
+      'they state a preference, a standard, a taste, a way of working, a ' +
+      'thing they never want done again: "use grams, never cups", "keep it ' +
+      'soft, not technical", "always show me the link". Save the SENTENCE, ' +
+      'verbatim — never your summary of it, never a tidied-up version, ' +
+      'never what you concluded from it. A summary can only lose what they ' +
+      'said, and nobody can get it back. Add context only where the words ' +
+      'are unreadable without it — one line saying what was being talked ' +
+      'about, and no more; the words themselves carry the rest. It is kept ' +
+      'for the whole space, so everyone working there sees it, and every ' +
+      'agent that connects afterwards is handed the newest few. Rules for ' +
+      "ONE app go in that app's AGENTS.md instead (guide page instructions).",
+    input: {
+      type: 'object',
+      properties: {
+        said: str(
+          'the words the person used, exactly as they used them — their ' +
+            'sentence, not a paraphrase of it',
+        ),
+        context: str(
+          'the one line needed to understand those words later — what was ' +
+            'being talked about when they said it. Two lines at most, and ' +
+            'leave it out where the words stand on their own',
+        ),
+        about: str(
+          'the app they were talking about, by slug, if there was one',
+        ),
+        space: SPACE,
+      },
+      required: ['said'],
+    },
+    run: async (ctx, args) => {
+      let { space, who } = await inSpace(ctx, args, true)
+      let kept = await remember(ctx.env, ctx.dir, space, who, {
+        said: text(args.said, 'said'),
+        context: args.context == null ? '' : String(args.context),
+        about: args.about == null ? '' : String(args.about),
+      })
+      return {
+        space,
+        text: `Kept, in their words, for everyone in ${space.slug}:\n\n` +
+          `"${kept.said}"${kept.context ? `\n${kept.context}` : ''}\n\n` +
+          'Every agent that connects here is handed it; memory_recall ' +
+          'finds it by what it is about.',
+      }
+    },
+  },
+  {
+    name: 'memory_recall',
+    title: 'What they have said',
+    readOnly: true,
+    description:
+      'What the person has said about how they want things done, in their ' +
+      'own words, ranked by what your words are about. Ask BEFORE building ' +
+      'or changing an app, and whenever a choice is theirs to have made — ' +
+      'how a page should look, what a thing should be called, how they want ' +
+      'to be told about something. The newest few ride on every ' +
+      'connection already; this is how the rest are found. Answers each ' +
+      'memory whole, with the line of context saved beside it.',
+    input: {
+      type: 'object',
+      properties: {
+        words: str(
+          'what you are about to do or decide, in a few words — "how should ' +
+            'the pages look", "measurements in a recipe". Leave it out for ' +
+            'the newest',
+        ),
+        limit: { type: 'number', description: 'how many at most (default 8)' },
+        space: SPACE,
+      },
+    },
+    run: async (ctx, args) => {
+      let { space } = await inSpace(ctx, args)
+      let said = args.words == null ? '' : String(args.words)
+      let held = await memories(ctx.env, space, {
+        said,
+        limit: args.limit == null ? undefined : Number(args.limit),
+      })
+      if (!held.length) {
+        return {
+          space,
+          text: `Nothing has been kept in ${space.slug} yet. When they say ` +
+            'how they want something built or handled, memory_save keeps ' +
+            'their words.',
+        }
+      }
+      return {
+        space,
+        text: held.map((m) =>
+          `"${m.said}"${m.context ? `\n  ${m.context}` : ''}` +
+          `${m.about ? `\n  about the ${m.about} app` : ''}` +
+          `${
+            m.by ? `\n  — ${m.by}${m.at ? `, ${m.at.slice(0, 10)}` : ''}` : ''
+          }`
+        ).join('\n\n'),
       }
     },
   },

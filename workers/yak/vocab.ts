@@ -56,6 +56,7 @@ import { idKeywords } from '@yaks/id'
 import { keyDoc, keyKeywords } from '@yaks/key'
 import { mailDoc } from '@yaks/mail'
 import { memberDoc } from '@yaks/member'
+import { memoryDoc } from '@yaks/memory'
 
 // The column shapes these documents are written out of. A `ref` names another
 // entity and says what happens to this row when that one dies; `owned` is
@@ -562,7 +563,13 @@ export let platformDoc: VocabDoc = {
  * platform notes its own breaks where it notes an app's, `app_errors` and the
  * unseen block read every store the caller can reach by the same words, and a
  * mark spelled `archived` here and nowhere else would make the directory the
- * one store those doors cannot answer for. */
+ * one store those doors cannot answer for.
+ *
+ * `memoryDoc` is among them and NOT among an app's (T-34473): a memory is a
+ * thing the person said about how they want things built, and it holds whether
+ * they are looking at one app or another — so it belongs to the SPACE, and the
+ * directory is the one store a space has. The words themselves are its
+ * `doc.body`, which is why @yaks/doc is loaded above it. */
 export let platformDocs: VocabDoc[] = [
   coreDoc,
   docDoc,
@@ -572,6 +579,7 @@ export let platformDocs: VocabDoc[] = [
   notifiedDoc,
   keyDoc,
   aliasDoc,
+  memoryDoc,
   platformDoc,
 ]
 

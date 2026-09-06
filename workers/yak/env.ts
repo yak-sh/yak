@@ -138,6 +138,26 @@ export type Env = {
     run(model: string, input: unknown, opts?: unknown): Promise<unknown>
     gateway(id: string): { getUrl(provider?: string): Promise<string> }
   }
+  // Where a space's memories are ranked by MEANING (memory.ts, T-34473):
+  // Cloudflare Vectorize, holding one vector per memory with the space it was
+  // said in beside it, embedded through the `AI` binding above. Absent under
+  // `wrangler dev` and the workerd probes, and absent until somebody has run
+  // `wrangler vectorize create yak-memories` — recall then ranks by the words
+  // through the store's own full-text index, which is a worse order and not a
+  // failure.
+  VECTORIZE?: {
+    upsert(
+      vectors: {
+        id: string
+        values: number[]
+        metadata?: Record<string, string>
+      }[],
+    ): Promise<unknown>
+    query(
+      vector: number[],
+      opts: { topK?: number; filter?: unknown },
+    ): Promise<{ matches?: { id: string; score: number }[] }>
+  }
   AI_GATEWAY?: string
   AI_GATEWAY_TOKEN?: string
   OPENAI_API_KEY?: string

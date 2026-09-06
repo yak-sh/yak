@@ -165,6 +165,9 @@ slow(
         'member_remove',
         // The token that signs a terminal in (grants.ts, T-34385).
         'grant',
+        // What the person said, in their own words (memory.ts, T-34473).
+        'memory_save',
+        'memory_recall',
         'feedback',
         // The guide itself, so nothing has to be fetched off the web
         // (T-34284).
@@ -5186,6 +5189,104 @@ slow('the front page says which paths it answers first', async () => {
 // the meta store, attributed to whoever's agent called it, and mails the same
 // words to the platform's own address — the letter leading with what was
 // said, since a person reads it at a glance.
+// What the person said, kept as they said it (memory.ts, T-34473, T-34474).
+// The whole point is that the words survive the conversation they were said
+// in, so the proof is a SECOND connection reading them without asking.
+slow('what the person said is kept, and read back whole', async () => {
+  let k = await kernel()
+  try {
+    let them = await seed(k, [{ slug: 'kitchen', apps: ['recipes'] }])
+    let agent = connector(k, them.cookie)
+    let words = 'use grams, never cups'
+    let kept = await agent.tool('memory_save', {
+      said: words,
+      // Three lines of context: the third is clamped off, because context is
+      // the handle and never the summary.
+      context: 'setting up the recipe app\nwe were on ingredients\nand this',
+      about: 'recipes',
+      space: 'kitchen',
+    })
+    assertStringIncludes(kept, `"${words}"`)
+    assertStringIncludes(kept, 'kitchen')
+
+    // The row, in the space's own store: the words verbatim in doc.body,
+    // where the store's search index reads them, and the byline nobody typed.
+    let rows = await meta(k, them.cookie).query('.memory!&.doc?&.created?')
+    assertEquals(rows.length, 1)
+    let one = rows[0] as unknown as {
+      doc: { body: string }
+      memory: { context: string; about: string; space: unknown }
+      created: { by: { name: string } }
+    }
+    assertEquals(one.doc.body, words)
+    assertEquals(
+      one.memory.context,
+      'setting up the recipe app\nwe were on ingredients',
+    )
+    assertEquals(one.memory.about, 'recipes')
+    assertStringIncludes(JSON.stringify(one.memory.space), them.eids.kitchen)
+    assertEquals(one.created.by.name, them.name)
+
+    // Recall by words: whole, with the context under it. Ranked by meaning
+    // where a vector service is bound, and by the words themselves here,
+    // where none is.
+    let found = await agent.tool('memory_recall', {
+      words: 'grams',
+      space: 'kitchen',
+    })
+    assertStringIncludes(found, `"${words}"`)
+    assertStringIncludes(found, 'setting up the recipe app')
+    assertStringIncludes(found, 'about the recipes app')
+    // And words that match nothing answer the newest rather than nothing:
+    // an agent told nothing was kept builds against preferences it could
+    // have read.
+    assertStringIncludes(
+      await agent.tool('memory_recall', {
+        words: 'how should it look',
+        space: 'kitchen',
+      }),
+      words,
+    )
+
+    // A memory with no sentence in it is an agent's note about a
+    // conversation, which is the one thing this is not.
+    let no = await assertRejects(
+      () => agent.tool('memory_save', { said: '   ', space: 'kitchen' }),
+      Error,
+    )
+    assertStringIncludes(no.message, 'never your summary')
+
+    // The next agent to connect is handed it, with the rule for keeping the
+    // next one, before it has asked anything (T-34474).
+    let fresh = connector(k, them.cookie)
+    let init = await fresh.call('initialize', HELLO)
+    assertStringIncludes(init.instructions, `## What ${them.name} has said`)
+    assertStringIncludes(init.instructions, `"${words}"`)
+    assertStringIncludes(init.instructions, 'setting up the recipe app')
+    assertStringIncludes(
+      init.instructions,
+      'keep their exact words with memory_save',
+    )
+
+    // Somebody else's space is somebody else's: they are not handed it, they
+    // cannot ask for it, and their own space holds nothing.
+    let ana = connector(k, (await signIn(k)).cookie)
+    let hers = await ana.call('initialize', HELLO)
+    assertEquals(hers.instructions.includes(words), false)
+    let shut = await assertRejects(
+      () => ana.tool('memory_recall', { space: 'kitchen' }),
+      Error,
+    )
+    assertStringIncludes(shut.message, 'not a member of kitchen')
+    assertStringIncludes(
+      await ana.tool('memory_recall', {}),
+      'Nothing has been kept',
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
 slow('feedback reaches the platform, in the words it was said in', async () => {
   let k = await kernel()
   try {

@@ -1,0 +1,30 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true
+  },
+  "title": "memory",
+  "$defs": {
+    "memory": {
+      "type": "object",
+      "kind": true,
+      "before": ["doc"],
+      "description": "one thing a person said about how they want something built or handled, kept in their own words. The words themselves are the entity's doc.body, verbatim; this says where they belong and what is needed to read them. The byline is the entity's created{at, by}",
+      "properties": {
+        "space": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "description": "whose place they were said in — every member of it reads them, and they die with it"
+        },
+        "about": {
+          "type": "string",
+          "description": "the app they were said about, by slug, when they were about one"
+        },
+        "context": {
+          "type": "string",
+          "description": "the line or two needed to understand the words — what was being talked about, never a restatement of what was said"
+        }
+      }
+    }
+  }
+}
