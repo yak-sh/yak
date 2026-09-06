@@ -7,6 +7,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { slow } from '../../src/testing.ts'
 import { REPLY_TO } from './mail.ts'
 import { BUILDS, CURRENCY, LETTERS, PRICE } from './meter.ts'
+import { rate } from './sell.ts'
 import { page as galleryPage } from './gallery.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { askEmail, connect, spaceIndex } from './pages.ts'
@@ -446,6 +447,54 @@ Deno.test('the plan pages quote the price the offer names', () => {
   }
 })
 
+// What we take from a seller's sale is `FEE_BPS` (sell.ts) and nothing else,
+// so the two pages that say it out loud are held to that line — the way the
+// plan price is held to `PRICE`. Changing what the platform charges is one
+// number in one file, and these fail until the copy follows it.
+Deno.test('the pages quote the selling fee the code charges', () => {
+  assertStringIncludes(flat(read('pricing.html')), `We take ${rate()} of each`)
+  // The terms name the fee too — a seller has to read what it costs them where
+  // they read what they are responsible for — and they name it as a RATE, so
+  // the "no price on this page" rule above (which is about dollars) still
+  // holds.
+  assertStringIncludes(flat(read('terms.html')), `we take a fee per sale`)
+})
+
+// The seller is the merchant, and the terms have to say the four things that
+// follow from it — every one of them a promise the controller properties in
+// sell.ts actually make (`account` pays the fees, `stripe` carries the losses,
+// Stripe collects the requirements, Stripe's own dashboard). A terms page that
+// drifted from those would be a page claiming a liability split the integration
+// does not have.
+Deno.test('the terms say who the merchant is, and what follows from it', () => {
+  let html = flat(read('terms.html'))
+  assertStringIncludes(html, 'you are the merchant')
+  // The disclosure Stripe requires of a platform, with both agreements linked.
+  assertStringIncludes(html, 'https://stripe.com/connect-account/legal/full')
+  assertStringIncludes(html, 'Stripe Connected Account Agreement')
+  assertStringIncludes(html, 'https://stripe.com/legal/ssa')
+  // Refunds, chargebacks and tax are the seller's, and the identity documents
+  // are Stripe's — the two halves of `losses.payments` and
+  // `requirement_collection`.
+  assertStringIncludes(html, 'issuing refunds')
+  assertStringIncludes(html, 'responding to chargebacks')
+  assertStringIncludes(html, 'identity documents')
+  // The prohibited list, aligned with the one the account is actually held to.
+  assertStringIncludes(html, 'https://stripe.com/legal/restricted-businesses')
+  for (
+    let no of [
+      'nothing illegal',
+      'pornography',
+      'gambling',
+      'weapons',
+      'counterfeits',
+      'pyramid schemes',
+    ]
+  ) assertStringIncludes(html, no)
+  // And the buyer's side: their contract is with the seller, not with us.
+  assertStringIncludes(html, 'your contract is with the seller')
+})
+
 // The terms are the document a reviewer opens to check what the pricing page
 // claims, so they must not carry a second copy of the number: it said the
 // place "costs nothing" for two days after checkout shipped (T-34355). No
@@ -483,6 +532,13 @@ Deno.test('the privacy policy names everywhere the code sends something', () => 
   assertStringIncludes(html, 'sandbox')
   // Stripe, who sell the plan and hold the card (billing.ts).
   assertStringIncludes(html, 'stripe')
+  // And selling, both ways round (sell.ts, T-34527): what a BUYER's order and
+  // address do — they go to the seller and to Stripe, and we keep the order —
+  // and what a SELLER hands over, which is nothing but an address, because
+  // Stripe collects the rest directly.
+  assertStringIncludes(html, 'the email address you gave at checkout')
+  assertStringIncludes(html, 'never touch this platform')
+  assertStringIncludes(html, 'those never come to us')
   // And the claim that makes the rest of it a promise.
   assertStringIncludes(html, 'this page is the whole list')
 })
