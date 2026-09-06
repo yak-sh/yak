@@ -467,6 +467,29 @@ export let platformDoc: VocabDoc = {
         worker: text,
       },
     },
+    // One time this app's STORE was put back to a moment (recover.ts,
+    // T-34507): when it was asked for, the moment asked for, who asked, and
+    // the bookmark the store stood at before it moved.
+    //
+    // An entity of its own per restore, like `deploy`, and not a word on the
+    // app row — because the record exists so that a restore can itself be
+    // undone, and a second restore overwriting the first would take away the
+    // way back from it. It lives in the DIRECTORY, which is a different object
+    // from the store it describes, so the trail survives the very recovery it
+    // is about: what the store held is wound back, and what happened to it is
+    // still written down here.
+    restored: {
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      properties: {
+        app: ref('cascade'),
+        at: owned(time),
+        to: owned(time),
+        by: owned(ref('keep')),
+        from_bookmark: owned(text),
+      },
+    },
     published: {
       type: 'object',
       properties: { name: unique(text), version: num, at: time, about: text },

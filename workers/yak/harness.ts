@@ -65,12 +65,59 @@ class Rewriter {
 
 ;(globalThis as { HTMLRewriter?: unknown }).HTMLRewriter ??= Rewriter
 
+/**
+ * Point-in-time recovery, faked (recover.ts, T-34507).
+ *
+ * There is nowhere at all to drive a restore against a runtime: local workerd
+ * answers `getCurrentBookmark` and refuses the other two — "This Durable
+ * Object's storage back-end does not implement point-in-time recovery" —
+ * so the probe kernel (probe.ts) cannot hold this gesture either. What is
+ * imitated here is the CONTRACT and not the recovery: a bookmark that moves
+ * with every read, a bookmark for a moment inside the window and a throw
+ * outside it, and the restore remembered rather than performed.
+ *
+ * That is enough for the half that is ours — the order the record is written
+ * in, the sentence that comes back, the restart being asked for — and it
+ * proves nothing whatever about SQLite going backwards, which is Cloudflare's
+ * half and is not ours to test.
+ */
+export type Pitr = {
+  /** The bookmark the object was last told to wake at, if it was told one. */
+  restore: string
+  /** How many times a restart was asked for. */
+  aborts: number
+  /** Every bookmark handed out, in order. */
+  marks: string[]
+}
+
 /** One Durable Object's state, as the Store constructor takes it. */
 export let state = () => {
   let live: Wire[] = []
+  let pitr: Pitr = { restore: '', aborts: 0, marks: [] }
+  let bookmark = (name: string) => {
+    pitr.marks.push(name)
+    return Promise.resolve(name)
+  }
   return {
-    storage: durable(),
+    storage: Object.assign(durable(), {
+      getCurrentBookmark: () => bookmark(`at-${pitr.marks.length}`),
+      getBookmarkForTime: (at: number | Date) => {
+        let t = at instanceof Date ? at.getTime() : at
+        if (Date.now() - t > 30 * 24 * 60 * 60_000) {
+          return Promise.reject(
+            new Error('the bookmark is outside the 30-day window'),
+          )
+        }
+        return bookmark(`at-${new Date(t).toISOString()}`)
+      },
+      onNextSessionRestoreBookmark: (b: string) => {
+        pitr.restore = b
+        return Promise.resolve(`undo-${b}`)
+      },
+    }),
     live,
+    pitr,
+    abort: () => void pitr.aborts++,
     acceptWebSocket: (ws: Wire) => void live.push(ws),
     getWebSockets: () => live,
   }
@@ -269,11 +316,16 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
 export let platform = (secret: string, vars: Partial<Env> = {}) => {
   let objects = new Map<string, Store>()
   let sockets = new Map<string, Wire[]>()
+  // What the runtime did to each object, beside what the object did: the
+  // restore it was told to wake at and the restart it was asked for, which
+  // are the runtime's half of a recovery and not the Store's (recover.ts).
+  let recovery = new Map<string, Pitr>()
   let object = (name: string) => {
     let held = objects.get(name)
     if (!held) {
       let ctx = state()
       sockets.set(name, ctx.live)
+      recovery.set(name, ctx.pitr)
       objects.set(name, held = new Store(ctx))
     }
     return held
@@ -325,5 +377,5 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
     },
     ...vars,
   } as unknown as Env
-  return { env, files, object, sockets, builder }
+  return { env, files, object, sockets, builder, recovery }
 }

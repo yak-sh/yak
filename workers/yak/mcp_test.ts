@@ -145,6 +145,9 @@ slow(
         'store_load',
         'app_versions',
         'app_rollback',
+        // The data half of the same word (recover.ts, T-34507): a rollback
+        // puts the files back, this puts the store back.
+        'store_restore',
         'app_set',
         'app_secret_set',
         'app_secret_list',
@@ -4712,6 +4715,25 @@ slow('a deploy is a version, and one word puts it back', async () => {
       (await agent.tool('app_files', { ...app, op: 'list' })).split('\n')
         .sort(),
       ['broken.js', 'index.html'],
+    )
+
+    // And the other half of the same word (recover.ts, T-34507): the STORE's
+    // way back. With no moment named it says the window and does nothing —
+    // which is all this can be held to here, because local workerd answers
+    // `getCurrentBookmark` and refuses the two that would move anything.
+    let window = await agent.tool('store_restore', app)
+    assertStringIncludes(window, "undo/recipes's store can be put back")
+    assertMatch(window, /any moment since 20\d\d-\d\d-\d\dT/)
+    assertStringIncludes(window, "store_restore(app: 'recipes', at:")
+    // A moment outside the thirty days is refused before the store is asked
+    // anything, and the refusal names the window rather than saying no.
+    assertStringIncludes(
+      (await assertRejects(
+        () =>
+          agent.tool('store_restore', { ...app, at: '2020-01-01T00:00:00Z' }),
+        Error,
+      )).message,
+      'outside the 30-day window',
     )
   } finally {
     await k.stop()

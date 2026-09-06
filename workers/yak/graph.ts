@@ -183,12 +183,25 @@ export type State = Hibernation & {
     // replaces kept everything it remembered there (its name, the app's
     // `vocab.json`, its tools), so the migration reads them across (migrate.ts).
     kv?: Slots
+    // Cloudflare's point-in-time recovery, which is a whole store's way back
+    // (recover.ts, T-34507): where this object's SQLite stands now, the
+    // bookmark for a moment in the last thirty days, and the one to restore to
+    // when it next starts. OPTIONAL because a back-end may not offer them —
+    // local workerd answers the first and refuses the other two — and the door
+    // says so rather than pretending.
+    getCurrentBookmark?(): Promise<string>
+    getBookmarkForTime?(at: number | Date): Promise<string>
+    onNextSessionRestoreBookmark?(bookmark: string): Promise<string>
   }
   // The runtime's own gate: work started here finishes before any request is
   // delivered, which is what makes a one-pass migration safe to start from the
   // first request that reaches the object. Absent in the workerd stand-in, where
   // an object is driven one call at a time anyway.
   blockConcurrencyWhile?<T>(body: () => Promise<T>): Promise<T>
+  // Restarting the object on the spot, which is how a recovery takes effect
+  // now rather than at the next wake (`#recovery`). Optional for the same
+  // reason: the stand-in has no session to end.
+  abort?(reason?: string): void
 }
 
 /** The bindings this object is handed — the Worker's whole `env`, of which it
@@ -334,6 +347,15 @@ let apart = (manifest: string): string =>
 let viewed = (manifest: string): string =>
   [...new Set(entries(manifest).map(([, t]) => t?.view).filter(Boolean))]
     .map(String).sort().join('\n')
+
+// What a back-end with no point-in-time recovery says. Local workerd offers
+// `getCurrentBookmark` and refuses the other two in very nearly these words, so
+// one sentence covers both the method that is missing and the method that
+// throws — and a person is told the truth about their data either way.
+let NO_PITR =
+  "this store's back end does not offer point-in-time recovery — it is a " +
+  'Cloudflare production Durable Object that does, and local development does ' +
+  'not'
 
 /** The id a mirrored grant is filed under: one per (app, person), derived, so
  * the same vouch lands on one row however often it is said. */
@@ -1154,6 +1176,14 @@ export class Store {
       if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
       return this.#erase()
     }
+    // Where this object's storage stands, and putting it back (recover.ts,
+    // T-34507). Kernel only, like the erase: a whole store going backwards is
+    // the platform's act on behalf of a member who may write it, and a client
+    // never spells a store's path.
+    if (path == '/restore') {
+      if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
+      return this.#recovery(request)
+    }
     // The socket is a READ that stays open, and it is the one door @yaks/api
     // does not answer here — hibernation is the runtime's, so `sockets` takes
     // it — which would leave it the one door with no policy on it. So it asks
@@ -1460,6 +1490,49 @@ export class Store {
     if (name) this.#put('name', name)
     this.#boot()
     return Response.json({ ok: true })
+  }
+
+  /**
+   * Where this object's storage IS, and putting it back there (Cloudflare's
+   * point-in-time recovery, T-34507).
+   *
+   * A GET reads bookmarks and changes nothing: `from` is where the object
+   * stands right now — which is the way BACK from any restore, and therefore
+   * the thing the caller writes down before asking for one — and `to`, when a
+   * moment was named, is the bookmark for that moment.
+   *
+   * A POST restores. The restart is a HURRY and not the mechanism:
+   * `onNextSessionRestoreBookmark` is written down by the runtime, so the
+   * recovery happens whenever this object next starts even if the abort never
+   * lands. Which is why the answer goes out FIRST — `abort` fails every
+   * in-flight request, including the one asking for this — and the restart
+   * rides a turn of the loop behind it.
+   */
+  async #recovery(request: Request): Promise<Response> {
+    let s = this.#ctx.storage
+    try {
+      if (request.method != 'POST') {
+        if (!s.getCurrentBookmark) throw new Refused(NO_PITR)
+        let from = await s.getCurrentBookmark()
+        let at = new URL(request.url).searchParams.get('at')
+        if (!at) return Response.json({ from, to: '' })
+        if (!s.getBookmarkForTime) throw new Refused(NO_PITR)
+        let to = await s.getBookmarkForTime(new Date(at))
+        return Response.json({ from, to })
+      }
+      let said = await request.json() as { bookmark?: string }
+      if (!said?.bookmark) throw new Refused('/restore takes a bookmark')
+      if (!s.onNextSessionRestoreBookmark) throw new Refused(NO_PITR)
+      let undo = await s.onNextSessionRestoreBookmark(said.bookmark)
+      let ctx = this.#ctx
+      if (ctx.abort) setTimeout(() => ctx.abort?.('restoring'), 0)
+      return Response.json({ undo })
+    } catch (e) {
+      // A runtime that offers none of this throws its own sentence, which is
+      // handed on as a refusal rather than a 500: nothing broke, the back end
+      // simply cannot do it.
+      return refuse(e instanceof Refused ? e : new Refused(String(e)))
+    }
   }
 
   // The platform writing about its own data: a `plan` a person may not lift,

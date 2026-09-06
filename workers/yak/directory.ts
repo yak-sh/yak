@@ -242,6 +242,13 @@ type Row = {
     at?: string | null
   }
   deploy?: { app: Id; version: number; files?: string; worker?: string }
+  restored?: {
+    app: Id
+    at?: string | null
+    to?: string | null
+    by?: Id | null
+    from_bookmark?: string | null
+  }
   created?: { at?: string }
   member?: { space: Id; person: Id; role: Role }
   email?: { address: string }
@@ -540,6 +547,17 @@ export let deployOf = (r: Row) => ({
   worker: r.deploy!.worker ?? '',
 })
 
+// One restore of an app's store, as recover.ts reads it (T-34507). `from` is
+// the bookmark the store stood at BEFORE this one moved it, which is the way
+// back out of it if the recovery itself turns out to be the mistake.
+export let restoreOf = (r: Row) => ({
+  eid: r.entity.eid,
+  at: r.restored!.at ?? '',
+  to: r.restored!.to ?? '',
+  by: r.restored!.by ? idOf(r.restored!.by) : '',
+  from: r.restored!.from_bookmark ?? '',
+})
+
 // A Durable Object cannot be renamed, so an app's store must not be named by
 // anything a person may change: renaming `recipes` to `cookbook` would strand
 // every recipe in it. So the name is pinned at birth on the app's `former`
@@ -765,6 +783,13 @@ export let directory = (via: Fetcher, now = false) => {
       (await query(`.deploy.app=${app.eid}&.created?`, true))
         .map(deployOf)
         .sort((a, b) => b.version - a.version),
+    // Every time this app's store was put back to a moment, newest first
+    // (recover.ts, T-34507). Never cached, for the reason `deploys` is not: a
+    // restore reads its own trail back the moment it writes to it.
+    restores: async (app: App) =>
+      (await query(`.restored.app=${app.eid}`, true))
+        .map(restoreOf)
+        .sort((a, b) => b.at.localeCompare(a.at)),
     // Every space there is. Only the meter asks this (usage.ts): a tool
     // always works in one space, and a person only ever sees their own.
     all: async (): Promise<Space[]> =>

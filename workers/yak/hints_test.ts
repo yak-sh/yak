@@ -45,6 +45,10 @@ let DESTROYS = [
   'sandbox_write',
   'space_delete',
   'domain_detach',
+  // Reversible — the way back is written down before anything moves — and
+  // still destructive: it throws away everything written since the moment
+  // asked for, and a host should stop and ask before it does that.
+  'store_restore',
 ]
 
 // It reaches past yaks.app: a letter to somebody's inbox, a page the whole web

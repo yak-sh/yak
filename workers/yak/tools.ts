@@ -69,6 +69,9 @@ import {
   url,
 } from './directory.ts'
 import { moved, reachChanged, toolsOf } from './declared.ts'
+// A whole store put back to a moment (T-34507) — the data half of what
+// app_rollback does for an app's files.
+import { mark, moment, oldest, putBack, recorded } from './recover.ts'
 // Only the ceiling, and only ever called: tools.ts and standing.ts are a
 // cycle through declared.ts, so nothing from there may be read while this
 // module's own body runs.
@@ -2391,6 +2394,85 @@ export let TOOLS: Tool[] = [
           `now as v${version}: ${url(space, app)} — ${
             whatChanged(now, want.files)
           }` + said,
+        space,
+      }
+    },
+  },
+  // The store's own way back (recover.ts, T-34507). It sits beside
+  // app_rollback because the two are the same word said about the two halves an
+  // app is made of: a rollback puts the FILES back, this puts the DATA back.
+  {
+    name: 'store_restore',
+    title: 'Put a store back to a moment',
+    destructive: true,
+    description:
+      'Put everything the app has saved back to how it was at a moment — the ' +
+      'whole store, every row of it, as of that time. This is the answer when ' +
+      'a write went wrong and the person wants their data back: a bad import, ' +
+      'rows deleted that should not have been, a change that turned out to be ' +
+      'the wrong one. Cloudflare keeps the last 30 days of the store, so any ' +
+      'moment in those 30 days can be asked for; at is that moment, as a time ' +
+      '(2026-09-06T14:20:00Z). Call it with no at first: it says the oldest ' +
+      'moment still available and every restore already made. It is ' +
+      'REVERSIBLE — where the store stood before is written down before ' +
+      'anything moves, so a restore is undone by restoring again to a moment ' +
+      'just before it, and the answer hands you that exact sentence. What it ' +
+      'costs is what was written since the moment asked for, so name the ' +
+      'moment as late as it can be. The app is briefly restarted to pick the ' +
+      "recovery up. The app's FILES are not part of this — app_rollback and " +
+      'app_files restore put those back.',
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        app: APP,
+        at: str(
+          'the moment to put the store back to, within the last 30 days — ' +
+            '2026-09-06T14:20:00Z. Left out, this answers the window and the ' +
+            'restores already made instead of restoring anything',
+        ),
+      },
+      required: ['app'],
+    },
+    run: async (ctx, args) => {
+      let { space, app, store } = await inApp(ctx, args, true)
+      let past = await ctx.dir.restores(app)
+      // What has been done to this store already, newest first — read before
+      // and said after, so the answer to "what happened here" is the same
+      // whether or not this call is the thing that happens.
+      let story = past.length
+        ? '\n\nPut back before:\n' +
+          past.map((r) => `- ${r.at}: to ${r.to}`).join('\n')
+        : ''
+      if (args.at == null) {
+        // Where it stands is asked even though the answer does not say the
+        // bookmark: it is the one question that proves the back end offers
+        // recovery at all, and a person told "any moment in 30 days" by a
+        // store that cannot do it has been told a comfortable lie.
+        await mark(store)
+        return {
+          text: `${space.slug}/${app.slug}'s store can be put back to any ` +
+            `moment since ${oldest().toISOString()} — the last 30 days. ` +
+            `store_restore(app: '${app.slug}', at: '<moment>') does it, and ` +
+            'nothing moves until you name one.' + story,
+          space,
+        }
+      }
+      let at = moment(text(args.at, 'at'))
+      let done = await putBack(
+        store,
+        (r) => stamp(ctx.env, { entities: recorded(app.eid, r) }),
+        at,
+        ctx.person,
+      )
+      let when = at.toISOString()
+      return {
+        text: `${space.slug}/${app.slug}'s store is being put back to ` +
+          `${when}. The app restarts to pick it up, so give it a moment ` +
+          `before you read it. Everything written after ${when} is gone from ` +
+          `it — to undo this restore, store_restore(app: '${app.slug}', at: ` +
+          `'${done.at}'), which is the moment just before it happened.` +
+          story,
         space,
       }
     },
