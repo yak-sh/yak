@@ -188,6 +188,23 @@ Nothing else about a call is trusted either: which columns a caller may write,
 whether a precondition still holds, and what a delete takes with it are all
 [@yaks/graph](https://jsr.io/@yaks/graph)'s to decide.
 
+A door anybody may call is `readOnly`: `graph_apply` is then not a tool that
+refuses, it is a tool that is not listed. Where such a door serves a graph it
+picks per call — one tenant, one app, one shelf — `scope` says what to name it
+by, and every read carries those arguments beside its own:
+
+```ts
+let door = mcp({
+  graph: shelfFor(request),
+  readOnly: true,
+  scope: { shelf: z.string().describe('which shelf') },
+})
+```
+
+The tools ignore them: the door read them off the call and built the graph they
+name before the server saw the request. They are declared so a client knows to
+say them.
+
 ## Plugins bring tools
 
 A plugin contributes tools the same way it contributes components and hooks:

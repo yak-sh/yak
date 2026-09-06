@@ -4,22 +4,24 @@
 // we should."
 //
 // So: an agent that has not signed in can learn what this platform is and how
-// building here works — the same thing a person reads on the website — and
-// nothing else. `about` says what yaks.app is in a paragraph, and the guide
-// resources are the depth. Both are already world-readable over plain HTTP —
+// building here works — the same thing a person reads on the website. `about`
+// says what yaks.app is in a paragraph, and the guide resources are the depth.
+// Both are already world-readable over plain HTTP —
 // https://yaks.app/guide.md and every guide/<slug>.md answer 200 to anybody —
 // so this exposes nothing new; it puts the same words through the door the
 // agent is already talking to, instead of making it open a browser.
 //
-// The seam is physical rather than a check. `answer` takes a METHOD and its
-// params — never a person, never a Ctx (tools.ts) — and the only binding it
-// holds is `Site`, the static assets. No store, no directory, no blob and no
-// stream is in reach of this file, so nothing here can forget to check who is
-// asking: it has nothing to check them against, and no way to look anything
-// up about them. What it cannot answer it answers `null`, and mcp.ts meets
-// that caller with the 401 and its `WWW-Authenticate` challenge — the line an
-// MCP client follows to find our authorization server, so it must stay
-// exactly what it was for every protected method.
+// This file is the half of that surface with NOTHING TO LOOK UP, and the seam
+// is physical rather than a check: `answer` takes a METHOD and its params —
+// never a person, never a Ctx (tools.ts) — and the only binding it holds is
+// `Site`, the static assets. No store, no directory, no blob and no stream is
+// in reach of it, so nothing here can forget to check who is asking. What it
+// cannot answer it answers `null`, and mcp.ts either serves that method off
+// the anonymous door (anon.ts — the tools a stranger may call, which do read
+// data: the gallery, and one public app at a time) or meets the caller with
+// the 401 and its `WWW-Authenticate` challenge, the line an MCP client follows
+// to find our authorization server. That challenge must stay exactly what it
+// was for every protected method.
 //
 // And everything public is served signed in too: tools.ts lifts each `Says`
 // into an ordinary tool and mcp.ts's resources open with these `DOCS`, so the
@@ -79,11 +81,11 @@ let ABOUT: Says = {
   description:
     'What yaks.app is and what gets made here. Call it when someone asks ' +
     'what this place is, or when you have not signed in and want to know ' +
-    'what signing in would give you — it answers in a paragraph and says ' +
-    'where to sign in. Signed in, it also says WHO you are signed in as, how ' +
-    '(a browser, a connector, a CLI grant) and until when, plus the tools ' +
-    'this door is listing right now. Signed out it reads nothing about ' +
-    'anybody: the same words for everyone.',
+    'what works signed out and what signing in would add — it answers in a ' +
+    'paragraph and says where to sign in. Signed in, it also says WHO you ' +
+    'are signed in as, how (a browser, a connector, a CLI grant) and until ' +
+    'when, plus the tools this door is listing right now. Signed out it ' +
+    'reads nothing about anybody: the same words for everyone.',
   text: `yaks.app is a place to make small web apps by asking for one. An app
 is an index.html and whatever files sit beside it — no build step, no
 framework, no install — served live at its own address,
@@ -101,25 +103,38 @@ it land in the app's store, and the app writes from it. That is the app's
 mailbox and never a person's own; mail asked about with no app named is their
 mail account, which is somewhere else entirely.
 
-Everything else here needs signing in: making a space or an app, writing its
-files, deploying it, reading or writing its data. Sign in at
-https://yaks.app — an email address and a six-digit code, no password — and
-this connector grows the tools to build with.
+Signed out, this door already does a fair amount. The guide is here to read:
+https://yaks.app/guide.md is the map, and a page per subject sits beside it.
+app_published is what other people have published, browsable by word.
+graph_query, graph_show, graph_schema and search read ONE app you name — its
+space and its slug — as long as its pages are readable by anyone with the
+link, which is exactly what a browser at that address would see. And feedback
+reaches the people who run this place whether or not anybody has signed in.
 
-The guide needs no account and is worth reading first: https://yaks.app/guide.md
-is the map, and a page per subject sits beside it.`,
+Making anything needs signing in: a space, an app, its files, a deploy, and
+writing any app's data. Sign in at https://yaks.app/login — one email address
+and a six-digit code, no password. That one line is also signing up: an
+address nobody has used here yet becomes an account on the spot, with a space
+of its own. Then this connector grows the tools to build with.`,
 }
 
 export let PUBLIC: Says[] = [ABOUT]
 
-// What these tools declare about signing in, per tool: nothing is needed for
-// any of them. It is said out loud rather than left off, because a host reads
-// a MIXED-auth server one tool at a time — `securitySchemes` is the only place
-// this door says which of its tools a stranger may call, and a tool that says
-// nothing is a tool ChatGPT will not offer a sign-in button for
-// (developers.openai.com/plugins/reference). The tools that DO need signing in
-// say `oauth2` the same way (mcp.ts `SIGNIN`).
+// What a tool declares about signing in, per tool. It is said out loud rather
+// than left off, because a host reads a MIXED-auth server one tool at a time —
+// `securitySchemes` is the only place this door says which of its tools a
+// stranger may call, and a tool that says nothing is a tool ChatGPT will not
+// offer a sign-in button for (developers.openai.com/plugins/reference).
+//
+// `NOAUTH` is the half that needs nobody; `SIGNIN` is an access token from our
+// own authorization server, for the one scope its metadata names (identity.ts
+// `scopesSupported`), which is what everything else on the signed-in door
+// declares. `EITHER` is the pair, and it is what an anonymous-capable tool
+// says: it works with a token and without one, and the tool table is where a
+// tool claims that (tools.ts, anon.ts `openly`).
 export let NOAUTH: Security[] = [{ type: 'noauth' }]
+export let SIGNIN: Security[] = [{ type: 'oauth2', scopes: ['graph'] }]
+export let EITHER: Security[] = [...NOAUTH, ...SIGNIN]
 
 // What a resource of this door's own is: a listing entry, plus the address
 // its bytes come off the assets at (`page`), which for everything here is the
@@ -190,11 +205,12 @@ let listed = ({ uri, name, title, description, mimeType }: Doc) => ({
   mimeType,
 })
 
-// The whole pre-auth surface: a RESULT for a method this door answers to
-// anybody, or null for one it does not — which is every other method, every
-// other tool, and every other resource, each of which meets the challenge
-// instead. Null is also the answer for a tool or a page that does not exist
-// at all, so nothing here says whether an address, a space or an app is real.
+// The part of the pre-auth surface that looks NOTHING up: a RESULT for a
+// method answered out of this file's own words and the static assets, or null
+// for everything else — the tools, which read data and are anon.ts's, and
+// every other method and every other resource, which meet the challenge. Null
+// is also the answer for a page that does not exist at all, so nothing here
+// says whether an address is real.
 export let answer = async (
   method: string,
   params: Record<string, unknown>,
@@ -225,31 +241,6 @@ export let answer = async (
     }
   }
   if (method == 'ping') return {}
-  if (method == 'tools/list') {
-    return {
-      // The same title and hints the signed-in list carries (tools.ts lifts
-      // these into TOOLS), because this is the list a directory reviewer sees
-      // first: a door whose one tool arrives bare reads as a door with no
-      // annotations at all.
-      tools: PUBLIC.map((t) => ({
-        name: t.name,
-        title: t.title,
-        description: t.description,
-        inputSchema: NO_ARGS,
-        annotations: {
-          readOnlyHint: true,
-          destructiveHint: false,
-          idempotentHint: false,
-          openWorldHint: false,
-        },
-        _meta: { securitySchemes: NOAUTH },
-      })),
-    }
-  }
-  if (method == 'tools/call') {
-    let said = PUBLIC.find((t) => t.name == params.name)
-    return said ? { content: [{ type: 'text', text: said.text }] } : null
-  }
   if (method == 'resources/list') return { resources: DOCS.map(listed) }
   if (method == 'resources/read') {
     let want = DOCS.find((d) => d.uri == params.uri)

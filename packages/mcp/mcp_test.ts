@@ -5,6 +5,7 @@
 // schema that stopped describing its answer fails here.
 
 import { assert, assertEquals } from '@std/assert'
+import { z } from 'zod'
 import type { Bundle } from '@yaks/graph'
 import { comp, connect, result, shopGraph } from './harness.ts'
 import { roster, Say } from './server.ts'
@@ -44,6 +45,37 @@ Deno.test('the generic tier is what it lists', async () => {
     'graph_schema',
     'graph_show',
   ])
+  await client.close()
+})
+
+Deno.test('a read-only door lists no write, and its reads take its scope', async () => {
+  // The write is not a tool that refuses — it is not there at all, which is
+  // what a door anybody may call has to be able to say.
+  let client = await connect({
+    readOnly: true,
+    search: () => [spring],
+    scope: { shelf: z.string().describe('which shelf to read') },
+  })
+  let tools = (await client.listTools()).tools as {
+    name: string
+    inputSchema: { properties: Record<string, unknown>; required?: string[] }
+  }[]
+  assertEquals(tools.map((t) => t.name).sort(), [
+    'graph_query',
+    'graph_schema',
+    'graph_show',
+    'search',
+  ])
+  // Every read says what to name it by, beside its own arguments — and the
+  // tool never looks at it: the door read it off the call and built the graph
+  // it names before this server saw the request.
+  for (let t of tools) {
+    assert(t.inputSchema.properties.shelf, `${t.name} says no shelf`)
+    assertEquals(t.inputSchema.required?.includes('shelf'), true, t.name)
+  }
+  assert(tools.find((t) => t.name == 'graph_query')!.inputSchema.properties.q)
+  let out = await called(client, 'search', { shelf: 'poetry', words: 'spring' })
+  assertEquals(bundles(result(out))[0].entity.eid, 'b1')
   await client.close()
 })
 

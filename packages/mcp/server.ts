@@ -24,7 +24,7 @@ import {
 } from '@yaks/graph'
 import { signed } from '@yaks/api'
 import type { BundleOpts, Depth } from './schema.ts'
-import { core, type Search } from './tools.ts'
+import { core, type CoreOpts, type Search } from './tools.ts'
 import type { Guide } from './words.ts'
 
 /**
@@ -82,6 +82,13 @@ export type Options = {
   guide?: Guide
   /** ranked full-text search; without it there is no `search` tool */
   search?: Search
+  /** this door only READS: the generic tier's `graph_apply` is not listed at
+   * all — see {@link CoreOpts.readOnly}. A plugin's own tools are untouched:
+   * this says what the GENERIC tier is here, not what every tool may do. */
+  readOnly?: boolean
+  /** extra arguments every generic READ takes here — see
+   * {@link CoreOpts.scope} */
+  scope?: CoreOpts['scope']
   /** what every tool this server lists declares about signing in
    * ({@link Security}), said per TOOL because that is where a host reads it —
    * a tool carrying `securitySchemes` in its own `meta` keeps that instead */
@@ -205,6 +212,8 @@ export let listing = (opts: Options): Tool[] => [
     column: opts.column,
     guide: opts.guide,
     search: opts.search,
+    readOnly: opts.readOnly,
+    scope: opts.scope,
   }),
   ...toolsOf(opts.graph.plugins),
   ...(opts.tools ?? []),

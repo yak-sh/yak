@@ -15,6 +15,7 @@ import {
   type Bundle,
   detached,
   Refused,
+  type Schema,
   type Tool,
   type ToolCtx,
 } from '@yaks/graph'
@@ -54,6 +55,18 @@ export type CoreOpts = {
   guide?: Guide
   /** the ranked search seam; without it there is no `search` tool */
   search?: Search
+  /** this door only READS: `graph_apply` is not listed at all. For a door
+   * anybody may call — where the write is not a tool that refuses but a tool
+   * that is not there. */
+  readOnly?: boolean
+  /** extra arguments every READ here takes, merged into each read tool's
+   * input, for a host whose reads are scoped by something of its own —
+   * yaks.app's signed-out door names which app to read.
+   *
+   * The tools ignore them: what they name is the graph the door was built
+   * around, and the door read them off the call before this server saw it.
+   * They are declared so a client knows to say them. */
+  scope?: Record<string, Schema>
 }
 
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
@@ -318,5 +331,14 @@ export let core = (opts: CoreOpts): Tool[] => {
       },
     })
   }
+  // What this door is, said once over the whole tier: a door that only reads
+  // does not list the write at all, and a door whose reads are scoped by
+  // something of its own says so on every one of them.
   return tools
+    .filter((t) => t.readOnly || !opts.readOnly)
+    .map((t) =>
+      t.readOnly && opts.scope
+        ? { ...t, input: { ...opts.scope, ...t.input } }
+        : t
+    )
 }

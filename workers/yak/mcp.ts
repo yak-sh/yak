@@ -46,15 +46,19 @@
 // challenge in the refusal's own `_meta['mcp/www_authenticate']` too
 // (`refused` below) — one door, said the two ways the two directories read it.
 //
-// Nobody at all is answered too, by preauth.ts (T-33030): what this platform
-// is, and the guide, which the web already serves to anybody who asks for it.
-// That surface is handed a method and its params and no binding but the
-// static assets — no person, no `Ctx`, nothing to read anybody's data with —
-// and everything it does not answer meets the same challenge as ever.
+// Nobody at all is answered too (T-33030, T-34467), in two halves. What this
+// platform is and the guide come off preauth.ts, which is handed a method and
+// its params and no binding but the static assets — no person, no `Ctx`,
+// nothing to read anybody's data with. Everything else a stranger may call
+// comes off `stranger` below: the same @yaks/mcp mount the signed-in door is,
+// over a graph with nobody in it — the tools that declare they need nobody
+// (anon.ts `openly`), and the generic READS scoped to the ONE public or open
+// app the call names. No write is listed at all, and everything that is not on
+// that list meets the same challenge as ever.
 //
 // MIXED AUTH is what that adds up to, and it is the path (T-34465): a stranger
 // is answered, is SHOWN the whole tool list with `securitySchemes` saying which
-// tools want a token (`MENU`), and is met with the challenge the moment one of
+// tools want a token (`menu`), and is met with the challenge the moment one of
 // those is called — which is the sequence OpenAI documents and ChatGPT walks
 // (developers.openai.com/plugins/build/auth). The half that used to be missing
 // was the menu: a list holding only what a stranger may call gives the host
@@ -67,9 +71,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { SetLevelRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
-import { annotated, mcp, roster, rosterVersion, type Security } from '@yaks/mcp'
+import { mcp, roster, rosterVersion } from '@yaks/mcp'
 import { VERSION } from '../../src/version.ts'
-import { answered, inputOf, reaching, searching } from './agent.ts'
+import { answered, inputOf, reaching, searching, sugared } from './agent.ts'
+import { anonymous, opened, openly, READS, SCOPE } from './anon.ts'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
@@ -77,7 +82,8 @@ import { INSTRUCTIONS, pageFor } from './guide.ts'
 import { asking, challenge, SAYS, unauthorized } from './identity.ts'
 import { narrowed } from './grants.ts'
 import { callDeclared, listDeclared, listViews, readView } from './declared.ts'
-import { answer, asset, type Doc, DOCS } from './preauth.ts'
+import { answer, asset, type Doc, DOCS, EITHER, SIGNIN } from './preauth.ts'
+import type { Reach } from './reach.ts'
 import { PROMPTS } from './prompts.ts'
 import { CONNECTOR } from './seo.ts'
 import { type Entry, prompted, standing } from './standing.ts'
@@ -151,13 +157,7 @@ let json = (status: number, body: unknown) => Response.json(body, { status })
 let result = (id: unknown, result: unknown) =>
   json(200, { jsonrpc: '2.0', id, result })
 
-// What everything but the public tools declares about signing in: an access
-// token from our own authorization server, for the one scope its metadata
-// names (identity.ts `scopesSupported`). @yaks/mcp puts it on every tool it
-// lists that does not say its own — which `about` does, `noauth` (preauth.ts).
-let SIGNIN: Security[] = [{ type: 'oauth2', scopes: ['graph'] }]
-
-// What a stranger is SHOWN beside the one tool they may call (T-34465).
+// What a stranger is SHOWN beside the tools they may call (T-34465).
 // Mixed auth is a menu, not a smaller restaurant: the host lists the whole
 // surface with nobody signed in, reads `securitySchemes` to see which tools
 // want a token, and offers the sign-in the first time the person asks for one
@@ -167,34 +167,25 @@ let SIGNIN: Security[] = [{ type: 'oauth2', scopes: ['graph'] }]
 // stranger may CALL is a connector that can never ask them to sign in — which
 // is the connector `about` and nothing else was.
 //
-// The platform's verbs are the menu (tools.ts TOOLS): every word of their
-// listing is the same for everybody, so they can be said without knowing who
-// is asking. The generic tier and an app's own tools are NOT here — their
-// schemas are derived from the vocabulary of the apps THIS caller reaches, and
-// there is no honest way to describe them to nobody. They arrive when signing
-// in moves the list, which this door already promises (`listChanged`).
+// So the menu is every platform verb a stranger may NOT call (anon.ts
+// `openly` says which they may): every word of their listing is the same for
+// everybody, so it can be said without knowing who is asking. An app's own
+// tools are not here — they arrive per caller, out of apps only that caller
+// reaches — and neither is the generic tier's write, which signed out is not
+// a tool that refuses but a tool that is not there (`stranger`).
 //
-// Nothing new is callable: a `tools/call` for any of these still meets
-// `refused` below, which is the runtime half the host draws its button from.
-// And a tool's `ui` meta is left off — a view is a page a signed-in person's
-// own answer draws in, and the stranger's resource list holds none of them.
-let MENU = TOOLS.filter((t) => !t.security).map((t) => ({
-  name: t.name,
-  title: t.title,
-  description: t.description,
-  inputSchema: t.input,
-  annotations: annotated(t),
-  _meta: { securitySchemes: SIGNIN },
-}))
-
-// The stranger's answer with that menu folded in. It is composed HERE rather
-// than in preauth.ts because preauth.ts holds nothing but the static assets on
-// purpose, and the menu is the tool table — this door is the one place that
-// has both.
-let offered = (method: string, open: unknown) =>
-  method == 'tools/list'
-    ? { tools: [...(open as { tools: unknown[] }).tools, ...MENU] }
-    : open
+// Nothing here is callable: `stranger` meets a call for any of them with
+// `refused`, the runtime half the host draws its button from, before this
+// server sees it. `run` says the same sentence anyway, so a later path that
+// listed one as callable could not answer anything else. And the `ui` meta is
+// dropped with the rest of the tool's own — a view is a page a signed-in
+// person's answer draws in, and a stranger's resource list holds none.
+let menu = (ctx: Ctx) =>
+  TOOLS.filter((t) => !openly(t)).map((t) => ({
+    ...sugared(ctx, t),
+    meta: { securitySchemes: SIGNIN },
+    run: () => Promise.reject(new Error(SAYS)),
+  }))
 
 // A refusal, said to a caller that named a JSON-RPC id. The status and the
 // `WWW-Authenticate` header are what they always were — the half every MCP
@@ -339,31 +330,42 @@ let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
 //
 // The pair that named ONE app moves too: on a write it becomes `$app` on each
 // bundle, on a read the `.in=` rider on the query line — both the platform's
-// own words, each said where the thing it is about is (agent.ts).
+// own words, each said where the thing it is about is (agent.ts). Signed out
+// it moves nowhere: the pair IS the call's scope there, read off the arguments
+// by the door itself before any graph exists (anon.ts `opened`), so `scoped`
+// says whether this caller has a reach for an app to be narrowed out of.
 let SAID: Record<string, Record<string, string>> = {
   graph_apply: { entities: 'change' },
   graph_query: { filter: 'q', query: 'q' },
   search: { text: 'words' },
 }
 
-let heard = (name: string, args: Record<string, unknown>) => {
+let heard = (
+  name: string,
+  args: Record<string, unknown>,
+  scoped: boolean,
+) => {
   let moved = SAID[name]
   if (!moved) return args
   let out: Record<string, unknown> = {}
   for (let [k, v] of Object.entries(args)) out[moved[k] ?? k] = v
-  let { app, space, ...rest } = out
   // The old wire let a bundle name no entity at all and had the store mint
   // one; the bundle wire wants the alias said out loud. An old caller keeps
   // its silence, and the alias it never asked for is one this door invents.
   if (
-    name == 'graph_apply' && 'entities' in args && Array.isArray(rest.change)
+    name == 'graph_apply' && 'entities' in args && Array.isArray(out.change)
   ) {
-    rest.change = rest.change.map((b, i) =>
+    out.change = out.change.map((b, i) =>
       b && typeof b == 'object' && !('entity' in b) && !('id' in b)
         ? { entity: { eid: `$b${i}` }, ...b }
         : b
     )
   }
+  // Signed out, the pair stays exactly where the caller put it: it is the
+  // call's own scope there, declared on the tool (anon.ts SCOPE) and read by
+  // the door itself, not a narrowing of a reach nobody has.
+  if (!scoped) return out
+  let { app, space, ...rest } = out
   if (typeof app != 'string') return rest
   let at = typeof space == 'string' ? `${space}/${app}` : app
   if (name == 'graph_apply' && Array.isArray(rest.change)) {
@@ -434,6 +436,11 @@ let door = async (ctx: Ctx, session: string) => {
       ? `${INSTRUCTIONS}\n\n---\n\n${apps.text}`
       : INSTRUCTIONS,
     search: searching(ctx, reach),
+    // What this door needs: a token (preauth.ts SIGNIN). A tool that works
+    // either way says so itself and keeps it (tools.ts `security: EITHER`) —
+    // which is every tool a stranger may call except the generic reads, and
+    // those are anonymous only on the door a stranger reads, where they are
+    // ONE named app rather than the whole of somebody's reach.
     security: SIGNIN,
     tools: own,
     extend: extend(ctx, apps.apps),
@@ -466,6 +473,100 @@ let door = async (ctx: Ctx, session: string) => {
   }
 }
 
+// A tool's own refusal, said to a caller the door turned away before the
+// protocol machine ran: the 200 a tool error takes, never the 401, which is
+// the answer to "you are not signed in" and not to "that app is private".
+let erred = (id: unknown, err: unknown) =>
+  result(id, {
+    content: [{
+      type: 'text',
+      text: err instanceof Error ? err.message : String(err),
+    }],
+    isError: true,
+  })
+
+// The door for a caller who has not signed in (anon.ts, T-34467). It is the
+// same @yaks/mcp mount, over a graph with NOBODY in it:
+//
+//   the platform's tools that declare they need nobody — about, the guide,
+//   the gallery and feedback (tools.ts `security: EITHER`);
+//   the generic READS, scoped to the one public or open app the call names,
+//   which read that app's store exactly as its own page does;
+//   no write at all: `readOnly` means graph_apply is not a tool that refuses
+//   but a tool that is not there;
+//   and the MENU beside all of it (`menu`, T-34465) — every platform verb a
+//   stranger may not call, listed, saying `oauth2`, so the host has something
+//   to offer the sign-in for.
+//
+// Claim-later — a stranger writing now and owning it once they sign in — is
+// what would be built HERE, and is deliberately not: it needs somewhere to
+// hold a write nobody owns yet, and there is nowhere on this platform to put
+// one. Signing in first is the whole of it for now.
+//
+// Everything else is `refused`: a method this door does not serve publicly, a
+// tool nobody may call anonymously, and a tool nobody wrote all answer the
+// same 401, so nothing here says what a signed-in list would hold.
+let stranger = async (
+  req: Request,
+  rpc: Rpc,
+  env: Env,
+  said: string,
+): Promise<Response> => {
+  let name = rpc.method == 'tools/call' ? String(rpc.params?.name ?? '') : ''
+  if (rpc.method != 'tools/list' && !(name && anonymous(name))) {
+    return refused(req, rpc.id)
+  }
+  let ctx: Ctx = {
+    env,
+    dir: directory(bound(env.DIRECTORY, dirPart.fetch, env), true),
+    // Nobody. Every door below reads this as no reach, no membership and no
+    // mailbox rather than as a person whose eid happens to be empty
+    // (directory.ts `member`, agent.ts `platform`).
+    person: '',
+  }
+  // The app a READ answers for, resolved before anything is built — so a call
+  // that named none, or named one nobody may read, is refused in a sentence
+  // rather than by an empty answer. Listing names no app and needs none: the
+  // schemas are the same whichever app is read.
+  let args = (rpc.params?.arguments ?? {}) as Record<string, unknown>
+  let reach: Reach[] = []
+  if (READS.includes(name)) {
+    try {
+      reach = await opened(ctx, args)
+    } catch (err) {
+      return erred(rpc.id, err)
+    }
+  }
+  let { graph, column } = await reaching(ctx, reach)
+  let opts = {
+    graph,
+    column,
+    schema: 'names' as const,
+    guide: pageFor,
+    search: searching(ctx, reach),
+    // Every tool this door LISTS as callable works with a token and without
+    // one (preauth.ts EITHER); the menu beside them says `oauth2` and is what
+    // a host offers the sign-in for.
+    security: EITHER,
+    readOnly: true,
+    scope: SCOPE,
+    tools: menu(ctx),
+    ...CONNECTOR,
+    version: VERSION,
+  }
+  // No roster line and no session: both are a person's own — a roster names
+  // what a client cached at connect, and a stranger's list moves only when we
+  // deploy. `about` signed out says the same words for everyone, which is
+  // what makes it safe to answer without knowing who is asking.
+  return mcp(opts)(
+    new Request(req.url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: said,
+    }),
+  )
+}
+
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let url = new URL(req.url)
   if (url.pathname != '/mcp') {
@@ -481,7 +582,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // stranger gets and never offers to sign in. The address is the lever
   // because the client's behaviour is not ours to change: a host that cannot
   // ask twice is given an address that only ever answers the challenge, and
-  // `/mcp` stays lazy — and mixed — for the hosts that can (`MENU`).
+  // `/mcp` stays lazy — and mixed — for the hosts that can (`menu`).
   // A query rather than a second path so there is still ONE resource here —
   // one route, one `WWW-Authenticate`, one `/.well-known/…/mcp`, which the
   // challenge already builds from the pathname.
@@ -550,22 +651,22 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
       arguments: heard(
         String(rpc.params.name),
         (rpc.params.arguments ?? {}) as Record<string, unknown>,
+        !!auth,
       ),
     }
     said = JSON.stringify(rpc)
   }
-  // The pre-auth surface (preauth.ts): what this platform is, and the guide,
-  // which the web already serves to anybody. It is handed a method and its
-  // params — no person, no Ctx, and no binding but the static assets — so
-  // nothing it answers can have read anybody's data, and whatever it will not
-  // answer meets the challenge that names our authorization server.
+  // The pre-auth surface, in its two halves. preauth.ts first: what this
+  // platform is, and the guide, which the web already serves to anybody. It is
+  // handed a method and its params — no person, no Ctx, and no binding but the
+  // static assets — so nothing it answers can have read anybody's data. What
+  // it does not answer goes to the anonymous door (`stranger`), which serves
+  // the tools a stranger may call and challenges everything else.
   if (!auth) {
     let open = await answer(String(rpc.method), rpc.params ?? {}, {
       ASSETS: env.ASSETS,
     })
-    return open
-      ? result(rpc.id, offered(String(rpc.method), open))
-      : refused(req, rpc.id)
+    return open ? result(rpc.id, open) : await stranger(req, rpc, env, said)
   }
   // Fresh, every read: a tool answers about what a tool just wrote, and the
   // directory's read cache belongs to whichever isolate warmed it

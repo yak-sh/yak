@@ -1465,8 +1465,10 @@ slow('the door before anyone signs in', async () => {
     assertEquals(init.instructions.includes('app_new'), false)
     assertEquals(await anon.call('ping'), {})
 
-    // One tool a stranger may CALL, and it is the one that reads nothing —
-    // beside the menu of the ones they may not (T-34465).
+    // The tools a stranger may CALL (anon.ts): about, the guide, the gallery,
+    // feedback, and the generic READS scoped to one app — beside the MENU of
+    // the ones they may not (T-34465). The callable half is held whole in the
+    // test below; here it is `about`, the one lifted out of preauth.ts.
     let schemes = async (of: typeof anon) =>
       Object.fromEntries(
         ((await of.call('tools/list')).tools as {
@@ -1480,15 +1482,27 @@ slow('the door before anyone signs in', async () => {
       annotations: Record<string, boolean>
       _meta?: { securitySchemes?: unknown }
     }[]
-    assertEquals(listed[0].name, 'about')
-    // And the menu behind it: every platform verb, listed but not callable,
-    // each saying `oauth2` — the tools that give a host something to offer
-    // the sign-in FOR (T-34465, mcp.ts MENU). Mixed auth is a list plus a
-    // refusal, and a list holding only the open tool is a connector that can
-    // never ask anybody to sign in.
-    assert(listed.length > 1, 'the menu, not the one open tool')
+    let about = listed.find((t) => t.name == 'about')!
+    // And the menu around it: every platform verb a stranger may not call,
+    // listed all the same, each saying `oauth2` — the tools that give a host
+    // something to offer the sign-in FOR (T-34465, mcp.ts `menu`). Mixed auth
+    // is a list plus a refusal, and a list holding only the open tools is a
+    // connector that can never ask anybody to sign in.
+    assert(listed.length > 1, 'the menu, not the open tools alone')
     assert(listed.some((t) => t.name == 'app_new'), 'the verbs are on the menu')
-    for (let t of listed.slice(1)) {
+    // What a stranger may call is the other test's subject; here it is only
+    // that everything ELSE on the menu wants a token.
+    let callable = [
+      'about',
+      'app_published',
+      'feedback',
+      'guide',
+      'graph_query',
+      'graph_schema',
+      'graph_show',
+      'search',
+    ]
+    for (let t of listed.filter((one) => !callable.includes(one.name))) {
       assertEquals(t._meta?.securitySchemes, [{
         type: 'oauth2',
         scopes: ['graph'],
@@ -1497,17 +1511,21 @@ slow('the door before anyone signs in', async () => {
     // It wears the same title and hints signed in and out (tools.ts lifts it
     // from preauth.ts): this is the list a directory reviewer sees first, and
     // a bare entry here reads as a door with no annotations at all.
-    assertEquals(listed[0].title, 'What yaks.app is')
-    assertEquals(listed[0].annotations, {
+    assertEquals(about.title, 'What yaks.app is')
+    assertEquals(about.annotations, {
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: false,
       openWorldHint: false,
     })
-    // And it says out loud that it needs nobody to sign in (T-34349): a host
-    // reads a mixed-auth server one tool at a time, so an open tool that
-    // declares no scheme is a tool it will not offer.
-    assertEquals(listed[0]._meta?.securitySchemes, [{ type: 'noauth' }])
+    // And it says out loud how it is reached (T-34349): a host reads a
+    // mixed-auth server one tool at a time, so an open tool that declares no
+    // scheme is a tool it will not offer. Both schemes, because both work —
+    // no token is needed and one is welcome (T-34467).
+    assertEquals(about._meta?.securitySchemes, [
+      { type: 'noauth' },
+      { type: 'oauth2', scopes: ['graph'] },
+    ])
     let said = await anon.tool('about')
     for (
       let word of [
@@ -1632,8 +1650,10 @@ slow('the door before anyone signs in', async () => {
       )
     }
     // A tool of the platform's, one of the app's own, and one nobody wrote:
-    // one answer for all three, so nothing here says which apps exist.
-    await shut('tools/call', { name: 'graph_query', arguments: { query: '' } })
+    // one answer for all three, so nothing here says which apps exist. The
+    // generic tier's WRITE is among them — signed out it is not a tool that
+    // refuses, it is a tool that is not listed (T-34467).
+    await shut('tools/call', { name: 'graph_apply', arguments: { change: [] } })
     await shut('tools/call', { name: 'app_list' })
     await shut('tools/call', { name: 'runs__leaderboard' })
     await shut('tools/call', { name: 'nope' })
@@ -1712,11 +1732,18 @@ slow('the door before anyone signs in', async () => {
     let fullSchemes = await schemes(agent)
     let full = Object.keys(fullSchemes)
     let open = listed.map((t) => t.name)
-    // Every tool says how it is reached, and `about` says the same thing on
-    // both lists — one tool cannot need signing in on one and not the other.
-    // The scope is the one our resource metadata names (identity.ts).
-    assertEquals(fullSchemes.about, [{ type: 'noauth' }])
-    for (let name of full.filter((n) => n != 'about')) {
+    // Every tool says how it is reached, and a tool that works signed out
+    // says the same thing on both lists — one tool cannot need signing in on
+    // one and not the other. The scope is the one our resource metadata names
+    // (identity.ts).
+    let openTools = ['about', 'app_published', 'feedback', 'guide']
+    for (let name of openTools) {
+      assertEquals(fullSchemes[name], [
+        { type: 'noauth' },
+        { type: 'oauth2', scopes: ['graph'] },
+      ], name)
+    }
+    for (let name of full.filter((n) => !openTools.includes(n))) {
       assertEquals(fullSchemes[name], [{
         type: 'oauth2',
         scopes: ['graph'],
@@ -1739,6 +1766,254 @@ slow('the door before anyone signs in', async () => {
     }[]).map((r) => r.uri)
     assert(pages.every((p) => mine.includes(p.uri)), 'the guide is still hers')
     assert(mine.includes(APPS) && mine.includes(view))
+  } finally {
+    await k.stop()
+  }
+})
+
+// The anonymous surface (T-34467). Owner, 2026-09-06: "we should expose as
+// much as possible to the anon users, but obviously, most things will require
+// auth." So the rule is the web's own — anything a browser at the address
+// would show somebody who never signed in, this door shows: the guide, the
+// gallery of published apps, and the DATA of one app anyone with the link can
+// read, named on the call. Nothing else, and no write.
+slow('signed out: the gallery, the guide, and one public app', async () => {
+  let k = await kernel()
+  try {
+    let them = await seed(k, [{ slug: 'ada', apps: [] }])
+    let agent = connector(k, them.cookie)
+    let anon = connector(k)
+    let made = async (
+      slug: string,
+      comp: string,
+      cols: Record<string, string>,
+      access?: string,
+    ) => {
+      await agent.tool('app_new', {
+        space: 'ada',
+        slug,
+        title: slug,
+        ...(access ? { access } : {}),
+      })
+      await agent.tool('app_files', {
+        space: 'ada',
+        app: slug,
+        files: [{
+          path: 'vocab.json',
+          content: JSON.stringify({ [comp]: cols }),
+        }],
+      })
+      await agent.tool('app_deploy', { space: 'ada', app: slug })
+    }
+    // One app anyone with the link reads, one only its members do.
+    await made('runs', 'jog', { miles: 'number' })
+    await made('diary', 'confession', { mood: 'text' }, 'private')
+    let run = crypto.randomUUID()
+    await agent.tool('graph_apply', {
+      space: 'ada',
+      app: 'runs',
+      entities: [{
+        entity: { eid: run },
+        doc: { title: 'Morning loop' },
+        jog: { miles: 3 },
+      }],
+    })
+    await agent.tool('graph_apply', {
+      space: 'ada',
+      app: 'diary',
+      entities: [{
+        entity: { eid: crypto.randomUUID() },
+        doc: { title: 'Tuesday' },
+        confession: { mood: 'fine' },
+      }],
+    })
+    await agent.tool('app_publish', {
+      space: 'ada',
+      app: 'runs',
+      name: 'run-club',
+      about: 'A log of everybody runs',
+    })
+
+    // THE LIST a stranger reads: what they may CALL — the four generic READS,
+    // each scoped to one app, and the platform tools that need nobody — beside
+    // the menu of what they may not (T-34465). A tool says which it is in the
+    // one field a host reads for exactly that, so the two halves are told
+    // apart here the same way ChatGPT tells them apart.
+    let listed = (await anon.call('tools/list')).tools as {
+      name: string
+      annotations: Record<string, boolean>
+      inputSchema: { properties: Record<string, unknown>; required?: string[] }
+      _meta?: { securitySchemes?: { type: string }[] }
+    }[]
+    let open = listed.filter((t) =>
+      t._meta?.securitySchemes?.some((s) => s.type == 'noauth')
+    )
+    assertEquals(open.map((t) => t.name).sort(), [
+      'about',
+      'app_published',
+      'feedback',
+      'graph_query',
+      'graph_schema',
+      'graph_show',
+      'guide',
+      'search',
+    ])
+    for (let t of open) {
+      // Each works with a token and without one: no token is needed, and one
+      // is welcome.
+      assertEquals(t._meta?.securitySchemes, [
+        { type: 'noauth' },
+        { type: 'oauth2', scopes: ['graph'] },
+      ], t.name)
+    }
+    // No write anywhere on it: graph_apply is not a tool that refuses here, it
+    // is a tool that is not there. The menu holds the platform's verbs, which
+    // ARE listed and refused, so the host has something to sign in for.
+    assertEquals(listed.some((t) => t.name == 'graph_apply'), false)
+    assert(listed.some((t) => t.name == 'app_new'), 'the menu is still there')
+    for (let name of ['graph_query', 'graph_schema', 'graph_show', 'search']) {
+      let t = listed.find((one) => one.name == name)!
+      assertEquals(t.annotations.readOnlyHint, true, name)
+      // And each says which app to name, and that naming it is not optional.
+      assertEquals(t.inputSchema.required?.includes('app'), true, name)
+      assertEquals(t.inputSchema.required?.includes('space'), true, name)
+    }
+
+    // The guide, read here instead of fetched off the web.
+    assertStringIncludes(await anon.tool('guide'), '# ')
+    assertStringIncludes(await anon.tool('guide', { page: 'querying' }), '# ')
+
+    // The gallery, and the same list searched — an offer is made to everybody,
+    // so browsing it needs nobody.
+    assertStringIncludes(await anon.tool('app_published'), 'run-club')
+    assertStringIncludes(
+      await anon.tool('app_published', { words: 'log runs' }),
+      'run-club',
+    )
+    assertStringIncludes(
+      await anon.tool('app_published', { words: 'kayak' }),
+      'nothing published says kayak',
+    )
+
+    // The public app's own data, named on the call — the answer its page
+    // gets at that address, through the tool an agent already has.
+    let rows = JSON.parse(
+      await anon.tool('graph_query', {
+        space: 'ada',
+        app: 'runs',
+        q: '.jog!&.doc?',
+      }),
+    ) as { entity: { eid: string }; doc: { title: string } }[]
+    assertEquals(rows.length, 1)
+    assertEquals(rows[0].entity.eid, run)
+    assertEquals(rows[0].doc.title, 'Morning loop')
+    let page = await client(k, 'ada.yaks.app', 'runs').get('.jog!')
+    assertEquals(page.map((r) => r.entity.eid), [run])
+    // Whole, by id, and by its words.
+    let shown = JSON.parse(
+      await anon.tool('graph_show', {
+        space: 'ada',
+        app: 'runs',
+        ids: [run],
+        backrefs: false,
+      }),
+    ) as { bundles: { entity: { eid: string } }[] }
+    assertEquals(shown.bundles[0].entity.eid, run)
+    let found = JSON.parse(
+      await anon.tool('search', {
+        space: 'ada',
+        app: 'runs',
+        words: 'Morning',
+      }),
+    ) as { entity: { eid: string } }[]
+    assertEquals(found[0].entity.eid, run)
+    // And the app's own word is in the schema it answers — the vocabulary of
+    // THAT app, because it is the only one this caller is reading.
+    let words = await anon.tool('graph_schema', { space: 'ada', app: 'runs' })
+    assertStringIncludes(words, 'jog')
+    assertEquals(words.includes('confession'), false)
+
+    // A private app is refused BY NAME: its address already answers a browser
+    // that way, so saying it plainly is what tells "not that app" from "not
+    // signed in".
+    let hidden = await assertRejects(
+      () =>
+        anon.tool('graph_query', {
+          space: 'ada',
+          app: 'diary',
+          q: '.confession!',
+        }),
+      Error,
+    )
+    assertStringIncludes(hidden.message, 'ada/diary is private')
+    // A read that names no app says the app is what is missing, and where the
+    // apps to read are listed.
+    let bare = await assertRejects(
+      () => anon.tool('graph_query', { q: '.jog!' }),
+      Error,
+    )
+    assertStringIncludes(bare.message, 'signed out, a read answers for ONE app')
+    assertStringIncludes(bare.message, 'app_published')
+    // Naming an app on the query LINE is not a way around it either: `.in=`
+    // asks about a membership, and a stranger holds none.
+    let inLine = await assertRejects(
+      () => anon.tool('graph_query', { q: '.in=ada/diary&.confession!' }),
+      Error,
+    )
+    assertStringIncludes(inLine.message, 'signed out')
+
+    // Feedback, from somebody with no account: the words are kept and the
+    // letter says who it is from, which is nobody.
+    let sent = await anon.tool('feedback', {
+      text: 'The gallery could say how many people installed each one.',
+    })
+    assertStringIncludes(sent, 'people who run yaks.app')
+    let mailed = await letter(k, 'hello@yaks.app', 'how many people installed')
+    assertStringIncludes(mailed.body, 'someone, signed out')
+    // And one an hour, shared by everybody signed out — harder than a
+    // person's own three, and still a pause rather than a no.
+    let held = await assertRejects(
+      () => anon.tool('feedback', { text: 'And another thought.' }),
+      Error,
+    )
+    assertStringIncludes(held.message, 'pause, not a no')
+    assertStringIncludes(held.message, 'https://yaks.app/login')
+
+    // Everything else is the challenge, exactly as it was: a tool of the
+    // platform's that reads somebody's own apps, and the write.
+    for (
+      let call of [
+        { name: 'app_list' },
+        { name: 'graph_apply', arguments: { change: [] } },
+      ]
+    ) {
+      let r = await k.at('yaks.app', '/mcp', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: call,
+        }),
+      })
+      assertEquals(r.status, 401, call.name)
+      let body = await r.json()
+      assertEquals(body.result.isError, true)
+      assertStringIncludes(
+        body.result._meta['mcp/www_authenticate'][0],
+        'resource_metadata=',
+      )
+    }
+
+    // Signing in adds and never swaps: the same words the stranger read, and
+    // the whole list beside them.
+    let full = ((await agent.call('tools/list')).tools as { name: string }[])
+      .map((t) => t.name)
+    for (let name of listed.map((t) => t.name)) {
+      assert(full.includes(name), `${name} is not on the signed-in list`)
+    }
+    assert(full.includes('graph_apply'))
   } finally {
     await k.stop()
   }
@@ -1923,7 +2198,17 @@ slow(
       for (let [name, schemes] of wants) {
         assert(schemes?.length, `${name} declares nothing about signing in`)
       }
-      assertEquals(wants.get('about'), [{ type: 'noauth' }])
+      // A tool a stranger may call says BOTH: no token is needed and one is
+      // welcome, which is how a host tells the open half of a mixed-auth
+      // surface from the closed half (T-34467).
+      assertEquals(wants.get('about'), [
+        { type: 'noauth' },
+        { type: 'oauth2', scopes: ['graph'] },
+      ])
+      assertEquals(wants.get('guide'), [
+        { type: 'noauth' },
+        { type: 'oauth2', scopes: ['graph'] },
+      ])
       assertEquals(wants.get('app_list'), [{
         type: 'oauth2',
         scopes: ['graph'],

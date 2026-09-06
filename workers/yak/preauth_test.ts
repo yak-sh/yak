@@ -1,11 +1,12 @@
-// The pre-auth surface, held to the two things that make it safe to serve to
-// nobody (preauth.ts): it answers out of the static site alone, and what it
-// answers is a subset of what a signed-in caller already sees. Both are
-// checked here rather than over HTTP because both are properties of the
-// module — `answer` is handed a `Site` one binding wide, so a test can watch
-// every fetch it makes and know there is nothing else it could have made.
-// mcp_test.ts holds the other half, the door's: that everything this module
-// will not answer still meets the 401 and its challenge.
+// The half of the pre-auth surface with nothing to look up, held to the two
+// things that make it safe to serve to nobody (preauth.ts): it answers out of
+// the static site alone, and what it answers is a subset of what a signed-in
+// caller already sees. Both are checked here rather than over HTTP because
+// both are properties of the module — `answer` is handed a `Site` one binding
+// wide, so a test can watch every fetch it makes and know there is nothing
+// else it could have made. mcp_test.ts holds the rest: the tools a stranger
+// may call, which do read data (anon.ts), and the 401 and its challenge for
+// everything neither surface answers.
 import { assert, assertEquals } from '@std/assert'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { answer, DOCS, NO_ARGS, PUBLIC } from './preauth.ts'
@@ -36,15 +37,6 @@ Deno.test('every public method answers, out of the site and nothing else', async
   )
   assertEquals(await answer('ping', {}, s), {})
   assertEquals(
-    (await answer('tools/list', {}, s) as { tools: { name: string }[] }).tools
-      .map((t) => t.name),
-    PUBLIC.map((t) => t.name),
-  )
-  let called = await answer('tools/call', { name: 'about' }, s) as {
-    content: { text: string }[]
-  }
-  assertEquals(called.content[0].text, PUBLIC[0].text)
-  assertEquals(
     (await answer('resources/list', {}, s) as { resources: { uri: string }[] })
       .resources.map((r) => r.uri),
     DOCS.map((d) => d.uri),
@@ -63,9 +55,13 @@ Deno.test('a protected method, tool or page is not answered here', async () => {
   let s = site()
   for (
     let [method, params] of [
-      // A tool of the platform's, a tool of an app's, and a tool nobody
-      // wrote: one answer for all three, so nothing here says which apps
-      // exist.
+      // No tool at all is this module's (T-34467). Even `about`, whose whole
+      // answer is written here, is served through the anonymous door — the
+      // one place a tool a stranger may call is listed and run, so the list
+      // and the call cannot disagree. A tool of the platform's, a tool of an
+      // app's, and a tool nobody wrote read the same either way.
+      ['tools/list', {}],
+      ['tools/call', { name: 'about' }],
       ['tools/call', { name: 'graph_query' }],
       ['tools/call', { name: 'app_list' }],
       ['tools/call', { name: 'runs__leaderboard' }],

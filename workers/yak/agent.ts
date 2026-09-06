@@ -27,6 +27,7 @@ import { z } from 'zod'
 import type { Bundle, Graph, Plugin, Row, Storage, Tool, Tx } from '@yaks/graph'
 import { composed as perEntity, detached } from '@yaks/graph'
 import { addressed, wordish } from '@yaks/alias'
+import { openly } from './anon.ts'
 import { Say, type Search } from '@yaks/mcp'
 import type { Column, Vocab } from '@yaks/vocab'
 import { META, storeName } from './directory.ts'
@@ -105,7 +106,9 @@ export let outputOf = (schema: unknown): z.ZodTypeAny | undefined =>
  * longer knows what a space is.
  */
 export let answered = async (ctx: Ctx, out: Out): Promise<Say> => {
-  if (!out.space) return new Say(out.text, out.data)
+  // Nobody signed in has no space to be told what is unseen in (anon.ts): the
+  // breaks in an app are its members', and a stranger is not one.
+  if (!out.space || !ctx.person) return new Say(out.text, out.data)
   let who = {
     person: ctx.person,
     role: await ctx.dir.role(out.space, ctx.person),
@@ -170,10 +173,17 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
  * The platform's verbs, as a plugin on the caller's graph: the whole tool
  * table. It contributes no components — the words are the apps' own — only
  * tools, and every one of them is bound to the person asking.
+ *
+ * With nobody asking it is the tools that say they need nobody (anon.ts
+ * `openly`), which is the same field a host reads to tell them apart — so the
+ * anonymous list is a SUBSET of this one by construction rather than a second
+ * table that could drift from it.
  */
 export let platform = (ctx: Ctx): Plugin => ({
   name: 'yak/platform',
-  tools: TOOLS.map((t) => sugared(ctx, t)),
+  tools: TOOLS.filter((t) => ctx.person || openly(t)).map((t) =>
+    sugared(ctx, t)
+  ),
 })
 
 /**
@@ -196,6 +206,15 @@ export let post = (ctx: Ctx, vocab: Vocab): Plugin => ({
  * owner's door to it is this tier, and this is how they open it.
  */
 export let named = (ctx: Ctx, said: string, write = false): Promise<Reach> => {
+  // Naming an app is asking about a MEMBERSHIP, so a caller with no identity
+  // cannot do it: signed out, the app a read answers for is the one the call
+  // names and the door resolved (anon.ts `opened`), never a rider on the line.
+  if (!ctx.person) {
+    throw new Error(
+      `signed out, a read cannot name an app on the query line (.in=${said}) ` +
+        '— name space and app on the call itself',
+    )
+  }
   let [one, two] = said.split('/')
   return inApp(ctx, two ? { space: one, app: two } : { app: one }, write)
 }
@@ -328,7 +347,7 @@ let spoken = async (
       }
     }
   }
-  let meta = await ctx.dir.space(META.space)
+  let meta = ctx.person && await ctx.dir.space(META.space)
   if (meta && await ctx.dir.role(meta, ctx.person)) {
     for (let col of PLATFORM_APART) clashes.add(col)
   }
@@ -432,7 +451,9 @@ export let reaching = async (
 ): Promise<{ graph: Graph; column: ReturnType<typeof reading> }> => {
   let { vocab, clashes } = await spoken(ctx, reach)
   let storage = held(ctx, reach)
-  let plugins = [platform(ctx), post(ctx, vocab)]
+  // The post room is a person's own mailbox work (letters.ts): a caller who
+  // has not signed in has no letters to list and none to send.
+  let plugins = ctx.person ? [platform(ctx), post(ctx, vocab)] : [platform(ctx)]
   let self: Graph = {
     vocab,
     storage,

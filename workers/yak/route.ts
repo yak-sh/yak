@@ -31,6 +31,14 @@ export let PRICING = `https://${PLATFORM}/pricing`
 export let MCP = `https://${PLATFORM}/mcp`
 export let MCP_ASK = `${MCP}?auth=required`
 
+// Where signing in happens — one email address and a six-digit code, and the
+// same line for somebody who has never been here (signin.ts). It is here
+// beside the other two for the same reason: everything that says it must say
+// the same string, and the tools that name it in a refusal (tools.ts, anon.ts)
+// cannot import identity.ts, which re-exports it, without dragging the
+// runtime's own modules into a Deno test.
+export let SIGN_IN = `https://${PLATFORM}/login`
+
 // And what an agent's connector form asks for when it will not go and find it
 // (T-34414): the authorization server's own addresses and the one scope.
 // identity.ts CONFIGURES the provider with these, so they are the same strings

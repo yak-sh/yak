@@ -769,6 +769,11 @@ export let directory = (via: Fetcher, now = false) => {
     // the one that stands, and the role, which is the same question asked
     // shorter.
     member: async (space: Space, person: string) => {
+      // Nobody is a member of nothing. An empty person is a caller who has not
+      // signed in (anon.ts), and it must never be ASKED: `.member.person=`
+      // reads as that column being ABSENT, which is a question that could
+      // answer yes and hand a stranger a seat.
+      if (!person) return null
       let row = await one(
         `.member.space=${space.eid}&.member.person=${person}`,
       )
@@ -814,8 +819,9 @@ export let directory = (via: Fetcher, now = false) => {
     spaces: async (person: string, role?: Role): Promise<Space[]> => {
       // A filter resolves an eid to an entity, so a person the meta store has
       // never seen — someone who signed in before it kept a row — makes the
-      // question itself unanswerable. No row, no memberships.
-      if (!(await one(`.eid=${person}`))) return []
+      // question itself unanswerable. No row, no memberships. Nobody at all
+      // (an empty person, `member` above) belongs to nothing either.
+      if (!person || !(await one(`.eid=${person}`))) return []
       let members = await query(
         `.member.person=${person}${role ? `&.member.role=${role}` : ''}`,
       )

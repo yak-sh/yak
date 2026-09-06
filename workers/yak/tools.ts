@@ -116,7 +116,7 @@ import type { Caller } from './identity.ts'
 import { DEFAULT, HOURS, ledger, mint, revoke } from './grants.ts'
 import { GRAPH, mail, REPLY_TO } from './mail.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
-import { asset, NO_ARGS, NOAUTH, PUBLIC } from './preauth.ts'
+import { asset, EITHER, NO_ARGS, PUBLIC } from './preauth.ts'
 import {
   type Box,
   boxOf,
@@ -128,7 +128,7 @@ import {
   spending,
   TIMEOUT,
 } from './sandbox.ts'
-import { foreign, SLUG } from './route.ts'
+import { foreign, SIGN_IN, SLUG } from './route.ts'
 import { globs } from './router.ts'
 import type { Reach } from './reach.ts'
 import { titling, vouched, type Who } from './session.ts'
@@ -1328,10 +1328,20 @@ let quoted = (said: string) =>
 // far likelier to be an agent in a loop than a fourth thing wrong.
 let HOURLY = 3
 
+// And how many a caller who has not signed in gets: one, shared by every such
+// caller, because there is no identity to hand an allowance to. Harder on
+// purpose — a stranger's report is wanted, a loop's is a mailbox full — and
+// still a pause rather than a no, since the refusal says where to write.
+let STRANGERS = 1
+
 // What this person has already said this hour, out of the meta store itself
 // rather than a counter in some isolate — three per hour only means anything
 // if it holds across the isolate a call lands in. A store that cannot answer
 // counts nothing: a rate limit is never the reason feedback is lost.
+//
+// Nobody signed in spells `.created.by=` on the line, which the filter grammar
+// reads as ABSENT — so the bucket for a stranger is every report nobody
+// signed, which is exactly the anonymous ones.
 let recently = async (ctx: Ctx) => {
   try {
     return (await meta(ctx.env).query(
@@ -3277,24 +3287,49 @@ export let TOOLS: Tool[] = [
     name: 'app_published',
     title: 'Published apps',
     readOnly: true,
+    // The gallery is the one list here that is nobody's own: an offer is made
+    // to the whole platform, so a stranger browses it (anon.ts).
+    security: EITHER,
     description:
       'What other people have published here, newest first: the name to ' +
       'install by, what it is, and which space it came from. Read it when ' +
       'the person asks for something somebody may already have made — ' +
       'installing one is app_install, and gives them their own copy with ' +
-      'their own data.',
-    input: { type: 'object', properties: {} },
-    run: async (ctx) => {
+      'their own data. With words, only the offers whose name, title or ' +
+      'description say them. It needs no account: a published app is offered ' +
+      'to everybody, and its own pages are readable at the address printed ' +
+      'here.',
+    input: {
+      type: 'object',
+      properties: {
+        words: str(
+          'search the offers — a word or two of what it should be about. ' +
+            'Leave it out for all of them',
+        ),
+      },
+    },
+    run: async (ctx, args) => {
       let offers = await ctx.dir.offers()
+      let line = ({ space, app }: (typeof offers)[number]) =>
+        `- ${app.published!.name} v${app.published!.version} — ` +
+        `${app.title}${
+          app.published!.about ? `: ${app.published!.about}` : ''
+        } (from ${space.slug}/${app.slug}, installs as ${app.slug}, ` +
+        `published ${app.published!.at.slice(0, 10)})`
+      // Every word said, anywhere in the line the reader is about to see:
+      // the gallery is a list of a few dozen sentences, so the search is the
+      // sentences themselves rather than an index to keep in step with them.
+      let words = typeof args.words == 'string'
+        ? args.words.toLowerCase().split(/\s+/).filter(Boolean)
+        : []
+      let found = offers.map((o) => ({ o, said: line(o).toLowerCase() }))
+        .filter(({ said }) => words.every((w) => said.includes(w)))
       return {
-        text: offers.length
-          ? offers.map(({ space, app }) =>
-            `- ${app.published!.name} v${app.published!.version} — ` +
-            `${app.title}${
-              app.published!.about ? `: ${app.published!.about}` : ''
-            } (from ${space.slug}/${app.slug}, installs as ${app.slug}, ` +
-            `published ${app.published!.at.slice(0, 10)})`
-          ).join('\n')
+        text: found.length
+          ? found.map(({ o }) => line(o)).join('\n')
+          : words.length
+          ? `nothing published says ${words.join(' ')} — ` +
+            'app_published with no words lists every offer'
           : 'nothing is published yet',
       }
     },
@@ -3764,6 +3799,10 @@ export let TOOLS: Tool[] = [
     title: 'Send feedback',
     destructive: false,
     openWorld: true,
+    // The one door that takes something FROM a stranger (anon.ts). What it
+    // writes is the platform's own inbox and nobody's graph, so it is no more
+    // an anonymous write than a letter is: harder-limited, and unsigned.
+    security: EITHER,
     description:
       'The door for ALL feedback about yaks.app itself — this connector, its ' +
       'tools, its guide, the way an app is built or served here. A bug, a ' +
@@ -3781,7 +3820,10 @@ export let TOOLS: Tool[] = [
       'said, in their own words, and what YOU tried and what happened — ' +
       'those two are the whole report. Who they are, their space, the app if ' +
       'you name one, and the versions ride along on their own; do not repeat ' +
-      'them. It reaches a person by mail, and they can write back.',
+      'them. It reaches a person by mail, and they can write back. It works ' +
+      'signed out too — the report then says it came from someone signed ' +
+      'out, and there is no address to answer, so put one in the words if a ' +
+      'reply is wanted.',
     input: {
       type: 'object',
       properties: {
@@ -3804,18 +3846,24 @@ export let TOOLS: Tool[] = [
       // loss than a refusal on plumbing at the moment someone is already
       // annoyed. No membership check either: this is attribution, not
       // authorization, and being signed in is the whole of it.
-      let space = args.space == null
+      let space = args.space != null
+        ? await ctx.dir.space(text(args.space, 'space'))
+        : ctx.person
         ? await ownSpace(ctx, args.app).catch(() => null)
-        : await ctx.dir.space(text(args.space, 'space'))
+        // Signed out there is no space of theirs to work out, and asking the
+        // directory whose it might be would be reading about somebody.
+        : null
       let app = space && args.app != null
         ? await ctx.dir.app(space, text(args.app, 'app'))
         : null
       let held = await recently(ctx)
-      if (held >= HOURLY) {
+      let cap = ctx.person ? HOURLY : STRANGERS
+      if (held >= cap) {
         throw new Error(
           `That is ${held} already this hour, and every one of them is kept ` +
             'and will be read — so this is a pause, not a no. Save the rest ' +
-            `for later, or write to ${REPLY_TO} directly if it cannot wait.`,
+            `for later, or write to ${REPLY_TO} directly if it cannot wait.` +
+            (ctx.person ? '' : ` Signing in at ${SIGN_IN} raises it.`),
         )
       }
       let at = new Date().toISOString()
@@ -3845,8 +3893,14 @@ export let TOOLS: Tool[] = [
       // true either way. It leads with the WORDS: what was said is the report,
       // and everything else is a line of context under a rule, so a person
       // takes it in at a glance.
-      let by = await ctx.dir.nameAt(ctx.person)
-      let email = await ctx.dir.emailAt(ctx.person)
+      // Who it is from, on the letter. Nobody signed in is said plainly —
+      // "someone, signed out" — rather than left blank, so a reader knows
+      // there is no address to answer and nothing was lost.
+      let by = ctx.person ? await ctx.dir.nameAt(ctx.person) : null
+      let email = ctx.person ? await ctx.dir.emailAt(ctx.person) : null
+      let from = ctx.person
+        ? `${by ?? 'someone'}${email ? ` <${email}>` : ''}`
+        : 'someone, signed out'
       let where = app && space
         ? `${space.slug}/${app.slug}${app.version ? ` v${app.version}` : ''}`
         : space?.slug ?? ''
@@ -3854,7 +3908,7 @@ export let TOOLS: Tool[] = [
         to: [REPLY_TO, GRAPH],
         subject: `feedback: ${opening}`,
         body: `${said.trim()}\n\n—\n` +
-          `${by ?? 'someone'}${email ? ` <${email}>` : ''}\n` +
+          `${from}\n` +
           (where ? `${where}\n` : '') +
           (app && space ? `${url(space, app)}\n` : '') +
           `yaks.app ${VERSION} · ${at}\n${eid}`,
@@ -3868,7 +3922,11 @@ export let TOOLS: Tool[] = [
             (where ? `, with ${where} and the versions` : '') +
             `. They read these, and can write back${
               email ? ` to ${email}` : ''
-            }.`
+            }.` +
+            (ctx.person
+              ? ''
+              : ' It went as from someone signed out, so there is no address ' +
+                'to answer — say one in the words if a reply is wanted.')
           : 'The words are kept for the people who run yaks.app — the mail ' +
             'could not go out just now, so it waits with them rather than ' +
             'being lost. No need to say it again.',
@@ -3891,6 +3949,9 @@ export let TOOLS: Tool[] = [
       '. A name that is none of them answers the map, which lists them all. ' +
       'The same words are served to a person at https://yaks.app/guide.md.',
     readOnly: true,
+    // The bytes the web already hands anybody at that address, so there is
+    // nobody to sign in as to read them (anon.ts).
+    security: EITHER,
     input: {
       type: 'object',
       properties: {
@@ -3943,8 +4004,9 @@ export let TOOLS: Tool[] = [
     // there is, and the one a host should never stop to ask about.
     readOnly: true,
     // And they say so in the signed-in list too, since the same tool cannot
-    // need signing in on one list and not the other.
-    security: NOAUTH,
+    // need signing in on one list and not the other. Both schemes, because
+    // both work: a token is welcome and none is needed (preauth.ts EITHER).
+    security: EITHER,
     // Signed in, `about` also says who is asking, how they got in and until
     // when (`whoami`, T-34385), and what this door is listing right now with
     // the version naming that list (T-34277) — so an agent whose cached list
