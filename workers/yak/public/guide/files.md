@@ -46,6 +46,37 @@ so a page that goes on loading the file from a CDN can be pinned to the bytes
 this fetch got. What the app SERVES it as comes from the path's extension, not
 from the response — name it `.js` and it is javascript.
 
+## An icon for the home screen
+
+Write an **`icon.png` beside `index.html`** — square, 512×512, on its own
+background rather than transparent — and the app has an icon everywhere. The
+file is the setting; there is nothing else to call. Bytes are not text, so it
+goes in as `base64` in place of `content`, or with `op: fetch` from a URL:
+
+    app_files(app, files: [{path: 'icon.png', base64: '<the bytes>'}])
+
+The page is served with the two links an installed app needs already in its
+head, at the app's own root:
+
+    <link rel="apple-touch-icon" href="/recipes/icon.png">
+    <link rel="manifest" href="/recipes/manifest.webmanifest">
+
+iOS reads the first and nothing else — an icon named only in a manifest is not
+the one it uses — while everything else reads the second, which is generated
+from the app: its title as the `name`, its own address as `start_url` and
+`scope`, `display: standalone`, the icon at 512 and 192, and the colour the page
+states in `<meta name="theme-color">` where it states one.
+
+**What the page declares is kept.** Each link is added only where the page has
+none, so an app that writes its own `apple-touch-icon` keeps it and still gets
+the manifest link, and an app that ships its own `manifest.webmanifest` is
+served that file rather than the generated one.
+
+Until an app writes an icon, `icon.png` answers the platform's own tile, so an
+app somebody keeps on their phone is never a blank square. Transparency is the
+one trap: iOS fills a transparent icon with solid black, so give the picture a
+ground of its own.
+
 ## upload, and what it answers
 
 `upload` is on the client every app is served:

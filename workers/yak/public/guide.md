@@ -175,8 +175,16 @@ stamp is the store's record; the date is the row's.
 
 ## Files
 
-Deeper: <https://yaks.app/guide/files.md> — uploads, pictures, and a gallery
-that never shows one twice.
+Deeper: <https://yaks.app/guide/files.md> — the app's icon, uploads, pictures,
+and a gallery that never shows one twice.
+
+An **`icon.png` beside `index.html`** — square, 512, on its own background,
+written with `base64` in place of `content` — is the app's icon on a home
+screen. The page is served with `<link rel="apple-touch-icon">` and
+`<link rel="manifest">` already in its head, at the app's own root, and
+`manifest.webmanifest` is generated from the app: its title, its address, and
+that icon at 512 and 192. Either link a page declares itself is kept. Until an
+app writes one, `icon.png` is the platform's own tile.
 
 `upload` takes a `File` off an `<input type=file>` — or any `Blob` — and answers
 `{eid, url, mime, bytes}`, plus `w` and `h` when the file is a picture that says

@@ -172,6 +172,18 @@ let reported = (at: string, page: Response) => {
     .transform(page)
 }
 
+// Where the parser will read a tag the kernel weaves in: inside the head if
+// the page has one, else after the doctype, which must stay the document's
+// first thing or the browser reads the whole page in quirks mode. A page with
+// neither gets it in front of everything. The base and the links below are
+// placed by this one rule.
+let intoHead = (page: string, tag: string) => {
+  let head = /<head[^>]*>/i.exec(page)
+  if (head) return page.replace(head[0], `${head[0]}${tag}`)
+  let doctype = /^\s*<!doctype[^>]*>/i.exec(page)
+  return doctype ? page.replace(doctype[0], `${doctype[0]}${tag}`) : tag + page
+}
+
 // An app's own files must not name the app. The code is COPIED under
 // whatever address the installer took it at (`app_install`), so a page
 // written with `/chores/api/client.js` in it is a 404 the moment the copy
@@ -182,20 +194,90 @@ let reported = (at: string, page: Response) => {
 // page is opened, pretty paths included. An absolute `/<app>/…` a page
 // already carries is untouched — a base moves relative URLs only.
 //
-// Where the parser will read it: inside the head if the page has one, else
-// after the doctype, which must stay the document's first thing or the
-// browser reads the whole page in quirks mode. A page carrying its own
-// `<base>` keeps it, and is given none: the first in tree order is the
-// document's, and an author who wrote one meant it. declared.ts hands a view
-// to an MCP host by the same rule, at that app's absolute address.
-export let based = (href: string, page: string) => {
-  if (/<base[\s>][^>]*\bhref\b/i.test(page)) return page
-  let tag = `<base href="${href}">`
-  let head = /<head[^>]*>/i.exec(page)
-  if (head) return page.replace(head[0], `${head[0]}${tag}`)
-  let doctype = /^\s*<!doctype[^>]*>/i.exec(page)
-  return doctype ? page.replace(doctype[0], `${doctype[0]}${tag}`) : tag + page
+// A page carrying its own `<base>` keeps it, and is given none: the first in
+// tree order is the document's, and an author who wrote one meant it.
+// declared.ts hands a view to an MCP host by the same rule, at that app's
+// absolute address.
+export let based = (href: string, page: string) =>
+  /<base[\s>][^>]*\bhref\b/i.test(page)
+    ? page
+    : intoHead(page, `<base href="${href}">`)
+
+// Whether the page already names a `rel` — one TOKEN of it, so
+// `rel="shortcut icon"` and `rel="apple-touch-icon-precomposed"` each count as
+// the author having answered.
+let declares = (page: string, rel: string) =>
+  new RegExp(`<link\\b[^>]*\\brel\\s*=\\s*['"]?[^'">]*\\b${rel}\\b`, 'i')
+    .test(page)
+
+// The two links an app added to a home screen needs, and almost no app writes
+// (T-34493). iOS takes the icon from `<link rel="apple-touch-icon">` in the
+// head and nowhere else — Apple's *Configuring Web Applications*: a page names
+// its icon there, 180×180 for current displays, `sizes` only when it offers
+// several, and the smallest icon LARGER than the device wants is the one
+// scaled, so one square file serves every device. Every other platform reads
+// the manifest's `icons` instead. A page written here has neither unless its
+// agent thought of both, so an app somebody kept on their phone came out
+// blank — owner, 2026-09-06: "the app's PWAs aren't getting icons (i tested
+// iOS), even when the site itself has an image icon."
+//
+// So a page is given the link it did NOT write, at the app's own root: the
+// icon (`icon.png`, answered by the platform's tile when the app wrote none)
+// and the manifest (`manifest.webmanifest`, generated below). Each half is
+// decided on its own — a page naming an icon and no manifest gets the manifest
+// — and what the page declares is never touched, because a second `rel` beside
+// the author's is a second answer to a question they answered.
+//
+// The hrefs are absolute at the mount, like the reporter's, rather than
+// relative: a page carrying its own `<base>` keeps it (`based` above), and a
+// relative `icon.png` would then resolve against the author's base instead of
+// against the app.
+export let pinned = (at: string, page: string) => {
+  let tags =
+    (declares(page, 'apple-touch-icon')
+      ? ''
+      : `<link rel="apple-touch-icon" href="${at}icon.png">`) +
+    (declares(page, 'manifest')
+      ? ''
+      : `<link rel="manifest" href="${at}manifest.webmanifest">`)
+  return tags ? intoHead(page, tags) : page
 }
+
+// The colour the page asked the browser to paint its chrome with, which is the
+// one answer a GENERATED manifest can honestly give for a colour: whatever the
+// app's own front page says in `<meta name="theme-color">`. A page that names
+// none gets a manifest with no colours in it rather than a guess — the
+// browser's default beats ours. A page naming several scopes the extras by
+// `prefers-color-scheme`, so the unscoped one is the one that always applies.
+let THEME = /<meta\b[^>]*\bname\s*=\s*['"]?theme-color\b[^>]*>/gi
+let CONTENT = /\bcontent\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i
+
+export let themed = (page: string) => {
+  let tags = [...page.matchAll(THEME)].map((m) => m[0])
+  let tag = tags.find((t) => !/\bmedia\s*=/i.test(t)) ?? tags[0]
+  if (!tag) return null
+  let c = CONTENT.exec(tag)
+  return (c?.[1] ?? c?.[2] ?? c?.[3] ?? '').trim() || null
+}
+
+// What an app's manifest says when the app wrote none: its name, its own root
+// as the scope a standalone window stays inside, and the icon at the two sizes
+// an installer looks for. The SAME file at both — one square png is all the
+// platform asks an agent for, and resizing it at the edge would be a second
+// set of bytes to serve and cache for an installer that scales anyway.
+export let manifesting = (app: App, at: string, theme: string | null) => ({
+  name: app.title || app.slug,
+  short_name: app.title || app.slug,
+  start_url: at,
+  scope: at,
+  display: 'standalone',
+  ...(theme ? { background_color: theme, theme_color: theme } : {}),
+  icons: ['512x512', '192x192'].map((sizes) => ({
+    src: `${at}icon.png`,
+    type: 'image/png',
+    sizes,
+  })),
+})
 
 // The files that ARE the app's platform manifest rather than its page: the
 // server code the dispatch namespace runs (dispatch.ts), the two declarations
@@ -248,6 +330,61 @@ let unchanged = (req: Request, etag: string) =>
   (req.headers.get('if-none-match') ?? '').split(',')
     .some((t) => t.trim() == etag)
 
+// An app's bytes, through the cache (cache.ts): `Files` is a second entrypoint
+// with Cloudflare's cache in front of it, addressed by the app's eid and this
+// path, so a warm edge answers without the bucket being touched. It is the
+// same call for a private app as for a public one — what is cached is the
+// file, and whether this person may have it was decided by `served()` before
+// we got here.
+//
+// Absent the binding (under `wrangler dev` and the workerd probes) `bound`
+// calls the module in-process: the same bytes, no cache.
+let bytes = (env: Env, app: App, prefix: string, path: string) =>
+  bound(env.FILES, files.fetch, env).fetch(
+    new Request(cachedAt(app.eid, path), { headers: { [PREFIX]: prefix } }),
+  )
+
+// The two addresses the kernel answers for an app that wrote neither file
+// (T-34493), so the links `pinned` wove in are never dead. Both are the
+// FALLBACK and nothing more: an app with its own `icon.png` or its own
+// `manifest.webmanifest` is served that, because this is only reached where
+// the bucket had nothing.
+//
+// The icon is the platform's connector tile — opaque, square, 512 (site_test)
+// — so an app on a home screen wears the platform's face rather than the
+// browser's blank sheet. iOS fills a transparent icon with black, which is why
+// the tile that carries its own ground is the right one to fall back to.
+let unwritten = async (
+  req: Request,
+  env: Env,
+  app: App,
+  prefix: string,
+  path: string,
+  at: string,
+) => {
+  if (path == '/icon.png') {
+    let tile = await env.ASSETS.fetch(
+      new Request(new URL('/connector-512.png', req.url)),
+    )
+    if (!tile.ok) return null
+    return new Response(tile.body, {
+      headers: { 'content-type': 'image/png', 'cache-control': keeping(app) },
+    })
+  }
+  if (path != '/manifest.webmanifest') return null
+  // The colours off the app's own front page, which is the only page a
+  // manifest is about. A miss is no colours, never a failure.
+  let front = await bytes(env, app, prefix, '/')
+  if (!front.ok) await front.body?.cancel()
+  let theme = front.ok ? themed(await front.text()) : null
+  return new Response(JSON.stringify(manifesting(app, at, theme), null, 2), {
+    headers: {
+      'content-type': 'application/manifest+json',
+      'cache-control': keeping(app),
+    },
+  })
+}
+
 let asset = async (
   req: Request,
   env: Env,
@@ -262,21 +399,9 @@ let asset = async (
 ) => {
   let prefix = prefixOf(space, app)
   if (inside(keyed(prefix, path).slice(prefix.length))) return nothingHere()
-  // The bytes, through the cache (cache.ts): `Files` is a second entrypoint
-  // with Cloudflare's cache in front of it, addressed by the app's eid and
-  // this path, so a warm edge answers without the bucket being touched. It is
-  // the same call for a private app as for a public one — what is cached is
-  // the file, and whether this person may have it was decided by `served()`
-  // before we got here.
-  //
-  // Absent the binding (under `wrangler dev` and the workerd probes) `bound`
-  // calls the module in-process: the same bytes, no cache.
   let got = await c.time(
     'bytes',
-    () =>
-      bound(env.FILES, files.fetch, env).fetch(
-        new Request(cachedAt(app.eid, path), { headers: { [PREFIX]: prefix } }),
-      ),
+    () => bytes(env, app, prefix, path),
     // Whether that trip stopped at the edge or went on to the bucket, in the
     // same Server-Timing entry as the time it took: a slow `bytes` stage and a
     // fast one are the same call, and this is the word for which happened.
@@ -284,7 +409,7 @@ let asset = async (
   )
   if (got.status != 200) {
     await got.body?.cancel()
-    return nothingHere()
+    return await unwritten(req, env, app, prefix, path, at) ?? nothingHere()
   }
   let type = got.headers.get('content-type') ?? 'application/octet-stream'
   let etag = await etagOf(got.headers.get(SHA) ?? '', at)
@@ -299,7 +424,7 @@ let asset = async (
   // and the reporter after it. The weaving is done HERE rather than behind the
   // cache because the same file is a different document at each mount, and one
   // cached copy of the bytes serving every mount beats one copy per mount.
-  let page = based(at, await got.text())
+  let page = based(at, pinned(at, await got.text()))
   return reported(at, new Response(page, { headers }))
 }
 

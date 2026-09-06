@@ -64,7 +64,10 @@ An app is an index.html and whatever files sit beside it, served live at
 1. app_new — the app. Leave the space argument out: signing in gave them
    one, and every tool uses it unless they have several.
 2. app_files — write index.html, and any css, js or images beside it; the
-   whole set in one call, as files: [{path, content}, ...].
+   whole set in one call, as files: [{path, content}, ...]. Write an icon.png
+   beside index.html as well — square, 512, on its own background, base64 in
+   place of content — and the app has an icon when it is kept on a phone's
+   home screen.
 3. app_deploy — mark the release. The files are already live; this is the
    version an error will name. It also plants any components the app declares
    in a vocab.json beside index.html — {"recipe": {"serves": "number"}} and
@@ -296,11 +299,12 @@ export let PAGES: Page[] = [
     title: 'Files and pictures',
     description:
       "app_files for the app's own files — what a write answers, the patch " +
-      'and fetch ops — then upload() for a file off an <input>: where the ' +
-      'bytes are served back from, the attachment and image rows it writes, ' +
-      'the 20 MB ceiling and the downscale under it, and a gallery that ' +
-      'never shows one picture twice.',
-    brief: "the app's files, uploads, pictures, galleries",
+      'and fetch ops, the icon.png that gives an app an icon on a home ' +
+      'screen — then upload() for a file off an <input>: where the bytes are ' +
+      'served back from, the attachment and image rows it writes, the 20 MB ' +
+      'ceiling and the downscale under it, and a gallery that never shows one ' +
+      'picture twice.',
+    brief: "the app's files, its icon, uploads, pictures",
   },
   {
     slug: 'tools',

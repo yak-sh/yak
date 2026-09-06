@@ -141,6 +141,69 @@ Deno.test('a page is served with its base and its reporter', async () => {
   assert((await js.text()).includes('export let store ='))
 })
 
+Deno.test('an app is installable: the two links, the icon, the manifest', async () => {
+  let { env, files } = platform()
+  await seeded(env)
+  files.held.set(
+    'ada/cookbook/index.html',
+    new TextEncoder().encode(
+      '<!doctype html><head><meta name="theme-color" content="#1b3a2f">' +
+        '</head><body>hi',
+    ),
+  )
+  let html = await (await apps.fetch(visit('/cookbook/'), env)).text()
+  assert(
+    html.includes('<link rel="apple-touch-icon" href="/cookbook/icon.png">'),
+    html,
+  )
+  assert(
+    html.includes(
+      '<link rel="manifest" href="/cookbook/manifest.webmanifest">',
+    ),
+    html,
+  )
+
+  // The app wrote no icon, so the address the head names is the platform's
+  // own tile rather than a 404 — an installed app is never blank.
+  let icon = await apps.fetch(visit('/cookbook/icon.png'), env)
+  assertEquals(icon.status, 200)
+  assertEquals(icon.headers.get('content-type'), 'image/png')
+  let tile = await Deno.readFile(
+    new URL('./public/connector-512.png', import.meta.url),
+  )
+  assertEquals(new Uint8Array(await icon.arrayBuffer()), tile)
+
+  // And the manifest, generated from the app and the colour its page states.
+  let got = await apps.fetch(visit('/cookbook/manifest.webmanifest'), env)
+  assertEquals(got.status, 200)
+  assertEquals(got.headers.get('content-type'), 'application/manifest+json')
+  assertEquals(await got.json(), {
+    name: 'Cookbook',
+    short_name: 'Cookbook',
+    start_url: '/cookbook/',
+    scope: '/cookbook/',
+    display: 'standalone',
+    background_color: '#1b3a2f',
+    theme_color: '#1b3a2f',
+    icons: [
+      { src: '/cookbook/icon.png', type: 'image/png', sizes: '512x512' },
+      { src: '/cookbook/icon.png', type: 'image/png', sizes: '192x192' },
+    ],
+  })
+
+  // An app that wrote its own is served its own, at both addresses: the
+  // fallback is only ever what a miss answers.
+  files.held.set('ada/cookbook/icon.png', new TextEncoder().encode('mine'))
+  files.held.set(
+    'ada/cookbook/manifest.webmanifest',
+    new TextEncoder().encode('{"name":"Ours"}'),
+  )
+  let own = await apps.fetch(visit('/cookbook/icon.png'), env)
+  assertEquals(await own.text(), 'mine')
+  let theirs = await apps.fetch(visit('/cookbook/manifest.webmanifest'), env)
+  assertEquals(await theirs.json(), { name: 'Ours' })
+})
+
 Deno.test('the page wire: apply, query and search round-trip', async () => {
   let { env } = platform()
   await seeded(env)
