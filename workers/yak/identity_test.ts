@@ -971,6 +971,62 @@ slow(
   },
 )
 
+// The OAuth settings the connect page teaches (T-34414), against the two
+// documents the authorization server actually serves. The page tells a person
+// what to put in a connector form; if it ever named an address the door does
+// not answer, the person would be stuck with no way to tell which of the two
+// was lying. So both are read here from one kernel and compared. It lives
+// beside the identity part rather than in site_test.ts because the connect
+// page is the kernel's own (pages.ts), not one of the static ones.
+slow(
+  'the connect page teaches the OAuth settings the door serves',
+  async () => {
+    let k = await kernel()
+    try {
+      let { cookie } = await signIn(k)
+      let page = await (await k.at('yaks.app', '/connect', {
+        headers: { cookie },
+      })).text()
+      let as = await (await k.at(
+        'yaks.app',
+        '/.well-known/oauth-authorization-server',
+      )).json()
+      // Every endpoint the page names is the one the metadata names — compared
+      // by path, since the probe kernel is not at the platform's hostname.
+      for (
+        let [said, at] of [
+          ['authorize', as.authorization_endpoint],
+          ['token', as.token_endpoint],
+          ['register', as.registration_endpoint],
+        ] as const
+      ) {
+        assertEquals(new URL(at).pathname, `/oauth/${said}`)
+        assertStringIncludes(
+          page,
+          `<code>https://yaks.app/oauth/${said}</code>`,
+        )
+      }
+      assertEquals(as.scopes_supported, ['graph'])
+      assertStringIncludes(page, '<b>Scope</b> <code>graph</code>')
+      // The three things a person gets wrong on their own: which authentication
+      // to pick, that there is no secret to find, and that the client boxes are
+      // meant to be empty.
+      assertStringIncludes(page, '<b>OAuth settings.</b>')
+      assertStringIncludes(page, 'Set <b>Authentication</b> to <b>OAuth</b>')
+      assertStringIncludes(page, 'There is no secret to enter')
+      assertStringIncludes(
+        page,
+        'Leave <b>OAuth Client ID</b> and <b>OAuth Client Secret</b> empty',
+      )
+      // And ChatGPT is given the address that answers the challenge (T-34416),
+      // never the lazy one.
+      assertStringIncludes(page, 'https://yaks.app/mcp?auth=required')
+    } finally {
+      await k.stop()
+    }
+  },
+)
+
 // The clamp on how long signing in may take (T-34138). A first sign-in on
 // 2026-09-04 took 32.4 seconds of wall time against 28.7ms of CPU — an
 // unbounded wait on something, not work — and the person who was doing it

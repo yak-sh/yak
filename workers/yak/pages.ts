@@ -10,7 +10,7 @@
 // HTML (the repo's md.ts rule, one floor down).
 
 import type { Frame } from './build.ts'
-import { MCP, MCP_ASK } from './route.ts'
+import { MCP, MCP_ASK, OAUTH, PLATFORM } from './route.ts'
 import { CONNECTOR } from './seo.ts'
 
 // The one escape: `&` first, so an escape is never escaped twice.
@@ -109,7 +109,6 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .Face_Rows p { display: flex; align-items: center; gap: .5rem; margin: 0; min-width: 0; font-size: .9rem }
 .Face_Rows b { flex: none; min-width: 5rem; color: var(--ink) }
 .Face_Rows .Copy { min-width: 0; flex: 1 }
-.Soon { color: var(--warn) }
 .Tabs { position: relative }
 .Tabs > input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none }
 .Tabs_Strip { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 .75rem }
@@ -919,12 +918,34 @@ let face = `<section class="Card"><h2>What the form asks for</h2>
 <a href="${CONNECTOR.icons[1].src}">save the square yak</a>.</p>
 </section>`
 
-// The OAuth line each tab will carry, which is NOT written yet: what every
-// form asks for under "advanced" differs, and what ChatGPT needs has still to
-// be found out. It is a marked placeholder on purpose, so nobody reads it as
-// finished copy — T-34414 replaces it per tab once T-34416 has the answers.
-let oauth = '<p class="Note Soon">Advanced or OAuth settings: <b>to be ' +
-  'written</b>.</p>'
+// An address on this platform, spelled out for somebody to type or paste.
+let at = (path: string) => `<code>https://${PLATFORM}${path}</code>`
+
+// What to write in an OAuth box, for the forms that have boxes (T-34414).
+// Every value is the authorization server's OWN — route.ts `OAUTH` is what
+// identity.ts configures the provider with and what both `/.well-known`
+// documents serve — so this page cannot come to teach an address the door
+// does not answer.
+//
+// The honest answer for every assistant here is "nothing": they all register
+// themselves (RFC 7591) at the registration endpoint below, which is why the
+// client boxes stay empty and there is no secret anywhere. The values are for
+// the form that refuses an empty box, and for whatever asks instead of
+// looking.
+let ID =
+  'Leave <b>OAuth Client ID</b> and <b>OAuth Client Secret</b> empty. There ' +
+  'is no secret to enter: the connector registers itself the first time it ' +
+  'knocks, and what protects it is PKCE, not a password. Nothing needs ' +
+  'allow-listing here either — we take whichever redirect address it ' +
+  'registers.'
+
+let BOXES = `<b>Authorization URL</b> ${
+  at(OAUTH.authorize)
+}, <b>Token URL</b> ${at(OAUTH.token)}, <b>Registration URL</b> ${
+  at(OAUTH.register)
+}, <b>Scope</b> <code>${OAUTH.scope}</code>.`
+
+let URLS = `If a box will not take an empty value: ${BOXES}`
 
 // Nothing interpolated below is anybody's input, so it is written as the
 // markup it is; everything that IS a person's is escaped where it enters.
@@ -953,6 +974,9 @@ let AGENTS = [
     note: 'A remote connector follows you to every Claude — the phone too. ' +
       'On a Team or Enterprise plan an owner adds it once under Organization ' +
       'settings, and everyone else clicks Connect.',
+    oauth: 'Nothing to fill in. Claude finds all of this itself; the two ' +
+      'boxes under <b>Advanced settings</b> are the only ones it could ask ' +
+      'about. ' + ID,
   },
   {
     key: 'chatgpt',
@@ -978,6 +1002,9 @@ let AGENTS = [
       'stranger and never offers you the sign-in. The web app, not the phone ' +
       'one. On a Business or Enterprise workspace an admin may have to allow ' +
       'developer mode first.',
+    oauth: 'Set <b>Authentication</b> to <b>OAuth</b> — not "no ' +
+      'authentication", and not an API key, which we do not take. ' + ID +
+      ' ' + URLS,
   },
   {
     key: 'claude-code',
@@ -990,6 +1017,8 @@ let AGENTS = [
     ],
     note: 'Add <code>--scope user</code> to that first line to have it in ' +
       'every project, not just this one.',
+    oauth: 'Nothing to fill in — there is no form. <b>Authenticate</b> opens ' +
+      'the browser, you sign in, and the terminal has the tools.',
   },
   {
     key: 'cursor',
@@ -1004,6 +1033,8 @@ let AGENTS = [
     ],
     note: 'A <code>.cursor/mcp.json</code> in a project folder does the same ' +
       'thing for that project alone.',
+    oauth: 'Nothing to fill in — that one field is the whole entry. Cursor ' +
+      'registers itself and opens the browser when you click sign in.',
   },
   {
     key: 'other',
@@ -1016,6 +1047,13 @@ let AGENTS = [
       'are what this one answers to.',
     ],
     note: '',
+    oauth:
+      `Anything that reads ${
+        at('/.well-known/oauth-authorization-server')
+      } needs nothing typed at all. For one that asks instead: ${BOXES} ` +
+      'Authorization code with PKCE (<code>S256</code>), a refresh token ' +
+      'that does not expire, and no client secret — the client registers ' +
+      'itself.',
   },
 ]
 
@@ -1049,7 +1087,8 @@ ${
 <ol><li>Copy the URL:${copyable(a.url ?? MCP, 'the MCP URL')}</li>${
       a.steps.map((s) => `<li>${s}</li>`).join('')
     }</ol>
-${a.note ? `<p class="Note">${a.note}</p>` : ''}${oauth}
+${a.note ? `<p class="Note">${a.note}</p>` : ''}
+<p class="Note"><b>OAuth settings.</b> ${a.oauth}</p>
 </section>`
   ).join('')
 }

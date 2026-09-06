@@ -577,8 +577,23 @@ Deno.test('the connect page teaches one agent at a time', async () => {
       '~/.cursor/mcp.json',
     ]
   ) assertStringIncludes(html, out)
-  // And the OAuth line is a marked placeholder in each tab, not written copy.
-  assertEquals(count(html, 'class="Note Soon"'), tabs.length)
+  // And the OAuth line, one per tab and written now (T-34414). Every tab says
+  // the same true thing — there is nothing to fill in, because each of these
+  // registers itself — and the two whose forms have boxes get the addresses
+  // to put in them. That those addresses are the ones the authorization
+  // server actually serves is held in identity_test.ts, which has a kernel to
+  // read the metadata off.
+  assertEquals(count(html, '<b>OAuth settings.</b>'), tabs.length)
+  for (
+    let said of [
+      'Leave <b>OAuth Client ID</b> and <b>OAuth Client Secret</b> empty.',
+      'Set <b>Authentication</b> to <b>OAuth</b>',
+      '<b>Authorization URL</b> <code>https://yaks.app/oauth/authorize</code>',
+      '<b>Token URL</b> <code>https://yaks.app/oauth/token</code>',
+      '<b>Registration URL</b> <code>https://yaks.app/oauth/register</code>',
+      '<b>Scope</b> <code>graph</code>',
+    ]
+  ) assertStringIncludes(html, said)
 })
 
 Deno.test('the connect page shows the connector its own face', async () => {

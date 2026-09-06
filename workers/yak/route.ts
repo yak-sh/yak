@@ -31,6 +31,20 @@ export let PRICING = `https://${PLATFORM}/pricing`
 export let MCP = `https://${PLATFORM}/mcp`
 export let MCP_ASK = `${MCP}?auth=required`
 
+// And what an agent's connector form asks for when it will not go and find it
+// (T-34414): the authorization server's own addresses and the one scope.
+// identity.ts CONFIGURES the provider with these, so they are the same strings
+// the two `/.well-known` documents serve, and the connect page TYPES THEM OUT
+// for a person whose form has empty boxes. Paths, not absolute URLs, because
+// the provider matches an endpoint by hostname and path and the probe kernel
+// is not at this hostname; the page absolutes them against PLATFORM.
+export let OAUTH = {
+  authorize: '/oauth/authorize',
+  token: '/oauth/token',
+  register: '/oauth/register',
+  scope: 'graph',
+}
+
 // The Cloudflare for SaaS fallback origin (T-33036): the name a customer's
 // own hostname is CNAME'd to, and the one place that name is written — the
 // attach flow and the guide both read it here.

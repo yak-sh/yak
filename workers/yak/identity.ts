@@ -90,7 +90,7 @@ import {
   deleted,
   lost,
 } from './pages.ts'
-import { hostOf, onZone, PLATFORM, SLUG } from './route.ts'
+import { hostOf, OAUTH, onZone, PLATFORM, SLUG } from './route.ts'
 import { canon, mint, nameOf, personOf, spend } from './signin.ts'
 
 // A month of not signing in again. The cookie is the browser's; an agent's
@@ -728,8 +728,6 @@ let cimd = (env: Env) => env.CIMD != 'off'
 // A year, in seconds: the access token's life (`opts` below says why).
 let YEAR = 365 * 24 * 60 * 60
 
-export let TOKEN = '/oauth/token'
-
 // The provider's configuration over this env, one value: `withAuth` reads it
 // to unwrap a bearer, and `fetch` runs it. `/oauth/me` is the one protected
 // resource the identity part serves itself — the door an agent calls to learn
@@ -745,9 +743,9 @@ let opts = (env: Env): OAuthProviderOptions<Env> => ({
       return who ? Response.json(who) : unauthorized(req)
     },
   },
-  authorizeEndpoint: '/oauth/authorize',
-  tokenEndpoint: TOKEN,
-  clientRegistrationEndpoint: '/oauth/register',
+  authorizeEndpoint: OAUTH.authorize,
+  tokenEndpoint: OAUTH.token,
+  clientRegistrationEndpoint: OAUTH.register,
   clientIdMetadataDocumentEnabled: cimd(env),
   // The owner, 2026-09-05: "the oauth should never expire". A connector is a
   // door a person opened, and it closes when they close it and not before —
@@ -764,9 +762,9 @@ let opts = (env: Env): OAuthProviderOptions<Env> => ({
   // (grants.ts) — those are pasted into a terminal, not held by a connector.
   accessTokenTTL: YEAR,
   refreshTokenTTL: undefined,
-  scopesSupported: ['graph'],
+  scopesSupported: [OAUTH.scope],
   resourceMetadata: {
-    scopes_supported: ['graph'],
+    scopes_supported: [OAUTH.scope],
     resource_name: 'yaks.app',
   },
 })
@@ -798,7 +796,9 @@ let context = () => ({
 // Basic is the same mistake said in a header, and it takes the client_id with
 // it, so the id moves into the form where the provider reads it next.
 let plain = async (req: Request, env: Env): Promise<Request> => {
-  if (req.method != 'POST' || new URL(req.url).pathname != TOKEN) return req
+  if (req.method != 'POST' || new URL(req.url).pathname != OAUTH.token) {
+    return req
+  }
   let basic = /^Basic\s+(\S+)$/i.exec(req.headers.get('authorization') ?? '')
   // Anything unreadable here is the provider's to refuse, not ours to guess
   // at: a body that will not parse and Basic credentials that are not base64
