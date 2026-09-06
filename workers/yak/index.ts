@@ -44,6 +44,7 @@
 //     /.well-known/oauth-*    identity.ts: the provider's metadata
 //     /api/stripe/webhook     billing.ts: what Stripe says happened
 //     /api/billing/*          billing.ts: checkout and the customer portal
+//     /stripe/connect         sell.ts: what a SELLER's account says happened
 //     /mcp, /api/*            mcp.ts (T-32329; a JSON 404 until then)
 //     /robots.txt, /sitemap.xml, /llms.txt, /llms-full.txt
 //                             seo.ts: the site said as a list, generated
@@ -94,6 +95,7 @@ import {
   sameOrigin,
   shared,
 } from './route.ts'
+import * as sell from './sell.ts'
 import * as seo from './seo.ts'
 import { metaBreaks, noted, refusal } from './unseen.ts'
 import { metered } from './usage.ts'
@@ -168,6 +170,12 @@ let serve = async (req: Request, env: Env, r: Route) => {
   if (path.startsWith('/api/stripe/') || path.startsWith('/api/billing/')) {
     return bound(env.BILLING, billing.fetch, env).fetch(req)
   }
+  // The OTHER Stripe door, and it is its own endpoint on purpose (sell.ts,
+  // T-34523): what a SELLER's connected account says happened, verified with a
+  // second signing secret. Not under `/api/` — that prefix is the graph's
+  // (route.ts `doorway`, which would make this a same-origin-guarded door), and
+  // this is server to server with no Origin at all.
+  if (path == '/stripe/connect') return sell.fetch(req, env)
   if (path == '/mcp' || path.startsWith('/api/')) {
     return bound(env.MCP, mcp.fetch, env).fetch(req)
   }

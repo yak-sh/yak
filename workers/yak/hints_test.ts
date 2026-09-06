@@ -66,6 +66,9 @@ let OUTSIDE = [
   'member_add',
   'sandbox_exec',
   'sandbox_ship',
+  // It mints an account at Stripe and hands back a link onto Stripe's own
+  // hosted form.
+  'space_sell',
 ]
 
 let sorted = (names: string[]) => [...names].sort()

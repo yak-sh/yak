@@ -639,6 +639,15 @@ export let spaceIndex = (at: {
   views?: Visits[] | null
   viewDays?: number
   viewsOff?: string
+  // Where this space stands with selling (sell.ts `selling`, T-34524), the
+  // owner's alone — nobody else is told whether a space takes money. Absent
+  // for everybody else, and absent on a platform with no Stripe key at all,
+  // which is one fewer block rather than a button that cannot work.
+  sell?: 'none' | 'setup' | 'ready'
+  // What the platform takes from a sale, as a person reads it (sell.ts
+  // `rate`). Passed rather than imported so this file draws pages and does not
+  // reach into the money.
+  fee?: string
   // What the last save said, when one was refused.
   say?: string
   no?: boolean
@@ -751,6 +760,55 @@ there.</p>
 </form>
 </section>`
     : ''
+  // Selling (sell.ts, T-34524). Three states and one button, because that is
+  // the whole of what a person can do about it from here: connect, go and
+  // finish, or stop. The state comes off the space's `stripe` row, which the
+  // Connect webhook keeps current — so this page says what STRIPE says, not
+  // what somebody clicked, and a seller Stripe has paused reads as unfinished
+  // here the moment it happens.
+  //
+  // A plain form POSTing to this page, like every other button here: starting
+  // means asking Stripe for a fresh onboarding link, which is a REDIRECT to
+  // Stripe's own hosted form, so no script could do it in place anyway.
+  //
+  // What it says about the money is deliberately blunt. Somebody about to take
+  // strangers' money should read who is responsible before they click, not
+  // after a chargeback.
+  let sell = owner && at.sell
+    ? `<section class="Card"><h2>Selling</h2>
+${
+      at.sell == 'ready'
+        ? `<p>Your apps here can take payments. You are the merchant: the
+charge is yours, the money goes to your Stripe account, your name is on the
+customer's statement, and refunds and disputes are yours to answer. Stripe's
+own dashboard is where you read all of it.</p>
+<p class="Note">Every sale here is charged on your account, and yaks.app takes
+${esc(at.fee ?? '')} of it. See the <a href="/pricing">pricing page</a>.</p>
+<form method="post" action="/">
+<input type="hidden" name="sell" value="stop">
+<button type="submit">Stop selling</button>
+</form>`
+        : at.sell == 'setup'
+        ? `<p>Stripe has not finished setting you up yet. Pick up where you
+left off — it is Stripe's form, on Stripe's site, and nothing here can be sold
+until they say you are ready.</p>
+<form method="post" action="/">
+<input type="hidden" name="sell" value="start">
+<button type="submit">Finish setting up</button>
+</form>`
+        : `<p>Take payments in your apps here. You connect your own Stripe
+account — you are the merchant, the money is yours, and Stripe asks you for
+your details directly. We never see or hold them.</p>
+<p class="Note">yaks.app takes ${
+          esc(at.fee ?? '')
+        } of each sale. See the <a href="/pricing">pricing page</a>.</p>
+<form method="post" action="/">
+<input type="hidden" name="sell" value="start">
+<button type="submit">Start selling</button>
+</form>`
+    }
+</section>`
+    : ''
   // What to do next (T-34420), once an assistant has been let in. The connect
   // steps shut the moment one ever connects, and nothing said what the person
   // had just gained — so this is what stands where they were: three things to
@@ -784,8 +842,11 @@ one.</p>
   let seen = owner && at.views !== undefined
     ? visited(at.views, at.viewDays ?? 30, at.viewsOff ?? '')
     : ''
+  // Selling sits with the rest of the owner's standing facts — after the
+  // settings and before the visitor counts — and nowhere at all until there is
+  // something built to sell from: a space with no apps has no till.
   let block = at.apps.length
-    ? `${attach}${asking}${settings}${next}${seen}`
+    ? `${attach}${asking}${settings}${sell}${next}${seen}`
     : `${settings}${next}${asking}${attach}`
   let lead = at.apps.length
     ? 'Here is what you can open.'

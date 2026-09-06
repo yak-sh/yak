@@ -70,6 +70,7 @@ let ref = (death: string, bare = true): PropSchema => ({
 })
 let text: PropSchema = { type: 'string' }
 let num: PropSchema = { type: 'number' }
+let bool: PropSchema = { type: 'boolean' }
 let time: PropSchema = { type: 'string', format: 'date-time' }
 let owned = (s: PropSchema): PropSchema => ({ ...s, stamped: true })
 // No two rows of the component may share this value — the uniqueness a race is
@@ -535,6 +536,26 @@ export let platformDoc: VocabDoc = {
     // the store because an install mints a new app row and a new store
     // together, and the copy is meant to be seeded again.
     seeded: { type: 'object', properties: { at: time, version: num } },
+    // The Stripe account this space SELLS through (sell.ts, T-34524). Direct
+    // charges: the connected account is the merchant, so this is the whole of
+    // what the platform keeps about it — the id every call carries in its
+    // `Stripe-Account` header, and the two words Stripe answers with about
+    // whether it is ready. Everything else about the merchant — their bank,
+    // their business details, their disputes — is Stripe's and stays there.
+    //
+    // Server-owned, all three, for the reason `plan` is: `charges_enabled` is
+    // what the checkout door reads before it takes anybody's money, and a
+    // column a space could write for itself is a space selling before Stripe
+    // ever said it may. Only the Connect webhook and `space_sell` write them,
+    // through the kernel's own door (directory.ts `stamp`).
+    stripe: {
+      type: 'object',
+      properties: {
+        account: owned(text),
+        charges_enabled: owned(bool),
+        details_submitted: owned(bool),
+      },
+    },
     plan: {
       type: 'object',
       properties: {

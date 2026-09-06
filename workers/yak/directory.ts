@@ -98,6 +98,18 @@ export type Plan = {
   at: string
 }
 
+/** A space's connected Stripe account, as the directory holds it (sell.ts).
+ * Three columns and no more: the merchant's own books are Stripe's, and the
+ * platform keeps only the id every call names them by and the two words that
+ * say whether they are ready — `details_submitted` is "they finished the
+ * form", `charges_enabled` is "Stripe will take money for them", and the
+ * checkout door reads the second one alone. */
+export type Stripe = {
+  account: string
+  chargesEnabled: boolean
+  detailsSubmitted: boolean
+}
+
 export type Space = {
   eid: string
   slug: string
@@ -108,6 +120,10 @@ export type Space = {
   // The same row whole, for the one caller that needs every column of it
   // (billing.ts). Null where no `plan` row has ever been written.
   plan: Plan | null
+  // What this space SELLS through (sell.ts, T-34524): the connected Stripe
+  // account, and whether Stripe says it may take money yet. Null for a space
+  // that has never asked to sell, which is almost all of them.
+  stripe: Stripe | null
   meter: Meter | null
   // Whether the agent has already been told where this space stands against
   // its ceilings (unseen.ts `ceiling`). The mark is `notified`, the same one
@@ -263,6 +279,11 @@ type Row = {
     until?: string | null
     ending?: string | null
     at?: string | null
+  }
+  stripe?: {
+    account?: string | null
+    charges_enabled?: boolean | null
+    details_submitted?: boolean | null
   }
   meter?: Partial<Meter>
   notified?: unknown
@@ -449,7 +470,7 @@ let ABOUT =
   '&.trashed?'
 
 // And what every read of a SPACE asks for, for the same reason.
-let SPACE_ABOUT = '.doc?&.plan?&.meter?&.notified?&.trashed?'
+let SPACE_ABOUT = '.doc?&.plan?&.meter?&.notified?&.trashed?&.stripe?'
 
 // The plan as a whole row, however little of it is written: a column nobody
 // has filled reads empty, the way `meterOf` does, so nothing downstream tests
@@ -475,12 +496,26 @@ let trashedOf = (r: Row) =>
     ? { at: r.trashed.at ?? '', by: r.trashed.by ? idOf(r.trashed.by) : '' }
     : null
 
+// The seller's row, or null where nothing has ever connected. An account with
+// neither word yet — minted a second ago, the webhook not in — reads false on
+// both, which is the truth: nothing may be sold through it until Stripe says
+// so.
+let stripeOf = (r: Row): Stripe | null =>
+  r.stripe?.account
+    ? {
+      account: r.stripe.account,
+      chargesEnabled: !!r.stripe.charges_enabled,
+      detailsSubmitted: !!r.stripe.details_submitted,
+    }
+    : null
+
 let spaceOf = (r: Row): Space => ({
   eid: r.entity.eid,
   slug: r.space!.slug,
   title: r.doc?.title || r.space!.slug,
   tier: tierOf(r.space!.slug, r.plan?.tier ?? null),
   plan: planOf(r),
+  stripe: stripeOf(r),
   meter: meterOf(r),
   told: r.notified != null,
   trashed: trashedOf(r),
@@ -716,6 +751,18 @@ export let directory = (via: Fetcher, now = false) => {
     payer: async (customer: string) => {
       let row = await one(
         `.plan.customer=${customer}&.space!&${SPACE_ABOUT}`,
+      )
+      return row?.space ? spaceOf(row) : null
+    },
+    // The space that SELLS through this connected Stripe account (sell.ts).
+    // The Connect webhook's only way in: an event from a connected account
+    // names the `acct_…` and nothing of ours, so this is what turns it back
+    // into a space. One account per space, so the answer is one space or
+    // nobody — and nobody is an event about somebody else's platform, or one
+    // for a space that has since disconnected.
+    seller: async (account: string) => {
+      let row = await one(
+        `.stripe.account=${account}&.space!&${SPACE_ABOUT}`,
       )
       return row?.space ? spaceOf(row) : null
     },

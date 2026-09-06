@@ -42,6 +42,8 @@ import * as dirPart from './directory.ts'
 import { ahead, bearing, granted, itsApp, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { pilled, standing } from './gallery.ts'
+import { broke } from './billing.ts'
+import { connect, disconnect, rate, selling } from './sell.ts'
 import { type Size, sizeOf } from './image.ts'
 import { asking, listed, type Row } from './listing.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
@@ -1130,6 +1132,11 @@ let index = async (
         days: daysLeft(a.trashed!),
       }))
       : [],
+    // Where the space stands with selling (sell.ts, T-34524), the owner's
+    // alone — and only where the platform has a Stripe key at all, since a
+    // button that cannot work is worse than no block.
+    sell: owner && env.STRIPE_KEY ? selling(space) : undefined,
+    fee: rate(),
     name: owner ? await dir.nameAt(owner) ?? '' : '',
     connected: !!owner && await (await identity()).connected(env, owner),
     // Something IS built here while an app sits in the trash: its store is
@@ -1227,6 +1234,28 @@ let saved = async (
     let app = await dir.app(space, back)
     if (app?.trashed) await untrash(env, dir, space, app, who)
     return redirect(`https://${space.slug}.${PLATFORM}/`, 303)
+  }
+  // The selling block's button (sell.ts, T-34524). Its own form and its own
+  // POST, like the restore button above — and `start` answers a REDIRECT to
+  // Stripe's own hosted onboarding, which is the one thing on this page that
+  // leaves the site. A Stripe call that fails is filed and the page comes back
+  // saying so, rather than a 502 on somebody's own front door.
+  let till = String(form.get('sell') ?? '').trim()
+  if (till == 'stop') {
+    if (space.stripe?.account) await disconnect(env, space)
+    return redirect(`https://${space.slug}.${PLATFORM}/`, 303)
+  }
+  if (till == 'start') {
+    try {
+      let made = await connect(env, space, await dir.emailAt(who.person) ?? '')
+      return redirect(made.url, 303)
+    } catch (e) {
+      await broke(env, 'POST / (sell)', e)
+      return index(req, env, dir, space, {
+        say: "we couldn't reach Stripe just now — try again in a minute",
+        no: true,
+      })
+    }
   }
   let name = String(form.get('name') ?? '').trim().slice(0, 60)
   let want = String(form.get('space') ?? '').trim().toLowerCase()

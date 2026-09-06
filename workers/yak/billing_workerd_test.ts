@@ -10,30 +10,9 @@
 // STRIPE_KEY, which is also the shape a deploy has before the owner sets one.
 import { assert, assertEquals } from '@std/assert'
 import { slow } from '../../src/testing.ts'
-import { connector, kernel, meta, seed } from './probe.ts'
+import { connector, kernel, meta, seed, signed } from './probe.ts'
 
 let SECRET = 'whsec_a_probe_secret'
-
-let hex = (b: ArrayBuffer) =>
-  [...new Uint8Array(b)].map((n) => n.toString(16).padStart(2, '0')).join('')
-
-// Stripe's own scheme: HMAC-SHA256 over `<timestamp>.<raw body>`, and the raw
-// body is the exact string posted — so the test signs the same bytes it sends.
-let signed = async (raw: string, at: number) => {
-  let key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(SECRET),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  )
-  let mac = await crypto.subtle.sign(
-    'HMAC',
-    key,
-    new TextEncoder().encode(`${at}.${raw}`),
-  )
-  return `t=${at},v1=${hex(mac)}`
-}
 
 let PERIOD = 1_900_000_000
 
@@ -84,7 +63,7 @@ slow(
           body: raw,
           headers: {
             'content-type': 'application/json',
-            'stripe-signature': await signed(raw, at),
+            'stripe-signature': await signed(SECRET, raw, at),
           },
         })
         return { status: r.status, body: await r.json() }
@@ -170,14 +149,18 @@ slow('an unsigned webhook is refused, and no Origin is not', async () => {
     assertEquals(bare.status, 400)
     assertEquals((await bare.json()).error.code, 'bad_signature')
 
-    let wrong = await send({ 'stripe-signature': await signed('{}', at) })
+    let wrong = await send({
+      'stripe-signature': await signed(SECRET, '{}', at),
+    })
     assertEquals(wrong.status, 400)
     assertEquals(
       (await wrong.json()).error.message,
       'the signature does not match',
     )
 
-    let old = await send({ 'stripe-signature': await signed(raw, at - 3600) })
+    let old = await send({
+      'stripe-signature': await signed(SECRET, raw, at - 3600),
+    })
     assertEquals((await old.json()).error.message, 'the signature is too old')
 
     // THE ONE THAT MATTERS. `/api/*` at the apex is behind the Origin guard
@@ -186,13 +169,15 @@ slow('an unsigned webhook is refused, and no Origin is not', async () => {
     // deliberately — a browser always sends one — and a webhook silently
     // 403ing is a plan that never activates, which nobody would see until a
     // customer complained. So: no Origin gets in...
-    let stripe = await send({ 'stripe-signature': await signed(raw, at) })
+    let stripe = await send({
+      'stripe-signature': await signed(SECRET, raw, at),
+    })
     assertEquals(stripe.status, 200, 'Stripe sends no Origin and must get in')
     assertEquals((await stripe.json()).did, 'jeff is plus')
 
     // ...and a PAGE at somebody else's address still does not.
     let page = await send({
-      'stripe-signature': await signed(raw, at),
+      'stripe-signature': await signed(SECRET, raw, at),
       origin: 'https://evil.example',
     })
     assertEquals(page.status, 403)

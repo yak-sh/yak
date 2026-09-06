@@ -550,6 +550,79 @@ export let seed = async (
   return { ...them, eids }
 }
 
+// ---- Stripe, stood in for (billing.ts, sell.ts) ----------------------------
+//
+// Stripe's v1 API is form-encoded POSTs to one base URL, and `STRIPE_API`
+// aims that base anywhere — so a probe can be Stripe for the length of a test.
+// What it is FOR is the two things only a runtime can answer: that the fields
+// the code builds actually go out on the wire in the shape Stripe's docs spell,
+// and that the whole route — tool to door to Stripe and back into the graph —
+// joins up. The seams are pinned in sell_test.ts and billing_test.ts, where
+// they cost microseconds.
+
+export type Call = { path: string; on: string; sent: URLSearchParams }
+
+/**
+ * A stand-in Stripe on a free port. `answer` is handed the path, the fields
+ * as they arrived and the `Stripe-Account` header (empty on a platform call),
+ * and returns the JSON object Stripe would — or null for "Stripe would refuse
+ * that", which comes back in the error shape billing.ts `said` reads.
+ *
+ * Every call is recorded in `calls`, in order, because the assertion that
+ * matters is usually what was SENT: an `application_fee_amount` under the right
+ * key, a `Stripe-Account` on the right request.
+ */
+export let stripe = (
+  answer: (call: Call) => unknown,
+) => {
+  let calls: Call[] = []
+  let server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
+    let call: Call = {
+      path: new URL(req.url).pathname,
+      on: req.headers.get('stripe-account') ?? '',
+      sent: new URLSearchParams(await req.text()),
+    }
+    calls.push(call)
+    let out = answer(call)
+    return out == null
+      ? Response.json({
+        error: { message: `nothing stands in for ${call.path}` },
+      }, { status: 400 })
+      : Response.json(out)
+  })
+  return {
+    url: `http://127.0.0.1:${(server.addr as Deno.NetAddr).port}`,
+    calls,
+    // The last call at a path, which is what an assertion nearly always wants.
+    at: (path: string) => calls.filter((c) => c.path == path).at(-1),
+    stop: () => server.shutdown(),
+  }
+}
+
+/**
+ * A `Stripe-Signature` header over exactly these bytes: HMAC-SHA256 of
+ * `<timestamp>.<raw body>`, keyed by the endpoint's signing secret. The scheme
+ * is Stripe's own and identical for the platform endpoint and the Connect one —
+ * only the secret differs — so both doors are driven through this.
+ */
+export let signed = async (secret: string, raw: string, at: number) => {
+  let key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
+  let mac = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(`${at}.${raw}`),
+  )
+  let hex = [...new Uint8Array(mac)]
+    .map((n) => n.toString(16).padStart(2, '0')).join('')
+  return `t=${at},v1=${hex}`
+}
+
 // ---- a zip, as a person would drop one (unzip.ts, drop.ts, T-34230) --------
 //
 // The reader is the thing under test, so the fixtures are written here rather

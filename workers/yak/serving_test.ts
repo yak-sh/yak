@@ -32,13 +32,15 @@ import type { Wire } from '@yaks/durable-object'
 import { slow } from '../../src/testing.ts'
 import { sign } from '../../src/token.ts'
 import * as apps from './apps.ts'
-import { directory, storeName } from './directory.ts'
+import { directory, stamp, storeName } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { scriptName } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { added, asked } from './examples/shop/cart.js'
 import { analytics, dataset, platform as inMemory } from './harness.ts'
 import { emptied, trash, trashSpace } from './erase.ts'
+import { signed, stripe } from './probe.ts'
+import * as sell from './sell.ts'
 import { call, type Ctx, wrote } from './tools.ts'
 import { archive, openIn, serve } from './unseen.ts'
 import { PLATFORM_STORE } from './vocab.ts'
@@ -1215,4 +1217,291 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
     Error,
     'no product',
   )
+})
+
+// ---- selling (sell.ts, T-34524) --------------------------------------------
+//
+// The Connect webhook against a real directory: what an event from a seller's
+// account does to the space it belongs to. The account and the onboarding link
+// go out through a stand-in Stripe on a free port (probe.ts `stripe`, aimed at
+// with STRIPE_API), so what is asserted is the request that actually left
+// rather than a mock's word for it.
+//
+// The SPACE PAGE's half of this — the three states an owner reads, and the
+// button that posts back — is in mcp_test.ts instead: drawing that page reaches
+// identity.ts for whether an assistant has ever connected, and the OAuth
+// provider it carries imports `cloudflare:` modules that only workerd can load.
+// So the page is driven where a runtime exists, and the door is driven here,
+// where it costs nothing.
+
+// Where the space stands with selling, read back off the directory.
+let sold = async (env: Env) =>
+  (await directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+    .space('ada'))?.stripe
+
+// The button on that page, as its form posts it. The page it is on is drawn in
+// mcp_test.ts; the POST is apps.ts `saved` and reaches nothing that needs a
+// runtime.
+let pressed = async (env: Env, sell: string) =>
+  await apps.fetch(
+    new Request('https://ada.yaks.app/', {
+      method: 'POST',
+      headers: {
+        cookie: await as(ADA),
+        origin: 'https://ada.yaks.app',
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: `sell=${sell}`,
+    }),
+    env,
+  )
+
+// One event at the Connect door, signed the way Stripe signs it.
+let connectHook = async (
+  env: Env,
+  secret: string,
+  event: Record<string, unknown>,
+) => {
+  let raw = JSON.stringify(event)
+  let at = Math.floor(Date.now() / 1000)
+  let res = await sell.fetch(
+    new Request('https://yaks.app/stripe/connect', {
+      method: 'POST',
+      body: raw,
+      headers: {
+        'content-type': 'application/json',
+        'stripe-signature': await signed(secret, raw, at),
+      },
+    }),
+    env,
+  )
+  return { status: res.status, body: await res.json() }
+}
+
+let WHSEC = 'whsec_a_connect_probe_secret'
+
+let updated = (id: string, over: Record<string, unknown>) => ({
+  id,
+  type: 'account.updated',
+  account: 'acct_probe',
+  data: { object: { id: 'acct_probe', ...over } },
+})
+
+Deno.test('a space connects Stripe, and the webhook makes it ready', async () => {
+  let fake = stripe(({ path }) =>
+    path == '/v1/accounts'
+      ? { id: 'acct_probe', charges_enabled: false, details_submitted: false }
+      : path == '/v1/account_links'
+      ? { url: 'https://connect.stripe.com/setup/c/acct_probe/TOKEN' }
+      : null
+  )
+  let { env } = inMemory(SECRET, {
+    STRIPE_KEY: 'sk_probe',
+    STRIPE_API: fake.url,
+    STRIPE_CONNECT_WEBHOOK_SECRET: WHSEC,
+  })
+  try {
+    await seeded(env)
+    // Nothing connected.
+    assertEquals(await sold(env), null)
+
+    // The button. It answers a redirect to STRIPE's own hosted form — the one
+    // thing on that page that leaves the site.
+    let went = await pressed(env, 'start')
+    assertEquals(went.status, 303)
+    assertEquals(
+      went.headers.get('location'),
+      'https://connect.stripe.com/setup/c/acct_probe/TOKEN',
+    )
+
+    // What actually went to Stripe: the four controller properties that ARE
+    // the charge-merchants-directly model, and no `type` beside them.
+    let made = fake.at('/v1/accounts')!
+    assertEquals(made.sent.get('controller[fees][payer]'), 'account')
+    assertEquals(made.sent.get('controller[losses][payments]'), 'stripe')
+    assertEquals(made.sent.get('controller[stripe_dashboard][type]'), 'full')
+    assertEquals(made.sent.get('controller[requirement_collection]'), 'stripe')
+    assertEquals(made.sent.get('type'), null)
+    // And the link comes back to the page the button is on, both ways.
+    let asked = fake.at('/v1/account_links')!
+    assertEquals(asked.sent.get('account'), 'acct_probe')
+    assertEquals(asked.sent.get('type'), 'account_onboarding')
+    assertEquals(asked.sent.get('return_url'), 'https://ada.yaks.app/')
+    assertEquals(asked.sent.get('refresh_url'), 'https://ada.yaks.app/')
+
+    // The id is written the moment Stripe answers with it, BEFORE the link is
+    // asked for — so a person who wanders off mid-onboarding comes back to the
+    // account they started rather than a second one.
+    assertEquals(await sold(env), {
+      account: 'acct_probe',
+      chargesEnabled: false,
+      detailsSubmitted: false,
+    })
+
+    // Pressing it again mints a NEW LINK on the SAME account — an account link
+    // is single-use, and a second account would split one merchant's money
+    // across books nobody can add up.
+    await pressed(env, 'start')
+    assertEquals(
+      fake.calls.filter((c) => c.path == '/v1/accounts').length,
+      1,
+      'one account, ever',
+    )
+    assertEquals(
+      fake.calls.filter((c) => c.path == '/v1/account_links').length,
+      2,
+    )
+
+    // ---- account.updated, and they are ready ----
+    let ready = await connectHook(
+      env,
+      WHSEC,
+      updated('evt_1', { charges_enabled: true, details_submitted: true }),
+    )
+    assertEquals(ready.status, 200)
+    assertEquals(ready.body.did, 'ada can sell')
+    assertEquals(await sold(env), {
+      account: 'acct_probe',
+      chargesEnabled: true,
+      detailsSubmitted: true,
+    })
+
+    // The SAME event again writes nothing at all: at-least-once delivery is
+    // the normal case, and the row is derived rather than transitioned.
+    assertEquals(
+      (await connectHook(
+        env,
+        WHSEC,
+        updated('evt_1', { charges_enabled: true, details_submitted: true }),
+      )).body.did,
+      'unchanged',
+    )
+
+    // ---- Stripe changes its mind: a flag it does not send is FALSE ----
+    assertEquals(
+      (await connectHook(
+        env,
+        WHSEC,
+        updated('evt_2', {
+          details_submitted: true,
+        }),
+      )).body.did,
+      'ada cannot sell',
+    )
+    assertEquals((await sold(env))?.chargesEnabled, false)
+
+    // ---- the seller revokes us from their own dashboard ----
+    assertEquals(
+      (await connectHook(env, WHSEC, {
+        id: 'evt_3',
+        type: 'account.application.deauthorized',
+        account: 'acct_probe',
+        data: { object: { id: 'ca_platform' } },
+      })).body.did,
+      'ada disconnected',
+    )
+    // Forgotten here, and untouched at Stripe: the row is gone, the merchant
+    // still has their account, their money and their records.
+    assertEquals(await sold(env), null)
+
+    // An event for an account nobody here sells through is answered 200 and
+    // nothing else: a second delivery would find the same nothing, and making
+    // Stripe repeat an unanswerable question for three days helps no one.
+    assertEquals(
+      (await connectHook(env, WHSEC, {
+        id: 'evt_4',
+        type: 'account.updated',
+        account: 'acct_someone_else',
+        data: { object: { id: 'acct_someone_else', charges_enabled: true } },
+      })).body.did,
+      'no space sells through that account',
+    )
+  } finally {
+    await fake.stop()
+  }
+})
+
+Deno.test('the connect door refuses what Stripe did not sign', async () => {
+  let { env } = inMemory(SECRET, { STRIPE_CONNECT_WEBHOOK_SECRET: WHSEC })
+  await seeded(env)
+  let raw = '{"type":"account.updated"}'
+  let post = (headers: Record<string, string>) =>
+    sell.fetch(
+      new Request('https://yaks.app/stripe/connect', {
+        method: 'POST',
+        body: raw,
+        headers: { 'content-type': 'application/json', ...headers },
+      }),
+      env,
+    )
+  assertEquals((await post({})).status, 400)
+  assertEquals(
+    (await (await post({ 'stripe-signature': 't=1,v1=beef' })).json())
+      .error.code,
+    'bad_signature',
+  )
+  // The PLATFORM's secret is not this door's secret. Two endpoints, two
+  // `whsec_`, and a door that verified the wrong one is a door answering
+  // nothing.
+  let at = Math.floor(Date.now() / 1000)
+  assertEquals(
+    (await post({
+      'stripe-signature': await signed('whsec_the_other_one', raw, at),
+    })).status,
+    400,
+  )
+  // GET is not how an event arrives.
+  assertEquals(
+    (await sell.fetch(new Request('https://yaks.app/stripe/connect'), env))
+      .status,
+    405,
+  )
+})
+
+// The secret is the owner's to set (README.md). Until he has, the door says so
+// in one sentence — and every other half of selling still works, which is the
+// whole reason it is a 503 rather than a boot failure.
+Deno.test('with no connect secret the door says so, and nothing else breaks', async () => {
+  let { env } = inMemory(SECRET, { STRIPE_KEY: 'sk_probe' })
+  await seeded(env)
+  let res = await sell.fetch(
+    new Request('https://yaks.app/stripe/connect', {
+      method: 'POST',
+      body: '{}',
+      headers: { 'content-type': 'application/json' },
+    }),
+    env,
+  )
+  assertEquals(res.status, 503)
+  assertEquals((await res.json()).error.code, 'no_selling')
+})
+
+// The one button a space can press without a Stripe key set is Stop, and it
+// needs no Stripe call at all: forgetting an account is a write of ours.
+Deno.test('stopping selling forgets the account and calls nothing', async () => {
+  let fake = stripe(() => null)
+  let { env } = inMemory(SECRET, {
+    STRIPE_KEY: 'sk_probe',
+    STRIPE_API: fake.url,
+    STRIPE_CONNECT_WEBHOOK_SECRET: WHSEC,
+  })
+  try {
+    let { space } = await seeded(env)
+    await stamp(env, {
+      entities: [{
+        entity: { eid: space.eid },
+        stripe: {
+          account: 'acct_probe',
+          charges_enabled: true,
+          details_submitted: true,
+        },
+      }],
+    })
+    assertEquals((await sold(env))?.chargesEnabled, true)
+    assertEquals((await pressed(env, 'stop')).status, 303)
+    assertEquals(await sold(env), null)
+    assertEquals(fake.calls.length, 0, 'nothing was asked of Stripe')
+  } finally {
+    await fake.stop()
+  }
 })

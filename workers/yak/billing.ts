@@ -82,10 +82,17 @@ let said = (body: unknown, status: number) => {
 
 // One call. A GET has no body; a POST is form-encoded, which is the only shape
 // Stripe's v1 API takes.
+//
+// `on` is a connected account (sell.ts): the platform key acting ON somebody
+// else's account, which Stripe reads off the `Stripe-Account` header and
+// nothing else — the same key, the same path, a different merchant. It is one
+// header rather than a second client because it IS one header: a direct charge
+// differs from our own only in whose books it lands on.
 export let ask = async (
   env: Env,
   path: string,
   fields?: Record<string, unknown>,
+  on?: string,
 ) => {
   if (!env.STRIPE_KEY) throw new Error('STRIPE_KEY is not set')
   let body = fields ? new URLSearchParams(form(fields)).toString() : undefined
@@ -95,6 +102,7 @@ export let ask = async (
     method: body == null ? 'GET' : 'POST',
     headers: {
       authorization: `Bearer ${env.STRIPE_KEY}`,
+      ...(on ? { 'stripe-account': on } : {}),
       ...(body == null
         ? {}
         : { 'content-type': 'application/x-www-form-urlencoded' }),
@@ -258,11 +266,14 @@ export let stale = (now: Plan | null, next: Plan) => {
 // identical row — the same event carries the same `at` — so this is empty and
 // the write below never happens at all: idempotent because there is nothing to
 // write, not because a second write happened to be harmless.
-export let moved = (now: Plan | null, next: Plan) => {
+// Over any row of columns, because sell.ts derives a seller's row the same way
+// and the rule is the rule rather than the plan's own.
+export let moved = <T extends Record<string, unknown>>(
+  now: T | null,
+  next: T,
+) => {
   let out: Record<string, unknown> = {}
-  for (let [k, v] of Object.entries(next)) {
-    if (!now || now[k as keyof Plan] !== v) out[k] = v
-  }
+  for (let [k, v] of Object.entries(next)) if (!now || now[k] !== v) out[k] = v
   return out
 }
 
@@ -291,13 +302,15 @@ let json = (status: number, code: string, message: string) =>
   Response.json({ error: { code, message } }, { status })
 
 // A break, where the owner reads the platform's own (index.ts `report`). It is
-// awaited, so the entity exists by the time the door answers.
-let broke = async (env: Env, request: string, e: unknown) => {
+// awaited, so the entity exists by the time the door answers. Exported because
+// sell.ts files its own the same way and there is nothing about this that is
+// billing's.
+export let broke = async (env: Env, request: string, e: unknown) => {
   await noted(metaBreaks(env), {
     request,
     message: e instanceof Error ? e.message : String(e),
     stack: e instanceof Error ? e.stack ?? '' : '',
-  }).catch((why) => console.error('yak-billing: could not file', why, e))
+  }).catch((why) => console.error(`yak: could not file ${request}`, why, e))
 }
 
 // The webhook door is on the open internet, so what it FILES has a ceiling:

@@ -26,8 +26,10 @@ import {
   meta,
   rfc822,
   seed,
+  signed,
   signedIn,
   signIn,
+  stripe,
 } from './probe.ts'
 import { monthOf } from './meter.ts'
 import { PAGES, uriOf } from './guide.ts'
@@ -6773,5 +6775,126 @@ slow('an app says what it holds, and what it asks of an agent', async () => {
     )
   } finally {
     await k.stop()
+  }
+})
+
+// ---- selling (sell.ts, T-34524) --------------------------------------------
+//
+// `space_sell` through the whole kernel, and the space page beside it — which
+// is here rather than in serving_test.ts because drawing that page reaches
+// identity.ts for whether an assistant has ever connected, and the OAuth
+// provider it carries imports `cloudflare:` modules only workerd can load.
+// Stripe is a stand-in on a free port (probe.ts `stripe`), aimed at with
+// STRIPE_API the way the analytics probe above aims ANALYTICS_API.
+slow('space_sell connects an account and hands back one link', async () => {
+  let fake = stripe(({ path }) =>
+    path == '/v1/accounts'
+      ? { id: 'acct_probe', charges_enabled: false, details_submitted: false }
+      : path == '/v1/account_links'
+      ? { url: 'https://connect.stripe.com/setup/c/acct_probe/TOKEN' }
+      : null
+  )
+  let k = await kernel({
+    STRIPE_KEY: 'sk_probe',
+    STRIPE_API: fake.url,
+    STRIPE_CONNECT_WEBHOOK_SECRET: 'whsec_a_connect_probe_secret',
+  })
+  try {
+    let { cookie } = await seed(k, [{ slug: 'ada', apps: ['shop'] }])
+    let agent = connector(k, cookie)
+    let page = (init: RequestInit = {}) =>
+      k.at('ada.yaks.app', '/', {
+        ...init,
+        headers: { cookie, ...(init.headers as Record<string, string>) },
+      })
+
+    // Before anything: the owner is offered the door and told, in the words
+    // that matter, whose money and whose liability it is.
+    let before = await (await page()).text()
+    assertStringIncludes(before, 'Start selling')
+    assertStringIncludes(before, 'you are the merchant')
+
+    // The tool hands back ONE link and says to stop there — an assistant that
+    // kept going would be an assistant clicking through somebody's identity
+    // form.
+    let said = await agent.tool('space_sell', { space: 'ada' })
+    assertStringIncludes(said, 'https://connect.stripe.com/setup/c/acct_probe/')
+    assertStringIncludes(said, 'They are the merchant')
+
+    // What went out is the charge-merchants-directly model, and it named the
+    // space both ways so an account read back at Stripe says whose it is.
+    let made = fake.at('/v1/accounts')!
+    assertEquals(made.sent.get('controller[fees][payer]'), 'account')
+    assertEquals(made.sent.get('controller[losses][payments]'), 'stripe')
+    assertEquals(made.sent.get('controller[stripe_dashboard][type]'), 'full')
+    assertEquals(made.sent.get('controller[requirement_collection]'), 'stripe')
+    assertEquals(made.sent.get('metadata[slug]'), 'ada')
+
+    // The page now reads mid-setup, and does not offer the first step again.
+    let mid = await (await page()).text()
+    assertStringIncludes(mid, 'has not finished setting you up')
+    assert(!mid.includes('Start selling'), mid.slice(0, 300))
+
+    // Stripe says they are ready, at the Connect door.
+    let event = JSON.stringify({
+      id: 'evt_ready',
+      type: 'account.updated',
+      account: 'acct_probe',
+      data: {
+        object: {
+          id: 'acct_probe',
+          charges_enabled: true,
+          details_submitted: true,
+        },
+      },
+    })
+    let at = Math.floor(Date.now() / 1000)
+    let hook = await k.at('yaks.app', '/stripe/connect', {
+      method: 'POST',
+      body: event,
+      headers: {
+        'content-type': 'application/json',
+        'stripe-signature': await signed(
+          'whsec_a_connect_probe_secret',
+          event,
+          at,
+        ),
+      },
+    })
+    assertEquals(hook.status, 200)
+    assertEquals((await hook.json()).did, 'ada can sell')
+
+    // The page says so, and the tool stops offering a link nobody needs.
+    let after = await (await page()).text()
+    assertStringIncludes(after, 'can take payments')
+    assertStringIncludes(after, 'Stop selling')
+    assertStringIncludes(
+      await agent.tool('space_sell', { space: 'ada' }),
+      'already selling',
+    )
+    assertEquals(
+      fake.calls.filter((c) => c.path == '/v1/accounts').length,
+      1,
+      'one account, ever',
+    )
+
+    // Stopping is the platform forgetting, never Stripe deleting: the account
+    // is the merchant's own.
+    assertStringIncludes(
+      await agent.tool('space_sell', { space: 'ada', disconnect: true }),
+      'Their Stripe account is untouched',
+    )
+    assertStringIncludes(await (await page()).text(), 'Start selling')
+
+    // And nobody but the owner may connect a space to a bank account.
+    let stranger = connector(k, (await signIn(k)).cookie)
+    await assertRejects(
+      () => stranger.tool('space_sell', { space: 'ada' }),
+      Error,
+      'ada',
+    )
+  } finally {
+    await k.stop()
+    await fake.stop()
   }
 })

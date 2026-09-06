@@ -93,6 +93,49 @@ asking for nothing, a year at most). Build the account out — an app or two —
 before handing the link over, since a reviewer is asked to walk a working
 account. `--as` picks the account when it is not the current one.
 
+## STRIPE_CONNECT_WEBHOOK_SECRET — the selling door's own secret
+
+Selling (sell.ts) is a **second** Stripe relationship, not an extension of the
+first. billing.ts is the platform's own plan, where Stripe sells to us; this is
+Connect, where a space's own Stripe account sells to its customers and we take a
+fee on the way past. Stripe delivers **connected-account** events to their own
+endpoint with their own signing secret, so there are two `whsec_…` and neither
+verifies the other's events.
+
+The platform API key is the **same** one — a direct charge is our key acting on
+the merchant's account through a `Stripe-Account` header, never a key of theirs
+— so `STRIPE_KEY` needs nothing done to it.
+
+Until the secret is set, `POST /stripe/connect` answers 503 in one sentence and
+everything else still works: a space connects, a checkout session is created, a
+buyer pays. What is missing is only what the events would have told us.
+
+The dashboard steps, in full. In the **sandbox** first, then again in live:
+
+| step | where                                                                                                                                                                         |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | dashboard.stripe.com → check the account switcher is on the sandbox → **Workbench** → **Webhooks**                                                                            |
+| 2    | **Create an event destination**                                                                                                                                               |
+| 3    | **Events from**: **Connected accounts** — not "Your account". This is the whole point of the second endpoint                                                                  |
+| 4    | Select these five v1 events, and only these: `account.updated`, `account.application.deauthorized`, `checkout.session.completed`, `charge.refunded`, `charge.dispute.created` |
+| 5    | **Continue** → destination type **Webhook endpoint** → **Continue**                                                                                                           |
+| 6    | Endpoint URL: `https://yaks.app/stripe/connect`                                                                                                                               |
+| 7    | On the settings page, **Reveal secret** and copy the `whsec_…` value                                                                                                          |
+
+Then, from `workers/yak`:
+
+```sh
+npx wrangler secret put STRIPE_CONNECT_WEBHOOK_SECRET   # paste the whsec_
+```
+
+**v1 events, not v2.** There is a v2 Accounts API with thin `v2.core.account.*`
+events; this platform speaks v1 throughout (Jeff, 2026-09-06: "v1"), so the five
+names above are the ones the handler reads. Ticking a v2 spelling is a webhook
+that delivers and does nothing.
+
+**No account-created event.** We create the account ourselves and write its id
+down in the same breath (sell.ts `connect`), so there is nothing to be told.
+
 ## Verifying a deploy
 
 ```sh

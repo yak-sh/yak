@@ -147,6 +147,7 @@ import {
   spending,
   TIMEOUT,
 } from './sandbox.ts'
+import { connect, disconnect, rate, selling } from './sell.ts'
 import { foreign, SIGN_IN, SLUG } from './route.ts'
 import { globs } from './router.ts'
 import type { Reach } from './reach.ts'
@@ -1717,6 +1718,81 @@ export let TOOLS: Tool[] = [
         text: `${space.slug} is back: https://${space.slug}.yaks.app/ serves ` +
           'again and its apps are yours again. Everything they saved is ' +
           'where it was.',
+        space,
+      }
+    },
+  },
+  {
+    name: 'space_sell',
+    title: 'Start selling',
+    destructive: false,
+    openWorld: true,
+    description:
+      'Connect this space to Stripe so its apps can take money. The person ' +
+      'gets a link to finish setting up with Stripe — their name, their bank ' +
+      'account, whatever Stripe asks — and that all happens at Stripe, not ' +
+      'here: we never see or hold any of it. They are the merchant. It is ' +
+      "their charge, their money, their name on the customer's statement, " +
+      'and refunds and disputes are theirs to answer. HAND THEM THE LINK AND ' +
+      'STOP: nobody can sell until they have finished it, and calling again ' +
+      'gives a fresh link onto the same Stripe account, never a second one. ' +
+      'Once they are done, every app in the space can take payments through ' +
+      'POST /api/pay/checkout — see the selling guide. Pass disconnect: true ' +
+      'to stop selling here; their Stripe account and everything in it stays ' +
+      'theirs, this space just stops charging on it.',
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        disconnect: {
+          type: 'boolean',
+          description:
+            'true to stop selling through this space: the Stripe account is ' +
+            'left alone and untouched, and no app here can charge on it any ' +
+            'more. Connecting again is one call',
+        },
+      },
+    },
+    run: async (ctx, args) => {
+      let { space } = await owns(ctx, args)
+      if (args.disconnect != null && flag(args.disconnect, 'disconnect')) {
+        if (!space.stripe?.account) {
+          throw new Error(`${space.slug} is not selling through Stripe`)
+        }
+        await disconnect(ctx.env, space)
+        return {
+          text: `${space.slug} has stopped selling. Their Stripe account is ` +
+            'untouched — their money, their records, their dashboard, all ' +
+            'exactly where they were — and nothing here can charge on it now.',
+          space,
+        }
+      }
+      if (!ctx.env.STRIPE_KEY) {
+        throw new Error('selling is not switched on here')
+      }
+      if (selling(space) == 'ready') {
+        return {
+          text: `${space.slug} is already selling: Stripe has them ready to ` +
+            `take payments, and every app here can charge through POST ` +
+            `/api/pay/checkout. We take ${rate()} of each sale.`,
+          space,
+        }
+      }
+      // The address the platform already has for them, so Stripe's form opens
+      // with it filled in. Never one the agent named — the account is minted
+      // against the person who is signed in, and an address an agent chose
+      // would be an account onboarded to somebody else.
+      let email = await ctx.dir.emailAt(ctx.person) ?? ''
+      let made = await connect(ctx.env, space, email)
+      return {
+        text:
+          `Send them this link to finish setting up with Stripe — it is theirs ` +
+          `alone, it is good once, and it expires:\n\n${made.url}\n\nNothing ` +
+          `can be sold in ${space.slug} until they have been through it. They ` +
+          `are the merchant: their charge, their money, their name on the ` +
+          `statement, and refunds and disputes are theirs. We take ${rate()} ` +
+          `of each sale. Call space_sell again for a fresh link — it opens the ` +
+          `same Stripe account, never a second one.`,
         space,
       }
     },

@@ -16,6 +16,7 @@ let space: Space = {
   title: 'jeff',
   tier: null,
   plan: null,
+  stripe: null,
   meter: null,
   told: false,
   trashed: null,

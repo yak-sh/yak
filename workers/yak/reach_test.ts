@@ -21,6 +21,7 @@ let space = (slug: string): Space => ({
   title: slug,
   tier: null,
   plan: null,
+  stripe: null,
   meter: null,
   told: false,
   trashed: null,

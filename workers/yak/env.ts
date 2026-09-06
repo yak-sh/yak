@@ -140,6 +140,16 @@ export type Env = {
   STRIPE_WEBHOOK_SECRET?: string
   STRIPE_PRICE?: string
   STRIPE_API?: string
+  // Selling (sell.ts, T-34523): what the events from a SELLER's connected
+  // account are verified against. A SECOND secret, not the one above, because
+  // Stripe delivers connected-account events to their own endpoint with their
+  // own `whsec_…` — the owner creates it in the dashboard pointing at
+  // `https://yaks.app/stripe/connect` (README.md's settings table has the
+  // steps). Unset, that door answers 503 in one sentence and the rest of
+  // selling still works: what is missing is only what an event would have told
+  // us. The platform KEY above is the same one for both — a direct charge is
+  // our key acting on the merchant's account, never a key of theirs.
+  STRIPE_CONNECT_WEBHOOK_SECRET?: string
   // The builder (builder.ts, T-34239): the model that makes somebody their
   // first app. BOTH tiers run on Workers AI — `AI` is the binding
   // (wrangler.toml `[ai]`), no key of ours and nothing bought, absent under
