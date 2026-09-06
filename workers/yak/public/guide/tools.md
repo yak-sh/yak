@@ -1,21 +1,22 @@
-# Tools of your own
+# Commands of your own
 
-An app's pages need somebody looking at them. Its tools do not. A `tools.json`
-beside `index.html` gives the person's agent verbs of the app's own — log a run,
-read the leaderboard, close a shift — with nothing open. This page is that file:
-what an entry says, how `{{arg}}` holes are filled and typed, the two acts, what
-a deploy refuses, and the page a tool's answer draws itself in.
+An app's pages need somebody looking at them. Its commands do not. A
+`tools.json` beside `index.html` gives the person's agent verbs of the app's own
+— log a run, read the leaderboard, close a shift — with nothing open. This page
+is that file: what an entry says, how `{{arg}}` holes are filled and typed, the
+two acts, what a deploy refuses, the page a command's answer draws itself in,
+and how `commands` and `command` carry the lot.
 
-## Why an app carries tools at all
+## Why an app carries commands at all
 
 The graph tools (`graph_apply`, `graph_query`) can already write anything. What
-they cannot do is say what this app MEANS. A declared tool is the app's own
+they cannot do is say what this app MEANS. A declared command is the app's own
 vocabulary at the agent's door: one sentence the model chooses by, typed
 arguments, and a template you wrote once so nobody has to remember that a run is
 `jog{who, miles}` on a fresh entity. It is listed for everyone else in the space
 too, so an app for four people is four people's verb.
 
-## Every kind you declare is two tools already
+## Every kind you declare is two commands already
 
 You get the first two for nothing. Every component an app's `vocab.json`
 declares is a KIND — a thing this app is about — and `app_deploy` gives each one
@@ -23,8 +24,8 @@ a verb for adding one and a verb for finding one again:
 
     vocab.json  { "recipe": { "serves": "number", "cuisine": "text" } }
 
-    →  recipes__add_recipe    title, body, alias, serves, cuisine
-       recipes__find_recipe   words, serves, cuisine, limit
+    →  add_recipe    title, body, alias, serves, cuisine
+       find_recipe   words, serves, cuisine, limit
 
 `add` mints an entity wearing the kind, with a `doc` for the title and body and
 an `alias` — a name the row answers to, so a later call reaches it without
@@ -36,20 +37,21 @@ arguments is everything of that kind.
 
 **This is how an app is DISCOVERED.** The person who asked for a recipe box in
 one conversation says "add this recipe" in the next one, to an agent that has
-never seen the app. Tools are the one surface every client reads, so the app
-answers there whether or not anybody wrote a `tools.json`.
+never seen the app. `commands` is the one place every agent looks for what the
+apps here can do, so the app answers there whether or not anybody wrote a
+`tools.json`.
 
 Two ways to say otherwise:
 
 - **Opt out** — `"tools": false` at the top of `vocab.json`, beside the
-  components. The app declares its kinds and gets no generated tools at all.
+  components. The app declares its kinds and gets no generated commands at all.
 - **Override** — declare `add_recipe` or `find_recipe` in `tools.json` yourself.
   Your entry wins whole: your sentence, your arguments, your template. A
-  hand-written tool says what the app MEANS; a generated one only says what it
-  holds.
+  hand-written command says what the app MEANS; a generated one only says what
+  it holds.
 
 A deploy regenerates them from the manifest as it then reads, so a column added
-to a kind is an argument added to its two tools.
+to a kind is an argument added to its two commands.
 
 ## The file
 
@@ -64,51 +66,85 @@ to a kind is an argument added to its two tools.
 
 The manifest is replaced whole on every deploy — a declaration holds no rows, so
 there is nothing to migrate; delete `tools.json` and the next deploy leaves the
-app with no tools at all. It is the app's INSIDE, not one of its pages:
+app with no commands at all. It is the app's INSIDE, not one of its pages:
 `GET /<app>/tools.json` is a 404 on the web, the same as `vocab.json` and
 `worker.js`, and a member reads it back with `app_files`.
 
 ## The name, and who may call it
 
-At the connector a tool is `<app>__<tool>` — `runs__log_run`. An app slug
-carries no underscore and a tool name is `[a-z][a-z0-9_]{0,39}`, so the first
-`__` is the seam and no app's word can collide with another's or with the
-platform's own tools.
+A command's name is its whole name — `log_run`, not `runs__log_run`. It is not
+an MCP tool and never appears in the tool list. Two fixed tools carry every
+app's verbs: **`commands`** reads what there is, **`command`** runs one, and the
+app is said BESIDE the name rather than spliced into it.
+
+    command { name: 'log_run', args: { who: 'Ada', miles: 5 } }
+
+`args` is the command's own arguments, exactly as `commands` spells them. `app`
+goes beside them only where two apps in reach spell the same command name.
+
+**The tool list has to be fixed.** A directory such as OpenAI's snapshots
+`tools/list` the day a connector is submitted and serves that snapshot forever —
+only `tools/call` ever reaches the live server
+(<https://developers.openai.com/plugins/deploy/app-review>). So this connector
+lists the same names, in the same order, for every caller, signed in or not, and
+a name that moved with what somebody deployed this morning could never be in
+that snapshot. Commands are how an app's own verbs travel through a list that
+cannot move.
 
 The deploy answers with the names it planted:
 
     deployed jeff/runs v3: https://jeff.yaks.app/runs/
-    tools: runs__log_run, runs__leaderboard, runs__since
+    commands: log_run, leaderboard, since
 
-**Who sees it is who can reach the app**: every app in every space the caller
+**Who sees them is who can reach the app**: every app in every space the caller
 belongs to. A `public` or `open` app in a space they are NOT in is reachable on
-the web and not here — a bare `<app>__<tool>` has no space in it to resolve
-against. Two apps in two of their spaces CAN share a slug; the first answers,
-and a call for the other refuses with the spaces named:
+the web and not here — a command names its app by slug and has no space to
+resolve it against. Two apps in two of their spaces CAN spell one command; both
+are listed, and a call naming neither app refuses with the candidates:
 
-    runs is an app in club and jeff — rename one, or use graph_apply with
-    the space named
+    log_run is a command of club/runs and jeff/runs — say which app
+
+A name nobody has answers with what there IS rather than nothing, since a
+command list is a person's own and no model can have memorized it:
+
+    no command add_run — the apps here offer jeff/runs: log_run, leaderboard,
+    since. commands lists them with their arguments.
+
+`commands` groups them by app and spells each one's arguments the way `command`
+takes them, an optional argument carrying a `?`. Its `app` argument — a slug, or
+`<space>/<app>` where two spaces spell one — narrows it to a single app; leave
+it out for everything in reach:
+
+    ## jeff/runs
+    log_run(who, miles) — Log a run for the club leaderboard — Run club, an
+      app at jeff.yaks.app/runs/
+
+    ## jeff/recipes
+    add_recipe(title, body?, alias?, serves?) — Add a recipe to jeff/recipes
+      — Recipes, an app at jeff.yaks.app/recipes/
 
 The listing carries the app's title, because a slug is not what the person
-called it and a model chooses by words:
+called it and a model chooses by words. Its `structuredContent` is
+`{commands: [{at, name, title, description, readOnly, input, view?}]}` — `at` is
+the app as `command` takes it, `input` is the command's own JSON Schema.
 
-    name:  runs__log_run     title: Run club: log_run
-    description: Log a run for the club leaderboard — Run club, an app at
-                 jeff.yaks.app/runs/
-
-A deploy that MOVES that list tells every member of the space so, on their own
-MCP stream (`notifications/tools/list_changed`) — a client that listed once
-lists again. A deploy that changes no tool says nothing.
+A deploy no longer moves anybody's tool list, and neither does joining a space
+or trashing an app: the tools are the same tools they always were. Only a
+platform release moves it, and then a client that listed once is told to list
+again (`notifications/tools/list_changed`, and a line on its next reply). What a
+deploy still moves is the PAGES a command's answer draws itself in — those are
+resources, and `notifications/resources/list_changed` says so.
 
 ## The four parts of an entry
 
 `description`, `input`, exactly one act (`apply` or `query`), and an optional
 `view`. Any other key is refused by name rather than ignored, so a misspelling
-is a sentence at deploy and not a tool that quietly does half of what was meant.
+is a sentence at deploy and not a command that quietly does half of what was
+meant.
 
 ### description
 
-Required, and the whole of what a model has to go on. It is what the tool is
+Required, and the whole of what a model has to go on. It is what the command is
 CHOSEN by, so write the sentence the person would say, not the shape of the row:
 "Log a run for the club leaderboard", never "Writes a jog component". The house
 style for the platform's own tools is the one to copy — say what it does, then
@@ -120,17 +156,19 @@ not write them in yourself.
 
 An object of argument names to types. Five types, the same words a component's
 columns use: `text`, `number`, `bool`, `time`, `url`. An argument name is
-`[a-z][a-z0-9_]{0,39}`, like a tool's, and `"input": {}` is a tool that takes
-nothing. They become JSON Schema for the host: `number` is a number, `bool` a
-boolean, and `text`, `time` and `url` are strings — the last two carrying a
-description of the shape wanted, so a `time` argument says it wants something
-like 2026-09-01 or 2026-09-01T10:00:00Z.
+`[a-z][a-z0-9_]{0,39}`, like a command's, and `"input": {}` is a command that
+takes nothing. They become the JSON Schema `commands` prints and `command` fills
+`args` from: `number` is a number, `bool` a boolean, and `text`, `time` and
+`url` are strings — the last two carrying a description of the shape wanted, so
+a `time` argument says it wants something like 2026-09-01 or
+2026-09-01T10:00:00Z.
 
 **Every declared argument is required.** There are no optional arguments and no
 defaults: a hole with nothing to fill it would splice the word `undefined` into
-your template. If something is genuinely optional, that is two tools. (The two a
-kind is worth are generated rather than written, so those do let you leave an
-argument out — nobody's template is surprised when a clause drops out of one.)
+your template. If something is genuinely optional, that is two commands. (The
+two a kind is worth are generated rather than written, so those do let you leave
+an argument out — nobody's template is surprised when a clause drops out of one,
+and `commands` marks them with a `?`.)
 
 An argument arrives as whatever the model sent and is read under the type it was
 declared as: `"5"` for a `number` becomes `5`, `"true"` for a `bool` becomes
@@ -195,11 +233,11 @@ Two entities in one call, the second pointing at the first by its alias:
             "doc": { "body": "{{note}}" },
             "comment": { "target": "$run" } } ] } }
 
-An eid can be an argument, so a tool may change a row somebody names rather than
-mint one: put `{{run}}` where the eid goes and the bundle patches the columns it
-says, leaving the rest. The wire's own words work in a template beside the
-components — `entity`, `edges`, `tombstone`, `was` — so a tool can draw an edge
-or delete a row:
+An eid can be an argument, so a command may change a row somebody names rather
+than mint one: put `{{run}}` where the eid goes and the bundle patches the
+columns it says, leaving the rest. The wire's own words work in a template
+beside the components — `entity`, `edges`, `tombstone`, `was` — so a command can
+draw an edge or delete a row:
 
     { "drop_run": {
         "description": "Delete a run somebody logged by mistake",
@@ -210,7 +248,7 @@ The answer names what was written and carries the ids as `structuredContent`, so
 the agent's next call — or a view's redraw — reads the row back by the eid this
 one minted:
 
-    runs__log_run: wrote 1 entity in jeff/runs: $run=4f3c…
+    log_run: wrote 1 entity in jeff/runs: $run=4f3c…
     { "entities": ["4f3c…"], "aliases": { "$run": "4f3c…" } }
 
 ## The query act
@@ -237,13 +275,13 @@ show — `.jog!` alone answers no titles, and `&.doc?` asks for one beside it.
 knows answers `{eid, name}`, so the answer says who ran, not "someone". The
 answer counts and carries the rows:
 
-    runs__leaderboard: 12 rows in jeff/runs
+    leaderboard: 12 rows in jeff/runs
     { "rows": [ { "kind": "jog", "entity": { "eid": "4f3c…", "num": 12 },
                   "jog": { "who": "Ada", "miles": 5 },
                   "created": { "at": "2026-09-01T…",
                                "by": { "eid": "…", "name": "Ada" } } } ] }
 
-## A tool is a template, never code
+## A command is a template, never code
 
 Nothing in a manifest runs. Filling a template makes exactly the body a page's
 own `apply` or `query` would send, and the call goes through the app's ordinary
@@ -252,14 +290,14 @@ security model:
 
 - **The app's `access` decides.** A `public` app takes a write from an owner or
   editor of the space; an `open` one from anyone who can reach it. A viewer
-  calling a write tool reads the sentence the page would have shown them: "you
-  can read this app but not change it — its owner can make you an editor".
-- **`created.by` names them**, so `.created!` on the rows a tool wrote says who
-  called it.
-- **Nobody gets more through a tool than they have on the page.**
+  running a write command reads the sentence the page would have shown them:
+  "you can read this app but not change it — its owner can make you an editor".
+- **`created.by` names them**, so `.created!` on the rows a command wrote says
+  who ran it.
+- **Nobody gets more through a command than they have on the page.**
 
 Code that DOES something — an outside API, a secret, a computed answer — is a
-`worker.js`, not a tool.
+`worker.js`, not a command.
 
 ## What a deploy refuses
 
@@ -271,8 +309,8 @@ second:
     tools.json: bad: screen — a tool says description, input, apply, query,
     view; bad: {{who}} names no input — declare it in bad.input
 
-Nothing is planted when it refuses: the tools the app had keep answering exactly
-as before. What it checks:
+Nothing is planted when it refuses: the commands the app had keep answering
+exactly as before. What it checks:
 
 - the tool name and every argument name (`a-z`, `0-9`, `_`, from a letter)
 - an entry is an object carrying no key but the five, with a `description` that
@@ -290,8 +328,8 @@ deploy is where it is caught, and the sentence says what to do:
     tools.json: gone.html — a view names a page in this app's own files;
     deploy the page beside index.html
 
-Components are planted before tools, so a tool may write a word declared by this
-very release.
+Components are planted before commands, so a command may write a word declared
+by this very release.
 
 ## The view: a page the answer draws itself in
 
@@ -305,12 +343,14 @@ page, deploy it with the rest, name it beside the act:
                      "view": "leaderboard.html" }
 
 At the door the page becomes a resource at `ui://<space>/<app>/<file>`, served
-as `text/html;profile=mcp-app`, and the tool links it with
-`_meta.ui.resourceUri`. Its visibility is `['model', 'app']` — `app` is what
-lets the page call the tool BACK, which is how a button or a date picker
-redraws, and it grants nothing the app's own page does not already have. Only a
-page a tool NAMED is readable this way: the app's other files are the web's
-business, not this door's, and asking for one is `no resource`.
+as `text/html;profile=mcp-app`, and the `commands` listing names it as that
+command's `view`. The link rides there rather than on a tool's `_meta`, because
+there is no tool of this app's to hang it on — which is the one thing the fixed
+roster costs: a host that renders a widget off the TOOL it called has nothing to
+read here, so a page like this is an agent's to fetch and show rather than one
+the host draws by itself. Only a page a command NAMED is readable at all: the
+app's other files are the web's business, not this door's, and asking for one is
+`no resource`.
 
 **Relative URLs work.** The door prepends a `<base href>` at the app's own
 address — the same tag the app door gives every page it serves — and names that
@@ -319,8 +359,8 @@ address in the resource's CSP metadata, so `./style.css` and an image beside
 
 **The frame cannot read `./api/` itself.** It is rendered off-origin with no
 session cookie on it, so a `fetch` at the app's doors is nobody. Its data
-arrives in the tool's answer; a redraw is a `tools/call` back through the host,
-which does carry who is asking.
+arrives in the command's answer; a redraw is a `tools/call` of `command` back
+through the host, which does carry who is asking.
 
 ### The protocol, in the order it happens
 
@@ -382,11 +422,14 @@ Everything is `window.parent.postMessage` with a JSON-RPC envelope, and
         draw((msg.params || {}).structuredContent)
       })
 
-      // The redraw: this app's own tool, called back through the host.
+      // The redraw: this app's own command, called back through the host.
       today.addEventListener('click', async () => {
         let { result } = await request('tools/call', {
-          name: 'runs__since',
-          arguments: { since: new Date().toISOString().slice(0, 10) },
+          name: 'command',
+          arguments: {
+            name: 'since',
+            args: { since: new Date().toISOString().slice(0, 10) },
+          },
         })
         if (result && !result.isError) draw(result.structuredContent)
       })
@@ -427,10 +470,10 @@ The run club, with the vocabulary it needs. `vocab.json`:
         "query": ".jog!&.created!&.created.at>={{since}}",
         "view": "leaderboard.html" } }
 
-Two tools share one view — the door lists the page once, and each draws its own
-answer in it. Deploy that beside `index.html` and `leaderboard.html`, and the
-club has three verbs anywhere the person talks to their agent, doing what they
-could do on the page and no more.
+Two commands share one view — the door lists the page once, and each draws its
+own answer in it. Deploy that beside `index.html` and `leaderboard.html`, and
+the club has three verbs anywhere the person talks to their agent, doing what
+they could do on the page and no more.
 
 The whole guide, everything else an app can do, is at
 <https://yaks.app/guide.md>.

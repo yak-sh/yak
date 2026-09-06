@@ -230,7 +230,7 @@ Name one off `app_versions` for anything else.
 What moves: every file that version named, restored from its pinned bytes, and
 every file the app has now that the version did not name, deleted. Then the
 whole release runs again over those files — the components its `vocab.json`
-declares, the tools its `tools.json` declares, its `worker.js` re-uploaded —
+declares, the commands its `tools.json` declares, its `worker.js` re-uploaded —
 because everything a deploy plants is a file, so restoring the files is the
 whole of a rollback.
 
@@ -259,9 +259,9 @@ every byte of it: its files, its store, its deploys, and its slug, which stays
 reserved so a restore is exact rather than approximate.
 
 What changes the moment it goes in: its address answers nothing on the web, its
-declared tools and views leave your list, it is nobody's front page even if it
-was one, and letters to its mailbox bounce. What does not change: anything it
-saved.
+commands stop being offered and its views leave your resource list, it is
+nobody's front page even if it was one, and letters to its mailbox bounce. What
+does not change: anything it saved.
 
 `app_restore` takes it back out and puts all of that back. You have 30 days;
 `app_list` shows a Trash section with the days each one has left, and the person
@@ -270,7 +270,8 @@ can restore one from their space's own page without an assistant at all. After
 
     app_delete(app: 'scratch')
     → jeff/scratch is in the trash. https://jeff.yaks.app/scratch/ stops
-      answering and it has left your tools; nothing it saved was touched.
+      answering and its commands have gone with it; nothing it saved was
+      touched.
 
 Two things to know before you call it. The slug is held for the whole 30 days,
 so `app_new` at that address is refused and says why — restore it or erase it,
@@ -286,9 +287,9 @@ it only when the person has said they mean exactly that.
 A whole space goes to the same 30-day trash, and the same words are true of it:
 nothing is erased, every app in it is kept whole, and the address is held so
 nobody else can take it. While it sits there every hostname of the space answers
-nothing, its apps leave your tools and your pages, and letters to any address
-under it bounce. `space_restore` takes it back out and every one of those is the
-old answer again.
+nothing, its apps stop offering their commands and their pages, and letters to
+any address under it bounce. `space_restore` takes it back out and every one of
+those is the old answer again.
 
 `space_delete` is still the one tool **you cannot do**. It mails the owner a
 link, lasting an hour, and answers with what that link would stop; tell them to

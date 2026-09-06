@@ -1,7 +1,9 @@
-// An app's OWN tools (T-32685): the `tools.json` at the root of an app's
-// files, read by app_deploy and kept in that app's store beside its
-// vocabulary (store.ts), and listed at the platform's MCP door as
-// `<app>__<tool>` for everyone who can reach the app. One entry is a
+// An app's OWN commands (T-32685, T-34541): the `tools.json` at the root of an
+// app's files, read by app_deploy and kept in that app's store beside its
+// vocabulary (store.ts). Everyone who can reach the app reads them with the
+// platform's `commands` tool and runs one with `command` — they are not MCP
+// tools themselves, because that list is snapshotted by a directory and must
+// be the same for everybody (workers/yak/declared.ts). One entry is a
 // sentence, an input, and one act:
 //
 //   { "log_run": {
@@ -22,9 +24,8 @@
 //
 // An entry may also name a `view`: a page in the app's own files that the
 // person's agent renders the answer in (T-32687), served at the MCP door as
-// `ui://<space>/<app>/<file>` and linked from the tool by
-// `_meta.ui.resourceUri`. The app writes that page the way it writes any
-// other, and the host hands it the same answer the model reads.
+// `ui://<space>/<app>/<file>` and named beside the command in what `commands`
+// answers. The app writes that page the way it writes any other.
 //
 // Nothing here reaches the store: filling a template makes the same body a
 // page's own `apply` and `query` send, and the call goes through the app's
@@ -75,10 +76,9 @@ let KEYS = ['description', 'input', 'apply', 'query', 'view']
 // be a door onto somebody else's app.
 let VIEW = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w./-]+\.html$/
 
-// A tool's name and an input's name: what a host can spell. The MCP door
-// namespaces a tool as `<app>__<tool>`, and an app slug carries no
-// underscore, so no app's word can collide with another's or with the
-// platform's own tools.
+// A command's name and an input's name: the same shape a tool name takes, so
+// a command reads as a verb wherever it is said — `command` takes it whole,
+// beside the app it belongs to.
 let NAME = /^[a-z][a-z0-9_]{0,39}$/
 
 // A hole, and the whole of a string that is nothing but one — the difference

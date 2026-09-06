@@ -25,6 +25,9 @@ let READS = [
   'app_secret_list',
   'app_versions',
   'app_stats',
+  // What the apps in reach can be asked to do (declared.ts): a listing, and
+  // the same one however often it is asked.
+  'commands',
   'domain_status',
   'gallery_search',
   'guide',
@@ -36,6 +39,10 @@ let READS = [
 // not here: it only adds, and the undo of a create is the delete that is.
 let DESTROYS = [
   'app_delete',
+  // It runs an app's own command, and this side cannot know which: a template
+  // carrying nulls drops a component. So it takes the safe default rather than
+  // a promise that would be wrong for half the commands there are.
+  'command',
   'app_files',
   'app_rollback',
   'app_secret_remove',

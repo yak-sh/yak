@@ -27,10 +27,12 @@
 // request at all (reach.ts `doorOf` over `nobody`), so the same answer is
 // checked twice: here, and by @yaks/member inside the store.
 import { z } from 'zod'
+import type { Tool } from '@yaks/graph'
 import type { Security } from '@yaks/mcp'
 import { mode, reads } from '@yaks/member'
+import { EITHER, SIGNIN } from './preauth.ts'
 import type { Reach } from './reach.ts'
-import { SIGN_IN } from './route.ts'
+import { SAYS, SIGN_IN } from './route.ts'
 import { nobody } from './session.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 
@@ -42,6 +44,43 @@ type Args = Record<string, unknown>
  * so the claim and the declaration cannot drift apart. */
 export let openly = (t: { security?: Security[] }) =>
   !!t.security?.some((s) => s.type == 'noauth')
+
+/**
+ * One tool a stranger is SHOWN and may not call (T-34465, T-34541).
+ *
+ * Mixed auth is a menu, not a smaller restaurant: the host lists the whole
+ * surface with nobody signed in, reads `securitySchemes` to see which tools
+ * want a token, and offers the sign-in the first time the person asks for one
+ * of those (developers.openai.com/plugins/build/auth). Owner, 2026-09-06:
+ * "mixed auth is documented and should work correctly. chatgpt will then
+ * prompt auth on the first auth-required tool use." A list holding only what a
+ * stranger may CALL is a connector that can never ask them to sign in.
+ *
+ * It is also what makes the roster FIXED: the same names in the same order for
+ * everybody, which is the only list a directory's snapshot can go on matching
+ * (declared.ts). So a tool is never dropped for want of a token — it is listed
+ * saying `oauth2`, and refused if called.
+ *
+ * Nothing here is reachable anyway: the door meets a call for any of them with
+ * the 401 and its challenge before this server sees it (mcp.ts `stranger`).
+ * The sentence is said again here so a later path that let one through could
+ * not answer anything else.
+ */
+export let barred = (t: Tool): Tool => ({
+  ...t,
+  meta: { ...t.meta, securitySchemes: SIGNIN },
+  run: () => Promise.reject(new Error(SAYS)),
+})
+
+/**
+ * What a tool of THIS door declares about signing in, per tool: the pair for
+ * anything a stranger may call, and `oauth2` for the rest. It is a function
+ * because the generic tier's tools are the package's own — a read a stranger
+ * makes needs no token and the write does — and a host reads this field to
+ * decide whether to offer the sign-in at all.
+ */
+export let asked = (t: { name: string }): Security[] =>
+  anonymous(t.name) ? EITHER : SIGNIN
 
 // The generic tier's READS, which signed out answer for one named app. They
 // are pinned rather than read off a built door because the door checks a call

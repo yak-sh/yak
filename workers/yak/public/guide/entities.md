@@ -81,13 +81,13 @@ writable from either app:
                           "loan": { "to": "text" } }
     → added: book.isbn
 
-**From the agent tier and from an app's own tools, a borrowed word just works**:
-`graph_apply { app: 'lending', entities: [{ book: … }] }` lands in the reading
-list's store, and a `tools.json` entry of the lending app may name `book` in its
-`apply` or its `query`. **From a PAGE it does not**: `./api/apply` and
-`./api/query` are this app's own doors onto this app's own store, so a page that
-writes a borrowed word gets `unknown component: book`. Reach the home app by its
-address instead — `store('/reading-list/api/')`, below.
+**From the agent tier and from an app's own commands, a borrowed word just
+works**: `graph_apply { app: 'lending', entities: [{ book: … }] }` lands in the
+reading list's store, and a `tools.json` entry of the lending app may name
+`book` in its `apply` or its `query`. **From a PAGE it does not**: `./api/apply`
+and `./api/query` are this app's own doors onto this app's own store, so a page
+that writes a borrowed word gets `unknown component: book`. Reach the home app
+by its address instead — `store('/reading-list/api/')`, below.
 
 ## The one refusal: a shape conflict
 

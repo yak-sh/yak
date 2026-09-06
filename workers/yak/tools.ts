@@ -70,7 +70,13 @@ import {
   storeName,
   url,
 } from './directory.ts'
-import { moved, reachChanged, toolsOf } from './declared.ts'
+import {
+  listCommands,
+  reachChanged,
+  runCommand,
+  toolsOf,
+  viewsMoved,
+} from './declared.ts'
 // A whole store put back to a moment (T-34507) — the data half of what
 // app_rollback does for an app's files.
 import { mark, moment, oldest, putBack, recorded } from './recover.ts'
@@ -989,20 +995,15 @@ let released = async (
     ),
   )
   let declared: string[] = tooled.tools ?? []
-  // A tool list that moved is news to every agent connected who can reach
-  // this app, and so is a view list that did — each said with its own
-  // list_changed, since a release can move one without the other
-  // (declared.ts, T-32686, T-33004).
+  // A VIEW list that moved is news to every agent connected who can reach this
+  // app (declared.ts, T-33004): a page a command draws its answer in is a
+  // resource of theirs, and it appeared or went.
   //
-  // A moved VOCABULARY is the same news (T-34153): graph_apply's input schema
-  // IS the caller's words, so a component planted or a column grown here
-  // changed the tool list of everyone in the space, whether or not this app
-  // declares a tool at all.
-  let grown = !!(added.length || dropped.length)
-  await moved(ctx, space, [
-    ...(tooled.changed || grown ? ['tools' as const] : []),
-    ...(tooled.views ? ['resources' as const] : []),
-  ])
+  // The TOOL list is not news, because it did not move (T-34541): what this
+  // deploy grew is a command inside `command`, and what a moved vocabulary
+  // grew is graph_apply's schema, not its name. The roster is the same for
+  // everybody and moves only when the platform is released (stream.ts).
+  if (tooled.views) await viewsMoved(ctx, space)
   // And the app's OWN code, if it wrote any (dispatch.ts, T-32778): the
   // worker.js among its files becomes its script in the dispatch namespace,
   // and an app that deleted its worker.js loses the script it had, so what
@@ -1061,9 +1062,10 @@ let released = async (
           closed == 1 ? 'break' : 'breaks'
         } from earlier versions`
         : '') +
-      (declared.length
-        ? `\ntools: ${declared.map((t) => `${app.slug}__${t}`).join(', ')}`
-        : '') +
+      // What this app can now be ASKED to do, as `command` takes them: bare
+      // names, because a command is said with its app beside it rather than
+      // spliced into it (declared.ts, T-34541).
+      (declared.length ? `\ncommands: ${declared.join(', ')}` : '') +
       (planted.length ? `\ncomponents: ${planted.join(', ')}` : '') +
       // The data the app came with, said once — the deploy after this one
       // finds the mark and seeds nothing.
@@ -1511,6 +1513,21 @@ export let uiMeta = (domain: string, csp: Csp = {}) => ({
 // The pages the `guide` tool offers, said two ways: the names alone for the
 // argument, and a name with its few words for the description, which is where
 // an agent chooses one (guide.ts `brief`).
+// One command's arguments, as a signature a model reads: the required ones,
+// then the optional ones marked `?`. It is the same JSON Schema `command`
+// takes in `args` (store/tools.ts `schemaOf`), said the short way — the schema
+// itself rides on the answer's data for anything that wants it whole.
+let argsOf = (input: unknown) => {
+  let s = (input ?? {}) as {
+    properties?: Record<string, unknown>
+    required?: string[]
+  }
+  let need = new Set(s.required ?? [])
+  return Object.keys(s.properties ?? {})
+    .map((arg) => (need.has(arg) ? arg : `${arg}?`))
+    .join(', ')
+}
+
 let SLUGS = PAGES.map((p) => p.slug).join(', ')
 let COVERING = PAGES.map((p) => `${p.slug} (${p.brief})`).join(', ')
 
@@ -2389,9 +2406,9 @@ export let TOOLS: Tool[] = [
       "there is a lot of them — is written into the app's store here, once " +
       'per store and after the components, so the app opens with data in it; ' +
       'deploy again and nothing is seeded. A tools.json beside ' +
-      'it gives the app its own MCP tools — ' +
-      `${TOOLS_EXAMPLE} — listed here as <app>__<tool> for everyone who can ` +
-      'reach the app, so the person and their agent act on the app through ' +
+      'it gives the app commands of its own — ' +
+      `${TOOLS_EXAMPLE} — which everyone who can reach the app runs with the ` +
+      'command tool, so the person and their agent act on the app through ' +
       "its own words. And a worker.js beside index.html becomes the app's " +
       'own server code: it answers every request that is not /api/ before ' +
       'the files do, and whatever it answers 404 falls through to them. ' +
@@ -3066,7 +3083,8 @@ export let TOOLS: Tool[] = [
         await trash(ctx.env, ctx.dir, space, app, who)
         return {
           text: `${space.slug}/${app.slug} is in the trash. ` +
-            `${url(space, app)} stops answering and it has left your tools; ` +
+            `${url(space, app)} stops answering and its commands have gone ` +
+            'with it; ' +
             'nothing it saved was touched. app_restore(app: ' +
             `'${app.slug}') brings it back whole, any time in the next 30 ` +
             'days — after that it is erased for good.',
@@ -3078,12 +3096,7 @@ export let TOOLS: Tool[] = [
       // trash already, where it left every list the day it went in.
       let had = app.trashed ? {} : await toolsOf(ctx.env, space, app)
       let wrote = await erased(ctx.env, ctx.dir, space, app, who)
-      await moved(ctx, space, [
-        ...(Object.keys(had).length ? ['tools' as const] : []),
-        ...(Object.values(had).some((t) => t.view)
-          ? ['resources' as const]
-          : []),
-      ])
+      if (Object.values(had).some((t) => t.view)) await viewsMoved(ctx, space)
       return {
         text: `deleted ${space.slug}/${app.slug}: ${wrote} ${
           wrote == 1 ? 'file' : 'files'
@@ -3397,6 +3410,107 @@ export let TOOLS: Tool[] = [
         space: spaces.length == 1 ? spaces[0]! : undefined,
       }
     },
+  },
+  // The apps' own verbs, in two fixed tools (T-34541). What an app declares is
+  // a COMMAND, not a tool: `commands` says which there are and what each takes,
+  // `command` runs one. The roster never moves for them — which is the whole
+  // point, since a directory snapshots this list at submission and serves that
+  // snapshot forever (declared.ts).
+  {
+    name: 'commands',
+    title: 'What the apps can do',
+    readOnly: true,
+    idempotent: true,
+    description:
+      'The commands the apps here declare, with the arguments each one takes. ' +
+      "An app's own verbs — the ones its tools.json spells and the two every " +
+      'word it holds is worth, like add_recipe and find_recipe — live here ' +
+      'rather than in this tool list, which is the same for everybody. Read ' +
+      'it when an ask sounds like something an app of theirs already does, ' +
+      'then run one with command.',
+    input: {
+      type: 'object',
+      properties: {
+        app: str(
+          'one app to ask about — its slug, or <space>/<app> where two ' +
+            'spaces spell one. Leave it out for every app they can reach',
+        ),
+      },
+    },
+    run: async (ctx, args) => {
+      let said = args.app == null ? '' : text(args.app, 'app')
+      let all = await listCommands(ctx, said)
+      if (!all.length) {
+        return {
+          text: said
+            ? `${said} declares no commands — app_deploy plants the two every ` +
+              'word in its vocab.json is worth, and a tools.json declares more'
+            : 'no app you can reach declares a command yet. A vocab.json is ' +
+              'worth two of them per word it declares (add_<word>, ' +
+              'find_<word>); a tools.json declares any others.',
+        }
+      }
+      // Grouped by app, because that is how a person thinks about them: the
+      // app, then its verbs, each with the arguments spelled the way `command`
+      // takes them. The whole listing is the answer — an agent that reads it
+      // needs no second call to know what to send.
+      let lines: string[] = []
+      let seen = new Set<string>()
+      for (let one of all) {
+        if (!seen.has(one.at)) {
+          seen.add(one.at)
+          lines.push(`${lines.length ? '\n' : ''}## ${one.at}`)
+        }
+        lines.push(`${one.name}(${argsOf(one.input)}) — ${one.description}`)
+      }
+      return {
+        text: `${lines.join('\n')}\n\nRun one with command(name, args) — and ` +
+          'app too where two apps spell the same command.',
+        data: { commands: all },
+      }
+    },
+  },
+  {
+    name: 'command',
+    title: 'Run an app command',
+    // Which command it is deciding what it does, and this side cannot know
+    // which: half of them read and half write, and a template carrying nulls
+    // can drop a component. So it says the safe thing for all of them rather
+    // than a promise that would be wrong for the other half.
+    destructive: true,
+    description:
+      "One of an app's own commands, run: name it and pass its arguments as " +
+      'args, exactly as commands says it takes them. The app is only needed ' +
+      "when two apps here spell the same command. It goes through the app's " +
+      'ordinary doors as the person calling it, so it can do what they could ' +
+      'do on the page and never more.',
+    input: {
+      type: 'object',
+      properties: {
+        name: str('the command, as commands lists it — add_recipe'),
+        app: str(
+          'the app whose command it is — its slug, or <space>/<app> where ' +
+            'two spaces spell one. Leave it out where only one app has it',
+        ),
+        // Open on purpose: the arguments are the app's own, and a schema that
+        // spelled them would be this tool's shape moving every time somebody
+        // deployed — which is the thing a snapshotted tool list cannot have.
+        args: {
+          type: 'object',
+          description:
+            "the command's own arguments, as commands says it takes them",
+          additionalProperties: true,
+        },
+      },
+      required: ['name'],
+    },
+    run: (ctx, args) =>
+      runCommand(
+        ctx,
+        args.app == null ? '' : text(args.app, 'app'),
+        text(args.name, 'name'),
+        (args.args ?? {}) as Args,
+      ),
   },
   {
     name: 'domain_attach',
@@ -4139,8 +4253,8 @@ export let TOOLS: Tool[] = [
         ],
       }, vouched(who))
       // Being added is a deploy from where the added person stands: every
-      // tool and view the space's apps declare just appeared for them, and
-      // the deploy-time walk tells members — which they were not until now
+      // view the space's apps declare just appeared for them, and the
+      // deploy-time walk tells members — which they were not until now
       // (declared.ts, T-33004). A re-role moves nothing they can reach, and
       // neither does a space with no apps.
       if (!had && (await ctx.dir.apps(space)).length) {
@@ -4213,9 +4327,9 @@ export let TOOLS: Tool[] = [
       await ctx.dir.apply({
         entities: [{ entity: { eid: had.eid }, tombstone: {} }],
       }, vouched(who))
-      // The removed person's lists moved the other way: every tool and view
-      // the space's apps declared is out of their reach, and the member walk
-      // no longer finds them (declared.ts, T-33004).
+      // The removed person's lists moved the other way: every view the
+      // space's apps declared is out of their reach, and the member walk no
+      // longer finds them (declared.ts, T-33004).
       if ((await ctx.dir.apps(space)).length) {
         await reachChanged(ctx.env, person)
       }

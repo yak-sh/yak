@@ -324,10 +324,9 @@ let unserved = (line: string): string | null => {
 // A hibernatable socket the runtime will also close for us.
 type Closable = Wire & { close?(code: number, reason: string): void }
 
-// A tools manifest without its views, and its views alone — the two halves a
-// release can move one of (see the `/tools` door). Both read the JSON as
-// written and say nothing about whether it is a manifest at all: what is in
-// the slot is whatever the kernel put there.
+// The VIEWS a tools manifest names (see the `/tools` door). It reads the JSON
+// as written and says nothing about whether it is a manifest at all: what is
+// in the slot is whatever the kernel put there.
 let entries = (manifest: string): [string, Record<string, unknown>][] => {
   try {
     let held = JSON.parse(manifest)
@@ -338,11 +337,6 @@ let entries = (manifest: string): [string, Record<string, unknown>][] => {
     return []
   }
 }
-
-let apart = (manifest: string): string =>
-  JSON.stringify(
-    entries(manifest).map(([name, t]) => [name, { ...t, view: undefined }]),
-  )
 
 let viewed = (manifest: string): string =>
   [...new Set(entries(manifest).map(([, t]) => t?.view).filter(Boolean))]
@@ -1150,18 +1144,13 @@ export class Store {
       let answer = await this.#slot(request, 'tools')
       if (!answer.ok || request.method != 'POST') return answer
       let now = this.#get('tools') ?? '{}'
-      // The manifest's two halves, compared apart (T-33004): the TOOL half is
-      // the manifest with the views taken out — what `tools/list` is made of —
-      // and the VIEW half is the set of pages those tools name, which is what
-      // `resources/list` is made of. A release that only repointed a view moves
-      // resources and not tools, and the kernel says each with its own
-      // `list_changed` (declared.ts).
+      // The VIEWS this manifest names, compared: the set of pages its
+      // commands draw their answers in, which is what `resources/list` is made
+      // of, and the kernel tells everyone who can reach the app when it moved
+      // (declared.ts `viewsMoved`). The commands themselves move no list —
+      // they are not tools, and the tool roster is fixed (T-34541).
       let said = await answer.json() as Record<string, unknown>
-      return Response.json({
-        ...said,
-        changed: apart(now) != apart(was),
-        views: viewed(now) != viewed(was),
-      })
+      return Response.json({ ...said, views: viewed(now) != viewed(was) })
     }
     if (path == '/graph') {
       return Response.json({

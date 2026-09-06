@@ -1,15 +1,14 @@
-// The tools a KIND is worth (T-34513). An app that declares a `recipe` in its
-// vocab.json gets `recipes__add_recipe` and `recipes__find_recipe` at the agent
-// door for nothing, so the next agent the person talks to — one that has never
-// read this app's pages — discovers there is somewhere to put a recipe the way
-// it discovers anything else here: by reading the tool list.
+// The commands a KIND is worth (T-34513). An app that declares a `recipe` in
+// its vocab.json gets `add_recipe` and `find_recipe` for nothing, so the next
+// agent the person talks to — one that has never read this app's pages —
+// discovers there is somewhere to put a recipe the way it discovers anything
+// else here: by asking `commands` what the apps in reach can do.
 //
 // Nothing new answers them. They are ordinary declared tools (src/store/tools.ts
 // ToolDef), planted in the app's store beside whatever its tools.json said and
-// listed, called, titled, hinted and told-about through the one seam
-// (declared.ts) — so `readOnly` on the find, the app's title and address on the
-// description, `_meta.securitySchemes`, and the `list_changed` a moved list
-// sends all come for free.
+// listed, called, titled and described through the one seam (declared.ts) — so
+// `readOnly` on the find and the app's title and address on the description
+// come for free.
 //
 // The two ways out, in the order they are asked:
 //   "tools": false   at the top of vocab.json — this app wants none of them

@@ -51,7 +51,7 @@ Four things make that a good one, and they are the whole test:
   whatever the page looks like this month.
 - **No reasoning.** The person knows why they want grams. An agent that reads
   the rule does not need the argument for it.
-- **Nothing the graph already holds.** The components, the tools, the address
+- **Nothing the graph already holds.** The components, the commands, the address
   and what the app holds are all said for you (below). A rule that restates them
   is a second copy that will drift.
 
@@ -82,12 +82,12 @@ itself enforces, and no agent can forget it.
 **Three doors, one text.**
 
 At the connector, `initialize` hands the model a passage naming every app the
-person can reach, one heading each, with what the app holds, its own tools and
-its `AGENTS.md` underneath:
+person can reach, one heading each, with what the app holds, its own commands
+and its `AGENTS.md` underneath:
 
     ## kitchen/recipes
-    https://kitchen.yaks.app/recipes/ — Recipes, holds recipes. Tools:
-    recipes__add.
+    https://kitchen.yaks.app/recipes/ — Recipes, holds recipes. Commands:
+    add_recipe, find_recipe.
 
     # Recipes
 
@@ -96,10 +96,15 @@ its `AGENTS.md` underneath:
     ## kitchen/chores
     https://kitchen.yaks.app/chores/ — Chores, holds chores.
 
+The passage says how to use those names, too: an app's own verbs are commands
+rather than tools of the connector's list, run with the `command` tool and read
+with `commands`.
+
 That passage is why an agent asked to "add this recipe" knows there is a recipe
-app to add it to, rather than making a second one. `about` says it again, for a
-conversation that has run long enough for the apps to have moved under it — and
-when they do move, a later reply says so.
+app to add it to, rather than making a second one. It is made fresh at every
+connection, and `about` says it again for a conversation that has run long
+enough for the apps to have moved under it — an app made this morning is news
+`about` carries, not news the tool list does.
 
 Second, a person can invoke one by name. It is offered as a prompt called after
 the app — `recipes` — so somebody picking from a menu can pull the app's rules
@@ -127,6 +132,6 @@ lines already there are theirs.
 ---
 
 Back to the map: <https://yaks.app/guide.md>. Nearby: the app's own words in
-<https://yaks.app/guide/components.md>, its own tools in
+<https://yaks.app/guide/components.md>, its own commands in
 <https://yaks.app/guide/tools.md>, and its files in
 <https://yaks.app/guide/files.md>.

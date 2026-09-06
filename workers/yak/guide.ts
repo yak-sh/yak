@@ -71,9 +71,8 @@ An app is an index.html and whatever files sit beside it, served live at
 3. app_deploy — mark the release. The files are already live; this is the
    version an error will name. It also plants any components the app declares
    in a vocab.json beside index.html — {"recipe": {"serves": "number"}} and
-   the app has a recipe of its own, filterable like doc, and two tools of its
-   own, <app>__add_recipe and <app>__find_recipe, so any agent finds the app
-   later.
+   the app has a recipe of its own, filterable like doc, and two commands of
+   its own, add_recipe and find_recipe, so any agent finds the app later.
 4. Give the person the URL.
 
 app_list is what they already have — every app, its address and what is
@@ -107,8 +106,9 @@ only the components its filter NAMES — presence filters end at ! and join
 with &, and '?' asks for one without filtering on it — so query('.recipe!')
 answers recipes with no titles and query('.recipe!&.doc?') answers both. Ask
 for what the page will draw. Call guide for the map of all of this, and guide
-with a page for one subject — querying, components, files, tools of your own,
-code of your own — so read the one the work calls for rather than guessing.
+with a page for one subject — querying, components, files, commands of your
+own, code of your own — so read the one the work calls for rather than
+guessing.
 It is a tool here, so nothing has to be fetched off the web; the same words
 are at https://yaks.app/guide.md for a person. graph_apply, graph_query and
 search are the same store from here, for seeding and fixing.
@@ -120,10 +120,10 @@ into the copy an app_install makes, so an app opens furnished rather than blank.
 Call guide with page store for the whole thing.
 
 Call about at the start of a conversation: it names the tools this connector
-has right now and the version of that list, so a list your host cached in an
-earlier session — missing tools you have, naming tools you no longer do — is
-caught before you try to use it. A reply saying the tool list changed is the
-same thing happening mid-conversation.
+has right now and the version of that list, so a list your host cached under
+an older release is caught before you try to use it. The list is the same for
+everybody and moves only when this platform is released — what an app of the
+person's own can do is a COMMAND, which commands says and command runs.
 
 Never guess at a component's columns: graph_apply's own input schema is the
 vocabulary you can reach — every component, every column, every type. And
@@ -146,11 +146,13 @@ To read ONE app rather than all of them, ride '.in=recipes' on the query line
 A page reads a sibling app the same way, with store('/lending/api/') from
 './api/client.js'.
 
-An app can carry its OWN tools: a tools.json beside index.html declares them
-— a name, a sentence, an input, and an apply or query template over the app's
-store — and after app_deploy they are listed here as <app>__<tool>, for the
-person and for anyone else in the space. Call guide with page tools for the
-shape.
+An app can carry its OWN commands: a tools.json beside index.html declares
+them — a name, a sentence, an input, and an apply or query template over the
+app's store — and after app_deploy anyone who can reach the app runs them with
+the command tool, and reads what there is with commands. They are commands
+rather than tools of this list because this list never moves: a directory
+snapshots it when a connector is submitted and serves that snapshot forever.
+Call guide with page tools for the shape.
 
 When the person states a STANDING RULE for an app — recipes in grams, one
 photo each, never mail anybody on a Sunday — write it into an AGENTS.md beside
@@ -359,13 +361,13 @@ export let PAGES: Page[] = [
   },
   {
     slug: 'tools',
-    title: 'Tools of your own',
+    title: 'Commands of your own',
     description:
       "tools.json, so the person's agent can act on an app with no page " +
       "open: an entry's description, its input types and {{arg}} holes, the " +
-      'apply and query acts, what a deploy refuses, and the view an answer ' +
-      'draws itself in.',
-    brief: 'tools of the app, for an agent',
+      'apply and query acts, what a deploy refuses, the view an answer ' +
+      'draws itself in, and how commands and command carry them.',
+    brief: 'commands of the app, for an agent',
   },
   {
     slug: 'instructions',

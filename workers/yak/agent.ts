@@ -27,7 +27,7 @@ import { z } from 'zod'
 import type { Bundle, Graph, Plugin, Row, Storage, Tool, Tx } from '@yaks/graph'
 import { composed as perEntity, detached } from '@yaks/graph'
 import { addressed, wordish } from '@yaks/alias'
-import { openly } from './anon.ts'
+import { barred, openly } from './anon.ts'
 import { Say, type Search } from '@yaks/mcp'
 import type { Column, Vocab } from '@yaks/vocab'
 import { META, storeName } from './directory.ts'
@@ -171,18 +171,20 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
 
 /**
  * The platform's verbs, as a plugin on the caller's graph: the whole tool
- * table. It contributes no components — the words are the apps' own — only
- * tools, and every one of them is bound to the person asking.
+ * table, for everybody. It contributes no components — the words are the apps'
+ * own — only tools, and every one of them is bound to the person asking.
  *
- * With nobody asking it is the tools that say they need nobody (anon.ts
- * `openly`), which is the same field a host reads to tell them apart — so the
- * anonymous list is a SUBSET of this one by construction rather than a second
- * table that could drift from it.
+ * With nobody asking it is the SAME list (T-34541): a tool that needs a token
+ * (anon.ts `openly` says which do not) is listed saying `oauth2` and refuses
+ * the call (anon.ts `barred`), rather than being dropped. One roster, in one
+ * order, whoever is asking — which is what a directory that snapshots
+ * `tools/list` at submission and serves it forever needs from us
+ * (declared.ts).
  */
 export let platform = (ctx: Ctx): Plugin => ({
   name: 'yak/platform',
-  tools: TOOLS.filter((t) => ctx.person || openly(t)).map((t) =>
-    sugared(ctx, t)
+  tools: TOOLS.map((t) =>
+    ctx.person || openly(t) ? sugared(ctx, t) : barred(sugared(ctx, t))
   ),
 })
 
@@ -451,9 +453,12 @@ export let reaching = async (
 ): Promise<{ graph: Graph; column: ReturnType<typeof reading> }> => {
   let { vocab, clashes } = await spoken(ctx, reach)
   let storage = held(ctx, reach)
-  // The post room is a person's own mailbox work (letters.ts): a caller who
-  // has not signed in has no letters to list and none to send.
-  let plugins = ctx.person ? [platform(ctx), post(ctx, vocab)] : [platform(ctx)]
+  // The post room is a person's own mailbox work (letters.ts), and it is
+  // LISTED for everybody: a caller who has not signed in has no letters to
+  // list and none to send, and hears that as the sign-in challenge rather than
+  // as two tools that are not there. One roster, one order, whoever is asking
+  // (`platform`, T-34541).
+  let plugins = [platform(ctx), post(ctx, vocab)]
   let self: Graph = {
     vocab,
     storage,

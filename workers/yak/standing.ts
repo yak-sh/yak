@@ -7,7 +7,7 @@
 //               discovered. if i later say, 'add this recipe', i want them to
 //               know there's a recipe app to add it to". So every reachable
 //               app gets a heading, its address, what it holds and its own
-//               tools — an app already made is found instead of made again.
+//               commands — an app already made is found instead of made again.
 //   STANDING    An `AGENTS.md` beside index.html: the rules the person wants
 //               followed whenever anyone works on or with that app. Owner,
 //               2026-09-05: "if i make a recipe app, and i often have my agent
@@ -35,11 +35,10 @@ import { r2Blobs } from '../../src/blobs_r2.ts'
 import { type App, type Space, storeName, url } from './directory.ts'
 import { storeOf } from './door.ts'
 import type { Env } from './env.ts'
-import { named, reachable, toolsOf } from './declared.ts'
+import { at, reachable, toolsOf } from './declared.ts'
 import { told } from './memory.ts'
 import type { Ctx } from './tools.ts'
 import { appDoc } from './vocab.ts'
-import { sha256 } from './versions.ts'
 
 /** The file, at the app's root. */
 export let AGENTS = 'AGENTS.md'
@@ -77,8 +76,8 @@ export type Entry = {
   said: string
   /** the components its vocab.json declares */
   kinds: string[]
-  /** the tools it declares, spelled as the door lists them */
-  tools: string[]
+  /** the commands it declares, as `command` takes them (declared.ts) */
+  commands: string[]
 }
 
 /** One app's AGENTS.md, or '' where it has none. */
@@ -133,15 +132,14 @@ let holds = (kinds: string[]) =>
 /**
  * Every app the caller can reach, with what it says about itself.
  *
- * The door already walked the reach and already listed the declared tools
- * before it asks for this, so both ride in rather than being read a second
- * time on every call (mcp.ts `door`). A caller with neither — the builder —
- * reads them here.
+ * The door already walked the reach and already listed the commands before it
+ * asks for this, so both ride in rather than being read a second time on every
+ * call (mcp.ts `door`). A caller with neither — the builder — reads them here.
  */
 export let entries = async (
   ctx: Ctx,
   reach?: { space: Space; app: App }[],
-  tools?: string[],
+  commands?: { at: string; name: string }[],
 ): Promise<Entry[]> =>
   await Promise.all(
     (reach ?? await reachable(ctx)).map(async ({ space, app }) => ({
@@ -149,12 +147,11 @@ export let entries = async (
       app,
       said: await agentsOf(ctx.env, space, app),
       kinds: await kindsOf(ctx.env, space, app),
-      // A slug carries no underscore and the first `__` is the seam
-      // (declared.ts `named`), so a prefix match is exact.
-      tools: tools
-        ? tools.filter((t) => t.startsWith(`${app.slug}__`))
-        : Object.keys(await toolsOf(ctx.env, space, app))
-          .map((t) => named(app, t)),
+      // The commands the door already listed, picked out by the app they are
+      // of — `<space>/<app>`, which is the same word `command` takes.
+      commands: commands
+        ? commands.filter((c) => c.at == at(space, app)).map((c) => c.name)
+        : Object.keys(await toolsOf(ctx.env, space, app)),
     })),
   )
 
@@ -162,7 +159,7 @@ export let entries = async (
 let entry = (e: Entry): string =>
   `## ${e.space.slug}/${e.app.slug}\n` +
   `${url(e.space, e.app)} — ${e.app.title || e.app.slug}, ${holds(e.kinds)}.` +
-  `${e.tools.length ? ` Tools: ${e.tools.join(', ')}.` : ''}` +
+  `${e.commands.length ? ` Commands: ${e.commands.join(', ')}.` : ''}` +
   `${e.said ? `\n\n${e.said}` : ''}`
 
 let OPENING = `# The apps here
@@ -170,7 +167,11 @@ let OPENING = `# The apps here
 Every app you can reach, what it holds, and the standing instructions its
 person left beside it. When an ask belongs in one of these — another recipe,
 another chore, another entry — put it there rather than making a second app
-for it, and follow whatever the app says below.`
+for it, and follow whatever the app says below.
+
+An app's own verbs are COMMANDS, not tools of this list: run one with the
+command tool — the app, the command's name, and its arguments as args — and
+the commands tool says which there are and what each one takes.`
 
 // What the person has SAID, one section per space they belong to (memory.ts,
 // T-34474). It rides here rather than beside it because it is the same
@@ -188,26 +189,27 @@ let heard = async (ctx: Ctx): Promise<string[]> => {
 }
 
 /**
- * The passage itself, and a MARK naming it. The mark folds into the roster
- * version (mcp.ts), so an app that appeared, an app that changed what it
- * holds, an edited AGENTS.md and a memory just kept all move the version a
- * client cached at connect — and the door says so on the next reply (stream.ts
- * `roster`).
+ * The passage itself, and the apps it was made of.
  *
- * A person with no apps and nothing said gets no passage and no mark: there is
- * nothing to say, and saying it would put a heading with nothing under it at
- * the top of every agent's context.
+ * It is said fresh on every call at the door rather than named by a mark the
+ * client compares (T-34541): the roster it used to fold into moves only when
+ * the platform is released now, and an app made this morning is news the
+ * INSTRUCTIONS carry at the next connection and `about` says any time.
+ *
+ * A person with no apps and nothing said gets no passage: there is nothing to
+ * say, and saying it would put a heading with nothing under it at the top of
+ * every agent's context.
  */
 export let standing = async (
   ctx: Ctx,
   reach?: { space: Space; app: App }[],
-  tools?: string[],
-): Promise<{ text: string; mark: string; apps: Entry[] }> => {
-  let apps = await entries(ctx, reach, tools)
-  let text = [passage(apps), ...await heard(ctx)].filter(Boolean).join('\n\n')
-  if (!text) return { text, mark: '', apps }
-  let mark = await sha256(new TextEncoder().encode(text))
-  return { text, mark: mark.slice(0, 16), apps }
+  commands?: { at: string; name: string }[],
+): Promise<{ text: string; apps: Entry[] }> => {
+  let apps = await entries(ctx, reach, commands)
+  return {
+    text: [passage(apps), ...await heard(ctx)].filter(Boolean).join('\n\n'),
+    apps,
+  }
 }
 
 /** The apps as one passage, or '' where there are none. */
@@ -227,9 +229,9 @@ let first = (said: string) =>
  *
  * The name is the app's slug — host-safe, since a slug is `[a-z0-9-]` and the
  * door's own prompts are `[a-z]+` — and `<app>__agents` where that word is
- * already spoken for, which is the same seam a declared tool takes
- * (declared.ts `named`). An app that can claim neither is left off rather than
- * shadowing something a person already knows by name.
+ * already spoken for; an app slug carries no underscore, so the first `__` is
+ * the seam and nothing else can be. An app that can claim neither is left off
+ * rather than shadowing something a person already knows by name.
  */
 export let prompted = (apps: Entry[], taken: string[]) => {
   let held = new Set(taken)

@@ -94,8 +94,11 @@ export type Options = {
   undo?: CoreOpts['undo']
   /** what every tool this server lists declares about signing in
    * ({@link Security}), said per TOOL because that is where a host reads it —
-   * a tool carrying `securitySchemes` in its own `meta` keeps that instead */
-  security?: Security[]
+   * a tool carrying `securitySchemes` in its own `meta` keeps that instead.
+   * A function is asked once per tool, for a door where the answer differs
+   * from one to the next: a read anybody may make beside a write that needs a
+   * token, listed together so a host has something to offer the sign-in for */
+  security?: Security[] | ((t: Tool) => Security[] | undefined)
   /** tools beside the generic tier and the graph's plugins' */
   tools?: Tool[]
   /** what a result should ALSO say, given the names this server is listing
@@ -187,11 +190,13 @@ let noting = (out: CallToolResult, line: string | undefined): CallToolResult =>
 // by this field alone.
 let metaOf = (
   tool: Tool,
-  security: Security[] | undefined,
-): Record<string, unknown> | undefined =>
-  security && !tool.meta?.securitySchemes
-    ? { ...tool.meta, securitySchemes: security }
+  security: Options['security'],
+): Record<string, unknown> | undefined => {
+  let says = typeof security == 'function' ? security(tool) : security
+  return says && !tool.meta?.securitySchemes
+    ? { ...tool.meta, securitySchemes: says }
     : tool.meta
+}
 
 let shapeOf = (tool: Tool): Record<string, z.ZodTypeAny> =>
   Object.fromEntries(

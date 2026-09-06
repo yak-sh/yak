@@ -36,7 +36,7 @@ let entry = (slug: string, over: Partial<Entry> = {}): Entry => ({
   app: app(slug, 'Recipes'),
   said: '',
   kinds: [],
-  tools: [],
+  commands: [],
   ...over,
 })
 
@@ -55,17 +55,17 @@ Deno.test('AGENTS.md is refused over the cap, with the number', () => {
 Deno.test('the passage names every app, what it holds, and its rules', () => {
   assertEquals(passage([]), '')
   let said = passage([
-    entry('recipes', { kinds: ['recipe'], tools: ['recipes__add'] }),
+    entry('recipes', { kinds: ['recipe'], commands: ['add_recipe'] }),
     entry('chores', { kinds: ['chore', 'week'] }),
   ])
   assert(said.includes('## kitchen/recipes'), said)
   assert(said.includes('https://kitchen.yaks.app/recipes/'), said)
   assert(said.includes('holds recipes'), said)
-  assert(said.includes('Tools: recipes__add'), said)
+  assert(said.includes('Commands: add_recipe'), said)
   // An app with no words of its own still holds the platform's doc, and an
-  // app with no tools says nothing about tools.
+  // app with no commands says nothing about commands.
   assert(said.includes('holds chores, weeks'), said)
-  assert(!said.includes('Tools: .'), said)
+  assert(!said.includes('Commands: .'), said)
   assert(passage([entry('notes')]).includes('holds docs'), 'no fallback')
 })
 
@@ -96,7 +96,7 @@ Deno.test('a prompt is named after the app, and never over something taken', () 
   // The description is the file's own first line, with the heading marks off.
   assertEquals(one[0].description, 'Recipes')
   assertEquals(one[0].text, rules)
-  // An app spelling a door's own prompt takes the seam a declared tool takes.
+  // An app spelling a door's own prompt takes the `__` seam instead.
   assertEquals(
     prompted([entry('make', { said: rules })], ['make']).map((p) => p.name),
     ['make__agents'],
@@ -117,17 +117,13 @@ Deno.test('a prompt is named after the app, and never over something taken', () 
 })
 
 Deno.test('a session is told what moved, and never what did not', () => {
-  let was = { version: 'a', names: ['about'], context: 'x' }
-  // A release that moved no name and no app moves the version and says
-  // nothing: there is nothing for the agent to do about it.
+  let was = { version: 'a', names: ['about'] }
+  // A release that moved no name moves the version and says nothing: there is
+  // nothing for the agent to do about it. Which is every release now that the
+  // roster is fixed (T-34541) except one that moved the platform's own tools.
   assertEquals(stale(was, { ...was, version: 'b' }), undefined)
   assertEquals(stale(was, was), undefined)
-  // A tool that appeared is the actionable news, even when the apps moved too.
-  let more = { version: 'b', names: ['about', 'recipes__add'], context: 'y' }
-  assert(stale(was, more)!.includes('recipes__add'), 'no tool named')
-  // An app made, or an AGENTS.md edited: no name moved, and the agent is
-  // still told, because it cached the instructions at connect.
-  let edited = stale(was, { version: 'b', names: ['about'], context: 'y' })
-  assert(edited!.includes('about'), edited)
-  assert(edited!.includes('apps'), edited)
+  // A tool that appeared is the news, and it names the tool.
+  let more = { version: 'b', names: ['about', 'command'] }
+  assert(stale(was, more)!.includes('command'), 'no tool named')
 })

@@ -157,6 +157,10 @@ slow(
         // Who visited, in counts and never in names (views.ts, T-34498).
         'app_stats',
         'app_list',
+        // The apps' own verbs, carried by two fixed tools (declared.ts,
+        // T-34541): what they can do, and running one.
+        'commands',
+        'command',
         'domain_attach',
         'domain_status',
         'domain_detach',
@@ -1678,13 +1682,17 @@ slow('the door before anyone signs in', async () => {
         /^Bearer realm="OAuth", resource_metadata="http.*\/\.well-known\/oauth-protected-resource\/mcp", error="invalid_token", error_description="sign in at https:\/\/yaks\.app\/login[^"]*"$/,
       )
     }
-    // A tool of the platform's, one of the app's own, and one nobody wrote:
-    // one answer for all three, so nothing here says which apps exist. The
-    // generic tier's WRITE is among them — signed out it is not a tool that
-    // refuses, it is a tool that is not listed (T-34467).
+    // A tool of the platform's, an app's own command, and a tool nobody
+    // wrote: one answer for all three, so nothing here says which apps exist.
+    // The generic tier's WRITE is among them — it is LISTED signed out
+    // (T-34541) and it is this refusal that answers a call, which is the
+    // sequence a host walks into the sign-in.
     await shut('tools/call', { name: 'graph_apply', arguments: { change: [] } })
     await shut('tools/call', { name: 'app_list' })
-    await shut('tools/call', { name: 'runs__leaderboard' })
+    await shut('tools/call', {
+      name: 'command',
+      arguments: { name: 'leaderboard' },
+    })
     await shut('tools/call', { name: 'nope' })
     await shut('prompts/list')
     await shut('prompts/get', { name: PROMPTS[0].name })
@@ -1755,9 +1763,10 @@ slow('the door before anyone signs in', async () => {
     assertEquals(stream.headers.get('www-authenticate'), challenge)
     await stream.body?.cancel()
 
-    // Signing in adds; it never swaps one surface for another. Every public
-    // tool is in the full list, saying the same words, and every public
-    // resource is still listed.
+    // Signing in swaps no surface and adds no NAME: the roster is one list
+    // for everybody (T-34541), and what changes is which of them will answer
+    // — said per tool in `securitySchemes`, which is the field a host reads to
+    // know when to ask for the sign-in. Every public resource is still listed.
     let fullSchemes = await schemes(agent)
     let full = Object.keys(fullSchemes)
     let open = listed.map((t) => t.name)
@@ -1784,10 +1793,15 @@ slow('the door before anyone signs in', async () => {
         scopes: ['graph'],
       }], name)
     }
-    // An app's own tool is listed by the same rule, view and all.
-    assert(full.includes('runs__leaderboard'))
-    assert(open.every((n) => full.includes(n)), 'the public list is a subset')
-    assert(full.length > open.length, 'signing in has to be worth something')
+    // The same names, in the same order, whoever is asking: this is the list
+    // a directory snapshots at submission and serves forever, so a tool a
+    // signed-in person has and the snapshot never saw would be a tool nobody
+    // could call (T-34541).
+    assertEquals(full, open)
+    // And an app's own verbs are not in it at all — they are commands, which
+    // these two tools carry.
+    assert(full.includes('commands') && full.includes('command'))
+    assertEquals(full.some((n) => n.includes('log_run')), false)
     // The same words, and one thing more: the list this door is serving them
     // and the version naming it (T-34277), which is the answer to "is my tool
     // list still the tool list". Nobody signed in has a roster to be told
@@ -1902,10 +1916,14 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
         { type: 'oauth2', scopes: ['graph'] },
       ], t.name)
     }
-    // No write anywhere on it: graph_apply is not a tool that refuses here, it
-    // is a tool that is not there. The menu holds the platform's verbs, which
-    // ARE listed and refused, so the host has something to sign in for.
-    assertEquals(listed.some((t) => t.name == 'graph_apply'), false)
+    // The write is LISTED and refused (T-34541), like every other tool a
+    // stranger may not call: the list is one list for everybody, because it is
+    // the list a directory snapshots, and `securitySchemes` is what tells the
+    // two halves apart.
+    let shut = listed.find((t) => t.name == 'graph_apply')!
+    assertEquals(shut._meta?.securitySchemes?.map((one) => one.type), [
+      'oauth2',
+    ])
     assert(listed.some((t) => t.name == 'app_new'), 'the menu is still there')
     for (let name of ['graph_query', 'graph_schema', 'graph_show', 'search']) {
       let t = listed.find((one) => one.name == name)!
@@ -2399,7 +2417,7 @@ slow(
 // An app's OWN tools (T-32685): a tools.json beside vocab.json, planted by
 // the same deploy, called at the same door as `<app>__<tool>` — and doing
 // through it exactly what the caller could do on the app's own page.
-slow('an app declares its own tools, and the door calls them', async () => {
+slow('an app declares its own commands, and command runs them', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -2448,17 +2466,45 @@ slow('an app declares its own tools, and the door calls them', async () => {
       ],
     })
     let deployed = await agent.tool('app_deploy', app)
-    assertStringIncludes(deployed, 'tools: runs__log_run, runs__leaderboard')
+    assertStringIncludes(deployed, 'commands: log_run, leaderboard')
     assertStringIncludes(deployed, 'components: jog')
 
-    // The app's own MCP App view (T-32687): the tool links the page, the door
-    // serves it out of the app's own files under the profile, and a `<base>`
-    // at the app's address keeps the stylesheet beside it working.
+    // What the app can be ASKED to do, said by the one fixed tool (T-34541):
+    // the commands, the app each belongs to, and the arguments each takes.
+    let commands = async (args: Record<string, unknown> = {}) =>
+      (await agent.call('tools/call', { name: 'commands', arguments: args }))
+        .structuredContent.commands as {
+          at: string
+          name: string
+          description: string
+          readOnly: boolean
+          input: { required: string[] }
+          view?: string
+        }[]
+    let all = await commands()
+    // The two it declared, and the two its `jog` is worth (kinds.ts).
+    assertEquals(all.map((c) => c.name), [
+      'log_run',
+      'leaderboard',
+      'add_jog',
+      'find_jog',
+    ])
+    assertEquals(new Set(all.map((c) => c.at)), new Set([`${space}/runs`]))
+    let log = all.find((c) => c.name == 'log_run')!
+    // The app's TITLE and address ride in the description: a slug is not what
+    // the person called it, and a model choosing reads the words.
+    assertStringIncludes(log.description, 'Run club')
+    assertStringIncludes(log.description, `${space}.yaks.app/runs/`)
+    assertEquals(log.input.required, ['who', 'miles'])
+    assertEquals(log.readOnly, false)
+
+    // The app's own MCP App view (T-32687): the command names the page, the
+    // door serves it out of the app's own files under the profile, and a
+    // `<base>` at the app's address keeps the stylesheet beside it working.
     let view = `ui://${space}/runs/leaderboard.html`
-    let drawn = (await agent.call('tools/list')).tools
-      .find((t: { name: string }) => t.name == 'runs__leaderboard')
-    assertEquals(drawn._meta.ui.resourceUri, view)
-    assertEquals(drawn._meta.ui.visibility, ['model', 'app'])
+    let board0 = all.find((c) => c.name == 'leaderboard')!
+    assertEquals(board0.view, view)
+    assertEquals(board0.readOnly, true)
     let listed = (await agent.call('resources/list')).resources
       .find((r: { uri: string }) => r.uri == view)
     assertEquals(listed.mimeType, 'text/html;profile=mcp-app')
@@ -2502,8 +2548,11 @@ slow('an app declares its own tools, and the door calls them', async () => {
 
     // The call is a page's gesture: the row lands in the app's own store,
     // typed by the declared input, and says who wrote it.
-    let wrote = await agent.tool('runs__log_run', { who: 'Ada', miles: 5 })
-    assertStringIncludes(wrote, 'runs__log_run: wrote 1 entity')
+    let wrote = await agent.tool('command', {
+      name: 'log_run',
+      args: { who: 'Ada', miles: 5 },
+    })
+    assertStringIncludes(wrote, 'log_run: wrote 1 entity')
     type Run = {
       jog: { who: string; miles: number }
       created: { by: { eid: string; name: string } }
@@ -2520,28 +2569,37 @@ slow('an app declares its own tools, and the door calls them', async () => {
     // And the read half answers the listing a page gets — the same byline,
     // through the declared tool's own query.
     let board = await agent.call('tools/call', {
-      name: 'runs__leaderboard',
-      arguments: {},
+      name: 'command',
+      arguments: { name: 'leaderboard' },
     })
-    assertStringIncludes(board.content[0].text, 'runs__leaderboard: 1 row')
+    assertStringIncludes(board.content[0].text, 'leaderboard: 1 row')
     assertEquals(
       (board.structuredContent.rows as Run[])[0].created.by,
       { eid: jeff.person, name: jeff.name },
     )
-    // An argument the input declared and the call left out is refused by the
-    // input itself, naming the argument, and no half-written row lands: the
-    // declared schema is the door's now (T-33812).
+    // An argument the command declared and the call left out is refused by
+    // the declaration, naming the argument, and no half-written row lands.
     let short = await assertRejects(
-      () => agent.tool('runs__log_run', { who: 'Ada' }),
+      () => agent.tool('command', { name: 'log_run', args: { who: 'Ada' } }),
       Error,
     )
-    assertStringIncludes(short.message, 'runs__log_run')
     assertStringIncludes(short.message, 'miles')
-    // A tool nobody declared is a tool nobody has.
-    await assertRejects(
-      () => agent.tool('runs__nope', {}),
+    // A command nobody declared says what there IS instead of nothing: the
+    // list is this person's own, so a model cannot have known it.
+    let nope = await assertRejects(
+      () => agent.tool('command', { name: 'nope' }),
       Error,
-      'runs__nope not found',
+    )
+    assertStringIncludes(nope.message, 'no command nope')
+    assertStringIncludes(nope.message, `${space}/runs: log_run, leaderboard`)
+    assertStringIncludes(nope.message, 'commands lists them')
+    // And an app nobody has, named on the call.
+    assertStringIncludes(
+      (await assertRejects(
+        () => agent.tool('command', { app: 'gone', name: 'log_run' }),
+        Error,
+      )).message,
+      'no app gone',
     )
 
     // Someone who may read this app and not write it: the write tool refuses
@@ -2554,11 +2612,15 @@ slow('an app declares its own tools, and the door calls them', async () => {
     })
     let hers = connector(k, maya.cookie)
     assertStringIncludes(
-      await hers.tool('runs__leaderboard', {}),
-      'runs__leaderboard: 1 row',
+      await hers.tool('command', { name: 'leaderboard' }),
+      'leaderboard: 1 row',
     )
     await assertRejects(
-      () => hers.tool('runs__log_run', { who: 'Maya', miles: 3 }),
+      () =>
+        hers.tool('command', {
+          name: 'log_run',
+          args: { who: 'Maya', miles: 3 },
+        }),
       Error,
       'you can read this app but not change it',
     )
@@ -2590,7 +2652,10 @@ slow('an app declares its own tools, and the door calls them', async () => {
       "gone.html — a view names a page in this app's own files",
     )
     assertStringIncludes(
-      await agent.tool('runs__log_run', { who: 'Bo', miles: 2 }),
+      await agent.tool('command', {
+        name: 'log_run',
+        args: { who: 'Bo', miles: 2 },
+      }),
       'wrote 1 entity',
     )
   } finally {
@@ -2598,11 +2663,11 @@ slow('an app declares its own tools, and the door calls them', async () => {
   }
 })
 
-// The tools a KIND is worth (T-34513): an app that declares a `recipe` and no
-// tools.json at all still has a verb for adding one and a verb for finding it,
-// so the next agent the person talks to discovers the app the way it discovers
-// anything else here — by reading the tool list.
-slow('a kind an app declares is two tools, with no tools.json', async () => {
+// The commands a KIND is worth (T-34513): an app that declares a `recipe` and
+// no tools.json at all still has a verb for adding one and a verb for finding
+// it, so the next agent the person talks to discovers the app the way it
+// discovers anything else here — by asking what the apps in reach can do.
+slow('a kind an app declares is two commands, with no tools.json', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -2622,63 +2687,71 @@ slow('a kind an app declares is two tools, with no tools.json', async () => {
         },
       ],
     })
-    // The deploy says them in the same line it says a declared tool's name.
+    // The deploy says them in the same line it says a declared command's name.
     assertStringIncludes(
       await agent.tool('app_deploy', app),
-      'tools: box__add_recipe, box__find_recipe',
+      'commands: add_recipe, find_recipe',
     )
 
-    // They are ordinary declared tools at the door: the app's title and
-    // address on the sentence, and the read half marked read-only.
-    let listed = (await agent.call('tools/list')).tools as {
-      name: string
-      description: string
-      annotations?: { readOnlyHint?: boolean }
-      inputSchema: { properties: Record<string, unknown>; required?: string[] }
-    }[]
-    let add = listed.find((t) => t.name == 'box__add_recipe')!
-    let find = listed.find((t) => t.name == 'box__find_recipe')!
+    // They are ordinary declared commands: the app's title and address on the
+    // sentence, and the read half marked read-only.
+    let listed = async () =>
+      (await agent.call('tools/call', { name: 'commands', arguments: {} }))
+        .structuredContent.commands as {
+          name: string
+          description: string
+          readOnly: boolean
+          input: { properties: Record<string, unknown>; required?: string[] }
+        }[]
+    let all = await listed()
+    let add = all.find((t) => t.name == 'add_recipe')!
+    let find = all.find((t) => t.name == 'find_recipe')!
     assertStringIncludes(
       add.description,
       `Add a recipe to ${space}/box — Recipe box, an app at ` +
         `${space}.yaks.app/box/`,
     )
     assertStringIncludes(find.description, `Find recipes in ${space}/box.`)
-    assertEquals(add.annotations?.readOnlyHint, false)
-    assertEquals(find.annotations?.readOnlyHint, true)
+    assertEquals(add.readOnly, false)
+    assertEquals(find.readOnly, true)
     // The kind's own columns are the arguments, and only the title is owed.
-    assertEquals(Object.keys(add.inputSchema.properties), [
+    assertEquals(Object.keys(add.input.properties), [
       'title',
       'body',
       'alias',
       'serves',
       'cuisine',
     ])
-    assertEquals(add.inputSchema.required, ['title'])
-    // Nothing at all is owed to the find: an empty `required` is dropped on
-    // the way out rather than published as a word.
-    assertEquals(find.inputSchema.required ?? [], [])
+    assertEquals(add.input.required, ['title'])
+    // Nothing at all is owed to the find.
+    assertEquals(find.input.required ?? [], [])
 
     // Adding writes the row: the kind, the title, the columns given — and the
     // name it answers to afterwards.
     assertStringIncludes(
-      await agent.tool('box__add_recipe', {
-        title: 'Lemon cake',
-        body: '3 lemons',
-        alias: 'lemon-cake',
-        serves: 8,
+      await agent.tool('command', {
+        name: 'add_recipe',
+        args: {
+          title: 'Lemon cake',
+          body: '3 lemons',
+          alias: 'lemon-cake',
+          serves: 8,
+        },
       }),
       // Two: the recipe, and the name it answers to — a key is an entity of
       // its own (@yaks/key).
-      'box__add_recipe: wrote 2 entities',
+      'add_recipe: wrote 2 entities',
     )
     // A second one with nothing but a title still wears the kind, so the find
     // answers it — and writes no nameless alias.
-    await agent.tool('box__add_recipe', { title: 'Toast' })
+    await agent.tool('command', {
+      name: 'add_recipe',
+      args: { title: 'Toast' },
+    })
     let found = async (args: Record<string, unknown>) =>
       (await agent.call('tools/call', {
-        name: 'box__find_recipe',
-        arguments: args,
+        name: 'command',
+        arguments: { name: 'find_recipe', args },
       }))
         .structuredContent.rows as { doc: { title: string } }[]
     assertEquals((await found({})).map((r) => r.doc.title), [
@@ -2714,12 +2787,16 @@ slow('a kind an app declares is two tools, with no tools.json', async () => {
     })
     assertStringIncludes(
       await agent.tool('app_deploy', app),
-      'tools: box__add_recipe, box__find_recipe',
+      'commands: add_recipe, find_recipe',
     )
-    let mine = ((await agent.call('tools/list')).tools as { name: string }[])
-      .filter((t) => t.name.startsWith('box__')).map((t) => t.name)
-    assertEquals(mine, ['box__add_recipe', 'box__find_recipe'])
-    await agent.tool('box__add_recipe', { title: 'Fried rice' })
+    assertEquals((await listed()).map((t) => t.name), [
+      'add_recipe',
+      'find_recipe',
+    ])
+    await agent.tool('command', {
+      name: 'add_recipe',
+      args: { title: 'Fried rice' },
+    })
     assertEquals(
       (await found({ cuisine: 'house' })).map((r) => r.doc.title),
       ['Fried rice'],
@@ -2754,131 +2831,162 @@ let hearing = (res: Response) => {
   }
 }
 
-// The door LISTS what an app declared (T-32686): every app in every space the
-// caller belongs to, and nobody else's — then says on the session's stream
-// when a deploy moved that list.
-slow("the door lists an app's tools, and says when they moved", async () => {
-  let k = await kernel()
-  let ear: ReturnType<typeof hearing> | undefined
-  try {
-    let tools = (comp: string, name: string) =>
-      JSON.stringify({
-        [name]: {
-          description: `Write a ${comp}`,
-          input: { text: 'text' },
-          apply: { [comp]: { text: '{{text}}' } },
-        },
-      })
-    let made = async (
-      who: { cookie: string },
-      slug: string,
-      title: string,
-      comp: string,
-      name: string,
-      access?: string,
-    ) => {
-      let agent = connector(k, who.cookie)
-      let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/
-        .exec(
-          await agent.tool('app_new', {
-            slug,
-            title,
-            ...(access ? { access } : {}),
-          }),
-        )![1]
-      await agent.tool('app_files', {
-        space,
-        app: slug,
-        files: [
-          {
-            path: 'vocab.json',
-            content: JSON.stringify({ [comp]: { text: 'text' } }),
+// ONE ROSTER, for everybody (T-34541). A directory snapshots `tools/list`
+// when a connector is submitted and serves that snapshot forever — only
+// `tools/call` reaches us — so a list that moves with whose token arrived, or
+// with what somebody deployed this morning, is a list the published connector
+// can never match. What an app declares is a COMMAND instead: `commands` says
+// which there are, `command` runs one, and neither name ever moves.
+slow(
+  'the roster is one list for everybody, and apps carry commands',
+  async () => {
+    let k = await kernel()
+    let ear: ReturnType<typeof hearing> | undefined
+    try {
+      let tools = (comp: string, name: string) =>
+        JSON.stringify({
+          [name]: {
+            description: `Write a ${comp}`,
+            input: { text: 'text' },
+            apply: { [comp]: { text: '{{text}}' } },
           },
-          { path: 'tools.json', content: tools(comp, name) },
-        ],
+        })
+      let made = async (
+        who: { cookie: string },
+        slug: string,
+        title: string,
+        comp: string,
+        name: string,
+        access?: string,
+      ) => {
+        let agent = connector(k, who.cookie)
+        let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/
+          .exec(
+            await agent.tool('app_new', {
+              slug,
+              title,
+              ...(access ? { access } : {}),
+            }),
+          )![1]
+        await agent.tool('app_files', {
+          space,
+          app: slug,
+          files: [
+            {
+              path: 'vocab.json',
+              content: JSON.stringify({ [comp]: { text: 'text' } }),
+            },
+            { path: 'tools.json', content: tools(comp, name) },
+          ],
+        })
+        await agent.tool('app_deploy', { space, app: slug })
+        return { agent, space }
+      }
+      let jeff = await signIn(k)
+      let club = await made(jeff, 'runs', 'Run club', 'jog', 'log_run')
+      let maya = await signIn(k)
+      await made(maya, 'diary', 'Diary', 'entryline', 'note', 'private')
+      // And somebody with no apps at all, whose list is the same list.
+      let nobody = await signIn(k)
+
+      let named = async (agent: ReturnType<typeof connector>) =>
+        ((await agent.call('tools/list')).tools as { name: string }[])
+          .map((t) => t.name)
+      let his = await named(club.agent)
+      // An app owner, a member of another space, a person with nothing, and
+      // nobody at all: one list, in one order.
+      assertEquals(await named(connector(k, maya.cookie)), his)
+      assertEquals(await named(connector(k, nobody.cookie)), his)
+      assertEquals(await named(connector(k)), his)
+      assert(his.includes('app_deploy'), 'the platform tools are listed')
+      assert(his.includes('graph_apply'), 'so is the write, signed out and in')
+      assert(his.includes('mail_send'), 'and the mailbox')
+      assertEquals(his.filter((n) => n.includes('__')), [], 'no per-app name')
+      assertEquals(
+        his.some((n) => n.includes('log_run') || n.includes('note')),
+        false,
+        "no app's own verb is a tool",
+      )
+
+      // What differs is the COMMANDS, which are a caller's own: his app's, and
+      // nothing of hers — her app is in her space, and he is nobody there.
+      let commands = async (
+        agent: ReturnType<typeof connector>,
+      ) => ((await agent.call('tools/call', {
+        name: 'commands',
+        arguments: {},
+      }))
+        .structuredContent.commands as { at: string; name: string }[])
+      // Each app's own, and the two every word it declares is worth beside
+      // them (kinds.ts).
+      assertEquals((await commands(club.agent)).map((c) => c.name), [
+        'log_run',
+        'add_jog',
+        'find_jog',
+      ])
+      assertEquals(
+        (await commands(connector(k, maya.cookie))).map((c) => c.name),
+        ['note', 'add_entryline', 'find_entryline'],
+      )
+      // And a person with no apps is told so in a sentence rather than nothing.
+      assertStringIncludes(
+        await connector(k, nobody.cookie).tool('commands'),
+        'no app you can reach declares a command yet',
+      )
+
+      // The door says it will announce a moved list, and the instructions name
+      // the apps in reach with their commands and how to run one.
+      let init = await club.agent.call('initialize', HELLO)
+      assertEquals(init.capabilities.tools.listChanged, true)
+      assertStringIncludes(init.instructions, `${club.space}/runs`)
+      assertStringIncludes(init.instructions, 'Commands: log_run')
+      assertStringIncludes(init.instructions, 'command')
+
+      // The session's stream: held open, and QUIET through a deploy that grew a
+      // command. The tool list did not move, so nothing is said about it — the
+      // one thing that moves it now is a release (stream.ts `crossed`).
+      let stream = await k.at('yaks.app', '/mcp', {
+        headers: { cookie: jeff.cookie, accept: 'text/event-stream' },
       })
-      await agent.tool('app_deploy', { space, app: slug })
-      return { agent, space }
-    }
-    let jeff = await signIn(k)
-    let club = await made(jeff, 'runs', 'Run club', 'jog', 'log_run')
-    let maya = await signIn(k)
-    await made(maya, 'diary', 'Diary', 'entryline', 'note', 'private')
-
-    // Jeff sees his own app's tool beside the platform's, and nothing of
-    // hers: her app is in her space, and he is nobody there.
-    let named = async (agent: ReturnType<typeof connector>) =>
-      ((await agent.call('tools/list')).tools as { name: string }[])
-        .map((t) => t.name)
-    let his = await named(club.agent)
-    assert(his.includes('app_deploy'), 'the platform tools are still listed')
-    assert(his.includes('runs__log_run'), 'his own app tool is listed')
-    assertEquals(his.includes('diary__note'), false)
-    let hers = await named(connector(k, maya.cookie))
-    assert(hers.includes('diary__note'))
-    assertEquals(hers.includes('runs__log_run'), false)
-    // The app's TITLE rides in the description: a slug is not what the
-    // person called it.
-    let one = ((await club.agent.call('tools/list')).tools as {
-      name: string
-      description: string
-      inputSchema: { required: string[] }
-    }[]).find((t) => t.name == 'runs__log_run')!
-    assertStringIncludes(one.description, 'Run club')
-    assertStringIncludes(one.description, `${club.space}.yaks.app/runs/`)
-    assertEquals(one.inputSchema.required, ['text'])
-
-    // The door says it will announce a moved list, and the instructions say
-    // an app can carry tools at all.
-    let init = await club.agent.call('initialize', HELLO)
-    assertEquals(init.capabilities.tools.listChanged, true)
-    assertStringIncludes(init.instructions, 'tools.json')
-    assertStringIncludes(init.instructions, '<app>__<tool>')
-
-    // The session's stream: held open, and told when a deploy moved the list.
-    let stream = await k.at('yaks.app', '/mcp', {
-      headers: { cookie: jeff.cookie, accept: 'text/event-stream' },
-    })
-    assertEquals(stream.headers.get('content-type'), 'text/event-stream')
-    ear = hearing(stream)
-    await until(() => ear!.said().includes(': open'), {
-      timeout: 10_000,
-      poll: 50,
-      label: 'the stream to open',
-    })
-    await club.agent.tool('app_files', {
-      space: club.space,
-      app: 'runs',
-      op: 'write',
-      path: 'tools.json',
-      content: JSON.stringify({
-        log_run: {
-          description: 'Write a jog',
-          input: { text: 'text' },
-          apply: { jog: { text: '{{text}}' } },
-        },
-        jogs: { description: 'Every jog', input: {}, query: '.jog!' },
-      }),
-    })
-    await club.agent.tool('app_deploy', { space: club.space, app: 'runs' })
-    await until(
-      () => ear!.said().includes('notifications/tools/list_changed'),
-      {
+      assertEquals(stream.headers.get('content-type'), 'text/event-stream')
+      ear = hearing(stream)
+      await until(() => ear!.said().includes(': open'), {
         timeout: 10_000,
         poll: 50,
-        label: 'the tool list to be called stale',
-      },
-    )
-    assert((await named(club.agent)).includes('runs__jogs'))
-    // A deploy that moved nothing says nothing.
-    ear.forget()
-    await club.agent.tool('app_deploy', { space: club.space, app: 'runs' })
-    assertEquals(ear.said().includes('list_changed'), false)
-  } finally {
-    await ear?.stop()
-    await k.stop()
-  }
-})
+        label: 'the stream to open',
+      })
+      await club.agent.tool('app_files', {
+        space: club.space,
+        app: 'runs',
+        op: 'write',
+        path: 'tools.json',
+        content: JSON.stringify({
+          log_run: {
+            description: 'Write a jog',
+            input: { text: 'text' },
+            apply: { jog: { text: '{{text}}' } },
+          },
+          jogs: { description: 'Every jog', input: {}, query: '.jog!' },
+        }),
+      })
+      let grew = await club.agent.tool('app_deploy', {
+        space: club.space,
+        app: 'runs',
+      })
+      assertStringIncludes(grew, 'commands: log_run, jogs, add_jog, find_jog')
+      // The new command answers straight away, with no list to re-read first.
+      assertEquals(
+        (await commands(club.agent)).map((c) => c.name),
+        ['log_run', 'jogs', 'add_jog', 'find_jog'],
+      )
+      assertEquals(await named(club.agent), his, 'the roster did not move')
+      assertEquals(ear.said().includes('list_changed'), false)
+    } finally {
+      await ear?.stop()
+      await k.stop()
+    }
+  },
+)
 
 // And the schema DOOR (T-34156). Jeff: "can we otherwise add some vocab tools?
 // for getting specific parts and also the full thing probably? should come
@@ -3044,8 +3152,11 @@ slow(
       )
 
       // A vocabulary GROWS mid-connection, and the schema a client is holding
-      // goes stale with it: app_deploy plants the words, so the door says the
-      // tool list moved and a client re-reads it.
+      // goes stale with it — app_deploy plants the words and the next
+      // `tools/list` is typed for them. The tool NAMES did not move, so
+      // nothing is said on the stream (T-34541): a client is told its list
+      // moved only when it did, and the open write door is what makes a
+      // client holding the older schema work anyway.
       let stream = await k.at('yaks.app', '/mcp', {
         headers: { cookie: jeff.cookie, accept: 'text/event-stream' },
       })
@@ -3062,14 +3173,7 @@ slow(
         content: JSON.stringify({ recipe: { serves: 'number' } }),
       })
       await agent.tool('app_deploy', { app: 'cookbook' })
-      await until(
-        () => ear!.said().includes('notifications/tools/list_changed'),
-        {
-          timeout: 10_000,
-          poll: 50,
-          label: 'the tool list to be called stale',
-        },
-      )
+      assertEquals(ear.said().includes('list_changed'), false)
       let grown = await schema()
       assert(
         takes(grown.input, [{ entity: { eid: 'r1' }, recipe: { serves: 4 } }]),
@@ -3081,9 +3185,9 @@ slow(
         }]),
         false,
       )
-      // The stale schema is why the announcement matters: it typed nothing
-      // about a word nobody had declared yet, so a client holding it would have
-      // sent `serves` as anything at all and learned from a refusal instead.
+      // The older schema typed nothing about a word nobody had declared yet,
+      // so a client holding it sends `serves` as anything at all and the
+      // server decides — which is the whole reason the write door is open.
       assertEquals(
         takes(first.input, [{
           entity: { eid: 'r1' },
@@ -3128,17 +3232,19 @@ slow('the stream names its session and replays a missed line', async () => {
     await init.json()
     assertMatch(session, /^[0-9a-f-]{36}$/)
 
-    // An app of his own, whose tools.json is what moves.
+    // An app of his own, whose VIEWS are what move — the one list an app's
+    // deploy still moves, now that its commands are not tools (T-34541).
     let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/
       .exec(await agent.tool('app_new', { slug: 'walks', title: 'Walks' }))![1]
-    let tools = (...names: string[]) =>
-      JSON.stringify(
-        Object.fromEntries(names.map((n) => [n, {
-          description: `Write a ${n}`,
-          input: { text: 'text' },
-          apply: { walk: { text: '{{text}}' } },
-        }])),
-      )
+    let tools = (view: string) =>
+      JSON.stringify({
+        log_walk: {
+          description: 'Every walk so far',
+          input: {},
+          query: '.walk!',
+          view,
+        },
+      })
     await agent.tool('app_files', {
       space,
       app: 'walks',
@@ -3147,7 +3253,8 @@ slow('the stream names its session and replays a missed line', async () => {
           path: 'vocab.json',
           content: JSON.stringify({ walk: { text: 'text' } }),
         },
-        { path: 'tools.json', content: tools('log_walk') },
+        { path: 'walks.html', content: '<!doctype html><ol id=board>' },
+        { path: 'tools.json', content: tools('walks.html') },
       ],
     })
     await agent.tool('app_deploy', { space, app: 'walks' })
@@ -3160,13 +3267,14 @@ slow('the stream names its session and replays a missed line', async () => {
           ...headers,
         },
       })
-    let moved = async (...names: string[]) => {
+    let moved = async (view: string) => {
       await agent.tool('app_files', {
         space,
         app: 'walks',
-        op: 'write',
-        path: 'tools.json',
-        content: tools(...names),
+        files: [
+          { path: view, content: '<!doctype html><ol id=board>' },
+          { path: 'tools.json', content: tools(view) },
+        ],
       })
       await agent.tool('app_deploy', { space, app: 'walks' })
     }
@@ -3182,20 +3290,20 @@ slow('the stream names its session and replays a missed line', async () => {
       poll: 50,
       label: 'the stream to open',
     })
-    await moved('log_walk', 'walks')
+    await moved('board.html')
     await until(() => lines(ear!.said()).length == 1, {
       timeout: 10_000,
       poll: 50,
       label: 'the deploy to reach the stream',
     })
     let first = lines(ear.said())[0]
-    assertStringIncludes(first.data, 'notifications/tools/list_changed')
+    assertStringIncludes(first.data, 'notifications/resources/list_changed')
 
     // The connection drops, and the next deploy has nobody to write to. The
     // object keeps the line anyway.
     await ear.stop()
     ear = undefined
-    await moved('log_walk', 'walks', 'far')
+    await moved('far.html')
 
     // Reconnecting from the last id it saw: what it missed, and not the line
     // it already had.
@@ -3213,21 +3321,21 @@ slow('the stream names its session and replays a missed line', async () => {
     let back = lines(ear.said())
     assertEquals(back.length, 1)
     assertEquals(back[0].id, first.id + 1)
-    assertStringIncludes(back[0].data, 'notifications/tools/list_changed')
+    assertStringIncludes(back[0].data, 'notifications/resources/list_changed')
   } finally {
     await ear?.stop()
     await k.stop()
   }
 })
 
-// The ROSTER (T-34277). Jeff: "is there anything else we can do about claude
-// having stale mcp tools?" A client lists the tools once and holds that list;
-// `notifications/tools/list_changed` reaches one holding a stream and willing
-// to act on it, and nobody else. So the server says it again where the agent
-// is certainly reading — on the next result, naming what moved — and `about`
-// is the one call that says what is here right now.
+// The ROSTER (T-34277, T-34541). Jeff: "is there anything else we can do about
+// claude having stale mcp tools?" The answer arrived at is that the list does
+// not move: a person's apps, their words and their commands all travel inside
+// tools that are always there, so a client's cached list stays right. `about`
+// still says what is here right now — the tools, the version naming them, and
+// the apps in reach with their commands.
 slow(
-  'a stale tool list is named on the next result, and about says it',
+  'a deploy leaves the roster where it was, and about says what is here',
   async () => {
     let k = await kernel()
     try {
@@ -3239,10 +3347,10 @@ slow(
       let first = await agent.tool('about')
       let version = /roster ([0-9a-f]{8})/.exec(first)![1]
       assertStringIncludes(first, 'graph_apply')
-      assertEquals(first.includes('runs__log_run'), false)
+      assertStringIncludes(first, 'commands, command')
 
-      // An app of his own declares a tool, and the deploy plants it: the roster
-      // moved under a client that listed a minute ago.
+      // An app of his own declares a command, and the deploy plants it —
+      // beside the two the `jog` it declares is worth (kinds.ts, T-34513).
       let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/
         .exec(
           await agent.tool('app_new', { slug: 'runs', title: 'Run club' }),
@@ -3266,48 +3374,32 @@ slow(
       })
       await agent.tool('app_deploy', { space, app: 'runs' })
 
-      // The very next reply says so, naming the tool — as its own block, so the
-      // answer above it is still the answer.
+      // And the next reply is one block: nothing moved, so nothing is said.
+      // The client's cached list is still the list, which is what a directory
+      // serving a snapshot of it needs to be true.
       let told = await agent.call('tools/call', {
         name: 'app_list',
         arguments: {},
       })
-      let blocks = told.content as { text: string }[]
-      assertEquals(blocks.length, 2)
-      assertEquals(
-        blocks[1].text,
-        // The declared tool, and the two the `jog` it declares is worth
-        // (kinds.ts, T-34513) — they ride the same list.
-        'The tool list changed since you connected (new: runs__log_run, ' +
-          'runs__add_jog, runs__find_jog). Reconnect to see them, or ask ' +
-          '`about`.',
-      )
-      // Once per changed set: the next reply is quiet again.
-      let quiet = await agent.call('tools/call', {
-        name: 'app_list',
-        arguments: {},
-      })
-      assertEquals((quiet.content as unknown[]).length, 1)
+      assertEquals((told.content as unknown[]).length, 1)
 
-      // And `about` is the call that settles it without reconnecting: the new
-      // tool, and a version that moved with it.
+      // `about` still settles what is here without reconnecting: the same
+      // version, and the apps in reach with the commands they grew.
       let now = await agent.tool('about')
-      assertStringIncludes(now, 'runs__log_run')
-      assert(
-        !now.includes(`roster ${version}`),
-        'the version moved with the list',
-      )
+      assertStringIncludes(now, `roster ${version}`)
+      assertStringIncludes(now, 'Commands: log_run, add_jog, find_jog')
     } finally {
       await k.stop()
     }
   },
 )
 
-// A release can move the view set without the tool set (T-33004): the tool
-// half of tools.json is what tools/list is made of, the views are what
-// resources/list is made of, and each stales its own list on the stream.
+// A release that moved a VIEW says so (T-33004): the pages an app's commands
+// draw their answers in are what resources/list is made of, and a client
+// holding that list is told on the stream. The tool list is not told about,
+// because it did not move — an app's commands are not tools (T-34541).
 slow(
-  'a release whose views moved and not its tools says resources',
+  'a release whose views moved says resources, and never tools',
   async () => {
     let k = await kernel()
     let ear: ReturnType<typeof hearing> | undefined
@@ -3353,7 +3445,7 @@ slow(
         poll: 50,
         label: 'the stream to open',
       })
-      // The view appears; the tool half stands still.
+      // The view appears; the tool list stands still.
       await agent.tool('app_files', {
         space,
         app: 'walks',
@@ -4042,7 +4134,7 @@ slow('a word the space already has is used where it lives', async () => {
       '978',
     )
 
-    // A TOOL of the lending app may name the borrowed word — the word is
+    // A COMMAND of the lending app may name the borrowed word — the word is
     // this app's to write either way — and the call goes where it lives.
     await agent.tool('app_files', {
       app: 'lending',
@@ -4058,19 +4150,22 @@ slow('a word the space already has is used where it lives', async () => {
       }),
     })
     let tooled = await agent.tool('app_deploy', { app: 'lending' })
-    assertStringIncludes(tooled, 'tools: lending__shelve, lending__shelf')
-    await agent.tool('lending__shelve', { title: 'Solenoid' })
+    assertStringIncludes(tooled, 'commands: shelve, shelf')
+    await agent.tool('command', {
+      name: 'shelve',
+      args: { title: 'Solenoid' },
+    })
     // One store holds both books: the reading list's, where `book` lives.
     assertEquals(
       (await rows('.book!', 'reading-list')).map((r) => r.book!.title).sort(),
       ['Piranesi', 'Solenoid'],
     )
-    // And the lending app's own read tool answers from there too.
+    // And the lending app's own read command answers from there too.
     let shelf = await agent.call('tools/call', {
-      name: 'lending__shelf',
-      arguments: {},
+      name: 'command',
+      arguments: { name: 'shelf' },
     })
-    assertStringIncludes(shelf.content[0].text, 'lending__shelf: 2 rows')
+    assertStringIncludes(shelf.content[0].text, 'shelf: 2 rows')
 
     // The one refusal: the same column with two types, named with both and
     // with the app the word lives in.
@@ -5335,9 +5430,12 @@ slow('an app goes to the trash, and app_restore brings it back', async () => {
     let them = await seed(k, [{ slug: 'binlab', apps: ['garden'] }])
     let agent = connector(k, them.cookie)
     let at = { space: 'binlab', app: 'notes' }
+    // What the app can be asked to do — its commands leave every list the day
+    // it goes in the trash and come back with it (T-34430, T-34541).
     let listed = async () =>
-      ((await agent.call('tools/list')).tools as { name: string }[])
-        .map((t) => t.name)
+      (((await agent.call('tools/call', { name: 'commands', arguments: {} }))
+        .structuredContent?.commands ?? []) as { name: string }[])
+        .map((c) => c.name)
     let page = () => k.at('binlab.yaks.app', '/notes/')
 
     await agent.tool('app_new', { ...at, slug: 'notes', title: 'Notes' })
@@ -5367,7 +5465,7 @@ slow('an app goes to the trash, and app_restore brings it back', async () => {
       entities: [{ entity: { eid: '$n' }, doc: { title: 'a kept thing' } }],
     })
     assertEquals((await page()).status, 200)
-    assert((await listed()).includes('notes__log_note'))
+    assert((await listed()).includes('log_note'))
 
     // In. Everything that names the app stops naming it: the web, the tool
     // list, and the listing — where it is under Trash instead, with its days.
@@ -5376,7 +5474,7 @@ slow('an app goes to the trash, and app_restore brings it back', async () => {
       'binlab/notes is in the trash',
     )
     assertEquals((await page()).status, 404)
-    assertEquals((await listed()).includes('notes__log_note'), false)
+    assertEquals((await listed()).includes('log_note'), false)
     let saying = await agent.tool('app_list', { space: 'binlab' })
     assertStringIncludes(saying, 'Trash — app_restore brings one back')
     assertStringIncludes(saying, '- Notes (notes), 30 days left')
@@ -5409,7 +5507,7 @@ slow('an app goes to the trash, and app_restore brings it back', async () => {
       'binlab/notes is back',
     )
     assertEquals((await page()).status, 200)
-    assert((await listed()).includes('notes__log_note'))
+    assert((await listed()).includes('log_note'))
     assertStringIncludes(
       await agent.tool('app_list', { space: 'binlab' }),
       'https://binlab.yaks.app/notes/',
@@ -5457,8 +5555,9 @@ slow(
       let agent = connector(k, them.cookie)
       let at = { space: 'binspace', app: 'notes' }
       let listed = async () =>
-        ((await agent.call('tools/list')).tools as { name: string }[])
-          .map((t) => t.name)
+        (((await agent.call('tools/call', { name: 'commands', arguments: {} }))
+          .structuredContent?.commands ?? []) as { name: string }[])
+          .map((c) => c.name)
       let page = (path = '/notes/') => k.at('binspace.yaks.app', path)
 
       await agent.tool('app_new', { ...at, slug: 'notes', title: 'Notes' })
@@ -5488,7 +5587,7 @@ slow(
         entities: [{ entity: { eid: '$n' }, doc: { title: 'a kept thing' } }],
       })
       assertEquals((await page()).status, 200)
-      assert((await listed()).includes('notes__log_note'))
+      assert((await listed()).includes('log_note'))
       assertStringIncludes(await agent.tool('about'), 'binspace/notes')
 
       // The agent deletes nothing, as ever: it mails the owner. What the letter
@@ -5548,7 +5647,7 @@ slow(
       // Its apps left every roster the moment the space did — the tool list,
       // and the passage `about` and `initialize` both put at the top of an
       // agent's context (standing.ts), which is one `reachable` behind both.
-      assertEquals((await listed()).includes('notes__log_note'), false)
+      assertEquals((await listed()).includes('log_note'), false)
       assertEquals(
         (await agent.tool('about')).includes('binspace/notes'),
         false,
@@ -5578,7 +5677,7 @@ slow(
         'binspace is back',
       )
       assertEquals((await page()).status, 200)
-      assert((await listed()).includes('notes__log_note'))
+      assert((await listed()).includes('log_note'))
       assertStringIncludes(await agent.tool('about'), 'binspace/notes')
       assertEquals(
         JSON.parse(
@@ -6699,7 +6798,7 @@ slow('an app says what it holds, and what it asks of an agent', async () => {
       `https://${space}.yaks.app/recipes/`,
     )
     assertStringIncludes(init.instructions, 'holds recipes')
-    assertStringIncludes(init.instructions, 'Tools: recipes__add')
+    assertStringIncludes(init.instructions, 'Commands: add, add_recipe')
     assertStringIncludes(init.instructions, 'Weights in grams, never cups.')
     assertStringIncludes(init.instructions, `## ${space}/chores`)
     assertStringIncludes(init.instructions, 'holds chores')

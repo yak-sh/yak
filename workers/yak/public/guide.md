@@ -346,15 +346,19 @@ markdown or JSON both keep there.
 ## The tool list, and when it moves
 
 Your host listed these tools once, when it connected, and is holding that list.
-Ours keeps moving: a release adds one, an app of theirs declares one, a space
-they joined brings a few. So:
+Ours is FIXED — the same names, in the same order, for every caller, signed in
+or not — because a directory snapshots `tools/list` the day a connector is
+submitted and serves that snapshot forever, and only `tools/call` ever reaches
+us. So nothing a person does moves it: an app of theirs declares COMMANDS, which
+`commands` lists and `command` runs (below), and a space they joined brings more
+of those. Only a release here moves the list:
 
 - `about` says what is here **right now** — every tool name, and a roster
   version naming that list. Call it at the start of a conversation; the answer
   is the whole list, not a summary of it.
-- When the list moves under you, a reply carries one line saying so and naming
-  what moved: _the tool list changed since you connected (new: mail_send)_.
-  Reconnect, or call `about`, before you act on the old list.
+- When a release moves the list under you, a reply carries one line saying so
+  and naming what moved: _the tool list changed since you connected (new:
+  mail_send)_. Reconnect, or call `about`, before you act on the old list.
 - `graph_schema` is the same thing for WORDS. `graph_apply`'s input schema is
   the vocabulary, and it is open on purpose: a column your cached copy has never
   heard of still reaches the store, and a column nobody declared is refused
@@ -363,9 +367,10 @@ they joined brings a few. So:
 **A new capability is a new component, not a new tool.** `graph_apply` already
 writes anything the vocabulary declares, so a thing an app needs to keep — a
 `rating`, a `loan`, a `shift` — is a line in its `vocab.json`, discoverable by
-everyone through `graph_schema` the moment it deploys. Reach for a tool of your
-own (below) only when the app wants a VERB said in a sentence for someone else's
-agent. Every tool is a name every connected client has to learn again.
+everyone through `graph_schema` the moment it deploys. Reach for a command of
+your own (below) only when the app wants a VERB said in a sentence for someone
+else's agent. Every command is a name somebody reading `commands` has to choose
+between.
 
 ## An entity spans apps
 
@@ -385,9 +390,9 @@ else the app where that entity already lives.
 One word, one home — the first app in the space to declare it. Name it in a
 second app's vocab.json and nothing is planted twice: the deploy answers
 `book lives in reading-list`, this app reads and writes it there through
-`graph_apply` and its own tools, and a column you added grows that app's table.
-A PAGE reaches a borrowed word at the app that has it, with the sibling `store`
-below: its own `./api/` doors answer for its own store and nothing else.
+`graph_apply` and its own commands, and a column you added grows that app's
+table. A PAGE reaches a borrowed word at the app that has it, with the sibling
+`store` below: its own `./api/` doors answer for its own store and nothing else.
 
 A shape conflict is the only refusal — the same column declared with two types,
 named with both types and with the app the word lives in.
@@ -437,12 +442,12 @@ A PAGE reads a sibling app the same way, by naming its address:
 It is the app's own door, so its `access` decides: a `private` app answers
 nobody but its members, whichever page is asking.
 
-## Tools of your own
+## Commands of your own
 
 Deeper: <https://yaks.app/guide/tools.md> — the whole tools.json reference, and
 the view protocol.
 
-An app can also carry its own **tools**, so the person's agent can act on it
+An app can also carry its own **commands**, so the person's agent can act on it
 without a page open. They go in a `tools.json` at the app's root, beside
 `vocab.json`, and the same `app_deploy` hands them over:
 
@@ -456,9 +461,13 @@ without a page open. They go in a `tools.json` at the app's root, beside
         "input": { "since": "time" },
         "query": ".jog!&.created.at>={{since}}" } }
 
-After the deploy those are `runs__log_run` and `runs__leaderboard` at the
-connector — `<app>__<tool>`, listed for the person and for everyone else in the
-space, with the app's title in the description.
+After the deploy those are commands of `jeff/runs` — `log_run` and
+`leaderboard`, under their own names, listed for the person and for everyone
+else in the space with the app's title in the description. They are not tools of
+this connector and never enter its list, which is the same for everybody: two
+fixed tools carry them, `commands` to read what there is and `command` to run
+one — `command { name: 'log_run', args: { who: 'Ada', miles: 5 } }`, with `app`
+beside them only where two apps in reach spell one command name.
 
 An entry is three things: a `description` (the sentence the model chooses by),
 an `input` of arguments typed like a component's columns (`text`, `number`,
@@ -474,10 +483,10 @@ hole inside a sentence is spliced in as text. A hole naming an argument the
 `input` never declared is refused at deploy, with everything else wrong in the
 file, in one sentence — nothing is planted until the whole manifest reads.
 
-A tool is a template, never code: the act goes through the app's own doors as
+A command is a template, never code: the act goes through the app's own doors as
 the person calling it, so the app's `access` decides it, `created.by` names
 them, and a refusal is the same sentence the page would show. Nobody gets more
-through a tool than they have on the page.
+through a command than they have on the page.
 
 ### A page the answer draws itself in
 
@@ -490,7 +499,7 @@ and deploy the page with everything else:
                      "query": ".jog!&.created.at>={{since}}",
                      "view": "leaderboard.html" }
 
-The page gets the tool's answer over the host's own postMessage protocol: say
+The page gets the command's answer over the host's own postMessage protocol: say
 hello with `ui/initialize`, then draw whatever arrives in
 `ui/notifications/tool-result` — `structuredContent` is what `query` answered,
 `{ rows: [...] }` — and report your height back so the frame fits.
@@ -521,8 +530,8 @@ Relative URLs still work: the door hands the host the page with a `<base>` at
 the app's own address, so a stylesheet or an image beside `index.html` loads.
 Its DATA does not come that way — `./api/query` from inside the frame is another
 origin with no session on it. The answer arrives in the notification above, and
-a redraw is a plain MCP `tools/call` back through the host for the app's own
-tool, which does carry who is looking.
+a redraw is a plain MCP `tools/call` of `command` back through the host for the
+app's own command, which does carry who is looking.
 
 ## Standing instructions
 
@@ -547,7 +556,7 @@ refused — and to the rules themselves, not the reasoning behind them. An insta
 carries it along with the app's other files.
 
 Beside it, the same passage names **every app the person can reach**, its
-address, what it holds and its own tools. That is how an agent asked to "add
+address, what it holds and its own commands. That is how an agent asked to "add
 this recipe" knows there is already a recipe app to add it to.
 
 ## What the person said
@@ -958,9 +967,9 @@ Nothing is swallowed, so build for the person and fix what comes back.
 
 When the fix is the last version, take it: `app_versions` lists an app's last
 twenty deploys, newest first, with what changed in each, and `app_rollback` puts
-one back — every file of it, its components, its tools and its worker — as a NEW
-version, so a rollback can itself be rolled back. Only the files move; what the
-app has saved is never touched.
+one back — every file of it, its components, its commands and its worker — as a
+NEW version, so a rollback can itself be rolled back. Only the files move; what
+the app has saved is never touched.
 
 ## Nothing here is lost by a simple mistake
 

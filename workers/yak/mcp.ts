@@ -3,7 +3,8 @@
 // out, no session held — so a restart strands nobody and a Worker isolate
 // holds nothing between calls except a stream a client is holding open:
 // `GET /mcp` is that stream (stream.ts), and what goes down it is
-// `notifications/tools/list_changed` when an app's own tools move (T-32686).
+// `notifications/resources/list_changed` when the pages an app's commands draw
+// in move (T-33004), and the three lists when the platform is released.
 //
 // THE PROTOCOL IS THE PACKAGE'S (T-33812). @yaks/mcp serves the whole of it —
 // initialize, ping, tools, resources, prompts — over the graph and the
@@ -15,13 +16,18 @@
 //                      out, with the schemas derived from the loaded
 //                      vocabulary
 //   the platform tier  space_new, the app_* family, domain_*, member_*,
-//                      feedback and about, contributed as a plugin's tools
-//                      (agent.ts `platform`) rather than a table this door
-//                      reads
+//                      commands, command, feedback and about, contributed as a
+//                      plugin's tools (agent.ts `platform`) rather than a
+//                      table this door reads
 //
-// and beside them the tools an app of the person's own declares (declared.ts),
-// which are a plugin nobody wrote a plugin for: they arrive per caller, so
-// they ride as the mount's own `tools`.
+// THE ROSTER IS FIXED (T-34541): the same names, in the same order, for every
+// caller — anonymous, signed in, one app or thirty. What an app of the
+// person's own declares is not a tool but a COMMAND (declared.ts), said by
+// `commands` and run by `command`, because a directory snapshots this list
+// when a connector is submitted and serves that snapshot forever: a per-caller
+// name in it is a name the published connector can never match. Nothing is
+// dropped for want of a token either — a tool a stranger may not call is
+// listed saying `oauth2` and refuses (anon.ts `barred`).
 //
 // What this file still owns is everything that is NOT the protocol: the
 // resources and prompts it registers on the same server through `extend`, the
@@ -51,18 +57,20 @@
 // its params and no binding but the static assets — no person, no `Ctx`,
 // nothing to read anybody's data with. Everything else a stranger may call
 // comes off `stranger` below: the same @yaks/mcp mount the signed-in door is,
-// over a graph with nobody in it — the tools that declare they need nobody
-// (anon.ts `openly`), and the generic READS scoped to the ONE public or open
-// app the call names. No write is listed at all, and everything that is not on
-// that list meets the same challenge as ever.
+// over a graph with nobody in it. What a stranger may CALL is the tools that
+// declare they need nobody (anon.ts `openly`) and the generic READS scoped to
+// the ONE public or open app the call names; everything else on the list meets
+// the same challenge as ever.
 //
 // MIXED AUTH is what that adds up to, and it is the path (T-34465): a stranger
 // is answered, is SHOWN the whole tool list with `securitySchemes` saying which
-// tools want a token (`menu`), and is met with the challenge the moment one of
-// those is called — which is the sequence OpenAI documents and ChatGPT walks
-// (developers.openai.com/plugins/build/auth). The half that used to be missing
-// was the menu: a list holding only what a stranger may call gives the host
-// nothing to offer a sign-in FOR.
+// tools want a token (anon.ts `asked`, `barred`), and is met with the challenge
+// the moment one of those is called — which is the sequence OpenAI documents
+// and ChatGPT walks (developers.openai.com/plugins/build/auth). The half that
+// used to be missing was the menu: a list holding only what a stranger may call
+// gives the host nothing to offer a sign-in FOR — and, since a directory scans
+// a mixed-auth server with no token, it is also the list the published
+// connector gets forever.
 //
 // And `?auth=required` is that same door with the pre-auth surface switched
 // off (T-34416), kept for a host that cannot do optional auth at all — one
@@ -73,16 +81,16 @@ import { SetLevelRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import { mcp, roster, rosterVersion } from '@yaks/mcp'
 import { VERSION } from '../../src/version.ts'
-import { answered, inputOf, reaching, searching, sugared } from './agent.ts'
-import { anonymous, opened, openly, READS, SCOPE } from './anon.ts'
+import { reaching, searching } from './agent.ts'
+import { anonymous, asked, opened, READS, SCOPE } from './anon.ts'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { INSTRUCTIONS, pageFor, UNDO } from './guide.ts'
 import { asking, challenge, SAYS, unauthorized } from './identity.ts'
 import { narrowed } from './grants.ts'
-import { callDeclared, listDeclared, listViews, readView } from './declared.ts'
-import { answer, asset, type Doc, DOCS, EITHER, SIGNIN } from './preauth.ts'
+import { listCommands, listViews, readView } from './declared.ts'
+import { answer, asset, type Doc, DOCS, SIGNIN } from './preauth.ts'
 import type { Reach } from './reach.ts'
 import { PROMPTS } from './prompts.ts'
 import { CONNECTOR } from './seo.ts'
@@ -92,7 +100,6 @@ import {
   type Ctx,
   ERRORS_VIEW,
   inReach,
-  TOOLS,
   uiMeta,
   VIEW_MIME,
 } from './tools.ts'
@@ -157,36 +164,6 @@ let json = (status: number, body: unknown) => Response.json(body, { status })
 let result = (id: unknown, result: unknown) =>
   json(200, { jsonrpc: '2.0', id, result })
 
-// What a stranger is SHOWN beside the tools they may call (T-34465).
-// Mixed auth is a menu, not a smaller restaurant: the host lists the whole
-// surface with nobody signed in, reads `securitySchemes` to see which tools
-// want a token, and offers the sign-in the first time the person asks for one
-// of those (developers.openai.com/plugins/build/auth). Owner, 2026-09-06:
-// "mixed auth is documented and should work correctly. chatgpt will then
-// prompt auth on the first auth-required tool use." A list holding only what a
-// stranger may CALL is a connector that can never ask them to sign in — which
-// is the connector `about` and nothing else was.
-//
-// So the menu is every platform verb a stranger may NOT call (anon.ts
-// `openly` says which they may): every word of their listing is the same for
-// everybody, so it can be said without knowing who is asking. An app's own
-// tools are not here — they arrive per caller, out of apps only that caller
-// reaches — and neither is the generic tier's write, which signed out is not
-// a tool that refuses but a tool that is not there (`stranger`).
-//
-// Nothing here is callable: `stranger` meets a call for any of them with
-// `refused`, the runtime half the host draws its button from, before this
-// server sees it. `run` says the same sentence anyway, so a later path that
-// listed one as callable could not answer anything else. And the `ui` meta is
-// dropped with the rest of the tool's own — a view is a page a signed-in
-// person's answer draws in, and a stranger's resource list holds none.
-let menu = (ctx: Ctx) =>
-  TOOLS.filter((t) => !openly(t)).map((t) => ({
-    ...sugared(ctx, t),
-    meta: { securitySchemes: SIGNIN },
-    run: () => Promise.reject(new Error(SAYS)),
-  }))
-
 // A refusal, said to a caller that named a JSON-RPC id. The status and the
 // `WWW-Authenticate` header are what they always were — the half every MCP
 // client follows into the OAuth flow — and the body carries the SAME challenge
@@ -211,25 +188,6 @@ let refused = (req: Request, id: unknown) => {
     },
   }, { status: 401, headers: { 'www-authenticate': said } })
 }
-
-// The tools an app of the person's OWN declares (declared.ts, T-32686), for
-// every app in every space they belong to. They are not a plugin — nobody
-// wrote a plugin for somebody's recipe box — so they ride as the mount's own
-// tools, listed beside the two tiers and called the same way.
-let declared = async (ctx: Ctx) =>
-  (await listDeclared(ctx)).map((t) => ({
-    name: t.name,
-    title: t.title,
-    description: t.description,
-    ...(t.readOnly ? { readOnly: true } : {}),
-    input: inputOf(t.inputSchema),
-    ...(t._meta ? { meta: t._meta } : {}),
-    run: async (args: Record<string, unknown>) => {
-      let out = await callDeclared(ctx, t.name, args)
-      if (!out) throw new Error(`no tool ${t.name}`)
-      return answered(ctx, out)
-    },
-  }))
 
 // Everything this door serves that is not a tool, registered on the same
 // server the package built (@yaks/mcp `extend`).
@@ -395,17 +353,21 @@ let markOf = (env: Env) => env.CF_VERSION_METADATA?.id ?? VERSION
 // session and every later call is compared against.
 let door = async (ctx: Ctx, session: string) => {
   let reach = await inReach(ctx, {})
-  let own = await declared(ctx)
+  // The COMMANDS the apps in reach declare (declared.ts). They are not tools
+  // and never appear in the list; they are read here so the instructions can
+  // name them under their app, and `commands` says them again with their
+  // arguments when an agent asks.
+  let own = await listCommands(ctx)
   // What the apps in reach say about themselves (standing.ts, T-34425): every
-  // one of them named, with what it holds, its own tools and whatever
+  // one of them named, with what it holds, its own commands and whatever
   // AGENTS.md its person left beside it. It rides on the INSTRUCTIONS, which
   // is what a model reads before it reads anything else, so an app already
   // made is found rather than made a second time and a standing rule is
   // followed without anybody quoting it.
   //
-  // The reach and the tool names are handed over rather than read again: this
+  // The reach and the commands are handed over rather than read again: this
   // runs on every call at the door, and both were just paid for.
-  let apps = await standing(ctx, reach, own.map((t) => t.name))
+  let apps = await standing(ctx, reach, own)
   ctx.standing = apps.text
   // The graph, and how a column of it reads and writes: a reference answers
   // human, and a word two of the caller's spaces spell differently is typed
@@ -445,24 +407,20 @@ let door = async (ctx: Ctx, session: string) => {
     // those are anonymous only on the door a stranger reads, where they are
     // ONE named app rather than the whole of somebody's reach.
     security: SIGNIN,
-    tools: own,
     extend: extend(ctx, apps.apps),
   }
   // What this door lists right now, and the name for it. `about` says both
   // (tools.ts), so a client that suspects its list is old has one call that
   // settles it without reconnecting.
   //
-  // The apps' own mark folds in beside the release, because the instructions
-  // are the other half of what a client cached at connect: an app made, an
-  // app that grew a word, an AGENTS.md edited — none of them need move a tool
-  // NAME, and all of them are news the agent has to have (stream.ts `roster`
-  // says it on the next reply).
+  // The RELEASE is the only thing that names it (T-34541). Nothing a person
+  // does moves this list any more: an app made, an app that grew a word, a
+  // deploy that declared a command — all of them are commands and words, and
+  // the tools that carry them are the same tools they always were. So the
+  // version moves when we deploy, and a client is told its list is stale only
+  // when it actually is.
   let names = roster(opts)
-  let listed = {
-    version: rosterVersion(names, `${markOf(ctx.env)}:${apps.mark}`),
-    names,
-    context: apps.mark,
-  }
+  let listed = { version: rosterVersion(names, markOf(ctx.env)), names }
   ctx.roster = listed
   return {
     listed,
@@ -495,11 +453,10 @@ let erred = (id: unknown, err: unknown) =>
 //   the gallery and feedback (tools.ts `security: EITHER`);
 //   the generic READS, scoped to the one public or open app the call names,
 //   which read that app's store exactly as its own page does;
-//   no write at all: `readOnly` means graph_apply is not a tool that refuses
-//   but a tool that is not there;
-//   and the MENU beside all of it (`menu`, T-34465) — every platform verb a
-//   stranger may not call, listed, saying `oauth2`, so the host has something
-//   to offer the sign-in for.
+//   and the WHOLE of the rest of the roster beside them — the write, the mail
+//   pair, every platform verb — listed, saying `oauth2`, refusing the call
+//   (anon.ts `barred`, `asked`), so the host has something to offer the
+//   sign-in for and the list is the same one a signed-in caller sees.
 //
 // Claim-later — a stranger writing now and owning it once they sign in — is
 // what would be built HERE, and is deliberately not: it needs somewhere to
@@ -547,13 +504,15 @@ let stranger = async (
     schema: 'names' as const,
     guide: pageFor,
     search: searching(ctx, reach),
-    // Every tool this door LISTS as callable works with a token and without
-    // one (preauth.ts EITHER); the menu beside them says `oauth2` and is what
-    // a host offers the sign-in for.
-    security: EITHER,
-    readOnly: true,
+    // Every tool, and what each one declares about signing in (anon.ts
+    // `asked`): the pair for what a stranger may call, `oauth2` for the rest,
+    // which is the field a host reads to offer the sign-in. The WRITE is
+    // listed too — signed out it is a tool that refuses rather than a tool
+    // that is not there (T-34541), because this list is the one a directory
+    // snapshots at submission, and a name missing from that snapshot is a tool
+    // the published connector can never offer its signed-in people.
+    security: asked,
     scope: SCOPE,
-    tools: menu(ctx),
     ...CONNECTOR,
     version: VERSION,
   }
@@ -585,7 +544,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // stranger gets and never offers to sign in. The address is the lever
   // because the client's behaviour is not ours to change: a host that cannot
   // ask twice is given an address that only ever answers the challenge, and
-  // `/mcp` stays lazy — and mixed — for the hosts that can (`menu`).
+  // `/mcp` stays lazy — and mixed — for the hosts that can (anon.ts `asked`).
   // A query rather than a second path so there is still ONE resource here —
   // one route, one `WWW-Authenticate`, one `/.well-known/…/mcp`, which the
   // challenge already builds from the pathname.

@@ -59,7 +59,7 @@
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { opened, seal } from '../../src/token.ts'
 import { wiped } from './build.ts'
-import { moved, reachChanged, toolsOf } from './declared.ts'
+import { reachChanged, toolsOf, viewsMoved } from './declared.ts'
 import {
   type App,
   type Directory,
@@ -335,7 +335,7 @@ export let erase = async (
   await dir.apply({
     entities: [{ entity: { eid: d.space.eid }, tombstone: {} }],
   }, vouched(who))
-  // Everyone who was in it just lost every tool and view its apps declared
+  // Everyone who was in it just lost every view its apps declared
   // (declared.ts, T-33004) — the same move being removed from a space makes.
   for (let m of d.members) await reachChanged(env, m.person)
   return { files, apps: d.apps.length, hosts: d.hosts.length }
@@ -402,10 +402,14 @@ export let overdue = <T extends { trashed: Trashed | null }>(
   now = Date.now(),
 ) => rows.filter((r) => r.trashed && due(r.trashed, now))
 
-// What an app's coming or going does to everyone's tool list (T-33004). A
-// trashed app leaves the roster and a restored one rejoins it, so both ask
-// the same question of its store — did it declare tools, views, or neither —
-// and tell the space only what actually moved.
+// What an app's coming or going does to everyone's RESOURCE list (T-33004): a
+// trashed app's views leave it and a restored one's rejoin it, so both ask the
+// same question of its store — did any command of its own draw in a page — and
+// the space is told only when one did.
+//
+// The tool list is not asked about any more (T-34541): an app's commands live
+// inside `command`, which is there whether or not the app is, so nothing an
+// app does moves a tool name.
 export let rostered = async (
   env: Env,
   dir: Directory,
@@ -413,10 +417,9 @@ export let rostered = async (
   app: App,
 ) => {
   let had = await toolsOf(env, space, app)
-  await moved({ env, dir }, space, [
-    ...(Object.keys(had).length ? ['tools' as const] : []),
-    ...(Object.values(had).some((t) => t.view) ? ['resources' as const] : []),
-  ])
+  if (Object.values(had).some((t) => t.view)) {
+    await viewsMoved({ env, dir }, space)
+  }
 }
 
 // The word on, or off. `trashed: null` drops the whole component, which is
@@ -465,15 +468,15 @@ export let untrash = async (
 
 // Everyone in the space, told their reach moved (declared.ts, T-33004) — the
 // same news being added to or removed from a space makes, because that is
-// exactly what happened to them: every tool and view every app here declared
-// appeared or went. Not `rostered`, which asks ONE app's store what it
-// declares: the whole space went, so nothing is asked and everybody is told.
+// exactly what happened to them: every view every app here declared appeared
+// or went. Not `rostered`, which asks ONE app's store what it declares: the
+// whole space went, so nothing is asked and everybody is told.
 let reachMoved = async (env: Env, dir: Directory, space: Space) => {
   for (let person of await dir.members(space)) await reachChanged(env, person)
 }
 
 // A whole space into the trash, and out of it: the one word on the space row,
-// and everyone in it told their tools moved. The apps are not touched — not
+// and everyone in it told their views moved. The apps are not touched — not
 // their marks, not their stores, not their bytes — so a space that comes back
 // comes back with the same apps in the same states it had (`space_restore`,
 // tools.ts).

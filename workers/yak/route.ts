@@ -39,6 +39,13 @@ export let MCP_ASK = `${MCP}?auth=required`
 // runtime's own modules into a Deno test.
 export let SIGN_IN = `https://${PLATFORM}/login`
 
+// And the sentence every refusal says about it: what a person's agent reads
+// when it asked for something nobody signed in may have. It lives here beside
+// the address rather than at one of the doors, because three of them say it —
+// the 401 and its challenge (identity.ts), and the tools a stranger is SHOWN
+// but may not call (anon.ts `barred`).
+export let SAYS = `sign in at ${SIGN_IN} to reach your apps from here`
+
 // And what an agent's connector form asks for when it will not go and find it
 // (T-34414): the authorization server's own addresses and the one scope.
 // identity.ts CONFIGURES the provider with these, so they are the same strings

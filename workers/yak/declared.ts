@@ -1,20 +1,33 @@
-// The tools an APP declares (T-32685), at the platform's agent door: the
-// `tools.json` a deploy handed its store (store/tools.ts), read back here and
-// offered beside the platform's own tools as `<app>__<tool>` — the host-safe
-// spelling, since an app slug carries no underscore. tools.ts owns the tools
-// the platform has; this owns the ones a person's own app grew.
+// The COMMANDS an app declares (T-32685, T-34541): the `tools.json` a deploy
+// handed its store (store/tools.ts) and the two tools each word it holds is
+// worth (kinds.ts), read back here and run through the platform's `command`
+// tool. tools.ts owns the tools the platform has; this owns the verbs a
+// person's own app grew.
 //
-// A declared tool is a TEMPLATE, never code: its `apply` bundle or `query`
-// line is filled from the call's arguments and sent through the app's
-// ordinary doors with the caller vouched (apps.ts `acting`), so admission,
-// `created.by` and every refusal are a page's. Code tools — an app's own
-// Worker answering a call — wait on Workers for Platforms dispatch (T-32345).
+// THEY ARE NOT MCP TOOLS, and that is the whole shape of this file (T-34541).
+// A directory SNAPSHOTS `tools/list` when a connector is submitted and serves
+// that snapshot forever — only `tools/call` reaches us
+// (developers.openai.com/plugins/deploy/app-review). So a tool list that moves
+// with whose token arrived, or with what somebody deployed this morning, is a
+// list the published connector can never match: a name in the snapshot that is
+// not here breaks the call, and a name here that is not in the snapshot is
+// never offered. The roster is therefore FIXED — the same names for everybody,
+// signed in or not — and an app's own verbs ride inside two of them:
+// `commands` lists them with their arguments, `command` runs one. Jeff,
+// 2026-09-06: "maybe we could have some custom 'commands' and those get added,
+// and then we just have tools for calling commands?"
 //
-// Which tools a caller sees is which apps they can reach: every app in every
-// space they belong to. A `public` or `open` app in a space they are NOT in
-// is reachable on the web and not here, because a bare `<app>__<tool>` has no
-// space in it to resolve against — the door would have to remember which
-// apps this session has opened, and it remembers nothing (mcp.ts).
+// A command is a TEMPLATE, never code: its `apply` bundle or `query` line is
+// filled from the call's arguments and sent through the app's ordinary doors
+// with the caller vouched (apps.ts `acting`), so admission, `created.by` and
+// every refusal are a page's. Code commands — an app's own Worker answering a
+// call — wait on Workers for Platforms dispatch (T-32345).
+//
+// Which commands a caller sees is which apps they can reach: every app in
+// every space they belong to. A `public` or `open` app in a space they are NOT
+// in is reachable on the web and not here, because a call names an app by slug
+// and has no space to resolve it against — the door would have to remember
+// which apps this session has opened, and it remembers nothing (mcp.ts).
 import { type App, type Directory, type Space, storeName } from './directory.ts'
 import type { Env } from './env.ts'
 import { acting, based } from './apps.ts'
@@ -30,14 +43,9 @@ import { r2Blobs } from '../../src/blobs_r2.ts'
 import { storeOf } from './door.ts'
 import { told } from './stream.ts'
 
-// The two halves of a namespaced name. An app slug is `[a-z0-9-]` and a tool
-// name `[a-z0-9_]`, so the first `__` is the seam and nothing else can be.
-export let named = (app: App, tool: string) => `${app.slug}__${tool}`
-
-let split = (name: string) => {
-  let at = name.indexOf('__')
-  return at < 1 ? null : { app: name.slice(0, at), tool: name.slice(at + 2) }
-}
+/** One app, as a command names it: `recipes`, or `jeff/recipes` where two
+ * spaces spell one slug. */
+export let at = (space: Space, app: App) => `${space.slug}/${app.slug}`
 
 // What one app declares, as its store last accepted it.
 export let toolsOf = async (
@@ -79,29 +87,78 @@ let whoIn = async (ctx: Ctx, space: Space): Promise<Who> => ({
   role: await ctx.dir.role(space, ctx.person),
 })
 
-// One call on an app's own tool, or null when no app of the caller's spells
-// that name — the door then says what it says about any tool it has never
-// heard of.
-export let callDeclared = async (
+// The apps a call means: all the caller can reach, or the one it named —
+// `recipes`, or `jeff/recipes` where two spaces spell one slug.
+let picked = (all: { space: Space; app: App }[], said: string) => {
+  if (!said) return all
+  let [one, two] = said.split('/')
+  return all.filter((r) =>
+    two ? r.space.slug == one && r.app.slug == two : r.app.slug == one
+  )
+}
+
+// What there is instead, when a caller asks for a command nobody has: every
+// app they reach and what it offers, so the next call is the right one rather
+// than another guess. An app declaring nothing is left out — naming it would
+// only say where not to look.
+let offered = async (ctx: Ctx, mine: { space: Space; app: App }[]) => {
+  let said: string[] = []
+  for (let { space, app } of mine) {
+    let names = Object.keys(await toolsOf(ctx.env, space, app))
+    if (names.length) said.push(`${at(space, app)}: ${names.join(', ')}`)
+  }
+  return said
+}
+
+/**
+ * One command, run. `said` names the app where the caller named one, and is ''
+ * where they left it out — which works whenever one app of theirs spells the
+ * command, and says which apps do where several are.
+ *
+ * A name nobody has is a sentence saying what there IS, never an empty answer:
+ * the command list is a person's own and a model cannot have memorized it.
+ */
+export let runCommand = async (
   ctx: Ctx,
+  said: string,
   name: string,
   args: Record<string, unknown>,
-): Promise<Out | null> => {
-  let parts = split(name)
-  if (!parts) return null
-  let mine = (await reachable(ctx)).filter((r) => r.app.slug == parts.app)
-  if (!mine.length) return null
-  if (mine.length > 1) {
+): Promise<Out> => {
+  let all = await reachable(ctx)
+  let mine = picked(all, said)
+  if (said && !mine.length) {
     throw new Error(
-      `${parts.app} is an app in ${
-        mine.map((r) => r.space.slug).join(' and ')
-      } — rename one, or use graph_apply with the space named`,
+      `no app ${said} — ${
+        all.length
+          ? `you can reach ${all.map((r) => at(r.space, r.app)).join(', ')}`
+          : 'you have no apps yet; app_new makes one'
+      }`,
     )
   }
-  let { space, app } = mine[0]
-  let tool = (await toolsOf(ctx.env, space, app))[parts.tool]
-  if (!tool) return null
-  return { ...await ran(ctx, space, app, parts.tool, tool, args), space }
+  let found: { space: Space; app: App; tool: ToolDef }[] = []
+  for (let { space, app } of mine) {
+    let tool = (await toolsOf(ctx.env, space, app))[name]
+    if (tool) found.push({ space, app, tool })
+  }
+  if (found.length > 1) {
+    throw new Error(
+      `${name} is a command of ${
+        found.map((f) => at(f.space, f.app)).join(' and ')
+      } — say which app`,
+    )
+  }
+  if (!found.length) {
+    let there = await offered(ctx, mine)
+    throw new Error(
+      `no command ${name}${said ? ` in ${said}` : ''} — ${
+        there.length
+          ? `the apps here offer ${there.join('; ')}`
+          : 'no app you can reach declares one'
+      }. commands lists them with their arguments.`,
+    )
+  }
+  let { space, app, tool } = found[0]
+  return { ...await ran(ctx, space, app, name, tool, args), space }
 }
 
 // The act itself: the template filled, sent the page's way, and answered as
@@ -121,9 +178,9 @@ let ran = async (
     let rows = await door.query(act.query) as unknown[]
     let n = Array.isArray(rows) ? rows.length : 1
     return {
-      text: `${named(app, name)}: ${
+      text: `${name}: ${
         Array.isArray(rows) ? `${n} ${n == 1 ? 'row' : 'rows'}` : 'answered'
-      } in ${space.slug}/${app.slug}`,
+      } in ${at(space, app)}`,
       data: Array.isArray(rows) ? { rows } : rows as Record<string, unknown>,
     }
   }
@@ -139,38 +196,50 @@ let ran = async (
   let ids = out.entities
   let said = Object.entries(aliases).map(([alias, eid]) => `${alias}=${eid}`)
   return {
-    text: `${named(app, name)}: wrote ${ids.length} ${
+    text: `${name}: wrote ${ids.length} ${
       ids.length == 1 ? 'entity' : 'entities'
-    } in ${space.slug}/${app.slug}${said.length ? `: ${said.join(', ')}` : ''}`,
+    } in ${at(space, app)}${said.length ? `: ${said.join(', ')}` : ''}`,
     data: { entities: ids, aliases },
   }
 }
 
-// Every declared tool the caller can reach, as the agent door lists them
-// beside the platform's own (T-32686). A tool's name is `<app>__<tool>`; its
-// description carries the app's TITLE and address, since a slug is not what
-// the person called it and a model choosing between tools reads the words.
-// Two apps in two spaces can spell one slug: the first answers, and a call
-// for the other says which spaces have it (`callDeclared`).
-export let listDeclared = async (ctx: Ctx) => {
-  let out: {
-    name: string
-    title: string
-    description: string
-    readOnly: boolean
-    inputSchema: unknown
-    _meta?: { ui: { resourceUri: string; visibility: string[] } }
-  }[] = []
-  let taken = new Set<string>()
-  for (let { space, app } of await reachable(ctx)) {
+/** One command, as `commands` says it. */
+export type Command = {
+  /** where it is, as `command` takes it: `jeff/recipes` */
+  at: string
+  name: string
+  title: string
+  description: string
+  readOnly: boolean
+  /** its arguments, as JSON Schema — what `command` fills `args` with */
+  input: unknown
+  /** the page a host draws its answer in, where it named one */
+  view?: string
+}
+
+/**
+ * Every command the caller can reach, or the ones of the one app they named.
+ *
+ * A command's own name is its whole name — `add_recipe`, not
+ * `recipes__add_recipe` — because the app is said beside it rather than
+ * spliced into it, and nothing here has to be a host-safe MCP tool name any
+ * more. Its description carries the app's TITLE and address: a slug is not
+ * what the person called it, and a model choosing between commands reads the
+ * words. Two apps may spell one command; both are listed, and `command` asks
+ * which when it is called with neither named.
+ */
+export let listCommands = async (
+  ctx: Ctx,
+  said = '',
+): Promise<Command[]> => {
+  let out: Command[] = []
+  for (let { space, app } of picked(await reachable(ctx), said)) {
     for (
       let [name, tool] of Object.entries(await toolsOf(ctx.env, space, app))
     ) {
-      let spelled = named(app, name)
-      if (taken.has(spelled)) continue
-      taken.add(spelled)
       out.push({
-        name: spelled,
+        at: at(space, app),
+        name,
         title: `${app.title || app.slug}: ${name}`,
         description: `${tool.description} — ${app.title || app.slug}, an app ` +
           `at ${space.slug}.yaks.app/${app.slug}/`,
@@ -180,66 +249,50 @@ export let listDeclared = async (ctx: Ctx) => {
         // a template carrying nulls can drop a component — so a writer takes
         // the destructive default rather than a promise this side cannot keep.
         readOnly: tool.query != null,
-        inputSchema: schemaOf(tool),
-        // The page this tool's answer draws itself in, where it named one
-        // (T-32687). `app` beside `model` in the visibility is what lets the
-        // view call the tool BACK — the redraw a button or a date picker
-        // needs — and it grants nothing the app's own page does not already
-        // have, since the call goes through the app's ordinary doors as the
-        // person looking at it.
-        ...(tool.view
-          ? {
-            _meta: {
-              ui: {
-                resourceUri: viewUri(space, app, tool.view),
-                visibility: ['model', 'app'],
-              },
-            },
-          }
-          : {}),
+        input: schemaOf(tool),
+        // The page this command's answer draws itself in, where it named one
+        // (T-32687). It is still a `ui://` resource of this door's — the
+        // resource list is a caller's own and no directory snapshots it — so
+        // what moved is only who names it: `command` carries the uri on its
+        // answer rather than a per-app tool carrying it in the tool list.
+        ...(tool.view ? { view: viewUri(space, app, tool.view) } : {}),
       })
     }
   }
   return out
 }
 
-// An app whose tools or views moved is news to everyone who can reach it:
-// their list is stale, and MCP's word for that is `notifications/<list>/
-// list_changed` on the session's stream (stream.ts) — tools when the tool
-// set moved, resources when the view set did (T-33004), since a release can
-// move either without the other. Reaching the app is being in the space, so
-// the space's members are who to tell — each on their own object, which
-// holds the line whether or not they are listening this second. One
-// directory read per event however many lists moved, and nothing at all
-// otherwise.
+// An app whose VIEWS moved is news to everyone who can reach it: their
+// resource list is stale, and MCP's word for that is `notifications/resources/
+// list_changed` on the session's stream (stream.ts, T-33004). Reaching the app
+// is being in the space, so the space's members are who to tell — each on
+// their own object, which holds the line whether or not they are listening
+// this second. One directory read per event, and nothing at all otherwise.
+//
+// The TOOL list is not news any more (T-34541), because it does not move: an
+// app's own verbs are commands inside `command` and every caller sees the same
+// roster, so a deploy that grew a verb, a person added to a space and an app
+// into the trash all leave the tool list exactly where it was. A release still
+// says all three lists moved (stream.ts `crossed`), which is the one thing
+// that can move them.
+//
 // The two it needs and nothing else, so a door with no caller behind it can
 // say the same news: the space page's restore form is a person's browser, not
 // a tool call (apps.ts `saved`).
-export let moved = async (
+export let viewsMoved = async (
   ctx: { env: Env; dir: Directory },
   space: Space,
-  lists: ('tools' | 'resources')[],
 ) => {
-  if (!lists.length) return
   for (let person of await ctx.dir.members(space)) {
-    for (let list of lists) {
-      await told(ctx.env, person, `notifications/${list}/list_changed`)
-    }
+    await told(ctx.env, person, 'notifications/resources/list_changed')
   }
 }
 
-export let toolsChanged = (ctx: Ctx, space: Space) =>
-  moved(ctx, space, ['tools'])
-
-export let resourcesChanged = (ctx: Ctx, space: Space) =>
-  moved(ctx, space, ['resources'])
-
 // One person's reach moved without any deploy (T-33004): added to or removed
-// from a space, every tool and view its apps declare appeared or went for
-// THEM, and `moved` above walks members — which they only just are, or no
-// longer are. Told directly, both lists.
+// from a space, every view its apps declare appeared or went for THEM, and
+// `viewsMoved` above walks members — which they only just are, or no longer
+// are. Told directly.
 export let reachChanged = async (env: Env, person: string) => {
-  await told(env, person, 'notifications/tools/list_changed')
   await told(env, person, 'notifications/resources/list_changed')
 }
 

@@ -68,11 +68,11 @@ type Told = { method: string; params?: unknown }
 // but which tools moved. Recorded at `initialize` — the moment the client
 // cached the list — and replaced when the session is told.
 //
-// Beside them a mark naming what the instructions said about the apps in
-// reach (standing.ts, T-34425). The two move for different reasons and are
-// said back differently: a tool name the agent can act on, and a passage it
-// has to read again.
-export type Roster = { version: string; names: string[]; context?: string }
+// It moves for ONE reason now (T-34541): a platform release. Nothing a person
+// does touches it — an app made, a command declared, a word grown are all
+// things the fixed roster already carries (declared.ts) — so a session is
+// told its list is stale only when the names actually moved under it.
+export type Roster = { version: string; names: string[] }
 type Asked = Roster & { session: string; init?: boolean }
 
 type Held = {
@@ -99,18 +99,9 @@ let bare = (told: Told) => `data: ${body(told)}\n\n`
 // The lists a platform release moves, in the release news `crossed` says.
 let LISTS = ['tools', 'resources', 'prompts']
 
-// What a reply says when the apps in reach moved and no tool name did: an app
-// made, an app that grew a word of its own, or an AGENTS.md edited (mcp.ts
-// folds the mark for all three into the roster version). The agent cached
-// those at connect and cannot see them move any other way.
-let APPS = 'The apps here changed since you connected — one was made or ' +
-  'renamed, or the standing instructions beside one were edited. Ask ' +
-  '`about` to read them again.'
-
 /**
- * What to say to a session holding `was` when the door now lists `now`: the
- * tool names moved, or the apps did, or neither. A tool that appeared is the
- * more actionable news, so it wins where both moved — one sentence, not two.
+ * What to say to a session holding `was` when the door now lists `now`: which
+ * tool names moved, or nothing.
  *
  * ```ts
  * stale({ version: 'a', names: [] }, { version: 'b', names: [] })
@@ -118,8 +109,7 @@ let APPS = 'The apps here changed since you connected — one was made or ' +
  * ```
  */
 export let stale = (was: Roster, now: Roster): string | undefined =>
-  was.version == now.version ? undefined : rosterLine(was.names, now.names) ??
-    (was.context != now.context ? APPS : undefined)
+  was.version == now.version ? undefined : rosterLine(was.names, now.names)
 
 // How many sessions' last-spoken-for version the object keeps: a person's
 // clients are few, and a session evicted early only hears one release's news
@@ -247,11 +237,7 @@ export class Wire {
     let was = all[said.session]
     let keep = async () => {
       delete all[said.session]
-      all[said.session] = {
-        version: said.version,
-        names: said.names,
-        context: said.context,
-      }
+      all[said.session] = { version: said.version, names: said.names }
       for (let old of Object.keys(all).slice(0, -KEPT)) delete all[old]
       await this.state.storage.put('listed', all)
     }

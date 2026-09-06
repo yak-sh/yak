@@ -120,7 +120,15 @@ import {
   deleted,
   lost,
 } from './pages.ts'
-import { hostOf, OAUTH, onZone, PLATFORM, SIGN_IN, SLUG } from './route.ts'
+import {
+  hostOf,
+  OAUTH,
+  onZone,
+  PLATFORM,
+  SAYS,
+  SIGN_IN,
+  SLUG,
+} from './route.ts'
 import { canon, mint, nameOf, personOf, spend } from './signin.ts'
 
 // A month of not signing in again. The cookie is the browser's; an agent's
@@ -239,8 +247,7 @@ export let challenge = (url: URL) =>
 // had, and the one this one missed (C-32607 item 1, apps.ts SAYS). The address
 // itself lives in route.ts, with the platform's other spellings of itself, and
 // is re-exported here because this is where the doors read it.
-export { SIGN_IN } from './route.ts'
-export let SAYS = `sign in at ${SIGN_IN} to reach your apps from here`
+export { SAYS, SIGN_IN } from './route.ts'
 
 export let unauthorized = (req: Request) =>
   Response.json({
