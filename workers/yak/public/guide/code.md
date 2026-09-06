@@ -509,10 +509,27 @@ so putting an app back puts its code back too.
 
 ## The build sandbox is signed in as you
 
-Some code has to be compiled before a browser can run it — Rust to WebAssembly,
-a generator, a minifier — and `sandbox_exec` runs it in a Linux container of the
-space's own, with a Rust toolchain, `wasm32-unknown-unknown`, `wasm-bindgen` and
-`wasm-opt` already in it.
+Some code has to be compiled before a browser can run it — a chess engine, an
+image codec, a solver — and `sandbox_exec` runs the compiler in a Linux
+container of the space's own. Already in it:
+
+    Rust 1.98.1      with wasm32-unknown-unknown, wasm-bindgen 0.2.128,
+                     wasm-opt 132
+    Python 3.13.15   with pip
+    Go 1.27.1        GOOS=js GOARCH=wasm, and lib/wasm/wasm_exec.js beside it
+    Zig 0.16.0       and with it C and C++: `zig cc`, `zig c++`
+    Deno 2.9.1       plus the Node and Bun the base image ships
+
+`zig cc -target wasm32-freestanding -nostdlib -Wl,--no-entry` is the shortest
+road from C to a module a browser instantiates with no glue; the `wasm32-wasi`
+target gives one a WASI shim runs. C++ takes the same flags, with
+`-fno-exceptions`.
+
+**Anything else installs for the session.** Commands run as root, so
+`apt-get install -y <package>` or a plain download both work, and neither costs
+the next build anything: **the container is destroyed when the build ends**, and
+everything you put in it goes with it. Only what `sandbox_ship` copied into the
+app survives.
 
 That container is **signed in as you**. Two variables are set in every command's
 environment, and the `yaks` CLI is installed:

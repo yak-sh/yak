@@ -277,9 +277,14 @@
         <p>
           When something must be compiled — Rust to WebAssembly, say — the
           builder can run it in a Linux container and copy the result into your
-          app. One build gets <b>10 minutes</b> of container time; past that
-          the build says so and keeps whatever it has already shipped. The
-          container is thrown away when the build ends.
+          app. The container comes with Rust 1.98.1 (and wasm-bindgen 0.2.128,
+          wasm-opt 132), Python 3.13.15 with pip, Go 1.27.1, Zig 0.16.0 — which
+          is also its C and C++ compiler — and Deno 2.9.1 alongside Node and
+          Bun. Anything else the builder installs for that session with
+          <code>apt</code> or a download. One build gets <b>10 minutes</b> of
+          container time; past that the build says so and keeps whatever it has
+          already shipped. The container is destroyed when the build ends, and
+          everything in it with it.
         </p>
         <p>
           Visits are counted but not refused. Apps remain available after the

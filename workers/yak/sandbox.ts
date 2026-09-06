@@ -10,10 +10,13 @@
 // the builder and the same person's own agent over the connector reach one
 // workbench rather than two. It is a Cloudflare Container behind a Durable
 // Object (`@cloudflare/sandbox`), which the deploy provisions from the
-// Dockerfile beside this file: Cloudflare's own sandbox image plus a pinned
-// Rust toolchain, the `wasm32-unknown-unknown` target, `wasm-bindgen` and
-// `wasm-opt`. Nothing else — an image is disk, disk is money, and every
-// megabyte of it is pulled before the first command runs.
+// Dockerfile beside this file: Cloudflare's own sandbox image plus pinned
+// Rust, Python, Go and Zig toolchains — `zig cc` is the C and C++ path to
+// wasm — and `wasm-bindgen` and `wasm-opt` beside them. Nothing rarer than
+// those, because an image is disk, disk is money, and every megabyte of it is
+// pulled before the first command runs; a build that wants something else
+// installs it for the session with apt or a download, and the container it
+// installed into is destroyed at the end of that build (T-34516).
 //
 // THE BINDING IS TYPED, NEVER IMPORTED, the way every other binding in this
 // kernel is (env.ts). @cloudflare/sandbox is a Worker package: it imports

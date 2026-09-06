@@ -1968,14 +1968,21 @@ export let TOOLS: Tool[] = [
     destructive: true,
     openWorld: true,
     description:
-      "Run one command in this space's build sandbox — a Linux container " +
-      'with a Rust toolchain, the wasm32-unknown-unknown target, ' +
-      'wasm-bindgen and wasm-opt. It is for the things a browser cannot do ' +
-      'for itself: compile Rust to WebAssembly, run a generator, minify ' +
-      'something. Write the source with sandbox_write, build it here, then ' +
-      'sandbox_ship the artifact into the app. An app needs none of this — ' +
-      'html, css and js run as they are, so reach for the sandbox only when ' +
-      'something must be COMPILED. It is signed in as the person: `yaks` is ' +
+      "Run one command in this space's build sandbox — a Linux container for " +
+      'the things a browser cannot do for itself: compile something to ' +
+      'WebAssembly, run a generator, minify an asset. Installed: Rust 1.98.1 ' +
+      'with the wasm32-unknown-unknown target, wasm-bindgen 0.2.128 and ' +
+      'wasm-opt 132; Python 3.13.15 with pip; Go 1.27.1; Zig 0.16.0, which is ' +
+      'also the C and C++ compiler here — `zig cc -target wasm32-freestanding ' +
+      '-nostdlib -Wl,--no-entry` gives a module a browser loads with no glue, ' +
+      'and -target wasm32-wasi one a WASI shim runs; Deno 2.9.1, and the Node ' +
+      'and Bun the base image ships. Anything else installs FOR THE SESSION: ' +
+      'the command runs as root, so `apt-get install -y <pkg>` or a download ' +
+      'works, and it costs the next build nothing. Write the source with ' +
+      'sandbox_write, build it here, then sandbox_ship the artifact into the ' +
+      'app. An app needs none of this — html, css and js run as they are, so ' +
+      'reach for the sandbox only when something must be COMPILED. It is ' +
+      'signed in as the person: `yaks` is ' +
       'installed and $YAKS_TOKEN and $YAKS_HOST are set, so `yaks <tool>` ' +
       'and curl reach these same tools from inside a script, and the token ' +
       'dies with the container. The container is metered: every second it ' +

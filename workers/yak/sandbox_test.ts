@@ -90,6 +90,22 @@ let tool = (name: string) => {
   return t
 }
 
+// A file of this worker's, read from disk — the Dockerfile and the pages that
+// have to agree with it.
+let at = (name: string) =>
+  Deno.readTextFile(new URL(`./${name}`, import.meta.url))
+
+// Every `ARG <NAME>_VERSION=` the image pins, as NAME → version. This is the
+// one list; the tool description and the two pages that quote it are checked
+// against it rather than against each other.
+let VERSIONS = /^ARG (\w+)_VERSION=(\S+)$/gm
+
+let pinned = async () =>
+  new Map(
+    [...(await at('sandbox/Dockerfile')).matchAll(VERSIONS)]
+      .map(([, name, version]) => [name, version] as const),
+  )
+
 // The whole workbench, wired: a space, an app, and a scripted container.
 let bench = async (answer: (cmd: string) => Ran | void = () => {}) => {
   let box = sandboxes(answer)
@@ -428,8 +444,6 @@ Deno.test('the workbench is offered to the builder, and says what it is for', ()
 // version are two halves of one release, and the SDK warns at startup rather
 // than failing when they disagree.
 Deno.test('the deploy names the container, and the image is the SDK version', async () => {
-  let at = (name: string) =>
-    Deno.readTextFile(new URL(`./${name}`, import.meta.url))
   let conf = parse(await at('wrangler.toml')) as {
     containers: {
       class_name: string
@@ -479,6 +493,75 @@ Deno.test('the deploy names the container, and the image is the SDK version', as
   // Pinned and checksummed like everything else it downloads.
   assert(/^ARG DENO_VERSION=\d+\.\d+\.\d+$/m.test(file), 'deno is pinned')
   assert(/^ARG DENO_SHA256=[0-9a-f]{64}$/m.test(file), 'and checksummed')
+})
+
+// The image is not Rust-specific (T-34516). What holds that is this list plus
+// the rule under it: nothing is fetched into the image without a sha256 to
+// check it against, because a floating toolchain is a build that worked
+// yesterday and there is nobody here to debug it.
+Deno.test('a toolchain apiece, pinned, and every download checksummed', async () => {
+  let file = await at('sandbox/Dockerfile')
+  let versions = await pinned()
+  for (
+    let want of [
+      'RUST',
+      'PYTHON',
+      'GO',
+      'ZIG',
+      'DENO',
+      'WASM_BINDGEN',
+      'BINARYEN',
+    ]
+  ) {
+    assert(versions.has(want), `${want} is pinned`)
+  }
+  for (let [, sha] of file.matchAll(/^ARG \w+_SHA256=(\S+)$/gm)) {
+    assert(/^[0-9a-f]{64}$/.test(sha), `${sha} is a sha256`)
+  }
+
+  // One `sha256sum -c` per downloaded file. rustup is the exception and is
+  // written as a `curl | sh` for exactly that reason: it verifies its own
+  // manifests and there is no file on disk to hash.
+  let got = [...file.matchAll(/curl -fsSL -o /g)].length
+  let checked = [...file.matchAll(/\| sha256sum -c -/g)].length
+  assertEquals(got, checked, 'every download is hashed before it is used')
+  assert(got >= 6, `${got} downloads, one per pinned artifact`)
+
+  // Zig is also the C and C++ path to wasm — the smallest that can be, at 396
+  // MB unpacked against wasi-sdk 34's 635 MB and Emscripten 6.0.9's 1.5 GB —
+  // so no second clang is carried for it.
+  assertStringIncludes(file, 'wasm32-freestanding')
+})
+
+Deno.test('sandbox_exec names what is in the image, and where the rest comes from', async () => {
+  let said = tool('sandbox_exec').description
+  for (let [name, version] of await pinned()) {
+    assert(said.includes(version), `${name} ${version} is named`)
+  }
+  for (
+    let want of ['Rust', 'Python', 'pip', 'Go', 'Zig', 'zig cc', 'Deno', 'Node']
+  ) {
+    assertStringIncludes(said, want)
+  }
+  // And the other half of the promise: the image is a floor, not a ceiling,
+  // and nothing a build adds outlives it.
+  assertStringIncludes(said, 'apt-get install')
+  assertStringIncludes(said, 'destroyed when the build ends')
+})
+
+Deno.test('the guide and the limits page say the same image', async () => {
+  let [guide, tech] = await Promise.all([
+    at('public/guide/code.md'),
+    at('public/technical.html'),
+  ])
+  for (let [name, version] of await pinned()) {
+    assert(guide.includes(version), `code.md names ${name} ${version}`)
+    assert(tech.includes(version), `technical.html names ${name} ${version}`)
+  }
+  for (let page of [guide, tech]) {
+    assertStringIncludes(page, 'apt')
+    assertStringIncludes(page, 'destroyed when the build ends')
+  }
 })
 
 Deno.test('a lone connector call pays for itself and leaves the container', async () => {
