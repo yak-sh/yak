@@ -15,6 +15,12 @@
 //
 // The files are the app's INSIDE, like vocab.json and tools.json: deployed,
 // never served to the web (apps.ts MANIFEST).
+//
+// The reading is the seed's only where `seedy` and the once-only mark are. The
+// rest — the order, the aliases across files, the file a refusal is blamed on —
+// is what `store_load` applies on demand out of any path in the app (tools.ts,
+// T-34392), so a dataset already written there goes into the store without
+// being a seed at all.
 import type { Bundle } from '@yaks/graph'
 
 /** A file the app is seeded from: `seed.json` beside index.html, or any
@@ -22,6 +28,15 @@ import type { Bundle } from '@yaks/graph'
 export let seedy = (path: string) =>
   path == 'seed.json' ||
   (path.startsWith('seed/') && path.endsWith('.json'))
+
+/** Whether `file` is one a load `path` names: the file itself, or any `*.json`
+ * under it when the path is a folder. A path naming something that is not JSON
+ * still matches, and the parser refuses it in its own name. */
+export let asked = (path: string, file: string) => {
+  let p = path.replace(/^\/+|\/+$/g, '')
+  return p != '' &&
+    (file == p || (file.startsWith(`${p}/`) && file.endsWith('.json')))
+}
 
 /** One file of an app's, as this reads it. */
 export type Text = { path: string; text: string }
@@ -59,14 +74,13 @@ let read = (file: string, text: string): Bundle[] => {
 }
 
 /**
- * Every bundle an app's seed holds, in the order it is applied: the seed files
- * among its own, sorted by name, each file's bundles in the order it wrote
- * them. `seed.json` sorts before `seed/…` on its own — `.` is below `/` — so
- * one file and a folder together still have one order.
+ * Every bundle these files hold, in the order it is applied: the files sorted
+ * by name, each file's bundles in the order it wrote them. `seed.json` sorts
+ * before `seed/…` on its own — `.` is below `/` — so one file and a folder
+ * together still have one order.
  */
-export let sown = (files: Text[]): Sown[] =>
-  files
-    .filter((f) => seedy(f.path))
+export let loaded = (files: Text[]): Sown[] =>
+  [...files]
     .sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
     .flatMap((f) =>
       read(f.path, f.text).map((bundle, index) => ({
@@ -75,6 +89,11 @@ export let sown = (files: Text[]): Sown[] =>
         bundle,
       }))
     )
+
+/** Every bundle an app's SEED holds — the seed files among its own, read as
+ * one. */
+export let sown = (files: Text[]): Sown[] =>
+  loaded(files.filter((f) => seedy(f.path)))
 
 /** The door a seed is written through: a batch in, the refusal's own sentence
  * out, or null when the store took it. `check` asks only whether it WOULD —
@@ -112,15 +131,18 @@ let blamed = async (
 }
 
 /**
- * The seed applied, as one atomic batch. Answers the bundles it wrote, empty
- * where the app carries no seed at all. A refusal throws with the refusal's own
- * sentence and the file and index of the bundle it was about, which is what an
- * agent needs to fix the file it wrote.
+ * The bundles applied, as one atomic batch. Answers the ones it wrote, empty
+ * where there were none. A refusal throws with the refusal's own sentence and
+ * the file and index of the bundle it was about, which is what an agent needs
+ * to fix the file it wrote.
  */
-export let sow = async (files: Text[], apply: Applying): Promise<Sown[]> => {
-  let all = sown(files)
+export let load = async (all: Sown[], apply: Applying): Promise<Sown[]> => {
   if (!all.length) return all
   let no = await apply(all.map((s) => s.bundle), false)
   if (no == null) return all
   throw new Error(`${at(await blamed(all, apply, no))} was refused: ${no}`)
 }
+
+/** The app's seed applied, once — the whole of it as one batch. */
+export let sow = (files: Text[], apply: Applying): Promise<Sown[]> =>
+  load(sown(files), apply)

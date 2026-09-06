@@ -123,7 +123,16 @@ import { titling, vouched, type Who } from './session.ts'
 import { mode, reads, writes } from '@yaks/member'
 import { canon, nameOf, personOf } from './signin.ts'
 import { type Door, storeOf } from './door.ts'
-import { type Applying, seedy, sow, type Sown, type Text } from './seed.ts'
+import {
+  type Applying,
+  asked,
+  load,
+  loaded,
+  seedy,
+  sow,
+  type Sown,
+  type Text,
+} from './seed.ts'
 import {
   archive,
   cards,
@@ -558,14 +567,19 @@ let homesIn = async (ctx: Ctx, space: Space, app: App) => {
   return { said, homes }
 }
 
-// The app's seed files, as text (seed.ts). Only the seed ones are read: an
-// app's bytes are its pictures as well as its pages, and a release has no
+// The app's data files, as text (seed.ts) — the seed ones for a release, the
+// ones a path names for store_load. Only the picked ones are read: an app's
+// bytes are its pictures as well as its pages, and neither caller has any
 // business decoding those.
-let seeds = async (blobs: Blobs, space: Space, app: App): Promise<Text[]> => {
+let texts = async (
+  blobs: Blobs,
+  space: Space,
+  app: App,
+  pick: (path: string) => boolean,
+): Promise<Text[]> => {
   let prefix = fileKey(space, app, '')
-  let paths = (await blobs.list(prefix))
-    .map((k) => k.slice(prefix.length))
-    .filter(seedy)
+  let paths = own((await blobs.list(prefix)).map((k) => k.slice(prefix.length)))
+    .filter(pick)
   return await Promise.all(paths.map(async (path) => ({
     path,
     text: new TextDecoder().decode(await blobs.get(prefix + path)),
@@ -591,6 +605,14 @@ let applying =
       return body
     }
   }
+
+// The head a write into an app's store wears when the platform makes it for
+// somebody: the caller vouched for, and their name, so the rows carry their
+// byline instead of the platform's (session.ts `titling`).
+let byCaller = async (ctx: Ctx, who: Who) => ({
+  ...vouched(who),
+  ...await titling(ctx.dir, who.person),
+})
 
 // Whether a manifest can land on this app AT ALL, asked before anything moves
 // (app_update). The same two rules a deploy holds it to, both of which throw
@@ -703,11 +725,8 @@ let released = async (
   let sowed: Sown[] = []
   if (!app.seeded) {
     sowed = await sow(
-      await seeds(blobs, space, app),
-      applying(store, {
-        ...vouched(who),
-        ...await titling(ctx.dir, who.person),
-      }),
+      await texts(blobs, space, app, seedy),
+      applying(store, await byCaller(ctx, who)),
     )
     if (sowed.length) {
       await ctx.dir.apply({
@@ -1800,6 +1819,74 @@ export let TOOLS: Tool[] = [
         text:
           `deployed ${space.slug}/${app.slug} v${version}: ${url(space, app)}` +
           said,
+        space,
+      }
+    },
+  },
+  // Bulk data that is not seed data (T-34392). The seed is the app's first
+  // furniture and runs once; this is the same reading of the same files, asked
+  // for on purpose, whenever a dataset needs to go in.
+  {
+    name: 'store_load',
+    title: 'Load a data file into the store',
+    destructive: false,
+    description:
+      "Write a JSON file the app already carries into the app's store, now. " +
+      'path is one file — data/cities.json — or a folder, and then every ' +
+      '*.json under it goes in. Each file holds the same list of bundles a ' +
+      'seed.json does and graph_apply takes: [{"entity": {"eid": "$a"}, ' +
+      '"doc": {"title": "…"}}]. Together they are ONE batch, read in filename ' +
+      'order, so an alias minted in one file resolves in the next; if the ' +
+      'store refuses a bundle nothing is written and the refusal names the ' +
+      'file and the entry that caused it. This is how a big dataset arrives ' +
+      'without being typed into a call: app_files(op: fetch) writes the ' +
+      'https body into the app, store_load puts it in the store — two calls. ' +
+      'Unlike a seed it is not once-only: call it whenever, and it patches ' +
+      'and adds as the caller, so the rows carry your byline. It applies ' +
+      'whatever the file says, deletes included — a bundle with $delete: ' +
+      'true (or tombstone: {}) deletes that entity, and the store is the ' +
+      'judge of whether you may. A bundle naming an eid patches that row; ' +
+      'one naming a $alias mints a new entity each run.',
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        app: APP,
+        path: str(
+          'the file to load — data/cities.json — or a folder, which loads ' +
+            'every *.json under it',
+        ),
+      },
+      required: ['app', 'path'],
+    },
+    run: async (ctx, args) => {
+      let { space, app, who, store } = await inApp(ctx, args, true)
+      let path = text(args.path, 'path')
+      let files = await texts(
+        r2Blobs(ctx.env.BLOBS),
+        space,
+        app,
+        (p) => asked(path, p),
+      )
+      if (!files.length) {
+        throw new Error(
+          `no file ${path} in ${app.slug} — app_files(op: 'list') says what ` +
+            'is there',
+        )
+      }
+      let all = await load(
+        loaded(files),
+        applying(store, await byCaller(ctx, who)),
+      )
+      let names = [...new Set(all.map((s) => s.file))]
+      return {
+        text: `loaded ${all.length} ${
+          all.length == 1 ? 'entity' : 'entities'
+        } into ${space.slug}/${app.slug} from ${
+          names.length > 6 ? `${names.length} files under ${path}` : (
+            names.join(', ') || path
+          )
+        }`,
         space,
       }
     },

@@ -346,6 +346,18 @@ For data the person is meant to edit, that is all there is to it. For a table of
 constants your page reads — an emoji list, a lookup — a plain `.js` file beside
 the page is simpler, and it is not data anyone can change.
 
+Data that arrives LATER is `store_load`, which is the same reading of the same
+kind of file, asked for on purpose: `store_load(app, path)` writes one JSON file
+already in the app — `data/cities.json` — or every `*.json` under a folder you
+name, into the store now, as you. It is one batch, in filename order, aliases
+resolving across the files, and a refusal names the file and the entry exactly
+as a seed's does; unlike a seed there is no once-only mark, so calling it again
+loads the file again, and it applies whatever the file says — a bundle carrying
+`tombstone: {}` deletes that entity, and the store decides whether you may. That
+makes an import two calls and nothing transcribed: `app_files(op: 'fetch')`
+writes the bytes of a public dataset into the app, and `store_load` puts them in
+the store, answering the files it read and how many entities it wrote.
+
 ## The doors underneath
 
 `client.js` is a wrapper over ordinary same-origin HTTP. Use them directly from

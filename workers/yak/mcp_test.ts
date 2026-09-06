@@ -113,6 +113,7 @@ slow(
         'sandbox_read',
         'sandbox_ship',
         'app_deploy',
+        'store_load',
         'app_versions',
         'app_rollback',
         'app_set',
@@ -4720,6 +4721,99 @@ slow('a refused seed bundle names its file and index', async () => {
     assertStringIncludes(
       await agent.tool('app_deploy', app),
       'seeded 2 entities',
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
+// Bulk data that is not seed data (T-34392). Owner, 2026-09-05: "any other
+// improvements we can make for bulk data that isn't seed data?" The same
+// reading as the seed, asked for on purpose: a folder of files as one batch,
+// aliases across them, only the *.json among them, and no once-only mark — so
+// a second call loads the same file again.
+slow('store_load writes a file already in the app into its store', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    await agent.tool('app_new', { slug: 'atlas', title: 'Atlas' })
+    let app = { app: 'atlas' }
+    await agent.tool('app_files', {
+      ...app,
+      files: [
+        { path: 'index.html', content: '<!doctype html><h1>Atlas' },
+        // A folder, written a call at a time the way a large dataset is — and
+        // a file beside them that is not JSON, which is never read and so
+        // never refuses anything.
+        {
+          path: 'data/01-places.json',
+          content: JSON.stringify([{
+            entity: { eid: '$here' },
+            doc: { title: 'Reykjavik' },
+          }]),
+        },
+        {
+          path: 'data/02-notes.json',
+          content: JSON.stringify([{
+            entity: { eid: '$note' },
+            doc: { body: 'the pool opens at six' },
+            comment: { target: '$here' },
+          }]),
+        },
+        { path: 'data/README.md', content: '# where the cities came from' },
+        {
+          path: 'more.json',
+          content: JSON.stringify([{
+            entity: { eid: '$one' },
+            doc: { title: 'Akureyri' },
+          }]),
+        },
+      ],
+    })
+    // The folder: both files, one batch, so the comment in the second points
+    // at the entity the first minted.
+    assertStringIncludes(
+      await agent.tool('store_load', { ...app, path: 'data' }),
+      'loaded 2 entities into',
+    )
+    let [place] = JSON.parse(
+      await agent.tool('graph_query', { q: '.doc.title=Reykjavik' }),
+    ) as { entity: { eid: string } }[]
+    let [note] = JSON.parse(
+      await agent.tool('graph_query', { q: '.comment!' }),
+    ) as { comment: { target: { eid: string } | string } }[]
+    let target = note.comment.target
+    assertEquals(
+      typeof target == 'string' ? target : target.eid,
+      place.entity.eid,
+    )
+    // One file by name, too.
+    assertStringIncludes(
+      await agent.tool('store_load', { ...app, path: 'more.json' }),
+      'loaded 1 entity into',
+    )
+    let titles = async () =>
+      (JSON.parse(await agent.tool('graph_query', { q: '.doc.title!' })) as {
+        doc: { title: string }
+      }[]).map((r) => r.doc.title).sort()
+    assertEquals(await titles(), ['Akureyri', 'Reykjavik'])
+
+    // And no once-only mark: it is a call anyone can make again, which is what
+    // separates it from the seed.
+    assertStringIncludes(
+      await agent.tool('store_load', { ...app, path: 'data' }),
+      'loaded 2 entities into',
+    )
+    assertEquals(await titles(), ['Akureyri', 'Reykjavik', 'Reykjavik'])
+
+    // A path that names nothing says so, and says where to look.
+    assertStringIncludes(
+      (await assertRejects(
+        () => agent.tool('store_load', { ...app, path: 'nowhere' }),
+        Error,
+      )).message,
+      'no file nowhere in atlas',
     )
   } finally {
     await k.stop()

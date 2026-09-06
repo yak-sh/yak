@@ -5,7 +5,7 @@
 // nothing — is mcp_test.ts.
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { type Applying, seedy, sow, sown } from './seed.ts'
+import { type Applying, asked, load, loaded, seedy, sow, sown } from './seed.ts'
 
 let file = (path: string, bundles: unknown[]) => ({
   path,
@@ -73,6 +73,49 @@ Deno.test('an alias minted in one file is the batch the next one joins', async (
   assertEquals(asked[0].check, false)
   assertEquals(asked[0].batch.length, 2)
   assertEquals(asked[0].batch[1].comment, { target: '$here' })
+})
+
+// The other caller of the same reading: store_load, which names its files by a
+// path instead of by `seedy` (T-34392).
+Deno.test('a load path names one file, or every *.json under a folder', () => {
+  for (
+    let [path, file] of [
+      ['data/cities.json', 'data/cities.json'],
+      ['data', 'data/cities.json'],
+      ['data/', 'data/one.json'],
+      ['/data', 'data/deep/two.json'],
+    ]
+  ) assert(asked(path, file), `${path} ← ${file}`)
+  for (
+    let [path, file] of [
+      ['data', 'data.json'],
+      ['data', 'other/cities.json'],
+      ['data', 'data/notes.md'],
+      ['data/cities.json', 'data/towns.json'],
+      ['', 'data/cities.json'],
+    ]
+  ) assertEquals(asked(path, file), false, `${path} ← ${file}`)
+})
+
+Deno.test('a load is one batch too, whatever chose the files', async () => {
+  let { asked: got, apply } = door()
+  let all = await load(
+    loaded([
+      file('data/02-menu.json', [{
+        entity: { eid: '$soup' },
+        comment: { target: '$here' },
+      }]),
+      file('data/01-places.json', [one('$here', 'Here')]),
+    ]),
+    apply,
+  )
+  assertEquals(all.map((s) => [s.file, s.index]), [
+    ['data/01-places.json', 0],
+    ['data/02-menu.json', 0],
+  ])
+  assertEquals(got.length, 1)
+  assertEquals(got[0].check, false)
+  assertEquals(got[0].batch.length, 2)
 })
 
 Deno.test('an app with no seed writes nothing at all', async () => {
