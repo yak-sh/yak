@@ -6293,11 +6293,15 @@ slow('store_load reads a CSV as rows of one component', async () => {
     let again = await recipes()
     assertEquals(again.length, 2)
     assertEquals(again[0].entity.eid, soup.entity.eid)
-    // And the name stands where an eid does: `lentil` is that row.
+    // And the name stands where an eid does: `lentil` is that row. WITH the
+    // backrefs, which is `.refs=` — one term per reference column, over a
+    // vocabulary with thirty of them, and workerd's SQLite takes five in a
+    // compound (@yaks/sql `ARMS`, T-34489). The name row points back, so it
+    // comes with it.
     let shown = JSON.parse(
-      await agent.tool('graph_show', { ids: ['lentil'], backrefs: false }),
+      await agent.tool('graph_show', { ids: ['lentil'], backrefs: true }),
     ) as { bundles: { entity: { eid: string } }[] }
-    assertEquals(shown.bundles.map((b) => b.entity.eid), [soup.entity.eid])
+    assert(shown.bundles.some((b) => b.entity.eid == soup.entity.eid))
 
     // A header the component has no column for names itself, and says the
     // two ways out.

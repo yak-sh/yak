@@ -12,15 +12,13 @@
 // at once — a chain of any length for one ask.
 //
 // A STATEMENT, not necessarily one. Every backwards arm is a term of the same
-// compound SELECT, and workerd — the runtime under a Durable Object and under
-// D1 — caps a compound at FIVE terms (`too many terms in compound SELECT`,
-// measured 2026-09-05; SQLite's own default is 500). So the arms are grouped
-// by table (a table's death columns are one arm, OR'd) and cut into statements
-// of {@link ARMS}, each seeded the same way. A vocabulary {@link narrow}
-// enough for one statement is answered whole; a wider one is asked in ROUNDS —
-// each statement is transitive within its own tables, so the caller re-asks
-// with what the last round turned up until nothing new comes back. Two rounds
-// answer the ordinary cascade, however deep it runs.
+// compound SELECT, and workerd caps a compound at five terms (./compound.ts).
+// So the arms are grouped by table (a table's death columns are one arm, OR'd)
+// and cut into statements of {@link ARMS}, each seeded the same way. A
+// vocabulary {@link narrow} enough for one statement is answered whole; a wider
+// one is asked in ROUNDS — each statement is transitive within its own tables,
+// so the caller re-asks with what the last round turned up until nothing new
+// comes back. Two rounds answer the ordinary cascade, however deep it runs.
 //
 // The COUNT saturates where the walk would loop. A cycle among cascade columns
 // (an entity that exists about an entity that exists about it) would grow the
@@ -34,16 +32,13 @@
 // storage that cannot compile this (a map, a browser cache) is walked instead.
 
 import type { Vocab } from '@yaks/vocab'
+import { type Arm, ARMS, arms, cut } from './compound.ts'
 import type { Frag } from './ir.ts'
 import { type Dialect, sqlite } from './sqlite.ts'
 
 /** How far a cascade's rungs are COUNTED before the number saturates. Depth is
  * the order the casualties come back in, never a bound on who dies. */
 export let DEEP = 32
-
-/** How many backwards arms one statement may carry. Workerd allows five terms
- * in a compound SELECT and the seed is one of them. */
-export let ARMS = 4
 
 // The CTE's name, and the alias the spine is read through. Both are spelled so
 // no component can collide with them — a vocabulary owns every ordinary name.
@@ -57,21 +52,6 @@ let marks = (n: number): string =>
 // ANDs into every query, said against an owner column rather than the spine.
 let alive = (owner: string): string =>
   `not exists (select 1 from "tombstone" where "tombstone"."entity" = ${owner})`
-
-/** One backwards arm: a table, and every death column of it wearing this word.
- * Two columns of one table are ONE arm — a term is scarce, and `or` is not. */
-type Arm = [comp: string, props: string[]]
-
-let arms = (cols: [string, string][]): Arm[] => {
-  let by = new Map<string, string[]>()
-  for (let [comp, prop] of cols) by.set(comp, [...(by.get(comp) ?? []), prop])
-  return [...by]
-}
-
-// The arms, cut into what one statement may carry. Always at least one group,
-// so a vocabulary with no cascade column still states its seed.
-let cut = <T>(xs: T[], n: number): T[][] =>
-  xs.length <= n ? [xs] : [xs.slice(0, n), ...cut(xs.slice(n), n)]
 
 /**
  * Is this vocabulary's whole cascade sayable in one statement? When it is, one

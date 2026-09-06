@@ -6,7 +6,10 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { z } from 'zod'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, graph } from '@yaks/graph'
+import { loadVocab, type VocabDoc } from '@yaks/vocab'
+import { storage } from '@yaks/sqlite'
+import { mem } from '../sqlite/harness.ts'
 import { comp, connect, result, shopGraph } from './harness.ts'
 import { roster, Say } from './server.ts'
 import { rosterLine, rosterVersion } from './roster.ts'
@@ -209,6 +212,55 @@ Deno.test('graph_show answers the entity, what points at it, and the edges', asy
   )
   assert(alone && typeof alone == 'object' && 'bundles' in alone)
   assertEquals(bundles(alone.bundles).map((b) => b.entity.eid), ['b1'])
+})
+
+// The backlinks are asked as `.refs=`, which is ONE term per reference column,
+// and workerd's SQLite takes five terms in a compound (@yaks/sql `ARMS`). So
+// the shape that broke — backrefs on, over a compiled store whose vocabulary
+// references more than five ways — is held here, through the tool.
+let wideDoc: VocabDoc = {
+  $defs: {
+    entity: {
+      type: 'object',
+      wire: false,
+      properties: { num: { type: 'number', stamped: true } },
+    },
+    doc: {
+      type: 'object',
+      kind: true,
+      properties: { title: { type: 'string' } },
+    },
+    ...Object.fromEntries(
+      [1, 2, 3, 4, 5, 6, 7, 8].map((i) => [`n${i}`, {
+        type: 'object',
+        properties: {
+          of: { type: 'string', ref: 'entity', death: 'detach' },
+        },
+      }]),
+    ),
+  } as VocabDoc['$defs'],
+}
+
+Deno.test('graph_show gathers backrefs over a vocabulary wider than a compound', async () => {
+  let wide = loadVocab(wideDoc)
+  let store = storage(mem(), wide)
+  store.install()
+  let g = graph({ storage: store, vocab: wide })
+  await g.apply([
+    { entity: { eid: 'a1' }, doc: { title: 'the target' } },
+    { entity: { eid: 'b1' }, n3: { of: 'a1' } },
+    { entity: { eid: 'b2' }, n8: { of: 'a1' } },
+  ])
+  let client = await connect({ graph: g })
+  let out = result(
+    await called(client, 'graph_show', { ids: ['a1'], backrefs: true }),
+  )
+  assert(out && typeof out == 'object' && 'bundles' in out)
+  assertEquals(
+    bundles(out.bundles).map((b) => b.entity.eid).sort(),
+    ['a1', 'b1', 'b2'],
+  )
+  await client.close()
 })
 
 // The three sizes are words_test.ts's; this is only that the tool is listed

@@ -141,6 +141,11 @@ full-text terms, the `.kind` scope, presence/absence, ordering,
 and `*` projections, the `.refs=` backlink union, and the `.eid=`/`.num=`
 identity predicate.
 
+The `.refs=` backlink union obeys the same compound ceiling the death cascade
+does (below): its arms are grouped by table, cut into unions of `ARMS`, and the
+groups OR'd — so a vocabulary that references more ways than one compound may
+carry is still asked in one statement.
+
 Advanced directives it cannot yet reach throw **`Unsupported`** rather than
 answer almost-right — a caller catches it to fall back to a JS matcher or to
 report the gap. The current gaps are the `.edges`/`.reaches` graph walks, and

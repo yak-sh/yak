@@ -39,6 +39,7 @@
 //   a $delete with a cascade   4 (12)  4     0     35
 //   a member-guarded write     3 (9)   3     0     44
 //   a batch of 50 bundles      2 (3)   2     0    550
+//   a .refs= read              2       1     1     21
 //
 // Where they come from, phase by phase:
 //
@@ -63,8 +64,14 @@
 //   a batch of 50 bundles     the same two as one write: the gather and the
 //                             flush are one round trip however wide the batch
 //                             is, which is what `prepare` at 550 says.
+//   a .refs= read             the compiled statement, then the gather of what
+//                             it hit — the two `tx.read` costs. The vocabulary
+//                             here is wider than one compound SELECT may carry
+//                             (@yaks/sql `ARMS`), and a predicate cut to fit is
+//                             still ONE statement: the cut is OR'd groups, not
+//                             rounds.
 
-import { assert } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
 import { type Change, graph, token } from '@yaks/graph'
 import { members } from '@yaks/member'
 import { club, ids } from '../member/harness.ts'
@@ -77,6 +84,7 @@ let PINS: Record<string, number> = {
   'a $delete with a cascade': 4,
   'a member-guarded write': 3,
   'a batch of 50 bundles': 2,
+  'a .refs= read over a wide vocabulary': 2,
 }
 
 // One case: the tally against its pin. Coming in under the pin is not a
@@ -187,6 +195,30 @@ Deno.test('a member-guarded write', async () => {
     pick: { title: 'Dune' },
     $actor: { by: raj },
   }])
+  holds(name, hops())
+})
+
+Deno.test('a .refs= read over a wide vocabulary', async () => {
+  let name = 'a .refs= read over a wide vocabulary'
+  let { store, hops, reset } = await counted(club)
+  let { club: c, dana, list } = ids
+  let g = graph({ storage: store, vocab: club })
+  await g.apply([
+    { entity: { eid: c }, space: { name: 'Tuesday Books' } },
+    { entity: { eid: dana }, person: { name: 'Dana' } },
+    { entity: { eid: list }, app: { name: 'Reading list', space: c } },
+    {
+      entity: { eid: 'seat1' },
+      member: { space: c, person: dana, role: 'owner' },
+    },
+  ])
+  reset()
+  // The club has EIGHT reference columns over six tables — more than one
+  // compound SELECT may carry on workerd (@yaks/sql `ARMS`), so the predicate
+  // is OR'd groups rather than one union. It is still ONE statement, which is
+  // what the pin says: the read, and the gather of what it hit.
+  let back = await g.read(`.refs=${c}`)
+  assertEquals(back.map((b) => b.entity.eid).sort(), ['list', 'seat1'])
   holds(name, hops())
 })
 

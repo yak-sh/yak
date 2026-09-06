@@ -64,6 +64,7 @@ import {
   renderCond,
   TRUE,
 } from './ir.ts'
+import { type Arm, ARMS, arms, cut } from './compound.ts'
 import { type Dialect, sqlite, type Tag, tagOf } from './sqlite.ts'
 import type { Derived } from './derived.ts'
 import type { Extension, Site } from './extend.ts'
@@ -385,18 +386,30 @@ let kindScope = (ctx: Ctx, value: string): Cond => {
 // The multi-column reverse-union: the backlinks of `value`, the union of every
 // reference column that equals it. Cleanly derivable from the vocab's ref-column
 // list. Only the positive `.refs=X` compiles; presence/absence decline.
+//
+// A union of every reference column in a wide vocabulary is a compound of more
+// terms than workerd will take (./compound.ts), so the columns are grouped by
+// table and cut into unions of {@link ARMS} — and the groups are OR'd, because
+// `or` has no ceiling and each `in` opens its own compound. A vocabulary that
+// references nothing has no backlink to find.
 let refsUnion = (ctx: Ctx, r: Refs): Cond => {
   if (r.op != '=' || !r.value) {
     throw new Unsupported('.refs', 'only .refs=<id> compiles')
   }
   let cols = ctx.v.refCols()
-  let subs = cols.map(([c, pr]) =>
-    `select "${c}"."entity" from "${c}" where "${c}"."${pr}" = (select id from entity where eid = ?)`
+  if (!cols.length) return FALSE
+  let at = '(select id from entity where eid = ?)'
+  let sub = ([c, props]: Arm) =>
+    `select "${c}"."entity" from "${c}" where ` +
+    props.map((p) => `"${c}"."${p}" = ${at}`).join(' or ')
+  return or(
+    ...cut(arms(cols), ARMS).map((group) =>
+      raw({
+        sql: `"entity"."id" in (${group.map(sub).join(' union ')})`,
+        params: group.flatMap(([, props]) => props.map(() => r.value!)),
+      })
+    ),
   )
-  return raw({
-    sql: `"entity"."id" in (${subs.join(' union ')})`,
-    params: cols.map(() => r.value),
-  })
 }
 
 // The LEFT joins for the tables a bind touched, keyed on the row they hang off:

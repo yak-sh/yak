@@ -7,7 +7,7 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import type { VocabDoc } from '@yaks/vocab'
-import { compile, type Derived, Unsupported } from './mod.ts'
+import { ARMS, compile, type Derived, Unsupported } from './mod.ts'
 
 // The spine, a doc, and a task with a stored priority and a COMPUTED status
 // (persist: false) — the smallest vocab that exercises routing, a scalar, and
@@ -225,6 +225,56 @@ Deno.test('the membership statement excludes graves and answers one eid', () => 
   let { sql } = compile(parse('.priority>=1'), v)
   assert(sql.startsWith('select "entity"."eid" as eid from "entity"'), sql)
   assert(sql.includes('not exists (select 1 from tombstone'), sql)
+})
+
+Deno.test('.refs= groups its arms and cuts them to what a compound may carry', () => {
+  // A vocabulary WIDER than one compound SELECT may carry: seven tables bear a
+  // reference column and one of them bears two, where workerd would refuse the
+  // sixth term (./compound.ts). Every group is its own `in`, so no compound
+  // here carries more than ARMS.
+  let wide = loadVocab({
+    $defs: {
+      entity: { type: 'object', wire: false, properties: {} },
+      ...Object.fromEntries(
+        [1, 2, 3, 4, 5, 6].map((i) => [`n${i}`, {
+          type: 'object',
+          properties: { of: { type: 'string', ref: 'entity' } },
+        }]),
+      ),
+      pair: {
+        type: 'object',
+        properties: {
+          left: { type: 'string', ref: 'entity' },
+          right: { type: 'string', ref: 'entity' },
+        },
+      },
+    } as VocabDoc['$defs'],
+  })
+  let { sql, params } = compile(parse('.refs=a1'), wide)
+  // Eight columns, one bound param each; seven arms, because a table's two
+  // columns are ONE term, OR'd.
+  assertEquals(params, Array(8).fill('a1'))
+  assert(
+    sql.includes(
+      '"pair"."left" = (select id from entity where eid = ?) or ' +
+        '"pair"."right" = (select id from entity where eid = ?)',
+    ),
+    sql,
+  )
+  // Two groups of at most four arms, and nothing else in the statement unions.
+  let compounds = sql.split('"entity"."id" in (').slice(1)
+    .map((piece) => piece.split(/\bunion\b/i).length)
+  assertEquals(compounds, [4, 3])
+  for (let terms of compounds) assert(terms <= ARMS, `${terms} terms: ${sql}`)
+})
+
+Deno.test('.refs= over a vocabulary that references nothing selects nothing', () => {
+  let none = loadVocab({
+    $defs: { entity: { type: 'object', wire: false, properties: {} } },
+  })
+  let { sql, params } = compile(parse('.refs=a1'), none)
+  assertEquals(params, [])
+  assert(sql.includes('where 0'), sql)
 })
 
 Deno.test('a request for a word this vocabulary never planted asks, and passes', () => {
