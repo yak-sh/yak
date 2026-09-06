@@ -38,8 +38,8 @@
 //   yaks.app (and any dev host)
 //     /                       the home page, from ./public
 //     /login, /login/code     identity.ts: the email-code sign-in
-//     /connect                identity.ts: the connector page, and the
-//                             address a person's apps live at
+//     /connect                identity.ts: the connector page, signed in, and
+//                             the address a person's apps live at
 //     /oauth/*                identity.ts: the OAuth 2.1 door for agents
 //     /.well-known/oauth-*    identity.ts: the provider's metadata
 //     /api/stripe/webhook     billing.ts: what Stripe says happened

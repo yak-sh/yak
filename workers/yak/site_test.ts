@@ -258,6 +258,33 @@ Deno.test('the home page names itself in its first heading', () => {
   assertStringIncludes(flat(h1), 'your own address')
 })
 
+// The way in is sign-in, everywhere (T-34408). Attaching an assistant is the
+// SECOND step and its instructions live on the space a sign-in lands on, so no
+// public page hands a stranger `/connect` — and the home page's doors and copy
+// say the order: email, a code, your own space, connect your assistant there.
+Deno.test('every public page hands a stranger sign-in, never /connect', () => {
+  for (let page of branded) {
+    let body = read(page).split('</head>')[1] ?? ''
+    assert(!body.includes('href="/connect"'), `${page} points at /connect`)
+  }
+  let html = read('index.html')
+  let doors = [...html.matchAll(/<a class="Button" href="([^"]+)"/g)]
+    .map((m) => m[1])
+  assertEquals(doors, ['/login', '/login'], 'a home-page door misses sign-in')
+  let how = flat(html.split('id="how"')[1].split('</section>')[0])
+  assertStringIncludes(how, 'Sign in with your email')
+  assertStringIncludes(how, 'six-digit code')
+  assertStringIncludes(how, 'Connect your assistant')
+  assert(
+    how.indexOf('Sign in with your email') <
+      how.indexOf('Connect your assistant'),
+    'the home page still connects before it signs in',
+  )
+  let join = flat(html.split('id="join"')[1].split('</section>')[0])
+  assertStringIncludes(join, 'land on your own space')
+  assertStringIncludes(join, 'Connect your assistant there')
+})
+
 // The owner's complaint, held to: a search for "yaks" returns Yik Yak, so the
 // home page says what this is not — plainly, in the description a result
 // shows, and once in the words a visitor reads.

@@ -698,11 +698,16 @@ export let askAllow = (email: string, q: string, who: string) =>
 </form>${home}`,
   )
 
-// Where a fresh sign-in lands (T-32972): the one page that gets a person from
-// an account to a working assistant. Two things live on it and neither waits
-// for the other — the address their apps will live at, theirs to change while
-// nothing is built there (T-32967), and how to hand this platform to the
-// assistant they already talk to. Connecting is never gated on choosing.
+// The connector page, signed in (T-32972). Three things live on it and none
+// waits for the others — the address their apps will live at, theirs to change
+// while nothing is built there (T-32967), what the space pays, and how to hand
+// this platform to the assistant they already talk to. Connecting is never
+// gated on choosing.
+//
+// Signed in is the only way anyone reads it: a fresh sign-in lands on their own
+// space (T-34233) and the owner block there carries these same steps, so a
+// stranger asking for `/connect` is sent to sign in first (identity.ts
+// `theirs`, T-34408).
 //
 // The provider steps were read off each provider's own documentation on
 // 2026-09-03 (claude.com/docs/connectors/custom/remote-mcp,
@@ -913,18 +918,18 @@ for (let b of document.querySelectorAll('.Bill_Go')) {
 }
 </script>`
 
-export let connect = (yours: Yours | null, status = 200) =>
+export let connect = (yours: Yours, status = 200) =>
   shell(
     'Connect your assistant',
     'Add yaks.app in your assistant’s settings using the steps below. Then ask it to build an app.',
     status,
     `<p class="Url"><code>${MCP}</code></p>
-${yours ? mine(yours) + plan(yours) : ''}${doors}
+${mine(yours)}${plan(yours)}${doors}
 <p class="Note">Menus move. If yours doesn't look like this, search its
 settings for "connector" or "MCP" — the link is the same wherever it
 goes.</p>
 <p class="Note">New here? <a href="https://yaks.app/help">Help</a> answers the
 questions people ask most: what you can make, where your apps live, and who
 can see them.</p>
-${home}${yours ? inline : ''}`,
+${home}${inline}`,
   )

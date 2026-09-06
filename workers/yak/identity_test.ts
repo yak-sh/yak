@@ -652,11 +652,12 @@ slow("the space page's owner block names them and their address", async () => {
   }
 })
 
-// The page a fresh sign-in lands on: how to hand this platform to the
-// assistant a person already talks to (T-32972), and beside it the address
-// their apps will live at, theirs to change inline while nothing is built
-// there (T-32967). Its own kernel, because the first sign-in on one owns the
-// meta space, which is the door every directory read below goes through.
+// The connector page, signed in: how to hand this platform to the assistant a
+// person already talks to (T-32972), and beside it the address their apps will
+// live at, theirs to change inline while nothing is built there (T-32967). A
+// stranger asking for it is sent to sign in (T-34408). Its own kernel, because
+// the first sign-in on one owns the meta space, which is the door every
+// directory read below goes through.
 slow('the connector page, and the address chosen on it', async () => {
   let k = await kernel()
   let uniq = () => crypto.randomUUID().slice(0, 8)
@@ -676,21 +677,14 @@ slow('the connector page, and the address chosen on it', async () => {
     return [r.status, await r.json()] as [number, Record<string, string>]
   }
   try {
-    // Signed out, the instructions read: connecting is nobody's secret, and
-    // it is never gated on choosing an address.
-    let open = await k.at('yaks.app', '/connect')
-    assertEquals(open.status, 200)
-    let page = await open.text()
-    for (
-      let said of [
-        /https:\/\/yaks\.app\/mcp/,
-        /Add custom connector/,
-        /claude mcp add --transport http yaks/,
-        /Developer mode/,
-        /speaks MCP/,
-      ]
-    ) assertMatch(page, said)
-    assertEquals(/name="space"/.test(page), false)
+    // Signed out, there is nothing to read here: attaching an assistant is
+    // the second step, so a stranger is sent to sign in and the steps meet
+    // them on the space they land on (T-34408). No `return` rides along —
+    // the point is to land them on their space, not back in front of it.
+    let open = await k.at('yaks.app', '/connect', { redirect: 'manual' })
+    assertEquals(open.status, 303)
+    assertEquals(open.headers.get('location'), '/login')
+    await open.body?.cancel()
 
     // A first sign-in lands on their own space, and the owner block there is
     // what carries them here (T-34233).
@@ -710,12 +704,25 @@ slow('the connector page, and the address chosen on it', async () => {
     let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
     let dir = meta(k, cookie)
 
-    // And the card says where they are, filled with the address signing in
-    // derived for them — theirs to keep by doing nothing at all.
+    // Signed in, the whole page: the instructions, and the card saying where
+    // they are, filled with the address signing in derived for them — theirs
+    // to keep by doing nothing at all.
     let derived = email.split('@')[0]
-    let card =
-      await (await k.at('yaks.app', '/connect', { headers: { cookie } }))
-        .text()
+    let whole = await k.at('yaks.app', '/connect', {
+      redirect: 'manual',
+      headers: { cookie },
+    })
+    assertEquals(whole.status, 200)
+    let card = await whole.text()
+    for (
+      let said of [
+        /https:\/\/yaks\.app\/mcp/,
+        /Add custom connector/,
+        /claude mcp add --transport http yaks/,
+        /Developer mode/,
+        /speaks MCP/,
+      ]
+    ) assertMatch(card, said)
     assertMatch(card, new RegExp(`${derived}.yaks.app`))
     assertMatch(card, new RegExp(`name="space"[^>]*value="${derived}"`))
 
