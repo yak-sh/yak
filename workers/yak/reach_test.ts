@@ -196,6 +196,27 @@ Deno.test('a batch refused by one store lands in neither', async () => {
   assertEquals(comp(now, 'loan').to, 'Ada')
 })
 
+// The door mints every `$alias` itself, so the alias has to RIDE to the store
+// that writes the part — it is what tells a store's mint phase an id this door
+// picked from one the caller wrote down. Dropped in the split, a named row
+// written twice was refused as a clash instead of patching its holder.
+Deno.test('a name written twice through the door is one entity', async () => {
+  let { env, reach } = await where()
+  let seed = async (pages: number) => {
+    let out = await written(env, reach, reach[0], [{
+      entity: { eid: '$r' },
+      alias: { name: 'book:dune' },
+      book: { pages },
+    }])
+    return out.aliases.$r
+  }
+  let once = await seed(412)
+  assertEquals(await seed(500), once)
+  let all = bundles(await read(env, reach, '.book!'))
+  assertEquals(all.map((b) => b.entity.eid), [once])
+  assertEquals(comp(all[0], 'book').pages, 500)
+})
+
 Deno.test('the space speaks one vocabulary, and a word nobody declares is the platform’s', async () => {
   let { env, reach } = await where()
   let one = eid()

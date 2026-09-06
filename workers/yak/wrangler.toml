@@ -330,6 +330,7 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 # is what `npm ci` here fills (package.json), so an SDK subpath is spelled at
 # the file it actually is.
 [alias]
+"@yaks/alias" = "../../packages/alias/mod.ts"
 "@yaks/api" = "../../packages/api/mod.ts"
 "@yaks/blob" = "../../packages/blob/mod.ts"
 "@yaks/canvas" = "../../packages/canvas/mod.ts"
@@ -342,6 +343,7 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 "@yaks/graph" = "../../packages/graph/mod.ts"
 "@yaks/id" = "../../packages/id/mod.ts"
 "@yaks/journal" = "../../packages/journal/mod.ts"
+"@yaks/key" = "../../packages/key/mod.ts"
 "@yaks/mail" = "../../packages/mail/mod.ts"
 "@yaks/match" = "../../packages/match/mod.ts"
 "@yaks/mcp" = "../../packages/mcp/mod.ts"

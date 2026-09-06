@@ -808,6 +808,36 @@ slow(
       assertEquals(stamped.length, 1)
       assert(stamped[0].created, 'naming a stamp asks for it back')
 
+      // A seed that tried to date itself: `created.at` is the store's own
+      // record of when it first saw a row and cannot be given a past moment,
+      // so it is dropped and the row reads as written now (T-33147).
+      let old = minted(
+        await agent.tool('graph_apply', {
+          change: [{
+            entity: { eid: '$old' },
+            $app: 'recipes',
+            doc: { title: 'Written in April' },
+            created: { at: '2026-04-11T12:00:00Z' },
+          }],
+        }),
+        '$old',
+      )
+      let [aged] = JSON.parse(
+        await agent.tool('graph_query', { q: `id=${old}&.created!` }),
+      ) as { created: { at: string } }[]
+      assertEquals(
+        aged.created.at.slice(0, 4),
+        String(new Date().getFullYear()),
+      )
+      await agent.tool('graph_apply', {
+        change: [{ entity: { eid: old }, tombstone: {} }],
+      })
+      let found = JSON.parse(await agent.tool('search', { words: 'lemon' }))
+      assertEquals(
+        found.map((r: { entity: { eid: string } }) => r.entity.eid),
+        [cake],
+      )
+
       // A NAME outlives the batch (T-34390, @yaks/key + @yaks/alias): the same
       // seed written again patches the entity that already holds the name
       // instead of writing a second one, and the name stands where an eid
@@ -839,35 +869,17 @@ slow(
         }),
       ) as { bundles: { entity: { eid: string } }[] }
       assertEquals(shown.bundles.map((b) => b.entity.eid), [once])
-
-      // A seed that tried to date itself: `created.at` is the store's own
-      // record of when it first saw a row and cannot be given a past moment,
-      // so it is dropped and the row reads as written now (T-33147).
-      let old = minted(
-        await agent.tool('graph_apply', {
-          change: [{
-            entity: { eid: '$old' },
-            $app: 'recipes',
-            doc: { title: 'Written in April' },
-            created: { at: '2026-04-11T12:00:00Z' },
-          }],
-        }),
-        '$old',
-      )
-      let [aged] = JSON.parse(
-        await agent.tool('graph_query', { q: `id=${old}&.created!` }),
-      ) as { created: { at: string } }[]
-      assertEquals(
-        aged.created.at.slice(0, 4),
-        String(new Date().getFullYear()),
-      )
+      // and it goes when the entity does — the name is released, not
+      // tombstoned, so it could be claimed again (what the rest of this test
+      // counts is the app's own rows, and this one was ours).
       await agent.tool('graph_apply', {
-        change: [{ entity: { eid: old }, tombstone: {} }],
+        change: [{ entity: { eid: once }, tombstone: {} }],
       })
-      let found = JSON.parse(await agent.tool('search', { words: 'lemon' }))
       assertEquals(
-        found.map((r: { entity: { eid: string } }) => r.entity.eid),
-        [cake],
+        JSON.parse(
+          await agent.tool('graph_query', { q: 'id=recipe:lemon-cakes' }),
+        ),
+        [],
       )
       // The app's OWN components: vocab.json declares them, app_deploy plants
       // them in this app's store, and nothing about them exists in any other.

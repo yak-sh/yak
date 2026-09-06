@@ -840,6 +840,11 @@ let routed = async (
           keys.filter((n) => n in e).map((n) => [n, e[n]]),
         ),
         ...(Object.keys(was).length ? { $was: was } : {}),
+        // and the alias the caller named it by, which every part carries:
+        // it is how a store tells an id this door picked from one the caller
+        // wrote down, and so whether a name somebody already holds moves this
+        // entity onto theirs (@yaks/alias, T-34390).
+        ...(typeof e.$alias == 'string' ? { $alias: e.$alias } : {}),
       } as Bundle)
     }
   }
