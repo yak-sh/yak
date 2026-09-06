@@ -1,0 +1,25 @@
+{
+  "name": "@yaks/cli",
+  "version": "0.0.0",
+  "exports": {
+    ".": "./mod.ts",
+    "./yaks": "./yaks.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "The yaks command: an MCP server's tool list read at run time, every tool a subcommand, bodies riding @file and stdin.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0"
+  },
+  "compilerOptions": {
+    "lib": [
+      "deno.ns",
+      "dom",
+      "esnext"
+    ]
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts"
+    ]
+  }
+}

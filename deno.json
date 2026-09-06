@@ -48,6 +48,7 @@
     "./packages/embedding",
     "./packages/api",
     "./packages/mcp",
+    "./packages/cli",
     "./packages/workers",
     "./packages/task",
     "./packages/session",
