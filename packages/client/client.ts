@@ -15,7 +15,7 @@
 import type { Bundle, Change, Eid, Graph, Plugin, ReadOpts } from '@yaks/graph'
 import { graph } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import { memory, type Query, type Store } from '@yaks/memory'
+import { type Query, ram, type Store } from '@yaks/ram'
 import {
   type Connect,
   type Fetch,
@@ -107,7 +107,7 @@ export type ClientWatchOpts = WatchOpts & {
 let ordinary = (): Vault | null => globalThis.indexedDB ? idb() : null
 
 /**
- * Assemble a client graph: a {@link https://jsr.io/@yaks/memory | @yaks/memory}
+ * Assemble a client graph: a {@link https://jsr.io/@yaks/ram | @yaks/ram}
  * store under a {@link https://jsr.io/@yaks/graph | @yaks/graph}, your plugins
  * on it, {@link https://jsr.io/@yaks/sync | @yaks/sync} to a server if you name
  * one, IndexedDB for the local tier, and watches for the render.
@@ -134,7 +134,7 @@ export let client = (
   opts: ClientOpts = {},
 ): Client => {
   // `adopt`: the numbers come from the server, not from this map.
-  let store = memory(vocab, { adopt: true })
+  let store = ram(vocab, { adopt: true })
   let g = graph({ storage: store, vocab, plugins, mint: opts.mint })
   let seen = watches(g, { signal: opts.signal })
 

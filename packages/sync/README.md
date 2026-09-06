@@ -4,9 +4,9 @@ The **wire tier** for a client [@yaks/graph](https://jsr.io/@yaks/graph): a
 plugin that carries a local graph's writes to a server, and the server's writes
 back.
 
-A graph in a page over [@yaks/memory](https://jsr.io/@yaks/memory) is a complete
-graph — the same `apply()`, the same query grammar, the same bundles — it just
-has nobody else in it. This package is the nobody else.
+A graph in a page over [@yaks/ram](https://jsr.io/@yaks/ram) is a complete graph
+— the same `apply()`, the same query grammar, the same bundles — it just has
+nobody else in it. This package is the nobody else.
 
 ## Install
 
@@ -23,11 +23,11 @@ notes about them, cooks who wrote them.
 ```ts
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
-import { memory } from '@yaks/memory'
+import { ram } from '@yaks/ram'
 import { sync, syncKeywords } from '@yaks/sync'
 
 let vocab = loadVocab(recipeBox, [syncKeywords])
-let g = graph({ storage: memory(vocab, { adopt: true }), vocab })
+let g = graph({ storage: ram(vocab, { adopt: true }), vocab })
 let wire = sync(g, { url: 'https://recipes.example' })
 
 wire.subscribe('.course=dinner&.serves>4')
@@ -45,7 +45,7 @@ g.apply([{
 //   about it on its own time.
 ```
 
-`memory(vocab, { adopt: true })` is worth a word: a client store must take the
+`ram(vocab, { adopt: true })` is worth a word: a client store must take the
 identity the server hands it rather than mint its own, so the `num` a recipe has
 here is the `num` it has everywhere.
 
@@ -221,7 +221,7 @@ plugin seam, and `@yaks/vocab` for the tier keyword.
 ## The family
 
 [@yaks/graph](https://jsr.io/@yaks/graph) owns the bundles and `apply()`;
-[@yaks/memory](https://jsr.io/@yaks/memory) is the map the client keeps them in;
+[@yaks/ram](https://jsr.io/@yaks/ram) is the map the client keeps them in;
 [@yaks/api](https://jsr.io/@yaks/api) is the door at the other end, and owns the
 subscription model this package talks to;
 [@yaks/query](https://jsr.io/@yaks/query) is the grammar a subscription is

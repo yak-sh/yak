@@ -5,7 +5,7 @@
 //
 // One corpus of batches, replayed through both:
 //   - the app's own apply() (src/db.ts), read back with journalOf(), and
-//   - @yaks/graph's apply() over @yaks/memory with @yaks/journal registered,
+//   - @yaks/graph's apply() over @yaks/ram with @yaks/journal registered,
 //     read back with history(), both over the fleet vocabulary.
 // Each side is projected to the same sentence — the components and columns
 // each batch moved, in order — and the two projections must agree.
@@ -28,7 +28,7 @@
 
 import { assertEquals } from '@std/assert'
 import { graph } from '@yaks/graph'
-import { memory } from '@yaks/memory'
+import { ram } from '@yaks/ram'
 import type { Batch } from '@yaks/journal'
 import { history, journal, journalDoc } from '@yaks/journal'
 import { loadVocab } from '@yaks/vocab'
@@ -46,7 +46,7 @@ type Change = {
 
 let V = loadVocab([...fleetDocs(), journalDoc], fleetKeywords)
 let appDb = bareDb()
-let core = graph({ storage: memory(V), vocab: V, plugins: [journal(V)] })
+let core = graph({ storage: ram(V), vocab: V, plugins: [journal(V)] })
 
 let VIA = uuid()
 

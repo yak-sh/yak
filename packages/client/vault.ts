@@ -8,7 +8,7 @@
 // they are gone at the next reload.
 //
 // A vault is not a `Storage`. Storage answers queries, and a query is answered
-// here by the map @yaks/memory already holds; what is missing is durability, so
+// here by the map @yaks/ram already holds; what is missing is durability, so
 // the interface is the three things durability needs — load everything at boot,
 // write an entity through after a commit, forget one that died. It stays small
 // on purpose, and it stays in this package until a second implementation of it

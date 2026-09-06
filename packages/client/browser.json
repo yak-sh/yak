@@ -10,7 +10,7 @@
     "@yaks/sql": "../sql/mod.ts",
     "@yaks/graph": "../graph/mod.ts",
     "@yaks/match": "../match/mod.ts",
-    "@yaks/memory": "../memory/mod.ts",
+    "@yaks/ram": "../ram/mod.ts",
     "@yaks/sync": "../sync/mod.ts"
   }
 }

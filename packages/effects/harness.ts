@@ -1,11 +1,11 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
-// blog, written as a vocabulary, over @yaks/memory. Posts that get published,
+// blog, written as a vocabulary, over @yaks/ram. Posts that get published,
 // subscribers who get notified, and comments that exist ABOUT a post — so a
 // deleted post takes its comments with it and the cascade's casualties are
 // something the tests can watch.
 
 import { type Graph, graph, type Options } from '@yaks/graph'
-import { memory } from '@yaks/memory'
+import { ram } from '@yaks/ram'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { effectDoc } from './durable.ts'
 
@@ -66,4 +66,4 @@ export let durableBlog: Vocab = loadVocab([doc, effectDoc])
 export let blogGraph = (
   plugins: Options['plugins'] = [],
   vocab: Vocab = blog,
-): Graph => graph({ storage: memory(vocab), vocab, plugins })
+): Graph => graph({ storage: ram(vocab), vocab, plugins })

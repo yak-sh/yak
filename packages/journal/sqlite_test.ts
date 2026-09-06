@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-// The same journal over a database. @yaks/memory holds bundles in a Map and
+// The same journal over a database. @yaks/ram holds bundles in a Map and
 // SQLite holds rows in tables; the log is components either way, so the same
 // history, the same undo, the same feed must come back — and, because both
 // adapters are synchronous, without an await anywhere.

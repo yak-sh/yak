@@ -3,14 +3,14 @@
 //
 // Two people keep a handful of pages. Each of them works through a RUN — an
 // editor window, or an agent turn — and a run locks a page while it edits it.
-// The store is @yaks/memory, which is how a page or a test composes this
+// The store is @yaks/ram, which is how a page or a test composes this
 // package: a Map holding the bundles, the same `apply()` and the same rules as
 // a database.
 
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import type { Bundle } from '@yaks/graph'
 import { type Graph, graph, type Storage } from '@yaks/graph'
-import { memory } from '@yaks/memory'
+import { ram } from '@yaks/ram'
 import { sessionDoc } from './comp.ts'
 import { type SessionOpts, sessions } from './plugin.ts'
 
@@ -66,7 +66,7 @@ export let ids = {
 /** A store holding two people, three runs (two going, one ended) and two
  * pages, with nothing locked yet. */
 export let store = (): Storage => {
-  let s = memory(pages)
+  let s = ram(pages)
   let { ada, bo, run1, run2, over, p1, p2 } = ids
   graph({ storage: s, vocab: pages }).apply([
     { entity: { eid: ada }, person: { name: 'Ada' } },

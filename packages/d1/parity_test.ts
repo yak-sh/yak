@@ -7,7 +7,7 @@
 //
 // This is also where the sync pass-through is proved from the other side. The
 // same `parity()` returns `void` over two synchronous adapters (see
-// @yaks/memory and @yaks/durable-object) and a promise here, because one of the
+// @yaks/ram and @yaks/durable-object) and a promise here, because one of the
 // two graphs is asynchronous — one apply(), threaded either way.
 
 import { assert } from '@std/assert'

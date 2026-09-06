@@ -6,7 +6,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { graph, isPromise } from '@yaks/graph'
-import { memory } from '@yaks/memory'
+import { ram } from '@yaks/ram'
 import { effects } from '@yaks/effects'
 import { history } from './read.ts'
 import { logger, wiki, wikiGraph } from './harness.ts'
@@ -120,7 +120,7 @@ Deno.test('the reading it takes never reaches the caller, or an effect', () => {
   let fired: string[] = []
   let fx = effects(wiki)
   let g = graph({
-    storage: memory(wiki),
+    storage: ram(wiki),
     vocab: wiki,
     plugins: [logger(wiki), fx],
   })
@@ -138,7 +138,7 @@ Deno.test('the reading it takes never reaches the caller, or an effect', () => {
 })
 
 Deno.test('a second journal counts on from what the log already holds', () => {
-  let store = memory(wiki)
+  let store = ram(wiki)
   let one = graph({ storage: store, vocab: wiki, plugins: [logger(wiki)] })
   let two = graph({ storage: store, vocab: wiki, plugins: [logger(wiki)] })
   sync(one.apply([{ entity: { eid: 'p1' }, page: { title: 'One' } }]))

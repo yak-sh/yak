@@ -8,7 +8,7 @@ import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Graph, Tx } from '@yaks/graph'
 import { detached, graph, isPromise } from '@yaks/graph'
 import { journal, journalDoc } from '@yaks/journal'
-import { memory } from '@yaks/memory'
+import { ram } from '@yaks/ram'
 import { loadVocab, type Vocab } from '@yaks/vocab'
 import { effects } from './registry.ts'
 import { ledger } from './durable.ts'
@@ -148,7 +148,7 @@ let logged = (): { g: Graph; fx: ReturnType<typeof effects> } => {
   ])
   let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
   let g = graph({
-    storage: memory(vocab),
+    storage: ram(vocab),
     vocab,
     plugins: [journal(vocab), fx],
   })

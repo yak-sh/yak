@@ -27,7 +27,7 @@ export type { Query }
 
 /** What rides every read of a store: the moment relative time phrases in a
  * query (`.released=today`) resolve against. A per-call `opts` wins over it. */
-export type MemoryOpts = {
+export type RamOpts = {
   /** the reference moment for time phrases (default: the read's own `now`) */
   now?: number
   /** adopt the `num` a patch's identity carries instead of minting one. What a
@@ -86,14 +86,14 @@ let bundleOf = (r: Rec): Bundle =>
  *
  * ```ts
  * import { graph } from '@yaks/graph'
- * import { memory } from '@yaks/memory'
+ * import { ram } from '@yaks/ram'
  *
- * let g = graph({ storage: memory(vocab), vocab })
+ * let g = graph({ storage: ram(vocab), vocab })
  * g.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }])
  * g.read('.kind=doc')
  * ```
  */
-export let memory = (vocab: Vocab, base: MemoryOpts = {}): Store => {
+export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   let rows = new Map<Eid, Rec>()
   let next = 1
   // The undo log: for each entity a transaction is about to change, the record

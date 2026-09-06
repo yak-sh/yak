@@ -1524,12 +1524,6 @@
           "jsr:@std/assert@1"
         ]
       },
-      "packages/memory": {
-        "dependencies": [
-          "jsr:@db/sqlite@0.13.0",
-          "jsr:@std/assert@1"
-        ]
-      },
       "packages/names": {
         "dependencies": [
           "jsr:@std/assert@1"
@@ -1537,6 +1531,12 @@
       },
       "packages/query": {
         "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/ram": {
+        "dependencies": [
+          "jsr:@db/sqlite@0.13.0",
           "jsr:@std/assert@1"
         ]
       },

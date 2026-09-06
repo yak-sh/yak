@@ -1,5 +1,5 @@
 {
-  "name": "@yaks/memory",
+  "name": "@yaks/ram",
   "version": "0.0.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",

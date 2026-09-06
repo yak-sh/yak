@@ -134,11 +134,11 @@ let watching = (s: Slot, e: Event): boolean =>
  *
  * ```ts
  * import { graph } from '@yaks/graph'
- * import { memory } from '@yaks/memory'
+ * import { ram } from '@yaks/ram'
  * import { effects } from '@yaks/effects'
  *
  * let fx = effects(vocab)
- * let g = graph({ storage: memory(vocab), vocab, plugins: [fx] })
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
  *
  * fx.created('post', (e) => console.log('a post appeared', e.comp?.title))
  * fx.changed('post', 'published', (e) => notify(e.entity.eid))

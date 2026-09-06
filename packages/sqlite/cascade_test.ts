@@ -21,7 +21,7 @@ import { assert, assertEquals } from '@std/assert'
 import { ARMS, doomSql, looseSql, narrow } from '@yaks/sql'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Change, type Graph, graph } from '@yaks/graph'
-import { memory } from '@yaks/memory'
+import { ram } from '@yaks/ram'
 import { mem } from './harness.ts'
 import { storage, type Store } from './mod.ts'
 
@@ -105,7 +105,7 @@ let both = (seed: Change, kill: Change, v: Vocab = words): Bundle[] => {
     return g.apply(kill, { now: AT }) as Bundle[]
   }
   let sql = run(graph({ storage: db(v), vocab: v }))
-  assertEquals(sql, run(graph({ storage: memory(v), vocab: v })))
+  assertEquals(sql, run(graph({ storage: ram(v), vocab: v })))
   return sql
 }
 

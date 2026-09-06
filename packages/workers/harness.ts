@@ -7,7 +7,7 @@
 
 import type { Frame, Socket } from '@yaks/api'
 import { type Graph, graph } from '@yaks/graph'
-import { memory } from '@yaks/memory'
+import { ram } from '@yaks/ram'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import type { Namespace, Stub } from './stub.ts'
 
@@ -46,8 +46,7 @@ let doc: VocabDoc = {
 export let shop: Vocab = loadVocab(doc)
 
 /** A graph over a fresh in-memory store. */
-export let shopGraph = (): Graph =>
-  graph({ storage: memory(shop), vocab: shop })
+export let shopGraph = (): Graph => graph({ storage: ram(shop), vocab: shop })
 
 /** A request, spelled the way a test wants to say it. */
 export let req = (path: string, init: RequestInit = {}): Request =>

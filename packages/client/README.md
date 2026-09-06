@@ -5,7 +5,7 @@ one call assembles it, a query is a value that changes, and what belongs to this
 browser is kept in IndexedDB.
 
 The pieces already exist — a map to hold entities
-([@yaks/memory](https://jsr.io/@yaks/memory)), a wire to a server
+([@yaks/ram](https://jsr.io/@yaks/ram)), a wire to a server
 ([@yaks/sync](https://jsr.io/@yaks/sync)), a query evaluator with no database
 under it ([@yaks/match](https://jsr.io/@yaks/match)). This package is the three
 things a page still has to add: the assembly, the reactivity, and somewhere
@@ -174,7 +174,7 @@ its own store implements the four members of `Vault` (`load`, `save`, `drop`,
 `clear`) and passes that.
 
 A vault is deliberately **not** a `Storage`: storage answers queries, and the
-queries are already answered by the map @yaks/memory holds. What was missing is
+queries are already answered by the map @yaks/ram holds. What was missing is
 durability, so the interface is the four things durability needs. It lives here
 until a second implementation makes it worth its own package.
 
@@ -207,7 +207,7 @@ worker, a test, or a CLI holding a working set gets the same live queries.
 ## The family
 
 [@yaks/graph](https://jsr.io/@yaks/graph) owns the bundles and `apply()`;
-[@yaks/memory](https://jsr.io/@yaks/memory) is the map this keeps them in;
+[@yaks/ram](https://jsr.io/@yaks/ram) is the map this keeps them in;
 [@yaks/match](https://jsr.io/@yaks/match) judges a bundle against a query;
 [@yaks/query](https://jsr.io/@yaks/query) is the grammar both sides speak;
 [@yaks/sync](https://jsr.io/@yaks/sync) is the wire to the server, and the

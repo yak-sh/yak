@@ -11,7 +11,7 @@
 
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
-import { memory } from '@yaks/memory'
+import { ram } from '@yaks/ram'
 import { api, type Handler } from '@yaks/api'
 import type { Connect, Socket } from './socket.ts'
 import { type Sync, sync } from './sync.ts'
@@ -87,7 +87,7 @@ export let box: Vocab = loadVocab(doc, [syncKeywords])
 /** A graph over a fresh map. `adopt` is what a CLIENT store needs: the numbers
  * come from the server, not from this map. */
 export let boxGraph = (adopt = false): Graph =>
-  graph({ storage: memory(box, { adopt }), vocab: box })
+  graph({ storage: ram(box, { adopt }), vocab: box })
 
 /** A stand-in socket, driven by hand: it records what this side sent, and
  * `emit` plays the events a real one would fire. It starts CONNECTING, so a

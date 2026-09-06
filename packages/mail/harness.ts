@@ -4,11 +4,11 @@
 // The club is a `space`, its people are `person` entities wearing an `email`,
 // and its roster is a `member` row — the same three words @yaks/member ships,
 // declared here so this package's tests need no dependency on it. The store is
-// @yaks/memory: a Map holding the bundles, the same apply() and the same
+// @yaks/ram: a Map holding the bundles, the same apply() and the same
 // queries as a database.
 
 import { type Graph, graph } from '@yaks/graph'
-import { memory } from '@yaks/memory'
+import { ram } from '@yaks/ram'
 import { type Effects, effects } from '@yaks/effects'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { docDoc, docs } from '@yaks/doc'
@@ -82,7 +82,7 @@ export let clubhouse = (refuse?: string): Club => {
   let fx = effects(club, { write: (b) => g.apply(b, { trusted: true }) })
   let post = stash(refuse ? { refuse } : {})
   let g = graph({
-    storage: memory(club),
+    storage: ram(club),
     vocab: club,
     plugins: [
       fx,

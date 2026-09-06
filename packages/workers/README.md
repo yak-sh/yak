@@ -168,8 +168,8 @@ Its dependencies are the sibling packages: `@yaks/api` and `@yaks/graph`.
 subscription model; [@yaks/graph](https://jsr.io/@yaks/graph) owns the bundle
 wire and `apply()`; the bytes belong to a storage adapter —
 [@yaks/durable-object](https://jsr.io/@yaks/durable-object) inside a Durable
-Object, `@yaks/d1` over D1, [@yaks/memory](https://jsr.io/@yaks/memory) with
-nothing underneath. This package is only the seam between them and Cloudflare.
+Object, `@yaks/d1` over D1, [@yaks/ram](https://jsr.io/@yaks/ram) with nothing
+underneath. This package is only the seam between them and Cloudflare.
 
 ## License
 

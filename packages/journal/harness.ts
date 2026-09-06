@@ -4,7 +4,7 @@
 // cascade's casualties are something the tests can watch a journal record.
 
 import { type Graph, graph, type Options, type Plugin } from '@yaks/graph'
-import { memory } from '@yaks/memory'
+import { ram } from '@yaks/ram'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { journal, type JournalOpts } from './record.ts'
 import { journalDoc } from './vocab.ts'
@@ -62,7 +62,7 @@ export let wiki: Vocab = loadVocab([doc, journalDoc])
 /** A graph over a fresh Map, journaling, plus whatever a test brings. */
 export let wikiGraph = (plugins: Options['plugins'] = []): Graph =>
   graph({
-    storage: memory(wiki),
+    storage: ram(wiki),
     vocab: wiki,
     plugins: [logger(wiki), ...plugins],
   })

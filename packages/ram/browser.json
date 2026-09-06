@@ -1,5 +1,5 @@
 {
-  "_": "The browser gate: @yaks/memory must type-check with only the web platform in scope — no Deno namespace, no Node types. `deno check --config packages/memory/browser.json packages/memory/mod.ts` is the check; it is part of `deno task check`.",
+  "_": "The browser gate: @yaks/ram must type-check with only the web platform in scope — no Deno namespace, no Node types. `deno check --config packages/ram/browser.json packages/ram/mod.ts` is the check; it is part of `deno task check`.",
   "compilerOptions": {
     "lib": ["dom", "esnext"],
     "strict": true

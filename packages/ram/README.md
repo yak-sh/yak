@@ -1,4 +1,4 @@
-# @yaks/memory
+# @yaks/ram
 
 The **in-memory storage adapter**: [@yaks/graph](https://jsr.io/@yaks/graph)'s
 `Storage` over a plain `Map` of bundles, fully synchronous, with no database
@@ -18,8 +18,8 @@ same bundles and leave both stores reading back the same entities.
 ## Install
 
 ```sh
-deno add jsr:@yaks/memory
-# or: npx jsr add @yaks/memory
+deno add jsr:@yaks/ram
+# or: npx jsr add @yaks/ram
 ```
 
 ## Use
@@ -27,7 +27,7 @@ deno add jsr:@yaks/memory
 ```ts
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
-import { memory } from '@yaks/memory'
+import { ram } from '@yaks/ram'
 
 let vocab = loadVocab({
   $defs: {
@@ -49,7 +49,7 @@ let vocab = loadVocab({
   },
 })
 
-let g = graph({ storage: memory(vocab), vocab })
+let g = graph({ storage: ram(vocab), vocab })
 
 g.apply([
   { entity: { eid: 'a1' }, doc: { title: 'Ursula Vale' } },
@@ -71,9 +71,9 @@ patching rows rather than applying changes, and the rules `apply()` owns
 (admission, `$was`, who dies with what, provenance) are not applied:
 
 ```ts
-import { memory } from '@yaks/memory'
+import { ram } from '@yaks/ram'
 
-let store = memory(vocab)
+let store = ram(vocab)
 store.tx((tx) => tx.patch([{ entity: { eid: 'b1' }, book: { pages: 412 } }]))
 store.read('.kind=book')
 ```
@@ -81,7 +81,7 @@ store.read('.kind=book')
 ## API
 
 ```ts
-memory(vocab, base?) // bind a store to a vocabulary
+ram(vocab, base?) // bind a store to a vocabulary
 ```
 
 returns a `Store` — @yaks/graph's `Storage`, answered synchronously:
@@ -123,13 +123,13 @@ at 1. `num` is therefore always present, which is what makes `.limit`/`.after`
 paging and `.order` mean the same thing here as against a database. A
 rolled-back batch gives its numbers back.
 
-`memory(vocab, { adopt: true })` turns that around: a patch whose identity
-already carries a `num` keeps it, and an entity this store numbered on its own
-takes the correction when one arrives. That is what a store MIRRORING another
-graph needs — a page holding [@yaks/sync](https://jsr.io/@yaks/sync) is being
-told the identity by the server, not asking for one — so a recipe has the same
-number in the browser as it has in the database. Off by default: a store nobody
-mirrors owns its own numbering.
+`ram(vocab, { adopt: true })` turns that around: a patch whose identity already
+carries a `num` keeps it, and an entity this store numbered on its own takes the
+correction when one arrives. That is what a store MIRRORING another graph needs
+— a page holding [@yaks/sync](https://jsr.io/@yaks/sync) is being told the
+identity by the server, not asking for one — so a recipe has the same number in
+the browser as it has in the database. Off by default: a store nobody mirrors
+owns its own numbering.
 
 ### Rollback
 

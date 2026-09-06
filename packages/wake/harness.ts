@@ -1,14 +1,14 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
 // houseplant and a calendar entry, written as a vocabulary.
 //
-// The store is @yaks/memory, which is how a page or a test composes this
+// The store is @yaks/ram, which is how a page or a test composes this
 // package — a Map holding the bundles, the same `apply()` and the same query
 // grammar as a database. Every clock is a number a test hands in, so nothing
 // here waits.
 
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Graph, graph, type Storage } from '@yaks/graph'
-import { memory } from '@yaks/memory'
+import { ram } from '@yaks/ram'
 import { wakeDoc } from './comp.ts'
 import { type Opts, wakes } from './plugin.ts'
 
@@ -38,7 +38,7 @@ export let T0: number = Date.parse('2026-01-01T09:17:00Z')
 export let HOUR = 3_600_000
 
 /** An empty store over that vocabulary. */
-export let store = (): Storage => memory(home)
+export let store = (): Storage => ram(home)
 
 /** A graph over a store, with the wake plugin on it and a clock a test owns. */
 export let woken = (s: Storage, opts: Opts = {}): Graph =>

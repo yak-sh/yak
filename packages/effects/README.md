@@ -22,11 +22,11 @@ vocabulary's; the handlers are yours.
 
 ```ts
 import { graph } from '@yaks/graph'
-import { memory } from '@yaks/memory'
+import { ram } from '@yaks/ram'
 import { effects } from '@yaks/effects'
 
 let fx = effects(vocab)
-let g = graph({ storage: memory(vocab), vocab, plugins: [fx] })
+let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
 
 fx.created('post', (e) => index(e.entity.eid, e.comp?.title))
 fx.changed('post', 'published', (e) => notify(e.entity.eid))
@@ -161,7 +161,7 @@ nothing; the in-memory tier needs no component at all.
 
 Below it, [@yaks/graph](https://jsr.io/@yaks/graph) owns the phases and hands
 this one the committed batch. Beside it, any storage adapter —
-[@yaks/memory](https://jsr.io/@yaks/memory) in a page or a test, a database
-adapter on a server. Above it, the plugins that have something to do: this is
-the seam a component domain uses to act on its own components without touching
-the write path.
+[@yaks/ram](https://jsr.io/@yaks/ram) in a page or a test, a database adapter on
+a server. Above it, the plugins that have something to do: this is the seam a
+component domain uses to act on its own components without touching the write
+path.

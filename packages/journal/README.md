@@ -46,12 +46,12 @@ rather than left to whatever order an adapter returns rows in.
 
 ```ts
 import { graph } from '@yaks/graph'
-import { memory } from '@yaks/memory'
+import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { history, journal, journalDoc, since, undo } from '@yaks/journal'
 
 let vocab = loadVocab([journalDoc, pages])
-let g = graph({ storage: memory(vocab), vocab, plugins: [journal(vocab)] })
+let g = graph({ storage: ram(vocab), vocab, plugins: [journal(vocab)] })
 
 g.apply([
   { entity: { eid: 'p1' }, page: { title: 'Kickoff' }, $actor: { by: 'ada' } },

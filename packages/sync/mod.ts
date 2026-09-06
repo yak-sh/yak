@@ -3,16 +3,16 @@
  * @yaks/graph}: a plugin that carries a local graph's writes to a server and
  * the server's writes back.
  *
- * A graph in a page over {@link https://jsr.io/@yaks/memory | @yaks/memory} is
+ * A graph in a page over {@link https://jsr.io/@yaks/ram | @yaks/ram} is
  * a complete graph — same `apply()`, same queries, same bundles — it just has
  * nobody else in it. This package is the nobody else.
  *
  * ```ts
  * import { graph } from '@yaks/graph'
- * import { memory } from '@yaks/memory'
+ * import { ram } from '@yaks/ram'
  * import { sync } from '@yaks/sync'
  *
- * // let g = graph({ storage: memory(vocab, { adopt: true }), vocab })
+ * // let g = graph({ storage: ram(vocab, { adopt: true }), vocab })
  * // let wire = sync(g, { url: 'https://recipes.example' })
  * // wire.subscribe('.dinner&.serves>4')
  * ```

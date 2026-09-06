@@ -8,7 +8,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
-import { memory } from '@yaks/memory'
+import { ram } from '@yaks/ram'
 import { type Options, server } from './server.ts'
 
 let doc: VocabDoc = {
@@ -71,8 +71,7 @@ let doc: VocabDoc = {
 export let shop: Vocab = loadVocab(doc)
 
 /** A graph over a fresh in-memory store. */
-export let shopGraph = (): Graph =>
-  graph({ storage: memory(shop), vocab: shop })
+export let shopGraph = (): Graph => graph({ storage: ram(shop), vocab: shop })
 
 /** An MCP client talking to a server over this graph, in one process. */
 export let connect = async (

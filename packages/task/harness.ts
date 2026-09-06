@@ -4,13 +4,13 @@
 // The team writes `doc{title}` on everything and files its tasks under projects.
 // That `doc` is @yaks/doc's, loaded beside this package's rather than spelled
 // out again here — which is also the composition the README teaches. The store
-// is @yaks/memory, which is how a page or a test composes this package — a Map
+// is @yaks/ram, which is how a page or a test composes this package — a Map
 // holding the bundles, the same apply() and the same query grammar as a
 // database.
 
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Graph, graph, type Storage } from '@yaks/graph'
-import { memory } from '@yaks/memory'
+import { ram } from '@yaks/ram'
 import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { taskDoc } from './comp.ts'
@@ -43,7 +43,7 @@ export let team: Vocab = loadVocab(
 )
 
 /** A fresh in-memory storage over that vocabulary. */
-export let store = (): Storage => memory(team)
+export let store = (): Storage => ram(team)
 
 /** A graph over a fresh store, with the edge and task plugins wired. */
 export let teamGraph = (

@@ -10,8 +10,8 @@
 
 import { parity, rig } from '../sqlite/parity.ts'
 import { shop, store } from '../sqlite/harness.ts'
-import { memory } from './mod.ts'
+import { ram } from './mod.ts'
 
-Deno.test('a memory graph and a sqlite graph agree, batch for batch', () => {
-  parity(rig(memory(shop)), rig(store()))
+Deno.test('a ram graph and a sqlite graph agree, batch for batch', () => {
+  parity(rig(ram(shop)), rig(store()))
 })

@@ -3,14 +3,14 @@
 //
 // The club is a `space`. It runs two things: a reading `list` everyone may see
 // and a `notes` page only the committee reads. People are `person` entities.
-// The store is @yaks/memory, which is how a page or a test composes this
+// The store is @yaks/ram, which is how a page or a test composes this
 // package — a Map holding the bundles, the same `apply()` and the same query
 // grammar as a database.
 
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import type { Bundle } from '@yaks/graph'
 import { type Graph, graph, type Storage } from '@yaks/graph'
-import { memory } from '@yaks/memory'
+import { ram } from '@yaks/ram'
 import { memberDoc } from './comp.ts'
 import { members } from './plugin.ts'
 
@@ -77,7 +77,7 @@ export let ids = {
 /** A store holding the club, its people, its two things, and a roster: Dana
  * owns the club, Raj and Mo have seats, Kim has nothing. */
 export let store = (): Storage => {
-  let s = memory(club)
+  let s = ram(club)
   let g = graph({ storage: s, vocab: club })
   let { club: c, dana, raj, mo, kim, list, notes } = ids
   g.apply([

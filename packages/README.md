@@ -40,8 +40,8 @@ In dependency order:
 - **[@yaks/match](./match)** — the other evaluator of the same grammar: a
   `@yaks/query` AST run as a predicate over bundles held in memory, with no
   database. Tested query by query for parity with `@yaks/sql`.
-- **[@yaks/memory](./memory)** — the storage adapter with nothing underneath it:
-  a `Map` of bundles answering `@yaks/graph`'s `Storage`, reads through
+- **[@yaks/ram](./ram)** — the storage adapter with nothing underneath it: a
+  `Map` of bundles answering `@yaks/graph`'s `Storage`, reads through
   `@yaks/match`, synchronous, browser-ready. Tested batch for batch against
   `@yaks/sqlite`.
 - **[@yaks/edge](./edge)** — links between entities as a component: the
@@ -153,7 +153,7 @@ on its own:
 - `@yaks/match` is the path with no storage at all: hand it the same AST and
   vocabulary and it filters the bundles you already hold, so a saved filter
   means one thing in the database and in the page.
-- `@yaks/memory` puts that evaluator behind the storage seam: a whole graph in a
+- `@yaks/ram` puts that evaluator behind the storage seam: a whole graph in a
   Map, with the same `apply()` and the same queries as the database path, for a
   page, a worker, or a test that has no database to install.
 - `@yaks/edge` adds relationships the same way search was added: a component
@@ -218,8 +218,8 @@ on its own:
   promise here, with the phases, plugins and cascade unchanged. Its README
   states exactly what D1's lack of an interactive transaction costs, rather than
   claiming an isolation D1 does not offer.
-- `@yaks/sync` closes the loop: a `@yaks/graph` over `@yaks/memory` in a page,
-  plus this plugin, is a client that writes locally at once and agrees with the
+- `@yaks/sync` closes the loop: a `@yaks/graph` over `@yaks/ram` in a page, plus
+  this plugin, is a client that writes locally at once and agrees with the
   `@yaks/api` at the other end afterwards. Both transports are injected, so the
   whole round trip runs in one process in a test.
 - `@yaks/client` is that loop with the page's half already wired: the assembly

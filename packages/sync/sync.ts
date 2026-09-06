@@ -74,10 +74,10 @@ let warn: Report = (t) =>
  *
  * ```ts
  * import { graph } from '@yaks/graph'
- * import { memory } from '@yaks/memory'
+ * import { ram } from '@yaks/ram'
  * import { sync } from '@yaks/sync'
  *
- * // let g = graph({ storage: memory(vocab, { adopt: true }), vocab })
+ * // let g = graph({ storage: ram(vocab, { adopt: true }), vocab })
  * // let wire = sync(g, { url: 'https://recipes.example' })
  * // wire.subscribe('.dinner&.serves>4')
  * ```

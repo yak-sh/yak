@@ -5,7 +5,7 @@
  * IndexedDB.
  *
  * The pieces already exist — a map to hold entities
- * ({@link https://jsr.io/@yaks/memory | @yaks/memory}), a wire to a server
+ * ({@link https://jsr.io/@yaks/ram | @yaks/ram}), a wire to a server
  * ({@link https://jsr.io/@yaks/sync | @yaks/sync}), a query evaluator with no
  * database under it ({@link https://jsr.io/@yaks/match | @yaks/match}). This
  * package is the three things a page still has to add: the assembly, the
