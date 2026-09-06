@@ -67,7 +67,12 @@ type Told = { method: string; params?: unknown }
 // names themselves, so what a later call compares against is not "it moved"
 // but which tools moved. Recorded at `initialize` — the moment the client
 // cached the list — and replaced when the session is told.
-type Roster = { version: string; names: string[] }
+//
+// Beside them a mark naming what the instructions said about the apps in
+// reach (standing.ts, T-34425). The two move for different reasons and are
+// said back differently: a tool name the agent can act on, and a passage it
+// has to read again.
+export type Roster = { version: string; names: string[]; context?: string }
 type Asked = Roster & { session: string; init?: boolean }
 
 type Held = {
@@ -93,6 +98,28 @@ let bare = (told: Told) => `data: ${body(told)}\n\n`
 
 // The lists a platform release moves, in the release news `crossed` says.
 let LISTS = ['tools', 'resources', 'prompts']
+
+// What a reply says when the apps in reach moved and no tool name did: an app
+// made, an app that grew a word of its own, or an AGENTS.md edited (mcp.ts
+// folds the mark for all three into the roster version). The agent cached
+// those at connect and cannot see them move any other way.
+let APPS = 'The apps here changed since you connected — one was made or ' +
+  'renamed, or the standing instructions beside one were edited. Ask ' +
+  '`about` to read them again.'
+
+/**
+ * What to say to a session holding `was` when the door now lists `now`: the
+ * tool names moved, or the apps did, or neither. A tool that appeared is the
+ * more actionable news, so it wins where both moved — one sentence, not two.
+ *
+ * ```ts
+ * stale({ version: 'a', names: [] }, { version: 'b', names: [] })
+ * // undefined — a release that moved nothing says nothing
+ * ```
+ */
+export let stale = (was: Roster, now: Roster): string | undefined =>
+  was.version == now.version ? undefined : rosterLine(was.names, now.names) ??
+    (was.context != now.context ? APPS : undefined)
 
 // How many sessions' last-spoken-for version the object keeps: a person's
 // clients are few, and a session evicted early only hears one release's news
@@ -220,7 +247,11 @@ export class Wire {
     let was = all[said.session]
     let keep = async () => {
       delete all[said.session]
-      all[said.session] = { version: said.version, names: said.names }
+      all[said.session] = {
+        version: said.version,
+        names: said.names,
+        context: said.context,
+      }
       for (let old of Object.keys(all).slice(0, -KEPT)) delete all[old]
       await this.state.storage.put('listed', all)
     }
@@ -229,7 +260,7 @@ export class Wire {
       return {}
     }
     if (was.version == said.version) return {}
-    let line = rosterLine(was.names, said.names)
+    let line = stale(was, said)
     await keep()
     return line ? { line } : {}
   }
@@ -345,7 +376,7 @@ export let listen = (env: Env, person: string, req: Request) =>
 export let rostered = async (
   env: Env,
   person: string,
-  said: { session: string; version: string; names: string[]; init?: boolean },
+  said: Asked,
 ): Promise<string | undefined> => {
   let r = await wireOf(env.WIRE, person).fetch(
     new Request('http://wire/roster', {

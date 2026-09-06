@@ -147,6 +147,13 @@ store — and after app_deploy they are listed here as <app>__<tool>, for the
 person and for anyone else in the space. Call guide with page tools for the
 shape.
 
+When the person states a STANDING RULE for an app — recipes in grams, one
+photo each, never mail anybody on a Sunday — write it into an AGENTS.md beside
+that app's index.html. Every agent who can reach the app, including you next
+time, is handed it at the start of every conversation, so a rule is said once
+and followed after. Keep it under 4 KB and to the rules themselves. Call guide
+with page instructions for the whole thing.
+
 An app can carry its own CODE too: a worker.js beside index.html answers
 every request that is not /api/ before the files do, and whatever it answers
 404 falls through to them, so it owns the routes it names and nothing else.
@@ -289,6 +296,17 @@ export let PAGES: Page[] = [
       'apply and query acts, what a deploy refuses, and the view an answer ' +
       'draws itself in.',
     brief: 'tools of the app, for an agent',
+  },
+  {
+    slug: 'instructions',
+    title: 'Standing instructions for an app',
+    description:
+      "AGENTS.md beside index.html: the rules an app's person wants followed " +
+      'every time anyone works on it, handed to every agent who can reach ' +
+      'the app — where the file goes, what belongs in it and what does not, ' +
+      'the size ceiling, how a person invokes it by name, and what an ' +
+      'installed copy carries.',
+    brief: 'standing rules an app carries',
   },
   {
     slug: 'code',

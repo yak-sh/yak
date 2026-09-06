@@ -197,7 +197,8 @@ export let based = (href: string, page: string) => {
 
 // The files that ARE the app's platform manifest rather than its page: the
 // server code the dispatch namespace runs (dispatch.ts), the two declarations
-// a deploy reads and the data it seeds the store with (tools.ts, seed.ts).
+// a deploy reads, the data it seeds the store with (tools.ts, seed.ts), and
+// the standing instructions its person left for an agent (standing.ts).
 // Those are the app's INSIDE — the platform reads them out of the blob store,
 // and a member reads them back through `app_files` — so the door that serves
 // the app's pages does not serve them to the web. Before this, `GET
@@ -206,7 +207,12 @@ export let based = (href: string, page: string) => {
 //
 // The test is on the decoded KEY, not the path, because `/%77orker.js` names
 // the same file.
-let MANIFEST = new Set(['/worker.js', '/vocab.json', '/tools.json'])
+let MANIFEST = new Set([
+  '/worker.js',
+  '/vocab.json',
+  '/tools.json',
+  '/AGENTS.md',
+])
 
 let inside = (path: string) => MANIFEST.has(path) || seedy(path.slice(1))
 

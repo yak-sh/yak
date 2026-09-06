@@ -48,6 +48,7 @@ import { asset } from './preauth.ts'
 import { released, spending } from './sandbox.ts'
 import type { Who } from './session.ts'
 import { type Ctx, TOOLS } from './tools.ts'
+import { standing } from './standing.ts'
 
 /** What one response cost, in the words both providers can be read into.
  * `neurons` is Workers AI's own billing unit and rides only where it is
@@ -241,16 +242,23 @@ let called = async (
  * instructions, then the guide whole. One text, so what an agent is taught
  * here and what an agent is taught over MCP cannot drift.
  */
-export let prompt = async (env: Env): Promise<string> => {
+export let prompt = async (env: Env, ctx?: Ctx): Promise<string> => {
+  // The apps this person already has, and the standing instructions beside
+  // each (standing.ts, T-34425) — the same passage the connector puts on its
+  // own instructions, so a rule written for one agent is not missed by the
+  // other. It goes LAST: it is about this person's apps, and the guide it
+  // follows is about apps in general.
+  let apps = ctx ? (await standing(ctx)).text : ''
+  let after = apps ? `\n\n---\n\n${apps}` : ''
   try {
     let page = await asset({ ASSETS: env.ASSETS }, WHOLE)
     if (!page.ok) {
       await page.body?.cancel()
-      return INSTRUCTIONS
+      return INSTRUCTIONS + after
     }
-    return `${INSTRUCTIONS}\n\n---\n\n${await page.text()}`
+    return `${INSTRUCTIONS}\n\n---\n\n${await page.text()}${after}`
   } catch {
-    return INSTRUCTIONS
+    return INSTRUCTIONS + after
   }
 }
 
@@ -566,7 +574,7 @@ export let build = async (
   let tools = roster(ctx)
   let by = new Map(tools.map((t) => [t.fn.name, t.run]))
   let fns = tools.map((t) => t.fn)
-  let system = await prompt(env)
+  let system = await prompt(env, ctx)
   let max = opts.rounds ?? 12
   let tokens = opts.tokens ?? 4096
   let ms = opts.ms ?? 60_000

@@ -69,6 +69,10 @@ import {
   url,
 } from './directory.ts'
 import { moved, reachChanged, toolsOf } from './declared.ts'
+// Only the ceiling, and only ever called: tools.ts and standing.ts are a
+// cycle through declared.ts, so nothing from there may be read while this
+// module's own body runs.
+import { tooLong } from './standing.ts'
 import { meta, minted } from './meta.ts'
 import {
   doomed,
@@ -187,6 +191,11 @@ export type Ctx = {
   // T-34277). Set after the tools are assembled, since it is made OF them, so
   // only a tool RUNNING sees it — which `about` is.
   roster?: { version: string; names: string[] }
+  // What the apps in reach say about themselves (standing.ts), assembled once
+  // per request by the door that also puts it in `initialize.instructions`
+  // (mcp.ts). `about` says it again, because a client that cached the
+  // instructions at connect has no other way to read them fresh.
+  standing?: string
   // The container time this BUILD has spent (sandbox.ts `Spend`), where a
   // build is what is running: builder.ts mints one per loop and pays for it
   // at the end. A connector call arrives without one and gets a fresh one, so
@@ -253,6 +262,13 @@ let rostered = (ctx: Ctx) =>
       'changed, that is this version moving: reconnect, or call about again ' +
       'to see what is here.'
     : ''
+
+// The apps in reach, as `initialize` already told this client (standing.ts):
+// what each holds, and the standing instructions beside it. Said again here
+// because a client caches the instructions at connect and a person's apps move
+// under it — an app made this morning is one the agent would otherwise not
+// know to put this afternoon's recipe in.
+let said = (ctx: Ctx) => ctx.standing ? `\n\n${ctx.standing}` : ''
 
 // How a caller got in, said the way a person would say it (identity.ts
 // `Caller`).
@@ -1054,6 +1070,14 @@ export let wrote = async (
 ) => {
   let blobs = r2Blobs(env.BLOBS)
   let prefix = fileKey(space, app, '')
+  // The one file with a ceiling of its own (standing.ts): AGENTS.md is read
+  // on every connection by every agent that can reach the app, so it is
+  // refused over the cap here — at the write, whichever door brought the
+  // bytes — rather than truncated at the read.
+  for (let f of files) {
+    let no = tooLong(f.path, f.bytes.byteLength)
+    if (no) throw new Error(no)
+  }
   for (let f of files) await blobs.put(fileKey(space, app, f.path), f.bytes)
   // One purge for the whole batch, after the last byte lands: the tag is the
   // app, not the file, so writing ten files empties the edge once (cache.ts
@@ -1568,7 +1592,13 @@ export let TOOLS: Tool[] = [
       'installs at another address still works. Every write answers what it ' +
       'stored — the byte count and the sha256, and for a .json file whether ' +
       'it parses, naming the position when it does not — so a miscounted ' +
-      'bracket is caught in the call that made it. op: patch with path, find ' +
+      'bracket is caught in the call that made it. AGENTS.md beside ' +
+      'index.html is what the person wants followed whenever anyone works on ' +
+      'this app — recipes in grams, one photo each — and every agent who can ' +
+      'reach the app is told it at the start of every conversation; write ' +
+      'one whenever they state a rule like that, and keep it under 4 KB. It ' +
+      "is the app's inside, like vocab.json: never served on the web, read " +
+      'back here. op: patch with path, find ' +
       'and replace edits one file in place: find is exact and must match ' +
       'exactly once. op: fetch with path and url writes an https response ' +
       'body to path, which is how a library is vendored without transcribing ' +
@@ -3694,6 +3724,8 @@ export let TOOLS: Tool[] = [
     // is old has one call that settles what it has, without reconnecting.
     // Before signing in the same words are said with neither (preauth.ts): the
     // public list is one tool, and it is this one.
-    run: async (ctx) => ({ text: t.text + await whoami(ctx) + rostered(ctx) }),
+    run: async (ctx) => ({
+      text: t.text + await whoami(ctx) + said(ctx) + rostered(ctx),
+    }),
   })),
 ]

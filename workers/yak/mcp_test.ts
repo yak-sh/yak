@@ -5156,3 +5156,149 @@ slow('store_load reads a CSV as rows of one component', async () => {
     await k.stop()
   }
 })
+
+// AGENTS.md beside an app (standing.ts, T-34425): the standing rules its
+// person left, and — for every app, rules or not — the heading that makes it
+// discoverable. Owner, 2026-09-05: "if i later say, 'add this recipe', i want
+// them to know there's a recipe app to add it to".
+slow('an app says what it holds, and what it asks of an agent', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/
+      .exec(
+        await agent.tool('app_new', { slug: 'recipes', title: 'Recipes' }),
+      )![1]
+    let RULES = '# Recipes\n\nWeights in grams, never cups.\n' +
+      'One photo per recipe, of the finished dish.'
+    await agent.tool('app_files', {
+      space,
+      app: 'recipes',
+      files: [
+        { path: 'index.html', content: '<h1>Recipes</h1>' },
+        {
+          path: 'vocab.json',
+          content: JSON.stringify({ recipe: { serves: 'number' } }),
+        },
+        {
+          path: 'tools.json',
+          content: JSON.stringify({
+            add: {
+              description: 'Write a recipe down',
+              input: { title: 'text' },
+              apply: { doc: { title: '{{title}}' }, recipe: {} },
+            },
+          }),
+        },
+        { path: 'AGENTS.md', content: RULES },
+      ],
+    })
+    await agent.tool('app_deploy', { space, app: 'recipes' })
+    // A second app with words of its own and NO rules beside it: it is still
+    // named, because being found is the point.
+    await agent.tool('app_new', { slug: 'chores', title: 'Chores' })
+    await agent.tool('app_files', {
+      space,
+      app: 'chores',
+      files: [{
+        path: 'vocab.json',
+        content: JSON.stringify({ chore: { who: 'text' } }),
+      }],
+    })
+    await agent.tool('app_deploy', { space, app: 'chores' })
+
+    // What a model reads before it reads anything else.
+    let init = await agent.call('initialize', HELLO)
+    assertStringIncludes(init.instructions, `## ${space}/recipes`)
+    assertStringIncludes(
+      init.instructions,
+      `https://${space}.yaks.app/recipes/`,
+    )
+    assertStringIncludes(init.instructions, 'holds recipes')
+    assertStringIncludes(init.instructions, 'Tools: recipes__add')
+    assertStringIncludes(init.instructions, 'Weights in grams, never cups.')
+    assertStringIncludes(init.instructions, `## ${space}/chores`)
+    assertStringIncludes(init.instructions, 'holds chores')
+    // And `about` says it again, for a conversation the apps moved under.
+    let about = await agent.tool('about')
+    assertStringIncludes(about, 'Weights in grams, never cups.')
+    assertStringIncludes(about, `## ${space}/chores`)
+
+    // The person's own door onto the same words: a prompt named after the
+    // app, whose description is the file's first line.
+    let listed = async (
+      c: ReturnType<typeof connector>,
+    ) => ((await c.call('prompts/list')).prompts as {
+      name: string
+      description: string
+    }[])
+    let prompts = await listed(agent)
+    let mine = prompts.find((p) => p.name == 'recipes')
+    assert(mine, `no recipes prompt in ${prompts.map((p) => p.name)}`)
+    assertEquals(mine.description, 'Recipes')
+    assertEquals(prompts.some((p) => p.name == 'chores'), false)
+    let got = await agent.call('prompts/get', { name: 'recipes' })
+    assertEquals(got.messages.length, 1)
+    assertEquals(got.messages[0].role, 'user')
+    assertEquals(got.messages[0].content.text, RULES)
+
+    // It is the app's INSIDE: deployed, never served, whichever way the path
+    // is spelled (apps.ts MANIFEST).
+    assertEquals(
+      (await k.at(`${space}.yaks.app`, '/recipes/AGENTS.md')).status,
+      404,
+    )
+    assertEquals(
+      (await k.at(`${space}.yaks.app`, '/recipes/%41GENTS.md')).status,
+      404,
+    )
+
+    // Too long is refused at the write, with the number, rather than
+    // truncated at the read: every agent in the space pays for it on every
+    // connection.
+    assertStringIncludes(
+      (await assertRejects(
+        () =>
+          agent.tool('app_files', {
+            space,
+            app: 'recipes',
+            path: 'AGENTS.md',
+            content: 'x'.repeat(4097),
+          }),
+        Error,
+      )).message,
+      '4097 bytes — 4096 at most',
+    )
+
+    // A member of another space is told nothing about any of it: reach is
+    // membership, the same question the tool list asks (declared.ts).
+    let maya = connector(k, (await signIn(k)).cookie)
+    let hers = await maya.call('initialize', HELLO)
+    assertEquals(hers.instructions.includes('Weights in grams'), false)
+    assertEquals(hers.instructions.includes(`${space}/recipes`), false)
+    assertEquals((await listed(maya)).some((p) => p.name == 'recipes'), false)
+
+    // Until she installs it. The rules are one of the app's files, so a copy
+    // carries them — the publisher's rules, in her own copy, hers to rewrite.
+    await agent.tool('app_publish', { space, app: 'recipes' })
+    assertStringIncludes(
+      await maya.tool('app_install', { name: 'recipes' }),
+      'installed recipes',
+    )
+    assertStringIncludes(
+      await maya.tool('app_files', {
+        app: 'recipes',
+        op: 'read',
+        path: 'AGENTS.md',
+      }),
+      'Weights in grams, never cups.',
+    )
+    assertStringIncludes(
+      (await maya.call('initialize', HELLO)).instructions,
+      'Weights in grams, never cups.',
+    )
+  } finally {
+    await k.stop()
+  }
+})

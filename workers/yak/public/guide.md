@@ -516,6 +516,32 @@ origin with no session on it. The answer arrives in the notification above, and
 a redraw is a plain MCP `tools/call` back through the host for the app's own
 tool, which does carry who is looking.
 
+## Standing instructions
+
+Deeper: <https://yaks.app/guide/instructions.md> — what belongs in the file, the
+ceiling on it, and the three doors that read it.
+
+A rule the person wants followed _every_ time — recipes in grams, one photo
+each, tag by meal and never by cuisine — goes in an **`AGENTS.md`** beside
+`index.html`:
+
+    # Recipes
+
+    Weights in grams, never cups. Oven in °C with °F in brackets.
+    Every ingredient's amount is repeated in the step that uses it.
+    One photo per recipe, of the finished dish, uploaded not linked.
+
+Every agent who can reach the app is handed it at the start of every
+conversation, so the rule is said once and followed after. It is the app's
+inside, like `vocab.json`: `GET /recipes/AGENTS.md` is a 404 on the web, and a
+member reads it back with `app_files`. Keep it under 4 KB — a bigger write is
+refused — and to the rules themselves, not the reasoning behind them. An install
+carries it along with the app's other files.
+
+Beside it, the same passage names **every app the person can reach**, its
+address, what it holds and its own tools. That is how an agent asked to "add
+this recipe" knows there is already a recipe app to add it to.
+
 ## Code of your own
 
 Deeper: <https://yaks.app/guide/code.md> — env, routes, secrets, limits, and

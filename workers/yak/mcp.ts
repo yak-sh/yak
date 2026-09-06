@@ -75,6 +75,7 @@ import { callDeclared, listDeclared, listViews, readView } from './declared.ts'
 import { answer, asset, type Doc, DOCS } from './preauth.ts'
 import { PROMPTS } from './prompts.ts'
 import { CONNECTOR } from './seo.ts'
+import { type Entry, prompted, standing } from './standing.ts'
 import {
   APPS_VIEW,
   type Ctx,
@@ -202,7 +203,7 @@ let declared = async (ctx: Ctx) =>
 // app of theirs declares (declared.ts, T-32687), which only someone who can
 // reach that app is told about. The prompts are the doors a PERSON picks by
 // name (prompts.ts, T-32981).
-let extend = (ctx: Ctx) => async (server: McpServer) => {
+let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
   for (let doc of RESOURCES) {
     // A view's `_meta` rides on the listing AND on the bytes: the listing is
     // what a host reads to decide, the content item is what governs the frame
@@ -256,6 +257,24 @@ let extend = (ctx: Ctx) => async (server: McpServer) => {
             ),
           ),
         },
+      }],
+    }))
+  }
+  // And one per app that left standing instructions beside it (standing.ts,
+  // T-34425): the same words `initialize` already handed the model, offered
+  // to the PERSON by the app's own name so they can say "the recipes rules"
+  // and have them read back. It carries no arguments — the file is the whole
+  // message — and `prompts` is already a declared capability, since the four
+  // above registered it.
+  for (let p of prompted(apps, PROMPTS.map((one) => one.name))) {
+    server.registerPrompt(p.name, {
+      title: p.title,
+      description: p.description,
+    }, () => ({
+      description: p.description,
+      messages: [{
+        role: 'user' as const,
+        content: { type: 'text' as const, text: p.text },
       }],
     }))
   }
@@ -329,6 +348,18 @@ let markOf = (env: Env) => env.CF_VERSION_METADATA?.id ?? VERSION
 // session and every later call is compared against.
 let door = async (ctx: Ctx, session: string) => {
   let reach = await inReach(ctx, {})
+  let own = await declared(ctx)
+  // What the apps in reach say about themselves (standing.ts, T-34425): every
+  // one of them named, with what it holds, its own tools and whatever
+  // AGENTS.md its person left beside it. It rides on the INSTRUCTIONS, which
+  // is what a model reads before it reads anything else, so an app already
+  // made is found rather than made a second time and a standing rule is
+  // followed without anybody quoting it.
+  //
+  // The reach and the tool names are handed over rather than read again: this
+  // runs on every call at the door, and both were just paid for.
+  let apps = await standing(ctx, reach, own.map((t) => t.name))
+  ctx.standing = apps.text
   // The graph, and how a column of it reads and writes: a reference answers
   // human, and a word two of the caller's spaces spell differently is typed
   // nowhere (agent.ts `reading`). The schemas in the tool list are derived
@@ -354,17 +385,29 @@ let door = async (ctx: Ctx, session: string) => {
     // door with a face, and nobody has to type any of it into a form.
     ...CONNECTOR,
     version: VERSION,
-    instructions: INSTRUCTIONS,
+    instructions: apps.text
+      ? `${INSTRUCTIONS}\n\n---\n\n${apps.text}`
+      : INSTRUCTIONS,
     search: searching(ctx, reach),
     security: SIGNIN,
-    tools: await declared(ctx),
-    extend: extend(ctx),
+    tools: own,
+    extend: extend(ctx, apps.apps),
   }
   // What this door lists right now, and the name for it. `about` says both
   // (tools.ts), so a client that suspects its list is old has one call that
   // settles it without reconnecting.
+  //
+  // The apps' own mark folds in beside the release, because the instructions
+  // are the other half of what a client cached at connect: an app made, an
+  // app that grew a word, an AGENTS.md edited — none of them need move a tool
+  // NAME, and all of them are news the agent has to have (stream.ts `roster`
+  // says it on the next reply).
   let names = roster(opts)
-  let listed = { version: rosterVersion(names, markOf(ctx.env)), names }
+  let listed = {
+    version: rosterVersion(names, `${markOf(ctx.env)}:${apps.mark}`),
+    names,
+    context: apps.mark,
+  }
   ctx.roster = listed
   return {
     listed,
