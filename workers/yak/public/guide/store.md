@@ -342,6 +342,17 @@ Four things to know:
 - The seed files are the app's inside, like `vocab.json` and `tools.json`: they
   are never served to the web. `app_files` reads them back.
 
+Give a row a name and loading it twice is safe:
+
+    {"entity": {"eid": "$soup"}, "alias": {"name": "recipe:lentil-soup"},
+     "doc": {"title": "Lentil soup"}, "recipe": {"serves": 4}}
+
+A row carrying `alias{name}` lands on the entity that already holds that name
+instead of writing a second one — so the same seed loaded again is a patch, not
+a duplicate. The name stands wherever an eid does, too: in a column that
+references an entity, in `id=`, and in `graph_show`. An eid always wins over a
+name that spells it.
+
 For data the person is meant to edit, that is all there is to it. For a table of
 constants your page reads — an emoji list, a lookup — a plain `.js` file beside
 the page is simpler, and it is not data anyone can change.

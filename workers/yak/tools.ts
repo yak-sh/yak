@@ -1665,9 +1665,10 @@ export let TOOLS: Tool[] = [
             'points there — pick another slug',
         )
       }
-      // The alias is the name of the app's store, pinned at birth so a
+      // The birth address is the name of the app's store, pinned here so a
       // later rename moves the address and not the data (directory.ts
-      // storeName).
+      // storeName). It is `former` and not `alias` because that word is every
+      // store's now (@yaks/alias, T-34390).
       let entities: EntityLiteral[] = [{
         entity: { eid: '$app' },
         doc: { title: text(args.title, 'title') },
@@ -1677,7 +1678,7 @@ export let TOOLS: Tool[] = [
           version: 0,
           access: args.access == null ? 'public' : access(args.access),
         },
-        alias: { slug: bornAt(space, s) },
+        former: { slug: bornAt(space, s) },
       }]
       // Being first claims nothing (T-33040). Until somebody says which app
       // is the front page, the space's bare hostname lists the apps its
@@ -2402,8 +2403,8 @@ export let TOOLS: Tool[] = [
       // new one: a page already open on a phone writes to the old address for
       // as long as it stays open, and a link someone was given is forever
       // (C-32574 item 4, where a rename broke every open tab in silence).
-      // Alias slugs resolve like ids, and the BIRTH address is already the
-      // primary one (app_new pins it), so only a later move adds a word.
+      // A `former` slug resolves like an id, and the BIRTH address is already
+      // the primary one (app_new pins it), so only a later move adds a word.
       let left = bornAt(space, app.slug)
       let keeping = moving && !app.slugs.includes(left)
         ? [...app.slugs.slice(1), left].join(' ')
@@ -2432,7 +2433,7 @@ export let TOOLS: Tool[] = [
               },
             }
             : {}),
-          ...(keeping ? { alias: { slugs: keeping } } : {}),
+          ...(keeping ? { former: { slugs: keeping } } : {}),
         })
       }
       // The globs are COLUMNS of the word that says which app is home
@@ -3379,7 +3380,7 @@ export let TOOLS: Tool[] = [
           version: 0,
           access: offer.app.access ?? 'public',
         },
-        alias: { slug: bornAt(space, s) },
+        former: { slug: bornAt(space, s) },
         installed: { of: offer.app.eid, version },
       }]
       await ctx.dir.apply({ entities }, vouched(who))

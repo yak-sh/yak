@@ -12,7 +12,7 @@
 // entity, and a component that never reaches a table is a perfectly good way
 // for one phase to tell a later one what it decided.
 
-import type { Bundle, Change, Entity } from './bundle.ts'
+import type { Bundle, Change, Eid, Entity } from './bundle.ts'
 import type { Query, ReadOpts, Tx } from './storage.ts'
 import type { Ask } from './gather.ts'
 import type { Derive } from './alias.ts'
@@ -186,6 +186,17 @@ export type Plugin = {
    * entity — consulted in the `mint` phase when such a component arrives under
    * an alias (see {@link Derive}) */
   derive?: Record<string, Derive>
+  /** how an id a CALLER typed becomes an eid, for the ids that are not already
+   * one. The answer holds only the ids that MOVED, so a door reads it as
+   * `at.get(id) ?? id`, and an id this plugin knows nothing about is simply
+   * absent. Asked through {@link Graph.address}; the reason it is a plugin's
+   * word is that "what names an entity" is a question about a component
+   * ({@link https://jsr.io/@yaks/alias | @yaks/alias}'s `alias{name}` is the
+   * one that answers it), not about the core. */
+  address?: (
+    tx: Tx,
+    ids: string[],
+  ) => Map<string, Eid> | Promise<Map<string, Eid>>
 }
 
 /** Every vocabulary document a set of plugins contributes, in plugin order —

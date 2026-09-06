@@ -25,7 +25,8 @@
 // actually write.
 import { z } from 'zod'
 import type { Bundle, Graph, Plugin, Row, Storage, Tool, Tx } from '@yaks/graph'
-import { composed as perEntity } from '@yaks/graph'
+import { composed as perEntity, detached } from '@yaks/graph'
+import { addressed, wordish } from '@yaks/alias'
 import { Say, type Search } from '@yaks/mcp'
 import type { Column, Vocab } from '@yaks/vocab'
 import { META, storeName } from './directory.ts'
@@ -209,6 +210,34 @@ let scope = (line: string) => {
   return { said, line: segs.filter((s) => !/^\.in=/.test(s)).join('&') }
 }
 
+// The identity operand list, wherever it appears on a line: `.eid=a,b` — which
+// is what the page's `id=` becomes (wire.ts `lined`) — names a SET rather than
+// comparing a column, so its operands are ids and a word among them may be a
+// NAME (T-34390, @yaks/alias). `.eid!=` and the rest are untouched: this is the
+// one operator whose right-hand side is an identity.
+let IDS = /(^|&)(\.(?:entity\.)?eid=)([^&]*)/g
+
+// That line with every name in it replaced by the entity it names. Nothing to
+// resolve costs nothing: a uuid is not asked about, and a line naming no id is
+// not read at all.
+let byName = async (
+  storage: Storage,
+  line: string,
+): Promise<string> => {
+  let said = [...line.matchAll(IDS)]
+    .flatMap((m) => m[3].split(',')).filter(wordish)
+  if (!said.length) return line
+  let at = await addressed(detached(storage), said)
+  if (!at.size) return line
+  return line.replaceAll(
+    IDS,
+    (_, pre, key, vals) =>
+      `${pre}${key}${
+        String(vals).split(',').map((v) => at.get(v) ?? v).join(',')
+      }`,
+  )
+}
+
 // A composition is not a database: these are the members of `Graph` that only
 // mean something to an adapter that owns bytes, and nothing calls them here.
 let nope = (what: string) => (): never => {
@@ -219,6 +248,7 @@ let nope = (what: string) => (): never => {
 // storage at all: these eids, whole, out of every store that holds a piece of
 // one (reach.ts `composed`).
 let held = (ctx: Ctx, reach: Reach[]): Storage => {
+  let self: Storage
   let rows = async (q: unknown) => {
     let { said, line } = scope(String(q))
     let where = said ? [await named(ctx, said)] : reach
@@ -226,7 +256,7 @@ let held = (ctx: Ctx, reach: Reach[]): Storage => {
     // where the store spells `.eid=`, `.limit=` and `.after=`, and a value
     // written as it reads rather than as a store would parse it. One
     // translation for every door a person's own line arrives at (wire.ts).
-    return await read(ctx.env, where, lined(line)) as Row[]
+    return await read(ctx.env, where, await byName(self, lined(line))) as Row[]
   }
   let tx: Tx = {
     read: (q) => rows(q) as Promise<Bundle[]>,
@@ -235,13 +265,14 @@ let held = (ctx: Ctx, reach: Reach[]): Storage => {
     patch: nope('transaction'),
     remove: nope('transaction'),
   }
-  return {
+  self = {
     ddl: () => [],
     install: () => {},
     read: (q) => rows(q) as Promise<Bundle[]>,
     rows,
     tx: (body) => body(tx) as never,
   }
+  return self
 }
 
 // Every reachable app's `vocab.json`, merged over the core documents. First
@@ -411,6 +442,11 @@ export let reaching = async (
     install: () => {},
     read: (q) => storage.read(q),
     rows: (q) => storage.rows(q),
+    // A NAME where an eid goes (T-34390). The ladder is @yaks/alias's and it
+    // is nothing but reads by id, so it works here exactly as it does inside a
+    // store: `get` fans across the reach, and a name held in whichever store
+    // this caller can see answers.
+    address: (ids) => addressed(detached(storage), ids),
     apply: async (change) => {
       let asked = (Array.isArray(change) ? change : [change]) as Bundle[]
       let { batch, where } = await aimed(ctx, asked)

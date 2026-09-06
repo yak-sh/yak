@@ -1,0 +1,28 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/key": true
+  },
+  "title": "key",
+  "$defs": {
+    "key": {
+      "type": "object",
+      "kind": true,
+      "description": "a value an entity answers to — which kind of value it is is a tag component riding beside it",
+      "properties": {
+        "of": {
+          "type": "string",
+          "ref": "entity",
+          "death": "release",
+          "bare": false,
+          "description": "the entity the value names — the row goes when that entity dies, and the value is free again"
+        },
+        "value": {
+          "type": "string",
+          "bare": false,
+          "description": "the value itself — unique within its kind, since the key's own id is derived from the two"
+        }
+      }
+    }
+  }
+}

@@ -808,6 +808,38 @@ slow(
       assertEquals(stamped.length, 1)
       assert(stamped[0].created, 'naming a stamp asks for it back')
 
+      // A NAME outlives the batch (T-34390, @yaks/key + @yaks/alias): the same
+      // seed written again patches the entity that already holds the name
+      // instead of writing a second one, and the name stands where an eid
+      // does.
+      let seeding = (title: string) =>
+        agent.tool('graph_apply', {
+          change: [{
+            entity: { eid: '$r' },
+            $app: 'recipes',
+            alias: { name: 'recipe:lemon-cakes' },
+            doc: { title },
+          }],
+        })
+      let once = minted(await seeding('Lemon cakes'), '$r')
+      assertEquals(minted(await seeding('Lemon cakes, better'), '$r'), once)
+      let cakes = JSON.parse(
+        await agent.tool('graph_query', { q: '.doc.title~=Lemon cakes' }),
+      ) as { entity: { eid: string } }[]
+      assertEquals(cakes.map((b) => b.entity.eid), [once])
+      // and the name stands where an eid does, on the line and at the door
+      let byName = JSON.parse(
+        await agent.tool('graph_query', { q: 'id=recipe:lemon-cakes' }),
+      ) as { entity: { eid: string } }[]
+      assertEquals(byName.map((b) => b.entity.eid), [once])
+      let shown = JSON.parse(
+        await agent.tool('graph_show', {
+          ids: ['recipe:lemon-cakes'],
+          backrefs: false,
+        }),
+      ) as { bundles: { entity: { eid: string } }[] }
+      assertEquals(shown.bundles.map((b) => b.entity.eid), [once])
+
       // A seed that tried to date itself: `created.at` is the store's own
       // record of when it first saw a row and cannot be given a past moment,
       // so it is dropped and the row reads as written now (T-33147).

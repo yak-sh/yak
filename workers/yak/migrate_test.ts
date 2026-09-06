@@ -25,6 +25,7 @@ import { schema } from '@yaks/sqlite'
 import { Store } from './graph.ts'
 import {
   carry,
+  FORMER,
   HOMED,
   keyOf,
   MARK,
@@ -495,8 +496,8 @@ slow(
         note: '1 spaces named a front page in space.home',
       },
     )
-    // Version 2 in the same breath, so the second pass has nothing to do.
-    assertEquals(marker(ctx), HOMED)
+    // Every pass in the same breath, so none of them has anything to do.
+    assertEquals(marker(ctx), FORMER)
   },
 )
 
@@ -547,6 +548,141 @@ slow(
     )
   },
 )
+
+// ---- the app's addresses → `former` (T-34390) ------------------------------
+
+// A directory reaches version 3 from either side too: the store that carries
+// with the addresses still in the fleet-shaped `alias` table, and the one that
+// carried before @yaks/alias took that word — whose `alias` table is standing
+// with the addresses in it and the core tag now writing rows of its own there.
+let seedFormer = async (ctx: State) => {
+  let old = older(ctx, PLATFORM_STORE)
+  await old.apply([
+    { eid: SPACE, name: 'space', comp: { slug: 'ada' } },
+    { eid: APP, name: 'app', comp: { slug: 'cookbook', space: SPACE } },
+    { eid: APP, name: 'alias', comp: { slug: 'ada/cookbook' } },
+    { eid: ONE, name: 'app', comp: { slug: 'orchard', space: SPACE } },
+    // The app that has been renamed: born at `garden`, answering there still.
+    {
+      eid: ONE,
+      name: 'alias',
+      comp: { slug: 'ada/garden', slugs: 'ada/plot' },
+    },
+    // A space wears no address of its own, which is the row that must NOT move.
+    { eid: TWO, name: 'space', comp: { slug: 'ben' } },
+  ])
+  return old
+}
+
+// Every address the directory holds, by the app that answers at it.
+let answering = async (now: ReturnType<typeof newer>) =>
+  (await now.query('.former!&.app!'))
+    .map((r) => [
+      (r.app as { slug: string }).slug,
+      (r.former as { slug: string; slugs?: string }).slug,
+      (r.former as { slugs?: string }).slugs ?? '',
+    ])
+    .sort()
+
+/**
+ * A directory as a DEPLOYED one stands right now: carried past the front-page
+ * pass and no further, its app addresses still in the table `alias` — which the
+ * core word owns as of T-34390, so the columns are standing under a word that
+ * declares neither.
+ */
+let carriedTwo = async (ctx: State) => {
+  let now = newer(ctx, PLATFORM_STORE)
+  await now.door('/apply', {
+    method: 'POST',
+    headers: { 'x-yak-kernel': '1' },
+    body: JSON.stringify([
+      { entity: { eid: SPACE }, space: { slug: 'ada' } },
+      { entity: { eid: APP }, app: { slug: 'cookbook', space: SPACE } },
+      { entity: { eid: ONE }, app: { slug: 'orchard', space: SPACE } },
+    ]),
+  })
+  let sql = ctx.storage.sql
+  sql.exec('alter table alias add column slug text')
+  sql.exec('alter table alias add column slugs text')
+  sql.exec('create unique index alias_slug on alias ("slug")')
+  let put = (eid: string, slug: string, slugs: string | null) =>
+    sql.exec(
+      'insert into alias (entity, slug, slugs) ' +
+        'select id, ?, ? from entity where eid = ?',
+      slug,
+      slugs,
+      eid,
+    )
+  put(APP, 'ada/cookbook', null)
+  put(ONE, 'ada/garden', 'ada/plot')
+  sql.exec(
+    "insert into yak_kv (k, v) values ('migrated', ?) " +
+      'on conflict(k) do update set v = excluded.v',
+    HOMED,
+  )
+  return now
+}
+
+slow('a store carrying now arrives with the addresses moved', async () => {
+  let ctx = state()
+  await seedFormer(ctx)
+  let files = bucket()
+  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  assertEquals(await answering(now), [
+    ['cookbook', 'ada/cookbook', ''],
+    ['orchard', 'ada/garden', 'ada/plot'],
+  ])
+  let report = reportIn(files.held)
+  assert(report.ok, report.message)
+  assertEquals(
+    report.moved.find((m) => m.table == 'former'),
+    {
+      table: 'former',
+      from: 0,
+      to: 2,
+      note: '2 apps had an address of their own, spelled "alias"',
+    },
+  )
+  // The core word's table is planted and EMPTY: an address is not a name tag,
+  // so nothing was copied into it on the way past.
+  assertEquals(count(ctx, 'alias'), 0)
+  // Version 3 in the same breath, so the third pass has nothing to do.
+  assertEquals(marker(ctx), FORMER)
+})
+
+slow('a directory that already carried moves them on next touch', async () => {
+  let ctx = state()
+  await carriedTwo(ctx)
+
+  // A fresh incarnation over the same object — a deploy, in other words — and
+  // the first request carries it the rest of the way.
+  let files = bucket()
+  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  assertEquals(await answering(now), [
+    ['cookbook', 'ada/cookbook', ''],
+    ['orchard', 'ada/garden', 'ada/plot'],
+  ])
+  let report = reportIn(files.held)
+  assert(report.ok, report.message)
+  assertEquals(report.mark, FORMER)
+  assertEquals(report.moved.find((m) => m.table == 'former')?.to, 2)
+
+  // The old place is gone — the columns and the unique index the old word
+  // declared — so the core word has the table to itself.
+  let cols = ctx.storage.sql.exec('pragma table_info(alias)').toArray()
+    .map((c) => (c as { name: string }).name)
+  assertEquals(cols, ['entity'])
+  assertEquals(count(ctx, 'alias'), 0)
+
+  // The rows reached R2 before one moved, which is the restore path.
+  assertEquals(rowsIn(files.held).alias.length, 2)
+
+  // And it does not run again: the marker is written, and a third incarnation
+  // exports nothing.
+  let third = bucket()
+  newer(ctx, PLATFORM_STORE, { EXPORTS: third.r2 })
+  assertEquals(third.held.size, 0)
+})
 
 // ---- the refusals ----------------------------------------------------------
 

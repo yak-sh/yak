@@ -325,6 +325,41 @@ Deno.test('an open app is written by nobody', async () => {
   assert(applied.every((b) => by(b) == null))
 })
 
+// A NAME outlives the batch (T-34390): @yaks/key carries it, @yaks/alias
+// spells it, and both are composed into every store — so the same seed written
+// twice is one entity, and the name stands where an eid does.
+Deno.test('a named row written twice is one entity, and answers to its name', async () => {
+  let store = await cookbook()
+  let seed = async (title: string) => {
+    let out = await post(store, '/apply', [{
+      entity: { eid: '$r' },
+      alias: { name: 'recipe:lemon-cakes' },
+      doc: { title },
+      recipe: { serves: 8 },
+    }], owner)
+    assertEquals(out.status, 200)
+    return (await out.json() as Bundle[])
+      .find((b) => b.$alias == '$r')!.entity.eid
+  }
+  let once = await seed('Lemon cakes')
+  assertEquals(await seed('Lemon cakes, better'), once)
+  let all = await (await get(store, '/query?q=.recipe!', owner))
+    .json() as Bundle[]
+  assertEquals(all.map((b) => b.entity.eid), [once])
+  // and a reference written by name lands on that entity
+  let said = await post(store, '/apply', [{
+    entity: { eid: CAKE },
+    doc: { body: 'too sweet' },
+    comment: { target: 'recipe:lemon-cakes' },
+  }], owner)
+  assertEquals(said.status, 200)
+  assertEquals(
+    ((await said.json() as Bundle[])
+      .find((b) => b.entity.eid == CAKE)!.comment as { target: string }).target,
+    once,
+  )
+})
+
 // The whole point of the cut (V-33553): a customer's Durable Object holds one
 // app's tables, not the fleet's 83.
 Deno.test('the object plants core + member + edge + the app, and nothing else', async () => {
@@ -357,6 +392,9 @@ Deno.test('the object plants core + member + edge + the app, and nothing else', 
       // @yaks/edge, and the verbs an edge may wear
       'edge',
       ...RELATIONS,
+      // @yaks/key, and the one kind of value every store speaks: a name
+      'key',
+      'alias',
       // the platform's own words in an app's store: the breaks, the marks, and
       // the two rows an upload makes
       'exception',

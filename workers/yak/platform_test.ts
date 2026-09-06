@@ -90,7 +90,7 @@ Deno.test('a space and an app are seeded, minted, and read back', async () => {
       entity: { eid: '$app' },
       doc: { title: 'Cookbook' },
       app: { slug: 'cookbook', space: s.eid, version: 0, access: 'public' },
-      alias: { slug: 'ada/cookbook' },
+      former: { slug: 'ada/cookbook' },
     }],
   }, as(ada))
 
@@ -126,7 +126,7 @@ Deno.test('a hostname resolves to the app it serves and the space it is in', asy
       entity: { eid: '$app' },
       doc: { title: 'Cookbook' },
       app: { slug: 'cookbook', space: s.eid, version: 0, access: 'public' },
-      alias: { slug: 'ada/cookbook' },
+      former: { slug: 'ada/cookbook' },
     }], as(ada)),
   ).$app
 
@@ -235,7 +235,7 @@ Deno.test('erasing a space buries everything that named it', async () => {
       entity: { eid: '$app' },
       doc: { title: 'Cookbook' },
       app: { slug: 'cookbook', space: s.eid, version: 0, access: 'public' },
-      alias: { slug: 'ada/cookbook' },
+      former: { slug: 'ada/cookbook' },
     }], as(ada)),
   ).$app
   await at.apply([
@@ -292,7 +292,7 @@ Deno.test('the directory plants the platform, and not one app word', async () =>
     let name of [
       'space',
       'app',
-      'alias',
+      'former',
       'member',
       'email',
       'hostname',

@@ -74,7 +74,7 @@ let opened = async (
   if (!space || space.trashed) throw new Refused(`no mailbox for ${to}`)
   // An address the app has LEFT still finds it, as its old hostname does
   // (apps.ts `served`, directory.ts `former`): a rename moves `app.slug` and
-  // keeps the old name on the app's alias, so a letter to
+  // keeps the old name in the app's `former`, so a letter to
   // `<space>.<was>@yaks.app` lands in the store a link to `/<was>/` reaches.
   // A slug that was nobody's here has no such move to follow, and is refused.
   let app = box.app

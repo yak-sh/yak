@@ -1,0 +1,15 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/key": true
+  },
+  "title": "alias",
+  "$defs": {
+    "alias": {
+      "type": "object",
+      "key": true,
+      "description": "the kind of key that is a NAME: a word an entity answers to, unique in the store and usable wherever an eid is. Write it as alias{name} on the entity itself — `{entity: {eid: '$r'}, alias: {name: 'recipe:lemon-cakes'}, doc: {…}}` — and the row is made for you; write the same name again and it lands on the same entity",
+      "properties": {}
+    }
+  }
+}

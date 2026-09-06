@@ -236,7 +236,7 @@ type Row = {
   created?: { at?: string }
   member?: { space: Id; person: Id; role: Role }
   email?: { address: string }
-  alias?: { slug: string; slugs?: string | null }
+  former?: { slug: string; slugs?: string | null }
   home?: { first?: string | null }
   doc?: { title?: string }
   plan?: {
@@ -422,14 +422,14 @@ export let stamp = async (
 
 // A listing carries the components the filter NAMES (graph.ts `#wanted`),
 // so every read here asks for what it reads: a space with its title, plan and
-// meter, an app with its title, the alias its store is named by, and its
+// meter, an app with its title, the address its store is named by, and its
 // meter. `.eid=` names no component and answers the whole bundle, which is why
 // those are bare.
 // What every read of an APP asks for beside the app row itself, in one place
 // because `appOf` reads all of it and a filter that forgets one answers null
 // where there is a value.
 let ABOUT =
-  '.doc?&.alias?&.home?&.meter?&.published?&.installed?&.seeded?&.trashed?'
+  '.doc?&.former?&.home?&.meter?&.published?&.installed?&.seeded?&.trashed?'
 
 // And what every read of a SPACE asks for, for the same reason.
 let SPACE_ABOUT = '.doc?&.plan?&.meter?&.notified?&.trashed?'
@@ -476,8 +476,8 @@ export let appOf = (r: Row): App => ({
   version: r.app!.version,
   access: r.app!.access ?? null,
   title: r.doc?.title || r.app!.slug,
-  store: r.alias?.slug ?? null,
-  slugs: slugsOf(r.alias),
+  store: r.former?.slug ?? null,
+  slugs: slugsOf(r.former),
   home: r.home != null,
   first: firstOf(r.home),
   meter: meterOf(r),
@@ -526,9 +526,9 @@ export let deployOf = (r: Row) => ({
 
 // A Durable Object cannot be renamed, so an app's store must not be named by
 // anything a person may change: renaming `recipes` to `cookbook` would strand
-// every recipe in it. So the name is pinned at birth as the app's alias — the
-// address it was born at — and read back here. An app born before that
-// (`store` null) is named by its address, which for it has never moved.
+// every recipe in it. So the name is pinned at birth on the app's `former`
+// record — the address it was born at — and read back here. An app born before
+// that (`store` null) is named by its address, which for it has never moved.
 export let storeName = (space: Space, app: App) =>
   app.store ?? `${space.slug}/${app.slug}`
 
@@ -663,7 +663,7 @@ export let directory = (via: Fetcher, now = false) => {
       return row ? appOf(row) : null
     },
     // An address the app has LEFT, still pointing at it. A rename moves
-    // `app.slug` and keeps the old address on the app's alias, so the answer
+    // `app.slug` and keeps the old address in the app's `former`, so the answer
     // is the app of THIS space that still answers to the address asked for —
     // a move to follow (T-32576: a rename used to strand every open page).
     former: async (space: Space, slug: string) => {

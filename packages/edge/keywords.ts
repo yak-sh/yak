@@ -16,8 +16,17 @@ import doc from './meta/edge.vocab.json' with { type: 'json' }
 export let EDGE_URI = 'https://yaks.sh/vocab/edge'
 
 /**
- * The `relation` keyword vocabulary, ready to register:
+ * The `edge` keyword vocabulary, ready to register:
  * `loadVocab(docs, [edgeKeywords])` carries each component's declaration onto
- * `v.comp(name).keywords.relation`, which is where {@link relations} reads it.
+ * `v.comp(name).keywords.edge`, which is where {@link relations} reads it.
+ *
+ * `relation` is the older spelling of the same slot and is still carried —
+ * {@link relations} reads either. The new one is the carrier's own name, so
+ * that one rule ("this tag rides that component") reads an edge's tags and
+ * {@link https://jsr.io/@yaks/key | @yaks/key}'s alike.
  */
-export let edgeKeywords: Keywords = { uri: EDGE_URI, comp: ['relation'], doc }
+export let edgeKeywords: Keywords = {
+  uri: EDGE_URI,
+  comp: ['edge', 'relation'],
+  doc,
+}

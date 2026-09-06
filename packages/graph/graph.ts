@@ -126,6 +126,11 @@ export type Graph = {
   read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
   /** a query → the compiled statement's raw rows */
   rows: (query: Query, opts?: ReadOpts) => Row[] | Promise<Row[]>
+  /** the ids a caller typed → the eids they name, for the ones that are not
+   * eids already (see {@link Plugin.address}). Only the ids that MOVED are in
+   * the answer, so a door reads it as `at.get(id) ?? id`; with no plugin
+   * answering, every id is itself and this costs nothing. */
+  address: (ids: string[]) => Map<string, Eid> | Promise<Map<string, Eid>>
   /** apply a batch atomically → the batch as applied, one bundle per entity,
    * plus what it synthesized */
   apply: (change: Change, opts?: ApplyOpts) => Bundle[] | Promise<Bundle[]>
@@ -301,10 +306,25 @@ export let graph = (opts: Options): Graph => {
     )
   }
 
+  // What a door asks before it reads by id: every plugin that knows how a name
+  // becomes an eid, asked in turn, each about the ids nobody has answered for
+  // yet. Outside any transaction — a door is asking before it does anything.
+  let address = (ids: string[]) => {
+    let asks = plugins.flatMap((p) => p.address ?? [])
+    if (!asks.length || !ids.length) return new Map<string, Eid>()
+    let outside = detached(storage)
+    return each(asks, new Map<string, Eid>(), (at, ask) =>
+      then(
+        ask(outside, ids.filter((id) => !at.has(id))),
+        (more) => new Map([...at, ...more]),
+      ))
+  }
+
   let g: Graph = {
     vocab,
     storage,
     plugins,
+    address,
     use: (plugin) => {
       plugins.push(plugin)
       return g

@@ -48,6 +48,15 @@ In dependency order:
   `edge{from, to}` an entity carries, the id it derives from the sentence it
   states, the relations a vocabulary declares, and traversal — as a walk over
   storage, and as the `@yaks/sql` extension compiling `.reaches`/`.edges`.
+- **[@yaks/key](./key)** — the values an entity answers to, as entities: the
+  `key{of, value}` carrier tagged by your own kinds (`isbn`, `email`, `alias`),
+  each key named by `sha256("<kind>|<value>")` — so a value is unique within its
+  kind by construction and stating it twice writes one row. To a has-many value
+  what `@yaks/edge` is to a link.
+- **[@yaks/alias](./alias)** — the kind of key that is a NAME: `alias{name}` on
+  an entity, lifted into a key of its own, so a seed written twice patches one
+  entity — and a name goes wherever an eid goes, in a reference column and at a
+  door.
 - **[@yaks/effects](./effects)** — what a graph DOES about what it commits:
   `created`/`changed`/`removed` handlers per component, run after the
   transaction, each isolated, with an optional durable ledger. The mechanism —

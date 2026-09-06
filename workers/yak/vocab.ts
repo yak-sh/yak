@@ -48,10 +48,12 @@ import {
   type Vocab,
   type VocabDoc,
 } from '@yaks/vocab'
+import { aliasDoc } from '@yaks/alias'
 import { blobKeywords } from '@yaks/blob'
 import { docDoc } from '@yaks/doc'
 import { EDGE_URI, edgeDoc, edgeKeywords } from '@yaks/edge'
 import { idKeywords } from '@yaks/id'
+import { keyDoc, keyKeywords } from '@yaks/key'
 import { mailDoc } from '@yaks/mail'
 import { memberDoc } from '@yaks/member'
 
@@ -317,7 +319,15 @@ export let appDerived = (): Record<
  * `mailDoc` is among them because every app has a mailbox (T-33686): a letter
  * is an entity here like anywhere else, and the same six words say the one it
  * sends and the one that arrives. It brings `notified` with it, which is why
- * {@link kernelDoc} does not. */
+ * {@link kernelDoc} does not.
+ *
+ * `keyDoc` and `aliasDoc` are among them because a NAME is how an agent
+ * addresses a row it wrote last week without having kept the eid (T-34390).
+ * @yaks/key's `key{of, value}` is the carrier — a value an entity answers to,
+ * as an entity of its own, named after what it says — and `alias` is the kind
+ * of value that is a name. They are core rather than each app's own for the
+ * reason every other core word is: a word means the same thing in every
+ * store. */
 export let coreDocs: VocabDoc[] = [
   coreDoc,
   docDoc,
@@ -327,6 +337,8 @@ export let coreDocs: VocabDoc[] = [
   kernelDoc,
   appsDoc,
   mailDoc,
+  keyDoc,
+  aliasDoc,
 ]
 
 // ---- the platform's own store (T-33814) -------------------------------------
@@ -395,7 +407,13 @@ export let platformDoc: VocabDoc = {
     // Every address an app has answered at: the one it was born at — which is
     // what its Durable Object is named, so it may never move — and, in
     // `slugs`, each one a rename left behind.
-    alias: { type: 'object', properties: { slug: unique(text), slugs: text } },
+    //
+    // It was spelled `alias` until T-34390, when that word became the
+    // platform's own (@yaks/alias, in {@link coreDocs}): a name any entity may
+    // wear in any store. Two things cannot share one word, and the one every
+    // store speaks wins — so the app's addresses are `former`, which is what
+    // the record is about.
+    former: { type: 'object', properties: { slug: unique(text), slugs: text } },
     // WHICH app is the space's front page, and the paths its worker sees FIRST
     // before the app whose slug owns them (D-34197, T-34227). One fact, one
     // spelling: the app WEARING `home` is the home app, and its globs are
@@ -408,8 +426,9 @@ export let platformDoc: VocabDoc = {
     // where moving it is one batch that drops the old and adds the new).
     //
     // A column is a scalar (@yaks/vocab `storable`), so the list is JSON in one
-    // text column — ordered, and read back by router.ts `firstOf`. `alias.slugs`
-    // splits on whitespace instead, which is the older spelling of a list here;
+    // text column — ordered, and read back by router.ts `firstOf`. The
+    // `former.slugs` above splits on whitespace instead, which is the older
+    // spelling of a list here;
     // JSON is the one that round-trips exactly what an agent passed.
     home: { type: 'object', properties: { first: text } },
     member: {
@@ -551,6 +570,8 @@ export let platformDocs: VocabDoc[] = [
   relationDoc,
   kernelDoc,
   notifiedDoc,
+  keyDoc,
+  aliasDoc,
   platformDoc,
 ]
 
@@ -600,7 +621,12 @@ export let PLATFORM_APART: string[] = (() => {
 /** The keyword vocabularies those documents and an app's own may use. Each is
  * owned by the package that reads it — @yaks/id `prefix`, @yaks/blob `store`,
  * @yaks/edge `relation` — and registered so the loader carries it. */
-export let appKeywords: Keywords[] = [idKeywords, blobKeywords, edgeKeywords]
+export let appKeywords: Keywords[] = [
+  idKeywords,
+  blobKeywords,
+  edgeKeywords,
+  keyKeywords,
+]
 
 /** Every word the platform already says in an app's store, sorted. A
  * `vocab.json` naming one is refused: a word means the same thing everywhere. */

@@ -97,6 +97,27 @@ target, so a deleted recipe takes its thread with it.
 
     let thread = await query(`.comment.target=${recipe}&.doc?`)
 
+**`alias`** — `name` (text). A name of your own for an entity, worth as much as
+its eid. Write it beside a `$` eid and the write becomes IDEMPOTENT: the same
+name written again patches the entity that already holds it, so a seed, an
+import, or a page that saves itself every time it opens writes one row rather
+than a pile.
+
+    await apply({ entity: { eid: '$r' },
+      alias: { name: 'recipe:lemon-cakes' },
+      doc: { title: 'Lemon cakes' } })
+
+    // and then, without ever having kept the eid
+    await apply({ entity: { eid: '$n' }, doc: { body: 'Halve the sugar.' },
+      comment: { target: 'recipe:lemon-cakes' } })
+
+A name stands wherever an eid does — in a reference column, as a bundle's own
+`entity.eid`, in `id=`, in `graph_show` — and an eid always wins over a name
+that spells it. One name, one entity: a second entity claiming a name somebody
+holds is refused, naming the holder. Delete the entity and the name is free
+again. An entity may answer to as many names as you give it; each is a row of
+its own (`key{of, value}` wearing `alias`), which is what `.alias!` lists.
+
 **`person`** — no columns. Whoever wrote a row. The store mints one for each
 writer it meets, titled with what to call them, so `person` rows wear a `doc`
 too. You read them for a byline. They are screened out of an ordinary listing,

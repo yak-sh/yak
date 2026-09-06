@@ -95,6 +95,12 @@ let blobs = {
 }
 ```
 
+An alias lives for one batch. A name that OUTLIVES one is a component's job, not
+the core's: a plugin says how an id a caller typed becomes an eid —
+`address(tx, ids)`, answering only the ids that moved — and a door asks every
+plugin at once through `g.address(ids)`.
+[@yaks/alias](https://jsr.io/@yaks/alias) is the one that answers.
+
 ## Apply is pluggable, in fixed phases
 
 A change flows through an ordered list of phases. The order is load-bearing — a

@@ -1,0 +1,13 @@
+{
+  "_": "The browser gate: @yaks/alias must type-check with only the web platform in scope — no Deno namespace, no Node types. `deno check --config packages/alias/browser.json packages/alias/mod.ts` is the check; it is part of `deno task check`.",
+  "compilerOptions": {
+    "lib": ["dom", "esnext"],
+    "strict": true
+  },
+  "imports": {
+    "@yaks/query": "../query/mod.ts",
+    "@yaks/vocab": "../vocab/mod.ts",
+    "@yaks/graph": "../graph/mod.ts",
+    "@yaks/key": "../key/mod.ts"
+  }
+}

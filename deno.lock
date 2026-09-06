@@ -1405,6 +1405,11 @@
       "npm:zod@^3.24.0"
     ],
     "members": {
+      "packages/alias": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
       "packages/api": {
         "dependencies": [
           "jsr:@db/sqlite@0.13.0",
@@ -1488,6 +1493,11 @@
       "packages/journal": {
         "dependencies": [
           "jsr:@db/sqlite@0.13.0",
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/key": {
+        "dependencies": [
           "jsr:@std/assert@1"
         ]
       },

@@ -55,7 +55,9 @@
 // longer names — SQLite's schema is additive, so a column a word lost is still
 // standing with its values in it. That is a second kind of migration and it is
 // numbered ({@link MARKS}): {@link homed} is version 2, `space.home` becoming
-// `home{}` on the app (T-34227). Same three steps, same order — export, one
+// `home{}` on the app (T-34227); {@link addressed} is version 3, the
+// directory's app addresses moving out of the table the CORE word `alias` now
+// owns and into `former` (T-34390). Same three steps, same order — export, one
 // transaction, reconcile — over the NEW schema rather than the old one.
 //
 // ## What cannot be carried
@@ -96,8 +98,9 @@ export let SLOTS = [
 
 /** The marker written when a pass reconciles, so it never runs twice. The
  * number is the version an object stands at: {@link MARK} is the move off the
- * fleet-shaped store, {@link HOMED} the one after it. An object is at the last
- * marker it wrote, and a pass whose marker is already there does not run. */
+ * fleet-shaped store, and each one after it a pass over the new schema
+ * ({@link MARKS}). An object is at the last marker it wrote, and a pass whose
+ * marker is already there does not run. */
 export let MARK = 'yak/store/packages/1'
 
 /** The second pass (T-34227): `space.home` — the column that said which app a
@@ -105,9 +108,14 @@ export let MARK = 'yak/store/packages/1'
  * no other object has a `space` table. */
 export let HOMED = 'yak/store/home/2'
 
+/** The third pass (T-34390): the directory's app addresses — `{slug, slugs}`,
+ * spelled `alias` until that word became every store's (@yaks/alias) — move to
+ * `former`. The directory's alone; no other object has a row of them. */
+export let FORMER = 'yak/store/former/3'
+
 /** Every marker in order, so "is this object caught up" is one comparison and
  * a new pass is one line here. */
-export let MARKS = [MARK, HOMED]
+export let MARKS = [MARK, HOMED, FORMER]
 
 /** The two tables the two layouts spell identically, and so never move. */
 let SPINE = ['entity', 'tombstone']
@@ -118,6 +126,11 @@ let KEEP = [...SPINE, 'yak_kv']
 
 /** A table renamed aside for the length of the pass. */
 let ASIDE = 'yak_old_'
+
+/** What the directory's app addresses were spelled before T-34390 — and what
+ * the CORE word is called now, which is why their rows have to move out of it
+ * ({@link addressed}). */
+let FORMERLY = 'alias'
 
 type Row = Record<string, unknown>
 
@@ -496,6 +509,145 @@ export let homed = (
   return report(true)
 }
 
+// ---- the app's addresses → `former` (T-34390) ------------------------------
+//
+// The directory's record of every address an app has answered at — its birth
+// address in `slug`, each one a rename left behind in `slugs` — was spelled
+// `alias`. That word is now every store's (@yaks/alias: a name any entity may
+// wear, a kind tag on `key{of, value}`), and two things cannot share one word,
+// so the record is `former` (vocab.ts `platformDoc`).
+//
+// The table NAME is what makes this a migration and not a rename. The core tag
+// declares no columns, so its table is `alias(entity)` — and `create table if
+// not exists` over a directory that already has `alias(entity, slug, slugs)`
+// leaves the old columns standing under the new word, with the addresses still
+// in them. The rows move to `former` and the dead columns are swept.
+
+/** The addresses moved out of one table and into `former`. Answers how many
+ * rows named an address and how many landed, which is what the reconciliation
+ * compares. A row with no `slug` is not an address — it is the core word's own
+ * tag — so it is neither counted nor moved. */
+let formerly = (d: Drive, from: string): { rows: number; moved: number } => {
+  let rows = Number(
+    d.query(
+      `select count(*) as n from ${q(from)} where slug is not null`,
+      [],
+    )[0]?.n ?? 0,
+  )
+  let before = count(d, 'former')
+  d.exec(
+    `insert into ${q('former')} (entity, slug, slugs) ` +
+      `select entity, slug, slugs from ${q(from)} where slug is not null`,
+  )
+  return { rows, moved: count(d, 'former') - before }
+}
+
+/**
+ * Whether a table is the app-address record as the platform used to spell it:
+ * both of the old word's columns, with an address in them. Rows AND columns,
+ * because an app store has neither and a directory the pass has been over has
+ * the columns swept — and because the core word writes rows of its own into
+ * the same table, which are not addresses and are not this pass's business.
+ */
+let addressing = (d: Drive, table: string): boolean =>
+  stands(d, table) && columns(d, table).includes('slug') &&
+  columns(d, table).includes('slugs') &&
+  Number(
+      d.query(
+        `select count(*) as n from ${q(table)} where slug is not null`,
+        [],
+      )[0]?.n ?? 0,
+    ) > 0
+
+/** Whether this object still keeps app addresses under the core word's table.
+ * False for every app store — no addresses — and for a directory
+ * {@link addressed} has already been over. */
+export let slugged = (storage: DurableStorage): boolean => {
+  let d = driver(storage)
+  return stands(d, 'former') && addressing(d, FORMERLY)
+}
+
+/** Which rows the pass is about, read out before one moves — the restore path,
+ * the way {@link taken} is for the first pass. */
+export let addresses = (storage: DurableStorage): Taken => {
+  let d = driver(storage)
+  return {
+    store: '',
+    at: new Date().toISOString(),
+    slots: {},
+    tables: [{
+      name: FORMERLY,
+      rows: d.query(`select * from ${q(FORMERLY)}`, []),
+    }],
+  }
+}
+
+/**
+ * The app addresses out of `alias` and into `former` (T-34390), synchronously —
+ * run it inside `transactionSync` for the same reason {@link carry} is: a throw
+ * is how it refuses and the rollback is how it leaves nothing behind.
+ *
+ * THE RULE: every address carries across. One that does not is an address an
+ * app answers at and the directory can no longer find, which is a rename that
+ * strands every open page — so it refuses, the rows stay where they are, and
+ * they are in the export.
+ */
+export let addressed = (
+  storage: DurableStorage,
+  o: { store: string; app: string | null; export: string },
+): Report => {
+  let d = driver(storage)
+  let at = new Date().toISOString()
+  let moved: Moved[] = []
+  let report = (ok: boolean, message?: string): Report => ({
+    store: o.store,
+    app: o.app,
+    at,
+    ok,
+    message,
+    mark: FORMER,
+    moved,
+    dropped: [],
+    export: o.export,
+  })
+  let { rows, moved: landed } = formerly(d, FORMERLY)
+  moved.push({
+    table: 'former',
+    from: 0,
+    to: landed,
+    note: `${rows} apps had an address of their own`,
+  })
+  if (landed != rows) {
+    throw new Refused(report(
+      false,
+      `${rows} addresses to move and ${landed} landed in former`,
+    ))
+  }
+  d.exec(`delete from ${q(FORMERLY)} where slug is not null`)
+  // The old place, swept up. TIDYING, not the move: the addresses are in
+  // `former`, the vocabulary declares neither column, and nothing selects
+  // them — so a drop the engine will not do leaves two dead columns and a
+  // working directory. The unique index goes first because SQLite will not
+  // drop a column an index stands on, and that index is the old word's.
+  let swept = ''
+  try {
+    d.exec(`drop index if exists ${q(`${FORMERLY}_slug`)}`)
+    d.exec(`alter table ${q(FORMERLY)} drop column slug`)
+    d.exec(`alter table ${q(FORMERLY)} drop column slugs`)
+  } catch (e) {
+    swept = `the address columns would not drop: ${
+      e instanceof Error ? e.message : String(e)
+    } — they are dead, nothing selects them`
+  }
+  moved.push({
+    table: FORMERLY,
+    from: rows,
+    to: 0,
+    note: swept || 'the slug and slugs columns dropped',
+  })
+  return report(true)
+}
+
 /**
  * The whole pass, synchronously — run it inside `transactionSync`, because a
  * throw is how it refuses and the rollback is how it leaves nothing behind.
@@ -562,9 +714,14 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   // A word another word is renamed INTO is filled by that rename below, never
   // here — otherwise a store that held both spellings would write the same
   // entity twice.
+  // The table the core word took over is never a straight copy either: its old
+  // rows are addresses and its new ones are name tags, so copying `entity`
+  // across would say every app answers to a name nobody wrote. They go to
+  // `former` below.
   let renamed = new Set(Object.values(RENAMED))
   for (let comp of words) {
-    if (comp == 'doc' || renamed.has(comp) || !there(comp)) continue
+    if (comp == 'doc' || comp == FORMERLY) continue
+    if (renamed.has(comp) || !there(comp)) continue
     let want = new Set(columns(d, comp))
     let have = columns(d, aside(comp)).filter((c) => want.has(c))
     let lost = columns(d, aside(comp)).filter((c) => !want.has(c))
@@ -656,6 +813,30 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
       throw new Refused(report(
         false,
         `${named} spaces named a front page and ${stamped} apps wear home`,
+      ))
+    }
+  }
+
+  // The app addresses → `former` (T-34390). A store carrying now arrives at
+  // version 3 in the same breath, so {@link addressed} has nothing left to do
+  // for it: the rows land under the new word and the old table goes with the
+  // rest of the ones set aside.
+  if (
+    there(FORMERLY) && words.includes('former') &&
+    addressing(d, aside(FORMERLY))
+  ) {
+    let { rows, moved: landed } = formerly(d, aside(FORMERLY))
+    carried.add(FORMERLY)
+    moved.push({
+      table: 'former',
+      from: 0,
+      to: landed,
+      note: `${rows} apps had an address of their own, spelled "${FORMERLY}"`,
+    })
+    if (landed != rows) {
+      throw new Refused(report(
+        false,
+        `${rows} addresses to move and ${landed} landed in former`,
       ))
     }
   }
@@ -779,10 +960,11 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   //   blob_text  was one row per body, is one row per DISTINCT body
   //   grant      had none, has one per non-owner seat the split moved
   //   home       had none, has one per space that named a front page
+  //   former     had none, has the addresses the old `alias` table held
   //   entity     gains one spine row per entity those grants named into being
   // Anything else that does not match is a copy that lost or gained a row, and
   // there is no version of that worth marking done.
-  let SAID = ['grant', 'blob_text', 'home', 'entity']
+  let SAID = ['grant', 'blob_text', 'home', 'former', 'entity']
   let off = moved.filter((m) => !SAID.includes(m.table) && m.from != m.to)
   let spine = moved.find((m) => m.table == 'entity')!
   if (spine.to != spine.from + minted.n) off.push(spine)

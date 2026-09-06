@@ -197,6 +197,10 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
       // @yaks/edge — the link, and the twelve verbs it may wear
       'edge',
       ...RELATIONS,
+      // @yaks/key — the carrier of a value an entity answers to, and the one
+      // kind of it every store speaks: a name (@yaks/alias)
+      'key',
+      'alias',
       // what the PLATFORM says in every app's store: the breaks it noted, the
       // marks a served or fixed item wears, and the two rows an upload makes
       'exception',
@@ -255,7 +259,7 @@ Deno.test('the platform declares the uniques its races are decided by', () => {
     let [name, cols] of [
       ['space_slug', '"space" ("slug")'],
       ['app_space_slug', '"app" ("space", "slug")'],
-      ['alias_slug', '"alias" ("slug")'],
+      ['former_slug', '"former" ("slug")'],
       ['member_space_person', '"member" ("space", "person")'],
       ['hostname_name', '"hostname" ("name")'],
       ['deploy_app_version', '"deploy" ("app", "version")'],
@@ -279,7 +283,7 @@ Deno.test('none of the fleet vocabulary comes with it', () => {
   )
   let mine = new Set(tablesOf(schema(appVocab())))
   assert(fleet.length > 50, `the fleet plants ${fleet.length} tables`)
-  assert(mine.size < 45, `an app plants ${mine.size}`)
+  assert(mine.size < 50, `an app plants ${mine.size}`)
   // The words an app SHARES with the fleet are the ones the guide gives it to
   // reach for — `task` and its marks among them. What must not come with it is
   // the fleet's own working life: its sessions, its canvas, its memories.

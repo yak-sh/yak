@@ -72,7 +72,7 @@ let seeded = async (env: Env, access = 'public') => {
       entity: { eid: '$app' },
       doc: { title: 'Cookbook' },
       app: { slug: 'cookbook', space: space.eid, version: 1, access },
-      alias: { slug: 'ada/cookbook' },
+      former: { slug: 'ada/cookbook' },
     }],
   }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
   let app = (await dir.app(space, 'cookbook'))!
@@ -442,7 +442,7 @@ let router = async (
         entity: { eid: '$garden' },
         doc: { title: 'Garden' },
         app: { slug: 'garden', space: space.eid, version: 1, access: 'public' },
-        alias: { slug: 'ada/garden' },
+        former: { slug: 'ada/garden' },
       },
       {
         entity: { eid: app.eid },

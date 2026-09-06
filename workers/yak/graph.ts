@@ -92,6 +92,8 @@ import {
 } from '@yaks/durable-object'
 import { effects } from '@yaks/effects'
 import { edges } from '@yaks/edge'
+import { keys } from '@yaks/key'
+import { aliases } from '@yaks/alias'
 import { type Driver, fields, find } from '@yaks/fts'
 import {
   type Bundle,
@@ -128,8 +130,11 @@ import type { Namespace } from './door.ts'
 import { metering } from './meter.ts'
 import { PLATFORM } from './route.ts'
 import {
+  addressed,
+  addresses,
   type Bucket,
   carry,
+  FORMER,
   HOMED,
   homed,
   homes,
@@ -142,6 +147,7 @@ import {
   Refused as Unreconciled,
   type Report,
   type Slots,
+  slugged,
   stale,
   taken,
 } from './migrate.ts'
@@ -362,10 +368,14 @@ export class Store {
     ctx.storage.sql.exec(KV)
     this.#pending = !this.#get('migrated') && stale(ctx.storage)
     if (!this.#pending) this.#boot()
-    // The second pass reads and writes the NEW schema, so it is asked after
-    // the boot — and only of an object that is not already at the last marker.
+    // The passes after the first read and write the NEW schema, so they are
+    // asked after the boot — and only of an object that is not already at the
+    // LAST marker (migrate.ts `MARKS`), with one question per pass: an object
+    // that stopped at an older marker because it had nothing to move for it
+    // still has to be asked about the ones added since.
     this.#behind = this.#pending ||
-      (this.#get('migrated') != HOMED && housed(ctx.storage))
+      (this.#get('migrated') != FORMER &&
+        (housed(ctx.storage) || slugged(ctx.storage)))
   }
 
   // Waking on whatever this object holds. Everything above the storage is
@@ -473,6 +483,11 @@ export class Store {
         // Before every check, because it is about the SHAPE a value arrived in.
         this.#lowering,
         edges(vocab),
+        // The carrier and the one kind of it every store speaks: a NAME, which
+        // is how anything addresses a row it wrote last week without having
+        // kept the eid. The carrier goes first — the name rides it (T-34390).
+        keys(vocab),
+        aliases(vocab),
         blobs(vocab, bytes),
         fx,
         // Before the guard, because it is what the guard reads.
@@ -870,6 +885,7 @@ export class Store {
   async #passes(request: Request) {
     if (this.#pending) await this.#carrying(request)
     if (!this.#refused) await this.#homing(request)
+    if (!this.#refused) await this.#addressing(request)
     this.#behind = false
   }
 
@@ -923,6 +939,60 @@ export class Store {
       console.warn('store: migration report', e)
     }
     if (report.ok) return void this.#put('migrated', HOMED)
+    this.#refused = `${report.message ?? 'the migration refused'} — the rows ` +
+      `are unchanged and exported to ${wrote}`
+  }
+
+  /**
+   * The third pass (T-34390): the app addresses move out of the table the core
+   * word `alias` now owns and into `former`. Same order as the ones before it —
+   * the rows reach R2 before one moves, the move is one transaction, the report
+   * is written beside them — and an object with nothing to move only writes the
+   * marker, so it is never asked again. Every app store is that object.
+   */
+  async #addressing(request: Request) {
+    let ctx = this.#ctx
+    let name = request.headers.get('x-store') ?? this.#get('name') ?? ''
+    if (!slugged(ctx.storage)) return void this.#put('migrated', FORMER)
+    let bucket = this.#bind.EXPORTS
+    if (!bucket) {
+      this.#refused = 'no export bucket is bound (EXPORTS): this store will ' +
+        'not move a row without a restore path'
+      return
+    }
+    let dump = addresses(ctx.storage)
+    dump.store = name
+    let key = keyOf(name, dump.at)
+    let wrote = `${key}/rows.jsonl`
+    await bucket.put(wrote, lines(dump))
+    let report: Report
+    try {
+      report = ctx.storage.transactionSync(() =>
+        addressed(ctx.storage, {
+          store: name,
+          app: request.headers.get('x-yak-app'),
+          export: wrote,
+        })
+      )
+    } catch (e) {
+      report = e instanceof Unreconciled ? e.report : {
+        store: name,
+        app: request.headers.get('x-yak-app'),
+        at: dump.at,
+        ok: false,
+        message: e instanceof Error ? e.message : String(e),
+        mark: FORMER,
+        moved: [],
+        dropped: [],
+        export: wrote,
+      }
+    }
+    try {
+      await bucket.put(`${key}/report.json`, JSON.stringify(report, null, 2))
+    } catch (e) {
+      console.warn('store: migration report', e)
+    }
+    if (report.ok) return void this.#put('migrated', FORMER)
     this.#refused = `${report.message ?? 'the migration refused'} — the rows ` +
       `are unchanged and exported to ${wrote}`
   }

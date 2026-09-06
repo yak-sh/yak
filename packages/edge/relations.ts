@@ -28,7 +28,12 @@ export let EDGE = 'edge'
 export let relations = (v: Vocab): Record<string, string> => {
   let out: Record<string, string> = {}
   for (let tag of v.all) {
-    let said = v.comp(tag)?.keywords.relation
+    // `edge` is the spelling — a tag says the name of the carrier it rides, so
+    // one rule reads every carrier (@yaks/key's tags say `key`). `relation` is
+    // the older word for the same slot and still means it; old spellings never
+    // die.
+    let kw = v.comp(tag)?.keywords
+    let said = kw?.edge ?? kw?.relation
     if (said === true) out[tag] = tag
     else if (typeof said == 'string' && said) out[said] = tag
   }

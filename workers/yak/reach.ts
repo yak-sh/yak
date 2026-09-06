@@ -676,7 +676,21 @@ let minted = (batch: Bundle[]) => {
       : v
   let entities = batch.map((e, i) => {
     let one = swap(e) as Bundle
-    return eids[i] ? { ...one, entity: { ...one.entity, eid: eids[i]! } } : one
+    if (!eids[i]) return one
+    // The alias RIDES ALONG (T-34390). A store's own mint phase reads `$alias`
+    // to tell an id the graph picked from one a caller wrote down, which is
+    // what decides whether a name somebody already holds moves this entity onto
+    // theirs or is refused as a clash. Minting here would otherwise make every
+    // `$` eid look client-minted by the time a store sees it, and the second
+    // load of a named seed would be a refusal instead of a patch.
+    let said = e.entity?.eid
+    return {
+      ...one,
+      entity: { ...one.entity, eid: eids[i]! },
+      ...(typeof said == 'string' && said.startsWith('$')
+        ? { $alias: said }
+        : {}),
+    }
   })
   return { entities, eids, aliases }
 }
@@ -859,8 +873,16 @@ export let written = async (
     await Promise.all(parts.map((p) => sent(env, p, true, headers)))
   }
   let outs = await Promise.all(parts.map((p) => sent(env, p, false, headers)))
+  let bundles = outs.flat()
+  // Where a `$alias` actually LANDED. A store may put a bundle somewhere other
+  // than the id this door minted for it: one carrying a name somebody already
+  // holds is a patch of THAT entity (@yaks/alias, T-34390). The batch as
+  // applied says so, so the map a caller reads is corrected from the answer.
+  for (let b of bundles) {
+    if (typeof b.$alias == 'string') aliases[b.$alias] = b.entity.eid
+  }
   return {
-    bundles: outs.flat(),
+    bundles,
     aliases,
     where: parts.map((p) => at(p.r)).join(' and '),
   }

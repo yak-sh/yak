@@ -102,9 +102,14 @@ let pointed = (err: unknown): never => {
 // half of an entity's edges costs one query, not one per reference column.
 let gather = async (
   ctx: ToolCtx,
-  ids: string[],
+  said: string[],
   backrefs: boolean,
 ): Promise<Bundle[]> => {
+  // What the caller typed, as the eids it names: an id that is an entity is
+  // itself, and anything else is whatever a plugin says it addresses — a name,
+  // where @yaks/alias is composed in. Nothing composed, nothing to resolve.
+  let at = await ctx.graph.address(said)
+  let ids = said.map((id) => at.get(id) ?? id)
   let found = await detached(ctx.graph.storage).get(ids)
   let seen = new Map<string, Bundle>()
   for (let b of found) seen.set(b.entity.eid, b)
@@ -158,7 +163,11 @@ export let core = (opts: CoreOpts): Tool[] => {
         `a client's apply() takes: an omitted column is untouched, a ` +
         `null column is cleared, a null component is dropped, and ` +
         `$delete: true kills the entity. Mint an id yourself, or write ` +
-        `'$name' as the eid and read back what the graph named it. The answer ` +
+        `'$name' as the eid and read back what the graph named it. Where this ` +
+        `store keeps names, alias: {name: '<your name>'} beside a '$name' eid ` +
+        `makes the write IDEMPOTENT — the same name written again patches the ` +
+        `entity that already holds it instead of making a second one, and a ` +
+        `name stands wherever an eid does. The answer ` +
         `is the batch AS APPLIED, one bundle per entity: {entity: {eid, num}}, ` +
         `every component as written, the stamps the graph made (created, ` +
         `updated), and the '$alias' you named it by. Anything that died — ` +
@@ -219,10 +228,11 @@ export let core = (opts: CoreOpts): Tool[] => {
         `every component each one carries, plus ` +
         `everything that points AT it, each as its own bundle, and the ` +
         `references between them as edges. This is identity, not search — ` +
-        `pass eids. Set backrefs false when you only want the entities ` +
-        `themselves.`,
+        `pass eids, or the name an entity answers to where this store keeps ` +
+        `names (an eid wins over a name that spells it). Set backrefs false ` +
+        `when you only want the entities themselves.`,
       input: {
-        ids: z.array(z.string()).describe('the eids to show'),
+        ids: z.array(z.string()).describe('the eids or names to show'),
         backrefs: z.boolean().optional().describe(
           'also gather what points at them (default: true)',
         ),

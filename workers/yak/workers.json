@@ -6,6 +6,7 @@
   },
   "imports": {
     "@cloudflare/workers-types": "npm:@cloudflare/workers-types@^4.20260702.1",
+    "@yaks/alias": "../../packages/alias/mod.ts",
     "@yaks/api": "../../packages/api/mod.ts",
     "@yaks/blob": "../../packages/blob/mod.ts",
     "@yaks/doc": "../../packages/doc/mod.ts",
@@ -15,6 +16,7 @@
     "@yaks/fts": "../../packages/fts/mod.ts",
     "@yaks/graph": "../../packages/graph/mod.ts",
     "@yaks/id": "../../packages/id/mod.ts",
+    "@yaks/key": "../../packages/key/mod.ts",
     "@yaks/mail": "../../packages/mail/mod.ts",
     "@yaks/match": "../../packages/match/mod.ts",
     "@yaks/member": "../../packages/member/mod.ts",

@@ -50,22 +50,31 @@ let pointsAt = (b: Bundle, vocab: Vocab): Eid[] =>
     )
   )
 
-// One bundle with every resolved alias in it rewritten to the id it stands for.
-let rewrite = (b: Bundle, vocab: Vocab, at: Map<Eid, Eid>): Bundle => {
+// One bundle with every id in `at` rewritten to the id it stands for. `strict`
+// is the mint phase's own reading: an ALIAS nothing named is a batch that
+// cannot land, where an ordinary eid nobody renamed is simply left alone.
+let rewrite = (
+  b: Bundle,
+  vocab: Vocab,
+  at: Map<Eid, Eid>,
+  strict: boolean,
+): Bundle => {
   let out: Bundle = { ...b }
   for (let [name, comp] of comps(b)) {
     if (!comp) continue
     let cols: Comp | undefined
     for (let [prop, val] of Object.entries(comp)) {
       if (
-        typeof val != 'string' || !isAlias(val) ||
-        vocab.column(name, prop)?.category != 'ref'
+        typeof val != 'string' || vocab.column(name, prop)?.category != 'ref'
       ) continue
       let eid = at.get(val)
       if (!eid) {
-        throw new Refused(
-          `${name}.${prop} names ${val}, which this batch does not mint`,
-        )
+        if (strict && isAlias(val)) {
+          throw new Refused(
+            `${name}.${prop} names ${val}, which this batch does not mint`,
+          )
+        }
+        continue
       }
       cols = { ...(cols ?? comp), [prop]: eid }
     }
@@ -73,6 +82,30 @@ let rewrite = (b: Bundle, vocab: Vocab, at: Map<Eid, Eid>): Bundle => {
   }
   return out
 }
+
+/**
+ * The other half of {@link resolve}, on its own: every entity named by one of
+ * these ids, and every reference to one, rewritten to the id it stands for.
+ * Anything the map does not name is left exactly alone.
+ *
+ * It is exported for a plugin that names entities of its OWN in the mint phase.
+ * {@link https://jsr.io/@yaks/alias | @yaks/alias} is the one: a bundle
+ * carrying a name some entity already holds is a patch OF that entity, so the
+ * id this phase just minted has to give way to the holder's — in the bundle
+ * itself and in everything pointing at it — which is this function.
+ */
+export let substitute = (
+  bundles: Bundle[],
+  vocab: Vocab,
+  at: Map<Eid, Eid>,
+): Bundle[] =>
+  at.size
+    ? bundles.map((b) => {
+      let out = rewrite(b, vocab, at, false)
+      let eid = at.get(b.entity.eid)
+      return eid ? { ...out, entity: { ...out.entity, eid } } : out
+    })
+    : bundles
 
 /**
  * The mint phase: give every alias in the batch a real id, and rewrite the
@@ -117,7 +150,7 @@ export let resolve = (
       // bundle in the batch carried the naming component.
       let named: Eid | undefined
       for (let b of groups.get(alias)!) {
-        let full = rewrite(b, vocab, at)
+        let full = rewrite(b, vocab, at, true)
         let by = comps(full).find(([name, comp]) => comp && derive[name])
         if (by) named = derive[by[0]](by[1] as Comp, full)
         if (named) break
@@ -127,7 +160,7 @@ export let resolve = (
     left = left.filter((alias) => !at.has(alias))
   }
   return bundles.map((b) => {
-    let out = rewrite(b, vocab, at)
+    let out = rewrite(b, vocab, at, true)
     let eid = at.get(b.entity.eid)
     return eid
       ? { ...out, entity: { ...out.entity, eid }, $alias: b.entity.eid }
