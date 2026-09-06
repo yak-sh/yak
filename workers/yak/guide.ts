@@ -227,7 +227,8 @@ change of yours is what broke it, or they simply want it back: app_rollback
 puts every file of an earlier deploy back and releases it as a new version,
 and app_versions is the list to pick from. A whole app deleted comes back the
 same way: app_delete puts it in the trash for 30 days, keeping everything,
-and app_restore takes it back out.
+and app_restore takes it back out — and a whole SPACE the same, with
+space_restore.
 
 Anything either of you has to say about THIS PLATFORM rather than their app —
 a tool that refused for no reason you could find, a guide that taught the
@@ -376,9 +377,10 @@ export let PAGES: Page[] = [
     description:
       'What a refused call answers and how a page shows it, where a break ' +
       'is filed and how the agent hears about it once, app_errors, ' +
-      'app_versions and app_rollback, the 30-day trash app_delete puts an ' +
-      'app in and app_restore takes it out of, and feedback for anything ' +
-      'you or the person have to say about the platform itself.',
+      'app_versions and app_rollback, the 30-day trash app_delete and ' +
+      'space_delete put a thing in and app_restore and space_restore take it ' +
+      'out of, and feedback for anything you or the person have to say about ' +
+      'the platform itself.',
     brief: 'what broke, and rolling back',
   },
 ]

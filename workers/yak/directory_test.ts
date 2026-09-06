@@ -18,6 +18,7 @@ let space: Space = {
   plan: null,
   meter: null,
   told: false,
+  trashed: null,
 }
 
 // A meta store that answers one app, at whatever version the test has set.

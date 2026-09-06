@@ -21,6 +21,7 @@ import {
   due,
   erase,
   GRACE,
+  keeping,
   letter,
   LIFE,
   naming,
@@ -46,6 +47,7 @@ let space = (over: Partial<Space> = {}): Space => ({
   plan: null,
   meter: null,
   told: false,
+  trashed: null,
   ...over,
 })
 
@@ -97,6 +99,17 @@ Deno.test('a ticket opens one space for one person, for an hour', async () => {
   assertEquals(await ticketed('not a ticket', secret), null)
 })
 
+// WHICH act the link opens rides inside the signature (T-34431), so the only
+// way to reach the erase is a letter the platform sent: a link off the web,
+// or one somebody edited, opens the trash.
+Deno.test('a ticket carries whether it erases or trashes', async () => {
+  let secret = 'shhh'
+  let mild = await ticketed(await ticket(space(), 'p1', secret), secret)
+  assertEquals(mild?.forever, false)
+  let final = await ticketed(await ticket(space(), 'p1', secret, true), secret)
+  assertEquals(final?.forever, true)
+})
+
 Deno.test('what a delete would destroy is named, not counted', () => {
   let lines = naming(doomed({
     apps: [app(), app({ eid: 'b', slug: 'notes', title: 'Notes' })],
@@ -112,11 +125,33 @@ Deno.test('what a delete would destroy is named, not counted', () => {
   // One member is the owner reading the letter; there is nobody to warn about.
   assert(!naming(doomed()).some((l) => l.includes('lose their way in')))
   // And the letter says the same words, with the link and the hour.
-  let l = letter(doomed(), door('shoplab', 'tkt'))
+  let l = letter(doomed(), door('shoplab', 'tkt'), true)
   assertEquals(l.subject, 'Delete shoplab.yaks.app?')
   assertStringIncludes(l.body, 'https://yaks.app/space/shoplab/delete?t=tkt')
   assertStringIncludes(l.body, 'the next hour')
   assertStringIncludes(l.body, 'The Shop (https://shoplab.yaks.app/shop/)')
+  assertStringIncludes(l.body, 'It cannot be undone')
+})
+
+// What a TRASH says is a different list, not a softer wording of that one
+// (T-34431): every line names something that stops, and the last one is the
+// opposite of the last line above — the address is held, never released.
+Deno.test('a space in the trash is told what stops, not what is destroyed', () => {
+  let d = doomed({ hosts: [host('herbusiness.com')] })
+  let said = keeping(d).join('\n')
+  assertStringIncludes(
+    said,
+    'The Shop (https://shoplab.yaks.app/shop/) stops answering',
+  )
+  assertStringIncludes(said, 'everything it has saved are kept')
+  assertStringIncludes(said, 'herbusiness.com stops serving until')
+  assertStringIncludes(said, 'shoplab.yaks.app is held for you for 30 days')
+  assertEquals(said.includes('back into circulation'), false)
+  // And the letter is the act its ticket carries, one list or the other.
+  let l = letter(d, door('shoplab', 'tkt'))
+  assertStringIncludes(l.body, 'puts the space in the trash for 30 days')
+  assertStringIncludes(l.body, 'stops answering')
+  assertEquals(l.body.includes('It cannot be undone'), false)
 })
 
 Deno.test('the platform and a paying space refuse to be deleted', () => {
@@ -192,27 +227,63 @@ Deno.test('the sweep takes the trash that is out of days, and nothing else', () 
   assertEquals(overdue(apps, then(0)).map((a) => a.eid), ['old'])
 })
 
+// A SPACE wears the same word and is counted out of the trash by the same
+// days (T-34431) — one selection, asked of whichever rows the sweep is
+// holding, because "thirty days ago" cannot be allowed to mean two things.
+Deno.test('a space out of days is taken the same way an app is', () => {
+  let spaces = [
+    space({ eid: 'live', slug: 'live' }),
+    space({ eid: 'fresh', slug: 'fresh', trashed: { at: AT, by: 'p1' } }),
+    space({
+      eid: 'old',
+      slug: 'old',
+      trashed: { at: new Date(then(-31 * day)).toISOString(), by: 'p1' },
+    }),
+  ]
+  assertEquals(overdue(spaces, then(0)).map((s) => s.eid), ['old'])
+  // The space still in its days is taken on the day they run out, and never
+  // before: a space erased early is the bug this whole feature prevents.
+  assertEquals(overdue(spaces, then(30 * day - 1)).map((s) => s.eid), ['old'])
+  assertEquals(overdue(spaces, then(30 * day)).map((s) => s.eid), [
+    'fresh',
+    'old',
+  ])
+})
+
 // A person signed in on the stand-in, and the space they own — written the
 // way `space_new` writes one (serving_test.ts seeds it the same way).
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 
-let owned = async (env: Env) => {
-  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+let by = { 'x-yak-person': ADA, 'x-yak-role': 'owner' }
+
+// One space of theirs, with whatever else it wears — a trash mark, in the
+// sweep's tests.
+let makes = async (
+  dir: ReturnType<typeof directory>,
+  slug: string,
+  over: Record<string, unknown> = {},
+) => {
   await dir.apply({
     entities: [
       { entity: { eid: ADA }, person: {} },
       {
         entity: { eid: '$space' },
-        doc: { title: 'ada' },
-        space: { slug: 'ada' },
+        doc: { title: slug },
+        space: { slug },
+        ...over,
       },
       {
         entity: { eid: '$seat' },
         member: { space: '$space', person: ADA, role: 'owner' },
       },
     ],
-  }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
-  return { dir, space: (await dir.space('ada'))! }
+  }, by)
+  return (await dir.space(slug))!
+}
+
+let owned = async (env: Env) => {
+  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  return { dir, space: await makes(dir, 'ada') }
 }
 
 // A page's socket, as far as a replay is concerned: what it was sent.
@@ -261,7 +332,10 @@ Deno.test('a deleted space takes its conversation and its workbench', async () =
   assertEquals([...box.alive], [])
 })
 
-slow('a space deleted: the letter, the act, and the name back', async () => {
+// `forever` end to end (T-34431): the one path that still erases a space on
+// the spot, and therefore the one that still gives the name back. The default
+// path — the trash — is mcp_test.ts's, through the same letter.
+slow('a space erased: the letter, the act, and the name back', async () => {
   let k = await kernel()
   try {
     // A person with a space, an app with files and data in it, and a second
@@ -277,7 +351,10 @@ slow('a space deleted: the letter, the act, and the name back', async () => {
     assertEquals((await k.at('shoplab.yaks.app', '/shop/')).status, 200)
 
     // The AGENT asks. It deletes nothing: it mails the owner, and says so.
-    let said = await agent.tool('space_delete', { space: 'shoplab' })
+    let said = await agent.tool('space_delete', {
+      space: 'shoplab',
+      forever: true,
+    })
     assertStringIncludes(said, 'nothing is deleted')
     assertStringIncludes(said, 'check their email')
     assertStringIncludes(said, 'https://shoplab.yaks.app/shop/')
@@ -415,6 +492,52 @@ slow(
   },
 )
 
+// And the same sweep on the row above (T-34431): a SPACE out of days goes
+// whole, taking its apps and their bytes with it, while a space still inside
+// its thirty days is a space its person can still have back.
+slow(
+  'the sweep erases a space out of days, and leaves one in them',
+  async () => {
+    let { env } = platform('a probe secret')
+    let { dir } = await owned(env)
+    let ago = (days: number) => ({
+      trashed: { at: new Date(Date.now() - days * day).toISOString(), by: ADA },
+    })
+    let app = async (space: Space, slug: string) => {
+      await dir.apply({
+        entities: [{
+          entity: { eid: `$${slug}` },
+          doc: { title: slug },
+          app: { slug, space: space.eid, version: 1, access: 'public' },
+          alias: { slug: `${space.slug}/${slug}` },
+        }],
+      }, by)
+      await r2Blobs(env.BLOBS).put(
+        `${space.slug}/${slug}/index.html`,
+        new TextEncoder().encode(`<h1>${slug}</h1>`),
+      )
+    }
+    await app(await makes(dir, 'fresh', ago(29)), 'notes')
+    await app(await makes(dir, 'old', ago(31)), 'notes')
+
+    assertEquals(await collected(env), 1)
+    assertEquals(await dir.space('old'), null)
+    assert(await dir.space('fresh'))
+    assert(await dir.space('ada'))
+    // The app in it went with it, and so did its bytes — one erase, the same
+    // one a person confirming `forever` runs.
+    let keys = await r2Blobs(env.BLOBS).list('')
+    assertEquals(keys.some((k) => k.startsWith('old/')), false)
+    assertEquals(keys.some((k) => k.startsWith('fresh/')), true)
+    // A second run has nothing to do, and the space still in its days waits
+    // for its own day: the clock is the argument.
+    assertEquals(await collected(env), 0)
+    assertEquals(await collected(env, new Date(Date.now() + 2 * day)), 1)
+    assertEquals(await dir.space('fresh'), null)
+    assert(await dir.space('ada'))
+  },
+)
+
 slow('a space with a domain attached refuses to die quietly', async () => {
   let k = await kernel()
   try {
@@ -431,13 +554,24 @@ slow('a space with a domain attached refuses to die quietly', async () => {
         stage: 'active',
       },
     }])
+    // The ERASE, which is the only act that gives a hostname back — the trash
+    // leaves every one of them exactly where it is. Its ticket is the one the
+    // letter would have carried (erase.ts `ticket`), minted here rather than
+    // waited for, since what is under test is the act and not the letter.
     let out = await k.at('yaks.app', '/space/domainlab/delete', {
       method: 'POST',
       headers: {
         cookie: them.cookie,
         'content-type': 'application/x-www-form-urlencoded',
       },
-      body: new URLSearchParams({ confirm: 'domainlab' }).toString(),
+      body: new URLSearchParams({
+        t: await ticket(
+          space({ eid: them.eids.domainlab }),
+          them.person,
+          k.secret,
+          true,
+        ),
+      }).toString(),
     })
     assertEquals(out.status, 502)
     let said = await out.text()

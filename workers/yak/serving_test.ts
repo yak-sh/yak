@@ -32,7 +32,7 @@ import * as dirPart from './directory.ts'
 import { scriptName } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { platform as inMemory } from './harness.ts'
-import { emptied, trash } from './erase.ts'
+import { emptied, trash, trashSpace } from './erase.ts'
 import { wrote } from './tools.ts'
 import { archive, openIn, serve } from './unseen.ts'
 import { PLATFORM_STORE } from './vocab.ts'
@@ -726,6 +726,56 @@ Deno.test("a trashed front page is nobody's, and the owner restores it there", a
     k.env,
   )
   assertEquals(back.status, 303)
+  assertStringIncludes(await (await k.at('/')).text(), 'cookbook')
+})
+
+// A SPACE in the trash answers nothing at any of its addresses (T-34431) —
+// ahead of every rung of the order above, since none of them is reached. Its
+// owner is the exception, and the page they get carries the one button that
+// brings the space back.
+Deno.test('a space in the trash serves nothing, and its owner restores it', async () => {
+  let k = await router()
+  k.put('ada/cookbook/index.html', '<!doctype html><body>cookbook</body>')
+  k.put('ada/garden/index.html', '<!doctype html><body>garden</body>')
+  assertEquals((await k.at('/')).status, 200)
+
+  await trashSpace(k.env, k.dir, k.space, { person: ADA, role: 'owner' })
+  // Every address under it, whichever rung would have answered: the front
+  // page, an app of its own, a file, and an app's store door.
+  for (
+    let path of ['/', '/garden/', '/cookbook/index.html', '/garden/api/query']
+  ) {
+    let out = await k.at(path)
+    assertEquals(out.status, 404, path)
+    assertStringIncludes(await out.text(), 'Nothing here yet')
+  }
+
+  // The owner, and only them: the page says where the space went, how long
+  // they have, and it says it at every address rather than only at `/`.
+  let cookie = await as(ADA)
+  let mine = await apps.fetch(visit('/garden/', { headers: { cookie } }), k.env)
+  assertEquals(mine.status, 404)
+  let said = await mine.text()
+  assertStringIncludes(said, 'ada is in the trash')
+  assertStringIncludes(said, '30 more days')
+  assertStringIncludes(said, 'name="restore-space" value="ada"')
+
+  // The button. One POST to the page it is on, no script, and the space is
+  // serving again — every app of it, exactly as it was.
+  let back = await apps.fetch(
+    visit('/', {
+      method: 'POST',
+      headers: {
+        cookie,
+        origin: 'https://ada.yaks.app',
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ 'restore-space': 'ada' }).toString(),
+    }),
+    k.env,
+  )
+  assertEquals(back.status, 303)
+  assertEquals((await k.at('/garden/')).status, 200)
   assertStringIncludes(await (await k.at('/')).text(), 'cookbook')
 })
 

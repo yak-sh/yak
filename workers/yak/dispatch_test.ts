@@ -51,6 +51,7 @@ let space: Space = {
   plan: null,
   meter: null,
   told: false,
+  trashed: null,
 }
 let app: App = {
   eid: 'a1',

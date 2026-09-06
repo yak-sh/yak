@@ -66,7 +66,12 @@ let opened = async (
   if (!box) throw new Refused(`no mailbox for ${to}`)
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let space = await dir.space(box.space)
-  if (!space) throw new Refused(`no mailbox for ${to}`)
+  // A space in the trash has no mailboxes at all (erase.ts, T-34431), for the
+  // reason a trashed app has none: the address is spelled right and nothing
+  // is behind it, and the sender is nobody we owe the news that somebody
+  // deleted their space. Refused before the app is looked for, so a letter to
+  // any address under it bounces the same way.
+  if (!space || space.trashed) throw new Refused(`no mailbox for ${to}`)
   // An address the app has LEFT still finds it, as its old hostname does
   // (apps.ts `served`, directory.ts `former`): a rename moves `app.slug` and
   // keeps the old name on the app's alias, so a letter to

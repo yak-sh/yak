@@ -23,6 +23,7 @@ let space = (slug: string): Space => ({
   plan: null,
   meter: null,
   told: false,
+  trashed: null,
 })
 
 let app = (slug: string, spaceEid: string): App => ({

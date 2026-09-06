@@ -681,6 +681,73 @@ slow('/login never draws the box for a browser already signed in', async () => {
   }
 })
 
+// A space in the trash is still THEIR space (erase.ts, T-34431): signing in
+// mints nothing beside it, and where the code lands them is the one page that
+// space serves — the owner's, with the button that brings it back. This is the
+// half of the trash a person meets without ever being told about it.
+slow(
+  'the code lands on the trash page when the only space is there',
+  async () => {
+    let k = await kernel()
+    try {
+      let them = await signIn(k)
+      let slug = them.email.split('@')[0]
+      // Straight off the web with no letter in hand: typing the name back is
+      // the other way to confirm, and what it confirms is the TRASH — the erase
+      // rides in a ticket the platform signed and nothing else (erase.ts).
+      let shut = await form(
+        k,
+        `/space/${slug}/delete`,
+        { confirm: slug },
+        them.cookie,
+      )
+      assertEquals(shut.status, 200)
+      assertStringIncludes(
+        await shut.text(),
+        `${slug}.yaks.app is in the trash`,
+      )
+
+      // The code again, and it sends them where it always sends them.
+      let asked = await form(k, '/login', { email: them.email })
+      assertEquals(asked.status, 200)
+      await asked.body?.cancel()
+      let inn = await form(k, '/login/code', {
+        email: them.email,
+        code: await mailed(k, them.email),
+      })
+      assertEquals(inn.status, 303)
+      assertEquals(inn.headers.get('location'), `https://${slug}.yaks.app/`)
+      let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
+
+      // And that page says where their space went, with the days it has left.
+      let there = await k.at(`${slug}.yaks.app`, '/', { headers: { cookie } })
+      assertEquals(there.status, 404)
+      let said = await there.text()
+      assertStringIncludes(said, `${slug} is in the trash`)
+      assertStringIncludes(said, '30 more days')
+
+      // One POST off that page and it is theirs again — no assistant, no script.
+      let back = await k.at(`${slug}.yaks.app`, '/', {
+        method: 'POST',
+        redirect: 'manual',
+        headers: {
+          cookie,
+          origin: `https://${slug}.yaks.app`,
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({ 'restore-space': slug }).toString(),
+      })
+      assertEquals(back.status, 303)
+      await back.body?.cancel()
+      let now = await k.at(`${slug}.yaks.app`, '/', { headers: { cookie } })
+      assertEquals(now.status, 200)
+      await now.body?.cancel()
+    } finally {
+      await k.stop()
+    }
+  },
+)
+
 // The two questions the sign-in card stopped asking (T-34236), asked on the
 // page a sign-in now lands on instead: what to call them, and the address
 // their apps live at. One form, one POST to the space's own address, and the

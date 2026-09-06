@@ -157,6 +157,33 @@ export let binned = (at: { title: string; days: number }) =>
     '<p><a class="Button" href="/">Restore it from your apps</a></p>',
   )
 
+// A SPACE in the trash, at any address of its own (erase.ts, T-34431).
+// Everyone else gets `nothingHere` at every one of them — a deleted space is
+// not a stranger's news — so this is its OWNER, told where their space went,
+// how long they have, and given the one button that brings it back. A form
+// POSTing to `/`, the same door the space page's own forms use (apps.ts
+// `saved`), so a restore needs no assistant and no script. A 404 with words
+// in it, because the address really is answering nothing.
+export let spaceBinned = (at: {
+  slug: string
+  title: string
+  days: number
+}) =>
+  shell(
+    `${esc(at.title)} is in the trash.`,
+    `Nothing answers at ${esc(at.slug)}.yaks.app until you restore it — no ` +
+      `app here, and no page. Everything the space had is kept for ${at.days} more ${
+        at.days == 1 ? 'day' : 'days'
+      }, then erased for good.`,
+    404,
+    `<form method="post" action="/">
+<input type="hidden" name="restore-space" value="${esc(at.slug)}">
+<button type="submit">Restore ${esc(at.slug)}.yaks.app</button>
+</form>
+<p class="Note">Its apps, their files and everything they saved come back
+exactly as they were.</p>${home}`,
+  )
+
 // Deploying by DROPPING a file (T-34230): the one door on this platform that
 // makes an app with no assistant in the room. A file input, which a file can
 // also be dragged onto, and the name the app lives at — one plain form that
@@ -754,11 +781,17 @@ export let askCode = (
 </form>${home}`,
   )
 
-// Closing a space (T-33166, erase.ts): the page that stands in front of the
-// one act on this platform that cannot be undone. It NAMES what dies —
-// every app, every domain, everyone who loses their way in, and the address
-// going back into circulation — because a person about to lose all of it
-// should read the list rather than remember it.
+// Closing a space (T-33166, erase.ts): the page that stands in front of it.
+// It NAMES what goes — every app, every domain, everyone who loses their way
+// in, and the address — because a person about to lose all of it should read
+// the list rather than remember it.
+//
+// Two acts, and the page says which one this is (T-34431). By default the
+// space goes to the TRASH, and then each line names something that STOPS
+// rather than something destroyed; `forever` is the letter's other link, and
+// only then does the page speak of no undo. The lines themselves are the
+// caller's (erase.ts `keeping` and `naming`), so the page never has to know
+// which act it is drawing except to title it.
 //
 // Two ways to say yes, and the page shows whichever the visitor arrived with.
 // Off the letter, with its ticket in hand, one button: opening the letter and
@@ -774,8 +807,12 @@ export let askDelete = (at: {
   slug: string
   lines: string[]
   token?: string | null
-  // Why this cannot happen at all — a space that is still paying (erase.ts
-  // `refused`). The page then names the reason and offers no form.
+  // Whether this link erases the space instead of trashing it (erase.ts
+  // `Ticket`). Only a ticket the platform signed can say so.
+  forever?: boolean
+  // Why this cannot happen at all — a space that is still paying, or one
+  // already in the trash (erase.ts `refused`, identity.ts `closing`). The page
+  // then names the reason and offers no form.
   stop?: string
   why?: string
   status?: number
@@ -783,12 +820,18 @@ export let askDelete = (at: {
   shell(
     `Delete ${esc(at.slug)}.yaks.app?`,
     esc(
-      at.stop ?? at.why ?? 'This cannot be undone, and nothing is kept.',
+      at.stop ?? at.why ??
+        (at.forever
+          ? 'This cannot be undone, and nothing is kept.'
+          : 'It goes to the trash for 30 days. Nothing is erased, and you ' +
+            'can bring it back any time before then.'),
     ),
     at.status ?? 200,
     `${
       at.lines.length
-        ? `<section class="Card"><h2>What goes, for good</h2>
+        ? `<section class="Card"><h2>${
+          at.forever ? 'What goes, for good' : 'What stops until you restore it'
+        }</h2>
 <ol>${at.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ol>
 </section>`
         : ''
@@ -802,7 +845,11 @@ ${
           at.token ? '' : `<p>Type <b>${esc(at.slug)}</b> to confirm.</p>
 <input name="confirm" autocomplete="off" spellcheck="false" autofocus aria-label="The name of the space">`
         }
-<button type="submit">Delete ${esc(at.slug)}.yaks.app forever</button>
+<button type="submit">${
+          at.forever
+            ? `Delete ${esc(at.slug)}.yaks.app forever`
+            : `Put ${esc(at.slug)}.yaks.app in the trash`
+        }</button>
 </form>
 <p class="Note">Changed your mind? Close this page — nothing has happened.</p>`
     }
@@ -811,14 +858,20 @@ ${home}`,
 
 // And after: what went, and the one thing worth knowing next — the address
 // belongs to nobody now, theirs to take again or somebody else's to take
-// later.
-export let deleted = (said: string) =>
+// later. A space that went to the TRASH has the opposite next thing: the
+// address is still theirs, and so is everything under it.
+export let deleted = (said: string, forever = true) =>
   shell(
     "That's done.",
     esc(said),
     200,
-    `<p class="Note">The address is free again. Ask your assistant for a new
-space whenever you want one.</p>${home}`,
+    `<p class="Note">${
+      forever
+        ? `The address is free again. Ask your assistant for a new
+space whenever you want one.`
+        : `Nothing was erased. The address is held for you, and restoring it
+puts everything back exactly as it was.`
+    }</p>${home}`,
   )
 
 // An app asking, for a browser that is already signed in: one click is the

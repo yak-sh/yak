@@ -114,6 +114,12 @@ export type Space = {
   // an error wears once it has been served; the sweep clears it when the
   // standing changes, so a new line is one the agent has not heard.
   told: boolean
+  // In the trash, and since when (erase.ts, T-34431) — the same word an app
+  // wears, on the row above it. Null for every space that is not, which is
+  // almost all of them. While it is worn every hostname of the space answers
+  // nothing, its apps leave every roster, its mail bounces and its slug is
+  // held; nothing it holds is touched until the thirty days run out.
+  trashed: Trashed | null
 }
 export type App = {
   eid: string
@@ -178,9 +184,9 @@ export type Pin = { of: string; version: number }
 // release that put it there (seed.ts, T-34327).
 export type Sowed = { at: string; version: number }
 
-// When an app was thrown away and by whom (erase.ts, T-34430). `at` is what
-// the thirty days are counted from, and `by` is the person the sweep erases
-// it as, since they are the one who asked for it gone.
+// When an app or a space was thrown away and by whom (erase.ts, T-34430,
+// T-34431). `at` is what the thirty days are counted from, and `by` is the
+// person the sweep erases it as, since they are the one who asked for it gone.
 export type Trashed = { at: string; by: string }
 
 // A hostname a person owns, aimed at one app (platform.rs `Hostname`,
@@ -425,6 +431,9 @@ export let stamp = async (
 let ABOUT =
   '.doc?&.alias?&.home?&.meter?&.published?&.installed?&.seeded?&.trashed?'
 
+// And what every read of a SPACE asks for, for the same reason.
+let SPACE_ABOUT = '.doc?&.plan?&.meter?&.notified?&.trashed?'
+
 // The plan as a whole row, however little of it is written: a column nobody
 // has filled reads empty, the way `meterOf` does, so nothing downstream tests
 // for null twice.
@@ -441,6 +450,14 @@ let planOf = (r: Row): Plan | null =>
     }
     : null
 
+// The trash mark as both rows wear it (erase.ts): one reader, because an app
+// and a space are in the trash the same way and are counted the same way out
+// of it.
+let trashedOf = (r: Row) =>
+  r.trashed
+    ? { at: r.trashed.at ?? '', by: r.trashed.by ? idOf(r.trashed.by) : '' }
+    : null
+
 let spaceOf = (r: Row): Space => ({
   eid: r.entity.eid,
   slug: r.space!.slug,
@@ -449,6 +466,7 @@ let spaceOf = (r: Row): Space => ({
   plan: planOf(r),
   meter: meterOf(r),
   told: r.notified != null,
+  trashed: trashedOf(r),
 })
 
 export let appOf = (r: Row): App => ({
@@ -477,9 +495,7 @@ export let appOf = (r: Row): App => ({
   seeded: r.seeded
     ? { at: r.seeded.at ?? '', version: r.seeded.version ?? 0 }
     : null,
-  trashed: r.trashed
-    ? { at: r.trashed.at ?? '', by: r.trashed.by ? idOf(r.trashed.by) : '' }
-    : null,
+  trashed: trashedOf(r),
 })
 
 let hostOf = (r: Row): Host => ({
@@ -633,7 +649,7 @@ export let directory = (via: Fetcher, now = false) => {
       return r.json()
     },
     space: async (slug: string) => {
-      let row = await one(`.space.slug=${slug}&.doc?&.plan?&.meter?&.notified?`)
+      let row = await one(`.space.slug=${slug}&${SPACE_ABOUT}`)
       return row ? spaceOf(row) : null
     },
     // `fresh` skips the read cache: what a break names has to be the deploy
@@ -665,7 +681,7 @@ export let directory = (via: Fetcher, now = false) => {
     // or nobody.
     payer: async (customer: string) => {
       let row = await one(
-        `.plan.customer=${customer}&.space!&.doc?&.meter?&.notified?`,
+        `.plan.customer=${customer}&.space!&${SPACE_ABOUT}`,
       )
       return row?.space ? spaceOf(row) : null
     },
@@ -736,7 +752,7 @@ export let directory = (via: Fetcher, now = false) => {
     // Every space there is. Only the meter asks this (usage.ts): a tool
     // always works in one space, and a person only ever sees their own.
     all: async (): Promise<Space[]> =>
-      (await query('.space!&.doc?&.plan?&.meter?&.notified?')).map(spaceOf),
+      (await query(`.space!&${SPACE_ABOUT}`)).map(spaceOf),
     // The app that answers the space's bare hostname, if it has one: the one
     // in this space WEARING `home` (T-34227). At most one does — `homing`
     // below is the rule — so the first row is the answer.

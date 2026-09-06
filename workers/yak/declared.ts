@@ -60,6 +60,10 @@ export let toolsOf = async (
 export let reachable = async (ctx: Ctx) => {
   let out: { space: Space; app: App }[] = []
   for (let space of await ctx.dir.spaces(ctx.person)) {
+    // A space in the trash is out of reach whole (erase.ts, T-34431): every
+    // app in it leaves every list at once, and none is asked about, which is
+    // also why `about` and the door's own instructions stop naming them.
+    if (space.trashed) continue
     // An app in the trash declares nothing (erase.ts, T-34430): its tools and
     // its views leave every list the day it is deleted, which is the same
     // move a delete has always made — and they come back on a restore.

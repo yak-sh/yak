@@ -455,16 +455,20 @@ export let platformDoc: VocabDoc = {
       type: 'object',
       properties: { of: ref('detach'), version: num },
     },
-    // That this app is IN THE TRASH, and since when (erase.ts, T-34430). A
-    // delete marks it and keeps everything: the bytes, the store, the slug.
-    // While it is worn the app answers nothing on the web, leaves everyone's
-    // tool and view lists, is not the front page whatever else it wears, and
-    // its mail bounces — and `app_restore` takes the word off and gives all
-    // of that back. Thirty days on, the daily sweep erases it for good.
+    // That this app — or this SPACE — is IN THE TRASH, and since when
+    // (erase.ts, T-34430, T-34431). A delete marks it and keeps everything:
+    // the bytes, the store, the slug. While it is worn the app answers
+    // nothing on the web, leaves everyone's tool and view lists, is not the
+    // front page whatever else it wears, and its mail bounces; a space wearing
+    // it does all of that for every app in it at once. `app_restore` and
+    // `space_restore` take the word off and give all of that back, and thirty
+    // days on the daily sweep erases it for good.
     //
-    // One word on the app row rather than a state column beside it, for the
-    // reason `home` is one: the app in the trash is the app WEARING this, and
-    // a second spelling of the same fact drifts from it.
+    // One word on the row rather than a state column beside it, for the
+    // reason `home` is one: what is in the trash is what WEARS this, and a
+    // second spelling of the same fact drifts from it. That is also why an
+    // app and a space share the word — it says one thing, thrown away and
+    // since when, and every reader asks the row in front of it.
     trashed: { type: 'object', properties: { at: time, by: ref('keep') } },
     // That this app's store has been SEEDED, and by which release (seed.ts,
     // T-34327). The mark is what makes the seed a once — a redeploy finds it

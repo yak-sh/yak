@@ -75,7 +75,18 @@ import { cookie, cookieValue, sign, verify } from '../../src/token.ts'
 import { HANDOFF, handoffTo, opener, safeNext, spender } from './handoff.ts'
 export { HANDOFF } from './handoff.ts'
 import { directory, META, type Space } from './directory.ts'
-import { doomed, erase, naming, refused, ticketed, went } from './erase.ts'
+import {
+  daysLeft,
+  doomed,
+  erase,
+  keeping,
+  kept,
+  naming,
+  refused,
+  ticketed,
+  trashSpace,
+  went,
+} from './erase.ts'
 import { GRANT, held, ledger } from './grants.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
@@ -271,9 +282,17 @@ let browser = async (env: Env, req: Request) => {
   return (await verify(token, env.SESSION_SECRET))?.person ?? null
 }
 
-// Closing a space (erase.ts, T-33166): `/space/<slug>/delete`, the one door
-// on this platform behind which something cannot be brought back — so a
-// person, signed in, is the only caller who ever reaches it.
+// Closing a space (erase.ts, T-33166): `/space/<slug>/delete`, the one door a
+// space is ever closed at — so a person, signed in, is the only caller who
+// ever reaches it.
+//
+// TWO ACTS, one door (T-34431). By default it puts the space in the TRASH:
+// nothing is erased, everything is kept for thirty days, and the owner takes
+// it back from the space's own address. `forever` is the other one, and the
+// only way to ask for it is a ticket the letter carried, because the kernel
+// signs the ticket and nobody else can mint one — so a person who came
+// straight off the web is offered the act that can be taken back, and the one
+// that cannot is the one their assistant had to be asked for out loud.
 //
 // The GET only ever DRAWS. A mail client that fetches every link in a letter
 // before anyone reads it must not be able to delete a space by doing its job,
@@ -309,21 +328,33 @@ let closing = async (
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
   let space = await dir.space(slug)
   if (!space || (await dir.role(space, person)) != 'owner') return lost()
-  let stop = refused(space)
   let d = await doomed(dir, space)
-  let lines = naming(d)
-  if (stop) return askDelete({ slug, lines, stop, status: 409 })
   // The letter's ticket, if this visit carries one: minted for THIS space and
   // THIS person, and dead after an hour (erase.ts). It stands in for typing
   // the name, because following a link out of a letter that named everything
-  // about to go is the deliberate act the typing is there to be.
+  // about to go is the deliberate act the typing is there to be — and it is
+  // what carries `forever`.
   let held = req.method == 'POST' ? form.token : url.searchParams.get('t') ?? ''
   let ok = held ? await ticketed(held, secret(env)) : null
   let mine = !!ok && ok.space == space.eid && ok.person == person
+  let forever = mine && !!ok?.forever
+  let lines = forever ? naming(d) : keeping(d)
+  let stop = refused(space) ||
+    // Already there, and this visit is not the one that erases it: trashing
+    // again would start the thirty days over on a space the person is only
+    // looking at, so nothing happens and they are told both ways out.
+    (space.trashed && !forever
+      ? `${slug} is already in the trash, ${
+        daysLeft(space.trashed)
+      } days left. Restore it at https://${slug}.${PLATFORM}/, or ask your ` +
+        'assistant to delete it for good'
+      : '')
+  if (stop) return askDelete({ slug, lines, stop, forever, status: 409 })
   if (req.method != 'POST') {
     return askDelete({
       slug,
       lines,
+      forever,
       token: mine ? held : null,
       why: held && !mine
         ? 'That link has expired or was for something else. You can still ' +
@@ -335,12 +366,20 @@ let closing = async (
     return askDelete({
       slug,
       lines,
-      why: `Type ${slug} exactly, and it goes.`,
+      forever,
+      why: `Type ${slug} exactly, and it goes${
+        forever ? '' : ' to the trash'
+      }.`,
       status: 400,
     })
   }
   try {
-    return deleted(went(d, await erase(env, dir, d, { person, role: 'owner' })))
+    let who = { person, role: 'owner' as const }
+    if (!forever) {
+      await trashSpace(env, dir, space, who)
+      return deleted(kept(d), false)
+    }
+    return deleted(went(d, await erase(env, dir, d, who)))
   } catch (e) {
     // What could not be finished is said on the page rather than swallowed
     // behind the soft error page: a domain Cloudflare would not give back is
@@ -349,6 +388,7 @@ let closing = async (
     return askDelete({
       slug,
       lines,
+      forever,
       why: `That did not finish: ${e instanceof Error ? e.message : String(e)}`,
       status: 502,
     })

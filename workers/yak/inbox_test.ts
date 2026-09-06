@@ -295,6 +295,33 @@ slow(
         })).status,
         200,
       )
+      // And a whole SPACE in the trash has no mailboxes at all (T-34431):
+      // every address under it bounces as the same nothing, whichever app it
+      // names, and they all land again when the space comes back.
+      let door = (path: string, fields: Record<string, string>) =>
+        k.at('yaks.app', path, {
+          method: 'POST',
+          headers: {
+            cookie: them.cookie,
+            'content-type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams(fields).toString(),
+        })
+      assertEquals(
+        (await door('/space/jeff/delete', { confirm: 'jeff' })).status,
+        200,
+      )
+      assertStringIncludes(await no('jeff.recipes@yaks.app'), 'no mailbox')
+      assertStringIncludes(await no('jeff@yaks.app'), 'no mailbox')
+      await connector(k, them.cookie).tool('space_restore', { space: 'jeff' })
+      assertEquals(
+        (await arrives(k, {
+          from: 'ana@books.example',
+          to: 'jeff.recipes@yaks.app',
+          raw: rfc822({ Subject: 'Back again' }, 'Hello once more.'),
+        })).status,
+        200,
+      )
     } finally {
       await k.stop()
     }

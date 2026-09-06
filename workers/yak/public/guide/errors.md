@@ -278,6 +278,33 @@ but do not build a second app on top of one the person may want back. And
 `forever: true` skips the trash: files, data and address gone with no undo. Use
 it only when the person has said they mean exactly that.
 
+## space_delete and space_restore
+
+    space_delete(space, forever?)
+    space_restore(space)
+
+A whole space goes to the same 30-day trash, and the same words are true of it:
+nothing is erased, every app in it is kept whole, and the address is held so
+nobody else can take it. While it sits there every hostname of the space answers
+nothing, its apps leave your tools and your pages, and letters to any address
+under it bounce. `space_restore` takes it back out and every one of those is the
+old answer again.
+
+`space_delete` is still the one tool **you cannot do**. It mails the owner a
+link, lasting an hour, and answers with what that link would stop; tell them to
+check their email. They can also do it themselves, signed in, at
+`https://yaks.app/space/<slug>/delete`.
+
+    space_delete(space: 'oldlab')
+    → nothing is deleted. oldlab is still there, and an assistant cannot delete
+      a space: a letter is on its way…
+
+The person restores it from the space's own address — signed in,
+`https://<slug>.yaks.app/` is the one page a trashed space serves, and it has
+the button. `space_new` at that slug is refused for its owner and says why.
+`forever: true` mails a link that erases the space on the spot instead, with
+nothing kept: only when the person has said they mean exactly that.
+
 ## feedback
 
     feedback(text, app?, space?)

@@ -79,12 +79,14 @@ import {
   doomed,
   door,
   erased,
+  keeping,
   letter,
   naming,
   refused,
   ticket,
   trash,
   untrash,
+  untrashSpace,
 } from './erase.ts'
 import {
   carried,
@@ -1027,6 +1029,14 @@ let copied = async (
 // plus the app's own access: the door remembers nothing about which apps a
 // session has opened (declared.ts), so a public app in a space the caller is
 // not in is on the web and not here.
+//
+// And the trash is out of reach, whichever row wears the word (erase.ts,
+// T-34430, T-34431). This is the same answer `reachable` gives the ROSTER, and
+// the two have to agree: a deleted app that still turned up in the passage
+// `about` and `initialize` put at the top of an agent's context would be an
+// app the agent goes on filing things in after the person threw it away.
+// Naming one is the way back to it — `app_restore` and `space_restore`, and
+// any tool that names the app explicitly, take the early return above.
 export let inReach = async (ctx: Ctx, args: Args): Promise<Reach[]> => {
   if (args.app != null) {
     let { space, app, who } = await inApp(ctx, args)
@@ -1037,13 +1047,16 @@ export let inReach = async (ctx: Ctx, args: Args): Promise<Reach[]> => {
     : [(await inSpace(ctx, args)).space]
   let out: Reach[] = []
   for (let space of spaces) {
+    if (space.trashed) continue
     let who: Who = {
       person: ctx.person,
       role: await ctx.dir.role(space, ctx.person),
     }
     if (!who.role) continue
     for (let app of await ctx.dir.apps(space)) {
-      if (reads(mode(app.access), who.role)) out.push({ space, app, who })
+      if (!app.trashed && reads(mode(app.access), who.role)) {
+        out.push({ space, app, who })
+      }
     }
   }
   return out
@@ -1410,7 +1423,24 @@ export let TOOLS: Tool[] = [
             'cannot make one',
         )
       }
-      if (await ctx.dir.space(s)) throw new Error(`space ${s} is taken`)
+      let taken = await ctx.dir.space(s)
+      if (taken) {
+        // The slug is held for a trashed space for its whole thirty days
+        // (erase.ts, T-34431), the way a trashed app's is: a second space
+        // here is the one thing a restore could not put back. Only its own
+        // owner is told that is why — to anybody else the address is taken,
+        // which is all it ever was.
+        let mine = taken.trashed &&
+          await ctx.dir.role(taken, ctx.person) == 'owner'
+        throw new Error(
+          mine
+            ? `${s} is in the trash, ${
+              daysLeft(taken.trashed!)
+            } days left — space_restore(space: '${s}') brings it back whole, ` +
+              'and after 30 days the platform erases it and frees the address'
+            : `space ${s} is taken`,
+        )
+      }
       // The space, its owner, and the owner's person row in one batch. The
       // person is keyed by the caller's sign-in, and a bundle mints at an eid
       // its author chose (T-32455), so the whole batch is bundles. Once
@@ -1442,18 +1472,32 @@ export let TOOLS: Tool[] = [
     title: 'Close a space',
     destructive: true,
     description:
-      'Close a space for good: every app in it, everything those apps have ' +
-      'saved, their files, any domain aimed at them, and the address itself ' +
-      '— which goes back into circulation, so someone else may take it ' +
-      'later. There is no undo and nothing is kept. YOU CANNOT DO THIS: it ' +
-      "mails the space's owner a link that does it, lasting an hour, and " +
-      'answers with what that link would destroy. Read that back to them and ' +
-      'tell them to check their email — it is theirs to confirm, not yours. ' +
-      'Only the owner of the space may ask, and app_delete is the smaller ' +
-      'thing when they mean one app.',
+      'Close a space: it goes to the trash for 30 days. Every app in it ' +
+      'stops answering, its address stops serving and its apps leave your ' +
+      'tools — but nothing is erased, the address is held, and space_restore ' +
+      'brings the whole space back within those 30 days. After that the ' +
+      'platform erases it: the apps, everything they saved, their files, any ' +
+      'domain aimed at them, and the address goes back into circulation. YOU ' +
+      "CANNOT DO THIS: it mails the space's owner a link that does it, " +
+      'lasting an hour, and answers with what that link would stop. Read ' +
+      'that back to them and tell them to check their email — it is theirs ' +
+      'to confirm, not yours. Only the owner of the space may ask, and ' +
+      'app_delete is the smaller thing when they mean one app. Pass forever: ' +
+      'true and the link erases it there and then instead, with nothing kept ' +
+      'and no undo — only when the person has said they mean exactly that.',
     input: {
       type: 'object',
-      properties: { space: SPACE },
+      properties: {
+        space: SPACE,
+        forever: {
+          type: 'boolean',
+          description:
+            'true to mail a link that erases the space on the spot instead ' +
+            'of trashing it: its apps, everything they saved, their files ' +
+            'and its address, all gone, with no restore. Only when the ' +
+            'person has said they mean exactly that',
+        },
+      },
       required: ['space'],
     },
     run: async (ctx, args) => {
@@ -1467,6 +1511,15 @@ export let TOOLS: Tool[] = [
       })
       let no = refused(space)
       if (no) throw new Error(no)
+      let forever = args.forever != null && flag(args.forever, 'forever')
+      if (space.trashed && !forever) {
+        throw new Error(
+          `${space.slug} is already in the trash, ${
+            daysLeft(space.trashed)
+          } days left — space_restore(space: '${space.slug}') brings it back, ` +
+            'or space_delete(forever: true) mails a link that erases it now',
+        )
+      }
       if (!ctx.env.SESSION_SECRET) {
         throw new Error('the platform cannot sign a confirmation link here')
       }
@@ -1476,22 +1529,30 @@ export let TOOLS: Tool[] = [
       let to = await ctx.dir.emailAt(ctx.person)
       if (!to) throw new Error('we have no address to write to you at')
       let d = await doomed(ctx.dir, space)
-      let said = naming(d).map((l) => `  - ${l}`).join('\n')
+      // What the link would do, in the words of the act it carries: `forever`
+      // names what is destroyed, the trash names what stops (erase.ts).
+      let bullets = (lines: string[]) => lines.map((l) => `  - ${l}`).join('\n')
+      let said = bullets(forever ? naming(d) : keeping(d))
       let link = door(
         space.slug,
-        await ticket(space, ctx.person, ctx.env.SESSION_SECRET),
+        await ticket(space, ctx.person, ctx.env.SESSION_SECRET, forever),
       )
       // A letter that will not send is not a link to hand over (member_add
       // does that for an invitation, which is not an irreversible act): the
       // web door is said instead, and it still wants their cookie, their
-      // ownership and the name typed back.
+      // ownership and the name typed back. That door TRASHES whatever was
+      // asked for here — the erase rides in the ticket, and the ticket was in
+      // the letter that did not arrive — so what it would do is said in the
+      // trash's words however this call was made.
       try {
-        await mail(ctx.env)({ to, ...letter(d, link) })
+        await mail(ctx.env)({ to, ...letter(d, link, forever) })
       } catch {
         throw new Error(
-          `the confirmation letter could not be sent. They can still do it ` +
-            `themselves, signed in, at ${door(space.slug)} — which asks ` +
-            `them to type ${space.slug} back. It would destroy:\n${said}`,
+          'the confirmation letter could not be sent. They can still put the ' +
+            `space in the trash themselves, signed in, at ${
+              door(space.slug)
+            } — which asks them to type ${space.slug} back. That would stop:\n` +
+            bullets(keeping(d)),
         )
       }
       return {
@@ -1499,7 +1560,47 @@ export let TOOLS: Tool[] = [
           'assistant cannot delete a space: a letter is on its way to the ' +
           'address they sign in with, carrying a link that does it. It ' +
           'lasts an hour, and opening it asks them once more. Tell them to ' +
-          `check their email. What it would destroy:\n${said}`,
+          `check their email. What it would ${
+            forever ? 'destroy' : 'stop, until they restore it'
+          }:\n${said}`,
+        space,
+      }
+    },
+  },
+  {
+    name: 'space_restore',
+    title: 'Take a space out of the trash',
+    destructive: false,
+    idempotent: true,
+    description:
+      'Bring back a space that was deleted. Every app in it serves again at ' +
+      'the address it always had, their tools and pages come back, and ' +
+      'everything they saved is exactly as it was — nothing was touched ' +
+      'while it sat in the trash. Within 30 days of the delete being ' +
+      'confirmed; after that the space has been erased and there is nothing ' +
+      "to bring back. Unlike space_delete this is the assistant's to do: " +
+      'putting a space back is not an act anybody needs protecting from.',
+    input: {
+      type: 'object',
+      properties: { space: SPACE },
+      required: ['space'],
+    },
+    run: async (ctx, args) => {
+      let { space, who } = await owns(ctx, {
+        ...args,
+        space: slug(args.space, 'space'),
+      })
+      if (!space.trashed) {
+        throw new Error(
+          `${space.slug} is not in the trash — it is serving at ` +
+            `https://${space.slug}.yaks.app/`,
+        )
+      }
+      await untrashSpace(ctx.env, ctx.dir, space, who)
+      return {
+        text: `${space.slug} is back: https://${space.slug}.yaks.app/ serves ` +
+          'again and its apps are yours again. Everything they saved is ' +
+          'where it was.',
         space,
       }
     },
@@ -2711,7 +2812,19 @@ export let TOOLS: Tool[] = [
         // (erase.ts, T-34430).
         let apps = all.filter((a) => !a.trashed)
         let bin = all.filter((a) => a.trashed)
-        lines.push(`${space.slug} — https://${space.slug}.yaks.app/`)
+        // The space itself may be in the trash (erase.ts, T-34431), and then
+        // NOTHING under it is answering however true the rest of the listing
+        // still is — every app is kept exactly as it is, and that address is
+        // where the person restores it.
+        lines.push(
+          `${space.slug} — https://${space.slug}.yaks.app/${
+            space.trashed
+              ? ` — IN THE TRASH, ${
+                daysLeft(space.trashed)
+              } days left: nothing here answers until space_restore(space: '${space.slug}')`
+              : ''
+          }`,
+        )
         let listed = []
         for (let app of apps) {
           let errors = (await openIn(ctx.env, space, app, who, true)).length

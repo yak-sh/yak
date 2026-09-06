@@ -22,6 +22,7 @@ import {
   connector,
   kernel,
   letter,
+  letters,
   meta,
   rfc822,
   seed,
@@ -131,6 +132,7 @@ slow(
         // And the platform's own verbs beside them, one plugin's tools.
         'space_new',
         'space_delete',
+        'space_restore',
         'app_new',
         'app_files',
         // The builder's workbench, offered to a person's own agent on the
@@ -4367,6 +4369,163 @@ slow('an app goes to the trash, and app_restore brings it back', async () => {
     await k.stop()
   }
 })
+
+// The same trash one row up (T-34431): a whole SPACE. The agent still cannot
+// delete one — the letter is the door and the owner is the only caller who
+// reaches it — so this walks the whole way an owner actually goes, and then
+// every answer that named the space stops naming it while nothing it holds is
+// touched.
+slow(
+  'a space goes to the trash, and space_restore brings it back',
+  async () => {
+    let k = await kernel()
+    try {
+      let them = await seed(k, [{ slug: 'binspace', apps: [] }])
+      let agent = connector(k, them.cookie)
+      let at = { space: 'binspace', app: 'notes' }
+      let listed = async () =>
+        ((await agent.call('tools/list')).tools as { name: string }[])
+          .map((t) => t.name)
+      let page = (path = '/notes/') => k.at('binspace.yaks.app', path)
+
+      await agent.tool('app_new', { ...at, slug: 'notes', title: 'Notes' })
+      await agent.tool('app_files', {
+        ...at,
+        files: [
+          { path: 'index.html', content: '<!doctype html><h1>notes</h1>' },
+          {
+            path: 'vocab.json',
+            content: JSON.stringify({ note: { at: 'text' } }),
+          },
+          {
+            path: 'tools.json',
+            content: JSON.stringify({
+              log_note: {
+                description: 'Write a note',
+                input: { at: 'text' },
+                apply: { note: { at: '{{at}}' } },
+              },
+            }),
+          },
+        ],
+      })
+      await agent.tool('app_deploy', at)
+      await agent.tool('graph_apply', {
+        ...at,
+        entities: [{ entity: { eid: '$n' }, doc: { title: 'a kept thing' } }],
+      })
+      assertEquals((await page()).status, 200)
+      assert((await listed()).includes('notes__log_note'))
+      assertStringIncludes(await agent.tool('about'), 'binspace/notes')
+
+      // The agent deletes nothing, as ever: it mails the owner. What the letter
+      // and the answer say is what the trash DOES — every line something that
+      // stops, and the address held rather than released.
+      let said = await agent.tool('space_delete', { space: 'binspace' })
+      assertStringIncludes(said, 'nothing is deleted')
+      assertStringIncludes(said, 'stops answering')
+      let mail = await until(
+        () =>
+          letters(k, them.email).findLast((l) => l.subject.includes('Delete')),
+        { timeout: 20_000, poll: 100, label: 'the delete letter' },
+      )
+      assertStringIncludes(
+        mail!.body,
+        'puts the space in the trash for 30 days',
+      )
+      let link = /https:\/\/yaks\.app(\/space\/binspace\/delete\?t=[^\s]+)/
+        .exec(mail!.body)
+      assert(link, `no confirmation link in: ${mail!.body}`)
+
+      // The owner opens it, and the page asks in the trash's words.
+      let asking = await (await k.at('yaks.app', link[1], {
+        headers: { cookie: them.cookie },
+      })).text()
+      assertStringIncludes(asking, 'What stops until you restore it')
+      assertStringIncludes(asking, 'Put binspace.yaks.app in the trash')
+      let gone = await k.at('yaks.app', '/space/binspace/delete', {
+        method: 'POST',
+        headers: {
+          cookie: them.cookie,
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({ t: link[1].split('t=')[1] }).toString(),
+      })
+      assertEquals(gone.status, 200)
+      assertStringIncludes(
+        await gone.text(),
+        'binspace.yaks.app is in the trash',
+      )
+
+      // Every address of it answers what a wrong address answers: the front
+      // page, an app of its own, a path no app claims.
+      for (let path of ['/', '/notes/', '/whatever']) {
+        let out = await page(path)
+        assertEquals(out.status, 404, path)
+        assertStringIncludes(await out.text(), 'Nothing here yet')
+      }
+      // Except for its owner, who is told where it went and given it back.
+      let mine = await k.at('binspace.yaks.app', '/', {
+        headers: { cookie: them.cookie },
+      })
+      assertEquals(mine.status, 404)
+      let says = await mine.text()
+      assertStringIncludes(says, 'binspace is in the trash')
+      assertStringIncludes(says, 'name="restore-space" value="binspace"')
+      // Its apps left every roster the moment the space did — the tool list,
+      // and the passage `about` and `initialize` both put at the top of an
+      // agent's context (standing.ts), which is one `reachable` behind both.
+      assertEquals((await listed()).includes('notes__log_note'), false)
+      assertEquals(
+        (await agent.tool('about')).includes('binspace/notes'),
+        false,
+      )
+      // And the slug is held for it: a second space here is the one thing a
+      // restore could not put back.
+      assertStringIncludes(
+        (await assertRejects(
+          () => agent.tool('space_new', { slug: 'binspace', title: 'again' }),
+          Error,
+        )).message,
+        'binspace is in the trash',
+      )
+      // Asking again is not a second delete; it says where the space is.
+      assertStringIncludes(
+        (await assertRejects(
+          () => agent.tool('space_delete', { space: 'binspace' }),
+          Error,
+        )).message,
+        'is already in the trash',
+      )
+
+      // Out, and every one of those answers is the old answer again — the rows
+      // in its apps' stores included, since nothing ever touched them.
+      assertStringIncludes(
+        await agent.tool('space_restore', { space: 'binspace' }),
+        'binspace is back',
+      )
+      assertEquals((await page()).status, 200)
+      assert((await listed()).includes('notes__log_note'))
+      assertStringIncludes(await agent.tool('about'), 'binspace/notes')
+      assertEquals(
+        JSON.parse(
+          await agent.tool('graph_query', { ...at, q: '.doc.title~=kept' }),
+        )
+          .length,
+        1,
+      )
+      assertStringIncludes(
+        (await assertRejects(
+          () => agent.tool('space_restore', { space: 'binspace' }),
+          Error,
+        )).message,
+        'is not in the trash',
+      )
+    } finally {
+      await k.stop()
+    }
+  },
+)
 
 // The front page is the space's ROUTER, and `first` is how it opts in
 // (D-34197): the paths its worker sees before the app whose slug owns them,

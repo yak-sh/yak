@@ -45,8 +45,8 @@ import { type Size, sizeOf } from './image.ts'
 import { asking, listed, type Row } from './listing.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
 import { batched, lined, lowered } from './wire.ts'
-import { binned, nothingHere, spaceIndex } from './pages.ts'
-import { daysLeft, untrash } from './erase.ts'
+import { binned, nothingHere, spaceBinned, spaceIndex } from './pages.ts'
+import { daysLeft, untrash, untrashSpace } from './erase.ts'
 import { hostOf, MOUNT, PLATFORM, route, sameOrigin } from './route.ts'
 import { covers, PLATFORM_PATHS } from './router.ts'
 import { titling, vouched, type Who, whoIs } from './session.ts'
@@ -962,6 +962,43 @@ let index = async (
   })
 }
 
+// A SPACE in the trash, at any of its addresses (erase.ts, T-34431). Nothing
+// under it serves — not an app, not a file, not a store door — so this stands
+// ahead of every rung of `served` below, and what it answers is what a wrong
+// address answers. Its OWNER is the exception: they are told where their
+// space went and given the button back, because they are the only person the
+// news belongs to.
+//
+// The button is a POST to `/` like the space page's own forms, and it lands
+// on the platform address rather than back here: a custom domain of a space
+// that was in the trash a second ago is a hostname that has to warm up again,
+// where the space's own address is serving the moment the word comes off.
+let closed = async (
+  req: Request,
+  env: Env,
+  dir: ReturnType<typeof directory>,
+  space: Space,
+): Promise<Response> => {
+  let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
+  if (who.role != 'owner' || !who.person) return nothingHere()
+  if (req.method != 'POST') {
+    return spaceBinned({
+      slug: space.slug,
+      title: space.title,
+      days: daysLeft(space.trashed!),
+    })
+  }
+  // The same origin check `saved` makes and for the same reason: every space
+  // is a subdomain of one registrable domain, so `SameSite=Lax` is not the
+  // guard here — a sibling's page is same-site.
+  if (!sameOrigin(hostOf(req), req.headers.get('origin'))) return nothingHere()
+  let form = await req.formData().catch(() => new FormData())
+  if (String(form.get('restore-space') ?? '').trim() == space.slug) {
+    await untrashSpace(env, dir, space, who)
+  }
+  return redirect(`https://${space.slug}.${PLATFORM}/`, 303)
+}
+
 // The space's bare address: the listing above, or the owner block's one form
 // coming back. Only the two, and only here — the form posts to the page it is
 // on, so the space's root is the whole of its surface.
@@ -1111,6 +1148,10 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   let space = await c.time('space', () => dir.space(r.space!))
   if (!space) return nothingHere()
   if (kernels(space, r.app)) return nothingHere()
+  // The whole space in the trash, before any rung of the order below: every
+  // hostname of it answers nothing, and its owner is answered the page that
+  // brings it back (`closed` above, T-34431).
+  if (space.trashed) return closed(req, env, dir, space)
   let url = new URL(req.url)
   // The builder's socket (build.ts, T-34240). A SPACE's door, not an app's:
   // the person it is for has no app yet, so it is answered here — before the
