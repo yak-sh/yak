@@ -8,7 +8,7 @@ import { slow } from '../../src/testing.ts'
 import { REPLY_TO } from './mail.ts'
 import { BUILDS, CURRENCY, LETTERS, PRICE } from './meter.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
-import { connect, spaceIndex } from './pages.ts'
+import { askCode, askEmail, connect, spaceIndex } from './pages.ts'
 import { kernel } from './probe.ts'
 import {
   ADDRESSES,
@@ -311,6 +311,65 @@ Deno.test('every public page hands a stranger sign-in, never /connect', () => {
   let join = flat(html.split('id="join"')[1].split('</section>')[0])
   assertStringIncludes(join, 'land on your own space')
   assertStringIncludes(join, 'Connect your assistant there')
+})
+
+Deno.test('sign-in welcomes new visitors, including those from an assistant', async () => {
+  for (let who of [undefined, 'Claude', 'ChatGPT', 'A & B']) {
+    let html = flat(await askEmail(null, null, who).text())
+    let intro = html.split('<form')[0]
+    for (
+      let sentence of [
+        'Your assistant builds apps for you on yaks.app.',
+        'They live at your own address, with their own data.',
+      ]
+    ) assertStringIncludes(intro, sentence)
+    for (
+      let sentence of [
+        'Sign in or sign up with your email.',
+        'No account to create first.',
+        'No passwords, ever.',
+        "We'll email you a six-digit code.",
+      ]
+    ) assertStringIncludes(html, sentence)
+    if (who) {
+      assertStringIncludes(
+        html,
+        `${who.replaceAll('&', '&amp;')} would like to use your apps.`,
+      )
+    }
+  }
+})
+
+Deno.test('the code card says where signing in leads', async () => {
+  // Match landed(): an assistant takes priority over a return; home is the fallback.
+  for (
+    let [q, back, next] of [
+      [null, null, 'Enter it to land on your own space.'],
+      [null, '/notes/', 'Enter it to sign in and continue.'],
+      [
+        null,
+        'https://elsewhere.example/notes/',
+        'Enter it to sign in and continue.',
+      ],
+      [
+        'client_id=claude',
+        null,
+        'Enter it to finish connecting your assistant.',
+      ],
+      [
+        'client_id=claude',
+        '/notes/',
+        'Enter it to finish connecting your assistant.',
+      ],
+    ] as const
+  ) {
+    let html = await askCode('dana@example.com', q, back).text()
+    assertStringIncludes(
+      html,
+      'We sent a six-digit code to dana@example.com. It lasts ten minutes.',
+    )
+    assertStringIncludes(html, `<p>${next}</p>`)
+  }
 })
 
 // The owner's complaint, held to: a search for "yaks" returns Yik Yak, so the

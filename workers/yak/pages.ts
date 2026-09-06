@@ -746,12 +746,14 @@ export let askEmail = (
 ) =>
   shell(
     'Sign in to yaks.app',
-    who
-      ? `${esc(who)} would like to use your apps. Enter your email and ` +
-        "we'll send a code."
-      : "Enter your email and we'll send you a six-digit code.",
+    'Your assistant builds apps for you on yaks.app. ' +
+      'They live at your own address, with their own data.',
     status,
     `<form method="post" action="/login">${carried(q, back)}
+<p>${
+      who ? `${esc(who)} would like to use your apps. ` : ''
+    }Sign in or sign up with your email.
+No account to create first. No passwords, ever. We'll email you a six-digit code.</p>
 <input name="email" type="email" required autofocus autocomplete="email" placeholder="you@example.com" aria-label="Your email">
 <button type="submit">Send me a code</button>
 </form>${home}`,
@@ -775,6 +777,13 @@ export let askCode = (
     why ?? `We sent a six-digit code to ${esc(email)}. It lasts ten minutes.`,
     status,
     `<form method="post" action="/login/code">${carried(q, back)}
+<p>${
+      q
+        ? 'Enter it to finish connecting your assistant.'
+        : back
+        ? 'Enter it to sign in and continue.'
+        : 'Enter it to land on your own space.'
+    }</p>
 <input type="hidden" name="email" value="${esc(email)}">
 <input class="Code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus autocomplete="one-time-code" aria-label="Your six-digit code">
 <button type="submit">Sign in</button>

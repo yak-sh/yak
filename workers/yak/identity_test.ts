@@ -53,7 +53,18 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     // The card asks for an address, and nothing else.
     let card = await k.at('yaks.app', '/login')
     assertEquals(card.status, 200)
-    assertMatch(await card.text(), /Send me a code/)
+    let welcome = await card.text()
+    for (
+      let sentence of [
+        'Your assistant builds apps for you on yaks.app.',
+        'They live at your own address, with their own data.',
+        'Sign in or sign up with your email.',
+        'No account to create first.',
+        'No passwords, ever.',
+        "We'll email you a six-digit code.",
+        'Send me a code',
+      ]
+    ) assertStringIncludes(welcome, sentence)
 
     // A code, asked for and mailed. The page says where it went and asks for
     // the code — and nothing else, of anybody, ever: signing up is the address
@@ -63,7 +74,11 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     let sent = await form(k, '/login', { email })
     assertEquals(sent.status, 200)
     let asking = await sent.text()
-    assertMatch(asking, new RegExp(email))
+    assertStringIncludes(
+      asking,
+      `We sent a six-digit code to ${email}. It lasts ten minutes.`,
+    )
+    assertStringIncludes(asking, 'Enter it to land on your own space.')
     assertEquals(/what should we call you/i.test(asking), false)
     assertEquals(/name="space"/.test(asking), false)
     let code = await mailed(k, email)
@@ -145,10 +160,12 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
         new RegExp(`name="return" value="${back}"`),
       )
       let asked = await form(k, '/login', { email: addr, return: back })
+      let returning = await asked.text()
       assertMatch(
-        await asked.text(),
+        returning,
         new RegExp(`name="return" value="${back}"`),
       )
+      assertStringIncludes(returning, 'Enter it to sign in and continue.')
       let r = await form(k, '/login/code', {
         email: addr,
         code: await mailed(k, addr),
@@ -353,6 +370,12 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
       ),
       code_challenge_method: 'S256',
     }).toString()
+    let linking = await form(k, '/login', { email, q, return: notes })
+    assertEquals(linking.status, 200)
+    assertStringIncludes(
+      await linking.text(),
+      'Enter it to finish connecting your assistant.',
+    )
     let consent = await k.at('yaks.app', `/oauth/authorize?${q}`, {
       headers: { cookie },
     })
