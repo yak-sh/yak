@@ -85,8 +85,7 @@ export let GALLERY = {
   path: '/gallery',
   title: 'The gallery — apps made with yaks.app',
   description:
-    'Apps people built here and asked us to show: what each one is, where ' +
-    'it lives, and the line an assistant runs to give you your own copy.',
+    'Explore apps made with yaks.app. Try one out or make it your own.',
 }
 
 export let RENDERED = [GALLERY]

@@ -760,12 +760,16 @@
 
   .Make_Line {
     margin: 0;
-    overflow-x: auto;
   }
 
-  .Make_Line code {
+  .Make_Line summary {
+    color: var(--meadow);
+    cursor: pointer;
+  }
+
+  .Make_Line .Said {
     user-select: all;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 
   .Yours {

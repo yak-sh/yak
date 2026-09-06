@@ -112,8 +112,7 @@ export let saying = (at: Standing) =>
   at == 'listed'
     ? `listed in the gallery — ${SITE}${PATH}`
     : at == 'asked'
-    ? 'waiting on us: it is not listed until we say yes, and a letter is on ' +
-      'its way to the desk that decides'
+    ? 'awaiting gallery review'
     : 'not in the gallery'
 
 // The word the space page's pill wears, which is the same three states said
@@ -347,10 +346,8 @@ let html = (body: string, status = 200) =>
     headers: { 'content-type': 'text/html; charset=utf-8' },
   })
 
-// One app, as a card: its name, what it is, the address it answers at, its own
-// share card where it has one, and the line to run. The whole card is a link
-// to the app itself — the install line is beside it rather than in it, because
-// it is a thing to COPY and a link swallows the click.
+// The card opens the app. Copy instructions sit outside that link so selecting
+// them does not navigate away.
 export let card = (a: Shown) =>
   `<li class="Make_Card">
 <a class="Make_Link" href="${esc(a.at)}">
@@ -365,7 +362,10 @@ ${
 ${a.about ? `<span class="Note Note-small">${esc(a.about)}</span>` : ''}
 <span class="Note Note-small">${esc(a.at.replace('https://', ''))}</span>
 </a>
-<p class="Make_Line"><code>${esc(install(a))}</code></p>
+<details class="Make_Line"><summary>Get your own copy</summary>
+<p class="Note Note-small">Ask your assistant:</p>
+<q class="Said">Install the ${esc(a.name)} app from yaks.app.</q>
+</details>
 </li>`
 
 // The gallery itself. The JSON-LD is the same list said for a machine — an
@@ -408,21 +408,17 @@ ${top}
 <section class="Make" aria-labelledby="gallery">
 <div class="Make_Intro">
 <h1 id="gallery" class="Title">The gallery</h1>
-<p class="Note">Apps people made here and asked us to show. Open one, or give
-your assistant the line under it and it builds you your own copy — your own
-address, your own data, nothing shared but the code.</p>
+<p class="Note">Explore apps made with yaks.app. Try one out or make it your own.</p>
 </div>
 ${
     all.length
       ? `<ul class="Make_List">${all.map(card).join('')}</ul>`
-      : `<p class="Note">Nothing is listed yet. <a href="/login">Make something</a>
-and ask your assistant to put it here.</p>`
+      : `<p class="Note">No apps yet. <a href="/login">Make the first one.</a></p>`
   }
 </section>
 <section class="Join Card" aria-labelledby="yours">
 <h2 id="yours" class="Title">Make one of your own</h2>
-<p class="Note">Ask Claude or ChatGPT for an app and yaks.app hosts it at your
-own address, with its own data.</p>
+<p class="Note">Describe what you need. Your assistant builds it, and we keep it online.</p>
 <p class="Join_Doors"><a class="Button" href="/login">Start free</a></p>
 </section>
 </main>
@@ -453,17 +449,13 @@ export let letter = (at: {
   ${at.about || '(no description)'}
   by ${at.owner}
 
-Nothing is listed until you say so — the gallery is a page on our own site,
-under our own name.
-
 Yes, list it:
 ${at.yes}
 
 No, thank you:
 ${at.no}
 
-Both links last a week and each one asks you once more before anything
-happens. Ignore this and nothing is listed.`,
+These links expire in one week.`,
 })
 
 // The review page. It DRAWS on GET and acts on POST, for the reason the space
@@ -488,7 +480,7 @@ let review = (at: {
     `${
       head(
         at.list ? `List ${at.title}?` : `Decline ${at.title}?`,
-        'A gallery listing, waiting on an answer.',
+        'Review a gallery submission.',
         `${SITE}${REVIEW}`,
         false,
       )
@@ -505,10 +497,8 @@ ${at.why ? `<p class="Note Say-no">${esc(at.why)}</p>` : ''}
     }<br>by ${esc(at.owner)}</p>
 <p class="Note">${
       at.list
-        ? 'It appears at yaks.app/gallery, in the sitemap, and to an ' +
-          'assistant searching the gallery.'
-        : 'The ask is cleared. Nothing about the app changes, and its owner ' +
-          'can ask again.'
+        ? 'This app will appear in the public gallery.'
+        : 'The app stays published. Its owner can submit it again.'
     }</p>
 <form method="post" action="${REVIEW}">
 <input type="hidden" name="t" value="${esc(at.token)}">
@@ -639,14 +629,13 @@ export let answer = async (
     await list(env, at.app)
     return done(
       `${at.app.title} is in the gallery.`,
-      `It is on ${SITE}${PATH} now, and an assistant searching the gallery ` +
-        'finds it.',
+      `You can find it at ${SITE}${PATH}.`,
     )
   }
   await drop(env, at.app)
   return done(
     `${at.app.title} was not listed.`,
-    'The ask is cleared. The app is untouched, and its owner can ask again.',
+    'The app stays published. Its owner can submit it again.',
   )
 }
 

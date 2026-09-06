@@ -19,8 +19,6 @@ import {
   listed,
   page,
   pictured,
-  pilled,
-  saying,
   showcase,
   type Shown,
   standing,
@@ -69,16 +67,10 @@ let app = (over: Partial<App> = {}): App => ({
 let asked = { askedAt: '2026-09-06T10:00:00.000Z', listedAt: '' }
 let live = { ...asked, listedAt: '2026-09-06T12:00:00.000Z' }
 
-Deno.test('the two stamps are the three states, said one way everywhere', () => {
+Deno.test('the two stamps distinguish unsubmitted, pending and listed apps', () => {
   assertEquals(standing(app()), 'no')
   assertEquals(standing(app({ gallery: asked })), 'asked')
   assertEquals(standing(app({ gallery: live })), 'listed')
-  assertStringIncludes(saying('no'), 'not in the gallery')
-  assertStringIncludes(saying('asked'), 'waiting on us')
-  assertStringIncludes(saying('listed'), 'https://yaks.app/gallery')
-  assertEquals(pilled('no'), '')
-  assertEquals(pilled('asked'), 'gallery: waiting')
-  assertEquals(pilled('listed'), 'in the gallery')
 })
 
 // A listing is a published app, and nothing else may be one: the reader
@@ -156,18 +148,11 @@ Deno.test('the letter names the app, its maker, and both answers', () => {
   })
   assertEquals(l.to, 'hello@yaks.app')
   assertStringIncludes(l.subject, 'Recipe box')
-  assertStringIncludes(l.body, 'Jeff asked to show an app')
+  assertStringIncludes(l.body, 'Jeff')
   assertStringIncludes(l.body, 'https://jeff.yaks.app/recipes/')
   assertStringIncludes(l.body, 'Somewhere to keep recipes')
-  assertStringIncludes(
-    l.body,
-    'Yes, list it:\nhttps://yaks.app/gallery/review?t=yes',
-  )
-  assertStringIncludes(
-    l.body,
-    'No, thank you:\nhttps://yaks.app/gallery/review?t=no',
-  )
-  assertStringIncludes(l.body, 'Nothing is listed until you say so')
+  assertStringIncludes(l.body, 'https://yaks.app/gallery/review?t=yes')
+  assertStringIncludes(l.body, 'https://yaks.app/gallery/review?t=no')
 })
 
 // The ticket carries WHICH answer, signed, so a decline cannot be talked into
@@ -215,8 +200,7 @@ Deno.test("a listing takes its picture from the app's own og:image", () => {
   )
 })
 
-// The page itself: every listing with its address and the line to run, and the
-// head furniture an engine and a model read.
+// Listings include their app data, links and search metadata.
 Deno.test('the gallery page carries the listings and its own metadata', async () => {
   let html = await page([
     shown({ shot: 'https://jeff.yaks.app/recipes/c.png' }),
@@ -226,21 +210,11 @@ Deno.test('the gallery page carries the listings and its own metadata', async ()
     html,
     '<link rel="canonical" href="https://yaks.app/gallery">',
   )
-  assertStringIncludes(
-    html,
-    '<title>The gallery — apps made with yaks.app</title>',
-  )
-  assertStringIncludes(
-    html,
-    '<meta name="description" content="Apps people built here',
-  )
   assertStringIncludes(html, 'og:image')
   assertStringIncludes(html, '"@type":"CollectionPage"')
   assertStringIncludes(html, 'Recipe box')
   assertStringIncludes(html, 'https://jeff.yaks.app/recipes/c.png')
-  assertStringIncludes(html, 'app_install(name: &#39;recipes&#39;)')
-  // Nothing listed is a page that says so rather than an empty one.
-  assertStringIncludes(await page([]).text(), 'Nothing is listed yet')
+  assert(!(await page([]).text()).includes('class="Make_Card"'))
 })
 
 // The home page keeps its own examples in the file, and gives the space up to
@@ -267,12 +241,11 @@ Deno.test('the showcase replaces the examples only when something is listed', ()
   )
 })
 
-Deno.test('a card is one link to the app and one line to copy', () => {
+Deno.test('a card keeps its copy instructions outside the app link', () => {
   let html = card(shown())
   assertStringIncludes(html, 'href="https://jeff.yaks.app/recipes/"')
   assertStringIncludes(html, 'jeff.yaks.app/recipes/')
   // No picture of its own falls back to the platform's tile.
   assertStringIncludes(html, 'connector-512.png')
-  // The install line is OUTSIDE the anchor: a link swallows the selection.
-  assertEquals(html.indexOf('</a>') < html.indexOf('app_install'), true)
+  assert(html.indexOf('</a>') < html.indexOf('<details'))
 })

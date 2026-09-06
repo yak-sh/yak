@@ -726,10 +726,6 @@ ${dropZone()}
 <p>Add yaks.app in your assistant's settings using the steps below. Then ask
 it to build an app here.</p>
 ${doors}
-<p class="Note">Menus move. If yours doesn't look like this, search its
-settings for "connector" or "MCP" — the link is the same wherever it goes.
-<a href="https://yaks.app/connect">The connect page</a> says the same thing,
-with your plan beside it.</p>
 </details>`
     : ''
   // The two things a sign-in no longer asks (T-34236), asked here instead,
@@ -740,7 +736,7 @@ with your plan beside it.</p>
   let settings = owner
     ? `<section class="Card"><h2>You and your address</h2>
 <form method="post" action="/">
-<p>What your apps call you. Leave it empty and the front of your email does.</p>
+<p>Your name</p>
 <input name="name" maxlength="60" autocomplete="name" placeholder="Dana" aria-label="What should we call you?" value="${
       esc(at.name ?? '')
     }">
@@ -748,10 +744,8 @@ ${
       at.fixed
         ? `<p class="Note">Your apps live at <b>${
           esc(at.space)
-        }.yaks.app</b>. That address stays put now that something is built
-there.</p>`
-        : `<p>Where your apps live. Yours to change while nothing is built
-there.</p>
+        }.yaks.app</b>. The address is fixed after your first app.</p>`
+        : `<p>Your address. You can change it until you build your first app.</p>
 <span class="At"><input name="space" maxlength="63" autocomplete="off" spellcheck="false" aria-label="The name your apps live at" value="${
           esc(at.space)
         }"><span>.yaks.app</span></span>`
@@ -819,11 +813,9 @@ your details directly. We never see or hold them.</p>
   let next = !owner || !at.connected
     ? ''
     : at.apps.length
-    ? `<p class="Note">Your assistant is connected. Ask it for another app
-whenever you want one — here is what you have.</p>`
+    ? `<p class="Note">Your assistant is connected.</p>`
     : `<section class="Card"><h2>What to do next</h2>
-<p class="Note">Your assistant can build here now. Say one of these to it — or
-anything like it, in your own words.</p>
+<p class="Note">Ask your assistant for your first app. Try one of these:</p>
 <ul class="Says">${
       [
         'Make me a page for my book club',
@@ -831,10 +823,6 @@ anything like it, in your own words.</p>
         'Set up a sign-up sheet for the potluck',
       ].map((s) => `<li>${copyable(s)}</li>`).join('')
     }</ul>
-<p class="Note">It builds the page and hands you back a link at
-<b>${esc(at.space)}.yaks.app</b> — yours to open, or to send to anyone.</p>
-<p class="Note">No assistant open? The box below does the first one without
-one.</p>
 </section>`
   // The builder's own block: the one door that needs no assistant at all.
   let asking = owner ? chat(!!at.apps.length) : ''
@@ -931,15 +919,13 @@ export let askEmail = (
   status = 200,
 ) =>
   shell(
-    'Sign in to yaks.app',
-    why ?? 'Your assistant builds apps for you on yaks.app. ' +
-        'They live at your own address, with their own data.',
+    'Sign in or sign up',
+    why ?? 'Build an app by asking Claude or ChatGPT.',
     status,
     `<form method="post" action="/login">${carried(q, back)}
 <p>${
       who ? `${esc(who)} would like to use your apps. ` : ''
-    }Sign in or sign up with your email.
-No account to create first. No passwords, ever. We'll email you a six-digit code.</p>
+    }Enter your email to get a sign-in code.</p>
 <input name="email" type="email" required autofocus autocomplete="email" placeholder="you@example.com" aria-label="Your email">
 <button type="submit">Send me a code</button>
 </form>${home}`,
@@ -1238,8 +1224,7 @@ let OAUTH_HELP =
 //
 // Each provider's steps were read off its own documentation on 2026-09-05:
 // support.claude.com article 11176164, help.openai.com article 12584461,
-// code.claude.com/docs/en/mcp, cursor.com/docs/mcp. Menus move: the line under
-// the tabs says so, and says what to search for instead.
+// code.claude.com/docs/en/mcp, cursor.com/docs/mcp.
 let AGENTS = [
   {
     key: 'claude',
@@ -1450,11 +1435,6 @@ export let connect = (yours: Yours, status = 200) =>
     'Add yaks.app in your assistant’s settings using the steps below. Then ask it to build an app.',
     status,
     `${mine(yours)}${plan(yours)}${doors}
-<p class="Note">Menus move. If yours doesn't look like this, search its
-settings for "connector" or "MCP" — the link is the same wherever it
-goes.</p>
-<p class="Note">New here? <a href="https://yaks.app/help">Help</a> answers the
-questions people ask most: what you can make, where your apps live, and who
-can see them.</p>
+<p class="Note"><a href="https://yaks.app/help">Need help?</a></p>
 ${home}${copying}${tabbing}${inline}`,
   )

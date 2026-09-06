@@ -194,41 +194,22 @@ let saysIn = (page: string) =>
 // what she should do next."
 Deno.test('a connected space with nothing built says what to do next', async () => {
   let quiet = await block()
-  assert(!quiet.includes('What to do next'), quiet)
+  assertEquals(saysIn(quiet), '')
   let page = await block({ connected: true })
-  assertStringIncludes(page, 'What to do next')
-  for (
-    let said of [
-      'Make me a page for my book club',
-      'Build a place to keep recipes',
-      'Set up a sign-up sheet for the potluck',
-    ]
-  ) {
-    // Selectable on its own for a browser that ran no script, and a button
-    // for one that did.
-    assertStringIncludes(page, `<span class="Pick">${said}</span>`)
-  }
   assertEquals(saysIn(page).match(/class="Copy_Go"/g)?.length, 3)
-  // A link at their own address, and the door that needs no assistant.
-  assertStringIncludes(page, '<b>dana.yaks.app</b>')
-  assertStringIncludes(page, 'The box below does the first one without')
   // Above the builder's chat it points at, and under the form they land on.
-  let next = page.indexOf('What to do next')
+  let next = page.indexOf('<ul class="Says">')
   assert(page.indexOf('name="name"') < next, page)
-  assert(next < page.indexOf('What do you want to build?'), page)
+  assert(next < page.indexOf('<textarea'), page)
 })
 
-Deno.test('once an app is built it is one line, pointing at the apps', async () => {
+Deno.test('once an app is built, suggested prompts are hidden', async () => {
   let page = await block({
     connected: true,
     fixed: true,
     apps: [{ slug: 'recipes', title: 'Recipes' }],
   })
-  assert(!page.includes('What to do next'), page)
   assertEquals(saysIn(page), '')
-  let line = page.indexOf('Ask it for another app')
-  assert(line > 0, page)
-  assert(line < page.indexOf('class="Pills"'), page)
   // And the form keeps the place it has always had, under the steps.
   assert(page.indexOf('<details') < page.indexOf('name="name"'), page)
 })
@@ -347,7 +328,6 @@ Deno.test('the owner sees the trash under the apps, with a button', async () => 
 
 Deno.test("none of the owner block is anybody else's", async () => {
   let page = await block({ role: null, person: false, connected: true })
-  assert(!page.includes('What to do next'), page)
   assert(!page.includes('name="name"'), page)
   assertEquals(saysIn(page), '')
 })

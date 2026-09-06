@@ -149,7 +149,7 @@
       if (app.version) bits.push('version ' + app.version)
       else bits.push('not released yet')
       if (app.errors) {
-        bits.push(app.errors + (app.errors == 1 ? ' break' : ' breaks'))
+        bits.push(app.errors + (app.errors == 1 ? ' error' : ' errors'))
       }
       // The one the space's own address opens (T-32947).
       if (app.home) bits.push('the front page')
@@ -229,10 +229,8 @@
       answer(msg.params || {})
     })
 
-    // Nothing to draw is still an answer. A view that sits on "Looking…"
-    // forever reads as broken, and the tool's own sentence — which the model
-    // has either way — is the whole answer on its own.
-    setTimeout(() => told || quiet('The answer is in the reply.'), 4000)
+    // A host that sends no result must not leave the view loading forever.
+    setTimeout(() => told || quiet('Could not load your apps. Try again.'), 4000)
 
     request('ui/initialize', {
       protocolVersion: '2026-01-26',

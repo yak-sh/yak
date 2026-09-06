@@ -205,7 +205,7 @@
 
     let fix = async (e, button) => {
       button.disabled = true
-      button.textContent = 'fixing…'
+      button.textContent = 'Saving…'
       let reply = await request('tools/call', {
         name: 'app_errors',
         arguments: { space: about.space, app: about.app, fixed: e.eids },
@@ -213,7 +213,7 @@
       let out = reply.result
       if (!out || out.isError || reply.error) {
         button.disabled = false
-        button.textContent = 'fixed'
+        button.textContent = 'Try again'
         return
       }
       draw(out.structuredContent)
@@ -225,7 +225,7 @@
       if (e.where) node.append(el('p', 'Break_Where', e.where))
       let foot = el('div', 'Break_Foot')
       foot.append(el('p', 'Break_Meta', meta(e)))
-      let button = el('button', 'Break_Fix', 'fixed')
+      let button = el('button', 'Break_Fix', 'Mark fixed')
       button.addEventListener('click', () => fix(e, button))
       foot.append(button)
       node.append(foot)
@@ -250,7 +250,7 @@
           'p',
           'Breaks_App',
           `${data.title || data.app} — ${errors.length}${
-            errors.length == 1 ? ' break' : ' breaks'
+            errors.length == 1 ? ' error' : ' errors'
           } open`,
         ),
       )
@@ -285,10 +285,8 @@
       answer(msg.params || {})
     })
 
-    // Nothing to draw is still an answer. A view that sits on "Looking…"
-    // forever reads as broken, and the tool's own sentence — which the model
-    // has either way — is the whole answer on its own.
-    setTimeout(() => told || quiet('The answer is in the reply.'), 4000)
+    // A host that sends no result must not leave the view loading forever.
+    setTimeout(() => told || quiet('Could not load the errors. Try again.'), 4000)
 
     request('ui/initialize', {
       protocolVersion: '2026-01-26',
