@@ -135,6 +135,7 @@ slow(
         'space_new',
         'space_delete',
         'space_restore',
+        'space_sell',
         'app_new',
         'app_files',
         // The builder's workbench, offered to a person's own agent on the
