@@ -5427,8 +5427,8 @@ slow(
 )
 
 // The spreadsheet half (csv.ts, T-34393): `as` is what a row IS, the headers
-// are its columns, and the id column is what makes the SECOND load patch the
-// same two rows rather than mint two more.
+// are its columns, and the id column names each row — which is what makes the
+// SECOND load patch the same two rows rather than mint two more (T-34454).
 slow('store_load reads a CSV as rows of one component', async () => {
   let k = await kernel()
   try {
@@ -5482,12 +5482,17 @@ slow('store_load reads a CSV as rows of one component', async () => {
       }[]).map((r) => r.doc.title).sort(),
       ['Fig tart', 'Lentil soup'],
     )
-    // Again: the id column named these two entities, so the second load
-    // patches them where a `$alias` would have minted two more.
+    // Again: the id column NAMED these two entities, so the second load lands
+    // on the same two where a bare `$` mint would have made two more.
     assertStringIncludes(await load(), 'loaded 2 entities into')
     let again = await recipes()
     assertEquals(again.length, 2)
     assertEquals(again[0].entity.eid, soup.entity.eid)
+    // And the name stands where an eid does: `lentil` is that row.
+    let shown = JSON.parse(
+      await agent.tool('graph_show', { ids: ['lentil'], backrefs: false }),
+    ) as { bundles: { entity: { eid: string } }[] }
+    assertEquals(shown.bundles.map((b) => b.entity.eid), [soup.entity.eid])
 
     // A header the component has no column for names itself, and says the
     // two ways out.

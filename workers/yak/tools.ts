@@ -2125,8 +2125,10 @@ export let TOOLS: Tool[] = [
       'the component ONE ROW becomes — as: "city" with headers name,country ' +
       'writes city{name, country} per row, values coerced to the column ' +
       "types the vocabulary declares; `title` and `body` land in the row's " +
-      "doc, an `id` (or `alias`) column IS the row's eid so loading the file " +
-      'again patches those rows instead of duplicating them, and map ' +
+      "doc, an `id` (or `alias`) column is the row's NAME — alias{name}, " +
+      'which lands on the entity already holding it, so loading the file ' +
+      'again patches those rows instead of duplicating them and the name ' +
+      'stands wherever an eid does, and map ' +
       '{"Serves how many": "serves"} renames a header that does not match a ' +
       'column. A header naming nothing is refused, as is a cell that will ' +
       'not coerce, both naming the row and the header. Together the files ' +

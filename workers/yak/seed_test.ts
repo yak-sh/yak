@@ -132,7 +132,8 @@ Deno.test('a CSV among the files is rows of the component `as` names', () => {
     ['data/02-menu.csv', 0],
   ])
   assertEquals(all[1].bundle, {
-    entity: { eid: 'soup' },
+    entity: { eid: '$data/02-menu.csv:0' },
+    alias: { name: 'soup' },
     recipe: { serves: 4 },
   })
 })

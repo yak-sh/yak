@@ -1,7 +1,7 @@
 /// <reference lib="deno.ns" />
 // The spreadsheet mapping (csv.ts): where a header lands, what a cell coerces
-// to, which row an id names, and every refusal that names the row and the
-// header. The end-to-end proof — a CSV loaded into a store twice — is
+// to, what an id column names the row, and every refusal that names the row and
+// the header. The end-to-end proof — a CSV loaded into a store twice — is
 // mcp_test.ts.
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
 import { type Sheet, sheet } from './csv.ts'
@@ -69,17 +69,20 @@ Deno.test('title and body land in doc, and the component wins the name', () => {
   )
 })
 
-Deno.test("an id column is the row's own eid, so a second load patches", () => {
+Deno.test("an id column is the row's name, so a second load patches", () => {
+  let named = {
+    entity: { eid: '$data/cities.csv:0' },
+    alias: { name: 'oslo' },
+    city: { name: 'Oslo' },
+  }
   assertEquals(
     bundles('id,name\noslo,Oslo\n').concat(bundles('alias,name\noslo,Oslo\n')),
-    [
-      { entity: { eid: 'oslo' }, city: { name: 'Oslo' } },
-      { entity: { eid: 'oslo' }, city: { name: 'Oslo' } },
-    ],
+    [named, named],
   )
   // An empty one is a row with no name of its own, minted for this batch.
-  assertEquals(bundles('id,name\n,Oslo\n')[0].entity, {
-    eid: '$data/cities.csv:0',
+  assertEquals(bundles('id,name\n,Oslo\n')[0], {
+    entity: { eid: '$data/cities.csv:0' },
+    city: { name: 'Oslo' },
   })
 })
 

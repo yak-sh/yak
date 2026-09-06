@@ -385,9 +385,10 @@ columns.
 `recipe{name, serves}`, each value coerced to the type `vocab.json` declares for
 the column — `serves` is a number, a `bool` takes true/yes/1 either way round,
 and an empty cell is left unsaid rather than written null. A `title` or `body`
-header lands in the row's `doc`; an `id` (or `alias`) column IS the row's eid,
-which is what makes loading the file again patch the same rows instead of
-minting a second set of them — leave it out and every load mints new entities. A
+header lands in the row's `doc`; an `id` (or `alias`) column is the row's NAME —
+`alias{name}`, which lands on the entity already holding it, so loading the file
+again patches the same rows instead of minting a second set of them, and the
+name stands wherever an eid does. Leave it out and every load mints new rows. A
 header the component has no column for is refused by name: rename it with
 `map {"Serves how many": "serves"}`, or declare the column in `vocab.json`. A
 cell that will not coerce is refused naming the row and the header, and the

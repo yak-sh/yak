@@ -7,10 +7,12 @@
 // The default mapping is the obvious one and needs no argument: a header lands
 // in the same-named column of `as`, coerced to that column's type; `title` and
 // `body` land in `doc`, because a row a person reads has words; an `id` (or
-// `alias`) column is the row's own eid, so loading the file again PATCHES the
-// same rows instead of minting a second set. `map {header: column}` renames a
-// header that does not match — it renames, it does not re-route, so a mapped
-// name resolves by the same three rules.
+// `alias`) column is the row's NAME — `alias{name}` (@yaks/alias), which lands
+// on the entity already holding it, so loading the file again PATCHES the same
+// rows instead of minting a second set, and the name stands wherever an eid
+// does. `map {header: column}` renames a header that does not match — it
+// renames, it does not re-route, so a mapped name resolves by the same three
+// rules.
 //
 // A component's own columns win over all of it: if the app declared
 // `city.title`, a `title` header is that column and not the doc's.
@@ -35,7 +37,7 @@ let SHAPE = 'a CSV is a header row naming the columns, then one row per ' +
   'entity — name,serves / Lentil soup,4'
 
 /** The headers that name the row itself rather than a column of it. */
-let ID = ['id', 'alias']
+let NAMES = ['id', 'alias']
 /** The headers that land in `doc`, the words a person reads. */
 let DOC = ['title', 'body']
 
@@ -62,8 +64,8 @@ let value = (type: string, cell: string): unknown => {
 }
 
 /** Where one header's values go: a column of a component, or the row's own
- * id. */
-type Lands = { comp: string; col: string; type: string } | { id: true }
+ * name. */
+type Lands = { comp: string; col: string; type: string } | { named: true }
 
 // WHICH, by the three rules — the component's own columns first, so an app
 // that declared `city.id` means that column and not the row's name.
@@ -72,7 +74,7 @@ let landing = (file: string, spec: Sheet, header: string): Lands => {
   if (name in spec.cols) {
     return { comp: spec.as, col: name, type: spec.cols[name] }
   }
-  if (ID.includes(name)) return { id: true }
+  if (NAMES.includes(name)) return { named: true }
   if (DOC.includes(name)) return { comp: 'doc', col: name, type: 'text' }
   throw new Error(
     `${file}: ${JSON.stringify(header)}${
@@ -123,11 +125,11 @@ export let sheet = (file: string, text: string, spec?: Sheet): Sown[] => {
     // The component is written even when the row said nothing about it: `as`
     // is what the row IS, and a bare component says that much on its own.
     let parts: Record<string, Record<string, unknown>> = { [spec.as]: {} }
-    let eid = ''
+    let name = ''
     cells.forEach((cell, i) => {
       if (cell.trim() == '') return // an empty cell is unsaid, never null
       let to = lands[i]
-      if ('id' in to) return void (eid = cell.trim())
+      if ('named' in to) return void (name = cell.trim())
       let got = value(to.type, cell)
       if (got === undefined) {
         throw new Error(
@@ -141,10 +143,13 @@ export let sheet = (file: string, text: string, spec?: Sheet): Sown[] => {
     return {
       file,
       index,
-      // No id column, or an empty one: the row is a new entity, named for the
-      // batch alone so the graph mints its id (@yaks/graph `alias`).
+      // The row is always minted for the batch (`$…`, @yaks/graph). What makes
+      // a second load a PATCH is the id column, said as the row's own name:
+      // `alias{name}` lands on the entity already holding it (@yaks/alias). No
+      // id column, or an empty one, and every load mints a new entity.
       bundle: {
-        entity: { eid: eid || `$${file}:${index}` },
+        entity: { eid: `$${file}:${index}` },
+        ...(name ? { alias: { name } } : {}),
         ...parts,
       } as Bundle,
     }
