@@ -176,6 +176,12 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // (route.ts `doorway`, which would make this a same-origin-guarded door), and
   // this is server to server with no Origin at all.
   if (path == '/stripe/connect') return sell.fetch(req, env)
+  // What the platform takes from a sale (sell.ts `fees`, T-34554), read and
+  // set by whoever owns the `yak` space. Before the connector, for the reason
+  // the billing doors are: `/api/*` at the apex is otherwise all mcp.ts's, and
+  // this is not a tool — the connector's roster is fixed and public (T-34541),
+  // and a rate is the owner's own door, not a thing an agent may move.
+  if (path == '/api/fee') return sell.fees(req, env)
   if (path == '/mcp' || path.startsWith('/api/')) {
     return bound(env.MCP, mcp.fetch, env).fetch(req)
   }
@@ -207,7 +213,13 @@ let serve = async (req: Request, env: Env, r: Route) => {
   if (shown) return shown
   let page = await env.ASSETS.fetch(req)
   if (page.status == 404) return lost()
-  return path == '/' ? await gallery.made(env, dir, page) : page
+  // Two pages are files with something LIVE in them: the home page's showcase
+  // (the newest listings) and the pricing page's selling rate (sell.ts). Both
+  // splice into the bytes the assets door answered, and both keep the file's
+  // own words when the directory will not answer.
+  if (path == '/') return await gallery.made(env, dir, page)
+  if (path == '/pricing') return await sell.priceAt(dir, page)
+  return page
 }
 
 // A foreign host that has reached the Worker (route.ts ORIGIN, T-33036) but

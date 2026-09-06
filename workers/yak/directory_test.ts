@@ -17,6 +17,7 @@ let space: Space = {
   tier: null,
   plan: null,
   stripe: null,
+  fee: 0,
   meter: null,
   told: false,
   trashed: null,

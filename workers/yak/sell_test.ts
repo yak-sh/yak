@@ -21,14 +21,17 @@ import {
   backAt,
   cart,
   fee,
+  feeOf,
   held,
   link,
+  MARK,
   META,
   orderEid,
   orderOf,
   packed,
   priced,
   type Product,
+  quoted,
   rate,
   receipt,
   sellerOf,
@@ -45,6 +48,7 @@ let space = (over: Partial<Space> = {}): Space => ({
   tier: null,
   plan: null,
   stripe: null,
+  fee: 0,
   meter: null,
   told: false,
   trashed: null,
@@ -99,8 +103,8 @@ Deno.test('the onboarding link comes back to the space page, both ways', () => {
 })
 
 Deno.test('the fee is basis points, rounded down, and never the whole sale', () => {
-  // The owner has not set a rate, so nothing is taken.
-  assertEquals(fee(10_000), 0)
+  // No rate set is a rate of 0, and nothing is taken.
+  assertEquals(fee(10_000, 0), 0)
   assertEquals(fee(1000, 250), 25)
   // Down, never up: the fee is never a cent more than the rate says.
   assertEquals(fee(999, 250), 24)
@@ -115,6 +119,45 @@ Deno.test('the rate reads the way a person says it', () => {
   assertEquals(rate(0), '0%')
   assertEquals(rate(250), '2.5%')
   assertEquals(rate(1000), '10%')
+})
+
+// The rate is a SETTING on the platform's own space row (T-34554), so it is
+// asked of `yak` and of no other space — a seller's row saying 500 would be a
+// seller choosing what they pay us.
+Deno.test('the fee is read off the platform’s own space row', async () => {
+  let asked: string[] = []
+  let dir = (fee: number | null) => ({
+    space: (slug: string) => {
+      asked.push(slug)
+      return Promise.resolve(fee == null ? null : { fee } as Space)
+    },
+  })
+  assertEquals(await feeOf(dir(250)), 250)
+  assertEquals(asked, ['yak'])
+  // Unset, and a directory with no platform row at all, both read as 0.
+  assertEquals(await feeOf(dir(0)), 0)
+  assertEquals(await feeOf(dir(null)), 0)
+})
+
+// The pricing page is a FILE. The live rate is spliced into its one marked
+// element on the way out, and the number in the file is what a crawler reading
+// the repo sees and what serves when the directory will not answer.
+Deno.test('the pricing page is quoted the rate that is set', () => {
+  let page = `<p>We take <span class="Fee">0%</span> of each sale.</p>`
+  assertStringIncludes(quoted(page, 250), 'We take <span class="Fee">2.5%<')
+  assertEquals(quoted(page, 0), page)
+  // A page that lost its mark is served as it is, never mangled.
+  assertEquals(
+    quoted('<p>We take nothing.</p>', 250),
+    '<p>We take nothing.</p>',
+  )
+  assertEquals(quoted(`<span class="Fee">0%`, 250), `<span class="Fee">0%`)
+  // And the file itself carries the mark, or the splice would quietly do
+  // nothing on the page it exists for.
+  assertStringIncludes(
+    Deno.readTextFileSync(new URL('./public/pricing.html', import.meta.url)),
+    MARK,
+  )
 })
 
 Deno.test('the seller row is the account object, flags and all', () => {
@@ -325,6 +368,7 @@ let asked = {
   lines: [{ price_data: {}, quantity: 1 }],
   total: 10_000,
   packed: '[{"p":"x","q":1}]',
+  bps: 0,
   success: 'https://ada.yaks.app/shop/?ok',
   cancel: 'https://ada.yaks.app/shop/',
 }
@@ -343,6 +387,9 @@ Deno.test('the session is a payment, with the cart in numbered line items', () =
     space: 'e-space',
     app: 'shop',
     items: asked.packed,
+    // And the rate THIS sale was charged at, so the order the webhook files
+    // minutes later says what was taken rather than what is set by then.
+    fee: '0',
   })
   // The SAME metadata on the PaymentIntent, and that is not a duplicate: a
   // refund arrives as a charge, which inherits the intent's metadata and knows
@@ -359,11 +406,30 @@ Deno.test('the fee rides payment_intent_data, and is absent when it is zero', ()
     'application_fee_amount' in session(asked).payment_intent_data,
     false,
   )
-  // What it looks like once the owner sets a number: `fee` is the arithmetic,
-  // pinned above, and this is where it lands. There is no top-level spelling of
-  // this parameter on a Checkout Session, so under `payment_intent_data` is not
-  // a choice.
-  assertEquals(fee(asked.total, 250), 250)
+  // What it looks like once the owner sets a number. There is no top-level
+  // spelling of this parameter on a Checkout Session, so under
+  // `payment_intent_data` is not a choice.
+  let made = session({ ...asked, bps: 250 })
+  assertEquals(made.payment_intent_data.application_fee_amount, 250)
+  assertEquals(made.metadata.fee, '250')
+})
+
+// The rate is a SETTING (T-34554), so it can move between the checkout and the
+// event that files the order. What the order records is what was TAKEN, which
+// is the rate the session carries and never the rate in force now.
+Deno.test('an order is charged the rate its session carried', () => {
+  let paid = (fee: Record<string, string>) =>
+    orderOf(
+      { id: 'cs_1', amount_total: 10_000, metadata: fee },
+      'acct_1',
+    ).fee_cents
+  assertEquals(paid({ fee: '250' }), 250)
+  assertEquals(paid({ fee: '0' }), 0)
+  // A session made before the rate was a column carries none, and those sales
+  // were charged nothing.
+  assertEquals(paid({}), 0)
+  // Junk in the metadata takes nothing, rather than NaN cents.
+  assertEquals(paid({ fee: 'lots' }), 0)
 })
 
 // ---- the order the webhook writes (T-34526) --------------------------------

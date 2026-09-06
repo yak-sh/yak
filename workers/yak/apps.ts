@@ -48,6 +48,7 @@ import {
   buying,
   connect,
   disconnect,
+  feeOf,
   type Product,
   rate,
   selling,
@@ -1164,7 +1165,7 @@ let index = async (
     // alone — and only where the platform has a Stripe key at all, since a
     // button that cannot work is worse than no block.
     sell: owner && env.STRIPE_KEY ? selling(space) : undefined,
-    fee: rate(),
+    fee: rate(await feeOf(dir)),
     name: owner ? await dir.nameAt(owner) ?? '' : '',
     connected: !!owner && await (await identity()).connected(env, owner),
     // Something IS built here while an app sits in the trash: its store is

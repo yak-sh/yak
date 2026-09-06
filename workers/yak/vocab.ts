@@ -609,6 +609,20 @@ export let platformDoc: VocabDoc = {
         details_submitted: owned(bool),
       },
     },
+    // What the platform takes from one sale, in BASIS POINTS (sell.ts `fee`),
+    // on the platform's OWN space row — `yak`, the one row in this directory
+    // that is the platform rather than a customer. Unset reads as 0, which is
+    // every sale until somebody sets a rate.
+    //
+    // Stamped, and the only writer is the owner's own door (sell.ts `fees`).
+    // A fee a space could write for itself is a seller choosing what they pay
+    // us; a fee written around that door is one the read cache would go on
+    // answering for a TTL, and the rate a sale is charged has to be the rate
+    // the owner set a moment ago.
+    fee: {
+      type: 'object',
+      properties: { bps: owned(num) },
+    },
     plan: {
       type: 'object',
       properties: {

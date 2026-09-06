@@ -124,6 +124,10 @@ export type Space = {
   // account, and whether Stripe says it may take money yet. Null for a space
   // that has never asked to sell, which is almost all of them.
   stripe: Stripe | null
+  // What the platform takes from a sale here, in basis points (sell.ts
+  // `feeOf`). It is asked of ONE space — `yak`, the platform's own row — and
+  // 0 on every other, where nobody has ever written one.
+  fee: number
   meter: Meter | null
   // Whether the agent has already been told where this space stands against
   // its ceilings (unseen.ts `ceiling`). The mark is `notified`, the same one
@@ -265,6 +269,7 @@ type Row = {
     by?: Id | null
     from_bookmark?: string | null
   }
+  fee?: { bps?: number | null }
   created?: { at?: string }
   member?: { space: Id; person: Id; role: Role }
   email?: { address: string }
@@ -470,7 +475,7 @@ let ABOUT =
   '&.trashed?'
 
 // And what every read of a SPACE asks for, for the same reason.
-let SPACE_ABOUT = '.doc?&.plan?&.meter?&.notified?&.trashed?&.stripe?'
+let SPACE_ABOUT = '.doc?&.plan?&.meter?&.notified?&.trashed?&.stripe?&.fee?'
 
 // The plan as a whole row, however little of it is written: a column nobody
 // has filled reads empty, the way `meterOf` does, so nothing downstream tests
@@ -516,6 +521,7 @@ let spaceOf = (r: Row): Space => ({
   tier: tierOf(r.space!.slug, r.plan?.tier ?? null),
   plan: planOf(r),
   stripe: stripeOf(r),
+  fee: r.fee?.bps ?? 0,
   meter: meterOf(r),
   told: r.notified != null,
   trashed: trashedOf(r),

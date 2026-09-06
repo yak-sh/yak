@@ -1,7 +1,10 @@
-// yaks.app as a client speaks it: the sign-in card, the connector, and an
-// app's two store doors. Everything here is something a person could do in a
-// browser — there is no operator authority in this file and no door a signed-in
-// account does not already have.
+// yaks.app as a client speaks it: the sign-in card, the connector, an app's
+// two store doors, and the platform's own fee. Everything here is something a
+// person could do in a browser — this file holds no credential of its own and
+// asks for nothing an account's session does not already carry. The fee door
+// is not an exception: it answers to a SEAT in the `yak` space, read off the
+// same cookie as everything else, so what makes it the owner's is their
+// membership and never something kept here.
 //
 // The sign-in code has two lives and this module knows both. To a
 // `@bot.yak.sh` address the letter lands in the TASKS graph, where the fleet
@@ -118,12 +121,32 @@ export let unlink = async (session: string, id: string): Promise<string[]> =>
     posted(apex(LINK), { revoke: id }, session),
   )).revoked
 
-// The door answers JSON both ways: a refusal says why in the same shape every
-// other door here refuses in (identity.ts `unauthorized`).
+/** What the platform takes from a sale, in basis points, and the rate as a
+ * person reads it (workers/yak/sell.ts `fees`). */
+export type Fee = { bps: number; rate: string }
+
+export let FEE = '/api/fee'
+
+/** The rate as it stands. Any signed-in account may ask; only an owner of the
+ * `yak` space is answered. */
+export let feeNow = (session: string): Promise<Fee> =>
+  said(fetch(apex(FEE), { headers: head(session) }))
+
+/** Set it. Whole basis points — 250 is 2.5%, 0 takes nothing. */
+export let setFee = (session: string, bps: number): Promise<Fee> =>
+  said(posted(apex(FEE), { bps: String(bps) }, session))
+
+// The doors answer JSON both ways: a refusal says why in the same shape every
+// other door here refuses in (identity.ts `unauthorized`). The path is read
+// back off the answer, so a new door's failure names itself.
 let said = async <T>(answer: Promise<Response>): Promise<T> => {
   let r = await answer
   let body = await bodyOf(r)
-  if (!r.ok) throw new Error(body?.error?.message ?? `${LINK} said ${r.status}`)
+  if (!r.ok) {
+    throw new Error(
+      body?.error?.message ?? `${new URL(r.url).pathname} said ${r.status}`,
+    )
+  }
   return body as T
 }
 

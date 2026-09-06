@@ -41,6 +41,7 @@ import * as dirPart from './directory.ts'
 import {
   type App,
   appStore,
+  type Directory,
   directory,
   type Space,
   stamp,
@@ -48,23 +49,35 @@ import {
 import { bound, type Env } from './env.ts'
 import { metaOf } from './meta.ts'
 import { PLATFORM } from './route.ts'
+import { whoIs } from './session.ts'
 
 // ---- the fee ---------------------------------------------------------------
 
 /**
  * What the platform takes from one sale, in BASIS POINTS — hundredths of a
- * percent, so 250 is 2.5%. THE OWNER SETS THIS NUMBER; it is 0 until he does,
- * which means every sale goes to the seller whole and nothing is taken. Zero is
- * the honest default: a fee nobody chose, charged to somebody's customer, is
- * worse than no fee at all.
+ * percent, so 250 is 2.5%. It is a SETTING and not a number in this file
+ * (T-34554): `fee.bps` on the platform's own space row (vocab.ts), read at
+ * request time, so the owner changes what we charge with `yak fee 250` and the
+ * next sale pays the new rate with nothing deployed.
  *
- * It is one constant because it is said in four places — the Checkout Session's
+ * It is one column because it is said in four places — the Checkout Session's
  * `application_fee_amount`, the pricing page, the terms, and the sentence
  * `space_sell` answers with — and four copies of a number drift the first time
- * one moves. site_test.ts holds the two pages to this line, the way it holds
- * them to `PRICE` (meter.ts), so a change is this number and nothing else.
+ * one moves. Unset it reads 0, which means every sale goes to the seller whole
+ * and nothing is taken. Zero is the honest default: a fee nobody chose, charged
+ * to somebody's customer, is worse than no fee at all.
+ *
+ * The most anybody may set is the whole sale, `MOST` — a rate above 100% is a
+ * typo every time, and Stripe would refuse the charge it made.
  */
-export let FEE_BPS = 0
+export let MOST = 10_000
+
+/** The platform's cut, as the directory holds it. Nothing is kept between
+ * requests: what is read here is what the owner's door last wrote, and that
+ * door empties the read cache. */
+export let feeOf = async (
+  dir: { space: (slug: string) => Promise<Space | null> },
+) => (await dir.space(dirPart.META.space))?.fee ?? 0
 
 /** The fee on a total, in cents. Rounded DOWN, so the fee is never a cent more
  * than the rate says, and never more than the sale itself.
@@ -75,12 +88,30 @@ export let FEE_BPS = 0
  * fee(1000, 0)   // 0
  * ```
  */
-export let fee = (cents: number, bps = FEE_BPS) =>
+export let fee = (cents: number, bps: number) =>
   Math.min(cents, Math.max(0, Math.floor((cents * bps) / 10_000)))
 
 /** The rate as a person reads it: `2.5%`, or `0%`. One derivation, so the
  * pages and the tool sentence cannot disagree with the arithmetic above. */
-export let rate = (bps = FEE_BPS) => `${Math.round(bps / 100 * 100) / 100}%`
+export let rate = (bps: number) => `${Math.round(bps / 100 * 100) / 100}%`
+
+/**
+ * The rate as the pricing page says it. The page is a FILE — hand-written,
+ * crawled, served straight off the assets binding — so the live rate is
+ * spliced into one marked element on the way out, the way the home page's
+ * showcase is (gallery.ts `made`). The number in the file stays the FALLBACK,
+ * which is what a crawler reading the repo sees and what serves if the
+ * directory will not answer.
+ */
+export let MARK = '<span class="Fee">'
+
+export let quoted = (file: string, bps: number) => {
+  let from = file.indexOf(MARK)
+  if (from < 0) return file
+  let to = file.indexOf('</span>', from)
+  if (to < 0) return file
+  return file.slice(0, from + MARK.length) + rate(bps) + file.slice(to)
+}
 
 // ---- the connected account -------------------------------------------------
 
@@ -423,7 +454,7 @@ export let backAt = (root: string, asked: unknown) => {
  * is the ONLY place Stripe takes one for a Checkout Session — there is no
  * top-level spelling. It is left out entirely when it is zero: Stripe requires a
  * positive amount, so a fee of nothing has to be no fee rather than a fee of 0,
- * and with `FEE_BPS` unset that is every sale today.
+ * and with no rate set that is every sale.
  *
  * `metadata` says whose sale this is in the two words the webhook routes by,
  * plus the cart. It is copied onto `payment_intent_data[metadata]` as well, and
@@ -438,12 +469,22 @@ export let session = (at: {
   lines: unknown[]
   total: number
   packed: string
+  bps: number
   email?: string
   success: string
   cancel: string
 }) => {
-  let cut = fee(at.total)
-  let metadata = { space: at.space, app: at.app, items: at.packed }
+  let cut = fee(at.total, at.bps)
+  // The RATE THIS SALE WAS CHARGED AT rides with it. The rate is a setting now
+  // (`feeOf`), so the number in force when the session was made is not
+  // necessarily the number in force when the webhook files the order minutes
+  // later — and what an order records has to be what was actually taken.
+  let metadata = {
+    space: at.space,
+    app: at.app,
+    items: at.packed,
+    fee: String(at.bps),
+  }
   return {
     mode: 'payment',
     line_items: Object.fromEntries(at.lines.map((l, i) => [i, l])),
@@ -525,6 +566,10 @@ export let buying = async (
         lines: priceless.lines,
         total: priceless.total,
         packed: priceless.packed,
+        // The rate as it stands RIGHT NOW, read fresh (`dirOf`): a sale is
+        // charged what the owner set a moment ago, never what a cached row
+        // still says.
+        bps: await feeOf(dirOf(env)),
         ...(email ? { email } : {}),
         success,
         cancel,
@@ -638,7 +683,11 @@ let idOf = (v: string | { id?: string } | undefined | null) =>
  * `fee_cents` is derived here rather than read back off Stripe. The session
  * carries no application fee at all (it lives on the PaymentIntent), and one
  * more round trip to learn a number we computed on the way out would be a call
- * that can fail for nothing.
+ * that can fail for nothing. It is derived from the RATE THE SESSION CARRIES
+ * (`metadata.fee`) and never from the rate in force now: the owner may have
+ * moved it between the checkout and this event, and the order says what was
+ * taken. A session made before that column existed carries no rate and reads
+ * 0, which is the fee those sales were charged.
  */
 export let orderOf = (o: Session, account: string) => {
   let total = Math.max(0, Math.floor(Number(o.amount_total ?? 0)))
@@ -648,7 +697,7 @@ export let orderOf = (o: Session, account: string) => {
     account,
     items: String(o.metadata?.items ?? '[]'),
     total_cents: total,
-    fee_cents: fee(total),
+    fee_cents: fee(total, Math.max(0, Number(o.metadata?.fee ?? 0) || 0)),
     email: String(o.customer_details?.email || o.customer_email || ''),
     status: 'paid',
   }
@@ -959,3 +1008,78 @@ let hook = async (env: Env, req: Request) => {
 }
 
 export let fetch = (req: Request, env: Env): Promise<Response> => hook(env, req)
+
+// ---- the owner's door (T-34554) --------------------------------------------
+
+/**
+ * The pricing page as it is served: the file, with the live rate in its one
+ * marked element. A directory that will not answer is the page with its own
+ * number in it, never a pricing page that does not serve — the same bargain
+ * `gallery.made` makes for the home page's showcase.
+ */
+export let priceAt = async (dir: Directory, file: Response) => {
+  let html = await file.text()
+  let bps = await feeOf(dir).catch(() => 0)
+  let headers = new Headers(file.headers)
+  // The two headers that describe the BYTES: the body just changed length, and
+  // it is no longer the file that etag names.
+  headers.delete('content-length')
+  headers.delete('etag')
+  return new Response(quoted(html, bps), { status: file.status, headers })
+}
+
+/**
+ * `GET /api/fee` reads the platform's cut and `POST /api/fee` (`bps=250`) sets
+ * it — `yak fee` on the owner's box, and the only writer of the column.
+ *
+ * THE GATE IS A SEAT IN `yak`, the platform's own space: whoever owns that row
+ * owns the platform, which is the same authority `space_sell` and the meter
+ * already answer to. Read through `whoIs`, so it is the session COOKIE and
+ * never an agent's bearer — what a tool may do is deliberately not this
+ * (T-34541 fixed the connector's roster, and a rate is not on it).
+ *
+ * It writes through `stamp`, which empties the directory's read cache, so the
+ * rate a sale is charged is the rate set a moment ago rather than one a TTL
+ * later. Under `/api/`, so the same-origin guard (route.ts `doorway`) stands in
+ * front of it: sibling spaces are same-site, and without that guard a page in
+ * anybody's space could aim a form at this door and the owner's cookie would
+ * ride along. A CLI sends no `Origin` at all and is unaffected.
+ */
+export let fees = async (req: Request, env: Env) => {
+  let dir = dirOf(env)
+  let meta = await dir.space(dirPart.META.space)
+  if (!meta) return json(503, 'no_platform', 'the directory has not seeded yet')
+  let who = await whoIs(
+    req,
+    env.SESSION_SECRET,
+    (person) => dir.role(meta, person),
+  )
+  if (who.role != 'owner') {
+    return json(403, 'not_owner', `the fee is set by an owner of ${meta.slug}`)
+  }
+  if (req.method == 'POST') {
+    // Read as DIGITS and not as a number: `Number('')` and `Number(null)` are
+    // both 0, so a post that named no rate at all would otherwise read as the
+    // owner setting the fee to nothing.
+    let said = (await req.formData()).get('bps')
+    let digits = typeof said == 'string' && /^\d+$/.test(said)
+    let bps = digits ? Number(said) : NaN
+    if (!Number.isInteger(bps) || bps > MOST) {
+      return json(
+        400,
+        'bad_fee',
+        `the fee is whole basis points, 0 to ${MOST}: ` +
+          `${said == null || said == '' ? '(nothing)' : said} is not one`,
+      )
+    }
+    await stamp(env, {
+      entities: [{ entity: { eid: meta.eid }, fee: { bps } }],
+    })
+    return Response.json({ bps, rate: rate(bps) })
+  }
+  if (req.method != 'GET') {
+    return json(405, 'method_not_allowed', 'get the fee, or post one')
+  }
+  let bps = meta.fee
+  return Response.json({ bps, rate: rate(bps) })
+}

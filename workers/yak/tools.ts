@@ -153,7 +153,7 @@ import {
   spending,
   TIMEOUT,
 } from './sandbox.ts'
-import { connect, disconnect, rate, selling } from './sell.ts'
+import { connect, disconnect, feeOf, rate, selling } from './sell.ts'
 import { foreign, SIGN_IN, SLUG } from './route.ts'
 import { globs } from './router.ts'
 import type { Reach } from './reach.ts'
@@ -1792,7 +1792,8 @@ export let TOOLS: Tool[] = [
         return {
           text: `${space.slug} is already selling: Stripe has them ready to ` +
             `take payments, and every app here can charge through POST ` +
-            `/api/pay/checkout. We take ${rate()} of each sale.`,
+            `/api/pay/checkout. We take ${rate(await feeOf(ctx.dir))} of ` +
+            `each sale.`,
           space,
         }
       }
@@ -1808,7 +1809,8 @@ export let TOOLS: Tool[] = [
           `alone, it is good once, and it expires:\n\n${made.url}\n\nNothing ` +
           `can be sold in ${space.slug} until they have been through it. They ` +
           `are the merchant: their charge, their money, their name on the ` +
-          `statement, and refunds and disputes are theirs. We take ${rate()} ` +
+          `statement, and refunds and disputes are theirs. We take ` +
+          `${rate(await feeOf(ctx.dir))} ` +
           `of each sale. Call space_sell again for a fresh link — it opens the ` +
           `same Stripe account, never a second one.`,
         space,

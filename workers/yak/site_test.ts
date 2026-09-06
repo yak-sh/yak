@@ -7,7 +7,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { slow } from '../../src/testing.ts'
 import { REPLY_TO } from './mail.ts'
 import { BUILDS, CURRENCY, LETTERS, PRICE } from './meter.ts'
-import { rate } from './sell.ts'
+import { quoted, rate } from './sell.ts'
 import { page as galleryPage } from './gallery.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { askEmail, connect, spaceIndex } from './pages.ts'
@@ -447,12 +447,21 @@ Deno.test('the plan pages quote the price the offer names', () => {
   }
 })
 
-// What we take from a seller's sale is `FEE_BPS` (sell.ts) and nothing else,
-// so the two pages that say it out loud are held to that line — the way the
-// plan price is held to `PRICE`. Changing what the platform charges is one
-// number in one file, and these fail until the copy follows it.
+// What we take from a seller's sale is a SETTING now (sell.ts `feeOf`,
+// T-34554), so the page is held to the rate rather than to a number: whatever
+// the owner sets, the sentence a reader gets says that. The file's own copy is
+// the fallback, and the splice is what makes it current.
 Deno.test('the pages quote the selling fee the code charges', () => {
-  assertStringIncludes(flat(read('pricing.html')), `We take ${rate()} of each`)
+  let bps = 250
+  assertStringIncludes(
+    flat(quoted(read('pricing.html'), bps)),
+    `We take <span class="Fee">${rate(bps)}</span> of each`,
+  )
+  // Nothing set is nothing taken, and the page says so in the same sentence.
+  assertStringIncludes(
+    flat(quoted(read('pricing.html'), 0)),
+    `We take <span class="Fee">0%</span> of each`,
+  )
   // The terms name the fee too — a seller has to read what it costs them where
   // they read what they are responsible for — and they name it as a RATE, so
   // the "no price on this page" rule above (which is about dollars) still

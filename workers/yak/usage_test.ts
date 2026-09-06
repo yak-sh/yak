@@ -119,6 +119,7 @@ let space = (meter: Partial<Meter> = {}, tier: Tier | null = null): Space => ({
   tier,
   plan: null,
   stripe: null,
+  fee: 0,
   told: false,
   trashed: null,
   meter: {

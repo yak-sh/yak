@@ -46,10 +46,12 @@ import {
   close,
   codeFor,
   doomedIn,
+  feeNow,
   linkFor,
   meAt,
   rpc,
   saidBy,
+  setFee,
   spendCode,
   storeApply,
   storeQuery,
@@ -391,6 +393,37 @@ let verbs: Record<string, Verb> = {
       print(`id        ${got.id}`)
       print(`expires   ${got.expires}`)
       if (got.links.length > 1) print(`standing  ${got.links.join(' ')}`)
+    },
+  },
+
+  fee: {
+    name: 'fee',
+    about:
+      'what the platform takes from a sale, in basis points — read it, or ' +
+      'set it',
+    args: [arg('bps', false)],
+    door: ['cli'],
+    examples: ['yak fee --owner', 'yak fee 250 --owner'],
+    // The rate is the PLATFORM's, so it is the platform owner's to read and to
+    // move — never a throwaway's, and never a default's. `--owner` is what
+    // says so out loud, the same named act `login` asks for.
+    run: async (said) => {
+      if (!said.flags.has('--owner')) {
+        throw new Refused(
+          'the fee is the platform owner’s: add --owner. A test account ' +
+            'cannot read it or set it.',
+        )
+      }
+      // Read before the account is: a typo is a typo whoever is signed in.
+      let bps = said.words[0]
+      if (bps != null && !/^\d+$/.test(bps)) {
+        throw new Usage(`not a whole number of basis points: ${bps}`)
+      }
+      let at = acting(said)
+      let now = bps == null
+        ? await feeNow(at.session)
+        : await setFee(at.session, Number(bps))
+      print(`${now.bps} bps — ${now.rate} of each sale`)
     },
   },
 

@@ -1751,3 +1751,82 @@ Deno.test('stopping selling forgets the account and calls nothing', async () => 
     await fake.stop()
   }
 })
+
+// ---- the fee (T-34554) -----------------------------------------------------
+
+// The rate is a SETTING on the platform's own space row, not a number in the
+// code, and this is the whole of what that has to mean: an owner of `yak` sets
+// it, nobody else can, the next request is charged the new rate with nothing
+// deployed, and the pricing page says what is being charged.
+let feeAt = (env: Env, init: RequestInit = {}) =>
+  sell.fees(new Request('https://yaks.app/api/fee', init), env)
+
+let setting = (cookie: string, bps: string): RequestInit => ({
+  method: 'POST',
+  headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' },
+  body: `bps=${bps}`,
+})
+
+// A seat in the platform's own space, which is what owning the platform IS.
+let seated = async (env: Env, dir: ReturnType<typeof directory>) =>
+  await stamp(env, {
+    entities: [{
+      entity: { eid: '$seat' },
+      member: {
+        space: (await dir.space('yak'))!.eid,
+        person: ADA,
+        role: 'owner',
+      },
+    }],
+  })
+
+Deno.test('the fee is an owner’s to set, and is charged on the next request', async () => {
+  let { env } = platform()
+  await seeded(env)
+  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  let cookie = await as(ADA)
+  // Ada owns her own space and is nobody in `yak`, so the platform's rate is
+  // not hers to read or to move.
+  assertEquals((await feeAt(env, { headers: { cookie } })).status, 403)
+  assertEquals((await feeAt(env)).status, 403, 'nor a stranger with no cookie')
+  await seated(env, dir)
+  // Unset reads as nothing taken.
+  assertEquals(await (await feeAt(env, { headers: { cookie } })).json(), {
+    bps: 0,
+    rate: '0%',
+  })
+  assertEquals(await (await feeAt(env, setting(cookie, '250'))).json(), {
+    bps: 250,
+    rate: '2.5%',
+  })
+  // The NEXT request, with no deploy and no waiting out the read cache — the
+  // write went through `stamp`, which empties it.
+  assertEquals(await sell.feeOf(dir), 250)
+  assertEquals(await (await feeAt(env, { headers: { cookie } })).json(), {
+    bps: 250,
+    rate: '2.5%',
+  })
+  // And the page a seller reads says the number the checkout will take.
+  let page = await sell.priceAt(
+    dir,
+    new Response('<p>We take <span class="Fee">0%</span> of each sale.</p>'),
+  )
+  assertStringIncludes(await page.text(), 'We take <span class="Fee">2.5%<')
+})
+
+Deno.test('the fee is whole basis points, and never more than the sale', async () => {
+  let { env } = platform()
+  await seeded(env)
+  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  let cookie = await as(ADA)
+  await seated(env, dir)
+  for (let no of ['-5', '2.5', '10001', 'lots', '']) {
+    let res = await feeAt(env, setting(cookie, no))
+    assertEquals(res.status, 400, no)
+    assertEquals((await res.json()).error.code, 'bad_fee', no)
+  }
+  // The two ends that are not junk: nothing, and the whole sale.
+  assertEquals((await feeAt(env, setting(cookie, '10000'))).status, 200)
+  assertEquals((await feeAt(env, setting(cookie, '0'))).status, 200)
+  assertEquals(await sell.feeOf(dir), 0)
+})
