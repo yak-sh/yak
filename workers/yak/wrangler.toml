@@ -168,9 +168,16 @@ new_sqlite_classes = ["Sandbox"]
 # `max_instances` bounds what can be running at once — one sandbox per space,
 # so five spaces building simultaneously. Nothing here is a fleet yet; raising
 # it is one number.
+#
+# `image_build_context` is packages/cli rather than the Dockerfile's own
+# directory, which is what a build context defaults to: the image installs the
+# `yaks` CLI from the repo until @yaks/cli is on JSR (T-34168, T-34387), and
+# that package is the only thing it COPYs. Naming the package instead of the
+# repo root keeps the context a handful of files rather than the whole tree.
 [[containers]]
 class_name = "Sandbox"
 image = "./sandbox/Dockerfile"
+image_build_context = "../../packages/cli"
 instance_type = "standard-2"
 max_instances = 5
 

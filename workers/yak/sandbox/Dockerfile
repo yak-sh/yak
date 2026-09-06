@@ -1,7 +1,13 @@
 # The builder's workbench image (sandbox.ts, T-34264): Cloudflare's own
 # sandbox container, plus the least that compiles Rust to something a browser
-# runs. Nothing else goes in here — an image is disk, disk is a per-second
-# charge, and it is pulled before the first command of the first build.
+# runs, plus the `yaks` CLI so a command in here can reach the platform
+# (T-34387). Nothing else goes in here — an image is disk, disk is a
+# per-second charge, and it is pulled before the first command of the first
+# build.
+#
+# THE BUILD CONTEXT IS packages/cli, not this directory (wrangler.toml
+# `image_build_context`), because the one thing this image COPYs is that
+# package. Everything else it needs it downloads.
 #
 # The tag MUST match the @cloudflare/sandbox version in package.json: the
 # control server inside the container and the client in the Worker are two
@@ -60,3 +66,36 @@ RUN set -eux; \
       "${name}/bin/wasm-opt"; \
     rm /tmp/bn.tgz; \
     wasm-opt --version
+
+# Deno, which is what runs the `yaks` CLI below. It is the largest thing in
+# this image by far — a whole runtime — and it earns that by being the runtime
+# the platform itself is written in, so a script in the sandbox can be a .ts
+# file rather than a shell heredoc. The base image is Ubuntu with `unzip` and
+# `curl` already in it.
+ARG DENO_VERSION=2.9.1
+ARG DENO_SHA256=710c54d63477d1100844ef4818f19507ce0dbf40510903b1d883f19e394446a2
+RUN set -eux; \
+    curl -fsSL -o /tmp/deno.zip \
+      "https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/deno-x86_64-unknown-linux-gnu.zip"; \
+    echo "${DENO_SHA256}  /tmp/deno.zip" | sha256sum -c -; \
+    unzip -q /tmp/deno.zip -d /usr/local/bin; \
+    rm /tmp/deno.zip; \
+    deno --version
+
+# The `yaks` command (packages/cli): every tool the connector lists, as a
+# subcommand, signed in by the $YAKS_TOKEN sandbox.ts puts in the environment.
+#
+# It is installed FROM THE REPO because @yaks/cli is not published yet
+# (T-34168). Once it is, this whole stanza is one line and the COPY and the
+# build context go away:
+#
+#   RUN deno install -gf --allow-net --allow-env --allow-read --allow-write \
+#         --root /usr/local jsr:@yaks/cli/yaks
+#
+# `--root /usr/local` puts the shim on the PATH every command already has.
+COPY . /opt/yaks/cli
+RUN set -eux; \
+    deno install -gf --allow-net --allow-env --allow-read --allow-write \
+      --root /usr/local --config /opt/yaks/cli/deno.json \
+      /opt/yaks/cli/yaks.ts; \
+    yaks --help > /dev/null

@@ -28,9 +28,14 @@ import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import * as apps from './apps.ts'
 import { platform, type Ran, sandboxes } from './harness.ts'
+import { GRANT, held, ledger } from './grants.ts'
 import {
   boxOf,
   BUDGET,
+  destroyed,
+  HOST,
+  LIFE,
+  named,
   NO_BOX,
   released,
   seconds,
@@ -219,12 +224,12 @@ Deno.test('the budget refuses in a sentence, and only after it is spent', async 
   // The first call starts the clock; a call one second past the budget is the
   // one that is refused, and the container is never asked for.
   let spend = spending()
-  boxOf(env, space, spend, now)
+  boxOf(env, space, ADA, spend, now)
   assertEquals(spend.since, 0)
   clock = BUDGET * 1000 + 1
   let said = ((): Error => {
     try {
-      boxOf(env, space, spend, now)
+      boxOf(env, space, ADA, spend, now)
       throw new Error('not refused')
     } catch (e) {
       return e as Error
@@ -239,7 +244,7 @@ Deno.test('a release answers the seconds held, and the container goes', async ()
   let { env, space } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
   let clock = 0
   let spend = spending()
-  await boxOf(env, space, spend, () => clock).exec('sleep 42')
+  await boxOf(env, space, ADA, spend, () => clock).exec('sleep 42')
   assertEquals([...box.alive], [`build-${space.eid}`])
   clock = 42_300
   let spent = await released(env, space, spend, () => clock)
@@ -251,6 +256,84 @@ Deno.test('a release answers the seconds held, and the container goes', async ()
   // A release of a build that never woke one answers nothing and kills
   // nothing — which is what makes it safe on every end of the loop.
   assertEquals(await released(env, space, spending()), 0)
+})
+
+// The sandbox's sign-in (T-34387): every command runs with a grant of the
+// caller's in its environment, one grant for the whole container, and the
+// grant dies with the container.
+Deno.test('every command is signed in as the caller, with one grant', async () => {
+  let { box, env } = await bench(() => ({ stdout: 'ok' }))
+  // No `spend` on the Ctx, so each of these is its own build as far as the
+  // tools are concerned: what makes the two say one grant is the ledger row
+  // the container wears, not a memory inside one call.
+  let lone: Ctx = { env, dir: dirOf(env), person: ADA }
+  await tool('sandbox_exec').run(lone, { cmd: 'rustc --version' })
+  await tool('sandbox_exec').run(lone, { cmd: 'cargo build' })
+
+  let [first, second] = box.env
+  assertEquals(first.YAKS_HOST, HOST)
+  assert(first.YAKS_TOKEN?.startsWith(GRANT), 'a grant token, said as one')
+  assertEquals(second.YAKS_TOKEN, first.YAKS_TOKEN)
+  // A writeFile is not a command, and asks for no grant.
+  assertEquals(box.env.length, 2)
+
+  // And it opens the door as Ada, narrowed to her space, for about as long as
+  // the container can live.
+  let book = ledger(env.OAUTH_KV)!
+  let grant = await held(first.YAKS_TOKEN, SECRET, book)
+  assertEquals(grant?.person, ADA)
+  assertEquals(grant?.space, 'ada')
+  let hours = (grant!.exp - Math.floor(Date.now() / 1000)) / 3600
+  assert(Math.abs(hours - LIFE) < 0.01, `${hours} hours is about ${LIFE}`)
+})
+
+Deno.test('destroying the container revokes what it was wearing', async () => {
+  let { box, env, space } = await bench(() => ({ stdout: 'ok' }))
+  let lone: Ctx = { env, dir: dirOf(env), person: ADA }
+  await tool('sandbox_exec').run(lone, { cmd: 'ls' })
+  let token = box.env[0].YAKS_TOKEN
+  let book = ledger(env.OAUTH_KV)!
+  assert(await held(token, SECRET, book), 'live while the container is')
+
+  // Destroy is the one door — a build's own end (`released`) and a space
+  // being erased (erase.ts) both come through it, and neither has to be
+  // holding the grant to end it.
+  assertEquals(await destroyed(env, space), true)
+  assertEquals(await held(token, SECRET, book), null)
+  assertEquals(await book.wearing(named(space)), null)
+
+  // The next wake mints a fresh one rather than saying the dead one again.
+  await tool('sandbox_exec').run(lone, { cmd: 'ls' })
+  assert(box.env[1].YAKS_TOKEN != token, 'a new grant for a new container')
+  assert(await held(box.env[1].YAKS_TOKEN, SECRET, book))
+})
+
+Deno.test('the token is in the environment and never in the transcript', async () => {
+  let box = sandboxes(() => ({ stdout: 'ok' }))
+  let { env, space } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
+  let model = fake([
+    {
+      calls: [{
+        id: 'c1',
+        name: 'sandbox_exec',
+        args: JSON.stringify({ cmd: 'yaks app_list' }),
+      }],
+    },
+    { text: 'listed' },
+  ])
+  let beats: string[] = []
+  await build(env, owner, space, [{ said: 'person', text: 'list them' }], {
+    model,
+    on: (b) => beats.push(JSON.stringify(b)),
+  })
+
+  let token = box.env[0].YAKS_TOKEN
+  assert(token?.startsWith(GRANT), 'the command was signed in')
+  // Not in a frame the person's page draws, not in what the model reads back,
+  // and not in the command line the tool was called with.
+  for (let said of [...beats, ...box.ran]) {
+    assert(!said.includes(token), `the token is not in ${said.slice(0, 60)}`)
+  }
 })
 
 Deno.test('a build pays for its workbench and leaves none running', async () => {
@@ -348,7 +431,12 @@ Deno.test('the deploy names the container, and the image is the SDK version', as
   let at = (name: string) =>
     Deno.readTextFile(new URL(`./${name}`, import.meta.url))
   let conf = parse(await at('wrangler.toml')) as {
-    containers: { class_name: string; image: string; instance_type: string }[]
+    containers: {
+      class_name: string
+      image: string
+      image_build_context: string
+      instance_type: string
+    }[]
     durable_objects: { bindings: { name: string; class_name: string }[] }
     migrations: { tag: string; new_sqlite_classes?: string[] }[]
   }
@@ -376,11 +464,21 @@ Deno.test('the deploy names the container, and the image is the SDK version', as
   let pinned = JSON.parse(await at('package.json')) as {
     dependencies: Record<string, string>
   }
-  let tag = /^FROM docker\.io\/cloudflare\/sandbox:(\S+)$/m.exec(
-    await at('sandbox/Dockerfile'),
-  )
+  let file = await at('sandbox/Dockerfile')
+  let tag = /^FROM docker\.io\/cloudflare\/sandbox:(\S+)$/m.exec(file)
   assert(tag, 'the Dockerfile is FROM the sandbox image')
   assertEquals(tag[1], pinned.dependencies['@cloudflare/sandbox'])
+
+  // The CLI in the image (T-34387). It is installed from the repo copy until
+  // @yaks/cli is on JSR, which is why the build context is that package and
+  // not this directory — the two have to agree or the COPY finds nothing.
+  assertEquals(box.image_build_context, '../../packages/cli')
+  assertStringIncludes(file, 'COPY . /opt/yaks/cli')
+  assertStringIncludes(file, 'deno install -gf')
+  assertStringIncludes(file, '/opt/yaks/cli/yaks.ts')
+  // Pinned and checksummed like everything else it downloads.
+  assert(/^ARG DENO_VERSION=\d+\.\d+\.\d+$/m.test(file), 'deno is pinned')
+  assert(/^ARG DENO_SHA256=[0-9a-f]{64}$/m.test(file), 'and checksummed')
 })
 
 Deno.test('a lone connector call pays for itself and leaves the container', async () => {

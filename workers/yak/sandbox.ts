@@ -39,14 +39,25 @@
 // {@link SLEEP} is the backstop for a build that never says so — the container
 // sleeps on its own after that long idle, which is where the billing stops.
 // A sleeping sandbox wakes with its files still there.
+//
+// AND IT IS SIGNED IN AS THE CALLER (T-34387). Every command runs with
+// `YAKS_TOKEN` and `YAKS_HOST` in its environment — a grant (grants.ts),
+// narrowed to this space and living about as long as the container can — so
+// the `yaks` CLI the image carries, and plain `curl`, reach the platform's own
+// door as the person whose build this is. One grant per CONTAINER rather than
+// one per command ({@link signed}), and it dies with the container
+// ({@link destroyed}). It rides the SDK's per-invocation env and is never
+// exported into a shell, so nothing puts it in the builder's transcript.
 import type { Space } from './directory.ts'
+import { type Grant, ledger, mint, tokenOf } from './grants.ts'
+import { PLATFORM } from './route.ts'
 
 /** One sandbox, as this file asks for it — the four things the tools do,
  * plus the one knob the deploy has no way to set. */
 export type Box = {
   exec(
     cmd: string,
-    opts?: { cwd?: string; timeout?: number },
+    opts?: { cwd?: string; timeout?: number; env?: Record<string, string> },
   ): Promise<{ stdout: string; stderr: string; exitCode: number }>
   writeFile(
     path: string,
@@ -76,7 +87,13 @@ export type Sandboxes = {
  * platform table (tools.ts) and the build that pays for it is the loop
  * (builder.ts), and this is the one thing they share.
  */
-export type Spend = { since: number | null }
+export type Spend = {
+  since: number | null
+  // The grant this build's commands run under, asked for once and awaited by
+  // every command after ({@link signed}). It sits here rather than in a
+  // closure because it belongs to the build, exactly as the seconds do.
+  signing?: Promise<Record<string, string>>
+}
 
 export let spending = (): Spend => ({ since: null })
 
@@ -91,9 +108,11 @@ export let seconds = (s: Spend, now = Date.now()) =>
  * it costs anything anybody would notice. */
 export let BUDGET = 600
 
-/** How long an idle sandbox stays awake. The build normally destroys its own;
- * this is what catches the build that never got to say so. */
-export let SLEEP = '5m'
+/** How long an idle sandbox stays awake, in seconds and in the spelling the
+ * SDK takes. The build normally destroys its own; this is what catches the
+ * build that never got to say so. */
+export let NAP = 300
+export let SLEEP = `${NAP / 60}m`
 
 /** The longest one command may run. Nothing here is interactive, and a
  * command that has not finished in four minutes is a command that is stuck. */
@@ -106,6 +125,16 @@ export let CWD = '/workspace'
 /** The most output one command hands back. A compiler that failed says why in
  * its first lines; the rest is the same warning again. */
 export let CAP = 8_000
+
+/** Where the `yaks` CLI and `curl` inside the container aim: this platform as
+ * a whole origin, since what a script pastes into curl is `$YAKS_HOST/mcp`. */
+export let HOST = `https://${PLATFORM}`
+
+/** How long the grant in the container's environment lives, in hours: the
+ * whole build budget plus the nap that outlasts it, so the token is alive for
+ * as long as anything in the container could still be running and dead soon
+ * after. Well under the day grants.ts allows at most. */
+export let LIFE = (BUDGET + NAP) / 3600
 
 /** No container bound here — the workerd probes and `deno test`, where the
  * binding does not exist. Said as a sentence, because a model reads it. */
@@ -121,29 +150,103 @@ export let overBudget = (spent: number) =>
   `${BUDGET}. Whatever is already shipped into the app is shipped — ask me ` +
   'again and I will pick it up with a fresh one.'
 
-// The object holding this build session's container. The id is the space's
-// EID rather than its slug: a slug is renamed and an eid is not, and a
-// workbench that followed a rename to a fresh container would lose the
-// half-built tree inside it.
-//
-// This is @cloudflare/containers `getContainer`, which is all `getSandbox`
-// does to reach one — the rest of it is preview URLs, sessions and the code
-// interpreter, none of which anything here asks for.
-let stub = (ns: Sandboxes, space: Space) =>
-  ns.get(ns.idFromName(`build-${space.eid}`))
+/** This build session's container, by name — the id the object is addressed
+ * by, and the name its grant is written down under. The space's EID rather
+ * than its slug: a slug is renamed and an eid is not, and a workbench that
+ * followed a rename to a fresh container would lose the half-built tree
+ * inside it. */
+export let named = (space: Space) => `build-${space.eid}`
+
+// The object holding it. This is @cloudflare/containers `getContainer`, which
+// is all `getSandbox` does to reach one — the rest of it is preview URLs,
+// sessions and the code interpreter, none of which anything here asks for.
+let stub = (ns: Sandboxes, space: Space) => ns.get(ns.idFromName(named(space)))
+
+/** What a grant is made and unmade with: the secret it is sealed under and
+ * the ledger it is written in (grants.ts). */
+type Keys = { SESSION_SECRET?: string; OAUTH_KV?: unknown }
+
+// Whether a grant has enough life left to hand to a command. One command may
+// run for {@link TIMEOUT}, so a grant with less than that left is one that
+// would die under the command holding it — mint a fresh one instead.
+let alive = (g: Grant | null, now: number): g is Grant =>
+  !!g && g.exp * 1000 - now > TIMEOUT
 
 /**
- * The build session's sandbox, woken. The first call starts the clock; every
- * call after it rides the same container.
+ * The container's environment: the platform to talk to, and the grant that is
+ * the caller. `yaks` reads both by name and so does a `curl` written by hand,
+ * so a command in the sandbox reaches the same tools the person's own agent
+ * has — as the person, narrowed to this space, and no longer than the
+ * container lives ({@link LIFE}).
+ *
+ * ONE GRANT PER CONTAINER, not one per command: the ledger row (grants.ts
+ * `wear`) is what makes the second wake say the same grant as the first, since
+ * the token itself is kept nowhere and re-derived from what the ledger holds.
+ * A grant revoked by hand (tools.ts `grant`) is gone from the ledger, so the
+ * next wake mints rather than saying a dead one again.
+ *
+ * Nothing to sign with — no secret, no KV, which is every probe and every
+ * test — is an EMPTY environment rather than a refusal: the workbench still
+ * compiles, and `yaks` inside it says it is not signed in.
+ */
+export let signed = async (
+  env: Keys,
+  space: Space,
+  person: string,
+  now = Date.now(),
+): Promise<Record<string, string>> => {
+  let book = ledger(env.OAUTH_KV)
+  let secret = env.SESSION_SECRET
+  if (!book || !secret) return {}
+  let holder = named(space)
+  let was = await book.wearing(holder)
+  // Only this caller's own: a container woken by somebody else earlier is
+  // still one container, and the person running commands in it now is who its
+  // commands must speak as.
+  let has = was?.person == person ? await book.held(was.person, was.id) : null
+  if (alive(has, now)) {
+    return { YAKS_TOKEN: await tokenOf(has, secret), YAKS_HOST: HOST }
+  }
+  let { grant, token } = await mint(secret, book, {
+    person,
+    space: space.slug,
+    hours: LIFE,
+  }, now)
+  await book.wear(holder, grant, now)
+  return { YAKS_TOKEN: token, YAKS_HOST: HOST }
+}
+
+// The grant the container was wearing, taken back. Telemetry rather than a
+// failure, like the destroy it rides with: the grant dies of old age anyway,
+// and a container nobody could revoke for is not a reason to fail the caller
+// who was closing their space.
+let bared = async (env: Keys, space: Space) => {
+  try {
+    let book = ledger(env.OAUTH_KV)
+    if (!book) return
+    let holder = named(space)
+    let was = await book.wearing(holder)
+    if (!was) return
+    await book.drop(was.person, was.id)
+    await book.bare(holder)
+  } catch (e) {
+    console.error('yak: sandbox grant would not go', space.slug, e)
+  }
+}
+
+/**
+ * The build session's sandbox, woken and signed in as the caller. The first
+ * call starts the clock; every call after it rides the same container.
  *
  * ```ts
- * let box = boxOf(env, space, spend)
+ * let box = boxOf(env, space, person, spend)
  * await box.exec('cargo build --release --target wasm32-unknown-unknown')
  * ```
  */
 export let boxOf = (
-  env: { SANDBOX?: Sandboxes },
+  env: { SANDBOX?: Sandboxes } & Keys,
   space: Space,
+  person: string,
   spend: Spend,
   now = Date.now,
 ): Box => {
@@ -162,7 +265,26 @@ export let boxOf = (
       console.error('yak: sandbox would not take a sleep', space.slug, e)
     )
   }
-  return box
+  // Named rather than spread: the stub is a Durable Object proxy, and what a
+  // proxy answers is its methods, never its own properties.
+  return {
+    // The grant rides HERE — the SDK's per-invocation env, awaited by the
+    // first command and handed to every one after it — rather than
+    // `setEnvVars`, which reaches the container by exporting the token into a
+    // shell where an `echo` would put it in the transcript.
+    exec: async (cmd, opts) =>
+      await box.exec(cmd, {
+        ...opts,
+        env: {
+          ...await (spend.signing ??= signed(env, space, person)),
+          ...opts?.env,
+        },
+      }),
+    writeFile: (path, content, opts) => box.writeFile(path, content, opts),
+    readFile: (path, opts) => box.readFile(path, opts),
+    destroy: () => box.destroy(),
+    setSleepAfter: (after) => box.setSleepAfter?.(after),
+  }
 }
 
 /**
@@ -176,7 +298,7 @@ export let boxOf = (
  * what `/privacy` says goes with the space.
  */
 export let destroyed = async (
-  env: { SANDBOX?: Sandboxes },
+  env: { SANDBOX?: Sandboxes } & Keys,
   space: Space,
 ) => {
   if (!env.SANDBOX) return false
@@ -185,6 +307,11 @@ export let destroyed = async (
   } catch (e) {
     console.error('yak: sandbox would not go', space.slug, e)
   }
+  // And the grant it was wearing goes with it: a token that outlived its
+  // container is a bearer nobody is holding. It is read off the ledger rather
+  // than passed in, so erasing a space (erase.ts) revokes the grant a build
+  // minted in some other request just as a build's own end does.
+  await bared(env, space)
   return true
 }
 

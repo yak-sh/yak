@@ -65,12 +65,16 @@ export let ledger = (kv: unknown) => {
   let store = kv as Kv | undefined
   if (!store?.get) return null
   let key = (person: string, id: string) => `grant:${person}:${id}`
+  // What a long-lived holder is signed in with, by the holder's own name.
+  let worn = (holder: string) => `wearing:${holder}`
+  // A minute past the token's own death — KV's own floor is a minute — so a
+  // clock that disagrees slightly reads a live token as live.
+  let ttl = (g: Grant, now: number) =>
+    Math.max(60, g.exp - Math.floor(now / 1000) + 60)
   return {
     keep: async (g: Grant, now = Date.now()) => {
       await store.put(key(g.person, g.id), JSON.stringify(g), {
-        // A minute past the token's own death — KV's own floor is a minute —
-        // so a clock that disagrees slightly reads a live token as live.
-        expirationTtl: Math.max(60, g.exp - Math.floor(now / 1000) + 60),
+        expirationTtl: ttl(g, now),
       })
     },
     held: async (person: string, id: string): Promise<Grant | null> =>
@@ -82,8 +86,37 @@ export let ledger = (kv: unknown) => {
     drop: async (person: string, id: string) => {
       await store.delete(key(person, id))
     },
+    // WHICH grant a long-lived holder is wearing — one build container
+    // (sandbox.ts). The token is answered once and kept nowhere, so this row
+    // is not the token: it is whose grant and which one, which is enough for
+    // the holder's next wake to say the same grant again, and enough for
+    // whoever ends the holder to take it back without having minted it. It
+    // expires with the grant it names.
+    wear: async (holder: string, g: Grant, now = Date.now()) => {
+      await store.put(worn(holder), `${g.person}:${g.id}`, {
+        expirationTtl: ttl(g, now),
+      })
+    },
+    wearing: async (holder: string) => {
+      let said = await store.get(worn(holder))
+      let cut = said?.indexOf(':') ?? -1
+      return cut < 0
+        ? null
+        : { person: said!.slice(0, cut), id: said!.slice(cut + 1) }
+    },
+    bare: async (holder: string) => {
+      await store.delete(worn(holder))
+    },
   }
 }
+
+// The token that carries a grant. The seal is deterministic, so a grant still
+// on the books can be SAID again from what the ledger holds — which is what
+// lets one build container keep one grant across every command that wakes it
+// (sandbox.ts `worn`) instead of minting one per command. It is not a way to
+// recover a token somebody lost: nothing but this kernel can read the ledger.
+export let tokenOf = async (g: Grant, secret: string) =>
+  GRANT + await seal(g, secret)
 
 // A grant, and the token that carries it. The token is answered once and kept
 // nowhere: what the ledger holds is the grant, and the seal is what proves the
@@ -107,7 +140,7 @@ export let mint = async (
     exp: Math.floor(now / 1000) + Math.round(hours * 3600),
   }
   await book.keep(grant, now)
-  return { grant, token: GRANT + await seal(grant, secret) }
+  return { grant, token: await tokenOf(grant, secret) }
 }
 
 // The grant a bearer names, or null for anything else: a token written under

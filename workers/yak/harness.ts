@@ -137,6 +137,26 @@ export let bucket = () => {
   }
 }
 
+/**
+ * A KV namespace in a Map, in the one shape the kernel asks of `OAUTH_KV`
+ * (grants.ts, handoff.ts). TTL is not simulated: what expires here expires by
+ * the value's own `exp`, which a test moves by handing a clock in.
+ */
+export let kv = () => {
+  let held = new Map<string, string>()
+  return {
+    held,
+    get: (k: string) => Promise.resolve(held.get(k) ?? null),
+    put: (k: string, v: string) => (held.set(k, v), Promise.resolve()),
+    delete: (k: string) => (held.delete(k), Promise.resolve()),
+    list: ({ prefix }: { prefix: string }) =>
+      Promise.resolve({
+        keys: [...held.keys()].filter((k) => k.startsWith(prefix))
+          .map((name) => ({ name })),
+      }),
+  }
+}
+
 /** One command, as the stand-in sandbox was told to answer it. */
 export type Ran = { stdout?: string; stderr?: string; exitCode?: number }
 
@@ -152,12 +172,18 @@ export type Ran = { stdout?: string; stderr?: string; exitCode?: number }
  */
 export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
   let ran: string[] = []
+  // The environment each command was handed (sandbox.ts `signed`), in order.
+  let env: Record<string, string>[] = []
   let files = new Map<string, string>()
   let alive = new Set<string>()
   let box = (name: string) => ({
-    exec: (cmd: string, opts?: { cwd?: string; timeout?: number }) => {
+    exec: (
+      cmd: string,
+      opts?: { cwd?: string; timeout?: number; env?: Record<string, string> },
+    ) => {
       alive.add(name)
       ran.push(cmd)
+      env.push(opts?.env ?? {})
       let said = answer(cmd) ?? {}
       return Promise.resolve({
         stdout: said.stdout ?? '',
@@ -185,6 +211,7 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
   })
   return {
     ran,
+    env,
     files,
     alive,
     // `getSandbox` addresses one by name off the namespace; nothing here
@@ -227,6 +254,9 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
   let env = {
     SESSION_SECRET: secret,
     BLOBS: files.r2,
+    // The grants ledger (grants.ts): what a CLI token and the build sandbox's
+    // own sign-in are written down in.
+    OAUTH_KV: kv(),
     ASSETS: {
       fetch: async (req: Request) =>
         new Response(

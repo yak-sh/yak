@@ -1150,7 +1150,7 @@ let bench = async <T>(
   body: (box: Box) => Promise<T>,
 ): Promise<T> => {
   let spend = ctx.spend ?? spending()
-  let box = boxOf(ctx.env, space, spend)
+  let box = boxOf(ctx.env, space, ctx.person, spend)
   try {
     return await body(box)
   } finally {
@@ -1663,7 +1663,10 @@ export let TOOLS: Tool[] = [
       'something. Write the source with sandbox_write, build it here, then ' +
       'sandbox_ship the artifact into the app. An app needs none of this — ' +
       'html, css and js run as they are, so reach for the sandbox only when ' +
-      'something must be COMPILED. The container is metered: every second it ' +
+      'something must be COMPILED. It is signed in as the person: `yaks` is ' +
+      'installed and $YAKS_TOKEN and $YAKS_HOST are set, so `yaks <tool>` ' +
+      'and curl reach these same tools from inside a script, and the token ' +
+      'dies with the container. The container is metered: every second it ' +
       `is awake is charged to the space, and one build gets ${BUDGET} of ` +
       'them, so plan the build and run it once rather than poking at it. It ' +
       'is destroyed when the build ends, and everything in it with it.',

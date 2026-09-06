@@ -507,6 +507,43 @@ with it, so what serves is always what the files say. A deploy is also what a
 rollback replays: `app_rollback` re-uploads the `worker.js` that version pinned,
 so putting an app back puts its code back too.
 
+## The build sandbox is signed in as you
+
+Some code has to be compiled before a browser can run it — Rust to WebAssembly,
+a generator, a minifier — and `sandbox_exec` runs it in a Linux container of the
+space's own, with a Rust toolchain, `wasm32-unknown-unknown`, `wasm-bindgen` and
+`wasm-opt` already in it.
+
+That container is **signed in as you**. Two variables are set in every command's
+environment, and the `yaks` CLI is installed:
+
+    YAKS_TOKEN   a grant — you, narrowed to this space
+    YAKS_HOST    https://yaks.app
+
+So a build script reaches the same tools your agent has, as you:
+
+    yaks app_list
+    yaks graph_query --q '.recipe!'
+    yaks apply @rows.ndjson
+
+`yaks <tool>` is every tool this connector lists — it reads the list at run
+time, so it cannot drift — and `yaks apply` streams a file of NDJSON bundles
+into the graph 50 at a time. `curl` reaches the same door if you would rather
+write the JSON-RPC yourself:
+
+    curl -sS "$YAKS_HOST/mcp" \
+      -H "authorization: Bearer $YAKS_TOKEN" \
+      -H 'content-type: application/json' \
+      -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+           {"name":"app_list","arguments":{}}}'
+
+The grant is minted when the container wakes and **dies with the container** —
+it is taken back the moment the sandbox is destroyed, and it expires by itself
+soon after the sandbox would have slept. It is never more than you are: it
+carries no permission of its own, only your membership, and only in this space.
+Nothing else about it needs handling — do not print it, and do not write it into
+a file the app serves.
+
 ---
 
 The whole guide: <https://yaks.app/guide.md>

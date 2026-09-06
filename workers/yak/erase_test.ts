@@ -187,7 +187,7 @@ Deno.test('a deleted space takes its conversation and its workbench', async () =
   // Something said to the builder, and a workbench woken under the same key.
   await builder(space.eid).say(held, 'a recipe box please')
   assertEquals(builder(space.eid).said().length, 2)
-  await boxOf(env, space, spending()).exec('cargo build')
+  await boxOf(env, space, ADA, spending()).exec('cargo build')
   assertEquals([...box.alive], [`build-${space.eid}`])
 
   await erase(env, dir, await census(dir, space), who)
