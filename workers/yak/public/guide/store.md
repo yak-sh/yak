@@ -348,15 +348,37 @@ the page is simpler, and it is not data anyone can change.
 
 Data that arrives LATER is `store_load`, which is the same reading of the same
 kind of file, asked for on purpose: `store_load(app, path)` writes one JSON file
-already in the app — `data/cities.json` — or every `*.json` under a folder you
-name, into the store now, as you. It is one batch, in filename order, aliases
-resolving across the files, and a refusal names the file and the entry exactly
-as a seed's does; unlike a seed there is no once-only mark, so calling it again
-loads the file again, and it applies whatever the file says — a bundle carrying
-`tombstone: {}` deletes that entity, and the store decides whether you may. That
-makes an import two calls and nothing transcribed: `app_files(op: 'fetch')`
-writes the bytes of a public dataset into the app, and `store_load` puts them in
-the store, answering the files it read and how many entities it wrote.
+already in the app — `data/cities.json` — or every `*.json` and `*.csv` under a
+folder you name, into the store now, as you. It is one batch, in filename order,
+aliases resolving across the files, and a refusal names the file and the entry
+exactly as a seed's does; unlike a seed there is no once-only mark, so calling
+it again loads the file again, and it applies whatever the file says — a bundle
+carrying `tombstone: {}` deletes that entity, and the store decides whether you
+may. That makes an import two calls and nothing transcribed:
+`app_files(op: 'fetch')` writes the bytes of a public dataset into the app, and
+`store_load` puts them in the store, answering the files it read and how many
+entities it wrote.
+
+Most data a person already has is a SPREADSHEET, and a `.csv` is the same call
+with one more word: a spreadsheet does not say what a row is, so `as` does. Each
+row becomes one entity wearing that component, and the header row names its
+columns.
+
+    id,name,serves
+    lentil,Lentil soup,4
+    fig,Fig tart,8
+
+`store_load(app, path: 'data/menu.csv', as: 'recipe')` writes those two as
+`recipe{name, serves}`, each value coerced to the type `vocab.json` declares for
+the column — `serves` is a number, a `bool` takes true/yes/1 either way round,
+and an empty cell is left unsaid rather than written null. A `title` or `body`
+header lands in the row's `doc`; an `id` (or `alias`) column IS the row's eid,
+which is what makes loading the file again patch the same rows instead of
+minting a second set of them — leave it out and every load mints new entities. A
+header the component has no column for is refused by name: rename it with
+`map {"Serves how many": "serves"}`, or declare the column in `vocab.json`. A
+cell that will not coerce is refused naming the row and the header, and the
+whole file is one batch, exactly as a JSON load is.
 
 ## The doors underneath
 

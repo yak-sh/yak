@@ -101,6 +101,7 @@
     "postal-mime": "npm:postal-mime@3.0.0",
     "sucrase": "npm:sucrase@^3.35.0",
     "@std/assert": "jsr:@std/assert@^1.0.0",
+    "@std/csv": "jsr:@std/csv@^1.0.6",
     "ajv": "npm:ajv@^8.17.1",
     "@cloudflare/sandbox": "npm:@cloudflare/sandbox@0.12.9",
     "@cloudflare/workers-oauth-provider": "npm:@cloudflare/workers-oauth-provider@0.10.3",

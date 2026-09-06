@@ -77,13 +77,15 @@ Deno.test('an alias minted in one file is the batch the next one joins', async (
 
 // The other caller of the same reading: store_load, which names its files by a
 // path instead of by `seedy` (T-34392).
-Deno.test('a load path names one file, or every *.json under a folder', () => {
+Deno.test('a load path names one file, or the data under a folder', () => {
   for (
     let [path, file] of [
       ['data/cities.json', 'data/cities.json'],
       ['data', 'data/cities.json'],
       ['data/', 'data/one.json'],
       ['/data', 'data/deep/two.json'],
+      ['data', 'data/cities.csv'],
+      ['data/cities.csv', 'data/cities.csv'],
     ]
   ) assert(asked(path, file), `${path} ← ${file}`)
   for (
@@ -116,6 +118,23 @@ Deno.test('a load is one batch too, whatever chose the files', async () => {
   assertEquals(got.length, 1)
   assertEquals(got[0].check, false)
   assertEquals(got[0].batch.length, 2)
+})
+
+// A spreadsheet is read the same way and takes its place in the same order —
+// what one row becomes is csv.ts's, and csv_test.ts holds that.
+Deno.test('a CSV among the files is rows of the component `as` names', () => {
+  let all = loaded([
+    { path: 'data/02-menu.csv', text: 'id,serves\nsoup,4\n' },
+    file('data/01-places.json', [one('$here', 'Here')]),
+  ], { as: 'recipe', cols: { serves: 'number' } })
+  assertEquals(all.map((s) => [s.file, s.index]), [
+    ['data/01-places.json', 0],
+    ['data/02-menu.csv', 0],
+  ])
+  assertEquals(all[1].bundle, {
+    entity: { eid: 'soup' },
+    recipe: { serves: 4 },
+  })
 })
 
 Deno.test('an app with no seed writes nothing at all', async () => {

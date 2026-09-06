@@ -4821,6 +4821,7 @@ slow('store_load writes a file already in the app into its store', async () => {
     await k.stop()
   }
 })
+
 // The token that signs a terminal in (grants.ts, T-34385): the connector mints
 // it, the same door takes it as the same person, `about` says who is holding
 // it and until when, a grant cannot mint another, and revoking it shuts the
@@ -4897,3 +4898,81 @@ slow(
     }
   },
 )
+
+// The spreadsheet half (csv.ts, T-34393): `as` is what a row IS, the headers
+// are its columns, and the id column is what makes the SECOND load patch the
+// same two rows rather than mint two more.
+slow('store_load reads a CSV as rows of one component', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    await agent.tool('app_new', { slug: 'kitchen', title: 'Kitchen' })
+    let app = { app: 'kitchen' }
+    await agent.tool('app_files', {
+      ...app,
+      files: [
+        { path: 'index.html', content: '<!doctype html><h1>Kitchen' },
+        {
+          path: 'vocab.json',
+          content: '{"recipe":{"name":"text","serves":"number",' +
+            '"vegan":"bool"}}',
+        },
+        // As a spreadsheet writes one: a BOM, CRLF, a quoted comma, and a
+        // header nothing matches until `map` renames it.
+        {
+          path: 'data/menu.csv',
+          content: '﻿id,name,Serves how many,vegan,title\r\n' +
+            'lentil,"Lentil, soup",4,yes,Lentil soup\r\n' +
+            'fig,Fig tart,8,no,Fig tart\r\n',
+        },
+      ],
+    })
+    await agent.tool('app_deploy', app)
+    let load = (args: Record<string, unknown> = {}) =>
+      agent.tool('store_load', {
+        ...app,
+        path: 'data/menu.csv',
+        as: 'recipe',
+        map: { 'Serves how many': 'serves' },
+        ...args,
+      })
+    assertStringIncludes(await load(), 'loaded 2 entities into')
+    let recipes = async () =>
+      (JSON.parse(await agent.tool('graph_query', { q: '.recipe!' })) as {
+        entity: { eid: string }
+        recipe: { name: string; serves: number; vegan: number }
+      }[]).sort((a, b) => a.recipe.serves - b.recipe.serves)
+    let [soup, tart] = await recipes()
+    // `yes` coerced to a boolean, which a store keeps in an integer column and
+    // reads back as one — the same 1 a JSON load's `true` writes.
+    assertEquals(soup.recipe, { name: 'Lentil, soup', serves: 4, vegan: 1 })
+    assertEquals(tart.recipe.vegan, 0)
+    // The `title` header is the row's doc, not the recipe's own word.
+    assertEquals(
+      (JSON.parse(await agent.tool('graph_query', { q: '.doc.title!' })) as {
+        doc: { title: string }
+      }[]).map((r) => r.doc.title).sort(),
+      ['Fig tart', 'Lentil soup'],
+    )
+    // Again: the id column named these two entities, so the second load
+    // patches them where a `$alias` would have minted two more.
+    assertStringIncludes(await load(), 'loaded 2 entities into')
+    let again = await recipes()
+    assertEquals(again.length, 2)
+    assertEquals(again[0].entity.eid, soup.entity.eid)
+
+    // A header the component has no column for names itself, and says the
+    // two ways out.
+    let why = (await assertRejects(() => load({ map: {} }), Error)).message
+    assertStringIncludes(why, '"Serves how many" is not a column of recipe')
+    assertStringIncludes(why, 'recipe takes name, serves, vegan')
+    // And a word no store says is refused before a byte is read.
+    assertStringIncludes(
+      (await assertRejects(() => load({ as: 'dish' }), Error)).message,
+      'as: dish is not a component',
+    )
+  } finally {
+    await k.stop()
+  }
+})

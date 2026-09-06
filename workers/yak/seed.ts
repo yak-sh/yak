@@ -20,8 +20,11 @@
 // rest — the order, the aliases across files, the file a refusal is blamed on —
 // is what `store_load` applies on demand out of any path in the app (tools.ts,
 // T-34392), so a dataset already written there goes into the store without
-// being a seed at all.
+// being a seed at all. A `.csv` at that path is the same reading of a
+// spreadsheet — one row per bundle, once the caller has said which component a
+// row is (csv.ts, T-34393).
 import type { Bundle } from '@yaks/graph'
+import { type Sheet, sheet } from './csv.ts'
 
 /** A file the app is seeded from: `seed.json` beside index.html, or any
  * `*.json` in a `seed/` folder beside it. */
@@ -29,13 +32,17 @@ export let seedy = (path: string) =>
   path == 'seed.json' ||
   (path.startsWith('seed/') && path.endsWith('.json'))
 
+/** What a folder holds that this reads: bundles, or a spreadsheet (csv.ts). */
+let DATA = ['.json', '.csv']
+
 /** Whether `file` is one a load `path` names: the file itself, or any `*.json`
- * under it when the path is a folder. A path naming something that is not JSON
- * still matches, and the parser refuses it in its own name. */
+ * or `*.csv` under it when the path is a folder. A path naming something that
+ * is neither still matches, and the parser refuses it in its own name. */
 export let asked = (path: string, file: string) => {
   let p = path.replace(/^\/+|\/+$/g, '')
   return p != '' &&
-    (file == p || (file.startsWith(`${p}/`) && file.endsWith('.json')))
+    (file == p ||
+      (file.startsWith(`${p}/`) && DATA.some((e) => file.endsWith(e))))
 }
 
 /** One file of an app's, as this reads it. */
@@ -78,16 +85,17 @@ let read = (file: string, text: string): Bundle[] => {
  * by name, each file's bundles in the order it wrote them. `seed.json` sorts
  * before `seed/…` on its own — `.` is below `/` — so one file and a folder
  * together still have one order.
+ *
+ * A `.csv` is the same data written as a spreadsheet, and `as` is what turns
+ * one row into one bundle (csv.ts). A file that is neither is refused as the
+ * JSON it is not.
  */
-export let loaded = (files: Text[]): Sown[] =>
+export let loaded = (files: Text[], as?: Sheet): Sown[] =>
   [...files]
     .sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
     .flatMap((f) =>
-      read(f.path, f.text).map((bundle, index) => ({
-        file: f.path,
-        index,
-        bundle,
-      }))
+      f.path.endsWith('.csv') ? sheet(f.path, f.text, as) : read(f.path, f.text)
+        .map((bundle, index) => ({ file: f.path, index, bundle }))
     )
 
 /** Every bundle an app's SEED holds — the seed files among its own, read as

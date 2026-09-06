@@ -7,7 +7,9 @@
     "jsr:@std/assert@*": "1.0.19",
     "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/async@^1.5.0": "1.5.0",
+    "jsr:@std/bytes@^1.0.6": "1.0.6",
     "jsr:@std/collections@^1.1.3": "1.3.0",
+    "jsr:@std/csv@^1.0.6": "1.0.6",
     "jsr:@std/data-structures@^1.1.2": "1.1.2",
     "jsr:@std/encoding@1": "1.0.11",
     "jsr:@std/fmt@1": "1.0.10",
@@ -17,12 +19,15 @@
     "jsr:@std/path@1": "1.1.6",
     "jsr:@std/path@1.0": "1.0.9",
     "jsr:@std/path@^1.1.5": "1.1.6",
+    "jsr:@std/streams@^1.0.9": "1.1.2",
     "jsr:@std/testing@1": "1.0.20",
     "jsr:@std/toml@1": "1.0.11",
     "npm:@cloudflare/sandbox@0.12.9": "0.12.9",
     "npm:@cloudflare/workers-oauth-provider@0.10.3": "0.10.3",
     "npm:@cloudflare/workers-types@^4.20260702.1": "4.20260702.1",
     "npm:@huggingface/transformers@3": "3.8.1",
+    "npm:@jsr/std__csv@1.0.6": "1.0.6",
+    "npm:@modelcontextprotocol/sdk@1.29.0": "1.29.0_zod@3.25.76",
     "npm:@modelcontextprotocol/sdk@^1.12.0": "1.29.0_zod@3.25.76",
     "npm:@modelcontextprotocol/sdk@^1.29.0": "1.29.0_zod@3.25.76",
     "npm:@preact/signals-core@^1.14.0": "1.14.4",
@@ -41,6 +46,7 @@
     "npm:preact@^10.29.1": "10.29.7",
     "npm:sucrase@^3.35.0": "3.35.1",
     "npm:zod-to-json-schema@^3.25.1": "3.25.2_zod@3.25.76",
+    "npm:zod@3.25.76": "3.25.76",
     "npm:zod@^3.24.0": "3.25.76"
   },
   "jsr": {
@@ -72,8 +78,17 @@
     "@std/async@1.5.0": {
       "integrity": "4c1f22d287a17ad7d8643b1952bc5a4d21e5d8b68dc8c20d8268eecc69096e82"
     },
+    "@std/bytes@1.0.6": {
+      "integrity": "f6ac6adbd8ccd99314045f5703e23af0a68d7f7e58364b47d2c7f408aeb5820a"
+    },
     "@std/collections@1.3.0": {
       "integrity": "eb36b43d784477ea0b476483ac034a14bdd182aff921c812ecf662a1fcef9498"
+    },
+    "@std/csv@1.0.6": {
+      "integrity": "52ef0e62799a0028d278fa04762f17f9bd263fad9a8e7f98c14fbd371d62d9fd",
+      "dependencies": [
+        "jsr:@std/streams"
+      ]
     },
     "@std/data-structures@1.1.2": {
       "integrity": "2471377c9e0051f9ec34e57d0ebd0ad133a5a889677446ec6ba9938e4e102918"
@@ -101,6 +116,12 @@
       "integrity": "c68485c2a4dfbb5ae3cc74fae4e8c4e5d874cf8a8ed12927917235c758b46cbe",
       "dependencies": [
         "jsr:@std/internal@^1.0.14"
+      ]
+    },
+    "@std/streams@1.1.2": {
+      "integrity": "0249bf9b78a999f57032ca4d8e7ccaa57579090242640b35ddc948fbb745d3af",
+      "dependencies": [
+        "jsr:@std/bytes"
       ]
     },
     "@std/testing@1.0.20": {
@@ -340,6 +361,24 @@
         "@jridgewell/resolve-uri",
         "@jridgewell/sourcemap-codec"
       ]
+    },
+    "@jsr/std__bytes@1.0.6": {
+      "integrity": "sha512-St6yKggjFGhxS52IFLJWvkchRFbAKg2Xh8UxA4S1EGz7GJ2Ui+ssDDldj/w2c8vCxvl6qgR0HaYbKeFJNqujmA==",
+      "tarball": "https://npm.jsr.io/~/11/@jsr/std__bytes/1.0.6.tgz"
+    },
+    "@jsr/std__csv@1.0.6": {
+      "integrity": "sha512-9n/SZzjolPQ907gUPksQU3EFURwRl4GA9V6MylA8hpSkpxhcj6J98zDpn9EmDqgE2A4L9MnlUvFhRpeWl+Y/ZQ==",
+      "dependencies": [
+        "@jsr/std__streams"
+      ],
+      "tarball": "https://npm.jsr.io/~/11/@jsr/std__csv/1.0.6.tgz"
+    },
+    "@jsr/std__streams@1.1.2": {
+      "integrity": "sha512-TNg+Mr/vE2Wg+JDdZpVj9umEyzcmSAOtcp0ildlyVCjHy0/fJ2BJZgO8PQXA/SwJOchvKLaMafZzfFkm9PO13A==",
+      "dependencies": [
+        "@jsr/std__bytes"
+      ],
+      "tarball": "https://npm.jsr.io/~/11/@jsr/std__streams/1.1.2.tgz"
     },
     "@modelcontextprotocol/sdk@1.29.0_zod@3.25.76": {
       "integrity": "sha512-zo37mZA9hJWpULgkRpowewez1y6ML5GsXJPY8FI0tBBCd77HEvza4jDqRKOXgHNn867PVGCyTdzqpz0izu5ZjQ==",
@@ -1343,6 +1382,7 @@
     "dependencies": [
       "jsr:@db/sqlite@0.13.0",
       "jsr:@std/assert@1",
+      "jsr:@std/csv@^1.0.6",
       "jsr:@std/testing@1",
       "jsr:@std/toml@1",
       "npm:@cloudflare/sandbox@0.12.9",
@@ -1537,6 +1577,7 @@
           "dependencies": [
             "npm:@cloudflare/sandbox@0.12.9",
             "npm:@cloudflare/workers-oauth-provider@0.10.3",
+            "npm:@jsr/std__csv@1.0.6",
             "npm:@modelcontextprotocol/sdk@1.29.0",
             "npm:postal-mime@3.0.0",
             "npm:zod@3.25.76"

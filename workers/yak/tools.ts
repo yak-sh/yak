@@ -50,7 +50,8 @@ import {
 import type { EntityLiteral } from '../../src/mutation.ts'
 import { appAccess } from '../../src/types.ts'
 import { VERSION } from '../../src/version.ts'
-import { appDoc } from './vocab.ts'
+import { appDoc, coreDocs, shortOf, TEACH } from './vocab.ts'
+import type { Cols, Sheet } from './csv.ts'
 import { mimeOf, purged } from './files.ts'
 import {
   type Access,
@@ -642,6 +643,47 @@ let applying =
       return body
     }
   }
+
+// `map {header: column}` as one argument: its SHAPE, checked once, so a model
+// that sent a list or a nested object hears that rather than a header that
+// silently went nowhere. Whether a mapped name is a column is csv.ts's, which
+// is where the header it came from is still known.
+let mapping = (v: unknown): Record<string, string> | undefined => {
+  if (v == null) return undefined
+  if (typeof v != 'object' || Array.isArray(v)) {
+    throw new Error('map: {"Serves how many": "serves"}')
+  }
+  return Object.fromEntries(
+    Object.entries(v as Record<string, unknown>).map(([header, col]) => [
+      header,
+      text(col, `map[${JSON.stringify(header)}]`),
+    ]),
+  )
+}
+
+// What a CSV is read AS (csv.ts): the component a row becomes, and the type
+// each of its columns takes. The words are the platform's own plus this app's,
+// in the five-scalar short form a store answers its own words in (vocab.ts
+// `shortOf`) — an app declares scalars, and a core column that is a reference
+// or a closed set holds the text a cell has anyway.
+let sheetOf = async (
+  store: Door,
+  as: string,
+  map?: Record<string, string>,
+): Promise<Sheet> => {
+  let mine = shortOf(appDoc(await answer(await store('/vocab'))))
+  let words: Record<string, Cols> = {}
+  for (let doc of coreDocs) Object.assign(words, shortOf(doc))
+  Object.assign(words, mine)
+  if (!(as in words)) {
+    throw new Error(
+      `as: ${as} is not a component — this app says ${
+        Object.keys(mine).sort().join(', ') || 'none of its own yet'
+      }, beside the platform's own words (doc, task, comment, …)${TEACH}`,
+    )
+  }
+  return { as, cols: words[as], map }
+}
 
 // The head a write into an app's store wears when the platform makes it for
 // somebody: the caller vouched for, and their name, so the rows carry their
@@ -1881,31 +1923,51 @@ export let TOOLS: Tool[] = [
     title: 'Load a data file into the store',
     destructive: false,
     description:
-      "Write a JSON file the app already carries into the app's store, now. " +
+      "Write a data file the app already carries into the app's store, now. " +
       'path is one file — data/cities.json — or a folder, and then every ' +
-      '*.json under it goes in. Each file holds the same list of bundles a ' +
-      'seed.json does and graph_apply takes: [{"entity": {"eid": "$a"}, ' +
-      '"doc": {"title": "…"}}]. Together they are ONE batch, read in filename ' +
-      'order, so an alias minted in one file resolves in the next; if the ' +
-      'store refuses a bundle nothing is written and the refusal names the ' +
-      'file and the entry that caused it. This is how a big dataset arrives ' +
-      'without being typed into a call: app_files(op: fetch) writes the ' +
-      'https body into the app, store_load puts it in the store — two calls. ' +
-      'Unlike a seed it is not once-only: call it whenever, and it patches ' +
-      'and adds as the caller, so the rows carry your byline. It applies ' +
-      'whatever the file says, deletes included — a bundle with $delete: ' +
-      'true (or tombstone: {}) deletes that entity, and the store is the ' +
-      'judge of whether you may. A bundle naming an eid patches that row; ' +
-      'one naming a $alias mints a new entity each run.',
+      '*.json and *.csv under it goes in. A JSON file holds the same list of ' +
+      'bundles a seed.json does and graph_apply takes: [{"entity": {"eid": ' +
+      '"$a"}, "doc": {"title": "…"}}]. A CSV is a spreadsheet, and `as` names ' +
+      'the component ONE ROW becomes — as: "city" with headers name,country ' +
+      'writes city{name, country} per row, values coerced to the column ' +
+      "types the vocabulary declares; `title` and `body` land in the row's " +
+      "doc, an `id` (or `alias`) column IS the row's eid so loading the file " +
+      'again patches those rows instead of duplicating them, and map ' +
+      '{"Serves how many": "serves"} renames a header that does not match a ' +
+      'column. A header naming nothing is refused, as is a cell that will ' +
+      'not coerce, both naming the row and the header. Together the files ' +
+      'are ONE batch, read in filename order, so an alias minted in one file ' +
+      'resolves in the next; if the store refuses a bundle nothing is ' +
+      'written and the refusal names the file and the entry that caused it. ' +
+      'This is how a big dataset arrives without being typed into a call: ' +
+      'app_files(op: fetch) writes the https body into the app, store_load ' +
+      'puts it in the store — two calls. Unlike a seed it is not once-only: ' +
+      'call it whenever, and it patches and adds as the caller, so the rows ' +
+      'carry your byline. It applies whatever the file says, deletes ' +
+      'included — a bundle with $delete: true (or tombstone: {}) deletes ' +
+      'that entity, and the store is the judge of whether you may. A bundle ' +
+      'naming an eid patches that row; one naming a $alias mints a new ' +
+      'entity each run.',
     input: {
       type: 'object',
       properties: {
         space: SPACE,
         app: APP,
         path: str(
-          'the file to load — data/cities.json — or a folder, which loads ' +
-            'every *.json under it',
+          'the file to load — data/cities.json, data/cities.csv — or a ' +
+            'folder, which loads every *.json and *.csv under it',
         ),
+        as: str(
+          'for a CSV: the component one row becomes — "city", or a platform ' +
+            'word like "task". Its columns are the headers',
+        ),
+        map: {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+          description:
+            'headers that do not match a column, renamed: {"Serves how ' +
+            'many": "serves"}. A header that matches needs no entry',
+        },
       },
       required: ['app', 'path'],
     },
@@ -1925,7 +1987,12 @@ export let TOOLS: Tool[] = [
         )
       }
       let all = await load(
-        loaded(files),
+        loaded(
+          files,
+          args.as == null
+            ? undefined
+            : await sheetOf(store, text(args.as, 'as'), mapping(args.map)),
+        ),
         applying(store, await byCaller(ctx, who)),
       )
       let names = [...new Set(all.map((s) => s.file))]
