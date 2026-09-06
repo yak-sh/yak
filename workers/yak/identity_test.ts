@@ -1108,8 +1108,9 @@ slow(
         page,
         'Leave <b>OAuth Client ID</b> and <b>OAuth Client Secret</b> empty',
       )
-      // And ChatGPT is given the address that answers the challenge (T-34416),
-      // never the lazy one.
+      // And the address for a client that cannot do optional authentication
+      // is still written down (T-34416), as the sentence it now is: everybody
+      // is handed the plain door, which does mixed auth (T-34465).
       assertStringIncludes(page, 'https://yaks.app/mcp?auth=required')
     } finally {
       await k.stop()

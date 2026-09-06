@@ -1085,26 +1085,26 @@ let AGENTS = [
     key: 'chatgpt',
     tab: 'ChatGPT',
     title: 'ChatGPT — on the web',
-    // The longer address, and only here (T-34416): ChatGPT decides whether a
-    // server needs signing in by calling it with nobody signed in, so it is
-    // the one client that must be given `?auth=required`. Step one hands it
-    // over whole, which is the point of copying the URL before leaving.
-    url: MCP_ASK,
     steps: [
       'Open <a href="https://chatgpt.com/plugins">chatgpt.com/plugins</a>. ' +
       'If it is not there, turn on <b>Developer mode</b> first, under ' +
       '<b>Settings</b> → <b>Connectors</b> → <b>Advanced settings</b>.',
-      'Press <b>Create</b>, and paste that URL as the MCP server URL — all ' +
-      'of it, the <code>?auth=required</code> included.',
+      'Press <b>Create</b>, and paste that URL as the MCP server URL.',
       'Give it the name, description and icon above: this form asks for all ' +
       'three and reads none of them off the server.',
       'Create it and sign in when it asks. It appears under <b>Developer ' +
       'mode</b> below the message box.',
     ],
-    note: 'Without <code>?auth=required</code> ChatGPT connects as a ' +
-      'stranger and never offers you the sign-in. The web app, not the phone ' +
-      'one. On a Business or Enterprise workspace an admin may have to allow ' +
-      'developer mode first.',
+    // Mixed auth is the path (T-34465): this door lists its whole surface to a
+    // stranger and says on each tool whether it wants a token, so ChatGPT asks
+    // for the sign-in the first time it reaches for one that does.
+    note: 'Mixed authentication works here too: the connector reads every ' +
+      'tool without signing in and asks you to sign in the first time it ' +
+      'uses one that needs it. If a client ever connects as a stranger and ' +
+      `never offers the sign-in, give it <code>${MCP_ASK}</code> instead — ` +
+      'the same door with the anonymous tools off. The web app, not the ' +
+      'phone one. On a Business or Enterprise workspace an admin may have to ' +
+      'allow developer mode first.',
     oauth: 'Set <b>Authentication</b> to <b>OAuth</b> — not "no ' +
       'authentication", and not an API key, which we do not take. ' + ID +
       ' ' + URLS,
@@ -1149,7 +1149,10 @@ let AGENTS = [
       'If it asks what to call the server, the name and description above ' +
       'are what this one answers to.',
     ],
-    note: '',
+    note: 'A client that cannot do optional authentication — it calls with ' +
+      'no credential, reads the answer as "no sign-in needed" and never ' +
+      `offers you one — takes <code>${MCP_ASK}</code> instead, the same door ` +
+      'with the anonymous tools off.',
     oauth:
       `Anything that reads ${
         at('/.well-known/oauth-authorization-server')
@@ -1187,7 +1190,7 @@ ${
 ${
   AGENTS.map((a) =>
     `<section class="Card Tabs_Panel Tabs_Panel-${a.key}"><h2>${a.title}</h2>
-<ol><li>Copy the URL:${copyable(a.url ?? MCP, 'the MCP URL')}</li>${
+<ol><li>Copy the URL:${copyable(MCP, 'the MCP URL')}</li>${
       a.steps.map((s) => `<li>${s}</li>`).join('')
     }</ol>
 ${a.note ? `<p class="Note">${a.note}</p>` : ''}

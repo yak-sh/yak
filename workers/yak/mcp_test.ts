@@ -1465,7 +1465,8 @@ slow('the door before anyone signs in', async () => {
     assertEquals(init.instructions.includes('app_new'), false)
     assertEquals(await anon.call('ping'), {})
 
-    // One tool, and it is the one that reads nothing.
+    // One tool a stranger may CALL, and it is the one that reads nothing —
+    // beside the menu of the ones they may not (T-34465).
     let schemes = async (of: typeof anon) =>
       Object.fromEntries(
         ((await of.call('tools/list')).tools as {
@@ -1479,7 +1480,20 @@ slow('the door before anyone signs in', async () => {
       annotations: Record<string, boolean>
       _meta?: { securitySchemes?: unknown }
     }[]
-    assertEquals(listed.map((t) => t.name), ['about'])
+    assertEquals(listed[0].name, 'about')
+    // And the menu behind it: every platform verb, listed but not callable,
+    // each saying `oauth2` — the tools that give a host something to offer
+    // the sign-in FOR (T-34465, mcp.ts MENU). Mixed auth is a list plus a
+    // refusal, and a list holding only the open tool is a connector that can
+    // never ask anybody to sign in.
+    assert(listed.length > 1, 'the menu, not the one open tool')
+    assert(listed.some((t) => t.name == 'app_new'), 'the verbs are on the menu')
+    for (let t of listed.slice(1)) {
+      assertEquals(t._meta?.securitySchemes, [{
+        type: 'oauth2',
+        scopes: ['graph'],
+      }], t.name)
+    }
     // It wears the same title and hints signed in and out (tools.ts lifts it
     // from preauth.ts): this is the list a directory reviewer sees first, and
     // a bare entry here reads as a door with no annotations at all.
@@ -1842,6 +1856,224 @@ slow('?auth=required answers the challenge a probing host needs', async () => {
     await k.stop()
   }
 })
+
+// The base64url a PKCE challenge is written in.
+let b64u = (b: ArrayBuffer) =>
+  btoa(String.fromCharCode(...new Uint8Array(b)))
+    .replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
+
+// MIXED AUTH, played through at plain `/mcp` in the order OpenAI documents it
+// (developers.openai.com/plugins/build/auth, read 2026-09-06) — owner,
+// 2026-09-06: "mixed auth is documented and should work correctly. chatgpt
+// will then prompt auth on the first auth-required tool use".
+//
+// The host connects with nobody signed in, lists the WHOLE surface, reads each
+// tool's `securitySchemes` to see which want a token, and offers the sign-in
+// the first time the person asks for one of those — the refusal carrying
+// `_meta['mcp/www_authenticate']` is what it draws that button from. Then the
+// half every OAuth client walks: the challenge to the two metadata documents,
+// dynamic registration as a public client, authorization code with PKCE, and
+// the exchange — which ChatGPT sends carrying a `client_secret` it was never
+// issued (T-34416), in the code grant exactly as in the refresh.
+//
+// One test rather than five because it is one sequence: every step here is
+// what the step before it handed over, and a break anywhere in it is a person
+// looking at a connector that will not connect.
+slow(
+  'mixed auth: a stranger reads the menu, then signs in for it',
+  async () => {
+    let k = await kernel()
+    try {
+      let say = async (
+        method: string,
+        params: unknown = {},
+        token?: string,
+      ) => {
+        let r = await k.at('yaks.app', '/mcp', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            accept: 'application/json, text/event-stream',
+            ...(token ? { authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+        })
+        return {
+          status: r.status,
+          said: r.headers.get('www-authenticate') ?? '',
+          body: await r.json(),
+        }
+      }
+
+      // 1. The probe. A host doing mixed auth opens with no credential, and
+      // being ANSWERED is what tells it this server has an anonymous surface.
+      let hello = await say('initialize', HELLO)
+      assertEquals(hello.status, 200)
+      facing(hello.body.result.serverInfo)
+
+      // 2. The menu. Every tool a stranger is shown says what it wants: `about`
+      // is `noauth` and callable now, the platform's verbs are `oauth2` and are
+      // the reason there is anything to sign in FOR. A list holding only what a
+      // stranger may call is a connector that can never ask them to sign in.
+      let listed = (await say('tools/list')).body.result.tools as {
+        name: string
+        _meta?: { securitySchemes?: { type: string; scopes?: string[] }[] }
+      }[]
+      let wants = new Map(listed.map((t) => [t.name, t._meta?.securitySchemes]))
+      for (let [name, schemes] of wants) {
+        assert(schemes?.length, `${name} declares nothing about signing in`)
+      }
+      assertEquals(wants.get('about'), [{ type: 'noauth' }])
+      assertEquals(wants.get('app_list'), [{
+        type: 'oauth2',
+        scopes: ['graph'],
+      }])
+      assertEquals(wants.get('app_new'), [{
+        type: 'oauth2',
+        scopes: ['graph'],
+      }])
+      assert(wants.size > 2, 'the whole menu, not the two open tools')
+      // And the open half is open: `about` answers a stranger.
+      let open = await say('tools/call', { name: 'about', arguments: {} })
+      assertEquals(open.status, 200)
+      assertEquals(open.body.result.isError, undefined)
+
+      // 3. The person asks for an app, so the host calls the tool that makes
+      // one — and the refusal is a tool RESULT carrying the challenge, which is
+      // the half ChatGPT reads to draw its sign-in button.
+      let asked = await say('tools/call', { name: 'app_list', arguments: {} })
+      assertEquals(asked.status, 401)
+      assertEquals(asked.body.result.isError, true)
+      let challenge = asked.body.result
+        ._meta['mcp/www_authenticate'][0] as string
+      assertMatch(challenge, /error="[^"]+", error_description="[^"]+"/)
+      let where = /resource_metadata="([^"]+)"/.exec(challenge)?.[1] ?? ''
+      assertEquals(
+        new URL(where).pathname,
+        '/.well-known/oauth-protected-resource/mcp',
+      )
+
+      // 4. The two metadata documents that challenge names, and the two things
+      // a public client checks before it starts: that it can name itself with
+      // no secret, and that S256 is offered.
+      let prm = await (await k.at('yaks.app', new URL(where).pathname)).json()
+      assertEquals(prm.scopes_supported, ['graph'])
+      assertEquals(prm.authorization_servers.length, 1)
+      let as = await (await k.at(
+        'yaks.app',
+        '/.well-known/oauth-authorization-server',
+      )).json()
+      assert(as.token_endpoint_auth_methods_supported.includes('none'))
+      assertEquals(as.code_challenge_methods_supported, ['S256'])
+
+      // 5. Registration, as the public client ChatGPT registers itself as: no
+      // secret is issued, and PKCE is what protects the code instead.
+      let back = 'https://probe.invalid/cb'
+      let reg = await k.at(
+        'yaks.app',
+        new URL(as.registration_endpoint).pathname,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            client_name: 'A mixed-auth host',
+            redirect_uris: [back],
+            token_endpoint_auth_method: 'none',
+            grant_types: ['authorization_code', 'refresh_token'],
+            response_types: ['code'],
+          }),
+        },
+      )
+      assertEquals(reg.status, 201)
+      let { client_id, client_secret } = await reg.json()
+      assert(client_id, 'a registered client')
+      assertEquals(client_secret, undefined, 'a public client holds no secret')
+
+      // 6. The person signs in and allows it: authorization code with PKCE.
+      let jeff = await signIn(k)
+      let verifier = crypto.randomUUID() + crypto.randomUUID()
+      let q = new URLSearchParams({
+        response_type: 'code',
+        client_id,
+        redirect_uri: back,
+        state: 'a-mixed-state',
+        scope: 'graph',
+        code_challenge: b64u(
+          await crypto.subtle.digest(
+            'SHA-256',
+            new TextEncoder().encode(verifier),
+          ),
+        ),
+        code_challenge_method: 'S256',
+      }).toString()
+      let granted = await k.at('yaks.app', '/oauth/allow', {
+        method: 'POST',
+        redirect: 'manual',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          cookie: jeff.cookie,
+        },
+        body: new URLSearchParams({ q }).toString(),
+      })
+      assertEquals(granted.status, 302)
+      let to = new URL(granted.headers.get('location') ?? '')
+      assertEquals(to.searchParams.get('state'), 'a-mixed-state')
+      let code = to.searchParams.get('code') ?? ''
+      assert(code, 'an authorization code')
+
+      // 7. The exchange, carrying a `client_secret` this client was never
+      // issued — which is what ChatGPT sends, on the code grant as on the
+      // refresh. Refusing it is the "your connection has expired" a person
+      // reads at the end of a flow that worked (T-34416).
+      let token = (fields: Record<string, string>) =>
+        k.at('yaks.app', new URL(as.token_endpoint).pathname, {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams(fields).toString(),
+        })
+      let first = await token({
+        grant_type: 'authorization_code',
+        code,
+        client_id,
+        client_secret: 'invented',
+        redirect_uri: back,
+        code_verifier: verifier,
+      })
+      assertEquals(first.status, 200, await first.clone().text())
+      let got = await first.json()
+      assert(got.access_token && got.refresh_token)
+
+      // 8. And the tool that was refused now answers: the sign-in the menu
+      // asked for is the whole of what was missing.
+      let served = await say(
+        'tools/call',
+        { name: 'app_list', arguments: {} },
+        got.access_token,
+      )
+      assertEquals(served.status, 200)
+      assertEquals(served.body.result.isError, undefined)
+
+      // 9. And it keeps answering: the refresh carries the invented secret too.
+      let next = await token({
+        grant_type: 'refresh_token',
+        refresh_token: got.refresh_token,
+        client_id,
+        client_secret: 'invented',
+      })
+      assertEquals(next.status, 200, await next.clone().text())
+      let again = await next.json()
+      let still = await say(
+        'tools/call',
+        { name: 'app_list', arguments: {} },
+        again.access_token,
+      )
+      assertEquals(still.status, 200)
+      assertEquals(still.body.result.isError, undefined)
+    } finally {
+      await k.stop()
+    }
+  },
+)
 
 // An app's OWN tools (T-32685): a tools.json beside vocab.json, planted by
 // the same deploy, called at the same door as `<app>__<tool>` — and doing

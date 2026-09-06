@@ -611,16 +611,15 @@ Deno.test('the connect page teaches one agent at a time', async () => {
   // that stays hidden until the script un-hides it. The words are written once,
   // in the span the button reads, never in an attribute of its own.
   assertEquals(count(html, '<li>Copy the URL:<span class="Copy">'), tabs.length)
-  // Four tabs and the card above them get the plain address; ChatGPT gets the
-  // longer one it needs (T-34416), and step one is where it is handed over.
+  // Every tab and the card above them get the SAME address (T-34465): mixed
+  // auth is documented and works here, so ChatGPT is given the plain door like
+  // everyone else, and `?auth=required` is left as a sentence for a client
+  // that cannot do optional authentication.
   assertEquals(
     count(html, '<span class="Pick">https://yaks.app/mcp</span>'),
-    tabs.length,
+    tabs.length + 1,
   )
-  assertStringIncludes(
-    html,
-    '<span class="Pick">https://yaks.app/mcp?auth=required</span>',
-  )
+  assertEquals(count(html, 'https://yaks.app/mcp?auth=required'), 2)
   assertEquals(count(html, 'hidden>Copy</button>'), tabs.length + 3)
   assertStringIncludes(
     html,

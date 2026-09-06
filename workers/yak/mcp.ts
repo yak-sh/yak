@@ -52,17 +52,22 @@
 // static assets — no person, no `Ctx`, nothing to read anybody's data with —
 // and everything it does not answer meets the same challenge as ever.
 //
+// MIXED AUTH is what that adds up to, and it is the path (T-34465): a stranger
+// is answered, is SHOWN the whole tool list with `securitySchemes` saying which
+// tools want a token (`MENU`), and is met with the challenge the moment one of
+// those is called — which is the sequence OpenAI documents and ChatGPT walks
+// (developers.openai.com/plugins/build/auth). The half that used to be missing
+// was the menu: a list holding only what a stranger may call gives the host
+// nothing to offer a sign-in FOR.
+//
 // And `?auth=required` is that same door with the pre-auth surface switched
-// off (T-34416), for a host that decides whether to sign in by probing
-// anonymously and reading the status. Mixed auth is a conversation — answer
-// what you can, challenge the rest — and a host that only asks once cannot
-// have it: ours answers 200, the host writes down "no auth", and the person
-// gets a connector holding `about` and no way to sign in. The address is the
-// lever, since the client is not ours to fix.
+// off (T-34416), kept for a host that cannot do optional auth at all — one
+// that probes anonymously, reads the 200 as "no sign-in needed" and never asks
+// again. The address is the lever, since a client like that is not ours to fix.
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { SetLevelRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
-import { mcp, roster, rosterVersion, type Security } from '@yaks/mcp'
+import { annotated, mcp, roster, rosterVersion, type Security } from '@yaks/mcp'
 import { VERSION } from '../../src/version.ts'
 import { answered, inputOf, reaching, searching } from './agent.ts'
 import * as dirPart from './directory.ts'
@@ -81,6 +86,7 @@ import {
   type Ctx,
   ERRORS_VIEW,
   inReach,
+  TOOLS,
   uiMeta,
   VIEW_MIME,
 } from './tools.ts'
@@ -150,6 +156,45 @@ let result = (id: unknown, result: unknown) =>
 // names (identity.ts `scopesSupported`). @yaks/mcp puts it on every tool it
 // lists that does not say its own — which `about` does, `noauth` (preauth.ts).
 let SIGNIN: Security[] = [{ type: 'oauth2', scopes: ['graph'] }]
+
+// What a stranger is SHOWN beside the one tool they may call (T-34465).
+// Mixed auth is a menu, not a smaller restaurant: the host lists the whole
+// surface with nobody signed in, reads `securitySchemes` to see which tools
+// want a token, and offers the sign-in the first time the person asks for one
+// of those (developers.openai.com/plugins/build/auth). Owner, 2026-09-06:
+// "mixed auth is documented and should work correctly. chatgpt will then
+// prompt auth on the first auth-required tool use." A list holding only what a
+// stranger may CALL is a connector that can never ask them to sign in — which
+// is the connector `about` and nothing else was.
+//
+// The platform's verbs are the menu (tools.ts TOOLS): every word of their
+// listing is the same for everybody, so they can be said without knowing who
+// is asking. The generic tier and an app's own tools are NOT here — their
+// schemas are derived from the vocabulary of the apps THIS caller reaches, and
+// there is no honest way to describe them to nobody. They arrive when signing
+// in moves the list, which this door already promises (`listChanged`).
+//
+// Nothing new is callable: a `tools/call` for any of these still meets
+// `refused` below, which is the runtime half the host draws its button from.
+// And a tool's `ui` meta is left off — a view is a page a signed-in person's
+// own answer draws in, and the stranger's resource list holds none of them.
+let MENU = TOOLS.filter((t) => !t.security).map((t) => ({
+  name: t.name,
+  title: t.title,
+  description: t.description,
+  inputSchema: t.input,
+  annotations: annotated(t),
+  _meta: { securitySchemes: SIGNIN },
+}))
+
+// The stranger's answer with that menu folded in. It is composed HERE rather
+// than in preauth.ts because preauth.ts holds nothing but the static assets on
+// purpose, and the menu is the tool table — this door is the one place that
+// has both.
+let offered = (method: string, open: unknown) =>
+  method == 'tools/list'
+    ? { tools: [...(open as { tools: unknown[] }).tools, ...MENU] }
+    : open
 
 // A refusal, said to a caller that named a JSON-RPC id. The status and the
 // `WWW-Authenticate` header are what they always were — the half every MCP
@@ -432,11 +477,11 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // The same door, told to skip the pre-auth surface: `?auth=required`
   // (T-34416). A host that decides whether a server has an authorization
   // server by PROBING it anonymously reads our 200 as "no auth" and never
-  // looks at `WWW-Authenticate`, so it lands the connector on the one tool a
-  // stranger gets and never offers to sign in — which is what ChatGPT does.
-  // The address is the lever because the client's behaviour is not ours to
-  // change: a host that cannot ask twice is given an address that only ever
-  // answers the challenge, and `/mcp` stays lazy for the hosts that can.
+  // looks at `WWW-Authenticate`, so it lands the connector on the tools a
+  // stranger gets and never offers to sign in. The address is the lever
+  // because the client's behaviour is not ours to change: a host that cannot
+  // ask twice is given an address that only ever answers the challenge, and
+  // `/mcp` stays lazy — and mixed — for the hosts that can (`MENU`).
   // A query rather than a second path so there is still ONE resource here —
   // one route, one `WWW-Authenticate`, one `/.well-known/…/mcp`, which the
   // challenge already builds from the pathname.
@@ -518,7 +563,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     let open = await answer(String(rpc.method), rpc.params ?? {}, {
       ASSETS: env.ASSETS,
     })
-    return open ? result(rpc.id, open) : refused(req, rpc.id)
+    return open
+      ? result(rpc.id, offered(String(rpc.method), open))
+      : refused(req, rpc.id)
   }
   // Fresh, every read: a tool answers about what a tool just wrote, and the
   // directory's read cache belongs to whichever isolate warmed it
