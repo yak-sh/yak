@@ -213,11 +213,13 @@ wall wants a byline, ask them for a name and save it in your own row.
 
 ## What deleting removes
 
-Deleting the app (`app_delete`) takes its bytes with it: every object under the
-app's own prefix, uploads included, and there is no undo. Nothing else removes
-bytes. Tombstoning your `photo` row removes your row. Tombstoning the content
-row at the sha removes the `blob`/`image` row and cascades to the `attachment`
-row naming it — and the bytes stay in the bucket, still served at
+Deleting the app (`app_delete`) puts it in the trash and keeps every byte of it
+for 30 days, so `app_restore` brings the uploads back with everything else.
+After that — or straight away, with `forever: true` — the bytes go: every object
+under the app's own prefix, uploads included, and there is no undo. Nothing else
+removes bytes. Tombstoning your `photo` row removes your row. Tombstoning the
+content row at the sha removes the `blob`/`image` row and cascades to the
+`attachment` row naming it — and the bytes stay in the bucket, still served at
 `./api/blob/<eid>` to anyone holding the address, now with no mime or name to
 answer with. An upload is permanent for the life of the app.
 

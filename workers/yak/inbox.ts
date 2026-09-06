@@ -75,6 +75,13 @@ let opened = async (
   let app = box.app
     ? await dir.app(space, box.app) ?? await dir.former(space, box.app)
     : await dir.home(space)
+  // An app in the trash has no mailbox (erase.ts, T-34430): a letter to it
+  // bounces the way a letter to a slug nobody ever took does, and for the
+  // same reason — silence is the one answer that cannot be corrected later,
+  // and the sender is nobody we owe the news that an app was deleted. The
+  // home address needs no test of its own: a trashed app is not the front
+  // page (directory.ts `home`), so `<space>@yaks.app` is a space with none.
+  if (app?.trashed) throw new Refused(`no mailbox for ${to}`)
   if (!app) {
     throw new Refused(
       box.app ? `no mailbox for ${to}` : `${space.slug} has no front page: ` +

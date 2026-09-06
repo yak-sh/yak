@@ -28,7 +28,7 @@
 // own front page is a client of exactly that door and gets nothing extra.
 //
 // `scheduled` is the second entry point, and the only one no request reaches:
-// the hourly meter (usage.ts).
+// the hourly meter (usage.ts) and the daily trash sweep (erase.ts).
 //
 // The route table. Above every line of it sits what the PLATFORM owns
 // (route.ts `platform`): the whole `/.well-known/` prefix on our own
@@ -96,6 +96,7 @@ import {
 import * as seo from './seo.ts'
 import { metaBreaks, noted, refusal } from './unseen.ts'
 import { metered } from './usage.ts'
+import { collected, DAILY } from './erase.ts'
 
 // THE Store, at every address the binding names — the directory at
 // `yak/platform` and every app's own beside it (T-33815). It carries the DO's
@@ -487,15 +488,20 @@ export default {
     }
   },
 
-  // The hour striking (wrangler.toml `[triggers] crons`): the meter reads
-  // what every app and space spent this month (usage.ts). A sweep that falls
-  // over is written where every other break is — the meta store — rather than
-  // lost on a log nobody opens.
-  async scheduled(_event: unknown, env: Env): Promise<void> {
+  // A cron striking (wrangler.toml `[triggers] crons`). Two of them, told
+  // apart by the line that fired: on the hour the meter reads what every app
+  // and space spent this month (usage.ts), and once a day the trash is
+  // collected — every app whose thirty days have run out, erased (erase.ts,
+  // T-34430). A sweep that falls over is written where every other break is —
+  // the meta store — rather than lost on a log nobody opens, and one falling
+  // over never stops the other.
+  async scheduled(event: { cron?: string }, env: Env): Promise<void> {
+    let daily = event?.cron == DAILY
     try {
-      await metered(env)
+      if (daily) await collected(env)
+      else await metered(env)
     } catch (e) {
-      await report(env, 'cron meter', e).catch((why) =>
+      await report(env, daily ? 'cron trash' : 'cron meter', e).catch((why) =>
         console.error('yak: could not report', why, 'after', e)
       )
     }

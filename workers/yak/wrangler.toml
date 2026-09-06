@@ -59,8 +59,15 @@ host = "127.0.0.1"
 # month so far out of Cloudflare's analytics and writes what each app and each
 # space spent. A sweep with no CF_ANALYTICS_TOKEN logs one line and does
 # nothing, so this trigger is safe to deploy before the secret exists.
+#
+# And the trash, daily at 04:20 UTC (erase.ts `collected`, T-34430): every app
+# whose thirty days have run out, erased for good. Its own line rather than
+# work hung off the hourly one, because index.ts `scheduled` dispatches on the
+# cron that fired — a sweep that walks every space's apps has no business
+# running twenty-four times a day, and a delete deferred by a few hours is a
+# delete nobody is waiting on.
 [triggers]
-crons = ["0 * * * *"]
+crons = ["0 * * * *", "20 4 * * *"]
 
 # The account whose analytics the meter reads, and whose dispatch namespace an
 # app's worker is uploaded into — the same tag as `account_id` above, which the

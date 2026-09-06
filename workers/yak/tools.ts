@@ -75,13 +75,16 @@ import { moved, reachChanged, toolsOf } from './declared.ts'
 import { tooLong } from './standing.ts'
 import { meta, minted } from './meta.ts'
 import {
+  daysLeft,
   doomed,
   door,
-  emptied,
+  erased,
   letter,
   naming,
   refused,
   ticket,
+  trash,
+  untrash,
 } from './erase.ts'
 import {
   carried,
@@ -516,7 +519,13 @@ let ownSpace = async (ctx: Ctx, app?: unknown) => {
   if (typeof app == 'string' && app) {
     let holding: Space[] = []
     for (let space of await ctx.dir.spaces(ctx.person)) {
-      if (await ctx.dir.app(space, app)) holding.push(space)
+      // An app in the trash does not hold its slug against a live one
+      // (erase.ts, T-34430): it answers nothing anywhere else, and a person
+      // who deleted their `garden` should not be asked which garden they
+      // meant. It is still reachable by naming its space, which is what
+      // `app_restore` says when two of them spell one slug.
+      let here = await ctx.dir.app(space, app)
+      if (here && !here.trashed) holding.push(space)
     }
     if (holding.length == 1) return holding[0]
     if (holding.length > 1) {
@@ -1524,12 +1533,27 @@ export let TOOLS: Tool[] = [
       // An app costs money to keep, so this is a refusal and not a warning —
       // the warning came at 80%, on the unseen channel (unseen.ts `ceiling`).
       let free = ceilings(space.tier)
-      let apps = await ctx.dir.apps(space)
+      // What the space HAS: an app in the trash is one the person has already
+      // said they are done with, so it stands against nothing (erase.ts).
+      let apps = (await ctx.dir.apps(space)).filter((a) => !a.trashed)
       if (free && apps.length >= free.apps) {
         throw new Error(atCeiling(space, 'apps'))
       }
-      if (await ctx.dir.app(space, s)) {
-        throw new Error(`app ${s} exists in ${space.slug}`)
+      let taken = await ctx.dir.app(space, s)
+      if (taken) {
+        // The slug is held for a trashed app for its whole thirty days
+        // (erase.ts): a second app born here is the one thing a restore
+        // could not put back, so this address is not free until the person
+        // says which of the two they want.
+        throw new Error(
+          taken.trashed
+            ? `${s} is in the trash in ${space.slug}, ${
+              daysLeft(taken.trashed)
+            } days left — app_restore(app: '${s}') brings it back, or ` +
+              `app_delete(app: '${s}', forever: true) erases it and frees ` +
+              'the address'
+            : `app ${s} exists in ${space.slug}`,
+        )
       }
       // An address an app has LEFT still points at it (app_set below), so it
       // is not free for a new app either.
@@ -2465,13 +2489,28 @@ export let TOOLS: Tool[] = [
     title: 'Throw an app away',
     destructive: true,
     description:
-      'Throw an app away: its files, everything it saved, and its address, ' +
-      'all gone for good — there is no undo and nothing is kept. Only when ' +
-      'the person asks for the app to be deleted; app_files delete removes ' +
-      'one file, and app_set moves an app rather than replacing it.',
+      'Throw an app away: it goes to the trash for 30 days. Its address ' +
+      'stops answering, its tools and pages leave you, and it stops being ' +
+      'the front page — but its files, everything it saved and its slug are ' +
+      'all kept, and app_restore brings the whole app back within those 30 ' +
+      'days. After that the platform erases it for good. Only when the ' +
+      'person asks for the app to be deleted; app_files delete removes one ' +
+      'file, and app_set moves an app rather than replacing it. Pass ' +
+      'forever: true to skip the trash and erase it now — for the person ' +
+      'who means it, since nothing is kept and there is no undo.',
     input: {
       type: 'object',
-      properties: { space: SPACE, app: APP },
+      properties: {
+        space: SPACE,
+        app: APP,
+        forever: {
+          type: 'boolean',
+          description:
+            'true to erase it now instead of trashing it: its files, ' +
+            'everything it saved and its address, all gone, with no restore. ' +
+            'Only when the person has said they mean exactly that',
+        },
+      },
       required: ['app'],
     },
     run: async (ctx, args) => {
@@ -2482,37 +2521,79 @@ export let TOOLS: Tool[] = [
       if (space.slug == META.space && app.slug == META.app) {
         throw new Error(`${META.space}/${META.app} is the platform itself`)
       }
-      // What this app declared, asked before its store is emptied because
-      // after that there is nothing to ask: an app that carried tools takes
-      // them with it, and that moves the tool list of everyone in the space
-      // — and its views the resource list (T-33004).
-      let had = await toolsOf(ctx.env, space, app)
-      let declared = Object.keys(had).length
-      let viewed = Object.values(had).some((t) => t.view)
-      // The storage, then the row that says the app exists — that order,
-      // because the row is the app. A delete that dies halfway leaves an app
-      // still named but emptied, which asking again finishes; the other order
-      // would leave an unnamed app's files and rows behind for whatever is
-      // made at this address next to inherit. The emptying itself is
-      // erase.ts's, because deleting a SPACE empties every app in it the same
-      // way (T-33166).
-      let prefix = fileKey(space, app, '')
-      let keys = await emptied(ctx.env, space, app, who)
-      // Everything under the prefix goes; what the person is TOLD went is
-      // their own files, not the bytes a version pinned or a page uploaded
-      // (versions.ts `own`).
-      let wrote = own(keys.map((k) => k.slice(prefix.length))).length
-      await ctx.dir.apply({
-        entities: [{ entity: { eid: app.eid }, tombstone: {} }],
-      }, vouched(who))
+      let forever = args.forever != null && flag(args.forever, 'forever')
+      if (!forever) {
+        if (app.trashed) {
+          throw new Error(
+            `${space.slug}/${app.slug} is already in the trash, ${
+              daysLeft(app.trashed)
+            } days left — app_restore brings it back, or ` +
+              'app_delete(forever: true) erases it now',
+          )
+        }
+        // The mark, and the tool and view lists of everyone in the space
+        // moving with it (erase.ts `trash`, T-33004). Nothing else: the
+        // whole point is that a restore is exact.
+        await trash(ctx.env, ctx.dir, space, app, who)
+        return {
+          text: `${space.slug}/${app.slug} is in the trash. ` +
+            `${url(space, app)} stops answering and it has left your tools; ` +
+            'nothing it saved was touched. app_restore(app: ' +
+            `'${app.slug}') brings it back whole, any time in the next 30 ` +
+            'days — after that it is erased for good.',
+          space,
+        }
+      }
+      // Erased. What this app declared is asked before its store is emptied,
+      // because after that there is nothing to ask — unless it is in the
+      // trash already, where it left every list the day it went in.
+      let had = app.trashed ? {} : await toolsOf(ctx.env, space, app)
+      let wrote = await erased(ctx.env, ctx.dir, space, app, who)
       await moved(ctx, space, [
-        ...(declared ? ['tools' as const] : []),
-        ...(viewed ? ['resources' as const] : []),
+        ...(Object.keys(had).length ? ['tools' as const] : []),
+        ...(Object.values(had).some((t) => t.view)
+          ? ['resources' as const]
+          : []),
       ])
       return {
         text: `deleted ${space.slug}/${app.slug}: ${wrote} ${
           wrote == 1 ? 'file' : 'files'
         }, everything it saved, and ${url(space, app)} — all gone`,
+        space,
+      }
+    },
+  },
+  {
+    name: 'app_restore',
+    title: 'Take an app out of the trash',
+    destructive: false,
+    idempotent: true,
+    description:
+      'Bring back an app that was deleted. It serves again at the address it ' +
+      'always had, its tools and pages come back, and everything it saved is ' +
+      'exactly as it was — nothing was touched while it sat in the trash. ' +
+      'Within 30 days of app_delete; after that it has been erased and there ' +
+      'is nothing to bring back. app_list shows what is in the trash and how ' +
+      'long each has left.',
+    input: {
+      type: 'object',
+      properties: { space: SPACE, app: APP },
+      required: ['app'],
+    },
+    run: async (ctx, args) => {
+      let { space, app, who } = await inApp(ctx, args, true)
+      if (!app.trashed) {
+        throw new Error(
+          `${space.slug}/${app.slug} is not in the trash — it is serving at ${
+            url(space, app)
+          }`,
+        )
+      }
+      await untrash(ctx.env, ctx.dir, space, app, who)
+      return {
+        text: `${space.slug}/${app.slug} is back: ${url(space, app)} serves ` +
+          'again and its tools are yours again. Everything it saved is ' +
+          'where it was.',
         space,
       }
     },
@@ -2600,7 +2681,9 @@ export let TOOLS: Tool[] = [
       'it is at, how many breaks are still open in it, which one is the ' +
       "space's front page, and what the month has cost against what the " +
       'space is allowed. Read it before making a second app, and when they ' +
-      'ask what they have or where something lives.',
+      'ask what they have or where something lives. Anything deleted is ' +
+      'listed under Trash with the days it has left, until app_restore ' +
+      'brings it back or the 30 days run out.',
     view: APPS_VIEW,
     input: {
       type: 'object',
@@ -2622,7 +2705,12 @@ export let TOOLS: Tool[] = [
           role: await ctx.dir.role(space, ctx.person),
         }
         if (!who.role) throw new Error(`not a member of ${space.slug}`)
-        let apps = await ctx.dir.apps(space)
+        let all = await ctx.dir.apps(space)
+        // Two lists, because they are two different things to say: what the
+        // person HAS, and what they threw away and can still have back
+        // (erase.ts, T-34430).
+        let apps = all.filter((a) => !a.trashed)
+        let bin = all.filter((a) => a.trashed)
         lines.push(`${space.slug} — https://${space.slug}.yaks.app/`)
         let listed = []
         for (let app of apps) {
@@ -2661,11 +2749,32 @@ export let TOOLS: Tool[] = [
         // makes the sixth app, not when the door says no. A space with
         // nothing in it has nothing to stand against, and says nothing.
         else lines.push(standing(space, apps.length))
+        // And what was thrown away and can still be had back (erase.ts,
+        // T-34430) — beside this space's own listing, since that is what it
+        // is about.
+        if (bin.length) {
+          lines.push(
+            'Trash — app_restore brings one back; erased for good when its ' +
+              'days run out',
+          )
+          for (let app of bin) {
+            lines.push(
+              `- ${app.title} (${app.slug}), ${daysLeft(app.trashed!)} ${
+                daysLeft(app.trashed!) == 1 ? 'day' : 'days'
+              } left`,
+            )
+          }
+        }
         out.push({
           slug: space.slug,
           title: space.title,
           url: `https://${space.slug}.yaks.app/`,
           apps: listed,
+          trash: bin.map((a) => ({
+            slug: a.slug,
+            title: a.title,
+            days: daysLeft(a.trashed!),
+          })),
           tier: space.tier ?? 'free',
           usage: spent(space),
           // The letters and the builds are the allowances every plan carries,

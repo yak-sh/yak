@@ -15,7 +15,7 @@
 // is reachable on the web and not here, because a bare `<app>__<tool>` has no
 // space in it to resolve against — the door would have to remember which
 // apps this session has opened, and it remembers nothing (mcp.ts).
-import { type App, type Space, storeName } from './directory.ts'
+import { type App, type Directory, type Space, storeName } from './directory.ts'
 import type { Env } from './env.ts'
 import { acting, based } from './apps.ts'
 import {
@@ -60,7 +60,12 @@ export let toolsOf = async (
 export let reachable = async (ctx: Ctx) => {
   let out: { space: Space; app: App }[] = []
   for (let space of await ctx.dir.spaces(ctx.person)) {
-    for (let app of await ctx.dir.apps(space)) out.push({ space, app })
+    // An app in the trash declares nothing (erase.ts, T-34430): its tools and
+    // its views leave every list the day it is deleted, which is the same
+    // move a delete has always made — and they come back on a restore.
+    for (let app of await ctx.dir.apps(space)) {
+      if (!app.trashed) out.push({ space, app })
+    }
   }
   return out
 }
@@ -203,8 +208,11 @@ export let listDeclared = async (ctx: Ctx) => {
 // holds the line whether or not they are listening this second. One
 // directory read per event however many lists moved, and nothing at all
 // otherwise.
+// The two it needs and nothing else, so a door with no caller behind it can
+// say the same news: the space page's restore form is a person's browser, not
+// a tool call (apps.ts `saved`).
 export let moved = async (
-  ctx: Ctx,
+  ctx: { env: Env; dir: Directory },
   space: Space,
   lists: ('tools' | 'resources')[],
 ) => {

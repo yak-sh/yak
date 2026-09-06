@@ -6,17 +6,25 @@
 // a slug back in circulation with none of the last space's bytes or rows
 // behind it.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import { parse } from '@std/toml'
+import { r2Blobs } from '../../src/blobs_r2.ts'
 import type { Wire } from '@yaks/durable-object'
 import { slow, until } from '../../src/testing.ts'
 import type { Held } from './build.ts'
 import {
+  collected,
+  DAILY,
+  daysLeft,
   type Doomed,
   doomed as census,
   door,
+  due,
   erase,
+  GRACE,
   letter,
   LIFE,
   naming,
+  overdue,
   refused,
   ticket,
   ticketed,
@@ -56,6 +64,7 @@ let app = (over: Partial<App> = {}): App => ({
   published: null,
   installed: null,
   seeded: null,
+  trashed: null,
   ...over,
 })
 
@@ -130,6 +139,57 @@ Deno.test('the platform and a paying space refuse to be deleted', () => {
     refused(space({ plan: { ...paying.plan!, status: 'canceled' } })),
     '',
   )
+})
+
+// The trash's two numbers (T-34430): how long is left, and whether the sweep
+// takes it. A day is a day everywhere — the tool says it, the space page says
+// it, `/privacy` says it — so it is counted in one place.
+let AT = '2026-09-05T12:00:00.000Z'
+let day = 86_400_000
+let then = (ms: number) => Date.parse(AT) + ms
+
+Deno.test('the trash is thirty days, counted in whole days left', () => {
+  let t = { at: AT, by: 'p1' }
+  assertEquals(GRACE, 30 * day)
+  assertEquals(daysLeft(t, then(0)), 30)
+  // Part of a day left still reads as a day: nobody is told "0 days" about an
+  // app they can still have back.
+  assertEquals(daysLeft(t, then(29 * day + 1)), 1)
+  assertEquals(daysLeft(t, then(30 * day)), 0)
+  // And it never goes negative, however long it has sat past its day.
+  assertEquals(daysLeft(t, then(90 * day)), 0)
+  assertEquals(due(t, then(30 * day - 1)), false)
+  assertEquals(due(t, then(30 * day)), true)
+  // A mark nothing can read the date of is due: an app whose days cannot be
+  // counted is not one the platform keeps forever.
+  assertEquals(due({ at: '', by: 'p1' }, then(0)), true)
+})
+
+// `scheduled` is ONE handler for both cron triggers and tells them apart by
+// the line that fired (index.ts), so the line in the config and the line in
+// the code have to be the same string. They are two files; this is what keeps
+// them one fact.
+Deno.test('the sweep runs on a cron line the deploy actually asks for', async () => {
+  let conf = parse(
+    await Deno.readTextFile(new URL('./wrangler.toml', import.meta.url)),
+  ) as { triggers: { crons: string[] } }
+  assert(
+    conf.triggers.crons.includes(DAILY),
+    `${DAILY} is not in ${conf.triggers.crons.join(', ')}`,
+  )
+})
+
+Deno.test('the sweep takes the trash that is out of days, and nothing else', () => {
+  let apps = [
+    app({ eid: 'live', slug: 'live' }),
+    app({ eid: 'fresh', slug: 'fresh', trashed: { at: AT, by: 'p1' } }),
+    app({ eid: 'old', slug: 'old', trashed: { at: AT, by: 'p1' } }),
+  ]
+  // A day before the line nothing goes; a day after, only the trashed one
+  // whose thirty days ran out — the app still serving is never a candidate.
+  assertEquals(overdue(apps, then(29 * day)).map((a) => a.eid), [])
+  apps[2].trashed = { at: new Date(then(-31 * day)).toISOString(), by: 'p1' }
+  assertEquals(overdue(apps, then(0)).map((a) => a.eid), ['old'])
 })
 
 // A person signed in on the stand-in, and the space they own — written the
@@ -303,6 +363,57 @@ slow('a space deleted: the letter, the act, and the name back', async () => {
     await k.stop()
   }
 })
+
+// The daily sweep (wrangler.toml `[triggers] crons`, index.ts `scheduled`):
+// what it takes, and — the half that matters — what it leaves. An app inside
+// its thirty days is a person's app that they can still have back, and a sweep
+// that took one early would be the bug this whole feature exists to prevent.
+slow(
+  'the sweep erases the trash that is out of days, and only that',
+  async () => {
+    let { env } = platform('a probe secret')
+    let { dir, space } = await owned(env)
+    let make = async (slug: string, over: Record<string, unknown> = {}) => {
+      await dir.apply({
+        entities: [{
+          entity: { eid: `$${slug}` },
+          doc: { title: slug },
+          app: { slug, space: space.eid, version: 1, access: 'public' },
+          alias: { slug: `ada/${slug}` },
+          ...over,
+        }],
+      }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
+      let app = (await dir.app(space, slug))!
+      // A file of its own, so what the erase takes is visible in the bucket.
+      await r2Blobs(env.BLOBS).put(
+        `ada/${slug}/index.html`,
+        new TextEncoder().encode(`<h1>${slug}</h1>`),
+      )
+      return app
+    }
+    let ago = (days: number) => ({
+      trashed: { at: new Date(Date.now() - days * day).toISOString(), by: ADA },
+    })
+
+    await make('live')
+    await make('fresh', ago(29))
+    await make('old', ago(31))
+
+    assertEquals(await collected(env), 1)
+    assertEquals((await dir.apps(space)).map((a) => a.slug), ['live', 'fresh'])
+    // The bytes went with the row, and only that app's.
+    let keys = await r2Blobs(env.BLOBS).list('ada/')
+    assertEquals(keys.some((k) => k.startsWith('ada/old/')), false)
+    assertEquals(keys.some((k) => k.startsWith('ada/fresh/')), true)
+    // A second run has nothing to do, and the app still in its days is still
+    // there to be restored.
+    assertEquals(await collected(env), 0)
+    // Until its own day comes: the clock is the argument, so the sweep can be
+    // asked what it would do a month from now.
+    assertEquals(await collected(env, new Date(Date.now() + 2 * day)), 1)
+    assertEquals((await dir.apps(space)).map((a) => a.slug), ['live'])
+  },
+)
 
 slow('a space with a domain attached refuses to die quietly', async () => {
   let k = await kernel()

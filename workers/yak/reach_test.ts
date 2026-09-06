@@ -40,6 +40,7 @@ let app = (slug: string, spaceEid: string): App => ({
   published: null,
   installed: null,
   seeded: null,
+  trashed: null,
 })
 
 let ADA = 'b0000000-0000-4000-8000-000000000002'

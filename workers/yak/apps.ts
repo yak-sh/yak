@@ -45,7 +45,8 @@ import { type Size, sizeOf } from './image.ts'
 import { asking, listed, type Row } from './listing.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
 import { batched, lined, lowered } from './wire.ts'
-import { nothingHere, spaceIndex } from './pages.ts'
+import { binned, nothingHere, spaceIndex } from './pages.ts'
+import { daysLeft, untrash } from './erase.ts'
 import { hostOf, MOUNT, PLATFORM, route, sameOrigin } from './route.ts'
 import { covers, PLATFORM_PATHS } from './router.ts'
 import { titling, vouched, type Who, whoIs } from './session.ts'
@@ -925,7 +926,11 @@ let index = async (
   // address, to anyone (T-32585), so it does not get a door either.
   if (space.slug == META.space) return nothingHere()
   let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
-  let all = (await dir.apps(space)).filter((a) => !kernels(space, a.slug))
+  let here = (await dir.apps(space)).filter((a) => !kernels(space, a.slug))
+  // An app in the trash is not one of the apps here (erase.ts, T-34430): it
+  // is not listed, not counted as one being held back, and — for the owner
+  // alone — it is the block underneath, with the days it has left.
+  let all = here.filter((a) => !a.trashed)
   let mine = all.filter((a) => reads(mode(a.access), who.role))
   // The owner's own three facts, and nobody else's business — so nobody else
   // is asked for. `connected` is the provider's answer (identity.ts), not a
@@ -939,9 +944,19 @@ let index = async (
     role: who.role,
     person: !!who.person,
     signIn: signInAt(req.url),
+    trash: owner
+      ? here.filter((a) => a.trashed).map((a) => ({
+        slug: a.slug,
+        title: a.title,
+        days: daysLeft(a.trashed!),
+      }))
+      : [],
     name: owner ? await dir.nameAt(owner) ?? '' : '',
     connected: !!owner && await (await identity()).connected(env, owner),
-    fixed: !!all.length,
+    // Something IS built here while an app sits in the trash: its store is
+    // named for this address and its files live under it, so the address
+    // stays put until the trash is empty (T-32576).
+    fixed: !!here.length,
     say: said?.say,
     no: said?.no,
   })
@@ -987,6 +1002,16 @@ let saved = async (
   let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
   if (who.role != 'owner' || !who.person) return nothingHere()
   let form = await req.formData().catch(() => new FormData())
+  // The other button on this page: one app out of the trash (erase.ts,
+  // T-34430). Its own form, so it is its own POST — a plain button and no
+  // script, the way the drop zone and the settings form are — and it lands
+  // back on this page with the app in the listing again.
+  let back = String(form.get('restore') ?? '').trim()
+  if (back) {
+    let app = await dir.app(space, back)
+    if (app?.trashed) await untrash(env, dir, space, app, who)
+    return redirect(`https://${space.slug}.${PLATFORM}/`, 303)
+  }
   let name = String(form.get('name') ?? '').trim().slice(0, 60)
   let want = String(form.get('space') ?? '').trim().toLowerCase()
   let moved = want && want != space.slug
@@ -1118,6 +1143,21 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
       : joining(env, space.eid, req, who)
   }
   let app = r.app ? await c.time('app', () => dir.app(space!, r.app!)) : null
+  // In the trash (erase.ts, T-34430): the address is held for it and answers
+  // nothing while it waits. Not a 410 and not a redirect — to the web this is
+  // an address with nothing at it, which is what a delete has always meant —
+  // and only the space's own people are told where the app went, since a
+  // stranger learning that an app was deleted here learns something that is
+  // not theirs.
+  if (app?.trashed) {
+    let who = await c.time(
+      'who',
+      () => whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p)),
+    )
+    return who.role == 'owner'
+      ? binned({ title: app.title || app.slug, days: daysLeft(app.trashed) })
+      : nothingHere()
+  }
   if (r.app && !app) {
     // Not an app here — but it may be where one USED to be (directory.ts
     // former): a rename moves the address and keeps the old one pointing at

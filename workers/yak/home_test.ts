@@ -233,6 +233,36 @@ Deno.test('once an app is built it is one line, pointing at the apps', async () 
   assert(page.indexOf('<details') < page.indexOf('name="name"'), page)
 })
 
+// The trash, on the page a person can actually reach without an assistant
+// (T-34430): under the pills, one form per app, and one button that is the
+// whole restore.
+Deno.test('the owner sees the trash under the apps, with a button', async () => {
+  let page = await block({
+    apps: [{ slug: 'recipes', title: 'Recipes' }],
+    trash: [{ slug: 'notes', title: 'Notes', days: 12 }],
+  })
+  assertStringIncludes(page, 'In the trash')
+  assertStringIncludes(page, 'Notes — 12 days left')
+  // A form, so it needs no script; posting to the page it is on, so it needs
+  // no door of its own (apps.ts `saved`).
+  assertStringIncludes(page, '<form method="post" action="/">')
+  assertStringIncludes(page, 'name="restore" value="notes"')
+  // Under the apps, which is what it is about.
+  assert(page.indexOf('class="Pills"') < page.indexOf('In the trash'), page)
+  // One day reads as a day.
+  assertStringIncludes(
+    await block({ trash: [{ slug: 'notes', title: 'Notes', days: 1 }] }),
+    'Notes — 1 day left',
+  )
+  // Nobody else is told an app was ever there.
+  assert(
+    !(await block({
+      role: 'editor',
+      trash: [{ slug: 'notes', title: 'Notes', days: 12 }],
+    })).includes('In the trash'),
+  )
+})
+
 Deno.test("none of the owner block is anybody else's", async () => {
   let page = await block({ role: null, person: false, connected: true })
   assert(!page.includes('What to do next'), page)

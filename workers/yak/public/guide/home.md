@@ -31,13 +31,15 @@ moves. Hand out the bare address; a link somebody already holds to `/<app>/`
 still arrives.
 
 **Getting back to the default.** `app_set(app, home: false)` puts the space back
-to its default page, and so does deleting the app: the word is on the app, so it
-dies with it and nothing is left saying which app is home. `app_rollback` puts
-an earlier version of a front page back where it went wrong, and setting
-`home: true` on another app moves the word there instead. With no front page,
-`/` is the platform's list of the space's apps again, a path no app claims is a
-404, and a letter to `<space>@yaks.app` is refused by name — the sender is told
-to write to `<space>.<app>@yaks.app`.
+to its default page, and so does deleting the app: the word is on the app, so a
+trashed app is nobody's front page and an erased one takes the word with it.
+Restoring it makes it the front page again — the word was never removed, only
+ignored while it sat in the trash. `app_rollback` puts an earlier version of a
+front page back where it went wrong, and setting `home: true` on another app
+moves the word there instead. With no front page, `/` is the platform's list of
+the space's apps again, a path no app claims is a 404, and a letter to
+`<space>@yaks.app` is refused by name — the sender is told to write to
+`<space>.<app>@yaks.app`.
 
 ## The order a request is answered in
 

@@ -148,6 +148,7 @@ slow(
         'app_secret_list',
         'app_secret_remove',
         'app_delete',
+        'app_restore',
         'app_errors',
         'app_list',
         'domain_attach',
@@ -206,8 +207,16 @@ slow(
         idempotentHint: false,
         openWorldHint: false,
       })
-      // A create only adds; a letter leaves the platform for good.
+      // A create only adds; a letter leaves the platform for good. And an
+      // app coming back out of the trash destroys nothing, however many times
+      // it is asked (T-34430).
       assertEquals(hints('app_new')?.destructiveHint, false)
+      assertEquals(hints('app_restore'), {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      })
       assertEquals(hints('mail_send')?.openWorldHint, true)
       // The generic tier promises the shape of its answer, so a caller reads a
       // described value instead of parsing prose (@yaks/mcp `outputSchema`).
@@ -1264,15 +1273,26 @@ slow(
       assertEquals(spaces[0].apps[0].errors, 2)
       assertEquals(spaces[0].apps[0].url, 'https://jeff.yaks.app/cookbook/')
       assertEquals(spaces[1].apps, [])
+      // Its garden went to the trash a moment ago, so the space has no apps
+      // and one thing in the trash — with the days it has to change its mind
+      // (erase.ts, T-34430).
       assertEquals(
         (await agent.tool('app_list', { space: 'jeff-work' })).split('\n'),
-        ['jeff-work — https://jeff-work.yaks.app/', '- no apps yet'],
+        [
+          'jeff-work — https://jeff-work.yaks.app/',
+          '- no apps yet',
+          'Trash — app_restore brings one back; erased for good when its ' +
+          'days run out',
+          '- Work garden (garden), 30 days left',
+        ],
       )
 
-      // Thrown away: an app made, written, deployed, then deleted whole —
-      // its address stops answering, the listing forgets it, and an app made
-      // at the same address afterwards starts with nothing, because the
-      // store it was born naming was emptied with it (T-32562).
+      // Thrown away for good: an app made, written, deployed, then erased
+      // whole — its address stops answering, the listing forgets it, and an
+      // app made at the same address afterwards starts with nothing, because
+      // the store it was born naming was emptied with it (T-32562). `forever`
+      // is what skips the trash; the trash itself is its own test below
+      // (T-34430).
       let scratch = { space: 'jeff', app: 'scratch' }
       await agent.tool('app_new', {
         space: 'jeff',
@@ -1292,7 +1312,7 @@ slow(
       await agent.tool('app_deploy', scratch)
       assertEquals((await k.at('jeff.yaks.app', '/scratch/')).status, 200)
       assertMatch(
-        await agent.tool('app_delete', scratch),
+        await agent.tool('app_delete', { ...scratch, forever: true }),
         /deleted jeff\/scratch: 1 file, everything it saved.*all gone/,
       )
       assertEquals((await k.at('jeff.yaks.app', '/scratch/')).status, 404)
@@ -1322,7 +1342,7 @@ slow(
         ),
         [],
       )
-      await agent.tool('app_delete', scratch)
+      await agent.tool('app_delete', { ...scratch, forever: true })
 
       // A stranger belongs to no space of ours: every tool refuses him by
       // name, and he may make his own.
@@ -4173,8 +4193,10 @@ slow('the front page moves, and only the owner moves it', async () => {
 // Jeff, on T-34227: "and if i screw up my home app, can i reset it back to the
 // default in some way? maybe if you delete the home app, it just resets to the
 // default?" — it does, and it falls out of the word being ON the app rather
-// than beside it: the app dies and `home` dies with it, so there is nothing
-// left saying which app the bare hostname opens.
+// than beside it: an app in the trash is nobody's front page, and an erased
+// one takes `home` with it, so either way nothing is left saying which app the
+// bare hostname opens. The word itself stays on the trashed row, because a
+// restore has to put the space back exactly as it was (T-34430).
 slow('deleting the front page puts the space back to the default', async () => {
   let k = await kernel()
   try {
@@ -4200,14 +4222,16 @@ slow('deleting the front page puts the space back to the default', async () => {
     assertEquals(back.status, 200)
     assertStringIncludes(await back.text(), 'href="/garden/"')
     assertEquals(await front(), 404)
-    // Nothing is left carrying the word, so nothing is left carrying its
-    // globs: `/garden/x` is the garden app's again.
+    // Nothing ANSWERING carries the word, so nothing carries its globs
+    // either: `/garden/x` is the garden app's again. The row in the trash
+    // still wears it — that is what a restore puts back — and no listing of
+    // the space's apps says anything is the front page.
     assertEquals(
       (await agent.tool('app_list', { space: 'reset' })).includes('front page'),
       false,
     )
     assertEquals(
-      (await meta(k, them.cookie).query('.home!')).length,
+      (await meta(k, them.cookie).query('.home!&.trashed=')).length,
       0,
     )
     // Its own address is nobody's now — not a redirect to a former slug, and
@@ -4219,6 +4243,126 @@ slow('deleting the front page puts the space back to the default', async () => {
     // And the space takes another one whenever it is ready to.
     await agent.tool('app_set', { space: 'reset', app: 'garden', home: true })
     assertEquals(await front(), 'do:reset/garden')
+  } finally {
+    await k.stop()
+  }
+})
+
+// Jeff, on T-34430: "can deleted apps be brought back if done by mistake?" —
+// "there should be a grace period. like a 30 day trash". The whole round trip
+// through the door an agent actually uses: an app with files, data and a tool
+// of its own goes in the trash, and everything that names it stops naming it
+// while nothing it holds is touched; then it comes back, whole, and the same
+// four answers are the answers again.
+slow('an app goes to the trash, and app_restore brings it back', async () => {
+  let k = await kernel()
+  try {
+    let them = await seed(k, [{ slug: 'binlab', apps: ['garden'] }])
+    let agent = connector(k, them.cookie)
+    let at = { space: 'binlab', app: 'notes' }
+    let listed = async () =>
+      ((await agent.call('tools/list')).tools as { name: string }[])
+        .map((t) => t.name)
+    let page = () => k.at('binlab.yaks.app', '/notes/')
+
+    await agent.tool('app_new', { ...at, slug: 'notes', title: 'Notes' })
+    await agent.tool('app_files', {
+      ...at,
+      files: [
+        { path: 'index.html', content: '<!doctype html><h1>notes</h1>' },
+        {
+          path: 'vocab.json',
+          content: JSON.stringify({ note: { at: 'text' } }),
+        },
+        {
+          path: 'tools.json',
+          content: JSON.stringify({
+            log_note: {
+              description: 'Write a note',
+              input: { at: 'text' },
+              apply: { note: { at: '{{at}}' } },
+            },
+          }),
+        },
+      ],
+    })
+    await agent.tool('app_deploy', at)
+    await agent.tool('graph_apply', {
+      ...at,
+      entities: [{ entity: { eid: '$n' }, doc: { title: 'a kept thing' } }],
+    })
+    assertEquals((await page()).status, 200)
+    assert((await listed()).includes('notes__log_note'))
+
+    // In. Everything that names the app stops naming it: the web, the tool
+    // list, and the listing — where it is under Trash instead, with its days.
+    assertStringIncludes(
+      await agent.tool('app_delete', at),
+      'binlab/notes is in the trash',
+    )
+    assertEquals((await page()).status, 404)
+    assertEquals((await listed()).includes('notes__log_note'), false)
+    let saying = await agent.tool('app_list', { space: 'binlab' })
+    assertStringIncludes(saying, 'Trash — app_restore brings one back')
+    assertStringIncludes(saying, '- Notes (notes), 30 days left')
+    assertEquals(saying.includes('https://binlab.yaks.app/notes/'), false)
+    // And the slug is held for it: a second app here is the one thing a
+    // restore could not undo, so `app_new` refuses and says which two words
+    // resolve it.
+    assertStringIncludes(
+      (await assertRejects(
+        () =>
+          agent.tool('app_new', {
+            space: 'binlab',
+            slug: 'notes',
+            title: 'Notes again',
+          }),
+        Error,
+      )).message,
+      'notes is in the trash in binlab, 30 days left — app_restore',
+    )
+    // Deleting it again is not a second delete; it says where the app is.
+    assertStringIncludes(
+      (await assertRejects(() => agent.tool('app_delete', at), Error)).message,
+      'is already in the trash',
+    )
+
+    // Out, and every one of those answers is the old answer again — including
+    // the row nothing touched while it sat there.
+    assertStringIncludes(
+      await agent.tool('app_restore', at),
+      'binlab/notes is back',
+    )
+    assertEquals((await page()).status, 200)
+    assert((await listed()).includes('notes__log_note'))
+    assertStringIncludes(
+      await agent.tool('app_list', { space: 'binlab' }),
+      'https://binlab.yaks.app/notes/',
+    )
+    assertEquals(
+      JSON.parse(await agent.tool('graph_query', { q: '.doc.title~=kept' }))
+        .length,
+      1,
+    )
+    // An app that is not in the trash has nothing to restore.
+    assertStringIncludes(
+      (await assertRejects(() => agent.tool('app_restore', at), Error)).message,
+      'is not in the trash',
+    )
+
+    // And `forever` is the other word: no trash, nothing kept, and the
+    // address free for the next app, which wakes up in an empty store.
+    await agent.tool('app_delete', { ...at, forever: true })
+    assertEquals((await page()).status, 404)
+    await agent.tool('app_new', {
+      space: 'binlab',
+      slug: 'notes',
+      title: 'Notes again',
+    })
+    assertEquals(
+      JSON.parse(await agent.tool('graph_query', { q: '.doc.title~=kept' })),
+      [],
+    )
   } finally {
     await k.stop()
   }

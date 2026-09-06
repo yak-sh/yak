@@ -1,3 +1,10 @@
+// Deleting, and taking it back. Two halves: an APP goes to the trash and is
+// erased thirty days later (T-34430, the bottom of this file), and a SPACE
+// dies at once behind a link in a letter (T-33166, everything above it). One
+// file because there is one erase — `emptied` empties an app's storage, and
+// whether it is called by the space's death, by the sweep, or by a person who
+// said `forever`, it is the same act.
+//
 // Closing a space (T-33166): what deleting one destroys, the act itself, and
 // the ticket that stands between an agent and it. `/privacy` promises a
 // person their account can be closed, and until this there was no mechanism
@@ -43,19 +50,22 @@
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { opened, seal } from '../../src/token.ts'
 import { wiped } from './build.ts'
-import { reachChanged } from './declared.ts'
+import { moved, reachChanged, toolsOf } from './declared.ts'
 import {
   type App,
   type Directory,
+  directory,
   type Host,
   META,
   type Space,
   storeName,
+  type Trashed,
   url,
 } from './directory.ts'
+import * as dirPart from './directory.ts'
 import { drop } from './dispatch.ts'
 import { reachable, release } from './domains.ts'
-import type { Env } from './env.ts'
+import { bound, type Env } from './env.ts'
 import { PLATFORM } from './route.ts'
 import { destroyed } from './sandbox.ts'
 import { vouched, type Who } from './session.ts'
@@ -289,3 +299,147 @@ export let went = (
       ? `, ${out.hosts} ${out.hosts == 1 ? 'domain' : 'domains'} given back`
       : ''
   }. The address is free for somebody else to take.`
+
+// ---- the trash: an app deleted, and an app brought back (T-34430) ----
+//
+// Jeff, 2026-09-05: "can deleted apps be brought back if done by mistake?" —
+// "there should be a grace period. like a 30 day trash". So `app_delete`
+// keeps everything and writes ONE word on the app row (vocab.ts `trashed`),
+// and every reader of an app asks it: the web serves nothing, the roster
+// drops its tools and views, the front page is not it, and its mail bounces.
+// Nothing is copied anywhere and nothing is moved — which is what makes
+// `app_restore` exact rather than approximate.
+//
+// The SLUG is held with it, deliberately, and that is the one place this
+// disagrees with a space's death above ("i'd release the names"): a space's
+// name comes straight back because nothing survives it, where a trashed app
+// is still here in every other way, and a second app born at its address
+// would be the thing a restore then could not put back.
+
+// How long the trash keeps it. Thirty days is the owner's number, and it is
+// the same number `/privacy` says out loud.
+export let GRACE = 30 * 24 * 60 * 60_000
+
+// Days left before the sweep takes it, never below zero — what a person is
+// told, in the unit they would ask in. An app trashed a moment ago has thirty.
+export let daysLeft = (t: Trashed, now = Date.now()) =>
+  Math.max(0, Math.ceil((Date.parse(t.at) + GRACE - now) / 86_400_000))
+
+// Whether the trash has run out. A mark with no readable `at` is DUE — an app
+// nothing can count the days of cannot be kept forever on a null.
+export let due = (t: Trashed, now = Date.now()) =>
+  !(Date.parse(t.at) + GRACE > now)
+
+// Which of a space's apps the sweep takes: the ones in the trash whose days
+// have run out, and nothing else. The whole of the selection, as one pure
+// answer, because what a sweep DELETES is the part worth holding to a test.
+export let overdue = (apps: App[], now = Date.now()) =>
+  apps.filter((a) => a.trashed && due(a.trashed, now))
+
+// What an app's coming or going does to everyone's tool list (T-33004). A
+// trashed app leaves the roster and a restored one rejoins it, so both ask
+// the same question of its store — did it declare tools, views, or neither —
+// and tell the space only what actually moved.
+export let rostered = async (
+  env: Env,
+  dir: Directory,
+  space: Space,
+  app: App,
+) => {
+  let had = await toolsOf(env, space, app)
+  await moved({ env, dir }, space, [
+    ...(Object.keys(had).length ? ['tools' as const] : []),
+    ...(Object.values(had).some((t) => t.view) ? ['resources' as const] : []),
+  ])
+}
+
+// Into the trash: the mark, then the roster. Nothing else — the bytes, the
+// store, the deploys and the slug are all exactly where they were.
+export let trash = async (
+  env: Env,
+  dir: Directory,
+  space: Space,
+  app: App,
+  who: Who,
+  now = new Date(),
+) => {
+  await dir.apply({
+    entities: [{
+      entity: { eid: app.eid },
+      trashed: { at: now.toISOString(), by: who.person },
+    }],
+  }, vouched(who))
+  await rostered(env, dir, space, app)
+}
+
+// And out of it: `trashed: null` drops the whole component, which is the
+// whole of a restore — every other word the app wears was never touched.
+// Both doors call this, the tool and the space page's form. `untrash` rather
+// than `restore` because versions.ts already owns that word for putting an
+// app's FILES back, and these are two different acts on the same app.
+export let untrash = async (
+  env: Env,
+  dir: Directory,
+  space: Space,
+  app: App,
+  who: Who,
+) => {
+  await dir.apply({
+    entities: [{ entity: { eid: app.eid }, trashed: null }],
+  }, vouched(who))
+  await rostered(env, dir, space, app)
+}
+
+// One app gone for good: its storage (`emptied` above, the same call a
+// space's death makes), then the row that says the app exists — that order,
+// because the row is the app. Answers how many of the keys were files a
+// person wrote rather than bytes a version pinned (versions.ts `own`), which
+// is what a delete says back.
+export let erased = async (
+  env: Env,
+  dir: Directory,
+  space: Space,
+  app: App,
+  who: Who,
+) => {
+  let prefix = under(space, app)
+  let keys = await emptied(env, space, app, who)
+  await dir.apply({
+    entities: [{ entity: { eid: app.eid }, tombstone: {} }],
+  }, vouched(who))
+  return own(keys.map((k) => k.slice(prefix.length))).length
+}
+
+// The cron line the sweep runs on, spelled exactly as wrangler.toml
+// `[triggers] crons` spells it. `scheduled` is ONE handler for both triggers
+// (index.ts) and the line that fired is what tells them apart, so the two
+// spellings have to agree — erase_test.ts holds them to it, because a line
+// that matched nothing would run the meter twice a day and the sweep never.
+export let DAILY = '20 4 * * *'
+
+// The daily sweep (wrangler.toml `[triggers] crons`, index.ts `scheduled`):
+// every app whose thirty days have run out, erased. It walks the platform
+// because the promise is the platform's, not a space's — and it erases AS the
+// person who threw the app away, since the delete is what it is finishing.
+//
+// Nothing is told about a roster here: the app left everyone's lists the day
+// it went into the trash, and this is only the storage catching up.
+export let collected = async (env: Env, now = new Date()) => {
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let gone = 0
+  for (let space of await dir.all()) {
+    // Never the directory itself, whatever its row says: the app that holds
+    // every space on the platform is not one a sweep may erase (`refused`
+    // above and tools.ts app_delete hold the same line at the doors).
+    if (space.slug == META.space) continue
+    for (let app of overdue(await dir.apps(space), now.getTime())) {
+      await erased(env, dir, space, app, {
+        person: app.trashed!.by,
+        role: 'owner',
+      })
+      gone++
+    }
+  }
+  if (gone) console.log(`yak-trash: ${gone} erased at ${now.toISOString()}`)
+  return gone
+}

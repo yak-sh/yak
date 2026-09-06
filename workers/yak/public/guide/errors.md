@@ -248,6 +248,36 @@ and a version number the app no longer keeps is refused listing the ones it
 does. Pruning past the last 20 deletes only bytes no kept version names, so the
 oldest rollback an app still offers always has its files.
 
+## app_delete and app_restore
+
+    app_delete(app, space?, forever?)
+    app_restore(app, space?)
+
+The undo of a deploy is a rollback; the undo of a **delete** is a restore.
+`app_delete` does not erase anything. It puts the app in the trash and keeps
+every byte of it: its files, its store, its deploys, and its slug, which stays
+reserved so a restore is exact rather than approximate.
+
+What changes the moment it goes in: its address answers nothing on the web, its
+declared tools and views leave your list, it is nobody's front page even if it
+was one, and letters to its mailbox bounce. What does not change: anything it
+saved.
+
+`app_restore` takes it back out and puts all of that back. You have 30 days;
+`app_list` shows a Trash section with the days each one has left, and the person
+can restore one from their space's own page without an assistant at all. After
+30 days the platform erases it, and then there is nothing to restore.
+
+    app_delete(app: 'scratch')
+    → jeff/scratch is in the trash. https://jeff.yaks.app/scratch/ stops
+      answering and it has left your tools; nothing it saved was touched.
+
+Two things to know before you call it. The slug is held for the whole 30 days,
+so `app_new` at that address is refused and says why — restore it or erase it,
+but do not build a second app on top of one the person may want back. And
+`forever: true` skips the trash: files, data and address gone with no undo. Use
+it only when the person has said they mean exactly that.
+
 ## feedback
 
     feedback(text, app?, space?)

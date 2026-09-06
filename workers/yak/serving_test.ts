@@ -32,7 +32,7 @@ import * as dirPart from './directory.ts'
 import { scriptName } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { platform as inMemory } from './harness.ts'
-import { emptied } from './erase.ts'
+import { emptied, trash } from './erase.ts'
 import { wrote } from './tools.ts'
 import { archive, openIn, serve } from './unseen.ts'
 import { PLATFORM_STORE } from './vocab.ts'
@@ -656,6 +656,77 @@ Deno.test("rung 1½: the router's own onward request is not intercepted again", 
   env = k.env
   assertStringIncludes(await (await k.at('/garden/print')).text(), 'garden')
   assertEquals(ran, 1)
+})
+
+// ---- the trash (T-34430) ----------------------------------------------------
+
+// An app in the trash keeps its address and answers nothing at it. To the web
+// that is the same nothing a wrong address gets — whether an app was ever here
+// is not a stranger's business — and to the owner it is the one page that says
+// where the app went and how long they have.
+Deno.test('an app in the trash serves nothing, and says so to its owner', async () => {
+  let k = await router()
+  k.put('ada/garden/index.html', '<!doctype html><body>garden</body>')
+  let garden = (await k.dir.app(k.space, 'garden'))!
+  assertEquals((await k.at('/garden/')).status, 200)
+
+  await trash(k.env, k.dir, k.space, garden, { person: ADA, role: 'owner' })
+  let stranger = await k.at('/garden/')
+  assertEquals(stranger.status, 404)
+  assertStringIncludes(await stranger.text(), 'Nothing here yet')
+  // Its files are not reachable underneath it either — the gate is the app,
+  // not the page.
+  assertEquals((await k.at('/garden/index.html')).status, 404)
+
+  let cookie = await as(ADA)
+  let mine = await apps.fetch(visit('/garden/', { headers: { cookie } }), k.env)
+  assertEquals(mine.status, 404)
+  let said = await mine.text()
+  assertStringIncludes(said, 'Garden is in the trash')
+  assertStringIncludes(said, '30 more days')
+})
+
+// The front page is a word ON the app (T-34227), so a trashed app that wears
+// it is still wearing it — and the space is a space with no front page until
+// it comes back. The restore itself is a form on that space's own page: no
+// assistant, no script, one POST.
+Deno.test("a trashed front page is nobody's, and the owner restores it there", async () => {
+  let k = await router()
+  k.put('ada/cookbook/index.html', '<!doctype html><body>cookbook</body>')
+  k.put('ada/garden/index.html', '<!doctype html><body>garden</body>')
+  await trash(k.env, k.dir, k.space, k.app, { person: ADA, role: 'owner' })
+
+  // `/` is the space's index again, listing the app that is still here.
+  let bare = await k.at('/')
+  assertEquals(bare.status, 200)
+  let listed = await bare.text()
+  assert(listed.includes('href="/garden/"'))
+  assertEquals(listed.includes('href="/cookbook/"'), false)
+  // And a visitor is told nothing about what was deleted.
+  assertEquals(listed.includes('In the trash'), false)
+
+  // What the owner sees on that page instead — the trash under the pills, with
+  // its restore button — is pages.ts's own, drawn straight in home_test.ts:
+  // reaching the owner block through this stand-in would ask the OAuth
+  // provider whether an agent has ever connected, and that is workerd's.
+  //
+  // The button itself is this door. One POST to the page it is on, and the
+  // app is back — front page and all, because the word was never taken off it.
+  let cookie = await as(ADA)
+  let back = await apps.fetch(
+    visit('/', {
+      method: 'POST',
+      headers: {
+        cookie,
+        origin: 'https://ada.yaks.app',
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ restore: 'cookbook' }).toString(),
+    }),
+    k.env,
+  )
+  assertEquals(back.status, 303)
+  assertStringIncludes(await (await k.at('/')).text(), 'cookbook')
 })
 
 // ---- env.APP: the worker as the app's own gatekeeper (T-34303) --------------

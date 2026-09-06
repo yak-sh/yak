@@ -151,6 +151,12 @@ export type App = {
   // When this app's store was seeded and by which release (seed.ts), null
   // until it has been. A release reads it to know the seed has already run.
   seeded: Sowed | null
+  // In the trash, and since when (erase.ts, T-34430). Null for every app that
+  // is not — which is almost all of them — and every reader of an app asks
+  // it: a trashed app serves nothing, declares nothing, is nobody's front
+  // page and takes no mail, while its bytes, its store and its slug are all
+  // still here for the thirty days `app_restore` has to bring it back.
+  trashed: Trashed | null
 }
 export type Role = 'owner' | 'editor' | 'viewer'
 export type Access = 'public' | 'open' | 'private'
@@ -171,6 +177,11 @@ export type Pin = { of: string; version: number }
 // That the app's store carries the data its files seed it with, and the
 // release that put it there (seed.ts, T-34327).
 export type Sowed = { at: string; version: number }
+
+// When an app was thrown away and by whom (erase.ts, T-34430). `at` is what
+// the thirty days are counted from, and `by` is the person the sweep erases
+// it as, since they are the one who asked for it gone.
+export type Trashed = { at: string; by: string }
 
 // A hostname a person owns, aimed at one app (platform.rs `Hostname`,
 // T-33037). How far provisioning has come, and when that was last read from
@@ -208,6 +219,7 @@ type Row = {
   }
   installed?: { of?: Id | null; version?: number | null }
   seeded?: { at?: string | null; version?: number | null }
+  trashed?: { at?: string | null; by?: Id | null }
   hostname?: {
     name: string
     app: Id
@@ -410,7 +422,8 @@ export let stamp = async (
 // What every read of an APP asks for beside the app row itself, in one place
 // because `appOf` reads all of it and a filter that forgets one answers null
 // where there is a value.
-let ABOUT = '.doc?&.alias?&.home?&.meter?&.published?&.installed?&.seeded?'
+let ABOUT =
+  '.doc?&.alias?&.home?&.meter?&.published?&.installed?&.seeded?&.trashed?'
 
 // The plan as a whole row, however little of it is written: a column nobody
 // has filled reads empty, the way `meterOf` does, so nothing downstream tests
@@ -463,6 +476,9 @@ export let appOf = (r: Row): App => ({
     : null,
   seeded: r.seeded
     ? { at: r.seeded.at ?? '', version: r.seeded.version ?? 0 }
+    : null,
+  trashed: r.trashed
+    ? { at: r.trashed.at ?? '', by: r.trashed.by ? idOf(r.trashed.by) : '' }
     : null,
 })
 
@@ -724,9 +740,14 @@ export let directory = (via: Fetcher, now = false) => {
     // The app that answers the space's bare hostname, if it has one: the one
     // in this space WEARING `home` (T-34227). At most one does — `homing`
     // below is the rule — so the first row is the answer.
+    // A trashed app is nobody's front page (erase.ts, T-34430): the word
+    // stays ON it so a restore puts the space back exactly as it was, and
+    // until then the space is one with no front page — which is the ordinary
+    // state and already has an answer everywhere.
     home: async (space: Space) => {
-      let row = await one(`.app.space=${space.eid}&.home!&${ABOUT}`)
-      return row?.app ? appOf(row) : null
+      let rows = await query(`.app.space=${space.eid}&.home!&${ABOUT}`)
+      return rows.filter((r) => r.app).map(appOf).find((a) => !a.trashed) ??
+        null
     },
     // A person's membership row: the eid, so an invite can revise or remove
     // the one that stands, and the role, which is the same question asked

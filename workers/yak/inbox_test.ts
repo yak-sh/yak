@@ -16,7 +16,7 @@
 //   nobody home          refused, so the sender is told, and nothing written
 //   the app hears it     a page subscribed to its own store sees the letter
 //                        arrive without asking
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import { assertEquals, assertStringIncludes } from '@std/assert'
 import { slow, until } from '../../src/testing.ts'
 import { monthOf } from './meter.ts'
 import {
@@ -253,7 +253,7 @@ slow(
   async () => {
     let k = await kernel()
     try {
-      await seed(k, [{ slug: 'jeff', apps: ['recipes'] }, {
+      let them = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }, {
         slug: 'bare',
         apps: [],
       }])
@@ -279,7 +279,22 @@ slow(
       // Nothing landed anywhere: a refusal writes no row.
       let rows = await client(k, 'jeff.yaks.app', 'recipes').get('.mail!')
       assertEquals(rows, [])
-      assert(true)
+      // An app in the trash has no mailbox either (erase.ts, T-34430), and it
+      // bounces as the same nothing: the sender is not told that an app was
+      // deleted here. Its letters land again when it is restored.
+      await connector(k, them.cookie)
+        .tool('app_delete', { space: 'jeff', app: 'recipes' })
+      assertStringIncludes(await no('jeff.recipes@yaks.app'), 'no mailbox')
+      await connector(k, them.cookie)
+        .tool('app_restore', { space: 'jeff', app: 'recipes' })
+      assertEquals(
+        (await arrives(k, {
+          from: 'ana@books.example',
+          to: 'jeff.recipes@yaks.app',
+          raw: rfc822({ Subject: 'Back in the box' }, 'Hello again.'),
+        })).status,
+        200,
+      )
     } finally {
       await k.stop()
     }

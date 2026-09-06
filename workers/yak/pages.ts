@@ -141,6 +141,22 @@ export let nothingHere = () =>
     404,
   )
 
+// An app in the trash, at its own address (erase.ts, T-34430). Everyone else
+// gets `nothingHere` — a deleted app is not a stranger's news — so this is
+// the space's OWNER, told the one thing that is actually true of this
+// address: nothing serves here, and it is theirs to take back from the page
+// their apps are listed on. A 404 with words in it, because the address
+// really is answering nothing.
+export let binned = (at: { title: string; days: number }) =>
+  shell(
+    `${esc(at.title)} is in the trash.`,
+    `Nothing answers at this address until it is restored. It is kept for ${at.days} more ${
+      at.days == 1 ? 'day' : 'days'
+    }, then erased for good.`,
+    404,
+    '<p><a class="Button" href="/">Restore it from your apps</a></p>',
+  )
+
 // Deploying by DROPPING a file (T-34230): the one door on this platform that
 // makes an app with no assistant in the room. A file input, which a file can
 // also be dragged onto, and the name the app lives at — one plain form that
@@ -468,6 +484,10 @@ export let spaceIndex = (at: {
   space: string
   title: string
   apps: { slug: string; title: string }[]
+  // What the owner deleted and can still have back, with the days each has
+  // left (erase.ts, T-34430). Empty for everybody else — nobody but the owner
+  // is told an app was ever here.
+  trash?: { slug: string; title: string; days: number }[]
   hidden: number
   role: string | null
   person: boolean
@@ -489,6 +509,27 @@ export let spaceIndex = (at: {
         `<a class="Pill" href="/${esc(a.slug)}/">${esc(a.title || a.slug)}</a>`
       ).join('')
     }</nav>`
+    : ''
+  // Under the pills, and the owner's alone: what was deleted, how long it has
+  // left, and one button that brings it back. A form per app POSTing to this
+  // page's own address — the same door the settings form uses (apps.ts
+  // `saved`), so restoring needs no script and no assistant.
+  let bin = owner && at.trash?.length
+    ? `<section class="Card"><h2>In the trash</h2>
+<p class="Note">Deleted apps are kept for 30 days — everything they saved is
+still here — and then erased for good.</p>
+${
+      at.trash.map((a) =>
+        `<form method="post" action="/">
+<input type="hidden" name="restore" value="${esc(a.slug)}">
+<p>${esc(a.title || a.slug)} — ${a.days} ${
+          a.days == 1 ? 'day' : 'days'
+        } left</p>
+<button type="submit">Restore</button>
+</form>`
+      ).join('')
+    }
+</section>`
     : ''
   let ask = at.hidden && !owner
     ? `<p class="Note">${
@@ -607,7 +648,7 @@ one.</p>
     esc(at.title || at.space),
     lead,
     at.no ? 400 : 200,
-    `${block}${mine}${ask}${yours}${inn}${pitch}${at.person ? home : ''}${
+    `${block}${mine}${bin}${ask}${yours}${inn}${pitch}${at.person ? home : ''}${
       owner ? dropping + chatLive + copying + tabbing : ''
     }`,
   )
