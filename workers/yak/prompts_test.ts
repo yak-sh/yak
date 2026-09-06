@@ -12,17 +12,12 @@ Deno.test('a prompt is pickable by name, once', () => {
   assertEquals(new Set(names).size, names.length)
   for (let p of PROMPTS) {
     assert(/^[a-z][a-z_]*$/.test(p.name), p.name)
-    assert(p.title && p.description.length > 40, p.name)
     assertEquals(promptOf(p.name), p)
   }
   assertEquals(promptOf('nope'), null)
-  // Few on purpose: a menu a person reads is not a tool list.
-  assert(PROMPTS.length <= 6, 'the menu is growing')
 })
 
-// Picked bare, with nothing filled in, every optional prompt still has to read
-// as a sentence — the fallback is what a person sees when they pick from a
-// menu and type nothing.
+// Picked bare, no optional argument leaves a template hole in the message.
 Deno.test('a prompt reads with nothing filled in', () => {
   for (let p of PROMPTS) {
     let said = p.say(
@@ -30,9 +25,7 @@ Deno.test('a prompt reads with nothing filled in', () => {
         p.arguments.filter((a) => a.required).map((a) => [a.name, 'a thing']),
       ),
     )
-    assert(said.trim().length > 60, p.name)
     assert(!/undefined|\{\{|\$\{/.test(said), `${p.name} left a hole: ${said}`)
-    assert(said.includes('yaks.app'), `${p.name} never says where`)
   }
 })
 

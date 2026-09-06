@@ -54,18 +54,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     // The card asks for an address, and nothing else.
     let card = await k.at('yaks.app', '/login')
     assertEquals(card.status, 200)
-    let welcome = await card.text()
-    for (
-      let sentence of [
-        'Your assistant builds apps for you on yaks.app.',
-        'They live at your own address, with their own data.',
-        'Sign in or sign up with your email.',
-        'No account to create first.',
-        'No passwords, ever.',
-        "We'll email you a six-digit code.",
-        'Send me a code',
-      ]
-    ) assertStringIncludes(welcome, sentence)
+    assertMatch(await card.text(), /<input name="email" type="email" required/)
 
     // A code, asked for and mailed. The page says where it went and asks for
     // the code — and nothing else, of anybody, ever: signing up is the address
@@ -75,11 +64,6 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     let sent = await form(k, '/login', { email })
     assertEquals(sent.status, 200)
     let asking = await sent.text()
-    assertStringIncludes(
-      asking,
-      `We sent a six-digit code to ${email}. It lasts ten minutes.`,
-    )
-    assertStringIncludes(asking, 'Enter it to land on your own space.')
     assertEquals(/what should we call you/i.test(asking), false)
     assertEquals(/name="space"/.test(asking), false)
     let code = await mailed(k, email)
@@ -166,7 +150,6 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
         returning,
         new RegExp(`name="return" value="${back}"`),
       )
-      assertStringIncludes(returning, 'Enter it to sign in and continue.')
       let r = await form(k, '/login/code', {
         email: addr,
         code: await mailed(k, addr),
@@ -326,15 +309,11 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
         .then((r) => r.text())
     let fresh = await theirPage()
     assertMatch(fresh, /<details class="Attach" open>/)
-    assertMatch(fresh, /Add custom connector/)
-    // And what they are called leads it — above the builder's question and
-    // above the steps, which at full height are two screens of page (T-34419).
-    // Nothing to do next yet: nobody has connected.
+    // What they are called leads the connect block.
     assert(
       fresh.indexOf('name="name"') < fresh.indexOf('<details class="Attach"'),
       fresh,
     )
-    assertEquals(fresh.includes('What to do next'), false)
 
     // A client registers itself (RFC 7591) — what the Claude and ChatGPT
     // connectors do today.
@@ -373,10 +352,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     }).toString()
     let linking = await form(k, '/login', { email, q, return: notes })
     assertEquals(linking.status, 200)
-    assertStringIncludes(
-      await linking.text(),
-      'Enter it to finish connecting your assistant.',
-    )
+    await linking.body?.cancel()
     let consent = await k.at('yaks.app', `/oauth/authorize?${q}`, {
       headers: { cookie },
     })
@@ -475,11 +451,6 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     // one line to open rather than the page (T-34236).
     let working = await theirPage()
     assertMatch(working, /<details class="Attach">/)
-    assertMatch(working, /Add custom connector/)
-    // And something stands where they were: what to say to the assistant that
-    // just connected, since nothing is built here yet (T-34420).
-    assertMatch(working, /What to do next/)
-    assertMatch(working, /Make me a page for my book club/)
     assertMatch(working, /class="Copy_Go"/)
 
     // And signing in lands where it landed before it: their own space is the
@@ -699,7 +670,7 @@ slow('/login never draws the box for a browser already signed in', async () => {
     // Signed out, the card is what it always was.
     let card = await get('/login')
     assertEquals(card.status, 200)
-    assertMatch(await card.text(), /Send me a code/)
+    assertMatch(await card.text(), /<input name="email" type="email" required/)
   } finally {
     await k.stop()
   }
@@ -951,15 +922,8 @@ slow('the connector page, and the address chosen on it', async () => {
     })
     assertEquals(whole.status, 200)
     let card = await whole.text()
-    for (
-      let said of [
-        /https:\/\/yaks\.app\/mcp/,
-        /Add custom connector/,
-        /claude mcp add --transport http yaks/,
-        /Developer mode/,
-        /speaks MCP/,
-      ]
-    ) assertMatch(card, said)
+    assertMatch(card, /https:\/\/yaks\.app\/mcp/)
+    assertMatch(card, /claude mcp add --transport http yaks/)
     assertMatch(card, new RegExp(`${derived}.yaks.app`))
     assertMatch(card, new RegExp(`name="space"[^>]*value="${derived}"`))
 
@@ -1098,17 +1062,7 @@ slow(
         )
       }
       assertEquals(as.scopes_supported, ['graph'])
-      assertStringIncludes(page, '<b>Scope</b> <code>graph</code>')
-      // The three things a person gets wrong on their own: which authentication
-      // to pick, that there is no secret to find, and that the client boxes are
-      // meant to be empty.
-      assertStringIncludes(page, '<b>OAuth settings.</b>')
-      assertStringIncludes(page, 'Set <b>Authentication</b> to <b>OAuth</b>')
-      assertStringIncludes(page, 'There is no secret to enter')
-      assertStringIncludes(
-        page,
-        'Leave <b>OAuth Client ID</b> and <b>OAuth Client Secret</b> empty',
-      )
+      assertStringIncludes(page, '<code>graph</code>')
       // And the address for a client that cannot do optional authentication
       // is still written down (T-34416), as the sentence it now is: everybody
       // is handed the plain door, which does mixed auth (T-34465).

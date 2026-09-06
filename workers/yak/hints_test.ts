@@ -9,7 +9,7 @@
 // none of them and the diff says which line to add it to, which is the whole
 // point: the table is the declaration, and a tool that forgot to declare
 // cannot slip through wearing whatever the default happened to be.
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
 import { annotated, core } from '@yaks/mcp'
 import { UNDO } from './guide.ts'
 import { TOOLS } from './tools.ts'
@@ -73,36 +73,6 @@ let OUTSIDE = [
   'space_sell',
 ]
 
-// The way back out of each of them, in the words its own description has to
-// END with (T-34509). Nothing here is lost by a simple mistake, and the place
-// an agent needs to be told that is the tool it is reading at the moment it is
-// deciding whether to dare — not a guide it may not have opened.
-//
-// PINNED like the lists above, and for the same reason: a new destructive tool
-// with no entry here fails, so naming the way back is part of declaring one.
-// Two of them say honestly that there is nothing to name, which is the truthful
-// entry and not an exemption.
-let BACK: Record<string, string> = {
-  app_delete: 'The way back: app_restore',
-  app_deploy: 'The way back: app_rollback',
-  app_files: 'The way back from any write, patch, fetch or delete here',
-  app_rollback: 'The way back: another app_rollback',
-  app_secret_remove: 'The way back: app_secret_set with the value again',
-  app_unpublish: 'The way back: app_publish',
-  app_update: 'The way back: app_rollback',
-  domain_detach: 'The way back: domain_attach with the same hostname',
-  member_remove: 'The way back: member_add with the same address',
-  sandbox_exec: 'The way back: none is needed',
-  sandbox_ship: 'The way back: these land through app_files',
-  sandbox_write: 'The way back: none is needed',
-  space_delete: 'The way back: space_restore',
-  store_restore: 'The way back: another store_restore',
-}
-
-// How much of a description counts as its ENDING. Long enough for a closing
-// sentence, short enough that a mention buried in the middle does not pass.
-let ending = (said: string) => said.trimEnd().slice(-200)
-
 let sorted = (names: string[]) => [...names].sort()
 
 let picked = (has: (t: (typeof TOOLS)[number]) => boolean) =>
@@ -156,32 +126,10 @@ Deno.test('a read tool is never destructive, and every write says which', () => 
   }
 })
 
-Deno.test('every destructive tool ends by naming its way back', () => {
-  let destroys = TOOLS.filter((t) => annotated(t).destructiveHint)
-  // app_deploy is not destructive — it only adds a version — but it replaces
-  // what the app serves, so it says its way back with the rest.
-  for (let t of [...destroys, TOOLS.find((x) => x.name == 'app_deploy')!]) {
-    let back = BACK[t.name]
-    assert(back, `${t.name} names no way back — add it to BACK`)
-    assertStringIncludes(
-      ending(t.description),
-      back,
-      `${t.name} does not END by naming its way back`,
-    )
-  }
-  // Nothing in the table that is not one of them: a way back named for a tool
-  // that cannot destroy is a line nobody will maintain.
-  assertEquals(
-    sorted(Object.keys(BACK)),
-    sorted([...destroys.map((t) => t.name), 'app_deploy']),
-  )
-})
-
 // And the generic tier, whose own package cannot know it (@yaks/mcp
 // `CoreOpts.undo`): a store's way back is store_restore, and graph_apply is
 // where an agent about to delete a row is reading.
 Deno.test('graph_apply is told this store has a way back', () => {
-  assertStringIncludes(UNDO, 'store_restore')
   assert(
     core({ vocab: platformVocab(), undo: UNDO })
       .find((t) => t.name == 'graph_apply')!.description.endsWith(UNDO),

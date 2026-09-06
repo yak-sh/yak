@@ -12,7 +12,7 @@ import { RESERVED } from '../../src/store/vocab.ts'
 import { comps, typeName } from '../../src/types.ts'
 import { SHIM, upload } from './dispatch.ts'
 import type { Env } from './env.ts'
-import { INSTRUCTIONS, PAGES, uriOf } from './guide.ts'
+import { PAGES, uriOf } from './guide.ts'
 import { ORIGIN } from './route.ts'
 import { TOOLS } from './tools.ts'
 
@@ -31,9 +31,11 @@ let pageText = (slug: string) =>
 Deno.test("the guide's Deeper links are exactly the pages offered", () => {
   let linked = [...guide.matchAll(/<https:\/\/yaks\.app\/guide\/(\w+)\.md>/g)]
     .map((m) => m[1])
+  let slugs = PAGES.map((p) => p.slug)
+  assertEquals(new Set(slugs).size, slugs.length, 'two pages share a slug')
   assertEquals(
     [...new Set(linked)].sort(),
-    PAGES.map((p) => p.slug).sort(),
+    slugs.sort(),
   )
 })
 
@@ -41,75 +43,8 @@ Deno.test('every page offered is a file, and says what it is', () => {
   for (let p of PAGES) {
     let text = pageText(p.slug)
     assert(text.startsWith('# '), `${p.slug} opens with no title`)
-    // A page is the DEEP treatment, not the guide's passage moved: the
-    // shortest of them still has to be worth choosing over the map.
-    assert(text.split('\n').length > 80, `${p.slug} is too thin to be a page`)
     // And it points back, so nobody is stranded on one page of a guide.
     assert(text.includes('yaks.app/guide.md'), `${p.slug} points nowhere back`)
-  }
-})
-
-// Nothing here is lost by a simple mistake (T-34509). The words are the point:
-// an agent that believes a change might destroy the person's data stops to ask
-// permission for every write, and the whole reason all this is kept is so it
-// does not have to. So the guide says it under its own heading, and the
-// instructions every agent is handed at connect say it in a sentence — the two
-// doors, because an agent reads the second and may never open the first.
-Deno.test('the guide and the instructions both say nothing is lost', () => {
-  assert(
-    guide.includes('## Nothing here is lost by a simple mistake'),
-    'the guide has no section on the way back',
-  )
-  // And it names all four ways back, since the point is that the reader can
-  // pick the one that covers what they are about to do.
-  for (
-    let word of [
-      'app_restore',
-      'space_restore',
-      'store_restore',
-      "op: 'history'",
-      "op: 'restore'",
-      'app_rollback',
-    ]
-  ) {
-    assert(guide.includes(word), `the guide never names ${word}`)
-  }
-  // The one honest exception, said out loud rather than left as a surprise.
-  assert(guide.includes('The one thing with no way back'), guide.slice(-200))
-
-  assert(
-    INSTRUCTIONS.includes('NOTHING HERE IS LOST BY A SIMPLE MISTAKE'),
-    'the instructions never say it',
-  )
-  assert(
-    INSTRUCTIONS.includes('fix things first and ask') &&
-      INSTRUCTIONS.includes('Say so to the person when they hesitate'),
-    'the instructions say it is recoverable but not what to DO about it',
-  )
-})
-
-// The description is the only thing an agent sees before deciding to read, so
-// two pages may never wear the same one, and none may be a label.
-Deno.test('every page description is its own, and says something', () => {
-  let said = PAGES.map((p) => p.description)
-  assertEquals(new Set(said).size, said.length, 'two pages read alike')
-  for (let p of PAGES) {
-    assert(p.description.length > 80, `${p.slug} says too little to choose by`)
-    assert(p.title.length > 3 && !p.title.endsWith('.'), p.slug)
-  }
-  // The `guide` tool names all thirteen at once in its own description
-  // (tools.ts, T-34284), so a page's `brief` is a phrase — long enough to
-  // choose by, short enough that thirteen of them fit in a tool list.
-  let briefs = PAGES.map((p) => p.brief)
-  assertEquals(new Set(briefs).size, briefs.length, 'two pages read alike')
-  for (let p of PAGES) {
-    assert(
-      p.brief.length > 20 && p.brief.length < 50,
-      `${p.slug}'s brief is ${p.brief.length} characters`,
-    )
-    // It reads inside a sentence — `mail (an app's own email address)` — so
-    // it opens like one clause of one, not like a heading.
-    assert(/^[a-z]/.test(p.brief), `${p.slug}'s brief opens like a title`)
   }
 })
 

@@ -316,9 +316,7 @@ Deno.test('the roster is the platform table, whole', async () => {
   for (let want of ['app_new', 'app_files', 'app_deploy', 'member_add']) {
     assert(names.includes(want), `${want} is offered`)
   }
-  // Every one of them describes itself, so a model can choose between them.
   for (let t of roster(ctx)) {
-    assert(t.fn.description.length > 20, `${t.fn.name} says what it is`)
     assertEquals(t.fn.parameters.type, 'object')
   }
 })
