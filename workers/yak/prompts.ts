@@ -7,11 +7,12 @@
 // work at the right place and carry the one or two judgements the agent
 // otherwise skips.
 //
-// Four of them, and few on purpose: a prompt that duplicates what the agent
-// would do unprompted is noise on a menu a person reads. Each is a sentence
-// somebody would otherwise have to compose, and each has the tools behind it
-// already — make (app_new/app_files/app_deploy), fix (app_errors), share
-// (app_set/member_add), publish (app_publish).
+// Few of them on purpose: a prompt that duplicates what the agent would do
+// unprompted is noise on a menu a person reads. Each is a sentence somebody
+// would otherwise have to compose, and each has the tools behind it already —
+// make (app_new/app_files/app_deploy), fix (app_errors), share
+// (app_set/member_add), publish (app_publish), and app-ideas, the one that
+// asks for nothing to be built yet.
 //
 // Shape: MCP 2025-06-18 §Server/Prompts — `prompts/list` answers `{prompts}`
 // (no cursor; the list is short and whole), `prompts/get` answers
@@ -26,19 +27,85 @@ export type Arg = {
   required?: boolean
 }
 
+/** An app the person already has, as a message names it. */
+export type Made = { title: string; url: string }
+
 export type Prompt = {
   name: string
   title: string
   description: string
   arguments: Arg[]
-  // The person's own message, out of what they filled in.
-  say: (a: Record<string, string>) => string
+  // The person's own message, out of what they filled in — and out of what
+  // they already have, for a message that is about that: the apps in reach
+  // (mcp.ts `extend`), or null when nobody has signed in (preauth.ts).
+  say: (a: Record<string, string>, made: Made[] | null) => string
 }
 
 // What the person named, or the phrase that stands in when they named
 // nothing — a prompt picked bare still has to read as a sentence.
 let or = (a: Record<string, string>, name: string, fallback: string) =>
   (a[name] ?? '').trim() || fallback
+
+// Where the person stands, as the ideas message says it: the apps they have
+// by name and address, so an idea lands on something of theirs; the line for
+// somebody whose first app this would be; and, signed out, where signing in
+// is — an idea costs no account, and an app does.
+let having = (made: Made[] | null) =>
+  !made
+    ? `I have not signed in there yet. Signing in at https://yaks.app/login —
+an email address and a six-digit code — is what turns one of these into an
+app, so tell me the ideas first and say that at the end.`
+    : made.length
+    ? `The apps I already have:
+
+${made.map((m) => `- ${m.title} — ${m.url}`).join('\n')}
+
+Where an idea belongs in one of those, say so rather than making it a second
+app.`
+    : `I have not made anything there yet, so one of these would be my first.`
+
+// The ideas door (T-34557). Owner, 2026-09-06: "This prompt to my agent was
+// awesome: 'Any yaks.app ideas you think I'd like based on our chat history?'
+// Can we offer that as a /app-ideas command or similar? With guidance, etc too
+// as context."
+//
+// The question is the whole of what a person says; the guidance is what an
+// agent proposes badly without — what an app here IS, so the ideas are things
+// this place can actually hold, and what this person already made, so they
+// land on their own address rather than in the abstract. The guide is pointed
+// at rather than copied: it moves, and this does not.
+//
+// It is also the one prompt a stranger may pick (preauth.ts), which is why it
+// is named here as well as listed below. Nothing in it is built, so nothing in
+// it needs an account — and the message says where the account is for the
+// moment one of the ideas is wanted.
+export let IDEAS: Prompt = {
+  name: 'app-ideas',
+  title: 'Ideas for what to make',
+  description:
+    'A handful of apps worth making on yaks.app for this particular person ' +
+    '— out of what they have said and what they have already made — each a ' +
+    'line or two, with an offer to build one.',
+  arguments: [],
+  say: (_a, made) =>
+    `Any yaks.app ideas you think I'd like, based on our chat history?
+
+What gets made there: an app is an index.html and whatever files sit beside
+it, served live at an address of my own — it opens on my phone, it keeps what
+it saves in a store of its own rather than in one browser, and it is a link I
+can send to somebody. It can be mine alone, readable by anyone with the link,
+or open for anyone to add to, and I can invite people into it by email
+address. It can carry commands of its own for you to call, keep what I have
+told it about how I want things done, and take money through Stripe. Read the
+guide before you decide what is possible — the guide tool, or
+https://yaks.app/guide.md.
+
+${having(made)}
+
+Give me five or so, each a line or two: what it is, and why me. Tie every one
+to something I have actually said or done rather than to apps in general.
+Then offer to build whichever I pick.`,
+}
 
 export let PROMPTS: Prompt[] = [
   {
@@ -133,6 +200,7 @@ Before you do: tell me what a copy carries and what it does not, and check
 the version that is serving now is the one I want other people taking. Then
 pick the name it installs under and publish it.`,
   },
+  IDEAS,
 ]
 
 export let promptOf = (name: unknown) =>

@@ -84,7 +84,7 @@ import { VERSION } from '../../src/version.ts'
 import { reaching, searching } from './agent.ts'
 import { anonymous, asked, opened, READS, SCOPE } from './anon.ts'
 import * as dirPart from './directory.ts'
-import { directory } from './directory.ts'
+import { directory, url } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { INSTRUCTIONS, pageFor, UNDO } from './guide.ts'
 import { asking, challenge, SAYS, unauthorized } from './identity.ts'
@@ -229,6 +229,13 @@ let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
       return { contents: [{ ...page, mimeType: VIEW_MIME }] }
     })
   }
+  // What this person has already made, for the prompt that is about that
+  // (prompts.ts `app-ideas`): the apps in reach by name and address, off the
+  // passage the door just gathered rather than read a second time.
+  let made = apps.map((e) => ({
+    title: e.app.title || e.app.slug,
+    url: url(e.space, e.app),
+  }))
   for (let p of PROMPTS) {
     server.registerPrompt(p.name, {
       title: p.title,
@@ -249,6 +256,7 @@ let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
             Object.fromEntries(
               Object.entries(args ?? {}).map(([k, v]) => [k, String(v ?? '')]),
             ),
+            made,
           ),
         },
       }],

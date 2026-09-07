@@ -107,7 +107,11 @@ slow(
         refusal._meta['mcp/www_authenticate'][0],
         'resource_metadata=',
       )
-      await assertRejects(() => connector(k).call('prompts/list'), Error, '401')
+      await assertRejects(
+        () => connector(k).call('prompts/get', { name: 'make' }),
+        Error,
+        '401',
+      )
       let init = await agent.call('initialize', {
         protocolVersion: '2025-03-26',
         capabilities: {},
@@ -475,6 +479,7 @@ slow(
         'fix',
         'share',
         'publish',
+        'app-ideas',
       ])
       let make = prompts.find((p: { name: string }) => p.name == 'make')
       assertEquals(make.title, 'Make something new')
@@ -500,6 +505,15 @@ slow(
           .messages[0].content.text,
         'my apps',
       )
+      // The ideas door (T-34557), asked by somebody who has made nothing
+      // here yet: the question, the guidance, and no sign-in line — they are
+      // signed in, so an idea is one tool call from being an app.
+      let ideas = (await agent.call('prompts/get', { name: 'app-ideas' }))
+        .messages[0].content.text
+      assertStringIncludes(ideas, "Any yaks.app ideas you think I'd like")
+      assertStringIncludes(ideas, 'I have not made anything there yet')
+      assertStringIncludes(ideas, 'https://yaks.app/guide.md')
+      assertEquals(ideas.includes('https://yaks.app/login'), false)
       // The spec's two -32602s: a name nobody offers, and a required
       // argument nobody filled in.
       await assertRejects(
@@ -1483,10 +1497,10 @@ slow('the door before anyone signs in', async () => {
     facing(init.serverInfo)
     assertEquals(init.capabilities.tools.listChanged, true)
     assertEquals(init.capabilities.resources.listChanged, true)
-    // Not prompts, which are a person's own doors, and not logging, which is
-    // a break in somebody's app: a capability this door would refuse is worse
-    // than one it never claimed.
-    assertEquals(init.capabilities.prompts, undefined)
+    // Prompts too, since one of them is public (T-34557). Not logging, which
+    // is a break in somebody's app: a capability this door would refuse is
+    // worse than one it never claimed.
+    assertEquals(init.capabilities.prompts.listChanged, true)
     assertEquals(init.capabilities.logging, undefined)
     // What it says is the orientation, not the recipe — nobody who cannot
     // call app_new is told to call it — and it names where signing in is.
@@ -1597,6 +1611,20 @@ slow('the door before anyone signs in', async () => {
     assertEquals(plain.status, 200)
     assertEquals(await plain.text(), map.text)
 
+    // And the one prompt a stranger may pick: ideas, which cost no account.
+    // The message says the ideas first and where the account is (T-34557),
+    // and it names nobody's apps, because nobody is asking.
+    assertEquals(
+      ((await anon.call('prompts/list')).prompts as { name: string }[])
+        .map((p) => p.name),
+      ['app-ideas'],
+    )
+    let ideas = (await anon.call('prompts/get', { name: 'app-ideas' }))
+      .messages[0].content.text
+    assertStringIncludes(ideas, "Any yaks.app ideas you think I'd like")
+    assertStringIncludes(ideas, 'I have not signed in there yet')
+    assertStringIncludes(ideas, 'https://yaks.app/login')
+
     // A notification is answered the transport's way, with no body to sign
     // in for.
     let noted = await k.at('yaks.app', '/mcp', {
@@ -1694,7 +1722,8 @@ slow('the door before anyone signs in', async () => {
       arguments: { name: 'leaderboard' },
     })
     await shut('tools/call', { name: 'nope' })
-    await shut('prompts/list')
+    // Every prompt but the ideas one asks for something to be built or
+    // shared, so it stays a person's own.
     await shut('prompts/get', { name: PROMPTS[0].name })
     await shut('logging/setLevel', { level: 'error' })
     // The platform's own views, the app's own page, and an asset that is not
@@ -6824,6 +6853,18 @@ slow('an app says what it holds, and what it asks of an agent', async () => {
     assertEquals(got.messages.length, 1)
     assertEquals(got.messages[0].role, 'user')
     assertEquals(got.messages[0].content.text, RULES)
+
+    // And the ideas door, which is about what they already have (T-34557):
+    // every app of theirs by title and address, so a proposal lands on one
+    // rather than in the abstract.
+    let ideas = (await agent.call('prompts/get', { name: 'app-ideas' }))
+      .messages[0].content.text as string
+    assertStringIncludes(
+      ideas,
+      `- Recipes — https://${space}.yaks.app/recipes/`,
+    )
+    assertStringIncludes(ideas, `- Chores — https://${space}.yaks.app/chores/`)
+    assertEquals(ideas.includes('https://yaks.app/login'), false)
 
     // It is the app's INSIDE: deployed, never served, whichever way the path
     // is spelled (apps.ts MANIFEST).

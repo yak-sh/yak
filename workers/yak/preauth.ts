@@ -40,6 +40,7 @@ import type { Security } from '@yaks/mcp'
 import { VERSION } from '../../src/version.ts'
 import type { Env } from './env.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
+import { IDEAS } from './prompts.ts'
 import { CONNECTOR } from './seo.ts'
 
 // The whole world a public answer can see: the static site, which serves the
@@ -208,9 +209,9 @@ let listed = ({ uri, name, title, description, mimeType }: Doc) => ({
 // The part of the pre-auth surface that looks NOTHING up: a RESULT for a
 // method answered out of this file's own words and the static assets, or null
 // for everything else — the tools, which read data and are anon.ts's, and
-// every other method and every other resource, which meet the challenge. Null
-// is also the answer for a page that does not exist at all, so nothing here
-// says whether an address is real.
+// every other method, every other resource and every other prompt, which meet
+// the challenge. Null is also the answer for a page that does not exist at
+// all, so nothing here says whether an address is real.
 export let answer = async (
   method: string,
   params: Record<string, unknown>,
@@ -219,15 +220,17 @@ export let answer = async (
   if (method == 'initialize') {
     return {
       protocolVersion: spoken(params.protocolVersion),
-      // Only what is public: tools and resources, both promising to say when
-      // they move — which is exactly what signing in does to them, and the
-      // stream already announces (stream.ts `told`, T-33004). No prompts,
-      // which are actions for a person, and no logging, which is a break in
-      // somebody's app. No `mcp-session-id` rides this answer either: the id
-      // names a stream, and a stream belongs to a person.
+      // Only what is public: tools, resources, and the one prompt that asks
+      // for nothing to be built (`app-ideas`, T-34557) — all three promising
+      // to say when they move, which is exactly what signing in does to them,
+      // and the stream already announces (stream.ts `told`, T-33004). No
+      // logging, which is a break in somebody's app. No `mcp-session-id` rides
+      // this answer either: the id names a stream, and a stream belongs to a
+      // person.
       capabilities: {
         tools: { listChanged: true },
         resources: { listChanged: true },
+        prompts: { listChanged: true },
       },
       // The face, before signing in — the same one the signed-in door answers
       // (seo.ts CONNECTOR, mcp.ts). It is what a directory reviewer and a
@@ -241,6 +244,31 @@ export let answer = async (
     }
   }
   if (method == 'ping') return {}
+  // The one prompt a stranger may pick (prompts.ts IDEAS): ideas for what to
+  // make here, which costs no account — and the message it hands back says
+  // where the account is for the moment one of them is wanted. Every other
+  // prompt asks for something to be built or shared, so it stays a person's
+  // own and meets the challenge; a name that is not this one answers null,
+  // like a page that is not the guide.
+  if (method == 'prompts/list') {
+    return {
+      prompts: [{
+        name: IDEAS.name,
+        title: IDEAS.title,
+        description: IDEAS.description,
+        arguments: IDEAS.arguments,
+      }],
+    }
+  }
+  if (method == 'prompts/get' && params.name == IDEAS.name) {
+    return {
+      description: IDEAS.description,
+      messages: [{
+        role: 'user',
+        content: { type: 'text', text: IDEAS.say({}, null) },
+      }],
+    }
+  }
   if (method == 'resources/list') return { resources: DOCS.map(listed) }
   if (method == 'resources/read') {
     let want = DOCS.find((d) => d.uri == params.uri)

@@ -477,7 +477,8 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
         await k.at('yaks.app', '/mcp', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: '{"jsonrpc":"2.0","id":1,"method":"prompts/list"}',
+          body: '{"jsonrpc":"2.0","id":1,"method":"prompts/get",' +
+            '"params":{"name":"make"}}',
         }),
       ]
     ) {

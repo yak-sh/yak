@@ -10,6 +10,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { answer, DOCS, NO_ARGS, PUBLIC } from './preauth.ts'
+import { IDEAS } from './prompts.ts'
 import { TOOLS } from './tools.ts'
 
 // The whole world a public answer may touch, and a note of what it touched.
@@ -41,6 +42,19 @@ Deno.test('every public method answers, out of the site and nothing else', async
       .resources.map((r) => r.uri),
     DOCS.map((d) => d.uri),
   )
+  // The one prompt a stranger may pick, and the message it hands back: the
+  // ideas, and where the account is for the moment one of them is wanted
+  // (T-34557). It names nobody's apps, because nobody is asking.
+  assertEquals(
+    (await answer('prompts/list', {}, s) as { prompts: { name: string }[] })
+      .prompts.map((p) => p.name),
+    [IDEAS.name],
+  )
+  let ideas = await answer('prompts/get', { name: IDEAS.name }, s) as {
+    messages: { role: string; content: { text: string } }[]
+  }
+  assertEquals(ideas.messages[0].role, 'user')
+  assert(ideas.messages[0].content.text.includes('https://yaks.app/login'))
   // Nothing so far read anything at all; the one read that follows is the
   // page the caller named, from the address the listing already gave them.
   assertEquals(s.asked, [])
@@ -66,10 +80,11 @@ Deno.test('a protected method, tool or page is not answered here', async () => {
       ['tools/call', { name: 'app_list' }],
       ['tools/call', { name: 'runs__leaderboard' }],
       ['tools/call', {}],
-      // A prompt is an action a person picks, and logging is a break in
+      // Every prompt but the ideas one asks for something to be built or
+      // shared, so it stays a person's own — and logging is a break in
       // somebody's app.
-      ['prompts/list', {}],
-      ['prompts/get', { name: 'build' }],
+      ['prompts/get', { name: 'make' }],
+      ['prompts/get', {}],
       ['logging/setLevel', { level: 'error' }],
       // The platform's own views, an app's own view, a guide page nobody
       // wrote — and an asset that is not the guide, which is what says the

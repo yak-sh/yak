@@ -228,7 +228,8 @@ let first = (said: string) =>
  * asking an agent to go and read a file.
  *
  * The name is the app's slug — host-safe, since a slug is `[a-z0-9-]` and the
- * door's own prompts are `[a-z]+` — and `<app>__agents` where that word is
+ * door's own prompts are letters and hyphens — and `<app>__agents` where that
+ * word is
  * already spoken for; an app slug carries no underscore, so the first `__` is
  * the seam and nothing else can be. An app that can claim neither is left off
  * rather than shadowing something a person already knows by name.
