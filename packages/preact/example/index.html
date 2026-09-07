@@ -1,0 +1,41 @@
+<!-- This page owns the example's browser import map. Each package stays an
+     individual module, and Preact comes from the application's vendored ESM. -->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>yaks.app</title>
+    <style>
+    body {
+      max-width: 36rem;
+      margin: 4rem auto;
+      padding: 0 1.5rem;
+      font: 1.1rem/1.6 system-ui, sans-serif;
+    }
+    button {
+      padding: 0.6rem 1rem;
+      font: inherit;
+    }
+    </style>
+    <script type="importmap">
+    {
+      "imports": {
+        "@yaks/preact": "/packages/preact/mod.ts",
+        "@yaks/render": "/packages/render/mod.ts",
+        "@yaks/match": "/packages/match/mod.ts",
+        "@yaks/vocab": "/packages/vocab/mod.ts",
+        "@yaks/query": "/packages/query/mod.ts",
+        "@yaks/sql": "/packages/sql/mod.ts",
+        "@yaks/id": "/packages/id/mod.ts",
+        "preact": "/src/vendor/preact.module.js",
+        "preact/hooks": "/src/vendor/hooks.module.js"
+      }
+    }
+    </script>
+  </head>
+  <body>
+    <main></main>
+    <script type="module" src="/packages/preact/example/app.ts"></script>
+  </body>
+</html>

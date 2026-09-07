@@ -48,6 +48,9 @@ In dependency order:
   role-rightmost name, actions contributed per component, and column schemas
   matched by the same registry. Renderers take an injected hyperscript, so the
   host owns what a tree becomes.
+- **[@yaks/preact](./preact)** — the Preact host for that registry: an Entity
+  component reading a function store, subscribing while mounted, and handing
+  Preact's hyperscript to the same portable renderers.
 - **[@yaks/ram](./ram)** — the storage adapter with nothing underneath it: a
   `Map` of bundles answering `@yaks/graph`'s `Storage`, reads through
   `@yaks/match`, synchronous, browser-ready. Tested batch for batch against

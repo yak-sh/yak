@@ -37,6 +37,7 @@
     "./packages/sqlite",
     "./packages/match",
     "./packages/render",
+    "./packages/preact",
     "./packages/graph",
     "./packages/ram",
     "./packages/sync",
