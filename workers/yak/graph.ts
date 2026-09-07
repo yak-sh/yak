@@ -150,6 +150,7 @@ import {
   homed,
   homes,
   housed,
+  install,
   keyOf,
   lines,
   MARK,
@@ -485,10 +486,12 @@ export class Store {
       // first time: there is no older shape to be wearing.
       if (held) recut(drive)
       for (let stmt of blobSchema()) drive.exec(stmt)
-      // The installer grows columns before indexing them. SQLite can read a
-      // quoted missing column as a constant, making a unique index collide
-      // across every row before the migration has a chance to backfill it.
-      store.install()
+      install(
+        ctx.storage,
+        vocab,
+        blobText(vocab),
+        meta && this.#get('migrated') != HANDLED,
+      )
       if (held) rebuild(drive)
       this.#put('schema', stamp)
     }

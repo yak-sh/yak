@@ -1096,7 +1096,7 @@ Deno.test('a declared index failure refuses constructor boot with an export', as
   sql.exec("update yak_kv set v = 'older schema' where k = 'schema'")
   let files = bucket()
   let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
-  await refused(now, 'UNIQUE constraint failed')
+  await refused(now, 'skipped unique index space_slug')
   assertEquals(marker(ctx), MARK)
   assertEquals(reportIn(files.held).ok, false)
   assertEquals(rowsIn(files.held).space.length, 2)
@@ -1104,6 +1104,49 @@ Deno.test('a declared index failure refuses constructor boot with an export', as
   assertEquals(sql.exec("select v from yak_kv where k = 'schema'").toArray(), [{
     v: 'older schema',
   }])
+})
+
+Deno.test('boot leaves a populated table constraint for its preparing pass', async () => {
+  let ctx = state()
+  await carriedFour(ctx)
+  let sql = ctx.storage.sql
+  sql.exec('drop index app_store')
+  sql.exec("update yak_kv set v = 'older schema' where k = 'schema'")
+  let exec = sql.exec.bind(sql)
+  let created = false
+  sql.exec = (query, ...params) => {
+    if (query.startsWith('create unique index if not exists app_store')) {
+      let [row] = exec('select count(*) as n from app where store is null')
+        .toArray() as { n: number }[]
+      assertEquals(row.n, 0)
+      created = true
+    }
+    return exec(query, ...params)
+  }
+  let files = bucket()
+  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  assertEquals(created, false)
+  assertEquals((await now.door('/query?q=.app!')).status, 200)
+  assertEquals(created, true)
+  assertEquals(marker(ctx), HANDLED)
+  assertThrows(() => exec("update app set store = 'same'"), Error, 'UNIQUE')
+})
+
+Deno.test('a raw index creation failure still refuses an empty store', async () => {
+  let ctx = state()
+  let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
+  ctx.storage.sql.exec = (query, ...params) => {
+    if (query.startsWith('create unique index if not exists space_slug')) {
+      throw new Error('index creation failed')
+    }
+    return exec(query, ...params)
+  }
+  let files = bucket()
+  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  await refused(now, 'index creation failed')
+  assertEquals(marker(ctx), null)
+  assertEquals(reportIn(files.held).ok, false)
+  assertEquals(files.held.size, 2)
 })
 
 Deno.test('a marker write failure rolls back its pass, even for a thrown value', async () => {

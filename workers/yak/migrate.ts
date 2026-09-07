@@ -71,6 +71,7 @@
 import { driver, type DurableStorage, reserved } from '@yaks/durable-object'
 import { edgeEid } from '@yaks/edge'
 import { sha256 } from '@yaks/graph'
+import { grown, indexed, tabled, type Text } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
 import { handle } from './directory.ts'
 
@@ -263,6 +264,35 @@ let stands = (d: Drive, table: string): boolean =>
     `select 1 as n from sqlite_master where type = 'table' and name = ?`,
     [table],
   ).length > 0
+
+/** Existing rows need a preparing pass before gaining a unique constraint.
+ * Empty tables can acquire it now without changing what old rows must satisfy. */
+export let install = (
+  storage: DurableStorage,
+  vocab: Vocab,
+  text: Text = {},
+  handling = false,
+) => {
+  let d = driver(storage)
+  for (let stmt of tabled(vocab, text)) d.exec(stmt)
+  for (let stmt of grown(d, vocab)) d.exec(stmt)
+  let held = new Set(named(d, 'index').map((i) => i.name))
+  let ready = {
+    ...vocab,
+    indexes: (table: string) =>
+      vocab.indexes(table).filter((i) => {
+        let name = `${table}_${i.cols.join('_')}`
+        if (held.has(name)) return false
+        if (!i.unique || !count(d, table)) return true
+        // HANDLED creates this constraint after assigning and reconciling handles.
+        if (handling && name == 'app_store' && unhandled(storage)) return false
+        throw new Error(
+          `skipped unique index ${name}: existing rows require a preparing migration`,
+        )
+      }),
+  }
+  for (let stmt of indexed(ready)) d.exec(stmt)
+}
 
 // A full-text index is several tables — the virtual one and its shadows — and
 // the shadows are derived bytes nobody restores from. The virtual table's own
@@ -938,6 +968,7 @@ export let handled = (
     ) {
       throw new Refused(report(false, 'the written handles did not reconcile'))
     }
+    d.exec('create unique index if not exists app_store on app (store)')
     // The unique index the OLD name was decided by. It stands on `former.slug`,
     // and that column is address history now — two apps may hold one address a
     // year apart, which is the whole point of freeing one (T-34659) — so the
