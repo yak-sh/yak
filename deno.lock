@@ -44,6 +44,7 @@
     "npm:fake-indexeddb@^6.2.2": "6.2.5",
     "npm:linkedom@~0.18.12": "0.18.13",
     "npm:lucide-preact@^1.31.0": "1.31.0_preact@10.29.7",
+    "npm:lucide@1.31.0": "1.31.0",
     "npm:postal-mime@3.0.0": "3.0.0",
     "npm:preact@^10.29.1": "10.29.7",
     "npm:sucrase@^3.35.0": "3.35.1",
@@ -965,6 +966,9 @@
         "preact"
       ]
     },
+    "lucide@1.31.0": {
+      "integrity": "sha512-iPJC7py8o990ZSmvFZlS+4+bNasP+ANDkD0IeDOGgQZjTm3p85F2Ldut7leM1yhYavr1pmoPfigm9MDHyyCOrw=="
+    },
     "matcher@3.0.0": {
       "integrity": "sha512-OkeDaAZ/bQCxeFAozM55PKcKU0yJMPGifLwV4Qgjitu+5MoAfSQN4lsLJeXZ1b8w0x+/Emda6MZgXS1jvsapng==",
       "dependencies": [
@@ -1409,6 +1413,7 @@
       "npm:ajv@^8.17.1",
       "npm:linkedom@~0.18.12",
       "npm:lucide-preact@^1.31.0",
+      "npm:lucide@1.31.0",
       "npm:postal-mime@3.0.0",
       "npm:preact@^10.29.1",
       "npm:sucrase@^3.35.0",
@@ -1611,6 +1616,7 @@
             "npm:@jsr/std__csv@1.0.6",
             "npm:@jsr/std__yaml@1.2.0",
             "npm:@modelcontextprotocol/sdk@1.29.0",
+            "npm:lucide@1.31.0",
             "npm:postal-mime@3.0.0",
             "npm:zod@3.25.76"
           ]
