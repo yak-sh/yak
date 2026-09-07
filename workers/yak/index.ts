@@ -38,6 +38,7 @@
 //   yaks.app (and any dev host)
 //     /                       the home page, from ./public
 //     /login, /login/code     identity.ts: the email-code sign-in
+//     /manage                 identity.ts: the owner's app library
 //     /connect                identity.ts: the connector page, signed in, and
 //                             the address a person's apps live at
 //     /oauth/*                identity.ts: the OAuth 2.1 door for agents
@@ -50,6 +51,7 @@
 //                             seo.ts: the site said as a list, generated
 //     anything else           ./public, else a soft 404
 //   <space>.yaks.app          apps.ts, and one door of its own:
+//     /_yaks, /_yaks/*        apps.ts: management, beside any custom homepage
 //     POST /deploy            drop.ts: a zip of files, or one index.html,
 //                             dropped on the space's page — an app made or
 //                             updated, by the member who dropped it
@@ -214,6 +216,13 @@ let serve = async (req: Request, env: Env, r: Route) => {
   if (shown) return shown
   let page = await env.ASSETS.fetch(req)
   if (page.status == 404) return lost()
+  // Setup is also served on space hosts, where the download attribute alone
+  // cannot download this cross-origin icon.
+  if (path == '/yaks-app.png') {
+    let headers = new Headers(page.headers)
+    headers.set('content-disposition', 'attachment; filename="yaks-app.png"')
+    return new Response(page.body, { status: page.status, headers })
+  }
   // Two pages are files with something LIVE in them: the home page's showcase
   // (the newest listings) and the pricing page's selling rate (sell.ts). Both
   // splice into the bytes the assets door answered, and both keep the file's

@@ -20,6 +20,7 @@
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { slow } from '../../src/testing.ts'
 import { spaceIndex } from './pages.ts'
+import { managePath } from './route.ts'
 import { client, connector, kernel, seed, signIn } from './probe.ts'
 
 // What the browser would ask for, given a page and a URL written in it: the
@@ -71,7 +72,8 @@ slow('a space with no front page lists what you may open', async () => {
     let mine = await (await at(them.cookie)).text()
     assertStringIncludes(mine, 'href="/recipes/"')
     assertStringIncludes(mine, 'href="/garden/"')
-    assertStringIncludes(mine, 'front page')
+    assertStringIncludes(mine, `href="${managePath('settings')}"`)
+    assert(!mine.includes('name="name"'), mine)
     assert(!mine.includes('What is yaks.app?'), mine)
     assert(!mine.includes('login?return='), mine)
     // And nothing is being held back from them, so nothing says so.
@@ -94,7 +96,7 @@ slow('a space with no front page lists what you may open', async () => {
     let ready = await k.at('bare.yaks.app', '/', {
       headers: { cookie: them.cookie },
     })
-    assertStringIncludes(await ready.text(), 'build something here')
+    assertStringIncludes(await ready.text(), `href="${managePath('connect')}"`)
 
     // Only the bare address lists. A path under a space with no front page
     // names nothing, and says so.
@@ -108,45 +110,26 @@ slow('a space with no front page lists what you may open', async () => {
   }
 })
 
-// The owner block's order (T-34242). On a space with nothing built the
-// builder's question stands ahead of the connect steps: it is the one door
-// that needs no assistant of the person's own, and somebody who has just
-// signed in can use it now (what they are called leads both — T-34419, in the
-// rendering tests below). Once something IS built, connecting an assistant
-// leads again and the question moves under it.
-slow("the builder's chat comes before the connect steps", async () => {
+// Builder and setup are separate destinations, and the live script is served
+// on the same origin as the optional builder.
+slow('management separates app creation from assistant setup', async () => {
   let k = await kernel()
   try {
-    let them = await seed(k, [
-      { slug: 'jeff', apps: ['recipes'] },
-      { slug: 'bare', apps: [] },
-    ])
-    let at = (host: string, cookie?: string) =>
-      k.at(host, '/', { headers: cookie ? { cookie } : {} })
-
-    let empty = await (await at('bare.yaks.app', them.cookie)).text()
-    assertStringIncludes(empty, 'action="/api/build"')
-    assert(
-      empty.indexOf('What do you want to build?') <
-        empty.indexOf('Connect your assistant'),
-      empty,
-    )
-    // Its live half is served on the space's own hostname, so the page needs
-    // no asset of the apex.
-    assertStringIncludes(empty, 'src="/api/build.js"')
+    let { cookie } = await seed(k, [{ slug: 'bare', apps: [] }])
+    let at = (view: Parameters<typeof managePath>[0]) =>
+      k.at('bare.yaks.app', managePath(view), { headers: { cookie } })
+    let library = await (await at('apps')).text()
+    assert(!library.includes('<textarea'), library)
+    assert(!library.includes('type="file"'), library)
+    let fresh = await (await at('new')).text()
+    assertStringIncludes(fresh, 'action="/api/build"')
+    assertStringIncludes(fresh, 'action="/deploy"')
+    assertStringIncludes(fresh, 'src="/api/build.js"')
+    assert(!fresh.includes('name="agent"'), fresh)
     assertEquals((await k.at('bare.yaks.app', '/api/build.js')).status, 200)
-
-    // With an app there, the instructions lead and the question follows.
-    let some = await (await at('jeff.yaks.app', them.cookie)).text()
-    assert(
-      some.indexOf('Connect your assistant') <
-        some.indexOf('Build something else'),
-      some,
-    )
-
-    // A stranger is offered no door that would only ever refuse them.
-    let cold = await (await at('bare.yaks.app')).text()
-    assert(!cold.includes('/api/build'), cold)
+    let setup = await (await at('connect')).text()
+    assertStringIncludes(setup, 'name="agent"')
+    assert(!setup.includes('<textarea'), setup)
   } finally {
     await k.stop()
   }
@@ -172,46 +155,57 @@ let block = (
     ...at,
   }).text()
 
-// T-34419. Jeff, 2026-09-05: "after putting in the code it didn't show the
-// page to change the user name i don't think." It was there — under the
-// builder's chat and under the connect steps at their full height, which is
-// two screens down on a phone.
-Deno.test('a fresh landing leads with the name and address form', async () => {
-  let page = await block()
-  let form = page.indexOf('name="name"')
-  assert(form > 0, page)
-  assert(form < page.indexOf('What do you want to build?'), page)
-  assert(form < page.indexOf('<details'), page)
+Deno.test('the app library has navigation, not account forms', async () => {
+  let page = await block({ apps: [{ slug: 'recipes', title: 'Recipes' }] })
+  assertStringIncludes(page, 'href="/recipes/"')
+  for (let view of ['connect', 'new', 'settings', 'visits', 'trash'] as const) {
+    assertStringIncludes(page, `href="${managePath(view)}"`)
+  }
+  assert(!page.includes('<form'), page)
+  assert(!page.includes('name="agent"'), page)
+  assert(!page.includes('src="/api/build.js"'), page)
 })
 
-// The say-this list, on its own: the copy control is the page's one control
-// and the connect instructions carry it too (pages.ts `copyable`, T-34412), so
-// what this block is about is counted inside the block.
-let saysIn = (page: string) =>
-  page.split('<ul class="Says">')[1]?.split('</ul>')[0] ?? ''
+Deno.test('profile and address save independently in settings', async () => {
+  let page = await block({ view: 'settings' })
+  let forms = page.match(/<form[\s\S]*?<\/form>/g) ?? []
+  assertEquals(forms.length, 2)
+  assert(forms[0] && forms[1])
+  assert(forms[0].includes('name="name"'), forms[0])
+  assert(!forms[0].includes('name="space"'), forms[0])
+  assert(forms[1].includes('name="space"'), forms[1])
+  assert(!forms[1].includes('name="name"'), forms[1])
+  for (let form of forms) {
+    assertStringIncludes(form, `action="${managePath('settings')}"`)
+  }
+})
 
-// T-34420. Jeff, 2026-09-05: "after connecting there is ZERO instruction on
-// what she should do next."
-Deno.test('a connected space with nothing built says what to do next', async () => {
-  let quiet = await block()
-  assertEquals(saysIn(quiet), '')
+Deno.test('new app keeps the builder and upload behind separate disclosures', async () => {
+  let page = await block({ view: 'new' })
+  let options =
+    page.match(/<details class="Desk_Options"[\s\S]*?<\/details>/g) ?? []
+  assertEquals(options.length, 2)
+  assert(options[0] && options[1])
+  assertStringIncludes(options[0], '<textarea')
+  assertStringIncludes(options[1], 'type="file"')
+  for (let option of options) {
+    assert(!/^<details[^>]*\bopen\b/.test(option), option)
+  }
+  assert(
+    page.indexOf(`href="${managePath('connect')}"`) < page.indexOf('<textarea'),
+    page,
+  )
+})
+
+Deno.test('connected empty library offers a copyable request', async () => {
   let page = await block({ connected: true })
-  assertEquals(saysIn(page).match(/class="Copy_Go"/g)?.length, 3)
-  // Above the builder's chat it points at, and under the form they land on.
-  let next = page.indexOf('<ul class="Says">')
-  assert(page.indexOf('name="name"') < next, page)
-  assert(next < page.indexOf('<textarea'), page)
-})
-
-Deno.test('once an app is built, suggested prompts are hidden', async () => {
-  let page = await block({
+  assertStringIncludes(page, 'class="Copy_Go"')
+  assert(!page.includes('<textarea'), page)
+  let built = await block({
     connected: true,
-    fixed: true,
     apps: [{ slug: 'recipes', title: 'Recipes' }],
   })
-  assertEquals(saysIn(page), '')
-  // And the form keeps the place it has always had, under the steps.
-  assert(page.indexOf('<details') < page.indexOf('name="name"'), page)
+  assert(!built.includes('class="Copy_Go"'), built)
 })
 
 // Who visited (views.ts, T-34497): the owner's block, drawn straight. What
@@ -237,6 +231,7 @@ let VISITS = {
 
 Deno.test('who visited: a bar per day and three lists, no script', async () => {
   let page = await block({
+    view: 'visits',
     apps: [{ slug: 'recipes', title: 'Recipes' }],
     views: [VISITS],
     viewDays: 3,
@@ -268,17 +263,22 @@ Deno.test('who visited: a bar per day and three lists, no script', async () => {
 
 Deno.test('who visited: no token is one sentence, no chart', async () => {
   let page = await block({
+    view: 'visits',
     apps: [{ slug: 'recipes', title: 'Recipes' }],
     views: null,
     viewsOff: 'Visitor counts are not switched on for this platform yet.',
   })
   assertStringIncludes(page, 'Who visited')
   assertStringIncludes(page, 'not switched on')
-  assert(!page.includes('<svg'), 'an empty chart is worse than a line')
+  assert(
+    !page.includes('<svg class="Views_Chart"'),
+    'an empty chart is worse than a line',
+  )
 })
 
 Deno.test('who visited: an app nobody opened says so', async () => {
   let page = await block({
+    view: 'visits',
     apps: [{ slug: 'recipes', title: 'Recipes' }],
     views: [{
       ...VISITS,
@@ -293,43 +293,28 @@ Deno.test('who visited: an app nobody opened says so', async () => {
     }],
   })
   assertStringIncludes(page, 'Nobody has opened this one yet')
-  assert(!page.includes('<svg'), page)
+  assert(!page.includes('<svg class="Views_Chart"'), page)
 })
 
-// The trash, on the page a person can actually reach without an assistant
-// (T-34430): under the pills, one form per app, and one button that is the
-// whole restore.
-Deno.test('the owner sees the trash under the apps, with a button', async () => {
-  let page = await block({
-    apps: [{ slug: 'recipes', title: 'Recipes' }],
-    trash: [{ slug: 'notes', title: 'Notes', days: 12 }],
-  })
-  assertStringIncludes(page, 'In the trash')
-  assertStringIncludes(page, 'Notes — 12 days left')
-  // A form, so it needs no script; posting to the page it is on, so it needs
-  // no door of its own (apps.ts `saved`).
-  assertStringIncludes(page, '<form method="post" action="/">')
+Deno.test('trash has restore forms only on its own page', async () => {
+  let trash = [{ slug: 'notes', title: 'Notes', days: 12 }]
+  let page = await block({ view: 'trash', trash })
+  assertStringIncludes(page, `action="${managePath('trash')}"`)
   assertStringIncludes(page, 'name="restore" value="notes"')
-  // Under the apps, which is what it is about.
-  assert(page.indexOf('class="Pills"') < page.indexOf('In the trash'), page)
-  // One day reads as a day.
-  assertStringIncludes(
-    await block({ trash: [{ slug: 'notes', title: 'Notes', days: 1 }] }),
-    'Notes — 1 day left',
-  )
-  // Nobody else is told an app was ever there.
-  assert(
-    !(await block({
-      role: 'editor',
-      trash: [{ slug: 'notes', title: 'Notes', days: 12 }],
-    })).includes('In the trash'),
-  )
+  assertStringIncludes(page, '12 days left')
+  for (
+    let at of [{ trash }, { role: 'editor', view: 'trash' as const, trash }]
+  ) {
+    let other = await block(at)
+    assert(!other.includes('name="restore"'), other)
+    assert(!other.includes('Notes'), other)
+  }
 })
 
 Deno.test("none of the owner block is anybody else's", async () => {
   let page = await block({ role: null, person: false, connected: true })
   assert(!page.includes('name="name"'), page)
-  assertEquals(saysIn(page), '')
+  assert(!page.includes('class="Copy_Go"'), page)
 })
 
 slow('the front page is served at the space root', async () => {

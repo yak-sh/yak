@@ -306,7 +306,10 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
       k.at(`${email.split('@')[0]}.yaks.app`, managePath('connect'), {
         headers: { cookie },
       }).then((r) => r.text())
-    assertStringIncludes(await theirPage(), 'https://chatgpt.com/#settings/Security')
+    assertStringIncludes(
+      await theirPage(),
+      'https://chatgpt.com/#settings/Security',
+    )
 
     // A client registers itself (RFC 7591) — what the Claude and ChatGPT
     // connectors do today.
@@ -440,7 +443,10 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     await stale.body?.cancel()
 
     // Adding another assistant remains available after the first connects.
-    assertStringIncludes(await theirPage(), 'https://chatgpt.com/#settings/Security')
+    assertStringIncludes(
+      await theirPage(),
+      'https://chatgpt.com/#settings/Security',
+    )
 
     // And signing in lands where it landed before it: their own space is the
     // signed-in home either way, and attaching an assistant is something on

@@ -34,6 +34,11 @@ a space has none, and its bare address lists the apps a visitor may open;
 `app_list` says which app it is, if any. Only the space owner may move it, since
 everyone handed the space itself lands there.
 
+**Managing your apps.** <https://yaks.app/manage> opens your account's app
+library. Each space's management pages live at `<space>.yaks.app/_yaks`,
+including assistant setup, settings, and trash. These stay available when a
+custom app becomes your homepage; that app cannot replace them.
+
 It is a word the app WEARS, `home`, and at most one app in a space wears it.
 Moving it takes effect on the next request: nothing is copied, no file moves, no
 address is rewritten. What changes is which app answers the bare hostname — and
@@ -61,8 +66,9 @@ which is the same rungs at their own address, whether it carries the space or
 one app mounted at its root (<https://yaks.app/guide/domains.md>) — five rungs,
 the first that answers winning:
 
-1. **The platform's own paths.** `/login`, `/connect`, `/mcp`, and every app's
-   `/api/…` store doors. The kernel answers these and no app routes them.
+1. **The platform's own paths.** `/login`, `/connect`, `/_yaks`, `/mcp`, and
+   every app's `/api/…` store doors. The kernel answers these and no app routes
+   them.
 2. **An app's slug**, which owns the first path segment. `/garden/…` is the
    garden app — its own `worker.js` first where it has one, its files behind
    that. An address the app used to live at redirects here.
@@ -125,6 +131,7 @@ A glob may not name a path the platform answers itself. These, and a glob
 overlapping one is refused whole, before anything is written:
 
     /login      /login/*      /connect      /mcp
+    /_yaks      /_yaks/*
     /api/*      /*/api/*      /platform     /platform/*
 
 `/api/*` is there beside `/*/api/*` because the front page is served at the bare

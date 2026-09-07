@@ -10,7 +10,14 @@
 // HTML (the repo's md.ts rule, one floor down).
 
 import type { Frame } from './build.ts'
-import { MCP, MCP_ASK, OAUTH, PLATFORM } from './route.ts'
+import {
+  managePath,
+  type ManageView,
+  MCP,
+  MCP_ASK,
+  OAUTH,
+  PLATFORM,
+} from './route.ts'
 import { CONNECTOR } from './seo.ts'
 
 // The one escape: `&` first, so an escape is never escaped twice.
@@ -22,12 +29,13 @@ let home = '<a class="Away" href="https://yaks.app/">yaks.app</a>'
 
 let shell = (
   title: string,
-  lead: string,
+  lead: string | null,
   status: number,
   inner = home,
   // Extra response headers, beside content-type — `Retry-After` on the
   // provisioning page below, nothing else needs one today.
   headers: Record<string, string> = {},
+  layout = '',
 ) =>
   new Response(
     `<!doctype html>
@@ -135,9 +143,12 @@ details.Note > summary { color: var(--meadow); cursor: pointer }
 .Tabs_Tab:hover { border-color: var(--meadow) }
 .Tabs_Panel { display: none }
 ${tabsCss}
+${deskCss}
 </style>
 </head>
-<body><main><h1>${title}</h1><p>${lead}</p>${inner}</main></body>
+<body${layout ? ` class="${layout}"` : ''}><main>${
+      lead == null ? '' : `<h1>${title}</h1><p>${lead}</p>`
+    }${inner}</main></body>
 </html>`,
     {
       status,
@@ -173,7 +184,9 @@ export let binned = (at: { title: string; days: number }) =>
       at.days == 1 ? 'day' : 'days'
     }, then erased for good.`,
     404,
-    '<p><a class="Button" href="/">Restore it from your apps</a></p>',
+    `<p><a class="Button" href="${
+      managePath('trash')
+    }">Restore it from your apps</a></p>`,
   )
 
 // A SPACE in the trash, at any address of its own (erase.ts, T-34431).
@@ -215,7 +228,7 @@ exactly as they were.</p>${home}`,
 let dropZone = (slug?: string) =>
   `<form class="Drop" method="post" action="/deploy" enctype="multipart/form-data">
 <label class="Drop_Zone">
-<input class="Drop_File" type="file" name="file" required aria-label="The file to deploy">
+<input class="Drop_File" type="file" name="file" required aria-label="App files">
 <span class="Drop_Say">A .zip of the app's files, or a single index.html</span>
 </label>
 ${
@@ -223,7 +236,7 @@ ${
       `autocomplete="off" spellcheck="false" placeholder="what to call it" ` +
       `aria-label="What to call the app">`
   }
-<button type="submit">Deploy${slug ? ` to ${esc(slug)}` : ''}</button>
+<button type="submit">${slug ? 'Update app' : 'Upload app'}</button>
 </form>`
 
 // Constant text, no interpolation, and every write to the page is textContent
@@ -349,20 +362,10 @@ let chatAsk = () =>
 <button type="submit">Build it</button>
 </form>`
 
-/**
- * The builder's block on a space page. FIRST on a space with nothing in it
- * (spaceIndex): the question is the whole of what there is to do here, and it
- * is the one door that needs no assistant of the person's own.
- */
+// The optional built-in builder, reached from New app.
 let chat = (built: boolean, frames?: Frame[]) =>
   `<section class="Card Chat">
-<h2>${built ? 'Build something else' : 'What do you want to build?'}</h2>
-<p class="Note">${
-    built
-      ? 'Say what you want and it is made here, at this address.'
-      : 'Say it in your own words — a recipe box, a sign-up sheet, a page ' +
-        'for your business — and it is built here, at this address.'
-  }</p>
+<h2>${built ? 'Build another app' : 'What would you like to make?'}</h2>
 ${transcript(frames ?? [])}${chatAsk()}
 </section>`
 
@@ -389,7 +392,7 @@ export let building = (at: {
     `<section class="Card Chat">
 ${transcript(at.frames ?? [])}${chatAsk()}
 </section>
-<p><a class="Away" href="/">Everything at ${esc(at.space)}.yaks.app</a></p>
+<p><a class="Away" href="${managePath()}">Back to your apps</a></p>
 ${chatLive}`,
   )
 
@@ -429,7 +432,7 @@ ${
 </section>`
         : ''
     }
-<div class="Card"><h2>${at.slug ? 'Deploy again' : 'Try again'}</h2>
+<div class="Card"><h2>${at.slug ? 'Update app files' : 'Try again'}</h2>
 <p class="Note">${
       at.slug
         ? `Drop another zip — or one index.html — and ${
@@ -439,7 +442,7 @@ ${
     }</p>
 ${dropZone(at.slug)}
 </div>
-<p><a class="Away" href="/">Everything at ${esc(at.space)}.yaks.app</a></p>
+<p><a class="Away" href="${managePath()}">Back to your apps</a></p>
 ${dropping}`,
   )
 
@@ -574,91 +577,329 @@ addresses, nothing that says who anybody is.</p>${apps.map(visits).join('')}`
   }
 </section>`
 
-// The space's own address when no app is its front page (T-33040). A space
-// that EXISTS is not a 404: this is a door, not a failure — and for its owner
-// it is where a fresh sign-in lands (T-34233), so it is also the page that
-// gets them from an account to a working assistant. One page, of blocks that
-// appear when they are true of whoever is looking —
-//
-//   what to call you, and where     the owner; FIRST while nothing is built
-//   what to do next                 the owner, once an assistant has connected
-//   what do you want to build?      the owner
-//   attaching an assistant          the owner; OPEN until one ever has
-//   the apps this person may open   whenever there are any
-//   asking for the rest             only when something is actually held back
-//   this page is a choice, and      the owner, and nobody else
-//     a file to drop
-//   signing in                      signed out
-//   what this place is              signed out; a stranger, not a neighbour
-//
-// The owner's blocks come FIRST (T-34236, T-34242), and their order turns on
-// whether anything is built here. With NOTHING built, whoever is reading has
-// just typed their sign-in code and landed: what they are called and where
-// they live leads, above the builder's question and above anything
-// collapsible (T-34419) — under both, and under the connect steps at their
-// full height, it was two screens down on a phone and nobody found it. Once
-// something IS built they are back on a page they know: connecting leads
-// again — that is the way to keep working on what is there — and the form
-// keeps the place it has always had.
-//
-// The connect instructions collapse to their own one line once an agent has
-// ever been let in, rather than disappearing: the second assistant is added
-// the same way as the first. What takes their place is `next` (T-34420) —
-// things to SAY, because a person who has just connected one is looking at a
-// page with nothing on it to do.
-//
-// The filtering is the part to get right: an app someone may not read is not
-// NAMED here (apps.ts asks `reads` per app), and the line about asking for
-// access appears only when something is being held back — so the page never
-// implies a private app that is not there.
-//
-// `pitch` is one block on purpose: white-labelling (T-33069) turns our own
-// voice off on a paid space, and that has to be a condition around a block
-// rather than an edit to a page.
-export let spaceIndex = (at: {
+// Owners get an app library and separate management pages. Visitors only see
+// apps they may open; account controls never enter their response.
+export type SpacePage = {
   space: string
   title: string
-  // Where each app stands with the gallery, as the one word its pill wears
-  // (gallery.ts `pilled`) — empty for every app that never asked, which is
-  // almost all of them. Said to everybody where it is LISTED, since that is a
-  // public page anybody can read; the waiting state is the owner's own news
-  // and apps.ts only ever fills it in for them.
-  apps: { slug: string; title: string; gallery?: string }[]
-  // What the owner deleted and can still have back, with the days each has
-  // left (erase.ts, T-34430). Empty for everybody else — nobody but the owner
-  // is told an app was ever here.
+  apps: {
+    slug: string
+    title: string
+    gallery?: string
+    home?: boolean
+    access?: string | null
+  }[]
   trash?: { slug: string; title: string; days: number }[]
   hidden: number
   role: string | null
   person: boolean
   signIn: string
-  // The owner's own three facts: what they are called, whether any agent has
-  // ever been let in as them, and whether the address is still theirs to move
-  // (an app's URL is this slug, so a space with apps in it stays put, T-32576).
   name?: string
   connected?: boolean
   fixed?: boolean
-  // Who visited each app, the owner's alone (views.ts, T-34497). Absent for
-  // everybody else and for a space with no apps; `null` where the platform
-  // has no analytics token set, which is one sentence rather than an empty
-  // chart.
   views?: Visits[] | null
   viewDays?: number
   viewsOff?: string
-  // Where this space stands with selling (sell.ts `selling`, T-34524), the
-  // owner's alone — nobody else is told whether a space takes money. Absent
-  // for everybody else, and absent on a platform with no Stripe key at all,
-  // which is one fewer block rather than a button that cannot work.
   sell?: 'none' | 'setup' | 'ready'
-  // What the platform takes from a sale, as a person reads it (sell.ts
-  // `rate`). Passed rather than imported so this file draws pages and does not
-  // reach into the money.
   fee?: string
-  // What the last save said, when one was refused.
   say?: string
   no?: boolean
-}) => {
-  let owner = at.role == 'owner'
+  view?: ManageView
+}
+
+let deskCss = `
+.Desk { display: block }
+.Desk main { display: grid; grid-template-columns: 13.5rem minmax(0, 1fr); align-items: start; max-width: 80rem; min-height: 100vh; margin: auto; padding: 0; text-align: left }
+.Desk_Side { position: sticky; top: 0; display: flex; flex-direction: column; gap: 2rem; min-height: 100vh; padding: 2rem 1.25rem; border-right: 1px solid var(--line) }
+.Desk_Brand { display: flex; align-items: center; gap: .65rem; color: var(--ink); font-size: 1.25rem; font-weight: 800; text-decoration: none }
+.Desk_Brand img { border-radius: .65rem }
+.Desk_Nav { display: grid; gap: .3rem }
+.Desk_Nav a { display: flex; align-items: center; gap: .65rem; padding: .6rem .8rem; border-radius: .7rem; color: var(--soft-ink); font-size: .95rem; text-decoration: none }
+.Desk_Nav a:hover { background: var(--paper); color: var(--ink) }
+.Desk_Nav a[aria-current=page] { color: var(--ink); background: var(--paper); font-weight: 800; box-shadow: inset 3px 0 var(--meadow) }
+.Desk_Nav hr { width: 100%; border: 0; border-top: 1px solid var(--line); margin: 1rem 0 }
+.Desk_Icon { width: 1.1rem; height: 1.1rem; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round }
+.Desk_Count { margin-left: auto; font-size: .8rem; color: var(--soft-ink) }
+.Desk_Foot { margin-top: auto; display: grid; gap: .5rem; padding: .5rem .8rem; font-size: .85rem }
+.Desk_Body { min-width: 0; padding: 2.5rem clamp(1.25rem, 4vw, 3.5rem) }
+.Desk_Head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 2rem }
+.Desk_Head h1 { font-size: 1.9rem; margin: .15rem 0 0 }
+.Desk_Address { font-size: .85rem; text-decoration: none; color: var(--soft-ink) }
+.Desk_Head .Button { flex: none; padding: .6rem 1.2rem; font-size: .95rem }
+.Desk_Content { max-width: 52rem }
+.Desk .Card { padding: 1.5rem; border: 1px solid var(--line) }
+.Desk .Card h2 { font-size: 1.15rem }
+.Desk .Card p:last-child { margin-bottom: 0 }
+.Desk .Card form { max-width: 34rem }
+.Desk input { text-align: left; border: 1px solid var(--soft-ink); border-radius: .7rem }
+.Desk form button { justify-self: start }
+.Desk form label { font-size: .95rem; font-weight: 700 }
+.Desk .At { justify-content: start }
+.Desk .At input { flex: 1; text-align: left }
+.Desk .Say:empty { display: none }
+.Desk .Says { margin-bottom: 0 }
+.Desk_Connect { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; margin-bottom: 2rem; padding: 1.25rem 1.5rem; border: 1px solid var(--meadow); border-radius: 1rem }
+.Desk_ChatLinks { display: flex; flex-direction: column; gap: .5rem; flex: none; font-size: .95rem }
+.Desk_Connect h2 { margin: 0 0 .35rem; font-size: 1.1rem }
+.Desk_Connect p { margin: 0; font-size: .95rem; max-width: 34rem }
+.Desk_Connect .Button { flex: none; padding: .6rem 1.1rem; font-size: .9rem }
+.Apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 1rem }
+.Apps_Item { display: flex; flex-direction: column; align-items: start; gap: .55rem; min-height: 12rem; padding: 1.25rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--paper); color: var(--ink); text-decoration: none }
+.Apps_Item:hover { border-color: var(--meadow) }
+.Apps_Item img { width: 44px; height: 44px; border-radius: .75rem; margin-bottom: .5rem }
+.Apps_Item strong { font-size: 1.05rem; line-height: 1.3 }
+.Apps_Path { color: var(--soft-ink); font-size: .85rem }
+.Apps_Tags { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: auto; padding-top: .5rem; font-size: .75rem; color: var(--soft-ink) }
+.Apps_Tag { padding: .1rem .5rem; border-radius: .35rem; background: var(--ground) }
+.Desk_Empty { padding: 2.5rem 1rem; text-align: center }
+.Desk_Empty h2 { margin: 0 0 .5rem; font-size: 1.25rem }
+.Desk_Empty p { margin: 0 auto 1rem; max-width: 28rem }
+.Desk_Options { margin-top: 1.5rem }
+.Desk_Options > summary { cursor: pointer; color: var(--meadow); font-weight: 700; padding: .5rem 0 }
+.Desk_Options > .Card { margin-top: .75rem }
+.Desk_Trash { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 0; margin: 0; border-top: 1px solid var(--line) }
+.Desk_Trash:first-of-type { border-top: 0 }
+.Desk_Trash p { color: var(--ink) }
+.Desk_Trash small { display: block; color: var(--soft-ink) }
+.Desk .Desk_Trash { max-width: none; margin: 0 }
+.Desk .Tabs_Panel { margin-top: .75rem }
+.Desk_Skip { position: absolute; top: -5rem; left: 1rem; padding: .6rem 1rem; background: var(--paper); z-index: 1 }
+.Desk_Skip:focus { top: 1rem }
+@media (max-width: 700px) {
+  .Desk main { display: block }
+  .Desk_Side { position: static; min-height: 0; gap: 1rem; padding: 1rem; border-right: 0; border-bottom: 1px solid var(--line) }
+  .Desk_Brand { font-size: 1.1rem }
+  .Desk_Brand img { width: 30px; height: 30px }
+  .Desk_Nav { display: flex; flex-wrap: wrap; gap: .3rem }
+  .Desk_Nav a { padding: .45rem .65rem; font-size: .85rem; gap: .4rem }
+  .Desk_Nav hr, .Desk_Foot { display: none }
+  .Desk_Body { padding: 1.5rem 1rem }
+  .Desk_Head { margin-bottom: 1.5rem }
+  .Desk_Head h1 { font-size: 1.55rem }
+  .Desk_Connect { align-items: start; flex-direction: column; gap: 1rem; padding: 1.1rem }
+  .Desk .Card { padding: 1.1rem }
+  .Apps { grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: .75rem }
+  .Apps_Item { min-height: 11rem; padding: 1rem }
+}
+`
+
+let symbols = {
+  apps:
+    '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  connect: '<path d="M7 3v4m10-4v4M5 7h14v3a7 7 0 0 1-14 0V7zm7 10v4"/>',
+  visits: '<path d="M4 4v16h16M9 16v-5m5 5V7m5 9v-3"/>',
+  selling:
+    '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18m-14 5h3"/>',
+  settings: '<path d="M4 6h16M4 12h16M4 18h16M8 3v6m8 0v6m-6 0v6"/>',
+  trash: '<path d="M3 6h18M9 6V3h6v3m-10 0 1 15h12l1-15M10 10v7m4-7v7"/>',
+}
+
+let navigation = (at: SpacePage, view: ManageView) => {
+  let link = (key: keyof typeof symbols, label: string) =>
+    `<a href="${managePath(key)}"${
+      view == key || (view == 'new' && key == 'apps')
+        ? ' aria-current="page"'
+        : ''
+    }>
+<svg class="Desk_Icon" viewBox="0 0 24 24" aria-hidden="true">${
+      symbols[key]
+    }</svg>${label}${
+      key == 'trash' && at.trash?.length
+        ? `<span class="Desk_Count">${at.trash.length}</span>`
+        : ''
+    }</a>`
+  return `<a class="Desk_Skip" href="#content">Skip to content</a>
+<aside class="Desk_Side">
+<a class="Desk_Brand" href="https://yaks.app/"><img src="https://yaks.app/yaks-app.png" width="36" height="36" alt="">yaks.app</a>
+<nav class="Desk_Nav" aria-label="Manage your apps">
+${link('apps', 'Apps')}${link('connect', 'Assistant')}<hr>
+${link('visits', 'Visits')}${at.sell ? link('selling', 'Selling') : ''}
+${link('settings', 'Settings')}${link('trash', 'Trash')}
+</nav>
+<div class="Desk_Foot"><a href="/" target="_blank" rel="noopener">View homepage ↗</a><a href="https://yaks.app/help" target="_blank" rel="noopener">Help</a></div>
+</aside>`
+}
+
+let connectCard = (at: SpacePage) =>
+  `<section class="Desk_Connect"><div><h2>${
+    at.connected ? 'Keep building in your chat' : 'Connect your assistant'
+  }</h2><p>${
+    at.connected
+      ? 'Ask for an app, try it, then keep asking for changes in the same conversation.'
+      : 'Build and improve your apps in the conversations you already have with Claude or ChatGPT.'
+  }</p></div>${
+    at.connected
+      ? `<div class="Desk_ChatLinks">${
+        external('https://chatgpt.com/', 'Open ChatGPT')
+      }${external('https://claude.ai/new', 'Open Claude')}</div>`
+      : `<a class="Button" href="${
+        managePath('connect')
+      }">Connect assistant</a>`
+  }</section>`
+
+let library = (at: SpacePage) =>
+  `${!at.connected ? connectCard(at) : ''}${
+    at.apps.length
+      ? `<div class="Apps">${
+        at.apps.map((a) =>
+          `<a class="Apps_Item" href="/${
+            esc(a.slug)
+          }/" target="_blank" rel="noopener">
+<img src="/${esc(a.slug)}/icon.png" width="44" height="44" alt="">
+<strong>${esc(a.title || a.slug)}</strong><span class="Apps_Path">/${
+            esc(a.slug)
+          }</span>
+<span class="Apps_Tags">${
+            a.home ? '<span class="Apps_Tag">Homepage</span>' : ''
+          }${a.access ? `<span class="Apps_Tag">${esc(a.access)}</span>` : ''}${
+            a.gallery ? `<span class="Apps_Tag">${esc(a.gallery)}</span>` : ''
+          }</span></a>`
+        ).join('')
+      }</div>`
+      : `<section class="Desk_Empty"><h2>Your apps will live here</h2><p>${
+        at.connected
+          ? 'Ask your assistant for your first app. Try this:'
+          : 'A recipe box, a book club page, a tool for your day. Start with an idea.'
+      }</p>${
+        at.connected
+          ? copyable(
+            'Use yaks.app to build me a recipe box.',
+            'a first app request',
+          )
+          : `<a href="${managePath('new')}">More ways to make an app</a>`
+      }</section>`
+  }`
+
+let preferences = (at: SpacePage) => {
+  let home = at.apps.find((a) => a.home)
+  return `<section class="Card"><h2>Profile</h2>
+<form method="post" action="${managePath('settings')}">
+<label for="your-name">Your name</label>
+<input id="your-name" name="name" maxlength="60" autocomplete="name" placeholder="Dana" value="${
+    esc(at.name ?? '')
+  }">
+<button type="submit">Save name</button></form></section>
+<section class="Card"><h2>App address</h2>${
+    at.fixed
+      ? `<p>${
+        esc(at.space)
+      }.yaks.app</p><p class="Note">The address is fixed once you've created an app.</p>`
+      : `<form method="post" action="${managePath('settings')}">
+<label for="your-address">Your address</label>
+<span class="At"><input id="your-address" name="space" maxlength="63" autocomplete="off" spellcheck="false" value="${
+        esc(at.space)
+      }"><span>.yaks.app</span></span>
+<p class="Note">You can change this until you create your first app.</p><button type="submit">Save address</button></form>`
+  }</section>
+<section class="Card"><h2>Homepage</h2><p>${
+    home
+      ? `${esc(home.title || home.slug)} opens at your address.`
+      : 'Your address opens your app library.'
+  }</p><p class="Note">Ask your assistant to make any app your homepage. Manage your apps anytime at <a href="https://yaks.app/manage">yaks.app/manage</a>.</p></section>`
+}
+
+let selling = (at: SpacePage) => {
+  if (!at.sell) return '<p>Selling is not available here yet.</p>'
+  let ready = at.sell == 'ready'
+  return `<section class="Card"><h2>${
+    ready ? 'Payments are connected' : 'Take payments in your apps'
+  }</h2>
+<p>${
+    ready
+      ? 'Payments go to your Stripe account. You manage refunds and disputes there.'
+      : at.sell == 'setup'
+      ? 'Finish connecting your Stripe account to start accepting payments.'
+      : 'Connect your Stripe account to accept payments from your customers.'
+  }</p><p class="Note">yaks.app takes ${
+    esc(at.fee ?? '')
+  } of each sale. <a href="https://yaks.app/pricing" target="_blank" rel="noopener">Pricing</a></p>
+<form method="post" action="${
+    managePath('selling')
+  }"><input type="hidden" name="sell" value="${
+    ready ? 'stop' : 'start'
+  }"><button type="submit"${ready ? ' class="Bill_Go-quiet"' : ''}>${
+    ready
+      ? 'Disconnect Stripe'
+      : at.sell == 'setup'
+      ? 'Continue setup'
+      : 'Connect Stripe'
+  }</button></form></section>`
+}
+
+let trash = (at: SpacePage) =>
+  at.trash?.length
+    ? `<section class="Card"><p>Deleted apps can be restored for 30 days.</p>${
+      at.trash.map((a) =>
+        `<form class="Desk_Trash" method="post" action="${managePath('trash')}">
+<input type="hidden" name="restore" value="${esc(a.slug)}">
+<p>${esc(a.title || a.slug)}<small>${a.days} ${
+          a.days == 1 ? 'day' : 'days'
+        } left</small></p>
+<button type="submit" class="Bill_Go-quiet">Restore</button></form>`
+      ).join('')
+    }</section>`
+    : '<section class="Desk_Empty"><h2>Trash is empty</h2></section>'
+
+let desk = (at: SpacePage) => {
+  let view = at.view ?? 'apps'
+  let titles = {
+    apps: 'Your apps',
+    connect: 'Your assistant',
+    new: 'New app',
+    visits: 'Visits',
+    selling: 'Selling',
+    settings: 'Settings',
+    trash: 'Trash',
+  }
+  let body = ''
+  if (view == 'apps') body = library(at)
+  if (view == 'connect') {
+    body = `${
+      at.connected ? '<p class="Desk_Status">✓ Assistant connected</p>' : ''
+    }<p>Connect once, then build and keep improving your apps in your usual chats.</p>${doors}${copying}${tabbing}`
+  }
+  if (view == 'new') {
+    body = `${connectCard(at)}
+<details class="Desk_Options"><summary>Build an app here</summary>${
+      chat(!!at.apps.length)
+    }</details>
+<details class="Desk_Options"><summary>Upload an existing app</summary><section class="Card"><h2>Upload app files</h2>${dropZone()}</section></details>${chatLive}${dropping}`
+  }
+  if (view == 'visits') {
+    body = at.apps.length
+      ? visited(at.views ?? null, at.viewDays ?? 30, at.viewsOff ?? '')
+      : '<section class="Desk_Empty"><h2>No visits yet</h2><p>Your app visits will appear here once you have an app.</p></section>'
+  }
+  if (view == 'selling') body = selling(at)
+  if (view == 'settings') body = preferences(at)
+  if (view == 'trash') body = trash(at)
+  return shell(
+    `${titles[view]} · ${esc(at.space)}`,
+    null,
+    at.no ? 400 : 200,
+    `${
+      navigation(at, view)
+    }<div class="Desk_Body"><header class="Desk_Head"><div>
+<a class="Desk_Address" href="/" target="_blank" rel="noopener">${
+      esc(at.space)
+    }.yaks.app ↗</a><h1>${titles[view]}</h1></div>${
+      view == 'apps'
+        ? `<a class="Button" href="${managePath('new')}">+ New app</a>`
+        : ''
+    }</header><div class="Desk_Content" id="content" tabindex="-1">${
+      at.say
+        ? `<p class="Say${at.no ? ' Say-no' : ''}" role="status">${
+          esc(at.say)
+        }</p>`
+        : ''
+    }${body}</div></div>${view == 'apps' ? copying : ''}`,
+    { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
+    'Desk',
+  )
+}
+
+export let spaceIndex = (at: SpacePage) => {
+  if (at.role == 'owner') return desk(at)
   let mine = at.apps.length
     ? `<nav class="Pills" aria-label="Apps here">${
       at.apps.map((a) =>
@@ -668,192 +909,22 @@ export let spaceIndex = (at: {
       ).join('')
     }</nav>`
     : ''
-  // Under the pills, and the owner's alone: what was deleted, how long it has
-  // left, and one button that brings it back. A form per app POSTing to this
-  // page's own address — the same door the settings form uses (apps.ts
-  // `saved`), so restoring needs no script and no assistant.
-  let bin = owner && at.trash?.length
-    ? `<section class="Card"><h2>In the trash</h2>
-<p class="Note">Deleted apps are kept for 30 days — everything they saved is
-still here — and then erased for good.</p>
-${
-      at.trash.map((a) =>
-        `<form method="post" action="/">
-<input type="hidden" name="restore" value="${esc(a.slug)}">
-<p>${esc(a.title || a.slug)} — ${a.days} ${
-          a.days == 1 ? 'day' : 'days'
-        } left</p>
-<button type="submit">Restore</button>
-</form>`
-      ).join('')
-    }
-</section>`
-    : ''
-  let ask = at.hidden && !owner
+  let ask = at.hidden
     ? `<p class="Note">${
       at.hidden == 1 ? 'One app here is' : `${at.hidden} apps here are`
     } private. Ask whoever runs this space to let you in.</p>`
     : ''
-  let inn = at.person
-    ? ''
-    : `<p><a class="Button" href="${esc(at.signIn)}">Sign in</a></p>`
-  let pitch = at.person ? '' : `<div class="Card">
-<h2>What is yaks.app?</h2>
-<p class="Note">Ask an assistant like Claude or ChatGPT for an app, and it
-builds one here — a page of your own you can send to anyone.</p>
-<p><a class="Away" href="https://yaks.app/">Make one of your own</a></p>
-</div>`
-  let yours = owner
-    ? `<div class="Card">
-<h2>Choose what appears here</h2>
-<p class="Note">${
-      at.apps.length
-        ? 'Ask your assistant to make one of these apps the front page, and ' +
-          'it opens here instead of this list.'
-        : 'Ask your assistant to build something here — a list, a site, a ' +
-          'game — and it lives at this address.'
-    }</p>
-</div>
-<div class="Card">
-<h2>Or deploy a file</h2>
-<p class="Note">Have a zip of a site, or one page of HTML? Drop it here and
-it becomes an app at this address — no assistant needed.</p>
-${dropZone()}
-</div>`
-    : ''
-  // Attaching an assistant, in full, on the page they land on. Open while
-  // nobody has ever connected — there is nothing else to do here yet — and
-  // shut afterwards, because the instructions are still how a SECOND one is
-  // added. `<details>` and no script: the browser owns the toggle.
-  let attach = owner
-    ? `<details class="Attach"${at.connected ? '' : ' open'}>
-<summary>Connect your assistant</summary>
-<p>Add yaks.app in your assistant's settings using the steps below. Then ask
-it to build an app here.</p>
-${doors}
-</details>`
-    : ''
-  // The two things a sign-in no longer asks (T-34236), asked here instead,
-  // where a person can see what they are naming. One form, one POST to this
-  // page's own address, and no script: changing the address MOVES this
-  // hostname, so the answer is a redirect to wherever the space now lives —
-  // which a fetch could not do in place anyway.
-  let settings = owner
-    ? `<section class="Card"><h2>You and your address</h2>
-<form method="post" action="/">
-<p>Your name</p>
-<input name="name" maxlength="60" autocomplete="name" placeholder="Dana" aria-label="What should we call you?" value="${
-      esc(at.name ?? '')
-    }">
-${
-      at.fixed
-        ? `<p class="Note">Your apps live at <b>${
-          esc(at.space)
-        }.yaks.app</b>. The address is fixed after your first app.</p>`
-        : `<p>Your address. You can change it until you build your first app.</p>
-<span class="At"><input name="space" maxlength="63" autocomplete="off" spellcheck="false" aria-label="The name your apps live at" value="${
-          esc(at.space)
-        }"><span>.yaks.app</span></span>`
-    }
-<button type="submit">Save</button>
-<p class="Say${at.no ? ' Say-no' : ''}" role="status">${esc(at.say ?? '')}</p>
-</form>
-</section>`
-    : ''
-  // Selling (sell.ts, T-34524). Three states and one button, because that is
-  // the whole of what a person can do about it from here: connect, go and
-  // finish, or stop. The state comes off the space's `stripe` row, which the
-  // Connect webhook keeps current — so this page says what STRIPE says, not
-  // what somebody clicked, and a seller Stripe has paused reads as unfinished
-  // here the moment it happens.
-  //
-  // A plain form POSTing to this page, like every other button here: starting
-  // means asking Stripe for a fresh onboarding link, which is a REDIRECT to
-  // Stripe's own hosted form, so no script could do it in place anyway.
-  //
-  // What it says about the money is deliberately blunt. Somebody about to take
-  // strangers' money should read who is responsible before they click, not
-  // after a chargeback.
-  let sell = owner && at.sell
-    ? `<section class="Card"><h2>Selling</h2>
-${
-      at.sell == 'ready'
-        ? `<p>Your apps here can take payments. You are the merchant: the
-charge is yours, the money goes to your Stripe account, your name is on the
-customer's statement, and refunds and disputes are yours to answer. Stripe's
-own dashboard is where you read all of it.</p>
-<p class="Note">Every sale here is charged on your account, and yaks.app takes
-${esc(at.fee ?? '')} of it. See the <a href="/pricing">pricing page</a>.</p>
-<form method="post" action="/">
-<input type="hidden" name="sell" value="stop">
-<button type="submit">Stop selling</button>
-</form>`
-        : at.sell == 'setup'
-        ? `<p>Stripe has not finished setting you up yet. Pick up where you
-left off — it is Stripe's form, on Stripe's site, and nothing here can be sold
-until they say you are ready.</p>
-<form method="post" action="/">
-<input type="hidden" name="sell" value="start">
-<button type="submit">Finish setting up</button>
-</form>`
-        : `<p>Take payments in your apps here. You connect your own Stripe
-account — you are the merchant, the money is yours, and Stripe asks you for
-your details directly. We never see or hold them.</p>
-<p class="Note">yaks.app takes ${
-          esc(at.fee ?? '')
-        } of each sale. See the <a href="/pricing">pricing page</a>.</p>
-<form method="post" action="/">
-<input type="hidden" name="sell" value="start">
-<button type="submit">Start selling</button>
-</form>`
-    }
-</section>`
-    : ''
-  // What to do next (T-34420), once an assistant has been let in. The connect
-  // steps shut the moment one ever connects, and nothing said what the person
-  // had just gained — so this is what stands where they were: three things to
-  // say, in the words somebody would use, each one ready to paste into
-  // whatever they were talking to. Once something is built it is a line rather
-  // than a block, because the apps right below it say the rest.
-  let next = !owner || !at.connected
-    ? ''
-    : at.apps.length
-    ? `<p class="Note">Your assistant is connected.</p>`
-    : `<section class="Card"><h2>What to do next</h2>
-<p class="Note">Ask your assistant for your first app. Try one of these:</p>
-<ul class="Says">${
-      [
-        'Make me a page for my book club',
-        'Build a place to keep recipes',
-        'Set up a sign-up sheet for the potluck',
-      ].map((s) => `<li>${copyable(s)}</li>`).join('')
-    }</ul>
-</section>`
-  // The builder's own block: the one door that needs no assistant at all.
-  let asking = owner ? chat(!!at.apps.length) : ''
-  // Who came, once there is something for anybody to have come to. `undefined`
-  // is nobody's business but the owner's, so the block is simply absent.
-  let seen = owner && at.views !== undefined
-    ? visited(at.views, at.viewDays ?? 30, at.viewsOff ?? '')
-    : ''
-  // Selling sits with the rest of the owner's standing facts — after the
-  // settings and before the visitor counts — and nowhere at all until there is
-  // something built to sell from: a space with no apps has no till.
-  let block = at.apps.length
-    ? `${attach}${asking}${settings}${sell}${next}${seen}`
-    : `${settings}${next}${asking}${attach}`
-  let lead = at.apps.length
-    ? 'Here is what you can open.'
-    : owner
-    ? 'Nothing has been built here yet.'
-    : 'Nothing here is open to visitors yet.'
+  let pitch = at.person
+    ? home
+    : `<p><a class="Button" href="${esc(at.signIn)}">Sign in</a></p>
+<div class="Card"><h2>What is yaks.app?</h2><p>Ask an assistant like Claude or ChatGPT for an app, and it builds one here — a page of your own you can send to anyone.</p><a href="https://yaks.app/">Make one of your own</a></div>`
   return shell(
     esc(at.title || at.space),
-    lead,
-    at.no ? 400 : 200,
-    `${block}${mine}${bin}${ask}${yours}${inn}${pitch}${at.person ? home : ''}${
-      owner ? dropping + chatLive + copying + tabbing : ''
-    }`,
+    at.apps.length
+      ? 'Here is what you can open.'
+      : 'Nothing here is open to visitors yet.',
+    200,
+    `${mine}${ask}${pitch}`,
   )
 }
 
@@ -911,7 +982,7 @@ let held = (name: string, value?: string | null) =>
 // decide, never this page's.
 let carried = (q: string | null, back?: string | null) =>
   held('q', q) + held('return', back) +
-  (back == '/connect'
+  (back == '/connect' || back?.endsWith(managePath('connect'))
     ? `<script>if (location.hash) document.currentScript.previousElementSibling.value += location.hash</script>`
     : '')
 
@@ -1453,7 +1524,7 @@ ${mine(yours)}${plan(yours)}
 </details>
 <p class="Note"><a href="https://${
       esc(yours.slug)
-    }.${PLATFORM}/">Your apps and settings</a></p>
+    }.${PLATFORM}${managePath()}">Your apps and settings</a></p>
 <p class="Note"><a href="https://yaks.app/help">Need help?</a></p>
 ${home}${copying}${tabbing}${inline}`,
   )

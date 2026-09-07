@@ -83,6 +83,16 @@ slow('account pages remain reachable behind a custom home app', async () => {
     assertEquals(login.status, 303)
     assertEquals(login.headers.get('location'), '/login?return=%2Fmanage')
 
+    // An icon linked from a space's setup page still downloads from the apex.
+    let setup = await (await get(managePath('connect'))).text()
+    let icon = new URL(/href="([^"]+)" download="yaks-app.png"/.exec(setup)![1])
+    let download = await k.at(icon.hostname, icon.pathname)
+    assertEquals(
+      download.headers.get('content-disposition'),
+      'attachment; filename="yaks-app.png"',
+    )
+    assert((await download.arrayBuffer()).byteLength < 10_000)
+
     let settings = managePath('settings')
     let page = await (await get(settings)).text()
     assertStringIncludes(page, `action="${settings}"`)
