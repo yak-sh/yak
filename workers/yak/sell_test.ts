@@ -97,8 +97,8 @@ Deno.test('the onboarding link comes back to the space page, both ways', () => {
   assertEquals(link(space(), 'acct_1'), {
     account: 'acct_1',
     type: 'account_onboarding',
-    return_url: 'https://ada.yaks.app/',
-    refresh_url: 'https://ada.yaks.app/',
+    return_url: 'https://ada.yaks.app/_yaks/selling',
+    refresh_url: 'https://ada.yaks.app/_yaks/selling',
   })
 })
 

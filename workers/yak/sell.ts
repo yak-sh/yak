@@ -48,7 +48,7 @@ import {
 } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { metaOf } from './meta.ts'
-import { PLATFORM } from './route.ts'
+import { managePath, PLATFORM } from './route.ts'
 import { whoIs } from './session.ts'
 
 // ---- the fee ---------------------------------------------------------------
@@ -185,7 +185,8 @@ export let account = (space: Space, email: string) => ({
  * its own would have to say the same three things and could only say them less
  * currently — Stripe returns the browser the moment the form is submitted,
  * which is before `account.updated` has necessarily arrived. */
-export let backTo = (space: Space) => `https://${space.slug}.${PLATFORM}/`
+export let backTo = (space: Space) =>
+  `https://${space.slug}.${PLATFORM}${managePath('selling')}`
 
 /** The onboarding link, as the form fields of `POST /v1/account_links`.
  *

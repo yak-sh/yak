@@ -7,6 +7,34 @@
 // client routes itself into a space by header. Pure: no env, no store.
 export let PLATFORM = 'yaks.app'
 
+// Account pages have their own path, outside the app-slug namespace, so a
+// custom front page never replaces the place its owner manages their apps.
+export let MANAGE = '/_yaks'
+export type ManageView =
+  | 'apps'
+  | 'connect'
+  | 'new'
+  | 'visits'
+  | 'selling'
+  | 'settings'
+  | 'trash'
+export let managePath = (view: ManageView = 'apps') =>
+  MANAGE + (view == 'apps' ? '' : `/${view}`)
+export let manageView = (path: string): ManageView | null => {
+  let views: ManageView[] = [
+    'apps',
+    'connect',
+    'new',
+    'visits',
+    'selling',
+    'settings',
+    'trash',
+  ]
+  return views.find((view) =>
+    path == managePath(view) || path == `${managePath(view)}/`
+  ) ?? null
+}
+
 // What the plans cost, as a page (public/pricing.html, D-32751). It lives here
 // — beside the platform's own name, in the module with no dependencies —
 // because both halves of the paid tier need it and they must not import each

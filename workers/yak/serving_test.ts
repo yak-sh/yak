@@ -1490,7 +1490,7 @@ let sold = async (env: Env) =>
 // runtime.
 let pressed = async (env: Env, sell: string) =>
   await apps.fetch(
-    new Request('https://ada.yaks.app/', {
+    new Request('https://ada.yaks.app/_yaks/selling', {
       method: 'POST',
       headers: {
         cookie: await as(ADA),
@@ -1572,8 +1572,14 @@ Deno.test('a space connects Stripe, and the webhook makes it ready', async () =>
     let asked = fake.at('/v1/account_links')!
     assertEquals(asked.sent.get('account'), 'acct_probe')
     assertEquals(asked.sent.get('type'), 'account_onboarding')
-    assertEquals(asked.sent.get('return_url'), 'https://ada.yaks.app/')
-    assertEquals(asked.sent.get('refresh_url'), 'https://ada.yaks.app/')
+    assertEquals(
+      asked.sent.get('return_url'),
+      'https://ada.yaks.app/_yaks/selling',
+    )
+    assertEquals(
+      asked.sent.get('refresh_url'),
+      'https://ada.yaks.app/_yaks/selling',
+    )
 
     // The id is written the moment Stripe answers with it, BEFORE the link is
     // asked for — so a person who wanders off mid-onboarding comes back to the

@@ -14,6 +14,8 @@
 // store, no directory — so it is the same rule in a test, in `app_set`, and in
 // the router.
 
+import { MANAGE } from './route.ts'
+
 // Everything between the wildcards, as itself: a glob's own `.` is a dot and
 // not the regex's any-character.
 let literal = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -41,6 +43,8 @@ export let PLATFORM_PATHS = [
   '/mcp',
   '/api/*',
   '/*/api/*',
+  MANAGE,
+  `${MANAGE}/*`,
 ]
 
 // A glob's WITNESS: the pattern with its wildcards filled by a character no

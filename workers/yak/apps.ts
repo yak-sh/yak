@@ -65,7 +65,17 @@ import {
   type Visits,
 } from './pages.ts'
 import { daysLeft, untrash, untrashSpace } from './erase.ts'
-import { hostOf, MOUNT, PLATFORM, route, sameOrigin } from './route.ts'
+import {
+  hostOf,
+  MANAGE,
+  managePath,
+  type ManageView,
+  manageView,
+  MOUNT,
+  PLATFORM,
+  route,
+  sameOrigin,
+} from './route.ts'
 import { covers, PLATFORM_PATHS } from './router.ts'
 import { titling, vouched, type Who, whoIs } from './session.ts'
 import { seedy } from './seed.ts'
@@ -1126,43 +1136,57 @@ let visits = async (env: Env, apps: App[]): Promise<Visits[] | null> => {
   }
 }
 
+// The public app list and the owner's account share the same visibility
+// rules. Account sections stay independent of whichever app serves `/`.
 let index = async (
   req: Request,
   env: Env,
   dir: ReturnType<typeof directory>,
   space: Space,
   said?: { say: string; no: boolean },
+  view: ManageView = 'apps',
 ): Promise<Response> => {
   // The directory's own space is nobody's space: nothing answers at its
   // address, to anyone (T-32585), so it does not get a door either.
   if (space.slug == META.space) return nothingHere()
   let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
+  if (new URL(req.url).pathname.startsWith(MANAGE)) {
+    if (!who.person) {
+      return redirect(
+        signInAt(`https://${space.slug}.${PLATFORM}${managePath(view)}`),
+        303,
+      )
+    }
+    if (who.role != 'owner') return nothingHere()
+  }
   let here = (await dir.apps(space)).filter((a) => !kernels(space, a.slug))
-  // An app in the trash is not one of the apps here (erase.ts, T-34430): it
-  // is not listed, not counted as one being held back, and — for the owner
-  // alone — it is the block underneath, with the days it has left.
+  // Trashed apps appear only in the owner's Trash section.
   let all = here.filter((a) => !a.trashed)
   let mine = all.filter((a) => reads(mode(a.access), who.role))
-  // The owner's own three facts, and nobody else's business — so nobody else
-  // is asked for. `connected` is the provider's answer (identity.ts), not a
-  // row of ours: one grant, ever, is what shuts the block.
+  // Account details are the owner's alone; connection status comes from the
+  // OAuth provider rather than a second record of the same state.
   let owner = who.role == 'owner' && who.person ? who.person : null
   return spaceIndex({
     // Who visited, the owner's alone (views.ts, T-34497). `undefined` is
     // everybody else, `null` is the platform with no analytics token set, and
     // a read that fails is `null` too: this page is the space's front door,
     // and it does not go down because Cloudflare's analytics did.
-    views: owner && all.length ? await visits(env, all) : undefined,
+    views: owner && view == 'visits' && all.length
+      ? await visits(env, all)
+      : undefined,
     viewDays: DAYS,
     viewsOff: NOT_ON,
     space: space.slug,
     title: space.title,
+    view,
     // What the pill says about the gallery (gallery.ts, T-34476). LISTED is
     // said to anybody — it is a public page — and WAITING only to the owner,
     // who is the one it is news for.
     apps: mine.map((a) => ({
       slug: a.slug,
       title: a.title,
+      home: a.home,
+      access: a.access,
       gallery: owner || standing(a) == 'listed' ? pilled(standing(a)) : '',
     })),
     hidden: all.length - mine.length,
@@ -1187,7 +1211,8 @@ let index = async (
     // named for this address and its files live under it, so the address
     // stays put until the trash is empty (T-32576).
     fixed: !!here.length,
-    say: said?.say,
+    say: said?.say ??
+      (new URL(req.url).searchParams.has('saved') ? 'Saved.' : ''),
     no: said?.no,
   })
 }
@@ -1199,8 +1224,7 @@ let index = async (
 // space went and given the button back, because they are the only person the
 // news belongs to.
 //
-// The button is a POST to `/` like the space page's own forms, and it lands
-// on the platform address rather than back here: a custom domain of a space
+// The restore button lands on the account's platform address: a custom domain of a space
 // that was in the trash a second ago is a hostname that has to warm up again,
 // where the space's own address is serving the moment the word comes off.
 let closed = async (
@@ -1226,12 +1250,11 @@ let closed = async (
   if (String(form.get('restore-space') ?? '').trim() == space.slug) {
     await untrashSpace(env, dir, space, who)
   }
-  return redirect(`https://${space.slug}.${PLATFORM}/`, 303)
+  return redirect(`https://${space.slug}.${PLATFORM}${MANAGE}`, 303)
 }
 
-// The space's bare address: the listing above, or the owner block's one form
-// coming back. Only the two, and only here — the form posts to the page it is
-// on, so the space's root is the whole of its surface.
+// The default front page still opens the app library. Account forms keep
+// their own stable address even when a custom app takes over the front page.
 let root = (
   req: Request,
   env: Env,
@@ -1242,23 +1265,10 @@ let root = (
     ? saved(req, env, dir, space)
     : index(req, env, dir, space)
 
-// The owner block's one form, saved. Two independent fields and one POST: the
-// name they go by, written on their own person row, and the address this space
-// answers at, which is `choose`'s rule and nobody else's (identity.ts) so the
-// sentence a refusal reads is the same one `/connect` reads.
-//
-// The answer is a REDIRECT, not a page: a changed address moves this very
-// hostname, so the only honest place to land is wherever the space now lives.
-// A refusal redraws the page around the sentence, the way every other card
-// here does, and needs no script for any of it.
-//
-// Nobody but the owner reaches this, and only from this space's own page.
-// `SameSite=Lax` is NOT the guard here: every space is a subdomain of one
-// registrable domain, so a sibling's page is SAME-SITE and the session cookie
-// rides a form it posts at this address (route.ts `sameOrigin`, and the same
-// reasoning `/deploy` is guarded by). The origin check is, and a stranger —
-// signed out, a member, or another space's page — is told exactly what a
-// wrong address is told.
+// Account forms return to the section that submitted them. Settings fields
+// are independent; changing an address cannot overwrite an omitted name.
+// Sibling spaces share the cookie's site, so ownership alone is insufficient:
+// the request's origin must belong to this space too.
 let saved = async (
   req: Request,
   env: Env,
@@ -1277,7 +1287,10 @@ let saved = async (
   if (back) {
     let app = await dir.app(space, back)
     if (app?.trashed) await untrash(env, dir, space, app, who)
-    return redirect(`https://${space.slug}.${PLATFORM}/`, 303)
+    return redirect(
+      `https://${space.slug}.${PLATFORM}${managePath('trash')}`,
+      303,
+    )
   }
   // The selling block's button (sell.ts, T-34524). Its own form and its own
   // POST, like the restore button above — and `start` answers a REDIRECT to
@@ -1287,7 +1300,10 @@ let saved = async (
   let till = String(form.get('sell') ?? '').trim()
   if (till == 'stop') {
     if (space.stripe?.account) await disconnect(env, space)
-    return redirect(`https://${space.slug}.${PLATFORM}/`, 303)
+    return redirect(
+      `https://${space.slug}.${PLATFORM}${managePath('selling')}`,
+      303,
+    )
   }
   if (till == 'start') {
     try {
@@ -1298,7 +1314,7 @@ let saved = async (
       return index(req, env, dir, space, {
         say: "we couldn't reach Stripe just now — try again in a minute",
         no: true,
-      })
+      }, 'selling')
     }
   }
   let name = String(form.get('name') ?? '').trim().slice(0, 60)
@@ -1307,19 +1323,35 @@ let saved = async (
     ? await (await identity()).choose(env, who.person, want, space)
     : null
   if (moved?.error) {
-    return index(req, env, dir, space, { say: moved.error, no: true })
+    return index(
+      req,
+      env,
+      dir,
+      space,
+      { say: moved.error, no: true },
+      'settings',
+    )
   }
   // Cleared, the front of their address comes back — a person always has a
   // title, because a member row names them by it and a titleless one reads
   // back as a bare eid (T-32733). `nameOf` is the same fallback signing in
   // writes.
-  await dir.apply({
-    entities: [{
-      entity: { eid: who.person },
-      doc: { title: name || nameOf(null, await dir.emailAt(who.person) ?? '') },
-    }],
-  }, { 'x-yak-person': who.person, 'x-yak-role': 'owner' })
-  return redirect(`https://${moved?.slug ?? space.slug}.${PLATFORM}/`, 303)
+  if (form.has('name')) {
+    await dir.apply({
+      entities: [{
+        entity: { eid: who.person },
+        doc: {
+          title: name || nameOf(null, await dir.emailAt(who.person) ?? ''),
+        },
+      }],
+    }, { 'x-yak-person': who.person, 'x-yak-role': 'owner' })
+  }
+  return redirect(
+    `https://${moved?.slug ?? space.slug}.${PLATFORM}${
+      managePath('settings')
+    }?saved=1`,
+    303,
+  )
 }
 
 // Rung 1½ (D-34197): the home app is the space's ROUTER, and `home.first`
@@ -1410,6 +1442,13 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // brings it back (`closed` above, T-34431).
   if (space.trashed) return closed(req, env, dir, space)
   let url = new URL(req.url)
+  if (url.pathname == MANAGE || url.pathname.startsWith(`${MANAGE}/`)) {
+    let view = manageView(url.pathname)
+    if (!view) return nothingHere()
+    if (req.method == 'POST') return saved(req, env, dir, space)
+    if (req.method != 'GET' && req.method != 'HEAD') return nothingHere()
+    return index(req, env, dir, space, undefined, view)
+  }
   // The builder's socket (build.ts, T-34240). A SPACE's door, not an app's:
   // the person it is for has no app yet, so it is answered here — before the
   // home app is looked for, since a space with none would be a 404 at every

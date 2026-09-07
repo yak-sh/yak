@@ -27,6 +27,7 @@ import {
   signIn,
 } from './probe.ts'
 import { SENDS } from './signin.ts'
+import { MANAGE, managePath } from './route.ts'
 
 let form = (
   k: Kernel,
@@ -84,7 +85,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     // the platform, where attaching an assistant is one link away (T-34233).
     assertEquals(
       inn.headers.get('location'),
-      `https://${email.split('@')[0]}.yaks.app/`,
+      `https://${email.split('@')[0]}.yaks.app${MANAGE}`,
     )
     let set = inn.headers.get('set-cookie') ?? ''
     assertMatch(set, /^yak_session=/)
@@ -159,7 +160,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
       assertEquals(r.status, 303)
       return {
         to: r.headers.get('location'),
-        home: `https://${addr.split('@')[0]}.yaks.app/`,
+        home: `https://${addr.split('@')[0]}.yaks.app${MANAGE}`,
       }
     }
     let notes = 'https://someone.yaks.app/notes/'
@@ -301,19 +302,11 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
       `Could not read the client metadata document at ${doc}`,
     )
 
-    // Their space page, before any agent has ever been let in as them: the
-    // connect block stands OPEN, because attaching one is the whole of what is
-    // left to do here (T-34236).
     let theirPage = () =>
-      k.at(`${email.split('@')[0]}.yaks.app`, '/', { headers: { cookie } })
-        .then((r) => r.text())
-    let fresh = await theirPage()
-    assertMatch(fresh, /<details class="Attach" open>/)
-    // What they are called leads the connect block.
-    assert(
-      fresh.indexOf('name="name"') < fresh.indexOf('<details class="Attach"'),
-      fresh,
-    )
+      k.at(`${email.split('@')[0]}.yaks.app`, managePath('connect'), {
+        headers: { cookie },
+      }).then((r) => r.text())
+    assertStringIncludes(await theirPage(), 'https://yaks.app/connect#chatgpt')
 
     // A client registers itself (RFC 7591) — what the Claude and ChatGPT
     // connectors do today.
@@ -446,12 +439,8 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     )
     await stale.body?.cancel()
 
-    // And with one let in, the block on their space page shuts: the steps are
-    // still there — a SECOND assistant is added the same way — but they are
-    // one line to open rather than the page (T-34236).
-    let working = await theirPage()
-    assertMatch(working, /<details class="Attach">/)
-    assertMatch(working, /class="Copy_Go"/)
+    // Adding another assistant remains available after the first connects.
+    assertStringIncludes(await theirPage(), 'https://yaks.app/connect#chatgpt')
 
     // And signing in lands where it landed before it: their own space is the
     // signed-in home either way, and attaching an assistant is something on
@@ -464,7 +453,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     assertEquals(over.status, 303)
     assertEquals(
       over.headers.get('location'),
-      `https://${email.split('@')[0]}.yaks.app/`,
+      `https://${email.split('@')[0]}.yaks.app${MANAGE}`,
     )
     await over.body?.cancel()
 
@@ -639,7 +628,7 @@ slow('/login never draws the box for a browser already signed in', async () => {
     }
     let aimed = (back: string) => `/login?return=${encodeURIComponent(back)}`
     let { cookie, email } = await signIn(k)
-    let home = `https://${email.split('@')[0]}.yaks.app/`
+    let home = `https://${email.split('@')[0]}.yaks.app${MANAGE}`
 
     // Aimed nowhere: their own space, which is where a fresh sign-in with no
     // return goes too.
@@ -712,7 +701,10 @@ slow(
         code: await mailed(k, them.email),
       })
       assertEquals(inn.status, 303)
-      assertEquals(inn.headers.get('location'), `https://${slug}.yaks.app/`)
+      assertEquals(
+        inn.headers.get('location'),
+        `https://${slug}.yaks.app${MANAGE}`,
+      )
       let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
 
       // And that page says where their space went, with the days it has left.
@@ -749,11 +741,11 @@ slow(
 // their apps live at. One form, one POST to the space's own address, and the
 // answer is a redirect — a changed address MOVES this hostname, so where they
 // land is wherever the space now is.
-slow("the space page's owner block names them and their address", async () => {
+slow('account settings save the name and address', async () => {
   let k = await kernel()
   let uniq = () => crypto.randomUUID().slice(0, 8)
   let post = (host: string, fields: Record<string, string>, cookie?: string) =>
-    k.at(host, '/', {
+    k.at(host, managePath('settings'), {
       method: 'POST',
       redirect: 'manual',
       headers: {
@@ -769,7 +761,7 @@ slow("the space page's owner block names them and their address", async () => {
 
     // The block, as its owner reads it: their address and the name signing in
     // derived for them, both filled in and both theirs to change.
-    let page = await (await k.at(`${slug}.yaks.app`, '/', {
+    let page = await (await k.at(`${slug}.yaks.app`, managePath('settings'), {
       headers: { cookie },
     })).text()
     assertMatch(page, new RegExp(`name="space"[^>]*value="${slug}"`))
@@ -787,7 +779,7 @@ slow("the space page's owner block names them and their address", async () => {
     await named.body?.cancel()
     assertEquals(
       named.headers.get('location'),
-      `https://${slug}.yaks.app/`,
+      `https://${slug}.yaks.app${managePath('settings')}?saved=1`,
     )
     let [them] = await dir.query(`.eid=${person}&.doc?`)
     assertEquals((them.doc as { title: string }).title, 'Dana')
@@ -825,7 +817,10 @@ slow("the space page's owner block names them and their address", async () => {
     let moved = await post(`${slug}.yaks.app`, { space: want }, cookie)
     assertEquals(moved.status, 303)
     await moved.body?.cancel()
-    assertEquals(moved.headers.get('location'), `https://${want}.yaks.app/`)
+    assertEquals(
+      moved.headers.get('location'),
+      `https://${want}.yaks.app${managePath('settings')}?saved=1`,
+    )
     assert(
       (await dir.query(`.space.slug=${want}`)).length,
       `a space at ${want}`,
@@ -843,7 +838,7 @@ slow("the space page's owner block names them and their address", async () => {
     // spaces are SAME-SITE, so `SameSite=Lax` lets the session ride a form one
     // space's page posts at another's — the origin check is what does not
     // (route.ts `sameOrigin`).
-    let forged = await k.at(`${want}.yaks.app`, '/', {
+    let forged = await k.at(`${want}.yaks.app`, managePath('settings'), {
       method: 'POST',
       redirect: 'manual',
       headers: {
@@ -904,7 +899,7 @@ slow('the connector page, and the address chosen on it', async () => {
     assertEquals(inn.status, 303)
     assertEquals(
       inn.headers.get('location'),
-      `https://${email.split('@')[0]}.yaks.app/`,
+      `https://${email.split('@')[0]}.yaks.app${MANAGE}`,
     )
     await inn.body?.cancel()
     let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
@@ -1166,7 +1161,7 @@ slow('a link signs a person in, once or until it is revoked', async () => {
     await inn.body?.cancel()
     assertEquals(
       inn.headers.get('location'),
-      `https://${email.split('@')[0]}.yaks.app/`,
+      `https://${email.split('@')[0]}.yaks.app${MANAGE}`,
     )
     assertEquals(inn.headers.get('referrer-policy'), 'no-referrer')
     let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]

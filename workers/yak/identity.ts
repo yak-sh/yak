@@ -122,6 +122,7 @@ import {
 } from './pages.ts'
 import {
   hostOf,
+  MANAGE,
   OAUTH,
   onZone,
   PLATFORM,
@@ -257,11 +258,8 @@ let redirect = (to: string, set?: string, status = 302) =>
 // Where a signed-in person lands: the page they came from, when it is on our
 // own zone — an off-zone address is ignored and never followed, the field
 // being a stranger's to fill in (route.ts `onZone`). Sent nowhere in
-// particular, they land on their own space's root — the home app there, or the
-// space's index — because a person's space IS the signed-in home of this
-// platform (T-34233). `/connect` is still the page that teaches attaching an
-// assistant, and the space index's owner block links to it, so the nudge
-// arrives where they live instead of standing in front of it.
+// particular, they land on their account page. It stays reachable when a
+// custom app serves their space's root.
 //
 // Several spaces, and the one they came in on wins — but that is the return
 // address doing it, not a rule of its own: a space's index sends someone here
@@ -270,7 +268,7 @@ let redirect = (to: string, set?: string, status = 302) =>
 // nobody was aiming them anywhere, and `own()` names it: the space their own
 // address spells, else the first they own.
 let backTo = (mine: string, back: string) =>
-  (back && onZone(back)) || `https://${mine}.${PLATFORM}/`
+  (back && onZone(back)) || `https://${mine}.${PLATFORM}${MANAGE}`
 
 // The cookie's Domain: the platform's own apex, so one sign-in serves every
 // space's hostname. On a dev host there is no domain to share — an IP takes
@@ -679,6 +677,13 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     ? await req.formData().catch(() => new FormData())
     : new FormData()
   let field = (name: string) => String(form.get(name) ?? '')
+
+  if (path == '/manage' && req.method == 'GET') {
+    let person = await browser(env, req)
+    if (!person) return redirect('/login?return=%2Fmanage', undefined, 303)
+    let space = await dirOf(env).own(person)
+    return redirect(backTo(space.slug, ''), undefined, 303)
+  }
 
   // The custom-domain end of cross-domain sign-in (`handoff`). index.ts sends
   // it here on a foreign host before `aimed` moves the address, so it is the
