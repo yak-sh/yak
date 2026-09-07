@@ -12,6 +12,10 @@
 
   Redraw after an edit:
     rsvg-convert -w 512 -h 512 -f png -o connector-512.png connector.svg
+
+  ChatGPT's upload is PNG-only and under 10 KB. Keep its download derived from
+  this same drawing:
+    rsvg-convert -w 256 -h 256 -f png connector.svg | magick png:- -strip -colors 64 PNG8:yaks-app.png
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"
   viewBox="0 0 512 512">

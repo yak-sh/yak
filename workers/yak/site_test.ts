@@ -10,7 +10,7 @@ import { BUILDS, CURRENCY, LETTERS, PRICE } from './meter.ts'
 import { quoted, rate } from './sell.ts'
 import { page as galleryPage } from './gallery.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
-import { askEmail, connect, spaceIndex } from './pages.ts'
+import { askEmail, connect } from './pages.ts'
 import { kernel } from './probe.ts'
 import {
   ADDRESSES,
@@ -569,12 +569,21 @@ Deno.test('the help page answers its own questions in JSON-LD', () => {
   assertEquals(asked, headings)
 })
 
-// The connect instructions, as they are served. One tab per agent, the URL on
-// the clipboard as step one of every one of them, and the three things a
-// connector form asks for above them all (T-34412, T-34413, T-34415).
+// The connect instructions, as they are served. One tab per app, with only
+// the fields that app asks for (T-34412, T-34413, T-34415).
 let tabs = ['Claude', 'ChatGPT', 'Claude Code', 'Cursor', 'Any MCP client']
 
 let count = (html: string, s: string) => html.split(s).length - 1
+
+let panel = (html: string, key: string) => {
+  let start = html.indexOf(
+    `<section class="Card Tabs_Panel Tabs_Panel-${key}">`,
+  )
+  assert(start >= 0, `${key} panel is missing`)
+  let end = html.indexOf('</section>', start)
+  assert(end >= 0, `${key} panel does not close`)
+  return html.slice(start, end)
+}
 
 // `/connect` is a signed-in page (T-34408), so it always has a space to say
 // something about; none of what is asserted below depends on which.
@@ -598,31 +607,36 @@ Deno.test('the connect page teaches one agent at a time', async () => {
     html,
     '<input type="radio" name="agent" id="tab-claude" value="claude" checked>',
   )
+  assertStringIncludes(html, '<fieldset class="Tabs">')
+  assertStringIncludes(html, '<legend class="Tabs_Legend">')
   assertEquals(count(html, '<section class="Card Tabs_Panel'), tabs.length)
-  // Every tab and the card above them get the SAME address (T-34465): mixed
-  // auth is documented and works here, so ChatGPT is given the plain door like
-  // everyone else, and `?auth=required` is left as a sentence for a client
-  // that cannot do optional authentication.
-  assertEquals(
-    count(html, '<span class="Pick">https://yaks.app/mcp</span>'),
-    tabs.length + 1,
-  )
-  assertEquals(count(html, 'https://yaks.app/mcp?auth=required'), 2)
-  assertEquals(count(html, 'hidden>Copy</button>'), tabs.length + 3)
+  for (let key of ['claude', 'chatgpt', 'claude-code', 'cursor', 'other']) {
+    let one = panel(html, key)
+    assertStringIncludes(one, 'https://yaks.app/mcp')
+    assertStringIncludes(one, '<div class="Connect_Next">')
+    assertStringIncludes(one, 'aria-label="Copy the sample app request"')
+  }
   assertStringIncludes(
     html,
     'await navigator.clipboard.writeText(said.textContent)',
   )
-  // Step two is the way out to that agent's own form, so nobody comes back for
-  // the URL: every tab names where it is added.
+  // Setup jumps leave this page open beside the provider's form.
   for (
     let out of [
       'https://claude.ai/customize/connectors',
-      'https://chatgpt.com/plugins',
+      'https://chatgpt.com/#settings/Security',
       'claude mcp add --transport http yaks https://yaks.app/mcp',
       '~/.cursor/mcp.json',
     ]
   ) assertStringIncludes(html, out)
+  for (
+    let link of html.matchAll(
+      /<a href="https:\/\/(?:claude\.ai|chatgpt\.com)[^"]+"[^>]*>/g,
+    )
+  ) {
+    assertStringIncludes(link[0], 'target="_blank"')
+    assertStringIncludes(link[0], 'rel="noopener"')
+  }
   for (
     let value of [
       'https://yaks.app/oauth/authorize',
@@ -633,35 +647,45 @@ Deno.test('the connect page teaches one agent at a time', async () => {
   ) assertStringIncludes(html, value)
 })
 
-Deno.test('the connect page shows the connector its own face', async () => {
+Deno.test('each connector form gets only the fields it asks for', async () => {
   let html = await page()
+  let chatgpt = panel(html, 'chatgpt')
+  for (let field of ['Connection', 'Name', 'Description', 'Icon']) {
+    assertStringIncludes(chatgpt, `<dt>${field}</dt>`)
+  }
   assertStringIncludes(
-    html,
-    `<img class="Face_Icon" src="${SITE_URL}/connector.svg"`,
+    chatgpt,
+    'https://chatgpt.com/plugins#settings/Connectors?create-connector=true&amp;redirectAfter=%2F',
   )
-  assertStringIncludes(html, `<a href="${SITE_URL}/connector-512.png">`)
-  assertStringIncludes(html, '<span class="Pick">yaks.app</span>')
+
+  for (let key of ['claude', 'claude-code', 'cursor', 'other']) {
+    let one = panel(html, key)
+    assertEquals(one.includes('<dt>Description</dt>'), false, key)
+    assertEquals(one.includes('<dt>Icon</dt>'), false, key)
+    assertEquals(one.includes('yaks-app.png'), false, key)
+  }
+  assertEquals(
+    panel(html, 'claude-code').includes('<dl class="Fields">'),
+    false,
+  )
+  assertEquals(panel(html, 'cursor').includes('<dl class="Fields">'), false)
 })
 
-// One source, two places: a space's owner block is the same instructions, so a
-// tab added here is a tab there (pages.ts `doors`).
-Deno.test('the space page owner block carries the same instructions', async () => {
-  let html = await (await spaceIndex({
-    space: 'dana',
-    title: 'Dana',
-    apps: [],
-    hidden: 0,
-    role: 'owner',
-    person: true,
-    signIn: 'https://yaks.app/login',
-    connected: false,
-  })).text()
-  assertStringIncludes(html, '<details class="Attach" open>')
-  for (let tab of tabs) assertStringIncludes(html, `>${tab}</label>`)
-  assertEquals(
-    count(html, '<li>Copy the URL:<span class="Copy">'),
-    tabs.length,
+Deno.test('ChatGPT gets a downloadable icon within its upload limit', async () => {
+  let html = panel(await page(), 'chatgpt')
+  let href = `${SITE_URL}/yaks-app.png`
+  assertEquals(count(html, `href="${href}" download="yaks-app.png"`), 2)
+  assertStringIncludes(
+    html,
+    `<a href="${href}" download="yaks-app.png" aria-label="Download the yaks.app icon">
+<img src="${href}" width="56" height="56" alt=`,
   )
+
+  png('yaks-app.png', 256, 256, 3)
+  let icon = Deno.statSync(
+    new URL('./public/yaks-app.png', import.meta.url),
+  )
+  assert(icon.size < 10_000, `yaks-app.png is ${icon.size} bytes`)
 })
 
 // The four addresses, in workerd, at the apex and NOT on a space's hostname —

@@ -117,13 +117,18 @@ details.Note > summary { color: var(--meadow); cursor: pointer }
 .Chat_Ask { margin: 0 }
 .Chat_Ask textarea { min-width: 0; width: 100%; min-height: 4.5rem; font: inherit; padding: .7rem 1rem; border: 2px solid var(--soft-ink); border-radius: 1.25rem; background: var(--paper); color: var(--ink); resize: vertical }
 .Chat_Ask textarea:disabled { opacity: .6 }
-.Face { display: flex; align-items: flex-start; gap: 1rem }
-.Face_Icon { flex: none; width: 72px; height: 72px; border: 1px solid var(--line); border-radius: 1rem }
-.Face_Rows { display: grid; gap: .5rem; min-width: 0 }
-.Face_Rows p { display: flex; align-items: center; gap: .5rem; margin: 0; min-width: 0; font-size: .9rem }
-.Face_Rows b { flex: none; min-width: 5rem; color: var(--ink) }
-.Face_Rows .Copy { min-width: 0; flex: 1 }
-.Tabs { position: relative }
+.Fields { display: grid; gap: .55rem; margin: .55rem 0 0 }
+.Fields > div { display: grid; grid-template-columns: 6rem minmax(0, 1fr); align-items: center; gap: .65rem }
+@media (max-width: 480px) { .Fields > div { grid-template-columns: minmax(0, 1fr); gap: .25rem } }
+.Fields dt { color: var(--ink); font-weight: 800 }
+.Fields dd { min-width: 0; margin: 0 }
+.Fields .Copy { min-width: 0 }
+.Icon { display: flex; align-items: center; gap: .65rem }
+.Icon img { display: block; width: 56px; height: 56px; border: 1px solid var(--line); border-radius: .75rem }
+.Connect_Next { margin-top: .9rem; padding-top: .8rem; border-top: 1px solid var(--line) }
+.Connect_Next p { margin: 0 0 .35rem; color: var(--ink); font-weight: 800 }
+.Tabs { position: relative; min-width: 0; margin: 0; padding: 0; border: 0 }
+.Tabs_Legend { margin: 0 0 .65rem; padding: 0; color: var(--ink); font-weight: 800; text-align: left }
 .Tabs > input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none }
 .Tabs_Strip { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 .75rem }
 .Tabs_Tab { padding: .45rem .9rem; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--ink); font-size: .9rem; font-weight: 700; cursor: pointer }
@@ -905,7 +910,10 @@ let held = (name: string, value?: string | null) =>
 // (T-32593). Whether that address is one to follow is the login door's to
 // decide, never this page's.
 let carried = (q: string | null, back?: string | null) =>
-  held('q', q) + held('return', back)
+  held('q', q) + held('return', back) +
+  (back == '/connect'
+    ? `<script>if (location.hash) document.currentScript.previousElementSibling.value += location.hash</script>`
+    : '')
 
 // Ask for an address. `who` names the app asking, when one is (the OAuth
 // consent page IS this page — signing in is the consent), and `why` is the
@@ -1059,19 +1067,17 @@ puts everything back exactly as it was.`
 // whole consent.
 export let askAllow = (email: string, q: string, who: string) =>
   shell(
-    'Allow access to your yaks.app apps',
-    `${esc(who)} would like to use your yaks.app apps as ${esc(email)}.`,
+    'Allow access to your apps on yaks.app',
+    `${esc(who)} would like to use your apps on yaks.app as ${esc(email)}.`,
     200,
     `<form method="post" action="/oauth/allow">${carried(q)}
 <button type="submit">Allow</button>
 </form>${home}`,
   )
 
-// The connector page, signed in (T-32972). Three things live on it and none
-// waits for the others — the address their apps will live at, theirs to change
-// while nothing is built there (T-32967), what the space pays, and how to hand
-// this platform to the assistant they already talk to. Connecting is never
-// gated on choosing.
+// The connector page, signed in (T-32972). Provider steps come first. The
+// address and plan remain reachable below them in a closed disclosure, so
+// neither competes with the setup a person came here to finish.
 //
 // Signed in is the only way anyone reads it: a fresh sign-in lands on their own
 // space (T-34233) and the owner block there carries these same steps, so a
@@ -1174,24 +1180,32 @@ ${
 </section>`
 }
 
-// The three things every connector form asks for, ready to copy, and the
-// picture beside them (T-34415, seo.ts CONNECTOR). It sits above the tabs
-// because it is the same answer in all of them — only the form around it
-// changes — and because ChatGPT's form asks for all three by hand.
-let face = `<section class="Card"><h2>What the form asks for</h2>
-<div class="Face">
-<img class="Face_Icon" src="${
-  CONNECTOR.icons[0].src
-}" width="72" height="72" alt="The yaks.app yak">
-<div class="Face_Rows">
-<p><b>URL</b> ${copyable(MCP, 'the MCP URL')}</p>
-<p><b>Name</b> ${copyable(CONNECTOR.title, 'the name')}</p>
-<p><b>Description</b> ${copyable(CONNECTOR.description, 'the description')}</p>
-</div>
-</div>
-<p class="Note">Some forms want an icon too:
-<a href="${CONNECTOR.icons[1].src}">save the square yak</a>.</p>
-</section>`
+// Connector forms do not ask the same questions. Keep each answer beside the
+// provider step that asks for it, so a person never has to work out whether a
+// field belongs to the form they are looking at.
+let field = (label: string, value: string, what: string) =>
+  `<div><dt>${esc(label)}</dt><dd>${copyable(value, what)}</dd></div>`
+
+let fields = (rows: string) => `<dl class="Fields">${rows}</dl>`
+
+let ICON = `https://${PLATFORM}/yaks-app.png`
+let chatgptFields = fields(
+  field('Name', CONNECTOR.title, 'the name') +
+    field('Description', CONNECTOR.description, 'the description') +
+    `<div><dt>Icon</dt><dd class="Icon">
+<a href="${ICON}" download="yaks-app.png" aria-label="Download the yaks.app icon">
+<img src="${ICON}" width="56" height="56" alt="The yaks.app icon"></a>
+<a href="${ICON}" download="yaks-app.png">Download icon</a>
+</dd></div>`,
+)
+
+let external = (href: string, label: string) =>
+  `<a href="${esc(href)}" target="_blank" rel="noopener">${label}</a>`
+
+let request = copyable(
+  'Build me a personal recipe box where I can save, search and tag recipes.',
+  'the sample app request',
+)
 
 // An address on this platform, spelled out for somebody to type or paste.
 let at = (path: string) => `<code>https://${PLATFORM}${path}</code>`
@@ -1209,18 +1223,10 @@ let BOXES = `<b>Authorization URL</b> ${
   at(OAUTH.register)
 }, <b>Scope</b> <code>${OAUTH.scope}</code>.`
 
-let OAUTH_HELP =
-  'Your assistant registers automatically and uses PKCE to connect. ' +
-  'There is no secret to enter and no redirect URL to configure.' +
-  `<p class="Note">For clients that need manual setup: ${BOXES}</p>`
+let OAUTH_HELP = `For clients that need manual setup: ${ID} ${BOXES}`
 
 // Nothing interpolated below is anybody's input, so it is written as the
 // markup it is; everything that IS a person's is escaped where it enters.
-//
-// Step one is the URL, on the clipboard, in EVERY tab, and step two is the way
-// out to that agent's own form — owner, 2026-09-05: "the connect instructions
-// should have you copy the mcp url first (click to copy, also) before the link
-// to .../plugins. so you don't have to click back an extra time" (T-34412).
 //
 // Each provider's steps were read off its own documentation on 2026-09-05:
 // support.claude.com article 11176164, help.openai.com article 12584461,
@@ -1231,39 +1237,48 @@ let AGENTS = [
     tab: 'Claude',
     title: 'Claude — web, desktop and mobile',
     steps: [
-      'Open <a href="https://claude.ai/customize/connectors">Connectors</a> ' +
-      'in your settings, press <b>+</b> and choose <b>Add custom ' +
-      'connector</b>.',
-      'Paste the URL, give it the name above, and click <b>Add</b>.',
+      'Copy this URL:' + fields(field('URL', MCP, 'the connection URL')) +
+      'Then open ' +
+      external('https://claude.ai/customize/connectors', 'Connectors') +
+      ', press <b>+</b> and choose <b>Add custom connector</b>.',
+      'Paste it into <b>URL</b>, enter this name, then click <b>Add</b>:' +
+      fields(field('Name', CONNECTOR.title, 'the name')),
       'Click <b>Connect</b>, and sign in with your email.',
     ],
     note: 'A remote connector follows you to every Claude — the phone too. ' +
       'On a Team or Enterprise plan an owner adds it once under Organization ' +
       'settings, and everyone else clicks Connect.',
-    oauth: ID,
+    finish: 'Open ' + external('https://claude.ai/new', 'a new Claude chat'),
   },
   {
     key: 'chatgpt',
     tab: 'ChatGPT',
     title: 'ChatGPT — on the web',
     steps: [
-      'Open <a href="https://chatgpt.com/plugins">chatgpt.com/plugins</a>. ' +
-      'If it is not there, turn on <b>Developer mode</b> first, under ' +
-      '<b>Settings</b> → <b>Connectors</b> → <b>Advanced settings</b>.',
-      'Press <b>Create</b>, and paste that URL as the MCP server URL.',
-      'Give it the name, description and icon above: this form asks for all ' +
-      'three and reads none of them off the server.',
-      'Create it and sign in when it asks. It appears under <b>Developer ' +
-      'mode</b> below the message box.',
+      'Open ' +
+      external(
+        'https://chatgpt.com/#settings/Security',
+        'Security and login settings',
+      ) +
+      ', scroll down and turn on <b>Developer mode</b>. If the link does not ' +
+      'open the setting, click your profile picture in the bottom left, then ' +
+      '<b>Settings</b> → <b>Security and login</b>.',
+      'Copy this URL:' +
+      fields(field('Connection', MCP, 'the connection URL')) +
+      'Then open ' +
+      external(
+        'https://chatgpt.com/plugins#settings/Connectors?create-connector=true&redirectAfter=%2F',
+        'Create a connection',
+      ) + ' and paste it into <b>Connection</b>.',
+      'Add the name, description and icon:' + chatgptFields,
+      'Check <b>I understand</b>, then click <b>Create</b>.',
+      'Sign in with your email when ChatGPT asks.',
     ],
     note: 'Use ChatGPT on the web. On a Business or Enterprise workspace, ' +
       'an admin may have to ' +
       'allow developer mode first.',
-    oauth: 'Set <b>Authentication</b> to <b>OAuth</b>. ' + ID,
-    details: OAUTH_HELP +
-      '<p class="Note">Mixed authentication is also supported: ChatGPT asks ' +
-      'you to sign in when a tool needs it. If it never offers sign-in, ' +
-      `use <code>${MCP_ASK}</code> as the server URL.</p>`,
+    finish: 'Open ' + external('https://chatgpt.com/', 'a new ChatGPT chat') +
+      ' and add <b>yaks.app</b> from the tools menu',
   },
   {
     key: 'claude-code',
@@ -1276,6 +1291,7 @@ let AGENTS = [
     ],
     note: 'Add <code>--scope user</code> to that first line to have it in ' +
       'every project, not just this one.',
+    finish: 'Start a new Claude Code chat',
   },
   {
     key: 'cursor',
@@ -1290,20 +1306,22 @@ let AGENTS = [
     ],
     note: 'A <code>.cursor/mcp.json</code> in a project folder does the same ' +
       'thing for that project alone.',
+    finish: 'Open a new Agent chat in Cursor',
   },
   {
     key: 'other',
     tab: 'Any MCP client',
     title: 'Anything else that speaks MCP',
     steps: [
-      'Give it that URL, over streamable HTTP. It will walk you through ' +
-      'signing in.',
-      'If it asks what to call the server, the name and description above ' +
-      'are what this one answers to.',
+      'Add a streamable HTTP connection with this URL:' +
+      fields(field('URL', MCP, 'the MCP URL')),
+      'If it asks for a name, use <b>yaks.app</b>. Then follow its sign-in ' +
+      'prompt.',
     ],
     details: OAUTH_HELP +
-      '<p class="Note">If your client never offers sign-in, use ' +
-      `<code>${MCP_ASK}</code> as the server URL.</p>`,
+      ' If your client never offers sign-in, use ' +
+      `<code>${MCP_ASK}</code> as the server URL.`,
+    finish: 'Start a new chat in your MCP client',
   },
 ]
 
@@ -1317,8 +1335,8 @@ let tabsCss = AGENTS.map((a) =>
 #tab-${a.key}:checked ~ .Tabs_Panel-${a.key} { display: block }`
 ).join('\n')
 
-let doors = `${face}
-<div class="Tabs">
+let doors = `<fieldset class="Tabs">
+<legend class="Tabs_Legend">Which app do you use?</legend>
 ${
   AGENTS.map((a, i) =>
     `<input type="radio" name="agent" id="tab-${a.key}" value="${a.key}"${
@@ -1326,7 +1344,7 @@ ${
     }>`
   ).join('\n')
 }
-<nav class="Tabs_Strip" aria-label="Assistants">${
+<nav class="Tabs_Strip" aria-label="Choose where to build">${
   AGENTS.map((a) =>
     `<label class="Tabs_Tab" for="tab-${a.key}">${a.tab}</label>`
   ).join('')
@@ -1334,20 +1352,20 @@ ${
 ${
   AGENTS.map((a) =>
     `<section class="Card Tabs_Panel Tabs_Panel-${a.key}"><h2>${a.title}</h2>
-<ol><li>Copy the URL:${copyable(MCP, 'the MCP URL')}</li>${
-      a.steps.map((s) => `<li>${s}</li>`).join('')
-    }</ol>
-${a.oauth ? `<p class="Note"><b>OAuth settings.</b> ${a.oauth}</p>` : ''}
+<ol>${a.steps.map((s) => `<li>${s}</li>`).join('')}</ol>
 ${a.note ? `<p class="Note">${a.note}</p>` : ''}
 ${
       a.details
         ? `<details class="Note"><summary>More about authentication</summary><div class="Note">${a.details}</div></details>`
         : ''
     }
+<div class="Connect_Next"><p>Make your first app</p>
+${a.finish}, then ask:${request}
+<span class="Note">Try it, then ask for a change in the same chat. Keep shaping it as you use it.</span></div>
 </section>`
   ).join('')
 }
-</div>`
+</fieldset>`
 
 // The only script a tab needs, and it is not what switches one: the radios do
 // that with no script at all. This keeps the CHOSEN one in the address, so a
@@ -1431,10 +1449,17 @@ for (let b of document.querySelectorAll('.Bill_Go')) {
 
 export let connect = (yours: Yours, status = 200) =>
   shell(
-    'Connect your assistant',
-    'Add yaks.app in your assistant’s settings using the steps below. Then ask it to build an app.',
+    'Connect yaks.app',
+    'Build and manage your apps from your usual chats.',
     status,
-    `${mine(yours)}${plan(yours)}${doors}
+    `${doors}
+<details class="Attach"${status != 200 || yours.paid ? ' open' : ''}>
+<summary>Your address and plan</summary>
+${mine(yours)}${plan(yours)}
+</details>
+<p class="Note"><a href="https://${
+      esc(yours.slug)
+    }.${PLATFORM}/">Your apps and settings</a></p>
 <p class="Note"><a href="https://yaks.app/help">Need help?</a></p>
 ${home}${copying}${tabbing}${inline}`,
   )

@@ -886,13 +886,10 @@ slow('the connector page, and the address chosen on it', async () => {
     return [r.status, await r.json()] as [number, Record<string, string>]
   }
   try {
-    // Signed out, there is nothing to read here: attaching an assistant is
-    // the second step, so a stranger is sent to sign in and the steps meet
-    // them on the space they land on (T-34408). No `return` rides along —
-    // the point is to land them on their space, not back in front of it.
+    // Signing in returns to the setup instructions the person came for.
     let open = await k.at('yaks.app', '/connect', { redirect: 'manual' })
     assertEquals(open.status, 303)
-    assertEquals(open.headers.get('location'), '/login')
+    assertEquals(open.headers.get('location'), '/login?return=%2Fconnect')
     await open.body?.cancel()
 
     // A first sign-in lands on their own space, and the owner block there is

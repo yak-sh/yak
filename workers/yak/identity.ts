@@ -418,15 +418,11 @@ let closing = async (
 // and the instructions. `own` is the same call sign-in makes, so someone who
 // signed in before spaces existed gets theirs here (T-32482).
 //
-// A stranger is sent to sign in instead of shown the steps (T-34408). The
-// order is email, code, their own space, and the connect block waiting there
-// (apps.ts `index`) — teaching a visitor to attach an assistant BEFORE they
-// have an account asks them to do the second step first. No `return` rides
-// the redirect: landing them back here would put them in front of their space
-// rather than on it, and `backTo` already lands a fresh sign-in at home.
+// Keep the setup destination through sign-in. The login form carries its
+// fragment too, because a provider chosen in a link never reaches the server.
 let theirs = async (env: Env, req: Request, said?: string, say?: string) => {
   let who = await withAuth(env, req)
-  if (!who) return redirect('/login', undefined, 303)
+  if (!who) return redirect('/login?return=%2Fconnect', undefined, 303)
   let dir = dirOf(env)
   let space = await dir.own(who.person)
   return connect({
