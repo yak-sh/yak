@@ -1,5 +1,6 @@
 // Connected chatbot rows share one server-rendered shape and a browser
-// template. Refreshing this component leaves the surrounding forms intact.
+// template. Pages without a list still refresh their connection prompts;
+// both forms leave the surrounding inputs intact.
 import type { Connection, Provider } from './connections.ts'
 import { esc } from './html.ts'
 import { icon } from './icons.ts'
@@ -36,11 +37,12 @@ export let connectionList = (connections: Connection[]) =>
 export let connectionLive = (endpoint: string) =>
   `<script>(()=>{
 let root=document.querySelector('[data-connections]');
-if(!root)return;
-let list=root.querySelector('.Connections');
-let template=root.querySelector('[data-connection-row]');
+let list=root?.querySelector('.Connections');
+let template=root?.querySelector('[data-connection-row]');
+let disconnected=document.querySelector('[data-disconnected]');
+if(!list&&!disconnected)return;
 let destinations=${JSON.stringify(destinations)};
-let connected=!list.hidden, busy=false;
+let connected=list?!list.hidden:disconnected.hidden, busy=false;
 let refresh=async()=>{
   if(busy||document.hidden)return;
   busy=true;
@@ -51,20 +53,22 @@ let refresh=async()=>{
     if(!response.ok)return;
     let data=await response.json();
     if(!Array.isArray(data.connections)||!data.connections.every(c=>c&&typeof c.name==='string'&&typeof c.id==='string'))return;
-    let rows=document.createDocumentFragment();
-    for(let connection of data.connections){
-      let row=template.content.firstElementChild.cloneNode(true);
-      row.querySelector('[data-connection-name]').textContent=connection.name;
-      let link=row.querySelector('[data-connection-open]');
-      let destination=Object.hasOwn(destinations,connection.provider)?destinations[connection.provider]:null;
-      if(destination){
-        link.href=destination.href;
-        link.hidden=false;
-        link.querySelector('[data-connection-action]').textContent=destination.label;
+    if(list&&template){
+      let rows=document.createDocumentFragment();
+      for(let connection of data.connections){
+        let row=template.content.firstElementChild.cloneNode(true);
+        row.querySelector('[data-connection-name]').textContent=connection.name;
+        let link=row.querySelector('[data-connection-open]');
+        let destination=Object.hasOwn(destinations,connection.provider)?destinations[connection.provider]:null;
+        if(destination){
+          link.href=destination.href;
+          link.hidden=false;
+          link.querySelector('[data-connection-action]').textContent=destination.label;
+        }
+        rows.append(row);
       }
-      rows.append(row);
+      if(list.children.length!==rows.children.length||[...list.children].some((row,i)=>!row.isEqualNode(rows.children[i])))list.replaceChildren(rows);
     }
-    if(list.children.length!==rows.children.length||[...list.children].some((row,i)=>!row.isEqualNode(rows.children[i])))list.replaceChildren(rows);
     let any=data.connections.length>0;
     document.querySelectorAll('[data-connected]').forEach(el=>{el.hidden=!any});
     document.querySelectorAll('[data-disconnected]').forEach(el=>{el.hidden=any});

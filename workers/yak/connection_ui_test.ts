@@ -12,14 +12,16 @@ let chatgpt: Connection = {
   connectedAt: 1,
 }
 
-let mount = (initial: Connection[] = []) => {
+let mount = (initial: Connection[] = [], withList = true) => {
   let { document } = parseHTML(`<html><body>
 <p data-disconnected${initial.length ? ' hidden' : ''}>Connect your chatbot</p>
 <p data-connected${initial.length ? '' : ' hidden'}>Your chatbots</p>
 <details data-connection-setup${
     initial.length ? '' : ' open'
   }><input value="draft"></details>
-${connectionList(initial)}${connectionLive('/oauth/connections')}
+${withList ? connectionList(initial) : ''}${
+    connectionLive('/oauth/connections')
+  }
 </body></html>`)
   let events: Record<string, () => Promise<void>> = {}
   let listen = (name: string, run: () => Promise<void>) => {
@@ -158,4 +160,22 @@ Deno.test('connection refresh coalesces events and preserves state on failures',
   let count = m.calls.length
   await m.run('visibilitychange')
   assertEquals(m.calls.length, count)
+})
+
+Deno.test('connection state refreshes without a chatbot list or row template', async () => {
+  for (let initial of [[], [chatgpt]]) {
+    let m = mount(initial, false)
+    let prompt = m.document.querySelector<HTMLElement>('[data-disconnected]')!
+    let draft = m.document.querySelector('input')!
+    assertEquals(prompt.hidden, !!initial.length)
+    assertEquals(m.calls.length, 0)
+    for (let connections of [[chatgpt], []]) {
+      m.show(connections)
+      await m.run()
+      assertEquals(prompt.hidden, !!connections.length)
+      assertEquals(m.document.querySelector('.Connections'), null)
+      assertEquals(m.document.querySelector('[data-connection-row]'), null)
+      assertEquals(m.document.querySelector('input'), draft)
+    }
+  }
 })

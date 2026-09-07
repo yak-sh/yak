@@ -219,6 +219,15 @@ Deno.test('connected empty library offers a copyable request', async () => {
     apps: [{ slug: 'recipes', title: 'Recipes' }],
   })
   assert(!/class="[^"]*\bCopy_Go\b/.test(built), built)
+  for (let html of [page, built]) {
+    let { document } = parseHTML(html)
+    assertEquals(document.querySelector('.Connections'), null)
+    assertEquals(document.querySelector('[data-connection-row]'), null)
+    assertEquals(document.querySelector('[data-connection-name]'), null)
+    assert(
+      document.querySelector('[data-disconnected]')!.hasAttribute('hidden'),
+    )
+  }
 })
 
 Deno.test('connected pages show the named client and put setup behind a disclosure', async () => {
@@ -228,7 +237,7 @@ Deno.test('connected pages show the named client and put setup behind a disclosu
     name: 'ChatGPT',
     connectedAt: 1,
   }]
-  for (let view of ['apps', 'new', 'connect'] as const) {
+  for (let view of ['new', 'connect'] as const) {
     let { document } = parseHTML(await block({ view, connections }))
     let list = document.querySelector('.Connections')!
     assertStringIncludes(list.textContent!, 'ChatGPT')

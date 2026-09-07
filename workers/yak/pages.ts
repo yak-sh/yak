@@ -79,7 +79,7 @@ details.Note > summary { color: var(--accent); cursor: pointer }
 .Says { display: grid; gap: .5rem; margin: .75rem 0 1rem; padding: 0; list-style: none }
 .Copy { display: flex; align-items: center; gap: .5rem }
 .Copy .Pick { flex: 1; margin: 0; border-radius: .7rem; background: var(--ground) }
-.Copy_Go { --button-pad: .4rem .9rem; --button-fill: var(--paper); --button-ink: var(--accent); flex: none; font-size: .85rem; font-weight: 700 }
+.Copy_Go { --control-pad-inline: .9rem; --button-fill: var(--paper); --button-ink: var(--accent); flex: none; font-size: .85rem; font-weight: 700 }
 .At { display: flex; align-items: center; justify-content: center; gap: .3rem }
 .At input { flex: 0 1 13rem; text-align: right }
 .At span { color: var(--soft-ink) }
@@ -615,7 +615,7 @@ let deskCss = `
 .Desk_Head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 2rem }
 .Desk_Head h1 { font-size: 1.9rem; margin: .15rem 0 0 }
 .Desk_Address { font-size: .85rem; text-decoration: none; color: var(--soft-ink) }
-.Desk_Head .Button { flex: none; padding: .6rem 1.2rem; font-size: .95rem }
+.Desk_Head .Button { --control-pad-inline: 1.2rem; flex: none; font-size: .95rem }
 .Desk_Content { max-width: 52rem }
 .Desk .Card { --card-pad: 1.5rem }
 .Desk .Card h2 { font-size: 1.15rem }
@@ -631,7 +631,7 @@ let deskCss = `
 .Desk_Connect { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; margin-bottom: 2rem; padding: 1.25rem 1.5rem; border: 1px solid var(--accent); border-radius: 1rem }
 .Desk_Connect h2 { margin: 0 0 .35rem; font-size: 1.1rem }
 .Desk_Connect p { margin: 0; font-size: .95rem; max-width: 34rem }
-.Desk_Connect .Button { flex: none; padding: .6rem 1.1rem; font-size: .9rem }
+.Desk_Connect .Button { --control-pad-inline: 1.1rem; flex: none; font-size: .9rem }
 .Apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 1rem }
 .Apps_Item { display: flex; flex-direction: column; align-items: start; gap: .55rem; min-height: 12rem; padding: 1.25rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--paper); color: var(--ink); text-decoration: none }
 .Apps_Item:hover { border-color: var(--accent) }
@@ -710,8 +710,7 @@ let state = (connected: boolean, show: boolean) =>
   `data-${connected ? 'connected' : 'disconnected'}${show ? '' : ' hidden'}`
 
 let connectCard = (at: SpacePage) =>
-  `${connectionList(at.connections ?? [])}
-<section class="Desk_Connect" ${state(false, !at.connections?.length)}>
+  `<section class="Desk_Connect" ${state(false, !at.connections?.length)}>
 <div><h2>Connect your chatbot</h2><p>Build and improve your apps in the conversations you already have with Claude or ChatGPT.</p></div>
 <a class="Button" href="${managePath('connect')}">Connect chatbot</a></section>`
 
@@ -836,7 +835,7 @@ let desk = (at: SpacePage) => {
     body = `${connectionSetup(at.connections ?? [])}${copying}${tabbing}`
   }
   if (view == 'new') {
-    body = `${connectCard(at)}
+    body = `${connectionList(at.connections ?? [])}${connectCard(at)}
 <details class="Desk_Options"><summary>Build an app here</summary>${
       chat(!!at.apps.length)
     }</details>
