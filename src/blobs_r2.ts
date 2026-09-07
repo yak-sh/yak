@@ -8,8 +8,8 @@
 //
 // The slice itself is r2.ts, which imports nothing: a Worker that only
 // DECLARES a bucket binding must be able to name the shape without loading
-// this adapter, and through it the local Deno implementation behind `Blobs`.
-import type { Blobs } from './blobs.ts'
+// this adapter. `store/blobs.ts` keeps the byte-store contract portable too.
+import type { Blobs } from './store/blobs.ts'
 import type { R2 } from './r2.ts'
 
 export type { R2 }

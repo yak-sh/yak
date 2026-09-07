@@ -7,6 +7,7 @@
 // behind it.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parse } from '@std/toml'
+import { next } from '@yaks/wake'
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import type { Wire } from '@yaks/durable-object'
 import { slow, until } from '../../src/testing.ts'
@@ -38,6 +39,7 @@ import { ai, platform, sandboxes } from './harness.ts'
 import { boxOf, spending } from './sandbox.ts'
 import type { Who } from './session.ts'
 import { client, connector, kernel, letters, meta, seed } from './probe.ts'
+import { trashPlugin } from './trash.ts'
 
 let space = (over: Partial<Space> = {}): Space => ({
   eid: 'space-eid',
@@ -204,18 +206,16 @@ Deno.test('the trash is thirty days, counted in whole days left', () => {
   assertEquals(due({ at: '', by: 'p1' }, then(0)), true)
 })
 
-// `scheduled` is ONE handler for both cron triggers and tells them apart by
-// the line that fired (index.ts), so the line in the config and the line in
-// the code have to be the same string. They are two files; this is what keeps
-// them one fact.
-Deno.test('the sweep runs on a cron line the deploy actually asks for', async () => {
+// The deployed cron is a heartbeat, while the trash row owns its schedule.
+// The heartbeat must include 04:20 so collection keeps its daily instant.
+Deno.test('the heartbeat reaches the trash wake at 04:20 UTC', async () => {
   let conf = parse(
     await Deno.readTextFile(new URL('./wrangler.toml', import.meta.url)),
   ) as { triggers: { crons: string[] } }
-  assert(
-    conf.triggers.crons.includes(DAILY),
-    `${DAILY} is not in ${conf.triggers.crons.join(', ')}`,
-  )
+  assertEquals(conf.triggers.crons, ['*/5 * * * *'])
+  assertEquals(trashPlugin.wakes?.[0].wake.every, DAILY)
+  let before = Date.parse('2026-09-07T04:19:00Z')
+  assertEquals(next(conf.triggers.crons[0], before), next(DAILY, before))
 })
 
 Deno.test('the sweep takes the trash that is out of days, and nothing else', () => {

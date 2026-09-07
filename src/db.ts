@@ -10,7 +10,8 @@
 //
 // Ids: `eid` is a UUID so ANY side (client included) can mint entities;
 // `num` is the server-minted human number (T-7 in the UI, one global counter).
-import type { Sql, Statement } from './store/sql.ts'
+import type { SchemaOp, Sql, Statement } from './store/sql.ts'
+export type { SchemaOp } from './store/sql.ts'
 import { initVector } from './vector.ts'
 import { dirname, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -3855,15 +3856,6 @@ export let freshStats = (db: Sql) => {
   if (analyzed || added) prep(db, 'analyze sqlite_schema').run()
   return analyzed
 }
-
-// One schema-shaping DDL statement, classified so a non-Deno kernel can replay
-// it (D-22804 §8). The classes are the whole guard surface: an idempotent
-// create/drop runs as-is; an `add column` runs only when the column is absent;
-// a bare `create index` runs only when the index is absent.
-export type SchemaOp =
-  | { kind: 'exec'; sql: string }
-  | { kind: 'addColumn'; table: string; col: string; sql: string }
-  | { kind: 'index'; name: string; sql: string }
 
 // The ordered schema-shaping DDL a fresh migrate() runs, classified — the ONE
 // source the codegen emits src/store/schema.json from, so a backend that plants

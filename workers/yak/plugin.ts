@@ -21,6 +21,8 @@
 //   rules    what it does INSIDE a store, as data: a query over one bundle in
 //            a batch plus what comes out (@yaks/graph `Rule`), run by the phase
 //            it names in every store this Worker builds (graph.ts `#boot`)
+//   wakes    rows seeded once in the directory: when to write `fired`, with
+//            the tags the plugin's effect rules match beside it
 //
 // `rules` is the one slot that is not an extraction: it is @yaks/graph's own
 // phase seam, offered here so a domain says what it does about a WRITE in the
@@ -28,17 +30,12 @@
 // store does not speak is inert there (@yaks/graph rules.ts), which is what
 // lets one list serve the directory and every app store alike.
 //
-// There is deliberately NO sweep slot. `scheduled` in index.ts fires the meter
-// and the trash collection, and neither is a plugin yet; a slot with no
-// contributor is a guess about the next domain rather than an extraction from
-// this one. The day a plugin has a sweep, it is four lines here and a fold in
-// index.ts.
-//
 // A plugin holds no state and is composed once, at module load — `PLUGINS`
 // (plugins.ts) is the one list, and the host modules read that list instead of
 // naming a domain each.
-import type { Rule } from '@yaks/graph'
+import type { Bundle, Rule } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
+import type { Wake as Schedule } from '@yaks/wake'
 import { PAGES } from './content.ts'
 import type { App, Space } from './directory.ts'
 import type { Env } from './env.ts'
@@ -84,6 +81,9 @@ export type Visit = {
  */
 export type Watch = (v: Visit) => void
 
+/** A directory row a plugin seeds once, wearing the tags its rules match. */
+export type Wake = Bundle & { wake: Schedule }
+
 /** A self-contained contribution to this Worker. */
 export type Plugin = {
   /** the plugin's name, for diagnostics and for the list to read as a list */
@@ -100,6 +100,8 @@ export type Plugin = {
   watch?: Watch
   /** the rules it declares, run inside every store this Worker builds */
   rules?: Rule[]
+  /** schedules seeded once in the directory; existing rows keep their state */
+  wakes?: Wake[]
 }
 
 /**
@@ -131,6 +133,10 @@ export let toolsOf = (plugins: Plugin[]): Tool[] =>
  * @yaks/graph's own (graph.ts `#boot`). */
 export let rulesOf = (plugins: Plugin[]): Rule[] =>
   plugins.flatMap((p) => p.rules ?? [])
+
+/** Every schedule row, in plugin order, for the directory's first tick. */
+export let wakesOf = (plugins: Plugin[]): Wake[] =>
+  plugins.flatMap((p) => p.wakes ?? [])
 
 /** Every guide page, in plugin order. */
 export let pagesOf = (plugins: Plugin[]): Page[] =>

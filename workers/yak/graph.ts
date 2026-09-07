@@ -124,9 +124,13 @@ import {
 } from '@yaks/member'
 import { parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
+import { wakes } from '@yaks/wake'
+import { scheduled } from '@yaks/wake/cloudflare'
 import { named, type Row } from './listing.ts'
-import { rulesOf } from './plugin.ts'
+import { rulesOf, wakesOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
+import type { Env } from './env.ts'
+import { seeded } from './wake.ts'
 import { type Binding, posting } from './post.ts'
 import { type Namespace, PLATFORM_STORE } from './door.ts'
 import { metering } from './meter.ts'
@@ -214,13 +218,11 @@ export type State = Hibernation & {
   abort?(reason?: string): void
 }
 
-/** The bindings this object is handed — the Worker's whole `env`, of which it
- * reads three: the bucket a migration writes the object's whole old graph to
- * before it moves a row (migrate.ts), Cloudflare Email Sending, which is how a
- * letter written here leaves (post.ts, T-33686), and the store namespace, which
- * is how the letter it just sent reaches the space's meter — the directory is
- * another object in that namespace (meter.ts `metering`, T-33688). */
-export type Bindings = {
+/** The Worker's bindings: migration exports and outgoing mail for every
+ * store, and `#Env` for the directory's platform rules. The rules in app
+ * stores receive no platform bindings, even if an app declares matching tags.
+ * A stand-in may supply only the bindings its operations need. */
+export type Bindings = Omit<Partial<Env>, 'EXPORTS'> & {
   EXPORTS?: Bucket
   MAIL?: Binding
   STORE?: Namespace
@@ -514,6 +516,7 @@ export class Store {
         keys(vocab),
         aliases(vocab),
         blobs(vocab, bytes),
+        ...(meta ? [wakes()] : []),
         fx,
         // Before the guard, because it is what the guard reads.
         this.#vouching,
@@ -534,7 +537,11 @@ export class Store {
         // (@yaks/graph rules.ts) — and a phase runs its rules before its hooks
         // wherever the list sits, so the place decides nothing but the order
         // two rules on one phase fire in.
-        { name: 'yak/rules', rules: rulesOf(PLUGINS) },
+        {
+          name: 'yak/rules',
+          rules: rulesOf(PLUGINS),
+          resources: { Env: () => meta ? this.#bind : undefined },
+        },
       ],
     })
     // A letter goes when it asks to, whichever of its two components arrives
@@ -1127,6 +1134,25 @@ export class Store {
     this.#live.wake()
     let path = new URL(request.url).pathname
     let kernel = request.headers.get('x-yak-kernel') == '1'
+    if (path == '/tick') {
+      if (!kernel || this.#get('name') != PLATFORM_STORE) {
+        return json({ error: 'NotFound', message: 'no route' }, 404)
+      }
+      if (request.method != 'POST') return json({ error: 'Method' }, 405)
+      let event = await request.json() as { scheduledTime: number }
+      if (!Number.isFinite(event.scheduledTime)) {
+        return json({ error: 'scheduledTime must be an instant' }, 400)
+      }
+      await seeded(this.#graph, wakesOf(PLUGINS), event.scheduledTime)
+      let result = await scheduled(this.#graph, event)
+      return json({
+        ...result,
+        refused: result.refused.map(({ wake, error }) => ({
+          wake,
+          error: error instanceof Error ? error.message : String(error),
+        })),
+      })
+    }
     if (path == '/vocab') return this.#vocabDoor(request)
     // The three slots beside the vocabulary: the words this app USES but does
     // not home (T-32728), the tools it declares (T-32685), and what the object

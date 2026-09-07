@@ -14,15 +14,18 @@
 // and the byline are the store's exactly as a birth's are, and a mark that is
 // already dated is left alone however often it is written again.
 //
-// This is a FILE OF ITS OWN rather than a corner of erase.ts because the plugin
-// list is one-way (plugins.ts): everything it imports is a domain, and erase.ts
-// is a domain that reaches the host modules — the tool answers, the dispatch
-// namespace, the store door. A rule needs none of them. What runs inside the
-// store is here; what the Worker does about a delete stays there.
+// The daily wake belongs here too: its `fired` write runs collection after
+// the graph commits. erase.ts reaches the host modules, so the effect loads
+// it when it runs, after the plugin list has been composed.
 //
 // `trashed` is the DIRECTORY's word (vocab.ts `platformDoc`), so this rule is
 // inert in an app's store, which speaks no such component.
 import type { Plugin } from './plugin.ts'
+import type { Env } from './env.ts'
+import { reporting } from './wake.ts'
+
+/** The trash's calendar cadence; Cron Triggers only supply its heartbeat. */
+export let DAILY = '20 4 * * *'
 
 /**
  * The trash mark, dated and signed by the store: `at` is the batch's own
@@ -35,10 +38,26 @@ import type { Plugin } from './plugin.ts'
  */
 export let trashPlugin: Plugin = {
   name: 'yak/trash',
+  wakes: [{
+    entity: { eid: 'yak-trash' },
+    wake: { every: DAILY, note: 'Collect expired yaks.app trash' },
+    sweep: { kind: 'trash' },
+  }],
   rules: [{
     name: 'trashed',
     phase: 'stamp',
     match: '*trashed, trashed.at=, #Actor, #Now',
     run: ({ Actor, Now }) => ({ trashed: { at: Now, by: Actor } }),
+  }, {
+    name: 'trash',
+    phase: 'effect',
+    match: '.wake, *fired, .sweep, sweep.kind=trash, #Env, #Now',
+    run: async ({ Env: env, Now }) => {
+      if (!env) return
+      return await reporting(env as unknown as Env, 'trash', async () => {
+        let { collected } = await import('./erase.ts')
+        await collected(env as unknown as Env, new Date(Now.at))
+      })
+    },
   }],
 }

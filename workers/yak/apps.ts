@@ -986,7 +986,10 @@ let api = async (
     )
   }
   if (path == '/graph') {
-    let r = await (await store('/graph', {}, headers)).json()
+    let r = await (await store('/graph', {}, headers)).json() as Record<
+      string,
+      unknown
+    >
     return Response.json({ ...r, person: who.person, role: who.role })
   }
   if (path == '/query') {

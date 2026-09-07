@@ -28,7 +28,7 @@
 // rule "delete only what nothing names any more" can only be right if the thing
 // applying it can see everything that names — the kept versions AND the kept
 // history — which is why both live in this file.
-import type { Blobs } from '../../src/blobs.ts'
+import type { Blobs } from '../../src/store/blobs.ts'
 import type { App, Directory } from './directory.ts'
 import { vouched, type Who } from './session.ts'
 

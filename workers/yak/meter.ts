@@ -2,15 +2,15 @@
 // numbers the free and paid plans are sold on (public/pricing.html), the line
 // the agent reads before it runs into one, and the sentence every door says no
 // with. usage.ts is the other half — the hourly sweep that reads three of these
-// figures off Cloudflare's analytics — and it is the half that holds the
-// kernel's whole `Env`.
+// figures off Cloudflare's analytics. Its wake and effect rule live here
+// beside the meter's other contributions to the host.
 //
 // They are two files because the LETTERS are counted where they happen rather
 // than swept, and one of those two doors is inside the Store Durable Object
 // itself (`metering` below, wired in graph.ts). That object is checked against
 // the runtime's own types with nothing of Deno in its graph (conform.ts), so
-// what it may import is the door, the directory and this — never the sweep's
-// analytics client, and never env.ts.
+// the sweep is loaded only when its directory wake fires, after the plugin
+// list has been composed.
 import type { Sender } from '@yaks/mail'
 import * as dirPart from './directory.ts'
 import {
@@ -22,8 +22,35 @@ import {
   type Tier,
 } from './directory.ts'
 import type { Namespace } from './door.ts'
+import type { Env } from './env.ts'
+import type { Plugin } from './plugin.ts'
 import { mailedTo } from './post.ts'
 import { PRICING } from './route.ts'
+import { reporting } from './wake.ts'
+
+/** The hourly reading: `fired` on this tagged wake runs the existing meter. */
+export let meterPlugin: Plugin = {
+  name: 'yak/meter',
+  wakes: [{
+    entity: { eid: 'yak-meter' },
+    wake: { every: '@hourly', note: 'Read yaks.app usage for this month' },
+    sweep: { kind: 'meter' },
+  }],
+  rules: [{
+    name: 'meter',
+    phase: 'effect',
+    match: '.wake, *fired, .sweep, sweep.kind=meter, #Env, #Now',
+    run: async ({ Env: env, Now }) => {
+      // Every store composes the rules; only the directory gets the bindings
+      // that authorize a platform job, even if an app declares the same tags.
+      if (!env) return
+      return await reporting(env as unknown as Env, 'meter', async () => {
+        let { metered } = await import('./usage.ts')
+        await metered(env as unknown as Env, new Date(Now.at))
+      })
+    },
+  }],
+}
 
 // What one store did, as the analytics answer them (usage.ts `read`). Bytes
 // come from the store itself, and the month and the letters from the row being

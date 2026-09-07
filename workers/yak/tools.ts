@@ -33,7 +33,7 @@
 // answered at all. A deploy in v1 is a version bump, since an
 // app's files serve live from its blob store — and the version it bumps to is
 // kept, files and all, so app_rollback can put it back.
-import type { Blobs } from '../../src/blobs.ts'
+import type { Blobs } from '../../src/store/blobs.ts'
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { parseTools, TOOLS_EXAMPLE, viewsOf } from '../../src/store/tools.ts'
 import {

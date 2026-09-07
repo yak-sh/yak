@@ -11,8 +11,14 @@
 // domain, and everything that imports it is a host, so the one file that knows
 // both sides knows nothing else.
 import { memoryPlugin } from './memory.ts'
+import { meterPlugin } from './meter.ts'
 import type { Plugin } from './plugin.ts'
 import { trashPlugin } from './trash.ts'
 import { viewsPlugin } from './views.ts'
 
-export let PLUGINS: Plugin[] = [memoryPlugin, viewsPlugin, trashPlugin]
+export let PLUGINS: Plugin[] = [
+  memoryPlugin,
+  viewsPlugin,
+  trashPlugin,
+  meterPlugin,
+]

@@ -57,9 +57,11 @@ import { idKeywords } from '@yaks/id'
 import { keyDoc, keyKeywords } from '@yaks/key'
 import { mailDoc } from '@yaks/mail'
 import { memberDoc } from '@yaks/member'
+import { wakeDoc } from '@yaks/wake'
 import { read } from '@yaks/yaml'
 import { vocabOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
+import { sweepDoc } from './wake.ts'
 
 // The column shapes these documents are written out of. A `ref` names another
 // entity and says what happens to this row when that one dies; `owned` is
@@ -742,6 +744,8 @@ export let platformDocs: VocabDoc[] = [
   notifiedDoc,
   keyDoc,
   aliasDoc,
+  wakeDoc,
+  sweepDoc,
   ...vocabOf(PLUGINS),
   platformDoc,
 ]

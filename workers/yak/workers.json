@@ -24,6 +24,9 @@
     "@yaks/query": "../../packages/query/mod.ts",
     "@yaks/sql": "../../packages/sql/mod.ts",
     "@yaks/sqlite": "../../packages/sqlite/mod.ts",
-    "@yaks/vocab": "../../packages/vocab/mod.ts"
+    "@yaks/vocab": "../../packages/vocab/mod.ts",
+    "@yaks/wake": "../../packages/wake/mod.ts",
+    "@yaks/wake/cloudflare": "../../packages/wake/cloudflare.ts",
+    "croner": "jsr:@hexagon/croner@^10.0.1"
   }
 }

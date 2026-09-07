@@ -11,7 +11,7 @@
 // later deploy may add a column, never drop or retype one, because the rows
 // are already there and this file is the only record of them. A word the
 // platform already owns is refused — `doc` means `doc` in every store.
-import type { SchemaOp } from '../db.ts'
+import type { SchemaOp } from './sql.ts'
 import { comps, type PropType, stamped } from '../types.ts'
 
 // A store's own components: the same shape as `comps`, restricted to the

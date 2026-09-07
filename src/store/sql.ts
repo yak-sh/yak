@@ -12,6 +12,12 @@
 // in `can`, and db.ts plants what it can and refuses the door it cannot serve
 // — search() without FTS5 throws, it never guesses.
 
+/** One schema statement, classified so each backend applies the same guards. */
+export type SchemaOp =
+  | { kind: 'exec'; sql: string }
+  | { kind: 'addColumn'; table: string; col: string; sql: string }
+  | { kind: 'index'; name: string; sql: string }
+
 export type SqlValue =
   | number
   | string

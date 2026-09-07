@@ -5,8 +5,8 @@
 // name — so the bill is already itemized by the time we ask, and no counter
 // rides the hot path.
 //
-// The sweep is the Worker's `scheduled` handler (index.ts, wrangler.toml
-// `[triggers] crons`): one GraphQL call for the month so far, one `/graph`
+// The sweep is the meter plugin's effect rule (meter.ts), matching `fired`
+// on its hourly directory wake: one GraphQL call for the month so far, one `/graph`
 // read per app for the bytes it holds, and one write into the meta store —
 // `meter` on each app, `meter` on each space (its apps summed, its letters
 // left where the mail doors count them), and `plan{free}` on a space that has

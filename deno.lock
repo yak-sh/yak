@@ -40,6 +40,7 @@
     "npm:@sqliteai/sqlite-vector-linux-x86_64@1.0.0": "1.0.0",
     "npm:@sqliteai/sqlite-vector-win32-x86_64@1.0.0": "1.0.0",
     "npm:ajv@^8.17.1": "8.20.0",
+    "npm:croner@10.0.1": "10.0.1",
     "npm:fake-indexeddb@6": "6.2.5",
     "npm:fake-indexeddb@^6.2.2": "6.2.5",
     "npm:linkedom@~0.18.12": "0.18.13",
@@ -582,6 +583,9 @@
         "object-assign",
         "vary"
       ]
+    },
+    "croner@10.0.1": {
+      "integrity": "sha512-ixNtAJndqh173VQ4KodSdJEI6nuioBWI0V1ITNKhZZsO0pEMoDxz539T4FTTbSZ/xIOSuDnzxLVRqBVSvPNE2g=="
     },
     "cross-spawn@7.0.6": {
       "integrity": "sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==",
@@ -1636,6 +1640,7 @@
             "npm:@jsr/std__csv@1.0.6",
             "npm:@jsr/std__yaml@1.2.0",
             "npm:@modelcontextprotocol/sdk@1.29.0",
+            "npm:croner@10.0.1",
             "npm:lucide@1.31.0",
             "npm:postal-mime@3.0.0",
             "npm:zod@3.25.76"

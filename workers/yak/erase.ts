@@ -528,14 +528,10 @@ export let erased = async (
   return own(keys.map((k) => k.slice(prefix.length))).length
 }
 
-// The cron line the sweep runs on, spelled exactly as wrangler.toml
-// `[triggers] crons` spells it. `scheduled` is ONE handler for both triggers
-// (index.ts) and the line that fired is what tells them apart, so the two
-// spellings have to agree — erase_test.ts holds them to it, because a line
-// that matched nothing would run the meter twice a day and the sweep never.
-export let DAILY = '20 4 * * *'
+// Kept at this public seam for callers that describe the trash schedule.
+export { DAILY } from './trash.ts'
 
-// The daily sweep (wrangler.toml `[triggers] crons`, index.ts `scheduled`):
+// The daily sweep (trash.ts's wake and effect rule):
 // every app and every space whose thirty days have run out, erased. It walks
 // the platform because the promise is the platform's, not a space's — and it
 // erases AS the person who threw the thing away, since the delete is what it
