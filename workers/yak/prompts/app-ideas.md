@@ -1,5 +1,4 @@
 ---
-entity: { eid: $app-ideas }
 prompt:
   name: app-ideas
   title: Ideas for what to make

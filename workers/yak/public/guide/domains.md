@@ -1,5 +1,4 @@
 ---
-entity: { eid: $domains }
 doc:
   title: A domain of their own
 guide:

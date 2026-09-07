@@ -1,5 +1,4 @@
 ---
-entity: { eid: $fix }
 prompt:
   name: fix
   title: Fix what is broken

@@ -59,6 +59,13 @@ let storableProp = (
 let composites = (s: PropSchema): string[][] =>
   [s.unique, s.index].flatMap((v) => Array.isArray(v) ? v as string[][] : [])
 
+// The columns an identity is spelled across, both spellings together — the
+// component's list, or the columns that flagged themselves.
+let identified = (s: PropSchema): string[] =>
+  Array.isArray(s.identity) ? s.identity : Object.entries(s.properties ?? {})
+    .filter(([, c]) => object(c) && c.identity === true)
+    .map(([prop]) => prop)
+
 // The storable profile over a whole document: every $def is an object schema
 // whose properties are storable columns.
 export let storable = (doc: VocabDoc): string[] => {
@@ -85,6 +92,21 @@ export let storable = (doc: VocabDoc): string[] => {
         if (!(schema.properties ?? {})[col]) {
           errs.push(`${comp} indexes ${col}, which is no column of ${comp}`)
         }
+      }
+    }
+    // An id is derived from what the WRITER states, at the moment the entity is
+    // minted: a column nothing writes — computed, or server-owned and stamped
+    // after the fact — could never name the entity it identifies.
+    for (let col of identified(schema)) {
+      let c = (schema.properties ?? {})[col]
+      if (!c) {
+        errs.push(`${comp} is identified by ${col}, which is no column of it`)
+      } else if (c.persist === false || c.stamped) {
+        errs.push(
+          `${comp}.${col} is ${
+            c.stamped ? 'server-owned' : 'computed'
+          } — an identity is derived from what the writer states`,
+        )
       }
     }
   }

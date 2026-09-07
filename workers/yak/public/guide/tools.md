@@ -1,5 +1,4 @@
 ---
-entity: { eid: $tools }
 doc:
   title: Commands of your own
 guide:

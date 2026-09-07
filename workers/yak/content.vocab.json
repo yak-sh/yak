@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yaks.app/vocab/content",
+  "title": "the words this door is written in",
+  "description": "What a content file's frontmatter SAYS (T-34606, T-34649): public/guide/<slug>.md is a `guide`, prompts/<name>.md is a `prompt`, and each names its entity by its own identity column rather than by an eid somebody wrote down. Loading a file twice is one entity — the id is derived from the value (@yaks/graph identity.ts) — which is why the frontmatter carries no `entity` line at all. gen.ts reads these files into content.ts; nothing applies them to a store yet, and this is the vocabulary the day something does.",
+  "$defs": {
+    "guide": {
+      "type": "object",
+      "kind": true,
+      "description": "A page of the guide, offered through the connector as a resource of its own.",
+      "properties": {
+        "slug": {
+          "type": "string",
+          "identity": true,
+          "description": "The page's name, in its address and in its file's: public/guide/<slug>.md. It IS the page — gen.ts refuses a file whose frontmatter and filename disagree."
+        },
+        "brief": {
+          "type": "string",
+          "description": "A few words, for the `guide` tool's own description, which names every page at once."
+        },
+        "description": {
+          "type": "string",
+          "description": "The sentence an agent reads before deciding to read the page — the only thing it sees first."
+        }
+      }
+    },
+    "prompt": {
+      "type": "object",
+      "kind": true,
+      "description": "A thing a person picks by name: a slash command, a menu entry. The message itself is the file's body, and its `arguments` are the file's own word — a list is not a column, so a store holds the row and the file holds the slots.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "identity": true,
+          "description": "What a client calls it, in its file's name: prompts/<name>.md."
+        },
+        "title": {
+          "type": "string",
+          "description": "What a person reads on the menu."
+        },
+        "description": {
+          "type": "string",
+          "description": "What the prompt is for, as the client lists it."
+        }
+      }
+    }
+  }
+}

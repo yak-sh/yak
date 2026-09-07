@@ -1,5 +1,4 @@
 ---
-entity: { eid: $files }
 doc:
   title: Files and pictures
 guide:

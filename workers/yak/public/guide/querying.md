@@ -1,5 +1,4 @@
 ---
-entity: { eid: $querying }
 doc:
   title: 'Querying: the filter line'
 guide:

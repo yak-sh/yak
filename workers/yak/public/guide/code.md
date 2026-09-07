@@ -1,5 +1,4 @@
 ---
-entity: { eid: $code }
 doc:
   title: Code of your own
 guide:

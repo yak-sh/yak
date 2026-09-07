@@ -58,7 +58,10 @@ Deno.test('every page offered is a file, and says what it is', () => {
     let { meta, body } = pageFile(p.slug)
     let doc = meta.doc as Record<string, string>
     let said = meta.guide as Record<string, string>
-    assertEquals(meta.entity, { eid: `$${p.slug}` }, `${p.slug} names no eid`)
+    // It names no entity: `guide.slug` is the identity, so the id is derived
+    // from the slug and the page is the same page every time it is read
+    // (content_test.ts, T-34649).
+    assertEquals(meta.entity, undefined, `${p.slug} names an entity`)
     assertEquals(doc?.title, p.title, `${p.slug} title`)
     assertEquals(said?.slug, p.slug, `${p.slug} slug`)
     assertEquals(said?.brief, p.brief, `${p.slug} brief`)

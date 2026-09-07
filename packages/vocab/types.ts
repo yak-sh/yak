@@ -51,6 +51,9 @@ export type Column = {
   death?: Death
   stamped: boolean // server-owned: readable, never wire-writable
   persist: boolean // false = computed/never-stored (query-only rank, aggregates)
+  /** this column is what the entity's own id is derived from — see the
+   * `identity` keyword and `Vocab.identity` */
+  identity: boolean
   affinity: 'text' | 'real' | 'integer' // the SQLite column affinity it stores as
   fk: boolean // a reference carrying a foreign key to entity(id)
   keywords: Record<string, unknown> // registered extension keywords, verbatim
@@ -69,6 +72,10 @@ export type CompInfo = {
   stamped: string[] // server-owned column names
   keywords: Record<string, unknown> // registered extension keywords, verbatim
 }
+
+// The columns an entity's own id is derived from, in the order the derivation
+// says them. Empty for the ordinary component, whose entities take a minted id.
+export type Identity = string[]
 
 // One index over a component's table: the columns it covers, in order, and
 // whether it also promises uniqueness. Derived from the `unique`/`index`
@@ -126,6 +133,10 @@ export type PropSchema = {
   // column lists. `Vocab.indexes` merges the two spellings.
   unique?: boolean | string[][]
   index?: boolean | string[][]
+  // What the entity's id is DERIVED from. On a COLUMN, true; on a COMPONENT,
+  // the column list a composite identity is spelled across. One tuple, not a
+  // list of them: an entity has one id. `Vocab.identity` merges the spellings.
+  identity?: boolean | string[]
   aliases?: Record<string, string>
   // an extension vocabulary's keywords ride here too (keywords.ts)
   [k: string]: unknown

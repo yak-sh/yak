@@ -1,5 +1,4 @@
 ---
-entity: { eid: $components }
 doc:
   title: 'Components: the platform''s, and your own'
 guide:

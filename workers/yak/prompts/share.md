@@ -1,5 +1,4 @@
 ---
-entity: { eid: $share }
 prompt:
   name: share
   title: Share an app with someone

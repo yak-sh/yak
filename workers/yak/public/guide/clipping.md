@@ -1,5 +1,4 @@
 ---
-entity: { eid: $clipping }
 doc:
   title: Saving from another site
 guide:

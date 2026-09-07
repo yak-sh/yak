@@ -1,5 +1,4 @@
 ---
-entity: { eid: $notes }
 doc:
   title: The notes an app keeps
 guide:

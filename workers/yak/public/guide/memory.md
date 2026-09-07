@@ -1,5 +1,4 @@
 ---
-entity: { eid: $memory }
 doc:
   title: What the person said
 guide:

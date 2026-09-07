@@ -1,5 +1,4 @@
 ---
-entity: { eid: $errors }
 doc:
   title: When something breaks
 guide:

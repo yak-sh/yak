@@ -51,6 +51,7 @@
         "bare": { "type": "boolean" },
         "unique": { "$ref": "#/$defs/cols" },
         "index": { "$ref": "#/$defs/cols" },
+        "identity": { "type": "array", "items": { "type": "string" } },
         "prefix": { "type": "string", "pattern": "^[A-Z]$" },
         "by_name": { "type": "boolean" }
       },
@@ -73,6 +74,7 @@
         "bare": { "type": "boolean" },
         "unique": { "type": "boolean" },
         "index": { "type": "boolean" },
+        "identity": { "type": "boolean" },
         "aliases": {
           "type": "object",
           "additionalProperties": { "type": "string" }

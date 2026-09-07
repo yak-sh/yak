@@ -1,5 +1,4 @@
 ---
-entity: { eid: $stats }
 doc:
   title: Who visited
 guide:

@@ -51,6 +51,30 @@ Deno.test('storable refuses an index over a column that is not there', () => {
   assertEquals(errs, ['recipe indexes oven, which is no column of recipe'])
 })
 
+Deno.test('storable refuses an identity nothing could derive', () => {
+  let errs = storable(doc({
+    page: {
+      type: 'object',
+      identity: ['slug'],
+      properties: { title: { type: 'string' } },
+    },
+    release: {
+      type: 'object',
+      properties: {
+        version: { type: 'string', identity: true, stamped: true },
+        rank: { type: 'number', identity: true, persist: false },
+      },
+    },
+  }))
+  assertEquals(errs, [
+    'page is identified by slug, which is no column of it',
+    'release.version is server-owned — an identity is derived from what the ' +
+    'writer states',
+    'release.rank is computed — an identity is derived from what the writer ' +
+    'states',
+  ])
+})
+
 Deno.test('reserved names refuse against a base vocabulary', () => {
   let base = loadVocab(slice)
   let app = doc({

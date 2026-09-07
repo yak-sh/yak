@@ -1,5 +1,4 @@
 ---
-entity: { eid: $sharing }
 doc:
   title: Publishing and installing an app
 guide:

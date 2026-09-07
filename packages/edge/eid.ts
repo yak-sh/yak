@@ -10,26 +10,25 @@
 // link, the server that admits it, the reader that unlinks — because an id
 // computed two ways is two ids.
 
-import { type Bundle, type Comp, comps, type Eid, sha256 } from '@yaks/graph'
+import {
+  type Bundle,
+  type Comp,
+  comps,
+  derivedEid,
+  type Eid,
+} from '@yaks/graph'
 import type { Derive } from '@yaks/graph'
 
 /**
- * The eid a sentence names: the leading 16 bytes of
- * `sha256("<from>|<relation>|<to>")`, worn as a UUID — version nibble 8 (RFC
- * 9562's custom-derivation version) and the variant bits stamped, so it passes
- * every uuid door and can never collide with a randomly minted one.
+ * The eid a sentence names: `sha256("<from>|<relation>|<to>")` worn as a UUID
+ * (@yaks/graph `derivedEid` — the one derivation everything content-addressed
+ * shares, so an id computed here and an id computed there are one id).
  *
  * `relation` is the TAG component the edge wears, not the name a query says it
  * by: the entity is named by what it carries.
  */
-export let edgeEid = (from: Eid, relation: string, to: Eid): Eid => {
-  let h = sha256(`${from}|${relation}|${to}`).slice(0, 32)
-  let variant = ((parseInt(h[16], 16) & 0x3) | 0x8).toString(16)
-  let s = `${h.slice(0, 12)}8${h.slice(13, 16)}${variant}${h.slice(17)}`
-  return `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${
-    s.slice(16, 20)
-  }-${s.slice(20)}`
-}
+export let edgeEid = (from: Eid, relation: string, to: Eid): Eid =>
+  derivedEid(`${from}|${relation}|${to}`)
 
 /**
  * The relation tag a bundle wears, or nothing when it states none. `tags` is

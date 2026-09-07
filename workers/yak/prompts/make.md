@@ -1,5 +1,4 @@
 ---
-entity: { eid: $make }
 prompt:
   name: make
   title: Make something new

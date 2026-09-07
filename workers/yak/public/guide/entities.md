@@ -1,5 +1,4 @@
 ---
-entity: { eid: $entities }
 doc:
   title: One entity, two apps
 guide:

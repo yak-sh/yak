@@ -1,5 +1,4 @@
 ---
-entity: { eid: $home }
 doc:
   title: The front page, and routing the space
 guide:

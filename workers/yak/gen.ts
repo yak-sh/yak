@@ -39,7 +39,12 @@ let said = (v: unknown, where: string): string =>
   typeof v == 'string' && v.trim() ? v : refuse(`${where} is missing`)
 
 /** Each guide page's row, by slug: public/guide/<slug>.md frontmatter, where
- * `doc` says the title and `guide` says what the connector lists it by. */
+ * `doc` says the title and `guide` says what the connector lists it by.
+ *
+ * The file names no ENTITY: `guide.slug` is declared `identity` (see
+ * content.vocab.json), so the page is its slug wherever it is read — here, and
+ * in a store the day one applies it (T-34649). Which is why the refusal below
+ * matters as much as the row: the slug and the filename are one fact. */
 let pages = () => {
   let dir = new URL('public/guide/', HERE)
   let out: Record<string, unknown> = {}
@@ -63,7 +68,9 @@ let pages = () => {
 }
 
 /** Each prompt, by name: prompts/<name>.md — the row in its frontmatter and
- * the person's own message under it, slots and all. */
+ * the person's own message under it, slots and all. `prompt.name` is the
+ * identity, the way a page's slug is, and the refusal keeps it and the
+ * filename one fact. */
 let prompts = () => {
   let dir = new URL('prompts/', HERE)
   let out: Record<string, unknown> = {}

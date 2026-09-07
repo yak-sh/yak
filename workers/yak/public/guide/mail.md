@@ -1,5 +1,4 @@
 ---
-entity: { eid: $mail }
 doc:
   title: 'Mail: an app''s own address'
 guide:

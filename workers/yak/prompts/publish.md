@@ -1,5 +1,4 @@
 ---
-entity: { eid: $publish }
 prompt:
   name: publish
   title: Publish an app for anyone here

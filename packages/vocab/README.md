@@ -15,20 +15,43 @@ A vocab is a JSON Schema document. Each component is an object schema in
 vocabulary (declared via JSON Schema's own `$vocabulary` mechanism,
 `meta/core.vocab.json`) adds what a component table needs:
 
-| keyword   | on     | says                                                              |
-| --------- | ------ | ----------------------------------------------------------------- |
-| `ref`     | column | the entity kind a string references (`"project"`, `"entity"`)     |
-| `death`   | column | `cascade` \| `detach` \| `release` \| `keep` when the target dies |
-| `persist` | column | `false` = computed, never stored (a query-only rank)              |
-| `stamped` | column | `true` = server-owned: readable, never wire-writable              |
-| `store`   | column | `"blob"` = a content-addressed markdown body                      |
-| `aliases` | column | input spellings that resolve to an enum member                    |
-| `bare`    | both   | `false` = never claims its bare filter spelling; qualified only   |
-| `unique`  | both   | column: no two rows share it. comp: `[["space","slug"]]`          |
-| `index`   | both   | the same two spellings, without the uniqueness                    |
-| `kind`    | comp   | this component names a display kind                               |
-| `before`  | comp   | kinds this kind sorts before (feeds the derived kindOrder)        |
-| `wire`    | comp   | `false` = readable-not-writable component (the spine)             |
+| keyword    | on     | says                                                              |
+| ---------- | ------ | ----------------------------------------------------------------- |
+| `ref`      | column | the entity kind a string references (`"project"`, `"entity"`)     |
+| `death`    | column | `cascade` \| `detach` \| `release` \| `keep` when the target dies |
+| `persist`  | column | `false` = computed, never stored (a query-only rank)              |
+| `stamped`  | column | `true` = server-owned: readable, never wire-writable              |
+| `store`    | column | `"blob"` = a content-addressed markdown body                      |
+| `aliases`  | column | input spellings that resolve to an enum member                    |
+| `bare`     | both   | `false` = never claims its bare filter spelling; qualified only   |
+| `unique`   | both   | column: no two rows share it. comp: `[["space","slug"]]`          |
+| `index`    | both   | the same two spellings, without the uniqueness                    |
+| `identity` | both   | the entity's id is DERIVED from this. comp: `["space","slug"]`    |
+| `kind`     | comp   | this component names a display kind                               |
+| `before`   | comp   | kinds this kind sorts before (feeds the derived kindOrder)        |
+| `wire`     | comp   | `false` = readable-not-writable component (the spine)             |
+
+**`identity` is the one that names the entity.** A component whose column says
+`"identity": true` has its entities' ids DERIVED from that value — the same
+derivation an edge and a key already use — so a file, a row or a seed written
+twice is one entity and there is no eid for anybody to have kept:
+
+```json
+{
+  "guide": {
+    "type": "object",
+    "properties": {
+      "slug": { "type": "string", "identity": true },
+      "brief": { "type": "string" }
+    }
+  }
+}
+```
+
+`{guide: {slug: 'store', brief: '…'}}` applied a second time patches the first
+entity. This package DECLARES it and answers `identity(comp)`;
+[@yaks/graph](https://jsr.io/@yaks/graph) is what derives the id and refuses a
+bundle whose eid disagrees with it.
 
 A text field's completions draw from native `examples` ∪ the column's own live
 distinct values. Ordering is derived, never hand-ranked: component and stamped

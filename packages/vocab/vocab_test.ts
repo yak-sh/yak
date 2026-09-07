@@ -28,6 +28,7 @@ Deno.test('columns interrogate to their whole shape', () => {
     death: undefined,
     stamped: false,
     persist: true,
+    identity: false,
     affinity: 'real',
     fk: false,
     keywords: {},

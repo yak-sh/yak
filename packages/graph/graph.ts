@@ -46,6 +46,7 @@ import type { Row, Storage, Tx } from './storage.ts'
 import { detached, type Query, type ReadOpts } from './storage.ts'
 import type { Hook, Phase, Plugin } from './plugin.ts'
 import { type Derive, resolve } from './alias.ts'
+import { identified, identities } from './identity.ts'
 import { admit } from './admit.ts'
 import { composed } from './compose.ts'
 import { type Ask, gather, holding, reached } from './gather.ts'
@@ -154,10 +155,17 @@ export let graph = (opts: Options): Graph => {
   let report = opts.report ?? warn
   let mint = opts.mint ?? (() => crypto.randomUUID() as Eid)
 
+  // What the VOCABULARY names for itself: every component declaring an
+  // `identity` derives its entity's id from that value (identity.ts). Fixed
+  // for the life of this graph, because the vocabulary is.
+  let declared = identities(vocab)
+
   // Every content-addressed component's naming function, by component name.
-  // Read per apply, so a plugin registered later is in.
+  // Read per apply, so a plugin registered later is in. A plugin's own derive
+  // wins: @yaks/edge and @yaks/key name an entity from the TAG it wears, which
+  // is more than a column list can say.
   let derives = (): Record<string, Derive> =>
-    Object.assign({}, ...plugins.map((p) => p.derive ?? {}))
+    Object.assign({}, declared, ...plugins.map((p) => p.derive ?? {}))
 
   // Every read this batch is going to need: the core's own — every entity the
   // batch names or points at, which is what the `$was` guard, `mutate` and the
@@ -343,7 +351,13 @@ export let graph = (opts: Options): Graph => {
       [
         phase('normalize', outside),
         phase('admit', outside, (b) => admit(b, vocab, o.trusted)),
-        phase('mint', outside, (b) => resolve(b, vocab, derives(), mint)),
+        // Named, then held to it: an id derived from a value is only worth
+        // something while the two agree (identity.ts `identified`).
+        phase(
+          'mint',
+          outside,
+          (b) => identified(resolve(b, vocab, derives(), mint), vocab),
+        ),
         inside,
         composed,
       ],

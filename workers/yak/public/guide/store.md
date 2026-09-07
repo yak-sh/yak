@@ -1,5 +1,4 @@
 ---
-entity: { eid: $store }
 doc:
   title: The store, from a page
 guide:

@@ -1,5 +1,4 @@
 ---
-entity: { eid: $selling }
 doc:
   title: Selling things
 guide:

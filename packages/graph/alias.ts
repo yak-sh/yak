@@ -155,7 +155,12 @@ export let resolve = (
         if (by) named = derive[by[0]](by[1] as Comp, full)
         if (named) break
       }
-      at.set(alias, named ?? mint())
+      // `||`, not `??`: a component that could not name the entity answers the
+      // EMPTY string (an incomplete sentence, a half-stated identity), and the
+      // documented reading of that is an ordinary minted id — which the hook
+      // that owns the component then refuses by name. Kept as the eid, an
+      // empty id would land as an entity called nothing.
+      at.set(alias, named || mint())
     }
     left = left.filter((alias) => !at.has(alias))
   }

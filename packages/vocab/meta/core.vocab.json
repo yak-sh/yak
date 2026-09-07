@@ -56,6 +56,13 @@
         }
       ]
     },
+    "identity": {
+      "description": "What the entity's own id is DERIVED from. On a COLUMN, true = this component's entities are identified by this value: the eid is sha256(\"<component>|<value>\") worn as a UUID, so writing the same value twice is one entity and uniqueness is a fact about ids rather than a race. On a COMPONENT, the column list a composite identity is spelled across, in derivation order: [\"space\", \"slug\"]. One tuple, never a list of them — an entity has one id.",
+      "anyOf": [
+        { "type": "boolean" },
+        { "type": "array", "items": { "type": "string" } }
+      ]
+    },
     "index": {
       "description": "An index to read by, carrying no uniqueness. On a COLUMN, true = index it. On a COMPONENT, the composite indexes as column lists: [[\"app\", \"version\"]].",
       "anyOf": [

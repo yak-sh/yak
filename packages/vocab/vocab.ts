@@ -15,6 +15,7 @@ import type {
   CompInfo,
   Death,
   Hop,
+  Identity,
   Index,
   PropSchema,
   Scalar,
@@ -91,6 +92,7 @@ let columnOf = (
     death,
     stamped: !!s.stamped,
     persist: s.persist !== false,
+    identity: s.identity === true,
     affinity: affinityOf(category, scalar),
     // A reference carries an FK to entity(id) unless its death is 'keep' — a
     // kept ref outlives its target's tombstone, so it stays FK-free (ddl.ts).
@@ -113,6 +115,10 @@ export type Vocab = {
   /** The indexes a component declares, merged from both spellings — see
    * {@link Index}. A storage adapter renders them; nothing else reads them. */
   indexes: (comp: string) => Index[]
+  /** The columns this component's entities are IDENTIFIED by — the tuple the
+   * id is derived from, in derivation order, or `[]` for the ordinary
+   * component whose entities take a minted id. @yaks/graph is what derives. */
+  identity: (comp: string) => Identity
   route: (prop: string) => { comp: string; prop: string }
   /** A dotted path → the hops it names. `facet` says the predicate is the bare
    * presence form (`.name!`), where a single segment naming a COMPONENT is that
@@ -134,6 +140,23 @@ export type Vocab = {
 // is the COLUMN spelling misplaced, and means nothing about the whole table, so
 // it reads as no list rather than a refusal the meta-schema already makes.
 let lists = (v: unknown): string[][] => Array.isArray(v) ? v as string[][] : []
+
+// The columns a component's entities are identified BY, from the two spellings
+// that declare them: a column's own `identity` flag, or the component's list
+// when the identity is spelled across several columns. The list wins when both
+// are there, because it is the one that says the ORDER, and the order is part
+// of the sentence the id is derived from.
+//
+// One tuple per component and never a list of them — `unique` may hold several
+// because a row can be unique several ways, but an entity has ONE id.
+let identityOf = (comp: PropSchema | undefined): Identity => {
+  if (!comp) return []
+  let said = comp.identity
+  if (Array.isArray(said)) return [...said]
+  return Object.entries(comp.properties ?? {})
+    .filter(([, s]) => s.identity === true)
+    .map(([prop]) => prop)
+}
 
 // A component's indexes, from the two spellings that declare them: a column's
 // own `unique`/`index` flag is that one column's index, and the component's
@@ -160,6 +183,10 @@ let indexesOf = (
   }
   for (let names of lists(comp.unique)) add(names, true)
   for (let names of lists(comp.index)) add(names, false)
+  // An identity is unique by construction — two rows sharing the value would
+  // be one entity — so the index says out loud what the derivation already
+  // guarantees, and a store that somehow held two says so at the row.
+  add(identityOf(comp).filter((p) => cols(p)?.persist), true)
   return [...out.values()]
 }
 
@@ -300,6 +327,7 @@ export let loadVocab = (
     columns: (comp) => routes.get(comp) ?? [],
     column: colFor,
     indexes: (comp) => indexesOf(defs[comp], (p) => colFor(comp, p)),
+    identity: (comp) => identityOf(defs[comp]),
     // Bare prop → its owning component. A stamped lifecycle column never steals
     // a bare spelling from a live one (`.status` stays the task's even though
     // sessions carry a stamped status), so non-stamped owners are preferred
