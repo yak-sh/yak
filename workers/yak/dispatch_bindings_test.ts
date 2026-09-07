@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects } from '@std/assert'
-import { drop, upload } from './dispatch.ts'
+import { drop, dropSecret, secrets, setSecret, upload } from './dispatch.ts'
 import type { Env } from './env.ts'
 
 let env = { CF_ACCOUNT: 'acct', CF_WORKERS_TOKEN: 'test-token' } as Env
@@ -11,6 +11,45 @@ let history = [
   { tag: 'v1', new_sqlite_classes: ['Room'] },
   { tag: 'v2', renamed_classes: [{ from: 'Room', to: 'Hall' }] },
 ]
+
+Deno.test('staging app workers and their secrets stay in their own namespace', async () => {
+  let was = globalThis.fetch
+  let methods: string[] = []
+  let staged = {
+    ...env,
+    DISPATCH_NAMESPACE: 'yak-apps-staging',
+    WORKER_NAME: 'yak-staging',
+  }
+  globalThis.fetch = (async (input: string | Request, init?: RequestInit) => {
+    let req = new Request(input as string, init)
+    let path = new URL(req.url).pathname
+    assertEquals(
+      path.split('/scripts/')[0],
+      '/client/v4/accounts/acct/workers/dispatch/namespaces/yak-apps-staging',
+    )
+    methods.push(req.method)
+    if (req.method == 'PUT' && !path.endsWith('/secrets')) {
+      let body = await req.formData()
+      let sent = JSON.parse(await (body.get('metadata') as File).text())
+      assertEquals(sent.bindings, [{
+        type: 'service',
+        name: 'KERNEL',
+        service: 'yak-staging',
+      }])
+    }
+    return Response.json({ success: true, result: [] })
+  }) as typeof fetch
+  try {
+    await upload(staged, 'app.abc123', modules)
+    await setSecret(staged, 'app.abc123', 'TOKEN', 'value')
+    await secrets(staged, 'app.abc123')
+    await dropSecret(staged, 'app.abc123', 'TOKEN')
+    await drop(staged, 'app.abc123')
+    assertEquals(methods, ['PUT', 'PUT', 'GET', 'DELETE', 'DELETE'])
+  } finally {
+    globalThis.fetch = was
+  }
+})
 
 // The current tag comes from the dispatch script, not from a locally assumed
 // deploy. That matters after retries and after restoring an older file set.

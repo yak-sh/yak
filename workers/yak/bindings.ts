@@ -6,6 +6,7 @@ import type { Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'
 import { sha256 } from './versions.ts'
 import { type Bound, type Config, requests } from './wrangler_app.ts'
+import { NAMESPACE, namespace } from './dispatch.ts'
 
 export type Binding = Bound & { eid: string; app: string }
 type Request = ReturnType<typeof requests>[number]
@@ -22,8 +23,15 @@ let scopes: Record<Product, string> = {
 
 // The suffix distinguishes names that lowercase or truncate to the same text.
 // The readable part still puts this resource beside its app in the dashboard.
-export let resourceName = async (store: string, name: string) => {
-  let key = (await sha256(new TextEncoder().encode(`${store}\0${name}`)))
+export let resourceName = async (
+  store: string,
+  name: string,
+  scope = NAMESPACE,
+) => {
+  // Production keeps its existing names; every other deployment has its own
+  // scope even if a restored app has the same immutable store handle.
+  let scoped = scope == NAMESPACE ? store : `${scope}\0${store}`
+  let key = (await sha256(new TextEncoder().encode(`${scoped}\0${name}`)))
     .slice(0, 10)
   let label = `${store}-${name}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-')
     .replace(/^-+|-+$/g, '').slice(0, 52).replace(/-+$/g, '')
@@ -156,7 +164,7 @@ export let provision = async (
   for (let want of requests(config)) {
     let b = held.find((b) => matches(b, want))
     if (!b) {
-      let resource = await resourceName(store, want.name)
+      let resource = await resourceName(store, want.name, namespace(env))
       let row = {
         app: app.eid,
         name: want.name,

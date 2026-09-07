@@ -71,6 +71,12 @@ crons = ["*/5 * * * *"]
 # runtime is never handed. Not a secret: it is in this file.
 [vars]
 CF_ACCOUNT = "0f9613dfd3f0451df0bd0f12a1372ea3"
+APEX = "yaks.app"
+# The REST APIs and app service bindings must name the same resources as the
+# bindings below; a separate deployment changes both sides together.
+WORKER_NAME = "yak"
+DISPATCH_NAMESPACE = "yak-apps"
+VIEWS_DATASET = "yak_views"
 
 # The zone a customer's own domain is attached to as a Cloudflare for SaaS
 # custom hostname (domains.ts, T-33038) — this zone, the one every route above
@@ -402,3 +408,132 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 "@modelcontextprotocol/sdk/server/mcp.js" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js"
 "@modelcontextprotocol/sdk/types.js" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/types.js"
 "@modelcontextprotocol/sdk/inMemory.js" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/inMemory.js"
+
+# Bindings and vars do not inherit into named environments. Repeat every
+# binding here so staging has its own resources. Migrations, containers and
+# routing are repeated too, keeping the whole deployment visible in one place.
+# No tail_consumers: staging failures are logged and never page the owner.
+[env.staging]
+name = "yak-staging"
+routes = [
+  { pattern = "yaks.fyi/*", zone_name = "yaks.fyi" },
+  { pattern = "*.yaks.fyi/*", zone_name = "yaks.fyi" },
+]
+
+[env.staging.vars]
+APEX = "yaks.fyi"
+CF_ACCOUNT = "0f9613dfd3f0451df0bd0f12a1372ea3"
+# Set the yaks.fyi zone id before testing custom domains; an empty value
+# refuses provisioning instead of attaching a staging domain to production.
+CF_ZONE = ""
+WORKER_NAME = "yak-staging"
+DISPATCH_NAMESPACE = "yak-apps-staging"
+VIEWS_DATASET = "yak_views_staging"
+# Set a recurring price from the Stripe sandbox before testing Plus billing.
+STRIPE_PRICE = ""
+# MAIL_SINK is the owner's address, set as a staging secret, never a var.
+
+[env.staging.observability.logs]
+enabled = true
+invocation_logs = true
+
+[env.staging.triggers]
+crons = ["*/5 * * * *"]
+
+[env.staging.version_metadata]
+binding = "CF_VERSION_METADATA"
+
+[[env.staging.dispatch_namespaces]]
+binding = "DISPATCH"
+namespace = "yak-apps-staging"
+
+[env.staging.assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
+
+[[env.staging.durable_objects.bindings]]
+name = "STORE"
+class_name = "Store"
+
+[[env.staging.durable_objects.bindings]]
+name = "WIRE"
+class_name = "Wire"
+
+[[env.staging.durable_objects.bindings]]
+name = "BUILDER"
+class_name = "Builder"
+
+[[env.staging.durable_objects.bindings]]
+name = "SANDBOX"
+class_name = "Sandbox"
+
+[[env.staging.migrations]]
+tag = "v1"
+new_sqlite_classes = ["Store"]
+
+[[env.staging.migrations]]
+tag = "v2"
+new_sqlite_classes = ["Wire"]
+
+[[env.staging.migrations]]
+tag = "v3"
+new_sqlite_classes = ["Builder"]
+
+[[env.staging.migrations]]
+tag = "v4"
+new_sqlite_classes = ["Sandbox"]
+
+[[env.staging.containers]]
+class_name = "Sandbox"
+image = "./sandbox/Dockerfile"
+image_build_context = "../../packages/cli"
+instance_type = "standard-2"
+max_instances = 5
+
+[[env.staging.send_email]]
+name = "MAIL"
+
+[env.staging.ai]
+binding = "AI"
+
+[[env.staging.vectorize]]
+binding = "VECTORIZE"
+index_name = "yak-memories-staging"
+
+[[env.staging.analytics_engine_datasets]]
+binding = "VIEWS"
+dataset = "yak_views_staging"
+
+[[env.staging.r2_buckets]]
+binding = "BLOBS"
+bucket_name = "yak-blobs-staging"
+
+[[env.staging.r2_buckets]]
+binding = "EXPORTS"
+bucket_name = "yak-store-exports-staging"
+
+[env.staging.cache]
+enabled = true
+
+[env.staging.exports.default]
+type = "worker"
+
+[env.staging.exports.default.cache]
+enabled = false
+
+[env.staging.exports.Files]
+type = "worker"
+
+[env.staging.exports.Files.cache]
+enabled = true
+
+[[env.staging.services]]
+binding = "FILES"
+service = "yak-staging"
+entrypoint = "Files"
+
+[[env.staging.kv_namespaces]]
+binding = "OAUTH_KV"
+# Paste the id printed by bin/yak-staging-init before the first deploy.
+id = "STAGING_OAUTH_KV_ID"

@@ -75,6 +75,8 @@ export type Env = {
   // Email Sending: the API token, the account, and a base URL a probe aims
   // somewhere else.
   MAIL_DEV?: string
+  // Staging keeps every outbound letter in the owner's inbox.
+  MAIL_SINK?: string
   MAIL_TOKEN?: string
   MAIL_ACCOUNT?: string
   MAIL_API?: string
@@ -92,6 +94,11 @@ export type Env = {
   // (page visits). CF_ACCOUNT is public and configured in wrangler.toml.
   CF_ANALYTICS_TOKEN?: string
   CF_ACCOUNT?: string
+  // REST APIs name these resources explicitly; bindings alone cannot keep
+  // app uploads and analytics reads on this deployment.
+  WORKER_NAME?: string
+  DISPATCH_NAMESPACE?: string
+  VIEWS_DATASET?: string
   // Who visited an app (views.ts, T-34496): the Analytics Engine dataset one
   // data point per page view is written to. The SQL API reads it with the
   // account and analytics token above. The binding is absent under the

@@ -354,9 +354,10 @@ export let metadata = (
   config: Config = {},
   bound: Bound[] = [],
   tag?: string,
+  service = 'yak',
 ) => {
   let bindings: Record<string, unknown>[] = [
-    { type: 'service', name: 'KERNEL', service: 'yak' },
+    { type: 'service', name: 'KERNEL', service },
   ]
   for (let [name, value] of Object.entries(config.vars ?? {})) {
     bindings.push(

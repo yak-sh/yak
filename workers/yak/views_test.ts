@@ -237,6 +237,33 @@ let sql = (
 let env = (vars: Partial<Env> = {}) =>
   ({ CF_ACCOUNT: 'acc0unt', CF_ANALYTICS_TOKEN: 'a token', ...vars }) as Env
 
+Deno.test('staging analytics reads and cached counts stay in their dataset', async () => {
+  let api = sql((q) => ({
+    body: JSON.stringify({
+      data: [{
+        day: '2026-09-06',
+        views: q.includes('FROM yak_views_staging ') ? 2 : 9,
+      }],
+    }),
+  }))
+  try {
+    let now = Date.parse('2026-09-06T12:00:00Z')
+    assertEquals((await statsOf(env(), APP, 7, now))?.total, 9)
+    assertEquals(
+      (await statsOf(env({ VIEWS_DATASET: 'yak_views_staging' }), APP, 7, now))
+        ?.total,
+      2,
+    )
+    assertEquals(api.asked.length, 8)
+    assert(
+      api.asked.slice(4).every((q) => q.includes('FROM yak_views_staging ')),
+    )
+    assertThrows(() => perDay(APP, 7, 'yak_views; DROP TABLE yak_views'))
+  } finally {
+    api.done()
+  }
+})
+
 Deno.test('visits authenticate with the platform analytics reader', async () => {
   let api = sql((_q, headers) => {
     assertEquals(headers.get('authorization'), 'Bearer a token')

@@ -58,6 +58,8 @@ import { type Bound, type Config, metadata } from './wrangler_app.ts'
 // addresses it by name over the API.
 export let NAMESPACE = 'yak-apps'
 
+export let namespace = (env: Env) => env.DISPATCH_NAMESPACE ?? NAMESPACE
+
 // The grant rides its own header, in and out. A client's own is always
 // stripped before an app's worker is called, so the only one an app ever
 // sees is the kernel's.
@@ -450,7 +452,7 @@ export let NEEDS_TOKEN =
 
 let api = (env: Env, path: string) =>
   `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT}` +
-  `/workers/dispatch/namespaces/${NAMESPACE}/scripts${path}`
+  `/workers/dispatch/namespaces/${namespace(env)}/scripts${path}`
 
 // What the API answered, or the sentence it refused with. Cloudflare wraps
 // every reply in `{success, errors, result}`, so a failure is read out of
@@ -635,7 +637,7 @@ export let upload = async (
   body.append(
     'metadata',
     new Blob([
-      JSON.stringify(metadata(config, bound, tag)),
+      JSON.stringify(metadata(config, bound, tag, env.WORKER_NAME)),
     ], { type: 'application/json' }),
   )
   // Each part is named by the module name that imports it, and typed by what

@@ -27,7 +27,7 @@ export type Letter = { to: string | string[]; subject: string; body: string }
 export type Mail = (l: Letter) => Promise<void>
 
 import { FROM } from './mail-config.ts'
-import { replyTo } from './post.ts'
+import { replyTo, sink } from './post.ts'
 import type { Host } from './host.ts'
 export { FROM, GRAPH, REPLY_TO } from './mail-config.ts'
 
@@ -66,10 +66,13 @@ export let sending =
 
 let API = 'https://api.cloudflare.com/client/v4'
 
-export let mail = (env: Env): Mail =>
-  env.MAIL_DEV == '1' ? printed() : sending(
+export let mail = (env: Env): Mail => {
+  let send = env.MAIL_DEV == '1' ? printed() : sending(
     env.MAIL_TOKEN ?? '',
     env.MAIL_ACCOUNT ?? '',
     env.MAIL_API ?? API,
     env,
   )
+  return (letter) =>
+    send({ ...letter, ...sink(env, letter.to, letter.subject) })
+}

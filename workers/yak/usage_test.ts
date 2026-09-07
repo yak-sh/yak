@@ -1,11 +1,5 @@
-// The meter's one seam that needs no runtime: an analytics answer read into
-// rows by store name (usage.ts `read`). The fixture is a recorded answer,
-// trimmed — the shape of
-// https://developers.cloudflare.com/analytics/graphql-api/tutorials/querying-workers-metrics/
-// (data.viewer.accounts[0].<dataset>[].dimensions/sum) with the Durable
-// Object datasets documented at
-// https://developers.cloudflare.com/durable-objects/observability/metrics-and-analytics/
-// and the field names this account's own schema introspects to.
+// Object ids keep usage with one deployment even when another deployment
+// holds the same app handle. Both analytics datasets must make that join.
 import {
   assert,
   assertEquals,
@@ -13,7 +7,10 @@ import {
   assertThrows,
 } from '@std/assert'
 import type { Meter, Space, Tier } from './directory.ts'
-import { read } from './usage.ts'
+import { read, sweep } from './usage.ts'
+import { directory } from './directory.ts'
+import * as dirPart from './directory.ts'
+import { platform } from './harness.ts'
 import type { Namespace } from './door.ts'
 import {
   atCeiling,
@@ -33,22 +30,25 @@ let ANSWER = {
     viewer: {
       accounts: [{
         durableObjectsInvocationsAdaptiveGroups: [
-          { dimensions: { name: 'jeff/recipe-box' }, sum: { requests: 93 } },
-          { dimensions: { name: 'yak/platform' }, sum: { requests: 2176 } },
+          {
+            dimensions: { objectId: 'jeff/recipe-box' },
+            sum: { requests: 93 },
+          },
+          { dimensions: { objectId: 'yak/platform' }, sum: { requests: 2176 } },
           // Not an app of ours: nobody asks for it, and it costs nothing to
           // carry.
           {
-            dimensions: { name: 'cf-singleton-container' },
+            dimensions: { objectId: 'cf-singleton-container' },
             sum: { requests: 72 },
           },
         ],
         durableObjectsPeriodicGroups: [
           {
-            dimensions: { name: 'jeff/recipe-box' },
+            dimensions: { objectId: 'jeff/recipe-box' },
             sum: { rowsRead: 48358, rowsWritten: 1632 },
           },
           {
-            dimensions: { name: 'yak/platform' },
+            dimensions: { objectId: 'yak/platform' },
             sum: { rowsRead: 872425, rowsWritten: 8741 },
           },
         ],
@@ -57,6 +57,66 @@ let ANSWER = {
   },
   errors: null,
 }
+
+Deno.test('meter queries distinguish the same handle in two deployments', async () => {
+  let { env } = platform('meter-staging', {
+    CF_ACCOUNT: 'account',
+    CF_ANALYTICS_TOKEN: 'read-only',
+    WORKER_NAME: 'yak-staging',
+  })
+  let stores = env.STORE
+  env.STORE = {
+    idFromName: (name) => `staging:${name}`,
+    get: (id) => stores.get(String(id).slice('staging:'.length)),
+  }
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  await dir.apply({
+    entities: [
+      {
+        entity: { eid: '$space' },
+        doc: { title: 'Ada' },
+        space: { slug: 'ada' },
+      },
+      {
+        entity: { eid: '$app' },
+        doc: { title: 'Recipes' },
+        app: { space: '$space', slug: 'recipes', store: 'ada/recipes' },
+      },
+    ],
+  }, { 'x-yak-role': 'owner' })
+  let was = globalThis.fetch
+  globalThis.fetch = ((_to: string | Request, init?: RequestInit) => {
+    let { query } = JSON.parse(String(init?.body))
+    assertEquals(query.match(/dimensions \{ objectId \}/g)?.length, 2)
+    let values = (key: string) => [
+      {
+        dimensions: { objectId: 'production:ada/recipes' },
+        sum: { [key]: 900 },
+      },
+      { dimensions: { objectId: 'staging:ada/recipes' }, sum: { [key]: 7 } },
+    ]
+    return Promise.resolve(Response.json({
+      data: {
+        viewer: {
+          accounts: [{
+            durableObjectsInvocationsAdaptiveGroups: values('requests'),
+            durableObjectsPeriodicGroups: values('rowsRead'),
+          }],
+        },
+      },
+    }))
+  }) as typeof fetch
+  try {
+    await sweep(env, new Date('2026-09-07T00:00:00Z'))
+    let space = (await dir.space('ada'))!
+    let app = (await dir.app(space, 'recipes'))!
+    assertEquals(app.meter?.requests, 7)
+    assertEquals(app.meter?.rows_read, 7)
+    assertEquals(space.meter?.requests, 7)
+  } finally {
+    globalThis.fetch = was
+  }
+})
 
 Deno.test('an analytics answer reads as one row per store', () => {
   let by = read(ANSWER)
@@ -77,7 +137,7 @@ Deno.test('a store in one dataset and not the other still reads', () => {
       viewer: {
         accounts: [{
           durableObjectsInvocationsAdaptiveGroups: [
-            { dimensions: { name: 'jeff/quiet' }, sum: { requests: 4 } },
+            { dimensions: { objectId: 'jeff/quiet' }, sum: { requests: 4 } },
           ],
           durableObjectsPeriodicGroups: [],
         }],

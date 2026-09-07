@@ -1,9 +1,9 @@
 // The meter (D-32751 §Billing and metering, T-32757): what each app and each
 // space spent this calendar month, read from Cloudflare's own analytics rather
 // than counted in our code. Every app store is a Durable Object named
-// `<space>/<app>` (directory.ts `storeName`), and the analytics group by that
-// name — so the bill is already itemized by the time we ask, and no counter
-// rides the hot path.
+// `<space>/<app>` (directory.ts `storeName`), and its namespace turns that
+// name into an object id. Analytics groups by that id, so two deployments
+// may hold the same app handle without mixing their bills.
 //
 // The sweep is the meter plugin's effect rule (meter.ts), matching `fired`
 // on its hourly directory wake: one GraphQL call for the month so far, one `/graph`
@@ -16,13 +16,13 @@
 // Two datasets, because one does not carry both numbers:
 // `durableObjectsInvocationsAdaptiveGroups` has `sum.requests`,
 // `durableObjectsPeriodicGroups` has `sum.rowsRead`/`sum.rowsWritten`, and
-// both carry `dimensions.name`. Stored bytes are NOT from analytics:
+// both carry `dimensions.objectId`. Stored bytes are NOT from analytics:
 // `durableObjectsStorageGroups` is account-wide, with no per-object dimension,
 // so an app's size is what its own store reports (graph.ts `/graph`).
 // The datasets are documented at
 // https://developers.cloudflare.com/durable-objects/observability/metrics-and-analytics/
-// which names introspection as the way to read their fields; these field
-// names came from introspecting the account's own schema.
+// which describes namespace and object metrics. Object ids identify the
+// same object across both datasets and remain distinct across deployments.
 //
 // Without CF_ANALYTICS_TOKEN there is nothing to ask, so the sweep says one
 // line on the log and returns: the secret is the owner's to set (T-32759), and
@@ -56,7 +56,7 @@ import {
 
 export let GRAPHQL = 'https://api.cloudflare.com/client/v4/graphql'
 
-// The whole month so far, grouped by Durable Object name and nothing else:
+// The whole month so far, grouped by Durable Object id and nothing else:
 // the fewer dimensions, the fewer rows, and one row per app is all a meter
 // wants. `limit` is the group count, not the request count — a thousand apps
 // still answer in one page.
@@ -68,21 +68,24 @@ export let QUERY =
         limit: 10000
         filter: {datetime_geq: $since, datetime_lt: $until}
       ) {
-        dimensions { name }
+        dimensions { objectId }
         sum { requests }
       }
       durableObjectsPeriodicGroups(
         limit: 10000
         filter: {datetime_geq: $since, datetime_lt: $until}
       ) {
-        dimensions { name }
+        dimensions { objectId }
         sum { rowsRead rowsWritten }
       }
     }
   }
 }`
 
-type Group = { dimensions?: { name?: string }; sum?: Record<string, number> }
+type Group = {
+  dimensions?: { objectId?: string }
+  sum?: Record<string, number>
+}
 type Answer = {
   data?: {
     viewer?: {
@@ -95,9 +98,8 @@ type Answer = {
   errors?: { message?: string }[] | null
 }
 
-// The answer as rows, by store name. A group with no name is nothing to
-// attribute — and a name that is no app of ours (`cf-singleton-container`) is
-// simply never asked for.
+// The answer as rows, by object id. A group with no id has nobody to charge;
+// an id outside this deployment is never matched by its STORE binding.
 export let read = (answer: Answer) => {
   let said = answer.errors?.length
     ? answer.errors.map((e) => e.message).join('; ')
@@ -111,13 +113,13 @@ export let read = (answer: Answer) => {
     return row
   }
   for (let g of account?.durableObjectsInvocationsAdaptiveGroups ?? []) {
-    if (g.dimensions?.name) {
-      of(g.dimensions.name).requests += g.sum?.requests ?? 0
+    if (g.dimensions?.objectId) {
+      of(g.dimensions.objectId).requests += g.sum?.requests ?? 0
     }
   }
   for (let g of account?.durableObjectsPeriodicGroups ?? []) {
-    if (!g.dimensions?.name) continue
-    let row = of(g.dimensions.name)
+    if (!g.dimensions?.objectId) continue
+    let row = of(g.dimensions.objectId)
     row.rows_read += g.sum?.rowsRead ?? 0
     row.rows_written += g.sum?.rowsWritten ?? 0
   }
@@ -185,7 +187,7 @@ export let sweep = async (env: Env, now = new Date()) => {
     for (let app of apps) {
       let name = storeName(space, app)
       let bytes = await bytesOf(env, name)
-      let got = counts.get(name) ?? none()
+      let got = counts.get(String(env.STORE.idFromName(name))) ?? none()
       entities.push({
         entity: { eid: app.eid },
         meter: { month, ...got, bytes, at },

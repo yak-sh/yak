@@ -518,7 +518,7 @@ export class Store {
     let post = meta || !app ? null : metering(
       this.#bind,
       () => this.#get('mail'),
-      posting(this.#bind.MAIL),
+      posting(this.#bind.MAIL, this.#bind),
     )
     let g = graph({
       storage: store,

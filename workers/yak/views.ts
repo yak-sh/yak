@@ -198,12 +198,19 @@ let eid = (app: string) => {
 let whole = (n: number, most: number) =>
   Math.max(1, Math.min(most, Math.floor(n) || 1))
 
+let table = (name: string) => {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+    throw new Error(`not a dataset: ${name}`)
+  }
+  return name
+}
+
 /** What a count is, everywhere here: sampled rows, each standing for many. */
 export let COUNT = 'sum(_sample_interval)'
 
 // One app, one window — the FROM and WHERE every query below shares.
-let over = (app: string, days: number) =>
-  `FROM ${DATASET} WHERE index1 = '${eid(app)}' ` +
+let over = (app: string, days: number, dataset: string) =>
+  `FROM ${table(dataset)} WHERE index1 = '${eid(app)}' ` +
   `AND timestamp >= NOW() - INTERVAL '${whole(days, KEPT_DAYS)}' DAY`
 
 /**
@@ -211,17 +218,17 @@ let over = (app: string, days: number) =>
  * answer and filled in by `daily` below, because a gap in a chart is a quiet
  * day and not a missing one.
  */
-export let perDay = (app: string, days = DAYS) =>
+export let perDay = (app: string, days = DAYS, dataset = DATASET) =>
   `SELECT toStartOfInterval(timestamp, INTERVAL '1' DAY) AS day, ` +
-  `${COUNT} AS views ${over(app, days)} GROUP BY day ORDER BY day`
+  `${COUNT} AS views ${over(app, days, dataset)} GROUP BY day ORDER BY day`
 
 // The three "top" lists are one query with a different column, so they are one
 // function. `skip` drops the rows that never had the fact: a direct visit has
 // no referring site, and an unknown country is not a country.
 let top =
   (col: string, as: string, skip: boolean) =>
-  (app: string, days = DAYS, limit = TOP) =>
-    `SELECT ${col} AS ${as}, ${COUNT} AS views ${over(app, days)}` +
+  (app: string, days = DAYS, limit = TOP, dataset = DATASET) =>
+    `SELECT ${col} AS ${as}, ${COUNT} AS views ${over(app, days, dataset)}` +
     `${skip ? ` AND ${col} != ''` : ''} ` +
     `GROUP BY ${as} ORDER BY views DESC LIMIT ${whole(limit, 100)}`
 
@@ -327,7 +334,7 @@ export let statsOf = (
 ): Promise<Stats> | null => {
   if (!env.CF_ANALYTICS_TOKEN || !env.CF_ACCOUNT) return null
   let window = whole(days, KEPT_DAYS)
-  let key = `${app}:${window}`
+  let key = `${sqlAt(env)}:${env.VIEWS_DATASET ?? DATASET}:${app}:${window}`
   let fresh = held.get(key)
   if (fresh && now - fresh.at < FRESH) return fresh.stats
   let stats = asked(env, app, window, now)
@@ -343,11 +350,12 @@ let asked = async (
   now: number,
 ): Promise<Stats> => {
   // Four questions, four queries, one round trip's worth of waiting.
+  let dataset = env.VIEWS_DATASET ?? DATASET
   let [day, pages, from, countries] = await Promise.all([
-    ran(env, perDay(app, days)),
-    ran(env, topPages(app, days)),
-    ran(env, topFrom(app, days)),
-    ran(env, topCountries(app, days)),
+    ran(env, perDay(app, days, dataset)),
+    ran(env, topPages(app, days, TOP, dataset)),
+    ran(env, topFrom(app, days, TOP, dataset)),
+    ran(env, topCountries(app, days, TOP, dataset)),
   ])
   let series = daily(day, days, now)
   return {

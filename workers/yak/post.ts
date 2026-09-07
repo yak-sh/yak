@@ -20,6 +20,19 @@
 import { type Message, parts, type Receipt, type Sender } from '@yaks/mail'
 import { SLUG } from './route.ts'
 import { apex, type Host } from './host.ts'
+import type { Env } from './env.ts'
+
+// Apply at the transport so app effects and platform letters obey one rule.
+export let sink = <T extends string | string[]>(
+  env: Pick<Env, 'MAIL_SINK'>,
+  to: T,
+  subject: string,
+): { to: string | T; subject: string } => ({
+  to: env.MAIL_SINK || to,
+  subject: env.MAIL_SINK
+    ? `[to: ${[to].flat().join(', ')}] ${subject}`
+    : subject,
+})
 
 /**
  * The address an app writes from: `<space>.<app>@yaks.app`, and
@@ -94,13 +107,15 @@ export type Binding = {
  * rest as a `bounced` saying so, which someone can read off the entity, rather
  * than sitting unsent with nothing written about it.
  */
-export let posting = (mail?: Binding): Sender => ({
+export let posting = (
+  mail?: Binding,
+  env: Pick<Env, 'MAIL_SINK'> = {},
+): Sender => ({
   send: async (m: Message): Promise<Receipt> => {
     if (!mail) throw new Error('this deploy has no mail binding')
     let sent = await mail.send({
       from: m.from,
-      to: m.to,
-      subject: m.subject,
+      ...sink(env, m.to, m.subject),
       text: m.text,
       html: m.html,
       // The threading headers carry the bracketed Message-ID; the receipt
