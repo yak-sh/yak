@@ -108,6 +108,26 @@ rolls back, the data did not move, and its marker stays unchanged. `yak deploys`
 still treats a version carrying that pass as a potential boundary, because
 another Store may have completed it.
 
+## App bindings
+
+Apps may request D1, R2 and Vectorize resources in `wrangler.jsonc` or
+`wrangler.json`. `CF_WORKERS_TOKEN` needs these account permissions: **Workers
+Scripts · Edit; D1 · Edit; Workers R2 Storage · Edit; Vectorize · Edit**. The
+token stays a Worker secret. Resources follow the app's immutable store handle
+through renames; config removal unbinds them and permanent app erasure deletes
+them. The ordinary 30-day trash keeps them for restoration.
+
+Vectorize creation takes `dimensions` and `metric`, or `preset`, on its binding
+entry; these extend Wrangler's binding configuration because a new index needs
+an explicit shape. Durable Object migrations retain their declarations and are
+sent as pending steps after the deployed script's migration tag. A rollback that
+omits that tag refuses the worker upload instead of replaying migrations.
+
+R2 erasure lists and deletes objects before deleting the bucket. An object key
+with a `.` or `..` path segment cannot be addressed by the REST delete route:
+the URL parser normalizes it. That erasure retains its directory record and
+reports the bucket to empty in the R2 dashboard before retrying.
+
 ## Analytics
 
 `CF_ANALYTICS_TOKEN` reads both usage metrics and page visits. It needs

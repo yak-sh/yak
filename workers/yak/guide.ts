@@ -185,6 +185,16 @@ It reads the app's store as the person looking (env.STORE), its files
 what a page must not hold and nothing can read back. Call guide with page code
 for a whole one.
 
+An app may carry wrangler.jsonc or wrangler.json beside worker.js. Its supported
+keys are main (the uploaded entry name, entry.js by default),
+compatibility_date, compatibility_flags, vars, d1_databases,
+r2_buckets, durable_objects.bindings with local class_name, migrations, ai, and
+vectorize. D1 databases, R2 buckets and Vectorize indexes belong to that app and
+are created at deploy; a new Vectorize index names dimensions and metric, or a
+preset. app_deploy reports unsupported settings and app_list names the
+bindings. Removing a binding keeps its resource and data until the app is
+permanently deleted, including its 30 days in the trash.
+
 Almost nothing needs COMPILING: an app is html, css and js, served as
 written, and reaching for a build step where none is needed is the commonest
 way to waste an afternoon. When something genuinely must be compiled — Rust

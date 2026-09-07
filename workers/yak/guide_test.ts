@@ -13,7 +13,7 @@ import { RESERVED } from '../../src/store/vocab.ts'
 import { comps, typeName } from '../../src/types.ts'
 import { SHIM, upload } from './dispatch.ts'
 import type { Env } from './env.ts'
-import { PAGES, uriOf } from './guide.ts'
+import { INSTRUCTIONS, PAGES, uriOf } from './guide.ts'
 import { ORIGIN } from './route.ts'
 import { TOOLS } from './tools.ts'
 
@@ -189,6 +189,38 @@ Deno.test('the guide names the doors a worker is actually given', () => {
       /app_secret_set|WEATHER_KEY/.test(section),
       `the guide shows env.${door} and never says where it came from`,
     )
+  }
+})
+
+Deno.test('the app guide names its bindings and when their data is deleted', () => {
+  for (let text of [guide, INSTRUCTIONS]) {
+    let paragraph = text.split('\n\n').find((p) =>
+      p.startsWith('An app may carry') && p.includes('wrangler.jsonc')
+    ) ?? ''
+    for (
+      let key of [
+        'wrangler.json',
+        'main',
+        'compatibility_date',
+        'compatibility_flags',
+        'vars',
+        'd1_databases',
+        'r2_buckets',
+        'durable_objects.bindings',
+        'class_name',
+        'migrations',
+        'ai',
+        'vectorize',
+        'dimensions',
+        'metric',
+        'preset',
+      ]
+    ) {
+      assert(paragraph.includes(key), `the bindings paragraph omits ${key}`)
+    }
+    assert(paragraph.includes('Removing a binding keeps its resource and data'))
+    assert(/permanently\s+deleted/.test(paragraph))
+    assert(paragraph.includes('30 days in the trash'))
   }
 })
 

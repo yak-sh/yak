@@ -591,16 +591,31 @@ and leaves every page, stylesheet and picture to the platform — you never have
 to serve your own `index.html`.
 
 The file itself is never served: `GET /<app>/worker.js` is a 404, and so are
-`vocab.json` and `tools.json` — those three are the app's inside, not its pages,
-and only a member reads them back (`app_files` read).
+`vocab.json`, `tools.json`, `wrangler.jsonc` and `wrangler.json` — the app's
+inside, not its pages, and only a member reads them back (`app_files` read).
 
-It is a plain ES module, and `env` holds three things:
+An app may carry `wrangler.jsonc` or `wrangler.json` beside `worker.js`. The
+supported keys are `main` (the uploaded entry name, `entry.js` by default),
+`compatibility_date`, `compatibility_flags`, `vars`, `d1_databases`,
+`r2_buckets`, `durable_objects.bindings` with local `class_name`, `migrations`,
+`ai`, and `vectorize`. D1 databases, R2 buckets and Vectorize indexes belong to
+that app; yaks.app creates them at deploy and reuses them. A new Vectorize index
+also names its `dimensions` and `metric`, or a `preset`. `app_deploy` reports
+unsupported settings and `app_list` names the bindings. Removing a binding keeps
+its resource and data until the app is permanently deleted; the app's 30 days in
+the trash keep them too.
+
+It is a plain ES module, and `env` holds:
 
 - `env.STORE` — the app's own graph, at the same doors `client.js` uses, **as
   the person looking at the page**. `env.STORE.fetch('/query?.doc!')`,
   `env.STORE.fetch('/apply', {method: 'POST', body})`. A path, not a URL.
 - `env.FILES` — the app's own files. `env.FILES.fetch('/index.html')`.
 - one entry per secret you set, under the name you set it (below).
+- the variables and bindings its Wrangler file declares, under their names.
+
+A declared binding keeps its name, including `STORE`, `FILES` or `APP`; the
+platform supplies those convenience doors when no binding takes their name.
 
 Name your routes anything that is not under `/api/`: that segment is the
 platform's own doors — apply, query, me, graph, ws, blob, files — and a request

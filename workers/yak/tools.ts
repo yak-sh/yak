@@ -34,6 +34,7 @@
 // app's files serve live from its blob store — and the version it bumps to is
 // kept, files and all, so app_rollback can put it back.
 import { deployWorker } from './deploy_worker.ts'
+import { bindingLines, bindings } from './bindings.ts'
 import type { Blobs } from '../../src/store/blobs.ts'
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { parseTools, TOOLS_EXAMPLE, viewsOf } from '../../src/store/tools.ts'
@@ -3050,6 +3051,7 @@ let OURS: Row[] = [
         )
         let listed = []
         for (let app of apps) {
+          let bound = await bindings(ctx.env, app)
           let errors = (await openIn(ctx.env, space, app, who, true)).length
           // What this app spent this month, as the hourly sweep last read it
           // (usage.ts). Nothing metered yet says nothing.
@@ -3070,6 +3072,11 @@ let OURS: Row[] = [
             errors,
             usage: its,
             home: front,
+            bindings: bound.map(({ name, type, resource }) => ({
+              name,
+              type,
+              resource,
+            })),
           })
           lines.push(
             `- ${app.title} (${app.slug}) v${app.version ?? 0}${
@@ -3078,6 +3085,7 @@ let OURS: Row[] = [
               url(space, app)
             } · ${mailbox(space, app)}${front ? ' — the front page' : ''}`,
           )
+          lines.push(...bindingLines(bound).map((line) => `  ${line}`))
         }
         if (!apps.length) lines.push('- no apps yet')
         // Where the space stands against what it is allowed (T-32758), in a

@@ -54,9 +54,9 @@ write is what runs:
       },
     }
 
-`req` is the visitor's own request, `env` holds the app's doors and its secrets,
-`ctx` is the runtime's. There is no build step: the file is uploaded as-is at
-`app_deploy` and run as-is.
+`req` is the visitor's own request, `env` holds the app's doors, secrets and
+bindings, `ctx` is the runtime's. There is no build step: the file is uploaded
+as-is at `app_deploy` and run as-is.
 
 ### More than one file
 
@@ -117,12 +117,12 @@ Two consequences worth building around:
   — and a request for one is answered by the kernel without the worker being
   called at all. Your routes live beside it.
 
-Three files are never served to the web at all, worker or no worker:
-`worker.js`, `vocab.json` and `tools.json`. Those are the app's inside.
-`GET /<app>/worker.js` answers the platform's 404 page — the test is on the
-decoded path, so `/%77orker.js` is the same file and the same 404 — and a member
-reads them back through `app_files` read. Nothing you write in `worker.js` is
-visible to a visitor.
+These files are never served to the web at all, worker or no worker:
+`worker.js`, `vocab.json`, `tools.json`, `wrangler.jsonc` and `wrangler.json`.
+Those are the app's inside. `GET /<app>/worker.js` answers the platform's 404
+page — the test is on the decoded path, so `/%77orker.js` is the same file and
+the same 404 — and a member reads them back through `app_files` read. Nothing
+you write in `worker.js` is visible to a visitor.
 
 ## env.STORE — the app's graph, as the person looking
 
@@ -308,8 +308,12 @@ Every secret you set is on `env` under the name you gave it — `env.WEATHER_KEY
 and a grant header it will not give you, and the three doors are what it is for.
 Reach for those.
 
-There is nothing else. No KV, no D1, no R2 binding, no environment variables of
-your own: the app's graph is its storage.
+An app may also declare variables, D1, R2, local Durable Objects, Workers AI and
+Vectorize bindings in `wrangler.jsonc` or `wrangler.json` beside `worker.js`.
+The [guide's server section](https://yaks.app/guide.md#code-of-your-own)
+describes the supported settings. A declared binding keeps its name, including
+`STORE`, `FILES` or `APP`; otherwise those names are the convenience doors
+above.
 
 ### Taking money is not one of your secrets
 
