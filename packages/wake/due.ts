@@ -60,34 +60,44 @@ export let wakeOf = (b: Bundle): Wake | undefined =>
  * returns the bundles, over an asynchronous one a promise for them.
  */
 export let due = (
-  storage: Storage,
+  storage: Pick<Storage, 'read'>,
   now: number = Date.now(),
 ): Bundle[] | Promise<Bundle[]> =>
   storage.read(`.${WAKE}.at<=${iso(now)}&.order=${WAKE}.at`, { now })
 
 /**
- * When a wake is next due after `now`, as an ISO instant — `null` when it is
- * finished: a one-shot, or a recurrence this package cannot read.
+ * The next ISO instant after `now`, from a recurrence string or a wake —
+ * `null` for a one-shot or a recurrence this package cannot read. A string
+ * counts a duration from `now`; a wake keeps its original cadence.
  *
  * A duration counts from the wake's own `at`, so a cadence keeps its phase;
  * a cron line is read against the calendar. See
  * {@link https://jsr.io/@yaks/wake/doc/~/after | after}.
  *
  * ```ts
- * next({ at: '2026-01-01T09:00:00Z', every: '1d' }, Date.parse('2026-01-01T09:00:00Z'))
- * // '2026-01-02T09:00:00.000Z'
- * next({ at: '2026-01-01T09:00:00Z' }, Date.now()) // null — a one-shot
+ * import { assertEquals } from '@std/assert'
+ * import { next } from '@yaks/wake'
+ *
+ * let from = Date.parse('2026-01-01T09:00:00Z')
+ * assertEquals(next('1d', from), '2026-01-02T09:00:00.000Z')
+ * assertEquals(next('@daily', from, 'America/Detroit'), '2026-01-02T05:00:00.000Z')
+ * assertEquals(next({ at: '2026-01-01T09:00:00Z' }, from), null)
  * ```
  */
 export let next = (
-  wake: Wake,
+  wake: Wake | string,
   now: number = Date.now(),
-  clock: Clock = {},
+  clock: Clock | string = {},
 ): string | null => {
+  let tz = typeof clock == 'string' ? clock : clock.tz
+  if (typeof wake == 'string') {
+    let at = after(wake, now, now, tz)
+    return at == null ? null : iso(at)
+  }
   if (!wake.every || !wake.at) return null
   let from = Date.parse(wake.at)
   if (Number.isNaN(from)) return null
-  let at = after(wake.every, from, now, clock.tz)
+  let at = after(wake.every, from, now, tz)
   return at == null ? null : iso(at)
 }
 
@@ -95,13 +105,12 @@ export let next = (
  * The patch that CONSUMES a due wake: the `fired` stamp, plus its `at` moved
  * on to the next instant — or cleared, when there is no next one.
  *
- * It is a bundle rather than a write, so the host decides how it lands: in the
- * same batch as whatever the wake was for (one transaction, so a wake is never
- * marked fired without the work it named), or on its own.
+ * It is a bundle rather than a write. `tick` applies one such bundle per wake,
+ * and the graph's rules react to that write through their own phases.
  *
  * ```ts
  * // let owed = due(storage, now)
- * // graph.apply(owed.flatMap((w) => [...doTheThing(w), ring(w, now)]))
+ * // for (let w of owed) graph.apply([ring(w, now)])
  * ```
  */
 export let ring = (
@@ -123,7 +132,7 @@ export let ring = (
  * that one that can sleep until an exact instant does not have to.
  */
 export let soonest = (
-  storage: Storage,
+  storage: Pick<Storage, 'read'>,
   now: number = Date.now(),
 ): number | null | Promise<number | null> =>
   then(

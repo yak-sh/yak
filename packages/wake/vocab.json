@@ -6,6 +6,7 @@
       "kind": true,
       "prefix": "W",
       "description": "a promise to come back to something at a time",
+      "$comment": "There is no apply patch: a rule's produce already writes the entity it matched. If a wake needs to patch its target without code, the fix is a rule that names a target.",
       "properties": {
         "at": {
           "type": "string",
@@ -24,7 +25,7 @@
         },
         "every": {
           "type": "string",
-          "description": "how it recurs: a duration (30m, 2h, 1d), a cron line (0 9 * * 1-5), or @daily"
+          "description": "how it recurs: a duration (30m, 2h, 1d), five cron fields (0 9 * * 1-5), or @hourly/@daily/@weekly/@monthly; cron may end with an IANA zone (0 9 * * 1-5 America/New_York), otherwise UTC"
         }
       }
     },

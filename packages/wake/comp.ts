@@ -44,7 +44,8 @@ export let FIRED = 'fired'
 export type Wake = {
   /** when it is next due, an ISO instant — absent once it has finished */
   at?: string | null
-  /** how it recurs, if it does: a duration, a cron line, or a `@` shorthand
+  /** how it recurs: a duration, five cron fields or a `@` shorthand, optionally
+   * followed by an IANA zone (`0 9 * * 1-5 America/New_York`)
    * (see {@link https://jsr.io/@yaks/wake/doc/~/next | next}) */
   every?: string | null
   /** what the wake is about — the carrier itself when it is absent */

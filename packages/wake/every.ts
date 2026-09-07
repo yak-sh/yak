@@ -11,10 +11,13 @@
 //   the one thing here worth not hand-rolling, since a cron parser is all
 //   edges (step ranges, day-of-week vs day-of-month, month names).
 //
-// Cron is read in UTC unless the caller names a zone. A schedule stored in a
-// graph is read back by whoever is running — a server, a Worker in another
-// region, a browser tab on a plane — and a recurrence that answered a
-// different instant per reader would not be one schedule.
+// Cron is read in UTC unless its last word names an IANA zone, for example
+// `0 9 * * 1-5 America/New_York`, or the caller supplies a default. The zone
+// travels with `every`, without adding a fifth column to `wake`. Croner's
+// calendar uses Intl, available in Deno and workerd without a build step.
+// A stored schedule is read by a server, a Worker in another region, or a
+// browser tab on a plane. A recurrence that answered a different instant per
+// reader would not be one schedule.
 //
 // A recurrence that cannot be read is `null`, never a throw and never a
 // guess: a wake with an unreadable `every` still fires once, on its `at`, and
@@ -62,9 +65,12 @@ let DURATION = /^(?:every\s+)?(\d+)?\s*([a-z]+)$/
  * it is a cron line, or nothing this grammar knows.
  *
  * ```ts
- * span('30m') // 1800000
- * span('every 2 hours') // 7200000
- * span('0 9 * * 1-5') // null
+ * import { assertEquals } from '@std/assert'
+ * import { span } from './every.ts'
+ *
+ * assertEquals(span('30m'), 1800000)
+ * assertEquals(span('every 2 hours'), 7200000)
+ * assertEquals(span('0 9 * * 1-5'), null)
  * ```
  */
 export let span = (every: string): number | null => {
@@ -72,15 +78,21 @@ export let span = (every: string): number | null => {
   if (!m) return null
   let unit = MS[m[2]] ?? MS[WORDS[m[2]]]
   let n = m[1] == null ? 1 : +m[1]
-  return unit && n > 0 ? unit * n : null
+  let ms = unit * n
+  return ms > 0 && Number.isFinite(ms) ? ms : null
 }
 
-// A cron line, compiled — `null` when croner refuses it, which is how an
-// unreadable recurrence stays unreadable instead of becoming an exception in
-// somebody's alarm loop.
+// Five calendar fields (or a nickname), optionally followed by a zone. Croner
+// also accepts seconds, years and ISO instants; those are not `every` spellings.
+// In particular, a sixth numeric field must never masquerade as a zone.
 let cron = (every: string, tz: string): Cron | null => {
+  let fields = every.trim().split(/\s+/)
+  let count = fields[0].startsWith('@') ? 1 : 5
+  if (fields.length === count + 1) tz = fields.pop()!
+  if (fields.length !== count || !/[a-z]/i.test(tz)) return null
+  if (count === 1 && !/^@[a-z]+$/i.test(fields[0])) return null
   try {
-    return new Cron(every.trim(), { timezone: tz })
+    return new Cron(fields.join(' '), { timezone: tz })
   } catch {
     return null
   }
@@ -96,15 +108,34 @@ let cron = (every: string, tz: string): Cron | null => {
  * a long outage catches up in ONE step instead of firing once per missed tick.
  *
  * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { after } from './every.ts'
+ *
  * let t = Date.parse('2026-01-01T09:17:00Z')
  * // two hours on from 09:17, skipping the ticks a six-hour outage missed
- * after('2h', t, t + 6 * 3600_000) // 2026-01-01T17:17:00Z
+ * assertEquals(after('2h', t, t + 6 * 3600_000), Date.parse('2026-01-01T17:17:00Z'))
+ * assertEquals(after('@hourly', t, t), Date.parse('2026-01-01T10:00:00Z'))
+ * ```
+ *
+ * Cron follows the named zone's calendar. At a spring DST gap, a missing
+ * local time moves forward by the gap; a repeated fall time occurs once,
+ * at its first occurrence. These are Croner's existing calendar semantics.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { after } from './every.ts'
+ *
+ * let t = Date.parse('2026-03-08T05:00:00Z')
+ * assertEquals(
+ *   after('30 2 * * * America/New_York', t, t),
+ *   Date.parse('2026-03-08T07:30:00Z'), // 03:30, because 02:30 is missing
+ * )
  * ```
  *
  * @param every the recurrence: a duration, a cron line, or a `@` shorthand
  * @param from the instant a duration counts from (a cron line ignores it)
  * @param now the moment to land past
- * @param tz the zone a cron line is read in (default `UTC`)
+ * @param tz the default zone for a cron line without a trailing zone (`UTC`)
  * @returns the instant, in epoch milliseconds, or `null` if `every` is
  * unreadable
  */
@@ -114,9 +145,15 @@ export let after = (
   now: number,
   tz = 'UTC',
 ): number | null => {
+  if (!Number.isFinite(from) || !Number.isFinite(now)) return null
   let ms = span(every)
   if (ms != null) {
-    return from + Math.max(Math.floor((now - from) / ms) + 1, 0) * ms
+    let at = from + Math.max(Math.floor((now - from) / ms) + 1, 0) * ms
+    return Number.isNaN(new Date(at).getTime()) ? null : at
   }
-  return cron(every, tz)?.nextRun(new Date(now))?.getTime() ?? null
+  try {
+    return cron(every, tz)?.nextRun(new Date(now))?.getTime() ?? null
+  } catch {
+    return null
+  }
 }
