@@ -1,12 +1,13 @@
 #!/bin/sh
 # bin/build-yak — the gate, run by Cloudflare Workers Builds before it deploys
-# the kernel Worker (T-34165). The dashboard holds one line, `../bin/build-yak`;
+# the kernel Worker (T-34165). The dashboard's build and deploy commands call
+# this file (`../../bin/build-yak` and `../../bin/build-yak deploy`);
 # what that line MEANS lives here, in the repo, where it is reviewed and
 # versioned like everything else.
 #
 # Workers Builds is the whole deploy: the Cloudflare GitHub App watches
 # yak-sh/yak, and on a push to main it clones, runs this, then runs
-# `npx wrangler deploy` with a token it mints for itself — nothing is minted by
+# this file's deploy mode with a token it mints for itself — nothing is minted by
 # hand and no secret lives in the repo or on the Actions runner. A non-zero
 # exit here deploys NOTHING. The dashboard settings are written down in
 # workers/yak/README.md.
@@ -25,7 +26,6 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
 if ! command -v deno >/dev/null 2>&1; then
-  echo "--- installing deno (not on the Workers Builds image)"
   # DENO_INSTALL is where install.sh puts it; naming it keeps the PATH line
   # below true whatever the script's default becomes.
   DENO_INSTALL="$HOME/.deno"
@@ -33,13 +33,25 @@ if ! command -v deno >/dev/null 2>&1; then
   # -y answers the prompts; --no-modify-path keeps it out of the image's shell
   # rc files, which nothing in a build container ever sources anyway. The PATH
   # this build needs is the line below, not a login shell's.
-  curl -fsSL https://deno.land/install.sh | sh -s -- -y --no-modify-path
+  if [ ! -x "$DENO_INSTALL/bin/deno" ]; then
+    echo "--- installing deno (not on the Workers Builds image)"
+    curl -fsSL https://deno.land/install.sh | sh -s -- -y --no-modify-path
+  fi
   PATH="$DENO_INSTALL/bin:$PATH"
   export PATH
 fi
 deno --version
 
 cd "$root"
+
+case "${1:-}" in
+  deploy)
+    shift
+    exec deno task deploy:yak "$@"
+    ;;
+  '') ;;
+  *) echo "usage: bin/build-yak [deploy]" >&2; exit 2 ;;
+esac
 
 echo "--- deno task check"
 deno task check

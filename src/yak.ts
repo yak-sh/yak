@@ -75,6 +75,9 @@ import {
   unlink,
   zone,
 } from './yaks_api.ts'
+import { deploys, rollback, table } from './yak_deploys.ts'
+import { errors, tail } from './yak_logs.ts'
+import { revert } from './yak_revert.ts'
 
 // What a verb was told. The options are the package's own grammar (`--as x`
 // and `--as=x` both), and the bare words are this verb's arguments.
@@ -182,7 +185,109 @@ let one = (all: Account[], want: string): Account => {
   return hit[0]
 }
 
+// Infrastructure belongs to the platform owner. Its credentials are the
+// box's Wrangler/GitHub logins, independent of a yaks.app account session.
+let root = new URL('../', import.meta.url).pathname.replace(/\/$/, '')
+let platform = (args: string[], note: (line: string) => void): Said => {
+  // --owner is a boolean here, wherever it stands; the general key/value
+  // grammar otherwise consumes a following version or sha as its value.
+  if (!args.includes('--owner')) {
+    throw new Refused(
+      'yaks.app operations are the platform owner’s: add --owner',
+    )
+  }
+  let s = said(args.filter((a) => a != '--owner'))
+  note(banner({
+    name: 'platform',
+    address: 'yaks.app (this box’s Cloudflare/GitHub login)',
+    session: '',
+  }))
+  return s
+}
+
+let operation = (
+  s: Said,
+  words: number,
+  usage: string,
+  opts: string[] = [],
+) => {
+  if (
+    s.words.length > words || s.flags.size ||
+    Object.keys(s.opts).some((k) => !opts.includes(k))
+  ) {
+    throw new Usage(usage)
+  }
+}
+
 let verbs: Verb[] = [
+  {
+    name: 'deploys',
+    args: '--owner',
+    about: 'yaks.app versions, commits, live times, and data boundaries',
+    help: () =>
+      'yak deploys --owner\n\n  Recent uploads and deployments; ~ marks a commit inferred by time.\n  Migration boundaries survive code rollbacks. Unknown history refuses rollback.',
+    run: async (c) => {
+      let s = platform(c.args, c.note)
+      operation(s, 0, 'yak deploys --owner')
+      c.out(table(await deploys(root)))
+      return 0
+    },
+  },
+  {
+    name: 'errors',
+    args: '[--since 10m] --owner',
+    about: 'yaks.app exceptions and error logs grouped by signature',
+    help: () =>
+      'yak errors [--since 10m] --owner\n\n  Count, first/last seen, entrypoint and version for each error signature.\n  Uses Workers Logs when available; otherwise observes the NEXT window by tail.',
+    run: async (c) => {
+      let s = platform(c.args, c.note)
+      operation(s, 0, 'yak errors [--since 10m] --owner', ['since'])
+      return await errors(root, s.opts.since ?? '10m', c.out, c.note)
+    },
+  },
+  {
+    name: 'tail',
+    args: '--owner',
+    about: 'yaks.app live events: outcome, entrypoint, request and errors',
+    help: () =>
+      'yak tail --owner\n\n  One line per live event. Ctrl-C stops the tail.',
+    run: async (c) => {
+      let s = platform(c.args, c.note)
+      operation(s, 0, 'yak tail --owner')
+      return await tail(root, c.out, c.note)
+    },
+  },
+  {
+    name: 'rollback',
+    args: '[version] --owner',
+    about:
+      'emergency rollback for a broken build path; refuses data boundaries',
+    help: () =>
+      'yak rollback [version] --owner\n\n  Only for a broken build path. Code corrections use yak revert: main deploys\n  every push. Defaults to the prior deployed version; refuses data boundaries\n  and uncertain commits, then probes the public doors after a rollback.',
+    run: async (c) => {
+      let s = platform(c.args, c.note)
+      operation(s, 1, 'yak rollback [version] --owner')
+      c.note(
+        'Cloudflare rollback is for a broken build path. Code corrections belong on main: yak revert <sha> --owner.',
+      )
+      return await rollback(root, s.words[0], c.out)
+    },
+  },
+  {
+    name: 'revert',
+    args: '<sha> --owner',
+    about: 'revert on fresh main, gate, land/push, and time the live deploy',
+    help: () =>
+      'yak revert <sha> --owner\n\n  Reverts a main commit in a fresh worktree, runs deno task check, then uses\n  task land to publish main. Re-gates after a rebase and waits up to 20m for\n  an annotated version to serve the revert. Failed worktrees are kept.\n  Workers Builds deploy command: ../../bin/build-yak deploy',
+    run: async (c) => {
+      let s = platform(c.args, c.note)
+      operation(s, 1, 'yak revert <sha> --owner')
+      if (!/^[a-f\d]{7,40}$/i.test(s.words[0] ?? '')) {
+        throw new Usage('yak revert <sha> --owner')
+      }
+      return await revert(root, s.words[0], c.out, c.note)
+    },
+  },
   {
     name: 'whoami',
     about: 'the account this box acts as, its spaces, and its role in each',

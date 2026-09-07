@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run=npm,npx
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run=npm,npx,git
 // The one door to this Worker's wrangler: `deno task deploy:yak`,
 // `deno task dev:yak` and the probe (probe.ts) all come through here, so the
 // pinned version is spelled once and `node_modules` is current before wrangler
@@ -86,9 +86,21 @@ export let ready = async (root = dir, timeout = 600_000) => {
 
 if (import.meta.main) {
   await ready()
+  let argv = [...Deno.args]
+  if (argv[0] === 'deploy') {
+    // Versions carry their commit so `yak deploys` need not infer it by time.
+    let commit = await new Deno.Command('git', {
+      args: ['log', '-1', '--format=%H %s'],
+      cwd: dir,
+      stdout: 'piped',
+      stderr: 'inherit',
+    }).output()
+    if (!commit.success) Deno.exit(commit.code)
+    argv.push('--message', new TextDecoder().decode(commit.stdout).trim())
+  }
   let [cmd, ...args] = WRANGLER
   let { code } = await new Deno.Command(cmd, {
-    args: [...args, ...Deno.args],
+    args: [...args, ...argv],
     cwd: dir,
   }).spawn().status
   Deno.exit(code)
