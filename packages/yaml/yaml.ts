@@ -43,7 +43,7 @@ let HOLE = /\{\{([\w-]+)\}\}/g
  * left standing, so a slot the caller forgot reads as the slot it is rather
  * than as an empty sentence.
  */
-export let fill = (text: string, slots: Record<string, string> = {}) =>
+export let fill = (text: string, slots: Record<string, string> = {}): string =>
   text.replace(HOLE, (had, name) => slots[name] ?? had)
 
 /**
