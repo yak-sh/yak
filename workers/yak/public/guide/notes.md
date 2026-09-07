@@ -1,45 +1,49 @@
 ---
-entity: { eid: $instructions }
+entity: { eid: $notes }
 doc:
-  title: Standing instructions for an app
+  title: The notes an app keeps
 guide:
-  slug: instructions
-  brief: standing rules an app carries
+  slug: notes
+  brief: the notes an app keeps
   description: >-
-    AGENTS.md beside index.html: the rules an app's person wants followed
-    every time anyone works on it, handed to every agent who can reach the
-    app — where the file goes, what belongs in it and what does not, the
-    size ceiling, how a person invokes it by name, and what an installed
-    copy carries.
+    NOTES.md beside index.html, where an app keeps what its person wants
+    written down about how it is kept — where the file goes, what belongs in
+    it and what does not, the size ceiling, how about and the prompt of the
+    app's own name hand it over, and what an installed copy carries.
 ---
 
-# Standing instructions for an app
+# The notes an app keeps
 
 An app's person says a thing once — "recipes in grams" — and then says it again
 next week, to a different agent, because the first one's conversation ended.
-`AGENTS.md` beside `index.html` is where that rule goes to stop being said. It
-is prose, it is the app's own, and every agent who can reach the app is handed
-it at the start of every conversation.
+`NOTES.md` beside `index.html` is where that rule goes to stop being said. It is
+prose, it is the app's own, and every agent who can reach the app can be handed
+it.
 
 This page is that file: where it goes, what belongs in it, what does not, the
-ceiling on it, and the three places it is read.
+ceiling on it, and the three places it is handed over.
 
 The map is at <https://yaks.app/guide.md>.
 
 ## Where it goes
 
-`AGENTS.md`, at the app's root, beside `index.html` and `vocab.json`:
+`NOTES.md`, at the app's root, beside `index.html` and `vocab.json`:
 
-    app_files { app: 'recipes', path: 'AGENTS.md', content: '…' }
+    app_files { app: 'recipes', path: 'NOTES.md', content: '…' }
 
-It is the app's INSIDE, not one of its pages. `GET /recipes/AGENTS.md` is a 404
+It is the app's INSIDE, not one of its pages. `GET /recipes/NOTES.md` is a 404
 on the web, the same as `vocab.json`, `tools.json` and `worker.js`; a member
 reads it back with `app_files`:
 
-    app_files { app: 'recipes', op: 'read', path: 'AGENTS.md' }
+    app_files { app: 'recipes', op: 'read', path: 'NOTES.md' }
 
 Anyone who can reach the app can read it, which is everyone in the space. A
 stranger with the link cannot, whatever the app's access is.
+
+The file was called `AGENTS.md` before, and an app that still carries one goes
+on working: `NOTES.md` is read first and the old name is read where there is no
+new one. Nothing migrates by itself, and an app with both is the new name. Write
+the new one.
 
 ## The recipe example
 
@@ -83,30 +87,26 @@ standing preference, read as input like anything else in a store.
 
 4096 bytes. A larger write is refused, with the number:
 
-    AGENTS.md is 5200 bytes — 4096 at most. It is read on every connection
-    by every agent that can reach the app, so keep it to the rules
-    themselves, not the reasoning behind them.
+    NOTES.md is 5200 bytes — 4096 at most. Every agent that can reach the
+    app is handed it, so keep it to the app's own notes, not the reasoning
+    behind them.
 
-The ceiling is there because this text is paid for on every connection by
-everyone in the space. A page of rules is plenty; a document is a sign the rules
-want to be a `vocab.json` instead — a column an app declares is a rule the store
-itself enforces, and no agent can forget it.
+The ceiling is there because this text is paid for by everyone in the space who
+asks for it. A page of rules is plenty; a document is a sign the rules want to
+be a `vocab.json` instead — a column an app declares is a rule the store itself
+enforces, and no agent can forget it.
 
-## Where it is read
+## Where it is handed over
 
 **Three doors, one text.**
 
 At the connector, `initialize` hands the model a passage naming every app the
-person can reach, one heading each, with what the app holds, its own commands
-and its `AGENTS.md` underneath:
+person can reach, one heading each, with what the app holds and its own
+commands, and a line where the app keeps notes:
 
     ## kitchen/recipes
     https://kitchen.yaks.app/recipes/ — Recipes, holds recipes. Commands:
-    add_recipe, find_recipe.
-
-    # Recipes
-
-    Weights in grams, never cups. …
+    add_recipe, find_recipe. Keeps notes of its own, which about hands over.
 
     ## kitchen/chores
     https://kitchen.yaks.app/chores/ — Chores, holds chores.
@@ -117,19 +117,25 @@ with `commands`.
 
 That passage is why an agent asked to "add this recipe" knows there is a recipe
 app to add it to, rather than making a second one. It is made fresh at every
-connection, and `about` says it again for a conversation that has run long
-enough for the apps to have moved under it — an app made this morning is news
-`about` carries, not news the tool list does.
+connection, and it names the apps but never quotes what their people wrote.
+
+The notes themselves are what `about` hands over — the same roster with each
+app's own words underneath it, and anything the person has said in the space
+along with them. Ask for it before you build on an app or add to one. It is also
+how a conversation that has run long enough for the apps to have moved under it
+catches up: an app made this morning is news `about` carries, not news the tool
+list does.
 
 Second, a person can invoke one by name. It is offered as a prompt called after
-the app — `recipes` — so somebody picking from a menu can pull the app's rules
-into a conversation deliberately.
+the app — `recipes`, or `recipes__notes` where that word is already spoken for —
+titled "Recipes: notes", so somebody picking from a menu can pull the app's
+rules into a conversation deliberately.
 
-Third, the builder here reads it before it builds on an app that has one.
+Third, the builder here reads them before it builds on an app that has some.
 
 ## It travels
 
-`app_publish` and `app_install` copy an app's files, and `AGENTS.md` is one of
+`app_publish` and `app_install` copy an app's files, and `NOTES.md` is one of
 them. Somebody who installs a published recipe box gets its rules along with its
 pages — the publisher's rules, in the installer's own copy, which they can then
 rewrite with `app_files` like any other file of theirs.

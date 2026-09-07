@@ -533,13 +533,13 @@ origin with no session on it. The answer arrives in the notification above, and
 a redraw is a plain MCP `tools/call` of `command` back through the host for the
 app's own command, which does carry who is looking.
 
-## Standing instructions
+## The notes an app keeps
 
-Deeper: <https://yaks.app/guide/instructions.md> — what belongs in the file, the
-ceiling on it, and the three doors that read it.
+Deeper: <https://yaks.app/guide/notes.md> — what belongs in the file, the
+ceiling on it, and the three doors that hand it over.
 
 A rule the person wants followed _every_ time — recipes in grams, one photo
-each, tag by meal and never by cuisine — goes in an **`AGENTS.md`** beside
+each, tag by meal and never by cuisine — goes in a **`NOTES.md`** beside
 `index.html`:
 
     # Recipes
@@ -548,23 +548,24 @@ each, tag by meal and never by cuisine — goes in an **`AGENTS.md`** beside
     Every ingredient's amount is repeated in the step that uses it.
     One photo per recipe, of the finished dish, uploaded not linked.
 
-Every agent who can reach the app is handed it at the start of every
-conversation, so the rule is said once and followed after. It is the app's
-inside, like `vocab.json`: `GET /recipes/AGENTS.md` is a 404 on the web, and a
+Any agent who can reach the app can be handed it, so the rule is said once and
+followed after: `about` returns the notes of every app in reach, and a person
+can pull one in by name from the prompt called after the app. It is the app's
+inside, like `vocab.json`: `GET /recipes/NOTES.md` is a 404 on the web, and a
 member reads it back with `app_files`. Keep it under 4 KB — a bigger write is
 refused — and to the rules themselves, not the reasoning behind them. An install
 carries it along with the app's other files.
 
-Beside it, the same passage names **every app the person can reach**, its
-address, what it holds and its own commands. That is how an agent asked to "add
-this recipe" knows there is already a recipe app to add it to.
+At the connection itself, a passage names **every app the person can reach**,
+its address, what it holds and its own commands. That is how an agent asked to
+"add this recipe" knows there is already a recipe app to add it to.
 
 ## What the person said
 
 Deeper: <https://yaks.app/guide/memory.md> — the shape of a memory, what context
 is for, and how a recall is ranked.
 
-An `AGENTS.md` is the rules for one app. The other half is what the PERSON said,
+A `NOTES.md` is the rules for one app. The other half is what the PERSON said,
 in their own words, kept for the whole space:
 
     memory_save { said: 'use grams, never cups',
@@ -572,10 +573,10 @@ in their own words, kept for the whole space:
 
 Save the sentence, verbatim, the moment they say how they want something built
 or handled — a paraphrase can only lose what they said, and nobody afterwards
-can get it back. Add only the line of context needed to read it later. The
-newest few are handed to every agent that connects here, and `memory_recall`
-finds the rest by what they are about — ask it before you build or change an
-app, so what they told somebody once is not something they have to say again.
+can get it back. Add only the line of context needed to read it later. `about`
+hands the newest few to any agent that asks, and `memory_recall` finds the rest
+by what they are about — ask it before you build or change an app, so what they
+told somebody once is not something they have to say again.
 
 ## Code of your own
 

@@ -69,13 +69,6 @@ export let PAGES: Record<string, Page> = {
       "The app served at <space>.yaks.app/ and how it routes the space: the five rungs a request is answered in, app_set home, the first globs that send another app's paths to it, why a broken router fails open, and where the space's own mail lands.",
     'brief': 'the front page, and routing a space',
   },
-  'instructions': {
-    'slug': 'instructions',
-    'title': 'Standing instructions for an app',
-    'description':
-      "AGENTS.md beside index.html: the rules an app's person wants followed every time anyone works on it, handed to every agent who can reach the app — where the file goes, what belongs in it and what does not, the size ceiling, how a person invokes it by name, and what an installed copy carries.",
-    'brief': 'standing rules an app carries',
-  },
   'mail': {
     'slug': 'mail',
     'title': "Mail: an app's own address",
@@ -87,8 +80,15 @@ export let PAGES: Record<string, Page> = {
     'slug': 'memory',
     'title': 'What the person said',
     'description':
-      "memory_save and memory_recall: keeping what the person said about how they want things done, in their own words rather than your summary of them — what belongs in a memory, what context is for and what it is not, when to reach for each tool, how a recall is ranked, and how a memory differs from an app's AGENTS.md.",
+      'memory_save and memory_recall: keeping what the person said about how they want things done, in their own words rather than your summary of them — what belongs in a memory, what context is for and what it is not, when to reach for each tool, how a recall is ranked, and how a memory differs from the notes an app keeps.',
     'brief': 'the words a person wants remembered',
+  },
+  'notes': {
+    'slug': 'notes',
+    'title': 'The notes an app keeps',
+    'description':
+      "NOTES.md beside index.html, where an app keeps what its person wants written down about how it is kept — where the file goes, what belongs in it and what does not, the size ceiling, how about and the prompt of the app's own name hand it over, and what an installed copy carries.",
+    'brief': 'the notes an app keeps',
   },
   'querying': {
     'slug': 'querying',
@@ -249,7 +249,7 @@ export let WORDS: Record<string, Words> = {
   'app_files': {
     'title': "The app's files",
     'description':
-      "Write the app's files — index.html and any css, js or images beside it — or list them, read one back, or delete one. Write a whole app in ONE call with files: [{path, content}, …] — a files batch IS the write, so leave op out; path and content write a single file, and base64 in place of content writes one that is not text — a picture, or the .wasm a worker.js imports. They serve live at <space>.yaks.app/<app>/<path>; index.html answers the directory. Keep what the app remembers in its own store, never localStorage: the page reads and writes it with `import { apply, query, search } from './api/client.js'`, which is served beside the app. Write every address relative: the kernel gives each page a `<base>` at the app's own address, so nothing in an app names the app, and a copy someone installs at another address still works. Every write answers what it stored — the byte count and the sha256, and for a .json file whether it parses, naming the position when it does not — so a miscounted bracket is caught in the call that made it. AGENTS.md beside index.html is what the person wants followed whenever anyone works on this app — recipes in grams, one photo each — and every agent who can reach the app is told it at the start of every conversation; write one whenever they state a rule like that, and keep it under 4 KB. It is the app's inside, like vocab.json: never served on the web, read back here. op: patch with path, find and replace edits one file in place: find is exact and must match exactly once. op: fetch with path and url writes an https response body to path, which is how a library is vendored without transcribing it, and answers an integrity hash for it. Nothing a write or a delete takes away is lost: each keeps the bytes it replaced for 30 days, op: history with path lists them newest first — sha256, size, when it was replaced and by whom — and op: restore with path puts one back, the newest by default or the one sha or at names. A restore is itself a write, so it too can be undone. Call guide for the whole of it, in a page (https://yaks.app/guide.md). The way back from any write, patch, fetch or delete here: op: history, then op: restore.",
+      "Write the app's files — index.html and any css, js or images beside it — or list them, read one back, or delete one. Write a whole app in ONE call with files: [{path, content}, …] — a files batch IS the write, so leave op out; path and content write a single file, and base64 in place of content writes one that is not text — a picture, or the .wasm a worker.js imports. They serve live at <space>.yaks.app/<app>/<path>; index.html answers the directory. Keep what the app remembers in its own store, never localStorage: the page reads and writes it with `import { apply, query, search } from './api/client.js'`, which is served beside the app. Write every address relative: the kernel gives each page a `<base>` at the app's own address, so nothing in an app names the app, and a copy someone installs at another address still works. Every write answers what it stored — the byte count and the sha256, and for a .json file whether it parses, naming the position when it does not — so a miscounted bracket is caught in the call that made it. NOTES.md beside index.html holds the app's own notes — how this one is kept, in the person's words, up to 4 KB — and the about tool hands them back. It is the app's inside, like vocab.json: never served on the web, read back here. op: patch with path, find and replace edits one file in place: find is exact and must match exactly once. op: fetch with path and url writes an https response body to path, which is how a library is vendored without transcribing it, and answers an integrity hash for it. Nothing a write or a delete takes away is lost: each keeps the bytes it replaced for 30 days, op: history with path lists them newest first — sha256, size, when it was replaced and by whom — and op: restore with path puts one back, the newest by default or the one sha or at names. A restore is itself a write, so it too can be undone. Call guide for the whole of it, in a page (https://yaks.app/guide.md). The way back from any write, patch, fetch or delete here: op: history, then op: restore.",
   },
   'sandbox_exec': {
     'title': 'Run a build command',
@@ -414,7 +414,7 @@ export let WORDS: Record<string, Words> = {
   'about': {
     'title': 'What yaks.app is',
     'description':
-      'What yaks.app is and what gets made here. Call it when someone asks what this place is, or when you have not signed in and want to know what works signed out and what signing in would add — it answers in a paragraph and says where to sign in. Signed in, it also says WHO you are signed in as, how (a browser, a connector, a CLI grant) and until when, plus the tools this door is listing right now. Signed out it reads nothing about anybody: the same words for everyone.',
+      'What yaks.app is and what gets made here. Call it when someone asks what this place is, or when you have not signed in and want to know what works signed out and what signing in would add — it answers in a paragraph and says where to sign in. Signed in, it also says WHO you are signed in as, how (a browser, a connector, a CLI grant) and until when, the tools this door is listing right now, and every app you can reach — its address, what it holds, the notes it keeps and whatever the person has said in that space. Signed out it reads nothing about anybody: the same words for everyone.',
   },
   'gallery_search': {
     'title': 'Search the gallery',
@@ -424,7 +424,7 @@ export let WORDS: Record<string, Words> = {
   'memory_save': {
     'title': 'Keep what they said',
     'description':
-      'Keep what the person said about how they want something built or handled — their words, as they said them. Reach for it the moment they state a preference, a standard, a taste, a way of working, a thing they never want done again: "use grams, never cups", "keep it soft, not technical", "always show me the link". Save the SENTENCE, verbatim — never your summary of it, never a tidied-up version, never what you concluded from it. A summary can only lose what they said, and nobody can get it back. Add context only where the words are unreadable without it — one line saying what was being talked about, and no more; the words themselves carry the rest. It is kept for the whole space, so everyone working there sees it, and every agent that connects afterwards is handed the newest few. Rules for ONE app go in that app\'s AGENTS.md instead (guide page instructions).',
+      'Keep what the person said about how they want something built or handled — their words, as they said them. Reach for it the moment they state a preference, a standard, a taste, a way of working, a thing they never want done again: "use grams, never cups", "keep it soft, not technical", "always show me the link". Save the SENTENCE, verbatim — never your summary of it, never a tidied-up version, never what you concluded from it. A summary can only lose what they said, and nobody can get it back. Add context only where the words are unreadable without it — one line saying what was being talked about, and no more; the words themselves carry the rest. It is kept for the whole space, so everyone working there sees it, and the about tool hands the newest few to any agent that asks. What is only about ONE app belongs in that app\'s NOTES.md instead (guide page notes).',
   },
   'memory_recall': {
     'title': 'What they have said',

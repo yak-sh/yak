@@ -34,6 +34,7 @@ import {
 import { monthOf } from './meter.ts'
 import { PAGES, uriOf } from './guide.ts'
 import { PROMPTS } from './prompts.ts'
+import { HAS_NOTES } from './standing.ts'
 import { sha256 } from './versions.ts'
 import { VERSION } from '../../src/version.ts'
 
@@ -5923,23 +5924,23 @@ slow('what the person said is kept, and read back whole', async () => {
     )
     assertStringIncludes(no.message, 'never your summary')
 
-    // The next agent to connect is handed it, with the rule for keeping the
-    // next one, before it has asked anything (T-34474).
+    // The next agent to connect gets it from `about`, with the rule for
+    // keeping the next one (T-34474). It rides there rather than on the
+    // instructions since T-34632: what the person said is their prose, and a
+    // host classifies the instructions it is handed at connect.
     let fresh = connector(k, them.cookie)
+    let said = await fresh.tool('about')
+    assertStringIncludes(said, `## What ${them.name} has said`)
+    assertStringIncludes(said, `"${words}"`)
+    assertStringIncludes(said, 'setting up the recipe app')
+    assertStringIncludes(said, 'keep their exact words with memory_save')
     let init = await fresh.call('initialize', HELLO)
-    assertStringIncludes(init.instructions, `## What ${them.name} has said`)
-    assertStringIncludes(init.instructions, `"${words}"`)
-    assertStringIncludes(init.instructions, 'setting up the recipe app')
-    assertStringIncludes(
-      init.instructions,
-      'keep their exact words with memory_save',
-    )
+    assertEquals(init.instructions.includes(words), false)
 
     // Somebody else's space is somebody else's: they are not handed it, they
     // cannot ask for it, and their own space holds nothing.
     let ana = connector(k, (await signIn(k)).cookie)
-    let hers = await ana.call('initialize', HELLO)
-    assertEquals(hers.instructions.includes(words), false)
+    assertEquals((await ana.tool('about')).includes(words), false)
     let shut = await assertRejects(
       () => ana.tool('memory_recall', { space: 'kitchen' }),
       Error,
@@ -6798,11 +6799,14 @@ slow('store_load reads a CSV as rows of one component', async () => {
   }
 })
 
-// AGENTS.md beside an app (standing.ts, T-34425): the standing rules its
-// person left, and — for every app, rules or not — the heading that makes it
-// discoverable. Owner, 2026-09-05: "if i later say, 'add this recipe', i want
-// them to know there's a recipe app to add it to".
-slow('an app says what it holds, and what it asks of an agent', async () => {
+// NOTES.md beside an app (standing.ts, T-34425): what its person wrote down
+// about how it is kept, and — for every app, notes or not — the heading that
+// makes it discoverable. Owner, 2026-09-05: "if i later say, 'add this
+// recipe', i want them to know there's a recipe app to add it to".
+//
+// The two halves are handed over at different moments since T-34632: the
+// roster rides on `initialize`, and the notes are `about`'s answer.
+slow('an app says what it holds, and keeps notes about itself', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -6832,7 +6836,7 @@ slow('an app says what it holds, and what it asks of an agent', async () => {
             },
           }),
         },
-        { path: 'AGENTS.md', content: RULES },
+        { path: 'NOTES.md', content: RULES },
       ],
     })
     await agent.tool('app_deploy', { space, app: 'recipes' })
@@ -6858,16 +6862,22 @@ slow('an app says what it holds, and what it asks of an agent', async () => {
     )
     assertStringIncludes(init.instructions, 'holds recipes')
     assertStringIncludes(init.instructions, 'Commands: add, add_recipe')
-    assertStringIncludes(init.instructions, 'Weights in grams, never cups.')
     assertStringIncludes(init.instructions, `## ${space}/chores`)
     assertStringIncludes(init.instructions, 'holds chores')
-    // And `about` says it again, for a conversation the apps moved under.
+    // The app's own words are NOT there (T-34632): a host classifies these
+    // instructions, and somebody else's prose in them reads as an attempt to
+    // steer the model. The roster says the notes exist and where they are.
+    assertEquals(init.instructions.includes('Weights in grams'), false)
+    assertStringIncludes(init.instructions, HAS_NOTES)
+
+    // `about` is what hands them over — and it says the roster again too, for
+    // a conversation the apps moved under.
     let about = await agent.tool('about')
     assertStringIncludes(about, 'Weights in grams, never cups.')
     assertStringIncludes(about, `## ${space}/chores`)
 
     // The person's own door onto the same words: a prompt named after the
-    // app, whose description is the file's first line.
+    // app, described in OUR words, carrying the file as its text.
     let listed = async (
       c: ReturnType<typeof connector>,
     ) => ((await c.call('prompts/list')).prompts as {
@@ -6877,7 +6887,7 @@ slow('an app says what it holds, and what it asks of an agent', async () => {
     let prompts = await listed(agent)
     let mine = prompts.find((p) => p.name == 'recipes')
     assert(mine, `no recipes prompt in ${prompts.map((p) => p.name)}`)
-    assertEquals(mine.description, 'Recipes')
+    assertEquals(mine.description, 'The notes kept beside the Recipes app.')
     assertEquals(prompts.some((p) => p.name == 'chores'), false)
     let got = await agent.call('prompts/get', { name: 'recipes' })
     assertEquals(got.messages.length, 1)
@@ -6899,30 +6909,47 @@ slow('an app says what it holds, and what it asks of an agent', async () => {
     // It is the app's INSIDE: deployed, never served, whichever way the path
     // is spelled (apps.ts MANIFEST).
     assertEquals(
-      (await k.at(`${space}.yaks.app`, '/recipes/AGENTS.md')).status,
+      (await k.at(`${space}.yaks.app`, '/recipes/NOTES.md')).status,
       404,
     )
     assertEquals(
-      (await k.at(`${space}.yaks.app`, '/recipes/%41GENTS.md')).status,
+      (await k.at(`${space}.yaks.app`, '/recipes/%4EOTES.md')).status,
+      404,
+    )
+    // And the name it was written under before T-34632 is inside too, since
+    // an app that still carries one is still read.
+    assertEquals(
+      (await k.at(`${space}.yaks.app`, '/recipes/AGENTS.md')).status,
       404,
     )
 
     // Too long is refused at the write, with the number, rather than
-    // truncated at the read: every agent in the space pays for it on every
-    // connection.
+    // truncated at the read: half of what somebody wrote is worse than a
+    // pointer to all of it.
     assertStringIncludes(
       (await assertRejects(
         () =>
           agent.tool('app_files', {
             space,
             app: 'recipes',
-            path: 'AGENTS.md',
+            path: 'NOTES.md',
             content: 'x'.repeat(4097),
           }),
         Error,
       )).message,
       '4097 bytes — 4096 at most',
     )
+
+    // An app written before the rename keeps its notes: the old name is read
+    // where there is no new one, and nothing migrates (standing.ts NAMES).
+    await agent.tool('app_new', { slug: 'garden', title: 'Garden' })
+    await agent.tool('app_files', {
+      space,
+      app: 'garden',
+      files: [{ path: 'AGENTS.md', content: 'Water on Tuesdays.' }],
+    })
+    await agent.tool('app_deploy', { space, app: 'garden' })
+    assertStringIncludes(await agent.tool('about'), 'Water on Tuesdays.')
 
     // A member of another space is told nothing about any of it: reach is
     // membership, the same question the tool list asks (declared.ts).
@@ -6932,8 +6959,8 @@ slow('an app says what it holds, and what it asks of an agent', async () => {
     assertEquals(hers.instructions.includes(`${space}/recipes`), false)
     assertEquals((await listed(maya)).some((p) => p.name == 'recipes'), false)
 
-    // Until she installs it. The rules are one of the app's files, so a copy
-    // carries them — the publisher's rules, in her own copy, hers to rewrite.
+    // Until she installs it. The notes are one of the app's files, so a copy
+    // carries them — the publisher's notes, in her own copy, hers to rewrite.
     await agent.tool('app_publish', { space, app: 'recipes' })
     assertStringIncludes(
       await maya.tool('app_install', { name: 'recipes' }),
@@ -6943,14 +6970,11 @@ slow('an app says what it holds, and what it asks of an agent', async () => {
       await maya.tool('app_files', {
         app: 'recipes',
         op: 'read',
-        path: 'AGENTS.md',
+        path: 'NOTES.md',
       }),
       'Weights in grams, never cups.',
     )
-    assertStringIncludes(
-      (await maya.call('initialize', HELLO)).instructions,
-      'Weights in grams, never cups.',
-    )
+    assertStringIncludes(await maya.tool('about'), 'Weights in grams, never')
   } finally {
     await k.stop()
   }

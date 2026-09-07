@@ -243,12 +243,13 @@ let called = async (
  * here and what an agent is taught over MCP cannot drift.
  */
 export let prompt = async (env: Env, ctx?: Ctx): Promise<string> => {
-  // The apps this person already has, and the standing instructions beside
-  // each (standing.ts, T-34425) — the same passage the connector puts on its
-  // own instructions, so a rule written for one agent is not missed by the
-  // other. It goes LAST: it is about this person's apps, and the guide it
-  // follows is about apps in general.
-  let apps = ctx ? (await standing(ctx)).text : ''
+  // The apps this person already has, with the notes beside each and what
+  // they have said here (standing.ts, T-34425). The builder is our own agent
+  // and this is our own prompt, not a tool list a host classifies, so it takes
+  // the passage whole where the connector puts the roster on its instructions
+  // and hands the notes over at `about` (T-34632). It goes LAST: it is about
+  // this person's apps, and the guide it follows is about apps in general.
+  let apps = ctx ? (await standing(ctx)).notes : ''
   let after = apps ? `\n\n---\n\n${apps}` : ''
   try {
     let page = await asset({ ASSETS: env.ASSETS }, WHOLE)

@@ -10,7 +10,7 @@ guide:
     they want things done, in their own words rather than your summary of
     them — what belongs in a memory, what context is for and what it is not,
     when to reach for each tool, how a recall is ranked, and how a memory
-    differs from an app's AGENTS.md.
+    differs from the notes an app keeps.
 ---
 
 # What the person said
@@ -23,7 +23,7 @@ said, and `memory_recall` is how it comes back.
 The rule is one line long: **keep their words, not your summary of them.**
 
 This page is those two tools: what belongs in a memory, what does not, how they
-are ranked, and how they differ from an app's `AGENTS.md`.
+are ranked, and how they differ from an app's `NOTES.md`.
 
 The map is at <https://yaks.app/guide.md>.
 
@@ -100,29 +100,27 @@ otherwise. With no `words` at all you get the newest.
 Each one comes back whole: the sentence, its context, who said it and when.
 Never a snippet — half of what somebody said is worse than none of it.
 
-## They arrive on their own
+## They come back with `about`
 
-The newest few are handed to every agent that connects, under a heading of their
-own, before anything else is asked. So the common case needs no tool call at
-all: you have already read them. `memory_recall` is for the rest, and for the
-moment a particular question comes up.
+The newest few ride on `about`, under a heading of their own, beside the notes
+of every app in reach — so one call at the top of a conversation is usually the
+whole of it. `memory_recall` is for the rest, and for the moment a particular
+question comes up.
 
 They belong to the SPACE, not to an app. Everyone in the space reads them and
 everyone who may write there can save one, so a thing said to one agent about
 one app is known to every agent working anywhere in that space.
 
-## Against an AGENTS.md
+## Against a NOTES.md
 
-Both are read at the start of every conversation, and they hold different
-things:
+`about` hands over both, and they hold different things:
 
-- **`AGENTS.md`** is the rules for ONE app, written by an agent, in whatever
+- **`NOTES.md`** is the rules for ONE app, written by an agent, in whatever
   words make them followable — "every ingredient's amount is repeated in the
   step that uses it". It lives beside that app's `index.html`. See
-  <https://yaks.app/guide/instructions.md>.
+  <https://yaks.app/guide/notes.md>.
 - **A memory** is what the PERSON said, in their words, across the whole space —
   "use grams, never cups".
 
 When they state a rule for one app, both are right: keep their sentence with
-`memory_save`, and write the rule the app is to be built by into its
-`AGENTS.md`.
+`memory_save`, and write the rule the app is to be built by into its `NOTES.md`.

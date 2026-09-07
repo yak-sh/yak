@@ -28,7 +28,7 @@ The first deploy writes the three shirts in `seed/` into the store, once.
 | `cart.js`    | the cart as a vocabulary — no DOM, no prices           |
 | `seed/`      | three shirts, written once per store                   |
 | `tee-*.svg`  | the pictures those shirts point at                     |
-| `AGENTS.md`  | how to add a product, and what not to change           |
+| `NOTES.md`   | how to add a product, and what not to change           |
 
 **There is no `vocab.json` here, and that is the point.** Both words this shop
 is made of are the platform's own — `product`, which the checkout door reads a

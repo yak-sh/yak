@@ -87,12 +87,11 @@ app_files:
     and a copy someone installs at another address still works. Every write
     answers what it stored — the byte count and the sha256, and for a .json
     file whether it parses, naming the position when it does not — so a
-    miscounted bracket is caught in the call that made it. AGENTS.md beside
-    index.html is what the person wants followed whenever anyone works on
-    this app — recipes in grams, one photo each — and every agent who can
-    reach the app is told it at the start of every conversation; write one
-    whenever they state a rule like that, and keep it under 4 KB. It is the
-    app's inside, like vocab.json: never served on the web, read back here.
+    miscounted bracket is caught in the call that made it. NOTES.md beside
+    index.html holds the app's own notes — how this one is kept, in the
+    person's words, up to 4 KB — and the about tool hands them back. It is
+    the app's inside, like vocab.json: never served on the web, read back
+    here.
     op: patch with path, find and replace edits one file in place: find is
     exact and must match exactly once. op: fetch with path and url writes an
     https response body to path, which is how a library is vendored without
@@ -566,8 +565,10 @@ about:
     works signed out and what signing in would add — it answers in a
     paragraph and says where to sign in. Signed in, it also says WHO you are
     signed in as, how (a browser, a connector, a CLI grant) and until when,
-    plus the tools this door is listing right now. Signed out it reads
-    nothing about anybody: the same words for everyone.
+    the tools this door is listing right now, and every app you can reach —
+    its address, what it holds, the notes it keeps and whatever the person
+    has said in that space. Signed out it reads nothing about anybody: the
+    same words for everyone.
 
 gallery_search:
   title: Search the gallery
@@ -592,9 +593,9 @@ memory_save:
     Add context only where the words are unreadable without it — one line
     saying what was being talked about, and no more; the words themselves
     carry the rest. It is kept for the whole space, so everyone working
-    there sees it, and every agent that connects afterwards is handed the
-    newest few. Rules for ONE app go in that app's AGENTS.md instead (guide
-    page instructions).
+    there sees it, and the about tool hands the newest few to any agent that
+    asks. What is only about ONE app belongs in that app's NOTES.md instead
+    (guide page notes).
 
 memory_recall:
   title: What they have said

@@ -243,11 +243,14 @@ let rostered = (ctx: Ctx) =>
       'to see what is here.'
     : ''
 
-// The apps in reach, as `initialize` already told this client (standing.ts):
-// what each holds, and the standing instructions beside it. Said again here
-// because a client caches the instructions at connect and a person's apps move
-// under it — an app made this morning is one the agent would otherwise not
-// know to put this afternoon's recipe in.
+// The apps in reach (standing.ts), whole: what each holds, the notes beside
+// it, and what the person has said in the space. `initialize` named the apps
+// and left the words out — a host classifies its instructions, and somebody
+// else's prose there reads as an attempt to steer the model (T-34632) — so
+// this is where they are handed over. Said here anyway for a second reason: a
+// client caches the instructions at connect and a person's apps move under it,
+// and an app made this morning is one the agent would otherwise not know to
+// put this afternoon's recipe in.
 let said = (ctx: Ctx) => ctx.standing ? `\n\n${ctx.standing}` : ''
 
 // How a caller got in, said the way a person would say it (identity.ts
@@ -1098,10 +1101,10 @@ export let wrote = async (
 ) => {
   let blobs = r2Blobs(env.BLOBS)
   let prefix = fileKey(space, app, '')
-  // The one file with a ceiling of its own (standing.ts): AGENTS.md is read
-  // on every connection by every agent that can reach the app, so it is
-  // refused over the cap here — at the write, whichever door brought the
-  // bytes — rather than truncated at the read.
+  // The one file with a ceiling of its own (standing.ts): the app's notes are
+  // handed whole to any agent that can reach the app, so they are refused
+  // over the cap here — at the write, whichever door brought the bytes —
+  // rather than truncated at the read.
   for (let f of files) {
     let no = tooLong(f.path, f.bytes.byteLength)
     if (no) throw new Error(no)

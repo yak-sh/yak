@@ -8,29 +8,34 @@
 //               know there's a recipe app to add it to". So every reachable
 //               app gets a heading, its address, what it holds and its own
 //               commands — an app already made is found instead of made again.
-//   STANDING    An `AGENTS.md` beside index.html: the rules the person wants
-//               followed whenever anyone works on or with that app. Owner,
-//               2026-09-05: "if i make a recipe app, and i often have my agent
-//               add the recipes, but i want them to do it in a consistent way
-//               (use grams, include amounts of ingredients in instructions,
-//               etc), do they have a place to put those instructions so
-//               they're always followed for them or other agents that are
-//               granted access to the app?"
+//   NOTES       A `NOTES.md` beside index.html: what the person wants written
+//               down about how that app is kept. Owner, 2026-09-05: "if i
+//               make a recipe app, and i often have my agent add the recipes,
+//               but i want them to do it in a consistent way (use grams,
+//               include amounts of ingredients in instructions, etc), do they
+//               have a place to put those instructions so they're always
+//               followed for them or other agents that are granted access to
+//               the app?"
 //
 // It is the app's INSIDE, like `vocab.json`, `tools.json` and the seeds
 // (apps.ts MANIFEST): written and read through `app_files`, never served to
 // the web. An install copies it with the rest of the app's files (tools.ts
-// `copied`), so a published app carries its rules to everyone who takes one.
+// `copied`), so a published app carries its notes to everyone who takes one.
 //
-// Three doors read this passage, so a rule cannot be followed at one and
-// missed at another: the connector's `initialize` instructions and its
-// signed-in `about` (mcp.ts), the prompts a PERSON picks by name (mcp.ts
-// `extend`), and the builder we run ourselves (builder.ts).
+// The file was `AGENTS.md` until T-34632 and is still read under that name.
+// ChatGPT runs a classifier over a connector's tool text and its `initialize`
+// instructions: a passage that named that file and said how a model was to
+// treat what it found there reads as prompt injection, and the person got a
+// warning about this connector before they had used it once. So the two
+// halves are served at different moments. The ROSTER — every app, its address,
+// what it holds, its commands — rides on the instructions, where discovery has
+// to be. The NOTES are handed over when something asks for them: `about`
+// (tools.ts), the prompt a person picks by name, and the builder we run
+// ourselves (builder.ts).
 //
-// BOUNDED, because it is paid for on every connection: an app with no
-// AGENTS.md is one line, and the file itself is refused over CAP at the write
-// rather than truncated at the read — an instruction cut in half is worse than
-// one that was never written.
+// BOUNDED, because the notes are read on every call at the door: the file is
+// refused over CAP at the write rather than truncated at the read — half of
+// what somebody wrote is worse than a pointer to all of it.
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { type App, type Space, storeName, url } from './directory.ts'
 import { storeOf } from './door.ts'
@@ -41,13 +46,19 @@ import type { Ctx } from './tools.ts'
 import { appDoc } from './vocab.ts'
 
 /** The file, at the app's root. */
+export let NOTES = 'NOTES.md'
+
+/** What it was called before T-34632, still read where an app has one. */
 export let AGENTS = 'AGENTS.md'
 
+/** Both spellings, newest first — the order `notesOf` reads them in. */
+export let NAMES = [NOTES, AGENTS]
+
 /**
- * The most an app's standing instructions may be. Every agent that can reach
- * the app reads them on every connection, so they are the rules and not the
- * reasoning; 4 KB is a page of prose, and a person with more to say than that
- * is writing a guide rather than a standing rule.
+ * The most an app's notes may be. Every agent that can reach the app is handed
+ * them, so they are the notes themselves and not the reasoning behind them;
+ * 4 KB is a page of prose, and a person with more to say than that is writing
+ * a guide rather than a note.
  */
 export let CAP = 4096
 
@@ -58,21 +69,21 @@ let root = (path: string) => path.replace(/^\/+/, '')
  * number, so an agent that wrote too much knows by how much.
  *
  * ```ts
- * tooLong('AGENTS.md', 5000) // 'AGENTS.md is 5000 bytes — 4096 at most. …'
+ * tooLong('NOTES.md', 5000) // 'NOTES.md is 5000 bytes — 4096 at most. …'
  * ```
  */
 export let tooLong = (path: string, n: number): string =>
-  root(path) == AGENTS && n > CAP
-    ? `${AGENTS} is ${n} bytes — ${CAP} at most. It is read on every ` +
-      'connection by every agent that can reach the app, so keep it to the ' +
-      'rules themselves, not the reasoning behind them.'
+  NAMES.includes(root(path)) && n > CAP
+    ? `${root(path)} is ${n} bytes — ${CAP} at most. Every agent that can ` +
+      "reach the app is handed it, so keep it to the app's own notes, not " +
+      'the reasoning behind them.'
     : ''
 
 /** One app, as the passage says it. */
 export type Entry = {
   space: Space
   app: App
-  /** its AGENTS.md, or '' */
+  /** its NOTES.md, or '' */
   said: string
   /** the components its vocab.json declares */
   kinds: string[]
@@ -80,17 +91,26 @@ export type Entry = {
   commands: string[]
 }
 
-/** One app's AGENTS.md, or '' where it has none. */
-export let agentsOf = async (
+/**
+ * One app's notes, or '' where it has none — `NOTES.md`, falling back to the
+ * `AGENTS.md` an app written before T-34632 still carries. Nothing migrates:
+ * the old file goes on working where it sits, and an app that has both is the
+ * newer name.
+ */
+export let notesOf = async (
   env: Env,
   space: Space,
   app: App,
 ): Promise<string> => {
-  // `read` rather than has-then-get: most apps have no AGENTS.md, and this
-  // runs once per app on every call at the door.
-  let bytes = await r2Blobs(env.BLOBS).read(
-    `${space.slug}/${app.slug}/${AGENTS}`,
+  let blobs = r2Blobs(env.BLOBS)
+  // Both names at once, not one and then the other: this runs per app on
+  // every call at the door, and most apps have notes under NEITHER name — so
+  // asking in turn would put a second round trip on the common case. `read`
+  // rather than has-then-get for the same reason.
+  let both = await Promise.all(
+    NAMES.map((name) => blobs.read(`${space.slug}/${app.slug}/${name}`)),
   )
+  let bytes = both.find(Boolean)
   if (!bytes) return ''
   // The write refuses anything over CAP, so this slice only ever catches a
   // file written before the ceiling existed.
@@ -145,7 +165,7 @@ export let entries = async (
     (reach ?? await reachable(ctx)).map(async ({ space, app }) => ({
       space,
       app,
-      said: await agentsOf(ctx.env, space, app),
+      said: await notesOf(ctx.env, space, app),
       kinds: await kindsOf(ctx.env, space, app),
       // The commands the door already listed, picked out by the app they are
       // of — `<space>/<app>`, which is the same word `command` takes.
@@ -155,23 +175,30 @@ export let entries = async (
     })),
   )
 
-// One app's heading and the line under it, then whatever its person wrote.
-let entry = (e: Entry): string =>
+/** The line an app with notes gets on the roster, in place of them. */
+export let HAS_NOTES = 'Keeps notes of its own, which about hands over.'
+
+// One app's heading and the line under it — then either its notes, or a line
+// saying it has some. The roster is the half that rides on the instructions,
+// so what an app's person wrote appears only where something asked for it.
+let entry = (e: Entry, notes: boolean): string =>
   `## ${e.space.slug}/${e.app.slug}\n` +
   `${url(e.space, e.app)} — ${e.app.title || e.app.slug}, ${holds(e.kinds)}.` +
   `${e.commands.length ? ` Commands: ${e.commands.join(', ')}.` : ''}` +
-  `${e.said ? `\n\n${e.said}` : ''}`
+  `${e.said ? notes ? `\n\n${e.said}` : ` ${HAS_NOTES}` : ''}`
 
 let OPENING = `# The apps here
 
-Every app you can reach, what it holds, and the standing instructions its
-person left beside it. When an ask belongs in one of these — another recipe,
-another chore, another entry — put it there rather than making a second app
-for it, and follow whatever the app says below.
+Every app you can reach, its address and what it holds. An ask that belongs in
+one of these — another recipe, another chore, another entry — has somewhere to
+go already, rather than a second app for the same thing.
 
 An app's own verbs are COMMANDS, not tools of this list: run one with the
 command tool — the app, the command's name, and its arguments as args — and
-the commands tool says which there are and what each one takes.`
+the commands tool says which there are and what each one takes.
+
+Some apps keep notes of their own about how they are kept: the about tool
+returns them, along with anything the person has said here.`
 
 // What the person has SAID, one section per space they belong to (memory.ts,
 // T-34474). It rides here rather than beside it because it is the same
@@ -189,46 +216,50 @@ let heard = async (ctx: Ctx): Promise<string[]> => {
 }
 
 /**
- * The passage itself, and the apps it was made of.
+ * The passage, in its two lengths, and the apps it was made of.
  *
- * It is said fresh on every call at the door rather than named by a mark the
- * client compares (T-34541): the roster it used to fold into moves only when
- * the platform is released now, and an app made this morning is news the
- * INSTRUCTIONS carry at the next connection and `about` says any time.
+ * `text` is the ROSTER — every app, its address, what it holds, its commands
+ * — and it is what rides on the `initialize` instructions, where an app made
+ * this morning has to be named or it is made a second time this afternoon.
+ * `notes` is that same roster with what each app's person wrote under it and
+ * what they have said in this space, and it is what `about` hands over when
+ * something asks. Both are said fresh on every call at the door rather than
+ * named by a mark the client compares (T-34541).
  *
- * A person with no apps and nothing said gets no passage: there is nothing to
- * say, and saying it would put a heading with nothing under it at the top of
- * every agent's context.
+ * A person with no apps gets no roster: there is nothing to say, and saying it
+ * would put a heading with nothing under it at the top of every agent's
+ * context.
  */
 export let standing = async (
   ctx: Ctx,
   reach?: { space: Space; app: App }[],
   commands?: { at: string; name: string }[],
-): Promise<{ text: string; apps: Entry[] }> => {
+): Promise<{ text: string; notes: string; apps: Entry[] }> => {
   let apps = await entries(ctx, reach, commands)
   return {
-    text: [passage(apps), ...await heard(ctx)].filter(Boolean).join('\n\n'),
+    text: passage(apps),
+    notes: [passage(apps, true), ...await heard(ctx)].filter(Boolean)
+      .join('\n\n'),
     apps,
   }
 }
 
 /** The apps as one passage, or '' where there are none. */
-export let passage = (apps: Entry[]): string =>
-  apps.length ? `${OPENING}\n\n${apps.map(entry).join('\n\n')}` : ''
-
-// The line a person reads on the menu: the file's own first line, with the
-// heading marks off it, since an AGENTS.md all but always opens with one.
-let first = (said: string) =>
-  said.split('\n').map((l) => l.replace(/^#+\s*/, '').trim())
-    .find((l) => l.length > 0) ?? ''
+export let passage = (apps: Entry[], notes = false): string =>
+  apps.length
+    ? `${OPENING}\n\n${apps.map((e) => entry(e, notes)).join('\n\n')}`
+    : ''
 
 /**
- * The prompts a person picks by name (mcp.ts): one per app that left standing
- * instructions, so somebody can say "the recipes rules" out loud without
- * asking an agent to go and read a file.
+ * The prompts a person picks by name (mcp.ts): one per app that keeps notes,
+ * so somebody can say "the recipes notes" out loud without asking an agent to
+ * go and read a file. The notes are the prompt's TEXT, which is fetched by
+ * name; the listing says only that the app has some, because a prompt list is
+ * read by the same classifier the tool list is (T-34632) and somebody else's
+ * words are not ours to put in front of it.
  *
  * The name is the app's slug — host-safe, since a slug is `[a-z0-9-]` and the
- * door's own prompts are letters and hyphens — and `<app>__agents` where that
+ * door's own prompts are letters and hyphens — and `<app>__notes` where that
  * word is
  * already spoken for; an app slug carries no underscore, so the first `__` is
  * the seam and nothing else can be. An app that can claim neither is left off
@@ -244,14 +275,14 @@ export let prompted = (apps: Entry[], taken: string[]) => {
   }[] = []
   for (let e of apps) {
     if (!e.said) continue
-    let name = [e.app.slug, `${e.app.slug}__agents`].find((n) => !held.has(n))
+    let name = [e.app.slug, `${e.app.slug}__notes`].find((n) => !held.has(n))
     if (!name) continue
     held.add(name)
+    let title = e.app.title || e.app.slug
     out.push({
       name,
-      title: `${e.app.title || e.app.slug}: standing instructions`,
-      description: first(e.said) ||
-        `What ${e.app.title || e.app.slug} asks of an agent working on it.`,
+      title: `${title}: notes`,
+      description: `The notes kept beside the ${title} app.`,
       text: e.said,
     })
   }

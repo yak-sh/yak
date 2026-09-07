@@ -262,12 +262,11 @@ let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
       }],
     }))
   }
-  // And one per app that left standing instructions beside it (standing.ts,
-  // T-34425): the same words `initialize` already handed the model, offered
-  // to the PERSON by the app's own name so they can say "the recipes rules"
-  // and have them read back. It carries no arguments — the file is the whole
-  // message — and `prompts` is already a declared capability, since the four
-  // above registered it.
+  // And one per app that keeps notes beside it (standing.ts, T-34425),
+  // offered to the PERSON by the app's own name so they can say "the recipes
+  // notes" and have them read back. It carries no arguments — the file is the
+  // whole message — and `prompts` is already a declared capability, since the
+  // four above registered it.
   for (let p of prompted(apps, PROMPTS.map((one) => one.name))) {
     server.registerPrompt(p.name, {
       title: p.title,
@@ -367,16 +366,18 @@ let door = async (ctx: Ctx, session: string) => {
   // arguments when an agent asks.
   let own = await listCommands(ctx)
   // What the apps in reach say about themselves (standing.ts, T-34425): every
-  // one of them named, with what it holds, its own commands and whatever
-  // AGENTS.md its person left beside it. It rides on the INSTRUCTIONS, which
-  // is what a model reads before it reads anything else, so an app already
-  // made is found rather than made a second time and a standing rule is
-  // followed without anybody quoting it.
+  // one of them named, with what it holds and its own commands. That ROSTER
+  // rides on the INSTRUCTIONS, which is what a model reads before it reads
+  // anything else, so an app already made is found rather than made a second
+  // time. What an app's person WROTE beside it, and what they have said in
+  // this space, is `about`'s answer instead (T-34632): a host classifies the
+  // instructions and the tool list, and somebody else's prose there reads as
+  // an attempt to steer the model rather than as their own notes.
   //
   // The reach and the commands are handed over rather than read again: this
   // runs on every call at the door, and both were just paid for.
   let apps = await standing(ctx, reach, own)
-  ctx.standing = apps.text
+  ctx.standing = apps.notes
   // The graph, and how a column of it reads and writes: a reference answers
   // human, and a word two of the caller's spaces spell differently is typed
   // nowhere (agent.ts `reading`). The schemas in the tool list are derived

@@ -189,7 +189,7 @@ letter go out. Nothing about the app changes between test and live — the key i
 the platform's, and which mode it is in is the platform's business.
 
 A whole shop written out — storefront with sizes and a cart, seeded products,
-the seller's order list, `AGENTS.md`, no `vocab.json` at all and not one line of
+the seller's order list, `NOTES.md`, no `vocab.json` at all and not one line of
 Stripe code — is in this repository at `workers/yak/examples/shop/`. Copy it and
 change the shirts.
 
