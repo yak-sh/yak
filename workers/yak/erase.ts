@@ -73,6 +73,7 @@ import {
 } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { drop } from './dispatch.ts'
+import { deleteBindings } from './bindings.ts'
 import { reachable, release } from './domains.ts'
 import { bound, type Env } from './env.ts'
 import { PLATFORM } from './route.ts'
@@ -277,10 +278,11 @@ export let emptied = async (
   app: App,
   who: Who,
 ) => {
-  let keys = await swept(env, under(space, app))
   // The app's own code, which is not in the bucket: a script left in the
   // dispatch namespace would still answer at an address nothing stands at.
   if (env.CF_WORKERS_TOKEN) await drop(env, storeName(space, app))
+  await deleteBindings(env, app)
+  let keys = await swept(env, under(space, app))
   // The store is named for where the app was born (directory.ts storeName),
   // so emptying it is what keeps a later app at the same address from waking
   // up in this one's graph.

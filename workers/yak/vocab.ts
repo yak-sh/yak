@@ -469,6 +469,19 @@ export let platformDoc: VocabDoc = {
         store: unique(text),
       },
     },
+    // Storage survives config edits and renames. Only the kernel may record
+    // account resource ids, so an app cannot claim another tenant's data.
+    binding: {
+      type: 'object',
+      unique: [['app', 'name', 'type'], ['type', 'resource']],
+      properties: {
+        app: owned(ref('cascade')),
+        name: owned(text),
+        type: owned({ enum: ['d1', 'r2_bucket', 'vectorize'] }),
+        id: owned(text),
+        resource: owned(text),
+      },
+    },
     // Every address an app has answered at, oldest first: `slug` the one it was
     // born at, `slugs` each one a rename left behind. ADDRESS HISTORY and
     // nothing else — the handle it is stored under is `app.store` above, which

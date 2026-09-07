@@ -51,6 +51,7 @@ import type { Who } from './session.ts'
 import { storeOf } from './door.ts'
 import { failed, noted, refusal, serving } from './unseen.ts'
 import { KERNEL, metaOf } from './meta.ts'
+import { type Bound, type Config, metadata } from './wrangler_app.ts'
 
 // The namespace the account holds (`wrangler dispatch-namespace create
 // yak-apps`), named here as well as in wrangler.toml because the upload
@@ -110,6 +111,7 @@ export let WORKER = 'worker.js'
 // It is deliberately tiny and deliberately first: it is the only thing
 // between the app's code and the grant.
 export let SHIM = `import app from './${WORKER}'
+export * from './${WORKER}'
 
 let GRANT = '${GRANT}'
 let SELF = '${SELF}'
@@ -136,10 +138,12 @@ export default {
     })
     let api = '/' + slug + '/api/'
     return app.fetch(new Request(req, { headers }), {
-      ...env,
       STORE: door(api, grant),
       FILES: door('/' + slug + '/', grant),
       APP: door(api, self),
+      // An explicitly requested binding keeps its name, even when it names
+      // one of the convenience doors supplied to apps without that binding.
+      ...env,
     }, ctx)
   },
 }
@@ -554,11 +558,12 @@ let resolved = (from: string, spec: string) => {
  */
 export let carried = async (
   read: (path: string) => Promise<Uint8Array<ArrayBuffer> | null>,
+  main = 'entry.js',
 ): Promise<Module[]> => {
   let out: Module[] = []
   // `entry.js` is OURS: an app file by that name is never walked to and never
   // replaces the shim.
-  let seen = new Set(['entry.js'])
+  let seen = new Set([main])
   let walk = async (name: string) => {
     if (seen.has(name)) return
     seen.add(name)
@@ -602,18 +607,36 @@ export let carried = async (
 // is read, and none of them is what a rollback restores FROM: putting an app
 // back re-uploads the worker.js its version pinned, so it never depends on
 // Cloudflare having kept anything.
-export let upload = async (env: Env, store: string, modules: Module[]) => {
+export let upload = async (
+  env: Env,
+  store: string,
+  modules: Module[],
+  config: Config = {},
+  bound: Bound[] = [],
+) => {
+  let names = new Set(['metadata', config.main ?? 'entry.js'])
+  for (let { name } of modules) {
+    if (names.has(name)) {
+      throw new Error(
+        `refused module ${name}: the upload needs distinct module names`,
+      )
+    }
+    names.add(name)
+  }
+  let tag: string | undefined
+  if (config.migrations?.length) {
+    let r = await sent(env, `/${scriptName(store)}`, { method: 'GET' })
+    if (r.status == 404) await r.body?.cancel()
+    else {
+      let details = await answered(r) as { script?: { migration_tag?: string } }
+      tag = details?.script?.migration_tag
+    }
+  }
   let body = new FormData()
   body.append(
     'metadata',
     new Blob([
-      JSON.stringify({
-        main_module: 'entry.js',
-        compatibility_date: '2025-05-08',
-        bindings: [{ type: 'service', name: 'KERNEL', service: 'yak' }],
-        keep_bindings: ['secret_text'],
-        limits: { cpu_ms: 50, subrequests: 50 },
-      }),
+      JSON.stringify(metadata(config, bound, tag)),
     ], { type: 'application/json' }),
   )
   // Each part is named by the module name that imports it, and typed by what
@@ -624,7 +647,7 @@ export let upload = async (env: Env, store: string, modules: Module[]) => {
     bytes: string | Uint8Array<ArrayBuffer>,
     type: string,
   ) => body.append(name, new Blob([bytes], { type }), name)
-  part('entry.js', SHIM, ESM)
+  part(config.main ?? 'entry.js', SHIM, ESM)
   for (let m of modules) part(m.name, m.bytes, moduleType(m.name))
   return named(
     await answered(

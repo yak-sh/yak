@@ -328,6 +328,8 @@ export let manifesting = (app: App, at: string, theme: string | null) => ({
 // the same file.
 let MANIFEST = new Set([
   '/worker.js',
+  '/wrangler.jsonc',
+  '/wrangler.json',
   // Either spelling of a declaration (tools.ts `spelled`, M-34605): a `.yml`
   // is the app's INSIDE exactly as much as the `.json` is.
   '/vocab.json',

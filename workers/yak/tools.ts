@@ -33,6 +33,7 @@
 // answered at all. A deploy in v1 is a version bump, since an
 // app's files serve live from its blob store — and the version it bumps to is
 // kept, files and all, so app_rollback can put it back.
+import { deployWorker } from './deploy_worker.ts'
 import type { Blobs } from '../../src/store/blobs.ts'
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { parseTools, TOOLS_EXAMPLE, viewsOf } from '../../src/store/tools.ts'
@@ -97,17 +98,7 @@ import {
   untrash,
   untrashSpace,
 } from './erase.ts'
-import {
-  carried,
-  drop,
-  dropSecret,
-  NEEDS_TOKEN,
-  SECRET_NAME,
-  secrets,
-  setSecret,
-  upload,
-  WORKER,
-} from './dispatch.ts'
+import { dropSecret, SECRET_NAME, secrets, setSecret } from './dispatch.ts'
 import {
   apex,
   customOf,
@@ -903,30 +894,14 @@ let released = async (
   // grew is graph_apply's schema, not its name. The roster is the same for
   // everybody and moves only when the platform is released (stream.ts).
   if (tooled.views) await viewsMoved(ctx, space)
-  // And the app's OWN code, if it wrote any (dispatch.ts, T-32778): the
-  // worker.js among its files becomes its script in the dispatch namespace,
-  // and an app that deleted its worker.js loses the script it had, so what
-  // serves is what the files say. Without the platform's Cloudflare token
-  // there is nothing to upload with — the files are already live, so the
-  // release stands and says what is missing rather than failing (T-32781).
-  //
-  // What goes up is worker.js AND everything it imports (`carried`, T-34263):
-  // a worker compiled to wasm is a `.wasm` beside the `.js` that instantiates
-  // it, and a script missing a module does not link at all.
-  let workerKey = fileKey(space, app, WORKER)
-  let ran = ''
-  let worker = ''
-  if (!(await blobs.has(workerKey))) {
-    if (ctx.env.CF_WORKERS_TOKEN) await drop(ctx.env, storeName(space, app))
-  } else if (!ctx.env.CF_WORKERS_TOKEN) ran = `\n${NEEDS_TOKEN}`
-  else {
-    worker = await upload(
-      ctx.env,
-      storeName(space, app),
-      await carried((path) => blobs.read(fileKey(space, app, path))),
-    )
-    ran = '\nworker: worker.js answers first; a 404 from it serves the files'
-  }
+  let deployed = await deployWorker(
+    ctx.env,
+    app,
+    storeName(space, app),
+    (path) => blobs.read(fileKey(space, app, path)),
+  )
+  let worker = deployed.worker
+  let ran = deployed.lines.map((line) => `\n${line}`).join('')
   // What this release IS, kept so one word puts it back (T-32886): the files
   // as a manifest of path to the name of their bytes, those bytes pinned
   // beside them, and Cloudflare's name for the script this uploaded. The
