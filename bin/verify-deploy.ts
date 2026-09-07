@@ -16,6 +16,7 @@
 // (preauth.ts PUBLIC). Nothing here writes.
 //
 //   deno task verify:yak                         # doors, /mcp, 3 min of tail
+//   deno task verify:yak --staging               # yaks.fyi and yak-staging
 //   deno run -A bin/verify-deploy.ts --tail 0    # doors and /mcp, no credential
 //
 // Exit 0 means the deploy is good; anything else is the list of what broke, one
@@ -132,11 +133,17 @@ export let WRANGLER = [
   'workers/yak/wrangler.ts',
 ]
 
-export let tail = async (secs: number) => {
+export let tail = async (secs: number, staging = false) => {
   let faults: string[] = []
   let events = 0
   let child = new Deno.Command(Deno.execPath(), {
-    args: [...WRANGLER, 'tail', '--format', 'json'],
+    args: [
+      ...WRANGLER,
+      'tail',
+      '--format',
+      'json',
+      ...(staging ? ['--env', 'staging'] : []),
+    ],
     stdout: 'piped',
     stderr: 'null',
   }).spawn()
@@ -158,14 +165,18 @@ export let tail = async (secs: number) => {
   return [events, faults] as const
 }
 
-export let main = async (args = Deno.args) => {
+export let main = async (args = Deno.args, get = fetch, follow = tail) => {
+  let staging = args.includes('--staging')
+  let site = staging ? 'https://yaks.fyi' : SITE
   let secs = args.includes('--tail') ? +args[args.indexOf('--tail') + 1] : 180
-  let broke = await verify()
+  let broke = await verify(get, site)
   for (let line of broke) console.error(`FAIL ${line}`)
-  if (!broke.length) console.log(`ok  ${DOORS.length} doors, /mcp lists about`)
+  if (!broke.length) {
+    console.log(`ok  ${site}: ${DOORS.length} doors, /mcp lists about`)
+  }
   if (broke.length || !secs) return broke.length ? 1 : 0
 
-  let [events, faults] = await tail(secs)
+  let [events, faults] = await follow(secs, staging)
   for (let line of faults) console.error(`FAIL ${line}`)
   console.log(`ok  ${secs}s tail: ${events} events, ${faults.length} faults`)
   return faults.length ? 1 : 0

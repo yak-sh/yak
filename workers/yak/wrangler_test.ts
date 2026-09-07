@@ -9,10 +9,24 @@
 // on its first request (T-34390 added @yaks/key and @yaks/alias that way).
 import { assertEquals } from '@std/assert'
 import { parse } from '@std/toml'
-import { stale } from './wrangler.ts'
+import { command, stale } from './wrangler.ts'
 
 let read = (path: string) =>
   Deno.readTextFileSync(new URL(path, import.meta.url))
+
+Deno.test('wrangler: staging keeps deploy annotations with either flag position', () => {
+  for (
+    let args of [
+      ['deploy'],
+      ['deploy', '--env', 'staging'],
+      ['--env', 'staging', 'deploy'],
+      ['--env=staging', 'deploy'],
+      ['-e', 'staging', 'deploy'],
+    ]
+  ) assertEquals(command(args), 'deploy')
+  assertEquals(command(['--env', 'staging', 'dev']), 'dev')
+  assertEquals(command(['secret', 'put', 'deploy']), 'secret')
+})
 
 Deno.test('every @yaks/* the checker knows, the bundler resolves', () => {
   let checked = (JSON.parse(read('./workers.json')) as {

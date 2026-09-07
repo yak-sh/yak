@@ -1,5 +1,6 @@
 [
   { "app": "jeff/recipes" },
   { "app": "yourname/bookclub" },
-  { "app": "mom/recipe-box", "login": true }
+  { "app": "mom/recipe-box", "login": true },
+  { "apex": "yaks.fyi", "page": false }
 ]

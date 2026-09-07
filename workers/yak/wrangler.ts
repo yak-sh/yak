@@ -1,6 +1,7 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-run=npm,npx,git
 // The one door to this Worker's wrangler: `deno task deploy:yak`,
-// `deno task dev:yak` and the probe (probe.ts) all come through here, so the
+// `deno task dev:yak`, their `-staging` variants and the probe (probe.ts) all
+// come through here, so the
 // pinned version is spelled once and `node_modules` is current before wrangler
 // reads it.
 //
@@ -85,10 +86,19 @@ export let ready = async (root = dir, timeout = 600_000) => {
   }
 }
 
+// Wrangler accepts --env on either side of the command. Both spellings need
+// the same commit annotation, so production and staging identify one build.
+export let command = (args: string[]) => {
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] == '--env' || args[i] == '-e') i++
+    else if (!args[i].startsWith('--env=')) return args[i]
+  }
+}
+
 if (import.meta.main) {
   await ready()
   let argv = [...Deno.args]
-  if (argv[0] === 'deploy') {
+  if (command(argv) === 'deploy') {
     // Versions carry their commit so `yak deploys` need not infer it by time.
     let commit = await new Deno.Command('git', {
       args: ['log', '-1', '--format=%H %s'],

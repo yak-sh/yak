@@ -1,6 +1,7 @@
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import {
   advance,
+  check,
   command,
   envValue,
   page,
@@ -18,11 +19,13 @@ Deno.test('watch: app list resolves each space hostname and explicit login polic
       app: 'jeff/recipes',
       url: 'https://jeff.yaks.app/recipes/',
       login: false,
+      page: true,
     },
     {
       app: 'mom/recipe-box',
       url: 'https://mom.yaks.app/recipe-box/',
       login: true,
+      page: true,
     },
   ])
   for (
@@ -34,6 +37,12 @@ Deno.test('watch: app list resolves each space hostname and explicit login polic
       '[{"app":"jeff/recipes","login":"yes"}]',
       '[{"app":"jeff/recipes","login":null}]',
       '[{"app":"jeff/recipes","typo":true}]',
+      '[{"app":"jeff/recipes","page":"no"}]',
+      '[{"app":"jeff/recipes","apex":"yaks.fyi"}]',
+      '[{"apex":"yaks.fyi","login":true}]',
+      '[{"apex":"https://yaks.fyi"}]',
+      '[{"apex":"yaks.fyi/path"}]',
+      '[{"apex":"yaks.fyi"},{"apex":"yaks.fyi"}]',
       '[{"app":"jeff/recipes"},{"app":"jeff/recipes"}]',
       ...[
         'jeff',
@@ -48,15 +57,22 @@ Deno.test('watch: app list resolves each space hostname and explicit login polic
   ) assertThrows(() => probes(bad), Error)
 })
 
-Deno.test('watch: checked-in probes name the three live apps', async () => {
+Deno.test('watch: checked-in probes page for production and only report staging', async () => {
   let text = await Deno.readTextFile(
     new URL('../workers/yak/watch.json', import.meta.url),
   )
-  assertEquals(probes(text).map((p) => p.app), [
+  let list = probes(text)
+  assertEquals(list.filter((p) => p.page).map((p) => p.app), [
     'jeff/recipes',
     'yourname/bookclub',
     'mom/recipe-box',
   ])
+  assertEquals(list.filter((p) => !p.page), [{
+    apex: 'yaks.fyi',
+    url: 'https://yaks.fyi/',
+    login: false,
+    page: false,
+  }])
 })
 
 let reply = (status: number, location?: string) =>
@@ -70,6 +86,39 @@ let reply = (status: number, location?: string) =>
       }),
     )
   }) as typeof fetch
+
+Deno.test('watch: staging failures report without opening or contaminating a page', async () => {
+  let list = probes('[{"app":"jeff/recipes"},{"apex":"yaks.fyi","page":false}]')
+  let run = () => Promise.resolve({ ok: true, text: '' })
+  for (let production of [200, 503]) {
+    let get = ((url, init) =>
+      reply(String(url).includes('yaks.fyi') ? 503 : production)(
+        url,
+        init,
+      )) as typeof fetch
+    let result = await check(list, run, get)
+    assertEquals(result.warnings, ['https://yaks.fyi/: HTTP 503, want 200'])
+    assertEquals(
+      result.faults,
+      production == 200
+        ? []
+        : ['https://jeff.yaks.app/recipes/: HTTP 503, want 200'],
+    )
+    let letters: string[] = []
+    let state = await report(advance(null, result.faults, 100), (body) => {
+      letters.push(body)
+      return Promise.resolve()
+    })
+    assertEquals(state.paged, production != 200)
+    assertEquals(letters.length, production == 200 ? 0 : 1)
+    assertEquals(
+      letters.some((body) =>
+        body.includes('yaks.fyi')
+      ),
+      false,
+    )
+  }
+})
 
 Deno.test('watch: only the private app accepts its exact login redirect', async () => {
   let login = `https://yaks.app/login?return=${

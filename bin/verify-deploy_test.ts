@@ -3,7 +3,7 @@
 // wrangler subprocess are the impure edges and are not exercised here — the
 // point of the fake is that a check can be wrong without a deploy being wrong.
 import { assertEquals } from '@std/assert'
-import { connector, DOORS, fault, verify } from './verify-deploy.ts'
+import { connector, DOORS, fault, main, verify } from './verify-deploy.ts'
 
 let SITE = 'https://yaks.app'
 
@@ -35,6 +35,35 @@ let healthy = () => {
 
 Deno.test('verify: public pages, connect sign-in, and about listed is silence', async () => {
   assertEquals(await verify(fake(healthy()), SITE), [])
+})
+
+Deno.test('verify: staging probes its own doors and tails its own worker', async () => {
+  for (let staging of [false, true]) {
+    let seen: string[] = []
+    let get = ((url, init) => {
+      seen.push(new URL(String(url)).origin)
+      return fake(healthy())(url, init)
+    }) as typeof fetch
+    let tailed = false
+    let follow = (secs: number, environment = false) => {
+      assertEquals([secs, environment], [1, staging])
+      tailed = true
+      return Promise.resolve([3, [] as string[]] as const)
+    }
+    assertEquals(
+      await main(
+        staging ? ['--staging', '--tail', '1'] : ['--tail', '1'],
+        get,
+        follow,
+      ),
+      0,
+    )
+    assertEquals(tailed, true)
+    assertEquals(
+      seen,
+      Array(DOORS.length + 1).fill(staging ? 'https://yaks.fyi' : SITE),
+    )
+  }
 })
 
 Deno.test('verify: a door that moved names itself and its status', async () => {

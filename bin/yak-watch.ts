@@ -4,34 +4,70 @@
 import { FROM, REPLY_TO } from '../workers/yak/mail-config.ts'
 import { PLATFORM, SLUG } from '../workers/yak/route.ts'
 
-export type Probe = { app: string; url: string; login: boolean }
+export type Probe = {
+  app?: string
+  apex?: string
+  url: string
+  login: boolean
+  page: boolean
+}
 
 export let probes = (text: string): Probe[] => {
   let rows: unknown = JSON.parse(text)
   if (!Array.isArray(rows) || !rows.length) {
-    throw new Error('watch.json must contain a nonempty list of apps')
+    throw new Error('watch.json must contain a nonempty list of probes')
   }
   let seen = new Set<string>()
   return rows.map((row) => {
     if (
-      !row || typeof row != 'object' || typeof row.app != 'string' ||
-      Object.keys(row).some((key) => !['app', 'login'].includes(key)) ||
-      (row.login !== undefined && typeof row.login != 'boolean')
-    ) throw new Error('watch.json entries need app and optional login boolean')
-    let [space, app, extra] = row.app.split('/')
-    if (
-      !space || !app || extra != undefined || !SLUG.test(space) ||
-      !SLUG.test(app)
+      !row || typeof row != 'object' ||
+      Object.keys(row).some((key) =>
+        !['app', 'apex', 'login', 'page'].includes(key)
+      ) ||
+      (row.login !== undefined && typeof row.login != 'boolean') ||
+      (row.page !== undefined && typeof row.page != 'boolean')
     ) {
-      throw new Error(`invalid watched app: ${row.app}`)
+      throw new Error(
+        'watch.json entries need app or apex and optional login/page booleans',
+      )
     }
-    if (seen.has(row.app)) throw new Error(`duplicate watched app: ${row.app}`)
-    seen.add(row.app)
-    return {
-      app: row.app,
-      url: `https://${space}.${PLATFORM}/${app}/`,
-      login: row.login ?? false,
+    let p: Probe
+    if (typeof row.app == 'string' && row.apex === undefined) {
+      let [space, app, extra] = row.app.split('/')
+      if (
+        !space || !app || extra != undefined || !SLUG.test(space) ||
+        !SLUG.test(app)
+      ) {
+        throw new Error(`invalid watched app: ${row.app}`)
+      }
+      p = {
+        app: row.app,
+        url: `https://${space}.${PLATFORM}/${app}/`,
+        login: row.login ?? false,
+        page: row.page ?? true,
+      }
+    } else if (
+      typeof row.apex == 'string' && row.app === undefined &&
+      row.login === undefined
+    ) {
+      let labels: string[] = row.apex.split('.')
+      if (labels.length < 2 || !labels.every((label) => SLUG.test(label))) {
+        throw new Error(`invalid watched apex: ${row.apex}`)
+      }
+      p = {
+        apex: row.apex,
+        url: `https://${row.apex}/`,
+        login: false,
+        page: row.page ?? true,
+      }
+    } else {
+      throw new Error(
+        'watch.json entries need one app or apex; login applies only to apps',
+      )
     }
+    if (seen.has(p.url)) throw new Error(`duplicate watched probe: ${p.url}`)
+    seen.add(p.url)
+    return p
   })
 }
 
@@ -88,15 +124,17 @@ export let command = async (args: string[], ms = 30_000) => {
   }
 }
 
-export let check = async (list: Probe[]) => {
+export let check = async (list: Probe[], run = command, get = fetch) => {
   let [verified, apps] = await Promise.all([
-    command(['run', '--allow-net', 'bin/verify-deploy.ts', '--tail', '0']),
-    Promise.all(list.map((p) => probe(p))),
+    run(['run', '--allow-net', 'bin/verify-deploy.ts', '--tail', '0']),
+    Promise.all(list.map((p) => probe(p, get))),
   ])
-  return [
-    ...(verified.ok ? [] : [verified.text || 'verify-deploy failed']),
-    ...apps.filter((fault): fault is string => fault != null),
-  ]
+  let faults = verified.ok ? [] : [verified.text || 'verify-deploy failed']
+  let warnings: string[] = []
+  for (let [i, fault] of apps.entries()) {
+    if (fault) (list[i].page ? faults : warnings).push(fault)
+  }
+  return { faults, warnings }
 }
 
 export type State = {
@@ -247,11 +285,12 @@ export let main = async (args = Deno.args) => {
     ),
   )
   if (args.includes('--probe')) {
-    let faults = await check(list)
+    let { faults, warnings } = await check(list)
+    let all = [...faults, ...warnings]
     console.log(
-      faults.length ? faults.join('\n') : 'yaks.app: all live checks passed',
+      all.length ? all.join('\n') : 'yak-watch: all live checks passed',
     )
-    return faults.length ? 1 : 0
+    return all.length ? 1 : 0
   }
   let cfg = await mailConfig()
   let path = Deno.env.get('YAK_WATCH_STATE') ??
@@ -272,7 +311,11 @@ export let main = async (args = Deno.args) => {
   } catch (e) {
     if (!(e instanceof Deno.errors.NotFound)) throw e
   }
-  let state = advance(old, await check(list), Date.now())
+  let { faults, warnings } = await check(list)
+  // Disposable staging can fail without opening, extending or paging an incident.
+  // Cron retains these warnings in its log; --probe also reports a failing exit.
+  for (let warning of warnings) console.warn(`WARN (no page) ${warning}`)
+  let state = advance(old, faults, Date.now())
   await save(path, state)
   state = await report(state, (body) => page(cfg, body))
   await save(path, state)

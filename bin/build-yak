@@ -9,7 +9,9 @@
 # yak-sh/yak, and on a push to main it clones, runs this, then runs
 # this file's deploy mode with a token it mints for itself — nothing is minted by
 # hand and no secret lives in the repo or on the Actions runner. A non-zero
-# exit here deploys NOTHING. The dashboard settings are written down in
+# exit in build mode deploys nothing. Deploy mode preserves a successful
+# production deploy if staging fails, and exits nonzero so Builds reports it.
+# The dashboard settings are written down in
 # workers/yak/README.md.
 #
 # The image is Ubuntu 24.04 with node and npm; Deno is NOT on it, so the first
@@ -51,7 +53,11 @@ cd "$root"
 case "${1:-}" in
   deploy)
     shift
-    exec deno task deploy:yak "$@"
+    deno task deploy:yak "$@"
+    # Builds pins these to its connected production Worker. Leaving them set
+    # can override staging's name or reject its distinct script tag.
+    unset WRANGLER_CI_OVERRIDE_NAME WRANGLER_CI_MATCH_TAG
+    exec deno task deploy:yak-staging "$@"
     ;;
   '') ;;
   *) echo "usage: bin/build-yak [deploy]" >&2; exit 2 ;;
