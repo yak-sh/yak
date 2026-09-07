@@ -535,5 +535,5 @@ entrypoint = "Files"
 
 [[env.staging.kv_namespaces]]
 binding = "OAUTH_KV"
-# Paste the id printed by bin/yak-staging-init before the first deploy.
-id = "STAGING_OAUTH_KV_ID"
+# Made by bin/yak-staging-init.
+id = "667f6be792cb4941b4faace195e6c726"

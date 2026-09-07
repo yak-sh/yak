@@ -46,7 +46,9 @@ let wrapper = new URL('../workers/yak/wrangler.ts', import.meta.url).pathname
 let decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes).trim()
 
 export let wrangler: Run = async (args) => {
-  let out = await new Deno.Command(Deno.execPath(), {
+  // By name, not Deno.execPath(): `--allow-run=deno` admits the PATH entry,
+  // and on a brew install the exec path is the Cellar file behind a symlink.
+  let out = await new Deno.Command('deno', {
     args: [
       'run',
       '--allow-read',
