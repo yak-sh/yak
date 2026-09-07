@@ -153,6 +153,7 @@ import {
   keyOf,
   lines,
   MARK,
+  MARKS,
   rebuild,
   recut,
   Refused as Unreconciled,
@@ -381,21 +382,33 @@ export class Store {
   // (T-33809). Nothing above the storage is built while this is true — planting
   // the new schema over the old tables is exactly what must not happen — so the
   // first request runs the pass and everything is raised after it.
-  #pending: boolean
+  #pending = false
   // Whether this object is behind the LATEST migration (migrate.ts `MARKS`):
   // one that never carried, or one that carried before a later pass existed.
   // Decided ONCE, here, rather than read off the storage on every request.
-  #behind: boolean
+  #behind = false
   #passing: Promise<void> | null = null
   // Why the pass refused, when it did. The rows are the old ones, untouched.
   #refused: string | null = null
+  #failure: Unreconciled | null = null
+  #reporting: Promise<void> | null = null
 
   constructor(ctx: State, bind: Bindings = {}) {
     this.#ctx = ctx
     this.#bind = bind
+    try {
+      this.#start()
+    } catch (e) {
+      this.#failed(e, 'schema')
+    }
+  }
+
+  #start() {
+    let ctx = this.#ctx
     ctx.storage.sql.exec(KV)
     this.#pending = !this.#get('migrated') && stale(ctx.storage)
     if (!this.#pending) this.#boot()
+    if (this.#refused) return
     // The passes after the first read and write the NEW schema, so they are
     // asked after the boot — and only of an object that is not already at the
     // LAST marker (migrate.ts `MARKS`), with one question per pass: an object
@@ -413,7 +426,18 @@ export class Store {
   // store has never seen is created, a column a word grew is added — and what
   // changed is which words the graph admits. Nothing is ever dropped or
   // retyped; T-33809 owns moving rows that a changed COLUMN would need.
-  #boot() {
+  #boot(prepare = () => {}) {
+    try {
+      this.#ctx.storage.transactionSync(() => {
+        prepare()
+        this.#build()
+      })
+    } catch (e) {
+      this.#failed(e, 'schema')
+    }
+  }
+
+  #build() {
     let ctx = this.#ctx
     // Which words this object speaks is a question of WHICH OBJECT it is. One
     // store on the platform is the directory (the meta space, T-33814): it
@@ -601,13 +625,21 @@ export class Store {
   // app's access mode are the directory's to say, so a changed mode is
   // followed rather than argued with.
   #learn(req: Request) {
+    try {
+      this.#ctx.storage.transactionSync(() => this.#remember(req))
+    } catch (e) {
+      this.#failed(e, 'schema')
+    }
+  }
+
+  #remember(req: Request) {
     let name = req.headers.get('x-store')
     // The name is what says whether this object is the directory, so learning
     // it for the first time can change which vocabulary it speaks — and the
     // object was constructed before any request could tell it.
     if (name && this.#get('name') != name) {
       this.#put('name', name)
-      this.#boot()
+      this.#build()
     }
     // Which app this object holds is an APP's question. The directory is not
     // one — it speaks the platform's vocabulary, which has no `grant` and no
@@ -621,7 +653,7 @@ export class Store {
     let app = req.headers.get('x-yak-app')
     if (app && this.#get('app') != app) {
       this.#put('app', app)
-      this.#boot()
+      this.#build()
     }
     let said = req.headers.get('x-yak-access')
     if (said && this.#get('access') != said) {
@@ -894,25 +926,11 @@ export class Store {
    * promise is kept so a second caller inside this incarnation waits on the
    * first rather than starting a second pass. */
   #pass(request: Request): Promise<void> {
-    // A throw here can only come from BEFORE the transaction — reading the
-    // object out, or writing it to the bucket — because the transaction takes
-    // itself back and hands over a report instead. So nothing moved, and the
-    // object says why rather than answering 500 to everything that arrives.
-    //
-    // A refusal is NOT retried on the next request, deliberately. Every way
-    // this refuses is a bug in the code or the environment — an unreadable
-    // table (T-34019), an unbound bucket, counts that do not reconcile — and
-    // none of them clear without a deploy, which restarts every object anyway.
-    // Retrying would only re-export the object's whole graph to R2 once per
-    // request, which is a bill and a bucket full of identical dumps for a
-    // refusal that is still going to refuse.
+    // Keep the settled promise: retries would export the same refusal on every
+    // request, and a rejected runtime gate would restart the object.
     let go = () =>
       this.#passes(request).catch((e) => {
-        this.#pending = false
-        this.#behind = false
-        this.#refused = `the migration could not start: ${
-          e instanceof Error ? e.message : String(e)
-        }`
+        this.#failed(e, this.#pending ? MARK : 'schema')
       })
     return this.#passing ??= this.#ctx.blockConcurrencyWhile
       ? this.#ctx.blockConcurrencyWhile(go)
@@ -970,49 +988,39 @@ export class Store {
     ) => Report,
   ) {
     let ctx = this.#ctx
-    let name = request.headers.get('x-store') ?? this.#get('name') ?? ''
-    if (!holds(ctx.storage)) return void this.#put('migrated', mark)
-    let bucket = this.#bind.EXPORTS
-    if (!bucket) {
-      this.#refused = 'no export bucket is bound (EXPORTS): this store will ' +
-        'not move a row without a restore path'
-      return
-    }
-    let dump = rows(ctx.storage)
-    dump.store = name
-    let key = keyOf(name, dump.at)
-    let wrote = `${key}/rows.jsonl`
-    await bucket.put(wrote, lines(dump))
-    let report: Report
+    let name = request.headers.get('x-store') ?? ''
+    let app = request.headers.get('x-yak-app')
+    let wrote = ''
     try {
-      report = ctx.storage.transactionSync(() =>
-        move(ctx.storage, {
-          store: name,
-          app: request.headers.get('x-yak-app'),
-          export: wrote,
-        })
-      )
-    } catch (e) {
-      report = e instanceof Unreconciled ? e.report : {
-        store: name,
-        app: request.headers.get('x-yak-app'),
-        at: dump.at,
-        ok: false,
-        message: e instanceof Error ? e.message : String(e),
-        mark,
-        moved: [],
-        dropped: [],
-        export: wrote,
+      name ||= this.#get('name') ?? ''
+      if (MARKS.indexOf(this.#get('migrated') ?? '') >= MARKS.indexOf(mark)) {
+        return
       }
-    }
-    try {
-      await bucket.put(`${key}/report.json`, JSON.stringify(report, null, 2))
+      if (!holds(ctx.storage)) return void this.#put('migrated', mark)
+      let bucket = this.#bind.EXPORTS
+      if (!bucket) {
+        throw new Error(
+          'no export bucket is bound (EXPORTS): this store will ' +
+            'not move a row without a restore path',
+        )
+      }
+      let dump = rows(ctx.storage)
+      dump.store = name
+      let key = keyOf(name, dump.at)
+      let path = `${key}/rows.jsonl`
+      await bucket.put(path, lines(dump))
+      wrote = path
+      let report = ctx.storage.transactionSync(() => {
+        let report = move(ctx.storage, { store: name, app, export: wrote })
+        if (!report.ok) throw new Unreconciled(report)
+        // A marker and its rows must commit together, including on write failure.
+        this.#put('migrated', mark)
+        return report
+      })
+      await this.#report(report)
     } catch (e) {
-      console.warn('store: migration report', e)
+      this.#failed(e, mark, name, app, wrote)
     }
-    if (report.ok) return void this.#put('migrated', mark)
-    this.#refused = `${report.message ?? 'the migration refused'} — the rows ` +
-      `are unchanged and exported to ${wrote}`
   }
 
   /**
@@ -1029,61 +1037,104 @@ export class Store {
     // the vocabulary this schema is raised from depends on it.
     let name = request.headers.get('x-store') ??
       String(slots?.get('name') ?? '')
-    let app = request.headers.get('x-yak-app')
     for (let w of ['name', 'vocab', 'uses', 'tools'] as Word[]) {
       let held = w == 'name' ? name : slots?.get(w)
       if (held != null && String(held)) this.#put(w, String(held))
     }
-    let bucket = this.#bind.EXPORTS
-    if (!bucket) {
-      this.#pending = false
-      this.#refused = 'no export bucket is bound (EXPORTS): this store will ' +
-        'not move a row without a restore path'
-      return
-    }
-    let dump = taken(ctx.storage, slots)
-    dump.store = name
-    let key = keyOf(name, dump.at)
-    let wrote = `${key}/rows.jsonl`
-    await bucket.put(wrote, lines(dump))
-    let report: Report
-    try {
-      report = ctx.storage.transactionSync(() =>
-        carry(ctx.storage, {
-          store: name,
-          app,
+    await this.#after(
+      request,
+      MARK,
+      () => true,
+      () => taken(ctx.storage, slots),
+      (storage, o) =>
+        carry(storage, {
+          ...o,
           vocab: name == PLATFORM_STORE
             ? platformVocab()
             : appVocab(this.#get('vocab') ?? {}),
-          plant: () => this.#boot(),
+          // A build failure must unwind the whole carry transaction.
+          plant: () => this.#build(),
           grantEid,
-          export: wrote,
-        })
+        }),
+    )
+    this.#pending = false
+  }
+
+  #failed(
+    e: unknown,
+    mark: string,
+    store = '',
+    app: string | null = null,
+    exported = '',
+  ) {
+    let message = 'the migration refused'
+    try {
+      message = (e instanceof Error ? e.message : String(e)) || message
+    } catch { /* a thrown value need not be printable */ }
+    let no = e instanceof Unreconciled ? e : new Unreconciled({
+      store,
+      app,
+      at: new Date().toISOString(),
+      ok: false,
+      message,
+      mark,
+      moved: [],
+      dropped: [],
+      export: exported,
+    })
+    no.report.message ||= message
+    this.#failure = no
+    this.#refused = no.report.message
+    this.#pending = false
+    this.#behind = false
+    // The Tail Worker pages even if the export binding is unavailable.
+    console.error('store: migration refused', this.#refused)
+  }
+
+  async #report(report: Report) {
+    try {
+      await this.#bind.EXPORTS?.put(
+        `${
+          report.export
+            ? report.export.slice(0, -'/rows.jsonl'.length)
+            : keyOf(report.store, report.at)
+        }/report.json`,
+        JSON.stringify(report, null, 2),
       )
     } catch (e) {
-      report = e instanceof Unreconciled ? e.report : {
-        store: name,
-        app,
-        at: dump.at,
-        ok: false,
-        message: e instanceof Error ? e.message : String(e),
-        mark: MARK,
-        moved: [],
-        dropped: [],
-        export: wrote,
+      console.error('store: migration report', e)
+    }
+  }
+
+  async #record(request: Request) {
+    let report = this.#failure!.report
+    report.store ||= request.headers.get('x-store') ?? ''
+    report.app ??= request.headers.get('x-yak-app')
+    let bucket = this.#bind.EXPORTS
+    if (!bucket) return
+    if (!report.export) {
+      try {
+        let storage = this.#ctx.storage
+        let dump = taken(
+          storage,
+          stale(storage) ? storage.kv : {
+            get: (k) => this.#get(k as Word),
+          },
+        )
+        dump.store = report.store
+        dump.at = report.at
+        let wrote = `${keyOf(report.store, report.at)}/rows.jsonl`
+        await bucket.put(wrote, lines(dump))
+        report.export = wrote
+      } catch (e) {
+        console.error('store: migration export', e)
       }
     }
-    // The report is beside the rows it is about, and a bucket that would not
-    // take it does not undo a pass that already landed — the rows are the thing.
-    try {
-      await bucket.put(`${key}/report.json`, JSON.stringify(report, null, 2))
-    } catch (e) {
-      console.warn('store: migration report', e)
+    await this.#report(report)
+    if (report.export) {
+      this.#refused = `${report.message} — the rows are unchanged and ` +
+        `exported to ${report.export}`
     }
-    this.#pending = false
-    if (report.ok) return void this.#put('migrated', MARK)
-    this.#refused = `${report.message ?? 'the migration refused'} — the rows ` +
-      `are unchanged and exported to ${wrote}`
   }
 
   /**
@@ -1102,7 +1153,8 @@ export class Store {
    * answers off the storage rather than off the graph: the meter reads an
    * object's size, and an object in this state still has one.
    */
-  #stalled(request: Request): Response {
+  async #stalled(request: Request): Promise<Response> {
+    await (this.#reporting ??= this.#record(request))
     let why = this.#refused ?? 'this store has not migrated'
     if (new URL(request.url).pathname == '/graph') {
       return Response.json({
@@ -1131,6 +1183,7 @@ export class Store {
     if (this.#behind) await this.#pass(request)
     if (this.#refused) return this.#stalled(request)
     this.#learn(request)
+    if (this.#refused) return this.#stalled(request)
     this.#live.wake()
     let path = new URL(request.url).pathname
     let kernel = request.headers.get('x-yak-kernel') == '1'
@@ -1184,7 +1237,7 @@ export class Store {
     // write — a client's request never carries the flag.
     if (path == '/' && request.method == 'DELETE') {
       if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
-      return this.#erase()
+      return this.#erase(request)
     }
     // Where this object's storage stands, and putting it back (recover.ts,
     // T-34507). Kernel only, like the erase: a whole store going backwards is
@@ -1484,7 +1537,7 @@ export class Store {
   // than one with no tables at all. `deleteAll` takes the object's own memory
   // with it, so the name it answers to is written back before it boots — that
   // word is what says which vocabulary it speaks.
-  async #erase(): Promise<Response> {
+  async #erase(request: Request): Promise<Response> {
     let name = this.#get('name') ?? ''
     // The pages watching this app are watching nothing now. `close` is the
     // runtime's own on a server-side socket; @yaks/durable-object's `Wire` names
@@ -1499,6 +1552,7 @@ export class Store {
     this.#ctx.storage.sql.exec(KV)
     if (name) this.#put('name', name)
     this.#boot()
+    if (this.#refused) return this.#stalled(request)
     return Response.json({ ok: true })
   }
 
@@ -1599,15 +1653,16 @@ export class Store {
           (name) => this.#rows(name),
         )
         appVocab(doc)
-        this.#put('vocab', JSON.stringify(shortOf(doc)))
-        // A word that left held nothing, so its table goes with it. Everything
-        // else about the schema is additive and `#boot` runs it.
-        for (let name of dropped) {
-          this.#ctx.storage.sql.exec(
-            `drop table if exists "${name.replaceAll('"', '""')}"`,
-          )
-        }
-        this.#boot()
+        // The declaration and its DDL must roll back together on boot failure.
+        this.#boot(() => {
+          this.#put('vocab', JSON.stringify(shortOf(doc)))
+          for (let name of dropped) {
+            this.#ctx.storage.sql.exec(
+              `drop table if exists "${name.replaceAll('"', '""')}"`,
+            )
+          }
+        })
+        if (this.#refused) return this.#stalled(request)
         return Response.json({
           ok: true,
           // The app's OWN words, not the whole vocabulary it speaks: a store's

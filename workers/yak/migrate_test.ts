@@ -1037,6 +1037,181 @@ for (let conflict of ['suffix', 'index']) {
 
 // ---- the refusals ----------------------------------------------------------
 
+let refused = async (now: ReturnType<typeof newer>, message: string) => {
+  for (
+    let path of [
+      '/query?q=.app!',
+      '/apply',
+      '/ws',
+      '/vocab',
+      '/uses',
+      '/tools',
+      '/restore',
+      '/tick',
+      '/',
+    ]
+  ) {
+    let response = await now.door(path)
+    assertEquals(response.status, 503, path)
+    assertEquals(response.headers.get('x-yak-migration'), 'refused', path)
+    let body = await response.json()
+    assertEquals(body.error, 'Refused')
+    assert(body.message.includes(message), body.message)
+  }
+  let response = await now.door('/graph')
+  assertEquals(response.status, 200)
+  assertEquals((await response.json()).migration, 'refused')
+}
+
+Deno.test('a raw constraint failure in a pass refuses once and rolls back', async () => {
+  let ctx = state()
+  await carriedOne(ctx)
+  let sql = ctx.storage.sql
+  sql.exec(`create trigger refuse_home before insert on home begin
+    select raise(abort, 'UNIQUE constraint failed: home.entity'); end`)
+  let files = bucket()
+  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  await refused(now, 'UNIQUE constraint failed')
+  let report = reportIn(files.held)
+  assertEquals(report.ok, false)
+  assertEquals(report.mark, HOMED)
+  assertEquals(marker(ctx), MARK)
+  assertEquals(count(ctx, 'home'), 0)
+  assertEquals(rowsIn(files.held).space.length, 2)
+  assert(files.held.has(report.export.replace('rows.jsonl', 'report.json')))
+  assertEquals(files.held.size, 2)
+  await refused(
+    newer(ctx, PLATFORM_STORE, { EXPORTS: bucket().r2 }),
+    'UNIQUE constraint failed',
+  )
+  assertEquals(marker(ctx), MARK)
+})
+
+Deno.test('a declared index failure refuses constructor boot with an export', async () => {
+  let ctx = state()
+  await carriedOne(ctx)
+  let sql = ctx.storage.sql
+  sql.exec('drop index space_slug')
+  sql.exec("update space set slug = 'same'")
+  sql.exec("update yak_kv set v = 'older schema' where k = 'schema'")
+  let files = bucket()
+  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  await refused(now, 'UNIQUE constraint failed')
+  assertEquals(marker(ctx), MARK)
+  assertEquals(reportIn(files.held).ok, false)
+  assertEquals(rowsIn(files.held).space.length, 2)
+  assertEquals(files.held.size, 2)
+  assertEquals(sql.exec("select v from yak_kv where k = 'schema'").toArray(), [{
+    v: 'older schema',
+  }])
+})
+
+Deno.test('a marker write failure rolls back its pass, even for a thrown value', async () => {
+  let ctx = state()
+  await carriedOne(ctx)
+  let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
+  ctx.storage.sql.exec = (query, ...params) => {
+    if (query.startsWith('insert into yak_kv') && params[1] == HOMED) {
+      throw 'marker unavailable'
+    }
+    return exec(query, ...params)
+  }
+  let files = bucket()
+  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  await refused(now, 'marker unavailable')
+  assertEquals(marker(ctx), MARK)
+  assertEquals(count(ctx, 'home'), 0)
+  assertEquals(reportIn(files.held).mark, HOMED)
+})
+
+for (let door of ['constructor', 'vocab']) {
+  Deno.test(`a ${door} schema failure preserves vocabulary and exports current metadata`, async () => {
+    let ctx = state()
+    let files = bucket()
+    let now = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
+    assertEquals(
+      (await now.door('/vocab', {
+        method: 'POST',
+        body: JSON.stringify({ recipe: { title: 'text' } }),
+      })).status,
+      200,
+    )
+    let sql = ctx.storage.sql
+    if (door == 'constructor') {
+      sql.exec("update yak_kv set v = 'older schema' where k = 'schema'")
+    }
+    let before = sql.exec('select * from yak_kv order by k').toArray()
+    ctx.slots.set('vocab', '{}')
+    let exec = sql.exec.bind(sql)
+    sql.exec = (query, ...params) => {
+      if (
+        query.startsWith(
+          `create table if not exists "${
+            door == 'constructor' ? 'recipe' : 'menu'
+          }"`,
+        )
+      ) {
+        throw new Error('fixture schema failure')
+      }
+      return exec(query, ...params)
+    }
+    if (door == 'constructor') {
+      now = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
+    } else {
+      let response = await now.door('/vocab', {
+        method: 'POST',
+        body: JSON.stringify({ menu: { title: 'text' } }),
+      })
+      assertEquals(response.status, 503)
+      assertEquals(response.headers.get('x-yak-migration'), 'refused')
+    }
+    await refused(now, 'fixture schema failure')
+    assertEquals(sql.exec('select * from yak_kv order by k').toArray(), before)
+    assertEquals(count(ctx, 'recipe'), 0)
+    assertEquals(
+      sql.exec("select name from sqlite_master where name = 'menu'").toArray(),
+      [],
+    )
+    let report = reportIn(files.held)
+    let dump = files.held.get(report.export)!
+    let slots = dump.trim().split('\n').map((line) =>
+      JSON.parse(line)
+    ).find((r) => r.kind == 'slots').slots
+    assertEquals(slots.name, 'ada/cookbook')
+    assertEquals(JSON.parse(slots.vocab), { recipe: { title: 'text' } })
+    assertEquals(
+      slots.schema,
+      (before as { k: string; v: string }[]).find((r) =>
+        r.k == 'schema'
+      )!.v,
+    )
+  })
+}
+
+for (
+  let [label, error, message] of [
+    ['error', new Error('identity write failed'), 'identity write failed'],
+    ['empty error', new Error(''), 'the migration refused'],
+    ['unprintable value', Object.create(null), 'the migration refused'],
+  ] as [string, unknown, string][]
+) {
+  Deno.test(`an identity write throwing an ${label} is a persistent refusal`, async () => {
+    let ctx = state()
+    let files = bucket()
+    let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+    let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
+    ctx.storage.sql.exec = (query, ...params) => {
+      if (query.startsWith('insert into yak_kv') && params[0] == 'name') {
+        throw error
+      }
+      return exec(query, ...params)
+    }
+    await refused(now, message)
+    assertEquals(marker(ctx), null)
+    assertEquals(reportIn(files.held).ok, false)
+  })
+}
+
 slow('no bucket, no migration', async () => {
   let ctx = state()
   await seedApp(ctx)

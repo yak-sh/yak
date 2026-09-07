@@ -277,7 +277,10 @@ let shadowed = (d: Drive): string[] =>
  * and every base table's rows. Synchronous, and it writes nothing — this runs
  * before the pass, so that what it hands back can reach R2 first.
  */
-export let taken = (storage: DurableStorage, slots?: Slots): Taken => {
+export let taken = (
+  storage: DurableStorage,
+  slots?: Pick<Slots, 'get'>,
+): Taken => {
   let d = driver(storage)
   let held: Record<string, string> = {}
   for (let k of SLOTS) {
