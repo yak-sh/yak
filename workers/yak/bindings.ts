@@ -201,6 +201,18 @@ export let provision = async (
         throw e
       }
       b = { ...b, id }
+      // Applying to a tombstoned entity can be a no-op rather than a throw.
+      // Read the ownership back before starting another create or an upload.
+      if (
+        !(await bindings(env, app)).some((row) =>
+          row.eid == b!.eid && row.id == id
+        )
+      ) {
+        await discard(env, b)
+        throw new Error(
+          'the app was permanently deleted during resource creation',
+        )
+      }
     }
     bound.push(b)
   }

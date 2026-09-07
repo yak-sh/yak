@@ -81,6 +81,7 @@ export let deployWorker = async (
   try {
     bound = await provision(env, app, store, config)
   } catch (e) {
+    if (!(await meta(env).query(`.eid=${app.eid}&.app!`)).length) throw e
     held = await bindings(env, app)
     let why = e instanceof Error ? e.message : String(e)
     return {
@@ -98,7 +99,7 @@ export let deployWorker = async (
   // An upload can finish after permanent deletion's script DELETE. Reconcile
   // that late effect while its ids are still in hand, before recording a release.
   if (!(await meta(env).query(`.eid=${app.eid}&.app!`)).length) {
-    await drop(env, store)
+    await drop(env, store, true)
     for (let binding of bound) await discard(env, binding)
     throw new Error('the app was permanently deleted during its worker upload')
   }

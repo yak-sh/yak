@@ -194,9 +194,9 @@ Deno.test('the guide names the doors a worker is actually given', () => {
 
 Deno.test('the app guide names its bindings and when their data is deleted', () => {
   for (let text of [guide, INSTRUCTIONS]) {
-    let paragraph = text.split('\n\n').find((p) =>
+    let paragraph = (text.split('\n\n').find((p) =>
       p.startsWith('An app may carry') && p.includes('wrangler.jsonc')
-    ) ?? ''
+    ) ?? '').replace(/\s+/g, ' ')
     for (
       let key of [
         'wrangler.json',

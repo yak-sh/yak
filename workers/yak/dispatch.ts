@@ -669,8 +669,16 @@ let named = (result: unknown) => {
 
 // The app's worker gone, when its worker.js is (or when the app is). A
 // script that was never there is not a failure to delete.
-export let drop = async (env: Env, store: string) => {
-  let r = await sent(env, `/${scriptName(store)}`, { method: 'DELETE' })
+export let drop = async (env: Env, store: string, forever = false) => {
+  // Cloudflare otherwise refuses scripts owning Durable Objects. Only app
+  // erasure may remove that storage; removing worker.js must not destroy it.
+  let r = await sent(
+    env,
+    `/${scriptName(store)}${forever ? '?force=true' : ''}`,
+    {
+      method: 'DELETE',
+    },
+  )
   if (r.status == 404) {
     await r.body?.cancel()
     return

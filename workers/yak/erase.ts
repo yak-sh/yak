@@ -280,7 +280,7 @@ export let emptied = async (
 ) => {
   // The app's own code, which is not in the bucket: a script left in the
   // dispatch namespace would still answer at an address nothing stands at.
-  if (env.CF_WORKERS_TOKEN) await drop(env, storeName(space, app))
+  if (env.CF_WORKERS_TOKEN) await drop(env, storeName(space, app), true)
   await deleteBindings(env, app)
   let keys = await swept(env, under(space, app))
   // The store is named for where the app was born (directory.ts storeName),
