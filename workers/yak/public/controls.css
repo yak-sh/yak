@@ -240,18 +240,11 @@
     margin-top: 0;
     padding-top: .9rem;
     border-bottom-color: var(--paper);
-    background: var(--paper);
+    background: linear-gradient(var(--accent) 4px, var(--paper) 4px)
+      padding-box;
     color: var(--ink);
     box-shadow: inset 0 1px var(--rim);
     z-index: 2;
-  }
-  .Tabs_Item > input:checked ~ .Tabs_Tab::before {
-    position: absolute;
-    content: '';
-    inset: 0 0 auto;
-    height: 4px;
-    border-radius: .6rem .6rem 0 0;
-    background: var(--accent);
   }
   .Tabs_Item > input:checked ~ .Tabs_Tab::after {
     position: absolute;
@@ -309,19 +302,12 @@
   }
   .SideNav a[aria-current='page'] {
     margin-left: 0;
-    background: var(--paper);
+    background: linear-gradient(to right, var(--accent) 4px, var(--paper) 4px)
+      padding-box;
     border-right-color: var(--paper);
     color: var(--ink);
     font-weight: 800;
     z-index: 1;
-  }
-  .SideNav a[aria-current='page']::before {
-    position: absolute;
-    content: '';
-    inset: 0 auto 0 0;
-    width: 4px;
-    border-radius: .5rem 0 0 .5rem;
-    background: var(--accent);
   }
   .SideNav a[aria-current='page']::after {
     position: absolute;
@@ -354,7 +340,6 @@
       background: color-mix(in srgb, var(--accent) 10%, transparent);
       box-shadow: inset 3px 0 var(--accent);
     }
-    .SideNav a[aria-current='page']::before,
     .SideNav a[aria-current='page']::after {
       display: none;
     }
