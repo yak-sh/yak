@@ -72,9 +72,8 @@ is not being able to read its numbers.
 
 ## Reading it: the page, and the door
 
-The person sees the same thing without you. Their space's front page carries a
-**Who visited** block — a bar per day, then the three lists — for every app they
-have. Nothing there is a script; it is a chart drawn as markup.
+The **Visits** page in their app manager shows each app's count, daily chart,
+and the same three lists.
 
 And the app's own page can read its numbers, for a member:
 

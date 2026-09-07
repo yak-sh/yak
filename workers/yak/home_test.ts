@@ -291,10 +291,9 @@ Deno.test('who visited: a bar per day and three lists, no script', async () => {
     views: [VISITS],
     viewDays: 3,
   })
-  assertStringIncludes(page, 'Who visited')
   assertStringIncludes(page, '9 visits')
   // One rect per day, the tallest full height and the empty day absent.
-  let bars = page.match(/class="Views_Bar"/g)
+  let bars = page.match(/class="Stats_Bar"/g)
   assertEquals(bars?.length, 3)
   assertStringIncludes(page, 'height="40.00"')
   assertStringIncludes(page, 'height="0.00"')
@@ -305,7 +304,7 @@ Deno.test('who visited: a bar per day and three lists, no script', async () => {
   assertStringIncludes(page, '4 Sep')
   assertStringIncludes(page, '6 Sep')
   // Nothing here runs: the chart is markup, not a canvas somebody paints.
-  assertStringIncludes(page, '<svg class="Views_Chart"')
+  assertStringIncludes(page, '<svg class="Stats_Chart"')
 
   // Not the owner's, not their business.
   let theirs = await block({
@@ -313,7 +312,7 @@ Deno.test('who visited: a bar per day and three lists, no script', async () => {
     apps: [{ slug: 'recipes', title: 'Recipes' }],
     views: [VISITS],
   })
-  assert(!theirs.includes('Who visited'), theirs)
+  assert(!parseHTML(theirs).document.querySelector('.Stats'))
 })
 
 Deno.test('who visited: no token is one sentence, no chart', async () => {
@@ -323,10 +322,9 @@ Deno.test('who visited: no token is one sentence, no chart', async () => {
     views: null,
     viewsOff: 'Visitor counts are not switched on for this platform yet.',
   })
-  assertStringIncludes(page, 'Who visited')
   assertStringIncludes(page, 'not switched on')
   assert(
-    !page.includes('<svg class="Views_Chart"'),
+    !page.includes('<svg class="Stats_Chart"'),
     'an empty chart is worse than a line',
   )
 })
@@ -347,8 +345,9 @@ Deno.test('who visited: an app nobody opened says so', async () => {
       },
     }],
   })
-  assertStringIncludes(page, 'Nobody has opened this one yet')
-  assert(!page.includes('<svg class="Views_Chart"'), page)
+  let { document } = parseHTML(page)
+  assertEquals(document.querySelector('.Stats_Total')?.textContent, '0 visits')
+  assert(!page.includes('<svg class="Stats_Chart"'), page)
 })
 
 Deno.test('trash has restore forms only on its own page', async () => {

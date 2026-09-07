@@ -64,7 +64,8 @@ input { text-align: center }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9rem; background: var(--ground); border-radius: .4rem; padding: .1rem .35rem; overflow-wrap: anywhere }
 .Url code { display: inline-block; padding: .5rem 1rem; border-radius: 999px; background: var(--paper); font-size: .95rem }
 .Card { --card-pad: 1.1rem 1.25rem; margin: 0 0 1rem; text-align: left }
-.Card h2 { font-size: 1.05rem; font-weight: 800; margin: 0 0 .6rem }
+.Card h2 { font-size: 1.05rem; font-weight: 800 }
+.Card > h2 { margin: 0 0 .6rem }
 .Card ol { display: grid; gap: .4rem; margin: 0; padding-left: 1.2rem; color: var(--soft-ink); font-size: .95rem }
 .Card li::marker { color: var(--accent); font-weight: 700 }
 .Card pre { margin: 0; white-space: pre-wrap; font: inherit; color: var(--soft-ink); text-align: left }
@@ -85,18 +86,6 @@ details.Note > summary { color: var(--accent); cursor: pointer }
 .Attach > p { margin: .75rem 0 1rem }
 .Say { min-height: 1.3rem; margin: 0; font-size: .95rem }
 .Say-no { color: var(--warn) }
-.Views_App { display: grid; gap: .5rem; padding-top: 1rem }
-.Views_App + .Views_App { border-top: 1px solid var(--line) }
-.Views_App h3 { margin: 0; font-size: 1rem; font-weight: 800 }
-.Views_Total { color: var(--soft-ink); font-weight: 400; font-size: .9rem }
-.Views_Chart { display: block; width: 100%; height: 4rem }
-.Views_Bar { fill: var(--accent) }
-.Views_Span { display: flex; justify-content: space-between; margin: 0; color: var(--soft-ink); font-size: .9rem }
-.Views_Tops { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)) }
-.Views_Column h4 { margin: 0 0 .25rem; color: var(--soft-ink); font-size: .9rem; font-weight: 700 }
-.Views_List { display: grid; gap: .25rem; margin: 0; padding: 0; list-style: none; font-size: .9rem }
-.Views_List li { display: flex; justify-content: space-between; gap: .5rem }
-.Views_List span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .Bill_Doors { display: flex; flex-wrap: wrap; gap: .625rem; margin: 1rem 0 .5rem }
 .Bill_Go-quiet { --button-fill: var(--paper); --button-ink: var(--accent) }
 .Drop_Zone { display: grid; place-items: center; gap: .5rem; padding: 1.4rem 1rem; border: 2px dashed var(--soft-ink); border-radius: 1.25rem; background: var(--ground); text-align: center; cursor: pointer }
@@ -506,25 +495,27 @@ let axisDay = (iso: string) => {
 let chart = (days: { day: string; views: number }[], total: number) => {
   let most = Math.max(...days.map((d) => d.views), 1)
   let bars = days.map((d, i) =>
-    `<rect class="Views_Bar" x="${(i + 0.15).toFixed(2)}" y="${
+    `<rect class="Stats_Bar" x="${(i + 0.15).toFixed(2)}" y="${
       (40 - (d.views / most) * 40).toFixed(2)
     }" width="0.7" height="${((d.views / most) * 40).toFixed(2)}"></rect>`
   ).join('')
-  return `<svg class="Views_Chart" viewBox="0 0 ${days.length} 40"
+  return `<figure class="Stats_Plot"><svg class="Stats_Chart" viewBox="0 0 ${days.length} 40"
 preserveAspectRatio="none" role="img" aria-label="${
     count(total)
   } visits over ${days.length} days, ${
     count(days[days.length - 1]?.views ?? 0)
   } on the last day">${bars}</svg>
-<p class="Views_Span"><span>${esc(axisDay(days[0]?.day ?? ''))}</span><span>${
+<figcaption class="Stats_Span"><span>${
+    esc(axisDay(days[0]?.day ?? ''))
+  }</span><span>${
     esc(axisDay(days[days.length - 1]?.day ?? ''))
-  }</span></p>`
+  }</span></figcaption></figure>`
 }
 
 let column = (head: string, rows: { name: string; views: number }[]) =>
   rows.length
-    ? `<div class="Views_Column"><h4>${head}</h4>
-<ul class="Views_List">${
+    ? `<div class="Stats_Column"><h3>${head}</h3>
+<ul class="Stats_List">${
       rows.map((r) =>
         `<li><span>${esc(r.name)}</span><b>${count(r.views)}</b></li>`
       ).join('')
@@ -546,30 +537,26 @@ export type Visits = {
 }
 
 let visits = (v: Visits) =>
-  `<article class="Views_App"><h3>${esc(v.title || v.slug)} <span
-class="Views_Total">${count(v.stats.total)} ${
+  `<article class="Stats" aria-labelledby="visits-${esc(v.slug)}">
+<header class="Stats_Head"><h2 class="Stats_Title" id="visits-${
+    esc(v.slug)
+  }"><a href="/${encodeURIComponent(v.slug)}/" target="_blank" rel="noopener">${
+    esc(v.title || v.slug)
+  }</a></h2>
+<p class="Stats_Total">${count(v.stats.total)} <span class="Stats_Unit">${
     v.stats.total == 1 ? 'visit' : 'visits'
-  }</span></h3>${
+  }</span></p></header>${
     v.stats.total
       ? chart(v.stats.daily, v.stats.total) +
-        `<div class="Views_Tops">${
+        `<div class="Stats_Tops">${
           column('Pages', v.stats.pages) + column('Came from', v.stats.from) +
           column('Countries', v.stats.countries)
         }</div>`
-      : '<p class="Note">Nobody has opened this one yet.</p>'
+      : ''
   }</article>`
 
-// `null` is the platform with no analytics token set (views.ts NOT_ON): one
-// sentence, because there is nothing here for the reader to do about it.
-let visited = (apps: Visits[] | null, days: number, off: string) =>
-  `<section class="Card"><h2>Who visited</h2>
-${
-    apps == null
-      ? `<p class="Note">${esc(off)}</p>`
-      : `<p class="Note">The last ${days} days. Counts only — no names, no
-addresses, nothing that says who anybody is.</p>${apps.map(visits).join('')}`
-  }
-</section>`
+let visited = (apps: Visits[] | null, off: string) =>
+  apps == null ? `<p class="Note">${esc(off)}</p>` : apps.map(visits).join('')
 
 // Owners get an app library and separate management pages. Visitors only see
 // apps they may open; account controls never enter their response.
@@ -614,6 +601,8 @@ let deskCss = `
 .Desk_Body { min-width: 0; min-height: 100vh; background: var(--paper); padding: 2.5rem clamp(1.25rem, 4vw, 3.5rem) }
 .Desk_Head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 2rem }
 .Desk_Head h1 { font-size: 1.9rem; margin: .15rem 0 0 }
+.Desk_Period { margin: .35rem 0 0; font-size: .9rem }
+.Desk_Profile { display: grid; gap: .75rem; max-width: 34rem }
 .Desk_Address { font-size: .85rem; text-decoration: none; color: var(--soft-ink) }
 .Desk_Head .Button { --control-pad-inline: 1.2rem; flex: none; font-size: .95rem }
 .Desk_Content { max-width: 52rem }
@@ -750,13 +739,15 @@ let library = (at: SpacePage) =>
 
 let preferences = (at: SpacePage) => {
   let home = at.apps.find((a) => a.home)
-  return `<section class="Card"><h2>Profile</h2>
-<form method="post" action="${managePath('settings')}">
-<label for="your-name">Your name</label>
+  return `<form class="Card Card-sectioned" method="post" action="${
+    managePath('settings')
+  }">
+<header class="Card_Header"><h2>Profile</h2></header>
+<div class="Card_Body"><div class="Desk_Profile"><label for="your-name">Your name</label>
 <input class="Field" id="your-name" name="name" maxlength="60" autocomplete="name" placeholder="Dana" value="${
     esc(at.name ?? '')
   }">
-<button class="Button" type="submit">Save name</button></form></section>
+</div></div><footer class="Card_Footer"><button class="Button" type="submit">Save name</button></footer></form>
 <section class="Card"><h2>App address</h2>${
     at.fixed
       ? `<p>${
@@ -860,7 +851,7 @@ let desk = (at: SpacePage) => {
   }
   if (view == 'visits') {
     body = at.apps.length
-      ? visited(at.views ?? null, at.viewDays ?? 30, at.viewsOff ?? '')
+      ? visited(at.views ?? null, at.viewsOff ?? '')
       : '<section class="Desk_Empty"><h2>No visits yet</h2><p>Your app visits will appear here once you have an app.</p></section>'
   }
   if (view == 'selling') body = selling(at)
@@ -875,7 +866,11 @@ let desk = (at: SpacePage) => {
     }<div class="Desk_Body"><header class="Desk_Head"><div>
 <a class="Desk_Address" href="/" target="_blank" rel="noopener">${
       esc(at.space)
-    }.yaks.app ↗</a><h1>${titles[view]}</h1></div>${
+    }.yaks.app ↗</a><h1>${titles[view]}</h1>${
+      view == 'visits'
+        ? `<p class="Desk_Period">Last ${at.viewDays ?? 30} days</p>`
+        : ''
+    }</div>${
       view == 'apps'
         ? `<a class="Button" href="${managePath('new')}">+ New app</a>`
         : ''

@@ -718,6 +718,91 @@
         </div>
 
         <div class="Guide_Demo">
+          <p class="Guide_Name">
+            .Card-sectioned · .Card_Header · .Card_Body · .Card_Footer
+          </p>
+          <section class="Card Card-sectioned">
+            <header class="Card_Header">
+              <h3 class="Title">Profile</h3>
+            </header>
+            <div class="Card_Body">
+              <label for="card-name">Your name</label>
+              <input class="Field" id="card-name" value="Dana"
+                autocomplete="off" />
+            </div>
+            <footer class="Card_Footer">
+              <button class="Button" type="button">Save name</button>
+            </footer>
+          </section>
+          <p class="Note Note-small">
+            Use sections when a card has a heading, content, and actions.
+            Header and footer are optional. A report that fills a page can
+            use its own hierarchy without a card around it.
+          </p>
+        </div>
+
+        <div class="Guide_Demo">
+          <p class="Guide_Name">
+            .Stats · .Stats_Head · .Stats_Title · .Stats_Total · .Stats_Unit ·
+            .Stats_Plot · .Stats_Chart · .Stats_Bar · .Stats_Span ·
+            .Stats_Tops · .Stats_Column · .Stats_List
+          </p>
+          <article class="Stats" aria-labelledby="stats-demo-title">
+            <header class="Stats_Head">
+              <h2 class="Stats_Title" id="stats-demo-title">Recipe Box</h2>
+              <p
+                class="Stats_Total">42 <span class="Stats_Unit">visits</span></p>
+            </header>
+            <figure class="Stats_Plot">
+              <svg class="Stats_Chart" viewBox="0 0 7 40"
+                preserveAspectRatio="none" role="img"
+                aria-label="42 visits over 7 days, 9 on the last day">
+                <rect class="Stats_Bar" x=".15" y="30" width=".7"
+                  height="10"></rect>
+                <rect class="Stats_Bar" x="1.15" y="26.67" width=".7"
+                  height="13.33"></rect>
+                <rect class="Stats_Bar" x="2.15" y="40" width=".7"
+                  height="0"></rect>
+                <rect class="Stats_Bar" x="3.15" y="13.33" width=".7"
+                  height="26.67"></rect>
+                <rect class="Stats_Bar" x="4.15" y="0" width=".7"
+                  height="40"></rect>
+                <rect class="Stats_Bar" x="5.15" y="20" width=".7"
+                  height="20"></rect>
+                <rect class="Stats_Bar" x="6.15" y="10" width=".7"
+                  height="30"></rect>
+              </svg>
+              <figcaption
+                class="Stats_Span"><span>1 Sept</span><span>7 Sept</span></figcaption>
+            </figure>
+            <div class="Stats_Tops">
+              <div class="Stats_Column">
+                <h3>Pages</h3>
+                <ul class="Stats_List">
+                  <li><span>/recipes/</span><b>42</b></li>
+                </ul>
+              </div>
+              <div class="Stats_Column">
+                <h3>Came from</h3>
+                <ul class="Stats_List">
+                  <li><span>example.com</span><b>8</b></li>
+                </ul>
+              </div>
+              <div class="Stats_Column">
+                <h3>Countries</h3>
+                <ul class="Stats_List">
+                  <li><span>US</span><b>42</b></li>
+                </ul>
+              </div>
+            </div>
+          </article>
+          <p class="Note Note-small">
+            A report with one summary, a chart, and supporting lists. Keep
+            the date range in the page heading when several reports share it.
+          </p>
+        </div>
+
+        <div class="Guide_Demo">
           <p class="Guide_Name">.Yak · .Yak-small · .Yak-big</p>
           <p>
             <img class="Yak Yak-small" src="yak.png" alt="" />

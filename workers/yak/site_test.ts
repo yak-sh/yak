@@ -4,6 +4,7 @@
 // Graph, JSON-LD — against the lists seo.ts builds `/sitemap.xml`,
 // `/robots.txt` and `/llms.txt` from (T-34288).
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import { parseHTML } from 'linkedom'
 import { slow } from '../../src/testing.ts'
 import { REPLY_TO } from './mail.ts'
 import { BUILDS, CURRENCY, LETTERS, PRICE } from './meter.ts'
@@ -193,7 +194,8 @@ Deno.test('the plan pages carry the builds the code enforces', () => {
 
 Deno.test('every footer link names a page that is there', () => {
   for (let page of branded) {
-    let foot = read(page).split('<footer')[1] ?? ''
+    let foot = parseHTML(read(page)).document.querySelector('body > footer')
+      ?.outerHTML ?? ''
     assert(foot, `${page} has no footer`)
     assertEquals(
       links(foot).map((l) => `${l}.html`),
