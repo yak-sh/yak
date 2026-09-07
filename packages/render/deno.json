@@ -1,0 +1,13 @@
+{
+  "name": "@yaks/render",
+  "version": "0.0.0",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "Host-independent renderer selection by query, role-rightmost views, and actions contributed per component.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0"
+  },
+  "publish": {
+    "exclude": ["**/*_test.ts"]
+  }
+}

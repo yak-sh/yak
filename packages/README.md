@@ -44,6 +44,10 @@ In dependency order:
 - **[@yaks/match](./match)** — the other evaluator of the same grammar: a
   `@yaks/query` AST run as a predicate over bundles held in memory, with no
   database. Tested query by query for parity with `@yaks/sql`.
+- **[@yaks/render](./render)** — views selected by query specificity and a
+  role-rightmost name, actions contributed per component, and column schemas
+  matched by the same registry. Renderers take an injected hyperscript, so the
+  host owns what a tree becomes.
 - **[@yaks/ram](./ram)** — the storage adapter with nothing underneath it: a
   `Map` of bundles answering `@yaks/graph`'s `Storage`, reads through
   `@yaks/match`, synchronous, browser-ready. Tested batch for batch against
