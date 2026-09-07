@@ -458,13 +458,11 @@ export class Store {
       // index is then rebuilt off the content it mirrors. Nothing to do the
       // first time: there is no older shape to be wearing.
       if (held) recut(drive)
-      for (let stmt of ddl) drive.exec(stmt)
-      // A word that GREW a column: `create table if not exists` says nothing
-      // about a table that is already there, so the new column has to be added
-      // to the live table or every read naming it fails at the engine
-      // (@yaks/sqlite `grown`). After the creates, so a table raised a moment
-      // ago is there to interrogate.
-      for (let stmt of store.grown()) drive.exec(stmt)
+      for (let stmt of blobSchema()) drive.exec(stmt)
+      // The installer grows columns before indexing them. SQLite can read a
+      // quoted missing column as a constant, making a unique index collide
+      // across every row before the migration has a chance to backfill it.
+      store.install()
       if (held) rebuild(drive)
       this.#put('schema', stamp)
     }

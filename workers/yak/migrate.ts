@@ -72,6 +72,7 @@ import { driver, type DurableStorage, reserved } from '@yaks/durable-object'
 import { edgeEid } from '@yaks/edge'
 import { sha256 } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
+import { handle } from './directory.ts'
 
 /** The slice of an R2 bucket an export needs. */
 export type Bucket = {
@@ -771,8 +772,8 @@ export let served = (
 // object names a projection of a string a person picks — so an address could
 // never be freed and reused, and renaming the SPACE was not a thing that could
 // be offered at all. The handle moves into a column of the app's own,
-// `app.store`, and what it holds for an existing app is the string it is
-// ALREADY named by: nothing moves, no object is renamed, no byte is copied.
+// `app.store`. An unambiguous name stays put; apps sharing one are separated
+// without copying any bytes, and the report names which app keeps the rows.
 //
 // And `former` is left as what it now only is — address history — with the
 // space prefix taken off each entry, so the history is in the space's own
@@ -825,6 +826,12 @@ let bare = (address: string) => address.slice(address.indexOf('/') + 1)
  * An app with no `former` row at all (one born before addresses were kept) gets
  * the name it is already answering to, `<space>/<app>` as the rows stand, which
  * is what the code fell back to for it anyway.
+ *
+ * A shared name belongs to the oldest entity num: creation order survives a
+ * rename, whereas the current slug does not establish who was born there.
+ * Existing handles stay reserved. Every other claimant gets app_new's handle
+ * at its current address; its old rows stay in the shared store. Reserve all
+ * bare names before minting suffixes so a suffix cannot take another's store.
  */
 export let handled = (
   storage: DurableStorage,
@@ -844,73 +851,129 @@ export let handled = (
     dropped: [],
     export: o.export,
   })
-  let apps = count(d, 'app')
-  d.exec(
-    `update ${q('app')} set store = coalesce(` +
-      `(select f.slug from ${q('former')} f where f.entity = ${
-        q('app')
-      }.entity),` +
-      `(select s.slug from ${q('space')} s where s.entity = ${
-        q('app')
-      }.space)` +
-      ` || '/' || ${q('app')}.slug) where store is null`,
-  )
-  let held = Number(
-    d.query(
-      `select count(*) as n from ${q('app')} where store is not null`,
+  try {
+    let former = stands(d, 'former')
+    let apps = d.query(
+      'select a.entity, e.eid, a.slug, s.slug as space, a.store, ' +
+        `${former ? 'f.slug' : 'null'} as birth from app a ` +
+        'join entity e on e.id = a.entity ' +
+        'left join space s on s.entity = a.space ' +
+        (former ? 'left join former f on f.entity = a.entity ' : '') +
+        'order by e.num, e.id',
       [],
-    )[0]?.n ?? 0,
-  )
-  let distinct = Number(
-    d.query(`select count(distinct store) as n from ${q('app')}`, [])[0]?.n ??
-      0,
-  )
-  moved.push({
-    table: 'app',
-    from: apps,
-    to: held,
-    note: `${held} apps named by the string each was already stored under`,
-  })
-  if (held != apps || distinct != apps) {
-    throw new Refused(report(
-      false,
-      `${apps} apps, ${held} with a handle and ${distinct} distinct: one ` +
-        'would open the wrong store or none',
-    ))
+    ).map((r) => {
+      let space = r.space == null ? null : String(r.space)
+      let slug = r.slug == null ? null : String(r.slug)
+      let store = r.store == null ? null : String(r.store)
+      let birth = r.birth == null ? null : String(r.birth)
+      return {
+        id: Number(r.entity),
+        eid: String(r.eid),
+        space,
+        slug,
+        store,
+        next: store ?? birth ?? (space && slug ? `${space}/${slug}` : null),
+      }
+    })
+    let owners = new Map<string, typeof apps[number]>()
+    for (let app of apps) {
+      if (app.store != null) owners.set(app.store, app)
+    }
+    let split: {
+      app: typeof apps[number]
+      was: string
+      owner: typeof apps[number]
+    }[] = []
+    for (let app of apps) {
+      if (app.store != null || app.next == null) continue
+      let owner = owners.get(app.next)
+      if (owner) split.push({ app, was: app.next, owner })
+      else owners.set(app.next, app)
+    }
+    let notes: string[] = []
+    let named = (app: typeof apps[number]) =>
+      `${app.space}/${app.slug} (${app.eid})`
+    for (let { app, was, owner } of split) {
+      app.next = app.space && app.slug
+        ? handle({ slug: app.space }, app.slug, app.eid)
+        : null
+      notes.push(
+        `${named(app)}: ${was} -> ${app.next ?? 'no handle'}; ` +
+          `previous rows stay in ${was}, kept by ${named(owner)}; ` +
+          'the new handle opens an empty store; no data copied',
+      )
+    }
+    let held = apps.filter((a) => a.next != null).length
+    let distinct = new Set(
+      apps.map((a) => a.next).filter((s) => s != null),
+    ).size
+    moved.push({
+      table: 'app',
+      from: apps.length,
+      to: held,
+      note: [`${held} handles planned, ${split.length} disambiguated`, ...notes]
+        .join('\n'),
+    })
+    if (held != apps.length || distinct != apps.length) {
+      throw new Refused(report(
+        false,
+        `${apps.length} apps, ${held} with a handle and ${distinct} distinct: one ` +
+          'would open the wrong store or none',
+      ))
+    }
+    for (let app of apps) {
+      if (app.store != null) continue
+      d.query('update app set store = ? where entity = ?', [app.next, app.id])
+    }
+    let counts = d.query(
+      'select count(*) as apps, count(store) as held, count(distinct store) as names from app',
+      [],
+    )[0]
+    if (
+      counts.apps != apps.length || counts.held != apps.length ||
+      counts.names != apps.length
+    ) {
+      throw new Refused(report(false, 'the written handles did not reconcile'))
+    }
+    // The unique index the OLD name was decided by. It stands on `former.slug`,
+    // and that column is address history now — two apps may hold one address a
+    // year apart, which is the whole point of freeing one (T-34659) — so the
+    // index has to come down or the second app could never be born. Its name is
+    // the vocabulary's own (@yaks/sqlite `indexDdl`), which is why it can be
+    // named here at all.
+    d.exec(`drop index if exists ${q('former_slug')}`)
+    // The addresses, unqualified. `former` is the app's history WITHIN its space
+    // now, so the space's name has no business in it: leave it and a space rename
+    // strands every redirect the space's apps ever earned.
+    let rows = stands(d, 'former')
+      ? d.query(`select entity, slug, slugs from ${q('former')}`, [])
+      : []
+    let stripped = 0
+    for (let r of rows) {
+      let slug = r.slug == null ? null : bare(String(r.slug))
+      let slugs = r.slugs == null
+        ? null
+        : String(r.slugs).split(/\s+/).filter(Boolean).map(bare).join(' ')
+      if (slug == r.slug && slugs == r.slugs) continue
+      stripped++
+      d.query(
+        `update ${q('former')} set slug = ?, slugs = ? where entity = ?`,
+        [slug, slugs, r.entity as number],
+      )
+    }
+    moved.push({
+      table: 'former',
+      from: rows.length,
+      to: rows.length,
+      note:
+        `${stripped} address histories now read in the space's own namespace`,
+    })
+    return report(true)
+  } catch (e) {
+    if (e instanceof Refused) throw e
+    // Keep the assignment report even if an index or trigger refuses a write.
+    throw new Refused(report(false, e instanceof Error ? e.message : String(e)))
   }
-  // The unique index the OLD name was decided by. It stands on `former.slug`,
-  // and that column is address history now — two apps may hold one address a
-  // year apart, which is the whole point of freeing one (T-34659) — so the
-  // index has to come down or the second app could never be born. Its name is
-  // the vocabulary's own (@yaks/sqlite `indexDdl`), which is why it can be
-  // named here at all.
-  d.exec(`drop index if exists ${q('former_slug')}`)
-  // The addresses, unqualified. `former` is the app's history WITHIN its space
-  // now, so the space's name has no business in it: leave it and a space rename
-  // strands every redirect the space's apps ever earned.
-  let rows = stands(d, 'former')
-    ? d.query(`select entity, slug, slugs from ${q('former')}`, [])
-    : []
-  let stripped = 0
-  for (let r of rows) {
-    let slug = r.slug == null ? null : bare(String(r.slug))
-    let slugs = r.slugs == null
-      ? null
-      : String(r.slugs).split(/\s+/).filter(Boolean).map(bare).join(' ')
-    if (slug == r.slug && slugs == r.slugs) continue
-    stripped++
-    d.query(
-      `update ${q('former')} set slug = ?, slugs = ? where entity = ?`,
-      [slug, slugs, r.entity as number],
-    )
-  }
-  moved.push({
-    table: 'former',
-    from: rows.length,
-    to: rows.length,
-    note: `${stripped} address histories now read in the space's own namespace`,
-  })
-  return report(true)
 }
 
 /**

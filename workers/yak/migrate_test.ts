@@ -27,6 +27,7 @@ import {
   carry,
   FORMER,
   HANDLED,
+  handled,
   HOMED,
   keyOf,
   MARK,
@@ -874,6 +875,165 @@ slow('two apps may hold one address, and be two stores', async () => {
   })
   assert(!no.ok, 'a second app took a handle that was already held')
 })
+
+let collision = async (ctx: State, source = 'fallback') => {
+  await carriedFour(ctx)
+  let sql = ctx.storage.sql
+  sql.exec('drop index if exists former_slug')
+  sql.exec(
+    'update former set slug = ? where entity = (select id from entity where eid = ?)',
+    'ada/shed',
+    ONE,
+  )
+  if (source == 'former') {
+    sql.exec(
+      'insert into former (entity, slug) select id, ? from entity where eid = ?',
+      'ada/shed',
+      TWO,
+    )
+  }
+}
+
+let disambiguated = (report: Report) => {
+  let note = report.moved.find((m) => m.table == 'app')?.note ?? ''
+  for (
+    let text of [
+      'ada/shed',
+      TWO,
+      'ada/shed.000002',
+      'ada/orchard',
+      ONE,
+      'empty store',
+      'no data copied',
+    ]
+  ) {
+    assert(note.includes(text), note)
+  }
+}
+
+for (let source of ['former', 'fallback']) {
+  slow(
+    `colliding handles from ${source} keep the oldest app's store`,
+    async () => {
+      let ctx = state()
+      await collision(ctx, source)
+      let files = bucket()
+      let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+      let rows = [
+        ['cookbook', 'ada/cookbook', 'cookbook'],
+        ['orchard', 'ada/shed', 'shed plot'],
+        ['shed', 'ada/shed.000002', source == 'former' ? 'shed' : ''],
+      ]
+      assertEquals(await handling(now), rows)
+      let report = reportIn(files.held)
+      assert(report.ok, report.message)
+      disambiguated(report)
+      assertEquals(marker(ctx), HANDLED)
+      assertEquals(rowsIn(files.held).app.length, 3)
+      let next = bucket()
+      assertEquals(
+        await handling(newer(ctx, PLATFORM_STORE, { EXPORTS: next.r2 })),
+        rows,
+      )
+      assertEquals(next.held.size, 0)
+    },
+  )
+}
+
+slow('a handle already assigned stays with its app', async () => {
+  let ctx = state()
+  await collision(ctx)
+  ctx.storage.sql.exec(
+    'update app set store = ? where entity = (select id from entity where eid = ?)',
+    'ada/shed',
+    TWO,
+  )
+  let files = bucket()
+  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  assertEquals(await handling(now), [
+    ['cookbook', 'ada/cookbook', 'cookbook'],
+    ['orchard', 'ada/orchard.000001', 'shed plot'],
+    ['shed', 'ada/shed', ''],
+  ])
+  assert(reportIn(files.held).ok)
+})
+
+slow('a directory grows the handle column before indexing it', async () => {
+  let ctx = state()
+  await collision(ctx)
+  let sql = ctx.storage.sql
+  // A directory from before app.store existed must reach the migration too.
+  sql.exec('drop index app_store')
+  sql.exec('alter table app drop column store')
+  sql.exec("update yak_kv set v = 'before handles' where k = 'schema'")
+  let files = bucket()
+  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  assertEquals(await handling(now), [
+    ['cookbook', 'ada/cookbook', 'cookbook'],
+    ['orchard', 'ada/shed', 'shed plot'],
+    ['shed', 'ada/shed.000002', ''],
+  ])
+  disambiguated(reportIn(files.held))
+  assertEquals(
+    sql.exec('pragma index_info(app_store)').toArray()[0].name,
+    'store',
+  )
+})
+
+for (let conflict of ['suffix', 'index']) {
+  slow(
+    `a handle ${conflict} conflict refuses with the assignment report`,
+    async () => {
+      let ctx = state()
+      await collision(ctx)
+      let sql = ctx.storage.sql
+      if (conflict == 'suffix') {
+        // A generated suffix must not take another app's historical store.
+        sql.exec(
+          'update former set slug = ? where entity = (select id from entity where eid = ?)',
+          'ada/shed.000002',
+          APP,
+        )
+      } else {
+        // The writes can still fail after planning: keep the report and rollback.
+        sql.exec(
+          'create unique index refused_handles on app ((store is not null)) where store is not null',
+        )
+      }
+      let before = sql.exec('select * from app').toArray()
+      let history = sql.exec('select * from former').toArray()
+      let no = assertThrows(
+        () =>
+          ctx.storage.transactionSync(() =>
+            handled(ctx.storage, {
+              store: PLATFORM_STORE,
+              app: null,
+              export: 'store/probe/rows.jsonl',
+            })
+          ),
+        Unreconciled,
+      )
+      disambiguated(no.report)
+      if (conflict == 'index') {
+        assert(/unique/i.test(no.message), no.message)
+      }
+
+      let files = bucket()
+      let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+      let read = await now.door('/query?q=.app!')
+      assertEquals(read.status, 503)
+      assertEquals(read.headers.get('x-yak-migration'), 'refused')
+      assertEquals((await read.json()).error, 'Refused')
+      let report = reportIn(files.held)
+      assertEquals(report.ok, false)
+      disambiguated(report)
+      assertEquals(rowsIn(files.held).app, before)
+      assertEquals(sql.exec('select * from app').toArray(), before)
+      assertEquals(sql.exec('select * from former').toArray(), history)
+      assertEquals(marker(ctx), SERVES)
+    },
+  )
+}
 
 // ---- the refusals ----------------------------------------------------------
 

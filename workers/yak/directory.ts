@@ -649,7 +649,7 @@ export let storeName = (space: Space, app: App) =>
  * `app.store` is what decides it if the impossible happens, the way every other
  * race in this directory is decided.
  */
-export let handle = (space: Space, slug: string, eid: string) =>
+export let handle = (space: Pick<Space, 'slug'>, slug: string, eid: string) =>
   `${space.slug}/${slug}.${eid.replaceAll('-', '').slice(-6)}`
 
 // The door onto one app's store, told WHICH app it holds and what this
