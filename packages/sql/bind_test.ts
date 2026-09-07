@@ -139,6 +139,14 @@ Deno.test('an unreachable directive throws Unsupported naming the feature', () =
   assertEquals(e.feature, '.near')
 })
 
+// A rule sigil is an instruction to a rule engine, and storage has no engine:
+// compiling one away would answer a question nobody asked.
+Deno.test('a rule sigil throws Unsupported rather than compiling', () => {
+  for (let q of ['+task', '+!task', '*task', '#task', '$t']) {
+    assertThrows(() => compile(parse(q), v), Unsupported, 'directive')
+  }
+})
+
 Deno.test('ordering by an unfiltered column still joins its table', () => {
   let { sql } = compile(parse('.priority=1&.order=title'), v)
   assert(sql.includes('left join "doc_value" as "doc"'), sql)

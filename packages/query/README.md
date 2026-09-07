@@ -60,17 +60,48 @@ let b = and(
 ```
 
 Vocabulary: `eq ne contains lt le gt ge present absent want pred` (predicates);
-`list range scalar time text` (values and terms); `and or` (composition);
-`clauses orderOf nearOf windowOf` (accessors); and the directives
-`order near refs hasRefs count distinct tally fields every limit after edges
-reaches`.
+`ensure gate mutable resource variable` (the rule sigils);
+`list range scalar
+time text` (values and terms); `and or` (composition);
+`clauses orderOf nearOf
+windowOf declared` (accessors); and the directives
+`order near refs hasRefs
+count distinct tally fields every limit after edges reaches`.
 
 ## The format
 
-- `.p=v` equals · `.p=a,b,c` any-of · `.p=1..5` range (inclusive), `1...5`
-  exclusive end · `.p=` absent · `.p!` present · `.p!=v` not · `.p~=v` contains
-  (literal) · `.p<v .p<=v .p>v .p>=v` comparisons · `.p?` want the field
-  alongside the filter.
+A token is one of three things **by its own shape**: a component clause (it
+wears a sigil, or it carries an operator), a quoted text term, or a bare word,
+which is a text term. Nothing is read by trying and failing — a malformed clause
+throws where it is read rather than falling back to text.
+
+- **Sigils** mark a component word: `.comp` present · `!comp` absent · `+comp`
+  ensure (add it before the rule runs) · `+!comp` gate (it must be absent, and
+  is added, so a rule fires once) · `*comp` mutable (the rule's write set) ·
+  `#comp` a singleton resource · `$name` a variable. The first two are ordinary
+  predicates — presence and absence are questions any evaluator answers — and
+  the rest are a rule's own words, which an evaluator with no rule engine
+  refuses (`Unsupported`) rather than guessing at. `declared(ast)` splits a
+  query into the filter half and those lists.
+- **Operators**: `.p=v` equals · `.p=a,b,c` any-of · `.p=1..5` range
+  (inclusive), `1...5` exclusive end · `.p!=v` not · `.p~=v` contains (literal)
+  · `.p<v .p<=v .p>v .p>=v` comparisons · `.p?` want the field alongside the
+  filter.
+- The leading `.` is **accepted everywhere and required nowhere**: it keeps a
+  URL query string's filters apart from its `page` and `per`, and a rule that
+  never travels in a URL may drop it — `comp.prop=1` is the same clause as
+  `.comp.prop=1`, and `"comp.prop=1"` in quotes is the text term. It IS what
+  tells the opless `.env` (wears `env`) from `env` (search for it).
+- `.p!` (present) and `.p=` (absent) are the older spellings of `.p` and `!p`,
+  still parsed to the same nodes; saved queries keep working.
+- **Separators**: whitespace, `&`, and `,` all mean AND. A comma announces
+  another clause, so a bare word beside one is the component it names —
+  `!foo, bar hello there` is two clauses and two text terms. Inside a value a
+  comma is still any-of: position tells them apart, and once a clause has taken
+  an operator the rest of the token is its value (`.p=a,b` is one clause).
+- `parse(q, { text: false })` refuses bare-word text terms, so a rule or a saved
+  filter fails on a stray word instead of quietly gaining one. A quoted term is
+  still allowed — quoting is how a strict query asks for a word.
 - Paths are raw dotted segments: `.review.book.title~=magic`. This parser does
   not route them to a schema — that is a downstream job.
 - Directives ride the clause list: `.order=hot` `.near=42` `.refs=42` `.count!`

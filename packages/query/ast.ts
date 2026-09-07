@@ -82,6 +82,20 @@ export type Reaches = {
   target: string
 }
 
+// ---- rule sigils ----
+// A component word may wear a PREFIX SIGIL saying what a rule does with it.
+// Two of them are ordinary predicates, because an evaluator can answer them
+// from data alone: `.comp` is present, `!comp` is absent. These four are what
+// only a RULE can mean — the component to add before it runs, the gate that
+// makes it fire once, the components it writes, and the singleton resource it
+// reads — and `$name` binds a variable, as `$alias` names an entity in a
+// bundle. An evaluator with no rule engine refuses them rather than guessing.
+export type Ensure = { kind: 'ensure'; comp: string }
+export type Gate = { kind: 'gate'; comp: string }
+export type Mutable = { kind: 'mutable'; comp: string }
+export type Resource = { kind: 'resource'; comp: string }
+export type Var = { kind: 'var'; name: string }
+
 // Boolean composition. `parse` always yields an `and` of the token clauses
 // (the yaks text format is a flat AND-list); `or` is builder-only — the AST is
 // a superset of what the current text grammar can spell.
@@ -105,6 +119,11 @@ export type Clause =
   | After
   | Edges
   | Reaches
+  | Ensure
+  | Gate
+  | Mutable
+  | Resource
+  | Var
   | And
   | Or
 
@@ -227,6 +246,17 @@ export let fields = (...specs: (string | FieldSel)[]): Fields => ({
   fields: specs.map(field),
 })
 export let every = (): Every => ({ kind: 'every' })
+
+// The rule sigils. `ensure` adds a component before the rule runs; `gate` adds
+// one that had to be ABSENT, which is what makes a rule fire once; `mutable`
+// declares a component the rule writes; `resource` names a singleton; and
+// `variable` binds a name. Presence and absence have builders already
+// (`present`, `absent`) — they are predicates, not rule words.
+export let ensure = (comp: string): Ensure => ({ kind: 'ensure', comp })
+export let gate = (comp: string): Gate => ({ kind: 'gate', comp })
+export let mutable = (comp: string): Mutable => ({ kind: 'mutable', comp })
+export let resource = (comp: string): Resource => ({ kind: 'resource', comp })
+export let variable = (name: string): Var => ({ kind: 'var', name })
 
 export let edges = (
   opts: { select?: EdgeSelect; peers?: string[][] } = {},

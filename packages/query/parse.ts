@@ -1,10 +1,17 @@
 // The generic parser: a yaks query STRING to the AST. It knows the format —
-// the operators, list/range value forms, the reserved directives, how `&` and
-// whitespace and quotes separate tokens — and nothing about any schema. Where a
-// meaning needs the vocabulary (which component a bare `.status` routes to,
-// whether a scalar is a time phrase or a plain word, whether `.comments` names
-// a reverse association), the parser keeps the raw tokens and leaves the reading
-// to a downstream compiler. See README for the full handoff.
+// the sigils that mark a component word, the operators, list/range value forms,
+// the reserved directives, how `&`, `,`, whitespace and quotes separate tokens
+// — and nothing about any schema. Where a meaning needs the vocabulary (which
+// component a bare `.status` routes to, whether a scalar is a time phrase or a
+// plain word, whether `.comments` names a reverse association), the parser keeps
+// the raw tokens and leaves the reading to a downstream compiler. See README for
+// the full handoff.
+//
+// A token is one of three things BY ITS OWN SHAPE, so nothing is ever read by
+// trying and failing: a component clause (it wears a sigil, or it carries an
+// operator), a quoted text term, or a bare word, which is a text term. A
+// malformed clause — a directive with the wrong operand, two presence filters
+// mashed together — throws where it is read; it never falls back to text.
 //
 // The mirror of the builders in ast.ts: `parse('.a=1&.b=2')` deep-equals
 // `and(eq('a', '1'), eq('b', '2'))`.
@@ -31,26 +38,81 @@ let value = (raw: string): Value =>
     ? { kind: 'list', items: raw.split(',').map(atom) }
     : atom(raw)
 
+// ---- component words ----
+
+// The shape a component clause names: dotted segments of letters. A token that
+// is not this shape is a value or a word, never a path.
+let WORD = '[A-Za-z_-]+(?:\\.[A-Za-z_-]+)*'
+// A prefix SIGIL and the word it marks. `.` is the neutral one and stays
+// accepted before any other, so `+!created` and `+!.created` say the same thing.
+let SIGIL = new RegExp(`^(\\+!|[!+*#$])\\.?(${WORD})$`)
+// A component word alone, dot-marked: present. The dot is what tells `.env`
+// (this entity wears `env`) from `env` (the word, searched for).
+let PLAIN = new RegExp(`^\\.(${WORD})$`)
+// The same word with no mark at all, which a comma can still put in query
+// position (`!foo, bar` asks for two components).
+let BARE = new RegExp(`^${WORD}$`)
+
 // ---- directive helpers ----
 
 let path = (raw: string): string[] => raw.split('.')
 
 // `.reaches[requires,<=3]=T-42` — the bracket carries what a dot-param cannot:
 // which edge type and how far. The cap is required by the shape.
-let REACH = /^\.reaches\[([A-Za-z_]+)\s*,\s*<=\s*(\d+)\]=(.*)$/s
+let REACH = /^reaches\[([A-Za-z_]+)\s*,\s*<=\s*(\d+)\]=(.*)$/s
 // `.edges[referenced,entry.session]!` — one stored edge type, optional endpoint.
 let EDGE_SELECT =
-  /^\.edges\[([A-Za-z_]+)(?:\s*,\s*([A-Za-z_-]+(?:\.[A-Za-z_-]+)*))?\]!$/s
-let DOT = /^\.([A-Za-z_-]+(?:\.[A-Za-z_-]+)*)(!=|~=|<=|>=|<|>|=|!|\?)(.*)$/s
+  /^edges\[([A-Za-z_]+)(?:\s*,\s*([A-Za-z_-]+(?:\.[A-Za-z_-]+)*))?\]!$/s
+let DOT = new RegExp(`^\\.?(${WORD})(!=|~=|<=|>=|<|>|=|!|\\?)(.*)$`, 's')
 
-// One dot-param TOKEN to the clauses it contributes, or null when the token is
-// no dot-param at all (a bare word, an opless `.env`) — a text term to whoever
-// called. A directive is one clause; an ordinary predicate is one clause too.
+// The reserved words whose whole meaning is presence, so the dot-marked
+// spelling says the same thing as the older bang (`.count` = `.count!`).
+let PRESENCE: Record<string, Clause> = {
+  count: { kind: 'count' },
+  edges: { kind: 'edges', peers: [] },
+  refs: { kind: 'refs', op: '!', value: '' },
+}
+
+// A component word wearing a sigil, or null when the token wears none. `!comp`
+// and `.comp` are ordinary predicates — absence and presence are questions any
+// evaluator answers from data — and the other four are the rule's own words.
+let sigil = (token: string): Clause[] | null => {
+  let plain = token.match(PLAIN)
+  if (plain) return [PRESENCE[plain[1]] ?? pres(plain[1])]
+  let m = token.match(SIGIL)
+  if (!m) return null
+  let [, mark, word] = m
+  if (mark == '!') {
+    return [{ kind: 'pred', path: path(word), op: '=', value: scalar('') }]
+  }
+  if (mark == '+') return [{ kind: 'ensure', comp: word }]
+  if (mark == '+!') return [{ kind: 'gate', comp: word }]
+  if (mark == '*') return [{ kind: 'mutable', comp: word }]
+  if (mark == '#') return [{ kind: 'resource', comp: word }]
+  return [{ kind: 'var', name: word }]
+}
+
+let pres = (word: string): Clause => ({
+  kind: 'pred',
+  path: path(word),
+  op: '!',
+  value: null,
+})
+
+// One TOKEN to the clauses it contributes, or null when its shape is no clause
+// at all (a bare word) — a text term to whoever called. A directive is one
+// clause; an ordinary predicate is one clause too.
 export let parseDot = (token: string): Clause[] | null => {
+  let marked = sigil(token)
+  if (marked) return marked
+  // The `.` prefix is accepted everywhere and required nowhere: it keeps a URL
+  // query string's filters apart from its `page` and `per`, and a rule that
+  // never travels in a URL may drop it.
+  let raw = token.startsWith('.') ? token.slice(1) : token
   // Bracket forms answer first: a malformed one would fall through to a bare
   // text term and silently search for the traversal the caller meant.
-  if (token.startsWith('.reaches[')) {
-    let m = token.match(REACH)
+  if (raw.startsWith('reaches[')) {
+    let m = raw.match(REACH)
     if (!m || !m[3]) {
       throw new Error(
         '.reaches names an edge type, a depth cap and an entity: ' +
@@ -61,8 +123,8 @@ export let parseDot = (token: string): Clause[] | null => {
     if (depth < 1) throw new Error(`.reaches needs at least one hop: <=${m[2]}`)
     return [{ kind: 'reaches', edgeType: m[1], depth, target: m[3] }]
   }
-  if (token.startsWith('.edges[')) {
-    let m = token.match(EDGE_SELECT)
+  if (raw.startsWith('edges[')) {
+    let m = raw.match(EDGE_SELECT)
     if (!m) {
       throw new Error(
         '.edges selects one edge type and an optional endpoint reference: ' +
@@ -90,7 +152,7 @@ export let parseDot = (token: string): Clause[] | null => {
     if (op == '=') return [{ kind: 'refs', op: '=', value: val }]
     if (op == '!') return [{ kind: 'refs', op: '!', value: '' }]
     throw new Error(
-      '.refs takes an id (.refs=T-3), presence (.refs!) or absence (.refs=)',
+      '.refs takes an id (.refs=T-3), presence (.refs) or absence (!refs)',
     )
   }
   // `.count!` — the selection's size, naming no column, so presence is its only
@@ -136,7 +198,7 @@ export let parseDot = (token: string): Clause[] | null => {
       return [{ kind: 'edges', peers: val.split(',').map(path) }]
     }
     throw new Error(
-      '.edges rides a query (.edges!) and may project the far endpoint ' +
+      '.edges rides a query (.edges) and may project the far endpoint ' +
         '(.edges.peers=status,title)',
     )
   }
@@ -171,32 +233,85 @@ let segments = (q: string): string[] => q.match(/(?:"[^"]*"|[^&])+/g) ?? []
 let words = (seg: string): string[] =>
   seg.match(/[^\s"]+"[^"]*"|"[^"]*"|\S+/g) ?? []
 
-// A query string to its AST. `&` separates first — an `&`-segment that IS one
-// dot-param keeps its spaces (`.title~=two words` survives) — and a segment
-// holding bare words or an embedded ` .` splits on whitespace, mixing filters
-// and text terms the way a search box does.
-//
-// A LONE `*` is the widest projection, not a word: it asks for every component
-// of every row selected. Only the whole token means it — a trailing `*` on a
-// word (`lemo*`) is still the full-text prefix term it always was.
-//
-// The empty query selects NOTHING: an empty string, or one with no clauses,
-// yields a lone `never`, so a blank board query does not stage the whole graph.
-export let parse = (q: string): And => {
+// A token that has already taken an operator, so every comma after it is part
+// of its VALUE rather than a separator.
+let VALUED = new RegExp(
+  `^\\.?(?:${WORD}(?:!=|~=|<=|>=|<|>|=)|(?:reaches|edges)\\[)`,
+)
+
+// The clause parts of one token. `,` between clauses is AND; `,` inside a value
+// is any-of, and POSITION is what tells them apart: commas separate until a
+// clause takes an operator, and from there the rest of the token is that
+// clause's value (`entity,+!created` is two clauses, `.p=a,b` is one).
+let parts = (tok: string): string[] => {
+  let out: string[] = []
+  for (let p of tok.split(',')) {
+    if (out.length && VALUED.test(out[out.length - 1])) {
+      out[out.length - 1] += ',' + p
+    } else out.push(p)
+  }
+  return out.filter(Boolean)
+}
+
+/** What a parse may say about the query it is reading. */
+export type ParseOpts = {
+  /** whether a bare word is a full-text term (default true). A rule, or a saved
+   * filter that must not quietly change meaning, passes `false`: a stray word
+   * is then refused rather than becoming a search term nobody asked for. */
+  text?: boolean
+}
+
+// One token to its clauses. `q` marks a token a COMMA put in query position:
+// the comma announces another clause, so a bare word there is the component it
+// names rather than a word to search for.
+let read = (tok: string, q: boolean, opts: ParseOpts): Clause[] => {
+  if (tok == '*') return [every()]
+  if (!tok.startsWith('"')) {
+    let cs = parseDot(tok)
+    if (cs) return cs
+    // A comma announced a clause, so the word names a component.
+    if (q && BARE.test(tok)) return [pres(tok)]
+    if (q || opts.text === false) {
+      throw new Error(
+        `a query takes clauses, not words: ${tok} — quote it to search for it`,
+      )
+    }
+  }
+  return [text(stripQuotes(tok))]
+}
+
+/**
+ * A query string to its AST. `&` separates first — an `&`-segment that IS one
+ * dot-param keeps its spaces (`.title~=two words` survives) — and a segment
+ * holding bare words or several clauses splits on whitespace and on the commas
+ * between clauses, mixing filters and text terms the way a search box does.
+ *
+ * A LONE `*` is the widest projection, not a word: it asks for every component
+ * of every row selected. Only the whole token means it — a trailing `*` on a
+ * word (`lemo*`) is still the full-text prefix term it always was.
+ *
+ * The empty query selects NOTHING: an empty string, or one with no clauses,
+ * yields a lone `never`, so a blank board query does not stage the whole graph.
+ */
+export let parse = (q: string, opts: ParseOpts = {}): And => {
   let out: Clause[] = segments(q).map((s) => s.trim()).filter(Boolean).flatMap(
     (seg) => {
-      if (seg.startsWith('.') && !/\s\./.test(seg)) {
-        let p = parseDot(seg)
-        if (p) return p
+      // A segment that is ONE clause keeps its spaces, so a value may hold them.
+      if (!/\s\./.test(seg) && parts(seg).length == 1) {
+        let cs = parseDot(seg)
+        if (cs) return cs
       }
-      return words(seg).flatMap((tok): Clause[] => {
-        if (tok == '*') return [every()]
-        if (tok.startsWith('.')) {
-          let p = parseDot(tok)
-          if (p) return p
-        }
-        return [text(stripQuotes(tok))]
-      })
+      let cs: Clause[] = []
+      let after = false // the token before this one ended in a comma
+      for (let w of words(seg)) {
+        let ps = parts(w)
+        let joined = ps.length > 1 || w.startsWith(',') || w.endsWith(',')
+        ps.forEach((p, i) =>
+          cs.push(...read(p, joined || (after && i == 0), opts))
+        )
+        after = w.endsWith(',')
+      }
+      return cs
     },
   )
   return { kind: 'and', clauses: out.length ? out : [{ kind: 'never' }] }

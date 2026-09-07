@@ -131,6 +131,13 @@ Deno.test('what it cannot answer exactly, it declines', () => {
     let e = assertThrows(() => matcher(q, shop), Unsupported) as Unsupported
     assertEquals(e.by, '@yaks/match', q)
   }
+  // the rule sigils: a component to add, a gate, a write set, a resource and a
+  // variable are instructions to a rule engine, not questions about a bundle,
+  // so they decline here rather than quietly matching everything
+  for (let q of ['+book', '+!book', '*book', '#book', '$b']) {
+    let e = assertThrows(() => matcher(q, shop), Unsupported) as Unsupported
+    assertEquals(e.by, '@yaks/match', q)
+  }
   // a reverse hop that is neither a count nor a child filter
   assertThrows(() => matcher('.reviews~=deep', shop), Unsupported)
   // a path whose root is no reference

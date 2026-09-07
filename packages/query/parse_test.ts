@@ -12,9 +12,11 @@ import {
   count,
   distinct,
   edges,
+  ensure,
   eq,
   every,
   fields,
+  gate,
   ge,
   gt,
   hasRefs,
@@ -22,6 +24,7 @@ import {
   limit,
   list,
   lt,
+  mutable,
   ne,
   near,
   never,
@@ -31,9 +34,11 @@ import {
   range,
   reaches,
   refs,
+  resource,
   scalar,
   tally,
   text,
+  variable,
   want,
 } from './mod.ts'
 
@@ -50,8 +55,33 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['.priority=1..5', and(eq('priority', range('1', '5')))],
   ['.priority=1...5', and(eq('priority', range('1', '5', true)))],
   ['.created.at=2026-07-25', and(eq('created.at', scalar('2026-07-25')))],
+  // presence and absence: the sigil spellings, and the older ones they replace
+  ['.assignee', and(present('assignee'))],
+  ['!assignee', and(absent('assignee'))],
   ['.assignee!', and(present('assignee'))],
   ['.assignee=', and(absent('assignee'))],
+  ['!.assignee', and(absent('assignee'))],
+  ['.created.at', and(present('created.at'))],
+  // the rule sigils
+  ['+created', and(ensure('created'))],
+  ['+!created', and(gate('created'))],
+  ['*created', and(mutable('created'))],
+  ['#clock', and(resource('clock'))],
+  ['$e', and(variable('e'))],
+  ['.entity,+!created', and(present('entity'), gate('created'))],
+  ['.entity, +!created', and(present('entity'), gate('created'))],
+  // `,` between clauses is AND; inside a value it stays any-of
+  [
+    '.status=open,.priority<=1&*task',
+    and(
+      eq('status', list('open', '.priority<=1')),
+      mutable('task'),
+    ),
+  ],
+  ['.task,.doc', and(present('task'), present('doc'))],
+  // the dot is accepted, never required, once a token carries an operator
+  ['status=open', and(eq('status', 'open'))],
+  ['comment.target=T-3', and(eq('comment.target', 'T-3'))],
   ['.loan?', and(want('loan'))],
   [
     '.comment.target.doc.title~=foo',
@@ -118,9 +148,35 @@ Deno.test('quoted phrase is one text term', () => {
   assertEquals(parse('"two words"'), and(text('two words')))
 })
 
-// An opless dot-word is a text term, not a filter.
-Deno.test('opless dot-word is a text term', () => {
-  assertEquals(parse('.env'), and(text('.env')))
+// A dot-marked word is the component, present; the same word bare is searched
+// for. Quotes make a text term of anything, operators included.
+Deno.test('the dot tells a component from a word', () => {
+  assertEquals(parse('.env'), and(present('env')))
+  assertEquals(parse('env'), and(text('env')))
+  assertEquals(parse('"comp.prop=1"'), and(text('comp.prop=1')))
+})
+
+// A comma announces another clause, so a bare word beside one is the component
+// it names — the rest of the line stays search terms.
+Deno.test('a comma puts a word in query position', () => {
+  assertEquals(
+    parse('!foo, bar hello there'),
+    and(absent('foo'), present('bar'), text('hello'), text('there')),
+  )
+})
+
+// `text: false` — a rule, or a saved filter, takes no bare-word search terms.
+Deno.test('text: false refuses a bare word', () => {
+  assertEquals(
+    parse('.doc, *task', { text: false }),
+    and(
+      present('doc'),
+      mutable('task'),
+    ),
+  )
+  assertThrows(() => parse('.doc hello', { text: false }), Error, 'not words')
+  // quoting is how a strict query still asks for a word
+  assertEquals(parse('"hello"', { text: false }), and(text('hello')))
 })
 
 // A list of ranges, one value.
