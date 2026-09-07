@@ -30,8 +30,11 @@ live(bundles) // the matching bundles, dearest first
 
 A **bundle** is one entity, whole: its identity under `entity`, every component
 it wears under that component's name — the shape
-[@yaks/graph](https://jsr.io/@yaks/graph) defines and
-[@yaks/sqlite](https://jsr.io/@yaks/sqlite) reads back.
+[@yaks/graph](https://jsr.io/@yaks/graph) writes and
+[@yaks/sqlite](https://jsr.io/@yaks/sqlite) reads back. This package declares
+that shape structurally rather than importing it: a graph compiles its rules
+with this matcher, so the dependency runs one way and a `@yaks/graph` bundle is
+one of these.
 
 ```ts
 { entity: { eid: 'b1', num: 3 },
@@ -182,8 +185,7 @@ Pure TypeScript. It imports no platform API — no `Deno`, no Node built-in, no
 DOM global — and type-checks under `lib: ["dom", "esnext"]`, so it runs
 unchanged in a **browser**, on **Deno**, and on **Node** (via JSR / npm). Its
 only dependencies are the sibling packages: a `@yaks/query` AST, a `@yaks/vocab`
-schema, `@yaks/graph`'s bundle types, and `@yaks/sql`'s `Unsupported` and column
-type categories.
+schema, and `@yaks/sql`'s `Unsupported` and column type categories.
 
 ## License
 

@@ -22,11 +22,17 @@ import {
   parse,
   type Query as Ast,
 } from '@yaks/query'
-import type { Bundle } from '@yaks/graph'
 import { Unsupported } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { BY, clause, type Ctx, type Test } from './clause.ts'
-import { column, type Computed, index, live, type Read } from './read.ts'
+import {
+  type Bundle,
+  column,
+  type Computed,
+  index,
+  live,
+  type Read,
+} from './read.ts'
 
 /** A query, as text (parsed by @yaks/query) or an already-built AST. */
 export type Query = string | Ast

@@ -46,7 +46,7 @@ export {
   type Query,
   type Select,
 } from './match.ts'
-export { type Computed, live } from './read.ts'
+export { type Bundle, type Computed, type Eid, live } from './read.ts'
 // The value and text rules, on their own: the vocabulary the two doors above are
 // composed from, for a caller testing one value or one word by hand.
 export {

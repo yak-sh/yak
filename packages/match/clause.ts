@@ -9,7 +9,6 @@
 // comparison a column's type cannot answer, or a directive that needs an index
 // is refused there and then, before any bundle is read.
 
-import type { Bundle } from '@yaks/graph'
 import {
   bare,
   type Clause,
@@ -20,7 +19,14 @@ import {
 } from '@yaks/query'
 import { identity, Unsupported } from '@yaks/sql'
 import type { Assoc, Hop, Vocab } from '@yaks/vocab'
-import { column, comp, type Computed, type Index, wears } from './read.ts'
+import {
+  type Bundle,
+  column,
+  comp,
+  type Computed,
+  type Index,
+  wears,
+} from './read.ts'
 import { check, EXISTS } from './value.ts'
 import { search } from './text.ts'
 

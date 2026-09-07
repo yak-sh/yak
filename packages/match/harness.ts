@@ -5,7 +5,7 @@
 // number, boolean, enum, timestamp, reference) and both directions of a
 // reference, without any knowledge outside this file.
 
-import type { Bundle } from '@yaks/graph'
+import type { Bundle } from './read.ts'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 
 let doc: VocabDoc = {

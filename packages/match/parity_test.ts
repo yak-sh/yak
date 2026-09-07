@@ -9,7 +9,7 @@
 
 import { assertEquals, assertThrows } from '@std/assert'
 import { Database } from '@db/sqlite'
-import type { Bundle } from '@yaks/graph'
+import type { Bundle } from './read.ts'
 import { storage } from '@yaks/sqlite'
 import { type Derived, Unsupported } from '@yaks/sql'
 import { compute, derived as taskDerived, taskDoc } from '@yaks/task'

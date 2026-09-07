@@ -12,9 +12,34 @@
 // bundle set the caller handed in. That set is the whole world for one run: an
 // entity outside it does not exist, the same way a row outside a table does not.
 
-import type { Bundle, Eid } from '@yaks/graph'
 import { type Tag, tagOf } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
+
+/** An entity's id: a client-minted string (a uuid, or a content hash). */
+export type Eid = string
+
+/**
+ * A bundle, as this package reads one: the identity under `entity`, every
+ * component under its own name, columns inside.
+ *
+ * It is the STRUCTURAL shape a matcher needs, and deliberately not an import of
+ * {@link https://jsr.io/@yaks/graph | @yaks/graph}'s `Bundle` — which is one of
+ * these, and passes wherever this is asked for. A graph compiles its RULES with
+ * this matcher, so the dependency between the two has to run one way, and this
+ * is the leaf end of it.
+ */
+export type Bundle = {
+  /** the identity component: the entity this bundle is about */
+  entity: { eid: Eid; num?: number }
+  /** a component's columns, `null` where it is being dropped, or a piece of
+   * the wire's own sugar */
+  [comp: string]:
+    | Record<string, unknown>
+    | null
+    | boolean
+    | string
+    | undefined
+}
 
 /** The bundle set one run is answered from, with its entities addressable. */
 export type Index = {
