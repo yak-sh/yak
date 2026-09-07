@@ -1332,11 +1332,13 @@ let AGENTS = [
       'Sign in with your email when ChatGPT asks.',
     ],
     details: {
-      summary: 'Add it as a plugin marketplace instead',
-      text: 'In the ChatGPT desktop app, <b>Add plugin marketplace</b> takes ' +
-        'this repository:' +
+      summary: 'Connect from the ChatGPT desktop app',
+      text:
+        'This way, yaks.app stays up to date without waiting for a review. ' +
+        'In the ChatGPT desktop app, choose ' +
+        '<b>Add plugin marketplace</b>, then copy and paste this:' +
         fields(field('Repository', REPO, 'the repository')) +
-        'A workspace imports the same one under its plugin settings.',
+        'You can also add it in your workspace’s plugin settings.',
     },
     finish: 'Open ' + external('https://chatgpt.com/', 'a new ChatGPT chat'),
   },

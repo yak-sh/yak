@@ -1,6 +1,6 @@
 ---
 name: tools
-description: "yaks.app — tools.json, so the person's agent can act on an app with no page open: an entry's description, its input types and {{arg}} holes, the apply and query acts, what a deploy refuses, the view an answer draws itself in, and how commands and command carry them."
+description: "Commands of your own (yaks.app). tools.json, so the person's agent can act on an app with no page open: an entry's description, its input types and {{arg}} holes, the apply and query acts, what a deploy refuses, the view an answer draws itself in, and how commands and command carry them."
 ---
 
 # Commands of your own

@@ -1,7 +1,7 @@
 {
   "name": "yaks.app",
   "version": "0.1.0",
-  "description": "Build an app by asking Claude or ChatGPT.",
+  "description": "Make and share apps in your usual chat, each with a web address of its own.",
   "author": {
     "name": "yaks.app",
     "url": "https://yaks.app/"
@@ -14,7 +14,7 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "yaks.app",
-    "shortDescription": "Build an app by asking.",
+    "shortDescription": "Make and share apps in your usual chat.",
     "longDescription": "Ask for an app and it is made, deployed and live at an address of its own. Every app keeps its own data, opens on a phone, and can be changed by asking again.",
     "developerName": "yaks.app",
     "category": "Productivity",

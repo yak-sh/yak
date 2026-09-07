@@ -1,6 +1,6 @@
 ---
 name: mail
-description: 'yaks.app — Sending and receiving email from an app: the address a space and an app make, the bundle that sends a letter and who may ask for one, the delivered and bounced rows that come back, how an arrival lands with its attachments, and what mail here does not do.'
+description: "Mail: an app's own address (yaks.app). Sending and receiving email from an app: the address a space and an app make, the bundle that sends a letter and who may ask for one, the delivered and bounced rows that come back, how an arrival lands with its attachments, and what mail here does not do."
 ---
 
 # Mail: an app's own address

@@ -1,6 +1,6 @@
 ---
 name: memory
-description: 'yaks.app — memory_save and memory_recall: keeping what the person said about how they want things done, in their own words rather than your summary of them — what belongs in a memory, what context is for and what it is not, when to reach for each tool, how a recall is ranked, and how a memory differs from the notes an app keeps.'
+description: 'What the person said (yaks.app). memory_save and memory_recall: keeping what the person said about how they want things done, in their own words rather than your summary of them — what belongs in a memory, what context is for and what it is not, when to reach for each tool, how a recall is ranked, and how a memory differs from the notes an app keeps.'
 ---
 
 # What the person said

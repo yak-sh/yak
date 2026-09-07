@@ -1,6 +1,6 @@
 ---
 name: sharing
-description: 'yaks.app — Who may read and write an app, and how one travels: app_publish, app_install and app_update, what an installed copy shares (the code, and nothing else), what pinning means, and what an update does to what people saved.'
+description: 'Publishing and installing an app (yaks.app). Who may read and write an app, and how one travels: app_publish, app_install and app_update, what an installed copy shares (the code, and nothing else), what pinning means, and what an update does to what people saved.'
 ---
 
 # Publishing and installing an app

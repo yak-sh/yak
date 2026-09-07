@@ -1,6 +1,6 @@
 ---
 name: entities
-description: "yaks.app — Two of the person's apps writing about the same entity without copying it: which app a component lives in, how a page reads a sibling app, and how graph_query composes one bundle out of several."
+description: "One entity, two apps (yaks.app). Two of the person's apps writing about the same entity without copying it: which app a component lives in, how a page reads a sibling app, and how graph_query composes one bundle out of several."
 ---
 
 # One entity, two apps

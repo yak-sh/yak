@@ -1,6 +1,6 @@
 ---
 name: notes
-description: "yaks.app — NOTES.md beside index.html, where an app keeps what its person wants written down about how it is kept — where the file goes, what belongs in it and what does not, the size ceiling, how about and the prompt of the app's own name hand it over, and what an installed copy carries."
+description: "The notes an app keeps (yaks.app). NOTES.md beside index.html, where an app keeps what its person wants written down about how it is kept — where the file goes, what belongs in it and what does not, the size ceiling, how about and the prompt of the app's own name hand it over, and what an installed copy carries."
 ---
 
 # The notes an app keeps

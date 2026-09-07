@@ -1,6 +1,6 @@
 ---
 name: code
-description: "yaks.app — worker.js in front of an app's files: which routes are yours, what env holds (STORE, FILES, and the secrets you set), what a request says about who is asking, the CPU and subrequest limits, and whole workers to copy."
+description: "Code of your own (yaks.app). worker.js in front of an app's files: which routes are yours, what env holds (STORE, FILES, and the secrets you set), what a request says about who is asking, the CPU and subrequest limits, and whole workers to copy."
 ---
 
 # Code of your own

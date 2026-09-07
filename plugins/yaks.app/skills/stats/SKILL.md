@@ -1,6 +1,6 @@
 ---
 name: stats
-description: "yaks.app — Visitor counts for an app: what one page view records and the six things it never does — no address, no visitor id, not even the browser's own string — app_stats and the window it takes, the block on their space page, the door a page reads its own numbers at, and why a small number is usually crawlers."
+description: "Who visited (yaks.app). Visitor counts for an app: what one page view records and the six things it never does — no address, no visitor id, not even the browser's own string — app_stats and the window it takes, the block on their space page, the door a page reads its own numbers at, and why a small number is usually crawlers."
 ---
 
 # Who visited

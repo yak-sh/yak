@@ -1,6 +1,6 @@
 ---
 name: store
-description: 'yaks.app — ./api/client.js in full — apply, query, search, subscribe, upload and me — the shape of an entity bundle, patching and deleting, who may read and write, the byline on a row, seed.json for the data an app comes with, and the HTTP doors underneath.'
+description: 'The store, from a page (yaks.app). ./api/client.js in full — apply, query, search, subscribe, upload and me — the shape of an entity bundle, patching and deleting, who may read and write, the byline on a row, seed.json for the data an app comes with, and the HTTP doors underneath.'
 ---
 
 # The store, from a page

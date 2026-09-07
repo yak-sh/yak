@@ -223,13 +223,13 @@ let formattedMd = async (held: Record<string, string>) => {
 
 let packaged = async (): Promise<Record<string, Uint8Array>> => {
   let md: Record<string, string> = {}
-  for (let { slug, description, body } of GUIDES) {
+  for (let { slug, title, description, body } of GUIDES) {
     // The description is JSON-encoded, which is a YAML double-quoted scalar
     // too: a page's own sentence may hold a colon or a quote and still land
-    // as one string. It is prefixed with the product because a skill's
-    // description is read on its own, in a list beside every other plugin's.
+    // as one string. The topic comes first for scanning a mixed skill list;
+    // the product beside it says where this guide applies.
     md[`skills/${slug}/SKILL.md`] = `---\nname: ${slug}\ndescription: ${
-      JSON.stringify(`yaks.app — ${description}`)
+      JSON.stringify(`${title} (yaks.app). ${description}`)
     }\n---\n\n${body.replace(/^\n+/, '').replace(/\n+$/, '')}\n`
   }
   let out: Record<string, Uint8Array> = {

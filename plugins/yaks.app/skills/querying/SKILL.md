@@ -1,6 +1,6 @@
 ---
 name: querying
-description: 'yaks.app — The filter grammar every door here speaks, with worked examples: presence and absence, contains, comparisons, ranges, time phrases, walking a reference, counting, paging, full text — and why a row carries only the components its filter named.'
+description: 'Querying: the filter line (yaks.app). The filter grammar every door here speaks, with worked examples: presence and absence, contains, comparisons, ranges, time phrases, walking a reference, counting, paging, full text — and why a row carries only the components its filter named.'
 ---
 
 # Querying: the filter line

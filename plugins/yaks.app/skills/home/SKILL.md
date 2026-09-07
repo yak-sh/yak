@@ -1,6 +1,6 @@
 ---
 name: home
-description: "yaks.app — The app served at <space>.yaks.app/ and how it routes the space: the five rungs a request is answered in, app_set home, the first globs that send another app's paths to it, why a broken router fails open, and where the space's own mail lands."
+description: "The front page, and routing the space (yaks.app). The app served at <space>.yaks.app/ and how it routes the space: the five rungs a request is answered in, app_set home, the first globs that send another app's paths to it, why a broken router fails open, and where the space's own mail lands."
 ---
 
 # The front page, and routing the space
