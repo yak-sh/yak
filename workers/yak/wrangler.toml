@@ -412,9 +412,12 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 # Bindings and vars do not inherit into named environments. Repeat every
 # binding here so staging has its own resources. Migrations, containers and
 # routing are repeated too, keeping the whole deployment visible in one place.
-# No tail_consumers: staging failures are logged and never page the owner.
 [env.staging]
 name = "yak-staging"
+# Empty on purpose: staging failures are logged and never page the owner.
+# Spelled out because wrangler warns on every run about a top-level list an
+# environment does not inherit.
+tail_consumers = []
 routes = [
   { pattern = "yaks.fyi/*", zone_name = "yaks.fyi" },
   { pattern = "*.yaks.fyi/*", zone_name = "yaks.fyi" },

@@ -153,8 +153,14 @@ export let tail = async (secs: number, staging = false) => {
     let lines = (rest + chunk).split('\n')
     rest = lines.pop() ?? ''
     for (let line of lines) {
-      if (!line.trim().startsWith('{')) continue
-      let row = JSON.parse(line) as Parameters<typeof fault>[0]
+      // wrangler mixes diagnostics into stdout, and a config warning can open
+      // with a brace too; only a line that parses is an event.
+      let row: Parameters<typeof fault>[0]
+      try {
+        row = JSON.parse(line)
+      } catch {
+        continue
+      }
       events++
       let bad = fault(row)
       if (bad) faults.push(bad)
