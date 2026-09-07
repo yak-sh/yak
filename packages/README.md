@@ -99,8 +99,8 @@ In dependency order:
 - **[@yaks/wake](./wake)** — coming back to something later, as data: a
   `wake{at, every, target, note}` on any entity, the wakes due at an instant,
   and the recurrence — a duration or a cron line — that moves one on. It fires
-  nothing itself; a server tick, a Durable Object `alarm()` and a browser tab
-  all run the same `due()`.
+  no handler: `tick` writes `fired` and advances the wake; graph rules do the
+  rest. Cloudflare and Deno drivers share that same write.
 - **[@yaks/mail](./mail)** — letters as entities: a `mail` addressed to any
   entity, the `deliver` that asks for it to go, the `delivered`/`bounced` it
   comes to rest as, the `created(mail)` effect that hands it to an injected
