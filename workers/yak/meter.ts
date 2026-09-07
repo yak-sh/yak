@@ -89,16 +89,9 @@ export let LETTERS: Record<Tier, number> = { free: 100, plus: 1_000 }
 
 export let letters = (tier: Tier | null): number => LETTERS[tier ?? 'free']
 
-// The apps the BUILDER builds for a person (T-34241, T-34237). Free is one for
-// the LIFE of the space — the first app, made for somebody who has never made
-// one — and Plus is a number every month. The month is what starts a paid
-// space over; nothing starts a free space over, which is why `Meter` carries
-// `built` beside `builds`.
-//
-// Both are ceilings on what WE pay a model for, so both tiers have one, the
-// way the letters do. Making and changing apps by hand (app_new, app_files) is
-// not metered here at all — only a build the builder performed.
-export let BUILDS: Record<Tier, number> = { free: 1, plus: 30 }
+// Monthly allowances for the optional built-in builder. Making and changing
+// apps through a connected chatbot (app_new, app_files) is not metered here.
+export let BUILDS: Record<Tier, number> = { free: 5, plus: 30 }
 
 export let builds = (tier: Tier | null): number => BUILDS[tier ?? 'free']
 
@@ -139,12 +132,9 @@ export let spent = (space: Space, now = new Date()) =>
   thisMonth(space.meter, monthOf(now)) ??
     empty(monthOf(now), space.meter?.built ?? 0)
 
-// The builds counted against the plan's ceiling: the space's whole life on
-// free, this month on a paid plan.
+// Both plans count completed builds in the current calendar month.
 export let usedBuilds = (space: Space, now = new Date()) =>
-  (space.tier ?? 'free') == 'free'
-    ? spent(space, now).built
-    : spent(space, now).builds
+  spent(space, now).builds
 
 // How full a space is, per ceiling, as a fraction: 1 is at it. The letters and
 // the builds are there on every plan; the other three only where the plan has
@@ -193,13 +183,9 @@ export let standing = (space: Space, apps: number, now = new Date()) => {
   let free = ceilings(space.tier)
   let m = spent(space, now)
   let mail = `${count(m.emails)} of ${count(letters(space.tier))} emails`
-  // What the builder has done and what it cost, counted here and now like the
-  // letters. The builds say WHICH span they are against — a free space's are
-  // for its life and a paid space's for the month — because `1 of 1 builds`
-  // under a month heading would read as a number that comes back.
   let made = `${count(usedBuilds(space, now))} of ${
     count(builds(space.tier))
-  } builds ${(space.tier ?? 'free') == 'free' ? 'ever' : 'a month'}`
+  } builds a month`
   // The tokens those builds spent: the one place a person sees what a build
   // costs us, and the month's, whatever span the builds are counted over.
   let cost = `${count(m.tokens)} tokens this month`
@@ -268,15 +254,10 @@ export let atCeiling = (
     // asked in words is owed an answer in words. What it leaves them is the
     // app they already have and the tools to change it themselves.
     builds: () =>
-      tier == 'free'
-        ? `${space.slug} is on the free tier, which is ${
-          count(builds(space.tier))
-        } app built for you for the life of the space, and it is built — ` +
-          `app_new and app_files still make and change apps here`
-        : `${space.slug} is on the plus tier, which is ${
-          count(builds(space.tier))
-        } apps built for you a month, and this month's are built — it can ` +
-          `build again on the 1st`,
+      `${space.slug} has used its ${
+        count(builds(space.tier))
+      } built-in builds this month — it can build again on the 1st, ` +
+      `or keep building with a connected chatbot`,
   }[what]()
   return `${said}. ${
     tier == 'plus' ? `What the plans hold` : `Plus lifts it`

@@ -198,9 +198,8 @@ export let sweep = async (env: Env, now = new Date()) => {
     // The space's own reading: its apps summed, and the figures counted where
     // they happen left alone — the mail doors count the letters and the
     // builder counts its builds (mail and a build ride no store), and this
-    // sweep is only what starts them over when the month turns. `built` is the
-    // one it never starts over: the free plan's build is for the life of the
-    // space, so `spent` carries that figure across the month (meter.ts).
+    // sweep starts them over when the month turns. `spent` preserves the
+    // lifetime total in `built` across that reset (meter.ts).
     let was = spent(space, now)
     let meter = {
       month,

@@ -165,13 +165,12 @@ Deno.test('a conversation that ships nothing is no build at all', async () => {
 Deno.test('a space at its build ceiling is told so before a token is spent', async () => {
   let { env, space } = await seeded()
   let model = fake([{ text: 'never asked' }])
-  // The free tier is one build for the life of the space (meter.ts BUILDS).
   let full = {
     ...space,
     meter: {
       month: monthOf(new Date()),
       built: BUILDS.free,
-      builds: 0,
+      builds: BUILDS.free,
       tokens: 0,
     },
   } as Space

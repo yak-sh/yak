@@ -233,8 +233,10 @@ let writes = () => {
   return { sent, env: { STORE: ns as unknown as Namespace } }
 }
 
-Deno.test('a free space is built for once, for the life of the space', async () => {
-  assertEquals(refusedBuild(space(), NOW), null)
+Deno.test('a free space gets five builds each month regardless of lifetime use', async () => {
+  for (let builds of [0, 1, 4]) {
+    assertEquals(refusedBuild(space({ builds, built: 40 }), NOW), null)
+  }
   let { sent, env } = writes()
   await countedBuild(env, space(), { input: 900, output: 100 }, 0, NOW)
   assertEquals(sent[0].meter, {
@@ -245,27 +247,23 @@ Deno.test('a free space is built for once, for the life of the space', async () 
     built: 1,
   })
 
-  // And that is the one: the sentence names the plan, the number, and the
-  // page — never a checkout (C-33033) — and leaves them the tools to keep
-  // going by hand.
-  let after = space({ builds: 1, tokens: 1_000, built: 1 })
+  let after = space({ builds: 5, tokens: 1_000, built: 45 })
   let no = refusedBuild(after, NOW)!
-  assertStringIncludes(no, '1 app built for you for the life of the space')
-  assertStringIncludes(no, 'app_new and app_files')
+  assert(no)
   assertStringIncludes(no, 'https://yaks.app/pricing')
   assert(!/checkout|billing|subscribe/i.test(no), no)
+  assert(refusedBuild(space({ builds: 6 }), NOW))
 
   // A refusal costs them nothing — not the build, and not the sentence: the
   // count is written by the loop that FINISHED one, and this one never ran.
-  assertEquals(usedBuilds(after, NOW), 1)
+  assertEquals(usedBuilds(after, NOW), 5)
   assertEquals(sent.length, 1)
 
-  // The month is not what gave them the build, so the month does not give
-  // them another. The lifetime figure rides the month turn (`spent`).
+  // The monthly allowance resets; the lifetime figure remains available.
   let october = new Date('2026-10-02T00:00:00Z')
-  assertEquals(spent(after, october).built, 1)
-  assertEquals(usedBuilds(after, october), 1)
-  assert(refusedBuild(after, october), 'a new month is not a new free build')
+  assertEquals(spent(after, october).built, 45)
+  assertEquals(usedBuilds(after, october), 0)
+  assertEquals(refusedBuild(after, october), null)
 })
 
 Deno.test('a paid space counts its builds down, and the month gives them back', async () => {
@@ -273,7 +271,7 @@ Deno.test('a paid space counts its builds down, and the month gives them back', 
     space({ month, builds, built: 40 }, 'plus')
   assertEquals(refusedBuild(plus(BUILDS.plus - 1), NOW), null)
   let no = refusedBuild(plus(BUILDS.plus), NOW)!
-  assertStringIncludes(no, '30 apps built for you a month')
+  assertStringIncludes(no, '30 built-in builds this month')
   assertStringIncludes(no, 'build again on the 1st')
   assertStringIncludes(no, 'https://yaks.app/pricing')
   // Last month's thirty are not this month's.
@@ -304,16 +302,14 @@ Deno.test('the build line warns at 80%, and the line says both numbers', () => {
   assertEquals(level(space({ builds: 23, built: 40 }, 'plus'), 1, NOW), 'ok')
   assertEquals(level(space({ builds: 24, built: 40 }, 'plus'), 1, NOW), 'near')
   assertEquals(level(space({ builds: 30, built: 40 }, 'plus'), 1, NOW), 'over')
-  // A free space has one build, so it has no 80%: it is at nothing, and then
-  // it is at the ceiling.
-  assertEquals(level(space({ builds: 1, built: 1 }), 1, NOW), 'over')
+  assertEquals(level(space({ builds: 3, built: 40 }), 1, NOW), 'ok')
+  assertEquals(level(space({ builds: 4, built: 40 }), 1, NOW), 'near')
+  assertEquals(level(space({ builds: 5, built: 40 }), 1, NOW), 'over')
 
-  // The line says which SPAN each number is against: a free space's build is
-  // for its life, a paid space's thirty are the month's, and the tokens are
-  // the month's on either plan.
+  // Both the build allowance and token usage are monthly on either plan.
   let said = standing(space({ builds: 1, tokens: 4_210, built: 1 }), 2, NOW)
-  assertStringIncludes(said, '1 of 1 builds ever (4,210 tokens this month)')
-  assertStringIncludes(said, 'a build past 1')
+  assertStringIncludes(said, '1 of 5 builds a month (4,210 tokens this month)')
+  assertStringIncludes(said, 'a build past 5')
   assertStringIncludes(
     standing(space({ builds: 4, tokens: 900, built: 44 }, 'plus'), 9, NOW),
     '4 of 30 builds a month (900 tokens this month)',

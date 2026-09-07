@@ -56,10 +56,8 @@ export type Meter = {
   rows_written: number
   bytes: number
   emails: number
-  // What the builder did and what it cost (T-34241): the builds it completed
-  // this month, the tokens they spent, and — the one figure here that is not
-  // the month's — every build in this space's life, because the free plan's
-  // build is for the life of the space rather than the month.
+  // Monthly builder usage. `built` keeps a lifetime total for usage reporting;
+  // both plans enforce their build allowance against the monthly `builds`.
   builds: number
   tokens: number
   // The seconds the builder's workbench spent awake (sandbox.ts, T-34264).

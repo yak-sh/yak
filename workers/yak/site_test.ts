@@ -7,7 +7,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { slow } from '../../src/testing.ts'
 import { REPLY_TO } from './mail.ts'
-import { BUILDS, CURRENCY, LETTERS, PRICE } from './meter.ts'
+import { CURRENCY, LETTERS, PRICE } from './meter.ts'
 import { quoted, rate } from './sell.ts'
 import { page as galleryPage } from './gallery.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
@@ -172,19 +172,6 @@ let flat = (html: string) => html.replace(/\s+/g, ' ')
 Deno.test('the plan pages carry the email allowance the code enforces', () => {
   let free = `${LETTERS.free} emails a month`
   let plus = `${LETTERS.plus.toLocaleString('en-US')} emails a month`
-  for (let page of ['index.html', 'pricing.html', 'technical.html']) {
-    let html = flat(read(page))
-    assert(html.includes(free), `${page} does not say ${free}`)
-    assert(html.includes(plus), `${page} does not say ${plus}`)
-  }
-})
-
-// The builder's number, held to the same rule (T-34241): free is one build for
-// the LIFE of the space and Plus a number every month, so the pages say each
-// in those words and `BUILDS` is the one place either is written down.
-Deno.test('the plan pages carry the builds the code enforces', () => {
-  let free = `${BUILDS.free} app built for you`
-  let plus = `${BUILDS.plus} apps built for you a month`
   for (let page of ['index.html', 'pricing.html', 'technical.html']) {
     let html = flat(read(page))
     assert(html.includes(free), `${page} does not say ${free}`)

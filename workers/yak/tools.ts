@@ -3140,8 +3140,7 @@ let OURS: Row[] = [
           usage: spent(space),
           // The letters and the builds are the allowances every plan carries,
           // so they are beside the three a free space alone answers to
-          // (meter.ts). `usage.builds` is this month's; on the free plan the
-          // ceiling is the space's whole life, which is `usage.built`.
+          // (meter.ts). `usage.builds` counts against the monthly allowance.
           ceilings: {
             ...(ceilings(space.tier) ?? {}),
             emails: letters(space.tier),
