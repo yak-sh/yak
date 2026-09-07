@@ -1,3 +1,17 @@
+---
+entity: { eid: $clipping }
+doc:
+  title: Saving from another site
+guide:
+  slug: clipping
+  brief: saving a page from another site
+  description: >-
+    Clipping a page somebody is reading into the app's store: a worker route
+    that fetches it and reads its JSON-LD, Open Graph and title, a
+    bookmarklet that launches it, why a script on another site cannot write
+    here, and what to say when a site refuses a robot.
+---
+
 # Saving a page from another site
 
 Somebody is reading something on somebody else's website — a recipe, a flat to

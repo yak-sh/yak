@@ -1,3 +1,17 @@
+---
+entity: { eid: $sharing }
+doc:
+  title: Publishing and installing an app
+guide:
+  slug: sharing
+  brief: publishing and installing an app
+  description: >-
+    Who may read and write an app, and how one travels: app_publish,
+    app_install and app_update, what an installed copy shares (the code, and
+    nothing else), what pinning means, and what an update does to what
+    people saved.
+---
+
 # Publishing and installing an app
 
 Two different questions get answered here. Who may read and write ONE app — its

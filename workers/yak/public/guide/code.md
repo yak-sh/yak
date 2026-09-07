@@ -1,3 +1,16 @@
+---
+entity: { eid: $code }
+doc:
+  title: Code of your own
+guide:
+  slug: code
+  brief: worker.js in front of an app's files
+  description: >-
+    worker.js in front of an app's files: which routes are yours, what env
+    holds (STORE, FILES, and the secrets you set), what a request says about
+    who is asking, the CPU and subrequest limits, and whole workers to copy.
+---
+
 # Code of your own
 
 An app is pages until you give it a `worker.js`. This page is what that file

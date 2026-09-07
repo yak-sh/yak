@@ -27,7 +27,7 @@
 // the mcp server so they don't have to fetch?" The files stay the one source:
 // the tool and the resources both read them off the assets binding, at the
 // very addresses the web serves them from.
-import { pagesOf } from './plugin.ts'
+import { page, pagesOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 
 export type Page = {
@@ -311,166 +311,29 @@ export let WHOLE = 'https://yaks.app/guide.md'
 
 export let uriOf = (slug: string) => `https://yaks.app/guide/${slug}.md`
 
-// The platform's own pages. The list an agent is offered is these plus every
-// plugin's — `PAGES`, at the foot of this list.
+// The platform's own pages, in the order an agent is offered them. A page
+// says its own title, brief and description in its frontmatter now (M-34605,
+// plugin.ts `page`); what stays here is WHICH pages there are and in what
+// order, because that is a decision, and a file dropped into the directory is
+// not one. The list an agent is offered is these plus every plugin's —
+// `PAGES`, at the foot of this list.
 let OURS: Page[] = [
-  {
-    slug: 'store',
-    title: 'The store, from a page',
-    description:
-      './api/client.js in full — apply, query, search, subscribe, upload ' +
-      'and me — the shape of an entity bundle, patching and deleting, who ' +
-      'may read and write, the byline on a row, seed.json for the data an ' +
-      'app comes with, and the HTTP doors underneath.',
-    brief: 'reading and writing from a page',
-  },
-  {
-    slug: 'querying',
-    title: 'Querying: the filter line',
-    description:
-      'The filter grammar every door here speaks, with worked examples: ' +
-      'presence and absence, contains, comparisons, ranges, time phrases, ' +
-      'walking a reference, counting, paging, full text — and why a row ' +
-      'carries only the components its filter named.',
-    brief: 'the filter line, with examples',
-  },
-  {
-    slug: 'components',
-    title: "Components: the platform's, and your own",
-    description:
-      'Every component an app already has, column by column, and vocab.json ' +
-      'for words of your own: the column types, what a later deploy may ' +
-      'change, the names already taken, and when a column beats doc.body.',
-    brief: "the platform's words, and your own",
-  },
-  {
-    slug: 'entities',
-    title: 'One entity, two apps',
-    description:
-      "Two of the person's apps writing about the same entity without " +
-      'copying it: which app a component lives in, how a page reads a ' +
-      'sibling app, and how graph_query composes one bundle out of several.',
-    brief: 'one entity across two apps',
-  },
-  {
-    slug: 'files',
-    title: 'Files and pictures',
-    description:
-      "app_files for the app's own files — what a write answers, the patch " +
-      'and fetch ops, the history every write keeps and the restore that ' +
-      'puts one back, the icon.png that gives an app an icon on a home ' +
-      'screen — then upload() for a file off an <input>: where the bytes are ' +
-      'served back from, the attachment and image rows it writes, the 20 MB ' +
-      'ceiling and the downscale under it, and a gallery that never shows one ' +
-      'picture twice.',
-    brief: "the app's files, its icon, uploads, pictures",
-  },
-  {
-    slug: 'tools',
-    title: 'Commands of your own',
-    description:
-      "tools.json, so the person's agent can act on an app with no page " +
-      "open: an entry's description, its input types and {{arg}} holes, the " +
-      'apply and query acts, what a deploy refuses, the view an answer ' +
-      'draws itself in, and how commands and command carry them.',
-    brief: 'commands of the app, for an agent',
-  },
-  {
-    slug: 'instructions',
-    title: 'Standing instructions for an app',
-    description:
-      "AGENTS.md beside index.html: the rules an app's person wants followed " +
-      'every time anyone works on it, handed to every agent who can reach ' +
-      'the app — where the file goes, what belongs in it and what does not, ' +
-      'the size ceiling, how a person invokes it by name, and what an ' +
-      'installed copy carries.',
-    brief: 'standing rules an app carries',
-  },
-  {
-    slug: 'code',
-    title: 'Code of your own',
-    description:
-      "worker.js in front of an app's files: which routes are yours, what " +
-      'env holds (STORE, FILES, and the secrets you set), what a request ' +
-      'says about who is asking, the CPU and subrequest limits, and whole ' +
-      'workers to copy.',
-    brief: "worker.js in front of an app's files",
-  },
-  {
-    slug: 'clipping',
-    title: 'Saving from another site',
-    description:
-      "Clipping a page somebody is reading into the app's store: a worker " +
-      'route that fetches it and reads its JSON-LD, Open Graph and title, a ' +
-      'bookmarklet that launches it, why a script on another site cannot ' +
-      'write here, and what to say when a site refuses a robot.',
-    brief: 'saving a page from another site',
-  },
-  {
-    slug: 'sharing',
-    title: 'Publishing and installing an app',
-    description:
-      'Who may read and write an app, and how one travels: app_publish, ' +
-      'app_install and app_update, what an installed copy shares (the code, ' +
-      'and nothing else), what pinning means, and what an update does to ' +
-      'what people saved.',
-    brief: 'publishing and installing an app',
-  },
-  {
-    slug: 'home',
-    title: 'The front page, and routing the space',
-    description:
-      'The app served at <space>.yaks.app/ and how it routes the space: the ' +
-      'five rungs a request is answered in, app_set home, the first globs ' +
-      "that send another app's paths to it, why a broken router fails open, " +
-      "and where the space's own mail lands.",
-    brief: 'the front page, and routing a space',
-  },
-  {
-    slug: 'mail',
-    title: "Mail: an app's own address",
-    description:
-      'Sending and receiving email from an app: the address a space and an ' +
-      'app make, the bundle that sends a letter and who may ask for one, the ' +
-      'delivered and bounced rows that come back, how an arrival lands with ' +
-      'its attachments, and what mail here does not do.',
-    brief: "an app's own email address",
-  },
-  {
-    slug: 'selling',
-    title: 'Selling things',
-    description:
-      'Taking money for something: how a seller connects their own Stripe ' +
-      'account to a space, the ./api/pay/checkout door a page posts a cart ' +
-      'to and what it answers, why a page never posts a price, the order row ' +
-      "and the buyer's letter that land when the money moves, who can read " +
-      'an order afterwards, and why a card number never reaches your app.',
-    brief: 'taking money for something an app sells',
-  },
-  {
-    slug: 'domains',
-    title: 'A domain of their own',
-    description:
-      'Pointing a domain the person already owns at their space or at one ' +
-      'app of it: the CNAME to add and where to type it at GoDaddy, ' +
-      'Namecheap, Squarespace and the rest, the apex problem and the three ' +
-      'ways through it, what each pending state means, and why a domain ' +
-      'stays stuck.',
-    brief: 'pointing a domain at a space or an app',
-  },
-  {
-    slug: 'errors',
-    title: 'When something breaks',
-    description:
-      'What a refused call answers and how a page shows it, where a break ' +
-      'is filed and how the agent hears about it once, app_errors, ' +
-      'app_versions and app_rollback, the 30-day trash app_delete and ' +
-      'space_delete put a thing in and app_restore and space_restore take it ' +
-      'out of, and feedback for anything you or the person have to say about ' +
-      'the platform itself.',
-    brief: 'what broke, and rolling back',
-  },
-]
+  'store',
+  'querying',
+  'components',
+  'entities',
+  'files',
+  'tools',
+  'instructions',
+  'code',
+  'clipping',
+  'sharing',
+  'home',
+  'mail',
+  'selling',
+  'domains',
+  'errors',
+].map(page)
 
 /** Every guide page: the platform's own, then each plugin's in PLUGINS order
  * (plugin.ts `pages`). The file a page names is still under `public/guide/`

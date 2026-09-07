@@ -1,3 +1,16 @@
+---
+entity: { eid: $components }
+doc:
+  title: 'Components: the platform''s, and your own'
+guide:
+  slug: components
+  brief: the platform's words, and your own
+  description: >-
+    Every component an app already has, column by column, and vocab.json for
+    words of your own: the column types, what a later deploy may change, the
+    names already taken, and when a column beats doc.body.
+---
+
 # Components: the platform's, and your own
 
 Every app's store speaks the same small vocabulary, and every app may add words

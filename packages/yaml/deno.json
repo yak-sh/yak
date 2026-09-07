@@ -1,0 +1,16 @@
+{
+  "name": "@yaks/yaml",
+  "version": "0.0.0",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "The warm path for declaration files: YAML (which reads JSON too) as a value, and a markdown file's frontmatter as a bundle.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "@std/yaml": "jsr:@std/yaml@^1.2.0"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts"
+    ]
+  }
+}

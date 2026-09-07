@@ -1,3 +1,18 @@
+---
+entity: { eid: $memory }
+doc:
+  title: What the person said
+guide:
+  slug: memory
+  brief: the words a person wants remembered
+  description: >-
+    memory_save and memory_recall: keeping what the person said about how
+    they want things done, in their own words rather than your summary of
+    them — what belongs in a memory, what context is for and what it is not,
+    when to reach for each tool, how a recall is ranked, and how a memory
+    differs from an app's AGENTS.md.
+---
+
 # What the person said
 
 A person says how they want things done once — "use grams, never cups" — and

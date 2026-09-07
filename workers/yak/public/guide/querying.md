@@ -1,3 +1,17 @@
+---
+entity: { eid: $querying }
+doc:
+  title: 'Querying: the filter line'
+guide:
+  slug: querying
+  brief: the filter line, with examples
+  description: >-
+    The filter grammar every door here speaks, with worked examples:
+    presence and absence, contains, comparisons, ranges, time phrases,
+    walking a reference, counting, paging, full text — and why a row carries
+    only the components its filter named.
+---
+
 # Querying: the filter line
 
 One grammar reads an app's store, and every door speaks it: `query()` and

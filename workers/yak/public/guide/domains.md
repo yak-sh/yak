@@ -1,3 +1,17 @@
+---
+entity: { eid: $domains }
+doc:
+  title: A domain of their own
+guide:
+  slug: domains
+  brief: pointing a domain at a space or an app
+  description: >-
+    Pointing a domain the person already owns at their space or at one app
+    of it: the CNAME to add and where to type it at GoDaddy, Namecheap,
+    Squarespace and the rest, the apex problem and the three ways through
+    it, what each pending state means, and why a domain stays stuck.
+---
+
 # A domain of their own
 
 A space here answers at `<space>.yaks.app` and each of its apps at

@@ -1,3 +1,18 @@
+---
+entity: { eid: $errors }
+doc:
+  title: When something breaks
+guide:
+  slug: errors
+  brief: what broke, and rolling back
+  description: >-
+    What a refused call answers and how a page shows it, where a break is
+    filed and how the agent hears about it once, app_errors, app_versions
+    and app_rollback, the 30-day trash app_delete and space_delete put a
+    thing in and app_restore and space_restore take it out of, and feedback
+    for anything you or the person have to say about the platform itself.
+---
+
 # When something breaks
 
 Nothing here is swallowed. This page is what a refused call answers and how a

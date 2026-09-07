@@ -1,3 +1,18 @@
+---
+entity: { eid: $instructions }
+doc:
+  title: Standing instructions for an app
+guide:
+  slug: instructions
+  brief: standing rules an app carries
+  description: >-
+    AGENTS.md beside index.html: the rules an app's person wants followed
+    every time anyone works on it, handed to every agent who can reach the
+    app — where the file goes, what belongs in it and what does not, the
+    size ceiling, how a person invokes it by name, and what an installed
+    copy carries.
+---
+
 # Standing instructions for an app
 
 An app's person says a thing once — "recipes in grams" — and then says it again

@@ -8,6 +8,7 @@
 // may call, which do read data (anon.ts), and the 401 and its challenge for
 // everything neither surface answers.
 import { assert, assertEquals } from '@std/assert'
+import { WORDS } from './content.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { answer, DOCS, NO_ARGS, PUBLIC } from './preauth.ts'
 import { IDEAS } from './prompts.ts'
@@ -109,7 +110,9 @@ Deno.test('the public tools are the signed-in ones, word for word', async () => 
   for (let t of PUBLIC) {
     let full = TOOLS.find((f) => f.name == t.name)
     assert(full, `${t.name} is public but not offered signed in`)
-    assertEquals(full.description, t.description)
+    // Both lists say what tools.yml says (tool.ts `worded`), so they cannot
+    // drift; what is checked here is that the row is offered at all.
+    assertEquals(full.description, WORDS[t.name].description)
     assertEquals(full.input, NO_ARGS)
     // The same words either way: a tool that reads nothing cannot have a
     // second answer for a member.
@@ -144,7 +147,12 @@ Deno.test('nothing public sells anything', () => {
   let sold =
     /subscription|upgrade|pricing|\bplans?\b|billing|per month|free to|\$\d/i
   for (let t of PUBLIC) {
-    assertEquals(sold.test(`${t.description} ${t.text}`), false, t.name)
+    let said = WORDS[t.name]
+    assertEquals(
+      sold.test(`${said.title} ${said.description} ${t.text}`),
+      false,
+      t.name,
+    )
   }
   for (let d of DOCS) {
     assertEquals(sold.test(`${d.title} ${d.description}`), false, d.uri)

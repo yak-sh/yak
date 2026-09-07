@@ -1,3 +1,17 @@
+---
+entity: { eid: $mail }
+doc:
+  title: 'Mail: an app''s own address'
+guide:
+  slug: mail
+  brief: an app's own email address
+  description: >-
+    Sending and receiving email from an app: the address a space and an app
+    make, the bundle that sends a letter and who may ask for one, the
+    delivered and bounced rows that come back, how an arrival lands with its
+    attachments, and what mail here does not do.
+---
+
 # Mail: an app's own address
 
 Every app here has a mailbox. It can send a letter — an order confirmation, a

@@ -396,6 +396,12 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 "@yaks/vocab" = "../../packages/vocab/mod.ts"
 "@yaks/wake" = "../../packages/wake/mod.ts"
 "@yaks/workers" = "../../packages/workers/mod.ts"
+"@yaks/yaml" = "../../packages/yaml/mod.ts"
+# @yaks/yaml's own dependency, spelled at the file it is. esbuild walks up from
+# packages/yaml/yaml.ts and finds no node_modules above it — the same reason
+# every npm name below is aliased — so the JSR package's npm build is named
+# here, out of this directory's own install (package.json).
+"@std/yaml" = "./node_modules/@std/yaml/mod.js"
 "zod" = "./node_modules/zod/index.js"
 "@modelcontextprotocol/sdk/server/mcp.js" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js"
 "@modelcontextprotocol/sdk/types.js" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/types.js"

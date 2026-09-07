@@ -38,8 +38,8 @@
 // that row stands for, so a plain `count()` under-reports a busy app by
 // exactly the factor that made it busy, and nothing would say so.
 import type { Env } from './env.ts'
-import type { Answer, Plugin } from './plugin.ts'
-import { APP, inApp, SPACE as SPACE_ARG } from './tool.ts'
+import { type Answer, page, type Plugin } from './plugin.ts'
+import { APP, inApp, type Row, SPACE as SPACE_ARG, worded } from './tool.ts'
 import { url as appUrl } from './directory.ts'
 
 /** How long Cloudflare keeps a data point. Said in one place. */
@@ -388,6 +388,63 @@ let stats: Answer = async (at) => {
   }
 }
 
+// The rows, said as rows: the words each says about itself are in
+// tools.yml under its name (tool.ts `worded`).
+let STATS: Row[] = [
+  {
+    name: 'app_stats',
+    readOnly: true,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE_ARG,
+        app: APP,
+        days: {
+          type: 'number',
+          description:
+            'how far back, in days (default 30). Cloudflare keeps three ' +
+            'months, so anything past 90 is the same answer as 90.',
+        },
+      },
+      required: ['app'],
+    },
+    run: async (ctx, args) => {
+      let { space, app } = await inApp(ctx, args)
+      let days = args.days == null ? undefined : Number(args.days)
+      // No token, no numbers — one sentence rather than an error, because
+      // there is nothing the agent or the person can do about it (views.ts).
+      let asked = statsOf(ctx.env, app.eid, days)
+      if (!asked) return { text: NOT_ON, space, data: { on: false } }
+      let seen = await asked
+      let list = (head: string, rows: { name: string; views: number }[]) =>
+        rows.length
+          ? [`${head}:`, ...rows.map((r) => `- ${r.name} — ${r.views}`)]
+          : []
+      let text = seen.total
+        ? [
+          `${space.slug}/${app.slug} — ${seen.total} visits in ${seen.days} ` +
+          `days (${appUrl(space, app)})`,
+          ...list('Pages', seen.pages),
+          ...list('Came from', seen.from),
+          ...list('Countries', seen.countries),
+        ].join('\n')
+        : `${space.slug}/${app.slug} — nobody has opened it in ${seen.days} ` +
+          'days'
+      return {
+        text,
+        space,
+        data: {
+          on: true,
+          space: space.slug,
+          app: app.slug,
+          url: appUrl(space, app),
+          ...seen,
+        },
+      }
+    },
+  },
+]
+
 /**
  * Analytics, as what it CONTRIBUTES (plugin.ts): the count of a page served,
  * the door an app's own page reads its numbers at, the tool an agent asks
@@ -403,78 +460,6 @@ export let viewsPlugin: Plugin = {
   name: 'views',
   answers: [stats],
   watch: (v) => viewed(v.env, v.req, v.res, v.at),
-  pages: [{
-    slug: 'stats',
-    title: 'Who visited',
-    description:
-      'Visitor counts for an app: what one page view records and the six ' +
-      'things it never does — no address, no visitor id, not even the ' +
-      "browser's own string — app_stats and the window it takes, the block " +
-      'on their space page, the door a page reads its own numbers at, and ' +
-      'why a small number is usually crawlers.',
-    brief: 'who opened an app, and from where',
-  }],
-  tools: [
-    {
-      name: 'app_stats',
-      title: 'Who visited an app',
-      readOnly: true,
-      description:
-        'How many people opened the app, and where they came from: visits a ' +
-        'day for the last month, the pages they opened, the sites that linked ' +
-        'to them, and the countries they were in. Aggregate counts and nothing ' +
-        'else — there is no visitor here to identify, no address and no ' +
-        'session, so this can never answer who someone was or what one person ' +
-        'did. Reach for it when they ask whether anyone is reading the thing, ' +
-        "or which page is worth working on. Only the app's own people may ask.",
-      input: {
-        type: 'object',
-        properties: {
-          space: SPACE_ARG,
-          app: APP,
-          days: {
-            type: 'number',
-            description:
-              'how far back, in days (default 30). Cloudflare keeps three ' +
-              'months, so anything past 90 is the same answer as 90.',
-          },
-        },
-        required: ['app'],
-      },
-      run: async (ctx, args) => {
-        let { space, app } = await inApp(ctx, args)
-        let days = args.days == null ? undefined : Number(args.days)
-        // No token, no numbers — one sentence rather than an error, because
-        // there is nothing the agent or the person can do about it (views.ts).
-        let asked = statsOf(ctx.env, app.eid, days)
-        if (!asked) return { text: NOT_ON, space, data: { on: false } }
-        let seen = await asked
-        let list = (head: string, rows: { name: string; views: number }[]) =>
-          rows.length
-            ? [`${head}:`, ...rows.map((r) => `- ${r.name} — ${r.views}`)]
-            : []
-        let text = seen.total
-          ? [
-            `${space.slug}/${app.slug} — ${seen.total} visits in ${seen.days} ` +
-            `days (${appUrl(space, app)})`,
-            ...list('Pages', seen.pages),
-            ...list('Came from', seen.from),
-            ...list('Countries', seen.countries),
-          ].join('\n')
-          : `${space.slug}/${app.slug} — nobody has opened it in ${seen.days} ` +
-            'days'
-        return {
-          text,
-          space,
-          data: {
-            on: true,
-            space: space.slug,
-            app: app.slug,
-            url: appUrl(space, app),
-            ...seen,
-          },
-        }
-      },
-    },
-  ],
+  pages: [page('stats')],
+  tools: STATS.map(worded),
 }

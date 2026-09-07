@@ -1,3 +1,17 @@
+---
+entity: { eid: $store }
+doc:
+  title: The store, from a page
+guide:
+  slug: store
+  brief: reading and writing from a page
+  description: >-
+    ./api/client.js in full — apply, query, search, subscribe, upload and me
+    — the shape of an entity bundle, patching and deleting, who may read and
+    write, the byline on a row, seed.json for the data an app comes with,
+    and the HTTP doors underneath.
+---
+
 # The store, from a page
 
 Every app comes with a graph of its own and a client for reading and writing it

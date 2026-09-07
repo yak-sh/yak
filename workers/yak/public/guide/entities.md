@@ -1,3 +1,16 @@
+---
+entity: { eid: $entities }
+doc:
+  title: One entity, two apps
+guide:
+  slug: entities
+  brief: one entity across two apps
+  description: >-
+    Two of the person's apps writing about the same entity without copying
+    it: which app a component lives in, how a page reads a sibling app, and
+    how graph_query composes one bundle out of several.
+---
+
 # One entity, two apps
 
 Two of the person's apps can write about the same thing without either one

@@ -22,11 +22,13 @@
     "jsr:@std/streams@^1.0.9": "1.1.2",
     "jsr:@std/testing@1": "1.0.20",
     "jsr:@std/toml@1": "1.0.11",
+    "jsr:@std/yaml@^1.2.0": "1.2.0",
     "npm:@cloudflare/sandbox@0.12.9": "0.12.9",
     "npm:@cloudflare/workers-oauth-provider@0.10.3": "0.10.3",
     "npm:@cloudflare/workers-types@^4.20260702.1": "4.20260702.1",
     "npm:@huggingface/transformers@3": "3.8.1",
     "npm:@jsr/std__csv@1.0.6": "1.0.6",
+    "npm:@jsr/std__yaml@1.2.0": "1.2.0",
     "npm:@modelcontextprotocol/sdk@1.29.0": "1.29.0_zod@3.25.76",
     "npm:@modelcontextprotocol/sdk@^1.12.0": "1.29.0_zod@3.25.76",
     "npm:@modelcontextprotocol/sdk@^1.29.0": "1.29.0_zod@3.25.76",
@@ -136,6 +138,9 @@
       "dependencies": [
         "jsr:@std/collections"
       ]
+    },
+    "@std/yaml@1.2.0": {
+      "integrity": "20beb41e4983ba3437dbefac62b14061ab058e8a187596f19d28ff9035f6e6cf"
     }
   },
   "npm": {
@@ -379,6 +384,10 @@
         "@jsr/std__bytes"
       ],
       "tarball": "https://npm.jsr.io/~/11/@jsr/std__streams/1.1.2.tgz"
+    },
+    "@jsr/std__yaml@1.2.0": {
+      "integrity": "sha512-fTUHQaAs2fOsPnuHHztJfp3WcmwDBvbbtpRZoNcpuUnRGPpCS+jN5UPXHDB+R/R1bvna6Ih0iUjWH6PryjKZPA==",
+      "tarball": "https://npm.jsr.io/~/11/@jsr/std__yaml/1.2.0.tgz"
     },
     "@modelcontextprotocol/sdk@1.29.0_zod@3.25.76": {
       "integrity": "sha512-zo37mZA9hJWpULgkRpowewez1y6ML5GsXJPY8FI0tBBCd77HEvza4jDqRKOXgHNn867PVGCyTdzqpz0izu5ZjQ==",
@@ -1385,6 +1394,7 @@
       "jsr:@std/csv@^1.0.6",
       "jsr:@std/testing@1",
       "jsr:@std/toml@1",
+      "jsr:@std/yaml@^1.2.0",
       "npm:@cloudflare/sandbox@0.12.9",
       "npm:@cloudflare/workers-oauth-provider@0.10.3",
       "npm:@huggingface/transformers@3",
@@ -1587,12 +1597,19 @@
           "jsr:@std/assert@1"
         ]
       },
+      "packages/yaml": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "jsr:@std/yaml@^1.2.0"
+        ]
+      },
       "workers/yak": {
         "packageJson": {
           "dependencies": [
             "npm:@cloudflare/sandbox@0.12.9",
             "npm:@cloudflare/workers-oauth-provider@0.10.3",
             "npm:@jsr/std__csv@1.0.6",
+            "npm:@jsr/std__yaml@1.2.0",
             "npm:@modelcontextprotocol/sdk@1.29.0",
             "npm:postal-mime@3.0.0",
             "npm:zod@3.25.76"

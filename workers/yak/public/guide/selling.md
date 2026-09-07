@@ -1,3 +1,18 @@
+---
+entity: { eid: $selling }
+doc:
+  title: Selling things
+guide:
+  slug: selling
+  brief: taking money for something an app sells
+  description: >-
+    Taking money for something: how a seller connects their own Stripe
+    account to a space, the ./api/pay/checkout door a page posts a cart to
+    and what it answers, why a page never posts a price, the order row and
+    the buyer's letter that land when the money moves, who can read an order
+    afterwards, and why a card number never reaches your app.
+---
+
 # Selling things
 
 An app can take money, and taking it is one call. The seller connects a Stripe

@@ -60,13 +60,15 @@ export let spoken = (asked: unknown) =>
   typeof asked == 'string' && PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0]
 
 // A tool with nothing to look up: its whole answer is a text written here,
-// the same words for every caller. That is the only shape a tool can have
-// before anyone has signed in, and it is what makes the public list safe to
-// serve without knowing who is asking.
+// the same words for every caller. What it SAYS about itself is in tools.yml
+// under its name, like every other row (tool.ts `worded`), so the pre-auth
+// list and the signed-in one cannot say different things about one tool.
+//
+// Saying one text and reading nothing is the only shape a tool can have before
+// anyone has signed in, and it is what makes the public list safe to serve
+// without knowing who is asking.
 export type Says = {
   name: string
-  title: string
-  description: string
   text: string
 }
 
@@ -78,15 +80,6 @@ export let NO_ARGS = { type: 'object' as const, properties: {} }
 // already read.
 let ABOUT: Says = {
   name: 'about',
-  title: 'What yaks.app is',
-  description:
-    'What yaks.app is and what gets made here. Call it when someone asks ' +
-    'what this place is, or when you have not signed in and want to know ' +
-    'what works signed out and what signing in would add — it answers in a ' +
-    'paragraph and says where to sign in. Signed in, it also says WHO you ' +
-    'are signed in as, how (a browser, a connector, a CLI grant) and until ' +
-    'when, plus the tools this door is listing right now. Signed out it ' +
-    'reads nothing about anybody: the same words for everyone.',
   text: `yaks.app is a place to make small web apps by asking for one. An app
 is an index.html and whatever files sit beside it — no build step, no
 framework, no install — served live at its own address,

@@ -39,6 +39,7 @@
 // naming a domain each.
 import type { Rule } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
+import { PAGES } from './content.ts'
 import type { App, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import type { Page } from './guide.ts'
@@ -99,6 +100,23 @@ export type Plugin = {
   watch?: Watch
   /** the rules it declares, run inside every store this Worker builds */
   rules?: Rule[]
+}
+
+/**
+ * The row a guide page says about ITSELF: the frontmatter of
+ * `public/guide/<slug>.md` (M-34605), which is where a page's title, brief and
+ * description live now. Naming a slug is the whole of registering a page — the
+ * words are the page's own — and a slug no file answers to throws at module
+ * load, which is the build and the test run.
+ *
+ * It sits here, below both, because guide.ts says the platform's pages with it
+ * and a plugin says its own; the file it reads is generated (gen.ts), so
+ * nothing in that direction can cycle.
+ */
+export let page = (slug: string): Page => {
+  let row = PAGES[slug]
+  if (!row) throw new Error(`public/guide/${slug}.md says nothing`)
+  return row
 }
 
 /** Every vocabulary document a set of plugins contributes, in plugin order. */

@@ -8,6 +8,7 @@
 // guess five times over (C-32675 items 2 and 3), and the doors and limits an
 // app's own worker.js runs under (T-32780).
 import { assert, assertEquals } from '@std/assert'
+import { front } from '@yaks/yaml'
 import { RESERVED } from '../../src/store/vocab.ts'
 import { comps, typeName } from '../../src/types.ts'
 import { SHIM, upload } from './dispatch.ts'
@@ -20,8 +21,18 @@ let guide = Deno.readTextFileSync(
   new URL('./public/guide.md', import.meta.url),
 )
 
-let pageText = (slug: string) =>
-  Deno.readTextFileSync(new URL(`./public/guide/${slug}.md`, import.meta.url))
+// A page as it is written: the row in its frontmatter, and the document under
+// it (M-34605). Everything below reads the DOCUMENT, so a rule about the
+// prose is never fooled by the bundle at the top.
+let pageFile = (slug: string) =>
+  front(
+    Deno.readTextFileSync(
+      new URL(`./public/guide/${slug}.md`, import.meta.url),
+    ),
+    `public/guide/${slug}.md`,
+  )
+
+let pageText = (slug: string) => pageFile(slug).body
 
 // The map still names every page (T-32982). A page nobody is pointed at is a
 // page nobody reads: the guide is what a person and an agent read first, so
@@ -39,12 +50,22 @@ Deno.test("the guide's Deeper links are exactly the pages offered", () => {
   )
 })
 
+// And what it says about itself is where the row an agent is offered comes
+// from: the page IS the declaration (M-34605, gen.ts), so a page edited
+// without its frontmatter, or a row that drifted from it, fails here.
 Deno.test('every page offered is a file, and says what it is', () => {
   for (let p of PAGES) {
-    let text = pageText(p.slug)
-    assert(text.startsWith('# '), `${p.slug} opens with no title`)
+    let { meta, body } = pageFile(p.slug)
+    let doc = meta.doc as Record<string, string>
+    let said = meta.guide as Record<string, string>
+    assertEquals(meta.entity, { eid: `$${p.slug}` }, `${p.slug} names no eid`)
+    assertEquals(doc?.title, p.title, `${p.slug} title`)
+    assertEquals(said?.slug, p.slug, `${p.slug} slug`)
+    assertEquals(said?.brief, p.brief, `${p.slug} brief`)
+    assertEquals(said?.description, p.description, `${p.slug} description`)
+    assert(body.trimStart().startsWith('# '), `${p.slug} opens with no title`)
     // And it points back, so nobody is stranded on one page of a guide.
-    assert(text.includes('yaks.app/guide.md'), `${p.slug} points nowhere back`)
+    assert(body.includes('yaks.app/guide.md'), `${p.slug} points nowhere back`)
   }
 })
 
