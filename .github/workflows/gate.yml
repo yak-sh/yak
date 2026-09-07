@@ -58,5 +58,9 @@ jobs:
       - name: worker tests
         run: deno task test:workers
 
+      # Box-side deploy:time records timings; this step needs no credentials.
+      - name: deploy gate
+        run: deno task deploy:gate
+
       - name: bench gate
         run: deno task bench:gate

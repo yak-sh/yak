@@ -86,6 +86,11 @@ push independently, and waits up to 20 minutes for an annotated version
 containing the revert to serve all traffic. A failed worktree is kept for
 inspection. Neither a rollback nor a revert undoes migrated data.
 
+Push-to-upload observations, the version-confirmed live timer, the deploy
+ratchet, and the build profile are in [deploy timing](../../bench/deploys.md).
+Run `deno task deploy:time <sha>` on the box alongside each push; Actions reads
+the committed record through `deno task deploy:gate` after worker tests.
+
 ## Analytics
 
 `CF_ANALYTICS_TOKEN` reads both usage metrics and page visits. It needs

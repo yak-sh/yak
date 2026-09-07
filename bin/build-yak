@@ -25,11 +25,15 @@ set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
+# Workers Builds restores npm's cache, but not Deno's default directories.
+# Keep Deno's executable and module cache beside the cached npm packages so
+# both build and deploy reuse them. Enable Build cache in the dashboard.
+cache=$(npm config get cache)
+DENO_INSTALL=${DENO_INSTALL:-"$cache/deno-install"}
+DENO_DIR=${DENO_DIR:-"$cache/deno"}
+export DENO_INSTALL DENO_DIR
+
 if ! command -v deno >/dev/null 2>&1; then
-  # DENO_INSTALL is where install.sh puts it; naming it keeps the PATH line
-  # below true whatever the script's default becomes.
-  DENO_INSTALL="$HOME/.deno"
-  export DENO_INSTALL
   # -y answers the prompts; --no-modify-path keeps it out of the image's shell
   # rc files, which nothing in a build container ever sources anyway. The PATH
   # this build needs is the line below, not a login shell's.

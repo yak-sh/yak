@@ -235,7 +235,16 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // (the newest listings) and the pricing page's selling rate (sell.ts). Both
   // splice into the bytes the assets door answered, and both keep the file's
   // own words when the directory will not answer.
-  if (path == '/') return await gallery.made(env, dir, page)
+  if (path == '/') {
+    let home = await gallery.made(env, dir, page)
+    // Overrides can fall back to the old version. The deploy timer must know
+    // which code answered its 200, using the runtime's existing binding.
+    let headers = new Headers(home.headers)
+    if (env.CF_VERSION_METADATA) {
+      headers.set('x-yak-version', env.CF_VERSION_METADATA.id)
+    }
+    return new Response(home.body, { status: home.status, headers })
+  }
   if (path == '/pricing') return await sell.priceAt(dir, page)
   return page
 }

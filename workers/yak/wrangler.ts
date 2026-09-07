@@ -24,7 +24,8 @@
 // And not the newest either: 4.128.0 boots the same probes three times slower
 // and drops kernels under the parallel slow tier (`Network connection lost`),
 // where 4.111.0 runs it at the old pin's pace. Measure before moving.
-export let WRANGLER = ['npx', '--yes', 'wrangler@4.111.0']
+// Exact pins can reuse npm's restored cache without registry revalidation.
+export let WRANGLER = ['npx', '--yes', '--prefer-offline', 'wrangler@4.111.0']
 
 export let dir = new URL('./', import.meta.url).pathname.replace(/\/$/, '')
 
@@ -73,7 +74,7 @@ export let ready = async (root = dir, timeout = 600_000) => {
   }
   try {
     let { code } = await new Deno.Command('npm', {
-      args: ['ci'],
+      args: ['ci', '--prefer-offline', '--no-audit', '--no-fund'],
       cwd: root,
       stdin: 'null',
     }).spawn().status
