@@ -1,11 +1,13 @@
 // Rules through a whole `apply()`: what a produce-only rule writes, that a
-// gate makes a rule fire once ever, and that a rule which writes outside the
-// write set it declared refuses the batch instead of writing.
+// gate makes a rule fire once ever, that a rule which writes outside the write
+// set it declared refuses the batch instead of writing, and what the `#Name`
+// resources of a tick are — one instant, read-only, and provided or refused.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
-import type { Plugin } from './plugin.ts'
+import type { Phase, Plugin } from './plugin.ts'
+import { type Rule, stands } from './rules.ts'
 import { isPromise } from './pipe.ts'
 import { books, comp, memory } from './harness.ts'
 
@@ -26,7 +28,8 @@ Deno.test('a produce-only rule writes its template into what it matched', () => 
     rules: [{
       name: 'shelve',
       phase: 'precondition',
-      match: '.book, *book',
+      // `*book` is the presence too: a rule writes what it matched
+      match: '*book',
       produce: { book: { shelved: true } },
     }],
   }])
@@ -64,17 +67,122 @@ Deno.test('a rule writing outside its *write set refuses the batch', () => {
     rules: [{
       name: 'stray',
       phase: 'stamp',
-      match: '.book, *doc',
+      match: '*doc',
       produce: { book: { status: 'sold' } },
     }],
   }])
   assertThrows(
-    () => one.apply([{ entity: { eid: 'b1' }, book: { pages: 412 } }]),
+    () =>
+      one.apply([
+        { entity: { eid: 'b1' }, doc: { title: 'Dune' }, book: { pages: 412 } },
+      ]),
     Error,
     'write set',
   )
   // refused inside the transaction, so nothing landed
   assertEquals(held(one, 'b1'), undefined)
+})
+
+Deno.test('#Now is one instant for every rule in one apply', () => {
+  let seen: string[] = []
+  let clock = (phase: Phase): Rule => ({
+    name: `clock at ${phase}`,
+    phase,
+    match: '.book, #Now',
+    run: ({ Now }) => void seen.push(Now.at),
+  })
+  let one = g([{
+    name: 'clocks',
+    rules: [clock('precondition'), clock('stamp')],
+  }])
+  sync(one.apply([{ entity: { eid: 'b1' }, book: { pages: 412 } }]))
+  assertEquals(seen.length, 2)
+  assertEquals(new Set(seen).size, 1)
+})
+
+Deno.test('a rule writing a resource refuses the batch', () => {
+  let one = g([{
+    name: 'clockwork',
+    rules: [{
+      name: 'reset',
+      phase: 'stamp',
+      match: '*book, #Now',
+      produce: { Now: { at: 'yesterday' } },
+    }],
+  }])
+  assertThrows(
+    () => one.apply([{ entity: { eid: 'b1' }, book: { pages: 412 } }]),
+    Error,
+    'read-only',
+  )
+})
+
+// A resource is not vocabulary, so naming one nobody provides is a mistake
+// where naming an unknown COMPONENT is inert — and it is one before the match,
+// not only where a rule would have fired.
+Deno.test('a rule naming a resource nobody provides is refused', () => {
+  let one = g([{
+    name: 'weathered',
+    rules: [{
+      name: 'rain',
+      phase: 'stamp',
+      match: '.book, #Weather',
+      run: () => ({ book: { status: 'sold' } }),
+    }],
+  }])
+  assertThrows(
+    () => one.apply([{ entity: { eid: 'p1' }, doc: { title: 'Chilton' } }]),
+    Error,
+    'nothing provides',
+  )
+})
+
+// A written resource is the value it stands for, and one standing for nothing
+// writes nothing — which is why the trash mark needs no `by` if there is no
+// actor to name.
+// A resource is bound for `run`, never for the match: the grammar's values are
+// values, so `created.at<Now.at` would compare against the literal text. It is
+// refused rather than answered wrong.
+Deno.test('a match comparing against a resource is refused', () => {
+  let one = g([{
+    name: 'stale',
+    rules: [{
+      name: 'expired',
+      phase: 'stamp',
+      match: '*book, created.at<Now.at, #Now',
+      run: () => ({ book: { status: 'sold' } }),
+    }],
+  }])
+  assertThrows(
+    () => one.apply([{ entity: { eid: 'b1' }, book: { pages: 412 } }]),
+    Error,
+    'compares against #Now',
+  )
+})
+
+Deno.test('a plugin provides a resource, capitalized', () => {
+  let shop = (name: string): Plugin => ({
+    name: 'shop',
+    resources: { [name]: () => stands({ n: 3 }), Nobody: () => stands({}) },
+    rules: [{
+      name: 'aisled',
+      phase: 'stamp',
+      match: `*book, #${name}, #Nobody`,
+      run: ({ Aisle, Nobody }) => ({
+        book: { pages: Aisle, status: Nobody },
+      }),
+    }],
+  })
+  let one = g([shop('Aisle')])
+  sync(one.apply([{ entity: { eid: 'b1' }, book: { pages: 412 } }]))
+  assertEquals(comp(held(one, 'b1'), 'book'), { pages: 3 })
+  // lowercase is a component's spelling, so it cannot be a resource's
+  assertThrows(
+    () =>
+      g([shop('aisle')]).apply([{ entity: { eid: 'b1' }, book: { pages: 1 } }]),
+    Error,
+    'capitalized',
+  )
 })
 
 // A rule declaring components this graph has never heard of is inert: that is

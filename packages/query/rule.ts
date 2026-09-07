@@ -9,7 +9,7 @@
 // absence it means, and every word that is an instruction dropped. The rest is
 // lists of component names, in the order they were written.
 
-import type { And, Clause, Query } from './ast.ts'
+import { type And, type Clause, present, type Query } from './ast.ts'
 
 /** What a query declares when it is read as a rule. */
 export type Declares = {
@@ -21,7 +21,9 @@ export type Declares = {
   /** `+!comp` — components that must be ABSENT and are added before the rule
    * runs, so it fires once */
   gates: string[]
-  /** `*comp` — the components the rule writes: its write set */
+  /** `*comp` — the components the rule writes: its write set. A write is about
+   * something, so the sigil says the component is PRESENT as well; `+comp` or
+   * `+!comp` beside it is how a rule writes one that is not there yet. */
   writes: string[]
   /** `#comp` — the singleton resources it reads */
   resources: string[]
@@ -39,6 +41,10 @@ export type Declares = {
  * r.gates // ['created']
  * r.writes // ['created']
  * r.filter // and(present('entity'), absent('created'))
+ *
+ * // `*comp` carries its own presence: `*trashed` needs no `trashed` beside it
+ * declared(parse('*trashed, trashed.at=')).filter
+ * // and(absent('trashed.at'), present('trashed'))
  * ```
  */
 export let declared = (ast: Query): Declares => {
@@ -68,5 +74,14 @@ export let declared = (ast: Query): Declares => {
     out.filter.clauses.push(c)
   }
   for (let c of ast.clauses) take(c)
+  // The mutable sigil's filter half: a rule writes what it MATCHED, so `*comp`
+  // says the component is present too — the presence clause beside it was only
+  // ever a second spelling of the same word. An ensure or a gate has already
+  // said how a component the rule writes gets there, so it needs none.
+  for (let c of out.writes) {
+    if (!out.ensures.includes(c) && !out.gates.includes(c)) {
+      out.filter.clauses.push(present(c))
+    }
+  }
   return out
 }

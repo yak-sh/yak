@@ -14,6 +14,19 @@ Deno.test('declared splits the filter from the instructions', () => {
   assertEquals(r.ensures, [])
 })
 
+// A rule writes what it matched, so the mutable sigil is a presence clause
+// too — unless an ensure or a gate has already said how it gets there.
+Deno.test('a write set says the component is present', () => {
+  let r = declared(parse('*trashed, trashed.at='))
+  assertEquals(r.writes, ['trashed'])
+  assertEquals(r.filter.clauses.length, 2)
+  assertEquals(r.filter.clauses[1], present('trashed'))
+  // the gated `created` above added no second presence clause
+  assertEquals(declared(parse('+!created, *created')).filter.clauses, [
+    absent('created'),
+  ])
+})
+
 Deno.test('an ensure filters nothing', () => {
   let r = declared(parse('.task, +touched'))
   assertEquals(r.filter, and(present('task')))

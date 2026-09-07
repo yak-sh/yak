@@ -53,7 +53,7 @@ import { guard } from './guard.ts'
 import { mutate } from './mutate.ts'
 import { cascade } from './cascade.ts'
 import { actorOf, births, stamps } from './stamp.ts'
-import { fire, type Rule } from './rules.ts'
+import { fire, registry, type Resource, type Rule, stands } from './rules.ts'
 import { state } from './state.ts'
 import { each, isPromise, then } from './pipe.ts'
 
@@ -180,6 +180,23 @@ export let graph = (opts: Options): Graph => {
     [...stamps, ...plugins.flatMap((p) => p.rules ?? [])]
       .filter((r) => r.phase == phase)
 
+  // The singletons a rule may bind with `#Name`: each plugin's, then this
+  // graph's own three, which have the last word — nothing a plugin registers
+  // can move the batch's instant or its actor out from under the stamps.
+  let resourced = (now: string): Record<string, Resource> =>
+    registry([
+      ...plugins.map((p) => p.resources),
+      {
+        Vocab: () => vocab,
+        Now: () => stands({ at: now }),
+        // A copy: the batch's own `$actor` is not this tick's to dress.
+        Actor: (tick) => {
+          let who = actorOf(tick.bundles)
+          return stands({ ...who }, who.by)
+        },
+      },
+    ])
+
   let apply = (change: Change, o: ApplyOpts = {}):
     | Bundle[]
     | Promise<
@@ -188,6 +205,9 @@ export let graph = (opts: Options): Graph => {
     let st = state()
     let now = o.now ?? new Date().toISOString()
     let outside = detached(storage)
+    // One registry for the whole apply, so `#Now` is one instant however many
+    // phases and rules read it.
+    let resources = resourced(now)
 
     // A phase: the core's own work first (it is what the rules and hooks are
     // extending), then the rules as one tick, then each hook, each seeing what
@@ -204,7 +224,7 @@ export let graph = (opts: Options): Graph => {
       let rules = ruled(name)
       if (rules.length) {
         steps.push((b) =>
-          fire(rules, b, { vocab, tx, phase: name, now, actor: actorOf(b), of })
+          fire(rules, { vocab, tx, phase: name, bundles: b, resources, of })
         )
       }
       for (let [, h] of hooks(name)) steps.push((b) => h(b, tx))

@@ -66,7 +66,8 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['+created', and(ensure('created'))],
   ['+!created', and(gate('created'))],
   ['*created', and(mutable('created'))],
-  ['#clock', and(resource('clock'))],
+  // a resource is capitalized: it binds beside the components, not among them
+  ['#Clock', and(resource('Clock'))],
   ['$e', and(variable('e'))],
   ['.entity,+!created', and(present('entity'), gate('created'))],
   ['.entity, +!created', and(present('entity'), gate('created'))],

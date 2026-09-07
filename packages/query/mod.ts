@@ -6,7 +6,7 @@
 // `parse('.a=1&.b=2')` deep-equals `and(eq('a', '1'), eq('b', '2'))`.
 //
 // It knows the FORMAT — the sigils that mark a component word (`.comp` present,
-// `!comp` absent, `+comp` ensure, `+!comp` gate, `*comp` mutable, `#comp`
+// `!comp` absent, `+comp` ensure, `+!comp` gate, `*comp` mutable, `#Name`
 // resource, `$name` variable), operators, any-of lists, ranges, time literals,
 // the reserved directives (order, near, refs, count, distinct, tally, fields,
 // `*`, limit, after, edges, reaches), dot-param routing shape, and how tokens

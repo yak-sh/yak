@@ -154,7 +154,7 @@ let shelver = {
   name: 'shelver',
   rules: [{
     phase: 'precondition',
-    match: '.book, *book', // every entity wearing `book`; it writes `book`
+    match: '*book', // every entity wearing `book`; it writes `book`
     produce: { book: { shelved: true } },
   }],
 }
@@ -165,9 +165,30 @@ bare-word text terms and judged by [@yaks/match](https://jsr.io/@yaks/match).
 Its sigils are the rule: `+comp` ensures a component before the rule runs,
 `+!comp` **gates** — it must be absent, and it is added, which is what makes a
 rule fire once ever — and `*comp` declares the write set, which a produce or a
-run may not write outside of. `produce` is the no-code case; `run(bound, ctx)`
-is everything else, and it sees the bound bundle with the ensures and the gate
+run may not write outside of (and says the component is present, so `*book`
+needs no `.book` beside it). `produce` is the no-code case; `run(bound)` is
+everything else, and it sees the bound bundle with the ensures and the gate
 already on.
+
+`#Name` binds a **resource**: a singleton the tick provides, made at most once
+and read-only — writing one is refused like a write outside the write set. The
+graph provides `#Vocab`, `#Now` (one instant for the whole apply) and `#Actor`;
+a plugin's `resources` adds its own, an `#Env` or a `#Request`, as one entry
+each. A resource is capitalized because it is bound into the same bundle as the
+components, so `({ trashed, Actor, Now })` says which is which; a lowercase name
+is refused. A rule naming a resource nobody provides is an error, where a rule
+naming an unknown component is merely inert.
+
+```ts
+let dated = {
+  name: 'trashed',
+  phase: 'stamp',
+  match: '*trashed, trashed.at=, #Actor, #Now',
+  run: ({ Actor, Now }) => ({
+    trashed: { at: Now, ...(Actor.by ? { by: Actor.by } : {}) },
+  }),
+}
+```
 
 A phase runs its rules as one **tick**: every match is judged against the same
 view — what the graph holds for each entity, with the batch folded in — before

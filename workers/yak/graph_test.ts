@@ -497,8 +497,8 @@ Deno.test('a rule writing outside its *write set takes the batch with it', async
   await ruling([{
     name: 'fixture/stray',
     phase: 'stamp',
-    match: 'recipe, *doc',
-    run: () => ({ recipe: { serves: 1 } }),
+    match: '*recipe',
+    run: () => ({ doc: { title: 'stray' } }),
   }], async () => {
     let store = await cookbook()
     let no = await post(store, '/apply', [{

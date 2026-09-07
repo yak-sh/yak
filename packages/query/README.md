@@ -77,8 +77,11 @@ throws where it is read rather than falling back to text.
 
 - **Sigils** mark a component word: `.comp` present · `!comp` absent · `+comp`
   ensure (add it before the rule runs) · `+!comp` gate (it must be absent, and
-  is added, so a rule fires once) · `*comp` mutable (the rule's write set) ·
-  `#comp` a singleton resource · `$name` a variable. The first two are ordinary
+  is added, so a rule fires once) · `*comp` mutable (the rule's write set; it
+  says the component is present as well, so `*comp` needs no `.comp` beside it,
+  and `+comp`/`+!comp` is how a rule writes one that is not there yet) · `#Name`
+  a singleton resource, capitalized so it cannot collide with a component in the
+  bundle a rule binds them into · `$name` a variable. The first two are ordinary
   predicates — presence and absence are questions any evaluator answers — and
   the rest are a rule's own words, which an evaluator with no rule engine
   refuses (`Unsupported`) rather than guessing at. `declared(ast)` splits a

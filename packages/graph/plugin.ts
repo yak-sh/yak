@@ -15,7 +15,7 @@
 import type { Bundle, Change, Eid, Entity } from './bundle.ts'
 import type { Query, ReadOpts, Tx } from './storage.ts'
 import type { Ask } from './gather.ts'
-import type { Rule } from './rules.ts'
+import type { Resource, Rule } from './rules.ts'
 import type { Derive } from './alias.ts'
 import type { Graph } from './graph.ts'
 import type { VocabDoc } from '@yaks/vocab'
@@ -178,6 +178,13 @@ export type Plugin = {
    * bundle in the batch plus what comes out (see {@link Rule}). The phase runs
    * every rule registered on it, in plugin order, before its hooks. */
   rules?: Rule[]
+  /** the resources it provides: a singleton made from the tick, which any
+   * rule may then bind by `#Name` (see {@link Resource}). The graph provides
+   * `#Vocab`, `#Now` and `#Actor` itself; a host adds its own — an `#Env`, a
+   * `#Request` — as one entry each. A resource is capitalized, which is what
+   * keeps it and a component apart in the bundle they share; a lowercase name
+   * is refused. */
+  resources?: Record<string, Resource>
   /** what its hooks are going to READ, given the batch. `apply()` unions every
    * plugin's asks with its own and answers them all in one gather before a hook
    * runs (see {@link Ask} and ./gather.ts), so a hook's `tx.get` and `about()`

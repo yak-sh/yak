@@ -52,6 +52,12 @@ let mark = (
  * into the batch, so a cache that applies the return sees the provenance a
  * fresh read would.
  *
+ * The instant, the actor and the vocabulary each rule reads are RESOURCES it
+ * names in its match (`#Now, #Actor, #Vocab`), so `run` takes the bound bundle
+ * and nothing else. `updated` ensures itself (`+updated`) because a touch is
+ * the first time that component is written, and `*updated` alone would ask for
+ * one already there.
+ *
  * A graph whose vocabulary declares no `created` is stamped not at all: a rule
  * about a component that does not exist here is inert.
  */
@@ -59,14 +65,14 @@ export let stamps: Rule[] = [
   {
     name: 'created',
     phase: 'stamp',
-    match: '.entity, +!created, *created',
-    run: (_bound, ctx) => wear('created', ctx.vocab, ctx.now, ctx.actor),
+    match: '.entity, +!created, *created, #Vocab, #Actor, #Now',
+    run: ({ Vocab, Now, Actor }) => wear('created', Vocab, Now.at, Actor),
   },
   {
     name: 'updated',
     phase: 'stamp',
-    match: '.entity, .created, *updated',
-    run: (_bound, ctx) => wear('updated', ctx.vocab, ctx.now, ctx.actor),
+    match: '.entity, .created, +updated, *updated, #Vocab, #Actor, #Now',
+    run: ({ Vocab, Now, Actor }) => wear('updated', Vocab, Now.at, Actor),
   },
 ]
 

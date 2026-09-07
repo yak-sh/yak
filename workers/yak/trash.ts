@@ -4,9 +4,11 @@
 // counted off the `at` in it, so the ask and the clock were both the caller's:
 // every door that trashes anything had to remember to date its own mark.
 //
-// It is a RULE instead: `trashed, trashed.at=, *trashed` says what it needs (a
-// row wearing the word with no date on it) and what it does about it (write
-// one), and the store that holds the row runs it in the `stamp` phase beside
+// It is a RULE instead: `*trashed, trashed.at=` says what it needs (a row
+// wearing the word — the write set says so — with no date on it) and what it
+// does about it (write one), while `#Actor, #Now` name the two singletons the
+// tick hands it. The store that holds the row runs it in the `stamp` phase
+// beside
 // `created` and `updated` — which is what those two are as well (@yaks/graph
 // rules.ts). So a caller asks for the trash by writing `trashed: {}`, the date
 // and the byline are the store's exactly as a birth's are, and a mark that is
@@ -25,18 +27,18 @@ import type { Plugin } from './plugin.ts'
 /**
  * The trash mark, dated and signed by the store: `at` is the batch's own
  * instant and `by` is whoever the platform vouched for — the two words the
- * `created` stamp writes, for the same reason. A batch carrying its own `at` —
- * a row stood up in the past by a test, a mark a migration carries across —
- * does not match at all.
+ * `created` stamp writes, for the same reason. Each is the resource written
+ * straight into the column it stands for, so a mark nobody signed is dated and
+ * unsigned rather than dated and blank. A batch carrying its own `at` — a row
+ * stood up in the past by a test, a mark a migration carries across — does not
+ * match at all.
  */
 export let trashPlugin: Plugin = {
   name: 'yak/trash',
   rules: [{
     name: 'trashed',
     phase: 'stamp',
-    match: 'trashed, trashed.at=, *trashed',
-    run: (_bound, ctx) => ({
-      trashed: { at: ctx.now, ...(ctx.actor.by ? { by: ctx.actor.by } : {}) },
-    }),
+    match: '*trashed, trashed.at=, #Actor, #Now',
+    run: ({ Actor, Now }) => ({ trashed: { at: Now, by: Actor } }),
   }],
 }
