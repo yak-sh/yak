@@ -1206,7 +1206,7 @@ let index = async (
     sell: owner && env.STRIPE_KEY ? selling(space) : undefined,
     fee: rate(await feeOf(dir)),
     name: owner ? await dir.nameAt(owner) ?? '' : '',
-    connected: !!owner && await (await identity()).connected(env, owner),
+    connections: owner ? await (await identity()).connections(env, owner) : [],
     // Something IS built here while an app sits in the trash: its store is
     // named for this address and its files live under it, so the address
     // stays put until the trash is empty (T-32576).
@@ -1442,6 +1442,21 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // brings it back (`closed` above, T-34431).
   if (space.trashed) return closed(req, env, dir, space)
   let url = new URL(req.url)
+  if (url.pathname == `${MANAGE}/connections` && req.method == 'GET') {
+    let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
+    let allowed = who.person && who.role == 'owner'
+    return Response.json(
+      allowed
+        ? {
+          connections: await (await identity()).connections(env, who.person!),
+        }
+        : { error: who.person ? 'not_an_owner' : 'not_signed_in' },
+      {
+        status: allowed ? 200 : who.person ? 403 : 401,
+        headers: { 'cache-control': 'private, no-store' },
+      },
+    )
+  }
   if (url.pathname == MANAGE || url.pathname.startsWith(`${MANAGE}/`)) {
     let view = manageView(url.pathname)
     if (!view) return nothingHere()

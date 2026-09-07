@@ -81,6 +81,7 @@ import {
   type OAuthProviderOptions,
 } from '@cloudflare/workers-oauth-provider'
 import { cookie, cookieValue, sign, verify } from '../../src/token.ts'
+import { connectionsOf } from './connections.ts'
 import { HANDOFF, handoffTo, opener, safeNext, spender } from './handoff.ts'
 export { HANDOFF } from './handoff.ts'
 import { directory, META, type Space } from './directory.ts'
@@ -280,13 +281,8 @@ let domainOf = (req: Request) => {
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
-// Whether any agent has ever been let in as this person: one grant is enough,
-// and the provider already keeps the answer. It is what tells a fresh account
-// from a working one (T-32972) — the space page's connect block stands OPEN
-// until it is true and shut afterwards (apps.ts `index`, T-34236), so the
-// question belongs beside the provider that answers it.
-export let connected = async (env: Env, person: string) =>
-  !!(await api(env).listUserGrants(person, { limit: 1 })).items.length
+export let connections = (env: Env, person: string) =>
+  connectionsOf(api(env), person)
 
 // Who is asking, out of the platform session COOKIE and nothing else. It is
 // deliberately not `withAuth` above, which also answers an agent's bearer:
@@ -425,6 +421,7 @@ let theirs = async (env: Env, req: Request, said?: string, say?: string) => {
   let space = await dir.own(who.person)
   return connect({
     slug: space.slug,
+    connections: await connections(env, who.person),
     fixed: !!(await dir.apps(space)).length,
     said,
     say,
@@ -677,6 +674,19 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     ? await req.formData().catch(() => new FormData())
     : new FormData()
   let field = (name: string) => String(form.get(name) ?? '')
+
+  if (path == '/oauth/connections' && req.method == 'GET') {
+    let person = await browser(env, req)
+    return Response.json(
+      person
+        ? { connections: await connections(env, person) }
+        : { error: 'not_signed_in' },
+      {
+        status: person ? 200 : 401,
+        headers: { 'cache-control': 'private, no-store' },
+      },
+    )
+  }
 
   if (path == '/manage' && req.method == 'GET') {
     let person = await browser(env, req)

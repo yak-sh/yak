@@ -28,6 +28,7 @@ import {
 } from './probe.ts'
 import { SENDS } from './signin.ts'
 import { MANAGE, managePath } from './route.ts'
+import type { Connection } from './connections.ts'
 
 let form = (
   k: Kernel,
@@ -48,6 +49,134 @@ let form = (
 let b64u = (b: ArrayBuffer) =>
   btoa(String.fromCharCode(...new Uint8Array(b)))
     .replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
+
+slow(
+  'chatbot connections identify existing grants and belong to the signed-in browser',
+  async () => {
+    let k = await kernel()
+    try {
+      let owner = await signIn(k)
+      let host = `${owner.name}.yaks.app`
+      let at = (
+        host: string,
+        path: string,
+        headers: Record<string, string> = {},
+      ) => k.at(host, path, { headers })
+      let snapshots = async () => {
+        let found: Connection[][] = []
+        for (
+          let [hostname, path] of [
+            ['yaks.app', '/oauth/connections'],
+            [host, `${MANAGE}/connections`],
+          ]
+        ) {
+          let res = await at(hostname, path, { cookie: owner.cookie })
+          assertEquals(res.status, 200)
+          assertEquals(res.headers.get('cache-control'), 'private, no-store')
+          found.push((await res.json()).connections)
+        }
+        assertEquals(found[0], found[1])
+        return found[0]
+      }
+      assertEquals(await snapshots(), [])
+
+      let authorize = async (back: string, name: string) => {
+        let registered = await k.at('yaks.app', '/oauth/register', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            client_name: name,
+            redirect_uris: [back],
+            token_endpoint_auth_method: 'none',
+            grant_types: ['authorization_code', 'refresh_token'],
+            response_types: ['code'],
+          }),
+        })
+        assertEquals(registered.status, 201)
+        let client_id = (await registered.json()).client_id
+        let verifier = crypto.randomUUID() + crypto.randomUUID()
+        let q = new URLSearchParams({
+          response_type: 'code',
+          client_id,
+          redirect_uri: back,
+          scope: 'graph',
+          code_challenge: b64u(
+            await crypto.subtle.digest(
+              'SHA-256',
+              new TextEncoder().encode(verifier),
+            ),
+          ),
+          code_challenge_method: 'S256',
+        }).toString()
+        let allowed = await form(k, '/oauth/allow', { q }, owner.cookie)
+        assertEquals(allowed.status, 302)
+        await allowed.body?.cancel()
+        let code = new URL(allowed.headers.get('location')!).searchParams.get(
+          'code',
+        )!
+        let token = await form(k, '/oauth/token', {
+          grant_type: 'authorization_code',
+          client_id,
+          redirect_uri: back,
+          code,
+          code_verifier: verifier,
+        })
+        assertEquals(token.status, 200)
+        return (await token.json()).access_token as string
+      }
+      let bearer = await authorize(
+        'https://chatgpt.com/callback',
+        'A web client',
+      )
+      await authorize('https://claude.ai/callback', 'Another web client')
+      await authorize(
+        'https://chatgpt.com/other-callback',
+        'A second installation',
+      )
+      let found = await snapshots()
+      assertEquals(found.map((c) => [c.id, c.name, c.provider]), [
+        ['chatgpt', 'ChatGPT', 'chatgpt'],
+        ['claude', 'Claude', 'claude'],
+      ])
+      assert(
+        found.every((c) =>
+          c.connectedAt > 0 && c.connectedAt <= Date.now() / 1000
+        ),
+      )
+
+      let credentials: Record<string, string>[] = [
+        {},
+        { authorization: `Bearer ${bearer}` },
+      ]
+      for (
+        let [hostname, path] of [
+          ['yaks.app', '/oauth/connections'],
+          [host, `${MANAGE}/connections`],
+        ]
+      ) {
+        for (let headers of credentials) {
+          let res = await at(hostname, path, headers)
+          assertEquals(res.status, 401)
+          assertEquals(res.headers.get('cache-control'), 'private, no-store')
+          assertEquals((await res.json()).connections, undefined)
+        }
+      }
+      let other = await signIn(k)
+      let denied = await at(host, `${MANAGE}/connections`, {
+        cookie: other.cookie,
+      })
+      assertEquals(denied.status, 403)
+      assertEquals(denied.headers.get('cache-control'), 'private, no-store')
+      assertEquals((await denied.json()).connections, undefined)
+      let own = await at('yaks.app', '/oauth/connections', {
+        cookie: other.cookie,
+      })
+      assertEquals(await own.json(), { connections: [] })
+    } finally {
+      await k.stop()
+    }
+  },
+)
 
 slow('a person signs in by mail, and an agent by OAuth', async () => {
   let k = await kernel()
