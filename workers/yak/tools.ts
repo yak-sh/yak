@@ -3485,7 +3485,9 @@ export let TOOLS: Tool[] = [
       'args, exactly as commands says it takes them. The app is only needed ' +
       "when two apps here spell the same command. It goes through the app's " +
       'ordinary doors as the person calling it, so it can do what they could ' +
-      'do on the page and never more.',
+      'do on the page and never more. ' +
+      'The way back: store_restore, to the moment just before it ran, for ' +
+      'whatever it wrote.',
     input: {
       type: 'object',
       properties: {
