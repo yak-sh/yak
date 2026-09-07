@@ -1,5 +1,5 @@
 // The owner's deployment history. Uploading code does not move data; giving
-// it traffic can. Keep every marker ever served in this history, even after
+// it traffic can. Keep every stored-shape boundary in this history, even after
 // someone rolls the code back. The directory does not roll its rows back.
 import { WRANGLER } from '../workers/yak/wrangler.ts'
 import { git } from './repo.ts'
@@ -48,8 +48,9 @@ export let commitsIn = (text: string): Commit[] =>
     return { sha, at, subject: subject.join('\t') }
   }).sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
 
-// Read the declarations, never execute historical TypeScript. Before the
-// second migration MARKS did not exist; MARK alone named the first pass.
+// Read the declarations, never execute historical TypeScript. Before
+// BOUNDARIES existed every MARKS entry moved data; before the second migration
+// MARK alone named the first pass.
 // An unfamiliar expression is unknown, never an empty migration history.
 export let marksIn = (source: string): string[] | null => {
   let clean = source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')
@@ -59,8 +60,14 @@ export let marksIn = (source: string): string[] | null => {
     )]
       .map((m) => [m[1], m[3]]),
   )
-  let list = clean.match(/\bMARKS\s*=\s*\[([^\]]*)\]/)?.[1]
-  if (list == null) return names.has('MARK') ? [names.get('MARK')!] : null
+  let word = ['BOUNDARIES', 'MARKS'].find((word) =>
+    new RegExp(`\\b(?:let|const)\\s+${word}\\b`).test(clean)
+  )
+  if (!word) return names.has('MARK') ? [names.get('MARK')!] : null
+  let list = clean.match(
+    new RegExp(`\\b${word}\\s*=\\s*\\[([^\\]]*)\\][ \\t]*;?[ \\t]*(?:\\n|$)`),
+  )?.[1]
+  if (list == null) return null
   let marks = list.split(',').map((s) => s.trim()).filter(Boolean).map((s) =>
     names.get(s) ?? s.match(/^['"](yak\/store\/[^'"]+)['"]$/)?.[1]
   )
@@ -263,7 +270,7 @@ export let deploys = async (root: string): Promise<Deploy[]> => {
   }
   // Wrangler retains a short deployment window. A past migration must not
   // disappear from the safety rule when its version ages out of that window.
-  // Main always deploys: conservatively include every marker it has carried,
+  // Main always deploys: conservatively include every boundary it has carried,
   // even if that particular build failed. A shallow history cannot prove this.
   let floor: string[] | null = []
   if (await needGit(root, ['rev-parse', '--is-shallow-repository']) == 'true') {

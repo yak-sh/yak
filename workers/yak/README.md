@@ -71,14 +71,14 @@ yak rollback [version] --owner
 yak revert <sha> --owner
 ```
 
-`deploys` joins uploads to deployments and reads each commit’s `MARKS` from
-`migrate.ts`. Rollback retains every marker main has carried, even after its
-deployment ages out of Cloudflare’s history. This conservatively includes failed
-builds. An inferred commit or incomplete migration history cannot authorize
-rollback. `errors` first tries Workers Logs with Wrangler’s local token; if
-unavailable it says so and tails the **next** requested duration, rather than
-claiming historical coverage. Live tails use the box’s GNU `timeout` to stop
-Wrangler and its launcher together.
+`deploys` joins uploads to deployments and reads each commit’s `BOUNDARIES` from
+`migrate.ts` (`MARKS` in older commits). Rollback retains every boundary main
+has carried, even after its deployment ages out of Cloudflare’s history. This
+conservatively includes failed builds. An inferred commit or incomplete
+migration history cannot authorize rollback. `errors` first tries Workers Logs
+with Wrangler’s local token; if unavailable it says so and tails the **next**
+requested duration, rather than claiming historical coverage. Live tails use the
+box’s GNU `timeout` to stop Wrangler and its launcher together.
 
 `revert` requires main to match its remote, gates a fresh worktree, and uses the
 same primitive as `task land` to publish. It re-gates after a rebase, checks the
@@ -101,6 +101,12 @@ report and refuse to serve without the declared constraint.
 
 - Creating an index before its column existed broke directory boot.
 - Rollback boot failed on an old vocabulary index the migrated rows violated.
+
+`migrate.ts` lists every stored-shape pass in `BOUNDARIES`, in marker order;
+today that is all of `MARKS`. A REFUSED pass is not a boundary: its transaction
+rolls back, the data did not move, and its marker stays unchanged. `yak deploys`
+still treats a version carrying that pass as a potential boundary, because
+another Store may have completed it.
 
 ## Analytics
 

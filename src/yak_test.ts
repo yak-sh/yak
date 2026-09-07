@@ -181,6 +181,61 @@ Deno.test('migration markers are read from MARKS declarations, including the fir
   assertEquals(marksIn('export let MARKS = generated()'), null)
 })
 
+Deno.test('explicit rollback boundaries exclude status markers and fail closed', () => {
+  let source = `
+    export let MARK = 'yak/store/packages/1'
+    export let REFUSED = 'yak/store/refused/6'
+    export let MARKS = [MARK, REFUSED]
+    export let BOUNDARIES = [MARK]
+  `
+  assertEquals(marksIn(source), ['yak/store/packages/1'])
+  assertEquals(
+    marksIn(source.replace('BOUNDARIES = [MARK]', 'BOUNDARIES = []')),
+    [],
+  )
+  for (
+    let expression of [
+      'generated()',
+      '[MISSING]',
+      '[MARK].concat([REFUSED])',
+      '[...MARKS]',
+    ]
+  ) {
+    assertEquals(
+      marksIn(
+        source.replace('BOUNDARIES = [MARK]', `BOUNDARIES = ${expression}`),
+      ),
+      null,
+    )
+  }
+  assertEquals(
+    marksIn(source.replace('MARKS = [MARK, REFUSED]', 'MARKS = generated()')),
+    ['yak/store/packages/1'],
+  )
+  assertEquals(marksIn(source.replace('export let BOUNDARIES = [MARK]', '')), [
+    'yak/store/packages/1',
+    'yak/store/refused/6',
+  ])
+})
+
+Deno.test('every current data pass is visible to deploy history as a boundary', async () => {
+  let source = await Deno.readTextFile(
+    new URL('../workers/yak/migrate.ts', import.meta.url),
+  )
+  let declared = marksIn(source)
+  assertEquals(declared, [
+    'yak/store/packages/1',
+    'yak/store/home/2',
+    'yak/store/former/3',
+    'yak/store/serves/4',
+    'yak/store/handle/5',
+  ])
+  assertEquals(
+    declared,
+    marksIn(source.replace(/^export let BOUNDARIES = .*$/m, '')),
+  )
+})
+
 Deno.test('a gradual deploy can roll back to its prior version while that version still serves traffic', () => {
   let rows = deploysIn(
     [version(1, commit(1).sha), version(2, commit(2).sha)],

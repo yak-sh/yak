@@ -130,6 +130,10 @@ export let HANDLED = 'yak/store/handle/5'
  * a new pass is one line here. */
 export let MARKS = [MARK, HOMED, FORMER, SERVES, HANDLED]
 
+/** Passes that change stored shape, read per commit by `yak deploys`.
+ * A refused pass leaves stored data and its marker unchanged, so adds no boundary. */
+export let BOUNDARIES = [MARK, HOMED, FORMER, SERVES, HANDLED]
+
 /** The two tables the two layouts spell identically, and so never move. */
 let SPINE = ['entity', 'tombstone']
 
