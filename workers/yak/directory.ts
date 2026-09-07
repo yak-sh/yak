@@ -156,13 +156,17 @@ export type App = {
   // 'private'. Null for an app born before the word, which means public —
   // what every app did before there was one.
   access: Access | null
-  // The name of the Durable Object holding this app's data, pinned when the
-  // app was born (`store` below); null for an app born before it was pinned,
-  // which is named by its address the way it always was.
+  // The app's HANDLE: the name of everything the platform keeps for it — its
+  // Durable Object, its dispatch script, its export path, its analytics rows
+  // (`storeName` below). Written once at birth and never derived from a slug
+  // again. Null only for an app the backfill has not reached (migrate.ts
+  // `handled`), which no read can be: the pass runs on the directory's first
+  // request of the deploy, before any app of it is answered for.
   store: string | null
-  // Every address this app has ever answered at — its birth address first,
-  // then each one a rename left behind. They resolve like ids (types.ts
-  // slugsOf), which is how an old link still finds the app it was made for.
+  // Every address this app has answered at within its space — the slug it was
+  // born at first, then each one a rename left behind, oldest first. They
+  // resolve like ids (types.ts slugsOf), which is how an old link still finds
+  // the app it was made for.
   slugs: string[]
   // Whether this app is the space's FRONT PAGE — the app wearing `home`
   // (T-34227). At most one app in a space does; `homing` below is what keeps
@@ -250,6 +254,7 @@ type Row = {
     space: Id
     version: number | null
     access?: Access | null
+    store?: string | null
   }
   published?: {
     name?: string | null
@@ -359,7 +364,12 @@ let seed = async (store: Meta) => {
     {
       entity: { eid: '$app' },
       doc: { title: META.app },
-      app: { slug: META.app, space: '$space' },
+      // The one app whose handle is not minted (`handle`): the meta store is
+      // the object this very row is being written INTO, and it has been called
+      // `yak/platform` since the platform's first day. Said outright rather
+      // than left to the backfill, which would only ever arrive at the same
+      // string by a longer road.
+      app: { slug: META.app, space: '$space', store: META_STORE },
     },
   ])
 }
@@ -540,7 +550,7 @@ export let appOf = (r: Row): App => ({
   version: r.app!.version,
   access: r.app!.access ?? null,
   title: r.doc?.title || r.app!.slug,
-  store: r.former?.slug ?? null,
+  store: r.app!.store ?? null,
   slugs: slugsOf(r.former),
   home: r.home != null,
   first: firstOf(r.home),
@@ -607,14 +617,33 @@ export let restoreOf = (r: Row) => ({
 
 // A Durable Object cannot be renamed, so an app's store must not be named by
 // anything a person may change: renaming `recipes` to `cookbook` would strand
-// every recipe in it. So the name is pinned at birth on the app's `former`
-// record — the address it was born at — and read back here. An app born before
-// that (`store` null) is named by its address, which for it has never moved.
+// every recipe in it. The name is therefore the app's own handle, written once
+// at birth (`handle` below) and read back here — never derived from a slug.
+// The fallback is the answer for an app the backfill has not reached
+// (migrate.ts `handled`), which is what the app was already named before the
+// column existed; it fires for nobody after the directory's first request of
+// the deploy.
 export let storeName = (space: Space, app: App) =>
   app.store ?? `${space.slug}/${app.slug}`
 
-// What app_new pins, and what a rename must therefore leave alone.
-export let bornAt = (space: Space, slug: string) => `${space.slug}/${slug}`
+/**
+ * The handle app_new writes, and what a rename — of the app or of its space —
+ * must therefore leave alone: the address it was born at, plus a short key off
+ * its eid so the string is the app's and not the address's (T-34657).
+ *
+ * The key is a SUFFIX because the dashboard sorts by the string: `ada/cookbook
+ * .1f7c` still reads as ada's cookbook and still sits beside her other apps,
+ * which is the whole reason the handle is legible at all rather than a bare
+ * eid. Jeff: "i *do* like being able to see these names in the cloudflare
+ * dashboard".
+ *
+ * Six hex off the eid's tail (a uuid v4's last twelve are random), which is
+ * unique enough that there is no collision branch here — the unique index on
+ * `app.store` is what decides it if the impossible happens, the way every other
+ * race in this directory is decided.
+ */
+export let handle = (space: Space, slug: string, eid: string) =>
+  `${space.slug}/${slug}.${eid.replaceAll('-', '').slice(-6)}`
 
 // The door onto one app's store, told WHICH app it holds and what this
 // directory says its access mode is (T-33813). A store keeps both (graph.ts
@@ -748,9 +777,8 @@ export let directory = (via: Fetcher, now = false) => {
     // is the app of THIS space that still answers to the address asked for —
     // a move to follow (T-32576: a rename used to strand every open page).
     former: async (space: Space, slug: string) => {
-      let was = bornAt(space, slug)
       let app = (await self.apps(space))
-        .find((a) => a.slug != slug && a.slugs.includes(was))
+        .find((a) => a.slug != slug && a.slugs.includes(slug))
       return app ?? null
     },
     // Every app in a space, oldest first — the order they were made.

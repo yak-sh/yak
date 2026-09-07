@@ -108,7 +108,7 @@ slow('a hostname finds its app, and only one app', async () => {
     // Its store answers at the app's own door, under the domain.
     let rows = await k.at('herbusiness.com', '/api/graph')
     assertEquals(rows.status, 200)
-    assertEquals((await rows.json()).db, 'do:jeff/recipes')
+    assertStringIncludes((await rows.json()).db, 'do:jeff/recipes.')
 
     // A write comes through whole — the request is carried to the app's
     // address, body and cookie with it.
@@ -207,7 +207,7 @@ slow('a domain on the space opens the space, apps and all', async () => {
     )
     let rows = await k.at('ourbookclub.com', '/recipes/api/graph')
     assertEquals(rows.status, 200)
-    assertEquals((await rows.json()).db, 'do:jeff/recipes')
+    assertStringIncludes((await rows.json()).db, 'do:jeff/recipes.')
     // The space's own doors are the space's, unchanged: a path no app claims
     // is the front page's.
     assertEquals((await k.at('ourbookclub.com', '/nope.html')).status, 404)

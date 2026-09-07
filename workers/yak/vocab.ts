@@ -456,18 +456,36 @@ export let platformDoc: VocabDoc = {
         space: ref('cascade'),
         version: num,
         access: { enum: ['public', 'open', 'private'] },
+        // The app's HANDLE: what its Durable Object, its dispatch script, its
+        // R2 export path and its analytics rows are named by (directory.ts
+        // `storeName`). Written once at birth and never read as an address —
+        // `<space>/<app>.<6 hex of the eid>`, so the Cloudflare dashboard still
+        // sorts it under its space and reads as the app it is, and so two apps
+        // that hold one address a year apart are still two objects. Unique
+        // by construction, and the index is what makes that true rather than
+        // hoped for (T-34657).
+        store: unique(text),
       },
     },
-    // Every address an app has answered at: the one it was born at — which is
-    // what its Durable Object is named, so it may never move — and, in
-    // `slugs`, each one a rename left behind.
+    // Every address an app has answered at, oldest first: `slug` the one it was
+    // born at, `slugs` each one a rename left behind. ADDRESS HISTORY and
+    // nothing else — the handle it is stored under is `app.store` above, which
+    // is why a rename moves an address and never a byte (T-34657). Bare slugs,
+    // in the space's own namespace, so a SPACE rename leaves every app's
+    // history standing.
     //
     // It was spelled `alias` until T-34390, when that word became the
     // platform's own (@yaks/alias, in {@link coreDocs}): a name any entity may
     // wear in any store. Two things cannot share one word, and the one every
     // store speaks wins — so the app's addresses are `former`, which is what
     // the record is about.
-    former: { type: 'object', properties: { slug: unique(text), slugs: text } },
+    //
+    // A space wears it too, for the same reason and in the same shape
+    // (T-34658): its birth subdomain and every one a rename left behind, each
+    // still redirecting. Not unique here — uniqueness is over an address WITHIN
+    // a space for an app, and over the whole platform for a space, and neither
+    // is one column's own race; the tools decide both (tools.ts `taken`).
+    former: { type: 'object', properties: { slug: text, slugs: text } },
     // WHICH app is the space's front page, and the paths its worker sees FIRST
     // before the app whose slug owns them (D-34197, T-34227). One fact, one
     // spelling: the app WEARING `home` is the home app, and its globs are

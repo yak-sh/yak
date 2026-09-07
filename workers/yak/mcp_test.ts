@@ -5346,7 +5346,11 @@ slow('the front page moves, and only the owner moves it', async () => {
     // is, yet: the list is.
     let front = async () => {
       let r = await k.at('front.yaks.app', '/api/graph')
-      return r.status == 200 ? (await r.json()).db : r.status
+      // The handle carries a key minted off the app's eid (directory.ts
+      // `handle`), so what is asked here is WHICH app answers, not the key.
+      return r.status == 200
+        ? String((await r.json()).db).replace(/\.[0-9a-f]+$/, '')
+        : r.status
     }
     let was = await bare()
     assertEquals(was.status, 200)
@@ -5441,7 +5445,11 @@ slow('deleting the front page puts the space back to the default', async () => {
     let bare = () => k.at('reset.yaks.app', '/', { redirect: 'manual' })
     let front = async () => {
       let r = await k.at('reset.yaks.app', '/api/graph')
-      return r.status == 200 ? (await r.json()).db : r.status
+      // The handle carries a key minted off the app's eid (directory.ts
+      // `handle`), so what is asked here is WHICH app answers, not the key.
+      return r.status == 200
+        ? String((await r.json()).db).replace(/\.[0-9a-f]+$/, '')
+        : r.status
     }
     await agent.tool('app_set', {
       space: 'reset',

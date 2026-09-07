@@ -88,8 +88,14 @@ Deno.test('a space and an app are seeded, minted, and read back', async () => {
     entities: [{
       entity: { eid: '$app' },
       doc: { title: 'Cookbook' },
-      app: { slug: 'cookbook', space: s.eid, version: 0, access: 'public' },
-      former: { slug: 'ada/cookbook' },
+      app: {
+        slug: 'cookbook',
+        space: s.eid,
+        version: 0,
+        access: 'public',
+        store: 'ada/cookbook.aaa111',
+      },
+      former: { slug: 'cookbook' },
     }],
   }, as(ada))
 
@@ -98,8 +104,10 @@ Deno.test('a space and an app are seeded, minted, and read back', async () => {
   assertEquals(app.space, s.eid)
   assertEquals(app.access, 'public')
   assertEquals(app.title, 'Cookbook')
-  // The store is named for where the app was BORN, which a rename never moves.
-  assertEquals(storeName(s, app), 'ada/cookbook')
+  // The store is named by the app's own handle, which no rename moves.
+  assertEquals(storeName(s, app), 'ada/cookbook.aaa111')
+  // And `former` is the address history, in the space's own namespace.
+  assertEquals(app.slugs, ['cookbook'])
   assertEquals((await dir.apps(s)).map((a) => a.slug), ['cookbook'])
   // The roster reads back with the platform's own three seats.
   assertEquals(await dir.role(s, ada), 'owner')
@@ -124,8 +132,14 @@ Deno.test('a hostname resolves to the app it serves and the space it is in', asy
     await at.apply([{
       entity: { eid: '$app' },
       doc: { title: 'Cookbook' },
-      app: { slug: 'cookbook', space: s.eid, version: 0, access: 'public' },
-      former: { slug: 'ada/cookbook' },
+      app: {
+        slug: 'cookbook',
+        space: s.eid,
+        version: 0,
+        access: 'public',
+        store: 'ada/cookbook.aaa111',
+      },
+      former: { slug: 'cookbook' },
     }], as(ada)),
   ).$app
 
@@ -233,8 +247,14 @@ Deno.test('erasing a space buries everything that named it', async () => {
     await at.apply([{
       entity: { eid: '$app' },
       doc: { title: 'Cookbook' },
-      app: { slug: 'cookbook', space: s.eid, version: 0, access: 'public' },
-      former: { slug: 'ada/cookbook' },
+      app: {
+        slug: 'cookbook',
+        space: s.eid,
+        version: 0,
+        access: 'public',
+        store: 'ada/cookbook.aaa111',
+      },
+      former: { slug: 'cookbook' },
     }], as(ada)),
   ).$app
   await at.apply([

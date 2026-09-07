@@ -74,8 +74,14 @@ let seeded = async (env: Env, access = 'public') => {
     entities: [{
       entity: { eid: '$app' },
       doc: { title: 'Cookbook' },
-      app: { slug: 'cookbook', space: space.eid, version: 1, access },
-      former: { slug: 'ada/cookbook' },
+      app: {
+        slug: 'cookbook',
+        space: space.eid,
+        version: 1,
+        access,
+        store: 'ada/cookbook.aaa111',
+      },
+      former: { slug: 'cookbook' },
     }],
   }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
   let app = (await dir.app(space, 'cookbook'))!
@@ -419,7 +425,7 @@ Deno.test('a bulk load is NDJSON in and NDJSON out, refusal and all', async () =
 Deno.test('a subscription is that query still answering', async () => {
   let { env, object, sockets } = platform()
   await seeded(env)
-  let name = 'ada/cookbook'
+  let name = 'ada/cookbook.aaa111'
   // The upgrade goes to the object itself, so the socket is driven the way the
   // runtime drives a hibernated one.
   let sent: Record<string, unknown>[] = []
@@ -612,8 +618,14 @@ let router = async (
       {
         entity: { eid: '$garden' },
         doc: { title: 'Garden' },
-        app: { slug: 'garden', space: space.eid, version: 1, access: 'public' },
-        former: { slug: 'ada/garden' },
+        app: {
+          slug: 'garden',
+          space: space.eid,
+          version: 1,
+          access: 'public',
+          store: 'ada/garden.bbb222',
+        },
+        former: { slug: 'garden' },
       },
       {
         entity: { eid: app.eid },
@@ -647,7 +659,7 @@ Deno.test('rung 1: a platform path never reaches an app', async () => {
   // app's bare root alike: a home worker that answers everything else does not
   // answer these.
   for (let path of ['/cookbook/api/graph', '/api/graph']) {
-    assertEquals((await (await k.at(path)).json()).db, 'do:ada/cookbook')
+    assertEquals((await (await k.at(path)).json()).db, 'do:ada/cookbook.aaa111')
   }
   // And `/<x>/api/…` at an app that is not here is a 404 rather than the home
   // app's page: a page asking a store at a wrong address must not be handed
@@ -789,7 +801,7 @@ Deno.test('rung 1½: a glob over a store door never takes it', async () => {
   // are the kernel's however the column is written (router.ts PLATFORM_PATHS).
   assertEquals(
     (await (await k.at('/garden/api/graph')).json()).db,
-    'do:ada/garden',
+    'do:ada/garden.bbb222',
   )
 })
 
@@ -1086,8 +1098,14 @@ let shopping = async () => {
     entities: [{
       entity: { eid: '$shop' },
       doc: { title: 'The Shop' },
-      app: { slug: 'shop', space: space.eid, version: 0, access: 'public' },
-      former: { slug: 'ada/shop' },
+      app: {
+        slug: 'shop',
+        space: space.eid,
+        version: 0,
+        access: 'public',
+        store: 'ada/shop.ccc333',
+      },
+      former: { slug: 'shop' },
     }],
   }, ADA_OWNS)
   let app = (await dir.app(space, 'shop'))!

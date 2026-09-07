@@ -478,7 +478,7 @@ slow('the front page is served at the space root', async () => {
     // Its store's doors answer at the root too — named by the hostname and
     // nothing else, the way they are on a custom domain (domain_test.ts).
     let rows = await k.at('jeff.yaks.app', '/api/graph')
-    assertEquals((await rows.json()).db, 'do:jeff/site')
+    assertStringIncludes((await rows.json()).db, 'do:jeff/site.')
     // But `/<x>/api/…` named an app that is not here: a page asking a store
     // at a wrong address hears a 404, never HTML it cannot parse.
     assertEquals((await k.at('jeff.yaks.app', '/gone/api/query')).status, 404)
@@ -520,9 +520,9 @@ slow('the front page is served at the space root', async () => {
     let back = await k.at('jeff.yaks.app', '/site/', { redirect: 'manual' })
     assertEquals(back.status, 200)
     assertStringIncludes(await back.text(), '<h1>Her business</h1>')
-    assertEquals(
+    assertStringIncludes(
       (await (await k.at('jeff.yaks.app', '/api/graph')).json()).db,
-      'do:jeff/garden',
+      'do:jeff/garden.',
     )
   } finally {
     await k.stop()

@@ -458,8 +458,14 @@ slow(
         entities: [{
           entity: { eid: `$${slug}` },
           doc: { title: slug },
-          app: { slug, space: space.eid, version: 1, access: 'public' },
-          former: { slug: `ada/${slug}` },
+          app: {
+            slug,
+            space: space.eid,
+            version: 1,
+            access: 'public',
+            store: `ada/${slug}.aaa111`,
+          },
+          former: { slug },
           ...over,
         }],
       }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
@@ -511,8 +517,14 @@ slow(
         entities: [{
           entity: { eid: `$${slug}` },
           doc: { title: slug },
-          app: { slug, space: space.eid, version: 1, access: 'public' },
-          former: { slug: `${space.slug}/${slug}` },
+          app: {
+            slug,
+            space: space.eid,
+            version: 1,
+            access: 'public',
+            store: `${space.slug}/${slug}.aaa111`,
+          },
+          former: { slug },
         }],
       }, by)
       await r2Blobs(env.BLOBS).put(

@@ -7,7 +7,7 @@
 // so the report path asks fresh.
 import { assertEquals } from '@std/assert'
 import * as dirPart from './directory.ts'
-import { directory, type Space } from './directory.ts'
+import { type App, directory, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 
 let space: Space = {
@@ -20,6 +20,25 @@ let space: Space = {
   fee: 0,
   meter: null,
   told: false,
+  trashed: null,
+}
+
+let an: App = {
+  eid: 'a1',
+  slug: 'recipes',
+  space: 's1',
+  version: 1,
+  title: 'Recipes',
+  access: 'public',
+  store: null,
+  slugs: ['recipes'],
+  home: false,
+  first: [],
+  meter: null,
+  published: null,
+  installed: null,
+  gallery: null,
+  seeded: null,
   trashed: null,
 }
 
@@ -147,6 +166,30 @@ Deno.test('a comped space reads as plus, everyone else as what they pay', () => 
   assertEquals(dirPart.tierOf('jeff', null), null)
   assertEquals(dirPart.tierOf('jeff', 'free'), 'free')
   assertEquals(dirPart.tierOf('jeff', 'plus'), 'plus')
+})
+
+// The app's HANDLE (T-34657): the string the platform names everything it
+// keeps for this app by, and the thing a rename — of the app, or of its space —
+// must never move.
+Deno.test('a handle reads as the app and is the app, not its address', () => {
+  let eid = '9efd22a8-19a0-49b8-95f7-5ecec9385dac'
+  // Legible in the dashboard, sorted under its space, with the key on the end.
+  assertEquals(dirPart.handle(space, 'cookbook', eid), 'jeff/cookbook.385dac')
+  // Two apps born at ONE address, a year apart, are two strings — which is why
+  // an address can be freed at all (T-34659).
+  let other = '06d952a9-b26b-4ecb-9ea7-841a96e2b1a9'
+  assertEquals(dirPart.handle(space, 'cookbook', other), 'jeff/cookbook.e2b1a9')
+  // And a rename is exactly the thing it does not answer to: the app moves, the
+  // handle it was born with is what its store is still opened by.
+  let app = { ...an, store: dirPart.handle(space, 'cookbook', eid) }
+  assertEquals(dirPart.storeName(space, app), 'jeff/cookbook.385dac')
+  assertEquals(
+    dirPart.storeName({ ...space, slug: 'ada' }, { ...app, slug: 'kitchen' }),
+    'jeff/cookbook.385dac',
+  )
+  // An app the backfill has not reached keeps answering to the name it already
+  // had, which is what it was called before the column existed.
+  assertEquals(dirPart.storeName(space, { ...an, store: null }), 'jeff/recipes')
 })
 
 // A meta store that keeps what it is written, so the questions `own()` asks

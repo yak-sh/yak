@@ -286,7 +286,7 @@ Deno.test('the platform declares the uniques its races are decided by', () => {
     let [name, cols] of [
       ['space_slug', '"space" ("slug")'],
       ['app_space_slug', '"app" ("space", "slug")'],
-      ['former_slug', '"former" ("slug")'],
+      ['app_store', '"app" ("store")'],
       ['member_space_person', '"member" ("space", "person")'],
       ['hostname_name', '"hostname" ("name")'],
       ['deploy_app_version', '"deploy" ("app", "version")'],
@@ -302,6 +302,10 @@ Deno.test('the platform declares the uniques its races are decided by', () => {
   }
   // An app's own store declares none of them — they are the directory's words.
   assert(!schema(appVocab()).some((s) => s.includes('unique index')))
+  // And an ADDRESS is no longer one of them (T-34657): `former` is history, so
+  // two apps may hold one address a year apart. Which app answers at an address
+  // now is the tools' word, not an index's.
+  assert(!sql.some((s) => s.includes('on "former"')))
 })
 
 Deno.test('none of the fleet vocabulary comes with it', () => {

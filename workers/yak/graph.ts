@@ -139,6 +139,9 @@ import {
   type Bucket,
   carry,
   FORMER,
+  HANDLED,
+  handled,
+  handles,
   HOMED,
   homed,
   homes,
@@ -157,6 +160,7 @@ import {
   stale,
   type Taken,
   taken,
+  unhandled,
 } from './migrate.ts'
 import {
   appDerived,
@@ -396,9 +400,9 @@ export class Store {
     // that stopped at an older marker because it had nothing to move for it
     // still has to be asked about the ones added since.
     this.#behind = this.#pending ||
-      (this.#get('migrated') != SERVES &&
+      (this.#get('migrated') != HANDLED &&
         (housed(ctx.storage) || slugged(ctx.storage) ||
-          aimedOld(ctx.storage)))
+          aimedOld(ctx.storage) || unhandled(ctx.storage)))
   }
 
   // Waking on whatever this object holds. Everything above the storage is
@@ -929,6 +933,12 @@ export class Store {
     // whole space. Only the directory has a hostname to move.
     if (!this.#refused) {
       await this.#after(request, SERVES, aimedOld, aims, served)
+    }
+    // The fifth (T-34657): an app's handle — what its store, its script and its
+    // export path are named by — becomes a column of its own instead of the
+    // address it was born at. Only the directory has an app row to name.
+    if (!this.#refused) {
+      await this.#after(request, HANDLED, unhandled, handles, handled)
     }
     this.#behind = false
   }

@@ -26,6 +26,7 @@ import { Store } from './graph.ts'
 import {
   carry,
   FORMER,
+  HANDLED,
   HOMED,
   keyOf,
   MARK,
@@ -46,6 +47,7 @@ import { parseVocab } from '../../src/store/vocab.ts'
 import ops from '../../src/store/schema.json' with { type: 'json' }
 import { PLATFORM_STORE } from './door.ts'
 import { appVocab } from './vocab.ts'
+import { slugsOf } from '../../src/types.ts'
 
 // One object's whole state, kept across incarnations: its storage, the key-value
 // slots the OLD store remembered everything in, and the socket list the runtime
@@ -93,6 +95,8 @@ let SPACE = 'c0000000-0000-4000-8000-0000000000c5'
 let APP = 'd0000000-0000-4000-8000-0000000000ab'
 let ONE = '10000000-0000-4000-8000-000000000001'
 let TWO = '20000000-0000-4000-8000-000000000002'
+let THREE = '33000000-0000-4000-8000-000000000033'
+let FOUR = '44000000-0000-4000-8000-000000000044'
 let GONE = '30000000-0000-4000-8000-000000000003'
 
 type Change = {
@@ -499,7 +503,7 @@ slow(
       },
     )
     // Every pass in the same breath, so none of them has anything to do.
-    assertEquals(marker(ctx), SERVES)
+    assertEquals(marker(ctx), HANDLED)
   },
 )
 
@@ -631,8 +635,8 @@ slow('a store carrying now arrives with the addresses moved', async () => {
   let files = bucket()
   let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
   assertEquals(await answering(now), [
-    ['cookbook', 'ada/cookbook', ''],
-    ['orchard', 'ada/garden', 'ada/plot'],
+    ['cookbook', 'cookbook', ''],
+    ['orchard', 'garden', 'plot'],
   ])
   let report = reportIn(files.held)
   assert(report.ok, report.message)
@@ -649,7 +653,7 @@ slow('a store carrying now arrives with the addresses moved', async () => {
   // so nothing was copied into it on the way past.
   assertEquals(count(ctx, 'alias'), 0)
   // Every pass in the same breath, so none of the later ones has anything left.
-  assertEquals(marker(ctx), SERVES)
+  assertEquals(marker(ctx), HANDLED)
 })
 
 slow('a directory that already carried moves them on next touch', async () => {
@@ -661,8 +665,8 @@ slow('a directory that already carried moves them on next touch', async () => {
   let files = bucket()
   let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
   assertEquals(await answering(now), [
-    ['cookbook', 'ada/cookbook', ''],
-    ['orchard', 'ada/garden', 'ada/plot'],
+    ['cookbook', 'cookbook', ''],
+    ['orchard', 'garden', 'plot'],
   ])
   let report = reportIn(files.held)
   assert(report.ok, report.message)
@@ -749,6 +753,126 @@ slow('a domain aimed by the old column is aimed by the new one', async () => {
   let third = bucket()
   newer(ctx, PLATFORM_STORE, { EXPORTS: third.r2 })
   assertEquals(third.held.size, 0)
+})
+
+// ---- an app's handle: `former.slug` → `app.store` (T-34657) -----------------
+//
+// A directory as a DEPLOYED one stands: carried past the domains and no
+// further, its apps still named by the address each was born at. The handle
+// each app ends up with is the string it was ALREADY stored under, which is
+// what makes this a migration nothing moves for.
+let carriedFour = async (ctx: State) => {
+  let now = newer(ctx, PLATFORM_STORE)
+  await now.door('/apply', {
+    method: 'POST',
+    headers: { 'x-yak-kernel': '1' },
+    body: JSON.stringify([
+      { entity: { eid: SPACE }, space: { slug: 'ada' } },
+      {
+        entity: { eid: APP },
+        app: { slug: 'cookbook', space: SPACE },
+        former: { slug: 'ada/cookbook' },
+      },
+      // Renamed once: born at `garden`, living at `orchard`, answering at both.
+      {
+        entity: { eid: ONE },
+        app: { slug: 'orchard', space: SPACE },
+        former: { slug: 'ada/garden', slugs: 'ada/plot' },
+      },
+      // And one from before addresses were kept at all: no `former` row.
+      { entity: { eid: TWO }, app: { slug: 'shed', space: SPACE } },
+    ]),
+  })
+  let sql = ctx.storage.sql
+  sql.exec(
+    "insert into yak_kv (k, v) values ('migrated', ?) " +
+      'on conflict(k) do update set v = excluded.v',
+    SERVES,
+  )
+  return now
+}
+
+// Every app, by the handle it is stored under and the addresses it answers at.
+let handling = async (now: ReturnType<typeof newer>) =>
+  (await now.query('.app!&.former?'))
+    .map((r) => [
+      (r.app as { slug: string; store?: string }).slug,
+      (r.app as { store?: string }).store ?? '',
+      slugsOf(r.former as { slug?: string; slugs?: string }).join(' '),
+    ])
+    .sort()
+
+slow('an app named by its birth address is named by a handle', async () => {
+  let ctx = state()
+  await carriedFour(ctx)
+
+  // A fresh incarnation over the same object — a deploy — and the first
+  // request carries it the rest of the way.
+  let files = bucket()
+  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  // Each app holds the exact string it was already stored under, so no object
+  // is renamed and no byte moves; the addresses are the app's own history now,
+  // read in the space's namespace rather than through the space's name.
+  assertEquals(await handling(now), [
+    ['cookbook', 'ada/cookbook', 'cookbook'],
+    ['orchard', 'ada/garden', 'garden plot'],
+    ['shed', 'ada/shed', ''],
+  ])
+  let report = reportIn(files.held)
+  assert(report.ok, report.message)
+  assertEquals(report.mark, HANDLED)
+  assertEquals(report.moved.find((m) => m.table == 'app')?.to, 3)
+
+  // The unique index the birth address was decided by is down, which is what
+  // lets one address be held by two apps a year apart (T-34659).
+  let indexes = ctx.storage.sql
+    .exec("select name from sqlite_master where type = 'index'")
+    .toArray().map((r) => (r as { name: string }).name)
+  assert(!indexes.includes('former_slug'), indexes.join(', '))
+  assert(indexes.includes('app_store'), indexes.join(', '))
+
+  // The rows reached R2 before one moved, which is the restore path.
+  assertEquals(rowsIn(files.held).app.length, 3)
+
+  // And it does not run again.
+  let third = bucket()
+  newer(ctx, PLATFORM_STORE, { EXPORTS: third.r2 })
+  assertEquals(third.held.size, 0)
+  assertEquals(marker(ctx), HANDLED)
+})
+
+slow('two apps may hold one address, and be two stores', async () => {
+  let ctx = state()
+  await carriedFour(ctx)
+  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: bucket().r2 })
+  // `garden` is an address `orchard` left behind. A new app born there is a
+  // write the index used to refuse; what keeps the two apart is the handle,
+  // and the handle is not the address.
+  await now.door('/apply', {
+    method: 'POST',
+    headers: { 'x-yak-kernel': '1' },
+    body: JSON.stringify([{
+      entity: { eid: THREE },
+      app: { slug: 'garden', space: SPACE, store: 'ada/garden.f00d99' },
+      former: { slug: 'garden' },
+    }]),
+  })
+  assertEquals(await handling(now), [
+    ['cookbook', 'ada/cookbook', 'cookbook'],
+    ['garden', 'ada/garden.f00d99', 'garden'],
+    ['orchard', 'ada/garden', 'garden plot'],
+    ['shed', 'ada/shed', ''],
+  ])
+  // The handle is still the one thing no two apps may share.
+  let no = await now.door('/apply', {
+    method: 'POST',
+    headers: { 'x-yak-kernel': '1' },
+    body: JSON.stringify([{
+      entity: { eid: FOUR },
+      app: { slug: 'shed-two', space: SPACE, store: 'ada/garden.f00d99' },
+    }]),
+  })
+  assert(!no.ok, 'a second app took a handle that was already held')
 })
 
 // ---- the refusals ----------------------------------------------------------

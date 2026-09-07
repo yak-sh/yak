@@ -118,9 +118,15 @@ export let FORMER = 'yak/store/former/3'
  * space. The directory's alone; no other object has a hostname. */
 export let SERVES = 'yak/store/serves/4'
 
+/** The fifth pass (T-34657): an app's HANDLE — the string its Durable Object,
+ * its script, its export path and its analytics rows are named by — becomes a
+ * column of its own, `app.store`, instead of being read back off the address it
+ * was born at. The directory's alone; no other object has an app row. */
+export let HANDLED = 'yak/store/handle/5'
+
 /** Every marker in order, so "is this object caught up" is one comparison and
  * a new pass is one line here. */
-export let MARKS = [MARK, HOMED, FORMER, SERVES]
+export let MARKS = [MARK, HOMED, FORMER, SERVES, HANDLED]
 
 /** The two tables the two layouts spell identically, and so never move. */
 let SPINE = ['entity', 'tombstone']
@@ -754,6 +760,155 @@ export let served = (
     from: rows,
     to: count(d, 'hostname'),
     note: swept || 'the app column dropped',
+  })
+  return report(true)
+}
+
+// ---- an app's handle: `former.slug` → `app.store` (T-34657) -----------------
+//
+// An app's store, script, export path and analytics rows were named by the
+// address it was BORN at, kept in `former.slug`. That made the platform's own
+// object names a projection of a string a person picks — so an address could
+// never be freed and reused, and renaming the SPACE was not a thing that could
+// be offered at all. The handle moves into a column of the app's own,
+// `app.store`, and what it holds for an existing app is the string it is
+// ALREADY named by: nothing moves, no object is renamed, no byte is copied.
+//
+// And `former` is left as what it now only is — address history — with the
+// space prefix taken off each entry, so the history is in the space's own
+// namespace and a space rename leaves it standing (T-34658).
+
+/** Whether this object still names its apps by their birth address: an app row
+ * with no handle of its own. False for every app store — no app table — and for
+ * a directory {@link handled} has already been over. */
+export let unhandled = (storage: DurableStorage): boolean => {
+  let d = driver(storage)
+  return stands(d, 'app') && columns(d, 'app').includes('store') &&
+    Number(
+        d.query(
+          `select count(*) as n from ${q('app')} where store is null`,
+          [],
+        )[0]?.n ?? 0,
+      ) > 0
+}
+
+/** Which rows the pass is about, read out before one moves — the restore path,
+ * the way {@link taken} is for the first pass. */
+export let handles = (storage: DurableStorage): Taken => {
+  let d = driver(storage)
+  return {
+    store: '',
+    at: new Date().toISOString(),
+    slots: {},
+    tables: ['app', 'former'].filter((t) => stands(d, t)).map((name) => ({
+      name,
+      rows: d.query(`select * from ${q(name)}`, []),
+    })),
+  }
+}
+
+/** One address with the space prefix taken off it: `ada/cookbook` is
+ * `cookbook`, and a bare `cookbook` is already itself. A slug holds no slash
+ * (route.ts SLUG), so the seam is never in doubt. */
+let bare = (address: string) => address.slice(address.indexOf('/') + 1)
+
+/**
+ * The handle out of `former.slug` and into `app.store` (T-34657), synchronously
+ * — run it inside `transactionSync` for the same reason {@link carry} is: a
+ * throw is how it refuses and the rollback is how it leaves nothing behind.
+ *
+ * THE RULE: every app ends with a handle, and no two share one. An app left
+ * without is an app whose store nothing can open — every recipe in it gone from
+ * the platform's point of view — so it refuses, the rows stay where they are,
+ * and they are in the export.
+ *
+ * An app with no `former` row at all (one born before addresses were kept) gets
+ * the name it is already answering to, `<space>/<app>` as the rows stand, which
+ * is what the code fell back to for it anyway.
+ */
+export let handled = (
+  storage: DurableStorage,
+  o: { store: string; app: string | null; export: string },
+): Report => {
+  let d = driver(storage)
+  let at = new Date().toISOString()
+  let moved: Moved[] = []
+  let report = (ok: boolean, message?: string): Report => ({
+    store: o.store,
+    app: o.app,
+    at,
+    ok,
+    message,
+    mark: HANDLED,
+    moved,
+    dropped: [],
+    export: o.export,
+  })
+  let apps = count(d, 'app')
+  d.exec(
+    `update ${q('app')} set store = coalesce(` +
+      `(select f.slug from ${q('former')} f where f.entity = ${
+        q('app')
+      }.entity),` +
+      `(select s.slug from ${q('space')} s where s.entity = ${
+        q('app')
+      }.space)` +
+      ` || '/' || ${q('app')}.slug) where store is null`,
+  )
+  let held = Number(
+    d.query(
+      `select count(*) as n from ${q('app')} where store is not null`,
+      [],
+    )[0]?.n ?? 0,
+  )
+  let distinct = Number(
+    d.query(`select count(distinct store) as n from ${q('app')}`, [])[0]?.n ??
+      0,
+  )
+  moved.push({
+    table: 'app',
+    from: apps,
+    to: held,
+    note: `${held} apps named by the string each was already stored under`,
+  })
+  if (held != apps || distinct != apps) {
+    throw new Refused(report(
+      false,
+      `${apps} apps, ${held} with a handle and ${distinct} distinct: one ` +
+        'would open the wrong store or none',
+    ))
+  }
+  // The unique index the OLD name was decided by. It stands on `former.slug`,
+  // and that column is address history now — two apps may hold one address a
+  // year apart, which is the whole point of freeing one (T-34659) — so the
+  // index has to come down or the second app could never be born. Its name is
+  // the vocabulary's own (@yaks/sqlite `indexDdl`), which is why it can be
+  // named here at all.
+  d.exec(`drop index if exists ${q('former_slug')}`)
+  // The addresses, unqualified. `former` is the app's history WITHIN its space
+  // now, so the space's name has no business in it: leave it and a space rename
+  // strands every redirect the space's apps ever earned.
+  let rows = stands(d, 'former')
+    ? d.query(`select entity, slug, slugs from ${q('former')}`, [])
+    : []
+  let stripped = 0
+  for (let r of rows) {
+    let slug = r.slug == null ? null : bare(String(r.slug))
+    let slugs = r.slugs == null
+      ? null
+      : String(r.slugs).split(/\s+/).filter(Boolean).map(bare).join(' ')
+    if (slug == r.slug && slugs == r.slugs) continue
+    stripped++
+    d.query(
+      `update ${q('former')} set slug = ?, slugs = ? where entity = ?`,
+      [slug, slugs, r.entity as number],
+    )
+  }
+  moved.push({
+    table: 'former',
+    from: rows.length,
+    to: rows.length,
+    note: `${stripped} address histories now read in the space's own namespace`,
   })
   return report(true)
 }

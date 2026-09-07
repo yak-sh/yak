@@ -57,7 +57,7 @@ import { mimeOf, purged } from './files.ts'
 import {
   type Access,
   type App,
-  bornAt,
+  handle,
   homing,
   mailbox,
   META,
@@ -1065,6 +1065,34 @@ type Change = { eid: string; name: string; comp: unknown }
 let fileKey = (space: Space, app: App, path: string) =>
   `${space.slug}/${app.slug}/${path.replace(/^\/+/, '')}`
 
+/**
+ * An app's row as it is BORN, at both doors that make one — app_new and
+ * app_install. The eid is minted HERE rather than by a `$alias` the store
+ * resolves, because the handle everything the platform keeps for this app is
+ * named by is made out of it (directory.ts `handle`) and there is no second
+ * moment to write it in. `former` opens at the slug it is born at: the first
+ * line of an address history, which is all that word is now (T-34657).
+ */
+let born = (
+  space: Space,
+  slug: string,
+  o: { title: string; access: Access },
+): EntityLiteral => {
+  let eid = crypto.randomUUID()
+  return {
+    entity: { eid },
+    doc: { title: o.title },
+    app: {
+      slug,
+      space: space.eid,
+      version: 0,
+      access: o.access,
+      store: handle(space, slug, eid),
+    },
+    former: { slug },
+  }
+}
+
 // A declaration file of the app's, whichever spelling it was written in: the
 // `.yml` first — YAML is the warm path (M-34605), and every parser here reads
 // it through the same door as the JSON (@yaks/yaml `read`) — then the `.json`,
@@ -1740,21 +1768,10 @@ let OURS: Row[] = [
             'points there — pick another slug',
         )
       }
-      // The birth address is the name of the app's store, pinned here so a
-      // later rename moves the address and not the data (directory.ts
-      // storeName). It is `former` and not `alias` because that word is every
-      // store's now (@yaks/alias, T-34390).
-      let entities: EntityLiteral[] = [{
-        entity: { eid: '$app' },
-        doc: { title: text(args.title, 'title') },
-        app: {
-          slug: s,
-          space: space.eid,
-          version: 0,
-          access: args.access == null ? 'public' : access(args.access),
-        },
-        former: { slug: bornAt(space, s) },
-      }]
+      let entities: EntityLiteral[] = [born(space, s, {
+        title: text(args.title, 'title'),
+        access: args.access == null ? 'public' : access(args.access),
+      })]
       // Being first claims nothing (T-33040). Until somebody says which app
       // is the front page, the space's bare hostname lists the apps its
       // visitor may open; which app opens there is a choice, and arrival
@@ -2496,15 +2513,16 @@ let OURS: Row[] = [
       // as long as it stays open, and a link someone was given is forever
       // (C-32574 item 4, where a rename broke every open tab in silence).
       // A `former` slug resolves like an id, and the BIRTH address is already
-      // the primary one (app_new pins it), so only a later move adds a word.
-      let left = bornAt(space, app.slug)
+      // the first line of the history (app_new writes it), so only a later
+      // move adds a word.
+      let left = app.slug
       let keeping = moving && !app.slugs.includes(left)
         ? [...app.slugs.slice(1), left].join(' ')
         : null
       // Files first and in that order — copy, then rename, then delete — so
       // whichever address is the app's at any moment has the whole app
-      // behind it. Its store is untouched: it is named for where the app was
-      // born, not where it lives (directory.ts storeName).
+      // behind it. Its store is untouched: it is named by the app's own handle,
+      // not by where it lives (directory.ts storeName).
       let blobs = r2Blobs(ctx.env.BLOBS)
       let from = fileKey(space, app, '')
       let onto = moving ? `${space.slug}/${to}/` : from
@@ -3507,21 +3525,16 @@ let OURS: Row[] = [
         )
       }
       let version = offer.app.published.version
-      // The app row, born the way app_new writes one — its own alias, so its
-      // own store, pinned to the address it was born at — plus the pin that
-      // says where the code came from and which version it took. Its access
-      // is the published app's: an app written to be voted on has to stay
-      // votable, and the person can app_set it after.
+      // The app row, born the way app_new writes one — its own eid, so its own
+      // handle and its own store — plus the pin that says where the code came
+      // from and which version it took. Its access is the published app's: an
+      // app written to be voted on has to stay votable, and the person can
+      // app_set it after.
       let entities: EntityLiteral[] = [{
-        entity: { eid: '$app' },
-        doc: { title: offer.app.title },
-        app: {
-          slug: s,
-          space: space.eid,
-          version: 0,
+        ...born(space, s, {
+          title: offer.app.title,
           access: offer.app.access ?? 'public',
-        },
-        former: { slug: bornAt(space, s) },
+        }),
         installed: { of: offer.app.eid, version },
       }]
       await ctx.dir.apply({ entities }, vouched(who))

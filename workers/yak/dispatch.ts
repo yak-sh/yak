@@ -84,12 +84,18 @@ type Grant = {
   exp: number
 }
 
-// The script's name in the namespace: the app's STORE name (directory.ts
-// `storeName` — pinned at birth, which a rename never moves), with the slash
-// made a character a script name may carry. A slug never holds an underscore
-// (route.ts SLUG), so `jeff/recipes` is `jeff_recipes` and no two apps can
-// spell the same script.
-export let scriptName = (store: string) => store.replaceAll('/', '_')
+// The script's name in the namespace: the app's HANDLE (directory.ts
+// `storeName` — written at birth, which no rename moves), with every character
+// a script name may not carry made an underscore. Cloudflare documents a
+// script name as alphanumerics and dashes; the separators the handle is built
+// out of — the slash between space and app, the dot before the key — are
+// neither, so both fold. A slug holds neither of them and neither an
+// underscore (route.ts SLUG) and the key is hex, so the fold is still one
+// script per app: `jeff/recipes.1f7c9a` is `jeff_recipes_1f7c9a`, and the
+// bare `jeff/recipes` an older app is named by is `jeff_recipes` as it always
+// was.
+export let scriptName = (store: string) =>
+  store.replaceAll(/[^a-zA-Z0-9-]/g, '_')
 
 // The app's own entry, the one file the platform looks for and the name the
 // shim imports.
