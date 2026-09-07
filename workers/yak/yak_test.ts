@@ -10,6 +10,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { slow } from '../../src/testing.ts'
+import { parseHTML } from 'linkedom'
 import {
   client,
   connector,
@@ -55,7 +56,13 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     assertEquals((await k.at('127.0.0.1', '/')).status, 200)
     let login = await k.at('yaks.app', '/login')
     assertEquals(login.status, 200)
-    assertMatch(await login.text(), /Sign in to yaks.app/)
+    // Copy may change; the page must still offer the email sign-in form.
+    let { document } = parseHTML(await login.text())
+    assert(
+      document.querySelector(
+        'form[method="post"][action="/login"] input[name="email"][type="email"][required]',
+      ),
+    )
     // The connector answers POST (the calls) and GET (the session's stream,
     // T-32686), both to someone it knows; mcp_test.ts drives them.
     let mcp = await k.at('yaks.app', '/mcp')
@@ -161,12 +168,17 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     // Another app in the space has its own files and its own store.
     assertEquals((await k.at('jeff.yaks.app', '/garden/')).status, 404)
 
-    // The graph API: the store is named by the route, the session is vouched
-    // for, and a batch round-trips. A viewer may read and not write.
+    // The graph API: the route reaches the app's stored handle, the session
+    // is vouched for, and a batch round-trips. A viewer may read and not write.
     let who = await (await k.at('jeff.yaks.app', '/recipes/api/graph', {
       headers: { cookie },
     })).json()
-    assertEquals(who.db, 'do:jeff/recipes')
+    let [app] = await meta(k, cookie).query(
+      `.eid=${eids['jeff/recipes']}&.app?`,
+    )
+    let store = (app.app as { store: string }).store
+    assert(store, 'the app has a store handle')
+    assertEquals(who.db, `do:${store}`)
     assertEquals(who.person, jeff)
     assertEquals(who.role, 'owner')
     let anon = await (await k.at('jeff.yaks.app', '/recipes/api/graph')).json()

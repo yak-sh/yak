@@ -11,6 +11,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { slow } from '../../src/testing.ts'
 import { kernel, type Packed, seed, signIn, zipped } from './probe.ts'
 import { MAX } from './unzip.ts'
+import { managePath } from './route.ts'
 
 // The form a browser sends: the file under `file`, the name beside it.
 let drops = (
@@ -214,20 +215,28 @@ slow('what the door will not take, it says in a sentence', async () => {
   }
 })
 
-// The owner's own page carries the door, and nobody else's does: dropping a
-// file is a member's act, and a stranger reading the page must not be offered
-// a form that will only ever refuse them.
-slow("the drop zone is on the owner's space page", async () => {
+// The app library leads to the New app page, where uploading lives alongside
+// building. A stranger must not be offered a form that will only refuse them.
+slow("the drop zone is on the owner's New app page", async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
-    let mine = await (await k.at('jeff.yaks.app', '/', {
+    let path = managePath('new')
+    let library = await k.at('jeff.yaks.app', '/', {
+      headers: { cookie: them.cookie },
+    })
+    assertStringIncludes(await library.text(), `href="${path}"`)
+    let mine = await (await k.at('jeff.yaks.app', path, {
       headers: { cookie: them.cookie },
     })).text()
     assertStringIncludes(mine, 'action="/deploy"')
     assertStringIncludes(mine, 'type="file"')
     let cold = await (await k.at('jeff.yaks.app', '/')).text()
     assert(!cold.includes('/deploy'), cold)
+    let shut = await k.at('jeff.yaks.app', path, { redirect: 'manual' })
+    assertEquals(shut.status, 303)
+    assertStringIncludes(shut.headers.get('location') ?? '', '/login?return=')
+    await shut.body?.cancel()
   } finally {
     await k.stop()
   }

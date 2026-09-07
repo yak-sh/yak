@@ -14,6 +14,7 @@ import {
 // A client's own reading of the published schema: the tool list is JSON
 // Schema, so what proves it describes a batch is a JSON Schema validator.
 import { Ajv } from 'ajv'
+import { parseHTML } from 'linkedom'
 import { slow, until } from '../../src/testing.ts'
 import { COOKIE, sign } from '../../src/token.ts'
 import {
@@ -37,6 +38,7 @@ import { PROMPTS } from './prompts.ts'
 import { HAS_NOTES } from './standing.ts'
 import { sha256 } from './versions.ts'
 import { VERSION } from '../../src/version.ts'
+import { managePath } from './route.ts'
 
 // The connector's face, on BOTH doors (T-34415): the same name, line and
 // square picture whether the caller has signed in or not, because a directory
@@ -7205,17 +7207,28 @@ slow('space_sell connects an account and hands back one link', async () => {
   try {
     let { cookie } = await seed(k, [{ slug: 'ada', apps: ['shop'] }])
     let agent = connector(k, cookie)
-    let page = (init: RequestInit = {}) =>
-      k.at('ada.yaks.app', '/', {
-        ...init,
-        headers: { cookie, ...(init.headers as Record<string, string>) },
-      })
-
-    // Before anything: the owner is offered the door and told, in the words
-    // that matter, whose money and whose liability it is.
-    let before = await (await page()).text()
-    assertStringIncludes(before, 'Start selling')
-    assertStringIncludes(before, 'you are the merchant')
+    // Selling has its own account page; the library links to it. The form's
+    // action and next step must follow the account through all three states.
+    let path = managePath('selling')
+    let page = async (button: string, value = 'start') => {
+      let r = await k.at('ada.yaks.app', path, { headers: { cookie } })
+      assertEquals(r.status, 200)
+      let { document } = parseHTML(await r.text())
+      let form = document.querySelector(`form[action="${path}"]`)
+      assert(form, 'the selling form')
+      assertEquals(form.getAttribute('method'), 'post')
+      assertEquals(
+        form.querySelector('[name="sell"]')?.getAttribute('value'),
+        value,
+      )
+      assertEquals(
+        form.querySelector('button[type="submit"]')?.textContent,
+        button,
+      )
+    }
+    let library = await k.at('ada.yaks.app', '/', { headers: { cookie } })
+    assertStringIncludes(await library.text(), `href="${path}"`)
+    await page('Connect Stripe')
 
     // The tool hands back ONE link and says to stop there — an assistant that
     // kept going would be an assistant clicking through somebody's identity
@@ -7234,9 +7247,7 @@ slow('space_sell connects an account and hands back one link', async () => {
     assertEquals(made.sent.get('metadata[slug]'), 'ada')
 
     // The page now reads mid-setup, and does not offer the first step again.
-    let mid = await (await page()).text()
-    assertStringIncludes(mid, 'has not finished setting you up')
-    assert(!mid.includes('Start selling'), mid.slice(0, 300))
+    await page('Continue setup')
 
     // Stripe says they are ready, at the Connect door.
     let event = JSON.stringify({
@@ -7268,9 +7279,7 @@ slow('space_sell connects an account and hands back one link', async () => {
     assertEquals((await hook.json()).did, 'ada can sell')
 
     // The page says so, and the tool stops offering a link nobody needs.
-    let after = await (await page()).text()
-    assertStringIncludes(after, 'can take payments')
-    assertStringIncludes(after, 'Stop selling')
+    await page('Disconnect Stripe', 'stop')
     assertStringIncludes(
       await agent.tool('space_sell', { space: 'ada' }),
       'already selling',
@@ -7287,7 +7296,7 @@ slow('space_sell connects an account and hands back one link', async () => {
       await agent.tool('space_sell', { space: 'ada', disconnect: true }),
       'Their Stripe account is untouched',
     )
-    assertStringIncludes(await (await page()).text(), 'Start selling')
+    await page('Connect Stripe')
 
     // And nobody but the owner may connect a space to a bank account.
     let stranger = connector(k, (await signIn(k)).cookie)

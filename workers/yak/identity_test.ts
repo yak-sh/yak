@@ -15,6 +15,7 @@ import {
   assertMatch,
   assertStringIncludes,
 } from '@std/assert'
+import { parseHTML } from 'linkedom'
 import { slow, until } from '../../src/testing.ts'
 import {
   connector,
@@ -29,6 +30,17 @@ import {
 import { SENDS } from './signin.ts'
 import { MANAGE, managePath } from './route.ts'
 import type { Connection } from './connections.ts'
+
+// Styling and attribute order do not change the sign-in form's contract.
+let emailCard = async (r: Response) => {
+  assertEquals(r.status, 200)
+  let { document } = parseHTML(await r.text())
+  assert(
+    document.querySelector(
+      'form[method="post"][action="/login"] input[name="email"][type="email"][required]',
+    ),
+  )
+}
 
 let form = (
   k: Kernel,
@@ -207,8 +219,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
   try {
     // The card asks for an address, and nothing else.
     let card = await k.at('yaks.app', '/login')
-    assertEquals(card.status, 200)
-    assertMatch(await card.text(), /<input name="email" type="email" required/)
+    await emailCard(card)
 
     // A code, asked for and mailed. The page says where it went and asks for
     // the code — and nothing else, of anybody, ever: signing up is the address
@@ -818,8 +829,7 @@ slow('/login never draws the box for a browser already signed in', async () => {
 
     // Signed out, the card is what it always was.
     let card = await get('/login')
-    assertEquals(card.status, 200)
-    assertMatch(await card.text(), /<input name="email" type="email" required/)
+    await emailCard(card)
   } finally {
     await k.stop()
   }
