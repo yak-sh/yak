@@ -10,10 +10,9 @@
 // binding in wrangler.toml and the router calls it instead of the module,
 // with no other change. A part never reaches another except through its
 // handler, and none keeps state another reads.
-import type { R2 } from '../../src/blobs_r2.ts'
-import type { Dispatch } from './dispatch.ts'
+import type { R2 } from '../../src/r2.ts'
 import type { Binding } from './post.ts'
-import type { Fetcher, Namespace } from './door.ts'
+import type { Dispatch, Fetcher, Namespace } from './door.ts'
 import type { Sandboxes } from './sandbox.ts'
 
 // The door's own word, said again here: every part of this kernel names its

@@ -130,6 +130,7 @@ import {
   SLUG,
 } from './route.ts'
 import { canon, mint, nameOf, personOf, spend } from './signin.ts'
+import type { Caller } from './session.ts'
 
 // A month of not signing in again. The cookie is the browser's; an agent's
 // token has the provider's own, shorter life.
@@ -139,20 +140,10 @@ let SESSION = 30 * 24 * 60 * 60
 // Membership is read from the directory at request time, never a claim.
 type Props = { person: string }
 
-export type Caller = {
-  person: string
-  // How they got in. `grant` is the CLI's short-lived bearer (grants.ts),
-  // which this door mints for a caller and verifies itself.
-  via: 'session' | 'oauth' | 'grant'
-  // The unix second this credential dies at — a bearer's own expiry, a
-  // cookie's `exp`. `about` says it out loud (tools.ts), which is how a CLI
-  // asks how long it has left.
-  until?: number
-  // A grant, and only a grant: which one it is, so it can be revoked by name,
-  // and the one space it may reach when it was narrowed to one.
-  grant?: string
-  space?: string | null
-}
+// Who is asking, and how they got in: session.ts's word, beside `Who`. Said
+// again here because this door is what MINTS one, and every caller of it
+// reads the type off this module.
+export type { Caller }
 
 // The provider's helpers over this env: parsing an authorize request,
 // naming a client, writing a grant, unwrapping a token. `opts` is the same

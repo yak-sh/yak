@@ -57,6 +57,8 @@ import { keyDoc, keyKeywords } from '@yaks/key'
 import { mailDoc } from '@yaks/mail'
 import { memberDoc } from '@yaks/member'
 import { memoryDoc } from '@yaks/memory'
+import { vocabOf } from './plugin.ts'
+import { PLUGINS } from './plugins.ts'
 
 // The column shapes these documents are written out of. A `ref` names another
 // entity and says what happens to this row when that one dies; `owned` is
@@ -414,10 +416,6 @@ export let coreDocs: VocabDoc[] = [
 // kernel decides who may read and write the directory before the request
 // reaches the object (directory.ts), and there is no app to be a member OF.
 
-/** The store the directory lives in, named the way every app's store is. Its
- * slugs are the platform's own and never move, so the name is a constant. */
-export let PLATFORM_STORE = 'yak/platform'
-
 /**
  * The platform's own components — what the directory IS, as one JSON Schema
  * document. Every word here is the fleet contract's own (src/types.ts) read
@@ -712,7 +710,11 @@ export let platformDoc: VocabDoc = {
  * thing the person said about how they want things built, and it holds whether
  * they are looking at one app or another — so it belongs to the SPACE, and the
  * directory is the one store a space has. The words themselves are its
- * `doc.body`, which is why @yaks/doc is loaded above it. */
+ * `doc.body`, which is why @yaks/doc is loaded above it.
+ *
+ * A plugin's words land between the core documents and the platform's own
+ * (plugin.ts `vocab`): after the words it is written in, and before the
+ * platform's, which is what the directory IS and answers last. */
 export let platformDocs: VocabDoc[] = [
   coreDoc,
   docDoc,
@@ -723,6 +725,7 @@ export let platformDocs: VocabDoc[] = [
   keyDoc,
   aliasDoc,
   memoryDoc,
+  ...vocabOf(PLUGINS),
   platformDoc,
 ]
 

@@ -18,8 +18,7 @@
 // ordinary door. It is never forwarded from anywhere a client can reach
 // (directory.ts VOUCH), so it cannot arrive from outside.
 import type { Bundle } from '@yaks/graph'
-import { type Door, type Namespace, storeOf } from './door.ts'
-import { PLATFORM_STORE } from './vocab.ts'
+import { type Door, type Namespace, PLATFORM_STORE, storeOf } from './door.ts'
 
 /** The meta store, in the graph's own wire. */
 export type Meta = {

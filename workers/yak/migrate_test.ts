@@ -44,7 +44,8 @@ import { fed } from '../../src/effects.ts'
 import { DoSql, type DoStorage } from '../../src/store/do.ts'
 import { parseVocab } from '../../src/store/vocab.ts'
 import ops from '../../src/store/schema.json' with { type: 'json' }
-import { appVocab, PLATFORM_STORE } from './vocab.ts'
+import { PLATFORM_STORE } from './door.ts'
+import { appVocab } from './vocab.ts'
 
 // One object's whole state, kept across incarnations: its storage, the key-value
 // slots the OLD store remembered everything in, and the socket list the runtime

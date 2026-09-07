@@ -126,7 +126,7 @@ import { parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import { named, type Row } from './listing.ts'
 import { type Binding, posting } from './post.ts'
-import type { Namespace } from './door.ts'
+import { type Namespace, PLATFORM_STORE } from './door.ts'
 import { metering } from './meter.ts'
 import { PLATFORM } from './route.ts'
 import {
@@ -162,7 +162,6 @@ import {
   appVocab,
   grew,
   GUIDE,
-  PLATFORM_STORE,
   platformVocab,
   shortOf,
   TEACH,

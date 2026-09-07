@@ -27,6 +27,9 @@
 // the mcp server so they don't have to fetch?" The files stay the one source:
 // the tool and the resources both read them off the assets binding, at the
 // very addresses the web serves them from.
+import { pagesOf } from './plugin.ts'
+import { PLUGINS } from './plugins.ts'
+
 export type Page = {
   slug: string
   title: string
@@ -308,7 +311,9 @@ export let WHOLE = 'https://yaks.app/guide.md'
 
 export let uriOf = (slug: string) => `https://yaks.app/guide/${slug}.md`
 
-export let PAGES: Page[] = [
+// The platform's own pages. The list an agent is offered is these plus every
+// plugin's — `PAGES`, at the foot of this list.
+let OURS: Page[] = [
   {
     slug: 'store',
     title: 'The store, from a page',
@@ -488,6 +493,11 @@ export let PAGES: Page[] = [
     brief: 'what broke, and rolling back',
   },
 ]
+
+/** Every guide page: the platform's own, then each plugin's in PLUGINS order
+ * (plugin.ts `pages`). The file a page names is still under `public/guide/`
+ * whoever registered it — a plugin brings the ROW, not the bytes. */
+export let PAGES: Page[] = [...OURS, ...pagesOf(PLUGINS)]
 
 // Which page covers a WORD, for the schema door (@yaks/mcp `graph_schema`,
 // T-34156): an agent reading what `mail` is should be told where the whole of

@@ -45,18 +45,12 @@
 import { COOKIE, opened, seal } from '../../src/token.ts'
 import type { App, Role, Space } from './directory.ts'
 import { storeName } from './directory.ts'
-import type { Env, Fetcher } from './env.ts'
+import type { Env } from './env.ts'
 import { oops } from './pages.ts'
 import type { Who } from './session.ts'
 import { storeOf } from './door.ts'
 import { failed, noted, refusal, serving } from './unseen.ts'
 import { KERNEL, metaOf } from './meta.ts'
-
-// The dispatch namespace binding, the slice we ask of it (env.ts): a name in,
-// a fetcher out. `get` throws for a script that is not there, and the docs
-// give only the message's prefix to know it by
-// (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/dynamic-dispatch/).
-export type Dispatch = { get(name: string): Fetcher }
 
 // The namespace the account holds (`wrangler dispatch-namespace create
 // yak-apps`), named here as well as in wrangler.toml because the upload

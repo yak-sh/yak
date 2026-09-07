@@ -14,6 +14,27 @@
  * Worker called in-process (env.ts `bound`). */
 export type Fetcher = { fetch(req: Request): Promise<Response> }
 
+// The dispatch namespace binding, the slice we ask of it (env.ts): a name in,
+// a fetcher out. `get` throws for a script that is not there, and the docs
+// give only the message's prefix to know it by
+// (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/dynamic-dispatch/).
+//
+// Here rather than in dispatch.ts, which is what USES it: a binding's slice is
+// what env.ts is made of, and naming this one from dispatch.ts made the whole
+// of that module — and everything it reaches — part of the type graph of
+// anything that reads `Env`. That is the same reason `Fetcher` is here.
+export type Dispatch = { get(name: string): Fetcher }
+
+/** The store the directory lives in, named the way every app's store is. Its
+ * slugs are the platform's own and never move, so the name is a constant.
+ *
+ * A store's NAME is addressing and not vocabulary, which is why it is here and
+ * not beside the platform's words: meta.ts and directory.ts want the name and
+ * nothing else from vocab.ts, and that one import was what made the words a
+ * dependency of the directory — so vocab.ts could not itself read a list of
+ * plugins that reaches the directory (plugin.ts). */
+export let PLATFORM_STORE = 'yak/platform'
+
 export type Stub = { fetch(req: Request): Promise<Response> }
 export type Namespace = {
   idFromName(name: string): unknown

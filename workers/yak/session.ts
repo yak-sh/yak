@@ -19,6 +19,27 @@ import type { Role } from './directory.ts'
 
 export type Who = { person: string | null; role: Role | null }
 
+/**
+ * Who is asking at a door that takes a CREDENTIAL rather than a cookie alone
+ * — the connector, the CLI (identity.ts `asking`, which is what mints one).
+ * Beside `Who` because it is the same question one step earlier: `Who` is the
+ * person and their seat in a space, this is the person and how they got in.
+ */
+export type Caller = {
+  person: string
+  // How they got in. `grant` is the CLI's short-lived bearer (grants.ts),
+  // which the identity door mints for a caller and verifies itself.
+  via: 'session' | 'oauth' | 'grant'
+  // The unix second this credential dies at — a bearer's own expiry, a
+  // cookie's `exp`. `about` says it out loud (tools.ts), which is how a CLI
+  // asks how long it has left.
+  until?: number
+  // A grant, and only a grant: which one it is, so it can be revoked by name,
+  // and the one space it may reach when it was narrowed to one.
+  grant?: string
+  space?: string | null
+}
+
 export let nobody: Who = { person: null, role: null }
 
 export let whoIs = async (

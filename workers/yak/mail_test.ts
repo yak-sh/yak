@@ -19,14 +19,13 @@ import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/harness.ts'
 import { canon, fleetAddress } from '../../src/mailaddr.ts'
 import { slow, until } from '../../src/testing.ts'
-import { type Namespace, storeOf } from './door.ts'
+import { type Namespace, PLATFORM_STORE, storeOf } from './door.ts'
 import { FROM, GRAPH, REPLY_TO, sending } from './mail.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { monthOf } from './meter.ts'
 import { mailedTo, mailFrom, posting } from './post.ts'
 import { client, kernel, seed } from './probe.ts'
-import { PLATFORM_STORE } from './vocab.ts'
 
 Deno.test('an app writes from a local part at the apex', () => {
   assertEquals(mailFrom('ada', 'cookbook'), 'ada.cookbook@yaks.app')

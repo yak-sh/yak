@@ -26,18 +26,23 @@
 import type { Bundle } from '@yaks/graph'
 import type { EntityLiteral, Mutation } from '../../src/mutation.ts'
 import { slugsOf } from '../../src/types.ts'
-import { type Door, type Fetcher, type Namespace, storeOf } from './door.ts'
+import {
+  type Door,
+  type Fetcher,
+  type Namespace,
+  PLATFORM_STORE,
+  storeOf,
+} from './door.ts'
 import { KERNEL, type Meta, meta as metaStore } from './meta.ts'
 import { mailFrom } from './post.ts'
 import { SLUG } from './route.ts'
 import { firstOf } from './router.ts'
 import { nameOf } from './signin.ts'
-import { PLATFORM_STORE } from './vocab.ts'
 
 export let META = { space: 'yak', app: 'platform' }
 // The meta space's own store, named the way every app's is. Its slugs are
-// the platform's own and never move, so the name is a constant — vocab.ts
-// spells it, because the store's own vocabulary is chosen by that name.
+// the platform's own and never move, so the name is a constant — door.ts
+// spells it, beside the rest of what addresses a store.
 export let META_STORE = PLATFORM_STORE
 
 // What a space or an app spent this calendar month (platform.rs `Meter`,

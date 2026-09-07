@@ -5,19 +5,14 @@
 // @cloudflare/workers-types — so src/ carries no Cloudflare dependency. Under
 // `wrangler dev` the same binding is a local simulation, which is the dev
 // store; nothing chooses between them here.
+//
+// The slice itself is r2.ts, which imports nothing: a Worker that only
+// DECLARES a bucket binding must be able to name the shape without loading
+// this adapter, and through it the local Deno implementation behind `Blobs`.
 import type { Blobs } from './blobs.ts'
+import type { R2 } from './r2.ts'
 
-export type R2 = {
-  head(key: string): Promise<unknown | null>
-  get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>
-  put(key: string, value: ArrayBuffer | Uint8Array): Promise<unknown>
-  delete(key: string): Promise<unknown>
-  list(
-    opts: { prefix: string; cursor?: string },
-  ): Promise<
-    { objects: { key: string }[]; truncated: boolean; cursor?: string }
-  >
-}
+export type { R2 }
 
 export let r2Blobs = (bucket: R2): Blobs => ({
   has: async (key) => (await bucket.head(key)) != null,

@@ -38,7 +38,7 @@ import { signed, stripe } from './probe.ts'
 import * as sell from './sell.ts'
 import { call, type Ctx, wrote } from './tools.ts'
 import { archive, openIn, serve } from './unseen.ts'
-import { PLATFORM_STORE } from './vocab.ts'
+import { PLATFORM_STORE } from './door.ts'
 
 let SECRET = 'a probe secret'
 
