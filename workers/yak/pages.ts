@@ -9,7 +9,11 @@
 // HTML (the repo's md.ts rule, one floor down).
 
 import type { Frame } from './build.ts'
+import type { Connection } from './connections.ts'
+import { connectionList, connectionLive } from './connection_ui.ts'
 import { icon, type IconName } from './icons.ts'
+import { esc } from './html.ts'
+export { esc } from './html.ts'
 import {
   managePath,
   type ManageView,
@@ -19,11 +23,6 @@ import {
   PLATFORM,
 } from './route.ts'
 import { CONNECTOR } from './seo.ts'
-
-// The one escape: `&` first, so an escape is never escaped twice.
-export let esc = (s: string) =>
-  s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;').replaceAll("'", '&#39;')
 
 let home = '<a class="Away" href="https://yaks.app/">yaks.app</a>'
 
@@ -131,6 +130,8 @@ details.Note > summary { color: var(--accent); cursor: pointer }
 .Fields .Copy { min-width: 0 }
 .Connect_Icon { display: flex; align-items: center; gap: .65rem }
 .Connect_Icon img { display: block; width: 56px; height: 56px; border: 1px solid var(--line); border-radius: .75rem }
+.Connect_Setup { margin-bottom: 1.5rem }
+.Connect_Setup > summary { cursor: pointer; color: var(--accent); font-weight: 700; padding: .5rem 0; margin-bottom: .75rem }
 .Connect_Next { margin-top: .9rem; padding-top: .8rem; border-top: 1px solid var(--line) }
 .Connect_Next p { margin: 0 0 .35rem; color: var(--ink); font-weight: 800 }
 ${deskCss}
@@ -590,7 +591,7 @@ export type SpacePage = {
   person: boolean
   signIn: string
   name?: string
-  connected?: boolean
+  connections?: Connection[]
   fixed?: boolean
   views?: Visits[] | null
   viewDays?: number
@@ -628,7 +629,6 @@ let deskCss = `
 .Desk .Say:empty { display: none }
 .Desk .Says { margin-bottom: 0 }
 .Desk_Connect { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; margin-bottom: 2rem; padding: 1.25rem 1.5rem; border: 1px solid var(--accent); border-radius: 1rem }
-.Desk_ChatLinks { display: flex; flex-direction: column; gap: .5rem; flex: none; font-size: .95rem }
 .Desk_Connect h2 { margin: 0 0 .35rem; font-size: 1.1rem }
 .Desk_Connect p { margin: 0; font-size: .95rem; max-width: 34rem }
 .Desk_Connect .Button { flex: none; padding: .6rem 1.1rem; font-size: .9rem }
@@ -706,23 +706,17 @@ ${link('settings', 'Settings')}${link('trash', 'Trash')}
 </aside>`
 }
 
+let state = (connected: boolean, show: boolean) =>
+  `data-${connected ? 'connected' : 'disconnected'}${show ? '' : ' hidden'}`
+
 let connectCard = (at: SpacePage) =>
-  `<section class="Desk_Connect"><div><h2>${
-    at.connected ? 'Keep building in your chat' : 'Connect your chatbot'
-  }</h2><p>${
-    at.connected
-      ? 'Ask for an app, try it, then keep asking for changes in the same conversation.'
-      : 'Build and improve your apps in the conversations you already have with Claude or ChatGPT.'
-  }</p></div>${
-    at.connected
-      ? `<div class="Desk_ChatLinks">${
-        external('https://chatgpt.com/', 'Open ChatGPT')
-      }${external('https://claude.ai/new', 'Open Claude')}</div>`
-      : `<a class="Button" href="${managePath('connect')}">Connect chatbot</a>`
-  }</section>`
+  `${connectionList(at.connections ?? [])}
+<section class="Desk_Connect" ${state(false, !at.connections?.length)}>
+<div><h2>Connect your chatbot</h2><p>Build and improve your apps in the conversations you already have with Claude or ChatGPT.</p></div>
+<a class="Button" href="${managePath('connect')}">Connect chatbot</a></section>`
 
 let library = (at: SpacePage) =>
-  `${!at.connected ? connectCard(at) : ''}${
+  `${connectCard(at)}${
     at.apps.length
       ? `<div class="Apps">${
         at.apps.map((a) =>
@@ -740,18 +734,19 @@ let library = (at: SpacePage) =>
           }</span></a>`
         ).join('')
       }</div>`
-      : `<section class="Desk_Empty"><h2>Your apps will live here</h2><p>${
-        at.connected
-          ? 'Ask your chatbot for your first app. Try this:'
-          : 'A recipe box, a book club page, a tool for your day. Start with an idea.'
-      }</p>${
-        at.connected
-          ? copyable(
-            'Use yaks.app to build me a recipe box.',
-            'a first app request',
-          )
-          : `<a href="${managePath('new')}">More ways to make an app</a>`
-      }</section>`
+      : `<section class="Desk_Empty"><h2>Your apps will live here</h2>
+<div ${
+        state(true, !!at.connections?.length)
+      }><p>Ask your chatbot for your first app. Try this:</p>${
+        copyable(
+          'Use yaks.app to build me a recipe box.',
+          'a first app request',
+        )
+      }</div>
+<div ${
+        state(false, !at.connections?.length)
+      }><p>A recipe box, a book club page, a tool for your day. Start with an idea.</p>
+<a href="${managePath('new')}">More ways to make an app</a></div></section>`
   }`
 
 let preferences = (at: SpacePage) => {
@@ -838,9 +833,7 @@ let desk = (at: SpacePage) => {
   let body = ''
   if (view == 'apps') body = library(at)
   if (view == 'connect') {
-    body = `${
-      at.connected ? '<p class="Desk_Status">✓ Chatbot connected</p>' : ''
-    }<p>Connect once, then build and keep improving your apps in your usual chats.</p>${doors}${copying}${tabbing}`
+    body = `${connectionSetup(at.connections ?? [])}${copying}${tabbing}`
   }
   if (view == 'new') {
     body = `${connectCard(at)}
@@ -876,7 +869,11 @@ let desk = (at: SpacePage) => {
           esc(at.say)
         }</p>`
         : ''
-    }${body}</div></div>${view == 'apps' ? copying : ''}`,
+    }${body}</div></div>${view == 'apps' ? copying : ''}${
+      ['apps', 'new', 'connect'].includes(view)
+        ? connectionLive(managePath() + '/connections')
+        : ''
+    }`,
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
     'Desk',
   )
@@ -1147,6 +1144,7 @@ export let askAllow = (email: string, q: string, who: string) =>
 // instruction with no way past it is worse than none.
 export type Yours = {
   slug: string
+  connections?: Connection[]
   // A space with apps in it keeps its address: an app's URL is this slug,
   // and moving one wants the redirect a rename already wants (T-32576).
   fixed: boolean
@@ -1400,6 +1398,20 @@ ${a.finish}, then ask:${request}
 }
 </fieldset>`
 
+let connectionSetup = (connections: Connection[]) =>
+  `${connectionList(connections)}
+<p ${
+    state(true, !!connections.length)
+  }>Ask for an app, or keep improving one in the same chat.</p>
+<p ${
+    state(false, !connections.length)
+  }>Connect once, then build and keep improving your apps in your usual chats.</p>
+<details class="Connect_Setup" data-connection-setup${
+    connections.length ? '' : ' open'
+  }>
+<summary ${state(true, !!connections.length)}>Connect another chatbot</summary>
+${doors}</details>`
+
 // The only script a tab needs, and it is not what switches one: the radios do
 // that with no script at all. This keeps the CHOSEN one in the address, so a
 // link can name a tab and a reload comes back to it. Matched by VALUE, never
@@ -1410,7 +1422,11 @@ if (tabs) {
   let all = [...tabs.querySelectorAll('input[name=agent]')]
   let pick = () => {
     let want = all.find((r) => r.value == decodeURIComponent(location.hash.slice(1)))
-    if (want) want.checked = true
+    if (want) {
+      want.checked = true
+      let setup = tabs.closest('details')
+      if (setup) setup.open = true
+    }
   }
   pick()
   addEventListener('hashchange', pick)
@@ -1485,7 +1501,7 @@ export let connect = (yours: Yours, status = 200) =>
     'Connect yaks.app',
     'Build and manage your apps from your usual chats.',
     status,
-    `${doors}
+    `${connectionSetup(yours.connections ?? [])}
 <details class="Attach"${status != 200 || yours.paid ? ' open' : ''}>
 <summary>Your address and plan</summary>
 ${mine(yours)}${plan(yours)}
@@ -1494,5 +1510,5 @@ ${mine(yours)}${plan(yours)}
       esc(yours.slug)
     }.${PLATFORM}${managePath()}">Your apps and settings</a></p>
 <p class="Note"><a href="https://yaks.app/help">Need help?</a></p>
-${home}${copying}${tabbing}${inline}`,
+${home}${copying}${tabbing}${inline}${connectionLive('/oauth/connections')}`,
   )

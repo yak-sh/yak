@@ -19,6 +19,7 @@
 // anonymous, member and owner are each asked separately.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { slow } from '../../src/testing.ts'
+import { parseHTML } from 'linkedom'
 import { spaceIndex } from './pages.ts'
 import { managePath } from './route.ts'
 import { client, connector, kernel, seed, signIn } from './probe.ts'
@@ -198,14 +199,59 @@ Deno.test('new app keeps the builder and upload behind separate disclosures', as
 })
 
 Deno.test('connected empty library offers a copyable request', async () => {
-  let page = await block({ connected: true })
+  let page = await block({
+    connections: [{
+      id: 'chatgpt',
+      provider: 'chatgpt',
+      name: 'ChatGPT',
+      connectedAt: 1,
+    }],
+  })
   assert(/class="[^"]*\bCopy_Go\b/.test(page), page)
   assert(!page.includes('<textarea'), page)
   let built = await block({
-    connected: true,
+    connections: [{
+      id: 'chatgpt',
+      provider: 'chatgpt',
+      name: 'ChatGPT',
+      connectedAt: 1,
+    }],
     apps: [{ slug: 'recipes', title: 'Recipes' }],
   })
   assert(!/class="[^"]*\bCopy_Go\b/.test(built), built)
+})
+
+Deno.test('connected pages show the named client and put setup behind a disclosure', async () => {
+  let connections = [{
+    id: 'chatgpt',
+    provider: 'chatgpt' as const,
+    name: 'ChatGPT',
+    connectedAt: 1,
+  }]
+  for (let view of ['apps', 'new', 'connect'] as const) {
+    let { document } = parseHTML(await block({ view, connections }))
+    let list = document.querySelector('.Connections')!
+    assertStringIncludes(list.textContent!, 'ChatGPT')
+    assertEquals(
+      list.querySelector('a')?.getAttribute('href'),
+      'https://chatgpt.com/',
+    )
+    assert(!list.querySelector('a[href*="claude.ai"]'))
+    for (let el of document.querySelectorAll('[data-disconnected]')) {
+      assert(el.hasAttribute('hidden'))
+    }
+    if (view == 'connect') {
+      assert(
+        !document.querySelector('[data-connection-setup]')!.hasAttribute(
+          'open',
+        ),
+      )
+    }
+  }
+  let { document } = parseHTML(await block({ view: 'connect' }))
+  assert(
+    document.querySelector('[data-connection-setup]')!.hasAttribute('open'),
+  )
 })
 
 // Who visited (views.ts, T-34497): the owner's block, drawn straight. What
@@ -312,7 +358,16 @@ Deno.test('trash has restore forms only on its own page', async () => {
 })
 
 Deno.test("none of the owner block is anybody else's", async () => {
-  let page = await block({ role: null, person: false, connected: true })
+  let page = await block({
+    role: null,
+    person: false,
+    connections: [{
+      id: 'chatgpt',
+      provider: 'chatgpt',
+      name: 'ChatGPT',
+      connectedAt: 1,
+    }],
+  })
   assert(!page.includes('name="name"'), page)
   assert(!/class="[^"]*\bCopy_Go\b/.test(page), page)
 })
