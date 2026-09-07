@@ -571,7 +571,7 @@ Deno.test('the help page answers its own questions in JSON-LD', () => {
 
 // The connect instructions, as they are served. One tab per app, with only
 // the fields that app asks for (T-34412, T-34413, T-34415).
-let tabs = ['Claude', 'ChatGPT', 'Claude Code', 'Cursor', 'Any MCP client']
+let tabs = ['claude', 'chatgpt', 'claude-code', 'cursor', 'other']
 
 let count = (html: string, s: string) => html.split(s).length - 1
 
@@ -597,7 +597,7 @@ let page = () =>
 Deno.test('the connect page teaches one agent at a time', async () => {
   let html = await page()
   assertEquals(
-    [...html.matchAll(/<label class="Tabs_Tab" for="tab-[a-z-]+">([^<]+)</g)]
+    [...html.matchAll(/<label class="Tabs_Tab" for="tab-([a-z-]+)">/g)]
       .map((m) => m[1]),
     tabs,
   )

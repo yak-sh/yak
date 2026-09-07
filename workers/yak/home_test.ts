@@ -199,13 +199,13 @@ Deno.test('new app keeps the builder and upload behind separate disclosures', as
 
 Deno.test('connected empty library offers a copyable request', async () => {
   let page = await block({ connected: true })
-  assertStringIncludes(page, 'class="Copy_Go"')
+  assert(/class="[^"]*\bCopy_Go\b/.test(page), page)
   assert(!page.includes('<textarea'), page)
   let built = await block({
     connected: true,
     apps: [{ slug: 'recipes', title: 'Recipes' }],
   })
-  assert(!built.includes('class="Copy_Go"'), built)
+  assert(!/class="[^"]*\bCopy_Go\b/.test(built), built)
 })
 
 // Who visited (views.ts, T-34497): the owner's block, drawn straight. What
@@ -314,7 +314,7 @@ Deno.test('trash has restore forms only on its own page', async () => {
 Deno.test("none of the owner block is anybody else's", async () => {
   let page = await block({ role: null, person: false, connected: true })
   assert(!page.includes('name="name"'), page)
-  assert(!page.includes('class="Copy_Go"'), page)
+  assert(!/class="[^"]*\bCopy_Go\b/.test(page), page)
 })
 
 slow('the front page is served at the space root', async () => {

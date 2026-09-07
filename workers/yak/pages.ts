@@ -1,15 +1,15 @@
 // The kernel's own pages, in the home page's voice (workers/yak/public): what
 // a person sees when there is nothing at an address, when an app broke, and
 // where they sign in. One shell, three sentences, and an optional card of
-// markup under them; the palette is the home page's, inlined so a space's
-// hostname needs no asset of the apex. Never a stack trace — the exception
-// entity carries that to the person's agent (D-32318 §Errors).
+// markup under them. Shared controls and tokens come from public/controls.css.
+// Errors stay in the graph for the person's chatbot (D-32318 §Errors).
 //
 // Everything interpolated here is escaped by `esc` at the call site: a page
 // carries an email address a stranger typed, and web content never speaks
 // HTML (the repo's md.ts rule, one floor down).
 
 import type { Frame } from './build.ts'
+import { icon, type IconName } from './icons.ts'
 import {
   managePath,
   type ManageView,
@@ -45,44 +45,42 @@ let shell = (
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>${title} · yaks.app</title>
+<link rel="stylesheet" href="https://yaks.app/controls.css">
 <style>
-:root { color-scheme: light; --ground: #fdf7ee; --paper: #fffbf5; --ink: #523828; --soft-ink: #785b47; --line: #efe3d2; --meadow: #4c773e; --warn: #a8503f }
-@media (prefers-color-scheme: dark) { :root { color-scheme: dark; --ground: #2b231f; --paper: #372c26; --ink: #f1e6d8; --soft-ink: #c9b19c; --line: #4d3d34; --meadow: #a7c080; --warn: #e67e80 } }
+@layer base {
 * { box-sizing: border-box }
 body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--ground); color: var(--ink); font: 400 1.05rem/1.6 'Nunito', system-ui, sans-serif }
 main { width: 100%; max-width: 34rem; padding: 2rem 1rem; text-align: center; overflow-wrap: anywhere }
 h1 { font-size: 1.6rem; font-weight: 800; margin: 0 0 .5rem }
 p { color: var(--soft-ink); margin: 0 0 1rem }
-a { color: var(--meadow); text-underline-offset: .18em }
-:focus-visible { outline: 3px solid var(--meadow); outline-offset: 3px }
+a { color: var(--accent); text-underline-offset: .18em }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px }
 form { display: grid; gap: .75rem; margin: 1.5rem 0 1rem }
 form p { margin: 0; font-size: .95rem }
-input { min-width: 0; max-width: 100%; font: inherit; text-align: center; padding: .7rem 1rem; border: 2px solid var(--soft-ink); border-radius: 1.25rem; background: var(--paper); color: var(--ink) }
-button { font: inherit; font-weight: 800; padding: .75rem 1.75rem; border: 0; border-radius: 999px; background: var(--meadow); color: var(--ground); cursor: pointer }
-button:hover, .Button:hover { text-decoration: underline; text-underline-offset: .2em }
-button:disabled, input:disabled { opacity: .6; cursor: not-allowed; text-decoration: none }
+input { text-align: center }
+}
+@layer sections {
 .Code { letter-spacing: .5em; font-size: 1.4rem; font-weight: 700 }
 .Away { font-size: .95rem }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9rem; background: var(--ground); border-radius: .4rem; padding: .1rem .35rem; overflow-wrap: anywhere }
 .Url code { display: inline-block; padding: .5rem 1rem; border-radius: 999px; background: var(--paper); font-size: .95rem }
-.Card { margin: 0 0 1rem; padding: 1.1rem 1.25rem; border-radius: 1.25rem; background: var(--paper); text-align: left }
+.Card { --card-pad: 1.1rem 1.25rem; margin: 0 0 1rem; text-align: left }
 .Card h2 { font-size: 1.05rem; font-weight: 800; margin: 0 0 .6rem }
 .Card ol { display: grid; gap: .4rem; margin: 0; padding-left: 1.2rem; color: var(--soft-ink); font-size: .95rem }
-.Card li::marker { color: var(--meadow); font-weight: 700 }
+.Card li::marker { color: var(--accent); font-weight: 700 }
 .Card pre { margin: 0; white-space: pre-wrap; font: inherit; color: var(--soft-ink); text-align: left }
 .Card form { margin: 1rem 0 0 }
 .Note { font-size: .9rem; margin: .75rem 0 0 }
-details.Note > summary { color: var(--meadow); cursor: pointer }
+details.Note > summary { color: var(--accent); cursor: pointer }
 .Pills { display: flex; flex-wrap: wrap; justify-content: center; gap: .625rem; margin: 0 0 1.25rem }
 .Pill { display: inline-block; padding: .5rem 1rem; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--ink); font-weight: 700; text-decoration: none }
-.Pill:hover { border-color: var(--meadow) }
+.Pill:hover { border-color: var(--accent) }
 .Pill_Tag { margin-left: .5rem; color: var(--soft-ink); font-weight: 400; font-size: .85rem }
-.Button { display: inline-block; padding: .75rem 1.75rem; border-radius: 999px; background: var(--meadow); color: var(--ground); font-weight: 800; text-decoration: none }
 .Pick { display: block; margin: .4rem 0; padding: .5rem .6rem; user-select: all }
 .Says { display: grid; gap: .5rem; margin: .75rem 0 1rem; padding: 0; list-style: none }
 .Copy { display: flex; align-items: center; gap: .5rem }
 .Copy .Pick { flex: 1; margin: 0; border-radius: .7rem; background: var(--ground) }
-.Copy_Go { flex: none; padding: .4rem .9rem; font-size: .85rem; font-weight: 700; background: transparent; color: var(--meadow); border: 1px solid var(--line) }
+.Copy_Go { --button-pad: .4rem .9rem; --button-fill: var(--paper); --button-ink: var(--accent); flex: none; font-size: .85rem; font-weight: 700 }
 .At { display: flex; align-items: center; justify-content: center; gap: .3rem }
 .At input { flex: 0 1 13rem; text-align: right }
 .At span { color: var(--soft-ink) }
@@ -96,7 +94,7 @@ details.Note > summary { color: var(--meadow); cursor: pointer }
 .Views_App h3 { margin: 0; font-size: 1rem; font-weight: 800 }
 .Views_Total { color: var(--soft-ink); font-weight: 400; font-size: .9rem }
 .Views_Chart { display: block; width: 100%; height: 4rem }
-.Views_Bar { fill: var(--meadow) }
+.Views_Bar { fill: var(--accent) }
 .Views_Span { display: flex; justify-content: space-between; margin: 0; color: var(--soft-ink); font-size: .9rem }
 .Views_Tops { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)) }
 .Views_Column h4 { margin: 0 0 .25rem; color: var(--soft-ink); font-size: .9rem; font-weight: 700 }
@@ -104,26 +102,26 @@ details.Note > summary { color: var(--meadow); cursor: pointer }
 .Views_List li { display: flex; justify-content: space-between; gap: .5rem }
 .Views_List span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .Bill_Doors { display: flex; flex-wrap: wrap; gap: .625rem; margin: 1rem 0 .5rem }
-.Bill_Go-quiet { background: transparent; color: var(--meadow); border: 1px solid var(--line) }
+.Bill_Go-quiet { --button-fill: var(--paper); --button-ink: var(--accent) }
 .Drop_Zone { display: grid; place-items: center; gap: .5rem; padding: 1.4rem 1rem; border: 2px dashed var(--soft-ink); border-radius: 1.25rem; background: var(--ground); text-align: center; cursor: pointer }
-.Drop_Zone-over { border-color: var(--meadow); background: var(--paper) }
+.Drop_Zone-over { border-color: var(--accent); background: var(--paper) }
 .Drop_File { border: 0; padding: 0; background: none; cursor: pointer }
 .Drop_Say { color: var(--soft-ink); font-size: .9rem }
 .Files { display: grid; gap: .3rem; margin: 0; padding-left: 1.2rem; color: var(--soft-ink); font-size: .95rem }
 .Chat_Said { display: grid; gap: .45rem; margin: 0 0 1rem }
 .Chat_Said:empty { display: none }
 .Chat_Bubble { max-width: 90%; margin: 0; padding: .55rem .9rem; border-radius: 1.1rem; background: var(--ground); color: var(--ink); white-space: pre-wrap }
-.Chat_Bubble-you { justify-self: end; background: var(--meadow); color: var(--ground) }
+.Chat_Bubble-you { justify-self: end; background: var(--accent); color: var(--ground) }
 .Chat_Bubble a { color: inherit }
 .Chat_Tool { display: flex; gap: .4rem; align-items: baseline; margin: 0; padding: 0 .3rem; color: var(--soft-ink); font-size: .9rem }
 .Chat_Tool-no { color: var(--warn) }
 .Chat_Name { font-weight: 700; flex: none }
 .Chat_Of { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.Chat_Built { margin: .4rem 0; padding: 1rem; border: 2px solid var(--meadow); border-radius: 1.25rem; background: var(--ground); text-align: center }
+.Chat_Built { margin: .4rem 0; padding: 1rem; border: 2px solid var(--accent); border-radius: 1.25rem; background: var(--ground); text-align: center }
 .Chat_Built p { margin: 0 0 .6rem }
 .Chat_Note { margin: 0; color: var(--soft-ink); font-size: .9rem }
 .Chat_Ask { margin: 0 }
-.Chat_Ask textarea { min-width: 0; width: 100%; min-height: 4.5rem; font: inherit; padding: .7rem 1rem; border: 2px solid var(--soft-ink); border-radius: 1.25rem; background: var(--paper); color: var(--ink); resize: vertical }
+.Chat_Ask textarea { width: 100%; min-height: 4.5rem; resize: vertical }
 .Chat_Ask textarea:disabled { opacity: .6 }
 .Fields { display: grid; gap: .55rem; margin: .55rem 0 0 }
 .Fields > div { display: grid; grid-template-columns: 6rem minmax(0, 1fr); align-items: center; gap: .65rem }
@@ -131,19 +129,12 @@ details.Note > summary { color: var(--meadow); cursor: pointer }
 .Fields dt { color: var(--ink); font-weight: 800 }
 .Fields dd { min-width: 0; margin: 0 }
 .Fields .Copy { min-width: 0 }
-.Icon { display: flex; align-items: center; gap: .65rem }
-.Icon img { display: block; width: 56px; height: 56px; border: 1px solid var(--line); border-radius: .75rem }
+.Connect_Icon { display: flex; align-items: center; gap: .65rem }
+.Connect_Icon img { display: block; width: 56px; height: 56px; border: 1px solid var(--line); border-radius: .75rem }
 .Connect_Next { margin-top: .9rem; padding-top: .8rem; border-top: 1px solid var(--line) }
 .Connect_Next p { margin: 0 0 .35rem; color: var(--ink); font-weight: 800 }
-.Tabs { position: relative; min-width: 0; margin: 0; padding: 0; border: 0 }
-.Tabs_Legend { margin: 0 0 .65rem; padding: 0; color: var(--ink); font-weight: 800; text-align: left }
-.Tabs > input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none }
-.Tabs_Strip { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 .75rem }
-.Tabs_Tab { padding: .45rem .9rem; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--ink); font-size: .9rem; font-weight: 700; cursor: pointer }
-.Tabs_Tab:hover { border-color: var(--meadow) }
-.Tabs_Panel { display: none }
-${tabsCss}
 ${deskCss}
+}
 </style>
 </head>
 <body${layout ? ` class="${layout}"` : ''}><main>${
@@ -210,7 +201,7 @@ export let spaceBinned = (at: {
     404,
     `<form method="post" action="/">
 <input type="hidden" name="restore-space" value="${esc(at.slug)}">
-<button type="submit">Restore ${esc(at.slug)}.yaks.app</button>
+<button class="Button" type="submit">Restore ${esc(at.slug)}.yaks.app</button>
 </form>
 <p class="Note">Its apps, their files and everything they saved come back
 exactly as they were.</p>${home}`,
@@ -232,11 +223,15 @@ let dropZone = (slug?: string) =>
 <span class="Drop_Say">A .zip of the app's files, or a single index.html</span>
 </label>
 ${
-    slug ? held('slug', slug) : `<input name="slug" maxlength="63" ` +
-      `autocomplete="off" spellcheck="false" placeholder="what to call it" ` +
-      `aria-label="What to call the app">`
+    slug
+      ? held('slug', slug)
+      : `<input class="Field" name="slug" maxlength="63" ` +
+        `autocomplete="off" spellcheck="false" placeholder="what to call it" ` +
+        `aria-label="What to call the app">`
   }
-<button type="submit">${slug ? 'Update app' : 'Upload app'}</button>
+<button class="Button" type="submit">${
+    slug ? 'Update app' : 'Upload app'
+  }</button>
 </form>`
 
 // Constant text, no interpolation, and every write to the page is textContent
@@ -358,8 +353,8 @@ let transcript = (frames: Frame[]) => {
 // keeps the same one, for whoever posts without it.
 let chatAsk = () =>
   `<form class="Chat_Ask" method="post" action="/api/build">
-<p><textarea name="say" rows="3" required placeholder="A recipe box I can share with my sister" aria-label="What do you want to build?"></textarea></p>
-<button type="submit">Build it</button>
+<p><textarea class="Field" name="say" rows="3" required placeholder="A recipe box I can share with my sister" aria-label="What do you want to build?"></textarea></p>
+<button class="Button" type="submit">Build it</button>
 </form>`
 
 // The optional built-in builder, reached from New app.
@@ -457,7 +452,7 @@ ${dropping}`,
 let copyable = (said: string, what = '') =>
   `<span class="Copy"><span class="Pick">${
     esc(said)
-  }</span><button class="Copy_Go" type="button"${
+  }</span><button class="Button Copy_Go" type="button"${
     what ? ` aria-label="Copy ${esc(what)}"` : ''
   } hidden>Copy</button></span>`
 
@@ -613,13 +608,7 @@ let deskCss = `
 .Desk_Side { position: sticky; top: 0; display: flex; flex-direction: column; gap: 2rem; min-height: 100vh; padding: 2rem 1.25rem; border-right: 1px solid var(--line) }
 .Desk_Brand { display: flex; align-items: center; gap: .65rem; color: var(--ink); font-size: 1.25rem; font-weight: 800; text-decoration: none }
 .Desk_Brand img { border-radius: .65rem }
-.Desk_Nav { display: grid; gap: .3rem }
-.Desk_Nav a { display: flex; align-items: center; gap: .65rem; padding: .6rem .8rem; border-radius: .7rem; color: var(--soft-ink); font-size: .95rem; text-decoration: none }
-.Desk_Nav a:hover { background: var(--paper); color: var(--ink) }
-.Desk_Nav a[aria-current=page] { color: var(--ink); background: var(--paper); font-weight: 800; box-shadow: inset 3px 0 var(--meadow) }
-.Desk_Nav hr { width: 100%; border: 0; border-top: 1px solid var(--line); margin: 1rem 0 }
-.Desk_Icon { width: 1.1rem; height: 1.1rem; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round }
-.Desk_Count { margin-left: auto; font-size: .8rem; color: var(--soft-ink) }
+.Desk_Count { margin-left: auto; font-size: .8rem; opacity: .8 }
 .Desk_Foot { margin-top: auto; display: grid; gap: .5rem; padding: .5rem .8rem; font-size: .85rem }
 .Desk_Body { min-width: 0; padding: 2.5rem clamp(1.25rem, 4vw, 3.5rem) }
 .Desk_Head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 2rem }
@@ -627,25 +616,25 @@ let deskCss = `
 .Desk_Address { font-size: .85rem; text-decoration: none; color: var(--soft-ink) }
 .Desk_Head .Button { flex: none; padding: .6rem 1.2rem; font-size: .95rem }
 .Desk_Content { max-width: 52rem }
-.Desk .Card { padding: 1.5rem; border: 1px solid var(--line) }
+.Desk .Card { --card-pad: 1.5rem }
 .Desk .Card h2 { font-size: 1.15rem }
 .Desk .Card p:last-child { margin-bottom: 0 }
 .Desk .Card form { max-width: 34rem }
-.Desk input { text-align: left; border: 1px solid var(--soft-ink); border-radius: .7rem }
+.Desk input { text-align: left }
 .Desk form button { justify-self: start }
 .Desk form label { font-size: .95rem; font-weight: 700 }
 .Desk .At { justify-content: start }
 .Desk .At input { flex: 1; text-align: left }
 .Desk .Say:empty { display: none }
 .Desk .Says { margin-bottom: 0 }
-.Desk_Connect { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; margin-bottom: 2rem; padding: 1.25rem 1.5rem; border: 1px solid var(--meadow); border-radius: 1rem }
+.Desk_Connect { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; margin-bottom: 2rem; padding: 1.25rem 1.5rem; border: 1px solid var(--accent); border-radius: 1rem }
 .Desk_ChatLinks { display: flex; flex-direction: column; gap: .5rem; flex: none; font-size: .95rem }
 .Desk_Connect h2 { margin: 0 0 .35rem; font-size: 1.1rem }
 .Desk_Connect p { margin: 0; font-size: .95rem; max-width: 34rem }
 .Desk_Connect .Button { flex: none; padding: .6rem 1.1rem; font-size: .9rem }
 .Apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 1rem }
 .Apps_Item { display: flex; flex-direction: column; align-items: start; gap: .55rem; min-height: 12rem; padding: 1.25rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--paper); color: var(--ink); text-decoration: none }
-.Apps_Item:hover { border-color: var(--meadow) }
+.Apps_Item:hover { border-color: var(--accent) }
 .Apps_Item img { width: 44px; height: 44px; border-radius: .75rem; margin-bottom: .5rem }
 .Apps_Item strong { font-size: 1.05rem; line-height: 1.3 }
 .Apps_Path { color: var(--soft-ink); font-size: .85rem }
@@ -655,14 +644,13 @@ let deskCss = `
 .Desk_Empty h2 { margin: 0 0 .5rem; font-size: 1.25rem }
 .Desk_Empty p { margin: 0 auto 1rem; max-width: 28rem }
 .Desk_Options { margin-top: 1.5rem }
-.Desk_Options > summary { cursor: pointer; color: var(--meadow); font-weight: 700; padding: .5rem 0 }
+.Desk_Options > summary { cursor: pointer; color: var(--accent); font-weight: 700; padding: .5rem 0 }
 .Desk_Options > .Card { margin-top: .75rem }
 .Desk_Trash { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 0; margin: 0; border-top: 1px solid var(--line) }
 .Desk_Trash:first-of-type { border-top: 0 }
 .Desk_Trash p { color: var(--ink) }
 .Desk_Trash small { display: block; color: var(--soft-ink) }
 .Desk .Desk_Trash { max-width: none; margin: 0 }
-.Desk .Tabs_Panel { margin-top: .75rem }
 .Desk_Skip { position: absolute; top: -5rem; left: 1rem; padding: .6rem 1rem; background: var(--paper); z-index: 1 }
 .Desk_Skip:focus { top: 1rem }
 @media (max-width: 700px) {
@@ -670,40 +658,36 @@ let deskCss = `
   .Desk_Side { position: static; min-height: 0; gap: 1rem; padding: 1rem; border-right: 0; border-bottom: 1px solid var(--line) }
   .Desk_Brand { font-size: 1.1rem }
   .Desk_Brand img { width: 30px; height: 30px }
-  .Desk_Nav { display: flex; flex-wrap: wrap; gap: .3rem }
-  .Desk_Nav a { padding: .45rem .65rem; font-size: .85rem; gap: .4rem }
-  .Desk_Nav hr, .Desk_Foot { display: none }
+  .Desk .SideNav { display: flex; flex-wrap: wrap; gap: .3rem }
+  .Desk .SideNav a { padding: .45rem .65rem; font-size: .85rem; gap: .4rem }
+  .Desk .SideNav hr, .Desk_Foot { display: none }
   .Desk_Body { padding: 1.5rem 1rem }
   .Desk_Head { margin-bottom: 1.5rem }
   .Desk_Head h1 { font-size: 1.55rem }
   .Desk_Connect { align-items: start; flex-direction: column; gap: 1rem; padding: 1.1rem }
-  .Desk .Card { padding: 1.1rem }
+  .Desk .Card { --card-pad: 1.1rem }
   .Apps { grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: .75rem }
   .Apps_Item { min-height: 11rem; padding: 1rem }
 }
 `
 
-let symbols = {
-  apps:
-    '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
-  connect: '<path d="M7 3v4m10-4v4M5 7h14v3a7 7 0 0 1-14 0V7zm7 10v4"/>',
-  visits: '<path d="M4 4v16h16M9 16v-5m5 5V7m5 9v-3"/>',
-  selling:
-    '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18m-14 5h3"/>',
-  settings: '<path d="M4 6h16M4 12h16M4 18h16M8 3v6m8 0v6m-6 0v6"/>',
-  trash: '<path d="M3 6h18M9 6V3h6v3m-10 0 1 15h12l1-15M10 10v7m4-7v7"/>',
-}
+let navIcons = {
+  apps: 'layout-grid',
+  connect: 'bot',
+  visits: 'chart-no-axes-column-increasing',
+  selling: 'credit-card',
+  settings: 'settings-2',
+  trash: 'trash-2',
+} satisfies Record<string, IconName>
 
 let navigation = (at: SpacePage, view: ManageView) => {
-  let link = (key: keyof typeof symbols, label: string) =>
+  let link = (key: keyof typeof navIcons, label: string) =>
     `<a href="${managePath(key)}"${
       view == key || (view == 'new' && key == 'apps')
         ? ' aria-current="page"'
         : ''
     }>
-<svg class="Desk_Icon" viewBox="0 0 24 24" aria-hidden="true">${
-      symbols[key]
-    }</svg>${label}${
+${icon(navIcons[key])}${label}${
       key == 'trash' && at.trash?.length
         ? `<span class="Desk_Count">${at.trash.length}</span>`
         : ''
@@ -711,18 +695,20 @@ let navigation = (at: SpacePage, view: ManageView) => {
   return `<a class="Desk_Skip" href="#content">Skip to content</a>
 <aside class="Desk_Side">
 <a class="Desk_Brand" href="https://yaks.app/"><img src="https://yaks.app/yaks-app.png" width="36" height="36" alt="">yaks.app</a>
-<nav class="Desk_Nav" aria-label="Manage your apps">
-${link('apps', 'Apps')}${link('connect', 'Assistant')}<hr>
+<nav class="SideNav" aria-label="Manage your apps">
+${link('apps', 'Apps')}${link('connect', 'Chatbots')}<hr>
 ${link('visits', 'Visits')}${at.sell ? link('selling', 'Selling') : ''}
 ${link('settings', 'Settings')}${link('trash', 'Trash')}
 </nav>
-<div class="Desk_Foot"><a href="/" target="_blank" rel="noopener">View homepage ↗</a><a href="https://yaks.app/help" target="_blank" rel="noopener">Help</a></div>
+<div class="Desk_Foot"><a href="/" target="_blank" rel="noopener">View homepage ${
+    icon('external-link')
+  }</a><a href="https://yaks.app/help" target="_blank" rel="noopener">Help</a></div>
 </aside>`
 }
 
 let connectCard = (at: SpacePage) =>
   `<section class="Desk_Connect"><div><h2>${
-    at.connected ? 'Keep building in your chat' : 'Connect your assistant'
+    at.connected ? 'Keep building in your chat' : 'Connect your chatbot'
   }</h2><p>${
     at.connected
       ? 'Ask for an app, try it, then keep asking for changes in the same conversation.'
@@ -732,9 +718,7 @@ let connectCard = (at: SpacePage) =>
       ? `<div class="Desk_ChatLinks">${
         external('https://chatgpt.com/', 'Open ChatGPT')
       }${external('https://claude.ai/new', 'Open Claude')}</div>`
-      : `<a class="Button" href="${
-        managePath('connect')
-      }">Connect assistant</a>`
+      : `<a class="Button" href="${managePath('connect')}">Connect chatbot</a>`
   }</section>`
 
 let library = (at: SpacePage) =>
@@ -758,7 +742,7 @@ let library = (at: SpacePage) =>
       }</div>`
       : `<section class="Desk_Empty"><h2>Your apps will live here</h2><p>${
         at.connected
-          ? 'Ask your assistant for your first app. Try this:'
+          ? 'Ask your chatbot for your first app. Try this:'
           : 'A recipe box, a book club page, a tool for your day. Start with an idea.'
       }</p>${
         at.connected
@@ -775,10 +759,10 @@ let preferences = (at: SpacePage) => {
   return `<section class="Card"><h2>Profile</h2>
 <form method="post" action="${managePath('settings')}">
 <label for="your-name">Your name</label>
-<input id="your-name" name="name" maxlength="60" autocomplete="name" placeholder="Dana" value="${
+<input class="Field" id="your-name" name="name" maxlength="60" autocomplete="name" placeholder="Dana" value="${
     esc(at.name ?? '')
   }">
-<button type="submit">Save name</button></form></section>
+<button class="Button" type="submit">Save name</button></form></section>
 <section class="Card"><h2>App address</h2>${
     at.fixed
       ? `<p>${
@@ -786,10 +770,10 @@ let preferences = (at: SpacePage) => {
       }.yaks.app</p><p class="Note">The address is fixed once you've created an app.</p>`
       : `<form method="post" action="${managePath('settings')}">
 <label for="your-address">Your address</label>
-<span class="At"><input id="your-address" name="space" maxlength="63" autocomplete="off" spellcheck="false" value="${
+<span class="At"><input class="Field" id="your-address" name="space" maxlength="63" autocomplete="off" spellcheck="false" value="${
         esc(at.space)
       }"><span>.yaks.app</span></span>
-<p class="Note">You can change this until you create your first app.</p><button type="submit">Save address</button></form>`
+<p class="Note">You can change this until you create your first app.</p><button class="Button" type="submit">Save address</button></form>`
   }</section>
 <section class="Card"><h2>Homepage</h2><p>${
     home
@@ -817,7 +801,7 @@ let selling = (at: SpacePage) => {
     managePath('selling')
   }"><input type="hidden" name="sell" value="${
     ready ? 'stop' : 'start'
-  }"><button type="submit"${ready ? ' class="Bill_Go-quiet"' : ''}>${
+  }"><button type="submit" class="Button${ready ? ' Bill_Go-quiet' : ''}">${
     ready
       ? 'Disconnect Stripe'
       : at.sell == 'setup'
@@ -835,7 +819,7 @@ let trash = (at: SpacePage) =>
 <p>${esc(a.title || a.slug)}<small>${a.days} ${
           a.days == 1 ? 'day' : 'days'
         } left</small></p>
-<button type="submit" class="Bill_Go-quiet">Restore</button></form>`
+<button type="submit" class="Button Bill_Go-quiet">Restore</button></form>`
       ).join('')
     }</section>`
     : '<section class="Desk_Empty"><h2>Trash is empty</h2></section>'
@@ -844,7 +828,7 @@ let desk = (at: SpacePage) => {
   let view = at.view ?? 'apps'
   let titles = {
     apps: 'Your apps',
-    connect: 'Your assistant',
+    connect: 'Your chatbots',
     new: 'New app',
     visits: 'Visits',
     selling: 'Selling',
@@ -855,7 +839,7 @@ let desk = (at: SpacePage) => {
   if (view == 'apps') body = library(at)
   if (view == 'connect') {
     body = `${
-      at.connected ? '<p class="Desk_Status">✓ Assistant connected</p>' : ''
+      at.connected ? '<p class="Desk_Status">✓ Chatbot connected</p>' : ''
     }<p>Connect once, then build and keep improving your apps in your usual chats.</p>${doors}${copying}${tabbing}`
   }
   if (view == 'new') {
@@ -1005,8 +989,8 @@ export let askEmail = (
 <p>${
       who ? `${esc(who)} would like to use your apps. ` : ''
     }Enter your email to get a sign-in code.</p>
-<input name="email" type="email" required autofocus autocomplete="email" placeholder="you@example.com" aria-label="Your email">
-<button type="submit">Send me a code</button>
+<input class="Field" name="email" type="email" required autofocus autocomplete="email" placeholder="you@example.com" aria-label="Your email">
+<button class="Button" type="submit">Send me a code</button>
 </form>${home}`,
   )
 
@@ -1036,8 +1020,8 @@ export let askCode = (
         : 'Enter it to land on your own space.'
     }</p>
 <input type="hidden" name="email" value="${esc(email)}">
-<input class="Code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus autocomplete="one-time-code" aria-label="Your six-digit code">
-<button type="submit">Sign in</button>
+<input class="Field Code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus autocomplete="one-time-code" aria-label="Your six-digit code">
+<button class="Button" type="submit">Sign in</button>
 </form>${home}`,
   )
 
@@ -1103,9 +1087,9 @@ ${
 ${held('t', at.token)}
 ${
           at.token ? '' : `<p>Type <b>${esc(at.slug)}</b> to confirm.</p>
-<input name="confirm" autocomplete="off" spellcheck="false" autofocus aria-label="The name of the space">`
+<input class="Field" name="confirm" autocomplete="off" spellcheck="false" autofocus aria-label="The name of the space">`
         }
-<button type="submit">${
+<button class="Button" type="submit">${
           at.forever
             ? `Delete ${esc(at.slug)}.yaks.app forever`
             : `Put ${esc(at.slug)}.yaks.app in the trash`
@@ -1142,7 +1126,7 @@ export let askAllow = (email: string, q: string, who: string) =>
     `${esc(who)} would like to use your apps on yaks.app as ${esc(email)}.`,
     200,
     `<form method="post" action="/oauth/allow">${carried(q)}
-<button type="submit">Allow</button>
+<button class="Button" type="submit">Allow</button>
 </form>${home}`,
   )
 
@@ -1194,10 +1178,10 @@ let mine = (y: Yours) =>
 <p class="Now">Your apps live at <b>${esc(y.slug)}.yaks.app</b>. It's yours to
 change while nothing is built there.</p>
 <form class="Addr" method="post" action="/connect">
-<span class="At"><input name="space" maxlength="63" autocomplete="off" spellcheck="false" aria-label="The name your apps live at" value="${
+<span class="At"><input class="Field" name="space" maxlength="63" autocomplete="off" spellcheck="false" aria-label="The name your apps live at" value="${
       esc(y.said ?? y.slug)
     }"><span>.yaks.app</span></span>
-<button type="submit">Save</button>
+<button class="Button" type="submit">Save</button>
 <p class="Say${y.no ? ' Say-no' : ''}" role="status">${esc(y.say ?? '')}</p>
 </form>
 </section>`
@@ -1233,9 +1217,9 @@ visits a month, 1 GB. <a href="https://yaks.app/pricing">Compare plans</a>.</p>`
   let doors = [
     y.plan.plus
       ? ''
-      : '<button class="Bill_Go" data-door="checkout">Get Plus — $4 a month</button>',
+      : '<button class="Button Bill_Go" data-door="checkout">Get Plus — $4 a month</button>',
     y.plan.known
-      ? '<button class="Bill_Go Bill_Go-quiet" data-door="portal">Manage billing</button>'
+      ? '<button class="Button Bill_Go Bill_Go-quiet" data-door="portal">Manage billing</button>'
       : '',
   ].filter(Boolean).join('')
   return `<section class="Card Bill"><h2>Your plan</h2>
@@ -1263,7 +1247,7 @@ let ICON = `https://${PLATFORM}/yaks-app.png`
 let chatgptFields = fields(
   field('Name', CONNECTOR.title, 'the name') +
     field('Description', CONNECTOR.description, 'the description') +
-    `<div><dt>Icon</dt><dd class="Icon">
+    `<div><dt>Icon</dt><dd class="Connect_Icon">
 <a href="${ICON}" download="yaks-app.png" aria-label="Download the yaks.app icon">
 <img src="${ICON}" width="56" height="56" alt="The yaks.app icon"></a>
 <a href="${ICON}" download="yaks-app.png">Download icon</a>
@@ -1375,7 +1359,7 @@ let AGENTS = [
   },
   {
     key: 'other',
-    tab: 'Any MCP client',
+    tab: 'Other',
     title: 'Anything else that speaks MCP',
     steps: [
       'Add a streamable HTTP connection with this URL:' +
@@ -1390,33 +1374,17 @@ let AGENTS = [
   },
 ]
 
-// The tab strip and its panels: radios, a row of labels, and a panel each,
-// all siblings so plain CSS `:checked ~` shows one at a time. The browser owns
-// the switching — no script runs for a tab to work, and the script below only
-// keeps the chosen one in the address.
-let tabsCss = AGENTS.map((a) =>
-  `#tab-${a.key}:checked ~ .Tabs_Strip label[for="tab-${a.key}"] { border-color: var(--meadow); background: var(--meadow); color: var(--ground) }
-#tab-${a.key}:focus-visible ~ .Tabs_Strip label[for="tab-${a.key}"] { outline: 3px solid var(--meadow); outline-offset: 3px }
-#tab-${a.key}:checked ~ .Tabs_Panel-${a.key} { display: block }`
-).join('\n')
-
+// Native radio tabs share their layout with the working style-guide example.
 let doors = `<fieldset class="Tabs">
 <legend class="Tabs_Legend">Which app do you use?</legend>
 ${
   AGENTS.map((a, i) =>
-    `<input type="radio" name="agent" id="tab-${a.key}" value="${a.key}"${
+    `<div class="Tabs_Item">
+<input type="radio" name="agent" id="tab-${a.key}" value="${a.key}"${
       i ? '' : ' checked'
-    }>`
-  ).join('\n')
-}
-<nav class="Tabs_Strip" aria-label="Choose where to build">${
-  AGENTS.map((a) =>
-    `<label class="Tabs_Tab" for="tab-${a.key}">${a.tab}</label>`
-  ).join('')
-}</nav>
-${
-  AGENTS.map((a) =>
-    `<section class="Card Tabs_Panel Tabs_Panel-${a.key}"><h2>${a.title}</h2>
+    }>
+<label class="Tabs_Tab" for="tab-${a.key}">${a.tab}</label>
+<section class="Card Tabs_Panel Tabs_Panel-${a.key}"><h2>${a.title}</h2>
 <ol>${a.steps.map((s) => `<li>${s}</li>`).join('')}</ol>
 ${a.note ? `<p class="Note">${a.note}</p>` : ''}
 ${
@@ -1427,7 +1395,7 @@ ${
 <div class="Connect_Next"><p>Make your first app</p>
 ${a.finish}, then ask:${request}
 <span class="Note">Try it, then ask for a change in the same chat. Keep shaping it as you use it.</span></div>
-</section>`
+</section></div>`
   ).join('')
 }
 </fieldset>`

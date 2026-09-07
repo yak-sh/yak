@@ -4,88 +4,7 @@
 
 @layer tokens, base, components, sections;
 
-@layer tokens {
-  :root {
-    color-scheme: light;
-
-    /* The paints. Nothing below this block writes a colour down. */
-    --cream: #fffbf5; /* the lightest warm white */
-    --linen: #fdf7ee; /* warm ground, a gold lean */
-    --oat: #f1e6d8; /* pale warm, for words on a dark ground */
-    --shell: #efe3d2; /* the hairline between things */
-    --taupe: #c9b19c; /* oat, gone quiet */
-    --clay: #785b47; /* coffee, gone quiet */
-    --coffee: #523828; /* warm brown, never black */
-    --bark: #4d3d34; /* the hairline, on a dark ground */
-    --cocoa: #372c26; /* cards and bubbles, on a dark ground */
-    --night: #2b231f; /* the dark ground itself */
-    --meadow: #4c773e; /* readable on both light backgrounds */
-    --moss: #a7c080; /* the accent, lit for the dark */
-    --blush: #f8e0c8; /* what you said */
-    --ember: #4e3b32; /* what you said, in the dark */
-    --sky: #e5eef5; /* what it answered */
-    --dusk: #34404a; /* what it answered, in the dark */
-    --forest: #33493c; /* the recipe preview's background */
-
-    /* The roles. Everything below uses these, never a paint. */
-    --ground: var(--linen);
-    --paper: var(--cream);
-    --ink: var(--coffee);
-    --soft-ink: var(--clay);
-    --line: var(--shell);
-    --accent: var(--meadow);
-    --on-accent: var(--ground); /* words on an accent fill */
-    --mine: var(--blush); /* the person's bubble */
-    --theirs: var(--sky); /* the assistant's bubble */
-    --preview: var(--forest); /* matches the embedded app in either theme */
-
-    /* Type. */
-    --font: 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
-    --body: 1.0625rem;
-    --lead: 1.125rem;
-    --small: 0.9375rem;
-
-    /* Space and shape. The gaps derive from one number. */
-    --measure: 34rem; /* reading width */
-    --wide-measure: 72rem; /* multi-column layouts */
-    --gap: 1rem;
-    --quarter-gap: calc(var(--gap) / 4);
-    --half-gap: calc(var(--gap) / 2);
-    --wide-gap: calc(var(--gap) * 1.5);
-    --radius: 1.25rem;
-    --small-radius: calc(var(--radius) * 0.6);
-    --big-radius: calc(var(--radius) * 1.4);
-    --pill: 999px;
-  }
-
-  /* A theme re-points roles. The paints above stay exactly where they are. */
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme='light']) {
-      color-scheme: dark;
-      --ground: var(--night);
-      --paper: var(--cocoa);
-      --ink: var(--oat);
-      --soft-ink: var(--taupe);
-      --line: var(--bark);
-      --accent: var(--moss);
-      --mine: var(--ember);
-      --theirs: var(--dusk);
-    }
-  }
-
-  :root[data-theme='dark'] {
-    color-scheme: dark;
-    --ground: var(--night);
-    --paper: var(--cocoa);
-    --ink: var(--oat);
-    --soft-ink: var(--taupe);
-    --line: var(--bark);
-    --accent: var(--moss);
-    --mine: var(--ember);
-    --theirs: var(--dusk);
-  }
-}
+@import url('controls.css');
 
 @layer base {
   * {
@@ -240,50 +159,6 @@
     --pill-size: var(--small);
   }
 
-  /* The button you press. An <a> and a <button> wear it the same. */
-  .Button {
-    display: inline-block;
-    padding: var(--button-pad, 0.75rem 1.75rem);
-    border: 0;
-    border-radius: var(--pill);
-    background: var(--button-fill, var(--accent));
-    color: var(--button-ink, var(--on-accent));
-    font: inherit;
-    font-weight: 800;
-    text-align: center;
-    text-decoration: none;
-    cursor: pointer;
-  }
-
-  .Button:hover {
-    text-decoration: underline;
-    text-underline-offset: 0.2em;
-  }
-
-  .Button:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    text-decoration: none;
-  }
-
-  /* One text field. The sign-in pages (pages.ts) carry their own copy of
-     this, because they are served on a space's hostname where an asset of
-     the apex cannot be loaded — keep the two in step by hand. */
-  .Field {
-    max-width: 100%;
-    font: inherit;
-    padding: 0.7rem 1rem;
-    border: 2px solid var(--soft-ink);
-    border-radius: var(--radius);
-    background: var(--paper);
-    color: var(--ink);
-  }
-
-  .Field:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
   /* A conversation. The frame is the point: it says at a glance that these
      words were spoken, by two people, as an example — not that the thing
      being described is what this page is selling. Who says what is a
@@ -426,13 +301,6 @@
     height: 26rem;
     border: 0;
     background: var(--preview);
-  }
-
-  /* Paper under a block of the page. */
-  .Card {
-    padding: var(--card-pad, 1.75rem);
-    border-radius: var(--big-radius);
-    background: var(--card-fill, var(--paper));
   }
 
   /* A page of plain prose — help, and the legal pages: the same column and

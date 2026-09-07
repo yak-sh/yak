@@ -82,6 +82,7 @@ import * as drop from './drop.ts'
 import { bound, type Env, type Inbound } from './env.ts'
 import * as gallery from './gallery.ts'
 import * as identity from './identity.ts'
+import { sprite } from './icons.ts'
 import { arrived, Refused } from './inbox.ts'
 import * as mcp from './mcp.ts'
 import { lost, oops, provisioning } from './pages.ts'
@@ -153,6 +154,14 @@ let serve = async (req: Request, env: Env, r: Route) => {
     return bound(env.APPS, apps.fetch, env).fetch(req)
   }
   let path = r.path
+  if (path == '/icons.svg') {
+    return new Response(sprite(), {
+      headers: {
+        'content-type': 'image/svg+xml',
+        'cache-control': 'public, max-age=3600',
+      },
+    })
+  }
   if (
     path == '/login' || path.startsWith('/login/') || path == '/connect' ||
     path == '/manage' ||
