@@ -4,7 +4,7 @@
 //
 // Three questions, in the order a break would show up:
 //
-//   1. do the doors a visitor uses still answer 200
+//   1. do public pages answer 200 and /connect preserve its sign-in destination
 //   2. does the connector door still list its one public tool
 //   3. does three minutes of live traffic carry a 5xx or an exception
 //
@@ -52,6 +52,17 @@ export let door = async (get: Fetch, site: string, path: string) => {
     .catch((e: Error) => e)
   if (res instanceof Error) return `${path}: ${res.message}`
   let body = await res.text()
+  // identity.ts `theirs` sends an anonymous visitor through sign-in while
+  // preserving the setup destination. A different redirect is a broken door.
+  if (path == '/connect') {
+    let want = '/login?return=%2Fconnect'
+    let location = res.headers.get('location')
+    return res.status == 303 && location == want
+      ? null
+      : `${path}: ${res.status} ${
+        location ?? '(no location)'
+      }, want 303 ${want}`
+  }
   if (res.status != 200) return `${path}: ${res.status}, want 200`
   if (path != '/pricing') return null
   if (!body.includes(PRICING.has)) {

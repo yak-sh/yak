@@ -35,6 +35,11 @@ routes = [
   { pattern = "*/*", zone_name = "yaks.app" },
 ]
 
+# Pages on kernel exceptions and Store/default console errors; its incident
+# KV is also the reader for `yak errors` (workers/yak-tail/README.md).
+[[tail_consumers]]
+service = "yak-tail"
+
 # Workers logs (T-33178). Off until 2026-09-03, which is why "where did that
 # second go" could only be answered by guessing: the platform had no logs at
 # all, and every deploy was pushing observability_enabled: false. `logs` is

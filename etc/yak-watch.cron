@@ -1,0 +1,4 @@
+# Install this line after landing; while reviewing, point bin/yak-watch at its worktree.
+# First register: /home/yaks/code/holdco/bin/holdco-deadman register yak-watch 15m 'yaks.app external checks and paging'
+# Exit 0 includes a detected outage whose page was accepted; silence means the monitor failed.
+*/5 * * * * PATH=/home/yaks/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/bin:/bin /home/yaks/code/tasks/bin/yak-watch >> /home/yaks/.tasks/yak-watch.log 2>&1 && /home/yaks/code/holdco/bin/holdco-deadman stamp yak-watch >> /home/yaks/.tasks/yak-watch.log 2>&1

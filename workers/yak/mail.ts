@@ -18,7 +18,7 @@
 // anything (signin.ts keeps a mac of it, never the digits), so a read of the
 // graph — however it is reached — can never mint a session (T-32585).
 import type { Env } from './env.ts'
-import { esc } from './pages.ts'
+import { esc } from './html.ts'
 
 // `to` is one address or several. Email Sending takes a list, and one send to
 // several recipients is ONE letter: it either reaches every reader or none, so
@@ -26,25 +26,8 @@ import { esc } from './pages.ts'
 export type Letter = { to: string | string[]; subject: string; body: string }
 export type Mail = (l: Letter) => Promise<void>
 
-// Who the platform writes as. The envelope sender must be an address the
-// fleet's Email Sending domain (src/mailaddr.ts `mailDomain`, bot.yak.sh —
-// DKIM signed, SPF/DMARC on cf-bounce.bot.yak.sh) is authorized to send;
-// yaks.app has no Email Sending setup, so a letter from there is refused at
-// the API. The reader still answers the platform: REPLY_TO is the yaks.app
-// address, and the display name is the platform's. A space that white-labels
-// its login will want its own pair; that is a later leaf's.
-export let FROM = 'hello@bot.yak.sh'
-export let REPLY_TO = 'hello@yaks.app'
-
-// The fleet's task graph, addressed as a reader. hello@yaks.app forwards to a
-// person's mailbox and nowhere else, so a letter sent only there is invisible
-// to every agent: it waits for that person to relay it by hand. This is the
-// address the tasks server's inbound sweep pulls into `mail` entities aimed at
-// P-19 (src/inbound.ts `routeTo`, the address book's entry for the project),
-// which is what puts a letter in `task inbox` and on the comms bus. FROM is a
-// bot.yak.sh address, so the arrival is DKIM-aligned and grades VERIFIED —
-// the sweep delivers nothing else to the bus.
-export let GRAPH = 'task@bot.yak.sh'
+import { FROM, REPLY_TO } from './mail-config.ts'
+export { FROM, GRAPH, REPLY_TO } from './mail-config.ts'
 
 // One line, JSON, tagged: a person reads it at a glance and a probe parses
 // the letter back out of the log (probe.ts `mailed`).

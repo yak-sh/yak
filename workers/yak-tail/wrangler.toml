@@ -1,0 +1,19 @@
+name = "yak-tail"
+main = "tail.ts"
+account_id = "0f9613dfd3f0451df0bd0f12a1372ea3"
+compatibility_date = "2025-05-08"
+workers_dev = false
+preview_urls = false
+
+# Created once with wrangler; the namespace id is recorded before deployment.
+[[kv_namespaces]]
+binding = "SEEN"
+id = "df2f9db77ee0426184909a77273bc09a"
+
+[[send_email]]
+name = "MAIL"
+
+# YAK_OWNER_EMAIL optionally overrides mail.ts's existing owner forwarding
+# address. Set it with `wrangler secret put`, never in this file.
+[observability.logs]
+enabled = true

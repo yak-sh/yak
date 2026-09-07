@@ -56,7 +56,7 @@ esac
 echo "--- deno task check"
 deno task check
 
-echo "--- deno test -A workers/yak/"
-deno test -A workers/yak/
+echo "--- deno task test:workers"
+deno task test:workers
 
 echo "--- build ok; Workers Builds deploys from here"

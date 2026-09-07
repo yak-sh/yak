@@ -42,7 +42,15 @@ The dashboard settings, in full (Workers & Pages → `yak` → Settings → Buil
 
 Everything the build actually does is in `bin/build-yak`, so the dashboard holds
 one line: install Deno (not on the Ubuntu 24.04 image), `deno task check` from
-the repo root, `deno test -A workers/yak/`. A red build deploys nothing.
+the repo root, `deno task test:workers` (kernel and tail). A red build deploys
+nothing.
+
+`yak-tail` pages on kernel exceptions and Store/default console errors. Its
+incident KV is also the source for `yak errors`; `bin/yak-watch` probes the live
+doors and named apps every five minutes from the box. See
+[incident paging](../yak-tail/README.md) for the schema, cooldown, cron, and the
+separate `deno task deploy:yak-tail` deployment. The tail must exist before the
+kernel deploy attaches it through `tail_consumers`.
 
 **Update the dashboard Deploy command to `../../bin/build-yak deploy`.** The
 previous `npx wrangler deploy` bypasses the repo's deploy wrapper; changing the

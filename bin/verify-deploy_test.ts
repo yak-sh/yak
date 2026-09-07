@@ -7,26 +7,33 @@ import { connector, DOORS, fault, verify } from './verify-deploy.ts'
 
 let SITE = 'https://yaks.app'
 
-// A fetch that answers from a table: path → [status, body]. Anything not in
+// A fetch that answers from a table: path → [status, body, location]. Anything not in
 // the table 404s, so a missed door shows up as a failure rather than a pass.
-let fake = (table: Record<string, [number, string]>) =>
+type Reply = [number, string, string?]
+let fake = (table: Record<string, Reply>) =>
   ((url: string | URL | Request, init?: RequestInit) => {
     let path = new URL(String(url)).pathname
-    let [status, body] =
+    let [status, body, location] =
       table[init?.method == 'POST' ? `POST ${path}` : path] ??
         [404, '']
-    return Promise.resolve(new Response(body, { status }))
+    return Promise.resolve(
+      new Response(body, {
+        status,
+        headers: location ? { location } : {},
+      }),
+    )
   }) as typeof fetch
 
 let TOOLS = JSON.stringify({ result: { tools: [{ name: 'about' }] } })
 
 let healthy = () => {
-  let table: Record<string, [number, string]> = { 'POST /mcp': [200, TOOLS] }
+  let table: Record<string, Reply> = { 'POST /mcp': [200, TOOLS] }
   for (let path of DOORS) table[path] = [200, '$4 a month']
+  table['/connect'] = [303, '', '/login?return=%2Fconnect']
   return table
 }
 
-Deno.test('verify: every door 200 and about listed is silence', async () => {
+Deno.test('verify: public pages, connect sign-in, and about listed is silence', async () => {
   assertEquals(await verify(fake(healthy()), SITE), [])
 })
 
@@ -39,7 +46,30 @@ Deno.test('verify: a door that moved names itself and its status', async () => {
 Deno.test('verify: a door that vanished is a 404, not a crash', async () => {
   let table = healthy()
   delete table['/connect']
-  assertEquals(await verify(fake(table), SITE), ['/connect: 404, want 200'])
+  assertEquals(await verify(fake(table), SITE), [
+    '/connect: 404 (no location), want 303 /login?return=%2Fconnect',
+  ])
+})
+
+Deno.test('verify: connect requires its precise anonymous sign-in redirect', async () => {
+  for (
+    let [status, location] of [
+      [200, undefined],
+      [302, '/login?return=%2Fconnect'],
+      [303, undefined],
+      [303, '/login'],
+      [303, '/login?return=%2Fother'],
+      [303, 'https://foreign.test/login?return=%2Fconnect'],
+    ] as const
+  ) {
+    let table = healthy()
+    table['/connect'] = [status, '', location]
+    assertEquals(await verify(fake(table), SITE), [
+      `/connect: ${status} ${
+        location ?? '(no location)'
+      }, want 303 /login?return=%2Fconnect`,
+    ])
+  }
 })
 
 Deno.test('verify: pricing must show the price and hide the checkout door', async () => {
