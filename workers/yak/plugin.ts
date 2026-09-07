@@ -18,6 +18,15 @@
 //            resources (guide.ts `PAGES`)
 //   answers  a door at an app's own address (apps.ts `api`)
 //   watch    what a plugin does about a page an app served (apps.ts `viewed`)
+//   rules    what it does INSIDE a store, as data: a query over one bundle in
+//            a batch plus what comes out (@yaks/graph `Rule`), run by the phase
+//            it names in every store this Worker builds (graph.ts `#boot`)
+//
+// `rules` is the one slot that is not an extraction: it is @yaks/graph's own
+// phase seam, offered here so a domain says what it does about a WRITE in the
+// same object it says its words and its rows in. A rule about a component a
+// store does not speak is inert there (@yaks/graph rules.ts), which is what
+// lets one list serve the directory and every app store alike.
 //
 // There is deliberately NO sweep slot. `scheduled` in index.ts fires the meter
 // and the trash collection, and neither is a plugin yet; a slot with no
@@ -28,6 +37,7 @@
 // A plugin holds no state and is composed once, at module load — `PLUGINS`
 // (plugins.ts) is the one list, and the host modules read that list instead of
 // naming a domain each.
+import type { Rule } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 import type { App, Space } from './directory.ts'
 import type { Env } from './env.ts'
@@ -87,6 +97,8 @@ export type Plugin = {
   answers?: Answer[]
   /** what it does about a page an app served */
   watch?: Watch
+  /** the rules it declares, run inside every store this Worker builds */
+  rules?: Rule[]
 }
 
 /** Every vocabulary document a set of plugins contributes, in plugin order. */
@@ -96,6 +108,11 @@ export let vocabOf = (plugins: Plugin[]): VocabDoc[] =>
 /** Every tool row, in plugin order — what the roster lists beside its own. */
 export let toolsOf = (plugins: Plugin[]): Tool[] =>
   plugins.flatMap((p) => p.tools ?? [])
+
+/** Every rule, in plugin order — what a store's graph is built with, beside
+ * @yaks/graph's own (graph.ts `#boot`). */
+export let rulesOf = (plugins: Plugin[]): Rule[] =>
+  plugins.flatMap((p) => p.rules ?? [])
 
 /** Every guide page, in plugin order. */
 export let pagesOf = (plugins: Plugin[]): Page[] =>

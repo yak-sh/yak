@@ -12,12 +12,15 @@
 // upgrade — `WebSocketPair` and a 101 `Response` are the runtime's, not the
 // web's — so a socket is driven the way the runtime drives a hibernated one,
 // through `webSocketMessage`.
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { Frame } from '@yaks/api'
-import { type Bundle, sha256 } from '@yaks/graph'
+import { type Bundle, type Rule, sha256 } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/harness.ts'
+import { PLATFORM_STORE } from './door.ts'
 import { grantEid, Store } from './graph.ts'
+import type { Plugin } from './plugin.ts'
+import { PLUGINS } from './plugins.ts'
 import { RELATIONS } from './vocab.ts'
 
 // A hibernatable socket, faked: what it was sent, and the attachment that is
@@ -448,4 +451,98 @@ Deno.test('a grant id is the sha of app and person joined by a NUL', () => {
     grantEid('cookbook', 'P-1'),
     '297f143239d7da3decf8ba2f25bb142403be985fb12d029d4e9f172127061df8',
   )
+})
+
+// ---- the rules slot (T-34619) ----
+//
+// A plugin says what it does about a WRITE as data, and the host hands every
+// plugin's rules to the store it builds (plugin.ts `rulesOf`, graph.ts
+// `#boot`). What these pin is the ARRIVAL — a fixture plugin on the list, a
+// store built after it, and the rule firing on a batch that store applied —
+// because the seam is the wiring and the rule engine itself is @yaks/graph's
+// (rules_test.ts). The list is a module value, so it is put back afterwards.
+let ruling = async (rules: Rule[], body: () => Promise<void>) => {
+  let plugin: Plugin = { name: 'fixture', rules }
+  PLUGINS.push(plugin)
+  try {
+    await body()
+  } finally {
+    PLUGINS.splice(PLUGINS.indexOf(plugin), 1)
+  }
+}
+
+Deno.test("a plugin's rule reaches the store the host built", async () => {
+  await ruling([{
+    name: 'fixture/titled',
+    phase: 'stamp',
+    match: 'recipe, +!doc, *doc',
+    produce: { doc: { title: 'named by a rule' } },
+  }], async () => {
+    let store = await cookbook()
+    let wrote = await post(store, '/apply', [{
+      entity: { eid: CAKE },
+      recipe: { serves: 8 },
+    }], owner)
+    assertEquals(wrote.status, 200)
+    let read = await (await get(
+      store,
+      `/query?q=${encodeURIComponent('.recipe!&.doc?')}`,
+      owner,
+    )).json()
+    assertEquals(read[0].doc.title, 'named by a rule')
+  })
+})
+
+Deno.test('a rule writing outside its *write set takes the batch with it', async () => {
+  await ruling([{
+    name: 'fixture/stray',
+    phase: 'stamp',
+    match: 'recipe, *doc',
+    run: () => ({ recipe: { serves: 1 } }),
+  }], async () => {
+    let store = await cookbook()
+    let no = await post(store, '/apply', [{
+      entity: { eid: CAKE },
+      recipe: { serves: 8 },
+    }], owner)
+    assert(!no.ok)
+    assertStringIncludes((await no.json()).message, 'write set')
+    // The refusal is a rollback: the batch it fired on is not in the store.
+    let read = await (await get(store, '/query?q=.recipe!', owner)).json()
+    assertEquals(read.length, 0)
+  })
+})
+
+// The one rule this Worker ships (trash.ts): the caller asks for the trash and
+// the store dates it and signs it, the way it dates a birth.
+Deno.test('the store dates the trash mark, and signs it', async () => {
+  let store = new Store(state())
+  let at = (body: unknown[]) =>
+    store.fetch(
+      new Request('http://store/apply', {
+        method: 'POST',
+        headers: { 'x-store': PLATFORM_STORE, 'x-yak-person': ADA },
+        body: JSON.stringify(body),
+      }),
+    )
+  let wrote = await at([{ entity: { eid: APP }, trashed: {} }])
+  assertEquals(wrote.status, 200)
+  let mark = (await wrote.json() as Bundle[])
+    .map((b) => b.trashed as { at?: string; by?: string } | undefined)
+    .find((t) => t?.at)
+  assert(mark, 'the store wrote no date')
+  assert(Date.now() - Date.parse(mark.at!) < 60_000)
+  assertEquals(mark.by, ADA)
+
+  // Asking again leaves the first date where it is: the days a row has left
+  // are counted off it, and a second delete must not hand back thirty more.
+  let again = await at([{ entity: { eid: APP }, trashed: {} }])
+  assertEquals(again.status, 200)
+  let [row] = await (await store.fetch(
+    new Request(
+      `http://store/query?q=${encodeURIComponent('.trashed!')}`,
+      { headers: { 'x-store': PLATFORM_STORE, 'x-yak-person': ADA } },
+    ),
+  )).json()
+  assertEquals(row.trashed.at, mark.at)
 })

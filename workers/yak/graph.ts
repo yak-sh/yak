@@ -125,6 +125,8 @@ import {
 import { parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import { named, type Row } from './listing.ts'
+import { rulesOf } from './plugin.ts'
+import { PLUGINS } from './plugins.ts'
 import { type Binding, posting } from './post.ts'
 import { type Namespace, PLATFORM_STORE } from './door.ts'
 import { metering } from './meter.ts'
@@ -523,6 +525,14 @@ export class Store {
         ...(post && app
           ? [this.#posting(app), mailbox({ domain: PLATFORM })]
           : []),
+        // What every domain of this Worker declares about a WRITE, as data
+        // (plugin.ts `rules`, plugins.ts): a query over one bundle in the batch
+        // plus what comes out, run by the phase it names. Every store gets
+        // every rule — one about a component this store does not speak is inert
+        // (@yaks/graph rules.ts) — and a phase runs its rules before its hooks
+        // wherever the list sits, so the place decides nothing but the order
+        // two rules on one phase fire in.
+        { name: 'yak/rules', rules: rulesOf(PLUGINS) },
       ],
     })
     // A letter goes when it asks to, whichever of its two components arrives

@@ -422,20 +422,17 @@ export let rostered = async (
   }
 }
 
-// The word on, or off. `trashed: null` drops the whole component, which is
-// the whole of a restore — every other word the row wears was never touched,
-// and that is what makes a restore exact rather than a rebuild.
+// The word on, or off. `trashed: {}` is the ASK, and the store dates it and
+// signs it (trash.ts, the `trashed` rule) the way it dates a birth — so a
+// caller never carries a clock. `trashed: null` drops the whole component,
+// which is the whole of a restore — every other word the row wears was never
+// touched, and that is what makes a restore exact rather than a rebuild.
 let mark = (
   dir: Directory,
   eid: string,
   who: Who,
-  at: { at: string; by: string | null } | null,
-) => dir.apply({ entities: [{ entity: { eid }, trashed: at }] }, vouched(who))
-
-let today = (who: Who, now: Date) => ({
-  at: now.toISOString(),
-  by: who.person,
-})
+  trashed: Record<string, never> | null,
+) => dir.apply({ entities: [{ entity: { eid }, trashed }] }, vouched(who))
 
 // Into the trash: the mark, then the roster. Nothing else — the bytes, the
 // store, the deploys and the slug are all exactly where they were.
@@ -445,9 +442,8 @@ export let trash = async (
   space: Space,
   app: App,
   who: Who,
-  now = new Date(),
 ) => {
-  await mark(dir, app.eid, who, today(who, now))
+  await mark(dir, app.eid, who, {})
   await rostered(env, dir, space, app)
 }
 
@@ -485,9 +481,8 @@ export let trashSpace = async (
   dir: Directory,
   space: Space,
   who: Who,
-  now = new Date(),
 ) => {
-  await mark(dir, space.eid, who, today(who, now))
+  await mark(dir, space.eid, who, {})
   await reachMoved(env, dir, space)
 }
 

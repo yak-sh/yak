@@ -6,6 +6,7 @@
 // what it pins is the two things a host relies on: order is the list's, and a
 // slot nobody filled contributes nothing.
 import { assert, assertEquals } from '@std/assert'
+import type { Rule } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 import type { App, Space } from './directory.ts'
 import type { Env } from './env.ts'
@@ -14,6 +15,7 @@ import {
   type Asked,
   pagesOf,
   type Plugin,
+  rulesOf,
   toolsOf,
   type Visit,
   vocabOf,
@@ -28,6 +30,14 @@ let row = (name: string) => ({
   description: 'what a fixture does',
   input: { type: 'object' as const, properties: {} },
   run: async () => await Promise.resolve({ text: name }),
+})
+
+// A rule, as a plugin declares one. What it MEANS is @yaks/graph's (its own
+// rules_test.ts); what is pinned here is that the list carries it.
+let rule = (name: string): Rule => ({
+  name,
+  phase: 'stamp',
+  match: '.entity, +!fixture, *fixture',
 })
 
 let asked = (path: string) =>
@@ -54,6 +64,7 @@ let fixture: Plugin = {
   }],
   answers: [(at) => at.path == '/fixture' ? new Response('counted') : null],
   watch: (v) => seen.push(v),
+  rules: [rule('fixture/one')],
 }
 
 let seen: Visit[] = []
@@ -61,15 +72,17 @@ let seen: Visit[] = []
 // A plugin that fills nothing: the host must be able to hold it.
 let quiet: Plugin = { name: 'quiet' }
 
-Deno.test('a plugin contributes its words, its rows and its pages', () => {
+Deno.test('a plugin contributes its words, its rows, its pages and its rules', () => {
   let list = [fixture, quiet]
   assertEquals(vocabOf(list), [doc])
   assertEquals(toolsOf(list).map((t) => t.name), ['fixture_one'])
   assertEquals(pagesOf(list).map((p) => p.slug), ['fixture'])
+  assertEquals(rulesOf(list).map((r) => r.name), ['fixture/one'])
   // Nothing at all is the empty contribution, not a failure.
   assertEquals(vocabOf([quiet]).length, 0)
   assertEquals(toolsOf([quiet]).length, 0)
   assertEquals(pagesOf([quiet]).length, 0)
+  assertEquals(rulesOf([quiet]).length, 0)
 })
 
 Deno.test('a plugin answers its own door and passes on every other', async () => {
