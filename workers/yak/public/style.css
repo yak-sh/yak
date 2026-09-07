@@ -115,50 +115,6 @@
     --note-size: var(--small);
   }
 
-  /* Pills: a soft chip, and a row of them that wraps like a handful of
-     notes. The list is the same shape whether the chips are words (the home
-     page) or links (the help page's questions). */
-  .Pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.625rem;
-  }
-
-  .Pill {
-    display: inline-block;
-    padding: var(--pill-pad, 0.5rem 1rem);
-    border: var(--pill-edge, 1px solid var(--line));
-    border-radius: var(--pill);
-    background: var(--pill-fill, var(--paper));
-    color: var(--pill-ink, var(--ink));
-    font-family: var(--pill-font, inherit);
-    font-size: var(--pill-size, inherit);
-    font-weight: var(--pill-weight, inherit);
-    text-decoration: none;
-  }
-
-  a.Pill:hover {
-    text-decoration: underline;
-  }
-
-  /* The address in a window bar: sunken rather than raised. */
-  .Pill-quiet {
-    --pill-fill: var(--ground);
-    --pill-ink: var(--soft-ink);
-    --pill-edge: 0;
-    --pill-pad: 0.2rem 0.9rem;
-    --pill-size: var(--small);
-    --pill-weight: 600;
-  }
-
-  /* A URL somebody has to copy. */
-  .Pill-code {
-    --pill-fill: var(--ground);
-    --pill-edge: 0;
-    --pill-font: var(--mono);
-    --pill-size: var(--small);
-  }
-
   /* A conversation. The frame is the point: it says at a glance that these
      words were spoken, by two people, as an example — not that the thing
      being described is what this page is selling. Who says what is a
@@ -786,6 +742,31 @@
     color: var(--soft-ink);
     list-style: disc;
     text-wrap: pretty;
+  }
+
+  .Guide_SideNav {
+    display: grid;
+    grid-template-columns: 10rem minmax(0, 1fr);
+    background: var(--paper);
+  }
+  .Guide_SideNav .SideNav {
+    align-self: start;
+  }
+  .Guide_SidePanel {
+    padding: 1rem;
+  }
+  .Guide_Choices {
+    display: grid;
+    gap: .25rem;
+    margin: .75rem 0;
+    padding: .75rem;
+    border: 1px solid var(--edge);
+    border-radius: .45rem;
+  }
+  @media (max-width: 700px) {
+    .Guide_SideNav {
+      display: block;
+    }
   }
 
   .Guide_Demo {

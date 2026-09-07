@@ -138,8 +138,8 @@
           </li>
           <li>
             <b>Make selection visible in the shape.</b> A selected tab joins
-            its panel, a pressed button sinks, and the current sidebar item
-            holds its place. Keep these cues in shared components so they
+            its panel, a pressed button sinks, and the current sidebar tab
+            joins the page along its right edge. Keep these cues in shared components so they
             work consistently in light and dark themes.
           </li>
           <li>
@@ -449,13 +449,15 @@
             <li class="Pill">a garden diary</li>
             <li class="Pill">a chore chart</li>
           </ul>
-          <p><a class="Pill" href="#components">A pill that is a link</a></p>
+          <p><a class="Pill" href="#components">Recipe box<span class="Pill_Tag">Public</span></a></p>
+          <p
+            class="Note Note-small">Linked pills have an underlined label and a raised edge. Plain pills label content.</p>
           <p><span class="Pill Pill-quiet">yourname.yaks.app/recipes</span></p>
           <p><code class="Pill Pill-code">https://yaks.app/mcp</code></p>
         </div>
 
         <div class="Guide_Demo">
-          <p class="Guide_Name">.Button · .Field</p>
+          <p class="Guide_Name">.Button · .Field · select.Field</p>
           <p><a class="Button" href="#components">Sign in</a></p>
           <form onsubmit="return false">
             <label for="demo-field" class="Note Note-small">Your email</label>
@@ -479,16 +481,47 @@
             </p>
           </form>
           <p>
+            <label for="demo-select" class="Note Note-small">View</label>
+            <select class="Field" id="demo-select">
+              <option>All apps</option>
+              <option>Recent apps</option>
+            </select>
+          </p>
+          <p
+            class="Note Note-small">Select menus have a raised edge and their native arrow; text fields are inset.</p>
+          <p>
             <button class="Button" type="button" aria-pressed="true">
               Pin app
             </button>
             <button class="Button" type="button" disabled>Unavailable</button>
           </p>
           <p class="Note Note-small">
+            Buttons and single-line fields share
+            <code class="Pill Pill-code">--control-height</code> (2.25rem).
+            Textareas use multiple lines. Adjust horizontal padding with
+            <code class="Pill Pill-code">--control-pad-inline</code>.
             Press “Pin app” to toggle its state. Use a native button for an
             action, an anchor for navigation, and
             <code class="Pill Pill-code">aria-pressed</code> for a toggle.
           </p>
+        </div>
+
+        <div class="Guide_Demo">
+          <p class="Guide_Name">.Choice · checkbox · radio</p>
+          <p><label class="Choice"><input type="checkbox" checked>Show completed apps</label></p>
+          <p><label class="Choice"><input type="checkbox">Send reminders</label></p>
+          <p><label class="Choice"><input type="checkbox" checked disabled>Unavailable option</label></p>
+          <fieldset class="Guide_Choices">
+            <legend>App visibility</legend>
+            <label
+              class="Choice"><input type="radio" name="demo-visibility" value="private" checked>Only me</label>
+            <label
+              class="Choice"><input type="radio" name="demo-visibility" value="public">Everyone</label>
+            <label
+              class="Choice"><input type="radio" name="demo-visibility" value="team" disabled>Team</label>
+          </fieldset>
+          <p
+            class="Note Note-small">Native inputs keep their keyboard controls and form values. The whole label is clickable.</p>
         </div>
 
         <div class="Guide_Demo">
@@ -508,14 +541,20 @@
 
         <div class="Guide_Demo">
           <p class="Guide_Name">.SideNav · [aria-current="page"]</p>
-          <nav class="SideNav" aria-label="Example site navigation">
-            <a href="/style-guide" aria-current="page">Style guide</a>
-            <a href="/help">Help</a>
-            <a href="/pricing">Pricing</a>
-          </nav>
+          <div class="Guide_SideNav">
+            <nav class="SideNav" aria-label="Example site navigation">
+              <a href="/style-guide" aria-current="page">Style guide</a>
+              <a href="/help">Help</a>
+              <a href="/pricing">Pricing</a>
+            </nav>
+            <div class="Guide_SidePanel">
+              <h3 class="Title">Style guide</h3>
+              <p class="Note">The selected tab joins this page.</p>
+            </div>
+          </div>
           <p class="Note Note-small">
-            Mark the current page on its link. The selected surface stays
-            distinct from hover and keyboard focus.
+            Mark the current page on its link. Sidebar tabs attach to the page;
+            narrow layouts use a compact row. Keyboard focus keeps its own outline.
           </p>
         </div>
 
@@ -560,6 +599,8 @@
             Select a tab, or use the arrow keys while it has focus. Native
             radios share a name; each label points to its input's unique ID.
             The selected tab and its panel form one surface without script.
+            The first and last tabs align with the panel edges. A strip inside
+            the selected tab has rounded top corners and a straight lower edge.
           </p>
         </div>
 

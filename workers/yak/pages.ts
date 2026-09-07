@@ -71,10 +71,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .Card form { margin: 1rem 0 0 }
 .Note { font-size: .9rem; margin: .75rem 0 0 }
 details.Note > summary { color: var(--accent); cursor: pointer }
-.Pills { display: flex; flex-wrap: wrap; justify-content: center; gap: .625rem; margin: 0 0 1.25rem }
-.Pill { display: inline-block; padding: .5rem 1rem; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--ink); font-weight: 700; text-decoration: none }
-.Pill:hover { border-color: var(--accent) }
-.Pill_Tag { margin-left: .5rem; color: var(--soft-ink); font-weight: 400; font-size: .85rem }
+.Pills { justify-content: center; margin: 0 0 1.25rem }
 .Pick { display: block; margin: .4rem 0; padding: .5rem .6rem; user-select: all }
 .Says { display: grid; gap: .5rem; margin: .75rem 0 1rem; padding: 0; list-style: none }
 .Copy { display: flex; align-items: center; gap: .5rem }
@@ -611,7 +608,8 @@ let deskCss = `
 .Desk_Brand img { border-radius: .65rem }
 .Desk_Count { margin-left: auto; font-size: .8rem; opacity: .8 }
 .Desk_Foot { margin-top: auto; display: grid; gap: .5rem; padding: .5rem .8rem; font-size: .85rem }
-.Desk_Body { min-width: 0; padding: 2.5rem clamp(1.25rem, 4vw, 3.5rem) }
+.Desk .SideNav { margin-right: calc(-1.25rem - 1px) }
+.Desk_Body { min-width: 0; min-height: 100vh; background: var(--paper); padding: 2.5rem clamp(1.25rem, 4vw, 3.5rem) }
 .Desk_Head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 2rem }
 .Desk_Head h1 { font-size: 1.9rem; margin: .15rem 0 0 }
 .Desk_Address { font-size: .85rem; text-decoration: none; color: var(--soft-ink) }
@@ -658,10 +656,10 @@ let deskCss = `
   .Desk_Side { position: static; min-height: 0; gap: 1rem; padding: 1rem; border-right: 0; border-bottom: 1px solid var(--line) }
   .Desk_Brand { font-size: 1.1rem }
   .Desk_Brand img { width: 30px; height: 30px }
-  .Desk .SideNav { display: flex; flex-wrap: wrap; gap: .3rem }
+  .Desk .SideNav { margin-right: 0; display: flex; flex-wrap: wrap; gap: .3rem }
   .Desk .SideNav a { padding: .45rem .65rem; font-size: .85rem; gap: .4rem }
   .Desk .SideNav hr, .Desk_Foot { display: none }
-  .Desk_Body { padding: 1.5rem 1rem }
+  .Desk_Body { min-height: 0; padding: 1.5rem 1rem }
   .Desk_Head { margin-bottom: 1.5rem }
   .Desk_Head h1 { font-size: 1.55rem }
   .Desk_Connect { align-items: start; flex-direction: column; gap: 1rem; padding: 1.1rem }

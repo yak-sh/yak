@@ -37,12 +37,10 @@
     --theirs: var(--sky); /* the assistant's bubble */
     --preview: var(--forest); /* matches the embedded app in either theme */
 
-    /* Materials: light on a rim, shade under a raised edge, and paper grain. */
+    /* Materials: light on a rim, shade under a raised edge, and depth in a field. */
     --rim: color-mix(in srgb, var(--paper), white 65%);
     --edge: color-mix(in srgb, var(--line), var(--soft-ink) 32%);
     --shade: color-mix(in srgb, var(--ink) 16%, transparent);
-    --grain: color-mix(in srgb, var(--soft-ink) 5%, transparent);
-    --paper-texture: repeating-linear-gradient(0deg, var(--grain) 0 1px, transparent 1px 3px);
     --raised: inset 0 1px var(--rim), 0 2px 2px var(--shade), 0 5px 12px var(--shade);
     --inset: inset 0 2px 4px var(--shade), 0 1px var(--rim);
 
@@ -57,6 +55,7 @@
     --measure: 34rem; /* reading width */
     --wide-measure: 72rem; /* multi-column layouts */
     --gap: 1rem;
+    --control-height: 2.25rem;
     --quarter-gap: calc(var(--gap) / 4);
     --half-gap: calc(var(--gap) / 2);
     --wide-gap: calc(var(--gap) * 1.5);
