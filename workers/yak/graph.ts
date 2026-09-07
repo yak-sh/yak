@@ -134,7 +134,7 @@ import { seeded } from './wake.ts'
 import { type Binding, posting } from './post.ts'
 import { type Namespace, PLATFORM_STORE } from './door.ts'
 import { metering } from './meter.ts'
-import { PLATFORM } from './route.ts'
+import { apex, url } from './host.ts'
 import {
   addressed,
   addresses,
@@ -173,10 +173,9 @@ import {
   appDoc,
   appVocab,
   grew,
-  GUIDE,
   platformVocab,
   shortOf,
-  TEACH,
+  teach,
 } from './vocab.ts'
 
 /**
@@ -555,7 +554,7 @@ export class Store {
         // this platform already speaks (vocab.ts `coreDocs`), so there is
         // nothing left for a `docs()` to declare.
         ...(post && app
-          ? [this.#posting(app), mailbox({ domain: PLATFORM })]
+          ? [this.#posting(app), mailbox({ domain: apex(this.#bind) })]
           : []),
         // What every domain of this Worker declares about a WRITE, as data
         // (plugin.ts `rules`, plugins.ts): a query over one bundle in the batch
@@ -723,7 +722,9 @@ export class Store {
         for (let b of bundles) {
           for (let [name] of comps(b)) {
             if (!this.#vocab.all.includes(name)) {
-              throw new Refused(`unknown component: ${name}${TEACH}`)
+              throw new Refused(
+                `unknown component: ${name}${teach(this.#bind)}`,
+              )
             }
           }
         }
@@ -1387,8 +1388,8 @@ export class Store {
     if (answer.ok || this.#get('name') == PLATFORM_STORE) return answer
     let said = await answer.json() as { error?: string; message?: string }
     return /^unknown (prop|component)/.test(said.message ?? '') &&
-        !said.message!.includes(GUIDE)
-      ? Response.json({ ...said, message: said.message + TEACH }, {
+        !said.message!.includes(url(this.#bind, '/guide.md'))
+      ? Response.json({ ...said, message: said.message + teach(this.#bind) }, {
         status: answer.status,
       })
       : Response.json(said, { status: answer.status })

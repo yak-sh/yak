@@ -11,6 +11,7 @@
 // the runtime's own types with nothing of Deno in its graph (conform.ts), so
 // the sweep is loaded only when its directory wake fires, after the plugin
 // list has been composed.
+import { type Host, url } from './host.ts'
 import type { Sender } from '@yaks/mail'
 import * as dirPart from './directory.ts'
 import {
@@ -25,7 +26,6 @@ import type { Namespace } from './door.ts'
 import type { Env } from './env.ts'
 import type { Plugin } from './plugin.ts'
 import { mailedTo } from './post.ts'
-import { PRICING } from './route.ts'
 import { reporting } from './wake.ts'
 
 /** The hourly reading: `fired` on this tagged wake runs the existing meter. */
@@ -206,7 +206,12 @@ let asOf = (at: string) => {
 
 // The line the agent reads: every number against its ceiling, and what
 // happens at each. One line, because the agent has work to get back to.
-export let standing = (space: Space, apps: number, now = new Date()) => {
+export let standing = (
+  space: Space,
+  apps: number,
+  now = new Date(),
+  env: Host = {},
+) => {
   let free = ceilings(space.tier)
   let m = spent(space, now)
   let mail = `${count(m.emails)} of ${count(letters(space.tier))} emails`
@@ -226,7 +231,7 @@ export let standing = (space: Space, apps: number, now = new Date()) => {
     }, data past ${size(free.bytes)}, or the ${
       count(letters(space.tier) + 1)
     }st letter SENT is — a letter that ` +
-    `arrives always lands. What the plans hold: ${PRICING}`
+    `arrives always lands. What the plans hold: ${url(env, '/pricing')}`
   let head = `${space.slug} (free tier, ${m.month}): ${apps} of ${free.apps} ` +
     'apps'
   let read = asOf(m.at)
@@ -253,6 +258,7 @@ export let standing = (space: Space, apps: number, now = new Date()) => {
 export let atCeiling = (
   space: Space,
   what: 'apps' | 'bytes' | 'emails' | 'builds',
+  env: Host = {},
 ) => {
   let free = ceilings(space.tier)!
   let tier = space.tier ?? 'free'
@@ -288,7 +294,7 @@ export let atCeiling = (
   }[what]()
   return `${said}. ${
     tier == 'plus' ? `What the plans hold` : `Plus lifts it`
-  }: ${PRICING}`
+  }: ${url(env, '/pricing')}`
 }
 
 // ---- the letters (T-33688) --------------------------------------------------
@@ -334,9 +340,9 @@ export let counted = async (
 // builder asks before it starts and repeats what comes back.
 
 /** What stops the builder here, or null to go ahead. */
-export let refusedBuild = (space: Space, now = new Date()) =>
+export let refusedBuild = (space: Space, now = new Date(), env: Host = {}) =>
   usedBuilds(space, now) >= builds(space.tier)
-    ? atCeiling(space, 'builds')
+    ? atCeiling(space, 'builds', env)
     : null
 
 /**
@@ -458,18 +464,18 @@ let reaching = (ns: Namespace) => {
  * its address yet — the way an unset analytics token meters nothing.
  */
 export let metering = (
-  bind: { STORE?: Namespace },
+  bind: { STORE?: Namespace } & Host,
   from: () => string | null,
   sender: Sender,
 ): Sender => ({
   send: async (m) => {
     let ns = bind.STORE
-    let box = ns ? mailedTo(from() ?? '') : null
+    let box = ns ? mailedTo(from() ?? '', bind) : null
     if (!ns || !box) return await sender.send(m)
     let space = await reaching(ns).space(box.space)
     if (!space) return await sender.send(m)
     if (spent(space).emails >= letters(space.tier)) {
-      throw new Error(atCeiling(space, 'emails'))
+      throw new Error(atCeiling(space, 'emails', bind))
     }
     let receipt = await sender.send(m)
     await counted({ STORE: ns }, space)

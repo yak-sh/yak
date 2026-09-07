@@ -88,7 +88,7 @@ export let at = (r: Reach) => `${r.space.slug}/${r.app.slug}`
 let doorOf = (env: Env, r: Reach, said?: string) => async (line: string) => {
   let asked = line.replace(/^[?&]+/, '')
   let mine = at(r) == META_STORE ? asked : asking(asked, SCREEN)
-  let door = appStore(env.STORE, r.space, r.app)
+  let door = appStore(env.STORE, r.space, r.app, env)
   let res = await door(
     `/query?q=${encodeURIComponent(mine)}`,
     {},
@@ -713,7 +713,7 @@ let sent = async (
   if (!edits(mode(r.app.access), r.who.role)) {
     throw new Error(`not a writer of ${at(r)}`)
   }
-  let door = appStore(env.STORE, r.space, r.app)
+  let door = appStore(env.STORE, r.space, r.app, env)
   let res = await door(`/apply${check ? '?check=1' : ''}`, {
     method: 'POST',
     body: JSON.stringify(part.entities),

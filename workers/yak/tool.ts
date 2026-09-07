@@ -214,6 +214,6 @@ export let inApp = async (ctx: Ctx, args: Args, write = false) => {
     space,
     app,
     who,
-    store: appStore(ctx.env.STORE, space, app),
+    store: appStore(ctx.env.STORE, space, app, ctx.env),
   }
 }

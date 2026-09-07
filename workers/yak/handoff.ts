@@ -8,6 +8,7 @@
 // name another person, nor used twice. No Cloudflare provider import lives here
 // (unlike identity.ts), so this contract is unit-testable on its own; the
 // handler there adds only the cookie and the redirect.
+import type { Host } from './host.ts'
 import { opened, seal } from '../../src/token.ts'
 import { foreign } from './route.ts'
 
@@ -32,6 +33,7 @@ export let handoffTo = async (
   person: string,
   back: string,
   now = Date.now(),
+  env: Host = {},
 ): Promise<string | null> => {
   let url
   try {
@@ -40,7 +42,7 @@ export let handoffTo = async (
     return null
   }
   let host = url.hostname.toLowerCase()
-  if (url.protocol != 'https:' || !foreign(host)) return null
+  if (url.protocol != 'https:' || !foreign(host, env)) return null
   if (!await dir.serves(host)) return null
   let hand: Hand = {
     person,

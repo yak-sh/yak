@@ -28,7 +28,9 @@
 // the tool and the resources both read them off the assets binding, at the
 // very addresses the web serves them from.
 import { page, pagesOf } from './plugin.ts'
+import { apex, type Host, url } from './host.ts'
 import { PLUGINS } from './plugins.ts'
+import { mailFrom } from './post.ts'
 
 export type Page = {
   slug: string
@@ -54,7 +56,7 @@ export type Page = {
 // the name not once, and an agent reading it told its person the place was
 // called "Yaks" (T-34302). The name is said here, in `about` (preauth.ts) and
 // at the top of the guide — the three things read first — and nowhere else.
-export let INSTRUCTIONS =
+export let instructions = (env: Host = {}) =>
   `This is yaks.app — call it that, the way its address is
 spelled: lowercase, with the .app, and never any shortening of it. When the
 person asks you to make something — an app, a page, a tool,
@@ -63,7 +65,9 @@ at their own address, opens on their phone, and keeps its data; a file on
 their computer or a page inside this conversation does none of that.
 
 An app is an index.html and whatever files sit beside it, served live at
-<space>.yaks.app/<app>/. No build step, no framework, no install. Four steps:
+<space>.${
+    apex(env)
+  }/<app>/. No build step, no framework, no install. Four steps:
 
 1. app_new — the app. Leave the space argument out: signing in gave them
    one, and every tool uses it unless they have several.
@@ -114,7 +118,7 @@ with a page for one subject — querying, components, files, commands of your
 own, code of your own — so read the one the work calls for rather than
 guessing.
 It is a tool here, so nothing has to be fetched off the web; the same words
-are at https://yaks.app/guide.md for a person. graph_apply, graph_query and
+are at ${url(env, '/guide.md')} for a person. graph_apply, graph_query and
 search are the same store from here, for seeding and fixing.
 
 An app can come with DATA: a seed.json beside index.html — a list of the same
@@ -216,10 +220,10 @@ title), and applies one bundle with a source component of its own. The person
 starts it with a bookmarklet the app hands them, because an app's write doors
 take same-origin requests only, so a script on somebody else's page cannot
 write here. Call guide with page clipping for the whole thing
-(https://yaks.app/guide/clipping.md).
+(${url(env, '/guide/clipping.md')}).
 
 One app in a space can be its FRONT PAGE — app_set(app, home: true) — and it is
-the space's router as well as its homepage: served AT <space>.yaks.app/, and
+the space's router as well as its homepage: served AT <space>.${apex(env)}/, and
 asked for every path no other app's slug claims, its worker first and its files
 behind it. app_set(app, home: true, first: ['/recipes/*']) opts it into paths
 another app owns, before that app sees them — only a front page routes, so an
@@ -228,9 +232,11 @@ every /api/ door, so a glob naming one is refused too. Deleting the front page
 puts the space back to its default page. A front-page worker that throws or
 answers 404 is skipped and the request routes as if it were not there, and it
 acts as the visitor, never as the app it routes to. Call guide with page home
-for the whole thing (https://yaks.app/guide/home.md).
+for the whole thing (${url(env, '/guide/home.md')}).
 
-Every app has a MAILBOX, at <space>.<app>@yaks.app — <space>@yaks.app for the
+Every app has a MAILBOX, at ${mailFrom('<space>', '<app>', env)} — ${
+    mailFrom('<space>', null, env)
+  } for the
 space's front page. Both directions are the store. Sending is one batch: the
 recipient as an entity wearing email {address}, the letter as doc {title, body}
 (markdown) and mail {}, and the ask, deliver {to}, naming that recipient. The
@@ -246,7 +252,7 @@ offered. mail_list and mail_send are that mailbox said as two tools; mail asked
 about with NO app named — "check my email" — is the person's own mailbox, which
 whatever mail tool they have connected answers and this is not, and naming an
 app or its address is what makes it this. Call guide with page mail for the
-whole thing (https://yaks.app/guide/mail.md).
+whole thing (${url(env, '/guide/mail.md')}).
 
 A STORE on Plus can take payments without keys or code. The seller connects
 a Stripe account of their own to their SPACE once (space_sell, or the button on
@@ -261,7 +267,7 @@ vocab.json declares it — and the buyer gets a confirmation from the app's own
 address. The charge is on the seller's account and the money is theirs, less a
 small platform fee; no card number ever reaches this platform or your app, and
 refunds are made in their own Stripe dashboard. Call guide with page selling
-for the whole thing (https://yaks.app/guide/selling.md).
+for the whole thing (${url(env, '/guide/selling.md')}).
 
 An app is a plugin. app_publish offers one to every other space here by
 name, and app_published lists what is on offer; app_install takes one into
@@ -293,13 +299,15 @@ countries. Counts and nothing else — there is no address, no visitor id and no
 browser string in it, so it can never say WHO, and saying so plainly is the
 right answer to that question. Crawlers are in the number, so a handful of
 visits on a page nobody was sent is usually robots. Call guide with page stats
-for the whole thing (https://yaks.app/guide/stats.md).
+for the whole thing (${url(env, '/guide/stats.md')}).
 
 Anything either of you has to say about THIS PLATFORM rather than their app —
 a tool that refused for no reason you could find, a guide that taught the
 wrong thing, something missing you cannot work around, a rough edge, a wish,
 an idea, a thing that went well — say it with feedback: their words and what
 you tried, once, and it reaches the people who run yaks.app by mail.`
+
+export let INSTRUCTIONS = instructions()
 
 /**
  * The way back out of a delete in this store, ending `graph_apply`'s
@@ -315,9 +323,11 @@ export let UNDO =
   'last 30 days, and called with no time it says the window and every ' +
   'restore already made.'
 
-export let WHOLE = 'https://yaks.app/guide.md'
+export let whole = (env: Host = {}) => url(env, '/guide.md')
+export let WHOLE = whole()
 
-export let uriOf = (slug: string) => `https://yaks.app/guide/${slug}.md`
+export let uriOf = (slug: string, env: Host = {}) =>
+  url(env, `/guide/${slug}.md`)
 
 // The platform's own pages, in the order an agent is offered them. A page
 // says its own title, brief and description in its frontmatter now (M-34605,
@@ -363,9 +373,10 @@ let COVERS: Record<string, string[]> = {
 
 let PAGE_OF: Record<string, string> = Object.fromEntries(
   Object.entries(COVERS).flatMap(([slug, comps]) =>
-    comps.map((comp) => [comp, uriOf(slug)])
+    comps.map((comp) => [comp, slug])
   ),
 )
 
 /** Where a component is written about at length, when a page covers it. */
-export let pageFor = (comp: string): string | undefined => PAGE_OF[comp]
+export let pageFor = (comp: string, env: Host = {}): string | undefined =>
+  PAGE_OF[comp] ? uriOf(PAGE_OF[comp], env) : undefined

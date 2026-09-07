@@ -25,6 +25,7 @@
 // per app: a page in a loop is a bug to see once, not a write flood. What the
 // door refused ON PURPOSE never becomes one (unseen.ts `refusal`): a
 // signed-out visitor sent to sign in is the platform working.
+import { apex, type Host } from './host.ts'
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { BUILD, joining, NOBODY, NOT_A_WRITER, posting } from './build.ts'
 import { at as cachedAt } from './cache.ts'
@@ -73,7 +74,6 @@ import {
   type ManageView,
   manageView,
   MOUNT,
-  PLATFORM,
   route,
   sameOrigin,
 } from './route.ts'
@@ -164,8 +164,8 @@ let json = (
 // door that page is the request itself; at an `/api/` door — nowhere to return
 // to — it is the Referer, and the request's own address when the browser sent
 // none. Whether that address is one to follow is the login door's to decide.
-let signInAt = (page: string) => {
-  let to = new URL(`https://${PLATFORM}/login`)
+let signInAt = (page: string, env: Host) => {
+  let to = new URL(`https://${apex(env)}/login`)
   to.searchParams.set('return', page)
   return to.href
 }
@@ -443,7 +443,7 @@ let asset = async (
   c: Clock,
 ) => {
   let prefix = prefixOf(space, app)
-  if (inside(keyed(prefix, path).slice(prefix.length))) return nothingHere()
+  if (inside(keyed(prefix, path).slice(prefix.length))) return nothingHere(env)
   let got = await c.time(
     'bytes',
     () => bytes(env, app, prefix, path),
@@ -454,7 +454,7 @@ let asset = async (
   )
   if (got.status != 200) {
     await got.body?.cancel()
-    return await unwritten(req, env, app, prefix, path, at) ?? nothingHere()
+    return await unwritten(req, env, app, prefix, path, at) ?? nothingHere(env)
   }
   let type = got.headers.get('content-type') ?? 'application/octet-stream'
   let etag = await etagOf(got.headers.get(SHA) ?? '', at)
@@ -807,7 +807,7 @@ let homeOf = async (
   let slugs = [...new Set(names.map((n) => uses[n]))]
   if (slugs.length != 1) return null
   let [home] = await appsAt(env, space, slugs)
-  return home ? appStore(env.STORE, space, home) : null
+  return home ? appStore(env.STORE, space, home, env) : null
 }
 
 // The app's two acts, as one person: what a page does through the doors
@@ -817,7 +817,7 @@ let homeOf = async (
 // rule shapes the answer — and a refusal is the sentence a page would read.
 // Anything a tool can do here, the person calling it could do on the page.
 export let acting = (env: Env, space: Space, app: App, who: Who) => {
-  let store = appStore(env.STORE, space, app)
+  let store = appStore(env.STORE, space, app, env)
   // Signed in and refused, it is the owner's to grant, so the sentence says
   // so; nobody reaches this door signed out, since the agent door has an
   // identity before it has a call (mcp.ts).
@@ -894,7 +894,7 @@ let api = async (
   if (path == '/client.js' || path == '/report.js') {
     return env.ASSETS.fetch(new Request(new URL(path, req.url)))
   }
-  let store = appStore(env.STORE, space, app)
+  let store = appStore(env.STORE, space, app, env)
   // What the page (or the browser itself) says broke. Anyone may report —
   // a break belongs to whoever was looking at the page, and asking a
   // stranger to sign in first would lose exactly the breaks nobody sees.
@@ -923,7 +923,7 @@ let api = async (
       401,
       what,
       SAYS[what],
-      signInAt(req.headers.get('referer') || req.url),
+      signInAt(req.headers.get('referer') || req.url, env),
     )
   let mayRead = reads(mode(app.access), who.role)
   let mayPost = edits(mode(app.access), who.role)
@@ -947,7 +947,7 @@ let api = async (
       writes: mayPost,
       signIn: who.person
         ? null
-        : signInAt(req.headers.get('referer') || req.url),
+        : signInAt(req.headers.get('referer') || req.url, env),
     })
   }
   // What a PLUGIN answers at this app's address (plugin.ts `answers`,
@@ -1154,16 +1154,16 @@ let index = async (
 ): Promise<Response> => {
   // The directory's own space is nobody's space: nothing answers at its
   // address, to anyone (T-32585), so it does not get a door either.
-  if (space.slug == META.space) return nothingHere()
+  if (space.slug == META.space) return nothingHere(env)
   let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
   if (new URL(req.url).pathname.startsWith(MANAGE)) {
     if (!who.person) {
       return redirect(
-        signInAt(`https://${space.slug}.${PLATFORM}${managePath(view)}`),
+        signInAt(`https://${space.slug}.${apex(env)}${managePath(view)}`, env),
         303,
       )
     }
-    if (who.role != 'owner') return nothingHere()
+    if (who.role != 'owner') return nothingHere(env)
   }
   let here = (await dir.apps(space)).filter((a) => !kernels(space, a.slug))
   // Trashed apps appear only in the owner's Trash section.
@@ -1198,7 +1198,7 @@ let index = async (
     hidden: all.length - mine.length,
     role: who.role,
     person: !!who.person,
-    signIn: signInAt(req.url),
+    signIn: signInAt(req.url, env),
     trash: owner
       ? here.filter((a) => a.trashed).map((a) => ({
         slug: a.slug,
@@ -1221,7 +1221,7 @@ let index = async (
     say: said?.say ??
       (new URL(req.url).searchParams.has('saved') ? 'Saved.' : ''),
     no: said?.no,
-  })
+  }, env)
 }
 
 // A SPACE in the trash, at any of its addresses (erase.ts, T-34431). Nothing
@@ -1241,23 +1241,25 @@ let closed = async (
   space: Space,
 ): Promise<Response> => {
   let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
-  if (who.role != 'owner' || !who.person) return nothingHere()
+  if (who.role != 'owner' || !who.person) return nothingHere(env)
   if (req.method != 'POST') {
     return spaceBinned({
       slug: space.slug,
       title: space.title,
       days: daysLeft(space.trashed!),
-    })
+    }, env)
   }
   // The same origin check `saved` makes and for the same reason: every space
   // is a subdomain of one registrable domain, so `SameSite=Lax` is not the
   // guard here — a sibling's page is same-site.
-  if (!sameOrigin(hostOf(req), req.headers.get('origin'))) return nothingHere()
+  if (!sameOrigin(hostOf(req), req.headers.get('origin'))) {
+    return nothingHere(env)
+  }
   let form = await req.formData().catch(() => new FormData())
   if (String(form.get('restore-space') ?? '').trim() == space.slug) {
     await untrashSpace(env, dir, space, who)
   }
-  return redirect(`https://${space.slug}.${PLATFORM}${MANAGE}`, 303)
+  return redirect(`https://${space.slug}.${apex(env)}${MANAGE}`, 303)
 }
 
 // The default front page still opens the app library. Account forms keep
@@ -1282,9 +1284,11 @@ let saved = async (
   dir: ReturnType<typeof directory>,
   space: Space,
 ): Promise<Response> => {
-  if (!sameOrigin(hostOf(req), req.headers.get('origin'))) return nothingHere()
+  if (!sameOrigin(hostOf(req), req.headers.get('origin'))) {
+    return nothingHere(env)
+  }
   let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
-  if (who.role != 'owner' || !who.person) return nothingHere()
+  if (who.role != 'owner' || !who.person) return nothingHere(env)
   let form = await req.formData().catch(() => new FormData())
   // The other button on this page: one app out of the trash (erase.ts,
   // T-34430). Its own form, so it is its own POST — a plain button and no
@@ -1295,7 +1299,7 @@ let saved = async (
     let app = await dir.app(space, back)
     if (app?.trashed) await untrash(env, dir, space, app, who)
     return redirect(
-      `https://${space.slug}.${PLATFORM}${managePath('trash')}`,
+      `https://${space.slug}.${apex(env)}${managePath('trash')}`,
       303,
     )
   }
@@ -1308,12 +1312,12 @@ let saved = async (
   if (till == 'stop') {
     if (space.stripe?.account) await disconnect(env, space)
     return redirect(
-      `https://${space.slug}.${PLATFORM}${managePath('selling')}`,
+      `https://${space.slug}.${apex(env)}${managePath('selling')}`,
       303,
     )
   }
   if (till == 'start') {
-    let no = refusedSell(space)
+    let no = refusedSell(space, env)
     if (no) return index(req, env, dir, space, { say: no, no: true }, 'selling')
     try {
       let made = await connect(env, space, await dir.emailAt(who.person) ?? '')
@@ -1356,7 +1360,7 @@ let saved = async (
     }, { 'x-yak-person': who.person, 'x-yak-role': 'owner' })
   }
   return redirect(
-    `https://${moved?.slug ?? space.slug}.${PLATFORM}${
+    `https://${moved?.slug ?? space.slug}.${apex(env)}${
       managePath('settings')
     }?saved=1`,
     303,
@@ -1441,8 +1445,8 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
 // own (rung 1), and never onto a space that asked for nothing.
 let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   let url = new URL(req.url)
-  let r = route(hostOf(req), url.pathname)
-  if (r.space == null) return nothingHere()
+  let r = route(hostOf(req), url.pathname, env)
+  if (r.space == null) return nothingHere(env)
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let space = await c.time('space', () => dir.space(r.space!))
   // Not a space here — but it may be where one USED to be (T-34658): a rename
@@ -1455,11 +1459,11 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     return was
       ? moved(
         req,
-        `https://${was.slug}.${PLATFORM}${url.pathname}${url.search}`,
+        `https://${was.slug}.${apex(env)}${url.pathname}${url.search}`,
       )
-      : nothingHere()
+      : nothingHere(env)
   }
-  if (kernels(space, r.app)) return nothingHere()
+  if (kernels(space, r.app)) return nothingHere(env)
   // The whole space in the trash, before any rung of the order below: every
   // hostname of it answers nothing, and its owner is answered the page that
   // brings it back (`closed` above, T-34431).
@@ -1481,9 +1485,9 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   }
   if (url.pathname == MANAGE || url.pathname.startsWith(`${MANAGE}/`)) {
     let view = manageView(url.pathname)
-    if (!view) return nothingHere()
+    if (!view) return nothingHere(env)
     if (req.method == 'POST') return saved(req, env, dir, space)
-    if (req.method != 'GET' && req.method != 'HEAD') return nothingHere()
+    if (req.method != 'GET' && req.method != 'HEAD') return nothingHere(env)
     return index(req, env, dir, space, undefined, view)
   }
   // The builder's socket (build.ts, T-34240). A SPACE's door, not an app's:
@@ -1507,7 +1511,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
       () => whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p)),
     )
     if (!who.person) {
-      return json(401, 'not_a_writer', NOBODY, signInAt(url.href))
+      return json(401, 'not_a_writer', NOBODY, signInAt(url.href, env))
     }
     if (!writes(who.role)) return json(403, 'not_a_writer', NOT_A_WRITER)
     // A form POST is the browser that ran no script (build.ts `posting`): one
@@ -1529,8 +1533,11 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
       () => whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p)),
     )
     return who.role == 'owner'
-      ? binned({ title: app.title || app.slug, days: daysLeft(app.trashed) })
-      : nothingHere()
+      ? binned(
+        { title: app.title || app.slug, days: daysLeft(app.trashed) },
+        env,
+      )
+      : nothingHere(env)
   }
   if (r.app && !app) {
     // Not an app here — but it may be where one USED to be (directory.ts
@@ -1563,13 +1570,13 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     // address, rung 5's 404 anywhere else: there is no home worker to be the
     // fall-through, so a path under such a space names nothing and says so.
     if (!home || kernels(space, home.slug)) {
-      if (url.pathname != '/') return nothingHere()
+      if (url.pathname != '/') return nothingHere(env)
       return await root(req, env, dir, space)
     }
     // `/<x>/api/…` named an app that is not here. That is a wrong address,
     // not one of the front page's own paths: a page asking a store there has
     // to hear a 404, never a page of HTML it cannot parse (C-32574 item 4).
-    if (r.app && r.path.startsWith('/api/')) return nothingHere()
+    if (r.app && r.path.startsWith('/api/')) return nothingHere(env)
     app = home
     front = true
     path = url.pathname
@@ -1666,7 +1673,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     : await c.time('worker', () => ran(env, space!, app!, req, who))
   // The worker passed, and the files are not this visitor's to see.
   if (!own && !file) {
-    return who.person ? nothingHere() : redirect(signInAt(req.url), 303)
+    return who.person ? nothingHere(env) : redirect(signInAt(req.url, env), 303)
   }
   let page = own ?? await file!
   // Rung 4, and it is last rather than fourth in the code because rungs 3 and

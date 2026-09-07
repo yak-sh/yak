@@ -15,12 +15,13 @@
 // its own (route.ts): what a person publishes there is theirs to say. index.ts
 // calls `answer` on the apex branch and nowhere else.
 import type { Env } from './env.ts'
-import { PAGES, uriOf, WHOLE } from './guide.ts'
+import { PAGES, uriOf, whole } from './guide.ts'
+import { type Host, hosted, spaceHost, url } from './host.ts'
 import { PLATFORM } from './route.ts'
 
-export let SITE_URL = `https://${PLATFORM}`
+export let SITE_URL = url({})
 
-let at = (path: string) => `${SITE_URL}${path}`
+let at = (path: string, env: Host = {}) => url(env, path)
 
 // The connector's face, in one place (T-34415). Owner, 2026-09-05: the
 // connector "provides no icon or description". Three things every connector
@@ -42,20 +43,26 @@ let at = (path: string) => `${SITE_URL}${path}`
 // with (developers.openai.com/apps-sdk, read 2026-09-05; the `ai-plugin.json`
 // that once did was retired when they moved to MCP). That is precisely why
 // the same three things are ON the page beside the URL, ready to copy.
-export let CONNECTOR = {
+export let connector = (env: Host = {}) => ({
   name: PLATFORM,
   title: PLATFORM,
   description: 'Build an app by asking Claude or ChatGPT.',
-  websiteUrl: SITE_URL,
+  websiteUrl: url(env),
   icons: [
-    { src: at('/connector.svg'), mimeType: 'image/svg+xml', sizes: ['any'] },
     {
-      src: at('/connector-512.png'),
+      src: at('/connector.svg', env),
+      mimeType: 'image/svg+xml',
+      sizes: ['any'],
+    },
+    {
+      src: at('/connector-512.png', env),
       mimeType: 'image/png',
       sizes: ['512x512'],
     },
   ],
-}
+})
+
+export let CONNECTOR = connector()
 
 // The apex's public pages, in the order a stranger should meet them. Every one
 // is a file in `public/` served at an extensionless path, and this is the list
@@ -95,12 +102,14 @@ export let RENDERED = [GALLERY]
 // addresses the connector hands an agent (guide.ts). They are markdown rather
 // than HTML and they are indexed anyway, which is the point of publishing them
 // at a URL.
-export let ADDRESSES = [
-  ...SITE.map(at),
-  ...RENDERED.map((p) => at(p.path)),
-  WHOLE,
-  ...PAGES.map((p) => uriOf(p.slug)),
+export let addresses = (env: Host = {}) => [
+  ...SITE.map((path) => at(path, env)),
+  ...RENDERED.map((p) => at(p.path, env)),
+  whole(env),
+  ...PAGES.map((p) => uriOf(p.slug, env)),
 ]
+
+export let ADDRESSES = addresses()
 
 // The crawlers named one by one. `*` allows everything already, so naming these
 // grants nothing extra — it is a STATEMENT, and the several that read a robots
@@ -131,11 +140,11 @@ export let CRAWLERS = [
 // is told the link expired — it is simply not a page.
 export let CLOSED = ['/login', '/connect', '/mcp', '/api/', '/gallery/review']
 
-export let robots = () =>
+export let robots = (env: Host = {}) =>
   [
     '# yaks.app — build an app by asking Claude or ChatGPT.',
     '# Crawling and reading here is welcome; the guide is at',
-    `# ${WHOLE}, and ${at('/llms.txt')} is the short index of it.`,
+    `# ${whole(env)}, and ${at('/llms.txt', env)} is the short index of it.`,
     '',
     ...CRAWLERS.flatMap((agent) => [
       `User-agent: ${agent}`,
@@ -143,7 +152,7 @@ export let robots = () =>
       ...CLOSED.map((path) => `Disallow: ${path}`),
       '',
     ]),
-    `Sitemap: ${at('/sitemap.xml')}`,
+    `Sitemap: ${at('/sitemap.xml', env)}`,
     '',
   ].join('\n')
 
@@ -158,11 +167,11 @@ export let deployed = (env: Env) => env.CF_VERSION_METADATA?.timestamp ?? null
 let escaped = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-export let sitemap = (lastmod: string | null) =>
+export let sitemap = (lastmod: string | null, env: Host = {}) =>
   [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-    ...ADDRESSES.map((url) =>
+    ...addresses(env).map((url) =>
       `  <url><loc>${escaped(url)}</loc>${
         lastmod ? `<lastmod>${escaped(lastmod)}</lastmod>` : ''
       }</url>`
@@ -188,23 +197,26 @@ export let said = (html: string) => {
 
 let fetched = async (env: Env, url: string) => {
   let res = await env.ASSETS.fetch(new Request(url))
-  return res.ok ? await res.text() : ''
+  return res.ok ? hosted(await res.text(), env) : ''
 }
 
 /** The llms.txt convention: what this is, then links with a line on each. */
 export let llms = (
   site: { url: string; title: string; description: string }[],
+  env: Host = {},
 ) =>
   [
     '# yaks.app',
     '',
     '> Build an app by asking Claude or ChatGPT. A recipe box, a sign-up sheet,',
     '> a trip planner — your assistant builds it, and yaks.app keeps it online.',
-    '> Your app lives at yourname.yaks.app, saves your data, and works in a browser.',
+    `> Your app lives at ${
+      spaceHost(env, 'yourname')
+    }, saves your data, and works in a browser.`,
     '',
     'An app is an index.html and the files beside it, served live, with a graph',
     'store behind it and no build step. An assistant connects over MCP at',
-    `${at('/mcp')} and makes apps with the tools it finds there.`,
+    `${at('/mcp', env)} and makes apps with the tools it finds there.`,
     '',
     '## Pages',
     '',
@@ -214,13 +226,17 @@ export let llms = (
     '',
     '## The guide',
     '',
-    `- [The guide](${WHOLE}): the map of everything an app can do, briefly.`,
-    ...PAGES.map((p) => `- [${p.title}](${uriOf(p.slug)}): ${p.description}`),
+    `- [The guide](${
+      whole(env)
+    }): the map of everything an app can do, briefly.`,
+    ...PAGES.map((p) =>
+      `- [${p.title}](${uriOf(p.slug, env)}): ${p.description}`
+    ),
     '',
     '## Optional',
     '',
     `- [llms-full.txt](${
-      at('/llms-full.txt')
+      at('/llms-full.txt', env)
     }): the guide and every page of it,`,
     '  concatenated, in one fetch.',
     '',
@@ -240,25 +256,25 @@ export let answer = async (
   path: string,
   env: Env,
 ): Promise<Response | null> => {
-  if (path == '/robots.txt') return text(robots())
+  if (path == '/robots.txt') return text(robots(env))
   if (path == '/sitemap.xml') {
-    return text(sitemap(deployed(env)), 'application/xml')
+    return text(sitemap(deployed(env), env), 'application/xml')
   }
   if (path == '/llms.txt') {
     let pages = await Promise.all(SITE.map(async (path) => ({
-      url: at(path),
-      ...said(await fetched(env, at(path))),
+      url: at(path, env),
+      ...said(await fetched(env, at(path, env))),
     })))
     return text(llms([
       ...pages.filter((p) => p.title),
       // The drawn pages say their own title and line (above): there is no file
       // to read them out of, and a page missing from this list is a page a
       // model never learns is there.
-      ...RENDERED.map((p) => ({ ...p, url: at(p.path) })),
-    ]))
+      ...RENDERED.map((p) => ({ ...p, url: at(p.path, env) })),
+    ], env))
   }
   if (path == '/llms-full.txt') {
-    let all = [WHOLE, ...PAGES.map((p) => uriOf(p.slug))]
+    let all = [whole(env), ...PAGES.map((p) => uriOf(p.slug, env))]
     let parts = await Promise.all(
       all.map(async (url) => ({ url, text: await fetched(env, url) })),
     )

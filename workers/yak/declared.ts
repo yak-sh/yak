@@ -30,6 +30,7 @@
 // which apps this session has opened, and it remembers nothing (mcp.ts).
 import { type App, type Directory, type Space, storeName } from './directory.ts'
 import type { Env } from './env.ts'
+import { type Host, spaceHost } from './host.ts'
 import { acting, based } from './apps.ts'
 import {
   filled,
@@ -242,7 +243,7 @@ export let listCommands = async (
         name,
         title: `${app.title || app.slug}: ${name}`,
         description: `${tool.description} — ${app.title || app.slug}, an app ` +
-          `at ${space.slug}.yaks.app/${app.slug}/`,
+          `at ${spaceHost(ctx.env, space.slug)}/${app.slug}/`,
         // The declaration says which it is: a `query` tool is a filter line
         // and reads, an `apply` tool is a template and writes. Nothing an app
         // writes here leaves the platform, so none of them is open-world, and
@@ -308,7 +309,8 @@ let AT = /^ui:\/\/([a-z0-9-]+)\/([a-z0-9-]+)\/(.+)$/
 
 // Where the app's own pages live, which is what a relative URL inside a view
 // has to mean.
-let siteOf = (space: Space) => `https://${space.slug}.yaks.app`
+let siteOf = (space: Space, env: Host = {}) =>
+  `https://${spaceHost(env, space.slug)}`
 
 // The host renders a view with no same-origin server behind it (spec
 // §Content Requirements: an HTML document handed over as a resource), so a
@@ -325,10 +327,10 @@ let siteOf = (space: Space) => `https://${space.slug}.yaks.app`
 // The same site is the view's sandbox `domain` (tools.ts `uiMeta`): one
 // origin per space, so one person's app view never shares a sandbox with
 // another's.
-export let metaFor = (space: Space) =>
-  uiMeta(siteOf(space), {
-    baseUriDomains: [siteOf(space)],
-    resourceDomains: [siteOf(space)],
+export let metaFor = (space: Space, env: Host = {}) =>
+  uiMeta(siteOf(space, env), {
+    baseUriDomains: [siteOf(space, env)],
+    resourceDomains: [siteOf(space, env)],
   })
 
 // The pages the caller can reach, one entry each however many tools draw in
@@ -355,9 +357,9 @@ export let listViews = async (ctx: Ctx) => {
         name: `${space.slug}/${app.slug}/${tool.view}`,
         title: `${app.title || app.slug}: ${tool.view}`,
         description: `A page ${app.title || app.slug} draws its own tools' ` +
-          `answers in, from ${space.slug}.yaks.app/${app.slug}/.`,
+          `answers in, from ${spaceHost(ctx.env, space.slug)}/${app.slug}/.`,
         mimeType: VIEW_MIME,
-        _meta: metaFor(space),
+        _meta: metaFor(space, ctx.env),
       })
     }
   }
@@ -385,6 +387,6 @@ export let readView = async (ctx: Ctx, uri: string) => {
   let page = new TextDecoder().decode(await blobs.get(key))
   // The same tag the app door gives every page it serves (apps.ts
   // `based`), at the absolute address a page rendered off-origin needs.
-  let home = `${siteOf(space)}/${app.slug}/`
-  return { uri, text: based(home, page), _meta: metaFor(space) }
+  let home = `${siteOf(space, ctx.env)}/${app.slug}/`
+  return { uri, text: based(home, page), _meta: metaFor(space, ctx.env) }
 }

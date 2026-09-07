@@ -82,18 +82,20 @@ import { z } from 'zod'
 import { mcp, roster, rosterVersion } from '@yaks/mcp'
 import { VERSION } from '../../src/version.ts'
 import { reaching, searching } from './agent.ts'
-import { anonymous, asked, opened, READS, SCOPE } from './anon.ts'
+import { anonymous, asked, opened, READS, scope } from './anon.ts'
 import * as dirPart from './directory.ts'
 import { directory, url } from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { INSTRUCTIONS, pageFor, UNDO } from './guide.ts'
-import { asking, challenge, SAYS, unauthorized } from './identity.ts'
+import { instructions, pageFor, UNDO } from './guide.ts'
+import { url as hostUrl } from './host.ts'
+import { asking, challenge, unauthorized } from './identity.ts'
 import { narrowed } from './grants.ts'
 import { listCommands, listViews, readView } from './declared.ts'
-import { answer, asset, type Doc, DOCS, SIGNIN } from './preauth.ts'
+import { answer, asset, type Doc, docs, SIGNIN } from './preauth.ts'
 import type { Reach } from './reach.ts'
 import { PROMPTS } from './prompts.ts'
-import { CONNECTOR } from './seo.ts'
+import { says } from './route.ts'
+import { connector } from './seo.ts'
 import { type Entry, prompted, standing } from './standing.ts'
 import {
   APPS_VIEW,
@@ -120,37 +122,41 @@ import { listen, rostered } from './stream.ts'
 // own, and an empty allowlist, because neither page fetches anything. Saying
 // nothing at all is what a host reads as no policy, and ChatGPT renders that
 // as a red "CSP off" or fails the widget outright (T-34433, T-34350).
-let PLATFORM_VIEW = uiMeta('https://yaks.app')
+let platformView = (env: Env) => uiMeta(hostUrl(env))
 
-let APPS: Doc = {
+let appsDoc = (env: Env): Doc => ({
   uri: APPS_VIEW,
   name: 'apps',
   title: 'Your apps',
   description: 'Every app the person has here, as a page they can look at.',
   mimeType: VIEW_MIME,
-  page: 'https://yaks.app/apps.html',
-  _meta: PLATFORM_VIEW,
-}
+  page: hostUrl(env, '/apps.html'),
+  _meta: platformView(env),
+})
 
 // And the second (T-32601): what is still broken, one card per break,
 // each with the button that archives it — the view calls `app_errors` back
 // through the host to do it, which is why that tool says `app` in its
 // visibility below.
-let ERRORS: Doc = {
+let errorsDoc = (env: Env): Doc => ({
   uri: ERRORS_VIEW,
   name: 'errors',
   title: 'What is broken',
   description: 'Every break still open in an app, as cards with a fixed ' +
     'button.',
   mimeType: VIEW_MIME,
-  page: 'https://yaks.app/errors.html',
-  _meta: PLATFORM_VIEW,
-}
+  page: hostUrl(env, '/errors.html'),
+  _meta: platformView(env),
+})
 
 // A signed-in caller reads all of them, the public ones included: the whole
 // list opens with what anybody may read, so the public surface is a subset of
 // this one rather than a second surface beside it.
-let RESOURCES: Doc[] = [...DOCS, APPS, ERRORS]
+let resources = (env: Env): Doc[] => [
+  ...docs(env),
+  appsDoc(env),
+  errorsDoc(env),
+]
 
 type Rpc = {
   jsonrpc: '2.0'
@@ -172,16 +178,17 @@ let result = (id: unknown, result: unknown) =>
 // to draw its sign-in button. Without it the tool it refused has no link to
 // offer and the person is simply stuck
 // (developers.openai.com/plugins/build/auth).
-let refused = (req: Request, id: unknown) => {
-  let said = challenge(new URL(req.url))
+let refused = (req: Request, id: unknown, env: Env) => {
+  let signIn = says(env)
+  let said = challenge(new URL(req.url), env)
   return Response.json({
     jsonrpc: '2.0',
     id,
     result: {
-      content: [{ type: 'text', text: SAYS }],
+      content: [{ type: 'text', text: signIn }],
       _meta: {
         'mcp/www_authenticate': [
-          `${said}, error="invalid_token", error_description="${SAYS}"`,
+          `${said}, error="invalid_token", error_description="${signIn}"`,
         ],
       },
       isError: true,
@@ -198,7 +205,7 @@ let refused = (req: Request, id: unknown) => {
 // reach that app is told about. The prompts are the doors a PERSON picks by
 // name (prompts.ts, T-32981).
 let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
-  for (let doc of RESOURCES) {
+  for (let doc of resources(ctx.env)) {
     // A view's `_meta` rides on the listing AND on the bytes: the listing is
     // what a host reads to decide, the content item is what governs the frame
     // it then builds, and the spec has it repeated on both.
@@ -234,7 +241,7 @@ let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
   // passage the door just gathered rather than read a second time.
   let made = apps.map((e) => ({
     title: e.app.title || e.app.slug,
-    url: url(e.space, e.app),
+    url: url(e.space, e.app, ctx.env),
   }))
   for (let p of PROMPTS) {
     server.registerPrompt(p.name, {
@@ -257,6 +264,7 @@ let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
               Object.entries(args ?? {}).map(([k, v]) => [k, String(v ?? '')]),
             ),
             made,
+            ctx.env,
           ),
         },
       }],
@@ -396,7 +404,7 @@ let door = async (ctx: Ctx, session: string) => {
     schema: 'names' as const,
     // And where a word is written about at length, so graph_schema hands over
     // the page beside the columns (guide.ts `pageFor`).
-    guide: pageFor,
+    guide: (comp: string) => pageFor(comp, ctx.env),
     // And the way back out of a delete here, which the generic tier could not
     // know: a store is not a place a mistake is final (recover.ts, T-34509).
     undo: UNDO,
@@ -404,11 +412,11 @@ let door = async (ctx: Ctx, session: string) => {
     // The name, the line and the picture, from the one place they are written
     // (seo.ts CONNECTOR, T-34415): a client that reads `serverInfo` shows this
     // door with a face, and nobody has to type any of it into a form.
-    ...CONNECTOR,
+    ...connector(ctx.env),
     version: VERSION,
     instructions: apps.text
-      ? `${INSTRUCTIONS}\n\n---\n\n${apps.text}`
-      : INSTRUCTIONS,
+      ? `${instructions(ctx.env)}\n\n---\n\n${apps.text}`
+      : instructions(ctx.env),
     search: searching(ctx, reach),
     // What this door needs: a token (preauth.ts SIGNIN). A tool that works
     // either way says so itself and keeps it (tools.ts `security: EITHER`) —
@@ -483,7 +491,7 @@ let stranger = async (
 ): Promise<Response> => {
   let name = rpc.method == 'tools/call' ? String(rpc.params?.name ?? '') : ''
   if (rpc.method != 'tools/list' && !(name && anonymous(name))) {
-    return refused(req, rpc.id)
+    return refused(req, rpc.id, env)
   }
   let ctx: Ctx = {
     env,
@@ -511,7 +519,7 @@ let stranger = async (
     graph,
     column,
     schema: 'names' as const,
-    guide: pageFor,
+    guide: (comp: string) => pageFor(comp, env),
     search: searching(ctx, reach),
     // Every tool, and what each one declares about signing in (anon.ts
     // `asked`): the pair for what a stranger may call, `oauth2` for the rest,
@@ -521,8 +529,8 @@ let stranger = async (
     // snapshots at submission, and a name missing from that snapshot is a tool
     // the published connector can never offer its signed-in people.
     security: asked,
-    scope: SCOPE,
-    ...CONNECTOR,
+    scope: scope(env),
+    ...connector(env),
     version: VERSION,
   }
   // No roster line and no session: both are a person's own — a roster names
@@ -568,7 +576,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // requires that 401, and Claude ignores `WWW-Authenticate` on a 200 — so
   // answering the public surface instead is a connector silently losing every
   // tool where it should have been asked to sign in again (T-34344).
-  if (!auth && (tried || strict)) return unauthorized(req)
+  if (!auth && (tried || strict)) return unauthorized(req, env)
   // The GET is the session's STREAM (stream.ts): a client holds it open to
   // hear what the server says between its own calls, which today is one
   // thing — that its tool list moved, because an app of theirs deployed new
@@ -578,7 +586,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // Everything else is still one POST in, one JSON out. A stream is a
   // person's own, so there is no public one.
   if (req.method == 'GET') {
-    return auth ? listen(env, auth.person, req) : unauthorized(req)
+    return auth ? listen(env, auth.person, req) : unauthorized(req, env)
   }
   // Before anyone has signed in this door answers exactly three ways: the
   // public result, a 202 for a notification, and the challenge for everything
@@ -600,12 +608,12 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
         id: null,
         error: { code: -32700, message: 'parse error' },
       })
-      : unauthorized(req)
+      : unauthorized(req, env)
   }
   if (Array.isArray(body)) {
     return auth
       ? json(400, { error: { code: 'no_batches' } })
-      : unauthorized(req)
+      : unauthorized(req, env)
   }
   let rpc = body as Rpc
   if (rpc.id == null) return new Response(null, { status: 202 }) // a notification
@@ -634,9 +642,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // it does not answer goes to the anonymous door (`stranger`), which serves
   // the tools a stranger may call and challenges everything else.
   if (!auth) {
-    let open = await answer(String(rpc.method), rpc.params ?? {}, {
-      ASSETS: env.ASSETS,
-    })
+    let open = await answer(String(rpc.method), rpc.params ?? {}, env)
     return open ? result(rpc.id, open) : await stranger(req, rpc, env, said)
   }
   // Fresh, every read: a tool answers about what a tool just wrote, and the

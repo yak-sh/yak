@@ -39,7 +39,7 @@
 import * as dirPart from './directory.ts'
 import { directory, type Plan, type Space, stamp } from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { PLATFORM } from './route.ts'
+import { apex, type Host } from './host.ts'
 
 import { cookieValue, verify } from '../../src/token.ts'
 import { metaBreaks, noted } from './unseen.ts'
@@ -368,8 +368,8 @@ let payerFor = async (env: Env, space: Space, email: string) => {
 
 // Where checkout hands somebody back. Both are on our own zone, and both are
 // the connector page, which is where a signed-in person manages their space.
-let backTo = (done: boolean) =>
-  `https://${PLATFORM}/connect?${done ? 'paid=1' : 'paid=0'}`
+let backTo = (done: boolean, env: Host) =>
+  `https://${apex(env)}/connect?${done ? 'paid=1' : 'paid=0'}`
 
 // Start a subscription. Answers the URL to send the person to, and nothing
 // else: this door is reachable from a signed-in page only, never from a tool.
@@ -405,8 +405,8 @@ let checkout = async (env: Env, req: Request) => {
       mode: 'subscription',
       customer,
       line_items: { 0: { price: env.STRIPE_PRICE, quantity: 1 } },
-      success_url: backTo(true),
-      cancel_url: backTo(false),
+      success_url: backTo(true, env),
+      cancel_url: backTo(false, env),
       client_reference_id: space.eid,
       metadata: { space: space.eid, slug: space.slug },
       subscription_data: { metadata: { space: space.eid, slug: space.slug } },
@@ -455,7 +455,7 @@ let portal = async (env: Env, req: Request) => {
   try {
     let made = await ask(env, '/v1/billing_portal/sessions', {
       customer,
-      return_url: `https://${PLATFORM}/connect`,
+      return_url: `https://${apex(env)}/connect`,
     })
     let url = String(made.url ?? '')
     if (!url) throw new Error('stripe made a portal session with no url')
@@ -599,7 +599,9 @@ let hook = async (env: Env, req: Request) => {
 
 export let fetch = (req: Request, env: Env): Promise<Response> => {
   let path = new URL(req.url).pathname
-  if (path == '/api/stripe/webhook') return hook(env, req)
+  if (path == '/stripe/webhook' || path == '/api/stripe/webhook') {
+    return hook(env, req)
+  }
   if (req.method != 'POST') {
     return Promise.resolve(
       json(405, 'method_not_allowed', 'post to this door'),

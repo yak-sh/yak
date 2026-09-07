@@ -37,6 +37,7 @@ export type Inbound = {
 }
 
 export type Env = {
+  APEX?: string
   STORE: Namespace
   // The person's own MCP stream (stream.ts): one object per signed-in
   // person, holding what an open connector is listening to.

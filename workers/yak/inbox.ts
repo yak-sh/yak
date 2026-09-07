@@ -62,7 +62,7 @@ let opened = async (
   env: Env,
   to: string,
 ): Promise<{ space: Space; app: App }> => {
-  let box = mailedTo(to)
+  let box = mailedTo(to, env)
   if (!box) throw new Refused(`no mailbox for ${to}`)
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   // A subdomain the SPACE has left still finds it, as its old hostname does
@@ -95,7 +95,7 @@ let opened = async (
   if (!app) {
     throw new Refused(
       box.app ? `no mailbox for ${to}` : `${space.slug} has no front page: ` +
-        `write to ${mailFrom(space.slug, '<app>')}`,
+        `write to ${mailFrom(space.slug, '<app>', env)}`,
     )
   }
   return { space, app }
@@ -201,7 +201,7 @@ export let arrived = async (m: Inbound, env: Env): Promise<string> => {
     // nobody said.
     ...(signed == null ? {} : { verified: signed }),
   })
-  await metaOf(appStore(env.STORE, space, app)).apply([
+  await metaOf(appStore(env.STORE, space, app, env)).apply([
     ...letter,
     ...(await carried(env, space, app, mail, eid)),
   ], KERNEL)

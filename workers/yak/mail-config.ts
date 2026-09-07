@@ -5,8 +5,9 @@
 // the API. The reader still answers the platform: REPLY_TO is the yaks.app
 // address, and the display name is the platform's. A space that white-labels
 // its login will want its own pair; that is a later leaf's.
+import { replyTo } from './post.ts'
 export let FROM = 'hello@bot.yak.sh'
-export let REPLY_TO = 'hello@yaks.app'
+export let REPLY_TO = replyTo()
 
 // The fleet's task graph, addressed as a reader. hello@yaks.app forwards to a
 // person's mailbox and nowhere else, so a letter sent only there is invisible

@@ -293,7 +293,7 @@ let appsOf = (env: Env, space: Space) =>
 // One app's store in the graph's own wire, with this caller vouched: what a
 // mark is written through, and what an open item is read out of.
 let graphAt = (env: Env, space: Space, app: App, who: Who) => {
-  let store = appStore(env.STORE, space, app)
+  let store = appStore(env.STORE, space, app, env)
   return {
     query: (line: string) =>
       metaOf((path, init, headers) =>
@@ -513,5 +513,5 @@ export let ceiling = async (env: Env, space: Space) => {
   let apps = await appsOf(env, space)
   if (space.told || level(space, apps.length) == 'ok') return ''
   await stamp(env, { entities: [{ entity: { eid: space.eid }, notified: {} }] })
-  return `\n\n## ceiling\n${standing(space, apps.length)}`
+  return `\n\n## ceiling\n${standing(space, apps.length, new Date(), env)}`
 }

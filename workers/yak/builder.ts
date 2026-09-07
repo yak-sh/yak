@@ -42,7 +42,8 @@ import { running } from './agent.ts'
 import { directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { INSTRUCTIONS, WHOLE } from './guide.ts'
+import { instructions, whole } from './guide.ts'
+import { type Host, hosted, url } from './host.ts'
 import { countedBuild, countedSandbox, refusedBuild } from './meter.ts'
 import { asset } from './preauth.ts'
 import { released, spending } from './sandbox.ts'
@@ -163,9 +164,11 @@ export let PAID = '@cf/zai-org/glm-5.3'
 
 /** Nobody is built for: the loop writes as the person calling it, and there
  * is no such person. */
-export let ANON =
+export let anonymous = (env: Host = {}) =>
   'Sign in first — everything I would build belongs to somebody, and I ' +
-  'write as whoever is asking. https://yaks.app/login'
+  `write as whoever is asking. ${url(env, '/login')}`
+
+export let ANON = anonymous()
 
 /** A model that is not Workers AI's, with no way to reach it. Nobody meets
  * this by default — both tiers run on the binding — only a platform whose
@@ -215,7 +218,11 @@ let tooLong = (ms: number) =>
  */
 export let roster = (ctx: Ctx): { fn: Fn; run: Run }[] =>
   TOOLS.map((t) => ({
-    fn: { name: t.name, description: t.description, parameters: t.input },
+    fn: {
+      name: t.name,
+      description: hosted(t.description, ctx.env),
+      parameters: JSON.parse(hosted(JSON.stringify(t.input), ctx.env)),
+    },
     run: running(ctx, t),
   }))
 
@@ -252,14 +259,14 @@ export let prompt = async (env: Env, ctx?: Ctx): Promise<string> => {
   let apps = ctx ? (await standing(ctx)).notes : ''
   let after = apps ? `\n\n---\n\n${apps}` : ''
   try {
-    let page = await asset({ ASSETS: env.ASSETS }, WHOLE)
+    let page = await asset(env, whole(env))
     if (!page.ok) {
       await page.body?.cancel()
-      return INSTRUCTIONS + after
+      return instructions(env) + after
     }
-    return `${INSTRUCTIONS}\n\n---\n\n${await page.text()}${after}`
+    return `${instructions(env)}\n\n---\n\n${await page.text()}${after}`
   } catch {
-    return INSTRUCTIONS + after
+    return instructions(env) + after
   }
 }
 
@@ -555,12 +562,12 @@ export let build = async (
       ...(refused ? { refused } : {}),
     }
   }
-  if (!who.person) return await end(ANON)
+  if (!who.person) return await end(anonymous(env))
   // The month's builds (meter.ts, T-34241). It is asked BEFORE anything is
   // spent, and what comes back is a sentence the builder says rather than a
   // door slammed mid-conversation — so a refused build costs the person
   // nothing, not a build and not the tokens of the refusal.
-  let full = refusedBuild(space)
+  let full = refusedBuild(space, new Date(), env)
   if (full) return await end(full)
 
   let ctx: Ctx = {

@@ -9,9 +9,10 @@
 // to read off the log.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { slow } from '../../src/testing.ts'
-import type { App, Space } from './directory.ts'
+import type { App, Directory, Space } from './directory.ts'
 import {
   card,
+  door,
   found,
   install,
   letter,
@@ -19,6 +20,7 @@ import {
   listed,
   page,
   pictured,
+  searched,
   showcase,
   type Shown,
   standing,
@@ -155,6 +157,37 @@ Deno.test('the letter names the app, its maker, and both answers', () => {
   assertStringIncludes(l.body, 'Somewhere to keep recipes')
   assertStringIncludes(l.body, 'https://yaks.app/gallery/review?t=yes')
   assertStringIncludes(l.body, 'https://yaks.app/gallery/review?t=no')
+})
+
+Deno.test('staging gallery listings, reviews and mail stay on its own host', async () => {
+  let env = { APEX: 'yaks.fyi' }
+  let dir = {
+    offers: () =>
+      Promise.resolve([{ space: space(), app: app({ gallery: live }) }]),
+  } as Directory
+  let all = await listed(dir, env)
+  assertEquals(all[0].at, 'https://jeff.yaks.fyi/recipes/')
+  let html = await page(all, env).text()
+  assertEquals(html.includes('https://yaks.app'), false)
+  assertStringIncludes(html, 'https://yaks.fyi/gallery')
+  assertStringIncludes(html, 'https://yaks.fyi/og.png')
+  assertStringIncludes(
+    await searched(dir, { words: 'absent' }, env),
+    'https://yaks.fyi/gallery',
+  )
+  let yes = door('yes', env)
+  assertEquals(yes, 'https://yaks.fyi/gallery/review?t=yes')
+  assertEquals(
+    letter({
+      title: 'Recipe box',
+      about: '',
+      url: all[0].at,
+      owner: 'Jeff',
+      yes,
+      no: door('no', env),
+    }, env).to,
+    'hello@yaks.fyi',
+  )
 })
 
 // The ticket carries WHICH answer, signed, so a decline cannot be talked into

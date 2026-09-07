@@ -51,7 +51,7 @@ import {
 import type { EntityLiteral } from '../../src/mutation.ts'
 import { appAccess } from '../../src/types.ts'
 import { VERSION } from '../../src/version.ts'
-import { appDoc, coreDocs, shortOf, TEACH } from './vocab.ts'
+import { appDoc, coreDocs, shortOf, teach } from './vocab.ts'
 import { withKinds } from './kinds.ts'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Cols, Sheet } from './csv.ts'
@@ -128,9 +128,9 @@ import {
 } from './gallery.ts'
 import type { Caller } from './identity.ts'
 import { DEFAULT, HOURS, ledger, mint, revoke } from './grants.ts'
-import { GRAPH, mail, REPLY_TO } from './mail.ts'
-import { PAGES, uriOf, WHOLE } from './guide.ts'
-import { asset, EITHER, NO_ARGS, PUBLIC } from './preauth.ts'
+import { GRAPH, mail } from './mail.ts'
+import { PAGES, uriOf, whole } from './guide.ts'
+import { asset, EITHER, NO_ARGS, PUBLIC, publics } from './preauth.ts'
 import {
   type Box,
   boxOf,
@@ -149,8 +149,9 @@ import {
   refusedSell,
   selling,
 } from './sell.ts'
-import { mailFrom } from './post.ts'
-import { foreign, SIGN_IN, SLUG } from './route.ts'
+import { mailFrom, replyTo } from './post.ts'
+import { apex as platformHost, spaceHost, url as hostUrl } from './host.ts'
+import { foreign, SLUG } from './route.ts'
 import { globs } from './router.ts'
 import type { Reach } from './reach.ts'
 import { titling, vouched, type Who } from './session.ts'
@@ -290,7 +291,7 @@ let HOSTNAME = str(
 // What to say when the hostname is a domain's apex, where DNS forbids a
 // CNAME. This is the step a non-technical person gives up at, so the answer
 // they need is in the answer they already have, not a page away.
-let APEX =
+let apexHelp = (env: Env) =>
   'This is the apex — the bare domain, with nothing in front of it — and ' +
   'DNS does not allow a CNAME there. Three ways through, best first: move ' +
   "the domain's DNS to Cloudflare (free, and its CNAME flattening makes the " +
@@ -298,7 +299,7 @@ let APEX =
   'same value (Porkbun has one; GoDaddy, Namecheap, Squarespace and Hover ' +
   'do not), or attach www.<domain> instead and redirect the apex to it. ' +
   'Call guide with page domains, which walks through each ' +
-  '(https://yaks.app/guide/domains.md).\n\n'
+  `(${hostUrl(env, '/guide/domains.md')}).\n\n`
 
 // What an app lets someone who is not a member do with its data (T-32504).
 // The person's agent picks it from their ask, which is why the words are the
@@ -542,11 +543,11 @@ let toGallery = async (ctx: Ctx, space: Space, app: App) => {
     await mail(ctx.env)(galleryLetter({
       title: app.title,
       about: app.published.about,
-      url: url(space, app),
+      url: url(space, app, ctx.env),
       owner,
-      yes: galleryDoor(await ticketFor(app, true, secret)),
-      no: galleryDoor(await ticketFor(app, false, secret)),
-    }))
+      yes: galleryDoor(await ticketFor(app, true, secret), ctx.env),
+      no: galleryDoor(await ticketFor(app, false, secret), ctx.env),
+    }, ctx.env))
   } catch {
     throw new Error(
       `${space.slug}/${app.slug} is published, but the gallery could not be ` +
@@ -660,6 +661,7 @@ let sheetOf = async (
   store: Door,
   as: string,
   map?: Record<string, string>,
+  env: Pick<Env, 'APEX'> = {},
 ): Promise<Sheet> => {
   let mine = shortOf(appDoc(await answer(await store('/vocab'))))
   let words: Record<string, Cols> = {}
@@ -669,7 +671,7 @@ let sheetOf = async (
     throw new Error(
       `as: ${as} is not a component — this app says ${
         Object.keys(mine).sort().join(', ') || 'none of its own yet'
-      }, beside the platform's own words (doc, task, comment, …)${TEACH}`,
+      }, beside the platform's own words (doc, task, comment, …)${teach(env)}`,
     )
   }
   return { as, cols: words[as], map }
@@ -1602,7 +1604,7 @@ let OURS: Row[] = [
       }, vouched({ person: ctx.person, role: 'owner' }))
       let space = (await ctx.dir.space(s))!
       return {
-        text: `space ${s} (${space.eid}): https://${s}.yaks.app/`,
+        text: `space ${s} (${space.eid}): https://${spaceHost(ctx.env, s)}/`,
         space,
       }
     },
@@ -1632,7 +1634,7 @@ let OURS: Row[] = [
       if (drop != null) forgotten(space.slug, space.slugs, drop)
       // The trash holds the address for its thirty days, so a space in it
       // cannot move off one — and the meta space is the platform.
-      let no = refused(space)
+      let no = refused(space, ctx.env)
       if (no) throw new Error(no)
       if (space.trashed) {
         throw new Error(
@@ -1683,11 +1685,13 @@ let OURS: Row[] = [
       let now = (await ctx.dir.space(to ?? space.slug))!
       return {
         text: `space ${now.slug}${title == null ? '' : ` "${title}"`}: ` +
-          `https://${now.slug}.yaks.app/` +
+          `https://${spaceHost(ctx.env, now.slug)}/` +
           (moving
-            ? ` — moved from ${space.slug}.yaks.app, which redirects here ` +
+            ? ` — moved from ${
+              spaceHost(ctx.env, space.slug)
+            }, which redirects here ` +
               `and stays reserved; letters to ${
-                mailFrom(space.slug, '<app>')
+                mailFrom(space.slug, '<app>', ctx.env)
               } still arrive. Give people the new address` +
               (apps.length
                 ? `, and every app of the space moved with it (${
@@ -1695,7 +1699,7 @@ let OURS: Row[] = [
                 })`
                 : '')
             : '') +
-          (drop == null ? '' : ` — ${lost(`${drop}.yaks.app`)}`),
+          (drop == null ? '' : ` — ${lost(`${spaceHost(ctx.env, drop)}`)}`),
         space: now,
       }
     },
@@ -1727,7 +1731,7 @@ let OURS: Row[] = [
         ...args,
         space: slug(args.space, 'space'),
       })
-      let no = refused(space)
+      let no = refused(space, ctx.env)
       if (no) throw new Error(no)
       let forever = args.forever != null && flag(args.forever, 'forever')
       if (space.trashed && !forever) {
@@ -1750,10 +1754,11 @@ let OURS: Row[] = [
       // What the link would do, in the words of the act it carries: `forever`
       // names what is destroyed, the trash names what stops (erase.ts).
       let bullets = (lines: string[]) => lines.map((l) => `  - ${l}`).join('\n')
-      let said = bullets(forever ? naming(d) : keeping(d))
+      let said = bullets(forever ? naming(d, ctx.env) : keeping(d, ctx.env))
       let link = door(
         space.slug,
         await ticket(space, ctx.person, ctx.env.SESSION_SECRET, forever),
+        ctx.env,
       )
       // A letter that will not send is not a link to hand over (member_add
       // does that for an invitation, which is not an irreversible act): the
@@ -1763,14 +1768,14 @@ let OURS: Row[] = [
       // the letter that did not arrive — so what it would do is said in the
       // trash's words however this call was made.
       try {
-        await mail(ctx.env)({ to, ...letter(d, link, forever) })
+        await mail(ctx.env)({ to, ...letter(d, link, forever, ctx.env) })
       } catch {
         throw new Error(
           'the confirmation letter could not be sent. They can still put the ' +
             `space in the trash themselves, signed in, at ${
-              door(space.slug)
+              door(space.slug, undefined, ctx.env)
             } — which asks them to type ${space.slug} back. That would stop:\n` +
-            bullets(keeping(d)),
+            bullets(keeping(d, ctx.env)),
         )
       }
       return {
@@ -1802,12 +1807,15 @@ let OURS: Row[] = [
       if (!space.trashed) {
         throw new Error(
           `${space.slug} is not in the trash — it is serving at ` +
-            `https://${space.slug}.yaks.app/`,
+            `https://${spaceHost(ctx.env, space.slug)}/`,
         )
       }
       await untrashSpace(ctx.env, ctx.dir, space, who)
       return {
-        text: `${space.slug} is back: https://${space.slug}.yaks.app/ serves ` +
+        text:
+          `${space.slug} is back: https://${
+            spaceHost(ctx.env, space.slug)
+          }/ serves ` +
           'again and its apps are yours again. Everything they saved is ' +
           'where it was.',
         space,
@@ -1848,7 +1856,7 @@ let OURS: Row[] = [
       if (!ctx.env.STRIPE_KEY) {
         throw new Error('selling is not switched on here')
       }
-      let no = refusedSell(space)
+      let no = refusedSell(space, ctx.env)
       if (no) throw new Error(no)
       if (selling(space) == 'ready') {
         return {
@@ -1903,7 +1911,7 @@ let OURS: Row[] = [
       // said they are done with, so it stands against nothing (erase.ts).
       let apps = (await ctx.dir.apps(space)).filter((a) => !a.trashed)
       if (free && apps.length >= free.apps) {
-        throw new Error(atCeiling(space, 'apps'))
+        throw new Error(atCeiling(space, 'apps', ctx.env))
       }
       let taken = await ctx.dir.app(space, s)
       if (taken) {
@@ -1943,8 +1951,9 @@ let OURS: Row[] = [
       await ctx.dir.apply({ entities }, vouched(who))
       let app = (await ctx.dir.app(space, s))!
       return {
-        text: `app ${space.slug}/${s} (${app.eid}): ${url(space, app)}` +
-          ` — ${told(app.access)}. https://${space.slug}.yaks.app/ ${
+        text:
+          `app ${space.slug}/${s} (${app.eid}): ${url(space, app, ctx.env)}` +
+          ` — ${told(app.access)}. https://${spaceHost(ctx.env, space.slug)}/ ${
             front ? `opens ${front.slug}` : "lists the space's apps"
           } — app_set(app, home: true) makes this one the front page there`,
         space,
@@ -2120,7 +2129,7 @@ let OURS: Row[] = [
         let [p] = await wrote(ctx.env, space, app, who, [{ path, bytes }])
         return {
           text: `put ${p} back to what it was until ${want.at} → ` +
-            `${url(space, app)}${p} — ${
+            `${url(space, app, ctx.env)}${p} — ${
               stored(p, bytes, want.sha)
             }. This is itself a write, so op history now has the bytes it ` +
             'replaced.',
@@ -2146,7 +2155,7 @@ let OURS: Row[] = [
         ))
         let [p] = await wrote(ctx.env, space, app, who, [{ path, bytes: now }])
         return {
-          text: `patched ${p} → ${url(space, app)}${p} — ${
+          text: `patched ${p} → ${url(space, app, ctx.env)}${p} — ${
             stored(p, now, await sha256(now))
           }`,
           space,
@@ -2166,7 +2175,7 @@ let OURS: Row[] = [
           // CDN can be pinned to the very bytes we got; the mime is what the
           // response claimed, and mimeOf(path) is what the app will serve.
           text:
-            `fetched ${args.url} → ${url(space, app)}${p} — ${
+            `fetched ${args.url} → ${url(space, app, ctx.env)}${p} — ${
               stored(p, got.bytes, sha)
             }${got.mime ? `, ${got.mime}` : ''}, integrity sha256-${sri(sha)}` +
             (mimeOf(p) == 'application/octet-stream'
@@ -2190,8 +2199,10 @@ let OURS: Row[] = [
       )
       return {
         text: paths.length == 1
-          ? `wrote ${paths[0]} → ${url(space, app)}${paths[0]} — ${each[0]}`
-          : `wrote ${paths.length} files → ${url(space, app)}:\n` +
+          ? `wrote ${paths[0]} → ${url(space, app, ctx.env)}${paths[0]} — ${
+            each[0]
+          }`
+          : `wrote ${paths.length} files → ${url(space, app, ctx.env)}:\n` +
             paths.map((p, i) => `${p} — ${each[i]}`).join('\n'),
         space,
       }
@@ -2339,7 +2350,7 @@ let OURS: Row[] = [
       return {
         text: `shipped ${paths.length} ${
           paths.length == 1 ? 'file' : 'files'
-        } → ${url(space, app)}: ${paths.join(', ')}`,
+        } → ${url(space, app, ctx.env)}: ${paths.join(', ')}`,
         space,
       }
     },
@@ -2362,7 +2373,9 @@ let OURS: Row[] = [
       let { version, said } = await released(ctx, space, app, who, store)
       return {
         text:
-          `deployed ${space.slug}/${app.slug} v${version}: ${url(space, app)}` +
+          `deployed ${space.slug}/${app.slug} v${version}: ${
+            url(space, app, ctx.env)
+          }` +
           said,
         space,
       }
@@ -2415,9 +2428,12 @@ let OURS: Row[] = [
       let all = await load(
         loaded(
           files,
-          args.as == null
-            ? undefined
-            : await sheetOf(store, text(args.as, 'as'), mapping(args.map)),
+          args.as == null ? undefined : await sheetOf(
+            store,
+            text(args.as, 'as'),
+            mapping(args.map),
+            ctx.env,
+          ),
         ),
         applying(store, await byCaller(ctx, who)),
       )
@@ -2527,7 +2543,7 @@ let OURS: Row[] = [
       let { version, said } = await released(ctx, space, app, who, store)
       return {
         text: `put ${space.slug}/${app.slug} back to v${want.version}, live ` +
-          `now as v${version}: ${url(space, app)} — ${
+          `now as v${version}: ${url(space, app, ctx.env)} — ${
             whatChanged(now, want.files)
           }` + said,
         space,
@@ -2752,7 +2768,7 @@ let OURS: Row[] = [
       return {
         text: `app ${space.slug}/${now.slug}${
           title == null ? '' : ` "${title}"`
-        }: ${url(space, now)}${
+        }: ${url(space, now, ctx.env)}${
           moving ? ` (moved from /${app.slug}/, which now redirects here)` : ''
         }${open ? ` — ${told(open)}` : ''}${
           // What the app IS now, off the row just read back: `home: false` on
@@ -2761,9 +2777,13 @@ let OURS: Row[] = [
           home == null || now.home == app.home
             ? ''
             : now.home
-            ? ` — it is the front page now: https://${space.slug}.yaks.app/ ` +
+            ? ` — it is the front page now: https://${
+              spaceHost(ctx.env, space.slug)
+            }/ ` +
               'opens it'
-            : ` — no longer the front page: https://${space.slug}.yaks.app/ ` +
+            : ` — no longer the front page: https://${
+              spaceHost(ctx.env, space.slug)
+            }/ ` +
               "lists the space's apps again until another one is set home"}${
           // Read off the row that was just written, never off what arrived:
           // the sentence says what the app IS now (directory.ts `appOf`).
@@ -2774,9 +2794,11 @@ let OURS: Row[] = [
               now.first.join(', ')
             } before the apps that own them`
             : ' — it answers no path before the app that owns it'}${
-          shown ? ` — ${saying(shown)}` : ''
+          shown ? ` — ${saying(shown, ctx.env)}` : ''
         }${
-          drop == null ? '' : ` — ${lost(`${space.slug}.yaks.app/${drop}/`)}`
+          drop == null
+            ? ''
+            : ` — ${lost(`${spaceHost(ctx.env, space.slug)}/${drop}/`)}`
         }`,
         space,
       }
@@ -2895,7 +2917,9 @@ let OURS: Row[] = [
         await trash(ctx.env, ctx.dir, space, app, who)
         return {
           text: `${space.slug}/${app.slug} is in the trash. ` +
-            `${url(space, app)} stops answering and its commands have gone ` +
+            `${
+              url(space, app, ctx.env)
+            } stops answering and its commands have gone ` +
             'with it; ' +
             'nothing it saved was touched. app_restore(app: ' +
             `'${app.slug}') brings it back whole, any time in the next 30 ` +
@@ -2912,7 +2936,7 @@ let OURS: Row[] = [
       return {
         text: `deleted ${space.slug}/${app.slug}: ${wrote} ${
           wrote == 1 ? 'file' : 'files'
-        }, everything it saved, and ${url(space, app)} — all gone`,
+        }, everything it saved, and ${url(space, app, ctx.env)} — all gone`,
         space,
       }
     },
@@ -2931,13 +2955,16 @@ let OURS: Row[] = [
       if (!app.trashed) {
         throw new Error(
           `${space.slug}/${app.slug} is not in the trash — it is serving at ${
-            url(space, app)
+            url(space, app, ctx.env)
           }`,
         )
       }
       await untrash(ctx.env, ctx.dir, space, app, who)
       return {
-        text: `${space.slug}/${app.slug} is back: ${url(space, app)} serves ` +
+        text:
+          `${space.slug}/${app.slug} is back: ${
+            url(space, app, ctx.env)
+          } serves ` +
           'again and its tools are yours again. Everything it saved is ' +
           'where it was.',
         space,
@@ -2999,7 +3026,7 @@ let OURS: Row[] = [
           space: space.slug,
           app: app.slug,
           title: app.title,
-          url: url(space, app),
+          url: url(space, app, ctx.env),
           version: app.version ?? 0,
           errors: cards(seen),
         },
@@ -3041,7 +3068,7 @@ let OURS: Row[] = [
         // still is — every app is kept exactly as it is, and that address is
         // where the person restores it.
         lines.push(
-          `${space.slug} — https://${space.slug}.yaks.app/${
+          `${space.slug} — https://${spaceHost(ctx.env, space.slug)}/${
             space.trashed
               ? ` — IN THE TRASH, ${
                 daysLeft(space.trashed)
@@ -3062,12 +3089,12 @@ let OURS: Row[] = [
           listed.push({
             slug: app.slug,
             title: app.title,
-            url: url(space, app),
+            url: url(space, app, ctx.env),
             // The other address it has (directory.ts `mailbox`): where its
             // letters leave from and where a reader writes back. Said here
             // because this is the listing a person is shown when they ask
             // what they have, and an address nobody is told is no address.
-            mail: mailbox(space, app),
+            mail: mailbox(space, app, ctx.env),
             version: app.version ?? 0,
             errors,
             usage: its,
@@ -3082,8 +3109,10 @@ let OURS: Row[] = [
             `- ${app.title} (${app.slug}) v${app.version ?? 0}${
               errors ? `, ${errors} open` : ''
             }${its ? `, ${its.requests} requests, ${size(its.bytes)}` : ''}: ${
-              url(space, app)
-            } · ${mailbox(space, app)}${front ? ' — the front page' : ''}`,
+              url(space, app, ctx.env)
+            } · ${mailbox(space, app, ctx.env)}${
+              front ? ' — the front page' : ''
+            }`,
           )
           lines.push(...bindingLines(bound).map((line) => `  ${line}`))
         }
@@ -3092,7 +3121,7 @@ let OURS: Row[] = [
         // person's words rather than fractions — so the agent knows before it
         // makes the sixth app, not when the door says no. A space with
         // nothing in it has nothing to stand against, and says nothing.
-        else lines.push(standing(space, apps.length))
+        else lines.push(standing(space, apps.length, new Date(), ctx.env))
         // And what was thrown away and can still be had back (erase.ts,
         // T-34430) — beside this space's own listing, since that is what it
         // is about.
@@ -3112,7 +3141,7 @@ let OURS: Row[] = [
         out.push({
           slug: space.slug,
           title: space.title,
-          url: `https://${space.slug}.yaks.app/`,
+          url: `https://${spaceHost(ctx.env, space.slug)}/`,
           apps: listed,
           trash: bin.map((a) => ({
             slug: a.slug,
@@ -3246,11 +3275,13 @@ let OURS: Row[] = [
       // A hostname on our own zone is not a domain anybody brought: every
       // space already answers at one, and route.ts decides which without
       // reading anything.
-      if (!foreign(host)) {
+      if (!foreign(host, ctx.env)) {
         throw new Error(
-          `${host} is on yaks.app, which is ours — a custom domain is one ` +
+          `${host} is on ${
+            platformHost(ctx.env)
+          }, which is ours — a custom domain is one ` +
             `the person owns somewhere else. ${space.slug} already answers ` +
-            `at https://${space.slug}.yaks.app/`,
+            `at https://${spaceHost(ctx.env, space.slug)}/`,
         )
       }
       // One hostname is one place. Whose it is stays out of the refusal
@@ -3304,7 +3335,7 @@ let OURS: Row[] = [
           entities: [{ entity: { eid }, hostname: { stage, at } }],
         })
       }
-      let recs = records(host)
+      let recs = records(host, ctx.env)
       return {
         text:
           `${host} is attached to ${place(space, app)}. ${
@@ -3312,7 +3343,7 @@ let OURS: Row[] = [
           }\n\n` +
           `Add this record where ${host}'s DNS is managed:\n\n` +
           recs.map((r) => `  ${r.type}  ${r.name}  →  ${r.value}`).join('\n') +
-          '\n\n' + (apex(host) ? APEX : '') +
+          '\n\n' + (apex(host) ? apexHelp(ctx.env) : '') +
           `${reading(how)}\n\nDNS usually takes minutes and can take a day; ` +
           'the certificate is issued within minutes of the record ' +
           `resolving. domain_status(hostname: '${host}') says where it is.`,
@@ -3351,7 +3382,9 @@ let OURS: Row[] = [
       if (!rows.length) {
         return {
           text: `${space.slug} has no custom domain. It answers at ` +
-            `https://${space.slug}.yaks.app/; domain_attach puts the space, ` +
+            `https://${
+              spaceHost(ctx.env, space.slug)
+            }/; domain_attach puts the space, ` +
             'or one of its apps, on a domain the person owns.',
           space,
         }
@@ -3389,7 +3422,7 @@ let OURS: Row[] = [
               : '✗ Cloudflare no longer has this hostname — domain_detach ' +
                 'it and domain_attach it again') +
             (stage == 'active' ? '' : '\n' +
-              records(row.name).map((r) =>
+              records(row.name, ctx.env).map((r) =>
                 `  ${r.type}  ${r.name}  →  ${r.value}`
               ).join('\n')),
         )
@@ -3399,7 +3432,7 @@ let OURS: Row[] = [
           url: `https://${row.name}/`,
           stage,
           apex: apex(row.name),
-          records: records(row.name),
+          records: records(row.name, ctx.env),
           steps: how ?? [],
         })
       }
@@ -3445,7 +3478,9 @@ let OURS: Row[] = [
       // request all along.
       let app = (await ctx.dir.apps(space)).find((a) => a.eid == row.serves) ??
         null
-      let back = app ? url(space, app) : `https://${space.slug}.yaks.app/`
+      let back = app
+        ? url(space, app, ctx.env)
+        : `https://${spaceHost(ctx.env, space.slug)}/`
       return {
         text: `${host} is detached from ${place(space, app)}` +
           (had ? '' : ' (Cloudflare had already given it back)') +
@@ -3549,7 +3584,7 @@ let OURS: Row[] = [
       return {
         text: `published ${name} v${version} from ${space.slug}/${app.slug}` +
           (about ? ` — ${about}` : '') + said +
-          (shown ? `\n${saying(shown)}` : ''),
+          (shown ? `\n${saying(shown, ctx.env)}` : ''),
         space,
       }
     },
@@ -3665,7 +3700,7 @@ let OURS: Row[] = [
       let free = ceilings(space.tier)
       let apps = await ctx.dir.apps(space)
       if (free && apps.length >= free.apps) {
-        throw new Error(atCeiling(space, 'apps'))
+        throw new Error(atCeiling(space, 'apps', ctx.env))
       }
       // The address the copy takes: the SOURCE app's own slug, not the
       // published name. An app is written at its own address — a page that
@@ -3726,7 +3761,7 @@ let OURS: Row[] = [
       return {
         text:
           `installed ${name} v${version} as ${space.slug}/${s}: ${
-            url(space, app)
+            url(space, app, ctx.env)
           } — ${wrote.length} ${
             wrote.length == 1 ? 'file' : 'files'
           }, its own ` +
@@ -3855,7 +3890,9 @@ let OURS: Row[] = [
       if (args.app != null && !app) {
         throw new Error(`no app ${args.app} in ${space.slug}`)
       }
-      let link = app ? url(space, app) : `https://${space.slug}.yaks.app/`
+      let link = app
+        ? url(space, app, ctx.env)
+        : `https://${spaceHost(ctx.env, space.slug)}/`
       // The platform's row for that address, minted if it has never seen
       // one: the invitation is what makes the person, and their sign-in
       // later finds this same row by the same address (signin.ts personOf).
@@ -4083,8 +4120,12 @@ let OURS: Row[] = [
         throw new Error(
           `That is ${held} already this hour, and every one of them is kept ` +
             'and will be read — so this is a pause, not a no. Save the rest ' +
-            `for later, or write to ${REPLY_TO} directly if it cannot wait.` +
-            (ctx.person ? '' : ` Signing in at ${SIGN_IN} raises it.`),
+            `for later, or write to ${
+              replyTo(ctx.env)
+            } directly if it cannot wait.` +
+            (ctx.person
+              ? ''
+              : ` Signing in at ${hostUrl(ctx.env, '/login')} raises it.`),
         )
       }
       let at = new Date().toISOString()
@@ -4126,12 +4167,12 @@ let OURS: Row[] = [
         ? `${space.slug}/${app.slug}${app.version ? ` v${app.version}` : ''}`
         : space?.slug ?? ''
       let sent = await mail(ctx.env)({
-        to: [REPLY_TO, GRAPH],
+        to: [replyTo(ctx.env), GRAPH],
         subject: `feedback: ${opening}`,
         body: `${said.trim()}\n\n—\n` +
           `${from}\n` +
           (where ? `${where}\n` : '') +
-          (app && space ? `${url(space, app)}\n` : '') +
+          (app && space ? `${url(space, app, ctx.env)}\n` : '') +
           `yaks.app ${VERSION} · ${at}\n${eid}`,
       }).then(() => true).catch(() => false)
       // Never loud: a mail seam that refused loses the letter, never the
@@ -4192,10 +4233,15 @@ let OURS: Row[] = [
         ? args.page.trim().toLowerCase().replace(/\.md$/, '')
         : ''
       let page = PAGES.find((p) => p.slug == asked)
-      let got = await asset(ctx.env, page ? uriOf(page.slug) : WHOLE)
+      let got = await asset(
+        ctx.env,
+        page ? uriOf(page.slug, ctx.env) : whole(ctx.env),
+      )
       if (!got.ok) {
         await got.body?.cancel()
-        throw new Error(`the guide is not being served just now — ${WHOLE}`)
+        throw new Error(
+          `the guide is not being served just now — ${whole(ctx.env)}`,
+        )
       }
       let markdown = await got.text()
       // A page nobody has is a typo, not a refusal: the map is what they
@@ -4229,7 +4275,8 @@ let OURS: Row[] = [
     // Before signing in the same words are said with neither (preauth.ts): the
     // public list is one tool, and it is this one.
     run: async (ctx) => ({
-      text: t.text + await whoami(ctx) + said(ctx) + rostered(ctx),
+      text: publics(ctx.env).find((one) => one.name == t.name)!.text +
+        await whoami(ctx) + said(ctx) + rostered(ctx),
     }),
   })),
   // And the gallery (gallery.ts, T-34478), which is the same list to a
@@ -4255,7 +4302,9 @@ let OURS: Row[] = [
         },
       },
     },
-    run: async (ctx, args) => ({ text: await searched(ctx.dir, args) }),
+    run: async (ctx, args) => ({
+      text: await searched(ctx.dir, args, ctx.env),
+    }),
   },
 ]
 

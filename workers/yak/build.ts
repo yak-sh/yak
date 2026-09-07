@@ -501,7 +501,7 @@ export let posting = async (
   let form = await req.formData()
   let text = String(form.get('say') ?? '').trim()
   if (!text) {
-    return building({ space: space.slug, why: 'Say what you want built.' })
+    return building({ space: space.slug, why: 'Say what you want built.' }, env)
   }
   let asked = await builderOf(env, space.eid).fetch(
     new Request('http://builder/say', {
@@ -517,8 +517,8 @@ export let posting = async (
   )
   if (!asked.ok) {
     let said = await asked.json() as { message?: string }
-    return building({ space: space.slug, why: said.message ?? NOBODY })
+    return building({ space: space.slug, why: said.message ?? NOBODY }, env)
   }
   let { frames } = await asked.json() as { frames: Frame[] }
-  return building({ space: space.slug, frames })
+  return building({ space: space.slug, frames }, env)
 }

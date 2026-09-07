@@ -50,7 +50,9 @@ import type { Env } from './env.ts'
 import { keyed, prefixOf } from './files.ts'
 import { type Letter, REPLY_TO } from './mail.ts'
 import { esc } from './pages.ts'
-import { GALLERY, SITE_URL } from './seo.ts'
+import { GALLERY } from './seo.ts'
+import { type Host, url as siteUrl } from './host.ts'
+import { replyTo } from './post.ts'
 
 // Where the gallery lives, and where a letter's links land. What the page SAYS
 // about itself — its title and its line — is seo.ts's, beside the same two
@@ -58,8 +60,6 @@ import { GALLERY, SITE_URL } from './seo.ts'
 // one of the site's pages, and the list it belongs to is kept in one place.
 export let PATH = GALLERY.path
 export let REVIEW = `${PATH}/review`
-
-let SITE = SITE_URL
 
 // The platform's own mailbox — the address every letter we send already
 // answers to (mail.ts REPLY_TO), so the approval arrives where the platform's
@@ -96,8 +96,8 @@ export let ticketed = async (
 }
 
 // The door the letter points at, with the ticket in hand.
-export let door = (token: string) =>
-  `${SITE}${REVIEW}?t=${encodeURIComponent(token)}`
+export let door = (token: string, env: Host = {}) =>
+  `${siteUrl(env, REVIEW)}?t=${encodeURIComponent(token)}`
 
 // ---- what is on the row ------------------------------------------------
 
@@ -108,9 +108,9 @@ export let standing = (app: App): Standing =>
 
 // The one sentence every door says about where an app stands, so the tool
 // answer, the space page and the review door never tell three stories.
-export let saying = (at: Standing) =>
+export let saying = (at: Standing, env: Host = {}) =>
   at == 'listed'
-    ? `listed in the gallery — ${SITE}${PATH}`
+    ? `listed in the gallery — ${siteUrl(env, PATH)}`
     : at == 'asked'
     ? 'awaiting gallery review'
     : 'not in the gallery'
@@ -140,12 +140,12 @@ export type Shown = {
   shot?: string
 }
 
-let shownOf = (space: Space, app: App): Shown => ({
+let shownOf = (space: Space, app: App, env: Host): Shown => ({
   eid: app.eid,
   name: app.published!.name,
   title: app.title,
   about: app.published!.about,
-  at: url(space, app),
+  at: url(space, app, env),
   since: app.gallery?.listedAt ?? '',
   space,
   app,
@@ -159,12 +159,12 @@ let shownOf = (space: Space, app: App): Shown => ({
 //
 // A trashed app and an app in a trashed space are screened here rather than
 // unlisted on the row — see the note at the top of this file.
-export let listed = async (dir: Directory): Promise<Shown[]> =>
+export let listed = async (dir: Directory, env: Host = {}): Promise<Shown[]> =>
   (await dir.offers())
     .filter(({ space, app }) =>
       app.gallery?.listedAt && !app.trashed && !space.trashed
     )
-    .map(({ space, app }) => shownOf(space, app))
+    .map(({ space, app }) => shownOf(space, app, env))
     .sort((a, b) => b.since.localeCompare(a.since))
 
 // The line an agent runs to give somebody their own copy. It is the whole
@@ -206,7 +206,7 @@ export let found = (all: Shown[], asked: string, limit = 10): Shown[] => {
 
 // What `gallery_search` answers: the lines an agent reads, each carrying the
 // install line, because the next thing to do with a result is take a copy.
-export let said = (hits: Shown[], asked: string) =>
+export let said = (hits: Shown[], asked: string, env: Host = {}) =>
   hits.length
     ? hits.map((a) =>
       `- ${a.title}${a.about ? ` — ${a.about}` : ''}\n  ${a.at}\n  ${
@@ -215,7 +215,9 @@ export let said = (hits: Shown[], asked: string) =>
     ).join('\n')
     : `nothing in the gallery answers ${
       asked ? `"${asked}"` : 'that'
-    }. The whole gallery is ${SITE}${PATH}, and app_published lists every app ` +
+    }. The whole gallery is ${
+      siteUrl(env, PATH)
+    }, and app_published lists every app ` +
       'anybody has offered, listed here or not'
 
 // The whole of `gallery_search`, in one function, because it is answered at
@@ -226,12 +228,16 @@ export let said = (hits: Shown[], asked: string) =>
 // the two answers from drifting.
 export let TOP = 25
 
-export let searched = async (dir: Directory, args: Record<string, unknown>) => {
+export let searched = async (
+  dir: Directory,
+  args: Record<string, unknown>,
+  env: Host = {},
+) => {
   let asked = typeof args.words == 'string' ? args.words : ''
   let want = typeof args.limit == 'number' && args.limit > 0
     ? Math.min(Math.floor(args.limit), TOP)
     : 10
-  return said(found(await listed(dir), asked, want), asked)
+  return said(found(await listed(dir, env), asked, want), asked, env)
 }
 
 // ---- the picture -------------------------------------------------------
@@ -283,7 +289,13 @@ export let pictures = async (env: Env, all: Shown[]) =>
 // (public/*.html, site_test.ts): the title and the line, the canonical, the
 // Open Graph pair a link unfurls with, and the site's own stylesheet. A page
 // the worker draws is still one of the site's pages.
-let head = (title: string, description: string, at: string, index = true) =>
+let head = (
+  env: Host,
+  title: string,
+  description: string,
+  at: string,
+  index = true,
+) =>
   `<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)}</title>
@@ -299,11 +311,11 @@ ${
 <meta property="og:url" content="${esc(at)}">
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(description)}">
-<meta property="og:image" content="${SITE}/og.png">
+<meta property="og:image" content="${siteUrl(env, '/og.png')}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${esc(title)}">
 <meta name="twitter:description" content="${esc(description)}">
-<meta name="twitter:image" content="${SITE}/og.png">
+<meta name="twitter:image" content="${siteUrl(env, '/og.png')}">
 <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -370,36 +382,37 @@ ${a.about ? `<span class="Note Note-small">${esc(a.about)}</span>` : ''}
 
 // The gallery itself. The JSON-LD is the same list said for a machine — an
 // ItemList of SoftwareApplications, which is what each of these is.
-export let page = (all: Shown[]) =>
-  html(`${head(GALLERY.title, GALLERY.description, `${SITE}${PATH}`)}
+export let page = (all: Shown[], env: Host = {}) =>
+  html(
+    `${head(env, GALLERY.title, GALLERY.description, `${siteUrl(env, PATH)}`)}
 <script type="application/ld+json">
 ${
-    JSON.stringify({
-      '@context': 'https://schema.org',
-      '@type': 'CollectionPage',
-      '@id': `${SITE}${PATH}`,
-      url: `${SITE}${PATH}`,
-      name: GALLERY.title,
-      description: GALLERY.description,
-      isPartOf: { '@id': `${SITE}/#website` },
-      mainEntity: {
-        '@type': 'ItemList',
-        numberOfItems: all.length,
-        itemListElement: all.map((a, i) => ({
-          '@type': 'ListItem',
-          position: i + 1,
-          item: {
-            '@type': 'SoftwareApplication',
-            name: a.title,
-            description: a.about,
-            url: a.at,
-            applicationCategory: 'WebApplication',
-            operatingSystem: 'Web browser',
-          },
-        })),
-      },
-    })
-  }
+      JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'CollectionPage',
+        '@id': `${siteUrl(env, PATH)}`,
+        url: `${siteUrl(env, PATH)}`,
+        name: GALLERY.title,
+        description: GALLERY.description,
+        isPartOf: { '@id': `${siteUrl(env, '/#website')}` },
+        mainEntity: {
+          '@type': 'ItemList',
+          numberOfItems: all.length,
+          itemListElement: all.map((a, i) => ({
+            '@type': 'ListItem',
+            position: i + 1,
+            item: {
+              '@type': 'SoftwareApplication',
+              name: a.title,
+              description: a.about,
+              url: a.at,
+              applicationCategory: 'WebApplication',
+              operatingSystem: 'Web browser',
+            },
+          })),
+        },
+      })
+    }
 </script>
 </head>
 <body>
@@ -411,10 +424,10 @@ ${top}
 <p class="Note">Explore apps made with yaks.app. Try one out or make it your own.</p>
 </div>
 ${
-    all.length
-      ? `<ul class="Make_List">${all.map(card).join('')}</ul>`
-      : `<p class="Note">No apps yet. <a href="/login">Make the first one.</a></p>`
-  }
+      all.length
+        ? `<ul class="Make_List">${all.map(card).join('')}</ul>`
+        : `<p class="Note">No apps yet. <a href="/login">Make the first one.</a></p>`
+    }
 </section>
 <section class="Join Card" aria-labelledby="yours">
 <h2 id="yours" class="Title">Make one of your own</h2>
@@ -424,7 +437,8 @@ ${
 </main>
 ${foot}
 </body>
-</html>`)
+</html>`,
+  )
 
 // ---- the letter, and the door it points at -----------------------------
 
@@ -439,8 +453,8 @@ export let letter = (at: {
   owner: string
   yes: string
   no: string
-}): Letter => ({
-  to: DESK,
+}, env: Host = {}): Letter => ({
+  to: replyTo(env),
   subject: `Gallery: ${at.title}?`,
   body: `${at.owner} asked to show an app on the yaks.app gallery.
 
@@ -475,13 +489,14 @@ let review = (at: {
   token: string
   why?: string
   status?: number
-}) =>
+}, env: Host) =>
   html(
     `${
       head(
+        env,
         at.list ? `List ${at.title}?` : `Decline ${at.title}?`,
         'Review a gallery submission.',
-        `${SITE}${REVIEW}`,
+        `${siteUrl(env, REVIEW)}`,
         false,
       )
     }
@@ -512,9 +527,9 @@ ${foot}
     at.status ?? 200,
   )
 
-let done = (title: string, lead: string, status = 200) =>
+let done = (env: Host, title: string, lead: string, status = 200) =>
   html(
-    `${head(title, lead, `${SITE}${REVIEW}`, false)}
+    `${head(env, title, lead, `${siteUrl(env, REVIEW)}`, false)}
 </head>
 <body>
 ${top}
@@ -581,7 +596,7 @@ export let answer = async (
 ): Promise<Response | null> => {
   if (path == PATH) {
     if (req.method != 'GET') return null
-    return page(await pictures(env, await listed(dir)))
+    return page(await pictures(env, await listed(dir, env)), env)
   }
   if (path != REVIEW) return null
   let asked = new URL(req.url)
@@ -596,6 +611,7 @@ export let answer = async (
     : null
   if (!ok) {
     return done(
+      env,
       'That link has expired.',
       'A gallery link lasts a week. Nothing has changed, and the app can be ' +
         'put forward again.',
@@ -609,6 +625,7 @@ export let answer = async (
   let at = (await dir.offers()).find(({ app }) => app.eid == ok.app)
   if (!at || at.app.trashed || at.space.trashed) {
     return done(
+      env,
       'That app is no longer on offer.',
       'It has been unpublished, deleted, or is in the trash, so there is ' +
         'nothing to list. Nothing was changed.',
@@ -619,21 +636,23 @@ export let answer = async (
   let said = {
     title: at.app.title,
     about: at.app.published!.about,
-    url: url(at.space, at.app),
+    url: url(at.space, at.app, env),
     owner,
     list: ok.list,
     token: held,
   }
-  if (req.method != 'POST') return review(said)
+  if (req.method != 'POST') return review(said, env)
   if (ok.list) {
     await list(env, at.app)
     return done(
+      env,
       `${at.app.title} is in the gallery.`,
-      `You can find it at ${SITE}${PATH}.`,
+      `You can find it at ${siteUrl(env, PATH)}.`,
     )
   }
   await drop(env, at.app)
   return done(
+    env,
     `${at.app.title} was not listed.`,
     'The app stays published. Its owner can submit it again.',
   )
@@ -669,7 +688,9 @@ export let showcase = (file: string, all: Shown[]) => {
 // examples in it, never a home page that does not serve.
 export let made = async (env: Env, dir: Directory, file: Response) => {
   let html = await file.text()
-  let shown = await listed(dir).then((all) => pictures(env, all.slice(0, 3)))
+  let shown = await listed(dir, env).then((all) =>
+    pictures(env, all.slice(0, 3))
+  )
     .catch(() => [] as Shown[])
   // The headers the assets door set, minus the two that describe the BYTES:
   // the body just changed length, and it is no longer the file that etag names.

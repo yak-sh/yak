@@ -81,6 +81,7 @@ import { customOf, reading, stageOf, type Step, steps } from './domains.ts'
 import * as drop from './drop.ts'
 import { bound, type Env, type Inbound } from './env.ts'
 import * as gallery from './gallery.ts'
+import { apex, hosted } from './host.ts'
 import * as identity from './identity.ts'
 import { sprite } from './icons.ts'
 import { arrived, Refused } from './inbox.ts'
@@ -178,7 +179,10 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // `/mcp`. The checkout and portal doors sit under the same prefix because
   // they are the same part (billing.ts) and are reachable only from a
   // signed-in page — never from a tool answer (C-33033).
-  if (path.startsWith('/api/stripe/') || path.startsWith('/api/billing/')) {
+  if (
+    path == '/stripe/webhook' || path.startsWith('/api/stripe/') ||
+    path.startsWith('/api/billing/')
+  ) {
     return bound(env.BILLING, billing.fetch, env).fetch(req)
   }
   // The OTHER Stripe door, and it is its own endpoint on purpose (sell.ts,
@@ -201,7 +205,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // separate single verification string, served from a secret so the repo
   // carries no token, and 404 when unset.
   if (path == '/.well-known/openai-apps-challenge') {
-    return env.OPENAI_APPS_CHALLENGE == null ? lost() : new Response(
+    return env.OPENAI_APPS_CHALLENGE == null ? lost(env) : new Response(
       env.OPENAI_APPS_CHALLENGE,
       { headers: { 'content-type': 'text/plain; charset=utf-8' } },
     )
@@ -223,7 +227,22 @@ let serve = async (req: Request, env: Env, r: Route) => {
   let shown = await gallery.answer(req, env, path, dir)
   if (shown) return shown
   let page = await env.ASSETS.fetch(req)
-  if (page.status == 404) return lost()
+  if (page.status == 404) return lost(env)
+  let type = page.headers.get('content-type')?.split(';')[0].trim() ?? ''
+  if (
+    apex(env) != apex() && page.status == 200 && page.body &&
+    ['text/html', 'text/plain', 'text/markdown', 'text/x-markdown'].includes(
+      type,
+    )
+  ) {
+    let headers = new Headers(page.headers)
+    headers.delete('content-length')
+    headers.delete('etag')
+    page = new Response(hosted(await page.text(), env), {
+      status: page.status,
+      headers,
+    })
+  }
   // Setup is also served on space hosts, where the download attribute alone
   // cannot download this cross-origin icon.
   if (path == '/yaks-app.png') {
@@ -269,7 +288,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
 // domain being set up; that is the one case this catches rather than lets
 // through, and it is a config gap, not a domain's own state.
 let settling = async (env: Env, host: string): Promise<Response | null> => {
-  if (!foreign(host)) return null
+  if (!foreign(host, env)) return null
   let served = await directory(bound(env.DIRECTORY, dirPart.fetch, env))
     .serves(host)
   if (served?.host.stage == 'active') return null
@@ -290,6 +309,7 @@ let settling = async (env: Env, host: string): Promise<Response | null> => {
     host,
     how ? reading(how) : 'Still being connected — check back shortly.',
     stage,
+    env,
   )
 }
 
@@ -317,12 +337,12 @@ let settling = async (env: Env, host: string): Promise<Response | null> => {
 // domain on a SPACE sends no mount: nothing moved, so its apps are mounted
 // where their addresses say they are.
 let aimed = async (req: Request, env: Env, host: string) => {
-  if (!foreign(host)) return null
+  if (!foreign(host, env)) return null
   let at = await directory(bound(env.DIRECTORY, dirPart.fetch, env))
     .serves(host)
   if (!at) return null
   let url = new URL(req.url)
-  let to = aimedAt(at.space.slug, at.app?.slug ?? null, url.pathname)
+  let to = aimedAt(at.space.slug, at.app?.slug ?? null, url.pathname, env)
   url.protocol = 'https:'
   url.host = to.host
   url.pathname = to.pathname
@@ -432,7 +452,7 @@ let report = async (env: Env, what: string, e: unknown) => {
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     let host = hostOf(req)
-    let r = route(host, new URL(req.url).pathname)
+    let r = route(host, new URL(req.url).pathname, env)
     try {
       req = unmounted(req)
       // What the platform owns rather than an app (route.ts `platform`),
@@ -447,11 +467,12 @@ export default {
       // there is ours to publish. On a space's hostname the platform owns the
       // address and has nothing to say at it — an app must not get it.
       let asked = new URL(req.url).pathname
-      if (platform(host, asked)) {
+      if (platform(host, asked, env)) {
         return sealed(
           r.space != null
-            ? lost()
+            ? lost(env)
             : await serve(req, env, { space: null, app: null, path: asked }),
+          env,
         )
       }
       // Custom-domain sign-in lands here (identity.ts `handoff`): the one
@@ -460,15 +481,18 @@ export default {
       // host-only session cookie rather than the app store answering a sign-in
       // path. It is a foreign host by construction — a space's `.yaks.app`
       // hostname already carries the platform cookie and never needs it.
-      if (foreign(host) && asked == identity.HANDOFF) {
-        return sealed(await bound(env.IDENTITY, identity.fetch, env).fetch(req))
+      if (foreign(host, env) && asked == identity.HANDOFF) {
+        return sealed(
+          await bound(env.IDENTITY, identity.fetch, env).fetch(req),
+          env,
+        )
       }
       // A domain mid-provisioning, or one Cloudflare has stopped serving
       // (`settling` above): answered before space isolation and `aimed`,
       // because there is nothing yet to isolate or route to — every path on
       // a host like this gets the same branded page, not just `/`.
       let hold = await settling(env, host)
-      if (hold) return sealed(hold)
+      if (hold) return sealed(hold, env)
       // Space isolation, and the one place it holds (route.ts `sameOrigin`).
       // HERE, before `aimed` moves the address, because what must match is
       // what the BROWSER addressed: a page at `herbusiness.com` asking its
@@ -490,17 +514,17 @@ export default {
       let at = r.space == null ? await aimed(req, env, host) : null
       if (at) {
         req = at
-        r = route(hostOf(at), new URL(at.url).pathname)
+        r = route(hostOf(at), new URL(at.url).pathname, env)
       }
       let answer = await serve(req, env, r)
-      return sealed(anyone ? cors(answer) : answer)
+      return sealed(anyone ? cors(answer) : answer, env)
     } catch (e) {
       // A refusal is not a break (unseen.ts `refusal`, T-32655). A part that
       // relays a door's deliberate no by throwing what it was answered is
       // carrying an ANSWER out, not a failure, and the same rule holds here
       // as at the report door: it files nothing.
       let said = e instanceof Error ? e.message : String(e)
-      if (refusal(said)) return oops()
+      if (refusal(said)) return oops(env)
       // The host the router ROUTED by, not the one the socket arrived on: it
       // is what names the space and the app this was on its way to, and after
       // `aimed` it is the address the platform derived rather than the
@@ -510,7 +534,7 @@ export default {
       await report(env, `${req.method} ${where}`, e).catch((why) =>
         console.error('yak: could not report', why, 'after', e)
       )
-      return oops()
+      return oops(env)
     }
   },
 

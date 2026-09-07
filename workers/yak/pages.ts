@@ -14,23 +14,18 @@ import { connectionList, connectionLive } from './connection_ui.ts'
 import { icon, type IconName } from './icons.ts'
 import { esc } from './html.ts'
 export { esc } from './html.ts'
-import {
-  managePath,
-  type ManageView,
-  MCP,
-  MCP_ASK,
-  OAUTH,
-  PLATFORM,
-} from './route.ts'
+import { managePath, type ManageView, OAUTH } from './route.ts'
 import { CONNECTOR } from './seo.ts'
+import { apex, type Host, spaceHost, url } from './host.ts'
 
-let home = '<a class="Away" href="https://yaks.app/">yaks.app</a>'
+let home = (env: Host) => `<a class="Away" href="${url(env, '/')}">yaks.app</a>`
 
 let shell = (
+  env: Host,
   title: string,
   lead: string | null,
   status: number,
-  inner = home,
+  inner = home(env),
   // Extra response headers, beside content-type — `Retry-After` on the
   // provisioning page below, nothing else needs one today.
   headers: Record<string, string> = {},
@@ -44,7 +39,7 @@ let shell = (
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>${title} · yaks.app</title>
-<link rel="stylesheet" href="https://yaks.app/controls.css">
+<link rel="stylesheet" href="${url(env, '/controls.css')}">
 <style>
 @layer base {
 * { box-sizing: border-box }
@@ -135,15 +130,17 @@ ${deskCss}
     },
   )
 
-export let lost = () =>
+export let lost = (env: Host = {}) =>
   shell(
+    env,
     'Page not found',
     'Check the address, or return to yaks.app.',
     404,
   )
 
-export let nothingHere = () =>
+export let nothingHere = (env: Host = {}) =>
   shell(
+    env,
     'Nothing here yet.',
     "There are no apps at this address yet. If it's yours, ask your " +
       'assistant to build one.',
@@ -156,8 +153,9 @@ export let nothingHere = () =>
 // address: nothing serves here, and it is theirs to take back from the page
 // their apps are listed on. A 404 with words in it, because the address
 // really is answering nothing.
-export let binned = (at: { title: string; days: number }) =>
+export let binned = (at: { title: string; days: number }, env: Host = {}) =>
   shell(
+    env,
     `${esc(at.title)} is in the trash.`,
     `Nothing answers at this address until it is restored. It is kept for ${at.days} more ${
       at.days == 1 ? 'day' : 'days'
@@ -179,20 +177,25 @@ export let spaceBinned = (at: {
   slug: string
   title: string
   days: number
-}) =>
+}, env: Host = {}) =>
   shell(
+    env,
     `${esc(at.title)} is in the trash.`,
-    `Nothing answers at ${esc(at.slug)}.yaks.app until you restore it — no ` +
+    `Nothing answers at ${
+      esc(spaceHost(env, at.slug))
+    } until you restore it — no ` +
       `app here, and no page. Everything the space had is kept for ${at.days} more ${
         at.days == 1 ? 'day' : 'days'
       }, then erased for good.`,
     404,
     `<form method="post" action="/">
 <input type="hidden" name="restore-space" value="${esc(at.slug)}">
-<button class="Button" type="submit">Restore ${esc(at.slug)}.yaks.app</button>
+<button class="Button" type="submit">Restore ${
+      esc(spaceHost(env, at.slug))
+    }</button>
 </form>
 <p class="Note">Its apps, their files and everything they saved come back
-exactly as they were.</p>${home}`,
+exactly as they were.</p>${home(env)}`,
   )
 
 // Deploying by DROPPING a file (T-34230): the one door on this platform that
@@ -367,9 +370,10 @@ export let building = (at: {
   space: string
   frames?: Frame[]
   why?: string
-}) =>
+}, env: Host = {}) =>
   shell(
-    at.why ? 'That did not go in' : `${esc(at.space)}.yaks.app`,
+    env,
+    at.why ? 'That did not go in' : `${esc(spaceHost(env, at.space))}`,
     at.why ? esc(at.why) : 'Here is what happened. Say the next thing below.',
     at.why ? 400 : 200,
     `<section class="Card Chat">
@@ -392,8 +396,9 @@ export let dropped = (at: {
   files?: string[]
   why?: string
   status?: number
-}) =>
+}, env: Host = {}) =>
   shell(
+    env,
     at.why ? 'That did not go in' : `${esc(at.slug ?? at.space)} is live`,
     at.why
       ? esc(at.why)
@@ -669,7 +674,7 @@ let navIcons = {
   trash: 'trash-2',
 } satisfies Record<string, IconName>
 
-let navigation = (at: SpacePage, view: ManageView) => {
+let navigation = (at: SpacePage, view: ManageView, env: Host) => {
   let link = (key: keyof typeof navIcons, label: string) =>
     `<a href="${managePath(key)}"${
       view == key || (view == 'new' && key == 'apps')
@@ -683,7 +688,9 @@ ${icon(navIcons[key])}${label}${
     }</a>`
   return `<a class="Desk_Skip" href="#content">Skip to content</a>
 <aside class="Desk_Side">
-<a class="Desk_Brand" href="https://yaks.app/"><img src="https://yaks.app/yaks-app.png" width="36" height="36" alt="">yaks.app</a>
+<a class="Desk_Brand" href="${url(env, '/')}"><img src="${
+    url(env, '/yaks-app.png')
+  }" width="36" height="36" alt="">yaks.app</a>
 <nav class="SideNav" aria-label="Manage your apps">
 ${link('apps', 'Apps')}${link('connect', 'Chatbots')}<hr>
 ${link('visits', 'Visits')}${at.sell ? link('selling', 'Selling') : ''}
@@ -691,7 +698,9 @@ ${link('settings', 'Settings')}${link('trash', 'Trash')}
 </nav>
 <div class="Desk_Foot"><a href="/" target="_blank" rel="noopener">View homepage ${
     icon('external-link')
-  }</a><a href="https://yaks.app/help" target="_blank" rel="noopener">Help</a></div>
+  }</a><a href="${
+    url(env, '/help')
+  }" target="_blank" rel="noopener">Help</a></div>
 </aside>`
 }
 
@@ -737,7 +746,7 @@ let library = (at: SpacePage) =>
 <a href="${managePath('new')}">More ways to make an app</a></div></section>`
   }`
 
-let preferences = (at: SpacePage) => {
+let preferences = (at: SpacePage, env: Host) => {
   let home = at.apps.find((a) => a.home)
   return `<form class="Card Card-sectioned" method="post" action="${
     managePath('settings')
@@ -751,23 +760,25 @@ let preferences = (at: SpacePage) => {
 <section class="Card"><h2>App address</h2>${
     at.fixed
       ? `<p>${
-        esc(at.space)
-      }.yaks.app</p><p class="Note">The address is fixed once you've created an app.</p>`
+        esc(spaceHost(env, at.space))
+      }</p><p class="Note">The address is fixed once you've created an app.</p>`
       : `<form method="post" action="${managePath('settings')}">
 <label for="your-address">Your address</label>
 <span class="At"><input class="Field" id="your-address" name="space" maxlength="63" autocomplete="off" spellcheck="false" value="${
         esc(at.space)
-      }"><span>.yaks.app</span></span>
+      }"><span>.${apex(env)}</span></span>
 <p class="Note">You can change this until you create your first app.</p><button class="Button" type="submit">Save address</button></form>`
   }</section>
 <section class="Card"><h2>Homepage</h2><p>${
     home
       ? `${esc(home.title || home.slug)} opens at your address.`
       : 'Your address opens your app library.'
-  }</p><p class="Note">Ask your assistant to make any app your homepage. Manage your apps anytime at <a href="https://yaks.app/manage">yaks.app/manage</a>.</p></section>`
+  }</p><p class="Note">Ask your assistant to make any app your homepage. Manage your apps anytime at <a href="${
+    url(env, '/manage')
+  }">${apex(env)}/manage</a>.</p></section>`
 }
 
-let selling = (at: SpacePage) => {
+let selling = (at: SpacePage, env: Host) => {
   if (!at.sell) return '<p>Selling is not available here yet.</p>'
   let ready = at.sell == 'ready'
   let connected = at.sell != 'none'
@@ -793,8 +804,12 @@ let selling = (at: SpacePage) => {
     at.plus
       ? `<p class="Note">yaks.app takes ${
         esc(at.fee ?? '')
-      } of each sale. <a href="https://yaks.app/pricing" target="_blank" rel="noopener">Pricing</a></p>`
-      : '<p><a class="Button" href="https://yaks.app/pricing">Compare plans</a></p>'
+      } of each sale. <a href="${
+        url(env, '/pricing')
+      }" target="_blank" rel="noopener">Pricing</a></p>`
+      : `<p><a class="Button" href="${
+        url(env, '/pricing')
+      }">Compare plans</a></p>`
   }${
     at.plus || connected
       ? `<form method="post" action="${
@@ -826,7 +841,7 @@ let trash = (at: SpacePage) =>
     }</section>`
     : '<section class="Desk_Empty"><h2>Trash is empty</h2></section>'
 
-let desk = (at: SpacePage) => {
+let desk = (at: SpacePage, env: Host) => {
   let view = at.view ?? 'apps'
   let titles = {
     apps: 'Your apps',
@@ -840,7 +855,7 @@ let desk = (at: SpacePage) => {
   let body = ''
   if (view == 'apps') body = library(at)
   if (view == 'connect') {
-    body = `${connectionSetup(at.connections ?? [])}${copying}${tabbing}`
+    body = `${connectionSetup(at.connections ?? [], env)}${copying}${tabbing}`
   }
   if (view == 'new') {
     body = `${connectionList(at.connections ?? [])}${connectCard(at)}
@@ -854,19 +869,20 @@ let desk = (at: SpacePage) => {
       ? visited(at.views ?? null, at.viewsOff ?? '')
       : '<section class="Desk_Empty"><h2>No visits yet</h2><p>Your app visits will appear here once you have an app.</p></section>'
   }
-  if (view == 'selling') body = selling(at)
-  if (view == 'settings') body = preferences(at)
+  if (view == 'selling') body = selling(at, env)
+  if (view == 'settings') body = preferences(at, env)
   if (view == 'trash') body = trash(at)
   return shell(
+    env,
     `${titles[view]} · ${esc(at.space)}`,
     null,
     at.no ? 400 : 200,
     `${
-      navigation(at, view)
+      navigation(at, view, env)
     }<div class="Desk_Body"><header class="Desk_Head"><div>
 <a class="Desk_Address" href="/" target="_blank" rel="noopener">${
-      esc(at.space)
-    }.yaks.app ↗</a><h1>${titles[view]}</h1>${
+      esc(spaceHost(env, at.space))
+    } ↗</a><h1>${titles[view]}</h1>${
       view == 'visits'
         ? `<p class="Desk_Period">Last ${at.viewDays ?? 30} days</p>`
         : ''
@@ -890,8 +906,8 @@ let desk = (at: SpacePage) => {
   )
 }
 
-export let spaceIndex = (at: SpacePage) => {
-  if (at.role == 'owner') return desk(at)
+export let spaceIndex = (at: SpacePage, env: Host = {}) => {
+  if (at.role == 'owner') return desk(at, env)
   let mine = at.apps.length
     ? `<nav class="Pills" aria-label="Apps here">${
       at.apps.map((a) =>
@@ -907,10 +923,13 @@ export let spaceIndex = (at: SpacePage) => {
     } private. Ask whoever runs this space to let you in.</p>`
     : ''
   let pitch = at.person
-    ? home
+    ? home(env)
     : `<p><a class="Button" href="${esc(at.signIn)}">Sign in</a></p>
-<div class="Card"><h2>What is yaks.app?</h2><p>Ask an assistant like Claude or ChatGPT for an app, and it builds one here — a page of your own you can send to anyone.</p><a href="https://yaks.app/">Make one of your own</a></div>`
+<div class="Card"><h2>What is yaks.app?</h2><p>Ask an assistant like Claude or ChatGPT for an app, and it builds one here — a page of your own you can send to anyone.</p><a href="${
+      url(env, '/')
+    }">Make one of your own</a></div>`
   return shell(
+    env,
     esc(at.title || at.space),
     at.apps.length
       ? 'Here is what you can open.'
@@ -920,8 +939,9 @@ export let spaceIndex = (at: SpacePage) => {
   )
 }
 
-export let oops = () =>
+export let oops = (env: Host = {}) =>
   shell(
+    env,
     'Something went wrong.',
     'Try again shortly. If the problem continues, ask your assistant to check the app.',
     500,
@@ -940,8 +960,10 @@ export let provisioning = (
   host: string,
   said: string,
   stage: 'pending' | 'error',
+  env: Host = {},
 ) =>
   shell(
+    env,
     stage == 'error' ? 'This domain needs a fix' : 'Setting up this domain',
     stage == 'error'
       ? `${esc(host)} needs attention before it can serve — here is what ` +
@@ -951,13 +973,14 @@ export let provisioning = (
     503,
     `<section class="Card"><h2>${esc(host)}</h2><pre>${
       esc(said)
-    }</pre></section>${home}`,
+    }</pre></section>${home(env)}`,
     { 'retry-after': '30' },
   )
 
 // A door a later leaf fills (the connector): plain, not a mystery.
-export let soon = (what: string) =>
+export let soon = (what: string, env: Host = {}) =>
   shell(
+    env,
     `${what} is not available yet.`,
     'This feature is still being built.',
     404,
@@ -988,8 +1011,10 @@ export let askEmail = (
   who?: string,
   why?: string,
   status = 200,
+  env: Host = {},
 ) =>
   shell(
+    env,
     'Sign in or sign up',
     why ?? 'Build an app by asking Claude or ChatGPT.',
     status,
@@ -999,7 +1024,7 @@ export let askEmail = (
     }Enter your email to get a sign-in code.</p>
 <input class="Field" name="email" type="email" required autofocus autocomplete="email" placeholder="you@example.com" aria-label="Your email">
 <button class="Button" type="submit">Send me a code</button>
-</form>${home}`,
+</form>${home(env)}`,
   )
 
 // Ask for the code just mailed, and nothing else (T-34236). Signing up is two
@@ -1014,8 +1039,10 @@ export let askCode = (
   back: string | null,
   why?: string,
   status = 200,
+  env: Host = {},
 ) =>
   shell(
+    env,
     'Check your email',
     why ?? `We sent a six-digit code to ${esc(email)}. It lasts ten minutes.`,
     status,
@@ -1030,7 +1057,7 @@ export let askCode = (
 <input type="hidden" name="email" value="${esc(email)}">
 <input class="Field Code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus autocomplete="one-time-code" aria-label="Your six-digit code">
 <button class="Button" type="submit">Sign in</button>
-</form>${home}`,
+</form>${home(env)}`,
   )
 
 // Closing a space (T-33166, erase.ts): the page that stands in front of it.
@@ -1068,9 +1095,10 @@ export let askDelete = (at: {
   stop?: string
   why?: string
   status?: number
-}) =>
+}, env: Host = {}) =>
   shell(
-    `Delete ${esc(at.slug)}.yaks.app?`,
+    env,
+    `Delete ${esc(spaceHost(env, at.slug))}?`,
     esc(
       at.stop ?? at.why ??
         (at.forever
@@ -1099,21 +1127,22 @@ ${
         }
 <button class="Button" type="submit">${
           at.forever
-            ? `Delete ${esc(at.slug)}.yaks.app forever`
-            : `Put ${esc(at.slug)}.yaks.app in the trash`
+            ? `Delete ${esc(spaceHost(env, at.slug))} forever`
+            : `Put ${esc(spaceHost(env, at.slug))} in the trash`
         }</button>
 </form>
 <p class="Note">Changed your mind? Close this page — nothing has happened.</p>`
     }
-${home}`,
+${home(env)}`,
   )
 
 // And after: what went, and the one thing worth knowing next — the address
 // belongs to nobody now, theirs to take again or somebody else's to take
 // later. A space that went to the TRASH has the opposite next thing: the
 // address is still theirs, and so is everything under it.
-export let deleted = (said: string, forever = true) =>
+export let deleted = (said: string, forever = true, env: Host = {}) =>
   shell(
+    env,
     "That's done.",
     esc(said),
     200,
@@ -1123,19 +1152,20 @@ export let deleted = (said: string, forever = true) =>
 space whenever you want one.`
         : `Nothing was erased. The address is held for you, and restoring it
 puts everything back exactly as it was.`
-    }</p>${home}`,
+    }</p>${home(env)}`,
   )
 
 // An app asking, for a browser that is already signed in: one click is the
 // whole consent.
-export let askAllow = (email: string, q: string, who: string) =>
+export let askAllow = (email: string, q: string, who: string, env: Host = {}) =>
   shell(
+    env,
     'Allow access to your apps on yaks.app',
     `${esc(who)} would like to use your apps on yaks.app as ${esc(email)}.`,
     200,
     `<form method="post" action="/oauth/allow">${carried(q)}
 <button class="Button" type="submit">Allow</button>
-</form>${home}`,
+</form>${home(env)}`,
   )
 
 // The connector page, signed in (T-32972). Provider steps come first. The
@@ -1177,19 +1207,21 @@ export type Yours = {
 // The address card, for a person who is signed in. The form posts, so it
 // works with no script at all; the script below turns that into an inline
 // answer, which is what a person choosing a name expects.
-let mine = (y: Yours) =>
+let mine = (y: Yours, env: Host) =>
   y.fixed
     ? `<section class="Card"><h2>Where your apps live</h2>
-<p>Your apps live at <b>${esc(y.slug)}.yaks.app</b>.</p>
+<p>Your apps live at <b>${esc(spaceHost(env, y.slug))}</b>.</p>
 <p class="Note">This address cannot be changed after you build your first app.</p>
 </section>`
     : `<section class="Card"><h2>Where your apps live</h2>
-<p class="Now">Your apps live at <b>${esc(y.slug)}.yaks.app</b>. It's yours to
+<p class="Now">Your apps live at <b>${
+      esc(spaceHost(env, y.slug))
+    }</b>. It's yours to
 change while nothing is built there.</p>
 <form class="Addr" method="post" action="/connect">
 <span class="At"><input class="Field" name="space" maxlength="63" autocomplete="off" spellcheck="false" aria-label="The name your apps live at" value="${
       esc(y.said ?? y.slug)
-    }"><span>.yaks.app</span></span>
+    }"><span>.${apex(env)}</span></span>
 <button class="Button" type="submit">Save</button>
 <p class="Say${y.no ? ' Say-no' : ''}" role="status">${esc(y.say ?? '')}</p>
 </form>
@@ -1212,14 +1244,16 @@ let day = (iso: string) => {
   })
 }
 
-let plan = (y: Yours) => {
+let plan = (y: Yours, env: Host) => {
   let ends = y.plan.ends ? day(y.plan.ends) : ''
   let head = y.plan.plus
-    ? `<p>${y.slug}.yaks.app is on <b>Plus</b>.${
+    ? `<p>${esc(spaceHost(env, y.slug))} is on <b>Plus</b>.${
       ends ? ` It runs until ${esc(ends)} and then stops renewing.` : ''
     }</p>`
-    : `<p>${y.slug}.yaks.app is on the <b>free</b> plan — five apps, 50,000
-visits a month, 1 GB. <a href="https://yaks.app/pricing">Compare plans</a>.</p>`
+    : `<p>${
+      esc(spaceHost(env, y.slug))
+    } is on the <b>free</b> plan — five apps, 50,000
+visits a month, 1 GB. <a href="${url(env, '/pricing')}">Compare plans</a>.</p>`
   // Someone Stripe has met can always reach their own billing, whatever plan
   // they are on today: an invoice from a month they paid for is theirs to
   // read after they cancel.
@@ -1252,16 +1286,20 @@ let field = (label: string, value: string, what: string) =>
 
 let fields = (rows: string) => `<dl class="Fields">${rows}</dl>`
 
-let ICON = `https://${PLATFORM}/yaks-app.png`
-let chatgptFields = fields(
-  field('Name', CONNECTOR.title, 'the name') +
-    field('Description', CONNECTOR.description, 'the description') +
-    `<div><dt>Icon</dt><dd class="Connect_Icon">
-<a href="${ICON}" download="yaks-app.png" aria-label="Download the yaks.app icon">
-<img src="${ICON}" width="56" height="56" alt="The yaks.app icon"></a>
-<a href="${ICON}" download="yaks-app.png">Download icon</a>
+let chatgptFields = (env: Host) =>
+  fields(
+    field('Name', CONNECTOR.title, 'the name') +
+      field('Description', CONNECTOR.description, 'the description') +
+      `<div><dt>Icon</dt><dd class="Connect_Icon">
+<a href="${
+        url(env, '/yaks-app.png')
+      }" download="yaks-app.png" aria-label="Download the yaks.app icon">
+<img src="${
+        url(env, '/yaks-app.png')
+      }" width="56" height="56" alt="The yaks.app icon"></a>
+<a href="${url(env, '/yaks-app.png')}" download="yaks-app.png">Download icon</a>
 </dd></div>`,
-)
+  )
 
 let external = (href: string, label: string) =>
   `<a href="${esc(href)}" target="_blank" rel="noopener">${label}</a>`
@@ -1272,7 +1310,7 @@ let request = copyable(
 )
 
 // An address on this platform, spelled out for somebody to type or paste.
-let at = (path: string) => `<code>https://${PLATFORM}${path}</code>`
+let at = (path: string, env: Host) => `<code>${url(env, path)}</code>`
 
 // What to write in an OAuth box, for the forms that have boxes (T-34414).
 // Every value is the authorization server's OWN — route.ts `OAUTH` is what
@@ -1281,13 +1319,15 @@ let at = (path: string) => `<code>https://${PLATFORM}${path}</code>`
 // does not answer.
 let ID = 'Leave <b>OAuth Client ID</b> and <b>OAuth Client Secret</b> empty.'
 
-let BOXES = `<b>Authorization URL</b> ${
-  at(OAUTH.authorize)
-}, <b>Token URL</b> ${at(OAUTH.token)}, <b>Registration URL</b> ${
-  at(OAUTH.register)
-}, <b>Scope</b> <code>${OAUTH.scope}</code>.`
+let boxes = (env: Host) =>
+  `<b>Authorization URL</b> ${at(OAUTH.authorize, env)}, <b>Token URL</b> ${
+    at(OAUTH.token, env)
+  }, <b>Registration URL</b> ${
+    at(OAUTH.register, env)
+  }, <b>Scope</b> <code>${OAUTH.scope}</code>.`
 
-let OAUTH_HELP = `For clients that need manual setup: ${ID} ${BOXES}`
+let oauthHelp = (env: Host) =>
+  `For clients that need manual setup: ${ID} ${boxes(env)}`
 
 // This repository is itself a plugin marketplace (T-34666): `.agents/plugins/
 // marketplace.json` offers `plugins/yaks.app/`, whose `.mcp.json` names the
@@ -1300,7 +1340,7 @@ let REPO = 'yak-sh/yak'
 //
 // Keep setup paths and field labels matched to each client's form, including
 // differences between its desktop and mobile interfaces.
-let AGENTS = [
+let agents = (env: Host) => [
   {
     key: 'claude',
     tab: 'Claude',
@@ -1315,7 +1355,11 @@ let AGENTS = [
           ) + '.',
           'Paste these values:' + fields(
             field('Name', CONNECTOR.title, 'the name') +
-              field('Remote MCP server URL', MCP, 'the connection URL'),
+              field(
+                'Remote MCP server URL',
+                url(env, '/mcp'),
+                'the connection URL',
+              ),
           ),
           'Click <b>Continue</b>.',
         ],
@@ -1327,7 +1371,7 @@ let AGENTS = [
           'Tap <b>Connectors</b> → <b>+</b> → <b>Add custom connector</b>.',
           'Paste these values:' + fields(
             field('Name', CONNECTOR.title, 'the name') +
-              field('URL', MCP, 'the connection URL'),
+              field('URL', url(env, '/mcp'), 'the connection URL'),
           ),
         ],
       },
@@ -1346,25 +1390,29 @@ let AGENTS = [
       ) +
       ', scroll down and turn on <b>Developer mode</b>.',
       'Copy this URL:' +
-      fields(field('Connection', MCP, 'the connection URL')) +
+      fields(field('Connection', url(env, '/mcp'), 'the connection URL')) +
       'Then open ' +
       external(
         'https://chatgpt.com/plugins#settings/Connectors?create-connector=true&redirectAfter=%2F',
         'Create a connection',
       ) + ' and paste it into <b>Connection</b>.',
-      'Add the name, description and icon:' + chatgptFields,
+      'Add the name, description and icon:' + chatgptFields(env),
       'Check <b>I understand</b>, then click <b>Create</b>.',
       'Sign in with your email when ChatGPT asks.',
     ],
-    details: {
-      summary: 'Connect from the ChatGPT desktop app',
-      text:
-        'This way, yaks.app stays up to date without waiting for a review. ' +
-        'In the ChatGPT desktop app, choose ' +
-        '<b>Add plugin marketplace</b>, then copy and paste this:' +
-        fields(field('Repository', REPO, 'the repository')) +
-        'You can also add it in your workspace’s plugin settings.',
-    },
+    // The repository's plugin names production; a staging visitor needs the
+    // manual connection above to stay with this deployment.
+    details: apex(env) == apex()
+      ? {
+        summary: 'Connect from the ChatGPT desktop app',
+        text:
+          'This way, yaks.app stays up to date without waiting for a review. ' +
+          'In the ChatGPT desktop app, choose ' +
+          '<b>Add plugin marketplace</b>, then copy and paste this:' +
+          fields(field('Repository', REPO, 'the repository')) +
+          'You can also add it in your workspace’s plugin settings.',
+      }
+      : undefined,
     finish: 'Open ' + external('https://chatgpt.com/', 'a new ChatGPT chat'),
   },
   {
@@ -1372,7 +1420,9 @@ let AGENTS = [
     tab: 'Claude Code',
     title: 'Claude Code',
     steps: [
-      `In your terminal: <code class="Pick">claude mcp add --transport http yaks ${MCP}</code>`,
+      `In your terminal: <code class="Pick">claude mcp add --transport http yaks ${
+        url(env, '/mcp')
+      }</code>`,
       'Start Claude Code, run <code>/mcp</code>, pick <b>yaks</b> and choose ' +
       '<b>Authenticate</b>. It opens your browser to sign in.',
     ],
@@ -1388,7 +1438,8 @@ let AGENTS = [
       'Open <b>Cursor Settings</b> → <b>Tools &amp; Integrations</b> and ' +
       'press <b>New MCP Server</b>. It opens <code>~/.cursor/mcp.json</code>.',
       'Add the server, with the URL as its one field: <code class="Pick">' +
-      '{ "mcpServers": { "yaks": { "url": "' + MCP + '" } } }</code>',
+      '{ "mcpServers": { "yaks": { "url": "' + url(env, '/mcp') +
+      '" } } }</code>',
       'Back in <b>Tools &amp; Integrations</b>, click <b>yaks</b> and sign in.',
     ],
     note: 'A <code>.cursor/mcp.json</code> in a project folder does the same ' +
@@ -1401,15 +1452,15 @@ let AGENTS = [
     title: 'Anything else that speaks MCP',
     steps: [
       'Add a streamable HTTP connection with this URL:' +
-      fields(field('URL', MCP, 'the MCP URL')),
+      fields(field('URL', url(env, '/mcp'), 'the MCP URL')),
       'If it asks for a name, use <b>yaks.app</b>. Then follow its sign-in ' +
       'prompt.',
     ],
     details: {
       summary: 'More about authentication',
-      text: OAUTH_HELP +
+      text: oauthHelp(env) +
         ' If your client never offers sign-in, use ' +
-        `<code>${MCP_ASK}</code> as the server URL.`,
+        `<code>${url(env, '/mcp?auth=required')}</code> as the server URL.`,
     },
     finish: 'Start a new chat in your MCP client',
   },
@@ -1419,38 +1470,39 @@ let steps = (items: string[]) =>
   `<ol>${items.map((s) => `<li>${s}</li>`).join('')}</ol>`
 
 // Native radio tabs share their layout with the working style-guide example.
-let doors = `<fieldset class="Tabs">
+let doors = (env: Host) =>
+  `<fieldset class="Tabs">
 <legend class="Tabs_Legend">Which app do you use?</legend>
 ${
-  AGENTS.map((a, i) =>
-    `<div class="Tabs_Item">
+    agents(env).map((a, i) =>
+      `<div class="Tabs_Item">
 <input type="radio" name="agent" id="tab-${a.key}" value="${a.key}"${
-      i ? '' : ' checked'
-    }>
+        i ? '' : ' checked'
+      }>
 <label class="Tabs_Tab" for="tab-${a.key}">${a.tab}</label>
 <section class="Card Tabs_Panel Tabs_Panel-${a.key}"><h2>${a.title}</h2>
 ${
-      a.paths
-        ? a.paths.map((p) =>
-          `<h3 class="Connect_Path">${p.title}</h3>${steps(p.steps)}`
-        ).join('')
-        : steps(a.steps)
-    }
+        a.paths
+          ? a.paths.map((p) =>
+            `<h3 class="Connect_Path">${p.title}</h3>${steps(p.steps)}`
+          ).join('')
+          : steps(a.steps)
+      }
 ${a.note ? `<p class="Note">${a.note}</p>` : ''}
 ${
-      a.details
-        ? `<details class="Note"><summary>${a.details.summary}</summary><div class="Note">${a.details.text}</div></details>`
-        : ''
-    }
+        a.details
+          ? `<details class="Note"><summary>${a.details.summary}</summary><div class="Note">${a.details.text}</div></details>`
+          : ''
+      }
 <div class="Connect_Next"><p>Make your first app</p>
 ${a.finish}, then ask:${request}
 <span class="Note">Try it, then ask for a change in the same chat. Keep shaping it as you use it.</span></div>
 </section></div>`
-  ).join('')
-}
+    ).join('')
+  }
 </fieldset>`
 
-let connectionSetup = (connections: Connection[]) =>
+let connectionSetup = (connections: Connection[], env: Host) =>
   `${connectionList(connections)}
 <p ${
     state(true, !!connections.length)
@@ -1462,7 +1514,7 @@ let connectionSetup = (connections: Connection[]) =>
     connections.length ? '' : ' open'
   }>
 <summary ${state(true, !!connections.length)}>Connect another chatbot</summary>
-${doors}</details>`
+${doors(env)}</details>`
 
 // The only script a tab needs, and it is not what switches one: the radios do
 // that with no script at all. This keeps the CHOSEN one in the address, so a
@@ -1548,19 +1600,22 @@ for (let b of document.querySelectorAll('.Bill_Go')) {
 }
 </script>`
 
-export let connect = (yours: Yours, status = 200) =>
+export let connect = (yours: Yours, status = 200, env: Host = {}) =>
   shell(
+    env,
     'Connect yaks.app',
     'Build and manage your apps from your usual chats.',
     status,
-    `${connectionSetup(yours.connections ?? [])}
+    `${connectionSetup(yours.connections ?? [], env)}
 <details class="Attach"${status != 200 || yours.paid ? ' open' : ''}>
 <summary>Your address and plan</summary>
-${mine(yours)}${plan(yours)}
+${mine(yours, env)}${plan(yours, env)}
 </details>
 <p class="Note"><a href="https://${
-      esc(yours.slug)
-    }.${PLATFORM}${managePath()}">Your apps and settings</a></p>
-<p class="Note"><a href="https://yaks.app/help">Need help?</a></p>
-${home}${copying}${tabbing}${inline}${connectionLive('/oauth/connections')}`,
+      esc(spaceHost(env, yours.slug))
+    }${managePath()}">Your apps and settings</a></p>
+<p class="Note"><a href="${url(env, '/help')}">Need help?</a></p>
+${home(env)}${copying}${tabbing}${inline}${
+      connectionLive('/oauth/connections')
+    }`,
   )

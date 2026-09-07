@@ -379,7 +379,7 @@ export let ran = async (
     res = await called(env, space, app, req, who)
   } catch (e) {
     await threw(env, space, app, req, e)
-    return oops()
+    return oops(env)
   }
   return verdict(env, space, app, req, res)
 }

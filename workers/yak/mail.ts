@@ -26,7 +26,9 @@ import { esc } from './html.ts'
 export type Letter = { to: string | string[]; subject: string; body: string }
 export type Mail = (l: Letter) => Promise<void>
 
-import { FROM, REPLY_TO } from './mail-config.ts'
+import { FROM } from './mail-config.ts'
+import { replyTo } from './post.ts'
+import type { Host } from './host.ts'
 export { FROM, GRAPH, REPLY_TO } from './mail-config.ts'
 
 // One line, JSON, tagged: a person reads it at a glance and a probe parses
@@ -37,7 +39,8 @@ export let printed = (): Mail => (l) => {
 }
 
 export let sending =
-  (token: string, account: string, api: string): Mail => async (l) => {
+  (token: string, account: string, api: string, env: Host = {}): Mail =>
+  async (l) => {
     if (!token || !account) throw new Error('mail is not configured')
     let res = await fetch(`${api}/accounts/${account}/email/sending/send`, {
       method: 'POST',
@@ -48,7 +51,7 @@ export let sending =
       body: JSON.stringify({
         from: { address: FROM, name: 'yaks.app' },
         to: [l.to].flat(),
-        reply_to: REPLY_TO,
+        reply_to: replyTo(env),
         subject: l.subject,
         text: l.body,
         html: `<p>${esc(l.body).replaceAll('\n\n', '</p><p>')}</p>`,
@@ -68,4 +71,5 @@ export let mail = (env: Env): Mail =>
     env.MAIL_TOKEN ?? '',
     env.MAIL_ACCOUNT ?? '',
     env.MAIL_API ?? API,
+    env,
   )

@@ -27,7 +27,7 @@ import { canon, parts } from '@yaks/mail'
 import type { Vocab } from '@yaks/vocab'
 import { mailbox } from './directory.ts'
 import { type Reach, read, written } from './reach.ts'
-import { PLATFORM } from './route.ts'
+import { apex, type Host } from './host.ts'
 import { titling } from './session.ts'
 import { type Ctx, inApp } from './tools.ts'
 
@@ -35,11 +35,15 @@ import { type Ctx, inApp } from './tools.ts'
  * The one sentence both tools carry, because the tool list is where a model
  * decides which mailbox somebody meant.
  */
-export let SCOPE =
+export let scope = (env: Host = {}) =>
   'These are the letters an app received at its yaks.app address ' +
-  "(<space>.<app>@yaks.app); not a person's own mailbox — mail asked about " +
+  `(<space>.<app>@${
+    apex(env)
+  }); not a person's own mailbox — mail asked about ` +
   'with no app named is their own mail account, which whatever mail tool ' +
   'they have connected answers.'
+
+export let SCOPE = scope()
 
 // The components a letter is made of, asked for by name: a row carries only
 // what its filter NAMES (listing.ts), and what a reader wants off a letter is
@@ -77,7 +81,8 @@ let num = (v: unknown): number | undefined =>
 let newest = (a: Bundle, b: Bundle) =>
   (b.entity?.num ?? 0) - (a.entity?.num ?? 0)
 
-let APP = 'the app slug — its mailbox is <space>.<app>@yaks.app'
+let address = (env: Host) =>
+  `the app slug — its mailbox is <space>.<app>@${apex(env)}`
 
 let SPACE = "the space the app is in; leave it out and the person's own is " +
   'used, as everywhere else'
@@ -106,10 +111,12 @@ let listing = (ctx: Ctx, vocab: Vocab): Tool => ({
   description:
     `Every letter an app received at its own address, and every one it sent ` +
     `from it, newest first, as whole bundles carrying what became of each — ` +
-    `delivered{at, via} or bounced{at, reason}. ${SCOPE} direction takes one ` +
+    `delivered{at, via} or bounced{at, reason}. ${
+      scope(ctx.env)
+    } direction takes one ` +
     `side: received, sent, or all (the default).`,
   input: {
-    app: z.string().describe(APP),
+    app: z.string().describe(address(ctx.env)),
     space: z.string().optional().describe(SPACE),
     direction: z.enum(['received', 'sent', 'all']).optional().describe(
       'which side of the mailbox (default: all)',
@@ -120,7 +127,7 @@ let listing = (ctx: Ctx, vocab: Vocab): Tool => ({
   run: async (args) => {
     let { space, app, who } = await inApp(ctx, args)
     let said = args.direction == null ? 'all' : String(args.direction)
-    let which = side(said, mailbox(space, app))
+    let which = side(said, mailbox(space, app, ctx.env))
     if (which == null) throw new Error('direction: received, sent or all')
     let rows = await read(
       ctx.env,
@@ -145,13 +152,15 @@ let sending = (ctx: Ctx, vocab: Vocab): Tool => ({
     `off. It writes the recipient where the app has not got them yet, then ` +
     `the letter beside them, and answers the letter as applied; whether it ` +
     `left lands on that same entity a moment later as delivered or bounced, ` +
-    `so read it back with mail_list. The body is markdown. ${SCOPE} Asking ` +
+    `so read it back with mail_list. The body is markdown. ${
+      scope(ctx.env)
+    } Asking ` +
     `to send takes a member who may write, even in an app anyone can write ` +
     `to. The way back: none — a letter that has left cannot be recalled, ` +
     `which makes this one of the very few things here a mistake is final in. ` +
     `Read it back to the person before you send it.`,
   input: {
-    app: z.string().describe(APP),
+    app: z.string().describe(address(ctx.env)),
     space: z.string().optional().describe(SPACE),
     to: z.string().describe(
       'the recipient: an email address, or the eid of an entity in the app ' +
@@ -171,7 +180,7 @@ let sending = (ctx: Ctx, vocab: Vocab): Tool => ({
     // address is canonicalized the way the store's own normalize hook would
     // (@yaks/mail `mailbox`), so the lookup asks in the spelling the row was
     // written in.
-    let address = parts(to) ? canon(PLATFORM)(to) : null
+    let address = parts(to) ? canon(apex(ctx.env))(to) : null
     let held = address ? await known(ctx, mine, address) : to
     let batch: Bundle[] = [
       ...(held ? [] : [{

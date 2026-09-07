@@ -32,7 +32,8 @@ import type { Security } from '@yaks/mcp'
 import { mode, reads } from '@yaks/member'
 import { EITHER, SIGNIN } from './preauth.ts'
 import type { Reach } from './reach.ts'
-import { SAYS, SIGN_IN } from './route.ts'
+import { apex, type Host, url } from './host.ts'
+import { says } from './route.ts'
 import { nobody } from './session.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 
@@ -66,10 +67,10 @@ export let openly = (t: { security?: Security[] }) =>
  * The sentence is said again here so a later path that let one through could
  * not answer anything else.
  */
-export let barred = (t: Tool): Tool => ({
+export let barred = (t: Tool, env: Host = {}): Tool => ({
   ...t,
   meta: { ...t.meta, securitySchemes: SIGNIN },
-  run: () => Promise.reject(new Error(SAYS)),
+  run: () => Promise.reject(new Error(says(env))),
 })
 
 /**
@@ -99,22 +100,29 @@ export let anonymous = (name: string) =>
 // `Options.scope`). The tools never look at these: the door reads them off the
 // call and builds the graph they name, and they are declared so a client knows
 // to say them.
-export let SCOPE = {
+export let scope = (env: Host = {}) => ({
   space: z.string().describe(
-    'the space the app is in — the <space> of <space>.yaks.app. Required ' +
+    `the space the app is in — the <space> of <space>.${apex(env)}. Required ` +
       'while nobody is signed in: there is no space of yours to mean',
   ),
   app: z.string().describe(
-    "the app's slug in that space — the <app> of <space>.yaks.app/<app>/. " +
+    `the app's slug in that space — the <app> of <space>.${
+      apex(env)
+    }/<app>/. ` +
       'Required while nobody is signed in, and the app must be one anyone ' +
       'with the link can read; app_published lists apps people have offered',
   ),
-}
+})
 
-let NAME_IT = 'signed out, a read answers for ONE app: name space and app — ' +
-  'the two halves of <space>.yaks.app/<app>/ — and the app must be one ' +
+export let SCOPE = scope()
+
+let nameIt = (env: Host = {}) =>
+  'signed out, a read answers for ONE app: name space and app — ' +
+  `the two halves of <space>.${apex(env)}/<app>/ — and the app must be one ` +
   'anyone with the link can read. app_published lists what people have ' +
-  `published, and signing in at ${SIGN_IN} reads every app of your own at ` +
+  `published, and signing in at ${
+    url(env, '/login')
+  } reads every app of your own at ` +
   'once.'
 
 let said = (v: unknown) => typeof v == 'string' ? v.trim() : ''
@@ -128,7 +136,7 @@ let said = (v: unknown) => typeof v == 'string' ? v.trim() : ''
 export let opened = async (ctx: Ctx, args: Args): Promise<Reach[]> => {
   let slug = said(args.app)
   let where = said(args.space)
-  if (!slug || !where) throw new Error(NAME_IT)
+  if (!slug || !where) throw new Error(nameIt(ctx.env))
   let space = await ctx.dir.space(where)
   let app = space && await ctx.dir.app(space, slug)
   // A trashed app answers nowhere else either (erase.ts): to a stranger it is
@@ -137,7 +145,7 @@ export let opened = async (ctx: Ctx, args: Args): Promise<Reach[]> => {
   if (!reads(mode(app.access), null)) {
     throw new Error(
       `${where}/${slug} is private — only its members read it. Sign in at ` +
-        `${SIGN_IN} and ask its owner for a seat.`,
+        `${url(ctx.env, '/login')} and ask its owner for a seat.`,
     )
   }
   return [{ space, app, who: nobody }]

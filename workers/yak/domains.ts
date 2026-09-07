@@ -25,13 +25,17 @@
 // leave a billable hostname at Cloudflare with nothing pointing at it.
 import { answered } from './dispatch.ts'
 import type { Env } from './env.ts'
-import { ORIGIN } from './route.ts'
+import { apex as hostApex, type Host } from './host.ts'
 
-export let NEEDS_HOSTNAMES =
+export let needsHostnames = (env: Host = {}) =>
   'the platform has no Cloudflare token to attach custom hostnames with ' +
-  '(CF_HOSTNAMES_TOKEN, Zone → SSL and Certificates → Edit on yaks.app) — ' +
+  `(CF_HOSTNAMES_TOKEN, Zone → SSL and Certificates → Edit on ${
+    hostApex(env)
+  }) — ` +
   'a domain cannot be provisioned until it is set. Every space still ' +
-  'answers at <space>.yaks.app'
+  `answers at <space>.${hostApex(env)}`
+
+export let NEEDS_HOSTNAMES = needsHostnames()
 
 export let NEEDS_ZONE =
   'the platform does not know which Cloudflare zone to attach a custom ' +
@@ -63,8 +67,8 @@ export let apex = (host: string) => {
 // the name Cloudflare for SaaS routes back to this Worker.
 export type Rec = { type: string; name: string; value: string }
 
-export let records = (host: string): Rec[] => [
-  { type: 'CNAME', name: host, value: ORIGIN },
+export let records = (host: string, env: Host = {}): Rec[] => [
+  { type: 'CNAME', name: host, value: `origin.saas.${hostApex(env)}` },
 ]
 
 // The custom hostname as Cloudflare answers it — the fields read here, and
@@ -99,7 +103,7 @@ let sent = (env: Env, path: string, init: RequestInit = {}) =>
 // because the alternative to refusing is a half-attached domain.
 export let reachable = (env: Env) => {
   if (!env.CF_ZONE) throw new Error(NEEDS_ZONE)
-  if (!env.CF_HOSTNAMES_TOKEN) throw new Error(NEEDS_HOSTNAMES)
+  if (!env.CF_HOSTNAMES_TOKEN) throw new Error(needsHostnames(env))
 }
 
 // The custom hostname for this name, or null. The hostname is the key on

@@ -72,6 +72,7 @@
 // `memberless`). After that the ordinary membership rule holds. It is the
 // only way that row is ever written: nothing serves the meta store at an
 // address (apps.ts), so no request can write the directory from outside.
+import { apex, type Host, url as hostUrl } from './host.ts'
 import {
   AuthorizationError,
   type AuthRequest,
@@ -121,16 +122,7 @@ import {
   deleted,
   lost,
 } from './pages.ts'
-import {
-  hostOf,
-  MANAGE,
-  OAUTH,
-  onZone,
-  PLATFORM,
-  SAYS,
-  SIGN_IN,
-  SLUG,
-} from './route.ts'
+import { hostOf, MANAGE, OAUTH, onZone, says, SLUG } from './route.ts'
 import { canon, mint, nameOf, personOf, spend } from './signin.ts'
 import type { Caller } from './session.ts'
 
@@ -230,9 +222,11 @@ export let withAuth = async (
 // inside the refused tool call's `_meta['mcp/www_authenticate']`, which is what
 // ChatGPT reads to draw its sign-in button (mcp.ts `refused`). One builder, so
 // the two halves cannot come to disagree.
-export let challenge = (url: URL) =>
+export let challenge = (url: URL, env: Host = {}) =>
   'Bearer realm="OAuth", resource_metadata=' +
-  `"${url.origin}/.well-known/oauth-protected-resource${url.pathname}"`
+  `"${
+    env.APEX ? hostUrl(env) : url.origin
+  }/.well-known/oauth-protected-resource${url.pathname}"`
 
 // Where signing in happens, and the sentence a refusal says about it. A
 // refusal is read by a person's agent, so it says a SENTENCE beside its code
@@ -242,12 +236,16 @@ export let challenge = (url: URL) =>
 // is re-exported here because this is where the doors read it.
 export { SAYS, SIGN_IN } from './route.ts'
 
-export let unauthorized = (req: Request) =>
+export let unauthorized = (req: Request, env: Host = {}) =>
   Response.json({
-    error: { code: 'unauthorized', message: SAYS, signIn: SIGN_IN },
+    error: {
+      code: 'unauthorized',
+      message: says(env),
+      signIn: hostUrl(env, '/login'),
+    },
   }, {
     status: 401,
-    headers: { 'www-authenticate': challenge(new URL(req.url)) },
+    headers: { 'www-authenticate': challenge(new URL(req.url), env) },
   })
 
 let redirect = (to: string, set?: string, status = 302) =>
@@ -268,15 +266,15 @@ let redirect = (to: string, set?: string, status = 302) =>
 // address is on our zone, so it is followed. `mine` is what is left when
 // nobody was aiming them anywhere, and `own()` names it: the space their own
 // address spells, else the first they own.
-let backTo = (mine: string, back: string) =>
-  (back && onZone(back)) || `https://${mine}.${PLATFORM}${MANAGE}`
+let backTo = (mine: string, back: string, env: Host) =>
+  (back && onZone(back, env)) || `https://${mine}.${apex(env)}${MANAGE}`
 
 // The cookie's Domain: the platform's own apex, so one sign-in serves every
 // space's hostname. On a dev host there is no domain to share — an IP takes
 // no Domain attribute at all — so the cookie stays host-only.
-let domainOf = (req: Request) => {
+let domainOf = (req: Request, env: Host) => {
   let host = hostOf(req)
-  return host == PLATFORM || host.endsWith(`.${PLATFORM}`) ? PLATFORM : ''
+  return host == apex(env) || host.endsWith(`.${apex(env)}`) ? apex(env) : ''
 }
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
@@ -352,7 +350,7 @@ let closing = async (
   // billing.ts reads the same way).
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
   let space = await dir.space(slug)
-  if (!space || (await dir.role(space, person)) != 'owner') return lost()
+  if (!space || (await dir.role(space, person)) != 'owner') return lost(env)
   let d = await doomed(dir, space)
   // The letter's ticket, if this visit carries one: minted for THIS space and
   // THIS person, and dead after an hour (erase.ts). It stands in for typing
@@ -363,18 +361,18 @@ let closing = async (
   let ok = held ? await ticketed(held, secret(env)) : null
   let mine = !!ok && ok.space == space.eid && ok.person == person
   let forever = mine && !!ok?.forever
-  let lines = forever ? naming(d) : keeping(d)
-  let stop = refused(space) ||
+  let lines = forever ? naming(d, env) : keeping(d, env)
+  let stop = refused(space, env) ||
     // Already there, and this visit is not the one that erases it: trashing
     // again would start the thirty days over on a space the person is only
     // looking at, so nothing happens and they are told both ways out.
     (space.trashed && !forever
       ? `${slug} is already in the trash, ${
         daysLeft(space.trashed)
-      } days left. Restore it at https://${slug}.${PLATFORM}/, or ask your ` +
+      } days left. Restore it at https://${slug}.${apex(env)}/, or ask your ` +
         'assistant to delete it for good'
       : '')
-  if (stop) return askDelete({ slug, lines, stop, forever, status: 409 })
+  if (stop) return askDelete({ slug, lines, stop, forever, status: 409 }, env)
   if (req.method != 'POST') {
     return askDelete({
       slug,
@@ -385,7 +383,7 @@ let closing = async (
         ? 'That link has expired or was for something else. You can still ' +
           'delete this space by typing its name.'
         : undefined,
-    })
+    }, env)
   }
   if (!mine && form.confirm.trim() != slug) {
     return askDelete({
@@ -396,15 +394,15 @@ let closing = async (
         forever ? '' : ' to the trash'
       }.`,
       status: 400,
-    })
+    }, env)
   }
   try {
     let who = { person, role: 'owner' as const }
     if (!forever) {
       await trashSpace(env, dir, space, who)
-      return deleted(kept(d), false)
+      return deleted(kept(d, env), false, env)
     }
-    return deleted(went(d, await erase(env, dir, d, who)))
+    return deleted(went(d, await erase(env, dir, d, who), env), true, env)
   } catch (e) {
     // What could not be finished is said on the page rather than swallowed
     // behind the soft error page: a domain Cloudflare would not give back is
@@ -416,7 +414,7 @@ let closing = async (
       forever,
       why: `That did not finish: ${e instanceof Error ? e.message : String(e)}`,
       status: 502,
-    })
+    }, env)
   }
 }
 
@@ -431,23 +429,27 @@ let theirs = async (env: Env, req: Request, said?: string, say?: string) => {
   if (!who) return redirect('/login?return=%2Fconnect', undefined, 303)
   let dir = dirOf(env)
   let space = await dir.own(who.person)
-  return connect({
-    slug: space.slug,
-    connections: await connections(env, who.person),
-    fixed: !!(await dir.apps(space)).length,
-    said,
-    say,
-    no: !!say,
-    // What they pay, and the two doors that change it (billing.ts, T-33125).
-    // `known` is whether Stripe has ever met this space: somebody who
-    // cancelled still reaches their own invoices.
-    plan: {
-      plus: space.tier == 'plus',
-      ends: space.plan?.ending ?? '',
-      known: !!space.plan?.customer,
+  return connect(
+    {
+      slug: space.slug,
+      connections: await connections(env, who.person),
+      fixed: !!(await dir.apps(space)).length,
+      said,
+      say,
+      no: !!say,
+      // What they pay, and the two doors that change it (billing.ts, T-33125).
+      // `known` is whether Stripe has ever met this space: somebody who
+      // cancelled still reaches their own invoices.
+      plan: {
+        plus: space.tier == 'plus',
+        ends: space.plan?.ending ?? '',
+        known: !!space.plan?.customer,
+      },
+      paid: new URL(req.url).searchParams.get('paid') == '1',
     },
-    paid: new URL(req.url).searchParams.get('paid') == '1',
-  }, say ? 400 : 200)
+    say ? 400 : 200,
+    env,
+  )
 }
 
 // Taking an address: the space wears the slug its owner chose. It is theirs
@@ -468,7 +470,7 @@ export let choose = async (
 ): Promise<{ address?: string; slug?: string; error?: string }> => {
   let dir = dirOf(env)
   let space = at ?? await dir.own(person)
-  if (want == space.slug) return { address: `${want}.${PLATFORM}`, slug: want }
+  if (want == space.slug) return { address: `${want}.${apex(env)}`, slug: want }
   if (!SLUG.test(want)) {
     return {
       error: 'An address is lowercase letters, numbers and dashes, ' +
@@ -477,12 +479,12 @@ export let choose = async (
   }
   if ((await dir.apps(space)).length) {
     return {
-      error: `You've built something at ${space.slug}.${PLATFORM}, so that ` +
+      error: `You've built something at ${space.slug}.${apex(env)}, so that ` +
         'address stays put for now.',
     }
   }
   if (await dir.space(want)) {
-    return { error: `${want}.${PLATFORM} is taken. Try another?` }
+    return { error: `${want}.${apex(env)} is taken. Try another?` }
   }
   try {
     // The title follows the address: a space nobody has named is known by
@@ -497,9 +499,9 @@ export let choose = async (
   } catch {
     // Two people can want one name at once; the unique slug decides, and the
     // loser is told the ordinary thing rather than shown a broken page.
-    return { error: `${want}.${PLATFORM} is taken. Try another?` }
+    return { error: `${want}.${apex(env)} is taken. Try another?` }
   }
-  return { address: `${want}.${PLATFORM}`, slug: want }
+  return { address: `${want}.${apex(env)}`, slug: want }
 }
 
 // The secret signs sessions and keys the code digests. Unset, sign-in cannot
@@ -530,7 +532,7 @@ export let handoff = async (req: Request, env: Env): Promise<Response> => {
   )
   if (!person) {
     return redirect(
-      `https://${PLATFORM}/login?return=${
+      `https://${apex(env)}/login?return=${
         encodeURIComponent(`https://${hostOf(req)}${to}`)
       }`,
     )
@@ -543,7 +545,7 @@ export let handoff = async (req: Request, env: Env): Promise<Response> => {
     status: 303,
     headers: {
       location: to,
-      'set-cookie': cookie(token, domainOf(req), SESSION),
+      'set-cookie': cookie(token, domainOf(req, env), SESSION),
       'referrer-policy': 'no-referrer',
     },
   })
@@ -589,14 +591,16 @@ let landed = async (
     { person, space: null, exp: Math.floor(Date.now() / 1000) + SESSION },
     secret(env),
   )
-  let set = cookie(token, domainOf(req), SESSION)
+  let set = cookie(token, domainOf(req, env), SESSION)
   // See Other: the code was POSTed, and where it sends them is a page to GET,
   // never that form again. A return on a customer's own hostname becomes a
   // HANDOFF (the platform cookie just set never rides there); anything else is
   // our own zone or the fallback, decided by `backTo`.
   if (q) return allow(req, env, q, person, set)
-  let hand = back ? await handoffTo(secret(env), dir, person, back) : null
-  return redirect(hand ?? backTo(mine.slug, back), set, 303)
+  let hand = back
+    ? await handoffTo(secret(env), dir, person, back, Date.now(), env)
+    : null
+  return redirect(hand ?? backTo(mine.slug, back, env), set, 303)
 }
 
 // A letter's one click, spent: the very code the form would have spent
@@ -704,7 +708,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     let person = await browser(env, req)
     if (!person) return redirect('/login?return=%2Fmanage', undefined, 303)
     let space = await dirOf(env).own(person)
-    return redirect(backTo(space.slug, ''), undefined, 303)
+    return redirect(backTo(space.slug, '', env), undefined, 303)
   }
 
   // The custom-domain end of cross-domain sign-in (`handoff`). index.ts sends
@@ -752,7 +756,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     // rather than a fresh sign-in.
     let who = await withAuth(env, req)
     if (who) return landed(req, env, who.person, '', back ?? '')
-    return askEmail(null, back)
+    return askEmail(null, back, undefined, undefined, undefined, env)
   }
 
   // An address, and a code on its way to it. The platform reads NOTHING about
@@ -769,7 +773,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     let email = canon(field('email'))
     let back = field('return') || null
     if (!email.includes('@')) {
-      return askEmail(field('q') || null, back, undefined, undefined, 400)
+      return askEmail(field('q') || null, back, undefined, undefined, 400, env)
     }
     let code = await mint(meta(env), secret(env), email)
     if (code) {
@@ -782,7 +786,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
         code,
         q: field('q') || undefined,
         back: back || undefined,
-      })
+      }, apex(env))
       await mail(env)({
         to: email,
         subject: `${code} is your yaks.app code`,
@@ -792,7 +796,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
           'happened and you can ignore this.',
       })
     }
-    return askCode(email, field('q') || null, back)
+    return askCode(email, field('q') || null, back, undefined, undefined, env)
   }
 
   if (path == '/login/code' && req.method == 'POST') {
@@ -806,6 +810,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
         back || null,
         'That code has expired or was mistyped. Ask for a fresh one?',
         400,
+        env,
       )
     }
     // Nothing here asks what to call them (T-34236), so the front of their
@@ -835,6 +840,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
         undefined,
         'That link has expired or was already used. Ask for a fresh one?',
         400,
+        env,
       )
     }
     return quiet(
@@ -853,7 +859,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   // mail anywhere, which is the line billing.ts takes for a purchase (C-33033).
   if (path == LINK && req.method == 'POST') {
     let person = await browser(env, req)
-    if (!person) return unauthorized(req)
+    if (!person) return unauthorized(req, env)
     let book = links(env.OAUTH_KV)
     if (!book) {
       return Response.json({
@@ -871,6 +877,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       let { standing, url: link } = await stand(secret(env), book, {
         person,
         days: field('days') ? Number(field('days')) : undefined,
+        host: apex(env),
       })
       return Response.json({
         url: link,
@@ -894,7 +901,16 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     let ask = await asked(req, env, q)
     if (ask instanceof Response) return ask
     let who = await withAuth(env, req)
-    if (!who) return askEmail(q, null, await clientName(env, ask))
+    if (!who) {
+      return askEmail(
+        q,
+        null,
+        await clientName(env, ask),
+        undefined,
+        undefined,
+        env,
+      )
+    }
     let [row] = await meta(env).query(`.eid=${who.person}`) as {
       email?: { address: string }
     }[]
@@ -902,17 +918,20 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       row?.email?.address ?? 'yourself',
       q,
       await clientName(env, ask),
+      env,
     )
   }
 
   if (path == '/oauth/allow' && req.method == 'POST') {
     let who = await withAuth(env, req)
     let q = field('q')
-    if (!who) return askEmail(q || null, null)
+    if (!who) {
+      return askEmail(q || null, null, undefined, undefined, undefined, env)
+    }
     return allow(req, env, q, who.person)
   }
 
-  return lost()
+  return lost(env)
 }
 
 // Do we claim Client ID Metadata Documents? On unless the env says `off`.
@@ -936,7 +955,7 @@ let opts = (env: Env): OAuthProviderOptions<Env> => ({
   apiHandler: {
     fetch: async (req: Request, env: Env) => {
       let who = await withAuth(env, req)
-      return who ? Response.json(who) : unauthorized(req)
+      return who ? Response.json(who) : unauthorized(req, env)
     },
   },
   authorizeEndpoint: OAUTH.authorize,
@@ -1030,6 +1049,12 @@ let plain = async (req: Request, env: Env): Promise<Request> => {
 // A provider per request, since its configuration is read from the env: the
 // library builds its own implementation per call anyway (`getOAuthApi`), so
 // this costs an object, not a connection.
-export let fetch = async (req: Request, env: Env): Promise<Response> =>
-  new OAuthProvider<Env>(opts(env))
+export let fetch = async (req: Request, env: Env): Promise<Response> => {
+  // An explicit apex also names the OAuth issuer behind a local proxy.
+  if (env.APEX && hostOf(req) == apex(env)) {
+    let at = new URL(req.url)
+    req = new Request(hostUrl(env, at.pathname + at.search), req)
+  }
+  return new OAuthProvider<Env>(opts(env))
     .fetch(await plain(req, env), env, context() as never)
+}

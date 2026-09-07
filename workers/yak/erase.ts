@@ -76,7 +76,7 @@ import { drop } from './dispatch.ts'
 import { deleteBindings } from './bindings.ts'
 import { reachable, release } from './domains.ts'
 import { bound, type Env } from './env.ts'
-import { PLATFORM } from './route.ts'
+import { apex, type Host as HostEnv } from './host.ts'
 import { destroyed } from './sandbox.ts'
 import { vouched, type Who } from './session.ts'
 import { storeOf } from './door.ts'
@@ -130,8 +130,8 @@ export let ticketed = async (
 
 // The door itself, and the door with a ticket in hand — the address the
 // letter carries and the page posts back to.
-export let door = (slug: string, token?: string) =>
-  `https://${PLATFORM}/space/${slug}/delete` +
+export let door = (slug: string, token?: string, env: HostEnv = {}) =>
+  `https://${apex(env)}/space/${slug}/delete` +
   (token ? `?t=${encodeURIComponent(token)}` : '')
 
 // Everything one space's death takes with it, read before anything moves —
@@ -173,12 +173,12 @@ export let doomed = async (
 //   cancel, and a subscription with nothing left to bill for is a charge
 //   every month for a space that is gone. Cancelling is the person's own, at
 //   their billing page, and it is one click away.
-export let refused = (space: Space) =>
+export let refused = (space: Space, env: HostEnv = {}) =>
   space.slug == META.space
     ? `${META.space} is the platform itself`
     : space.plan?.subscription && space.plan.status != 'canceled'
     ? `${space.slug} is paying for Plus. Cancel the subscription first — ` +
-      `https://${PLATFORM}/connect, "Manage billing" — and delete it after ` +
+      `https://${apex(env)}/connect, "Manage billing" — and delete it after ` +
       'that, so nothing keeps billing for a space that is gone'
     : ''
 
@@ -187,9 +187,9 @@ export let refused = (space: Space) =>
 // way in, and the address itself going back into circulation. The same lines
 // go in the letter, on the confirmation page, and in the answer the agent
 // reads out, so nobody is told three different stories.
-export let naming = (d: Doomed): string[] => [
+export let naming = (d: Doomed, env: HostEnv = {}): string[] => [
   ...d.apps.map((app) =>
-    `${app.title} (${url(d.space, app)}) — its pages, its files and ` +
+    `${app.title} (${url(d.space, app, env)}) — its pages, its files and ` +
     'everything it has saved'
   ),
   ...d.hosts.map((h) => `${h.name} stops serving and is given back`),
@@ -199,7 +199,7 @@ export let naming = (d: Doomed): string[] => [
       d.members.map((m) => m.name ?? 'someone').join(', '),
     ]
     : []),
-  `the address ${d.space.slug}.${PLATFORM} goes back into circulation, so ` +
+  `the address ${d.space.slug}.${apex(env)} goes back into circulation, so ` +
   'somebody else may take it later — any link to it stops being yours',
 ]
 
@@ -207,9 +207,11 @@ export let naming = (d: Doomed): string[] => [
 // not a softer wording of that one: nothing here is destroyed, so every line
 // says what STOPS rather than what goes, and the last line is the opposite of
 // the last line above — the address is held, not released.
-export let keeping = (d: Doomed): string[] => [
+export let keeping = (d: Doomed, env: HostEnv = {}): string[] => [
   ...d.apps.map((app) =>
-    `${app.title} (${url(d.space, app)}) stops answering — its pages, its ` +
+    `${app.title} (${
+      url(d.space, app, env)
+    }) stops answering — its pages, its ` +
     'files and everything it has saved are kept'
   ),
   ...d.hosts.map((h) => `${h.name} stops serving until the space is back`),
@@ -219,7 +221,7 @@ export let keeping = (d: Doomed): string[] => [
       d.members.map((m) => m.name ?? 'someone').join(', '),
     ]
     : []),
-  `the address ${d.space.slug}.${PLATFORM} is held for you for 30 days — ` +
+  `the address ${d.space.slug}.${apex(env)} is held for you for 30 days — ` +
   'nobody else can take it, and every link to it works again the moment you ' +
   'restore the space',
 ]
@@ -228,9 +230,14 @@ export let keeping = (d: Doomed): string[] => [
 // counts against a space's month (usage.ts `sending`): refusing to send it
 // would lock a person inside a space they are trying to close, and a person
 // deleting a space is a person we are about to stop billing anyway.
-export let letter = (d: Doomed, link: string, forever = false) => ({
-  subject: `Delete ${d.space.slug}.${PLATFORM}?`,
-  body: `Your assistant asked to delete ${d.space.slug}.${PLATFORM}.
+export let letter = (
+  d: Doomed,
+  link: string,
+  forever = false,
+  env: HostEnv = {},
+) => ({
+  subject: `Delete ${d.space.slug}.${apex(env)}?`,
+  body: `Your assistant asked to delete ${d.space.slug}.${apex(env)}.
 
 Nothing has happened yet. Nothing will unless you open this link, and it only
 works for the next hour:
@@ -241,11 +248,11 @@ ${
     forever
       ? `It cannot be undone. It destroys:
 
-${naming(d).map((l) => `  - ${l}`).join('\n')}`
+${naming(d, env).map((l) => `  - ${l}`).join('\n')}`
       : `It puts the space in the trash for 30 days. Nothing is erased, and you
 can bring it back any time in those 30 days. What stops until you do:
 
-${keeping(d).map((l) => `  - ${l}`).join('\n')}
+${keeping(d, env).map((l) => `  - ${l}`).join('\n')}
 
 After 30 days we erase it, and then it is gone for good.`
   }
@@ -348,8 +355,9 @@ export let erase = async (
 export let went = (
   d: Doomed,
   out: { files: number; apps: number; hosts: number },
+  env: HostEnv = {},
 ) =>
-  `${d.space.slug}.${PLATFORM} is gone: ${out.apps} ${
+  `${d.space.slug}.${apex(env)} is gone: ${out.apps} ${
     out.apps == 1 ? 'app' : 'apps'
   }, ${out.files} ${out.files == 1 ? 'file' : 'files'}, everything they ` +
   `saved${
@@ -501,12 +509,14 @@ export let untrashSpace = async (
 // What a space's trashing says back — `went`'s opposite number, and the same
 // sentence on the confirmation page and in the answer the agent reads out, so
 // nobody is told two different stories about where their space went.
-export let kept = (d: Doomed) =>
-  `${d.space.slug}.${PLATFORM} is in the trash. Nothing was erased: ${d.apps.length} ${
+export let kept = (d: Doomed, env: HostEnv = {}) =>
+  `${d.space.slug}.${
+    apex(env)
+  } is in the trash. Nothing was erased: ${d.apps.length} ${
     d.apps.length == 1 ? 'app' : 'apps'
   }, their files and everything they ` +
   'saved are all kept, and the address is held. Restore it any time in the ' +
-  `next 30 days — signed in at https://${d.space.slug}.${PLATFORM}/, or ` +
+  `next 30 days — signed in at https://${d.space.slug}.${apex(env)}/, or ` +
   `space_restore(space: '${d.space.slug}'). After 30 days it is erased for ` +
   'good.'
 

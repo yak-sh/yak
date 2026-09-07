@@ -29,6 +29,7 @@
 // of its own (T-32983) can move this list and say so on the stream.
 import { fill } from '@yaks/yaml'
 import { SAYS } from './content.ts'
+import { type Host, url } from './host.ts'
 
 /** An argument as a client is offered it (MCP §Prompts). */
 export type Arg = {
@@ -64,7 +65,7 @@ export type Prompt = {
   // The person's own message, out of what they filled in — and out of what
   // they already have, for a message that is about that: the apps in reach
   // (mcp.ts `extend`), or null when nobody has signed in (preauth.ts).
-  say: (a: Record<string, string>, made: Made[] | null) => string
+  say: (a: Record<string, string>, made: Made[] | null, env?: Host) => string
 }
 
 // What the person filled in, and the file's own stand-in for what they left
@@ -85,9 +86,9 @@ let filled = (p: Said, a: Record<string, string>) => {
 // by name and address, so an idea lands on something of theirs; the line for
 // somebody whose first app this would be; and, signed out, where signing in
 // is — an idea costs no account, and an app does.
-let having = (made: Made[] | null) =>
+let having = (made: Made[] | null, env: Host = {}) =>
   !made
-    ? `I have not signed in there yet. Signing in at https://yaks.app/login —
+    ? `I have not signed in there yet. Signing in at ${url(env, '/login')} —
 an email address and a six-digit code — is what turns one of these into an
 app, so tell me the ideas first and say that at the end.`
     : made.length
@@ -105,12 +106,16 @@ app.`
 // paragraphs with their own apps listed in the middle of one of them.
 let BLOCKS: Record<
   string,
-  (a: Record<string, string>, made: Made[] | null) => Record<string, string>
+  (
+    a: Record<string, string>,
+    made: Made[] | null,
+    env: Host,
+  ) => Record<string, string>
 > = {
   publish: (a) => ({
     about: a.about?.trim() ? `\n\nThe line to offer it under: ${a.about}` : '',
   }),
-  'app-ideas': (_a, made) => ({ having: having(made) }),
+  'app-ideas': (_a, made, env) => ({ having: having(made, env) }),
 }
 
 // The menu, in the order a person reads it. The list is code and the words are
@@ -128,8 +133,11 @@ let prompt = (name: string): Prompt => {
     // The file's own stand-in phrases stay in the file: a client is offered
     // the argument, not what we would say for it.
     arguments: said.arguments.map(({ or: _or, ...arg }) => arg),
-    say: (a, made) =>
-      fill(said.body, { ...filled(said, a), ...BLOCKS[name]?.(a, made) }),
+    say: (a, made, env = {}) =>
+      fill(said.body, {
+        ...filled(said, a),
+        ...BLOCKS[name]?.(a, made, env),
+      }),
   }
 }
 

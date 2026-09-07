@@ -53,6 +53,7 @@ let SWR = 86400
 // What the inner entrypoint says about the bytes it is answering. Only `Files`
 // sends this, and `Files` is reachable only through the service binding, so
 // nothing a person or an app can address ever wears it.
+import { type Host, url } from './host.ts'
 export let keepable = (tags: string[]) => ({
   'cache-control': `public, s-maxage=${YEAR}, stale-while-revalidate=${SWR}`,
   'cache-tag': tags.join(','),
@@ -118,12 +119,12 @@ export let tagsOf = (eid: string) => [`a:${eid}`]
 // baseline by declaring its own frame-ancestors. Deferred, not here: opt-in
 // cross-space authenticated embeds need cookie-stripping plus a consented,
 // audience-bound token — a real project, out of scope.
-export let sealed = (res: Response) => {
+export let sealed = (res: Response, env: Host = {}) => {
   if (res.status == 101) return res
   let headers = new Headers(res.headers)
   headers.append(
     'content-security-policy',
-    "frame-ancestors 'self' https://yaks.app",
+    `frame-ancestors 'self' ${url(env)}`,
   )
   if (!headers.has('cache-control')) {
     headers.set('cache-control', 'private, no-store')

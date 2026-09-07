@@ -23,6 +23,7 @@
 // The meta space seeds itself on first touch (space `yak`, app `platform`),
 // written as bundles through the store's /apply, so the directory can describe
 // its own store.
+import { type Host as HostEnv, spaceHost } from './host.ts'
 import type { Bundle } from '@yaks/graph'
 import type { EntityLiteral, Mutation } from '../../src/mutation.ts'
 import { slugsOf } from '../../src/types.ts'
@@ -656,11 +657,16 @@ export let handle = (space: Pick<Space, 'slug'>, slug: string, eid: string) =>
 // that has an App in hand opens its store this way; the ones that only have a
 // name — the meta store, the usage sweep — have no app to name and use
 // `storeOf` directly.
-export let appStore = (ns: Namespace, space: Space, app: App): Door =>
+export let appStore = (
+  ns: Namespace,
+  space: Space,
+  app: App,
+  env: HostEnv = {},
+): Door =>
   storeOf(ns, storeName(space, app), {
     eid: app.eid,
     access: app.access,
-    mail: mailbox(space, app),
+    mail: mailbox(space, app, env),
   })
 
 // The other address a (space, app) has, beside {@link url}: what its letters
@@ -669,8 +675,8 @@ export let appStore = (ns: Namespace, space: Space, app: App): Door =>
 // bare hostname. Derived HERE and carried to the store on every request,
 // because the store is named at birth and knows neither the app's current slug
 // nor which app the space's front page is.
-export let mailbox = (space: Space, app: App) =>
-  mailFrom(space.slug, app.home ? null : app.slug)
+export let mailbox = (space: Space, app: App, env: HostEnv = {}) =>
+  mailFrom(space.slug, app.home ? null : app.slug, env)
 
 // The address a person is handed for an app. A space's front page IS its
 // bare hostname (T-33040, apps.ts `fetch`) — its own `/<app>/` only forwards
@@ -681,8 +687,8 @@ export let mailbox = (space: Space, app: App) =>
 // has, and everything that says one out loud reads it from one place: the
 // tools, and the letter that names what deleting a space would destroy
 // (erase.ts).
-export let url = (space: Space, app: App) =>
-  `https://${space.slug}.yaks.app/` + (app.home ? '' : `${app.slug}/`)
+export let url = (space: Space, app: App, env: HostEnv = {}) =>
+  `https://${spaceHost(env, space.slug)}/` + (app.home ? '' : `${app.slug}/`)
 
 /**
  * Moving the front page, as the bundles that do it (T-34227): the word comes

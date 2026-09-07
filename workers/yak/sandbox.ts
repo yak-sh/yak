@@ -53,7 +53,7 @@
 // exported into a shell, so nothing puts it in the builder's transcript.
 import type { Space } from './directory.ts'
 import { type Grant, ledger, mint, tokenOf } from './grants.ts'
-import { PLATFORM } from './route.ts'
+import { type Host, url } from './host.ts'
 
 /** One sandbox, as this file asks for it — the four things the tools do,
  * plus the one knob the deploy has no way to set. */
@@ -131,7 +131,8 @@ export let CAP = 8_000
 
 /** Where the `yaks` CLI and `curl` inside the container aim: this platform as
  * a whole origin, since what a script pastes into curl is `$YAKS_HOST/mcp`. */
-export let HOST = `https://${PLATFORM}`
+export let sandboxHost = (env: Host = {}) => url(env)
+export let HOST = sandboxHost()
 
 /** How long the grant in the container's environment lives, in hours: the
  * whole build budget plus the nap that outlasts it, so the token is alive for
@@ -167,7 +168,7 @@ let stub = (ns: Sandboxes, space: Space) => ns.get(ns.idFromName(named(space)))
 
 /** What a grant is made and unmade with: the secret it is sealed under and
  * the ledger it is written in (grants.ts). */
-type Keys = { SESSION_SECRET?: string; OAUTH_KV?: unknown }
+type Keys = Host & { SESSION_SECRET?: string; OAUTH_KV?: unknown }
 
 // Whether a grant has enough life left to hand to a command. One command may
 // run for {@link TIMEOUT}, so a grant with less than that left is one that
@@ -208,7 +209,10 @@ export let signed = async (
   // commands must speak as.
   let has = was?.person == person ? await book.held(was.person, was.id) : null
   if (alive(has, now)) {
-    return { YAKS_TOKEN: await tokenOf(has, secret), YAKS_HOST: HOST }
+    return {
+      YAKS_TOKEN: await tokenOf(has, secret),
+      YAKS_HOST: sandboxHost(env),
+    }
   }
   let { grant, token } = await mint(secret, book, {
     person,
@@ -216,7 +220,7 @@ export let signed = async (
     hours: LIFE,
   }, now)
   await book.wear(holder, grant, now)
-  return { YAKS_TOKEN: token, YAKS_HOST: HOST }
+  return { YAKS_TOKEN: token, YAKS_HOST: sandboxHost(env) }
 }
 
 // The grant the container was wearing, taken back. Telemetry rather than a

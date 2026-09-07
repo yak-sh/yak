@@ -66,6 +66,33 @@ Deno.test('every public method answers, out of the site and nothing else', async
   assertEquals(read.contents[0].text, '# /guide/querying.md')
 })
 
+Deno.test('public MCP words and resources use the configured apex', async () => {
+  let env = { ...site(), APEX: 'yaks.fyi' }
+  let init = await answer('initialize', {}, env) as {
+    serverInfo: { websiteUrl: string; icons: { src: string }[] }
+    instructions: string
+  }
+  assertEquals(init.serverInfo.websiteUrl, 'https://yaks.fyi')
+  assertEquals(init.serverInfo.icons[0].src, 'https://yaks.fyi/connector.svg')
+  assert(init.instructions.includes('yourname.yaks.fyi/<app>/'))
+  assert(init.instructions.includes('https://yaks.fyi/login'))
+
+  let listed = await answer('resources/list', {}, env) as {
+    resources: { uri: string; description: string }[]
+  }
+  assertEquals(listed.resources[0].uri, 'https://yaks.fyi/guide.md')
+  assert(listed.resources.every((doc) => doc.uri.includes('yaks.fyi')))
+  assert(
+    listed.resources.find((doc) => doc.uri.endsWith('/home.md'))!
+      .description.includes('<space>.yaks.fyi/'),
+  )
+
+  let ideas = await answer('prompts/get', { name: IDEAS.name }, env) as {
+    messages: { content: { text: string } }[]
+  }
+  assert(ideas.messages[0].content.text.includes('https://yaks.fyi/login'))
+})
+
 Deno.test('a protected method, tool or page is not answered here', async () => {
   let s = site()
   for (

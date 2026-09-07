@@ -19,11 +19,12 @@
 // nobody else — the same rule as the file door in apps.ts, which is not the
 // app's `access` bargain. An app's `access` says what a STRANGER may do with
 // its data; its bytes are always a member's.
+import { apex } from './host.ts'
 import * as dirPart from './directory.ts'
 import { directory, url as addressOf } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { dropped, nothingHere } from './pages.ts'
-import { hostOf, PLATFORM, route, SLUG } from './route.ts'
+import { hostOf, route, SLUG } from './route.ts'
 import { whoIs } from './session.ts'
 import { call, inApp, wrote } from './tools.ts'
 import { type Entry, MAX, unzip } from './unzip.ts'
@@ -65,12 +66,12 @@ let opened = async (file: File): Promise<Entry[]> => {
 }
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
-  let r = route(hostOf(req), new URL(req.url).pathname)
+  let r = route(hostOf(req), new URL(req.url).pathname, env)
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
   let space = r.space ? await dir.space(r.space) : null
-  if (!space) return nothingHere()
+  if (!space) return nothingHere(env)
   let no = (why: string, status = 400) =>
-    dropped({ space: space!.slug, why, status })
+    dropped({ space: space!.slug, why, status }, env)
   let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p))
   // Signing in is the way through for a stranger; for somebody signed in who
   // is nobody here, there is no way through and the sentence says whose it is
@@ -78,12 +79,14 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   if (!writes(who.role)) {
     return who.person
       ? no(
-        `${space.slug}.yaks.app is not yours to deploy to — its owner can ` +
+        `${space.slug}.${
+          apex(env)
+        } is not yours to deploy to — its owner can ` +
           'make you an editor.',
         403,
       )
       : no(
-        `Sign in at https://${PLATFORM}/login first — deploying here is for ` +
+        `Sign in at https://${apex(env)}/login first — deploying here is for ` +
           'whoever this space belongs to.',
         401,
       )
@@ -138,10 +141,10 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     return dropped({
       space: space.slug,
       slug,
-      url: now ? addressOf(space, now) : undefined,
+      url: now ? addressOf(space, now, env) : undefined,
       version: now?.version ?? undefined,
       files: paths,
-    })
+    }, env)
   } catch (e) {
     // Everything below here answers a sentence: unzip.ts writes one per
     // refusal, and a tool's own no is already the words an agent would read.

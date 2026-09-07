@@ -45,6 +45,7 @@ import {
 import { ceiling, serve, unseenBlock } from './unseen.ts'
 import { appVocab, PLATFORM_APART } from './vocab.ts'
 import { lined } from './wire.ts'
+import { type Host, hosted } from './host.ts'
 
 // One JSON Schema property as Zod. The tool table spells plain shapes — a
 // string, a number, a flag, a list, an object — and the MCP SDK takes Zod, so
@@ -52,7 +53,7 @@ import { lined } from './wire.ts'
 // being guessed at: the tool's own `run` checks its arguments anyway (tools.ts
 // `text`, `list`, `files`), and a schema that lied would refuse a call the
 // tool would have accepted.
-let propOf = (schema: unknown): z.ZodTypeAny => {
+let propOf = (schema: unknown, env: Host = {}): z.ZodTypeAny => {
   let s = (schema ?? {}) as { type?: string; items?: unknown }
   let one = s.type == 'string'
     ? z.string()
@@ -61,12 +62,12 @@ let propOf = (schema: unknown): z.ZodTypeAny => {
     : s.type == 'boolean'
     ? z.boolean()
     : s.type == 'array'
-    ? z.array(propOf(s.items))
+    ? z.array(propOf(s.items, env))
     : s.type == 'object'
     ? z.record(z.unknown())
     : z.unknown()
   let said = (schema as { description?: string })?.description
-  return said ? one.describe(said) : one
+  return said ? one.describe(hosted(said, env)) : one
 }
 
 /**
@@ -75,6 +76,7 @@ let propOf = (schema: unknown): z.ZodTypeAny => {
  */
 export let inputOf = (
   schema: unknown,
+  env: Host = {},
 ): Record<string, z.ZodTypeAny> => {
   let s = (schema ?? {}) as {
     properties?: Record<string, unknown>
@@ -84,7 +86,10 @@ export let inputOf = (
   return Object.fromEntries(
     Object.entries(s.properties ?? {}).map((
       [name, prop],
-    ) => [name, need.has(name) ? propOf(prop) : propOf(prop).optional()]),
+    ) => [
+      name,
+      need.has(name) ? propOf(prop, env) : propOf(prop, env).optional(),
+    ]),
   )
 }
 
@@ -93,8 +98,11 @@ export let inputOf = (
  * tool that says nothing about its answer declares nothing, which is what
  * leaves the reply plain text.
  */
-export let outputOf = (schema: unknown): z.ZodTypeAny | undefined =>
-  schema == undefined ? undefined : z.object(inputOf(schema))
+export let outputOf = (
+  schema: unknown,
+  env: Host = {},
+): z.ZodTypeAny | undefined =>
+  schema == undefined ? undefined : z.object(inputOf(schema, env))
 
 /**
  * A platform tool's answer: the sentence it always said, and the view's data
@@ -150,8 +158,8 @@ let metaOf = (t: Sugar): Pick<Tool, 'meta'> => {
 export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
   name: t.name,
   title: t.title,
-  description: t.description,
-  input: inputOf(t.input),
+  description: hosted(t.description, ctx.env),
+  input: inputOf(t.input, ctx.env),
   // What it does, carried whole — the transport turns these four into the
   // MCP annotations (@yaks/mcp `annotated`), and a hint dropped here is a
   // tool the host mis-prompts about.
@@ -162,7 +170,7 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
   // What it answers, where it says: the `Say`'s data rides as the reply's
   // structuredContent unwrapped (@yaks/mcp `server`), so the schema describes
   // that object itself rather than a value under a key.
-  ...(t.output ? { output: outputOf(t.output) } : {}),
+  ...(t.output ? { output: outputOf(t.output, ctx.env) } : {}),
   // The page a host renders this answer in (MCP Apps): the tool names it, the
   // transport hands it over verbatim, and a host without views ignores it.
   ...metaOf(t),
@@ -184,7 +192,7 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
 export let platform = (ctx: Ctx): Plugin => ({
   name: 'yak/platform',
   tools: TOOLS.map((t) =>
-    ctx.person || openly(t) ? sugared(ctx, t) : barred(sugared(ctx, t))
+    ctx.person || openly(t) ? sugared(ctx, t) : barred(sugared(ctx, t), ctx.env)
   ),
 })
 

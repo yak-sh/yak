@@ -261,6 +261,6 @@ export let full = async (
   let mine = thisMonth(app.meter, month)?.bytes ?? 0
   let live = await bytesOf(env, storeName(space, app))
   return held - mine + live + extra > free.bytes
-    ? atCeiling(space, 'bytes')
+    ? atCeiling(space, 'bytes', env)
     : ''
 }

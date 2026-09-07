@@ -91,7 +91,7 @@ export let onceLink = async (secret: string, once: Once, at = PLATFORM) =>
 export let stand = async (
   secret: string,
   book: Links,
-  want: { person: string; days?: number },
+  want: { person: string; days?: number; host?: string },
   now = Date.now(),
 ): Promise<{ standing: Standing; url: string }> => {
   let days = want.days ?? DAYS
@@ -106,7 +106,7 @@ export let stand = async (
   await book.keep(standing, now)
   return {
     standing,
-    url: linkTo(await seal({ standing } satisfies Pass, secret)),
+    url: linkTo(await seal({ standing } satisfies Pass, secret), want.host),
   }
 }
 

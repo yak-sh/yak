@@ -39,6 +39,7 @@
 // never refused, because those files exist and their rows are already written
 // (Jeff, 2026-09-05: "there are a few users! can't just drop"). The two
 // spellings load to the same vocabulary.
+import { type Host, url } from './host.ts'
 import {
   CORE_URI,
   type Keywords,
@@ -222,11 +223,13 @@ export let notifiedDoc: VocabDoc = {
  * the read door, because it is the same missing act. The fleet's own store
  * says it too (src/store/vocab.ts `TEACH`); it is spelled again here because
  * the Store carries the packages' vocabulary and never the fleet's. */
-export let GUIDE = 'https://yaks.app/guide.md'
-export let TEACH = ' — a component of your own is declared in vocab.json ' +
+export let GUIDE = url({}, '/guide.md')
+export let teach = (env: Host = {}) =>
+  ' — a component of your own is declared in vocab.json ' +
   'and planted by app_deploy: ' +
   '{"recipe": {"title": "text", "serves": "number"}} · call guide with page ' +
-  `components, or ${GUIDE}`
+  `components, or ${url(env, '/guide.md')}`
+export let TEACH = teach()
 
 /**
  * The words the platform gives every app to reach for rather than invent

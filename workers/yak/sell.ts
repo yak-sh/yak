@@ -48,7 +48,8 @@ import {
 } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { metaOf } from './meta.ts'
-import { managePath, PLATFORM, PRICING } from './route.ts'
+import { managePath } from './route.ts'
+import { apex, type Host, url as hostUrl } from './host.ts'
 import { whoIs } from './session.ts'
 
 // ---- the fee ---------------------------------------------------------------
@@ -185,8 +186,8 @@ export let account = (space: Space, email: string) => ({
  * its own would have to say the same three things and could only say them less
  * currently — Stripe returns the browser the moment the form is submitted,
  * which is before `account.updated` has necessarily arrived. */
-export let backTo = (space: Space) =>
-  `https://${space.slug}.${PLATFORM}${managePath('selling')}`
+export let backTo = (space: Space, env: Host = {}) =>
+  `https://${space.slug}.${apex(env)}${managePath('selling')}`
 
 /** The onboarding link, as the form fields of `POST /v1/account_links`.
  *
@@ -194,11 +195,11 @@ export let backTo = (space: Space) =>
  * link for an account that has its own dashboard, and ours all do. A seller
  * changing their details later does it in their own Stripe Dashboard, which is
  * the whole point of giving them one. */
-export let link = (space: Space, id: string) => ({
+export let link = (space: Space, id: string, env: Host = {}) => ({
   account: id,
   type: 'account_onboarding',
-  return_url: backTo(space),
-  refresh_url: backTo(space),
+  return_url: backTo(space, env),
+  refresh_url: backTo(space, env),
 })
 
 // ---- what the platform writes down about a seller ---------------------------
@@ -256,10 +257,12 @@ export let selling = (space: Space): 'none' | 'setup' | 'ready' =>
 
 // New payments require Plus. Existing orders and Stripe events still settle
 // after a downgrade, and the seller can always disconnect their account.
-export let refusedSell = (space: Space) =>
+export let refusedSell = (space: Space, env: Host = {}) =>
   space.tier == 'plus'
     ? null
-    : `Taking payments requires Plus. Compare plans: ${PRICING}`
+    : `Taking payments requires Plus. Compare plans: ${
+      hostUrl(env, '/pricing')
+    }`
 
 // ---- connecting ------------------------------------------------------------
 
@@ -284,7 +287,7 @@ let wrote = (env: Env, space: Space, row: Record<string, unknown> | null) =>
  * The link is minted fresh every time, because it is single-use and expires.
  */
 export let connect = async (env: Env, space: Space, email: string) => {
-  let no = refusedSell(space)
+  let no = refusedSell(space, env)
   if (no) throw new Error(no)
   let id = space.stripe?.account
   if (!id) {
@@ -299,7 +302,7 @@ export let connect = async (env: Env, space: Space, email: string) => {
       detailsSubmitted: row.details_submitted,
     }
   }
-  let made = await ask(env, '/v1/account_links', link(space, id))
+  let made = await ask(env, '/v1/account_links', link(space, id, env))
   let url = String(made.url ?? '')
   if (!url) throw new Error('stripe made an account link with no url')
   return { account: id, url }
@@ -531,7 +534,7 @@ export let buying = async (
   if (!env.STRIPE_KEY) {
     return no(503, 'no_selling', 'selling is not switched on here')
   }
-  let upgrade = refusedSell(at.space)
+  let upgrade = refusedSell(at.space, env)
   if (upgrade) return no(403, 'plus_required', upgrade)
   let where = selling(at.space)
   if (where != 'ready') {
@@ -812,7 +815,7 @@ let inApp = async (env: Env, space: Space, slug: string) => {
  * a member here and never will be. `editor` is what puts that write past the
  * app's own `access` and no further. */
 let asApp = (env: Env, space: Space, app: App) => {
-  let store = appStore(env.STORE, space, app)
+  let store = appStore(env.STORE, space, app, env)
   let who = { 'x-yak-person': app.eid, 'x-yak-role': 'editor' }
   return metaOf((path, init, sent) => store(path, init, { ...who, ...sent }))
 }

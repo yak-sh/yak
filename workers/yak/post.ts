@@ -18,7 +18,8 @@
 // same sentence. A slug carries no dot (route.ts `SLUG`), so the single dot in
 // a local part is unambiguously the seam between the space and the app.
 import { type Message, parts, type Receipt, type Sender } from '@yaks/mail'
-import { PLATFORM, SLUG } from './route.ts'
+import { SLUG } from './route.ts'
+import { apex, type Host } from './host.ts'
 
 /**
  * The address an app writes from: `<space>.<app>@yaks.app`, and
@@ -30,8 +31,11 @@ import { PLATFORM, SLUG } from './route.ts'
  * mailFrom('ada', null)       // 'ada@yaks.app'
  * ```
  */
-export let mailFrom = (space: string, app: string | null): string =>
-  `${app ? `${space}.${app}` : space}@${PLATFORM}`
+export let mailFrom = (
+  space: string,
+  app: string | null,
+  env: Host = {},
+): string => `${app ? `${space}.${app}` : space}@${apex(env)}`
 
 /** An app's mailbox, as {@link mailedTo} reads one back. */
 export type Mailbox = { space: string; app: string | null }
@@ -48,9 +52,9 @@ export type Mailbox = { space: string; app: string | null }
  * mailedTo('a.b.c@yaks.app')        // null
  * ```
  */
-export let mailedTo = (address: string): Mailbox | null => {
+export let mailedTo = (address: string, env: Host = {}): Mailbox | null => {
   let split = parts(address.trim().toLowerCase())
-  if (!split || split[1] != PLATFORM) return null
+  if (!split || split[1] != apex(env)) return null
   let [space, app, ...rest] = split[0].split('.')
   if (rest.length || !SLUG.test(space ?? '')) return null
   if (app != null && !SLUG.test(app)) return null
@@ -114,3 +118,5 @@ export let posting = (mail?: Binding): Sender => ({
     return id ? { id } : {}
   },
 })
+
+export let replyTo = (env: Host = {}) => `hello@${apex(env)}`

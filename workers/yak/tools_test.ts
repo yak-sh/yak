@@ -11,6 +11,8 @@ import {
 } from '@std/assert'
 import { MAX } from './apps.ts'
 import {
+  call,
+  type Ctx,
   fetched,
   opOf,
   parses,
@@ -21,6 +23,97 @@ import {
   uiMeta,
 } from './tools.ts'
 import { sha256 } from './versions.ts'
+import { platform } from './harness.ts'
+import { directory } from './directory.ts'
+import * as dirPart from './directory.ts'
+import { inApp } from './tool.ts'
+import { letters } from './letters.ts'
+import { appVocab } from './vocab.ts'
+
+Deno.test('staging tool URLs and app mail use the same configured host', async () => {
+  let delivered: { to: string; from: string }[] = []
+  let { env } = platform('staging-tool-secret', {
+    APEX: 'yaks.fyi',
+    MAIL: {
+      send: (letter) => {
+        delivered.push({ to: letter.to, from: letter.from })
+        return Promise.resolve({ messageId: 'sent' })
+      },
+    },
+  })
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  let ctx: Ctx = {
+    env,
+    dir,
+    person: 'a0000000-0000-4000-8000-0000000000ad',
+  }
+  let space = await call(ctx, 'space_new', { slug: 'ada', title: 'Ada' })
+  assertStringIncludes(space.text, 'https://ada.yaks.fyi/')
+  let made = await call(ctx, 'app_new', {
+    space: 'ada',
+    slug: 'recipes',
+    title: 'Recipes',
+  })
+  assertStringIncludes(made.text, 'https://ada.yaks.fyi/recipes/')
+  let listed = await call(ctx, 'app_list', {})
+  assertStringIncludes(listed.text, 'https://ada.yaks.fyi/recipes/')
+  assertStringIncludes(listed.text, 'ada.recipes@yaks.fyi')
+  assertStringIncludes(
+    (await call(ctx, 'about', {})).text,
+    'https://yaks.fyi/login',
+  )
+  await call(ctx, 'app_files', {
+    space: 'ada',
+    app: 'recipes',
+    path: 'dishes.csv',
+    content: 'title\nPudding\n',
+  })
+  await assertRejects(
+    () =>
+      call(ctx, 'store_load', {
+        space: 'ada',
+        app: 'recipes',
+        path: 'dishes.csv',
+        as: 'undeclared',
+      }),
+    Error,
+    'https://yaks.fyi/guide.md',
+  )
+  await assertRejects(
+    () =>
+      call(ctx, 'domain_attach', { space: 'ada', hostname: 'test.yaks.fyi' }),
+    Error,
+    'test.yaks.fyi is on yaks.fyi',
+  )
+
+  let [listing, sending] = letters(ctx, appVocab())
+  assertStringIncludes(sending.description!, '<space>.<app>@yaks.fyi')
+  let out = await sending.run({
+    space: 'ada',
+    app: 'recipes',
+    to: 'ana@books.example',
+    title: 'Dinner',
+    body: 'Bring pudding.',
+  }, {} as never) as { mail: { from: string } }
+  assertEquals(out.mail.from, 'ada.recipes@yaks.fyi')
+  let sent = await listing.run({
+    space: 'ada',
+    app: 'recipes',
+    direction: 'sent',
+  }, {} as never) as { mail: { from: string } }[]
+  assertEquals(sent.map((l) => l.mail.from), ['ada.recipes@yaks.fyi'])
+  let { store } = await inApp(ctx, { space: 'ada', app: 'recipes' })
+  let read = await store('/query?q=.mail!', {}, {
+    'x-yak-person': ctx.person,
+    'x-yak-role': 'owner',
+  })
+  assertEquals(read.status, 200)
+  assertEquals((await read.json())[0].mail.from, 'ada.recipes@yaks.fyi')
+  assertEquals(delivered, [{
+    to: 'ana@books.example',
+    from: 'ada.recipes@yaks.fyi',
+  }])
+})
 
 let bytes = (s: string) => new TextEncoder().encode(s)
 

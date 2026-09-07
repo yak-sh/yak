@@ -4,8 +4,10 @@
 // loopback, the workers.dev preview — serves as the apex, and only there does
 // `x-yak-host` stand in for a hostname a test cannot send (fetch refuses a
 // Host header): on the platform's own hostnames the header is ignored, so no
-// client routes itself into a space by header. Pure: no env, no store.
-export let PLATFORM = 'yaks.app'
+// client routes itself into a space by header. Pure: only the configured host, no store.
+import { apex, type Host, spaceHost, url } from './host.ts'
+
+export let PLATFORM = apex()
 
 // Account pages have their own path, outside the app-slug namespace, so a
 // custom front page never replaces the place its owner manages their apps.
@@ -46,7 +48,7 @@ export let manageView = (path: string): ManageView | null => {
 // allows explaining that a feature needs a plan and linking to a page that
 // describes the plans. So a tool answer may name this and never a checkout
 // link — checkout is the signed-in web page's, and email's.
-export let PRICING = `https://${PLATFORM}/pricing`
+export let PRICING = url({}, '/pricing')
 
 // The agent door, as an address a person types into a connector form: two
 // spellings of ONE resource (mcp.ts). `MCP` is lazy — it tells a stranger
@@ -56,7 +58,7 @@ export let PRICING = `https://${PLATFORM}/pricing`
 // writing down "no auth" (T-34416). Here for the same reason PRICING is: the
 // door and the page that teaches somebody to type it must say the same
 // string, and pages.ts is identity.ts's, never the other way round.
-export let MCP = `https://${PLATFORM}/mcp`
+export let MCP = url({}, '/mcp')
 export let MCP_ASK = `${MCP}?auth=required`
 
 // Where signing in happens — one email address and a six-digit code, and the
@@ -65,14 +67,16 @@ export let MCP_ASK = `${MCP}?auth=required`
 // the same string, and the tools that name it in a refusal (tools.ts, anon.ts)
 // cannot import identity.ts, which re-exports it, without dragging the
 // runtime's own modules into a Deno test.
-export let SIGN_IN = `https://${PLATFORM}/login`
+export let SIGN_IN = url({}, '/login')
+export let says = (env: Host = {}) =>
+  `sign in at ${url(env, '/login')} to reach your apps from here`
 
 // And the sentence every refusal says about it: what a person's agent reads
 // when it asked for something nobody signed in may have. It lives here beside
 // the address rather than at one of the doors, because three of them say it —
 // the 401 and its challenge (identity.ts), and the tools a stranger is SHOWN
 // but may not call (anon.ts `barred`).
-export let SAYS = `sign in at ${SIGN_IN} to reach your apps from here`
+export let SAYS = says()
 
 // And what an agent's connector form asks for when it will not go and find it
 // (T-34414): the authorization server's own addresses and the one scope.
@@ -145,8 +149,13 @@ export let SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/
 // says the app's pages resolve from the domain's root rather than from the
 // prefix the platform routed by. Both may point at one space at once — the
 // app's own domain opens it at `/`, the space's opens it at `/<app>/`.
-export let aimedAt = (space: string, app: string | null, pathname: string) => ({
-  host: `${space}.${PLATFORM}`,
+export let aimedAt = (
+  space: string,
+  app: string | null,
+  pathname: string,
+  env: Host = {},
+) => ({
+  host: spaceHost(env, space),
   pathname: app ? `/${app}${pathname}` : pathname,
   mount: app ? '/' : null,
 })
@@ -167,8 +176,8 @@ export let hostOf = (req: Request) => {
 // platform already answers on is not foreign, so every route that exists
 // today is decided before this is ever asked: the apex, a space, a dev host,
 // and `x.y.yaks.app`, which was the apex before custom domains and still is.
-export let foreign = (host: string) =>
-  !dev(host) && host != PLATFORM && !host.endsWith(`.${PLATFORM}`)
+export let foreign = (host: string, env: Host = {}) =>
+  !dev(host) && host != apex(env) && !host.endsWith(`.${apex(env)}`)
 
 // An address on the platform's own zone: https, and the apex or a hostname
 // under it. It is what a sign-in may hand someone back to (T-32593) — a
@@ -186,7 +195,7 @@ export let foreign = (host: string) =>
 // sign-in hands them back there, signed in. A domain that wants to keep
 // someone on their own hostname needs its own verified return, not a wider
 // `onZone`.
-export let onZone = (href: string) => {
+export let onZone = (href: string, env: Host = {}) => {
   // A bare path is on the zone by construction, and it is what the platform's
   // own returns are made of (`/login?return=/connect`), so refusing one threw
   // away every address we minted ourselves. `//host` — and `/\host`, which a
@@ -201,14 +210,14 @@ export let onZone = (href: string) => {
   }
   let host = url.hostname.toLowerCase()
   return url.protocol == 'https:' &&
-      (host == PLATFORM || host.endsWith(`.${PLATFORM}`))
+      (host == apex(env) || host.endsWith(`.${apex(env)}`))
     ? url.href
     : null
 }
 
-export let route = (host: string, pathname: string): Route => {
-  let space = host.endsWith(`.${PLATFORM}`)
-    ? host.slice(0, -PLATFORM.length - 1)
+export let route = (host: string, pathname: string, env: Host = {}): Route => {
+  let space = host.endsWith(`.${apex(env)}`)
+    ? host.slice(0, -apex(env).length - 1)
     : null
   if (space == null || !SLUG.test(space)) {
     return { space: null, app: null, path: pathname }
@@ -272,8 +281,8 @@ export let route = (host: string, pathname: string): Route => {
 // That measurement is also why the platform can answer its own 404 on our
 // hostnames instead of passing a request through to a fallback origin that is
 // deliberately originless (`AAAA 100::`).
-export let platform = (host: string, pathname: string) =>
-  !foreign(host) && pathname.startsWith('/.well-known/')
+export let platform = (host: string, pathname: string, env: Host = {}) =>
+  !foreign(host, env) && pathname.startsWith('/.well-known/')
 
 // The doors the graph answers at, read from the path a browser asked for:
 // an app's `/<app>/api/…`, a front page's own `/api/…` (apps.ts `fetch`

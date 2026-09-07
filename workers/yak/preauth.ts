@@ -39,14 +39,15 @@
 import type { Security } from '@yaks/mcp'
 import { VERSION } from '../../src/version.ts'
 import type { Env } from './env.ts'
-import { PAGES, uriOf, WHOLE } from './guide.ts'
+import { PAGES, uriOf, whole } from './guide.ts'
+import { apex, type Host, hosted, spaceHost, url } from './host.ts'
 import { IDEAS } from './prompts.ts'
-import { CONNECTOR } from './seo.ts'
+import { connector } from './seo.ts'
 
 // The whole world a public answer can see: the static site, which serves the
 // guide at the very addresses the listing names. Everything else in `Env` is
 // a way to read somebody's data, and none of it is here.
-export type Site = Pick<Env, 'ASSETS'>
+export type Site = Pick<Env, 'ASSETS' | 'APEX'>
 
 // The versions this door speaks, newest first. A client asks for one in
 // initialize; we answer with the same when we know it, else with ours, and
@@ -78,12 +79,14 @@ export let NO_ARGS = { type: 'object' as const, properties: {} }
 // say to someone who cannot do anything else yet: what gets made here, where
 // it lives, and where signing in happens — with the guide, which they can
 // already read.
-let ABOUT: Says = {
+export let about = (env: Host = {}): Says => ({
   name: 'about',
   text: `yaks.app is a place to make small web apps by asking for one. An app
 is an index.html and whatever files sit beside it — no build step, no
 framework, no install — served live at its own address,
-yourname.yaks.app/<app>/. It opens on a phone, it keeps its data in a store
+${
+    spaceHost(env, 'yourname')
+  }/<app>/. It opens on a phone, it keeps its data in a store
 of its own, and it is a link the person can send to somebody.
 
 What people make here is what they would otherwise keep in a note or a
@@ -92,13 +95,15 @@ a page for a trip. An app can be private, readable by anyone with the link,
 or open for anyone to write to. It can carry tools of its own, which an agent
 calls the way it calls these, and code of its own that runs on the server.
 
-Every app also has an address of its own, <space>.<app>@yaks.app — letters to
+Every app also has an address of its own, <space>.<app>@${
+    apex(env)
+  } — letters to
 it land in the app's store, and the app writes from it. That is the app's
 mailbox and never a person's own; mail asked about with no app named is their
 mail account, which is somewhere else entirely.
 
 Signed out, this door already does a fair amount. The guide is here to read:
-https://yaks.app/guide.md is the map, and a page per subject sits beside it.
+${url(env, '/guide.md')} is the map, and a page per subject sits beside it.
 app_published is what other people have published, browsable by word.
 graph_query, graph_show, graph_schema and search read ONE app you name — its
 space and its slug — as long as its pages are readable by anyone with the
@@ -106,13 +111,14 @@ link, which is exactly what a browser at that address would see. And feedback
 reaches the people who run this place whether or not anybody has signed in.
 
 Making anything needs signing in: a space, an app, its files, a deploy, and
-writing any app's data. Sign in at https://yaks.app/login — one email address
+writing any app's data. Sign in at ${url(env, '/login')} — one email address
 and a six-digit code, no password. That one line is also signing up: an
 address nobody has used here yet becomes an account on the spot, with a space
 of its own. Then this connector grows the tools to build with.`,
-}
+})
 
-export let PUBLIC: Says[] = [ABOUT]
+export let publics = (env: Host = {}): Says[] => [about(env)]
+export let PUBLIC = publics()
 
 // What a tool declares about signing in, per tool. It is said out loud rather
 // than left off, because a host reads a MIXED-auth server one tool at a time —
@@ -150,8 +156,8 @@ export type Doc = {
 // The guide is how an app is built here, and how its pages save and list
 // through the client the kernel serves them (public/guide.md): the map,
 // covering pretty much everything, briefly.
-let GUIDE: Doc = {
-  uri: WHOLE,
+let guide = (env: Host = {}): Doc => ({
+  uri: whole(env),
   name: 'building-an-app',
   title: 'Building an app on yaks.app',
   description:
@@ -159,26 +165,28 @@ let GUIDE: Doc = {
     'through ./api/client.js, and a passage on every feature there is. ' +
     'Read it first; read a page below for the depth on one of them.',
   mimeType: 'text/markdown',
-  page: WHOLE,
-}
+  page: whole(env),
+})
 
 // And the pages that go deep, one per subject (guide.ts, T-32982). They are
 // ordinary files under public/, so the address in the listing is the one the
 // assets answer, and a person can follow it out of a chat.
-let DEEP: Doc[] = PAGES.map((p) => ({
-  uri: uriOf(p.slug),
-  name: `guide-${p.slug}`,
-  title: p.title,
-  description: p.description,
-  mimeType: 'text/markdown',
-  page: uriOf(p.slug),
-}))
+let deep = (env: Host = {}): Doc[] =>
+  PAGES.map((p) => ({
+    uri: uriOf(p.slug, env),
+    name: `guide-${p.slug}`,
+    title: p.title,
+    description: hosted(p.description, env),
+    mimeType: 'text/markdown',
+    page: uriOf(p.slug, env),
+  }))
 
 // The public resources: the guide and its pages, and nothing else. A `ui://`
 // view is a page a host renders for a signed-in person's own answer, and an
 // app's own view belongs to whoever can reach that app — neither is here, so
 // neither can be read from here.
-export let DOCS: Doc[] = [GUIDE, ...DEEP]
+export let docs = (env: Host = {}): Doc[] => [guide(env), ...deep(env)]
+export let DOCS = docs()
 
 // One resource's bytes, from the assets the apex serves. A redirect is
 // followed once: in production the assets binding drops a page's `.html` and
@@ -188,7 +196,9 @@ export let asset = async (site: Site, url: string) => {
   let page = await site.ASSETS.fetch(new Request(url))
   let to = page.status > 299 && page.status < 400 &&
     page.headers.get('location')
-  return to ? site.ASSETS.fetch(new Request(new URL(to, url).href)) : page
+  if (to) page = await site.ASSETS.fetch(new Request(new URL(to, url).href))
+  if (!site.APEX) return page
+  return new Response(hosted(await page.text(), site), page)
 }
 
 let listed = ({ uri, name, title, description, mimeType }: Doc) => ({
@@ -210,6 +220,7 @@ export let answer = async (
   params: Record<string, unknown>,
   site: Site,
 ): Promise<unknown | null> => {
+  let available = docs(site)
   if (method == 'initialize') {
     return {
       protocolVersion: spoken(params.protocolVersion),
@@ -228,12 +239,12 @@ export let answer = async (
       // The face, before signing in — the same one the signed-in door answers
       // (seo.ts CONNECTOR, mcp.ts). It is what a directory reviewer and a
       // connector form both read FIRST, so it must not wait on a grant.
-      serverInfo: { ...CONNECTOR, version: VERSION },
+      serverInfo: { ...connector(site), version: VERSION },
       // What a signed-in caller gets here is the whole recipe for building
       // (guide.ts INSTRUCTIONS). Before signing in, that would be instructions
       // for tools this caller has not got, so the orientation is the one
       // thing that is true either way.
-      instructions: ABOUT.text,
+      instructions: about(site).text,
     }
   }
   if (method == 'ping') return {}
@@ -258,13 +269,13 @@ export let answer = async (
       description: IDEAS.description,
       messages: [{
         role: 'user',
-        content: { type: 'text', text: IDEAS.say({}, null) },
+        content: { type: 'text', text: IDEAS.say({}, null, site) },
       }],
     }
   }
-  if (method == 'resources/list') return { resources: DOCS.map(listed) }
+  if (method == 'resources/list') return { resources: available.map(listed) }
   if (method == 'resources/read') {
-    let want = DOCS.find((d) => d.uri == params.uri)
+    let want = available.find((d) => d.uri == params.uri)
     if (!want) return null
     let page = await asset(site, want.page)
     return {

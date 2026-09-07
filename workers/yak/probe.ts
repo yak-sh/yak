@@ -18,6 +18,7 @@
 // second `wrangler dev` anywhere on the box dies with "Address already in
 // use" — and the test suite runs its files in parallel (bin/test.ts), so
 // every kernel here would be a second one for somebody.
+import { apex } from './host.ts'
 import { until } from '../../src/testing.ts'
 import { COOKIE, sign, verify } from '../../src/token.ts'
 import { ready, WRANGLER } from './wrangler.ts'
@@ -46,6 +47,7 @@ export type Kernel = Awaited<ReturnType<typeof kernel>>
 
 export let kernel = async (vars: Record<string, string> = {}) => {
   await ready()
+  let host = apex(vars)
   let port = freePort()
   let inspector = freePort()
   let secret = crypto.randomUUID()
@@ -125,7 +127,7 @@ export let kernel = async (vars: Record<string, string> = {}) => {
   try {
     await until(async () => {
       try {
-        return (await at('yaks.app', '/')).ok
+        return (await at(host, '/')).ok
       } catch {
         return false
       }
@@ -134,7 +136,7 @@ export let kernel = async (vars: Record<string, string> = {}) => {
     await stop()
     throw e
   }
-  return { base, secret, at, stop, log }
+  return { base, secret, at, stop, log, host }
 }
 
 /**
@@ -366,7 +368,7 @@ export let connector = (k: Kernel, cookie?: string, bearer?: string) => {
   // the tool list it cached (mcp.ts).
   let session = ''
   let call = async (method: string, params: unknown = {}) => {
-    let r = await k.at('yaks.app', '/mcp', {
+    let r = await k.at(k.host, '/mcp', {
       method: 'POST',
       headers: {
         ...(cookie ? { cookie } : {}),
@@ -470,10 +472,10 @@ export let rfc822 = (head: Record<string, string>, body: string) =>
 // their address is what the platform ends up calling them.
 export let signIn = async (
   k: Kernel,
-  email = `probe-${crypto.randomUUID().slice(0, 8)}@yaks.app`,
+  email = `probe-${crypto.randomUUID().slice(0, 8)}@${k.host}`,
 ) => {
   let form = (path: string, fields: Record<string, string>) =>
-    k.at('yaks.app', path, {
+    k.at(k.host, path, {
       method: 'POST',
       redirect: 'manual',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },

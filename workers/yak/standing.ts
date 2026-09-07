@@ -40,6 +40,7 @@ import { r2Blobs } from '../../src/blobs_r2.ts'
 import { type App, type Space, storeName, url } from './directory.ts'
 import { storeOf } from './door.ts'
 import type { Env } from './env.ts'
+import type { Host } from './host.ts'
 import { at, reachable, toolsOf } from './declared.ts'
 import { told } from './memory.ts'
 import type { Ctx } from './tools.ts'
@@ -181,9 +182,11 @@ export let HAS_NOTES = 'Keeps notes of its own, which about hands over.'
 // One app's heading and the line under it — then either its notes, or a line
 // saying it has some. The roster is the half that rides on the instructions,
 // so what an app's person wrote appears only where something asked for it.
-let entry = (e: Entry, notes: boolean): string =>
+let entry = (e: Entry, notes: boolean, env: Host): string =>
   `## ${e.space.slug}/${e.app.slug}\n` +
-  `${url(e.space, e.app)} — ${e.app.title || e.app.slug}, ${holds(e.kinds)}.` +
+  `${url(e.space, e.app, env)} — ${e.app.title || e.app.slug}, ${
+    holds(e.kinds)
+  }.` +
   `${e.commands.length ? ` Commands: ${e.commands.join(', ')}.` : ''}` +
   `${e.said ? notes ? `\n\n${e.said}` : ` ${HAS_NOTES}` : ''}`
 
@@ -237,17 +240,17 @@ export let standing = async (
 ): Promise<{ text: string; notes: string; apps: Entry[] }> => {
   let apps = await entries(ctx, reach, commands)
   return {
-    text: passage(apps),
-    notes: [passage(apps, true), ...await heard(ctx)].filter(Boolean)
+    text: passage(apps, false, ctx.env),
+    notes: [passage(apps, true, ctx.env), ...await heard(ctx)].filter(Boolean)
       .join('\n\n'),
     apps,
   }
 }
 
 /** The apps as one passage, or '' where there are none. */
-export let passage = (apps: Entry[], notes = false): string =>
+export let passage = (apps: Entry[], notes = false, env: Host = {}): string =>
   apps.length
-    ? `${OPENING}\n\n${apps.map((e) => entry(e, notes)).join('\n\n')}`
+    ? `${OPENING}\n\n${apps.map((e) => entry(e, notes, env)).join('\n\n')}`
     : ''
 
 /**
