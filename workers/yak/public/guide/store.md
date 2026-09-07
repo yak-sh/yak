@@ -335,10 +335,16 @@ them into the app's store:
       {"entity": {"eid": "$note"}, "doc": {"body": "double the cumin"},
        "comment": {"target": "$soup"}} ]
 
-When there is a lot of it, write a `seed/` folder of `*.json` files instead —
-`seed/01-places.json`, `seed/02-menu.json` — and write them a call at a time.
-All of them are ONE batch, read in filename order, so an alias minted in one
-file resolves in the next and the pieces can point at each other. Either
+A `seed.yml` is the same list written as YAML, and reads the same way:
+
+    - entity: {eid: $soup}
+      doc: {title: Lentil soup}
+      recipe: {serves: 4}
+
+When there is a lot of it, write a `seed/` folder of `*.json` (or `*.yml`) files
+instead — `seed/01-places.json`, `seed/02-menu.json` — and write them a call at
+a time. All of them are ONE batch, read in filename order, so an alias minted in
+one file resolves in the next and the pieces can point at each other. Either
 spelling works, and a `seed.json` with a `seed/` folder beside it is still that
 one batch, the file first.
 

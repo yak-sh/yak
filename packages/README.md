@@ -11,6 +11,10 @@ In dependency order:
   AST, or build the same AST from code. Schema-agnostic: it knows the format
   (operators, any-of lists, ranges, time literals, directives), not what any
   field means.
+- **[@yaks/yaml](./yaml)** — the warm path for the files a vocabulary and its
+  neighbours are DECLARED in: YAML as a value (JSON is YAML, so nothing has to
+  be migrated), a markdown file's frontmatter as a bundle, and the named holes
+  in a passage filled. Depends on nothing but the graph's `Bundle` type.
 - **[@yaks/vocab](./vocab)** — describe a component vocabulary as JSON Schema
   (2020-12) plus a small custom keyword vocabulary, and interrogate it at
   runtime: column types, path routing, display ordering, instance checks.

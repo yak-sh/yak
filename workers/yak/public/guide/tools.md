@@ -15,11 +15,11 @@ guide:
 # Commands of your own
 
 An app's pages need somebody looking at them. Its commands do not. A
-`tools.json` beside `index.html` gives the person's agent verbs of the app's own
-— log a run, read the leaderboard, close a shift — with nothing open. This page
-is that file: what an entry says, how `{{arg}}` holes are filled and typed, the
-two acts, what a deploy refuses, the page a command's answer draws itself in,
-and how `commands` and `command` carry the lot.
+`tools.json` (or `tools.yml`) beside `index.html` gives the person's agent verbs
+of the app's own — log a run, read the leaderboard, close a shift — with nothing
+open. This page is that file: what an entry says, how `{{arg}}` holes are filled
+and typed, the two acts, what a deploy refuses, the page a command's answer
+draws itself in, and how `commands` and `command` carry the lot.
 
 ## Why an app carries commands at all
 

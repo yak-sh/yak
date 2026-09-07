@@ -293,6 +293,18 @@ read them back on the row, filter on them, name them in a `tools.json`.
 
     let quick = await query('.recipe.minutes<=30&.doc?')
 
+Write it as `vocab.yml` instead if you would rather read it — YAML is the same
+manifest in fewer brackets, and an app that has both is deployed from the
+`.yml`:
+
+    recipe:
+      serves: number
+      minutes: number
+      source: text
+    cooked:
+      on: time
+      again: bool
+
 A component name is `a-z`, then `a-z0-9_`, up to 40 characters, and may not be
 one of the platform's words. A COLUMN name follows the same spelling and is
 checked against nothing else — only `entity` and `eid` are refused, since those
