@@ -177,9 +177,6 @@ slow(
         'member_remove',
         // The token that signs a terminal in (grants.ts, T-34385).
         'grant',
-        // What the person said, in their own words (memory.ts, T-34473).
-        'memory_save',
-        'memory_recall',
         'feedback',
         // The guide itself, so nothing has to be fetched off the web
         // (T-34284).
@@ -189,6 +186,11 @@ slow(
         // way (gallery.ts, T-34478).
         'about',
         'gallery_search',
+        // Then what the PLUGINS bring, after the platform's own rows and in
+        // list order (plugin.ts, T-34601): what the person said, in their own
+        // words (memory.ts, T-34473).
+        'memory_save',
+        'memory_recall',
         // And the post room's own two (letters.ts, T-34149), a plugin of
         // their own because they answer bundles rather than a sentence.
         'mail_list',

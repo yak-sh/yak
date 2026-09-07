@@ -10,6 +10,7 @@
 // This module is nothing but the list, on purpose: everything it imports is a
 // domain, and everything that imports it is a host, so the one file that knows
 // both sides knows nothing else.
+import { memoryPlugin } from './memory.ts'
 import type { Plugin } from './plugin.ts'
 
-export let PLUGINS: Plugin[] = []
+export let PLUGINS: Plugin[] = [memoryPlugin]

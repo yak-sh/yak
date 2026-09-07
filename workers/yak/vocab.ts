@@ -56,7 +56,6 @@ import { idKeywords } from '@yaks/id'
 import { keyDoc, keyKeywords } from '@yaks/key'
 import { mailDoc } from '@yaks/mail'
 import { memberDoc } from '@yaks/member'
-import { memoryDoc } from '@yaks/memory'
 import { vocabOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 
@@ -706,15 +705,14 @@ export let platformDoc: VocabDoc = {
  * mark spelled `archived` here and nowhere else would make the directory the
  * one store those doors cannot answer for.
  *
- * `memoryDoc` is among them and NOT among an app's (T-34473): a memory is a
- * thing the person said about how they want things built, and it holds whether
- * they are looking at one app or another — so it belongs to the SPACE, and the
- * directory is the one store a space has. The words themselves are its
- * `doc.body`, which is why @yaks/doc is loaded above it.
- *
  * A plugin's words land between the core documents and the platform's own
- * (plugin.ts `vocab`): after the words it is written in, and before the
- * platform's, which is what the directory IS and answers last. */
+ * (plugin.ts `vocab`): after the words they are written in, and before the
+ * platform's, which is what the directory IS and answers last. `memory` is
+ * one of them, and is among the DIRECTORY's words and not an app's (T-34473):
+ * a memory is a thing the person said about how they want things built, and it
+ * holds whether they are looking at one app or another — so it belongs to the
+ * SPACE, and the directory is the one store a space has. The words themselves
+ * are its `doc.body`, which is why @yaks/doc is loaded above every plugin. */
 export let platformDocs: VocabDoc[] = [
   coreDoc,
   docDoc,
@@ -724,7 +722,6 @@ export let platformDocs: VocabDoc[] = [
   notifiedDoc,
   keyDoc,
   aliasDoc,
-  memoryDoc,
   ...vocabOf(PLUGINS),
   platformDoc,
 ]
