@@ -5,17 +5,24 @@ import { inflate, separated, unreadPipe, worktreeRoot } from './client_host.ts'
 
 Deno.test('worktreeRoot: a linked worktree resolves, a main checkout does not', async () => {
   let base = await Deno.makeTempDir()
-  // a linked worktree: .git is a FILE (a gitdir: pointer)
-  let wt = `${base}/wt`
-  await Deno.mkdir(`${wt}/sub`, { recursive: true })
-  await Deno.writeTextFile(`${wt}/.git`, 'gitdir: /x/.git/worktrees/wt')
-  assertEquals(worktreeRoot(wt), wt)
-  assertEquals(worktreeRoot(`${wt}/sub`), wt) // from a subdir, still the root
-  // a main checkout: .git is a DIRECTORY everyone shares → not one agent's
-  let main = `${base}/main`
-  await Deno.mkdir(`${main}/.git`, { recursive: true })
-  assertEquals(worktreeRoot(main), undefined)
-  await Deno.remove(base, { recursive: true })
+  try {
+    // a linked worktree: .git is a FILE (a gitdir: pointer)
+    let wt = `${base}/wt`
+    await Deno.mkdir(`${wt}/sub`, { recursive: true })
+    await Deno.writeTextFile(`${wt}/.git`, 'gitdir: /x/.git/worktrees/wt')
+    assertEquals(worktreeRoot(wt), wt)
+    assertEquals(worktreeRoot(`${wt}/sub`), wt) // from a subdir, still the root
+
+    // A nested main checkout stops at its own .git DIRECTORY. Putting it
+    // below the fake worktree proves the walk cannot escape to that outer file.
+    let main = `${wt}/main`
+    await Deno.mkdir(`${main}/.git`, { recursive: true })
+    await Deno.mkdir(`${main}/sub`)
+    assertEquals(worktreeRoot(main), undefined)
+    assertEquals(worktreeRoot(`${main}/sub`), undefined)
+  } finally {
+    await Deno.remove(base, { recursive: true })
+  }
 })
 
 let p = (value: string) => ({ comp: 'doc', prop: 'body', value })

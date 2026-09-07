@@ -18,7 +18,11 @@ export let worktreeRoot = (dir = Deno.cwd()): string | undefined => {
   let d = dir
   while (true) {
     try {
-      if (Deno.statSync(`${d}/.git`).isFile) return d
+      let git = Deno.statSync(`${d}/.git`)
+      if (git.isFile) return d
+      // The nearest repository owns this path. Its directory marker means it
+      // is the shared checkout, so a linked worktree above it is irrelevant.
+      if (git.isDirectory) return
     } catch { /* no .git at this level — keep climbing */ }
     let up = parentDir(d)
     if (up == d) return
