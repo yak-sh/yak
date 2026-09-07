@@ -62,9 +62,8 @@
       <div class="Prose_Head">
         <h1 class="Title Title-page">Style guide</h1>
         <p class="Note Note-lead">
-          This page renders the tokens and components from
-          <code class="Pill Pill-code">style.css</code>. Use it to check a
-          change against the rest of the site.
+          This page renders the shared tokens and components used across
+          yaks.app. Use it to check a change against the rest of the site.
         </p>
         <p>
           <label class="Note Note-small" for="theme">Preview theme</label>
@@ -91,15 +90,19 @@
       <section class="Guide_Part" aria-labelledby="how-to">
         <h2 id="how-to" class="Title">Using the system</h2>
         <p class="Note">
-          One stylesheet, no build step, four declared layers — tokens, base,
-          components, and sections. Later layers take precedence. Follow these
+          No build step, four declared layers — tokens, base, components, and
+          sections. Later layers take precedence.
+          <code class="Pill Pill-code">tokens.css</code> defines the tokens;
+          <code class="Pill Pill-code">controls.css</code> supplies the shared
+          controls. Both the management pages and the site's
+          <code class="Pill Pill-code">style.css</code> load them. Follow these
           rules when adding a page or component:
         </p>
         <ul class="Guide_Rules">
           <li>
             <b>Use an existing component before writing new CSS.</b> The
-            available titles, notes, pills, buttons, fields, bubbles, windows,
-            cards, and prose styles are shown below.
+            available titles, notes, pills, buttons, fields, tabs, sidebars,
+            bubbles, windows, cards, and prose styles are shown below.
           </li>
           <li>
             <b>Use colour roles outside the tokens layer.</b> Write
@@ -128,6 +131,17 @@
       <section class="Guide_Part" aria-labelledby="voice">
         <h2 id="voice" class="Title">Layout and voice</h2>
         <ul class="Guide_Rules">
+          <li>
+            <b>Give controls a physical shape.</b> Raised buttons invite a
+            press; inset fields invite typing. Subtle texture and elevation
+            distinguish a surface from a control.
+          </li>
+          <li>
+            <b>Make selection visible in the shape.</b> A selected tab joins
+            its panel, a pressed button sinks, and the current sidebar item
+            holds its place. Keep these cues in shared components so they
+            work consistently in light and dark themes.
+          </li>
           <li>
             <b>Keep prose narrow.</b> Articles, help, and legal pages use
             <code class="Pill Pill-code">--measure</code>. Use
@@ -464,11 +478,88 @@
               />
             </p>
           </form>
+          <p>
+            <button class="Button" type="button" aria-pressed="true">
+              Pin app
+            </button>
+            <button class="Button" type="button" disabled>Unavailable</button>
+          </p>
           <p class="Note Note-small">
-            The sign-in pages carry their own copy of these styles
-            (<code class="Pill Pill-code">pages.ts</code>): they are served on a
-            space hostname, which cannot load assets from the main site. Keep
-            both copies in sync.
+            Press “Pin app” to toggle its state. Use a native button for an
+            action, an anchor for navigation, and
+            <code class="Pill Pill-code">aria-pressed</code> for a toggle.
+          </p>
+        </div>
+
+        <div class="Guide_Demo">
+          <p class="Guide_Name">.Icon</p>
+          <p>
+            <svg class="Icon" aria-hidden="true">
+              <use href="/icons.svg#connect"></use>
+            </svg>
+            Connect your chatbot
+          </p>
+          <p class="Note Note-small">
+            Use the shared Lucide sprite beside a text label. Hide decorative
+            icons from screen readers; give a button without text an
+            accessible name.
+          </p>
+        </div>
+
+        <div class="Guide_Demo">
+          <p class="Guide_Name">.SideNav · [aria-current="page"]</p>
+          <nav class="SideNav" aria-label="Example site navigation">
+            <a href="/style-guide" aria-current="page">Style guide</a>
+            <a href="/help">Help</a>
+            <a href="/pricing">Pricing</a>
+          </nav>
+          <p class="Note Note-small">
+            Mark the current page on its link. The selected surface stays
+            distinct from hover and keyboard focus.
+          </p>
+        </div>
+
+        <div class="Guide_Demo">
+          <p class="Guide_Name">
+            .Tabs · .Tabs_Legend · .Tabs_Item · .Tabs_Tab · .Tabs_Panel
+          </p>
+          <fieldset class="Tabs">
+            <legend class="Tabs_Legend">Example app tabs</legend>
+            <div class="Tabs_Item">
+              <input
+                type="radio"
+                name="demo-tabs"
+                id="demo-recipes"
+                checked
+              />
+              <label class="Tabs_Tab" for="demo-recipes">Recipes</label>
+              <section class="Card Tabs_Panel">
+                <h3 class="Title">Your recipe box</h3>
+                <p
+                  class="Note">Save recipes and find a favourite for dinner.</p>
+              </section>
+            </div>
+            <div class="Tabs_Item">
+              <input type="radio" name="demo-tabs" id="demo-garden" />
+              <label class="Tabs_Tab" for="demo-garden">Garden</label>
+              <section class="Card Tabs_Panel">
+                <h3 class="Title">Your garden diary</h3>
+                <p class="Note">Track what you planted and when it flowers.</p>
+              </section>
+            </div>
+            <div class="Tabs_Item">
+              <input type="radio" name="demo-tabs" id="demo-chores" />
+              <label class="Tabs_Tab" for="demo-chores">Chores</label>
+              <section class="Card Tabs_Panel">
+                <h3 class="Title">Your chore chart</h3>
+                <p class="Note">Share the jobs and see what is done.</p>
+              </section>
+            </div>
+          </fieldset>
+          <p class="Note Note-small">
+            Select a tab, or use the arrow keys while it has focus. Native
+            radios share a name; each label points to its input's unique ID.
+            The selected tab and its panel form one surface without script.
           </p>
         </div>
 
@@ -647,6 +738,15 @@
     let root = document.documentElement
     let theme = document.querySelector('#theme')
     let system = matchMedia('(prefers-color-scheme: dark)')
+
+    for (let button of document.querySelectorAll('.Guide button[aria-pressed]')) {
+      button.addEventListener('click', () => {
+        button.setAttribute(
+          'aria-pressed',
+          String(button.getAttribute('aria-pressed') != 'true'),
+        )
+      })
+    }
 
     let values = () => {
       for (let el of document.querySelectorAll('[data-token]')) {
