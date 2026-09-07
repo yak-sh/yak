@@ -53,9 +53,10 @@ batch, so editing a note later does not repeat the job.
 
 A refused batch leaves its wake due and does not stop the others. The result is
 `{ fired: Bundle[], refused: { wake: Bundle, error: unknown }[] }`. A guard on
-the previously read `wake.at` prevents overlapping drivers from consuming one
-occurrence twice. Effect failures go to the graph's reporter after commit; they
-do not undo the firing or make it a refused batch.
+the previously read `wake.at` and `wake.every` prevents overlapping drivers from
+consuming one occurrence twice or advancing an edited recurrence. Effect
+failures go to the graph's reporter after commit; they do not undo the firing or
+make it a refused batch.
 
 After downtime, each overdue wake fires once and advances beyond `now`.
 Occurrences missed while the host was absent are coalesced. A process crash
@@ -150,7 +151,7 @@ after any in-flight write finishes.
 - `ring(bundle, now)` builds the firing patch without applying it.
 - `soonest(storage, now)` reads the earliest future instant.
 - `wakes({ now?, tz? })` contributes the vocabulary and initializes a bare
-  recurrence with its first instant.
+  recurrence with its first instant. An explicit `at: null` keeps it paused.
 
 ## Compatibility
 

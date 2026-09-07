@@ -31,7 +31,7 @@ export type Opts = Clock & {
 export let starting = (opts: Opts = {}): Hook => (bundles: Bundle[]) =>
   bundles.map((b: Bundle): Bundle => {
     let w = wakeOf(b)
-    if (!w?.every || w.at) return b
+    if (!w?.every || w.at !== undefined) return b
     let now = (opts.now ?? Date.now)()
     let at = after(w.every, now, now, opts.tz)
     return at == null

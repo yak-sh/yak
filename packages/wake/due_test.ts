@@ -96,6 +96,20 @@ Deno.test('a bare cadence is given its first instant on the way in', () => {
   assertEquals(wakeOf(w)?.at, '2026-01-02T00:00:00.000Z')
 })
 
+Deno.test('an explicitly cleared at keeps a recurring wake paused', () => {
+  let s = store()
+  let g = woken(s)
+  g.apply([{
+    entity: { eid: 'paused' },
+    wake: { every: '@daily', at: null },
+  }])
+  assertEquals(due(s, T0 + HOUR), [])
+  let [w] = s.read('.wake!') as Bundle[]
+  assertEquals(wakeOf(w)?.at ?? null, null)
+  g.apply([w])
+  assertEquals(soonest(s, T0), null)
+})
+
 Deno.test('soonest is the next instant a host should come back for', () => {
   let { s } = seeded()
   assertEquals(soonest(s, T0), T0 + HOUR)

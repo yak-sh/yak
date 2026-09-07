@@ -19,6 +19,7 @@ import {
   toolsOf,
   type Visit,
   vocabOf,
+  wakesOf,
   watched,
 } from './plugin.ts'
 
@@ -65,6 +66,7 @@ let fixture: Plugin = {
   answers: [(at) => at.path == '/fixture' ? new Response('counted') : null],
   watch: (v) => seen.push(v),
   rules: [rule('fixture/one')],
+  wakes: [{ entity: { eid: 'fixture' }, wake: { every: '@daily' } }],
 }
 
 let seen: Visit[] = []
@@ -78,11 +80,13 @@ Deno.test('a plugin contributes its words, its rows, its pages and its rules', (
   assertEquals(toolsOf(list).map((t) => t.name), ['fixture_one'])
   assertEquals(pagesOf(list).map((p) => p.slug), ['fixture'])
   assertEquals(rulesOf(list).map((r) => r.name), ['fixture/one'])
+  assertEquals(wakesOf(list), fixture.wakes)
   // Nothing at all is the empty contribution, not a failure.
   assertEquals(vocabOf([quiet]).length, 0)
   assertEquals(toolsOf([quiet]).length, 0)
   assertEquals(pagesOf([quiet]).length, 0)
   assertEquals(rulesOf([quiet]).length, 0)
+  assertEquals(wakesOf([quiet]).length, 0)
 })
 
 Deno.test('a plugin answers its own door and passes on every other', async () => {

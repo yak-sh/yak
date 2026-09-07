@@ -326,7 +326,7 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
       let ctx = state()
       sockets.set(name, ctx.live)
       recovery.set(name, ctx.pitr)
-      objects.set(name, held = new Store(ctx))
+      objects.set(name, held = new Store(ctx, env))
     }
     return held
   }
