@@ -166,7 +166,13 @@ address — files, data and all — and each keeps the path it had, so
 path and the query kept, permanently, so a link somebody was given a year ago
 still opens the page it always did. Letters to `<old>.<app>@yaks.app` still
 arrive. And it stays RESERVED: nobody else can take it, and neither can the
-person who left it.
+person who left it, until they say to forget it.
+
+    space_set(forget: 'ada')         the old address stops redirecting, and is free
+
+Forgetting is the one part that breaks something: every link and every letter
+still aimed at that address stops finding anything. Only do it when the person
+has said they are done with it — and then anyone, including them, can take it.
 
 `app_set(app, slug)` is the same shape one level down, for one app's path within
 the space.

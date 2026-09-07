@@ -1093,11 +1093,51 @@ let laid = async (blobs: Blobs, from: string, onto: string) => {
 // two ways, so the words and the arithmetic are here once rather than twice in
 // two tools that would drift.
 
-/** The address history this call leaves behind: the one it had, plus the
- * address a move is leaving. Null where nothing moved, which is a call that
- * must not write the column at all. */
-let kept = (live: string, had: string[], moving: boolean) =>
-  !moving ? null : had.includes(live) ? had : [...had, live]
+let FORGET = str(
+  'an address this has LEFT, to stop it redirecting and let it be taken ' +
+    'again — never the address it is at now. Only when the person has said ' +
+    'they are done with it',
+)
+
+/** Whether an address is one this row has actually left. A refusal rather than
+ * a shrug, because forgetting an address is the one thing here that breaks a
+ * link somebody holds, and doing it to the wrong name is not a thing to guess
+ * at. */
+let forgotten = (live: string, had: string[], drop: string) => {
+  if (drop == live) {
+    throw new Error(
+      `${drop} is where it IS — move it first, and the address it leaves is ` +
+        'the one there is to forget',
+    )
+  }
+  if (!had.includes(drop)) {
+    throw new Error(
+      `${live} does not answer at ${drop}${
+        had.length ? ` — it answers at ${had.join(', ')}` : ' any more'
+      }`,
+    )
+  }
+}
+
+/** The address history this call leaves behind: the one it had, minus an
+ * address forgotten, plus the address a move is leaving. Null when neither
+ * happened, which is a call that must not write the column at all. */
+let kept = (
+  live: string,
+  had: string[],
+  moving: boolean,
+  drop: string | null,
+) => {
+  if (!moving && drop == null) return null
+  let now = drop == null ? had : had.filter((s) => s != drop)
+  return moving && !now.includes(live) ? [...now, live] : now
+}
+
+/** What forgetting an address costs, said in what stops working. The whole
+ * answer a person needs: the links are the thing they cannot get back. */
+let lost = (address: string) =>
+  `${address} stops redirecting and is free for anyone to take, so a link ` +
+  'or a letter still aimed there now finds nothing'
 
 /**
  * An app's row as it is BORN, at both doors that make one — app_new and
@@ -1594,16 +1634,19 @@ let OURS: Row[] = [
         space: SPACE,
         slug: str('the new hostname label, to move the space'),
         title: str('the new name'),
+        forget: FORGET,
       },
     },
     run: async (ctx, args) => {
       let { space, who } = await owns(ctx, args)
       let to = args.slug == null ? null : slug(args.slug, 'slug')
       let title = args.title == null ? null : text(args.title, 'title')
-      if (to == null && title == null) {
-        throw new Error('nothing to change: pass slug or title')
+      let drop = args.forget == null ? null : slug(args.forget, 'forget')
+      if (to == null && title == null && drop == null) {
+        throw new Error('nothing to change: pass slug, title, or forget')
       }
       let moving = to != null && to != space.slug
+      if (drop != null) forgotten(space.slug, space.slugs, drop)
       // The trash holds the address for its thirty days, so a space in it
       // cannot move off one — and the meta space is the platform.
       let no = refused(space)
@@ -1628,8 +1671,8 @@ let OURS: Row[] = [
       // new subdomain with the path kept (apps.ts `served`), and letters to
       // `<was>.<app>@yaks.app` still arrive (inbox.ts `opened`). A link
       // someone was given is forever, and a space's address is on more of
-      // them than an app's.
-      let had = kept(space.slug, space.slugs, moving)
+      // them than an app's — until the person says to forget one.
+      let had = kept(space.slug, space.slugs, moving, drop)
       // Every app's FILES move with the space, because a file's key carries
       // the space's slug (`laid`). Copied before anything is deleted, so the
       // apps are whole at whichever address answers while the move is in
@@ -1668,7 +1711,8 @@ let OURS: Row[] = [
                   apps.map((a) => a.slug).join(', ')
                 })`
                 : '')
-            : ''),
+            : '') +
+          (drop == null ? '' : ` — ${lost(`${drop}.yaks.app`)}`),
         space: now,
       }
     },
@@ -2604,6 +2648,7 @@ let OURS: Row[] = [
             'https://yaks.app/gallery — it appears there once yaks.app ' +
             'agrees; false to take it off, or withdraw the ask, at once',
         },
+        forget: FORGET,
       },
       required: ['app'],
     },
@@ -2613,18 +2658,28 @@ let OURS: Row[] = [
       let to = args.slug == null ? null : slug(args.slug, 'slug')
       let open = args.access == null ? null : access(args.access)
       let home = args.home == null ? null : flag(args.home, 'home')
+      let drop = args.forget == null ? null : slug(args.forget, 'forget')
       // The globs are checked BEFORE anything is written or any file moves:
       // a refusal here has to leave the app exactly as it was (router.ts).
       let first = args.first == null ? null : globs(args.first, [META.app])
       let show = args.gallery == null ? null : flag(args.gallery, 'gallery')
       if (
         title == null && to == null && open == null && home == null &&
-        first == null && show == null
+        first == null && show == null && drop == null
       ) {
         throw new Error(
           'nothing to change: pass title, slug, access, home, first, ' +
-            'gallery, or all',
+            'gallery, forget, or all',
         )
+      }
+      // Letting an address go is the space owner's, the way the front page is:
+      // what it costs is every link anybody was ever given to it, and an
+      // editor writes the app rather than deciding what its addresses are.
+      if (drop != null) {
+        if (who.role != 'owner') {
+          throw new Error(`not the owner of ${space.slug}`)
+        }
+        forgotten(app.slug, app.slugs, drop)
       }
       // Being SHOWN is the space owner's, the way publishing is: an editor
       // writes the app, and putting it on our own front page is not that.
@@ -2645,7 +2700,7 @@ let OURS: Row[] = [
       // new one: a page already open on a phone writes to the old address for
       // as long as it stays open, and a link someone was given is forever
       // (C-32574 item 4, where a rename broke every open tab in silence).
-      let had = kept(app.slug, app.slugs, moving)
+      let had = kept(app.slug, app.slugs, moving, drop)
       // Files first and copied before anything is deleted, so whichever
       // address is the app's at any moment has the whole app behind it. Its
       // store is untouched: it is named by the app's own handle, not by where
@@ -2735,6 +2790,8 @@ let OURS: Row[] = [
             } before the apps that own them`
             : ' — it answers no path before the app that owns it'}${
           shown ? ` — ${saying(shown)}` : ''
+        }${
+          drop == null ? '' : ` — ${lost(`${space.slug}.yaks.app/${drop}/`)}`
         }`,
         space,
       }

@@ -132,7 +132,8 @@ slow(
         'search',
         // And the platform's own verbs beside them, one plugin's tools.
         'space_new',
-        // Moving a space to another address (T-34658).
+        // Moving a space's address, and letting one it left go (T-34658,
+        // T-34659).
         'space_set',
         'space_delete',
         'space_restore',
@@ -5519,6 +5520,98 @@ slow('a space moves, and the subdomain it leaves points at it', async () => {
       }),
       'ada-cooks "Ada\'s kitchen"',
     )
+
+    // Forgotten (T-34659): the subdomain stops redirecting and goes back into
+    // circulation — a config change, and the answer names what it costs.
+    assertStringIncludes(
+      await agent.tool('space_set', { space: 'ada-cooks', forget: 'ada' }),
+      'ada.yaks.app stops redirecting and is free for anyone to take',
+    )
+    assertEquals(
+      (await k.at('ada.yaks.app', '/cookbook/', { redirect: 'manual' })).status,
+      404,
+    )
+    assertStringIncludes(
+      await agent.tool('space_new', { slug: 'ada', title: 'Ada again' }),
+      'https://ada.yaks.app/',
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
+// Forgetting an address (T-34659). Jeff, on T-34656: "whether the old domain
+// redirects should be a simple config change, not a infrastructure migration".
+// So it is one argument, and what it changes is the redirect and nothing else —
+// which is only true because the store is named by the app's own handle
+// (T-34657): a freed address can be taken by a NEW app, and the two are two
+// objects with two sets of data.
+slow('an address is forgotten, freed, and taken by another app', async () => {
+  let k = await kernel()
+  try {
+    let them = await seed(k, [{ slug: 'ada', apps: ['recipes'] }])
+    let agent = connector(k, them.cookie)
+    let handle = async (app: string) =>
+      String(
+        (await (await k.at('ada.yaks.app', `/${app}/api/graph`)).json()).db,
+      )
+    let was = await handle('recipes')
+    await agent.tool('app_set', {
+      space: 'ada',
+      app: 'recipes',
+      slug: 'cookbook',
+    })
+    let asked = (path: string) =>
+      k.at('ada.yaks.app', path, { redirect: 'manual' })
+    assertEquals(
+      (await asked('/recipes/')).headers.get('location'),
+      '/cookbook/',
+    )
+
+    // An address it never left, and the one it is AT, are both refused: the
+    // one act here that breaks a link is not a thing to guess at.
+    await assertRejects(
+      () =>
+        agent.tool('app_set', {
+          space: 'ada',
+          app: 'cookbook',
+          forget: 'garden',
+        }),
+      Error,
+      'does not answer at garden',
+    )
+    await assertRejects(
+      () =>
+        agent.tool('app_set', {
+          space: 'ada',
+          app: 'cookbook',
+          forget: 'cookbook',
+        }),
+      Error,
+      'is where it IS',
+    )
+
+    // Forgotten: the redirect stops, and the answer says what that costs.
+    assertStringIncludes(
+      await agent.tool('app_set', {
+        space: 'ada',
+        app: 'cookbook',
+        forget: 'recipes',
+      }),
+      'stops redirecting and is free for anyone to take',
+    )
+    assertEquals((await asked('/recipes/')).status, 404)
+
+    // And the address is free: a NEW app is born there, with its own handle
+    // and its own store — the old app's rows are not in it.
+    await agent.tool('app_new', {
+      space: 'ada',
+      slug: 'recipes',
+      title: 'Recipes again',
+    })
+    let now = await handle('recipes')
+    assert(now != was, `${now} is the store the first app had`)
+    assertEquals(await handle('cookbook'), was)
   } finally {
     await k.stop()
   }

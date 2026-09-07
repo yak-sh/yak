@@ -25,7 +25,10 @@ space_set:
     somebody already has still opens the page it always did, and letters to
     <old>.<app>@yaks.app still arrive. It also stays reserved — nobody else
     can take it, and neither can they until it is forgotten. Give the person
-    the new address. Only the space owner may move it.
+    the new address. Only the space owner may move it. forget names an
+    address the space has LEFT and drops it: it stops redirecting and anyone
+    can take it, so every link and every letter still aimed there finds
+    nothing. Only when the person has said they are done with that address.
 
 space_delete:
   title: Close a space
@@ -297,7 +300,11 @@ app_set:
     whole space; an empty list puts every path back where it was. gallery is
     whether a published app is put forward for https://yaks.app/gallery, the
     public page of apps made here: true asks, false takes it back at once.
-    Only when the person has said which they want.
+    Only when the person has said which they want. forget names an address
+    this app has LEFT and drops it: it stops redirecting and another app can
+    be made there, so every link still aimed at it finds nothing. Only the
+    space owner, and only when the person has said they are done with that
+    address.
 
 app_secret_set:
   title: Set a worker key
