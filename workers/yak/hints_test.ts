@@ -11,6 +11,8 @@
 // cannot slip through wearing whatever the default happened to be.
 import { assert, assertEquals } from '@std/assert'
 import { annotated, core } from '@yaks/mcp'
+import { read } from '@yaks/yaml'
+import { WORDS } from './content.ts'
 import { UNDO } from './guide.ts'
 import { TOOLS } from './tools.ts'
 import { platformVocab } from './vocab.ts'
@@ -84,6 +86,37 @@ let sorted = (names: string[]) => [...names].sort()
 
 let picked = (has: (t: (typeof TOOLS)[number]) => boolean) =>
   sorted(TOOLS.filter(has).map((t) => t.name))
+
+// The words are the FILE's (tools.yml, M-34605), and this is the pair of
+// checks that keeps the file and the roster one list: a row whose name the
+// file does not know throws at load (tool.ts `worded`), and an entry no row
+// claims is a description nobody will ever read.
+Deno.test('the tool words are the file, and the file is the roster', () => {
+  let yml = read(
+    Deno.readTextFileSync(new URL('./tools.yml', import.meta.url)),
+    'tools.yml',
+  ) as Record<string, { title: string; description: string }>
+  assertEquals(sorted(Object.keys(yml)), sorted(Object.keys(WORDS)))
+  assertEquals(
+    sorted(Object.keys(yml)),
+    sorted(TOOLS.map((t) => t.name)),
+    'tools.yml and the roster name different tools',
+  )
+  // And what a row wears is what its entry says — the one row with a slot
+  // (`guide`) says the pages there are, so its description GROWS from the
+  // file rather than matching it.
+  for (let t of TOOLS) {
+    assertEquals(t.title, yml[t.name].title, t.name)
+    let said = yml[t.name].description
+    let hole = said.indexOf('{{')
+    assert(
+      hole == -1
+        ? t.description == said
+        : t.description.startsWith(said.slice(0, hole)),
+      `${t.name} does not say what tools.yml says`,
+    )
+  }
+})
 
 Deno.test('every platform tool has a title', () => {
   for (let t of TOOLS) {

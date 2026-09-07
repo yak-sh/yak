@@ -116,17 +116,23 @@ let named = (v: unknown, found: Set<string> = new Set()): Set<string> => {
 // The manifest as written, checked whole: every problem in one sentence, the
 // way vocab.json refuses (T-32628), because an agent that fixes one problem
 // per deploy stops after the second.
-export let parseTools = (source: unknown, vocab: Vocab = {}): Tools => {
+export let parseTools = (
+  source: unknown,
+  vocab: Vocab = {},
+  file = 'tools.json',
+): Tools => {
   if (typeof source == 'string') {
     if (!source.trim()) return {}
+    // JSON, and only JSON — the YAML door is not in this module's graph
+    // (see parseVocab): a caller who may be holding a `.yml` reads it first.
     try {
       source = JSON.parse(source)
     } catch {
-      throw new Error(`tools.json is not JSON — ${TOOLS_EXAMPLE}`)
+      throw new Error(`${file} is not JSON — ${TOOLS_EXAMPLE}`)
     }
   }
   if (!object(source)) {
-    throw new Error(`tools.json is an object — ${TOOLS_EXAMPLE}`)
+    throw new Error(`${file} is an object — ${TOOLS_EXAMPLE}`)
   }
   let words = [...Object.keys(comps), ...Object.keys(vocab)]
   let wrong: string[] = []
@@ -231,12 +237,14 @@ export let parseTools = (source: unknown, vocab: Vocab = {}): Tools => {
 // can check them against the app's own files before anything is planted. A
 // manifest that will not parse yields none: the store refuses it a moment
 // later, with every problem in the one sentence.
-export let viewsOf = (source: string): string[] => {
+export let viewsOf = (source: unknown): string[] => {
   let seen = new Set<string>()
   try {
-    let read = JSON.parse(source)
-    if (object(read)) {
-      for (let entry of Object.values(read)) {
+    // A manifest as written is a string here only when it is JSON — a `.yml`
+    // is read by whoever holds it and handed on as the value (see parseTools).
+    let held = typeof source == 'string' ? JSON.parse(source) : source
+    if (object(held)) {
+      for (let entry of Object.values(held)) {
         if (object(entry) && typeof entry.view == 'string') seen.add(entry.view)
       }
     }

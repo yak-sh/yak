@@ -5,6 +5,10 @@
 // copies the app into — so a person opening a new app finds it furnished
 // instead of blank, and a redeploy never writes over what they changed since.
 //
+// YAML or JSON, read through one door (@yaks/yaml, M-34605): every JSON file
+// is a YAML file, so a seed already written stays a seed and `.yml` is simply
+// the spelling that is also legible.
+//
 // A FOLDER as well as a file, because the data is the large thing here. Owner,
 // 2026-09-05: "i noticed the agent was struggling with the very large seed data
 // json it was making for its custom loader. so if the seed data could be a
@@ -24,16 +28,23 @@
 // spreadsheet — one row per bundle, once the caller has said which component a
 // row is (csv.ts, T-34393).
 import type { Bundle } from '@yaks/graph'
+import { read } from '@yaks/yaml'
 import { type Sheet, sheet } from './csv.ts'
 
-/** A file the app is seeded from: `seed.json` beside index.html, or any
- * `*.json` in a `seed/` folder beside it. */
-export let seedy = (path: string) =>
-  path == 'seed.json' ||
-  (path.startsWith('seed/') && path.endsWith('.json'))
+/** What a seed is written in: YAML first — the warm path (M-34605) — then
+ * JSON, which YAML reads anyway, and a spreadsheet (csv.ts). */
+let DATA = ['.yml', '.json', '.csv']
 
-/** What a folder holds that this reads: bundles, or a spreadsheet (csv.ts). */
-let DATA = ['.json', '.csv']
+/** The bundle spellings, for the file BESIDE index.html. A `.csv` is not one:
+ * a spreadsheet needs to be told which component a row is, which only a load
+ * that names it can say. */
+let BUNDLES = ['.yml', '.json']
+
+/** A file the app is seeded from: `seed.yml` or `seed.json` beside
+ * index.html, or either of those in a `seed/` folder beside it. */
+export let seedy = (path: string) =>
+  BUNDLES.some((e) => path == `seed${e}`) ||
+  (path.startsWith('seed/') && BUNDLES.some((e) => path.endsWith(e)))
 
 /** Whether `file` is one a load `path` names: the file itself, or any `*.json`
  * or `*.csv` under it when the path is a folder. A path naming something that
@@ -56,20 +67,19 @@ export type Sown = { file: string; index: number; bundle: Bundle }
 /** A bundle's place, as a refusal names it. */
 export let at = (one: Sown) => `${one.file}[${one.index}]`
 
-let SHAPE = 'a seed file is a JSON list of bundles — ' +
-  '[{"entity": {"eid": "$a"}, "doc": {"title": "…"}}]'
+let SHAPE = 'a seed file is a list of bundles — ' +
+  '[{"entity": {"eid": "$a"}, "doc": {"title": "…"}}] as JSON, or the same ' +
+  'list written as YAML'
 
 // One file's bundles, refused in the FILE's own name: an agent that wrote ten
 // of them needs to know which one it mistyped, and the parser is the only place
 // that still knows.
-let read = (file: string, text: string): Bundle[] => {
+let bundles = (file: string, text: string): Bundle[] => {
   let held: unknown
   try {
-    held = JSON.parse(text)
+    held = read(text, file)
   } catch (e) {
-    throw new Error(
-      `${file} is not JSON: ${(e as Error).message} — ${SHAPE}`,
-    )
+    throw new Error(`${(e as Error).message} — ${SHAPE}`)
   }
   if (!Array.isArray(held)) throw new Error(`${file} is not a list — ${SHAPE}`)
   held.forEach((one, i) => {
@@ -94,8 +104,10 @@ export let loaded = (files: Text[], as?: Sheet): Sown[] =>
   [...files]
     .sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
     .flatMap((f) =>
-      f.path.endsWith('.csv') ? sheet(f.path, f.text, as) : read(f.path, f.text)
-        .map((bundle, index) => ({ file: f.path, index, bundle }))
+      f.path.endsWith('.csv')
+        ? sheet(f.path, f.text, as)
+        : bundles(f.path, f.text)
+          .map((bundle, index) => ({ file: f.path, index, bundle }))
     )
 
 /** Every bundle an app's SEED holds — the seed files among its own, read as

@@ -48,8 +48,8 @@ Deno.test('a write answers what it stored, and json answers whether it parses', 
     stored('index.html', page, await sha256(page)),
     '26 bytes, sha256 ' + await sha256(page),
   )
-  // Only a .json file is parsed: a .js file full of braces is not JSON and
-  // saying so of it would be noise on every write.
+  // Only a declaration file is parsed: a .js file full of braces is not JSON
+  // and saying so of it would be noise on every write.
   assertEquals(
     stored('app.js', bytes('{'), await sha256(bytes('{'))),
     `1 bytes, sha256 ${await sha256(bytes('{'))}`,
@@ -64,8 +64,19 @@ Deno.test('a write answers what it stored, and json answers whether it parses', 
   assertStringIncludes(said, 'NOT valid JSON')
   assertStringIncludes(said, 'position 14')
   // A file cut short has its position too — the end of what arrived.
-  assertStringIncludes(parses(bytes('{"a": ')), 'NOT valid JSON')
-  assertEquals(parses(bytes('[]')), 'parsed')
+  assertStringIncludes(
+    parses('data.json', bytes('{"a": ')),
+    'NOT valid JSON',
+  )
+  assertEquals(parses('data.json', bytes('[]')), 'parsed')
+  // And a .yml is read in its own language (@yaks/yaml, M-34605), so the
+  // spelling an app writes its words in is checked where it is written.
+  let yml = bytes('recipe:\n  serves: number\n')
+  assertStringIncludes(stored('vocab.yml', yml, await sha256(yml)), ', parsed')
+  assertStringIncludes(
+    parses('vocab.yml', bytes('recipe:\n - a\n  b: c\n')),
+    'NOT valid YAML',
+  )
 })
 
 Deno.test('a patch replaces exactly one match, or refuses saying how many', () => {

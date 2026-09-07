@@ -222,6 +222,7 @@ import {
   type Tool,
   worded,
 } from './tool.ts'
+import { read } from '@yaks/yaml'
 import { toolsOf as pluginTools } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 
@@ -690,8 +691,12 @@ let fits = async (
   app: App,
   store: Door,
   source: string,
+  file: string,
 ) => {
-  let split = homed(parseVocab(source), (await homesIn(ctx, space, app)).homes)
+  let split = homed(
+    parseVocab(read(source, file), file),
+    (await homesIn(ctx, space, app)).homes,
+  )
   let r = await store('/vocab')
   let mine = r.ok ? await r.json() as Vocab : {}
   grow(mine, split.mine)
@@ -725,8 +730,11 @@ let released = async (
   // The app's own components, if it declares any. A manifest the store
   // refuses fails the release: the words and the tables must agree, and a
   // half-planted vocabulary is what `unknown component` is made of.
-  let key = fileKey(space, app, 'vocab.json')
   let blobs = r2Blobs(ctx.env.BLOBS)
+  let key = await spelled(blobs, space, app, 'vocab')
+  // The file the app declares its words in, for every sentence below that
+  // tells somebody to go and edit it.
+  let vocabFile = key?.split('/').pop() ?? 'vocab.json'
   let planted: string[] = []
   let dropped: string[] = []
   // What this manifest MOVED, which naming the components does not say: a
@@ -740,10 +748,14 @@ let released = async (
   // means — the store keeps the short form of its words (graph.ts) and neither
   // survives the round trip. It is what the tools below are generated from.
   let manifest: VocabDoc = {}
-  if (await blobs.has(key)) {
+  if (key) {
     let source = new TextDecoder().decode(await blobs.get(key))
-    let next = parseVocab(source)
-    manifest = appDoc(source)
+    // Read ONCE, here, in whichever spelling the app wrote (@yaks/yaml): the
+    // two readers below take the value, and neither has to know there are two
+    // spellings of the file.
+    let held = read(source, vocabFile)
+    let next = parseVocab(held, vocabFile)
+    manifest = appDoc(held, vocabFile)
     // One word, one home: a word another app in the space already declares is
     // that app's, so this release records a USE of it instead of planting a
     // second table, and any column it adds grows the HOME's.
@@ -811,10 +823,16 @@ let released = async (
   // after the components, since a tool may write a word this very release
   // planted. The manifest is replaced whole — a declaration holds no rows —
   // so an app that deleted its tools.json releases none.
-  let toolsKey = fileKey(space, app, 'tools.json')
-  let sent = await blobs.has(toolsKey)
-    ? new TextDecoder().decode(await blobs.get(toolsKey))
-    : '{}'
+  let toolsKey = await spelled(blobs, space, app, 'tools')
+  let toolsFile = toolsKey?.split('/').pop() ?? 'tools.json'
+  // Read once, in whichever spelling it was written (@yaks/yaml): what the
+  // checks below and the store both take is the value.
+  let sent = toolsKey
+    ? read(
+      new TextDecoder().decode(await blobs.get(toolsKey)),
+      toolsFile,
+    )
+    : {}
   // A `view` names a page in the app's OWN files (T-32687), so this is the one
   // thing about the manifest the store cannot check: it holds the words, the
   // blobs hold the pages. A view nobody deployed would be a tool whose answer
@@ -851,7 +869,7 @@ let released = async (
   // and no tools.json still has a verb for putting one in and one for finding
   // it again, which is how the next agent discovers the app at all.
   let checked = withKinds(
-    parseTools(sent, { ...words, ...borrowed(borrows) }),
+    parseTools(sent, { ...words, ...borrowed(borrows) }, toolsFile),
     manifest,
     `${space.slug}/${app.slug}`,
   )
@@ -950,10 +968,12 @@ let released = async (
       // What to DO about a column the manifest stopped naming, which the bare
       // list never said: the board that read "5.2 mi in null min" was a
       // rename nobody was told to finish (C-32730 item 4).
+      // …named in the file the app actually wrote, since either spelling of
+      // it is a manifest (`spelled` above, M-34605).
       (kept.length
-        ? `\nkept, not in vocab.json (the rows are there): ${
+        ? `\nkept, not in ${vocabFile} (the rows are there): ${
           kept.join(', ')
-        } — name it in vocab.json again to keep writing it, or move its ` +
+        } — name it in ${vocabFile} again to keep writing it, or move its ` +
           'rows to the new word yourself, a row at a time with graph_query ' +
           'then graph_apply. Nothing is migrated behind you.'
         : '') +
@@ -1042,6 +1062,24 @@ type Change = { eid: string; name: string; comp: unknown }
 let fileKey = (space: Space, app: App, path: string) =>
   `${space.slug}/${app.slug}/${path.replace(/^\/+/, '')}`
 
+// A declaration file of the app's, whichever spelling it was written in: the
+// `.yml` first — YAML is the warm path (M-34605), and every parser here reads
+// it through the same door as the JSON (@yaks/yaml `read`) — then the `.json`,
+// which every app that already has one keeps. Null where the app declares
+// nothing, which is most apps.
+let spelled = async (
+  blobs: Blobs,
+  space: Space,
+  app: App,
+  name: string,
+): Promise<string | null> => {
+  for (let spelling of [`${name}.yml`, `${name}.json`]) {
+    let key = fileKey(space, app, spelling)
+    if (await blobs.has(key)) return key
+  }
+  return null
+}
+
 /**
  * Bytes into an app's files, and the edge emptied once after the last one —
  * the write half of app_files, with no tool call in it, because bytes arrive
@@ -1106,17 +1144,21 @@ export let wrote = async (
  */
 export let stored = (path: string, bytes: Uint8Array, sha: string) =>
   `${bytes.byteLength} bytes, sha256 ${sha}` +
-  (path.endsWith('.json') ? `, ${parses(bytes)}` : '')
+  (/\.(json|yml)$/.test(path) ? `, ${parses(path, bytes)}` : '')
 
-// A `.json` file's verdict. The parse error carries its own position, which
-// is the whole reason to say it here: "at position 45971" names the bracket,
-// and nothing else in the answer could.
-export let parses = (bytes: Uint8Array) => {
+// A declaration file's verdict, in its own language: a `.json` through
+// JSON.parse, whose error carries the POSITION — "at position 45971" names the
+// bracket, and nothing else in the answer could — and a `.yml` through the
+// YAML door, whose error names the line.
+export let parses = (path: string, bytes: Uint8Array) => {
+  let text = new TextDecoder().decode(bytes)
+  let json = path.endsWith('.json')
   try {
-    JSON.parse(new TextDecoder().decode(bytes))
+    if (json) JSON.parse(text)
+    else read(text, path)
     return 'parsed'
   } catch (e) {
-    return `NOT valid JSON — ${(e as Error).message}`
+    return `NOT valid ${json ? 'JSON' : 'YAML'} — ${(e as Error).message}`
   }
 }
 
@@ -3546,15 +3588,16 @@ let OURS: Row[] = [
       // moves: a vocabulary that only grew lands through the store's own
       // additive graft, and one that conflicts is refused here with the
       // sentence a deploy gives (T-32728), leaving the copy as it was.
-      let key = fileKey(from.space, from.app, 'vocab.json')
       let blobs = r2Blobs(ctx.env.BLOBS)
-      if (await blobs.has(key)) {
+      let key = await spelled(blobs, from.space, from.app, 'vocab')
+      if (key) {
         await fits(
           ctx,
           space,
           app,
           store,
           new TextDecoder().decode(await blobs.get(key)),
+          key.split('/').pop() ?? 'vocab.json',
         )
       }
       let { wrote, gone } = await copied(ctx, from, { space, app })

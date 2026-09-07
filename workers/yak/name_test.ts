@@ -37,10 +37,11 @@ let comment = /^\s*(\/\/|\*|\/\*)/
 let code = (text: string) =>
   text.split('\n').map((l) => comment.test(l) ? '' : l).join('\n')
 
-// Anything a person or an agent reads: the served pages, the guide's markdown,
+// Anything a person or an agent reads: the served pages, the guide's markdown
+// and the bundle at the top of it, the prompts, the tool words in tools.yml,
 // the worked example, and the modules that build a page or a letter out of
 // words. Not a test — nobody is handed one.
-let READ = /\.(html|md|css|js|txt|json|svg|webmanifest)$/
+let READ = /\.(html|md|css|js|txt|json|yml|svg|webmanifest)$/
 let source = /(?<!_test)\.ts$/
 
 let walk = function* (dir: URL, at = ''): Generator<[string, string]> {

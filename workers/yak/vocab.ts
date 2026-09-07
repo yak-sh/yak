@@ -32,7 +32,8 @@
 // @yaks/id's `prefix` keyword is registered rather than used: a component may
 // declare the letter its entities are numbered in, and the loader carries it.
 //
-// And the app's own `vocab.json`, in EITHER spelling. The format is JSON
+// And the app's own `vocab.json` — or `vocab.yml`, read through the same door
+// (@yaks/yaml, M-34605) — in EITHER spelling. The format is JSON
 // Schema now (D-33490 gate 3), and the five-scalar short form every app
 // deployed before it still deploys: a short-form manifest is CONVERTED here,
 // never refused, because those files exist and their rows are already written
@@ -56,6 +57,7 @@ import { idKeywords } from '@yaks/id'
 import { keyDoc, keyKeywords } from '@yaks/key'
 import { mailDoc } from '@yaks/mail'
 import { memberDoc } from '@yaks/member'
+import { read } from '@yaks/yaml'
 import { vocabOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 
@@ -942,23 +944,27 @@ export let schemaOf = (manifest: Record<string, unknown>): VocabDoc => ({
  * It is checked here rather than at the load: a name the platform already owns
  * is refused, and so is anything a column cannot hold.
  *
+ * `file` is what a refusal calls it — the app may have written either
+ * spelling (tools.ts `spelled`), and the sentence has to name the file they
+ * are looking at.
+ *
  * `"tools": false` is the one word a manifest says about ITSELF rather than
  * about a component — no tools synthesized for its kinds (kinds.ts, T-34513) —
  * so it is lifted off in either spelling and carried on the document. A boolean
  * tells it from a component named `tools`, which is an object of columns like
  * any other.
  */
-export let appDoc = (source: unknown): VocabDoc => {
+export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
   let held = source
   if (typeof held == 'string') {
     try {
-      held = held.trim() ? JSON.parse(held) : {}
-    } catch {
-      throw new Error(`vocab.json is not JSON — ${EXAMPLE}`)
+      held = held.trim() ? read(held, file) : {}
+    } catch (e) {
+      throw new Error(`${(e as Error).message} — ${EXAMPLE}`)
     }
   }
   if (held == null) held = {}
-  if (!object(held)) throw new Error(`vocab.json is an object — ${EXAMPLE}`)
+  if (!object(held)) throw new Error(`${file} is an object — ${EXAMPLE}`)
   let off = typeof held.tools == 'boolean' ? held.tools : undefined
   let body = off === undefined
     ? held
@@ -968,7 +974,7 @@ export let appDoc = (source: unknown): VocabDoc => {
     : schemaOf(body)
   if (off !== undefined) doc = { ...doc, tools: off }
   let errs = [...reserved(doc, RESERVED), ...storable(doc)]
-  if (errs.length) throw new Error(`vocab.json: ${errs.join('; ')}`)
+  if (errs.length) throw new Error(`${file}: ${errs.join('; ')}`)
   return doc
 }
 

@@ -27,9 +27,15 @@ let door = (no: (b: Bundle[]) => string | null = () => null) => {
   return { asked, apply }
 }
 
-Deno.test('a seed file is seed.json, or a *.json under seed/', () => {
+Deno.test('a seed file is seed.json or seed.yml, or one under seed/', () => {
   for (
-    let path of ['seed.json', 'seed/01.json', 'seed/deep/more.json']
+    let path of [
+      'seed.json',
+      'seed.yml',
+      'seed/01.json',
+      'seed/01.yml',
+      'seed/deep/more.json',
+    ]
   ) assert(seedy(path), path)
   for (
     let path of [
@@ -38,9 +44,35 @@ Deno.test('a seed file is seed.json, or a *.json under seed/', () => {
       'tools.json',
       'seeds.json',
       'seed/notes.md',
+      'seed/rows.csv',
       'data/seed.json',
     ]
   ) assertEquals(seedy(path), false, path)
+})
+
+// YAML is the warm path and JSON keeps working, because YAML reads it
+// (@yaks/yaml, M-34605): one seed may be written either way, and a folder may
+// hold both.
+Deno.test('a seed written in YAML is the same seed', () => {
+  let all = sown([
+    {
+      path: 'seed.yml',
+      text: '- entity: {eid: $a}\n  doc:\n    title: A\n',
+    },
+    file('seed/01-places.json', [one('$here', 'Here')]),
+  ])
+  assertEquals(all.map((s) => [s.file, s.bundle]), [
+    ['seed.yml', one('$a', 'A')],
+    ['seed/01-places.json', one('$here', 'Here')],
+  ])
+})
+
+Deno.test('a seed that is neither is refused in its own name', () => {
+  assertThrows(
+    () => sown([{ path: 'seed.yml', text: 'a:\n - b\n  c: d\n' }]),
+    Error,
+    'seed.yml is not YAML',
+  )
 })
 
 Deno.test('the bundles are read in filename order, the file and folder as one', () => {

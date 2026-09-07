@@ -73,15 +73,19 @@ export let RESERVED: string[] = [
 
 // The manifest as written, checked. Every refusal names the file and the
 // spelling that works, because the agent reading it has no other source.
-export let parseVocab = (source: unknown): Vocab => {
+export let parseVocab = (source: unknown, file = 'vocab.json'): Vocab => {
+  // A STRING is JSON, and only JSON: this module is in the browser's own
+  // graph (browser_test.ts), so the YAML door (@yaks/yaml) is not import-able
+  // here. Where a `.yml` is possible the caller reads it and hands the value
+  // (workers/yak/tools.ts), which is what `file` is then naming.
   if (typeof source == 'string') {
     try {
       source = JSON.parse(source)
     } catch {
-      throw new Error(`vocab.json is not JSON — ${EXAMPLE}`)
+      throw new Error(`${file} is not JSON — ${EXAMPLE}`)
     }
   }
-  if (!object(source)) throw new Error(`vocab.json is an object — ${EXAMPLE}`)
+  if (!object(source)) throw new Error(`${file} is an object — ${EXAMPLE}`)
   // The platform's words, all of them, before anything is planted: a manifest
   // refused one name at a time is probed one deploy at a time, and every
   // probe that got through left a component behind for good (C-32624 item 1).

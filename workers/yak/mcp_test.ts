@@ -1100,6 +1100,34 @@ slow(
         { text: null, body: 'said it' },
       ])
 
+      // And the same manifest written the OTHER way (M-34605): a `vocab.yml`
+      // beside index.html is the app's words in the warm spelling, read
+      // through the one loader (@yaks/yaml) and preferred over the `.json`
+      // when an app has both, so the two files are never both in force.
+      await agent.tool('app_files', {
+        ...app,
+        op: 'write',
+        path: 'vocab.yml',
+        content: 'recipe:\n  title: text\n  serves: number\nsticker:\n' +
+          '  colour: text\n',
+      })
+      let inYaml = await agent.tool('app_deploy', app)
+      assertStringIncludes(inYaml, 'components: recipe, note, sticker')
+      assertStringIncludes(inYaml, 'added: sticker.colour')
+      // And every sentence about the manifest names the file the app wrote,
+      // not the spelling this platform happens to have started with.
+      assertStringIncludes(inYaml, 'kept, not in vocab.yml')
+      await agent.tool('graph_apply', {
+        change: [{ entity: { eid: '$s' }, sticker: { colour: 'red' } }],
+      })
+      assertEquals(
+        JSON.parse(
+          await agent.tool('graph_query', { q: '.sticker.colour=red' }),
+        )
+          .length,
+        1,
+      )
+
       // A refused store answer is the tool's error, not a 500.
       await assertRejects(
         () => agent.tool('graph_query', { q: 'work=build' }),
@@ -1216,10 +1244,10 @@ slow(
           'whisk is not a function @ /recipes/index.html:42 x1',
         ],
       )
-      // v6: two files, a vocabulary, the word it dropped, the column it
-      // renamed — every deploy above bumped it, and a break wears the version
-      // it happened on.
-      assert(breaks.every((b) => b.version == 6), 'the deploy it happened on')
+      // v7: two files, a vocabulary, the word it dropped, the column it
+      // renamed, the same words written again as YAML — every deploy above
+      // bumped it, and a break wears the version it happened on.
+      assert(breaks.every((b) => b.version == 7), 'the deploy it happened on')
 
       // The fixed button: the view calls this same tool back through the
       // host with the card's eids, and what it gets is the listing that is
@@ -1313,7 +1341,7 @@ slow(
       assertEquals((await asked('/cookbook/')).status, 200)
       assertEquals(
         await agent.tool('app_files', { ...moved, op: 'list' }),
-        'css/site.css\nindex.html\nvocab.json',
+        'css/site.css\nindex.html\nvocab.json\nvocab.yml',
       )
       let still = JSON.parse(
         await agent.tool('graph_query', { ...moved, query: `id=${cake}` }),

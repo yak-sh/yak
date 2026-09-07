@@ -11,6 +11,11 @@
 import { parse } from '@std/yaml'
 import type { Bundle } from '@yaks/graph'
 
+// What a refusal calls the language. A file spelled `.json` is JSON to
+// whoever wrote it, whatever the parser reading it happens to be — being told
+// their JSON is not YAML would send them looking in the wrong place.
+let lang = (file: string) => file.endsWith('.json') ? 'JSON' : 'YAML'
+
 /**
  * YAML — and JSON, which YAML reads — as a value. `file` is what a refusal
  * calls the text.
@@ -24,7 +29,7 @@ export let read = (text: string, file = 'yaml'): unknown => {
   try {
     return parse(text)
   } catch (e) {
-    throw new Error(`${file} is not YAML: ${(e as Error).message}`)
+    throw new Error(`${file} is not ${lang(file)}: ${(e as Error).message}`)
   }
 }
 

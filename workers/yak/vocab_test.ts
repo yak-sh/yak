@@ -152,6 +152,28 @@ Deno.test('the two spellings are told apart by shape', () => {
   assertEquals(Object.keys(appDoc(undefined).$defs ?? {}), [])
 })
 
+// YAML is the warm path, and a vocab.json keeps working because YAML reads it
+// (@yaks/yaml, M-34605). The two spellings of the FILE are the same manifest;
+// which one an app wrote is what a refusal has to name.
+Deno.test('a manifest may be written as YAML', () => {
+  let yml = appDoc('recipe:\n  title: text\n  serves: number\n', 'vocab.yml')
+  let json = appDoc('{"recipe": {"title": "text", "serves": "number"}}')
+  assertEquals(yml, json)
+})
+
+Deno.test('a broken manifest is refused in its own file name', () => {
+  assertThrows(
+    () => appDoc('recipe:\n - a\n  b: c\n', 'vocab.yml'),
+    Error,
+    'vocab.yml is not YAML',
+  )
+  assertThrows(
+    () => appDoc('[]', 'vocab.yml'),
+    Error,
+    'vocab.yml is an object',
+  )
+})
+
 Deno.test('a manifest is refused in the words that fix it', () => {
   assertThrows(() => appDoc('{'), Error, 'vocab.json is not JSON')
   assertThrows(() => appDoc('[]'), Error, 'vocab.json is an object')

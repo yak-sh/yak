@@ -19,6 +19,16 @@ Deno.test('a refusal names the file', () => {
   )
 })
 
+// Whoever wrote a .json wrote JSON, and being told it is not YAML would send
+// them looking in the wrong place.
+Deno.test('a refusal calls a .json file JSON', () => {
+  assertThrows(
+    () => read('{oops', 'seed/02.json'),
+    Error,
+    'seed/02.json is not JSON',
+  )
+})
+
 Deno.test('a passage takes what the code says for its holes', () => {
   assertEquals(
     fill('Publish {{app}} for {{who}}', { app: 'recipes', who: 'Ada' }),
