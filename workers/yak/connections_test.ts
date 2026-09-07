@@ -1,6 +1,6 @@
 // OAuth grant projection: pagination, expiry, provider identification and
 // duplicate installations, without a Worker or a second connection ledger.
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import type {
   ClientInfo,
   GrantSummary,
@@ -126,4 +126,41 @@ Deno.test('connections: unknown registered clients stay visible; missing clients
     { id: 'unnamed', name: 'Other chatbot', connectedAt: 10 },
     { id: 'custom', name: 'Unlisted chatbot', connectedAt: 10 },
   ])
+})
+
+Deno.test('connections: unavailable metadata retains its grant without hiding other chatbots', async () => {
+  let p = provider([[
+    grant('https://unavailable.test/client.json'),
+    grant('https://unavailable.test/client.json', { createdAt: 20 }),
+    grant('known', { redirectUri: 'https://chatgpt.com/callback' }),
+  ]])
+  let looked = 0
+  assertEquals(
+    await connectionsOf({
+      ...p.oauth,
+      lookupClient: () => (looked++, Promise.resolve(undefined)),
+    }, 'person'),
+    [
+      { id: 'chatgpt', provider: 'chatgpt', name: 'ChatGPT', connectedAt: 10 },
+      {
+        id: 'https://unavailable.test/client.json',
+        name: 'Other chatbot',
+        connectedAt: 10,
+      },
+    ],
+  )
+  assertEquals(looked, 1)
+})
+
+Deno.test('connections: storage failures remain errors', async () => {
+  let p = provider([[grant('custom')]])
+  await assertRejects(
+    () =>
+      connectionsOf({
+        ...p.oauth,
+        lookupClient: () => Promise.reject(new Error('KV unavailable')),
+      }, 'person'),
+    Error,
+    'KV unavailable',
+  )
 })

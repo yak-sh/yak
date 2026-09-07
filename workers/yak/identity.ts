@@ -281,8 +281,20 @@ let domainOf = (req: Request) => {
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
-export let connections = (env: Env, person: string) =>
-  connectionsOf(api(env), person)
+export let connections = (env: Env, person: string) => {
+  let oauth = api(env)
+  return connectionsOf({
+    listUserGrants: (person, options) => oauth.listUserGrants(person, options),
+    lookupClient: async (id) => {
+      try {
+        return await oauth.lookupClient(id)
+      } catch (error) {
+        if (error instanceof CimdFetchError) return undefined
+        throw error
+      }
+    },
+  }, person)
+}
 
 // Who is asking, out of the platform session COOKIE and nothing else. It is
 // deliberately not `withAuth` above, which also answers an agent's bearer:

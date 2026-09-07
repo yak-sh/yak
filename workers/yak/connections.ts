@@ -15,6 +15,12 @@ export type Connection = {
   connectedAt: number
 }
 
+type Clients = Pick<OAuthHelpers, 'listUserGrants'> & {
+  // Missing registrations are null; unavailable metadata is undefined. The
+  // latter still has a grant and must not disappear during a client outage.
+  lookupClient: (id: string) => Promise<ClientInfo | null | undefined>
+}
+
 let names: Record<Provider, string> = {
   chatgpt: 'ChatGPT',
   claude: 'Claude',
@@ -57,16 +63,16 @@ let callback = (uri: string | undefined) => {
 }
 
 export let connectionsOf = async (
-  oauth: Pick<OAuthHelpers, 'listUserGrants' | 'lookupClient'>,
+  oauth: Clients,
   person: string,
   now = Math.floor(Date.now() / 1000),
 ): Promise<Connection[]> => {
-  let clients = new Map<string, Promise<ClientInfo | null>>()
+  let clients = new Map<string, Promise<ClientInfo | null | undefined>>()
   let found = new Map<string, Connection>()
   let identify = async (grant: GrantSummary) => {
     let host = callback(grant.redirectUri)
     let provider = host.provider
-    let client: ClientInfo | null = null
+    let client: ClientInfo | null | undefined
     if (!provider) {
       let lookup = clients.get(grant.clientId)
       if (!lookup) {
@@ -74,8 +80,8 @@ export let connectionsOf = async (
         clients.set(grant.clientId, lookup)
       }
       client = await lookup
-      if (!client) return
-      if (host.local) provider = named(client.clientName)
+      if (client === null) return
+      if (host.local) provider = named(client?.clientName)
     }
     let id = provider ?? grant.clientId
     let previous = found.get(id)

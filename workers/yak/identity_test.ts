@@ -122,14 +122,19 @@ slow(
           code_verifier: verifier,
         })
         assertEquals(token.status, 200)
-        return (await token.json()).access_token as string
+        let tokens: { access_token: string; refresh_token: string } =
+          await token.json()
+        return { client_id, ...tokens }
       }
-      let bearer = await authorize(
+      let chatgpt = await authorize(
         'https://chatgpt.com/callback',
         'A web client',
       )
-      await authorize('https://claude.ai/callback', 'Another web client')
-      await authorize(
+      let claude = await authorize(
+        'https://claude.ai/callback',
+        'Another web client',
+      )
+      let another = await authorize(
         'https://chatgpt.com/other-callback',
         'A second installation',
       )
@@ -146,7 +151,7 @@ slow(
 
       let credentials: Record<string, string>[] = [
         {},
-        { authorization: `Bearer ${bearer}` },
+        { authorization: `Bearer ${chatgpt.access_token}` },
       ]
       for (
         let [hostname, path] of [
@@ -172,6 +177,25 @@ slow(
         cookie: other.cookie,
       })
       assertEquals(await own.json(), { connections: [] })
+
+      // Revoking one installation leaves another; removing its last grant
+      // removes the chatbot on the next read, with no connection cache.
+      for (
+        let [client, remaining] of [
+          [chatgpt, ['chatgpt', 'claude']],
+          [another, ['claude']],
+          [claude, []],
+        ] as const
+      ) {
+        let revoked = await form(k, '/oauth/token', {
+          client_id: client.client_id,
+          token: client.refresh_token,
+          token_type_hint: 'refresh_token',
+        })
+        assertEquals(revoked.status, 200)
+        await revoked.body?.cancel()
+        assertEquals((await snapshots()).map((c) => c.id), [...remaining])
+      }
     } finally {
       await k.stop()
     }
