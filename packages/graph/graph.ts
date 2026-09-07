@@ -52,7 +52,8 @@ import { type Ask, gather, holding, reached } from './gather.ts'
 import { guard } from './guard.ts'
 import { mutate } from './mutate.ts'
 import { cascade } from './cascade.ts'
-import { stamp } from './stamp.ts'
+import { actorOf, births, stamps } from './stamp.ts'
+import { fire, type Rule } from './rules.ts'
 import { state } from './state.ts'
 import { each, isPromise, then } from './pipe.ts'
 
@@ -173,13 +174,11 @@ export let graph = (opts: Options): Graph => {
       return h ? [[p.name, h] as [string, Hook]] : []
     })
 
-  // A phase: the core's own work first (it is what the hooks are extending),
-  // then each hook, each seeing what the one before it returned.
-  let phase = (name: Phase, tx: Tx, core?: Step): Step => (bundles) => {
-    let steps: Step[] = core ? [core] : []
-    for (let [, h] of hooks(name)) steps.push((b) => h(b, tx))
-    return each(steps, bundles, (b, step) => step(b))
-  }
+  // The rules registered on a phase: the core's own (the stamps), then each
+  // plugin's, in registration order.
+  let ruled = (phase: Phase): Rule[] =>
+    [...stamps, ...plugins.flatMap((p) => p.rules ?? [])]
+      .filter((r) => r.phase == phase)
 
   let apply = (change: Change, o: ApplyOpts = {}):
     | Bundle[]
@@ -189,6 +188,28 @@ export let graph = (opts: Options): Graph => {
     let st = state()
     let now = o.now ?? new Date().toISOString()
     let outside = detached(storage)
+
+    // A phase: the core's own work first (it is what the rules and hooks are
+    // extending), then the rules as one tick, then each hook, each seeing what
+    // the one before it returned. `of` is how a rule sees what the graph holds
+    // beyond the batch; a phase with no snapshot leaves it out.
+    let phase = (
+      name: Phase,
+      tx: Tx,
+      core?: Step,
+      of?: (eid: Eid) => Bundle | undefined,
+    ): Step =>
+    (bundles) => {
+      let steps: Step[] = core ? [core] : []
+      let rules = ruled(name)
+      if (rules.length) {
+        steps.push((b) =>
+          fire(rules, b, { vocab, tx, phase: name, now, actor: actorOf(b), of })
+        )
+      }
+      for (let [, h] of hooks(name)) steps.push((b) => h(b, tx))
+      return each(steps, bundles, (b, step) => step(b))
+    }
 
     // After the transaction: every effect hook, isolated. A failing effect is
     // telemetry — the batch is already committed and a broken observer must
@@ -253,13 +274,18 @@ export let graph = (opts: Options): Graph => {
         // into the snapshot, so the phases still read each other.
         then(gather(tx, vocab, asking(bundles)), (snap) => {
           let held = holding(tx, vocab, snap)
+          // What the graph holds for one entity, every patch this batch made
+          // already folded in — what a rule is judged against (./rules.ts).
+          let holds = (eid: Eid) => snap.got.get(eid) ?? undefined
           return then(
             each(
               [
                 phase('precondition', held, (b) => guard(b, held, vocab)),
                 phase('mutate', held, (b) => mutate(b, held, st)),
                 phase('cascade', tx, (b) => cascade(b, tx, vocab, st)),
-                phase('stamp', tx, (b) => stamp(b, tx, vocab, st, now)),
+                // The stamps are rules now, and they ask what the graph holds
+                // for an entity: a birth is an entity with no `created`.
+                phase('stamp', tx, (b) => births(b, st), holds),
                 phase('journal', tx),
                 phase('commit', tx),
               ],

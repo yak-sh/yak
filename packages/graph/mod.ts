@@ -43,6 +43,13 @@
  * sees, which is how a hook rewrites, adds, or (by throwing) refuses. Every
  * registry is per graph instance.
  *
+ * A plugin may say the same thing as DATA: a {@link Rule} is a query over one
+ * bundle in the batch plus what comes out (`produce` a template, `run` a
+ * function), and the query's sigils are the rule — `+comp` ensures, `+!comp`
+ * gates so it fires once, `*comp` declares its write set. A phase runs its
+ * rules as one tick, all judged before any of them writes; the core's own
+ * `created`/`updated` stamps are two such rules.
+ *
  * A plugin also declares what its hooks are going to READ — `wants(bundles)`,
  * as {@link Ask}s — and `apply()` answers every plugin's asks and its own in
  * ONE gather when the transaction opens, so the phases before the patches read
@@ -69,6 +76,7 @@ export * from './gather.ts'
 export * from './guard.ts'
 export * from './mutate.ts'
 export * from './cascade.ts'
+export * from './rules.ts'
 export * from './stamp.ts'
 export * from './compose.ts'
 export * from './graph.ts'

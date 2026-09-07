@@ -131,13 +131,16 @@ let once = (rows: Bundle[]): Bundle[] => {
   return rows.filter((b) => !seen.has(b.entity.eid) && !!seen.add(b.entity.eid))
 }
 
-// A patch folded into what the snapshot holds: a null component drops it,
-// anything else merges in, so an omitted column keeps what it held and a null
-// one clears it. The same rule ./mutate.ts hands the storage — said here
-// because a hook that WRITES in the gathered phase has to be read back by the
-// hook after it (yaks.app's vouch writes the grant its own membership guard
-// then reads).
-let merged = (held: Bundle | null, b: Bundle): Bundle => {
+/**
+ * A patch folded into what the snapshot holds: a null component drops it,
+ * anything else merges in, so an omitted column keeps what it held and a null
+ * one clears it. The same rule ./mutate.ts hands the storage — said here
+ * because a hook that WRITES in the gathered phase has to be read back by the
+ * hook after it (yaks.app's vouch writes the grant its own membership guard
+ * then reads), and because a rule is judged against exactly this fold
+ * (./rules.ts).
+ */
+export let merged = (held: Bundle | null, b: Bundle): Bundle => {
   let out: Bundle = { ...(held ?? { entity: b.entity }) }
   for (let [name, comp] of comps(b)) {
     if (comp == null) delete out[name]

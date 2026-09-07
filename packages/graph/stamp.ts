@@ -15,10 +15,9 @@
 // all is stamped not at all. Nothing here assumes a shape.
 
 import type { Vocab } from '@yaks/vocab'
-import type { Actor, Bundle, Comp, Eid } from './bundle.ts'
-import type { Tx } from './storage.ts'
+import type { Actor, Bundle, Comp } from './bundle.ts'
 import type { State } from './state.ts'
-import { then } from './pipe.ts'
+import type { Patch, Rule } from './rules.ts'
 
 /** The actor a batch names: the first `$actor` component in it. A batch speaks
  * with one voice, so the first one found is the writer for the whole batch. */
@@ -45,37 +44,56 @@ let mark = (
 }
 
 /**
- * The stamp phase: `created` on every entity this batch brought into being,
- * `updated` on every one it touched but did not create. The stamps are written
- * through the transaction and synthesized into the batch, so a cache that
- * applies the return sees the same provenance a fresh read would.
+ * The stamp phase, as two rules. `created` goes on every entity the graph holds
+ * none for — which is what a birth IS — and `updated` on every other entity the
+ * batch touched; the gate on `created` is what keeps them apart. The phase
+ * judges both against ONE frozen view (./rules.ts), so a birth is never also a
+ * touch. What they produce is written through the transaction and synthesized
+ * into the batch, so a cache that applies the return sees the provenance a
+ * fresh read would.
+ *
+ * A graph whose vocabulary declares no `created` is stamped not at all: a rule
+ * about a component that does not exist here is inert.
  */
-export let stamp = (
-  bundles: Bundle[],
-  tx: Tx,
+export let stamps: Rule[] = [
+  {
+    name: 'created',
+    phase: 'stamp',
+    match: '.entity, +!created, *created',
+    run: (_bound, ctx) => wear('created', ctx.vocab, ctx.now, ctx.actor),
+  },
+  {
+    name: 'updated',
+    phase: 'stamp',
+    match: '.entity, .created, *updated',
+    run: (_bound, ctx) => wear('updated', ctx.vocab, ctx.now, ctx.actor),
+  },
+]
+
+// One rule's patch: the component, narrowed to the columns this vocabulary
+// declares. Nothing to say is no patch — the gate has already put the
+// component on.
+let wear = (
+  comp: string,
   vocab: Vocab,
-  st: State,
   now: string,
-): Bundle[] | Promise<Bundle[]> => {
-  let actor = actorOf(bundles)
-  let born = new Set(st.born.map((e) => e.eid))
+  actor: Actor,
+): Patch | undefined => {
+  let m = mark(vocab, comp, now, actor)
+  return m ? { [comp]: m } : undefined
+}
+
+/**
+ * The identities storage minted, carried back in the batch: a client that
+ * guessed an eid learns the `num` that came with it. The entity is carried BY
+ * REFERENCE, not copied — an adapter whose numbers the database picks
+ * (@yaks/d1) fills the `num` in when its batch lands, which is after this phase
+ * and before the caller sees the answer.
+ */
+export let births = (bundles: Bundle[], st: State): Bundle[] => {
   let dead = new Set(st.killed)
-  let out: Bundle[] = []
-  let add = (eid: Eid, comp: string) => {
-    let m = mark(vocab, comp, now, actor)
-    if (m) out.push({ entity: { eid }, [comp]: m })
-  }
-  for (let e of st.born) if (!dead.has(e.eid)) add(e.eid, 'created')
-  for (let eid of st.touched) {
-    if (!born.has(eid) && !dead.has(eid)) add(eid, 'updated')
-  }
-  // The identities storage minted ride back too: a client that guessed an eid
-  // learns the `num` that came with it. The entity is carried BY REFERENCE, not
-  // copied: an adapter whose numbers the database picks (@yaks/d1) fills the
-  // `num` in when its batch lands, which is after this phase and before the
-  // caller sees the answer.
-  let births = st.born.filter((e) => !dead.has(e.eid))
-    .map((e) => ({ entity: e }))
-  if (!out.length) return [...bundles, ...births]
-  return then(tx.patch(out), () => [...bundles, ...out, ...births])
+  return [
+    ...bundles,
+    ...st.born.filter((e) => !dead.has(e.eid)).map((e) => ({ entity: e })),
+  ]
 }

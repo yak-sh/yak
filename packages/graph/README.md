@@ -144,6 +144,37 @@ Every registry — plugins, hooks, effects — is per graph instance, so two gra
 in one process (a page's local one and its mirror of the server's) share
 nothing.
 
+## A rule is the same seam, said as data
+
+A hook is code that takes the batch. A **rule** is a query over one bundle in it
+plus what comes out, and the query says both things at once:
+
+```ts
+let shelver = {
+  name: 'shelver',
+  rules: [{
+    phase: 'precondition',
+    match: '.book, *book', // every entity wearing `book`; it writes `book`
+    produce: { book: { shelved: true } },
+  }],
+}
+```
+
+`match` is a [@yaks/query](https://jsr.io/@yaks/query) query, parsed with no
+bare-word text terms and judged by [@yaks/match](https://jsr.io/@yaks/match).
+Its sigils are the rule: `+comp` ensures a component before the rule runs,
+`+!comp` **gates** — it must be absent, and it is added, which is what makes a
+rule fire once ever — and `*comp` declares the write set, which a produce or a
+run may not write outside of. `produce` is the no-code case; `run(bound, ctx)`
+is everything else, and it sees the bound bundle with the ensures and the gate
+already on.
+
+A phase runs its rules as one **tick**: every match is judged against the same
+view — what the graph holds for each entity, with the batch folded in — before
+any rule writes, so two rules cannot chase each other's output. The core's own
+`created`/`updated` stamps are exactly that pair, and they are rules:
+`.entity, +!created` is a birth, `.entity, .created` a touch.
+
 ## A plugin says what it will read
 
 Over a database on the far side of a network, each question a hook asks is a

@@ -15,6 +15,7 @@
 import type { Bundle, Change, Eid, Entity } from './bundle.ts'
 import type { Query, ReadOpts, Tx } from './storage.ts'
 import type { Ask } from './gather.ts'
+import type { Rule } from './rules.ts'
 import type { Derive } from './alias.ts'
 import type { Graph } from './graph.ts'
 import type { VocabDoc } from '@yaks/vocab'
@@ -173,6 +174,10 @@ export type Plugin = {
   vocab?: VocabDoc[]
   /** the phases it hooks, at most one hook each */
   hooks?: Partial<Record<Phase, Hook>>
+  /** the rules it declares — the same seam said as data: a query over one
+   * bundle in the batch plus what comes out (see {@link Rule}). The phase runs
+   * every rule registered on it, in plugin order, before its hooks. */
+  rules?: Rule[]
   /** what its hooks are going to READ, given the batch. `apply()` unions every
    * plugin's asks with its own and answers them all in one gather before a hook
    * runs (see {@link Ask} and ./gather.ts), so a hook's `tx.get` and `about()`
