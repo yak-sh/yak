@@ -7203,9 +7203,10 @@ slow('space_sell connects an account and hands back one link', async () => {
     STRIPE_KEY: 'sk_probe',
     STRIPE_API: fake.url,
     STRIPE_CONNECT_WEBHOOK_SECRET: 'whsec_a_connect_probe_secret',
+    STRIPE_WEBHOOK_SECRET: 'whsec_plan_probe',
   })
   try {
-    let { cookie } = await seed(k, [{ slug: 'ada', apps: ['shop'] }])
+    let { cookie, eids } = await seed(k, [{ slug: 'ada', apps: ['shop'] }])
     let agent = connector(k, cookie)
     // Selling has its own account page; the library links to it. The form's
     // action and next step must follow the account through all three states.
@@ -7228,6 +7229,59 @@ slow('space_sell connects an account and hands back one link', async () => {
     }
     let library = await k.at('ada.yaks.app', '/', { headers: { cookie } })
     assertStringIncludes(await library.text(), `href="${path}"`)
+    let freePage = async () => {
+      let r = await k.at('ada.yaks.app', path, { headers: { cookie } })
+      let { document } = parseHTML(await r.text())
+      assert(!document.querySelector('[name="sell"][value="start"]'))
+      assert(document.querySelector('a[href="https://yaks.app/pricing"]'))
+    }
+    await freePage()
+    await assertRejects(
+      () => agent.tool('space_sell', { space: 'ada' }),
+      Error,
+      'Plus',
+    )
+    let denied = await k.at('ada.yaks.app', path, {
+      method: 'POST',
+      headers: { cookie, origin: 'https://ada.yaks.app' },
+      body: new URLSearchParams({ sell: 'start' }),
+    })
+    assertEquals(denied.status, 400)
+    assertEquals(fake.calls.length, 0)
+    assert(
+      !parseHTML(await denied.text()).document.querySelector(
+        '[name="sell"][value="start"]',
+      ),
+    )
+    let plan = async (status: string) => {
+      let raw = JSON.stringify({
+        id: `evt_plan_${status}`,
+        type: 'customer.subscription.updated',
+        created: Math.floor(Date.now() / 1000),
+        data: {
+          object: {
+            id: 'sub_probe',
+            customer: 'cus_probe',
+            status,
+            metadata: { space: eids.ada },
+          },
+        },
+      })
+      let r = await k.at('yaks.app', '/api/stripe/webhook', {
+        method: 'POST',
+        body: raw,
+        headers: {
+          'stripe-signature': await signed(
+            'whsec_plan_probe',
+            raw,
+            Math.floor(Date.now() / 1000),
+          ),
+        },
+      })
+      assertEquals(r.status, 200)
+      await r.body?.cancel()
+    }
+    await plan('active')
     await page('Connect Stripe')
 
     // The tool hands back ONE link and says to stop there — an assistant that
@@ -7290,13 +7344,22 @@ slow('space_sell connects an account and hands back one link', async () => {
       'one account, ever',
     )
 
+    await plan('canceled')
+    await freePage()
+    await page('Disconnect Stripe', 'stop')
+    await assertRejects(
+      () => agent.tool('space_sell', { space: 'ada' }),
+      Error,
+      'Plus',
+    )
+
     // Stopping is the platform forgetting, never Stripe deleting: the account
     // is the merchant's own.
     assertStringIncludes(
       await agent.tool('space_sell', { space: 'ada', disconnect: true }),
       'Their Stripe account is untouched',
     )
-    await page('Connect Stripe')
+    await freePage()
 
     // And nobody but the owner may connect a space to a bank account.
     let stranger = connector(k, (await signIn(k)).cookie)

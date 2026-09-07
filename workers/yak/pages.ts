@@ -595,6 +595,7 @@ export type SpacePage = {
   viewDays?: number
   viewsOff?: string
   sell?: 'none' | 'setup' | 'ready'
+  plus?: boolean
   fee?: string
   say?: string
   no?: boolean
@@ -778,29 +779,46 @@ let preferences = (at: SpacePage) => {
 let selling = (at: SpacePage) => {
   if (!at.sell) return '<p>Selling is not available here yet.</p>'
   let ready = at.sell == 'ready'
+  let connected = at.sell != 'none'
+  let stop = ready || (!at.plus && connected)
   return `<section class="Card"><h2>${
-    ready ? 'Payments are connected' : 'Take payments in your apps'
+    !at.plus
+      ? 'Take payments with Plus'
+      : ready
+      ? 'Payments are connected'
+      : 'Take payments in your apps'
   }</h2>
 <p>${
-    ready
+    !at.plus
+      ? connected
+        ? 'Your Stripe account is connected. Upgrade to Plus to accept new payments.'
+        : 'Connect Stripe and accept payments from your customers on Plus.'
+      : ready
       ? 'Payments go to your Stripe account. You manage refunds and disputes there.'
       : at.sell == 'setup'
       ? 'Finish connecting your Stripe account to start accepting payments.'
       : 'Connect your Stripe account to accept payments from your customers.'
-  }</p><p class="Note">yaks.app takes ${
-    esc(at.fee ?? '')
-  } of each sale. <a href="https://yaks.app/pricing" target="_blank" rel="noopener">Pricing</a></p>
-<form method="post" action="${
-    managePath('selling')
-  }"><input type="hidden" name="sell" value="${
-    ready ? 'stop' : 'start'
-  }"><button type="submit" class="Button${ready ? ' Bill_Go-quiet' : ''}">${
-    ready
-      ? 'Disconnect Stripe'
-      : at.sell == 'setup'
-      ? 'Continue setup'
-      : 'Connect Stripe'
-  }</button></form></section>`
+  }</p>${
+    at.plus
+      ? `<p class="Note">yaks.app takes ${
+        esc(at.fee ?? '')
+      } of each sale. <a href="https://yaks.app/pricing" target="_blank" rel="noopener">Pricing</a></p>`
+      : '<p><a class="Button" href="https://yaks.app/pricing">Compare plans</a></p>'
+  }${
+    at.plus || connected
+      ? `<form method="post" action="${
+        managePath('selling')
+      }"><input type="hidden" name="sell" value="${
+        stop ? 'stop' : 'start'
+      }"><button type="submit" class="Button${stop ? ' Bill_Go-quiet' : ''}">${
+        stop
+          ? 'Disconnect Stripe'
+          : at.sell == 'setup'
+          ? 'Continue setup'
+          : 'Connect Stripe'
+      }</button></form>`
+      : ''
+  }</section>`
 }
 
 let trash = (at: SpacePage) =>

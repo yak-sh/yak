@@ -22,7 +22,12 @@
 // The runtime this Worker is written against — the HTML rewriter, a Durable
 // Object's state, the bucket, the Store namespace — is harness.ts's, shared
 // with builder_test.ts.
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
 import type { Wire } from '@yaks/durable-object'
 import { slow } from '../../src/testing.ts'
 import { sign } from '../../src/token.ts'
@@ -1240,6 +1245,14 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
     k.env.STRIPE_KEY = 'sk_probe'
     k.env.STRIPE_API = fake.url
 
+    let free = await paying(k.env, { items })
+    assertEquals(free.status, 403)
+    assertEquals(free.body.error.code, 'plus_required')
+    assertEquals(fake.calls.length, 0)
+    await stamp(k.env, {
+      entities: [{ entity: { eid: k.space.eid }, plan: { tier: 'plus' } }],
+    })
+
     // The shop is deployed and the space has NOT connected Stripe. That is the
     // refusal a page will actually meet — a seller deploys before they finish
     // Stripe's form nearly every time — so it is refused by name, with the way
@@ -1336,6 +1349,17 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
     let away = await paying(k.env, { items, success: 'https://evil.example/' })
     assertEquals(away.status, 400)
     assertStringIncludes(away.body.error.message, 'stay inside this app')
+
+    // Downgrading blocks new checkouts, but the completed checkout below
+    // still files its order, receipt, refund and dispute.
+    await stamp(k.env, {
+      entities: [{ entity: { eid: k.space.eid }, plan: { tier: 'free' } }],
+    })
+    let before = fake.calls.length
+    let downgraded = await paying(k.env, { items })
+    assertEquals(downgraded.status, 403)
+    assertEquals(downgraded.body.error.code, 'plus_required')
+    assertEquals(fake.calls.length, before)
 
     // ---- and the money moves (T-34526) ------------------------------------
     //
@@ -1565,7 +1589,15 @@ Deno.test('a space connects Stripe, and the webhook makes it ready', async () =>
     STRIPE_CONNECT_WEBHOOK_SECRET: WHSEC,
   })
   try {
-    await seeded(env)
+    let { dir, space } = await seeded(env)
+    let ctx = { env, dir, person: ADA } as unknown as Ctx
+    let denied = () => call(ctx, 'space_sell', { space: 'ada' })
+    await assertRejects(denied, Error, 'Plus')
+    await assertRejects(() => sell.connect(env, space, ''), Error, 'Plus')
+    assertEquals(fake.calls.length, 0)
+    await stamp(env, {
+      entities: [{ entity: { eid: space.eid }, plan: { tier: 'plus' } }],
+    })
     // Nothing connected.
     assertEquals(await sold(env), null)
 
@@ -1659,6 +1691,13 @@ Deno.test('a space connects Stripe, and the webhook makes it ready', async () =>
       'ada cannot sell',
     )
     assertEquals((await sold(env))?.chargesEnabled, false)
+
+    await stamp(env, {
+      entities: [{ entity: { eid: space.eid }, plan: { tier: 'free' } }],
+    })
+    let before = fake.calls.length
+    await assertRejects(denied, Error, 'Plus')
+    assertEquals(fake.calls.length, before)
 
     // ---- the seller revokes us from their own dashboard ----
     assertEquals(

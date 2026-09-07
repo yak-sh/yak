@@ -801,9 +801,9 @@ Deeper: <https://yaks.app/guide/selling.md> — connecting the account, the door
 whole shape, what lands in an order, and who can read one.
 
 A store is a known shape here, and it needs no keys and no code. The seller
-connects a Stripe account of their own to their SPACE once — `space_sell`, or
-the button on their space page — and after that any app in it posts a cart to
-`./api/pay/checkout`:
+needs Plus and connects a Stripe account of their own to their SPACE once —
+`space_sell`, or the button on their space page — and after that any app in it
+posts a cart to `./api/pay/checkout`:
 
     let r = await fetch('./api/pay/checkout', {
       method: 'POST',

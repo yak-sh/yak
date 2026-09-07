@@ -238,7 +238,7 @@ whatever mail tool they have connected answers and this is not, and naming an
 app or its address is what makes it this. Call guide with page mail for the
 whole thing (https://yaks.app/guide/mail.md).
 
-A STORE is a known shape, and it needs no keys and no code. The seller connects
+A STORE on Plus can take payments without keys or code. The seller connects
 a Stripe account of their own to their SPACE once (space_sell, or the button on
 their space page), and after that any app in it posts a cart to
 ./api/pay/checkout — items: [{product: eid, qty, options}] — and is answered

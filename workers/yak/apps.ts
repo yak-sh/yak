@@ -51,6 +51,7 @@ import {
   feeOf,
   type Product,
   rate,
+  refusedSell,
   selling,
 } from './sell.ts'
 import { type Size, sizeOf } from './image.ts'
@@ -1204,6 +1205,7 @@ let index = async (
     // alone — and only where the platform has a Stripe key at all, since a
     // button that cannot work is worse than no block.
     sell: owner && env.STRIPE_KEY ? selling(space) : undefined,
+    plus: owner ? space.tier == 'plus' : undefined,
     fee: rate(await feeOf(dir)),
     name: owner ? await dir.nameAt(owner) ?? '' : '',
     connections: owner ? await (await identity()).connections(env, owner) : [],
@@ -1306,6 +1308,8 @@ let saved = async (
     )
   }
   if (till == 'start') {
+    let no = refusedSell(space)
+    if (no) return index(req, env, dir, space, { say: no, no: true }, 'selling')
     try {
       let made = await connect(env, space, await dir.emailAt(who.person) ?? '')
       return redirect(made.url, 303)

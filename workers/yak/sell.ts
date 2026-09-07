@@ -48,7 +48,7 @@ import {
 } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { metaOf } from './meta.ts'
-import { managePath, PLATFORM } from './route.ts'
+import { managePath, PLATFORM, PRICING } from './route.ts'
 import { whoIs } from './session.ts'
 
 // ---- the fee ---------------------------------------------------------------
@@ -254,6 +254,13 @@ export let selling = (space: Space): 'none' | 'setup' | 'ready' =>
     ? 'ready'
     : 'setup'
 
+// New payments require Plus. Existing orders and Stripe events still settle
+// after a downgrade, and the seller can always disconnect their account.
+export let refusedSell = (space: Space) =>
+  space.tier == 'plus'
+    ? null
+    : `Taking payments requires Plus. Compare plans: ${PRICING}`
+
 // ---- connecting ------------------------------------------------------------
 
 let dirOf = (env: Env) =>
@@ -277,6 +284,8 @@ let wrote = (env: Env, space: Space, row: Record<string, unknown> | null) =>
  * The link is minted fresh every time, because it is single-use and expires.
  */
 export let connect = async (env: Env, space: Space, email: string) => {
+  let no = refusedSell(space)
+  if (no) throw new Error(no)
   let id = space.stripe?.account
   if (!id) {
     let made = await ask(env, '/v1/accounts', account(space, email)) as Account
@@ -522,6 +531,8 @@ export let buying = async (
   if (!env.STRIPE_KEY) {
     return no(503, 'no_selling', 'selling is not switched on here')
   }
+  let upgrade = refusedSell(at.space)
+  if (upgrade) return no(403, 'plus_required', upgrade)
   let where = selling(at.space)
   if (where != 'ready') {
     return no(

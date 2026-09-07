@@ -62,7 +62,7 @@ space_restore:
 space_sell:
   title: Start selling
   description: >-
-    Connect this space to Stripe so its apps can take money. The person gets
+    Connect this space to Stripe so its apps can take money. Requires Plus. The person gets
     a link to finish setting up with Stripe — their name, their bank
     account, whatever Stripe asks — and that all happens at Stripe, not
     here: we never see or hold any of it. They are the merchant. It is their

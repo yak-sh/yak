@@ -149,7 +149,14 @@ import {
   spending,
   TIMEOUT,
 } from './sandbox.ts'
-import { connect, disconnect, feeOf, rate, selling } from './sell.ts'
+import {
+  connect,
+  disconnect,
+  feeOf,
+  rate,
+  refusedSell,
+  selling,
+} from './sell.ts'
 import { mailFrom } from './post.ts'
 import { foreign, SIGN_IN, SLUG } from './route.ts'
 import { globs } from './router.ts'
@@ -1865,6 +1872,8 @@ let OURS: Row[] = [
       if (!ctx.env.STRIPE_KEY) {
         throw new Error('selling is not switched on here')
       }
+      let no = refusedSell(space)
+      if (no) throw new Error(no)
       if (selling(space) == 'ready') {
         return {
           text: `${space.slug} is already selling: Stripe has them ready to ` +

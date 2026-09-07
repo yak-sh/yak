@@ -5,12 +5,11 @@ description: "Selling things (yaks.app). Taking money for something: how a selle
 
 # Selling things
 
-An app can take money, and taking it is one call. The seller connects a Stripe
-account of their own to their space, once. After that any app in that space can
-post a cart to `./api/pay/checkout`, and the door answers the address of a
-Stripe payment page to send the buyer to. When the money moves, an `order` row
-appears in that app's store and the buyer gets a letter from the app's own
-address.
+Apps on Plus can take payments. The seller connects a Stripe account of their
+own to their space, once. After that any app in that space can post a cart to
+`./api/pay/checkout`, and the door answers the address of a Stripe payment page
+to send the buyer to. When the money moves, an `order` row appears in that app's
+store and the buyer gets a letter from the app's own address.
 
 There is no key to set, no webhook to receive and no `worker.js` to write. The
 charge is made ON the seller's Stripe account, in the seller's name — this
@@ -44,6 +43,10 @@ Two more, and both are load-bearing:
   written when Stripe says the money moved, and by nothing else.
 
 ## The seller connects an account
+
+Plus is required for setup and new checkout sessions. After a downgrade,
+existing orders, refunds and disputes still update, and the Stripe account stays
+connected. See <https://yaks.app/pricing> for plans.
 
 Once per SPACE, not per app: `space_sell`, or the button on the space's own
 page. It opens Stripe's own onboarding — their business details, their bank
