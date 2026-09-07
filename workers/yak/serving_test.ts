@@ -272,7 +272,7 @@ Deno.test("/api/stats answers the app's own people, and nobody else", async () =
   try {
     let { env } = inMemory(SECRET, {
       CF_ACCOUNT: 'acc0unt',
-      ANALYTICS_TOKEN: 'a token',
+      CF_ANALYTICS_TOKEN: 'a token',
     })
     await seeded(env)
     let mine = await apps.fetch(

@@ -87,17 +87,13 @@ export type Env = {
   // platform's own sign-in codes go out from bot.yak.sh rather than an app's
   // address.
   MAIL?: Binding
-  // The meter (usage.ts): a Cloudflare API token that may read the account's
-  // analytics, and the account it reads. The token is a secret the owner sets
-  // (T-32759) and unset the hourly sweep does nothing; the account tag is not
-  // a secret and rides wrangler.toml's `[vars]`.
+  // Account Analytics Read serves both usage.ts (the meter) and views.ts
+  // (page visits). CF_ACCOUNT is public and configured in wrangler.toml.
   CF_ANALYTICS_TOKEN?: string
   CF_ACCOUNT?: string
   // Who visited an app (views.ts, T-34496): the Analytics Engine dataset one
-  // data point per page view is written to, and the token the SQL API reads
-  // those aggregates back with (an Account Analytics read token the owner
-  // mints — README.md's settings table has the steps). CF_ACCOUNT above is
-  // the account the SQL API is addressed at. The binding is absent under the
+  // data point per page view is written to. The SQL API reads it with the
+  // account and analytics token above. The binding is absent under the
   // workerd probes and the in-memory harness, where a view is counted nowhere
   // and nothing says so; the token unset, the space page says analytics are
   // not switched on rather than failing.
@@ -108,7 +104,6 @@ export type Env = {
       doubles?: number[]
     }): void
   }
-  ANALYTICS_TOKEN?: string
   ANALYTICS_API?: string
   // An app's OWN code (dispatch.ts): the Workers for Platforms namespace its
   // worker.js is uploaded into, and the token the upload speaks to the

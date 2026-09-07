@@ -29,8 +29,8 @@
 //
 // READING it back is the other half (T-34497): the SQL API, which is a POST of
 // SQL text to the account's own endpoint carrying an Account Analytics Read
-// token — a SECRET the owner mints (README.md's settings table has the steps),
-// never a binding, because there is no read binding for a dataset. Unset, the
+// token shared with usage.ts, because both APIs need Account Analytics Read.
+// There is no read binding for a dataset. Unset, the
 // space page says analytics are not switched on yet and nothing errors.
 //
 // Every count in this file is `sum(_sample_interval)` and never `count()`.
@@ -256,7 +256,7 @@ export let ran = async (
 ): Promise<Record<string, unknown>[]> => {
   let res = await globalThis.fetch(sqlAt(env), {
     method: 'POST',
-    headers: { authorization: `Bearer ${env.ANALYTICS_TOKEN}` },
+    headers: { authorization: `Bearer ${env.CF_ANALYTICS_TOKEN}` },
     body: sql,
   })
   let said = await res.text()
@@ -316,7 +316,7 @@ let held = new Map<string, { at: number; stats: Promise<Stats> }>()
 
 /**
  * Who visited this app, in one answer — or `null` where nobody has set
- * ANALYTICS_TOKEN, which is the platform saying analytics are not switched on
+ * CF_ANALYTICS_TOKEN, which is the platform saying analytics are not switched on
  * rather than an error every caller has to handle.
  */
 export let statsOf = (
@@ -325,7 +325,7 @@ export let statsOf = (
   days = DAYS,
   now = Date.now(),
 ): Promise<Stats> | null => {
-  if (!env.ANALYTICS_TOKEN || !env.CF_ACCOUNT) return null
+  if (!env.CF_ANALYTICS_TOKEN || !env.CF_ACCOUNT) return null
   let window = whole(days, KEPT_DAYS)
   let key = `${app}:${window}`
   let fresh = held.get(key)

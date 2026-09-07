@@ -5200,7 +5200,7 @@ slow('app_stats answers counts, and never a visitor', async () => {
   })
   let port = (api.addr as Deno.NetAddr).port
   let k = await kernel({
-    ANALYTICS_TOKEN: 'a probe token',
+    CF_ANALYTICS_TOKEN: 'a probe token',
     ANALYTICS_API: `http://127.0.0.1:${port}`,
   })
   try {
@@ -5218,6 +5218,12 @@ slow('app_stats answers counts, and never a visitor', async () => {
       assertStringIncludes(q, 'sum(_sample_interval)')
       assertStringIncludes(q, 'FROM yak_views')
     }
+    let dashboard = await k.at('watch.yaks.app', '/_yaks/visits', {
+      headers: { cookie },
+    })
+    assertEquals(dashboard.status, 200)
+    assertStringIncludes(await dashboard.text(), '9 visits')
+    assertEquals(asked.length, 4)
     // A shorter window is a different question, and it says so.
     assertStringIncludes(
       await agent.tool('app_stats', {

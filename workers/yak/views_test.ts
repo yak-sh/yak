@@ -220,13 +220,13 @@ Deno.test('daily: a dense series, gaps and all', () => {
 
 // The fake SQL API: what it was asked, and what it answers.
 let sql = (
-  answer: (q: string) => { status?: number; body: string },
+  answer: (q: string, headers: Headers) => { status?: number; body: string },
 ) => {
   let asked: string[] = []
   let real = globalThis.fetch
   globalThis.fetch = ((_to: string | Request, init?: RequestInit) => {
     asked.push(String(init?.body ?? ''))
-    let said = answer(asked[asked.length - 1])
+    let said = answer(asked[asked.length - 1], new Headers(init?.headers))
     return Promise.resolve(
       new Response(said.body, { status: said.status ?? 200 }),
     )
@@ -235,7 +235,19 @@ let sql = (
 }
 
 let env = (vars: Partial<Env> = {}) =>
-  ({ CF_ACCOUNT: 'acc0unt', ANALYTICS_TOKEN: 'a token', ...vars }) as Env
+  ({ CF_ACCOUNT: 'acc0unt', CF_ANALYTICS_TOKEN: 'a token', ...vars }) as Env
+
+Deno.test('visits authenticate with the platform analytics reader', async () => {
+  let api = sql((_q, headers) => {
+    assertEquals(headers.get('authorization'), 'Bearer a token')
+    return { body: JSON.stringify({ data: [{ views: 7 }] }) }
+  })
+  try {
+    assertEquals(await ran(env(), perDay(APP)), [{ views: 7 }])
+  } finally {
+    api.done()
+  }
+})
 
 Deno.test('a dataset nobody has written to is no views, not a failure', async () => {
   let api = sql(() => ({ status: 404, body: 'unknown table yak_views' }))
@@ -256,7 +268,7 @@ Deno.test('a refusal from the SQL API is said, not swallowed', async () => {
 })
 
 Deno.test('with no token there is nothing to ask, and one sentence to say', () => {
-  assertEquals(statsOf(env({ ANALYTICS_TOKEN: undefined }), APP), null)
+  assertEquals(statsOf(env({ CF_ANALYTICS_TOKEN: undefined }), APP), null)
   assertEquals(statsOf(env({ CF_ACCOUNT: undefined }), APP), null)
   assert(NOT_ON.includes('not switched on'))
 })
