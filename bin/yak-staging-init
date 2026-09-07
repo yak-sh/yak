@@ -1,0 +1,191 @@
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run=deno
+// Make the account resources that the yak-staging bindings name. This is a
+// one-time account operation, kept behind the Worker's Wrangler door so it
+// uses the same pin, config and install discipline as deploys.
+
+export let DISPATCH = 'yak-apps-staging'
+export let BUCKETS = ['yak-blobs-staging', 'yak-store-exports-staging']
+export let VECTORIZE = 'yak-memories-staging'
+export let OAUTH_KV = 'yak-oauth-staging'
+
+// 768/cosine is the production index's declared shape in memory.ts and
+// wrangler.toml. The embedding model answers 768 values, so staging must not
+// silently create a differently shaped index under the same binding.
+export let DIMENSIONS = 768
+export let METRIC = 'cosine'
+
+// These are the deployed settings that are secrets, or optional settings the
+// Worker deliberately changes through `secret put` without a code deploy.
+// Probe-only API seams and local MAIL_DEV are omitted: neither belongs on a
+// deployed environment.
+export let SECRETS = [
+  'AI_GATEWAY',
+  'AI_GATEWAY_TOKEN',
+  'BUILDER_MODEL_FREE',
+  'BUILDER_MODEL_PAID',
+  'CF_ANALYTICS_TOKEN',
+  'CF_HOSTNAMES_TOKEN',
+  'CF_WORKERS_TOKEN',
+  'CIMD',
+  'MAIL_ACCOUNT',
+  'MAIL_SINK',
+  'MAIL_TOKEN',
+  'OPENAI_API_KEY',
+  'OPENAI_APPS_CHALLENGE',
+  'SESSION_SECRET',
+  'STRIPE_CONNECT_WEBHOOK_SECRET',
+  'STRIPE_KEY',
+  'STRIPE_WEBHOOK_SECRET',
+]
+
+export type Result = { success: boolean; stdout: string; stderr: string }
+export type Run = (args: string[]) => Promise<Result>
+
+let root = new URL('../', import.meta.url)
+let wrapper = new URL('../workers/yak/wrangler.ts', import.meta.url).pathname
+let decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes).trim()
+
+export let wrangler: Run = async (args) => {
+  let out = await new Deno.Command(Deno.execPath(), {
+    args: [
+      'run',
+      '--allow-read',
+      '--allow-write',
+      '--allow-run=npm,npx,git',
+      wrapper,
+      ...args,
+    ],
+    cwd: root,
+    stdin: 'inherit',
+    stdout: 'piped',
+    stderr: 'piped',
+  }).output()
+  return {
+    success: out.success,
+    stdout: decode(out.stdout),
+    stderr: decode(out.stderr),
+  }
+}
+
+let ran = async (run: Run, args: string[]) => {
+  let out = await run(args)
+  if (!out.success) {
+    throw new Error(
+      `wrangler ${args.join(' ')} failed: ${out.stderr || out.stdout}`,
+    )
+  }
+  return out.stdout
+}
+
+let parse = <T>(text: string, what: string): T => {
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    throw new Error(`wrangler returned unreadable ${what}: ${text}`)
+  }
+}
+
+let named = (text: string, name: string) =>
+  new RegExp(`(^|[^a-z0-9-])${name}($|[^a-z0-9-])`, 'im').test(text)
+
+let ensureText = async (
+  run: Run,
+  say: (line: string) => void,
+  kind: string,
+  name: string,
+  list: string[],
+  create: string[],
+) => {
+  let found = named(await ran(run, list), name)
+  if (!found) await ran(run, create)
+  say(`${found ? 'exists' : 'created'}: ${kind} ${name}`)
+}
+
+type Index = { name: string; config?: { dimensions?: number; metric?: string } }
+
+let ensureVectorize = async (
+  run: Run,
+  say: (line: string) => void,
+) => {
+  let indexes = parse<Index[]>(
+    await ran(run, ['vectorize', 'list', '--json']),
+    'Vectorize index list',
+  )
+  let found = indexes.find((index) => index.name == VECTORIZE)
+  if (found) {
+    let shape = found.config
+    if (shape?.dimensions != DIMENSIONS || shape.metric != METRIC) {
+      throw new Error(
+        `${VECTORIZE} exists with ${shape?.dimensions ?? 'unknown'} dimensions` +
+          `/${shape?.metric ?? 'unknown'}, want ${DIMENSIONS}/${METRIC}`,
+      )
+    }
+  } else {
+    await ran(run, [
+      'vectorize',
+      'create',
+      VECTORIZE,
+      `--dimensions=${DIMENSIONS}`,
+      `--metric=${METRIC}`,
+    ])
+  }
+  say(`${found ? 'exists' : 'created'}: Vectorize index ${VECTORIZE}`)
+}
+
+type Namespace = { id: string; title: string }
+
+let namespaces = async (run: Run) =>
+  parse<Namespace[]>(
+    await ran(run, ['kv', 'namespace', 'list']),
+    'KV namespace list',
+  )
+
+let ensureKV = async (run: Run, say: (line: string) => void) => {
+  let found = (await namespaces(run)).find((space) => space.title == OAUTH_KV)
+  let existed = !!found
+  if (!found) {
+    // Do not pass --env: Wrangler prefixes an env onto KV titles, while the
+    // staging suffix already gives this account-level resource its identity.
+    await ran(run, ['kv', 'namespace', 'create', OAUTH_KV])
+    found = (await namespaces(run)).find((space) => space.title == OAUTH_KV)
+  }
+  if (!found?.id) throw new Error(`${OAUTH_KV} was created but has no KV id`)
+  say(`${existed ? 'exists' : 'created'}: KV namespace ${OAUTH_KV}`)
+  return found.id
+}
+
+export let initialize = async (
+  run: Run = wrangler,
+  say: (line: string) => void = console.log,
+) => {
+  await ensureText(
+    run,
+    say,
+    'dispatch namespace',
+    DISPATCH,
+    ['dispatch-namespace', 'list'],
+    ['dispatch-namespace', 'create', DISPATCH],
+  )
+  for (let bucket of BUCKETS) {
+    await ensureText(
+      run,
+      say,
+      'R2 bucket',
+      bucket,
+      ['r2', 'bucket', 'list'],
+      ['r2', 'bucket', 'create', bucket],
+    )
+  }
+  await ensureVectorize(run, say)
+  let id = await ensureKV(run, say)
+  say('')
+  say(`Paste this into workers/yak/wrangler.toml: id = "${id}"`)
+  say('')
+  say('Set the staging secrets:')
+  for (let name of SECRETS) {
+    say(`npx wrangler secret put ${name} --env staging`)
+  }
+  return id
+}
+
+if (import.meta.main) await initialize()
