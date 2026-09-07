@@ -1,15 +1,15 @@
 # @yaks/cli
 
-The `yaks` command: an MCP server's tool list, read at run time, with every tool
+The `yak` command: an MCP server's tool list, read at run time, with every tool
 a subcommand.
 
 ## Install
 
 ```sh
-deno install -gf --allow-net --allow-env --allow-read --allow-write jsr:@yaks/cli/yaks
+deno install -gf --allow-net --allow-env --allow-read --allow-write jsr:@yaks/cli/yak
 ```
 
-That gives you `yaks`. (`npx` and `bunx` reach JSR through its npm bridge at
+That gives you `yak`. (`npx` and `bunx` reach JSR through its npm bridge at
 `npm.jsr.io` — configure the `@jsr` scope and the package is `@jsr/yaks__cli` —
 but Deno is the supported install, and the one this is tested against.)
 
@@ -19,9 +19,9 @@ There is no list of verbs in this package. It asks the server for `tools/list`
 and every tool it gets back is a subcommand:
 
 ```sh
-yaks app_list
-yaks app_files --app recipes --path index.html --content @index.html
-yaks graph_query --q '.recipe!'
+yak app_list
+yak app_files --app recipes --path index.html --content @index.html
+yak graph_query --q '.recipe!'
 ```
 
 So the CLI cannot drift from the connector an agent is talking to, and a tool a
@@ -30,6 +30,47 @@ again.
 
 Four verbs are the command's own and shadow a tool of the same name: `help`,
 `login`, `logout`, `apply`.
+
+## Plugins
+
+Everything else arrives through a plugin, and a plugin is data: a name, the
+heading its verbs sit under, and a table of verbs contributed at boot.
+
+```ts
+import { main, type Plugin, PLUGINS } from '@yaks/cli/yak'
+
+let mine: Plugin = {
+  name: 'mine',
+  about: 'this box’s own verbs',
+  verbs:
+    () => [{ name: 'ping', about: 'say hello', run: (c) => (c.out('hi'), 0) }],
+}
+
+Deno.exit(await main(Deno.args, [mine, ...PLUGINS]))
+```
+
+`yak --help` renders every table on one page, one column throughout. The
+**first** plugin to name a verb wins, so the order is the precedence and a box
+that adds its own decides where it sits. A plugin is asked for its table only
+until the word is found, so one that has to reach the network for its verbs
+costs nothing on a line that never reaches it.
+
+Two plugins ship here: the server's tools (above), and the apps' commands.
+
+## An app's own commands
+
+An app declares commands rather than tools, so the tool list never moves for
+them. `yak commands` lists them, and either spelling runs one:
+
+```sh
+yak command add_recipe --app recipes title='Lemon cake' serves=4
+yak recipes add_recipe title='Lemon cake' serves=4
+```
+
+The second is what a first word nothing else claimed means: an app, then its
+command. The arguments are the app's own, so they are `key=value` words — JSON
+where the value parses as JSON, `@path` and `-` as everywhere else — which is
+what keeps them apart from this program's own options.
 
 ## Arguments
 
@@ -57,7 +98,7 @@ The words the tool said, on stdout. `--json` prints its structured result
 instead:
 
 ```sh
-yaks graph_query --q '.recipe!' --json | jq '.[].doc.title'
+yak graph_query --q '.recipe!' --json | jq '.[].doc.title'
 ```
 
 Exit codes: `0` said, `1` the tool or the door refused, `2` the command line was
@@ -66,12 +107,12 @@ wrong.
 ## Signing in
 
 The bearer is `$YAKS_TOKEN` when it is set — which is how a sandbox hands one
-over with no file to write — and otherwise the one `yaks login` wrote, at 0600
+over with no file to write — and otherwise the one `yak login` wrote, at 0600
 under this OS's config directory:
 
 ```sh
-yaks login <token>     # remembered for this host
-yaks logout            # forgotten
+yak login <token>     # remembered for this host
+yak logout            # forgotten
 ```
 
 A 401 answers with the one sentence to act on, not an OAuth flow: this is a
@@ -86,8 +127,8 @@ command line and it has no browser to follow a challenge with.
 ## Help
 
 ```sh
-yaks help              # every tool, one line each
-yaks help graph_query  # that tool's arguments, off its own schema
+yak help              # every tool, one line each
+yak help graph_query  # that tool's arguments, off its own schema
 ```
 
 The tool list is cached per host and stamped with the roster version the server
@@ -98,14 +139,14 @@ cached list is not.
 
 ## apply
 
-`yaks apply` is `graph_apply` with a door for a stream. A batch is atomic, and a
+`yak apply` is `graph_apply` with a door for a stream. A batch is atomic, and a
 file of bundles is a load rather than one batch, so NDJSON — one bundle per line
 — goes over in batches of 50:
 
 ```sh
-cat bundles.ndjson | yaks apply
-yaks apply @bundles.ndjson
-yaks apply --change '[{"entity":{"eid":"$r"},"doc":{"title":"Lemon cake"}}]'
+cat bundles.ndjson | yak apply
+yak apply @bundles.ndjson
+yak apply --change '[{"entity":{"eid":"$r"},"doc":{"title":"Lemon cake"}}]'
 ```
 
 ## Dependencies

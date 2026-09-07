@@ -99,7 +99,7 @@ Deno.test('a 401 is one sentence a person can act on', async () => {
 Deno.test('help is drawn from the schema the server published', async () => {
   let query = (await listed()).find((t) => t.name == 'graph_query')!
   let help = toolHelp(query)
-  assert(help.startsWith('yaks graph_query --q <string>'), help)
+  assert(help.startsWith('yak graph_query --q <string>'), help)
   assert(help.includes('--limit'), help)
 })
 

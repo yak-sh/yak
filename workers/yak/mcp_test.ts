@@ -6623,7 +6623,7 @@ slow(
       await agent.call('initialize', HELLO)
       let said = await agent.tool('grant', {})
       // The answer is the line to paste, and what the token is worth beside it.
-      let token = /^yaks login (\S+)$/m.exec(said)![1]
+      let token = /^yak login (\S+)$/m.exec(said)![1]
       assertStringIncludes(said, 'shown once')
       assertStringIncludes(said, 'exactly the access they have here')
       let id = /revoke (\w+)\./.exec(said)![1]
@@ -6649,7 +6649,7 @@ slow(
       // make a third to escape into.
       let narrow = await agent.tool('grant', { space: two, hours: 6 })
       assertStringIncludes(narrow, `It reaches ${two} and no other space`)
-      let only = connector(k, undefined, /^yaks login (\S+)$/m.exec(narrow)![1])
+      let only = connector(k, undefined, /^yak login (\S+)$/m.exec(narrow)![1])
       assertStringIncludes(await only.tool('app_list'), 'lists')
       assertStringIncludes(
         (await assertRejects(

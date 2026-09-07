@@ -7,7 +7,7 @@
 // body is rarely something a person types: `@path` is that file's text, `-` and
 // `@-` are stdin, and everything else is the word itself. That is what makes
 //
-//   yaks app_files --app recipes --path index.html --content @index.html
+//   yak app_files --app recipes --path index.html --content @index.html
 //
 // the same command whether the page is two lines or two hundred.
 //
@@ -116,6 +116,36 @@ export let valueOf = (name: string, raw: string, p?: Prop): unknown => {
     return [valueOf(name, raw, p?.items)]
   }
   return raw
+}
+
+/**
+ * Bare `key=value` words as an object — the arguments of something whose
+ * schema this program does not hold, like an app's own command. The value is
+ * JSON where it parses as JSON, so a number stays a number and a list stays a
+ * list, and the word itself otherwise; `@path` and `-` inflate first, the same
+ * three spellings every value here takes.
+ *
+ * ```ts
+ * await pairsIn(['serves=4', 'title=Lemon cake'], reads)
+ * // { serves: 4, title: 'Lemon cake' }
+ * ```
+ */
+export let pairsIn = async (
+  words: string[],
+  reads: Reads,
+): Promise<Record<string, unknown>> => {
+  let out: Record<string, unknown> = {}
+  for (let word of words) {
+    let eq = word.indexOf('=')
+    if (eq <= 0) throw new Usage(`not an argument: ${word} — want key=value`)
+    let raw = await inflate(word.slice(eq + 1), reads)
+    try {
+      out[word.slice(0, eq)] = JSON.parse(raw)
+    } catch {
+      out[word.slice(0, eq)] = raw
+    }
+  }
+  return out
 }
 
 let listed = (names: string[]): string =>

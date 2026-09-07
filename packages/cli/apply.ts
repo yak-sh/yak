@@ -1,4 +1,4 @@
-// `yaks apply`: graph_apply with a door for a stream of bundles.
+// `yak apply`: graph_apply with a door for a stream of bundles.
 //
 // A batch is atomic, and a file with fifty thousand bundles in it is not a
 // batch anybody wants to be atomic — it is a load. So NDJSON on stdin, one

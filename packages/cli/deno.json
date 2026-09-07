@@ -3,10 +3,10 @@
   "version": "0.0.0",
   "exports": {
     ".": "./mod.ts",
-    "./yaks": "./yaks.ts"
+    "./yak": "./yak.ts"
   },
   "license": "Apache-2.0",
-  "description": "The yaks command: an MCP server's tool list read at run time, every tool a subcommand, bodies riding @file and stdin.",
+  "description": "The yak command: an MCP server's tool list read at run time, every tool a subcommand, and a plugin seam for the verbs a box adds.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

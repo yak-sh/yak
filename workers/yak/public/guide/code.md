@@ -542,21 +542,21 @@ everything you put in it goes with it. Only what `sandbox_ship` copied into the
 app survives.
 
 That container is **signed in as you**. Two variables are set in every command's
-environment, and the `yaks` CLI is installed:
+environment, and the `yak` CLI is installed:
 
     YAKS_TOKEN   a grant — you, narrowed to this space
     YAKS_HOST    https://yaks.app
 
 So a build script reaches the same tools your agent has, as you:
 
-    yaks app_list
-    yaks graph_query --q '.recipe!'
-    yaks apply @rows.ndjson
+    yak app_list
+    yak graph_query --q '.recipe!'
+    yak apply @rows.ndjson
 
-`yaks <tool>` is every tool this connector lists — it reads the list at run
-time, so it cannot drift — and `yaks apply` streams a file of NDJSON bundles
-into the graph 50 at a time. `curl` reaches the same door if you would rather
-write the JSON-RPC yourself:
+`yak <tool>` is every tool this connector lists — it reads the list at run time,
+so it cannot drift — and `yak apply` streams a file of NDJSON bundles into the
+graph 50 at a time. `curl` reaches the same door if you would rather write the
+JSON-RPC yourself:
 
     curl -sS "$YAKS_HOST/mcp" \
       -H "authorization: Bearer $YAKS_TOKEN" \

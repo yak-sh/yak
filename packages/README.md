@@ -99,11 +99,12 @@ In dependency order:
   of five generic tools that take and answer bundles, served as a portable
   `fetch` handler or over stdio, each tool's output schema derived from the
   vocabulary.
-- **[@yaks/cli](./cli)** — that door from a shell: the `yaks` command, which
+- **[@yaks/cli](./cli)** — that door from a shell: the `yak` command, which
   reads an MCP server's `tools/list` at run time and makes every tool a
   subcommand, mapping the command line through each tool's own input schema. It
   has no verb list of its own, so it cannot drift from the connector an agent is
-  talking to.
+  talking to — and a PLUGIN, a table of verbs contributed at boot, is how a box
+  adds words of its own beside them under one help.
 - **[@yaks/workers](./workers)** — that handler as a Cloudflare Worker: the
   `WebSocketPair` upgrade `/ws` needs, the `fetch` entrypoint a Worker exports,
   a door that reads a cookie or a bearer token, and the hop to a Durable Object

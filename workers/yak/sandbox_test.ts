@@ -332,7 +332,7 @@ Deno.test('the token is in the environment and never in the transcript', async (
       calls: [{
         id: 'c1',
         name: 'sandbox_exec',
-        args: JSON.stringify({ cmd: 'yaks app_list' }),
+        args: JSON.stringify({ cmd: 'yak app_list' }),
       }],
     },
     { text: 'listed' },
@@ -489,7 +489,7 @@ Deno.test('the deploy names the container, and the image is the SDK version', as
   assertEquals(box.image_build_context, '../../packages/cli')
   assertStringIncludes(file, 'COPY . /opt/yaks/cli')
   assertStringIncludes(file, 'deno install -gf')
-  assertStringIncludes(file, '/opt/yaks/cli/yaks.ts')
+  assertStringIncludes(file, '/opt/yaks/cli/yak.ts')
   // Pinned and checksummed like everything else it downloads.
   assert(/^ARG DENO_VERSION=\d+\.\d+\.\d+$/m.test(file), 'deno is pinned')
   assert(/^ARG DENO_SHA256=[0-9a-f]{64}$/m.test(file), 'and checksummed')

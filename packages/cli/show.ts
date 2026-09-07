@@ -38,7 +38,7 @@ export let toolHelp = (t: Tool): string => {
   let props = t.inputSchema?.properties ?? {}
   let need = new Set(t.inputSchema?.required ?? [])
   let names = Object.keys(props)
-  let head = `yaks ${t.name} ${
+  let head = `yak ${t.name} ${
     names.map((n) => slot(n, props[n], need.has(n))).join(' ')
   }`.trimEnd()
   let wide = Math.max(0, ...names.map((n) => n.length))

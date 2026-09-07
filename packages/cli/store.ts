@@ -1,4 +1,4 @@
-// What this box remembers between commands: the bearer a `yaks login` wrote,
+// What this box remembers between commands: the bearer a `yak login` wrote,
 // and the tool list a host last served.
 //
 // Two files, not one, and the reason is the difference between them. The token

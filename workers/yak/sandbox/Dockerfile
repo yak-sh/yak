@@ -168,7 +168,7 @@ RUN set -eux; \
     rm /tmp/deno.zip; \
     deno --version
 
-# The `yaks` command (packages/cli): every tool the connector lists, as a
+# The `yak` command (packages/cli): every tool the connector lists, as a
 # subcommand, signed in by the $YAKS_TOKEN sandbox.ts puts in the environment.
 #
 # It is installed FROM THE REPO because @yaks/cli is not published yet
@@ -176,12 +176,12 @@ RUN set -eux; \
 # build context go away:
 #
 #   RUN deno install -gf --allow-net --allow-env --allow-read --allow-write \
-#         --root /usr/local jsr:@yaks/cli/yaks
+#         --root /usr/local jsr:@yaks/cli/yak
 #
 # `--root /usr/local` puts the shim on the PATH every command already has.
 COPY . /opt/yaks/cli
 RUN set -eux; \
     deno install -gf --allow-net --allow-env --allow-read --allow-write \
       --root /usr/local --config /opt/yaks/cli/deno.json \
-      /opt/yaks/cli/yaks.ts; \
-    yaks --help > /dev/null
+      /opt/yaks/cli/yak.ts; \
+    yak --help > /dev/null

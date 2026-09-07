@@ -2216,8 +2216,8 @@ export let TOOLS: Tool[] = [
       'sandbox_write, build it here, then sandbox_ship the artifact into the ' +
       'app. An app needs none of this — html, css and js run as they are, so ' +
       'reach for the sandbox only when something must be COMPILED. It is ' +
-      'signed in as the person: `yaks` is ' +
-      'installed and $YAKS_TOKEN and $YAKS_HOST are set, so `yaks <tool>` ' +
+      'signed in as the person: `yak` is ' +
+      'installed and $YAKS_TOKEN and $YAKS_HOST are set, so `yak <tool>` ' +
       'and curl reach these same tools from inside a script, and the token ' +
       'dies with the container. The container is metered: every second it ' +
       `is awake is charged to the space, and one build gets ${BUDGET} of ` +
@@ -4353,7 +4353,7 @@ export let TOOLS: Tool[] = [
     // revoke ends a token that was going to end anyway.
     destructive: false,
     description:
-      'A short-lived token that signs the `yaks` CLI in as this person — the ' +
+      'A short-lived token that signs the `yak` CLI in as this person — the ' +
       'same identity and exactly the same access they have here, never more. ' +
       'Reach for it when someone wants to work from their own terminal, or ' +
       'wants a script to reach their apps: the answer is the one line they ' +
@@ -4422,8 +4422,8 @@ export let TOOLS: Tool[] = [
         hours,
       })
       return {
-        text: `yaks login ${token}\n\n` +
-          'Paste that line into a terminal where the `yaks` CLI is ' +
+        text: `yak login ${token}\n\n` +
+          'Paste that line into a terminal where the `yak` CLI is ' +
           'installed. The token is shown once and kept nowhere it can be ' +
           'read back — if it is lost, mint another. It is this person, with ' +
           'exactly the access they have here and no more, until ' +

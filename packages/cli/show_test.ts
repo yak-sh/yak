@@ -37,7 +37,7 @@ Deno.test('a tool help is its own schema, read out', () => {
       },
     }),
     [
-      'yaks graph_query --q <string> [--limit <number>] [--deep]',
+      'yak graph_query --q <string> [--limit <number>] [--deep]',
       '',
       '  Read this store.',
       '',
@@ -48,6 +48,6 @@ Deno.test('a tool help is its own schema, read out', () => {
   )
   assertEquals(
     toolHelp({ name: 'app_list' }),
-    'yaks app_list\n\n  (no arguments)',
+    'yak app_list\n\n  (no arguments)',
   )
 })

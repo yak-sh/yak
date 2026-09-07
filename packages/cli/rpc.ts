@@ -104,5 +104,5 @@ export let initialize = async (ask: Rpc): Promise<Record<string, unknown>> =>
   await ask('initialize', {
     protocolVersion: PROTOCOL,
     capabilities: {},
-    clientInfo: { name: 'yaks', version: '0.0.0' },
+    clientInfo: { name: 'yak', version: '0.0.0' },
   })
