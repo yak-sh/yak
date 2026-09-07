@@ -22,7 +22,7 @@
 //   journal     hooks    the record of what happened
 //   commit      hooks    the last word inside the transaction
 //   ───────────────────  the transaction commits (or rolls back on a throw)
-//   effect      hooks    post-commit observers, each isolated
+//   effect      rules/hooks post-commit observers, each isolated
 //   audit       hooks    after a rollback, with what ended it
 //
 // `apply()` returns the batch AS APPLIED plus everything it synthesized —
@@ -239,27 +239,74 @@ export let graph = (opts: Options): Graph => {
       return each(steps, bundles, (b, step) => step(b))
     }
 
-    // After the transaction: every effect hook, isolated. A failing effect is
-    // telemetry — the batch is already committed and a broken observer must
-    // not turn a good write into an error.
-    let effects = (applied: Bundle[]) =>
-      then(
-        each(hooks('effect'), applied, (b, [plugin, hook]) => {
-          try {
-            let out = hook(b, outside)
-            return isPromise(out)
-              ? out.catch((e) => {
-                report(e, { phase: 'effect', plugin })
-                return b
-              })
-              : out
-          } catch (e) {
-            report(e, { phase: 'effect', plugin })
-            return b
-          }
-        }),
-        () => applied,
+    // After the transaction: every effect rule, then every hook, isolated. A
+    // failing observer is telemetry — the batch has already committed.
+    let observed = (
+      plugin: string,
+      b: Bundle[],
+      run: () => ReturnType<Step>,
+    ) => {
+      let failed = (e: unknown) => {
+        report(e, { phase: 'effect', plugin })
+        return b
+      }
+      try {
+        let out = run()
+        return isPromise(out) ? out.catch(failed) : out
+      } catch (e) {
+        return failed(e)
+      }
+    }
+
+    let effects = (applied: Bundle[]) => {
+      let rules = plugins.flatMap((p) =>
+        (p.rules ?? []).filter((r) => r.phase == 'effect')
+          .map((r) => [p.name, r] as const)
       )
+      // Rules see the whole entity, including tags omitted from this write.
+      // Freeze that view once, before any observer acts; each rule runs alone
+      // for isolation but shares the phase's resources and starting world.
+      let run = () =>
+        then(
+          outside.get([...new Set(applied.map((b) => b.entity.eid))]),
+          (rows) => {
+            let held = new Map(rows.map((b) => [b.entity.eid, b]))
+            let values = new Map<string, unknown>()
+            let shared = Object.fromEntries(
+              Object.entries(resources).map(([name, make]) => [
+                name,
+                ((tick) => {
+                  if (!values.has(name)) values.set(name, make(tick))
+                  return values.get(name)
+                }) as Resource,
+              ]),
+            )
+            return each(rules, applied, (b, [plugin, rule]) =>
+              observed(plugin, b, () =>
+                then(
+                  fire([rule], {
+                    vocab,
+                    tx: outside,
+                    phase: 'effect',
+                    bundles: applied,
+                    resources: shared,
+                    of: (eid) =>
+                      held.get(eid),
+                  }),
+                  (made) => [...b, ...made.slice(applied.length)],
+                )))
+          },
+        )
+      let made = rules.length ? observed('graph', applied, run) : applied
+      return then(made, (b) =>
+        then(
+          each(hooks('effect'), b, (out, [plugin, hook]) =>
+            observed(plugin, out, () =>
+              hook(out, outside))),
+          () =>
+            b,
+        ))
+    }
 
     // After a rollback: the audit hooks, with what caused it — a refusal, or
     // the {@link Checked} marker a dry run rolls back with. They run OUTSIDE

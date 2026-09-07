@@ -29,7 +29,7 @@
 // the `audit` hooks. This is what the caller is answered, not what the phases
 // said to each other.
 
-import type { Bundle, Eid } from './bundle.ts'
+import type { Bundle, Comp, Eid } from './bundle.ts'
 import { comps, dead, TOMBSTONE } from './bundle.ts'
 
 /**
@@ -65,7 +65,11 @@ export let composed = (bundles: Bundle[]): Bundle[] => {
     }
     if (typeof b.$alias == 'string') one.$alias = b.$alias
     if (dead(b)) gone.add(eid)
-    for (let [name, comp] of comps(b)) one[name] = comp
+    for (let [name, comp] of comps(b)) {
+      one[name] = comp == null
+        ? null
+        : { ...(one[name] as Comp | null ?? {}), ...comp }
+    }
   }
   return [...by.values()].map((b) =>
     gone.has(b.entity.eid)

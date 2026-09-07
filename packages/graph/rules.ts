@@ -12,8 +12,10 @@
 // `created`/`updated` pair needs: a birth is not also a touch.
 //
 // The `*comp` write set is a rule's declaration of what it writes. v1 records it
-// and refuses a produce or a run that writes outside it; nothing schedules on it
-// yet. A rule that declares none is unchecked — declaring is opting in.
+// and refuses a produce or a run that writes outside it. In the effect phase it
+// also names the writes that wake the rule: at least one must be in this batch,
+// so a stored component alone cannot repeat an effect on an unrelated edit.
+// A rule that declares none is unchecked — declaring is opting in.
 //
 // RESOURCES are the other half of a rule's match. `#Now` binds a singleton the
 // tick provides — the batch's instant, its actor, the vocabulary, a host's
@@ -71,7 +73,9 @@ export type Tick = {
   /** the phase running: what tells a rule whose output still has to be written
    * from one whose output the `mutate` phase will write for it */
   phase: Phase
-  /** the batch as this phase found it — what the rules are judged against */
+  /** the batch as this phase found it — what the rules are judged against.
+   * Effect rules with a `*write` set require one of those components to appear
+   * in this batch for the matched entity, even when `of` supplies more. */
   bundles: Bundle[]
   /** the singletons a rule may name with `#`, by name */
   resources: Record<string, Resource>
@@ -198,7 +202,8 @@ export type Rule = {
   /** the query it matches, as text (parsed with no bare-word text terms) or an
    * already-built AST. `+comp` ensures, `+!comp` gates, `*comp` declares the
    * write set (and says the component is present), `#Name` binds a resource,
-   * and the rest filters. */
+   * and the rest filters. An effect rule with a write set only runs when this
+   * batch writes one of those components on the matched entity. */
   match: Query
   /** components to write into the matched bundle, verbatim */
   produce?: Patch
@@ -215,6 +220,7 @@ type Ready = {
   ensures: string[]
   gates: string[]
   resources: string[]
+  writes: string[]
   cites: string[]
   allowed: Set<string>
   checked: boolean
@@ -258,6 +264,7 @@ let compile = (r: Rule, v: Vocab): Ready => {
     ensures: d.ensures,
     gates: d.gates,
     resources: d.resources,
+    writes: d.writes,
     cites: cited(d.filter),
     allowed: new Set(named),
     checked: d.writes.length > 0,
@@ -325,9 +332,13 @@ export let fire = (
   // batch as they go, and a rule is about the entity, so it must not fire once
   // per patch that mentions it.
   let seen = new Map<Eid, Bundle>()
+  let written = new Map<Eid, Set<string>>()
   for (let b of bundles) {
     let eid = b.entity.eid
     seen.set(eid, merged(seen.get(eid) ?? tick.of?.(eid) ?? null, b))
+    let names = written.get(eid) ?? new Set<string>()
+    for (let name of Object.keys(b)) names.add(name)
+    written.set(eid, names)
   }
   let views = [...seen.values()]
   // Made once, however many rules name it: `#Now` is one instant for the whole
@@ -364,6 +375,10 @@ export let fire = (
     let test = ready.test
     if (!test) continue
     views.forEach((v, i) => {
+      if (
+        tick.phase == 'effect' && ready.checked &&
+        !ready.writes.some((name) => written.get(v.entity.eid)?.has(name))
+      ) return
       if (test(v, views)) hits.push([r, ready, i])
     })
   }

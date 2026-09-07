@@ -7,13 +7,9 @@
 // gives such a wake its first instant. That is the whole hook. It runs before
 // the transaction and reads nothing, which is what `normalize` is for.
 //
-// The plugin fires NOTHING. It has no timer, no loop, and no effect handler,
-// because when to come back is a property of the host and not of the data: a
-// server has `setTimeout`, a Durable Object has `alarm()`, a Worker has a cron
-// trigger, a browser tab has whatever is left when it is backgrounded. What it
-// offers instead is `due()` — the same answer to all of them — and the
-// `created('wake')` slot on @yaks/effects, which is where a host arms its
-// clock when a new wake appears. See the README.
+// The plugin starts no timer. Hosts call `tick`, which writes `fired` on each
+// due wake; graph rules matching that write decide what follows. An effect
+// observing a new or moved wake can arm the host's clock.
 
 import type { Bundle, Hook, Plugin } from '@yaks/graph'
 import { type Clock, wakeOf } from './due.ts'
@@ -56,9 +52,8 @@ export let starting = (opts: Opts = {}): Hook => (bundles: Bundle[]) =>
  * g.apply([{ entity: { eid: 'w1' }, wake: { every: '@daily', note: 'water the plants' } }])
  * ```
  *
- * Running what a wake names is the host's, through
- * {@link https://jsr.io/@yaks/wake/doc/~/due | due} — see the README for the
- * three wirings (a server tick, a Durable Object alarm, a client).
+ * A host calls `tick(graph, now)` to consume due wakes. Rules matching
+ * `.wake, *fired` run in their declared phases; the driver invokes no handler.
  */
 export let wakes = (opts: Opts = {}): Plugin => ({
   name: '@yaks/wake',
