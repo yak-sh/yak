@@ -1,0 +1,20 @@
+{
+  "name": "yaks-app",
+  "interface": {
+    "displayName": "yaks.app"
+  },
+  "plugins": [
+    {
+      "name": "yaks.app",
+      "source": {
+        "source": "local",
+        "path": "./plugins/yaks.app"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

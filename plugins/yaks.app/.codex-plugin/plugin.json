@@ -1,0 +1,33 @@
+{
+  "name": "yaks.app",
+  "version": "0.1.0",
+  "description": "Build an app by asking Claude or ChatGPT.",
+  "author": {
+    "name": "yaks.app",
+    "url": "https://yaks.app/"
+  },
+  "homepage": "https://yaks.app/guide.md",
+  "repository": "https://github.com/yak-sh/yak",
+  "license": "Apache-2.0",
+  "keywords": ["apps", "hosting", "no-code", "web"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "yaks.app",
+    "shortDescription": "Build an app by asking.",
+    "longDescription": "Ask for an app and it is made, deployed and live at an address of its own. Every app keeps its own data, opens on a phone, and can be changed by asking again.",
+    "developerName": "yaks.app",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Write"],
+    "websiteURL": "https://yaks.app/",
+    "privacyPolicyURL": "https://yaks.app/privacy",
+    "termsOfServiceURL": "https://yaks.app/terms",
+    "defaultPrompt": [
+      "Build me a recipe box I can search and tag.",
+      "Make a page where my team signs up for shifts.",
+      "Show me my apps and what is broken in them."
+    ],
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png"
+  }
+}

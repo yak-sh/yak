@@ -1278,6 +1278,12 @@ let BOXES = `<b>Authorization URL</b> ${
 
 let OAUTH_HELP = `For clients that need manual setup: ${ID} ${BOXES}`
 
+// This repository is itself a plugin marketplace (T-34666): `.agents/plugins/
+// marketplace.json` offers `plugins/yaks.app/`, whose `.mcp.json` names the
+// same MCP address every other door on this page hands out. So the shorthand
+// is a THIRD route to the same connection, not a different product.
+let REPO = 'yak-sh/yak'
+
 // Nothing interpolated below is anybody's input, so it is written as the
 // markup it is; everything that IS a person's is escaped where it enters.
 //
@@ -1325,6 +1331,13 @@ let AGENTS = [
       'Check <b>I understand</b>, then click <b>Create</b>.',
       'Sign in with your email when ChatGPT asks.',
     ],
+    details: {
+      summary: 'Add it as a plugin marketplace instead',
+      text: 'In the ChatGPT desktop app, <b>Add plugin marketplace</b> takes ' +
+        'this repository:' +
+        fields(field('Repository', REPO, 'the repository')) +
+        'A workspace imports the same one under its plugin settings.',
+    },
     finish: 'Open ' + external('https://chatgpt.com/', 'a new ChatGPT chat'),
   },
   {
@@ -1365,9 +1378,12 @@ let AGENTS = [
       'If it asks for a name, use <b>yaks.app</b>. Then follow its sign-in ' +
       'prompt.',
     ],
-    details: OAUTH_HELP +
-      ' If your client never offers sign-in, use ' +
-      `<code>${MCP_ASK}</code> as the server URL.`,
+    details: {
+      summary: 'More about authentication',
+      text: OAUTH_HELP +
+        ' If your client never offers sign-in, use ' +
+        `<code>${MCP_ASK}</code> as the server URL.`,
+    },
     finish: 'Start a new chat in your MCP client',
   },
 ]
@@ -1387,7 +1403,7 @@ ${
 ${a.note ? `<p class="Note">${a.note}</p>` : ''}
 ${
       a.details
-        ? `<details class="Note"><summary>More about authentication</summary><div class="Note">${a.details}</div></details>`
+        ? `<details class="Note"><summary>${a.details.summary}</summary><div class="Note">${a.details.text}</div></details>`
         : ''
     }
 <div class="Connect_Next"><p>Make your first app</p>
