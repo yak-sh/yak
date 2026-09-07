@@ -3,6 +3,12 @@
 @layer tokens, base, components, sections;
 @import url('tokens.css');
 
+@layer base {
+  [hidden] {
+    display: none !important;
+  }
+}
+
 @layer components {
   .Button {
     display: inline-block;
@@ -212,5 +218,46 @@
     border-top: 1px solid var(--edge);
     box-shadow: 0 1px var(--rim);
     margin: 1rem 0;
+  }
+
+  .Connections {
+    display: grid;
+    gap: var(--half-gap);
+    margin: 0 0 var(--gap);
+    padding: 0;
+    list-style: none;
+  }
+  .Connections_Row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--half-gap) var(--gap);
+    padding: var(--gap);
+    border: 1px solid var(--edge);
+    border-radius: var(--small-radius);
+    background: var(--paper);
+    box-shadow: inset 0 1px var(--rim);
+    text-align: left;
+  }
+  .Connections_Info {
+    display: grid;
+    flex: 1 1 10rem;
+    gap: var(--quarter-gap);
+    min-width: 0;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+  .Connections_State,
+  .Connections_Open {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--quarter-gap);
+    color: var(--accent);
+    font-size: var(--small);
+  }
+  .Connections_Open {
+    font-weight: 700;
+    text-underline-offset: .18em;
+    white-space: nowrap;
   }
 }
