@@ -623,7 +623,7 @@ Deno.test('the connect page teaches one agent at a time', async () => {
   // Setup jumps leave this page open beside the provider's form.
   for (
     let out of [
-      'https://claude.ai/customize/connectors',
+      'https://claude.ai/customize/connectors/directory?modal=add-custom-connector',
       'https://chatgpt.com/#settings/Security',
       'claude mcp add --transport http yaks https://yaks.app/mcp',
       '~/.cursor/mcp.json',

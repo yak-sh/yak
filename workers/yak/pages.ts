@@ -129,6 +129,7 @@ details.Note > summary { color: var(--accent); cursor: pointer }
 .Connect_Icon img { display: block; width: 56px; height: 56px; border: 1px solid var(--line); border-radius: .75rem }
 .Connect_Setup { margin-bottom: 1.5rem }
 .Connect_Setup > summary { cursor: pointer; color: var(--accent); font-weight: 700; padding: .5rem 0; margin-bottom: .75rem }
+.Connect_Path { margin: .9rem 0 .4rem; font-size: 1rem; font-weight: 800 }
 .Connect_Next { margin-top: .9rem; padding-top: .8rem; border-top: 1px solid var(--line) }
 .Connect_Next p { margin: 0 0 .35rem; color: var(--ink); font-weight: 800 }
 ${deskCss}
@@ -1284,26 +1285,40 @@ let REPO = 'yak-sh/yak'
 // Nothing interpolated below is anybody's input, so it is written as the
 // markup it is; everything that IS a person's is escaped where it enters.
 //
-// Each provider's steps were read off its own documentation on 2026-09-05:
-// support.claude.com article 11176164, help.openai.com article 12584461,
-// code.claude.com/docs/en/mcp, cursor.com/docs/mcp.
+// Keep setup paths and field labels matched to each client's form, including
+// differences between its desktop and mobile interfaces.
 let AGENTS = [
   {
     key: 'claude',
     tab: 'Claude',
-    title: 'Claude — web, desktop and mobile',
-    steps: [
-      'Copy this URL:' + fields(field('URL', MCP, 'the connection URL')) +
-      'Then open ' +
-      external('https://claude.ai/customize/connectors', 'Connectors') +
-      ', press <b>+</b> and choose <b>Add custom connector</b>.',
-      'Paste it into <b>URL</b>, enter this name, then click <b>Add</b>:' +
-      fields(field('Name', CONNECTOR.title, 'the name')),
-      'Click <b>Connect</b>, and sign in with your email.',
+    title: 'Claude',
+    paths: [
+      {
+        title: 'Web + Desktop',
+        steps: [
+          'Open ' + external(
+            'https://claude.ai/customize/connectors/directory?modal=add-custom-connector',
+            'Customize → Connectors → Add',
+          ) + '.',
+          'Paste these values:' + fields(
+            field('Name', CONNECTOR.title, 'the name') +
+              field('Remote MCP server URL', MCP, 'the connection URL'),
+          ),
+          'Click <b>Continue</b>.',
+        ],
+      },
+      {
+        title: 'Mobile App',
+        steps: [
+          'Open the sidebar and tap your profile picture.',
+          'Tap <b>Connectors</b> → <b>+</b> → <b>Add custom connector</b>.',
+          'Paste these values:' + fields(
+            field('Name', CONNECTOR.title, 'the name') +
+              field('URL', MCP, 'the connection URL'),
+          ),
+        ],
+      },
     ],
-    note: 'A remote connector follows you to every Claude — the phone too. ' +
-      'On a Team or Enterprise plan an owner adds it once under Organization ' +
-      'settings, and everyone else clicks Connect.',
     finish: 'Open ' + external('https://claude.ai/new', 'a new Claude chat'),
   },
   {
@@ -1387,6 +1402,9 @@ let AGENTS = [
   },
 ]
 
+let steps = (items: string[]) =>
+  `<ol>${items.map((s) => `<li>${s}</li>`).join('')}</ol>`
+
 // Native radio tabs share their layout with the working style-guide example.
 let doors = `<fieldset class="Tabs">
 <legend class="Tabs_Legend">Which app do you use?</legend>
@@ -1398,7 +1416,13 @@ ${
     }>
 <label class="Tabs_Tab" for="tab-${a.key}">${a.tab}</label>
 <section class="Card Tabs_Panel Tabs_Panel-${a.key}"><h2>${a.title}</h2>
-<ol>${a.steps.map((s) => `<li>${s}</li>`).join('')}</ol>
+${
+      a.paths
+        ? a.paths.map((p) =>
+          `<h3 class="Connect_Path">${p.title}</h3>${steps(p.steps)}`
+        ).join('')
+        : steps(a.steps)
+    }
 ${a.note ? `<p class="Note">${a.note}</p>` : ''}
 ${
       a.details
