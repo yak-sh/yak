@@ -1599,6 +1599,13 @@
           "jsr:@std/assert@1"
         ]
       },
+      "packages/text": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:linkedom@~0.18.12",
+          "npm:preact@^10.29.1"
+        ]
+      },
       "packages/vocab": {
         "dependencies": [
           "jsr:@std/assert@1"

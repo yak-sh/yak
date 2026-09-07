@@ -38,6 +38,7 @@
     "./packages/match",
     "./packages/render",
     "./packages/preact",
+    "./packages/text",
     "./packages/graph",
     "./packages/ram",
     "./packages/sync",

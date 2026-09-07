@@ -51,6 +51,9 @@ In dependency order:
 - **[@yaks/preact](./preact)** — the Preact host for that registry: an Entity
   component reading a function store, subscribing while mounted, and handing
   Preact's hyperscript to the same portable renderers.
+- **[@yaks/text](./text)** — Markdown and plain text from those same trees,
+  preserving headings, lists, links, code and emphasis while stripping control
+  bytes from every text leaf and destination.
 - **[@yaks/ram](./ram)** — the storage adapter with nothing underneath it: a
   `Map` of bundles answering `@yaks/graph`'s `Storage`, reads through
   `@yaks/match`, synchronous, browser-ready. Tested batch for batch against
