@@ -459,17 +459,6 @@ let OURS: Page[] = [
     brief: 'pointing a domain at a space or an app',
   },
   {
-    slug: 'stats',
-    title: 'Who visited',
-    description:
-      'Visitor counts for an app: what one page view records and the six ' +
-      'things it never does — no address, no visitor id, not even the ' +
-      "browser's own string — app_stats and the window it takes, the block " +
-      'on their space page, the door a page reads its own numbers at, and ' +
-      'why a small number is usually crawlers.',
-    brief: 'who opened an app, and from where',
-  },
-  {
     slug: 'errors',
     title: 'When something breaks',
     description:

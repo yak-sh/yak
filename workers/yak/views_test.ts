@@ -21,7 +21,12 @@ import {
   topCountries,
   topFrom,
   topPages,
+  viewsPlugin,
 } from './views.ts'
+import { answered, pagesOf, toolsOf, watched } from './plugin.ts'
+import { PLUGINS } from './plugins.ts'
+import { PAGES } from './guide.ts'
+import { TOOLS } from './tools.ts'
 
 Deno.test('classed: an assistant, a crawler, a person, a script', () => {
   // The AI clients read first: almost all of them spell themselves `…Bot`.
@@ -254,4 +259,84 @@ Deno.test('with no token there is nothing to ask, and one sentence to say', () =
   assertEquals(statsOf(env({ ANALYTICS_TOKEN: undefined }), APP), null)
   assertEquals(statsOf(env({ CF_ACCOUNT: undefined }), APP), null)
   assert(NOT_ON.includes('not switched on'))
+})
+
+// ---- the plugin (T-34603) --------------------------------------------------
+// Analytics arrives through the HOST now (views.ts `viewsPlugin`): apps.ts
+// calls nothing here to count a page or to answer `/stats`. What is pinned is
+// that the door and the counter still land through the list — the two slots
+// this conversion exercises — and the tool and the page with them.
+
+Deno.test('the host composes the views plugin', () => {
+  assert(PLUGINS.includes(viewsPlugin), 'views is not in PLUGINS')
+  assertEquals(toolsOf([viewsPlugin]).map((t) => t.name), ['app_stats'])
+  assertEquals(pagesOf([viewsPlugin]).map((p) => p.slug), ['stats'])
+  assert(
+    TOOLS.some((t) => t.name == 'app_stats'),
+    'app_stats is off the roster',
+  )
+  assert(PAGES.some((p) => p.slug == 'stats'), 'the stats page is not in PAGES')
+})
+
+// The door, asked the way apps.ts asks it. A member on a platform with no
+// analytics token set gets the sentence and a 200; somebody with no role in
+// the space is refused; a path that is not this plugin's passes through as
+// null, which is what lets the kernel go on to its own doors.
+Deno.test('its /stats door arrives through the host', async () => {
+  let at = (path: string, role: string | null) =>
+    ({
+      env: {} as Env,
+      req: new Request('https://one.yaks.app/app/api' + path),
+      path,
+      space: { slug: 'one' },
+      app: { eid: 'e', slug: 'app' },
+      who: { person: role ? 'p' : null, role },
+      refuse: () => new Response(null, { status: 403 }),
+      json: (status: number) => new Response(null, { status }),
+    }) as never
+
+  assertEquals(await answered(PLUGINS, at('/elsewhere', 'owner')), null)
+  assertEquals((await answered(PLUGINS, at('/stats', null)))?.status, 403)
+  let said = await answered(PLUGINS, at('/stats', 'viewer'))
+  assertEquals(said?.status, 200)
+  assertEquals(await said?.json(), { on: false, say: NOT_ON })
+})
+
+// The counter, told the way apps.ts tells it, on the way out of a request that
+// is already answered.
+Deno.test('a served page reaches the counter through the host', () => {
+  let wrote: unknown[] = []
+  let env = {
+    VIEWS: { writeDataPoint: (p: unknown) => void wrote.push(p) },
+  } as unknown as Env
+  let page = (type: string, status = 200) =>
+    new Response('<!doctype html>', {
+      status,
+      headers: { 'content-type': type },
+    })
+  let at = { app: 'e', space: 'one', slug: 'app' }
+
+  watched(PLUGINS, {
+    env,
+    req: new Request('https://one.yaks.app/app/cakes'),
+    res: page('text/html; charset=utf-8'),
+    at,
+  })
+  assertEquals(wrote.length, 1)
+  assertEquals((wrote[0] as { indexes: string[] }).indexes, ['e'])
+
+  // Not a page: a stylesheet, and a redirect. Neither is a visit.
+  watched(PLUGINS, {
+    env,
+    req: new Request('https://one.yaks.app/app/app.css'),
+    res: page('text/css'),
+    at,
+  })
+  watched(PLUGINS, {
+    env,
+    req: new Request('https://one.yaks.app/app'),
+    res: page('text/html', 302),
+    at,
+  })
+  assertEquals(wrote.length, 1)
 })

@@ -1,7 +1,12 @@
 // Who visited an app (T-34496, T-34495). One data point per HTML page the
 // platform answered, written to Workers Analytics Engine — an aggregate
 // column store, not a log — and read back out of it by the SQL API for the
-// app's own members.
+// app's own members. At the foot of the file the whole of that is said as a
+// PLUGIN (plugin.ts, T-34603): apps.ts calls no function here to count a page
+// or to answer `/stats` — it folds over PLUGINS, and this module is in the
+// list. (Its space index still reads `statsOf` directly for the owner's
+// visitor block: drawing a page out of this data is one module using another,
+// not a slot.)
 //
 // What a data point carries is the whole privacy rule, and it is short on
 // purpose: the app it was a page of, the space and app it was served under,
@@ -33,6 +38,9 @@
 // that row stands for, so a plain `count()` under-reports a busy app by
 // exactly the factor that made it busy, and nothing would say so.
 import type { Env } from './env.ts'
+import type { Answer, Plugin } from './plugin.ts'
+import { APP, inApp, SPACE as SPACE_ARG } from './tool.ts'
+import { url as appUrl } from './directory.ts'
 
 /** How long Cloudflare keeps a data point. Said in one place. */
 export let KEPT_DAYS = 90
@@ -232,10 +240,10 @@ export let byClient = top(CLIENT, 'client', true)
 // The SQL API's default format, which is what these queries get back: the
 // schema, the rows, and the count. A number wider than a double arrives as a
 // STRING, which is why every number here goes through `num`.
-type Answer = { data?: Record<string, unknown>[] }
+type Said = { data?: Record<string, unknown>[] }
 
 let num = (v: unknown) => Number(v) || 0
-let str = (v: unknown) => (v == null ? '' : String(v))
+let word = (v: unknown) => (v == null ? '' : String(v))
 
 /**
  * One query, run. The API takes SQL as the request body and answers JSON. A
@@ -254,7 +262,7 @@ export let ran = async (
   let said = await res.text()
   if (res.status == 404) return []
   if (!res.ok) throw new Error(`analytics ${res.status}: ${said.slice(0, 200)}`)
-  return (JSON.parse(said) as Answer).data ?? []
+  return (JSON.parse(said) as Said).data ?? []
 }
 
 /** A day and what it held. */
@@ -286,7 +294,7 @@ export let daily = (
   days: number,
   now = Date.now(),
 ): Day[] => {
-  let had = new Map(rows.map((r) => [str(r.day).slice(0, 10), num(r.views)]))
+  let had = new Map(rows.map((r) => [word(r.day).slice(0, 10), num(r.views)]))
   let out: Day[] = []
   for (let i = days - 1; i >= 0; i--) {
     let day = YMD(now - i * 86_400_000)
@@ -296,7 +304,7 @@ export let daily = (
 }
 
 let lines = (rows: Record<string, unknown>[], col: string): Line[] =>
-  rows.map((r) => ({ name: str(r[col]), views: num(r.views) }))
+  rows.map((r) => ({ name: word(r[col]), views: num(r.views) }))
     .filter((l) => l.name)
 
 // A few minutes' worth of answers, per app and window, held in this isolate
@@ -359,3 +367,114 @@ let asked = async (
 export let NOT_ON =
   'Visitor counts are not switched on for this platform yet, so there is ' +
   'nothing to show.'
+
+// ---- the plugin (T-34603) --------------------------------------------------
+
+// Who visited, at the app's OWN address. The app's PEOPLE, whatever its access
+// says: a public app's pages are the world's to read and its visitor counts
+// are not, so this asks for a role rather than for read access. Not switched
+// on is a sentence and a 200, never a failure — the page showing it has
+// nothing to do about a secret nobody set.
+let stats: Answer = async (at) => {
+  if (at.path != '/stats') return null
+  if (!at.who.role) return at.refuse('not_a_reader')
+  let days = new URL(at.req.url).searchParams.get('days')
+  let asked = statsOf(at.env, at.app.eid, days ? Number(days) : undefined)
+  if (!asked) return Response.json({ on: false, say: NOT_ON })
+  try {
+    return Response.json({ on: true, ...await asked })
+  } catch (e) {
+    return at.json(502, 'refused', e instanceof Error ? e.message : String(e))
+  }
+}
+
+/**
+ * Analytics, as what it CONTRIBUTES (plugin.ts): the count of a page served,
+ * the door an app's own page reads its numbers at, the tool an agent asks
+ * with, and the guide page that says what is and is not recorded.
+ *
+ * `watch` is `viewed` above and nothing more — the host calls it on the way
+ * out of a request it has already answered, which is why that function returns
+ * nothing and swallows its own failures. A platform with no VIEWS binding
+ * contributes all four and counts nothing, which is what `wrangler dev` and
+ * every workerd probe run as.
+ */
+export let viewsPlugin: Plugin = {
+  name: 'views',
+  answers: [stats],
+  watch: (v) => viewed(v.env, v.req, v.res, v.at),
+  pages: [{
+    slug: 'stats',
+    title: 'Who visited',
+    description:
+      'Visitor counts for an app: what one page view records and the six ' +
+      'things it never does — no address, no visitor id, not even the ' +
+      "browser's own string — app_stats and the window it takes, the block " +
+      'on their space page, the door a page reads its own numbers at, and ' +
+      'why a small number is usually crawlers.',
+    brief: 'who opened an app, and from where',
+  }],
+  tools: [
+    {
+      name: 'app_stats',
+      title: 'Who visited an app',
+      readOnly: true,
+      description:
+        'How many people opened the app, and where they came from: visits a ' +
+        'day for the last month, the pages they opened, the sites that linked ' +
+        'to them, and the countries they were in. Aggregate counts and nothing ' +
+        'else — there is no visitor here to identify, no address and no ' +
+        'session, so this can never answer who someone was or what one person ' +
+        'did. Reach for it when they ask whether anyone is reading the thing, ' +
+        "or which page is worth working on. Only the app's own people may ask.",
+      input: {
+        type: 'object',
+        properties: {
+          space: SPACE_ARG,
+          app: APP,
+          days: {
+            type: 'number',
+            description:
+              'how far back, in days (default 30). Cloudflare keeps three ' +
+              'months, so anything past 90 is the same answer as 90.',
+          },
+        },
+        required: ['app'],
+      },
+      run: async (ctx, args) => {
+        let { space, app } = await inApp(ctx, args)
+        let days = args.days == null ? undefined : Number(args.days)
+        // No token, no numbers — one sentence rather than an error, because
+        // there is nothing the agent or the person can do about it (views.ts).
+        let asked = statsOf(ctx.env, app.eid, days)
+        if (!asked) return { text: NOT_ON, space, data: { on: false } }
+        let seen = await asked
+        let list = (head: string, rows: { name: string; views: number }[]) =>
+          rows.length
+            ? [`${head}:`, ...rows.map((r) => `- ${r.name} — ${r.views}`)]
+            : []
+        let text = seen.total
+          ? [
+            `${space.slug}/${app.slug} — ${seen.total} visits in ${seen.days} ` +
+            `days (${appUrl(space, app)})`,
+            ...list('Pages', seen.pages),
+            ...list('Came from', seen.from),
+            ...list('Countries', seen.countries),
+          ].join('\n')
+          : `${space.slug}/${app.slug} — nobody has opened it in ${seen.days} ` +
+            'days'
+        return {
+          text,
+          space,
+          data: {
+            on: true,
+            space: space.slug,
+            app: app.slug,
+            url: appUrl(space, app),
+            ...seen,
+          },
+        }
+      },
+    },
+  ],
+}

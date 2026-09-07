@@ -158,8 +158,6 @@ slow(
         'app_delete',
         'app_restore',
         'app_errors',
-        // Who visited, in counts and never in names (views.ts, T-34498).
-        'app_stats',
         'app_list',
         // The apps' own verbs, carried by two fixed tools (declared.ts,
         // T-34541): what they can do, and running one.
@@ -188,9 +186,11 @@ slow(
         'gallery_search',
         // Then what the PLUGINS bring, after the platform's own rows and in
         // list order (plugin.ts, T-34601): what the person said, in their own
-        // words (memory.ts, T-34473).
+        // words (memory.ts, T-34473), then who visited, in counts and never in
+        // names (views.ts, T-34498).
         'memory_save',
         'memory_recall',
+        'app_stats',
         // And the post room's own two (letters.ts, T-34149), a plugin of
         // their own because they answer bundles rather than a sentence.
         'mail_list',

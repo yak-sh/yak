@@ -12,5 +12,6 @@
 // both sides knows nothing else.
 import { memoryPlugin } from './memory.ts'
 import type { Plugin } from './plugin.ts'
+import { viewsPlugin } from './views.ts'
 
-export let PLUGINS: Plugin[] = [memoryPlugin]
+export let PLUGINS: Plugin[] = [memoryPlugin, viewsPlugin]

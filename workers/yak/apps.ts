@@ -78,7 +78,13 @@ import { type Clock, clock, timed } from './timing.ts'
 import { noted, refusal, serving } from './unseen.ts'
 import { full } from './usage.ts'
 import { sha256 } from './versions.ts'
-import { DAYS, NOT_ON, type Stats, statsOf, viewed } from './views.ts'
+// The space index's own visitor block reads views.ts directly (`visits`
+// below): drawing a page out of another module's data is not a slot, it is one
+// module using another. What DOES arrive through the host is the `/stats` door
+// and the count of a page served — `answered` and `watched`, both over PLUGINS.
+import { DAYS, NOT_ON, type Stats, statsOf } from './views.ts'
+import { answered, watched } from './plugin.ts'
+import { PLUGINS } from './plugins.ts'
 
 // The runtime's streaming HTML rewriter, the slice this file asks for, so
 // `deno check` reads the Worker without @cloudflare/workers-types (env.ts).
@@ -923,22 +929,23 @@ let api = async (
         : signInAt(req.headers.get('referer') || req.url),
     })
   }
-  // Who visited (views.ts, T-34497). The app's OWN PEOPLE, whatever its
-  // access says: a public app's pages are the world's to read and its
-  // visitor counts are not, so this asks for a role rather than for `mayRead`.
-  // Not switched on is a sentence and a 200, never a failure — the page
-  // showing it has nothing to do about a secret nobody set.
-  if (path == '/stats') {
-    if (!who.role) return refused('not_a_reader')
-    let days = new URL(req.url).searchParams.get('days')
-    let asked = statsOf(env, app.eid, days ? Number(days) : undefined)
-    if (!asked) return Response.json({ on: false, say: NOT_ON })
-    try {
-      return Response.json({ on: true, ...await asked })
-    } catch (e) {
-      return json(502, 'refused', e instanceof Error ? e.message : String(e))
-    }
-  }
+  // What a PLUGIN answers at this app's address (plugin.ts `answers`,
+  // T-34601) — the visitor counts (views.ts) is the one there is today. Here,
+  // among the doors that are the app's own rather than its store's, and after
+  // `/me`, so a plugin cannot take a path the kernel already answers. It is
+  // handed the two ways of saying no this door says them, so a plugin's
+  // refusal reads like every other refusal here.
+  let mine = await answered(PLUGINS, {
+    env,
+    req,
+    path,
+    space,
+    app,
+    who,
+    refuse: refused,
+    json,
+  })
+  if (mine) return mine
   // Taking money (sell.ts, T-34525). A READ door as far as this app is
   // concerned — it reads the products the cart names and writes nothing — so it
   // asks `mayRead` and not `mayPost`: a public shop sells to a stranger, which
@@ -1517,7 +1524,12 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     // counted as the home app's page view — at the bare hostname, which is
     // where the home app is mounted.
     if (early) {
-      viewed(env, req, early.page, seen(space, early.app))
+      watched(PLUGINS, {
+        env,
+        req,
+        res: early.page,
+        at: seen(space, early.app),
+      })
       return reporting(early.page, req, '/')
     }
   }
@@ -1584,11 +1596,12 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     await page.body?.cancel()
     return await index(req, env, dir, space)
   }
-  // A page was served, so somebody saw it (views.ts, T-34496). Last, once, and
-  // only for what an APP answered: the `/api/` doors returned above, a file
-  // that is not HTML is not a page, and the platform's own pages — the space
-  // index, the trash, a wrong address — never come back through here.
-  viewed(env, req, page, seen(space, app))
+  // A page was served, so every plugin that is watching is told (plugin.ts
+  // `watch`, T-34601; views.ts counts it, T-34496). Last, once, and only for
+  // what an APP answered: the `/api/` doors returned above, a file that is not
+  // HTML is not a page, and the platform's own pages — the space index, the
+  // trash, a wrong address — never come back through here.
+  watched(PLUGINS, { env, req, res: page, at: seen(space, app) })
   return reporting(page, req, at)
 }
 
