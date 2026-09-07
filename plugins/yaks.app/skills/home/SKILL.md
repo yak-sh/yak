@@ -153,6 +153,28 @@ reads and writes as them, the way it does in any app's worker, so a route may
 redirect, decorate or short-circuit — and cannot read a store the visitor could
 not have read themselves. Routing is not a way around another app's `access`.
 
+## Moving the space's address
+
+    space_set(slug: 'ada-cooks')     the space is now ada-cooks.yaks.app
+    space_set(title: 'Ada cooks')    just the name it is called
+
+Only the space's owner may move it. Every app in the space moves with the
+address — files, data and all — and each keeps the path it had, so
+`ada.yaks.app/cookbook/` becomes `ada-cooks.yaks.app/cookbook/`.
+
+**The address it leaves keeps working.** It redirects to the new one with the
+path and the query kept, permanently, so a link somebody was given a year ago
+still opens the page it always did. Letters to `<old>.<app>@yaks.app` still
+arrive. And it stays RESERVED: nobody else can take it, and neither can the
+person who left it.
+
+`app_set(app, slug)` is the same shape one level down, for one app's path within
+the space.
+
+What a move never touches: the app's own data (its store is named for the app,
+not for the address), any domain of the person's own aimed at the space or one
+of its apps, who is a member, what is published, or what the stats have counted.
+
 ## Mail at the space's own address
 
 `<space>@yaks.app` is the front page's mailbox — the same address every app has,

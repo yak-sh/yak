@@ -1431,17 +1431,30 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
 // a path from the app that owns it to the home app — never off the platform's
 // own (rung 1), and never onto a space that asked for nothing.
 let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
-  let r = route(hostOf(req), new URL(req.url).pathname)
+  let url = new URL(req.url)
+  let r = route(hostOf(req), url.pathname)
   if (r.space == null) return nothingHere()
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let space = await c.time('space', () => dir.space(r.space!))
-  if (!space) return nothingHere()
+  // Not a space here — but it may be where one USED to be (T-34658): a rename
+  // moves `space.slug` and keeps the old subdomain pointing at it, whole path
+  // and query, the way a renamed app's old path does one level down. A
+  // permanent move, because a space's address is on more links than an app's
+  // and every one of them should heal itself.
+  if (!space) {
+    let was = await c.time('moved', () => dir.formerly(r.space!))
+    return was
+      ? moved(
+        req,
+        `https://${was.slug}.${PLATFORM}${url.pathname}${url.search}`,
+      )
+      : nothingHere()
+  }
   if (kernels(space, r.app)) return nothingHere()
   // The whole space in the trash, before any rung of the order below: every
   // hostname of it answers nothing, and its owner is answered the page that
   // brings it back (`closed` above, T-34431).
   if (space.trashed) return closed(req, env, dir, space)
-  let url = new URL(req.url)
   if (url.pathname == `${MANAGE}/connections` && req.method == 'GET') {
     let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
     let allowed = who.person && who.role == 'owner'

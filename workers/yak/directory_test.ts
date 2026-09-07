@@ -21,6 +21,7 @@ let space: Space = {
   meter: null,
   told: false,
   trashed: null,
+  slugs: [],
 }
 
 let an: App = {

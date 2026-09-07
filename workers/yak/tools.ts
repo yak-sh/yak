@@ -56,6 +56,7 @@ import type { Cols, Sheet } from './csv.ts'
 import { mimeOf, purged } from './files.ts'
 import {
   type Access,
+  addresses,
   type App,
   handle,
   homing,
@@ -149,6 +150,7 @@ import {
   TIMEOUT,
 } from './sandbox.ts'
 import { connect, disconnect, feeOf, rate, selling } from './sell.ts'
+import { mailFrom } from './post.ts'
 import { foreign, SIGN_IN, SLUG } from './route.ts'
 import { globs } from './router.ts'
 import type { Reach } from './reach.ts'
@@ -1066,6 +1068,38 @@ let fileKey = (space: Space, app: App, path: string) =>
   `${space.slug}/${app.slug}/${path.replace(/^\/+/, '')}`
 
 /**
+ * Every file under one R2 prefix laid down under another, ANSWERING WITH THE
+ * OLD KEYS — which the caller sweeps once the directory write has landed. Copy
+ * first and delete last is the order that matters: whichever address the app
+ * answers at while the move is in flight has the whole app behind it, and a
+ * move that dies halfway leaves the app whole at the address it started from.
+ *
+ * A file's key carries the space's slug and the app's, so BOTH renames move
+ * bytes: app_set moves one app's files, space_set moves every app's (T-34658).
+ * Keying them by the app's handle instead would move none, and is the follow-up
+ * this helper exists to make obvious.
+ */
+let laid = async (blobs: Blobs, from: string, onto: string) => {
+  let keys = await blobs.list(from)
+  for (let key of keys) {
+    await blobs.put(onto + key.slice(from.length), await blobs.get(key))
+  }
+  return keys
+}
+
+// ---- addresses left behind (T-34658, T-34659) -------------------------------
+//
+// An app and a space keep the same address history and change it in the same
+// two ways, so the words and the arithmetic are here once rather than twice in
+// two tools that would drift.
+
+/** The address history this call leaves behind: the one it had, plus the
+ * address a move is leaving. Null where nothing moved, which is a call that
+ * must not write the column at all. */
+let kept = (live: string, had: string[], moving: boolean) =>
+  !moving ? null : had.includes(live) ? had : [...had, live]
+
+/**
  * An app's row as it is BORN, at both doors that make one — app_new and
  * app_install. The eid is minted HERE rather than by a `$alias` the store
  * resolves, because the handle everything the platform keeps for this app is
@@ -1514,6 +1548,16 @@ let OURS: Row[] = [
             : `space ${s} is taken`,
         )
       }
+      // An address a space has LEFT still points at it (space_set below), so it
+      // is not free for a new space either — the refusal app_new gives, one
+      // level up.
+      let was = await ctx.dir.formerly(s)
+      if (was) {
+        throw new Error(
+          `${s} is where ${was.slug} used to be, and still points there — ` +
+            'pick another slug',
+        )
+      }
       // The space, its owner, and the owner's person row in one batch. The
       // person is keyed by the caller's sign-in, and a bundle mints at an eid
       // its author chose (T-32455), so the whole batch is bundles. Once
@@ -1537,6 +1581,95 @@ let OURS: Row[] = [
       return {
         text: `space ${s} (${space.eid}): https://${s}.yaks.app/`,
         space,
+      }
+    },
+  },
+  {
+    name: 'space_set',
+    destructive: false,
+    idempotent: true,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        slug: str('the new hostname label, to move the space'),
+        title: str('the new name'),
+      },
+    },
+    run: async (ctx, args) => {
+      let { space, who } = await owns(ctx, args)
+      let to = args.slug == null ? null : slug(args.slug, 'slug')
+      let title = args.title == null ? null : text(args.title, 'title')
+      if (to == null && title == null) {
+        throw new Error('nothing to change: pass slug or title')
+      }
+      let moving = to != null && to != space.slug
+      // The trash holds the address for its thirty days, so a space in it
+      // cannot move off one — and the meta space is the platform.
+      let no = refused(space)
+      if (no) throw new Error(no)
+      if (space.trashed) {
+        throw new Error(
+          `${space.slug} is in the trash — space_restore(space: '${space.slug}') brings it back, and it can move after that`,
+        )
+      }
+      if (moving) {
+        let taken = await ctx.dir.space(to!)
+        if (taken) throw new Error(`space ${to} is taken`)
+        let was = await ctx.dir.formerly(to!)
+        if (was) {
+          throw new Error(
+            `${to} is where ${was.slug} used to be, and still points there ` +
+              '— pick another slug',
+          )
+        }
+      }
+      // The address it leaves keeps answering, as a permanent redirect to the
+      // new subdomain with the path kept (apps.ts `served`), and letters to
+      // `<was>.<app>@yaks.app` still arrive (inbox.ts `opened`). A link
+      // someone was given is forever, and a space's address is on more of
+      // them than an app's.
+      let had = kept(space.slug, space.slugs, moving)
+      // Every app's FILES move with the space, because a file's key carries
+      // the space's slug (`laid`). Copied before anything is deleted, so the
+      // apps are whole at whichever address answers while the move is in
+      // flight. Nothing else moves: the store handles are the apps' own
+      // (directory.ts `handle`), a custom domain names an eid, and
+      // memberships, grants, gallery standing and analytics never spelled the
+      // slug at all.
+      let apps = moving ? await ctx.dir.apps(space) : []
+      let blobs = r2Blobs(ctx.env.BLOBS)
+      let keys: string[] = []
+      for (let app of apps) {
+        keys.push(
+          ...await laid(blobs, fileKey(space, app, ''), `${to}/${app.slug}/`),
+        )
+      }
+      await ctx.dir.apply({
+        entities: [{
+          entity: { eid: space.eid },
+          ...(title == null ? {} : { doc: { title } }),
+          ...(moving ? { space: { slug: to! } } : {}),
+          ...(had ? { former: addresses(had) } : {}),
+        }],
+      }, vouched(who))
+      for (let key of keys) await blobs.delete(key)
+      let now = (await ctx.dir.space(to ?? space.slug))!
+      return {
+        text: `space ${now.slug}${title == null ? '' : ` "${title}"`}: ` +
+          `https://${now.slug}.yaks.app/` +
+          (moving
+            ? ` — moved from ${space.slug}.yaks.app, which redirects here ` +
+              `and stays reserved; letters to ${
+                mailFrom(space.slug, '<app>')
+              } still arrive. Give people the new address` +
+              (apps.length
+                ? `, and every app of the space moved with it (${
+                  apps.map((a) => a.slug).join(', ')
+                })`
+                : '')
+            : ''),
+        space: now,
       }
     },
   },
@@ -2512,26 +2645,17 @@ let OURS: Row[] = [
       // new one: a page already open on a phone writes to the old address for
       // as long as it stays open, and a link someone was given is forever
       // (C-32574 item 4, where a rename broke every open tab in silence).
-      // A `former` slug resolves like an id, and the BIRTH address is already
-      // the first line of the history (app_new writes it), so only a later
-      // move adds a word.
-      let left = app.slug
-      let keeping = moving && !app.slugs.includes(left)
-        ? [...app.slugs.slice(1), left].join(' ')
-        : null
-      // Files first and in that order — copy, then rename, then delete — so
-      // whichever address is the app's at any moment has the whole app
-      // behind it. Its store is untouched: it is named by the app's own handle,
-      // not by where it lives (directory.ts storeName).
+      let had = kept(app.slug, app.slugs, moving)
+      // Files first and copied before anything is deleted, so whichever
+      // address is the app's at any moment has the whole app behind it. Its
+      // store is untouched: it is named by the app's own handle, not by where
+      // it lives (directory.ts storeName).
       let blobs = r2Blobs(ctx.env.BLOBS)
       let from = fileKey(space, app, '')
       let onto = moving ? `${space.slug}/${to}/` : from
-      let keys = moving ? await blobs.list(from) : []
-      for (let key of keys) {
-        await blobs.put(onto + key.slice(from.length), await blobs.get(key))
-      }
+      let keys = moving ? await laid(blobs, from, onto) : []
       let entities: EntityLiteral[] = []
-      if (title != null || moving || open || keeping) {
+      if (title != null || moving || open || had) {
         entities.push({
           entity: { eid: app.eid },
           ...(title == null ? {} : { doc: { title } }),
@@ -2543,7 +2667,7 @@ let OURS: Row[] = [
               },
             }
             : {}),
-          ...(keeping ? { former: { slugs: keeping } } : {}),
+          ...(had ? { former: addresses(had) } : {}),
         })
       }
       // The globs are COLUMNS of the word that says which app is home

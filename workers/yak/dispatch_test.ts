@@ -54,6 +54,7 @@ let space: Space = {
   meter: null,
   told: false,
   trashed: null,
+  slugs: [],
 }
 let app: App = {
   eid: 'a1',

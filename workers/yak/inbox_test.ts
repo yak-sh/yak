@@ -248,6 +248,38 @@ slow("a letter to an app's former address follows the rename", async () => {
   }
 })
 
+slow("a letter to a space's former subdomain follows the rename", async () => {
+  let k = await kernel()
+  try {
+    let them = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
+    await connector(k, them.cookie).tool('space_set', {
+      space: 'jeff',
+      slug: 'jeffs-kitchen',
+    })
+    assertEquals(
+      (await arrives(k, {
+        from: 'ana@books.example',
+        to: 'jeff.recipes@yaks.app',
+        raw: rfc822({ Subject: 'Still find you' }, 'Bring a dish.'),
+      })).status,
+      200,
+    )
+    // The app's store never moved, so the letter is where it always would
+    // have been — read back at the space's new address.
+    let [letter] = await client(
+      k,
+      'jeffs-kitchen.yaks.app',
+      'recipes',
+      them.cookie,
+    )
+      .get('.mail!&.doc?') as unknown as Row[]
+    assertEquals(letter.doc.title, 'Still find you')
+    assertEquals(letter.mail.to, 'jeff.recipes@yaks.app')
+  } finally {
+    await k.stop()
+  }
+})
+
 slow(
   'an address nobody answers at is refused, and nothing is written',
   async () => {

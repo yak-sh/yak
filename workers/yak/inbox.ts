@@ -65,7 +65,12 @@ let opened = async (
   let box = mailedTo(to)
   if (!box) throw new Refused(`no mailbox for ${to}`)
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-  let space = await dir.space(box.space)
+  // A subdomain the SPACE has left still finds it, as its old hostname does
+  // (apps.ts `served`, T-34658): a rename moves `space.slug` and keeps the old
+  // one in the space's `former`, so a letter to `<was>.<app>@yaks.app` lands
+  // where a link to `<was>.yaks.app/<app>/` lands. Asked second, so a live
+  // space always wins the name.
+  let space = await dir.space(box.space) ?? await dir.formerly(box.space)
   // A space in the trash has no mailboxes at all (erase.ts, T-34431), for the
   // reason a trashed app has none: the address is spelled right and nothing
   // is behind it, and the sender is nobody we owe the news that somebody

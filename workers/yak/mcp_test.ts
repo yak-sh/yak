@@ -132,6 +132,8 @@ slow(
         'search',
         // And the platform's own verbs beside them, one plugin's tools.
         'space_new',
+        // Moving a space to another address (T-34658).
+        'space_set',
         'space_delete',
         'space_restore',
         // Connecting the space's own Stripe account, so its apps can take
@@ -5425,6 +5427,98 @@ slow('the front page moves, and only the owner moves it', async () => {
     let still = await bare()
     assertEquals(still.status, 200)
     await still.body?.cancel()
+  } finally {
+    await k.stop()
+  }
+})
+
+// A SPACE moves (T-34658). Jeff, on T-34656: "let's add space re-naming and we
+// can use the former concept for now and keep them reserved". So: the space
+// answers at its new subdomain, the old one redirects there with the path kept
+// and stays reserved, and what the platform keeps for the space — the store
+// each app is named by, the domain somebody else owns, the roster — never
+// spelled the slug and so never moves.
+slow('a space moves, and the subdomain it leaves points at it', async () => {
+  let k = await kernel()
+  try {
+    let them = await seed(k, [{ slug: 'ada', apps: ['cookbook', 'garden'] }])
+    let agent = connector(k, them.cookie)
+    let box = client(k, 'ada.yaks.app', 'cookbook', them.cookie)
+    await box.put('/index.html', '<!doctype html><h1>Our recipe box</h1>')
+    let cake = crypto.randomUUID()
+    await box.applied([{ entity: { eid: cake }, doc: { title: 'Lemon cake' } }])
+    // A domain somebody else owns, aimed at the space by its eid.
+    await meta(k, them.cookie).apply([{
+      hostname: {
+        name: 'ourbookclub.com',
+        serves: them.eids['ada'],
+        stage: 'active',
+      },
+    }])
+    let handle = async (host: string, app: string) =>
+      String((await (await k.at(host, `/${app}/api/graph`)).json()).db)
+    let was = await handle('ada.yaks.app', 'cookbook')
+
+    let said = await agent.tool('space_set', {
+      space: 'ada',
+      slug: 'ada-cooks',
+    })
+    assertStringIncludes(said, 'https://ada-cooks.yaks.app/')
+    assertStringIncludes(said, 'redirects here and stays reserved')
+    assertStringIncludes(said, 'cookbook, garden')
+
+    // Served at the new address, files and rows and all.
+    let now = await k.at('ada-cooks.yaks.app', '/cookbook/')
+    assertEquals(now.status, 200)
+    assertStringIncludes(await now.text(), '<h1>Our recipe box</h1>')
+    let [kept] = await client(k, 'ada-cooks.yaks.app', 'cookbook', them.cookie)
+      .get(`id=${cake}`) as unknown as { doc: { title: string } }[]
+    assertEquals(kept.doc.title, 'Lemon cake')
+    // The store handle did NOT move: it is the app's own, not the address's.
+    assertEquals(await handle('ada-cooks.yaks.app', 'cookbook'), was)
+
+    // The subdomain it left keeps answering, as the permanent move it was,
+    // with the path and the query kept.
+    let gone = await k.at('ada.yaks.app', '/cookbook/?page=2', {
+      redirect: 'manual',
+    })
+    assertEquals(gone.status, 301)
+    assertEquals(
+      gone.headers.get('location'),
+      'https://ada-cooks.yaks.app/cookbook/?page=2',
+    )
+    // A write keeps its method, the way a renamed app's does.
+    let write = await k.at('ada.yaks.app', '/cookbook/api/apply', {
+      method: 'POST',
+      body: '[]',
+      redirect: 'manual',
+    })
+    assertEquals(write.status, 308)
+    assertEquals(
+      write.headers.get('location'),
+      'https://ada-cooks.yaks.app/cookbook/api/apply',
+    )
+    // And the address is not free just because the space left it.
+    await assertRejects(
+      () => agent.tool('space_new', { slug: 'ada', title: 'Ada again' }),
+      Error,
+      'used to be',
+    )
+
+    // The domain names an eid, so it opens the space wherever the space
+    // lives — nothing about it was touched.
+    let their = await k.at('ourbookclub.com', '/cookbook/')
+    assertEquals(their.status, 200)
+    assertStringIncludes(await their.text(), '<h1>Our recipe box</h1>')
+    // And the roster is the space's own: its owner is still its owner, which
+    // is what lets them move it a second time.
+    assertStringIncludes(
+      await agent.tool('space_set', {
+        space: 'ada-cooks',
+        title: "Ada's kitchen",
+      }),
+      'ada-cooks "Ada\'s kitchen"',
+    )
   } finally {
     await k.stop()
   }

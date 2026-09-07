@@ -145,6 +145,11 @@ export type Space = {
   // nothing, its apps leave every roster, its mail bounces and its slug is
   // held; nothing it holds is touched until the thirty days run out.
   trashed: Trashed | null
+  // Every subdomain this space has answered at, oldest first — the same word
+  // an app wears for the same reason (T-34658). Empty for a space that has
+  // never moved, which is almost all of them; each entry redirects to the
+  // address it lives at now, and stays reserved until somebody forgets it.
+  slugs: string[]
 }
 export type App = {
   eid: string
@@ -491,7 +496,8 @@ let ABOUT =
   '&.trashed?'
 
 // And what every read of a SPACE asks for, for the same reason.
-let SPACE_ABOUT = '.doc?&.plan?&.meter?&.notified?&.trashed?&.stripe?&.fee?'
+let SPACE_ABOUT =
+  '.doc?&.plan?&.meter?&.notified?&.trashed?&.stripe?&.fee?&.former?'
 
 // The plan as a whole row, however little of it is written: a column nobody
 // has filled reads empty, the way `meterOf` does, so nothing downstream tests
@@ -541,6 +547,7 @@ let spaceOf = (r: Row): Space => ({
   meter: meterOf(r),
   told: r.notified != null,
   trashed: trashedOf(r),
+  slugs: slugsOf(r.former),
 })
 
 export let appOf = (r: Row): App => ({
@@ -715,6 +722,21 @@ export let homing = (
     : []),
 ]
 
+/**
+ * An address history as the two columns that hold it: the head in `slug`, the
+ * rest in `slugs`, oldest first — `former` written the way types.ts `slugsOf`
+ * reads it. An app wears one and so does a space (T-34658).
+ *
+ * The WHOLE record every time rather than a patch of one column, because a
+ * single call may both LEAVE an address and FORGET another (T-34659), and two
+ * patches of one history disagree about what the history is. A history that has
+ * emptied clears both columns, which is a row that redirects from nowhere.
+ */
+export let addresses = (had: string[]) => ({
+  slug: had[0] ?? null,
+  slugs: had.slice(1).join(' ') || null,
+})
+
 // The typed client over the handler, in-process or across a binding.
 export type Directory = ReturnType<typeof directory>
 
@@ -761,6 +783,18 @@ export let directory = (via: Fetcher, now = false) => {
     space: async (slug: string) => {
       let row = await one(`.space.slug=${slug}&${SPACE_ABOUT}`)
       return row ? spaceOf(row) : null
+    },
+    // A subdomain the space has LEFT, still pointing at it (T-34658) — what
+    // `former` is to an app, one level up. Asked only after `space` has
+    // answered nobody, so a space is never found by an address it still lives
+    // at: what IS at an address and what redirects to it are two questions,
+    // and this is only the second. One query over the spaces that have ever
+    // moved, which is a handful of rows and never grows with the platform.
+    formerly: async (slug: string) => {
+      let space = (await query(`.former!&.space!&${SPACE_ABOUT}`))
+        .map(spaceOf)
+        .find((s) => s.slug != slug && s.slugs.includes(slug))
+      return space ?? null
     },
     // `fresh` skips the read cache: what a break names has to be the deploy
     // it happened on, not one the cache is still holding (unseen.ts

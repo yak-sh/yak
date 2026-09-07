@@ -14,6 +14,19 @@ space_new:
     owner. They already have one from signing in, and every other tool uses
     it without being told — so this is only for a second address.
 
+space_set:
+  title: Rename a space
+  description: >-
+    Move a space to another address, or change its name. The title is what it
+    is called; the slug is its address, so changing it moves the space to
+    <new>.yaks.app — every app in it moves with it, files, data and all, and
+    every app keeps its own path under the new address. The old address keeps
+    working: it redirects to the new one with the path kept, so a link
+    somebody already has still opens the page it always did, and letters to
+    <old>.<app>@yaks.app still arrive. It also stays reserved — nobody else
+    can take it, and neither can they until it is forgotten. Give the person
+    the new address. Only the space owner may move it.
+
 space_delete:
   title: Close a space
   description: >-
