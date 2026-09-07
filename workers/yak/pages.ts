@@ -1203,7 +1203,7 @@ let external = (href: string, label: string) =>
   `<a href="${esc(href)}" target="_blank" rel="noopener">${label}</a>`
 
 let request = copyable(
-  'Build me a personal recipe box where I can save, search and tag recipes.',
+  'Use yaks.app to build me a personal recipe box where I can save, search and tag recipes.',
   'the sample app request',
 )
 
@@ -1260,9 +1260,7 @@ let AGENTS = [
         'https://chatgpt.com/#settings/Security',
         'Security and login settings',
       ) +
-      ', scroll down and turn on <b>Developer mode</b>. If the link does not ' +
-      'open the setting, click your profile picture in the bottom left, then ' +
-      '<b>Settings</b> → <b>Security and login</b>.',
+      ', scroll down and turn on <b>Developer mode</b>.',
       'Copy this URL:' +
       fields(field('Connection', MCP, 'the connection URL')) +
       'Then open ' +
@@ -1274,11 +1272,7 @@ let AGENTS = [
       'Check <b>I understand</b>, then click <b>Create</b>.',
       'Sign in with your email when ChatGPT asks.',
     ],
-    note: 'Use ChatGPT on the web. On a Business or Enterprise workspace, ' +
-      'an admin may have to ' +
-      'allow developer mode first.',
-    finish: 'Open ' + external('https://chatgpt.com/', 'a new ChatGPT chat') +
-      ' and add <b>yaks.app</b> from the tools menu',
+    finish: 'Open ' + external('https://chatgpt.com/', 'a new ChatGPT chat'),
   },
   {
     key: 'claude-code',
