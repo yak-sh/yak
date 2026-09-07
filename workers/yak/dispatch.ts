@@ -587,11 +587,10 @@ export let carried = async (
 // (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/reference/platform-examples/,
 // https://developers.cloudflare.com/workers/configuration/multipart-upload-metadata/).
 //
-// The one binding is the service binding home: every door the app's code
-// reaches — its store, its files — goes back through the kernel, so there is
-// nothing else to grant and nothing to revoke. `keep_bindings: ['secret_text']`
-// is what keeps the app's secrets across a deploy, since a re-upload
-// otherwise replaces the binding list whole
+// The KERNEL service binding carries the app's graph and file doors. Its
+// configured resources come from directory records and are resent on every
+// deploy. Only secret_text bindings are kept: retaining resources would keep
+// a removed binding attached, while secrets cannot be read back to resend
 // (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/bindings/).
 //
 // The limits are the platform's, per script and not per plan: an app's worker

@@ -389,6 +389,9 @@ export let metadata = (
       : {}),
     bindings,
     ...(migrations ? { migrations } : {}),
+    // Provisioned bindings are resent from the directory on every upload.
+    // Keeping them here would leave a removed config binding attached; only
+    // secrets have values that the platform deliberately never reads back.
     keep_bindings: ['secret_text'],
     limits: { cpu_ms: 50, subrequests: 50 },
   }
