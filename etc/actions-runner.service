@@ -42,6 +42,13 @@ Wants=network-online.target
 WorkingDirectory=/home/yaks/actions-runner
 ExecStart=/home/yaks/actions-runner/run.sh
 Environment=PATH=/home/yaks/.local/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# For the same reason as PATH: @db/sqlite's own prebuilt libsqlite3.so
+# segfaults on this box on the first `new Database()`, so everything here opens
+# the system sqlite instead. Every login shell exports this, a unit inherits
+# none of it, and that gap is what made the gate red on every push (T-34641).
+# The `test:packages`/`test:workers` tasks default the same value, so a bare
+# checkout works too; this line covers the steps that call deno directly.
+Environment=DENO_SQLITE_PATH=libsqlite3.so.0
 # The runner's own updater exits 3 to ask to be restarted; anything else that
 # stops it should also come back. `KillMode=process` leaves a job's own
 # processes to the runner's shutdown rather than mass-killing the cgroup.

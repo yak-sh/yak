@@ -48,8 +48,15 @@ jobs:
       # No install step: the Worker's npm dependencies are gitignored, and
       # since T-34159 the probe fills them itself (workers/yak/wrangler.ts
       # `ready()`, called from probe.ts) before workerd reads them.
+      #
+      # Through the TASK, not a bare `deno test`: @db/sqlite ships a prebuilt
+      # libsqlite3.so that segfaults on this box the moment it is opened, so
+      # `test:workers` points DENO_SQLITE_PATH at the system sqlite the way
+      # `test:packages` does (T-34641). A bare `deno test -A workers/yak/` only
+      # survived because every login shell here exports that var and a systemd
+      # unit inherits none of it.
       - name: worker tests
-        run: deno test -A workers/yak/
+        run: deno task test:workers
 
       - name: bench gate
         run: deno task bench:gate
