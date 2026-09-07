@@ -91,6 +91,39 @@ ratchet, and the build profile are in [deploy timing](../../bench/deploys.md).
 Run `deno task deploy:time <sha>` on the box alongside each push; Actions reads
 the committed record through `deno task deploy:gate` after worker tests.
 
+## Staging (yaks.fyi)
+
+`yak-staging` serves `yaks.fyi` and `*.yaks.fyi` with its own stores, app
+workers, buckets, memories, OAuth grants and analytics. Staging data is
+disposable. The same Workers Builds run on `main` deploys production first, then
+staging; a staging failure marks the build red and leaves production deployed.
+The individual doors are `deno task deploy:yak-staging`,
+`deno task dev:yak-staging`, and `deno task verify:yak --staging`.
+
+Before the first deploy, run `bin/yak-staging-init` on the owner’s box, paste
+its OAuth KV id into the staging `OAUTH_KV` binding, and set the listed secrets
+through `workers/yak/wrangler.ts` with `--env staging`. Use fresh session
+secrets, Stripe sandbox keys, and a sandbox price for `STRIPE_PRICE`. Set
+`MAIL_SINK` to the owner’s email address as a **secret**: every outbound letter
+goes there, with its intended recipients in the subject. Optional provider
+secrets can stay unset. Credentials stay on the box.
+
+Create these Stripe sandbox event destinations, each with its own signing
+secret:
+
+| events from                                   | destination                       | secret                          |
+| --------------------------------------------- | --------------------------------- | ------------------------------- |
+| Your account (billing)                        | `https://yaks.fyi/stripe/webhook` | `STRIPE_WEBHOOK_SECRET`         |
+| Connected accounts (the five v1 events below) | `https://yaks.fyi/stripe/connect` | `STRIPE_CONNECT_WEBHOOK_SECRET` |
+
+The zone needs proxied `AAAA @ → 100::` and `AAAA * → 100::` records. Onboard
+`yaks.fyi` for Email Sending and Email Routing with Cloudflare’s issued mail DNS
+records; route its catch-all to `yak-staging`. Custom domains stay off until
+`CF_ZONE` names the `yaks.fyi` zone and its hostname token is set; enabling them
+also needs a SaaS fallback origin and a `*/*` route on that zone. Observability
+is on; staging has no tail consumer. `yak-watch` reports its apex probe with
+`page: false`, excluding its failures from incident paging.
+
 ## Migration passes: expand, then contract
 
 A yaks.app version that adds a column or index never removes or re-indexes what
