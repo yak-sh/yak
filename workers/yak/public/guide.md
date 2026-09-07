@@ -837,15 +837,19 @@ Deeper: <https://yaks.app/guide/domains.md> — the record to add and where to
 type it at each registrar, the apex, moving DNS to Cloudflare, and what each
 pending state means.
 
-An app can also answer at a domain the person already owns — `herbusiness.com`
-instead of `jeff.yaks.app/recipes` — serving at the root of it, with the
-`.yaks.app` address still working. Three tools, all the space owner's:
+A space, or one app of it, can also answer at a domain the person already owns,
+with the `.yaks.app` address still working. `ourbookclub.com` on the SPACE
+serves it exactly as `jeff.yaks.app` does — the front page at `/`, every app at
+`/<app>/`. `herbusiness.com` on an APP serves that app at the root, and nothing
+else is there. Both can stand at once. Three tools, all the space owner's:
 
-- `domain_attach(app, hostname)` — provisions the hostname and answers with the
-  DNS record to add, as data: `records: [{type, name, value}]`.
-- `domain_status(hostname?)` — where it has got to. Leave the hostname out for
-  every domain in the space.
-- `domain_detach(hostname)` — hands the hostname back. The app is untouched.
+- `domain_attach(app?, hostname)` — provisions the hostname and answers with the
+  DNS record to add, as data: `records: [{type, name, value}]`. Name an `app`
+  for the app's own domain; leave it out for the space's.
+- `domain_status(hostname?)` — what each domain points at and where it has got
+  to. Leave the hostname out for every domain in the space.
+- `domain_detach(hostname)` — hands the hostname back. What it served is
+  untouched.
 
 The record is always the same shape: a CNAME at the hostname, pointing at
 `origin.saas.yaks.app`. Add it wherever the person's DNS is managed. You know

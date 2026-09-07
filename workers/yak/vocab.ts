@@ -498,13 +498,19 @@ export let platformDoc: VocabDoc = {
       },
     },
     email: { type: 'object', properties: { address: text } },
+    // A hostname somebody owns, and the ONE place it serves: a space, whose
+    // front page it opens at `/` with every app of it at `/<app>/`, or a single
+    // app, which it opens at `/` outright (T-34596). One column for both,
+    // because it is one fact — what this name is aimed at — and the two forms
+    // differ only in which entity it names; a second column would let a row say
+    // both and mean neither.
     hostname: {
       type: 'object',
       kind: true,
       before: ['doc'],
       properties: {
         name: unique(text),
-        app: ref('cascade'),
+        serves: ref('cascade'),
         stage: { enum: ['pending', 'active', 'error'] },
         at: time,
       },

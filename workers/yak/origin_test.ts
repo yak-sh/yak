@@ -144,7 +144,7 @@ slow('a page at another address reaches no door here', async () => {
     await meta(k, cookie).apply([{
       hostname: {
         name: 'herbusiness.com',
-        app: eids['jeff/recipes'],
+        serves: eids['jeff/recipes'],
         stage: 'active',
       },
     }])

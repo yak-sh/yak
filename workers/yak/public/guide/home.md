@@ -44,8 +44,9 @@ the space's apps again, a path no app claims is a 404, and a letter to
 ## The order a request is answered in
 
 For a request to `<space>.yaks.app<path>` — or to a domain of the person's own,
-mounted at its root (<https://yaks.app/guide/domains.md>) — five rungs, the
-first that answers winning:
+which is the same rungs at their own address, whether it carries the space or
+one app mounted at its root (<https://yaks.app/guide/domains.md>) — five rungs,
+the first that answers winning:
 
 1. **The platform's own paths.** `/login`, `/connect`, `/mcp`, and every app's
    `/api/…` store doors. The kernel answers these and no app routes them.

@@ -136,7 +136,7 @@ Deno.test('a hostname resolves to the app it serves and the space it is in', asy
       entity: { eid: crypto.randomUUID() },
       hostname: {
         name: 'recipes.example.com',
-        app,
+        serves: app,
         stage: 'pending',
         at: new Date().toISOString(),
       },
@@ -144,7 +144,7 @@ Deno.test('a hostname resolves to the app it serves and the space it is in', asy
   }, as(ada))
 
   let served = (await dir.serves('recipes.example.com'))!
-  assertEquals(served.app.eid, app)
+  assertEquals(served.app!.eid, app)
   assertEquals(served.space.slug, 'ada')
   assertEquals(served.host.stage, 'pending')
   assertEquals((await dir.hosts(s)).map((h) => h.name), ['recipes.example.com'])
@@ -243,7 +243,7 @@ Deno.test('erasing a space buries everything that named it', async () => {
       entity: { eid: '$host' },
       hostname: {
         name: 'recipes.example.com',
-        app,
+        serves: app,
         stage: 'active',
         at: new Date().toISOString(),
       },

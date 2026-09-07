@@ -1350,8 +1350,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
 // a second to guess at (T-33176).
 //
 // THE ORDER, and it is a rule rather than an accident (D-34197). For a
-// request to `<space>.yaks.app<path>`, or to a custom domain mounted at its
-// root, five rungs, the first that answers winning:
+// request to `<space>.yaks.app<path>` — which is also every request a custom
+// domain carries, whether it names the space or one app mounted at its root
+// (index.ts `aimed`, T-34596) — five rungs, the first that answers winning:
 //
 //  1. PLATFORM PATHS are the kernel's and no app routes them: `/.well-known/`
 //     on a hostname of ours, where a site GRANTS AUTHORITY over a name that

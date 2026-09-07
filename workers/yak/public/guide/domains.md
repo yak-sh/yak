@@ -1,8 +1,21 @@
 # A domain of their own
 
-An app here answers at `<space>.yaks.app/<app>/`. It can also answer at a domain
-the person already owns — `herbusiness.com`, or `www.herbusiness.com` — serving
-at the root of it, with the `.yaks.app` address still working.
+A space here answers at `<space>.yaks.app` and each of its apps at
+`<space>.yaks.app/<app>/`. Either can also answer at a domain the person already
+owns — `herbusiness.com`, or `www.herbusiness.com` — with the `.yaks.app`
+address still working.
+
+Two forms, and the difference is what you name:
+
+- **The space.** `ourbookclub.com` serves the space exactly as `jeff.yaks.app`
+  does: the front page at `/`, every app at `/<app>/`. The apps are directories
+  of their own domain.
+- **One app.** `herbusiness.com` serves that app at the root of it, and nothing
+  else is there.
+
+A space can have both at once, and an app of it can still take a domain of its
+own — at that domain the app is the root, at the space's domain it is a
+directory.
 
 This page is for you, the assistant. The person you are helping owns a domain
 and probably bought it years ago from GoDaddy or Namecheap or Squarespace. They
@@ -15,18 +28,19 @@ Back to the map: <https://yaks.app/guide.md>
 
 ## The three tools
 
-- `domain_attach(app, hostname)` — provisions the hostname and answers with the
+- `domain_attach(app?, hostname)` — provisions the hostname and answers with the
   DNS record that has to be added, as data: `records: [{type, name, value}]`.
-  Only the space owner may attach one.
-- `domain_status(hostname?)` — where provisioning has got to, split into the
-  three things that can be outstanding. Leave `hostname` out to get every domain
-  in the space.
-- `domain_detach(hostname)` — hands the hostname back. The app is untouched:
-  same data, same files, same `<space>.yaks.app` address.
+  Name an `app` and the domain is that app's; leave it out and the domain is the
+  space's. Only the space owner may attach one.
+- `domain_status(hostname?)` — what each domain points at, and where
+  provisioning has got to, split into the three things that can be outstanding.
+  Leave `hostname` out to get every domain in the space.
+- `domain_detach(hostname)` — hands the hostname back. What it served is
+  untouched: same data, same files, same `<space>.yaks.app` address.
 
-A domain points at one app, and a hostname belongs to one app across the whole
-platform. A space can have several — one per app — and `www.herbusiness.com` and
-`herbusiness.com` are two hostnames, so attach both if they want both.
+A domain points at one place, and a hostname belongs to one place across the
+whole platform. `www.herbusiness.com` and `herbusiness.com` are two hostnames,
+so attach both if they want both.
 
 ## The record
 

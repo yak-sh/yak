@@ -84,11 +84,11 @@ import { arrived, Refused } from './inbox.ts'
 import * as mcp from './mcp.ts'
 import { lost, oops, provisioning } from './pages.ts'
 import {
+  aimedAt,
   doorway,
   foreign,
   hostOf,
   MOUNT,
-  PLATFORM,
   platform,
   type Route,
   route,
@@ -266,40 +266,41 @@ let settling = async (env: Env, host: string): Promise<Response | null> => {
   )
 }
 
-// A hostname someone else owns, aimed at one of our apps (T-33037). Routing
-// stays pure and synchronous; this is a DIRECTORY READ, so it happens here,
-// where the router already holds env — and only for a hostname that is
+// A hostname someone else owns, aimed at a place of ours (T-33037, T-34596).
+// Routing stays pure and synchronous; this is a DIRECTORY READ, so it happens
+// here, where the router already holds env — and only for a hostname that is
 // neither ours nor a dev host (route.ts `foreign`). A host the directory has
 // never been given answers null and keeps the route it already had, which is
 // the apex: every address that exists today is decided before this is asked.
 //
-// A domain serves ONE app at its ROOT, so the request is carried to that
-// app's own address — `herbusiness.com/menu` becomes
-// `<space>.yaks.app/<app>/menu` — and every part below routes it from the
-// pure route table the way it routes everything else. Serving at the root
-// falls out of that: the app's `/` is the domain's `/`, with no redirect into
-// a path — and a space's own hostname now works the same way, its home app
-// served at `/` rather than redirected to (T-33040, apps.ts `fetch`). The
-// browser stays on the person's domain; only the address the PLATFORM
-// derives from the request moves, which is what puts a sign-in return on our
-// own zone, where the session cookie is (route.ts `onZone`).
+// The request is CARRIED to the address that place already has on our own zone
+// (route.ts `aimedAt`, which is the whole of the space/app difference), and
+// every part below routes it from the pure route table the way it routes
+// everything else — so a domain on a space is served by the same rungs as
+// `<space>.yaks.app` rather than by a second copy of them. The browser stays on
+// the person's domain; only the address the PLATFORM derives from the request
+// moves, which is what puts a sign-in return on our own zone, where the session
+// cookie is (route.ts `onZone`).
 //
-// The prefix rides along as `x-yak-mount: /`, because the app is at the
+// An app's mount rides along as `x-yak-mount: /`, because that app is at the
 // domain's root while the address routed on names its prefix, and the parts
 // below have no other way to tell: apps.ts gives the page a `<base href>` at
 // the mount, and never forwards the front page's `/<app>/` to `/` here, which
-// on a domain would be a loop back to the address that arrived (T-33040).
+// on a domain would be a loop back to the address that arrived (T-33040). A
+// domain on a SPACE sends no mount: nothing moved, so its apps are mounted
+// where their addresses say they are.
 let aimed = async (req: Request, env: Env, host: string) => {
   if (!foreign(host)) return null
   let at = await directory(bound(env.DIRECTORY, dirPart.fetch, env))
     .serves(host)
   if (!at) return null
   let url = new URL(req.url)
+  let to = aimedAt(at.space.slug, at.app?.slug ?? null, url.pathname)
   url.protocol = 'https:'
-  url.host = `${at.space.slug}.${PLATFORM}`
-  url.pathname = `/${at.app.slug}${url.pathname}`
+  url.host = to.host
+  url.pathname = to.pathname
   let headers = new Headers(req.headers)
-  headers.set(MOUNT, '/')
+  if (to.mount) headers.set(MOUNT, to.mount)
   return new Request(url, new Request(req, { headers }))
 }
 

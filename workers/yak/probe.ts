@@ -21,6 +21,7 @@
 import { until } from '../../src/testing.ts'
 import { COOKIE, sign, verify } from '../../src/token.ts'
 import { ready, WRANGLER } from './wrangler.ts'
+import type { Custom } from './domains.ts'
 
 let root = new URL('./', import.meta.url).pathname
 let wrangler = (Deno.env.get('WRANGLER') ?? WRANGLER.join(' ')).split(' ')
@@ -595,6 +596,49 @@ export let stripe = (
     calls,
     // The last call at a path, which is what an assertion nearly always wants.
     at: (path: string) => calls.filter((c) => c.path == path).at(-1),
+    stop: () => server.shutdown(),
+  }
+}
+
+// ---- Cloudflare's custom hostnames, stood in for (domains.ts) -------------
+//
+// The three calls a domain makes — list by name, create, delete — over the
+// account API's `{success, errors, result}` envelope, kept in memory. A
+// hostname is answered ACTIVE, which is the state a domain reaches once the
+// person's record resolves; the words each step is READ by are held against
+// recorded bytes in domains_test.ts, so what this is for is the other half:
+// that the tools attach, report and detach a domain end to end.
+export let hostnames = () => {
+  let held = new Map<string, Custom>()
+  let server = Deno.serve({ port: 0, onListen: () => {} }, (req) => {
+    let url = new URL(req.url)
+    let ok = (result: unknown) => Response.json({ success: true, result })
+    if (req.method == 'POST') {
+      let made = async () => {
+        let { hostname } = await req.json() as { hostname: string }
+        let custom: Custom = {
+          id: crypto.randomUUID(),
+          hostname,
+          status: 'active',
+          ssl: { status: 'active' },
+        }
+        held.set(hostname, custom)
+        return ok(custom)
+      }
+      return made()
+    }
+    if (req.method == 'DELETE') {
+      let id = url.pathname.split('/').pop()
+      for (let [name, c] of held) if (c.id == id) held.delete(name)
+      return ok({ id })
+    }
+    let want = url.searchParams.get('hostname') ?? ''
+    let found = held.get(want)
+    return ok(found ? [found] : [])
+  })
+  return {
+    url: `http://127.0.0.1:${(server.addr as Deno.NetAddr).port}`,
+    held,
     stop: () => server.shutdown(),
   }
 }

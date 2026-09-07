@@ -1,6 +1,7 @@
 // The route table as data: hostname + path in, (space, app, path) out.
 import { assertEquals } from '@std/assert'
 import {
+  aimedAt,
   doorway,
   foreign,
   hostOf,
@@ -39,6 +40,36 @@ Deno.test('route: hostname and path name the space, app, and the rest', () => {
   for (let [host, path, want] of cases) {
     assertEquals(route(host, path), want, `${host}${path}`)
   }
+})
+
+// Where a domain of someone's own is served from (T-34596): the address the
+// place it names already has on our zone. A SPACE's domain is the space's own
+// hostname with the path untouched — which is the same address `route` above
+// reads, so the two forms are one rule and not two — and an APP's is that
+// app's prefix, mounted at the domain's root.
+Deno.test('aimedAt: a domain is carried to the address of what it serves', () => {
+  assertEquals(aimedAt('jeff', null, '/'), {
+    host: 'jeff.yaks.app',
+    pathname: '/',
+    mount: null,
+  })
+  assertEquals(aimedAt('jeff', null, '/recipes/menu.html'), {
+    host: 'jeff.yaks.app',
+    pathname: '/recipes/menu.html',
+    mount: null,
+  })
+  assertEquals(aimedAt('jeff', 'recipes', '/menu.html'), {
+    host: 'jeff.yaks.app',
+    pathname: '/recipes/menu.html',
+    mount: '/',
+  })
+  // And the route that address takes is the one every other request takes.
+  let space = aimedAt('jeff', null, '/recipes/')
+  assertEquals(route(space.host, space.pathname), {
+    space: 'jeff',
+    app: 'recipes',
+    path: '/',
+  })
 })
 
 Deno.test('hostOf: x-yak-host stands in on a dev host only', () => {

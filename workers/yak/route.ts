@@ -101,6 +101,28 @@ export type Route = {
 
 export let SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/
 
+// Where a hostname somebody else owns is SERVED FROM: the address on our own
+// zone that the request is carried to, and the mount the app sits at there
+// (T-34596). The directory says which place the domain names — a space, or one
+// app of it — and this is the whole of what that difference means.
+//
+// A domain on a SPACE is that space's own hostname with the path untouched, so
+// it routes through `route()` and every rung of apps.ts exactly as
+// `<space>.yaks.app` does: the front page at `/`, each app at `/<app>/`, the
+// space's own doors where they always were. There is no second path rule for
+// it, because it IS the rule.
+//
+// A domain on an APP is that app's prefix under the same hostname, mounted at
+// `/`: `herbusiness.com/menu` is `<space>.yaks.app/<app>/menu`, and the mount
+// says the app's pages resolve from the domain's root rather than from the
+// prefix the platform routed by. Both may point at one space at once — the
+// app's own domain opens it at `/`, the space's opens it at `/<app>/`.
+export let aimedAt = (space: string, app: string | null, pathname: string) => ({
+  host: `${space}.${PLATFORM}`,
+  pathname: app ? `/${app}${pathname}` : pathname,
+  mount: app ? '/' : null,
+})
+
 let dev = (host: string) =>
   host == 'localhost' || host == '127.0.0.1' || host.endsWith('.localhost') ||
   host.endsWith('.workers.dev')

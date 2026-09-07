@@ -53,9 +53,11 @@ let stub = () => {
   }
 }
 
-// A hostname someone else owns, resolved to the app it serves and the space
-// that app is in (T-33037) — the read index.ts makes before it falls back to
-// the apex. A hostname nobody attached answers null, which is what keeps
+// A hostname someone else owns, resolved to the place it serves (T-33037,
+// T-34596) — the read index.ts makes before it falls back to the apex. One
+// aimed at an APP answers that app and the space it is in; one aimed at the
+// SPACE answers the space with no app, which is how `aimed` knows to leave the
+// path alone. A hostname nobody attached answers null, which is what keeps
 // every address that exists today routing as it always has.
 let hosts = () => {
   let env = {
@@ -72,7 +74,13 @@ let hosts = () => {
           if (q.includes('hostname.name=herbusiness.com')) {
             return Response.json([{
               entity: { eid: 'd1', num: 3 },
-              hostname: { name: 'herbusiness.com', app: 'a1' },
+              hostname: { name: 'herbusiness.com', serves: 'a1' },
+            }])
+          }
+          if (q.includes('hostname.name=ourbookclub.com')) {
+            return Response.json([{
+              entity: { eid: 'd2', num: 4 },
+              hostname: { name: 'ourbookclub.com', serves: 's1' },
             }])
           }
           if (q.includes('id=a1')) {
@@ -98,9 +106,17 @@ let hosts = () => {
 Deno.test('a hostname resolves to its space and app, or to nobody', async () => {
   let dir = hosts()
   let at = await dir.serves('herbusiness.com')
-  assertEquals([at?.space.slug, at?.app.slug], ['jeff', 'recipes'])
+  assertEquals([at?.space.slug, at?.app?.slug], ['jeff', 'recipes'])
   assertEquals(at?.host.name, 'herbusiness.com')
   assertEquals(await dir.serves('elsewhere.com'), null)
+})
+
+Deno.test('a hostname on the space resolves to the space, with no app', async () => {
+  let dir = hosts()
+  let at = await dir.serves('ourbookclub.com')
+  assertEquals(at?.space.slug, 'jeff')
+  assertEquals(at?.app, null)
+  assertEquals(at?.host.serves, 's1')
 })
 
 Deno.test('a fresh read goes past the 30-second cache, and refills it', async () => {

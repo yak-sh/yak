@@ -512,6 +512,20 @@ let hostname = (v: unknown) => {
   return s
 }
 
+// The place a domain points at, spelled the way every other answer here
+// spells an address: the space alone, or the one app in it (T-34596).
+let place = (space: Space, app: App | null) =>
+  app ? `${space.slug}/${app.slug}` : space.slug
+
+// And what that means at the domain, in a sentence, because the difference is
+// the whole feature: a space's domain is the space's own hostname under
+// another name, and an app's domain is that app and nothing else.
+let serving = (host: string, app: App | null) =>
+  app
+    ? `The app answers at https://${host}/.`
+    : `Its front page answers at https://${host}/ and every app at ` +
+      `https://${host}/<app>/.`
+
 let slug = (v: unknown, what: string) => {
   let s = text(v, what)
   if (!SLUG.test(s)) throw new Error(`${what}: not a slug (a-z, 0-9, -)`)
@@ -3523,23 +3537,31 @@ export let TOOLS: Tool[] = [
     idempotent: true,
     openWorld: true,
     description:
-      "Serve one of the person's apps at a domain they already own — " +
-      'herbusiness.com instead of jeff.yaks.app/recipes. It provisions the ' +
-      'hostname here and answers with the DNS record they have to add where ' +
-      'their domain is managed, as data: type, name, value. Add it for them ' +
-      'if you can reach their registrar; otherwise walk them through their ' +
-      "own panel — you know what GoDaddy's and Namecheap's look like. " +
-      'Nothing serves until that record is in place, so tell them the ' +
+      'Serve a domain the person already owns — herbusiness.com instead of ' +
+      'jeff.yaks.app. Name an app and that app answers at the root of the ' +
+      'domain; leave app out and the whole SPACE answers there, exactly as it ' +
+      'does at <space>.yaks.app — the front page at /, every app at /<app>/. ' +
+      'A space and its apps can each have their own domain at once. It ' +
+      'provisions the hostname here and answers with the DNS record they have ' +
+      'to add where their domain is managed, as data: type, name, value. Add ' +
+      'it for them if you can reach their registrar; otherwise walk them ' +
+      "through their own panel — you know what GoDaddy's and Namecheap's look " +
+      'like. Nothing serves until that record is in place, so tell them the ' +
       'record and then domain_status to watch it come up. Only the space ' +
       'owner may attach one.',
     input: {
       type: 'object',
       properties: { space: SPACE, app: APP, hostname: HOSTNAME },
-      required: ['app', 'hostname'],
+      required: ['hostname'],
     },
     run: async (ctx, args) => {
       let host = hostname(args.hostname)
-      let { space, app, who } = await ownsApp(ctx, args)
+      // The app is the whole difference between the two forms, so it is the
+      // one argument that says which: named, the domain is that app's; left
+      // out, it is the space's (T-34596).
+      let { space, app, who } = args.app == null
+        ? { ...await owns(ctx, args), app: null }
+        : await ownsApp(ctx, args)
       // A hostname on our own zone is not a domain anybody brought: every
       // space already answers at one, and route.ts decides which without
       // reading anything.
@@ -3557,7 +3579,7 @@ export let TOOLS: Tool[] = [
       if (taken) {
         throw new Error(
           taken.space.eid == space.eid
-            ? `${host} already serves ${space.slug}/${taken.app.slug} — ` +
+            ? `${host} already serves ${place(taken.space, taken.app)} — ` +
               'domain_detach it first to move it'
             : `${host} is attached to another space on this platform. If it ` +
               "is the person's domain, whoever attached it has to " +
@@ -3574,7 +3596,12 @@ export let TOOLS: Tool[] = [
       await ctx.dir.apply({
         entities: [{
           entity: { eid },
-          hostname: { name: host, app: app.eid, stage: 'pending', at },
+          hostname: {
+            name: host,
+            serves: (app ?? space).eid,
+            stage: 'pending',
+            at,
+          },
         }],
       }, vouched(who))
       let custom
@@ -3598,7 +3625,10 @@ export let TOOLS: Tool[] = [
       }
       let recs = records(host)
       return {
-        text: `${host} is attached to ${space.slug}/${app.slug}.\n\n` +
+        text:
+          `${host} is attached to ${place(space, app)}. ${
+            serving(host, app)
+          }\n\n` +
           `Add this record where ${host}'s DNS is managed:\n\n` +
           recs.map((r) => `  ${r.type}  ${r.name}  →  ${r.value}`).join('\n') +
           '\n\n' + (apex(host) ? APEX : '') +
@@ -3607,7 +3637,7 @@ export let TOOLS: Tool[] = [
           `resolving. domain_status(hostname: '${host}') says where it is.`,
         data: {
           hostname: host,
-          app: `${space.slug}/${app.slug}`,
+          serves: place(space, app),
           url: `https://${host}/`,
           stage,
           apex: apex(host),
@@ -3624,13 +3654,14 @@ export let TOOLS: Tool[] = [
     readOnly: true,
     openWorld: true,
     description:
-      'How far a domain has come: whether the DNS record has arrived, ' +
-      'whether Cloudflare has accepted the hostname, and whether the ' +
-      'certificate is issued — each said specifically enough to tell the ' +
-      'person what is still waiting on them. Read from Cloudflare, not ' +
-      'from what we last wrote down. Leave hostname out for every domain in ' +
-      'the space. Call it after domain_attach, and again a few minutes ' +
-      'later; nothing needs doing between.',
+      'How far a domain has come, and what it points at — the space, or one ' +
+      'app of it. Whether the DNS record has arrived, whether Cloudflare has ' +
+      'accepted the hostname, and whether the certificate is issued — each ' +
+      'said specifically enough to tell the person what is still waiting on ' +
+      'them. Read from Cloudflare, not from what we last wrote down. Leave ' +
+      'hostname out for every domain in the space. Call it after ' +
+      'domain_attach, and again a few minutes later; nothing needs doing ' +
+      'between.',
     input: {
       type: 'object',
       properties: { space: SPACE, hostname: HOSTNAME },
@@ -3649,8 +3680,8 @@ export let TOOLS: Tool[] = [
       if (!rows.length) {
         return {
           text: `${space.slug} has no custom domain. It answers at ` +
-            `https://${space.slug}.yaks.app/; domain_attach puts one of its ` +
-            'apps on a domain the person owns.',
+            `https://${space.slug}.yaks.app/; domain_attach puts the space, ` +
+            'or one of its apps, on a domain the person owns.',
           space,
         }
       }
@@ -3659,8 +3690,11 @@ export let TOOLS: Tool[] = [
       let out = []
       let lines = []
       for (let row of rows) {
-        let app = apps.find((a) => a.eid == row.app)
-        let where = `${space.slug}/${app?.slug ?? '?'}`
+        // What this domain points at. `hosts` answered only the rows aimed
+        // into this space, so no app here is the space's own form and never a
+        // row we cannot read.
+        let app = apps.find((a) => a.eid == row.serves) ?? null
+        let where = place(space, app)
         let custom = await customOf(ctx.env, row.name)
         // A row whose hostname Cloudflare no longer has is the one state
         // nothing else can explain, and it is not something a person can
@@ -3677,7 +3711,7 @@ export let TOOLS: Tool[] = [
         }
         lines.push(
           `${row.name} → ${where}` +
-            (stage == 'active' ? ` — live at https://${row.name}/` : '') +
+            (stage == 'active' ? ` — live. ${serving(row.name, app)}` : '') +
             '\n' +
             (how
               ? reading(how)
@@ -3690,7 +3724,7 @@ export let TOOLS: Tool[] = [
         )
         out.push({
           hostname: row.name,
-          app: where,
+          serves: where,
           url: `https://${row.name}/`,
           stage,
           apex: apex(row.name),
@@ -3712,9 +3746,10 @@ export let TOOLS: Tool[] = [
     idempotent: true,
     openWorld: true,
     description:
-      'Stop serving an app at a domain. The hostname is given back to ' +
-      'Cloudflare and the app is untouched — it still answers at its ' +
-      '<space>.yaks.app address, and its data and files are not involved. ' +
+      'Stop serving at a domain, whether it carried a space or one app. The ' +
+      'hostname is given back to Cloudflare and what it served is untouched ' +
+      '— it still answers at its <space>.yaks.app address, and its data and ' +
+      'files are not involved. ' +
       "The person's DNS record is theirs to remove wherever their domain is " +
       'managed; until they do it points at nothing. Only the space owner may. ' +
       'The way back: domain_attach with the same hostname, which starts the ' +
@@ -3744,12 +3779,16 @@ export let TOOLS: Tool[] = [
       await ctx.dir.apply({
         entities: [{ entity: { eid: row.eid }, tombstone: {} }],
       }, vouched(who))
-      let app = (await ctx.dir.apps(space)).find((a) => a.eid == row.app)
+      // What it was serving keeps the address it always had: an app its own,
+      // a space its bare hostname, which is where the domain was carrying the
+      // request all along.
+      let app = (await ctx.dir.apps(space)).find((a) => a.eid == row.serves) ??
+        null
+      let back = app ? url(space, app) : `https://${space.slug}.yaks.app/`
       return {
-        text:
-          `${host} is detached${app ? ` from ${space.slug}/${app.slug}` : ''}` +
-          (had ? '' : ' (Cloudflare had already given it back)') + '.' +
-          (app ? ` It still answers at ${url(space, app)}.` : '') +
+        text: `${host} is detached from ${place(space, app)}` +
+          (had ? '' : ' (Cloudflare had already given it back)') +
+          `. It still answers at ${back}.` +
           `\n\nRemove the CNAME for ${host} wherever its DNS is managed; it ` +
           'points at nothing now.',
         space,

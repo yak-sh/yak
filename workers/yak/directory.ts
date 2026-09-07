@@ -217,14 +217,15 @@ export type Sowed = { at: string; version: number }
 // person the sweep erases it as, since they are the one who asked for it gone.
 export type Trashed = { at: string; by: string }
 
-// A hostname a person owns, aimed at one app (platform.rs `Hostname`,
-// T-33037). How far provisioning has come, and when that was last read from
-// Cloudflare.
+// A hostname a person owns, aimed at one place (platform.rs `Hostname`,
+// T-33037): `serves` is the eid of the SPACE it opens, or of the one APP it
+// opens (T-34596). How far provisioning has come, and when that was last read
+// from Cloudflare.
 export type HostStage = 'pending' | 'active' | 'error'
 export type Host = {
   eid: string
   name: string
-  app: string
+  serves: string
   stage: HostStage | null
   at: string
 }
@@ -257,7 +258,7 @@ type Row = {
   trashed?: { at?: string | null; by?: Id | null }
   hostname?: {
     name: string
-    app: Id
+    serves: Id
     stage?: HostStage | null
     at?: string | null
   }
@@ -565,7 +566,7 @@ export let appOf = (r: Row): App => ({
 let hostOf = (r: Row): Host => ({
   eid: r.entity.eid,
   name: r.hostname!.name,
-  app: idOf(r.hostname!.app),
+  serves: idOf(r.hostname!.serves),
   stage: r.hostname!.stage ?? null,
   at: r.hostname!.at ?? '',
 })
@@ -786,29 +787,37 @@ export let directory = (via: Fetcher, now = false) => {
       let space = await self.at(app.space)
       return space ? { space, app } : null
     },
-    // What a hostname someone else owns is aimed at (T-33037): the hostname
-    // row, the app it serves, and the space that app is in — one hostname,
-    // one place, which the unique index on `hostname.name` is what makes
-    // true. Null for a hostname the platform has never been given, which is
-    // every hostname until someone attaches one — and is what keeps an
-    // unknown host routing exactly as it always did. Cached like every other
-    // read here, and an empty answer is not cached, so a domain serves the
-    // moment it is attached rather than a TTL later.
+    // What a hostname someone else owns is aimed at (T-33037, T-34596): the
+    // hostname row, the space it opens, and the app when it opens ONE app
+    // rather than the whole space — `app` null is the space form, which is the
+    // difference index.ts `aimed` routes by. One hostname, one place, which the
+    // unique index on `hostname.name` is what makes true. Null for a hostname
+    // the platform has never been given, which is every hostname until someone
+    // attaches one — and is what keeps an unknown host routing exactly as it
+    // always did. Cached like every other read here, and an empty answer is not
+    // cached, so a domain serves the moment it is attached rather than a TTL
+    // later.
     serves: async (host: string) => {
       let row = await one(`.hostname.name=${host}`)
       if (!row?.hostname) return null
-      let at = await self.appAt(idOf(row.hostname.app))
-      return at ? { ...at, host: hostOf(row) } : null
+      let eid = idOf(row.hostname.serves)
+      let aimed = hostOf(row)
+      let at = await self.appAt(eid)
+      if (at) return { space: at.space, app: at.app as App | null, host: aimed }
+      let space = await self.at(eid)
+      return space ? { space, app: null, host: aimed } : null
     },
-    // Every domain attached to an app of this space (T-33038), oldest first.
-    // A hostname belongs to a space through its app, so this reads the
-    // hostnames and keeps the ones aimed into the space — one query, where
-    // one per app would be several, and the whole table is exactly the
-    // platform's custom hostname count.
+    // Every domain of this space (T-33038), oldest first: the ones aimed at the
+    // space itself and the ones aimed at an app of it. One query over the whole
+    // table, which is exactly the platform's custom hostname count, where one
+    // per app would be several.
     hosts: async (space: Space): Promise<Host[]> => {
-      let apps = new Set((await self.apps(space)).map((a) => a.eid))
+      let mine = new Set([
+        space.eid,
+        ...(await self.apps(space)).map((a) => a.eid),
+      ])
       return (await query('.hostname!')).map(hostOf)
-        .filter((h) => apps.has(h.app))
+        .filter((h) => mine.has(h.serves))
     },
     // The app offered under a platform-wide name (T-32888), with the space it
     // came from — an offer is an app, so this is one row read two ways.

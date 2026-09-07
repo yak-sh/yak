@@ -113,9 +113,14 @@ export let HOMED = 'yak/store/home/2'
  * `former`. The directory's alone; no other object has a row of them. */
 export let FORMER = 'yak/store/former/3'
 
+/** The fourth pass (T-34596): a domain's target — the column that said which
+ * APP a hostname opens — becomes `serves`, which names the app or the whole
+ * space. The directory's alone; no other object has a hostname. */
+export let SERVES = 'yak/store/serves/4'
+
 /** Every marker in order, so "is this object caught up" is one comparison and
  * a new pass is one line here. */
-export let MARKS = [MARK, HOMED, FORMER]
+export let MARKS = [MARK, HOMED, FORMER, SERVES]
 
 /** The two tables the two layouts spell identically, and so never move. */
 let SPINE = ['entity', 'tombstone']
@@ -648,6 +653,111 @@ export let addressed = (
   return report(true)
 }
 
+// ---- a domain's target: `hostname.app` → `hostname.serves` (T-34596) --------
+//
+// A hostname used to name the one APP it opened. It now names the PLACE it
+// opens — that app, or the whole space, whose front page it serves at `/` with
+// every app of it at `/<app>/` — and one column says which (vocab.ts). The
+// column a word loses is still standing with its values in it, and nothing
+// selects it, so a domain whose target stayed in `app` would resolve to
+// nothing: a live customer domain would stop serving at the deploy. The eids
+// move across, and each one still points at the same app.
+
+/** Whether this object still keeps a domain's target under the old column: the
+ * hostname table with an `app` beside `serves`. False for every app store — no
+ * hostnames — and for a directory {@link served} has already been over. */
+export let aimedOld = (storage: DurableStorage): boolean => {
+  let d = driver(storage)
+  return stands(d, 'hostname') && columns(d, 'hostname').includes('app')
+}
+
+/** Which rows the pass is about, read out before one moves — the restore path,
+ * the way {@link taken} is for the first pass. */
+export let aims = (storage: DurableStorage): Taken => {
+  let d = driver(storage)
+  return {
+    store: '',
+    at: new Date().toISOString(),
+    slots: {},
+    tables: [{
+      name: 'hostname',
+      rows: d.query(`select * from ${q('hostname')}`, []),
+    }],
+  }
+}
+
+/**
+ * The target out of `app` and into `serves` (T-34596), synchronously — run it
+ * inside `transactionSync` for the same reason {@link carry} is: a throw is how
+ * it refuses and the rollback is how it leaves nothing behind.
+ *
+ * THE RULE: every hostname keeps a target. One left without is a domain the
+ * platform serves nothing at — a customer's own address answering the branded
+ * "still connecting" page for good — so it refuses, the eids stay where they
+ * are, and they are in the export.
+ */
+export let served = (
+  storage: DurableStorage,
+  o: { store: string; app: string | null; export: string },
+): Report => {
+  let d = driver(storage)
+  let at = new Date().toISOString()
+  let moved: Moved[] = []
+  let report = (ok: boolean, message?: string): Report => ({
+    store: o.store,
+    app: o.app,
+    at,
+    ok,
+    message,
+    mark: SERVES,
+    moved,
+    dropped: [],
+    export: o.export,
+  })
+  let rows = count(d, 'hostname')
+  d.exec(
+    `update ${q('hostname')} set serves = app ` +
+      'where serves is null and app is not null',
+  )
+  let aimed = Number(
+    d.query(
+      `select count(*) as n from ${q('hostname')} where serves is not null`,
+      [],
+    )[0]?.n ?? 0,
+  )
+  moved.push({
+    table: 'hostname',
+    from: rows,
+    to: aimed,
+    note: `${rows} domains, each aimed at the app it already served`,
+  })
+  if (aimed != rows) {
+    throw new Refused(report(
+      false,
+      `${rows} domains and ${aimed} with a target: one would serve nothing`,
+    ))
+  }
+  // The old place, swept up. TIDYING, not the move: the targets are in
+  // `serves`, the vocabulary no longer declares this column, and nothing
+  // selects it — so a drop the engine will not do leaves a dead column and a
+  // working directory.
+  let swept = ''
+  try {
+    d.exec(`alter table ${q('hostname')} drop column app`)
+  } catch (e) {
+    swept = `the app column would not drop: ${
+      e instanceof Error ? e.message : String(e)
+    } — it is dead, nothing selects it`
+  }
+  moved.push({
+    table: 'hostname',
+    from: rows,
+    to: count(d, 'hostname'),
+    note: swept || 'the app column dropped',
+  })
+  return report(true)
+}
+
 /**
  * The whole pass, synchronously — run it inside `transactionSync`, because a
  * throw is how it refuses and the rollback is how it leaves nothing behind.
@@ -837,6 +947,50 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
       throw new Refused(report(
         false,
         `${rows} addresses to move and ${landed} landed in former`,
+      ))
+    }
+  }
+
+  // A domain's target → `serves` (T-34596). The straight copy above left the
+  // old `app` column behind, since the new vocabulary does not declare it, so
+  // the eids are read back out of the table set aside and land in the column
+  // that names them now. The integer `entity` is the spine's and never moved,
+  // which is what joins the two. A store carrying now arrives at version 4 in
+  // the same breath, so {@link served} has nothing left to do for it.
+  // The DIRECTORY's alone: an app store's old schema has the table and the new
+  // vocabulary does not declare it, so there is nothing to update into.
+  if (
+    there('hostname') && words.includes('hostname') &&
+    columns(d, aside('hostname')).includes('app')
+  ) {
+    let had = Number(
+      d.query(
+        `select count(*) as n from ${q(aside('hostname'))} ` +
+          'where app is not null',
+        [],
+      )[0]?.n ?? 0,
+    )
+    d.exec(
+      `update ${q('hostname')} set serves = ` +
+        `(select h.app from ${q(aside('hostname'))} h ` +
+        `where h.entity = ${q('hostname')}.entity) where serves is null`,
+    )
+    let aimed = Number(
+      d.query(
+        `select count(*) as n from ${q('hostname')} where serves is not null`,
+        [],
+      )[0]?.n ?? 0,
+    )
+    moved.push({
+      table: 'hostname',
+      from: had,
+      to: aimed,
+      note: 'each domain aimed at the app it already served',
+    })
+    if (aimed != had) {
+      throw new Refused(report(
+        false,
+        `${had} domains had a target and ${aimed} kept one`,
       ))
     }
   }

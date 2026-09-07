@@ -1,8 +1,9 @@
 // A person's own domain, on Cloudflare's side (T-33038). The `hostname`
-// component says which app a domain serves (platform.rs, T-33037) and
-// index.ts already routes by it; this file is the other half — the custom
-// hostname at Cloudflare, and an honest reading of how far provisioning has
-// come.
+// component says which place a domain serves — a space, or one app of it
+// (platform.rs, T-33037, T-34596) — and index.ts already routes by it; this
+// file is the other half: the custom hostname at Cloudflare, and a plain
+// reading of how far provisioning has come. Nothing here knows or cares which
+// of the two a hostname carries.
 //
 // The three tools over it live in tools.ts. What is here is the account API
 // and the mapping, because the mapping is the part that has to be right: an
@@ -82,8 +83,8 @@ export type Custom = {
 }
 
 let api = (env: Env, path: string) =>
-  `https://api.cloudflare.com/client/v4/zones/${env.CF_ZONE}` +
-  `/custom_hostnames${path}`
+  `${env.HOSTNAMES_API ?? 'https://api.cloudflare.com/client/v4'}` +
+  `/zones/${env.CF_ZONE}/custom_hostnames${path}`
 
 let sent = (env: Env, path: string, init: RequestInit = {}) =>
   fetch(api(env, path), {

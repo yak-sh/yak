@@ -76,7 +76,7 @@ let app = (over: Partial<App> = {}): App => ({
 let host = (name: string): Host => ({
   eid: `host-${name}`,
   name,
-  app: 'app-eid',
+  serves: 'app-eid',
   stage: 'active',
   at: '',
 })
@@ -553,7 +553,7 @@ slow('a space with a domain attached refuses to die quietly', async () => {
     await dir.apply([{
       hostname: {
         name: 'herbusiness.com',
-        app: them.eids['domainlab/shop'],
+        serves: them.eids['domainlab/shop'],
         stage: 'active',
       },
     }])

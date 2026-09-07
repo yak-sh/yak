@@ -1,9 +1,11 @@
-// A person's own domain, held in workerd (T-33037): a hostname the directory
-// has never been given gets the branded provisioning page (index.ts
+// A person's own domain, held in workerd (T-33037, T-34596): a hostname the
+// directory has never been given gets the branded provisioning page (index.ts
 // `settling`, T-33036 — provisioning_test.ts is where that page itself is
-// held), and one it HAS been given, marked active, serves that app at its
-// root, paths below it the app's own. The hostname is the key, so two spaces
-// cannot both claim it.
+// held), and one it HAS been given, marked active, serves the place it names.
+// Both places are here: an APP, at the root of the domain with the paths below
+// it the app's own, and a SPACE, which is that space's own hostname under
+// another name — front page at `/`, every app at `/<app>/`. The hostname is the
+// key, so two spaces cannot both claim it.
 import {
   assert,
   assertEquals,
@@ -11,7 +13,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { slow } from '../../src/testing.ts'
-import { client, connector, kernel, meta, seed } from './probe.ts'
+import { client, connector, hostnames, kernel, meta, seed } from './probe.ts'
 
 slow('a hostname finds its app, and only one app', async () => {
   let k = await kernel()
@@ -43,7 +45,7 @@ slow('a hostname finds its app, and only one app', async () => {
     await dir.apply([{
       hostname: {
         name: 'herbusiness.com',
-        app: eids['jeff/recipes'],
+        serves: eids['jeff/recipes'],
         stage: 'active',
       },
     }])
@@ -143,13 +145,101 @@ slow('a hostname finds its app, and only one app', async () => {
     await assertRejects(
       () =>
         dir.apply([{
-          hostname: { name: 'herbusiness.com', app: eids['jeff/garden'] },
+          hostname: { name: 'herbusiness.com', serves: eids['jeff/garden'] },
         }]),
       Error,
       'UNIQUE constraint failed: hostname.name',
     )
     let still = await k.at('herbusiness.com', '/')
     assertStringIncludes(await still.text(), 'Our recipe box')
+  } finally {
+    await k.stop()
+  }
+})
+
+// A domain on the SPACE (T-34596), which is the other form: it serves the
+// space exactly as `<space>.yaks.app` does — the front page at `/`, every app
+// at `/<app>/` — because the request is carried to that hostname and routed by
+// the same rungs, not by a second copy of them (route.ts `aimedAt`). An app of
+// that space may still hold a domain of its own, and there it is the root.
+slow('a domain on the space opens the space, apps and all', async () => {
+  let k = await kernel()
+  try {
+    let { cookie, eids } = await seed(k, [{
+      slug: 'jeff',
+      apps: ['site', 'recipes'],
+    }])
+    let agent = connector(k, cookie)
+    await agent.tool('app_set', { space: 'jeff', app: 'site', home: true })
+    let front = client(k, 'jeff.yaks.app', 'site', cookie)
+    await front.put('/index.html', '<!doctype html><h1>The book club</h1>')
+    await front.put('/about.html', '<!doctype html><h1>Who we are</h1>')
+    let box = client(k, 'jeff.yaks.app', 'recipes', cookie)
+    await box.put('/index.html', '<!doctype html><h1>Our recipe box</h1>')
+
+    let dir = meta(k, cookie)
+    await dir.apply([{
+      hostname: {
+        name: 'ourbookclub.com',
+        serves: eids['jeff'],
+        stage: 'active',
+      },
+    }])
+
+    // The front page at the domain's root, served rather than redirected —
+    // and mounted at `/` because that is where the space's own hostname
+    // mounts it, not because the domain said so.
+    let root = await k.at('ourbookclub.com', '/', { redirect: 'manual' })
+    assertEquals(root.status, 200)
+    assertStringIncludes(await root.text(), 'The book club')
+    let about = await k.at('ourbookclub.com', '/about.html')
+    assertStringIncludes(await about.text(), 'Who we are')
+    // And every other app of the space at its own directory, the address it
+    // has on `<space>.yaks.app` — apps are directories of the domain.
+    let under = await k.at('ourbookclub.com', '/recipes/')
+    assertEquals(under.status, 200)
+    assertStringIncludes(await under.text(), 'Our recipe box')
+    // Its pages resolve from that directory, and its store door is under it.
+    assertStringIncludes(
+      await (await k.at('ourbookclub.com', '/recipes/'))
+        .text(),
+      '<base href="/recipes/">',
+    )
+    let rows = await k.at('ourbookclub.com', '/recipes/api/graph')
+    assertEquals(rows.status, 200)
+    assertEquals((await rows.json()).db, 'do:jeff/recipes')
+    // The space's own doors are the space's, unchanged: a path no app claims
+    // is the front page's.
+    assertEquals((await k.at('ourbookclub.com', '/nope.html')).status, 404)
+
+    // AND an app of it may hold its own domain at the same time. There the
+    // app is the root; at the space's domain the same app is still a
+    // directory, and neither address moves the other.
+    await dir.apply([{
+      hostname: {
+        name: 'herbusiness.com',
+        serves: eids['jeff/recipes'],
+        stage: 'active',
+      },
+    }])
+    let its = await k.at('herbusiness.com', '/', { redirect: 'manual' })
+    assertEquals(its.status, 200)
+    let page = await its.text()
+    assertStringIncludes(page, 'Our recipe box')
+    assertStringIncludes(page, '<base href="/">')
+    assertStringIncludes(
+      await (await k.at('ourbookclub.com', '/recipes/')).text(),
+      'Our recipe box',
+    )
+    assertStringIncludes(
+      await (await k.at('ourbookclub.com', '/')).text(),
+      'The book club',
+    )
+    // The space's own hostname is untouched by either.
+    assertStringIncludes(
+      await (await k.at('jeff.yaks.app', '/')).text(),
+      'The book club',
+    )
   } finally {
     await k.stop()
   }
@@ -234,7 +324,7 @@ slow('attaching a domain: what it refuses, and what it says', async () => {
     // to learn.
     let other = await seed(k, [{ slug: 'ann', apps: ['shop'] }])
     await meta(k, cookie).apply([{
-      hostname: { name: 'herbusiness.com', app: other.eids['ann/shop'] },
+      hostname: { name: 'herbusiness.com', serves: other.eids['ann/shop'] },
     }])
     let bounced = await said(agent.tool('domain_attach', {
       app: 'recipes',
@@ -246,3 +336,70 @@ slow('attaching a domain: what it refuses, and what it says', async () => {
     await k.stop()
   }
 })
+
+// The three tools end to end, with Cloudflare stood in for (probe.ts
+// `hostnames`): the SPACE form and the APP form side by side, each saying what
+// it points at, and a detach that leaves what it carried at the address it
+// always had (T-34596).
+slow(
+  'a domain is attached to a space or to an app, and says which',
+  async () => {
+    let cf = hostnames()
+    let k = await kernel({
+      CF_ZONE: 'zone',
+      CF_HOSTNAMES_TOKEN: 'a-token',
+      HOSTNAMES_API: cf.url,
+    })
+    try {
+      let { cookie } = await seed(k, [{
+        slug: 'jeff',
+        apps: ['site', 'recipes'],
+      }])
+      let agent = connector(k, cookie)
+      await agent.tool('app_set', { space: 'jeff', app: 'site', home: true })
+
+      // No app named: the domain is the SPACE's, and the answer says what that
+      // means at the address rather than leaving it to be guessed.
+      let space = await agent.tool('domain_attach', {
+        space: 'jeff',
+        hostname: 'ourbookclub.com',
+      })
+      assertStringIncludes(space, 'ourbookclub.com is attached to jeff.')
+      assertStringIncludes(space, 'https://ourbookclub.com/<app>/')
+      assertStringIncludes(space, 'CNAME')
+
+      // An app named: that app, at the root of its own domain — both at once.
+      let app = await agent.tool('domain_attach', {
+        space: 'jeff',
+        app: 'recipes',
+        hostname: 'herbusiness.com',
+      })
+      assertStringIncludes(app, 'herbusiness.com is attached to jeff/recipes.')
+      assertStringIncludes(app, 'The app answers at https://herbusiness.com/.')
+
+      // And the status says which is which, in the same words.
+      let how = await agent.tool('domain_status', { space: 'jeff' })
+      assertStringIncludes(how, 'ourbookclub.com → jeff')
+      assertStringIncludes(how, 'herbusiness.com → jeff/recipes')
+      assertStringIncludes(how, 'every app at https://ourbookclub.com/<app>/')
+
+      // Detached, the space keeps the one address it always had, and the app's
+      // own domain is untouched.
+      let gone = await agent.tool('domain_detach', {
+        space: 'jeff',
+        hostname: 'ourbookclub.com',
+      })
+      assertStringIncludes(gone, 'ourbookclub.com is detached from jeff.')
+      assertStringIncludes(gone, 'It still answers at https://jeff.yaks.app/.')
+      let left = await agent.tool('domain_status', { space: 'jeff' })
+      assert(!left.includes('ourbookclub.com'), left)
+      assertStringIncludes(left, 'herbusiness.com → jeff/recipes')
+      // The hostname went back to Cloudflare with it.
+      assert(!cf.held.has('ourbookclub.com'))
+      assert(cf.held.has('herbusiness.com'))
+    } finally {
+      cf.stop()
+      await k.stop()
+    }
+  },
+)

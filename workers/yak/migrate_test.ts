@@ -31,6 +31,7 @@ import {
   MARK,
   Refused as Unreconciled,
   type Report,
+  SERVES,
 } from './migrate.ts'
 import {
   mutate,
@@ -497,7 +498,7 @@ slow(
       },
     )
     // Every pass in the same breath, so none of them has anything to do.
-    assertEquals(marker(ctx), FORMER)
+    assertEquals(marker(ctx), SERVES)
   },
 )
 
@@ -646,8 +647,8 @@ slow('a store carrying now arrives with the addresses moved', async () => {
   // The core word's table is planted and EMPTY: an address is not a name tag,
   // so nothing was copied into it on the way past.
   assertEquals(count(ctx, 'alias'), 0)
-  // Version 3 in the same breath, so the third pass has nothing to do.
-  assertEquals(marker(ctx), FORMER)
+  // Every pass in the same breath, so none of the later ones has anything left.
+  assertEquals(marker(ctx), SERVES)
 })
 
 slow('a directory that already carried moves them on next touch', async () => {
@@ -679,6 +680,71 @@ slow('a directory that already carried moves them on next touch', async () => {
 
   // And it does not run again: the marker is written, and a third incarnation
   // exports nothing.
+  let third = bucket()
+  newer(ctx, PLATFORM_STORE, { EXPORTS: third.r2 })
+  assertEquals(third.held.size, 0)
+})
+
+// ---- a domain's target: `hostname.app` → `hostname.serves` (T-34596) --------
+//
+// A directory as a DEPLOYED one stands: carried past the addresses and no
+// further, its domains still aimed by the old column, which the vocabulary no
+// longer declares. Nothing selects it, so a domain left there would serve
+// nobody — a customer's own address answering the branded page for good.
+let carriedThree = async (ctx: State) => {
+  let now = newer(ctx, PLATFORM_STORE)
+  await now.door('/apply', {
+    method: 'POST',
+    headers: { 'x-yak-kernel': '1' },
+    body: JSON.stringify([
+      { entity: { eid: SPACE }, space: { slug: 'ada' } },
+      { entity: { eid: APP }, app: { slug: 'cookbook', space: SPACE } },
+      { entity: { eid: ONE }, hostname: { name: 'herbusiness.com' } },
+    ]),
+  })
+  let sql = ctx.storage.sql
+  sql.exec('alter table hostname add column app text')
+  sql.exec(
+    'update hostname set app = (select id from entity where eid = ?) ' +
+      'where entity = (select id from entity where eid = ?)',
+    APP,
+    ONE,
+  )
+  sql.exec(
+    "insert into yak_kv (k, v) values ('migrated', ?) " +
+      'on conflict(k) do update set v = excluded.v',
+    FORMER,
+  )
+  return now
+}
+
+slow('a domain aimed by the old column is aimed by the new one', async () => {
+  let ctx = state()
+  await carriedThree(ctx)
+
+  // A fresh incarnation over the same object — a deploy — and the first
+  // request carries it the rest of the way.
+  let files = bucket()
+  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  let [row] = await now.query('.hostname!')
+  assertEquals(
+    (row.hostname as { name: string; serves: { eid: string } }).name,
+    'herbusiness.com',
+  )
+  let aimed = (row.hostname as { serves: { eid: string } | string }).serves
+  assertEquals(typeof aimed == 'string' ? aimed : aimed.eid, APP)
+  let report = reportIn(files.held)
+  assert(report.ok, report.message)
+  assertEquals(report.mark, SERVES)
+
+  // The old column is gone with its values, so nothing can aim a domain two
+  // ways, and the rows reached R2 before one moved.
+  let cols = ctx.storage.sql.exec('pragma table_info(hostname)').toArray()
+    .map((c) => (c as { name: string }).name)
+  assert(!cols.includes('app'), cols.join(', '))
+  assertEquals(rowsIn(files.held).hostname.length, 1)
+
+  // And it does not run again.
   let third = bucket()
   newer(ctx, PLATFORM_STORE, { EXPORTS: third.r2 })
   assertEquals(third.held.size, 0)

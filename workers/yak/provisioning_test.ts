@@ -48,7 +48,7 @@ slow('a domain marked active still routes to its app', async () => {
     await meta(k, cookie).apply([{
       hostname: {
         name: 'herbusiness.com',
-        app: eids['jeff/recipes'],
+        serves: eids['jeff/recipes'],
         stage: 'active',
       },
     }])
