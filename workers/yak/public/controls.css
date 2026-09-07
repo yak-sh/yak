@@ -156,6 +156,15 @@
     --pill-size: var(--small);
   }
 
+  .Address {
+    color: var(--soft-ink);
+    font-weight: 400;
+  }
+  .Address_Name {
+    color: var(--ink);
+    font-weight: 800;
+  }
+
   .Card {
     padding: var(--card-pad, 1.75rem);
     border: 1px solid var(--edge);
