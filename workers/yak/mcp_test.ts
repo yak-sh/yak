@@ -7197,10 +7197,15 @@ slow('space_sell connects an account and hands back one link', async () => {
       ? { id: 'acct_probe', charges_enabled: false, details_submitted: false }
       : path == '/v1/account_links'
       ? { url: 'https://connect.stripe.com/setup/c/acct_probe/TOKEN' }
+      : path == '/v1/customers'
+      ? { id: 'cus_probe' }
+      : path == '/v1/checkout/sessions'
+      ? { id: 'cs_probe', url: 'https://checkout.stripe.com/c/pay/cs_probe' }
       : null
   )
   let k = await kernel({
     STRIPE_KEY: 'sk_probe',
+    STRIPE_PRICE: 'price_probe',
     STRIPE_API: fake.url,
     STRIPE_CONNECT_WEBHOOK_SECRET: 'whsec_a_connect_probe_secret',
     STRIPE_WEBHOOK_SECRET: 'whsec_plan_probe',
@@ -7233,7 +7238,12 @@ slow('space_sell connects an account and hands back one link', async () => {
       let r = await k.at('ada.yaks.app', path, { headers: { cookie } })
       let { document } = parseHTML(await r.text())
       assert(!document.querySelector('[name="sell"][value="start"]'))
-      assert(document.querySelector('a[href="https://yaks.app/pricing"]'))
+      assertEquals(
+        document.querySelector('[data-door="checkout"]')?.getAttribute(
+          'data-target',
+        ),
+        path,
+      )
     }
     await freePage()
     await assertRejects(
@@ -7252,6 +7262,44 @@ slow('space_sell connects an account and hands back one link', async () => {
       !parseHTML(await denied.text()).document.querySelector(
         '[name="sell"][value="start"]',
       ),
+    )
+    // The subscription button uses this space's guarded form door, then the
+    // existing billing checkout. A sibling page cannot start it.
+    let subscribe = (origin = 'https://ada.yaks.app', session = cookie) =>
+      k.at('ada.yaks.app', path, {
+        method: 'POST',
+        headers: { cookie: session, origin },
+        body: new URLSearchParams({ billing: 'checkout' }),
+      })
+    for (
+      let [origin, session] of [
+        ['https://other.yaks.app', cookie],
+        ['https://ada.yaks.app', ''],
+        ['https://ada.yaks.app', (await signIn(k)).cookie],
+      ]
+    ) {
+      let r = await subscribe(origin, session)
+      assertEquals(r.status, 404)
+      await r.body?.cancel()
+    }
+    assertEquals(fake.calls.length, 0)
+    let checkout = await subscribe()
+    assertEquals(checkout.status, 200)
+    assertEquals(
+      (await checkout.json()).url,
+      'https://checkout.stripe.com/c/pay/cs_probe',
+    )
+    let purchase = fake.at('/v1/checkout/sessions')!
+    assertEquals(purchase.sent.get('metadata[space]'), eids.ada)
+    assertEquals(purchase.sent.get('line_items[0][price]'), 'price_probe')
+    assertEquals(purchase.sent.get('managed_payments[enabled]'), 'true')
+    assertEquals(
+      purchase.sent.get('success_url'),
+      'https://yaks.app/connect?paid=1',
+    )
+    assertEquals(
+      purchase.sent.get('cancel_url'),
+      'https://yaks.app/connect?paid=0',
     )
     let plan = async (status: string) => {
       let raw = JSON.stringify({
@@ -7283,6 +7331,13 @@ slow('space_sell connects an account and hands back one link', async () => {
     }
     await plan('active')
     await page('Connect Stripe')
+    let paid = await subscribe()
+    assertEquals(paid.status, 409)
+    assertEquals((await paid.json()).error.code, 'already_plus')
+    assertEquals(
+      fake.calls.filter((c) => c.path == '/v1/checkout/sessions').length,
+      1,
+    )
 
     // The tool hands back ONE link and says to stop there — an assistant that
     // kept going would be an assistant clicking through somebody's identity

@@ -44,7 +44,7 @@ import * as dirPart from './directory.ts'
 import { ahead, bearing, granted, itsApp, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { pilled, standing } from './gallery.ts'
-import { broke } from './billing.ts'
+import { broke, checkout } from './billing.ts'
 import {
   buying,
   connect,
@@ -1315,6 +1315,7 @@ let saved = async (
   let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
   if (who.role != 'owner' || !who.person) return nothingHere(env)
   let form = await req.formData().catch(() => new FormData())
+  if (form.get('billing') == 'checkout') return checkout(env, req, space)
   // The other button on this page: one app out of the trash (erase.ts,
   // T-34430). Its own form, so it is its own POST — a plain button and no
   // script, the way the drop zone and the settings form are — and it lands

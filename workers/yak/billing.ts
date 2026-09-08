@@ -373,14 +373,14 @@ let backTo = (done: boolean, env: Host) =>
 
 // Start a subscription. Answers the URL to send the person to, and nothing
 // else: this door is reachable from a signed-in page only, never from a tool.
-let checkout = async (env: Env, req: Request) => {
+export let checkout = async (env: Env, req: Request, at?: Space) => {
   let person = await buyer(env, req)
   if (!person) return json(401, 'unauthorized', 'sign in first')
   if (!env.STRIPE_KEY || !env.STRIPE_PRICE) {
     return json(503, 'no_billing', 'the paid tier is not switched on here')
   }
   let dir = dirOf(env)
-  let space = await dir.own(person)
+  let space = at ?? await dir.own(person)
   if (await dir.role(space, person) != 'owner') {
     return json(
       403,

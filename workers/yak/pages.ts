@@ -17,8 +17,22 @@ export { esc } from './html.ts'
 import { managePath, type ManageView, OAUTH } from './route.ts'
 import { CONNECTOR } from './seo.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
+import { CURRENCY, PRICE } from './meter.ts'
 
 let home = (env: Host) => `<a class="Away" href="${url(env, '/')}">yaks.app</a>`
+
+let plusPrice = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: CURRENCY,
+  minimumFractionDigits: 0,
+}).format(PRICE.plus)
+
+let billButton = (door: string, label: string, target?: string) =>
+  `<button type="button" class="Button Bill_Go${
+    door == 'portal' ? ' Bill_Go-quiet' : ''
+  }" data-door="${esc(door)}"${target ? ` data-target="${esc(target)}"` : ''}>${
+    esc(label)
+  }</button>`
 
 let shell = (
   env: Host,
@@ -783,7 +797,7 @@ let selling = (at: SpacePage, env: Host) => {
   let ready = at.sell == 'ready'
   let connected = at.sell != 'none'
   let stop = ready || (!at.plus && connected)
-  return `<section class="Card"><h2>${
+  return `<section class="Card Bill"><h2>${
     !at.plus
       ? 'Take payments with Plus'
       : ready
@@ -807,9 +821,19 @@ let selling = (at: SpacePage, env: Host) => {
       } of each sale. <a href="${
         url(env, '/pricing')
       }" target="_blank" rel="noopener">Pricing</a></p>`
-      : `<p><a class="Button" href="${
-        url(env, '/pricing')
-      }">Compare plans</a></p>`
+      : `${
+        at.fee
+          ? `<p class="Note">${
+            esc(at.fee)
+          } per sale, plus Stripe processing fees.</p>`
+          : ''
+      }<p class="Bill_Doors">${
+        billButton(
+          'checkout',
+          `Subscribe — ${plusPrice} a month`,
+          managePath('selling'),
+        )
+      }</p><p class="Say Bill_Say" role="status"></p>`
   }${
     at.plus || connected
       ? `<form method="post" action="${
@@ -824,7 +848,7 @@ let selling = (at: SpacePage, env: Host) => {
           : 'Connect Stripe'
       }</button></form>`
       : ''
-  }</section>`
+  }</section>${at.plus ? '' : billing}`
 }
 
 let trash = (at: SpacePage) =>
@@ -1260,10 +1284,8 @@ visits a month, 1 GB. <a href="${url(env, '/pricing')}">Compare plans</a>.</p>`
   let doors = [
     y.plan.plus
       ? ''
-      : '<button class="Button Bill_Go" data-door="checkout">Get Plus — $4 a month</button>',
-    y.plan.known
-      ? '<button class="Button Bill_Go Bill_Go-quiet" data-door="portal">Manage billing</button>'
-      : '',
+      : billButton('checkout', `Get Plus — ${plusPrice} a month`),
+    y.plan.known ? billButton('portal', 'Manage billing') : '',
   ].filter(Boolean).join('')
   return `<section class="Card Bill"><h2>Your plan</h2>
 ${head}
@@ -1576,17 +1598,22 @@ if (f) f.addEventListener('submit', async (e) => {
   }
   go.disabled = false
 })
+</script>`
 
 // The billing buttons: ask our own door for a Stripe URL and follow it. The
 // URL is minted per person and expires, so it is never written into the page.
+let billing = `<script>
 for (let b of document.querySelectorAll('.Bill_Go')) {
   b.addEventListener('click', async () => {
-    let say = document.querySelector('.Bill_Say')
+    let say = b.closest('.Bill').querySelector('.Bill_Say')
     b.disabled = true
     say.className = 'Say Bill_Say'
     say.textContent = 'One moment…'
     try {
-      let r = await fetch('/api/billing/' + b.dataset.door, { method: 'POST' })
+      let r = await fetch(b.dataset.target || '/api/billing/' + b.dataset.door, {
+        method: 'POST',
+        body: new URLSearchParams({ billing: b.dataset.door }),
+      })
       let out = await r.json()
       if (out.url) { location = out.url; return }
       say.className = 'Say Bill_Say Say-no'
@@ -1615,7 +1642,7 @@ ${mine(yours, env)}${plan(yours, env)}
       esc(spaceHost(env, yours.slug))
     }${managePath()}">Your apps and settings</a></p>
 <p class="Note"><a href="${url(env, '/help')}">Need help?</a></p>
-${home(env)}${copying}${tabbing}${inline}${
+${home(env)}${copying}${tabbing}${inline}${billing}${
       connectionLive('/oauth/connections')
     }`,
   )
