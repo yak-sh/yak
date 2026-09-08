@@ -1,18 +1,15 @@
 // The curated views and verbs, with the app's quarantine and memo boundary.
 // @yaks/render selects them; @yaks/preact mounts the selected component.
-import { render } from '@yaks/preact'
 import { and, or, parse, present } from '@yaks/query'
 import { statusChanges, subChanges } from '../client.ts'
 import { ent, mutate, myActor, myMode, reveal, rows, shown } from '../live.ts'
 import { type Ent, statusOf } from '../types.ts'
 import {
   type Action,
-  bundle,
   define,
   defineActions,
-  registry,
+  renderView,
   resolve,
-  vocab,
 } from './registry.ts'
 import { shelve } from './shelf.ts'
 import { memo } from './memo.ts'
@@ -508,7 +505,7 @@ let EntityFace = (
       </Veil>
     )
   }
-  return render(registry, bundle(e), view, vocab, rest, { e, ...rest })
+  return renderView(e, view, rest)
 }
 
 export let Entity = memo(EntityFace)

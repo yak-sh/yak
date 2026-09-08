@@ -1,21 +1,20 @@
 import { type ComponentChildren, type JSX } from 'preact'
-import { render } from '@yaks/preact'
 import { type Context } from '@yaks/render'
 import { parse } from '@yaks/query'
 import { useContext, useRef, useState } from 'preact/hooks'
 import { formatProp, propAt } from '../props.ts'
 import { type Ent, idOf } from '../types.ts'
-import { statusChanges } from '../client.ts'
-import { cache, domains, ent, mutate, problem } from '../live.ts'
+import { cache, domains, ent, problem } from '../live.ts'
 import { ago, block, focus, pretty, Surround } from './ui.tsx'
 import { Dot } from './Dot.tsx'
 import { Edit, InlineEdit } from './Edit.tsx'
 import {
   applyPatch,
-  bundle,
+  canEdit,
+  columnValue,
   columnView,
-  registry,
   type Renderer,
+  renderView,
   vocab,
   writeColumn,
 } from './registry.ts'
@@ -33,6 +32,7 @@ export type EditorProps = {
   prop: string
   value: unknown
   done: () => void
+  onChange?: (value: unknown) => void
 }
 // What the layout wrappers add: the element the control anchors on and
 // the face it may keep rendering (popout) or replace (inline).
@@ -61,16 +61,12 @@ export let popout = (E: (p: EditorProps) => JSX.Element) => (p: EditProps) => (
   </>
 )
 
-// One write path for every editor: a single column, patched in place —
-// except task.status, which is DERIVED (D-24102) and has no column to patch, so
-// a pick mints/retracts the completed/cancelled mark instead.
+// A caller can provide an action for a derived value (the status pip's marks).
+// Every stored column otherwise uses the package's validated patch action.
 let set = (p: EditorProps, v: unknown) => {
   try {
-    if (p.comp == 'task' && p.prop == 'status') {
-      mutate(...statusChanges(p.eid, String(v)))
-    } else {
-      writeColumn(p.eid, p.comp, p.prop, v)
-    }
+    if (p.onChange) p.onChange(v)
+    else writeColumn(p.eid, p.comp, p.prop, v)
   } catch (e) {
     problem.value = e instanceof Error ? e.message : String(e)
   }
@@ -174,6 +170,12 @@ let EnumEdit = ({ ...p }: EditorProps) => {
   )
 }
 
+// A vocabulary declaration names its suggestion source; plugins can replace
+// that source while the column still selects its control through the registry.
+let wells: Record<string, () => string[]> = { domains: () => domains.value }
+export let defineWells = (sources: typeof wells) =>
+  Object.assign(wells, sources)
+
 // {text: well}: free text with the graph's suggestions — the same popout
 // search list the eid editor wears (one look for every picker; datalist
 // was the browser's own UI, styled by nobody). The difference from a
@@ -182,7 +184,9 @@ let EnumEdit = ({ ...p }: EditorProps) => {
 // The 'none' row clears, as everywhere.
 let WellEdit = ({ ...p }: EditorProps) => {
   let [q, setQ] = useState('')
-  let all = domains.value
+  let type = propAt(p.comp, p.prop)?.type
+  let name = typeof type == 'object' && 'text' in type ? type.text : ''
+  let all = wells[name]?.() ?? []
   let typed = q.trim()
   let hits = all
     .filter((x) => !typed || x.toLowerCase().includes(typed.toLowerCase()))
@@ -282,7 +286,7 @@ export function editorViews(): Renderer[] {
     view: 'Edit',
     match: parse(match),
     show,
-    Render: (ctx) => <Control {...controlProps(ctx)} />,
+    Render: (ctx) => <ColumnControl ctx={ctx} Control={Control} />,
   })
   return [
     {
@@ -294,6 +298,7 @@ export function editorViews(): Renderer[] {
           comp={String(comp)}
           prop={String(col)}
           {...ctx}
+          readOnly={!!ctx.readOnly || !canEdit(String(comp), String(col))}
         />
       ),
     },
@@ -330,17 +335,40 @@ let EnumControl = popout(EnumEdit)
 let WellControl = popout(WellEdit)
 let EidControl = popout(EidEdit)
 
+// Without a caller-owned edit session, mount the same closed field as Prop.
+// This is the package Props layout's door: its fields own their anchors and
+// bodies only open after a click. Read-only contexts never mount controls.
+let ColumnControl = (
+  { ctx, Control }: {
+    ctx: Context & { e: Ent }
+    Control: (p: EditProps) => JSX.Element
+  },
+) => {
+  let { e, comp, col } = ctx
+  let editable = !ctx.readOnly &&
+    (canEdit(String(comp), String(col)) || typeof ctx.onChange == 'function')
+  if (!editable || typeof ctx.done != 'function') {
+    return (
+      <Prop
+        eid={e.eid}
+        comp={String(comp)}
+        prop={String(col)}
+        editable={editable}
+      />
+    )
+  }
+  return <Control {...controlProps(ctx)} />
+}
+
 let controlProps = (
   { e, comp, col, ...ctx }: Context & { e: Ent },
 ): EditProps => ({
   eid: e.eid,
   comp: String(comp),
   prop: String(col),
-  value: 'value' in ctx
-    ? ctx.value
-    : (bundle(e)[String(comp)] as Record<string, unknown> | undefined)
-      ?.[String(col)],
-  done: ctx.done as (() => void) ?? (() => {}),
+  value: 'value' in ctx ? ctx.value : columnValue(e, String(comp), String(col)),
+  done: ctx.done as (() => void),
+  onChange: ctx.onChange as EditorProps['onChange'],
   anchor: ctx.anchor as EditProps['anchor'] ?? { current: null },
   face: ctx.face as ComponentChildren,
   side: ctx.side as EditProps['side'],
@@ -352,21 +380,14 @@ export let ColumnEdit = (
   { eid, comp, prop, ...ctx }: Omit<EditProps, 'value'> & { value?: unknown },
 ) => {
   let e = ent(eid)
-  return render(registry, bundle(e), 'Edit', vocab, {
+  return renderView(e, 'Edit', {
+    ...ctx,
     comp,
     col: prop,
     onPatch: (patch) => {
       applyPatch(eid, patch)
       ctx.done()
     },
-    onError: (error) => {
-      problem.value = error instanceof Error ? error.message : String(error)
-    },
-  }, {
-    e,
-    comp,
-    col: prop,
-    ...ctx,
   })
 }
 
@@ -394,11 +415,8 @@ export let Prop = (
   let [editing, setEditing] = useState(false)
   // What the popout control anchors on — the value or its handle.
   let anchor = useRef<HTMLElement>(null)
-  let e = ent(eid) as unknown as Record<
-    string,
-    Record<string, unknown> | undefined
-  >
-  let value = e[comp]?.[prop]
+  let e = ent(eid)
+  let value = columnValue(e, comp, prop)
   let p = propAt(comp, prop)
   let t = p?.type
   let faceValue = p
@@ -414,7 +432,7 @@ export let Prop = (
     ? null
     : String(value)
   let entry = columnView(ent(eid), comp, prop)
-  let editor = editable ? entry : undefined
+  let editor = editable && canEdit(comp, prop) ? entry : undefined
   // The face, through the registry; plain is the net under types no
   // entry claims (bool, a prop outside the vocabulary).
   let face = paint

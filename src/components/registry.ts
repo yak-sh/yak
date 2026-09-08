@@ -5,6 +5,7 @@ import {
   actions,
   applicable as offered,
   type Bundle,
+  type Context,
   type Contributor as Contribution,
   define as registryOf,
   edit,
@@ -16,13 +17,13 @@ import {
   type Renderer as PortableRenderer,
   resolve as select,
 } from '@yaks/render'
-import { type ComponentRenderer } from '@yaks/preact'
+import { type ComponentRenderer, type Events, render } from '@yaks/preact'
 import type { JSX } from 'preact'
 import { parseProp, propAt } from '../props.ts'
-import { ent, findEid, mutate } from '../live.ts'
+import { ent, findEid, mutate, problem } from '../live.ts'
 import { editorViews } from './editors.tsx'
 import { and, present } from '@yaks/query'
-import { type Ent, viewRenames } from '../types.ts'
+import { type Ent, statusOf, viewRenames } from '../types.ts'
 import { fleetVocab } from '../vocab/fleet_vocab.ts'
 
 export type Renderer = ComponentRenderer<Ent> & {
@@ -63,6 +64,7 @@ export let bundle = (e: Ent): Bundle => ({
     ),
   ),
   entity: { eid: e.eid, num: e.num },
+  ...(e.task && { task: { ...e.task, status: statusOf(e) } }),
 })
 
 // Kept as the plugin's component-query builder; no predicate callbacks.
@@ -78,8 +80,22 @@ export let defineActions = (cs: Contributor[]) => {
 export let extend = (rs: Entry[]) => overlay(registry, rs)
 export let applicable = (e: Ent) => offered(registry, bundle(e), vocab)
 export let actionsFor = (e: Ent) => actions(registry, bundle(e), vocab, e)
-export let resolve = (e: Ent, view?: string): Renderer =>
-  select(registry, bundle(e), view, vocab)! as Renderer
+// Some app callers inspect native component identity before mounting. Preserve
+// that API for native views and mount portable selections through the host.
+let components = new WeakMap<PortableRenderer, Renderer>()
+export let resolve = (e: Ent, view?: string): Renderer => {
+  let entry = select(registry, bundle(e), view, vocab)!
+  if ('Render' in entry) return entry
+  let component = components.get(entry)
+  if (!component) {
+    component = {
+      ...entry,
+      Render: ({ e, ...ctx }) => renderView(e, entry.view, ctx),
+    }
+    components.set(entry, component)
+  }
+  return component
+}
 
 /** Column renderers share the entity registry and its qualified view walk. */
 export let columnView = (e: Ent, comp: string, col: string, view = 'Edit') =>
@@ -104,3 +120,26 @@ export let writeColumn = (
   col: string,
   value: unknown,
 ) => applyPatch(eid, editColumn(ent(eid), { comp, col }, value))
+
+/** The app reads derived values through its bundle projection too. */
+export let columnValue = (e: Ent, comp: string, col: string): unknown => {
+  let row = bundle(e)[comp]
+  return row && typeof row == 'object' ? row[col] : undefined
+}
+
+export let canEdit = (comp: string, col: string): boolean => {
+  let info = vocab.comp(comp)
+  return !!info?.wire && info.writable.includes(col)
+}
+
+/** All app views share the same host callbacks, including portable controls. */
+export let renderView = (e: Ent, view?: string, ctx: Context & Events = {}) => {
+  let context: Context & Events = {
+    onPatch: (patch) => applyPatch(e.eid, patch),
+    onError: (error) => {
+      problem.value = error instanceof Error ? error.message : String(error)
+    },
+    ...ctx,
+  }
+  return render(registry, bundle(e), view, vocab, context, { e, ...context })
+}

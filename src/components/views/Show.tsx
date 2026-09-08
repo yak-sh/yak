@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { type ComponentChildren } from 'preact'
 import { type Ent, statusOf } from '../../types.ts'
+import { statusChanges } from '../../client.ts'
 import { FLOOR, textOf } from '../../twin.ts'
 import {
   base,
@@ -10,6 +11,7 @@ import {
   edgeWindow,
   ent,
   gated,
+  mutate,
   parents,
   pending,
   repoUrl,
@@ -131,6 +133,7 @@ export let Pip = ({ e }: { e: Ent }) => {
           comp='task'
           prop='status'
           value={statusOf(e)}
+          onChange={(value) => mutate(...statusChanges(e.eid, String(value)))}
           done={() => setOpen(false)}
           anchor={anchor}
           side='below'

@@ -80,7 +80,7 @@ class Socket {
 // The bar gesture: double-click the body, type, blur. `body` undefined is a
 // doc this client was never shipped a body for; the answer is what the
 // editor did — whether it armed, what went out, what the cache holds.
-let typeInto = (body: string | undefined, text: string) => {
+let typeInto = (body: string | undefined, text: string, readOnly = false) => {
   let prior = Object.entries({
     document: Object.getOwnPropertyDescriptor(globalThis, 'document'),
     getSelection: Object.getOwnPropertyDescriptor(globalThis, 'getSelection'),
@@ -125,8 +125,19 @@ let typeInto = (body: string | undefined, text: string) => {
     let armed = !!edit.isContentEditable
     edit.textContent = text
     edit.dispatchEvent(new window.Event('input', { bubbles: true }))
+    if (readOnly) {
+      render(
+        h(Edit, { eid, comp: 'doc', prop: 'body', multi: true, readOnly }),
+        root,
+      )
+    }
     edit.dispatchEvent(new window.Event('blur', { bubbles: true }))
-    return { armed, sent, stored: cache.value[eid]?.doc?.body }
+    return {
+      armed,
+      sent,
+      stored: cache.value[eid]?.doc?.body,
+      shown: edit.textContent,
+    }
   } finally {
     render(null, root)
     cache.value = {}
@@ -156,4 +167,12 @@ Deno.test('a loaded body is still edited, empty or not', () => {
     },
   ])
   assertEquals(out.stored, 'a fragment')
+})
+
+Deno.test('a body made read-only during editing reverts on blur', () => {
+  let out = typeInto('stored words', 'unsaved words', true)
+  assertEquals(out.armed, true)
+  assertEquals(out.sent, [])
+  assertEquals(out.stored, 'stored words')
+  assertEquals(out.shown, 'stored words')
 })

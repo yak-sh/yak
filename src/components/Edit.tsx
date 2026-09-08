@@ -1,6 +1,5 @@
-import { useEffect, useRef } from 'preact/hooks'
-import { render } from '@yaks/preact'
-import { bundle, registry, vocab, writeColumn } from './registry.ts'
+import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
+import { renderView, writeColumn } from './registry.ts'
 import { ent, mode, problem, want } from '../live.ts'
 import { propAt } from '../props.ts'
 import { drop, peek, save } from './drafts.ts'
@@ -24,7 +23,7 @@ let Span = el('span', 'Edit')
 // Keystrokes save a draft; blur spends it — so a hot swap mid-edit
 // remounts, finds the draft, and resumes editing where typing stopped.
 export let InlineEdit = (
-  { eid, comp, prop, multi, open, onClose, inline }: {
+  { eid, comp, prop, multi, open, onClose, inline, readOnly }: {
     eid: string
     comp: string
     prop: string
@@ -32,6 +31,7 @@ export let InlineEdit = (
     open?: boolean
     onClose?: () => void
     inline?: boolean
+    readOnly?: boolean
   },
 ) => {
   let comps = ent(eid) as unknown as Record<
@@ -50,7 +50,7 @@ export let InlineEdit = (
   let rendered = inline ? markdown(value, undefined, true) : {}
 
   let begin = (t: HTMLElement) => {
-    if (unloaded || t.isContentEditable) return
+    if (readOnly || unloaded || t.isContentEditable) return
     let row = t.closest<HTMLElement>('[draggable="true"]')
     if (row) row.draggable = false
     t.dataset.was = value
@@ -64,7 +64,7 @@ export let InlineEdit = (
   useEffect(() => {
     let t = ref.current
     if (unloaded) return void want(eid, comp, prop)
-    if (!t || t.isContentEditable) return
+    if (!t || t.isContentEditable || readOnly) return
     let d = peek(dkey) // a draft only exists mid-edit: resume it
     if (!open && !d) return
     begin(t) // records the COMMITTED value as `was` — Escape still reverts
@@ -74,7 +74,7 @@ export let InlineEdit = (
     }
     // `unloaded` is a dependency because the body LANDS: an editor opened
     // over a deferred body arms itself the moment its text arrives.
-  }, [open, unloaded])
+  }, [open, unloaded, readOnly])
 
   let key = (ev: KeyboardEvent) => {
     let t = ev.currentTarget as HTMLElement
@@ -87,8 +87,7 @@ export let InlineEdit = (
     }
   }
 
-  let blur = (ev: FocusEvent) => {
-    let t = ev.currentTarget as HTMLElement
+  let finish = (t: HTMLElement) => {
     if (!t.isContentEditable) return
     drop(dkey) // commit or revert, the draft is spent
     t.normalize() // typing can split the text node; preact holds the first
@@ -99,7 +98,7 @@ export let InlineEdit = (
     let was = t.dataset.was ?? ''
     let text = (t.textContent ?? '').trim()
     let shown = was
-    if (text && text != was) {
+    if (!readOnly && text && text != was) {
       try {
         writeColumn(eid, comp, prop, text)
         shown = text
@@ -112,6 +111,12 @@ export let InlineEdit = (
     onClose?.()
   }
 
+  // A permission change ends an existing edit too; the same finish path
+  // restores its committed value without writing or leaving a draft behind.
+  useLayoutEffect(() => {
+    if (readOnly && ref.current) finish(ref.current)
+  }, [readOnly])
+
   return (
     <Span
       elRef={ref}
@@ -119,7 +124,7 @@ export let InlineEdit = (
       onKeyDown={key}
       onInput={(ev: InputEvent) =>
         save(dkey, (ev.currentTarget as HTMLElement).textContent ?? '')}
-      onBlur={blur}
+      onBlur={(ev: FocusEvent) => finish(ev.currentTarget as HTMLElement)}
       {...rendered}
     >
       {inline ? null : value}
@@ -133,17 +138,5 @@ export let Edit = (
   { eid, comp, prop, ...ctx }: Parameters<typeof InlineEdit>[0],
 ) => {
   let e = ent(eid)
-  return render(
-    registry,
-    bundle(e),
-    'Inline.Edit',
-    vocab,
-    { comp, col: prop },
-    {
-      e,
-      comp,
-      col: prop,
-      ...ctx,
-    },
-  )
+  return renderView(e, 'Inline.Edit', { ...ctx, comp, col: prop })
 }
