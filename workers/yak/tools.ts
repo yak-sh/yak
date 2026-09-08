@@ -1228,14 +1228,19 @@ export let wrote = async (
   // put back. Before the put, per file, because after it they are gone: a
   // deploy is the release a person names, and this is the twenty minutes
   // between two of them, where the page somebody was using gets overwritten.
+  //
+  // The files go in parallel: each path's pin and put are its own round trips
+  // to the bucket and touch nothing another path does, and a three-file write
+  // measured 1.7 s of pinning done one after the other (T-34986). The sums
+  // under `pin` and `put` are therefore time spent, not time waited.
   let at = new Date()
   let pin = c.sum('pin')
   let put = c.sum('put')
-  for (let f of files) {
+  await Promise.all(files.map(async (f) => {
     let path = fileKey(space, app, f.path).slice(prefix.length)
     await pin(() => replaced(blobs, prefix, path, who.person ?? '', at))
     await put(() => blobs.put(prefix + path, f.bytes))
-  }
+  }))
   // One purge for the whole batch, after the last byte lands: the tag is the
   // app, not the file, so writing ten files empties the edge once (cache.ts
   // `tagsOf`).
