@@ -15,6 +15,8 @@ import type { Plugin } from '@yaks/graph'
 import { sessionDoc } from './comp.ts'
 import { auditing, type AuditOpts } from './audit.ts'
 import { leasing } from './lease.ts'
+import { nativeDoc } from './native.ts'
+import { naming } from './rules.ts'
 
 /** How the plugin's two seams are wired: a clock for both stamps, and the name
  * a conflict record is minted under. */
@@ -45,4 +47,20 @@ export let sessions = (opts: SessionOpts = {}): Plugin => ({
   name: '@yaks/session',
   vocab: [sessionDoc],
   hooks: { precondition: leasing(opts), audit: auditing(opts) },
+})
+
+/**
+ * The native half: a session as a transcript (./native.ts). It brings the
+ * entry vocabulary and the one precondition — a `fork.from` is an entry, a
+ * `using` names a provider and a model. What reacts to entries is
+ * {@link react}, handed to an effects registry or run in a loop; this plugin
+ * is the model and the rule, like {@link sessions}.
+ *
+ * Load it beside {@link sessions}: `plugins: [sessions(), native()]`, with
+ * `loadVocab([sessionDoc, nativeDoc, …])`.
+ */
+export let native = (): Plugin => ({
+  name: '@yaks/session/native',
+  vocab: [nativeDoc],
+  hooks: { precondition: naming },
 })
