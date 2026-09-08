@@ -17,22 +17,13 @@
 // lookup of the operand. A tombstoned entity keeps its spine row (its int id
 // can never recycle) but is DEAD, so every membership excludes the graves.
 
-import type { Column, Vocab } from '@yaks/vocab'
+import type { Column, Scalar, Vocab } from '@yaks/vocab'
 import { type Span as QSpan, timeSpan } from '@yaks/query'
 import type { Frag } from './ir.ts'
 
 // The tag a value coerces against — the vocab column category flattened to the
 // word the lowering switches on.
-export type Tag =
-  | 'text'
-  | 'number'
-  | 'priority'
-  | 'bool'
-  | 'query'
-  | 'time'
-  | 'url'
-  | 'enum'
-  | 'eid'
+export type Tag = Scalar | 'enum' | 'eid'
 export let tagOf = (c: Column): Tag =>
   c.category == 'ref' ? 'eid' : c.category == 'enum' ? 'enum' : c.scalar!
 

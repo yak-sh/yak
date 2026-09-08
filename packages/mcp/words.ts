@@ -103,6 +103,8 @@ let sample = (col: Column): unknown =>
     ? '2026-09-05T12:00:00Z'
     : col.scalar == 'url'
     ? 'https://example.com'
+    : col.scalar == 'json'
+    ? '{}'
     : 'text'
 
 /** One component as the index says it: the line an agent reads to decide

@@ -3,7 +3,9 @@
 // kind — plus the refusal for a word this graph has never heard of.
 
 import { assert, assertEquals } from '@std/assert'
+import { loadVocab } from '@yaks/vocab'
 import { connect, result } from './harness.ts'
+import { detail } from './words.ts'
 
 type Word = {
   name: string
@@ -93,6 +95,22 @@ Deno.test('a kind is what an entity of it is made of', async () => {
   assertEquals(said.comps.map((c) => c.name), ['book', 'doc'])
   assertEquals(said.comps[0].worn_with, ['doc'])
   assertEquals(said.comps[1].columns, ['title', 'body'])
+})
+
+Deno.test('a JSON column example writes valid JSON text', () => {
+  let vocab = loadVocab({
+    $defs: {
+      config: {
+        type: 'object',
+        properties: { value: { type: 'string', format: 'json' } },
+      },
+    },
+  })
+  let word = detail(vocab, 'config')
+  assertEquals(word.columns, [{ prop: 'value', type: 'json' }])
+  let example = word.example!.config as Record<string, unknown>
+  assertEquals(example, { value: '{}' })
+  assertEquals(vocab.check('config', example), [])
 })
 
 Deno.test('a word this graph never heard of is a refusal that says where to look', async () => {

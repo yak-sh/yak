@@ -61,6 +61,20 @@ Deno.test('a scalar predicate binds its value as a param, never inlined', () => 
   assert(sql.includes('"task"."priority" = ?'), sql)
 })
 
+Deno.test('JSON equality compares the stored text without numeric coercion', () => {
+  let vocab = loadVocab({
+    $defs: {
+      config: {
+        type: 'object',
+        properties: { value: { type: 'string', format: 'json' } },
+      },
+    },
+  })
+  let { sql, params } = compile(parse('.config.value=1'), vocab)
+  assertEquals(params, ['1'])
+  assert(sql.includes('cast("config"."value" as text) = ?'), sql)
+})
+
 Deno.test('a text term becomes a bound FTS match', () => {
   let { sql, params } = compile(parse('hello'), v)
   assert(sql.includes('doc_fts match ?'), sql)
