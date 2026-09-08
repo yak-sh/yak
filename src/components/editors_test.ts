@@ -5,7 +5,7 @@ import { parseHTML } from 'linkedom'
 import { ColumnEdit, Prop } from './editors.tsx'
 import { Prio } from './Prio.tsx'
 import { ago, pretty } from './ui.tsx'
-import { cache, ent } from '../live.ts'
+import { cache, ent, useRoute } from '../live.ts'
 import { formatProp, type Prop as PropRow, propAt } from '../props.ts'
 import { idOf } from '../types.ts'
 import { type PropType } from '../types.ts'
@@ -209,6 +209,78 @@ Deno.test('native number and query editors retain their existing elements', () =
       assertEquals(input.getAttribute('type'), null)
     } finally {
       free()
+    }
+  }
+})
+
+Deno.test('enum, reference and domain controls retain their shared popouts', () => {
+  let restore = useRoute(() => {})
+  let { document } = parseHTML('<html><body><main></main></body></html>')
+  let globals = {
+    document,
+    ResizeObserver: class {
+      observe() {}
+      disconnect() {}
+    },
+  }
+  let prior = Object.keys(globals).map((name) =>
+    [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const
+  )
+  for (let [name, value] of Object.entries(globals)) {
+    Object.defineProperty(globalThis, name, { value, configurable: true })
+  }
+  let root = document.querySelector('main')!
+  try {
+    let done = 0
+    render(
+      h(ColumnEdit, {
+        eid: 'popouts',
+        comp: 'task',
+        prop: 'status',
+        value: 'open',
+        done: () => done++,
+        anchor: { current: null },
+        face: h('span', { class: 'kept' }, 'open'),
+      }),
+      root,
+    )
+    assertEquals(root.querySelector('.kept')?.textContent, 'open')
+    let tabs = [...document.querySelectorAll<HTMLButtonElement>('.Prop_Tab')]
+    assertEquals(
+      tabs.map((tab) => tab.textContent),
+      vocab.column('task', 'status')!.values,
+    )
+    assertEquals(
+      document.querySelectorAll('.Prop_Tab .Dot').length,
+      tabs.length,
+    )
+    tabs.find((tab) => tab.textContent == 'open')!.click()
+    assertEquals(done, 1)
+    render(null, root)
+    for (let prop of ['project', 'domain']) {
+      render(
+        h(ColumnEdit, {
+          eid: 'popouts',
+          comp: 'task',
+          prop,
+          done: () => {},
+          anchor: { current: null },
+        }),
+        root,
+      )
+      assert(document.querySelector('.Overlay .Prop_Pop-list .Prop_Find'))
+      assertEquals(
+        document.querySelector('.Prop_Row-none')?.textContent,
+        'none',
+      )
+      render(null, root)
+    }
+  } finally {
+    render(null, root)
+    useRoute(restore)
+    for (let [name, descriptor] of prior) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor)
+      else delete (globalThis as Record<string, unknown>)[name]
     }
   }
 })
