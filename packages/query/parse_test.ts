@@ -52,6 +52,10 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['.status!=done', and(ne('status', 'done'))],
   ['.title~=word', and(contains('title', 'word'))],
   ['.domain=Ops,Eng', and(eq('domain', list('Ops', 'Eng')))],
+  // list members are trimmed; a clause-level comma leaves no empty member
+  ['.status=open, wip', and(eq('status', list('open', 'wip')))],
+  ['.status=open ,wip', and(eq('status', list('open', 'wip')))],
+  ['.status=open, .p=1', and(eq('status', 'open'), eq('p', '1'))],
   ['.priority=1..5', and(eq('priority', range('1', '5')))],
   ['.priority=1...5', and(eq('priority', range('1', '5', true)))],
   ['.created.at=2026-07-25', and(eq('created.at', scalar('2026-07-25')))],

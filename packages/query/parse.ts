@@ -32,11 +32,16 @@ let atom = (raw: string): Value => {
   return { kind: 'range', lo: scalar(lo), hi: scalar(hi), exclusiveEnd: !!excl }
 }
 
-// A whole value: a comma list is any-of; a lone part is its atom.
-let value = (raw: string): Value =>
-  raw.includes(',')
-    ? { kind: 'list', items: raw.split(',').map(atom) }
-    : atom(raw)
+// A whole value: a comma list is any-of; a lone part is its atom. Members are
+// trimmed and an empty one dropped, so `open, wip` and a trailing comma left by
+// the clause split (`.status=open, .p=1`) say what they look like they say.
+let value = (raw: string): Value => {
+  if (!raw.includes(',')) return atom(raw)
+  let items = raw.split(',').map((s) => s.trim()).filter(Boolean)
+  return items.length > 1
+    ? { kind: 'list', items: items.map(atom) }
+    : atom(items[0] ?? raw)
+}
 
 // ---- component words ----
 
