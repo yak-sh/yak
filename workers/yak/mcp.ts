@@ -106,6 +106,7 @@ import {
   VIEW_MIME,
 } from './tools.ts'
 import { listen, rostered } from './stream.ts'
+import { clock, timed } from './timing.ts'
 
 // The views this door offers beside the guide, whose resources are
 // preauth.ts's — the guide is world-readable and served to anybody, and these
@@ -650,6 +651,10 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // (directory.ts). A deploy from anywhere else is news this door has to
   // have (C-32905 item 5).
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
+  // Where this call's time goes (timing.ts): a write names the hops it waits
+  // on, and the answer carries them as `Server-Timing`, so `curl -i` on a slow
+  // app_files says which of them was slow (T-34986).
+  let c = clock()
   let ctx: Ctx = {
     env,
     // A grant narrowed to one space is narrowed HERE, over the directory every
@@ -659,6 +664,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     dir: auth.space ? narrowed(dir, auth.space) : dir,
     person: auth.person,
     who: auth,
+    clock: c,
   }
   // The session id, per the transport: minted at `initialize` and sent back by
   // the client on every later request. It names which of this person's streams
@@ -670,12 +676,15 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     ? crypto.randomUUID()
     : req.headers.get('mcp-session-id') ?? ''
   let built = await door(ctx, session)
-  let out = await built.handle(
-    new Request(req.url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: said,
-    }),
+  let out = timed(
+    await built.handle(
+      new Request(req.url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: said,
+      }),
+    ),
+    c,
   )
   if (rpc.method != 'initialize') return out
   // The list this client is about to cache, remembered for the session it is

@@ -14,10 +14,21 @@ export type Clock = ReturnType<typeof clock>
 
 export let clock = () => {
   let marks: string[] = []
+  let sums = new Map<string, number>()
   let born = Date.now()
   let mark = (name: string, ms: number, desc?: string | null) =>
     marks.push(`${name};dur=${ms}${desc ? `;desc=${desc}` : ''}`)
   return {
+    // One stage that happens many times — a put per file — summed under one
+    // name, so a twenty-file write reads as one `put` and not twenty.
+    sum: (name: string) => async <T>(work: () => Promise<T>): Promise<T> => {
+      let at = Date.now()
+      try {
+        return await work()
+      } finally {
+        sums.set(name, (sums.get(name) ?? 0) + Date.now() - at)
+      }
+    },
     // One stage: whatever it answers is answered on, and the time it took is
     // recorded either way — a stage that threw is the one worth seeing.
     //
@@ -44,7 +55,12 @@ export let clock = () => {
       let at = Date.now()
       return (name: string) => mark(name, Date.now() - at)
     },
-    header: () => [...marks, `all;dur=${Date.now() - born}`].join(', '),
+    header: () =>
+      [
+        ...marks,
+        ...[...sums].map(([name, ms]) => `${name};dur=${ms}`),
+        `all;dur=${Date.now() - born}`,
+      ].join(', '),
   }
 }
 

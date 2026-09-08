@@ -20,6 +20,7 @@ import { appStore, type Directory, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import type { Spend } from './sandbox.ts'
 import type { Caller, Who } from './session.ts'
+import type { Clock } from './timing.ts'
 
 export type Ctx = {
   env: Env
@@ -47,6 +48,10 @@ export type Ctx = {
   // a single tool call is its own budget — which is as much as one call could
   // spend anyway, since a command is capped at sandbox.ts `TIMEOUT`.
   spend?: Spend
+  // The request's stopwatch (timing.ts), when the door keeps one: a write
+  // names each round trip it waits on, and mcp.ts puts the marks on the
+  // answer as `Server-Timing`, so a slow deploy says which hop was slow.
+  clock?: Clock
 }
 
 export type Args = Record<string, unknown>

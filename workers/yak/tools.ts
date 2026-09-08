@@ -155,6 +155,7 @@ import { foreign, SLUG } from './route.ts'
 import { globs } from './router.ts'
 import type { Reach } from './reach.ts'
 import { titling, vouched, type Who } from './session.ts'
+import { type Clock, clock } from './timing.ts'
 import { mode, reads } from '@yaks/member'
 import { canon, nameOf, personOf } from './signin.ts'
 import { type Door, storeOf } from './door.ts'
@@ -739,7 +740,8 @@ let released = async (
   // emptied here, once, for all four (cache.ts `purged`). First, because a
   // release that dies on a manifest it refuses still leaves the bucket
   // changed, and the stale edge would outlive the failure.
-  await purged(ctx.env, app)
+  let c = ctx.clock ?? clock()
+  await c.time('purge', () => purged(ctx.env, app))
   // What this release will be called, read here because the seed below is
   // marked with it the moment it lands and the version row is written at the
   // end.
@@ -765,6 +767,7 @@ let released = async (
   // means — the store keeps the short form of its words (graph.ts) and neither
   // survives the round trip. It is what the tools below are generated from.
   let manifest: VocabDoc = {}
+  let vocabTook = c.since()
   if (key) {
     let source = new TextDecoder().decode(await blobs.get(key))
     // Read ONCE, here, in whichever spelling the app wrote (@yaks/yaml): the
@@ -815,6 +818,7 @@ let released = async (
       }, vouched(who)),
     )
   }
+  vocabTook('vocab')
   // And the data the app comes with (seed.ts, T-34327), AFTER the words it is
   // written in — an app's own components seed like the platform's — and once
   // per store: `app.seeded` is the mark, so a redeploy leaves what the person
@@ -822,6 +826,7 @@ let released = async (
   // ordinary door as the caller, so the rows carry their byline and nothing
   // server-owned can ride in on a seed file.
   let sowed: Sown[] = []
+  let seedTook = c.since()
   if (!app.seeded) {
     sowed = await sow(
       await texts(blobs, space, app, seedy),
@@ -836,6 +841,8 @@ let released = async (
       }, vouched(who))
     }
   }
+  seedTook('seed')
+  let toolsTook = c.since()
   // And the app's own MCP tools (tools.json, T-32685), read the same way and
   // after the components, since a tool may write a word this very release
   // planted. The manifest is replaced whole — a declaration holds no rows —
@@ -908,12 +915,14 @@ let released = async (
   // grew is graph_apply's schema, not its name. The roster is the same for
   // everybody and moves only when the platform is released (stream.ts).
   if (tooled.views) await viewsMoved(ctx, space)
-  let deployed = await deployWorker(
-    ctx.env,
-    app,
-    storeName(space, app),
-    (path) => blobs.read(fileKey(space, app, path)),
-  )
+  toolsTook('tools')
+  let deployed = await c.time('worker', () =>
+    deployWorker(
+      ctx.env,
+      app,
+      storeName(space, app),
+      (path) => blobs.read(fileKey(space, app, path)),
+    ))
   let worker = deployed.worker
   let ran = deployed.lines.map((line) => `\n${line}`).join('')
   // What this release IS, kept so one word puts it back (T-32886): the files
@@ -921,15 +930,21 @@ let released = async (
   // beside them, and Cloudflare's name for the script this uploaded. The
   // app's version counter and the row that records the version move together.
   let prefix = fileKey(space, app, '')
-  let pinned = await snapshot(blobs, prefix)
-  await record(ctx.dir, blobs, prefix, who, app, version, pinned, worker)
+  let pinned = await c.time('snapshot', () => snapshot(blobs, prefix))
+  await c.time(
+    'record',
+    () => record(ctx.dir, blobs, prefix, who, app, version, pinned, worker),
+  )
   // What the versions before this one broke is closed by this one: the code
   // that produced it is not what serves any more (unseen.ts `healed`,
   // D-32318 §Errors). The release already happened, so a store that cannot be
   // asked leaves the breaks open rather than failing a deploy that is live.
   let closed = 0
   try {
-    closed = await healed(ctx.env, space, app, who, version)
+    closed = await c.time(
+      'healed',
+      () => healed(ctx.env, space, app, who, version),
+    )
   } catch { /* the files are out; an open break is the softer wrong */ }
   // A published app's OFFER does not move with a deploy: publishing is the
   // owner's deliberate act and pins the version strangers install, so an
@@ -1196,6 +1211,7 @@ export let wrote = async (
   app: App,
   who: Who,
   files: { path: string; bytes: Uint8Array }[],
+  c: Clock = clock(),
 ) => {
   let blobs = r2Blobs(env.BLOBS)
   let prefix = fileKey(space, app, '')
@@ -1213,22 +1229,24 @@ export let wrote = async (
   // deploy is the release a person names, and this is the twenty minutes
   // between two of them, where the page somebody was using gets overwritten.
   let at = new Date()
+  let pin = c.sum('pin')
+  let put = c.sum('put')
   for (let f of files) {
     let path = fileKey(space, app, f.path).slice(prefix.length)
-    await replaced(blobs, prefix, path, who.person ?? '', at)
-    await blobs.put(prefix + path, f.bytes)
+    await pin(() => replaced(blobs, prefix, path, who.person ?? '', at))
+    await put(() => blobs.put(prefix + path, f.bytes))
   }
   // One purge for the whole batch, after the last byte lands: the tag is the
   // app, not the file, so writing ten files empties the edge once (cache.ts
   // `tagsOf`).
-  await purged(env, app)
+  await c.time('purge', () => purged(env, app))
   let paths = files.map((f) => fileKey(space, app, f.path).slice(prefix.length))
   // What these bytes replaced is closed by them (unseen.ts `rewrote`,
   // T-34338), the way a release closes what the versions under it broke. The
   // bytes are already out, so a store that cannot be asked leaves the breaks
   // open rather than failing a write that landed.
   try {
-    await rewrote(env, space, app, who, paths)
+    await c.time('rewrote', () => rewrote(env, space, app, who, paths))
   } catch { /* the files are out; an open break is the softer wrong */ }
   return paths
 }
@@ -2040,7 +2058,11 @@ let OURS: Row[] = [
             'files: [{path, content}] for several at once',
         )
       }
-      let { space, app, who } = await inApp(ctx, args, WRITES.includes(op))
+      let c = ctx.clock ?? clock()
+      let { space, app, who } = await c.time(
+        'inApp',
+        () => inApp(ctx, args, WRITES.includes(op)),
+      )
       let blobs = r2Blobs(ctx.env.BLOBS)
       let prefix = fileKey(space, app, '')
       if (op == 'list') {
@@ -2137,7 +2159,7 @@ let OURS: Row[] = [
               'goes back 30 days',
           )
         }
-        let [p] = await wrote(ctx.env, space, app, who, [{ path, bytes }])
+        let [p] = await wrote(ctx.env, space, app, who, [{ path, bytes }], c)
         return {
           text: `put ${p} back to what it was until ${want.at} → ` +
             `${url(space, app, ctx.env)}${p} — ${
@@ -2164,7 +2186,14 @@ let OURS: Row[] = [
           args.replace,
           key.slice(prefix.length),
         ))
-        let [p] = await wrote(ctx.env, space, app, who, [{ path, bytes: now }])
+        let [p] = await wrote(
+          ctx.env,
+          space,
+          app,
+          who,
+          [{ path, bytes: now }],
+          c,
+        )
         return {
           text: `patched ${p} → ${url(space, app, ctx.env)}${p} — ${
             stored(p, now, await sha256(now))
@@ -2175,11 +2204,11 @@ let OURS: Row[] = [
       // A library vendored, rather than a minified file transcribed by hand.
       if (op == 'fetch') {
         let path = text(args.path, 'path')
-        let got = await fetched(text(args.url, 'url'))
+        let got = await c.time('fetch', () => fetched(text(args.url, 'url')))
         let [p] = await wrote(ctx.env, space, app, who, [{
           path,
           bytes: got.bytes,
-        }])
+        }], c)
         let sha = await sha256(got.bytes)
         return {
           // The integrity hash so a page that goes on loading this from a
@@ -2200,7 +2229,7 @@ let OURS: Row[] = [
         path: text(args.path, 'path'),
         bytes: bytesOf(args),
       }]
-      let paths = await wrote(ctx.env, space, app, who, sent)
+      let paths = await wrote(ctx.env, space, app, who, sent, c)
       // What landed, per file: the measurement the caller checks its own
       // transcription against.
       let each = await Promise.all(
@@ -2380,7 +2409,11 @@ let OURS: Row[] = [
       required: ['app'],
     },
     run: async (ctx, args) => {
-      let { space, app, who, store } = await inApp(ctx, args, true)
+      let c = ctx.clock ?? clock()
+      let { space, app, who, store } = await c.time(
+        'inApp',
+        () => inApp(ctx, args, true),
+      )
       let { version, said } = await released(ctx, space, app, who, store)
       return {
         text:
