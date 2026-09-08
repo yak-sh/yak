@@ -76,6 +76,22 @@ rm -f snap/tasks.db snap/.verify.db snap/*.sql.tmp
 # Plain output regardless of any ~/.sqliterc (box modes break the checks).
 sq() { sqlite3 -batch -init /dev/null -noheader -list "$@"; }
 
+# Catch structural corruption on the LIVE db, which the snapshot check below
+# cannot. VACUUM INTO rebuilds the database from its logical rows, so a torn
+# write in the freelist or page map (a power-loss "2nd reference to page" /
+# "Freelist size" fault, T-34578) is LAUNDERED into a clean snapshot that passes
+# integrity_check — which is why the 2026-09-05 corruption stayed hidden through
+# the daily backup until a page-allocating write hit it two days later. Once the
+# fault turns fatal VACUUM errors and set -e catches it, but the latent window is
+# invisible. quick_check walks the page structure directly (it skips only
+# index-vs-table content) and is fast enough for the bound. A non-zero exit here
+# withholds the deadman stamp, so the fleet is paged the next morning, not days
+# later. Run it before PRAGMA optimize, which is the first write to the live db.
+sq tasks.db "PRAGMA quick_check;" | grep -qx ok || {
+  echo "backup: LIVE db failed quick_check — structural corruption on tasks.db" >&2
+  exit 1
+}
+
 # The snapshot is still taken atomically and still checked — it is just no
 # longer what history stores. It lives outside the repo (.gitignore) as the
 # consistent point-in-time source the text dump is written from, so the dump
