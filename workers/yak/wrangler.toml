@@ -339,7 +339,7 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 # unset, domain_attach refuses saying so and nothing is half-attached.
 # STRIPE_KEY is the restricted Stripe API key checkout, the customer portal and
 # one subscription read speak with (T-32760); STRIPE_WEBHOOK_SECRET is what the
-# events Stripe posts to /api/stripe/webhook are verified against
+# events Stripe posts to /stripe/webhook are verified against
 # (billing.ts). Unset, those doors say the paid tier is not switched on here
 # rather than half-working, and a webhook that arrives unread is filed where
 # the owner sees it.

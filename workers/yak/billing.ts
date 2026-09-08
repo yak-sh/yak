@@ -533,7 +533,7 @@ export let apply = async (env: Env, event: Event) => {
     // an unanswerable question for three days.
     await broke(
       env,
-      'POST /api/stripe/webhook',
+      'POST /stripe/webhook',
       new Error(
         `${event.type}: no space owns subscription ${next.subscription} ` +
           `(customer ${next.customer})`,
@@ -568,7 +568,7 @@ let hook = async (env: Env, req: Request) => {
     if (!hushed('unset')) {
       await broke(
         env,
-        'POST /api/stripe/webhook',
+        'POST /stripe/webhook',
         new Error('STRIPE_WEBHOOK_SECRET is not set — an event went unread'),
       )
     }
@@ -581,7 +581,7 @@ let hook = async (env: Env, req: Request) => {
   )
   if (no) {
     if (!hushed(no)) {
-      await broke(env, 'POST /api/stripe/webhook', new Error(no))
+      await broke(env, 'POST /stripe/webhook', new Error(no))
     }
     return json(400, 'bad_signature', no)
   }
@@ -599,6 +599,8 @@ let hook = async (env: Env, req: Request) => {
 
 export let fetch = (req: Request, env: Env): Promise<Response> => {
   let path = new URL(req.url).pathname
+  // `/api/stripe/webhook` is the older spelling; a Stripe endpoint created
+  // against it keeps working.
   if (path == '/stripe/webhook' || path == '/api/stripe/webhook') {
     return hook(env, req)
   }

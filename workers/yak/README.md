@@ -91,6 +91,61 @@ ratchet, and the build profile are in [deploy timing](../../bench/deploys.md).
 Run `deno task deploy:time <sha>` on the box alongside each push; Actions reads
 the committed record through `deno task deploy:gate` after worker tests.
 
+## Everything set by hand
+
+A deploy creates nothing on the account and holds no secret. Every piece of
+configuration a person does by hand, production and staging alike, is one of
+these three tables; each row says where it is set and what is missing without
+it. Values never appear here or in the repo.
+
+**Secrets** — `npx wrangler secret put <NAME>` from `workers/yak` (add
+`--env staging` for staging); locally a `.dev.vars` line.
+
+| name                                                                                           | required | value                                                                         | without it                                                        |
+| ---------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `SESSION_SECRET`                                                                               | yes      | any long random string                                                        | no session verifies, no sign-in code is issued                    |
+| `MAIL_TOKEN`, `MAIL_ACCOUNT`                                                                   | yes      | Cloudflare Email Sending API token and the account tag                        | sign-in code letters do not send                                  |
+| `CF_ANALYTICS_TOKEN`                                                                           | yes      | API token, **Account · Account Analytics · Read** (see Analytics)             | the meter and Visits report counts are off                        |
+| `CF_WORKERS_TOKEN`                                                                             | yes      | API token, **Workers Scripts, D1, R2, Vectorize · Edit** (see App bindings)   | an app's files deploy, its `worker.js` does not                   |
+| `CF_HOSTNAMES_TOKEN`                                                                           | domains  | API token, **Zone · SSL and Certificates · Edit** on the zone in `CF_ZONE`    | `domain_attach` refuses, saying so                                |
+| `STRIPE_KEY`                                                                                   | billing  | restricted Stripe API key (checkout, portal, one subscription read)           | billing doors say the paid tier is not switched on                |
+| `STRIPE_WEBHOOK_SECRET`                                                                        | billing  | `whsec_…` of the **Your account** destination (see the billing section)       | events go unread and are filed where the owner sees them          |
+| `STRIPE_CONNECT_WEBHOOK_SECRET`                                                                | selling  | `whsec_…` of the **Connected accounts** destination (see the Connect section) | `POST /stripe/connect` answers 503; selling otherwise works       |
+| `MAIL_SINK`                                                                                    | staging  | the owner's address                                                           | staging letters go to their intended recipients                   |
+| `OPENAI_APPS_CHALLENGE`                                                                        | optional | the token OpenAI's apps directory issues                                      | `/.well-known/openai-apps-challenge` 404s                         |
+| `CIMD`                                                                                         | optional | `on` (default when unset) or `off`                                            | nothing; `off` stops claiming Client ID Metadata Documents        |
+| `AI_GATEWAY`, `AI_GATEWAY_TOKEN`, `OPENAI_API_KEY`, `BUILDER_MODEL_FREE`, `BUILDER_MODEL_PAID` | optional | the other builder provider; all unset on purpose (T-34238)                    | nothing; both tiers build on Workers AI                           |
+| `MAIL_DEV`                                                                                     | local    | `1`                                                                           | never set on a deploy: letters become entities instead of sending |
+
+**Vars and account resources** — `wrangler.toml` names them; the account must
+already hold them (staging: the `[env.staging]` copies, `yak-*-staging` names).
+
+| what                                                                       | where                                                                                    | without it                                                       |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `CF_ACCOUNT`, `APEX`, `WORKER_NAME`, `DISPATCH_NAMESPACE`, `VIEWS_DATASET` | `[vars]`; must name the same resources as the bindings                                   | REST calls (app uploads, analytics reads) aim at the wrong place |
+| `CF_ZONE`                                                                  | `[vars]`, the zone id of `yaks.app` (staging: `yaks.fyi`, empty until set)               | custom domains refuse provisioning                               |
+| `STRIPE_PRICE`                                                             | `[vars]`, the recurring Plus price id (staging: a sandbox price, empty until set)        | checkout has nothing to sell                                     |
+| R2 buckets `yak-blobs`, `yak-store-exports`                                | `wrangler r2 bucket create <name>` once                                                  | no app files; a Store with no exports bucket refuses to migrate  |
+| Dispatch namespace `yak-apps`                                              | Cloudflare for Platforms, created once (`wrangler dispatch-namespace create yak-apps`)   | apps with a `worker.js` serve their files instead                |
+| KV `OAUTH_KV`                                                              | `wrangler kv namespace create` once; paste the id into the binding                       | the OAuth door has no store                                      |
+| Vectorize `yak-memories`                                                   | `wrangler vectorize create yak-memories --dimensions=768 --metric=cosine` once           | memory recall ranks by words, not meaning                        |
+| Email Sending + Email Routing on the zone                                  | Cloudflare dashboard: onboard the zone, add its issued mail DNS, catch-all → this Worker | no outbound mail from apps, no inbound mail                      |
+| DNS `AAAA @ → 100::`, `AAAA * → 100::`, proxied                            | Cloudflare DNS on the zone                                                               | the routes have nothing to attach to                             |
+| Custom domains fallback origin + `*/*` route                               | Cloudflare for SaaS on the zone                                                          | a customer's own hostname never reaches the Worker               |
+| Workers Builds                                                             | dashboard settings table above                                                           | nothing deploys on push                                          |
+| `yak-tail` worker                                                          | `deno task deploy:yak-tail` before the kernel's first deploy                             | the kernel deploy fails attaching `tail_consumers`               |
+| Containers                                                                 | Workers Paid with Containers enabled; the deploy builds the image                        | the builder's sandbox tools say so and do not run                |
+
+**Stripe dashboard**, sandbox first, then live:
+
+| step                            | where                                                                                     | without it                                                     |
+| ------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Managed Payments                | Stripe is the merchant of record for the paid tier (billing.ts); enable it on the account | tax and invoicing fall to us                                   |
+| Product + recurring price       | Product catalog; the price id is `STRIPE_PRICE`                                           | checkout has nothing to sell                                   |
+| Customer portal configuration   | Settings → Billing → Customer portal, save a configuration once                           | the portal door is refused by Stripe, and the refusal is filed |
+| Billing webhook, five events    | the billing section below                                                                 | plan changes never land                                        |
+| Connect webhook, five v1 events | the Connect section below                                                                 | seller account changes, refunds and disputes go unseen         |
+
 ## Staging (yaks.fyi)
 
 `yak-staging` serves `yaks.fyi` and `*.yaks.fyi` with its own stores, app
@@ -113,7 +168,7 @@ secret:
 
 | events from                                   | destination                       | secret                          |
 | --------------------------------------------- | --------------------------------- | ------------------------------- |
-| Your account (billing)                        | `https://yaks.fyi/stripe/webhook` | `STRIPE_WEBHOOK_SECRET`         |
+| Your account (the five billing events below)  | `https://yaks.fyi/stripe/webhook` | `STRIPE_WEBHOOK_SECRET`         |
 | Connected accounts (the five v1 events below) | `https://yaks.fyi/stripe/connect` | `STRIPE_CONNECT_WEBHOOK_SECRET` |
 
 The zone needs proxied `AAAA @ → 100::` and `AAAA * → 100::` records. Onboard
@@ -195,6 +250,21 @@ with `yak` (link.ts, identity.ts `/login/link`):
 asking for nothing, a year at most). Build the account out — an app or two —
 before handing the link over, since a reviewer is asked to walk a working
 account. `--as` picks the account when it is not the current one.
+
+## STRIPE_WEBHOOK_SECRET — the billing door's events
+
+billing.ts is the platform's own plan: Stripe sells to us, and tells us at
+`POST /stripe/webhook` (`/api/stripe/webhook` is the older spelling and still
+answers). The handler reads five v1 events and nothing else (billing.ts
+`subjectOf`); the dashboard steps are the Connect ones below with these
+differences:
+
+| step | where                                                                                                                                                                                 |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3    | **Events from**: **Your account**                                                                                                                                                     |
+| 4    | Select these five v1 events, and only these: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed` |
+| 6    | Endpoint URL: `https://yaks.app/stripe/webhook`                                                                                                                                       |
+| 8    | `npx wrangler secret put STRIPE_WEBHOOK_SECRET`                                                                                                                                       |
 
 ## STRIPE_CONNECT_WEBHOOK_SECRET — the selling door's own secret
 
