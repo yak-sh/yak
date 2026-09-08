@@ -5,6 +5,15 @@ export let COOLDOWN = 30 * 60 * 1000
 // hourly job failing every hour is one break, not an outage an hour (T-34844).
 // It pages again only when it survives a deploy, or after a quiet day.
 export let REPAGE = 24 * 60 * 60 * 1000
+// Cloudflare resetting a Durable Object mid-request is theirs and passing;
+// one is weather, two inside an hour is a break worth a page.
+export let PATIENCE = 60 * 60 * 1000
+
+// The runtime's own words for the two resets. The first is what every deploy
+// does to an object with a request in flight: a deploy event, never a fault.
+let DEPLOY_RESET = /^Durable Object reset because its code was updated\.?$/
+let STORAGE_RESET =
+  /^Internal error in Durable Object storage caused object to be reset/
 
 export type Sample = {
   name: string
@@ -19,6 +28,8 @@ export type Fault = {
   version: string | null
   at: number
   sample: Sample
+  // Set on a fault that pages only when it repeats within this many ms.
+  patience?: number
 }
 
 export type Incident = {
@@ -30,13 +41,15 @@ export type Incident = {
   sample: Sample
 }
 
-// UUIDs, object/trace ids, ULIDs, then numbers. Keep the words: different
-// failures at the same call site must not collapse into one incident.
+// UUIDs, object/trace ids, ULIDs, Cloudflare references, then numbers. Keep
+// the words: different failures at the same call site must not collapse into
+// one incident.
 export let normalise = (text: string): string =>
   text
     .replace(/\b[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}\b/gi, '<id>')
     .replace(/\b(?:0x)?[\da-f]{16,}\b/gi, '<id>')
     .replace(/\b[0-9A-HJKMNP-TV-Z]{26}\b/g, '<id>')
+    .replace(/\b(?=[a-z]*\d)(?=\d*[a-z])[a-z\d]{20,}\b/g, '<id>')
     .replace(/\d+/g, '#')
     .replace(/\s+/g, ' ')
     .trim()
@@ -67,8 +80,13 @@ export let record = (previous: Incident | null, fault: Fault): {
   let fresh = !previous || previous.signature != fault.signature
   let quiet = fresh ? Infinity : fault.at - previous!.last
   let again = quiet >= COOLDOWN
-  let page = fresh ||
-    (again && (previous!.version != fault.version || quiet >= REPAGE))
+  // A patient fault pages on its second occurrence inside the window, and
+  // never on a first — not even one that opens a new outage after a deploy.
+  let page = fault.patience
+    ? !fresh && !again && previous!.count == 1 &&
+      fault.at - previous!.first <= fault.patience
+    : fresh ||
+      (again && (previous!.version != fault.version || quiet >= REPAGE))
   let incident = again
     ? {
       signature: fault.signature,
@@ -145,6 +163,12 @@ export let faults = async (
     : null
   let unique = new Map<string, Fault>()
   for (let e of exceptions) {
+    if (DEPLOY_RESET.test(e.message.trim())) {
+      console.log(
+        `yak-tail: deploy reset ${entrypoint} ${event.scriptVersion?.id ?? ''}`,
+      )
+      continue
+    }
     let sample: Sample = {
       name: e.name,
       message: e.message,
@@ -159,6 +183,7 @@ export let faults = async (
       version: event.scriptVersion?.id ?? null,
       at: event.eventTimestamp ?? now,
       sample,
+      ...(STORAGE_RESET.test(e.message) ? { patience: PATIENCE } : {}),
     })
   }
   return [...unique.values()]

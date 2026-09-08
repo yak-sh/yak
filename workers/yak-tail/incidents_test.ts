@@ -5,6 +5,7 @@ import {
   type Fault,
   faults,
   normalise,
+  PATIENCE,
   record,
   REPAGE,
   type Sample,
@@ -126,11 +127,48 @@ Deno.test('error logs only from Store/default; logged exceptions count once per 
   assertEquals(seen.version, 'version-a')
 })
 
+Deno.test('a deploy reset is not a fault; a storage reset is one that waits for a repeat', async () => {
+  let reset = (message: string) =>
+    faults(event({ exceptions: [{ name: 'Error', message }], event: null }))
+  assertEquals(
+    await reset('Durable Object reset because its code was updated.'),
+    [],
+  )
+  let storage =
+    'Internal error in Durable Object storage caused object to be reset; reference = '
+  let [a] = await reset(storage + 'vdjuhq6r10pn17vdf1drophk')
+  let [b] = await reset(storage + 'k3m9x2p7q1w8e5r4t6y0u2i1')
+  assertEquals(a.patience, PATIENCE)
+  assertEquals(a.signature, b.signature)
+  assertEquals((await faults(event()))[0].patience, undefined)
+})
+
 let fault = (at: number, version = 'version-a'): Fault => ({
   signature: 'sig',
   version,
   at,
   sample: sample(),
+})
+
+Deno.test('a patient fault pages on its second occurrence within the hour, never on a first', () => {
+  let patient = (at: number, version = 'version-a'): Fault => ({
+    ...fault(at, version),
+    patience: PATIENCE,
+  })
+  let first = record(null, patient(0))
+  assertEquals(first.page, false)
+  let second = record(first.incident, patient(COOLDOWN - 1))
+  assertEquals(second.page, true)
+  assertEquals(second.incident.count, 2)
+  assertEquals(record(second.incident, patient(2 * COOLDOWN - 2)).page, false)
+  let chain = record(
+    second.incident,
+    patient(2 * COOLDOWN + PATIENCE, 'version-b'),
+  )
+  assertEquals(chain.page, false)
+  assertEquals(chain.incident.count, 1)
+  let late = record(null, patient(0)).incident
+  assertEquals(record(late, patient(PATIENCE + 1)).page, false)
 })
 
 Deno.test('cooldown lasts until thirty quiet minutes, preserves first sample across deploys', () => {
