@@ -1,9 +1,8 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-run=npm,npx,git
 // The one door to this Worker's wrangler: `deno task deploy:yak`,
 // `deno task dev:yak`, their `-staging` variants and the probe (probe.ts) all
-// come through here, so the
-// pinned version is spelled once and `node_modules` is current before wrangler
-// reads it.
+// come through here, so the pinned version is spelled once and `node_modules`
+// is current before wrangler reads it.
 //
 // Why the install has to happen first: wrangler bundles with esbuild, which
 // resolves `zod` and the MCP SDK as FILES under this directory's
@@ -95,6 +94,23 @@ export let command = (args: string[]) => {
   }
 }
 
+// Every process under `pid`, children before parents, read from /proc.
+export let descendants = (pid: number): number[] => {
+  let kids: number[] = []
+  for (let entry of Deno.readDirSync('/proc')) {
+    if (!/^\d+$/.test(entry.name)) continue
+    try {
+      let stat = Deno.readTextFileSync(`/proc/${entry.name}/stat`)
+      // The comm field is parenthesised and may hold spaces; ppid follows it.
+      let ppid = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1])
+      if (ppid == pid) kids.push(Number(entry.name))
+    } catch {
+      // exited between the listing and the read
+    }
+  }
+  return kids.flatMap((kid) => [...descendants(kid), kid])
+}
+
 if (import.meta.main) {
   await ready()
   let argv = [...Deno.args]
@@ -116,13 +132,17 @@ if (import.meta.main) {
   }).spawn()
   // A signal to this door reaches wrangler too; otherwise a stopped `tail`
   // leaves wrangler streaming and its reader waiting on a pipe that never
-  // closes (verify-deploy.ts hung ten minutes on a three-minute tail).
+  // closes (verify-deploy.ts hung ten minutes on a three-minute tail). The
+  // child is npx, which does not pass a signal to the wrangler it spawned, so
+  // the whole subtree is signalled, deepest first.
   for (let signal of ['SIGINT', 'SIGTERM'] as const) {
     Deno.addSignalListener(signal, () => {
-      try {
-        child.kill(signal)
-      } catch {
-        // already gone
+      for (let pid of [...descendants(child.pid), child.pid]) {
+        try {
+          Deno.kill(pid, signal)
+        } catch {
+          // already gone
+        }
       }
     })
   }
