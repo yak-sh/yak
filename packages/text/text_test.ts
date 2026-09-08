@@ -303,7 +303,8 @@ Deno.test('definition lists pair terms and values across grouped and direct rows
     h('dd', null, 2),
     h('dd', null, 'More'),
   )
-  assertEquals(markdown(node), 'Title: A \\*page\\*\nCount: 2\nMore')
+  assertEquals(markdown(node), 'Title: A \\*page\\*  \nCount: 2  \nMore')
+  assertEquals(html(markdown(node)).querySelectorAll('br').length, 2)
   assertEquals(plain(node), 'Title: A *page*\nCount: 2\nMore')
 })
 

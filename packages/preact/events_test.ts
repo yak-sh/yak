@@ -124,6 +124,53 @@ Deno.test('ordinary handlers keep the host event', () => {
   }
 })
 
+Deno.test('malformed browser input cannot clear a value and custom errors can recover', () => {
+  let patches: unknown[] = []
+  let errors: unknown[] = []
+  let validity: string[] = []
+  let calls = 0
+  let registry = define([{
+    view: 'Edit',
+    match: true,
+    render: (_b, h) =>
+      h('input', {
+        type: 'number',
+        onChange: {
+          name: 'Update',
+          run: (_bundle: Bundle, value: unknown) => {
+            calls++
+            return { doc: { count: value === '' ? null : Number(value) } }
+          },
+        },
+      }),
+  }])
+  let mounted = mount(render(registry, bundle, 'Edit', vocab, {
+    onPatch: (patch) => patches.push(patch),
+    onError: (error) => errors.push(error),
+  }))
+  try {
+    let control = mounted.root.querySelector('input')!
+    let state = { badInput: true, customError: false, valid: false }
+    Object.defineProperty(control, 'validity', { value: state })
+    control.setCustomValidity = (message) => validity.push(message)
+    control.reportValidity = () => false
+    control.value = ''
+    change(control)
+    assertEquals(calls, 0)
+    assertEquals(patches, [])
+    assertEquals(errors.length, 1)
+    state.badInput = false
+    state.customError = true
+    control.value = '2'
+    change(control)
+    assertEquals(calls, 1)
+    assertEquals(patches, [{ doc: { count: 2 } }])
+    assertEquals(validity, ['Enter a valid value', ''])
+  } finally {
+    mounted.free()
+  }
+})
+
 Deno.test('nested views use the same registry, context and native source props', () => {
   type Ent = { eid: string; title: string }
   let source: Ent = { eid: 'a', title: 'Native' }

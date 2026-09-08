@@ -164,7 +164,7 @@ let definitions = (node: Node, mode: Mode): string => {
       term = false
     }
   }
-  return lines.join('\n')
+  return lines.join(mode == 'markdown' ? '  \n' : '\n')
 }
 
 let piece = (child: Child<Node>, mode: Mode): Piece => {

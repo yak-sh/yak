@@ -87,6 +87,8 @@ type Control = {
   type?: string
   checked?: boolean
   value?: string
+  validity?: { badInput: boolean }
+  validationMessage?: string
   setCustomValidity?: (message: string) => void
   reportValidity?: () => boolean
 }
@@ -96,6 +98,9 @@ let change = (act: Action, bundle: Bundle, ctx: Events) => (event: Event) => {
   let input = control?.type == 'checkbox' ? control.checked : control?.value
   let patch: Patch
   try {
+    if (control?.validity?.badInput) {
+      throw new Error(control.validationMessage || 'Enter a valid value')
+    }
     patch = act.run(bundle, input)
   } catch (error) {
     control?.setCustomValidity?.(
