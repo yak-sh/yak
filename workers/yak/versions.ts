@@ -307,9 +307,6 @@ export let replaced = async (
   let bytes = await blobs.read(prefix + path)
   if (!bytes) return null
   let sha = await sha256(bytes)
-  if (!(await blobs.has(pinned(prefix, sha)))) {
-    await blobs.put(pinned(prefix, sha), bytes)
-  }
   let was: Wrote = {
     path,
     sha,
@@ -317,14 +314,26 @@ export let replaced = async (
     at: at.toISOString(),
     by,
   }
-  let all = trimmed(
-    [was, ...await history(blobs, prefix, path)],
-    at.getTime(),
-  )
-  await blobs.put(
-    logKey(prefix, path),
-    new TextEncoder().encode(JSON.stringify(all)),
-  )
+  // Pinning the bytes and extending the log are two chains with nothing to
+  // wait on in each other, so they go out together: three round trips to the
+  // bucket where there were five (T-34986).
+  await Promise.all([
+    (async () => {
+      if (!(await blobs.has(pinned(prefix, sha)))) {
+        await blobs.put(pinned(prefix, sha), bytes)
+      }
+    })(),
+    (async () => {
+      let all = trimmed(
+        [was, ...await history(blobs, prefix, path)],
+        at.getTime(),
+      )
+      await blobs.put(
+        logKey(prefix, path),
+        new TextEncoder().encode(JSON.stringify(all)),
+      )
+    })(),
+  ])
   return was
 }
 

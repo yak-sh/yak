@@ -40,7 +40,7 @@ import { r2Blobs } from '../../src/blobs_r2.ts'
 import { type App, type Space, url } from './directory.ts'
 import type { Env } from './env.ts'
 import type { Host } from './host.ts'
-import { at, reachable, toolsIn, vocabIn } from './declared.ts'
+import { at, reachable, spacesOf, toolsIn, vocabIn } from './declared.ts'
 import { told } from './memory.ts'
 import type { Ctx } from './tools.ts'
 import { appDoc } from './vocab.ts'
@@ -212,7 +212,7 @@ returns them, along with anything the person has said here.`
 // belongs to a space and not to an app — somebody with no apps yet has still
 // said how they want the first one built.
 let heard = async (ctx: Ctx): Promise<string[]> => {
-  let spaces = await ctx.dir.spaces(ctx.person)
+  let spaces = await spacesOf(ctx)
   return (await Promise.all(spaces.map((s) => told(ctx.env, s))))
     .filter(Boolean)
 }

@@ -73,7 +73,7 @@ export let toolsOf = async (
 // itself, and asked in turn each was its own walk of the directory.
 export let reachable = (ctx: Ctx) =>
   once(ctx, 'reachable', async () => {
-    let spaces = await ctx.dir.spaces(ctx.person)
+    let spaces = await spacesOf(ctx)
     // A space in the trash is out of reach whole (erase.ts, T-34431): every
     // app in it leaves every list at once, and none is asked about, which is
     // also why `about` and the door's own instructions stop naming them.
@@ -82,13 +82,23 @@ export let reachable = (ctx: Ctx) =>
     // move a delete has always made — and they come back on a restore.
     let each = await Promise.all(
       spaces.filter((s) => !s.trashed).map(async (space) =>
-        (await ctx.dir.apps(space))
+        (await appsOf(ctx, space))
           .filter((app) => !app.trashed)
           .map((app) => ({ space, app }))
       ),
     )
     return each.flat()
   })
+
+// The directory's two walks, once per request each (tool.ts `once`): the
+// caller's spaces, and a space's apps. Both `reachable` here and the role-aware
+// `inReach` (tools.ts) are made of them, so the second walk is the first one's
+// answer.
+export let spacesOf = (ctx: Ctx) =>
+  once(ctx, 'spaces', () => ctx.dir.spaces(ctx.person))
+
+export let appsOf = (ctx: Ctx, space: Space) =>
+  once(ctx, `apps:${space.eid}`, () => ctx.dir.apps(space))
 
 /** {@link toolsOf}, once per app per request (tool.ts `once`). */
 export let toolsIn = (ctx: Ctx, space: Space, app: App) =>

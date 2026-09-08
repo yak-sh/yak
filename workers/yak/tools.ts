@@ -71,9 +71,11 @@ import {
   url,
 } from './directory.ts'
 import {
+  appsOf,
   listCommands,
   reachChanged,
   runCommand,
+  spacesOf,
   toolsOf,
   viewsMoved,
 } from './declared.ts'
@@ -1047,15 +1049,16 @@ export let inReach = async (ctx: Ctx, args: Args): Promise<Reach[]> => {
     return [{ space, app, who }]
   }
   let spaces = args.space == null
-    ? await ctx.dir.spaces(ctx.person)
+    ? await spacesOf(ctx)
     : [(await inSpace(ctx, args)).space]
   // Every space at once: a role and an app list per space, and none waits on
-  // another's (T-34986).
+  // another's; the walks are the request's (declared.ts `spacesOf`, `appsOf`),
+  // so the roster's own walk a moment later is this one (T-34986).
   let each = await Promise.all(
     spaces.filter((s) => !s.trashed).map(async (space) => {
       let [role, apps] = await Promise.all([
         ctx.dir.role(space, ctx.person),
-        ctx.dir.apps(space),
+        appsOf(ctx, space),
       ])
       if (!role) return []
       let who: Who = { person: ctx.person, role }
