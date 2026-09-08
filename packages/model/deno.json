@@ -1,0 +1,16 @@
+{
+  "name": "@yaks/model",
+  "version": "0.0.0",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "The seam between a conversation and the model that serves it: provider-neutral items, one request and reply shape, and the provider, model and tool entities a graph keeps.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "./browser.json"
+    ]
+  }
+}

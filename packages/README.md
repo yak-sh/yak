@@ -94,6 +94,12 @@ In dependency order:
   (`session`), its lock on any entity (`claim`), the `stop_request` lever, the
   `brief` it leaves, and the `conflict` written down when two runs want one
   thing — a `precondition` hook that refuses, an `audit` hook that remembers.
+- **[@yaks/model](./model)** — the seam between a conversation and the model
+  that serves it: provider-neutral items, one request and reply shape, and the
+  `provider`, `model` and `tool` entities a graph keeps about serving.
+- **[@yaks/openai](./openai)** — that seam over OpenAI's Responses API: one
+  streamed exchange over `fetch`, a bearer from `OPENAI_API_KEY` or the Codex
+  sign-in, the two endpoints those bearers open.
 - **[@yaks/task](./task)** — a to-do list as a component domain: tasks,
   projects, boards that are saved queries rather than stored membership, and a
   status nobody writes — read off the `completed` and `cancelled` marks a task
