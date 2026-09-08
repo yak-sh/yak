@@ -1,9 +1,10 @@
 // The whole backend as one request handler over the host seam (host.ts;
-// host_deno.ts is the adapter this file runs on): static files out of src/,
+// host_deno.ts is the adapter this file runs on): static files out of src/
+// and packages/,
 // TS/TSX translated to JS per-request (sucrase strips types + compiles JSX —
 // no bundling, no type-checking; `deno task check` is the type gate), bare
-// imports resolved by the import map in index.html to the vendored ESM in
-// src/vendor/, the sync websocket, and a src/ watcher that hot-swaps
+// imports resolved by the import map in index.html to workspace packages and
+// vendored ESM in src/vendor/, the sync websocket, and a watcher that hot-swaps
 // clients: component edits re-import under a fresh ?v generation (state
 // survives — it lives in live.ts, above the swap), css edits re-fetch the
 // stylesheet, and only shell/server edits still cost a real reload.
@@ -155,6 +156,7 @@ globalThis.addEventListener('unhandledrejection', (e) => {
 let gen = Date.now()
 
 let src = new URL('.', import.meta.url).pathname
+let packages = new URL('../packages/', import.meta.url).pathname
 
 let mime: Record<string, string> = {
   html: 'text/html; charset=utf-8',
@@ -1390,6 +1392,8 @@ let handle: Handler = async (req) => {
   if (req.method != 'GET' && req.method != 'HEAD') {
     return methodNotAllowed('GET, HEAD')
   }
+  // Workspace modules use the same TS/TSX translation as application modules.
+  if (path.startsWith('/packages/')) return file(repo.slice(0, -1), path)
   // An extensionless path is a ROUTE (/T-123): the app boots and reads
   // the URL — same shell, different root card.
   let shell = path.includes('.') ? path : '/index.html'
@@ -1475,13 +1479,15 @@ if (appOnly) {
   bootDoing(doingDeps, syncSoon)
 }
 
-// Watch src/ and tell every client what a save means (debounced — editors
-// fire several events per save):
+// Watch app and package source and tell every client what a save means
+// (debounced — editors fire several events per save):
 //   {hmr: gen}  component/logic edit — re-import the graph under ?v=gen
 //               and re-render; signals in live.ts keep all state
 //   {css: gen}  css-only edit — re-fetch the stylesheet, nothing else
 //   'reload'    a SHELL file (main.tsx, live.ts, index.html, vendor/) —
-//               the swap boundary itself moved; only a real reload applies
+//               the swap boundary itself moved; only a reload applies
+//               Package imports are unversioned in the import map, so package
+//               edits also reload the page to replace their cached modules.
 // The supervisor (dev.ts) owns server-graph restarts. We must not close client
 // sockets merely because this watcher saw a serverFile edit: the supervisor
 // first asks this process to settle and exit, then starts the replacement.
@@ -1489,11 +1495,12 @@ if (appOnly) {
 // clients retry through the deliberate restart gap.
 let shellish = (p: string) =>
   p.endsWith('/main.tsx') || p.endsWith('/live.ts') ||
-  p.endsWith('/index.html') || p.includes('/vendor/')
+  p.endsWith('/index.html') || p.includes('/vendor/') ||
+  p.startsWith(packages)
 let watch = async () => {
   let timer: ReturnType<typeof setTimeout> | null = null
   let batch = new Set<string>()
-  for await (let e of Deno.watchFs(src)) {
+  for await (let e of Deno.watchFs([src, packages])) {
     if (e.paths.some(serverFile)) return
     for (let p of e.paths) batch.add(p)
     if (timer) clearTimeout(timer)

@@ -107,6 +107,7 @@
   },
   "imports": {
     "@huggingface/transformers": "npm:@huggingface/transformers@^3",
+    "es-module-lexer": "npm:es-module-lexer@1.7.0",
     "lucide-preact": "npm:lucide-preact@^1.31.0",
     "lucide": "npm:lucide@1.31.0",
     "preact": "npm:preact@^10.29.1",
