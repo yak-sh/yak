@@ -18,7 +18,9 @@
 //     + stop                 the daemon performs nothing after this
 //     + error{code}          expected and recorded: normal
 //     + exception            unexpected: a defect report, not a stop
-//   provider{name} model{name, provider} tool{name, description}
+//
+// What a `using` names — `provider`, `model` — and what a `call.to` may reach —
+// a `tool` — are @yaks/model's entities, loaded beside this document.
 //
 // The document is ./native.json — plain JSON Schema. This file names the comps
 // for callers and keeps the prose.
@@ -26,7 +28,8 @@
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './native.json' with { type: 'json' }
 
-/** The native session vocabulary, to load beside {@link sessionDoc}. */
+/** The native session vocabulary, to load beside {@link sessionDoc} and
+ * @yaks/model's `modelDoc`. */
 export let nativeDoc: VocabDoc = doc
 
 export let TRANSCRIPT = 'transcript'
@@ -40,6 +43,3 @@ export let RESULT = 'result'
 export let STOP_ENTRY = 'stop'
 export let ERROR = 'error'
 export let EXCEPTION = 'exception'
-export let PROVIDER = 'provider'
-export let MODEL = 'model'
-export let TOOL = 'tool'

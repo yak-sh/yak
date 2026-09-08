@@ -7,6 +7,7 @@ import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
 import { mem } from '../sqlite/harness.ts'
+import { modelDoc } from '@yaks/model'
 import { sessionDoc } from './comp.ts'
 import { nativeDoc } from './native.ts'
 import {
@@ -16,7 +17,7 @@ import {
   usingBefore,
 } from './status.ts'
 
-let vocab = loadVocab([sessionDoc, nativeDoc])
+let vocab = loadVocab([sessionDoc, modelDoc, nativeDoc])
 
 let S = 'sess'
 let entry = (n: number, kind: Record<string, unknown>, text = ''): Bundle => ({

@@ -16,7 +16,8 @@
 
 import type { Bundle, Comp, Hook } from '@yaks/graph'
 import { then } from '@yaks/graph'
-import { ENTRY, FORK, MODEL, PROVIDER, USING } from './native.ts'
+import { MODEL, PROVIDER } from '@yaks/model'
+import { ENTRY, FORK, USING } from './native.ts'
 
 /** A reference in a native comp named something that is not what it must be. */
 export class Unnamed extends Error {

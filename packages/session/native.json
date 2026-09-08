@@ -154,44 +154,6 @@
       "type": "object",
       "description": "an outcome the code did not expect, whoever caused it: a defect report, not a stop",
       "properties": {}
-    },
-    "provider": {
-      "type": "object",
-      "kind": true,
-      "description": "a service that runs models",
-      "properties": {
-        "name": {
-          "type": "string"
-        }
-      }
-    },
-    "model": {
-      "type": "object",
-      "kind": true,
-      "description": "a model a provider serves",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "provider": {
-          "type": "string",
-          "ref": "provider",
-          "death": "cascade"
-        }
-      }
-    },
-    "tool": {
-      "type": "object",
-      "kind": true,
-      "description": "something a model may call",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        }
-      }
     }
   }
 }

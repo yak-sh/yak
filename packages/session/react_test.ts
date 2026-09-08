@@ -1,35 +1,31 @@
 // The daemon's step over a fake model, on @yaks/ram: an input is asked, a tool
 // call is run, the transcript settles; a stop is obeyed; a fork continues from
-// its anchor with `previous_response_id` and only what followed; errors retry
-// to the bound and then stop.
+// its anchor with only what followed; errors retry to the bound and then stop;
+// and the same steps run themselves as a `created(entry)` effect.
 
 import { assertEquals } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
+import { effects } from '@yaks/effects'
+import { modelDoc, ModelError, type Reply, type Request } from '@yaks/model'
 import { sessionDoc } from './comp.ts'
 import { nativeDoc } from './native.ts'
 import { kindOf, statusOf } from './status.ts'
 import { native } from './plugin.ts'
-import {
-  ModelError,
-  type ModelReply,
-  type ModelRequest,
-  react,
-  settle,
-  transcript,
-} from './react.ts'
+import { react, settle, transcript } from './react.ts'
+import { daemon } from './daemon.ts'
 
-let vocab = loadVocab([sessionDoc, nativeDoc])
+let vocab = loadVocab([sessionDoc, modelDoc, nativeDoc])
 
 let ids = { s: 'sess', m: 'model', p: 'prov', t: 'tool', f: 'fork' }
 
 // A scripted model: each call pops the next reply; the requests are kept for
 // the assertions about what travelled.
-let scripted = (replies: ModelReply[]) => {
-  let asked: ModelRequest[] = []
-  let model = (req: ModelRequest) => {
+let scripted = (replies: Reply[]) => {
+  let asked: Request[] = []
+  let model = (req: Request) => {
     asked.push(req)
     let next = replies.shift()
     if (!next) throw new ModelError('exhausted', 'no more replies')
@@ -48,8 +44,7 @@ let echo = {
 let n = 0
 let mint = () => `x${++n}`
 
-let world = (): Graph => {
-  let g = graph({ storage: ram(vocab), vocab, plugins: [native()] })
+let seed = (g: Graph) =>
   g.apply([
     { entity: { eid: ids.p }, provider: { name: 'fake' } },
     { entity: { eid: ids.m }, model: { name: 'fake-1', provider: ids.p } },
@@ -65,29 +60,35 @@ let world = (): Graph => {
       using: { provider: ids.p, model: ids.m, effort: 'low' },
     },
   ])
+
+let world = (): Graph => {
+  let g = graph({ storage: ram(vocab), vocab, plugins: [native()] })
+  seed(g)
   return g
 }
 
 let kinds = async (g: Graph, s: string) =>
   (await transcript(g, s)).map((b) => kindOf(b))
 
+let calls = (...calls: [string, string][]): Reply => ({
+  id: 'r1',
+  model: 'fake-1',
+  items: calls.map(([id, text]) => ({
+    kind: 'call',
+    id,
+    name: 'echo',
+    args: JSON.stringify({ text }),
+  })),
+})
+let says = (id: string, text: string): Reply => ({
+  id,
+  model: 'fake-1',
+  items: [{ kind: 'assistant', text }],
+})
+
 Deno.test('an input is asked, a tool call is run, the transcript settles', async () => {
   let g = world()
-  let { model, asked } = scripted([
-    {
-      id: 'r1',
-      model: 'fake-1',
-      items: [
-        {
-          type: 'function_call',
-          id: 'c1',
-          name: 'echo',
-          arguments: '{"text":"hi"}',
-        },
-      ],
-    },
-    { id: 'r2', model: 'fake-1', items: [{ type: 'message', text: 'done' }] },
-  ])
+  let { model, asked } = scripted([calls(['c1', 'hi']), says('r2', 'done')])
   let deps = { model, tools: [echo], mint, anchors: true }
   let status = await settle(g, ids.s, deps)
   assertEquals(status, 'settled')
@@ -100,33 +101,20 @@ Deno.test('an input is asked, a tool call is run, the transcript settles', async
     'output',
   ])
   // the first call replayed the whole transcript; the second anchored on r1
-  assertEquals(asked[0].previous_response_id, undefined)
+  assertEquals(asked[0].anchor, undefined)
   assertEquals(asked[0].model, 'fake-1')
   assertEquals(asked[0].effort, 'low')
-  assertEquals(asked[1].previous_response_id, 'r1')
-  assertEquals(asked[1].input, [{
-    type: 'function_call_output',
-    call_id: 'c1',
+  assertEquals(asked[1].anchor, 'r1')
+  assertEquals(asked[1].items, [{
+    kind: 'result',
+    id: 'c1',
     output: 'echo: hi',
   }])
 })
 
 Deno.test('a stop is obeyed: nothing is asked or run after it', async () => {
   let g = world()
-  let { model, asked } = scripted([
-    {
-      id: 'r1',
-      model: 'fake-1',
-      items: [
-        {
-          type: 'function_call',
-          id: 'c1',
-          name: 'echo',
-          arguments: '{"text":"hi"}',
-        },
-      ],
-    },
-  ])
+  let { model, asked } = scripted([calls(['c1', 'hi'])])
   let deps = { model, tools: [echo], mint, anchors: true }
   await react(g, ids.s, deps) // asked: the tool call is now open
   g.apply([{
@@ -141,10 +129,7 @@ Deno.test('a stop is obeyed: nothing is asked or run after it', async () => {
 
 Deno.test('a fork continues from its anchor with only what followed', async () => {
   let g = world()
-  let { model, asked } = scripted([
-    { id: 'r1', model: 'fake-1', items: [{ type: 'message', text: 'done' }] },
-    { id: 'r2', model: 'fake-1', items: [{ type: 'message', text: 'again' }] },
-  ])
+  let { model, asked } = scripted([says('r1', 'done'), says('r2', 'again')])
   let deps = { model, tools: [echo], mint, anchors: true }
   await settle(g, ids.s, deps)
   let entries = await transcript(g, ids.s)
@@ -165,13 +150,18 @@ Deno.test('a fork continues from its anchor with only what followed', async () =
   // the fork's transcript is the parent's prefix through the anchor, then its own
   assertEquals(await kinds(g, ids.f), ['input', 'call', 'input'])
   assertEquals(await settle(g, ids.f, deps), 'settled')
-  assertEquals(asked[1].previous_response_id, 'r1')
-  assertEquals(asked[1].input, [{
-    role: 'user',
-    content: [{ type: 'input_text', text: 'and once more' }],
-  }])
+  assertEquals(asked[1].anchor, 'r1')
+  assertEquals(asked[1].items, [{ kind: 'user', text: 'and once more' }])
   // the parent is untouched
   assertEquals(statusOf(await transcript(g, ids.s)), 'settled')
+})
+
+Deno.test('without anchors every call replays the whole transcript', async () => {
+  let g = world()
+  let { model, asked } = scripted([calls(['c1', 'hi']), says('r2', 'done')])
+  await settle(g, ids.s, { model, tools: [echo], mint })
+  assertEquals(asked[1].anchor, undefined)
+  assertEquals(asked[1].items.map((i) => i.kind), ['user', 'call', 'result'])
 })
 
 Deno.test('errors retry to the bound, then the transcript is failed', async () => {
@@ -181,6 +171,22 @@ Deno.test('errors retry to the bound, then the transcript is failed', async () =
   assertEquals(await settle(g, ids.s, deps), 'failed')
   assertEquals(asked.length, 3)
   assertEquals(await kinds(g, ids.s), ['input', 'error', 'error', 'error'])
+})
+
+Deno.test('two tool calls in one reply are both answered before the next ask', async () => {
+  let g = world()
+  let { model, asked } = scripted([
+    calls(['c1', 'a'], ['c2', 'b']),
+    says('r2', 'done'),
+  ])
+  assertEquals(
+    await settle(g, ids.s, { model, tools: [echo], mint }),
+    'settled',
+  )
+  assertEquals(
+    asked[1].items.filter((i) => i.kind == 'result').map((i) => i.id),
+    ['c1', 'c2'],
+  )
 })
 
 Deno.test('a fork must name an entry, a using a model', () => {
@@ -215,4 +221,22 @@ Deno.test('a fork must name an entry, a using a model', () => {
     }),
     false,
   )
+})
+
+Deno.test('as an effect, the steps run themselves until the transcript settles', async () => {
+  let fx = effects(vocab)
+  let g = graph({ storage: ram(vocab), vocab, plugins: [native(), fx] })
+  let { model, asked } = scripted([calls(['c1', 'hi']), says('r2', 'done')])
+  let steps: string[] = []
+  let d = daemon(
+    g,
+    fx,
+    { model, tools: [echo], mint },
+    (s) => steps.push(s.did),
+  )
+  seed(g) // the input entry wakes the first step
+  await d.idle(ids.s)
+  assertEquals(statusOf(await transcript(g, ids.s)), 'settled')
+  assertEquals(asked.length, 2)
+  assertEquals(steps.filter((s) => s != 'nothing'), ['asked', 'ran', 'asked'])
 })

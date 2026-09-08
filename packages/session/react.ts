@@ -3,30 +3,38 @@
 // asks the model; an open tool call is performed; an error under the retry
 // bound asks the model again; everything else is nothing. It appends what
 // happened as entries and returns, so a loop over it is a session and a
-// `created(entry)` effect over it is the daemon.
+// `created(entry)` effect over it is the daemon (./daemon.ts).
 //
-// It owns no transport and no tools: it is handed a `ModelCall` and a table of
-// tools, so the same code runs over a Responses transport in effectsd, over a
+// It owns no transport and no tools: it is handed a @yaks/model `Model` and a
+// table of tools, so the same code runs over @yaks/openai in a CLI, over a
 // fake in a test, and inside a Store on Cloudflare. It imports no platform API.
 //
 // A fork's transcript is the parent's entries up to the anchor plus its own.
-// The prefix a model call is asked with is the entries after the newest model
-// call that has a `response_id` — sent as `previous_response_id` plus only what
-// followed — and the whole transcript when there is none. That one rule is
-// what makes a fork's first call cheap and a rewind possible: the anchor is
-// the parent's last response, and only the fork's new input travels.
+// When the model keeps replies (`deps.anchors`), a call is asked with the
+// newest model call's reply as its anchor plus only what followed; otherwise
+// the whole transcript travels every time. That one rule is what makes a
+// fork's first call cheap where the provider allows it: the anchor is the
+// parent's last reply, and only the fork's new input travels.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import {
+  type Item,
+  MODEL,
+  type Model,
+  ModelError,
+  type Reply,
+  type Request,
+  TOOL,
+  type Tool as Declared,
+} from '@yaks/model'
 import {
   CALL,
   ENTRY,
   ERROR,
   EXCEPTION,
   FORK,
-  MODEL,
   OUTPUT,
   RESULT,
-  TOOL,
   USING,
 } from './native.ts'
 import {
@@ -39,58 +47,20 @@ import {
 } from './status.ts'
 
 /** A tool the model may call: its declaration, and how to run it. */
-export type Tool = {
-  name: string
-  description: string
-  parameters: Record<string, unknown>
+export type Tool = Declared & {
   run: (args: Record<string, unknown>) => Promise<string> | string
-}
-
-/** One item a model returned. */
-export type ModelItem =
-  | { type: 'message'; text: string }
-  | { type: 'function_call'; id: string; name: string; arguments: string }
-
-/** What a model is asked: the Responses shape, provider-neutral. */
-export type ModelRequest = {
-  model: string
-  effort?: string
-  instructions?: string
-  input: unknown[]
-  tools: { name: string; description: string; parameters: unknown }[]
-  previous_response_id?: string
-}
-
-/** What a model answered: its anchor, the model that served, the items. */
-export type ModelReply = { id: string; model: string; items: ModelItem[] }
-
-/** The transport: one request in, one reply out. Throwing is an `error` entry
- * (a fault the transport named) or an `exception` (anything else). */
-export type ModelCall = (req: ModelRequest) => Promise<ModelReply>
-
-/** A transport fault the daemon expects — the world said no. Anything else a
- * transport throws is an exception. */
-export class ModelError extends Error {
-  code: string
-  constructor(code: string, message = code) {
-    super(message)
-    this.name = 'ModelError'
-    this.code = code
-  }
 }
 
 /** What `react` is handed beside the graph. */
 export type Deps = {
-  model: ModelCall
+  model: Model
   tools: Tool[]
   instructions?: string
-  /** the transport keeps responses, so a call may continue from the newest
-   * `response_id` with only what followed (`previous_response_id`). Off, every
-   * call replays the whole transcript — the only path a provider that stores
-   * nothing (the Codex backend sends `store: false`) can serve. The id is
-   * recorded either way. */
+  /** the model keeps replies, so a call may continue from the newest reply
+   * with only what followed. Off, every call replays the whole transcript —
+   * the only path a provider that stores nothing (the Codex backend) can
+   * serve. The reply id is recorded either way. */
   anchors?: boolean
-  now?: () => string
   mint?: () => Eid
 }
 
@@ -122,44 +92,34 @@ export let transcript = async (g: Graph, session: Eid): Promise<Bundle[]> => {
   ]
 }
 
-// The model's view of a window of the transcript: inputs as user turns, what
-// the model said as assistant turns, tool calls and results as the function
-// pair the API expects. Model call entries are our record, not the model's.
-let project = (
+/** The model's view of a window of the transcript: inputs as user turns, what
+ * the model said as assistant turns, tool calls and results as the pair a
+ * model expects. Model call entries are our record, not the model's; a tool
+ * call the anchored reply itself asked for is already in the provider's state,
+ * so only its result travels. */
+export let project = (
   entries: Bundle[],
-  tools: Map<Eid, Tool>,
+  tools: Map<Eid, Declared>,
   anchor?: Eid,
-): unknown[] => {
-  let out: unknown[] = []
+): Item[] => {
+  let out: Item[] = []
   for (let b of entries) {
     let kind = kindOf(b)
-    // a tool call the anchored response itself asked for is already in the
-    // provider's state; only its output travels
-    if (kind == 'call' && comp(b, CALL)?.source == anchor) continue
-    if (kind == 'input') {
+    let c = comp(b, CALL)
+    if (kind == 'input') out.push({ kind: 'user', text: text(b) })
+    else if (kind == 'output') out.push({ kind: 'assistant', text: text(b) })
+    else if (kind == 'call' && c?.source != null && c.source != anchor) {
       out.push({
-        role: 'user',
-        content: [{ type: 'input_text', text: text(b) }],
-      })
-    } else if (kind == 'output') {
-      out.push({
-        type: 'message',
-        role: 'assistant',
-        content: [{ type: 'output_text', text: text(b) }],
-      })
-    } else if (kind == 'call' && comp(b, CALL)?.source != null) {
-      let c = comp(b, CALL)!
-      out.push({
-        type: 'function_call',
-        call_id: String(c.id),
+        kind: 'call',
+        id: String(c.id),
         name: tools.get(String(c.to))?.name ?? 'tool',
-        arguments: String(c.args ?? '{}'),
+        args: String(c.args ?? '{}'),
       })
     } else if (kind == 'result') {
       let call = entries.find((e) => e.entity.eid == comp(b, RESULT)?.call)
       out.push({
-        type: 'function_call_output',
-        call_id: String(comp(call!, CALL)?.id ?? ''),
+        kind: 'result',
+        id: String(comp(call!, CALL)?.id ?? ''),
         output: text(b),
       })
     }
@@ -202,13 +162,10 @@ export let react = async (
       added,
     }
   }
-  let byEid = new Map(
-    (await g.read(`.${TOOL}`)).map((b) => [b.entity.eid, b] as const),
-  )
   let toolEntities = new Map<Eid, Tool>()
-  for (let [eid, b] of byEid) {
+  for (let b of await g.read(`.${TOOL}`)) {
     let t = deps.tools.find((t) => t.name == comp(b, TOOL)?.name)
-    if (t) toolEntities.set(eid, t)
+    if (t) toolEntities.set(b.entity.eid, t)
   }
 
   // Open tool calls: perform every one the newest model call asked for that
@@ -253,13 +210,14 @@ export let react = async (
   if (status == 'running') return nothing
 
   // Pending, or an error under the bound: ask the model. The anchor is the
-  // newest model call with a response id; only what followed it travels.
+  // newest model call with a reply id; only what followed it travels.
   let using = usingBefore(entries)
   let modelEid = using?.model == null ? undefined : String(using.model)
   let [modelEntity] = modelEid
     ? await g.storage.tx((tx) => tx.get([modelEid]))
     : []
-  let modelName = String(comp(modelEntity ?? {} as Bundle, MODEL)?.name ?? '')
+  let served = comp(modelEntity ?? {} as Bundle, MODEL)
+  let modelName = String(served?.name ?? '')
   if (!modelName) {
     return append([
       line({ [ERROR]: { code: 'no_model' } }, 'no model in force'),
@@ -272,21 +230,20 @@ export let react = async (
   let window = anchor
     ? entries.filter((b) => seqOf(b) > seqOf(anchor))
     : entries
-  let req: ModelRequest = {
+  let effort = using?.effort ?? served?.effort
+  let req: Request = {
     model: modelName,
-    effort: using?.effort == null ? undefined : String(using.effort),
+    effort: effort == null ? undefined : String(effort),
     instructions: deps.instructions,
-    input: project(window, toolEntities, anchor?.entity.eid),
+    items: project(window, toolEntities, anchor?.entity.eid),
     tools: deps.tools.map(({ name, description, parameters }) => ({
       name,
       description,
       parameters,
     })),
-    previous_response_id: anchor
-      ? String(comp(anchor, CALL)!.response_id)
-      : undefined,
+    anchor: anchor ? String(comp(anchor, CALL)!.response_id) : undefined,
   }
-  let reply: ModelReply
+  let reply: Reply
   try {
     reply = await deps.model(req)
   } catch (e) {
@@ -313,14 +270,14 @@ export let react = async (
     [...toolEntities].map(([eid, t]) => [t.name, eid] as const),
   )
   for (let item of reply.items) {
-    if (item.type == 'message') {
+    if (item.kind == 'assistant') {
       added.push(line({ [OUTPUT]: { source: call.entity.eid } }, item.text))
-    } else {
+    } else if (item.kind == 'call') {
       added.push(line({
         [CALL]: {
           to: byName.get(item.name),
           id: item.id,
-          args: item.arguments,
+          args: item.args,
           source: call.entity.eid,
         },
       }))
