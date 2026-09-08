@@ -52,6 +52,24 @@ export type Ctx = {
   // names each round trip it waits on, and mcp.ts puts the marks on the
   // answer as `Server-Timing`, so a slow deploy says which hop was slow.
   clock?: Clock
+  // Reads made once per request (`once` below): the door asks for the reach,
+  // each app's declared tools and each store's vocabulary from several places
+  // while it assembles itself, and a call is answered about ONE moment, so the
+  // second ask is the first one's promise. Nothing here outlives the request:
+  // freshness across calls is the directory's promise (mcp.ts), not this map's.
+  once?: Map<string, Promise<unknown>>
+}
+
+/** One read per request per key: the first caller does the work, every later
+ * caller in the same request awaits the same promise. */
+export let once = <T>(ctx: Ctx, key: string, work: () => Promise<T>) => {
+  ctx.once ??= new Map()
+  let hit = ctx.once.get(key)
+  if (!hit) {
+    hit = work()
+    ctx.once.set(key, hit)
+  }
+  return hit as Promise<T>
 }
 
 export type Args = Record<string, unknown>

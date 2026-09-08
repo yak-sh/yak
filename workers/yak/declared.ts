@@ -39,6 +39,7 @@ import {
   type Tools,
 } from '../../src/store/tools.ts'
 import { type Ctx, type Out, uiMeta, VIEW_MIME } from './tools.ts'
+import { once } from './tool.ts'
 import type { Who } from './session.ts'
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { storeOf } from './door.ts'
@@ -66,22 +67,52 @@ export let toolsOf = async (
 // the listing and a call resolve through. Two apps in two spaces can share a
 // slug, and then one name means two things: the first is the one that
 // answers, and a call for the other says which spaces have it.
-export let reachable = async (ctx: Ctx) => {
-  let out: { space: Space; app: App }[] = []
-  for (let space of await ctx.dir.spaces(ctx.person)) {
+//
+// Read ONCE per request and every space's apps at once (tool.ts `once`,
+// T-34986): the door asks for this from four places while it assembles
+// itself, and asked in turn each was its own walk of the directory.
+export let reachable = (ctx: Ctx) =>
+  once(ctx, 'reachable', async () => {
+    let spaces = await ctx.dir.spaces(ctx.person)
     // A space in the trash is out of reach whole (erase.ts, T-34431): every
     // app in it leaves every list at once, and none is asked about, which is
     // also why `about` and the door's own instructions stop naming them.
-    if (space.trashed) continue
     // An app in the trash declares nothing (erase.ts, T-34430): its tools and
     // its views leave every list the day it is deleted, which is the same
     // move a delete has always made — and they come back on a restore.
-    for (let app of await ctx.dir.apps(space)) {
-      if (!app.trashed) out.push({ space, app })
+    let each = await Promise.all(
+      spaces.filter((s) => !s.trashed).map(async (space) =>
+        (await ctx.dir.apps(space))
+          .filter((app) => !app.trashed)
+          .map((app) => ({ space, app }))
+      ),
+    )
+    return each.flat()
+  })
+
+/** {@link toolsOf}, once per app per request (tool.ts `once`). */
+export let toolsIn = (ctx: Ctx, space: Space, app: App) =>
+  once(
+    ctx,
+    `tools:${storeName(space, app)}`,
+    () => toolsOf(ctx.env, space, app),
+  )
+
+/**
+ * The vocabulary an app's store declares (`/vocab`), once per app per request:
+ * the roster reads it for what an app holds (standing.ts) and the graph door
+ * reads it for the columns it may write (agent.ts `spoken`), and both are the
+ * same moment. Null where the store answers nothing.
+ */
+export let vocabIn = (ctx: Ctx, space: Space, app: App) =>
+  once(ctx, `vocab:${storeName(space, app)}`, async () => {
+    let r = await storeOf(ctx.env.STORE, storeName(space, app))('/vocab')
+    if (!r.ok) {
+      await r.body?.cancel()
+      return null
     }
-  }
-  return out
-}
+    return await r.json() as Record<string, unknown>
+  })
 
 let whoIn = async (ctx: Ctx, space: Space): Promise<Who> => ({
   person: ctx.person,
@@ -234,10 +265,14 @@ export let listCommands = async (
   said = '',
 ): Promise<Command[]> => {
   let out: Command[] = []
-  for (let { space, app } of picked(await reachable(ctx), said)) {
-    for (
-      let [name, tool] of Object.entries(await toolsOf(ctx.env, space, app))
-    ) {
+  // Every app's declaration at once: one round trip for the reach, not one
+  // per app (T-34986).
+  let apps = picked(await reachable(ctx), said)
+  let tools = await Promise.all(
+    apps.map(({ space, app }) => toolsIn(ctx, space, app)),
+  )
+  for (let [i, { space, app }] of apps.entries()) {
+    for (let [name, tool] of Object.entries(tools[i])) {
       out.push({
         at: at(space, app),
         name,
@@ -346,8 +381,12 @@ export let listViews = async (ctx: Ctx) => {
     _meta: ReturnType<typeof metaFor>
   }[] = []
   let seen = new Set<string>()
-  for (let { space, app } of await reachable(ctx)) {
-    for (let tool of Object.values(await toolsOf(ctx.env, space, app))) {
+  let apps = await reachable(ctx)
+  let tools = await Promise.all(
+    apps.map(({ space, app }) => toolsIn(ctx, space, app)),
+  )
+  for (let [i, { space, app }] of apps.entries()) {
+    for (let tool of Object.values(tools[i])) {
       if (!tool.view) continue
       let uri = viewUri(space, app, tool.view)
       if (seen.has(uri)) continue

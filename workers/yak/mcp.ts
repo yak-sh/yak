@@ -90,7 +90,7 @@ import { instructions, pageFor, UNDO } from './guide.ts'
 import { url as hostUrl } from './host.ts'
 import { asking, challenge, unauthorized } from './identity.ts'
 import { narrowed } from './grants.ts'
-import { listCommands, listViews, readView } from './declared.ts'
+import { listViews, readView } from './declared.ts'
 import { answer, asset, type Doc, docs, SIGNIN } from './preauth.ts'
 import type { Reach } from './reach.ts'
 import { PROMPTS } from './prompts.ts'
@@ -377,7 +377,6 @@ let door = async (ctx: Ctx, session: string) => {
   // and never appear in the list; they are read here so the instructions can
   // name them under their app, and `commands` says them again with their
   // arguments when an agent asks.
-  let own = await c.time('commands', () => listCommands(ctx))
   // What the apps in reach say about themselves (standing.ts, T-34425): every
   // one of them named, with what it holds and its own commands. That ROSTER
   // rides on the INSTRUCTIONS, which is what a model reads before it reads
@@ -387,15 +386,22 @@ let door = async (ctx: Ctx, session: string) => {
   // instructions and the tool list, and somebody else's prose there reads as
   // an attempt to steer the model rather than as their own notes.
   //
-  // The reach and the commands are handed over rather than read again: this
-  // runs on every call at the door, and both were just paid for.
-  let apps = await c.time('standing', () => standing(ctx, reach, own))
-  ctx.standing = apps.notes
   // The graph, and how a column of it reads and writes: a reference answers
   // human, and a word two of the caller's spaces spell differently is typed
   // nowhere (agent.ts `reading`). The schemas in the tool list are derived
   // through it, so they describe what this door actually says.
-  let { graph, column } = await c.time('reaching', () => reaching(ctx, reach))
+  //
+  // The two are read AT ONCE, over the reach just paid for: each is its own
+  // fan-out across the apps, and what both ask for — a store's words — is
+  // read once per request (tool.ts `once`). The commands are not listed here
+  // any more: the roster names them off each app's declaration as it reads it,
+  // and `commands` says them with their arguments when asked. This runs on
+  // every call at the door, so it is the floor under every write (T-34986).
+  let [apps, { graph, column }] = await Promise.all([
+    c.time('standing', () => standing(ctx, reach)),
+    c.time('reaching', () => reaching(ctx, reach)),
+  ])
+  ctx.standing = apps.notes
   let opts = {
     graph,
     column,

@@ -30,11 +30,11 @@ import { addressed, wordish } from '@yaks/alias'
 import { barred, openly } from './anon.ts'
 import { Say, type Search } from '@yaks/mcp'
 import type { Column, Vocab } from '@yaks/vocab'
-import { META, storeName } from './directory.ts'
+import { META } from './directory.ts'
+import { vocabIn } from './declared.ts'
 import { letters } from './letters.ts'
 import { composed, type Reach, read, written } from './reach.ts'
 import { titling } from './session.ts'
-import { storeOf } from './door.ts'
 import {
   type Ctx,
   inApp,
@@ -333,15 +333,11 @@ let spoken = async (
   ctx: Ctx,
   reach: Reach[],
 ): Promise<{ vocab: Vocab; clashes: Set<string> }> => {
-  let said = await Promise.all(reach.map(async (r) => {
-    let door = storeOf(ctx.env.STORE, storeName(r.space, r.app))
-    let got = await door('/vocab')
-    if (!got.ok) {
-      await got.body?.cancel()
-      return {}
-    }
-    return await got.json() as Record<string, unknown>
-  }))
+  // Each store's words, read once per request (declared.ts `vocabIn`): the
+  // roster already asked for them (standing.ts `kindsOf`).
+  let said = await Promise.all(
+    reach.map(async (r) => (await vocabIn(ctx, r.space, r.app)) ?? {}),
+  )
   let all: Record<string, unknown> = {}
   let clashes = new Set<string>()
   let cols = (v: unknown) => (v ?? {}) as Record<string, unknown>

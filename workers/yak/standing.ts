@@ -37,11 +37,10 @@
 // refused over CAP at the write rather than truncated at the read — half of
 // what somebody wrote is worse than a pointer to all of it.
 import { r2Blobs } from '../../src/blobs_r2.ts'
-import { type App, type Space, storeName, url } from './directory.ts'
-import { storeOf } from './door.ts'
+import { type App, type Space, url } from './directory.ts'
 import type { Env } from './env.ts'
 import type { Host } from './host.ts'
-import { at, reachable, toolsOf } from './declared.ts'
+import { at, reachable, toolsIn, vocabIn } from './declared.ts'
 import { told } from './memory.ts'
 import type { Ctx } from './tools.ts'
 import { appDoc } from './vocab.ts'
@@ -121,14 +120,11 @@ export let notesOf = async (
 // The words an app declares as its own, as the store last accepted them
 // (reach.ts `vocabAt` reads the same door for the same file). A store that
 // cannot answer says nothing, which reads as an app with no words of its own.
-let kindsOf = async (env: Env, space: Space, app: App): Promise<string[]> => {
-  let r = await storeOf(env.STORE, storeName(space, app))('/vocab')
-  if (!r.ok) {
-    await r.body?.cancel()
-    return []
-  }
+let kindsOf = async (ctx: Ctx, space: Space, app: App): Promise<string[]> => {
+  let said = await vocabIn(ctx, space, app)
+  if (!said) return []
   try {
-    return Object.keys(appDoc(await r.json()).$defs ?? {})
+    return Object.keys(appDoc(said).$defs ?? {})
   } catch {
     return []
   }
@@ -163,17 +159,20 @@ export let entries = async (
   commands?: { at: string; name: string }[],
 ): Promise<Entry[]> =>
   await Promise.all(
-    (reach ?? await reachable(ctx)).map(async ({ space, app }) => ({
-      space,
-      app,
-      said: await notesOf(ctx.env, space, app),
-      kinds: await kindsOf(ctx.env, space, app),
-      // The commands the door already listed, picked out by the app they are
-      // of — `<space>/<app>`, which is the same word `command` takes.
-      commands: commands
-        ? commands.filter((c) => c.at == at(space, app)).map((c) => c.name)
-        : Object.keys(await toolsOf(ctx.env, space, app)),
-    })),
+    (reach ?? await reachable(ctx)).map(async ({ space, app }) => {
+      // An app's three reads at once — its notes, its words, its commands —
+      // none waits on another (T-34986).
+      let [said, kinds, names] = await Promise.all([
+        notesOf(ctx.env, space, app),
+        kindsOf(ctx, space, app),
+        // The commands the door already listed, picked out by the app they
+        // are of — `<space>/<app>`, which is the same word `command` takes.
+        commands
+          ? commands.filter((c) => c.at == at(space, app)).map((c) => c.name)
+          : toolsIn(ctx, space, app).then(Object.keys),
+      ])
+      return { space, app, said, kinds, commands: names }
+    }),
   )
 
 /** The line an app with notes gets on the roster, in place of them. */
@@ -238,10 +237,13 @@ export let standing = async (
   reach?: { space: Space; app: App }[],
   commands?: { at: string; name: string }[],
 ): Promise<{ text: string; notes: string; apps: Entry[] }> => {
-  let apps = await entries(ctx, reach, commands)
+  let [apps, told] = await Promise.all([
+    entries(ctx, reach, commands),
+    heard(ctx),
+  ])
   return {
     text: passage(apps, false, ctx.env),
-    notes: [passage(apps, true, ctx.env), ...await heard(ctx)].filter(Boolean)
+    notes: [passage(apps, true, ctx.env), ...told].filter(Boolean)
       .join('\n\n'),
     apps,
   }

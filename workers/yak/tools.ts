@@ -1049,21 +1049,22 @@ export let inReach = async (ctx: Ctx, args: Args): Promise<Reach[]> => {
   let spaces = args.space == null
     ? await ctx.dir.spaces(ctx.person)
     : [(await inSpace(ctx, args)).space]
-  let out: Reach[] = []
-  for (let space of spaces) {
-    if (space.trashed) continue
-    let who: Who = {
-      person: ctx.person,
-      role: await ctx.dir.role(space, ctx.person),
-    }
-    if (!who.role) continue
-    for (let app of await ctx.dir.apps(space)) {
-      if (!app.trashed && reads(mode(app.access), who.role)) {
-        out.push({ space, app, who })
-      }
-    }
-  }
-  return out
+  // Every space at once: a role and an app list per space, and none waits on
+  // another's (T-34986).
+  let each = await Promise.all(
+    spaces.filter((s) => !s.trashed).map(async (space) => {
+      let [role, apps] = await Promise.all([
+        ctx.dir.role(space, ctx.person),
+        ctx.dir.apps(space),
+      ])
+      if (!role) return []
+      let who: Who = { person: ctx.person, role }
+      return apps
+        .filter((app) => !app.trashed && reads(mode(app.access), who.role))
+        .map((app) => ({ space, app, who }))
+    }),
+  )
+  return each.flat()
 }
 
 let answer = async (r: Response) => {
