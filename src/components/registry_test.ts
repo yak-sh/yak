@@ -1,6 +1,7 @@
 // Scored resolution: the most specific renderer wins, ties go to
 // registration order, platform overrides beat the shared list on ties.
 import { h } from 'preact'
+import { and, type Query } from '@yaks/query'
 import {
   actionsFor,
   alias,
@@ -18,7 +19,7 @@ import { assertEquals } from '@std/assert'
 // A fixture renderer is a component like any other — it just paints its tag
 // as text. Resolution picks the winner; mounting through Preact reads which
 // tag it painted (tag() below), never a bare call.
-let R = (view: string, match: (e: Ent) => number | boolean, tag: string) => ({
+let R = (view: string, match: Query, tag: string) => ({
   view,
   match,
   Render: () => tag,
@@ -29,10 +30,10 @@ define([
   R('Doc', has('doc'), 'doc'),
   R('Card.Title', has('doc', 'task'), 'task-title'),
   R('Card.Title', has('doc'), 'doc-title'),
-  R('Card.Title', () => true, 'any-title'),
+  R('Card.Title', and(), 'any-title'),
   R('Tile', has('doc', 'task'), 'task-tile'),
   R('Tile', has('doc'), 'doc-tile'),
-  R('JSON', () => true, 'json'),
+  R('JSON', and(), 'json'),
 ], ['Task', 'Doc', 'JSON'])
 
 let ent = (comps: Record<string, unknown>) =>
@@ -105,7 +106,7 @@ Deno.test('actions union across matching contributors, in order', () => {
         run: () => {},
       }],
     },
-    { match: () => true, acts: () => [{ label: 'delete', run: () => {} }] },
+    { match: and(), acts: () => [{ label: 'delete', run: () => {} }] },
   ])
   assertEquals(
     actionsFor(ent({ task: {} })).map((a) => a.label),

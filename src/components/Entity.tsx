@@ -1,7 +1,19 @@
+// The curated views and verbs, with the app's quarantine and memo boundary.
+// @yaks/render selects them; @yaks/preact mounts the selected component.
+import { render } from '@yaks/preact'
+import { and, or, parse, present } from '@yaks/query'
 import { statusChanges, subChanges } from '../client.ts'
 import { ent, mutate, myActor, myMode, reveal, rows, shown } from '../live.ts'
 import { type Ent, statusOf } from '../types.ts'
-import { type Action, define, defineActions, has, resolve } from './registry.ts'
+import {
+  type Action,
+  bundle,
+  define,
+  defineActions,
+  registry,
+  resolve,
+  vocab,
+} from './registry.ts'
 import { shelve } from './shelf.ts'
 import { memo } from './memo.ts'
 import {
@@ -90,59 +102,59 @@ define([
   // reads the binding at module init.
   {
     view: 'Canvas',
-    match: has('canvas'),
+    match: parse('.canvas'),
     Render: ({ e }) => <Canvas eid={e.eid} />,
   },
-  { view: 'List', match: has('canvas'), Render: List },
-  { view: 'List', match: has('board'), Render: BoardList },
-  { view: 'Tile', match: has('doc', 'memory'), Render: MemoryTile },
+  { view: 'List', match: parse('.canvas'), Render: List },
+  { view: 'List', match: parse('.board'), Render: BoardList },
+  { view: 'Tile', match: parse('.doc .memory'), Render: MemoryTile },
   // TaskTile walks back through Entity for its Meta row; defer the binding
   // for the same reason as Canvas above.
   {
     view: 'Tile',
-    match: has('doc', 'task'),
+    match: parse('.doc .task'),
     Render: (props) => <TaskTile {...props} />,
   },
-  { view: 'Tile', match: has('doc', 'board'), Render: BoardTile },
-  { view: 'Tray.List.Tile', match: has('session'), Render: SessionRow },
-  { view: 'Tile', match: has('session'), Render: SessionRow },
-  { view: 'Tile', match: () => true, Render: ListTile },
-  { view: 'Wake', match: has('wake'), Render: Wake },
-  { view: 'Session', match: has('session'), Render: Session },
-  { view: 'Full', match: has('doc'), Render: Show },
-  { view: 'Card.Full', match: has('doc'), Render: CardFull },
-  { view: 'Board', match: has('doc', 'board'), Render: Board },
+  { view: 'Tile', match: parse('.doc .board'), Render: BoardTile },
+  { view: 'Tray.List.Tile', match: parse('.session'), Render: SessionRow },
+  { view: 'Tile', match: parse('.session'), Render: SessionRow },
+  { view: 'Tile', match: and(), Render: ListTile },
+  { view: 'Wake', match: parse('.wake'), Render: Wake },
+  { view: 'Session', match: parse('.session'), Render: Session },
+  { view: 'Full', match: parse('.doc'), Render: Show },
+  { view: 'Card.Full', match: parse('.doc'), Render: CardFull },
+  { view: 'Board', match: parse('.doc .board'), Render: Board },
   // The two-pane inbox: list left, opened entity right. A view of anything
   // with a list face (a board/project, or a canvas), never a default face —
   // it sits after Board/List in the tabs list so it is a chosen tab.
   {
     view: 'Split',
-    match: (e) => has('board')(e) || has('canvas')(e),
+    match: and(or(present('board'), present('canvas'))),
     Render: Split,
   },
   // The tiling container (D-14718) — a layout's default face. Its leaves
   // walk back through Entity, so defer the binding like Canvas above.
   {
     view: 'Layout',
-    match: has('doc', 'layout'),
+    match: parse('.doc .layout'),
     Render: (props) => <Layout {...props} />,
   },
-  // The Project Cockpit (D-14587). Scores 1 on purpose — not
-  // has('doc','project')'s 2 — so Full keeps the project's default face:
+  // The Project Cockpit (D-14587). One grouped clause ties with Full's
+  // doc clause, so Full keeps the project's default face:
   // the cockpit is a chosen tab, never a changed default. Its facet rows
   // walk back through Entity; defer the binding like Canvas above.
   {
     view: 'Dashboard',
-    match: (e) => !!(e.doc && e.project) && 1,
+    match: and(parse('.doc .project')),
     Render: (props) => <Dashboard {...props} />,
   },
-  { view: 'Persona', match: has('doc', 'persona'), Render: Persona },
+  { view: 'Persona', match: parse('.doc .persona'), Render: Persona },
   // Usage reads FOR a project: the cost + throughput of the sessions that
   // worked its tasks, projected from usage.ts. Delegates nothing, so no
   // deferral needed.
   {
     view: 'Usage',
-    match: has('project'),
+    match: parse('.project'),
     Render: (props) => <Usage {...props} />,
   },
   // An inbox reads FOR an actor, so it offers itself on the two things
@@ -151,87 +163,87 @@ define([
   // with every other composite view above.
   {
     view: 'Inbox',
-    match: has('project'),
+    match: parse('.project'),
     Render: (props) => <Inbox {...props} />,
   },
   {
     view: 'Inbox',
-    match: has('person'),
+    match: parse('.person'),
     Render: (props) => <Inbox {...props} />,
   },
   // Role's linked-session sections walk back through Entity, so defer the
   // binding like Canvas's cycle above.
   {
     view: 'Role',
-    match: has('doc', 'role'),
+    match: parse('.doc .role'),
     Render: (props) => <Role {...props} />,
   },
-  { view: 'Web', match: has('web'), Render: Web },
+  { view: 'Web', match: parse('.web'), Render: Web },
   // Registered AFTER Full: a bare attachment has no doc, so Media is its sole
   // match; a task/comment that wears one keeps its own face while still
   // offering a Media tab. Blob entities are shared content, not attachments.
-  { view: 'Media', match: has('attachment'), Render: Media },
+  { view: 'Media', match: parse('.attachment'), Render: Media },
   // Entry faces use the same specificity rules as every entity view. The
   // generic entry is the floor; facets such as bash and result override it.
   {
     view: 'Summary',
-    match: has('entry', 'call', 'bash'),
+    match: parse('.entry .call .bash'),
     Render: CommandSummary,
   },
   {
     view: 'Summary',
-    match: has('entry', 'prompt', 'message'),
+    match: parse('.entry .prompt .message'),
     Render: PromptSummary,
   },
-  { view: 'Summary', match: has('entry', 'result'), Render: ResultSummary },
-  { view: 'Summary', match: has('entry', 'message'), Render: MessageSummary },
-  { view: 'Summary', match: has('entry'), Render: EntrySummary },
-  { view: 'Full', match: has('entry', 'call', 'bash'), Render: CommandFull },
-  { view: 'Full', match: has('entry', 'result'), Render: ResultFull },
-  { view: 'Full', match: has('entry', 'message'), Render: MessageFull },
+  { view: 'Summary', match: parse('.entry .result'), Render: ResultSummary },
+  { view: 'Summary', match: parse('.entry .message'), Render: MessageSummary },
+  { view: 'Summary', match: parse('.entry'), Render: EntrySummary },
+  { view: 'Full', match: parse('.entry .call .bash'), Render: CommandFull },
+  { view: 'Full', match: parse('.entry .result'), Render: ResultFull },
+  { view: 'Full', match: parse('.entry .message'), Render: MessageFull },
   {
     view: 'Entry.Debug',
-    match: has('entry'),
+    match: parse('.entry'),
     Render: ({ e }) => <Debug e={e} tabs={false} />,
   },
   // The sections — Full's legos, internal views like Inline and Dependency.
   // Catch-all matchers on purpose: each renders nothing when its data is
   // absent, and a specialized look for an entity shape is a higher-
   // scoring entry above these, never an edit to Full.
-  { view: 'Body', match: () => true, Render: Body },
-  { view: 'Acceptance', match: () => true, Render: Acceptance },
-  { view: 'Meta', match: has('board'), Render: BoardMeta },
-  { view: 'Meta', match: () => true, Render: Meta },
-  { view: 'Mail', match: () => true, Render: Mail },
+  { view: 'Body', match: and(), Render: Body },
+  { view: 'Acceptance', match: and(), Render: Acceptance },
+  { view: 'Meta', match: parse('.board'), Render: BoardMeta },
+  { view: 'Meta', match: and(), Render: Meta },
+  { view: 'Mail', match: and(), Render: Mail },
   {
     view: 'Dependencies',
-    match: has('comment'),
+    match: parse('.comment'),
     Render: CommentDependencies,
   },
-  { view: 'Dependencies', match: () => true, Render: Dependencies },
-  { view: 'Relate', match: () => true, Render: Relate },
-  { view: 'Boards', match: () => true, Render: Boards },
-  { view: 'Tasks', match: () => true, Render: Tasks },
-  { view: 'Runs', match: () => true, Render: Runs },
-  { view: 'Similar', match: () => true, Render: Similar },
-  { view: 'Comments', match: () => true, Render: Talkback },
-  { view: 'Card.Title', match: has('wake', 'deliver'), Render: WakeTitle },
-  { view: 'Card.Title', match: has('doc', 'task'), Render: TaskTitle },
-  { view: 'Card.Title', match: has('doc', 'board'), Render: BoardTitle },
-  { view: 'Card.Title', match: has('doc', 'role'), Render: RoleTitle },
-  { view: 'Card.Title', match: has('web'), Render: WebTitle },
-  { view: 'Card.Title', match: has('session'), Render: SessionTitle },
-  { view: 'Card.Title', match: has('doc'), Render: DocTitle },
-  { view: 'Card.Title', match: () => true, Render: AnyTitle },
+  { view: 'Dependencies', match: and(), Render: Dependencies },
+  { view: 'Relate', match: and(), Render: Relate },
+  { view: 'Boards', match: and(), Render: Boards },
+  { view: 'Tasks', match: and(), Render: Tasks },
+  { view: 'Runs', match: and(), Render: Runs },
+  { view: 'Similar', match: and(), Render: Similar },
+  { view: 'Comments', match: and(), Render: Talkback },
+  { view: 'Card.Title', match: parse('.wake .deliver'), Render: WakeTitle },
+  { view: 'Card.Title', match: parse('.doc .task'), Render: TaskTitle },
+  { view: 'Card.Title', match: parse('.doc .board'), Render: BoardTitle },
+  { view: 'Card.Title', match: parse('.doc .role'), Render: RoleTitle },
+  { view: 'Card.Title', match: parse('.web'), Render: WebTitle },
+  { view: 'Card.Title', match: parse('.session'), Render: SessionTitle },
+  { view: 'Card.Title', match: parse('.doc'), Render: DocTitle },
+  { view: 'Card.Title', match: and(), Render: AnyTitle },
   {
     view: 'Markdown',
-    match: has('doc'),
+    match: parse('.doc'),
     Render: Md,
     file: { ext: 'md', mime: 'text/markdown', text: mdText },
   },
   {
     view: 'JSON',
-    match: () => true,
+    match: and(),
     Render: Json,
     file: {
       ext: 'json',
@@ -245,16 +257,16 @@ define([
   // by name.
   {
     view: 'Schema',
-    match: (e) => e.alias?.slug == 'vocabulary',
+    match: parse('.alias.slug=vocabulary'),
     Render: Schema,
   },
-  { view: 'Debug', match: has('project'), Render: ProjectDebug },
-  { view: 'Debug', match: () => true, Render: Debug },
-  { view: 'Debug.Tile', match: has('task'), Render: DebugTaskItem },
-  { view: 'Debug.Tile', match: () => true, Render: DebugAnyItem },
-  { view: 'Inline', match: has('doc', 'task'), Render: TaskInline },
-  { view: 'Inline', match: () => true, Render: Inline },
-  { view: 'Dependency', match: () => true, Render: Dependency },
+  { view: 'Debug', match: parse('.project'), Render: ProjectDebug },
+  { view: 'Debug', match: and(), Render: Debug },
+  { view: 'Debug.Tile', match: parse('.task'), Render: DebugTaskItem },
+  { view: 'Debug.Tile', match: and(), Render: DebugAnyItem },
+  { view: 'Inline', match: parse('.doc .task'), Render: TaskInline },
+  { view: 'Inline', match: and(), Render: Inline },
+  { view: 'Dependency', match: and(), Render: Dependency },
 ], [
   'Wake',
   'Canvas',
@@ -306,25 +318,25 @@ defineActions([
   {
     // The Shelf is universal screen chrome: any entity may become the
     // bottom-right popover, not only the chats that choose it by default.
-    match: () => true,
+    match: and(),
     acts: (e) => [{
       label: 'open in tray',
       run: () => shelve(e.eid, resolve(e).view),
     }],
   },
   {
-    match: () => true,
+    match: and(),
     acts: (e) => [{
       label: favoriteLabel(e),
       run: () => mutate(favoriteChange(e)),
     }],
   },
   {
-    match: (e) => decisionActions(e).length > 0,
+    match: parse('.proposed'),
     acts: decisionActions,
   },
   {
-    match: has('task'),
+    match: parse('.task'),
     acts: (e) => {
       let s = statusOf(e)
       // Status is DERIVED (D-24102): a move mints/retracts the mark
@@ -364,7 +376,7 @@ defineActions([
     // block needs a free-text reason, so it's offered only where a prompt
     // exists (the browser) — the TUI blocks via `task block`. This is what
     // reddens the Dot, orthogonal to the status moves above.
-    match: has('task'),
+    match: parse('.task'),
     acts: (e) =>
       e.blocked
         ? [{
@@ -382,7 +394,7 @@ defineActions([
         : [],
   },
   {
-    match: has('role'),
+    match: parse('.role'),
     acts: (e) => [{
       label: e.role!.state == 'running' ? 'pause role' : 'resume role',
       // Start also fences the crash-loop breaker (retry_at). Reconciliation
@@ -407,8 +419,9 @@ defineActions([
     // thread, and a thread can be a task, a venture, a session. Offered
     // only to a viewer whose client names an actor: without one there is
     // nobody for the instruction to belong to.
-    match: () => !!myActor(),
+    match: and(),
     acts: (e) => {
+      if (!myActor()) return []
       let mode = myMode(e.eid)
       let set = (to: 'watch' | 'mute' | null) => () =>
         mutate(...subChanges(rows(), myActor()!, e.eid, to))
@@ -423,7 +436,7 @@ defineActions([
     },
   },
   {
-    match: has('claim'),
+    match: parse('.claim'),
     acts: (e) => [{
       label: `release ${viaName(e.claim!.session)}`,
       run: () => mutate({ eid: e.eid, name: 'claim', comp: null }),
@@ -432,7 +445,7 @@ defineActions([
   {
     // Retiring stamps the moment; unretiring clears it. Everything filed
     // under the project stays — it just stops coming up first.
-    match: has('project'),
+    match: parse('.project'),
     acts: (e) => [
       e.archived
         ? {
@@ -451,7 +464,7 @@ defineActions([
     ],
   },
   {
-    match: () => true,
+    match: and(),
     acts: (e) => [
       e.quarantined
         ? {
@@ -465,7 +478,7 @@ defineActions([
     ],
   },
   {
-    match: () => true,
+    match: and(),
     acts: (e) => [{
       label: 'delete',
       mod: 'danger',
@@ -495,8 +508,7 @@ let EntityFace = (
       </Veil>
     )
   }
-  let r = resolve(e, view)
-  return <r.Render e={e} {...rest} />
+  return render(registry, bundle(e), view, vocab, rest, { e, ...rest })
 }
 
 export let Entity = memo(EntityFace)

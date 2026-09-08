@@ -1,6 +1,9 @@
-// The action menu names claim holders with the same chip id as every claim
-// flag.
+// The app's curated faces, actions and mounted Entity door preserve the same
+// defaults and live behavior across the web and terminal hosts.
 import { assertEquals } from '@std/assert'
+import { h } from 'preact'
+import { useState } from 'preact/hooks'
+import { parse } from '@yaks/query'
 import {
   backlinks,
   cache,
@@ -10,13 +13,79 @@ import {
   shown,
   useRoute,
 } from '../live.ts'
-import { actionsFor, applicable, resolve } from './registry.ts'
-import './Entity.tsx'
+import { actionsFor, applicable, extend, resolve } from './registry.ts'
+import { Entity } from './Entity.tsx'
+import { mount } from './mount.ts'
 
 // A mounted view holds subscriptions. In a test there is no server to hold
 // them against, so control frames go nowhere through live.ts's transport
 // seam — the cache here is only ever what the test seeds.
 useRoute(() => {})
+
+Deno.test('Entity mounts hooks with the original Ent and extra props', async () => {
+  cache.value = {
+    doc: {
+      entity: { eid: 'doc', num: 1 },
+      doc: { eid: 'doc', title: 'Page', body: '' },
+    },
+  }
+  extend([{
+    view: 'Test.State',
+    match: parse('.doc'),
+    Render: ({ e, suffix }) => {
+      let [count, set] = useState(0)
+      return h(
+        'button',
+        { onClick: () => set(count + 1) },
+        `${e.eid} ${e.doc!.title}${suffix} ${count}`,
+      )
+    },
+  }])
+  let { root, free } = mount(h(Entity, {
+    eid: 'doc',
+    view: 'Test.State',
+    suffix: '!',
+  }))
+  try {
+    assertEquals(root.textContent, 'doc Page! 0')
+    root.querySelector('button')!.click()
+    await Promise.resolve()
+    assertEquals(root.textContent, 'doc Page! 1')
+    cache.value = {
+      doc: {
+        ...cache.value.doc,
+        doc: { eid: 'doc', title: 'Changed', body: '' },
+      },
+    }
+    await Promise.resolve()
+    assertEquals(root.textContent, 'doc Changed! 1')
+  } finally {
+    free()
+    cache.value = {}
+  }
+})
+
+Deno.test('query groups preserve chosen tabs and default faces', () => {
+  let fixture = (comps: Record<string, object>) => {
+    cache.value = { x: { entity: { eid: 'x', num: 1 }, ...comps } }
+    return ent('x')
+  }
+  try {
+    let project = fixture({ doc: { title: 'Project' }, project: {} })
+    assertEquals(resolve(project).view, 'Full')
+    assertEquals(applicable(project).includes('Dashboard'), true)
+    assertEquals(
+      applicable(fixture({ project: {} })).includes('Dashboard'),
+      false,
+    )
+    for (let comp of ['board', 'canvas']) {
+      assertEquals(applicable(fixture({ [comp]: {} })).includes('Split'), true)
+    }
+    assertEquals(applicable(fixture({ doc: {} })).includes('Split'), false)
+  } finally {
+    cache.value = {}
+  }
+})
 
 Deno.test('boards open on Board with List still available', () => {
   cache.value = {

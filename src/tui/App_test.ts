@@ -3,6 +3,7 @@ import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { type Change, type Ent } from '../types.ts'
 import { config as liveConfig, mode, useRoute } from '../live.ts'
+import { extend, resolve } from '../components/registry.ts'
 import {
   accountCallback,
   configKey,
@@ -33,6 +34,7 @@ import type { AccountStatus } from '../accounts.ts'
 // them against, so control frames go nowhere through live.ts's transport
 // seam — the cache here is only ever what the test seeds.
 useRoute(() => {})
+extend(overrides)
 
 let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 let task = (body?: string): Ent => ({
@@ -50,7 +52,7 @@ let task = (body?: string): Ent => ({
 let paint = (e: Ent) => {
   let root = new TElement('root')
   let target = root as unknown as Parameters<typeof render>[1]
-  let r = overrides.find((x) => x.view == 'Full' && x.match(e))!
+  let r = resolve(e, 'Full')
   render(
     h('div', null, h(r.Render, { e }), h('footer', null, 'status')),
     target,

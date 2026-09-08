@@ -5,6 +5,7 @@
 // Debug.Tile render through the very same components the browser uses,
 // painted as lines instead of CSS.
 import { signal } from '@preact/signals'
+import { parse } from '@yaks/query'
 import { useBoardSub, useEntity } from '../components/subscriptions.ts'
 import { useCommentsOn } from '../components/useQuery.ts'
 import { tuiKeys } from '../keybindings.ts'
@@ -43,12 +44,7 @@ import {
 } from '../commands.ts'
 import { sessionFrames, spawnPlan } from '../client.ts'
 import { inflate } from '../client_host.ts'
-import {
-  applicable,
-  has,
-  type Renderer,
-  resolve,
-} from '../components/registry.ts'
+import { applicable, type Renderer, resolve } from '../components/registry.ts'
 import { Entity } from '../components/Entity.tsx'
 import { byline, viaName } from '../components/Comments.tsx'
 import { Dot } from '../components/Dot.tsx'
@@ -373,8 +369,8 @@ let TuiTask = ({ e }: { e: Ent }) => (
 // Same scores as the shared entries they shadow — a tie goes to the
 // override because platform layers are consulted first.
 export let overrides: Renderer[] = [
-  { view: 'Board', match: has('doc', 'board'), Render: TuiBoard },
-  { view: 'Full', match: has('doc', 'task'), Render: TuiTask },
+  { view: 'Board', match: parse('.doc .board'), Render: TuiBoard },
+  { view: 'Full', match: parse('.doc .task'), Render: TuiTask },
 ]
 
 // The command context here: the entity you're IN (the trail's head), or
