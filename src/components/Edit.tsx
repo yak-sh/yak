@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'preact/hooks'
-import { ent, mode, mutate, problem, want } from '../live.ts'
+import { render } from '@yaks/preact'
+import { bundle, registry, vocab, writeColumn } from './registry.ts'
+import { ent, mode, problem, want } from '../live.ts'
 import { propAt } from '../props.ts'
 import { drop, peek, save } from './drafts.ts'
 import { markdown, markup } from './Markdown.tsx'
@@ -21,7 +23,7 @@ let Span = el('span', 'Edit')
 // inline: show inline markdown at rest, but edit and save its source.
 // Keystrokes save a draft; blur spends it — so a hot swap mid-edit
 // remounts, finds the draft, and resumes editing where typing stopped.
-export let Edit = (
+export let InlineEdit = (
   { eid, comp, prop, multi, open, onClose, inline }: {
     eid: string
     comp: string
@@ -99,7 +101,7 @@ export let Edit = (
     let shown = was
     if (text && text != was) {
       try {
-        mutate({ eid, name: comp, comp: { [prop]: text } })
+        writeColumn(eid, comp, prop, text)
         shown = text
       } catch (e) {
         problem.value = e instanceof Error ? e.message : String(e)
@@ -122,5 +124,26 @@ export let Edit = (
     >
       {inline ? null : value}
     </Span>
+  )
+}
+
+// Existing call sites retain their inline metrics; selection and writes use
+// the same column door as the other Edit controls.
+export let Edit = (
+  { eid, comp, prop, ...ctx }: Parameters<typeof InlineEdit>[0],
+) => {
+  let e = ent(eid)
+  return render(
+    registry,
+    bundle(e),
+    'Inline.Edit',
+    vocab,
+    { comp, col: prop },
+    {
+      e,
+      comp,
+      col: prop,
+      ...ctx,
+    },
   )
 }

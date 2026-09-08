@@ -1,8 +1,8 @@
 // The plugin loader — the ONE seam that runs third-party code (D-18663 seam 1,
 // M-17881). A plugin is "a module that exports Renderer[] / a comps fragment",
 // NOT a framework: importing the module IS loading it, because the module's TOP
-// LEVEL calls the existing registrars (extend / defineActions / defineEditors /
-// on). There is no manifest, no registry object, no lifecycle here.
+// LEVEL calls the existing registrars (extend / defineActions / on). There is
+// no manifest, no registry object, no lifecycle here.
 //
 // INERT UNTIL CONFIGURED: with no specifiers the load is a no-op and every
 // surface — server, browser, TUI, CLI — behaves exactly as it does today. This

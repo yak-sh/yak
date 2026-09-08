@@ -1,32 +1,36 @@
 import { type ComponentChildren, type JSX } from 'preact'
+import { render } from '@yaks/preact'
+import { type Context } from '@yaks/render'
+import { parse } from '@yaks/query'
 import { useContext, useRef, useState } from 'preact/hooks'
 import { formatProp, propAt } from '../props.ts'
-import { idOf, type PropType, statuses } from '../types.ts'
+import { type Ent, idOf } from '../types.ts'
 import { statusChanges } from '../client.ts'
 import { cache, domains, ent, mutate, problem } from '../live.ts'
 import { ago, block, focus, pretty, Surround } from './ui.tsx'
 import { Dot } from './Dot.tsx'
-import { Edit } from './Edit.tsx'
+import { Edit, InlineEdit } from './Edit.tsx'
+import {
+  applyPatch,
+  bundle,
+  columnView,
+  registry,
+  type Renderer,
+  vocab,
+  writeColumn,
+} from './registry.ts'
 import { Overlay } from './overlay.tsx'
 import { useComplete } from './Complete.tsx'
 import { pickLine, useHits } from './hits.ts'
 import * as suggest from './suggest.ts'
 
-// The PROP registry — the renderer registry's sibling. The typed
-// vocabulary (types.ts comps) is the DETECTION layer: one entry per
-// PropType kind owns both faces of knowing what a value is — `show`
-// (the display) and `Edit` (the control) — so views render props and
-// they become editable with the right control without naming one.
-//
-// Defaults are curated at the bottom; defineEditors prepends, so a later
-// registration outranks the stock one — the registry is defaults, not a
-// ceiling.
+// Native Edit overlays: the same registry selects entity and column views.
+// These shared controls own the browser's inline and popout presentation.
 
 export type EditorProps = {
   eid: string
   comp: string
   prop: string
-  t: PropType
   value: unknown
   done: () => void
 }
@@ -37,16 +41,6 @@ export type EditProps = EditorProps & {
   face?: ComponentChildren
   side?: 'above' | 'below'
 }
-export type Editor = {
-  match: (t: PropType) => boolean
-  show?: (value: string | null, t: PropType) => JSX.Element | null
-  Edit: (p: EditProps) => JSX.Element
-}
-
-let editors: Editor[] = []
-export let defineEditors = (list: Editor[]) => editors.unshift(...list)
-export let editorFor = (t: PropType) => editors.find((e) => e.match(t))
-
 // The two layout idioms, composed at registration — a third is a new
 // audited wrapper here, never ad-hoc in an editor body:
 //   inline(E) — the control takes the face's place at the value's own
@@ -67,11 +61,6 @@ export let popout = (E: (p: EditorProps) => JSX.Element) => (p: EditProps) => (
   </>
 )
 
-// Named suggestion WELLS: the schema says {text: 'domains'} and stays
-// declarative; the browser registers what that name means here.
-let wells: Record<string, () => string[]> = {}
-export let defineWells = (w: typeof wells) => Object.assign(wells, w)
-
 // One write path for every editor: a single column, patched in place —
 // except task.status, which is DERIVED (D-24102) and has no column to patch, so
 // a pick mints/retracts the completed/cancelled mark instead.
@@ -80,7 +69,7 @@ let set = (p: EditorProps, v: unknown) => {
     if (p.comp == 'task' && p.prop == 'status') {
       mutate(...statusChanges(p.eid, String(v)))
     } else {
-      mutate({ eid: p.eid, name: p.comp, comp: { [p.prop]: v } })
+      writeColumn(p.eid, p.comp, p.prop, v)
     }
   } catch (e) {
     problem.value = e instanceof Error ? e.message : String(e)
@@ -167,17 +156,17 @@ let QueryEdit = ({ ...p }: EditorProps) => {
 // status set answers the pip that opened it in the same paint: each
 // choice wears its own dot.
 let EnumEdit = ({ ...p }: EditorProps) => {
-  let t = p.t as { enum: readonly string[] }
+  let values = vocab.column(p.comp, p.prop)!.values!
   return (
     <Pop>
-      {t.enum.map((v) => (
+      {values.map((v) => (
         <Tab
           key={v}
           type='button'
           mod={v == p.value && 'on'}
           onClick={() => v == p.value ? p.done() : set(p, v)}
         >
-          {t.enum == statuses && <Dot status={v} />}
+          {p.comp == 'task' && p.prop == 'status' && <Dot status={v} />}
           {v}
         </Tab>
       ))}
@@ -192,9 +181,8 @@ let EnumEdit = ({ ...p }: EditorProps) => {
 // an unheard-of value shows as the top row, so new domains stay mintable.
 // The 'none' row clears, as everywhere.
 let WellEdit = ({ ...p }: EditorProps) => {
-  let t = p.t as { text: string }
   let [q, setQ] = useState('')
-  let all = wells[t.text]?.() ?? []
+  let all = domains.value
   let typed = q.trim()
   let hits = all
     .filter((x) => !typed || x.toLowerCase().includes(typed.toLowerCase()))
@@ -225,9 +213,9 @@ let WellEdit = ({ ...p }: EditorProps) => {
 // picker offers the whole graph, not just the slice the cache holds. A 'none'
 // row clears the association.
 let EidEdit = ({ ...p }: EditorProps) => {
-  let t = p.t as { eid: string }
+  let target = vocab.column(p.comp, p.prop)!.ref!
   let [q, setQ] = useState('')
-  let hits = useHits(pickLine(q, t.eid))
+  let hits = useHits(pickLine(q, target))
   return (
     <Pop mod='list'>
       <Find
@@ -277,43 +265,110 @@ let TextEdit = (p: EditorProps) => (
     eid={p.eid}
     comp={p.comp}
     prop={p.prop}
-    multi={p.t == 'body'}
+    multi={propAt(p.comp, p.prop)?.type == 'body'}
     open
     onClose={p.done}
   />
 )
 
-defineEditors([
-  {
-    match: (t) => t == 'text' || t == 'body',
-    show: plain,
-    Edit: inline(TextEdit),
-  },
-  { match: (t) => t == 'time', show: TimeVal, Edit: inline(TextEdit) },
-  { match: (t) => t == 'url', show: UrlVal, Edit: inline(TextEdit) },
-  {
-    match: (t) => t == 'number' || t == 'priority',
-    show: plain,
-    Edit: inline(NumEdit),
-  },
-  { match: (t) => t == 'query', show: plain, Edit: inline(QueryEdit) },
-  {
-    match: (t) => typeof t == 'object' && 'enum' in t,
-    show: plain,
-    Edit: popout(EnumEdit),
-  },
-  {
-    match: (t) => typeof t == 'object' && 'text' in t,
-    show: plain,
-    Edit: popout(WellEdit),
-  },
-  {
-    match: (t) => typeof t == 'object' && 'eid' in t,
-    show: titled,
-    Edit: popout(EidEdit),
-  },
-])
-defineWells({ domains: () => domains.value })
+// Registration only captures component bindings in closures: registry.ts can
+// curate the list while the Edit/registry import cycle is still initializing.
+export function editorViews(): Renderer[] {
+  let native = (
+    match: string,
+    Control: (p: EditProps) => JSX.Element,
+    show = (value: unknown) => plain(value),
+  ): Renderer => ({
+    view: 'Edit',
+    match: parse(match),
+    show,
+    Render: (ctx) => <Control {...controlProps(ctx)} />,
+  })
+  return [
+    {
+      view: 'Inline.Edit',
+      match: parse('.column'),
+      Render: ({ e, comp, col, ...ctx }) => (
+        <InlineEdit
+          eid={e.eid}
+          comp={String(comp)}
+          prop={String(col)}
+          {...ctx}
+        />
+      ),
+    },
+    native(
+      '.column.comp=task .column.col=domain',
+      (p) => <WellControl {...p} />,
+    ),
+    native('.column.type=string', (p) => <TextControl {...p} />),
+    native(
+      '.column.type=time',
+      (p) => <TextControl {...p} />,
+      (value) => TimeVal(value),
+    ),
+    native(
+      '.column.type=url',
+      (p) => <TextControl {...p} />,
+      (value) => UrlVal(value),
+    ),
+    native('.column.type=number', (p) => <NumControl {...p} />),
+    native('.column.type=priority', (p) => <NumControl {...p} />),
+    native('.column.type=query', (p) => <QueryControl {...p} />),
+    native('.column.type=enum', (p) => <EnumControl {...p} />),
+    native(
+      '.column.type=ref',
+      (p) => <EidControl {...p} />,
+      (value) => titled(value),
+    ),
+  ]
+}
+let TextControl = inline(TextEdit)
+let NumControl = inline(NumEdit)
+let QueryControl = inline(QueryEdit)
+let EnumControl = popout(EnumEdit)
+let WellControl = popout(WellEdit)
+let EidControl = popout(EidEdit)
+
+let controlProps = (
+  { e, comp, col, ...ctx }: Context & { e: Ent },
+): EditProps => ({
+  eid: e.eid,
+  comp: String(comp),
+  prop: String(col),
+  value: 'value' in ctx
+    ? ctx.value
+    : (bundle(e)[String(comp)] as Record<string, unknown> | undefined)
+      ?.[String(col)],
+  done: ctx.done as (() => void) ?? (() => {}),
+  anchor: ctx.anchor as EditProps['anchor'] ?? { current: null },
+  face: ctx.face as ComponentChildren,
+  side: ctx.side as EditProps['side'],
+})
+
+// A column door is also used by the status pip, whose derived enum has its
+// own mark action but the same picker and vocabulary as every other enum.
+export let ColumnEdit = (
+  { eid, comp, prop, ...ctx }: Omit<EditProps, 'value'> & { value?: unknown },
+) => {
+  let e = ent(eid)
+  return render(registry, bundle(e), 'Edit', vocab, {
+    comp,
+    col: prop,
+    onPatch: (patch) => {
+      applyPatch(eid, patch)
+      ctx.done()
+    },
+    onError: (error) => {
+      problem.value = error instanceof Error ? error.message : String(error)
+    },
+  }, {
+    e,
+    comp,
+    col: prop,
+    ...ctx,
+  })
+}
 
 // ---- the door ----
 
@@ -358,19 +413,19 @@ export let Prop = (
     : value == null
     ? null
     : String(value)
-  let entry = t ? editorFor(t) : undefined
+  let entry = columnView(ent(eid), comp, prop)
   let editor = editable ? entry : undefined
   // The face, through the registry; plain is the net under types no
   // entry claims (bool, a prop outside the vocabulary).
   let face = paint
     ? paint(faceValue, value)
-    : entry?.show
-    ? entry.show(faceValue, t!)
+    : entry && 'show' in entry && entry.show
+    ? entry.show(faceValue)
     : (
       plain(faceValue)
     )
   let done = () => setEditing(false)
-  let ep: EditorProps = { eid, comp, prop, t: t!, value, done }
+  let ep: EditorProps = { eid, comp, prop, value, done }
   // bool never enters an edit mode: the value IS the toggle. For popout
   // editors the same click closes an open control — the value is the
   // press target both ways.
@@ -420,7 +475,7 @@ export let Prop = (
   return (
     <Frame mod={editor && 'live'}>
       {editing && editor
-        ? <editor.Edit {...ep} anchor={anchor} face={shown} />
+        ? <ColumnEdit {...ep} anchor={anchor} face={shown} />
         : shown}
     </Frame>
   )

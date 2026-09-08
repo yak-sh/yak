@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { type ComponentChildren } from 'preact'
-import { derivedProps, type Ent, statusOf } from '../../types.ts'
+import { type Ent, statusOf } from '../../types.ts'
 import { FLOOR, textOf } from '../../twin.ts'
 import {
   base,
@@ -25,7 +25,7 @@ import { Prio } from '../Prio.tsx'
 import { Edit } from '../Edit.tsx'
 import { Markdown } from '../Markdown.tsx'
 import { title, TitleEdit } from '../title.tsx'
-import { editorFor, Prop } from '../editors.tsx'
+import { ColumnEdit, Prop } from '../editors.tsx'
 import { Relate } from './Relate.tsx'
 import { Id } from './Inline.tsx'
 import { decisionActions, Entity } from '../Entity.tsx'
@@ -113,11 +113,8 @@ let {
 export let Pip = ({ e }: { e: Ent }) => {
   let [open, setOpen] = useState(false)
   let anchor = useRef<HTMLElement>(null)
-  // task.status is a DERIVED column (D-24102): its enum type lives in
-  // derivedProps, not the writable `comps` vocabulary. The enum editor renders
-  // the choices; set() translates a pick into the completed/cancelled mark.
-  let t = derivedProps.task.status
-  let ed = editorFor(t)!
+  // The vocabulary declares task.status as derived; its shared enum picker
+  // translates a choice into completed/cancelled marks.
   return (
     <>
       <Dot
@@ -129,11 +126,10 @@ export let Pip = ({ e }: { e: Ent }) => {
         onClick={() => setOpen((was) => !was)}
       />
       {open && (
-        <ed.Edit
+        <ColumnEdit
           eid={e.eid}
           comp='task'
           prop='status'
-          t={t}
           value={statusOf(e)}
           done={() => setOpen(false)}
           anchor={anchor}
