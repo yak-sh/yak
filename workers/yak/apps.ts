@@ -1214,6 +1214,7 @@ let index = async (
     // said to anybody — it is a public page — and WAITING only to the owner,
     // who is the one it is news for.
     apps: mine.map((a) => ({
+      eid: a.eid,
       slug: a.slug,
       title: a.title,
       home: a.home,

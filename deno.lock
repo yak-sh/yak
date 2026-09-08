@@ -1664,6 +1664,8 @@
             "npm:croner@10.0.1",
             "npm:lucide@1.31.0",
             "npm:postal-mime@3.0.0",
+            "npm:preact-render-to-string@6.7.0",
+            "npm:preact@10.29.7",
             "npm:zod@3.25.76"
           ]
         }

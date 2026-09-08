@@ -158,7 +158,9 @@ let block = (
   }, env).text()
 
 Deno.test('the app library has navigation, not account forms', async () => {
-  let page = await block({ apps: [{ slug: 'recipes', title: 'Recipes' }] })
+  let page = await block({
+    apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
+  })
   assertStringIncludes(page, 'href="/recipes/"')
   for (let view of ['connect', 'new', 'settings', 'visits', 'trash'] as const) {
     assertStringIncludes(page, `href="${managePath(view)}"`)
@@ -241,7 +243,7 @@ Deno.test('connected empty library offers a copyable request', async () => {
       name: 'ChatGPT',
       connectedAt: 1,
     }],
-    apps: [{ slug: 'recipes', title: 'Recipes' }],
+    apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
   })
   assert(!/class="[^"]*\bCopy_Go\b/.test(built), built)
   for (let html of [page, built]) {
@@ -312,7 +314,7 @@ let VISITS = {
 Deno.test('who visited: a bar per day and three lists, no script', async () => {
   let page = await block({
     view: 'visits',
-    apps: [{ slug: 'recipes', title: 'Recipes' }],
+    apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
     views: [VISITS],
     viewDays: 3,
   })
@@ -334,7 +336,7 @@ Deno.test('who visited: a bar per day and three lists, no script', async () => {
   // Not the owner's, not their business.
   let theirs = await block({
     role: null,
-    apps: [{ slug: 'recipes', title: 'Recipes' }],
+    apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
     views: [VISITS],
   })
   assert(!parseHTML(theirs).document.querySelector('.Stats'))
@@ -343,7 +345,7 @@ Deno.test('who visited: a bar per day and three lists, no script', async () => {
 Deno.test('who visited: no token is one sentence, no chart', async () => {
   let page = await block({
     view: 'visits',
-    apps: [{ slug: 'recipes', title: 'Recipes' }],
+    apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
     views: null,
     viewsOff: 'Visitor counts are not switched on for this platform yet.',
   })
@@ -357,7 +359,7 @@ Deno.test('who visited: no token is one sentence, no chart', async () => {
 Deno.test('who visited: an app nobody opened says so', async () => {
   let page = await block({
     view: 'visits',
-    apps: [{ slug: 'recipes', title: 'Recipes' }],
+    apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
     views: [{
       ...VISITS,
       stats: {

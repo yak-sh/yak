@@ -4,15 +4,16 @@
 // markup under them. Shared controls and tokens come from public/controls.css.
 // Errors stay in the graph for the person's chatbot (D-32318 §Errors).
 //
-// Everything interpolated here is escaped by `esc` at the call site: a page
-// carries an email address a stranger typed, and web content never speaks
-// HTML (the repo's md.ts rule, one floor down).
+// Template values are escaped by `esc` at the call site; registry views use
+// the HTML host's escaping. A page carries an email address a stranger typed,
+// and web content never speaks HTML (the repo's md.ts rule, one floor down).
 
 import type { Frame } from './build.ts'
 import type { Connection } from './connections.ts'
 import { connectionList, connectionLive } from './connection_ui.ts'
 import { icon, type IconName } from './icons.ts'
 import { esc } from './html.ts'
+import { tile } from './render/mod.ts'
 export { esc } from './html.ts'
 import { managePath, type ManageView, OAUTH } from './route.ts'
 import { CONNECTOR } from './seo.ts'
@@ -583,6 +584,7 @@ export type SpacePage = {
   space: string
   title: string
   apps: {
+    eid: string
     slug: string
     title: string
     gallery?: string
@@ -732,22 +734,7 @@ let connectCard = (at: SpacePage) =>
 let library = (at: SpacePage) =>
   `${connectCard(at)}${
     at.apps.length
-      ? `<div class="Apps">${
-        at.apps.map((a) =>
-          `<a class="Apps_Item" href="/${
-            esc(a.slug)
-          }/" target="_blank" rel="noopener">
-<img src="/${esc(a.slug)}/icon.png" width="44" height="44" alt="">
-<strong>${esc(a.title || a.slug)}</strong><span class="Apps_Path">/${
-            esc(a.slug)
-          }</span>
-<span class="Apps_Tags">${
-            a.home ? '<span class="Apps_Tag">Homepage</span>' : ''
-          }${a.access ? `<span class="Apps_Tag">${esc(a.access)}</span>` : ''}${
-            a.gallery ? `<span class="Apps_Tag">${esc(a.gallery)}</span>` : ''
-          }</span></a>`
-        ).join('')
-      }</div>`
+      ? `<div class="Apps">${at.apps.map(tile).join('')}</div>`
       : `<section class="Desk_Empty"><h2>Your apps will live here</h2>
 <div ${
         state(true, !!at.connections?.length)

@@ -15,18 +15,24 @@
     "@yaks/effects": "../../packages/effects/mod.ts",
     "@yaks/fts": "../../packages/fts/mod.ts",
     "@yaks/graph": "../../packages/graph/mod.ts",
+    "@yaks/html": "../../packages/html/mod.ts",
     "@yaks/id": "../../packages/id/mod.ts",
     "@yaks/key": "../../packages/key/mod.ts",
     "@yaks/mail": "../../packages/mail/mod.ts",
     "@yaks/match": "../../packages/match/mod.ts",
     "@yaks/member": "../../packages/member/mod.ts",
     "@yaks/memory": "../../packages/memory/mod.ts",
+    "@yaks/preact": "../../packages/preact/mod.ts",
     "@yaks/query": "../../packages/query/mod.ts",
+    "@yaks/render": "../../packages/render/mod.ts",
     "@yaks/sql": "../../packages/sql/mod.ts",
     "@yaks/sqlite": "../../packages/sqlite/mod.ts",
     "@yaks/vocab": "../../packages/vocab/mod.ts",
     "@yaks/wake": "../../packages/wake/mod.ts",
     "@yaks/wake/cloudflare": "../../packages/wake/cloudflare.ts",
-    "croner": "jsr:@hexagon/croner@^10.0.1"
+    "croner": "jsr:@hexagon/croner@^10.0.1",
+    "preact": "npm:preact@10.29.7",
+    "preact/hooks": "npm:preact@10.29.7/hooks",
+    "preact-render-to-string": "npm:preact-render-to-string@6.7.0"
   }
 }
