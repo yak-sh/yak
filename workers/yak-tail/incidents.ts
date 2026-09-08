@@ -1,6 +1,10 @@
 // The incident is also the cooldown: thirty quiet minutes end an outage.
 // Rows stay readable by `yak errors` after the outage ends.
 export let COOLDOWN = 30 * 60 * 1000
+// A signature back after the cooldown is the same defect persisting — an
+// hourly job failing every hour is one break, not an outage an hour (T-34844).
+// It pages again only when it survives a deploy, or after a quiet day.
+export let REPAGE = 24 * 60 * 60 * 1000
 
 export type Sample = {
   name: string
@@ -60,9 +64,12 @@ export let record = (previous: Incident | null, fault: Fault): {
   incident: Incident
   page: boolean
 } => {
-  let page = !previous || previous.signature != fault.signature ||
-    fault.at - previous.last >= COOLDOWN
-  let incident = page
+  let fresh = !previous || previous.signature != fault.signature
+  let quiet = fresh ? Infinity : fault.at - previous!.last
+  let again = quiet >= COOLDOWN
+  let page = fresh ||
+    (again && (previous!.version != fault.version || quiet >= REPAGE))
+  let incident = again
     ? {
       signature: fault.signature,
       version: fault.version,

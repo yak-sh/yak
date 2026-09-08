@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
-import { COOLDOWN, type Event, type Incident } from './incidents.ts'
+import { COOLDOWN, type Event, type Incident, REPAGE } from './incidents.ts'
 import tail, { type Env, letter, recorder } from './tail.ts'
 
 let event = (at = 1000, message = 'boot 123 failed'): Event => ({
@@ -89,20 +89,23 @@ Deno.test('boot loop is one mail and one row, with all invocations counted', asy
   assertEquals(f.sent.length, 1)
 })
 
-Deno.test('cold recorder rearms after the stored last event plus cooldown', async () => {
+Deno.test('cold recorder turns the row over after the cooldown, and rearms after a quiet day', async () => {
   let f = fixture()
   await f.receive()([event()], f.env)
   await f.receive()([event(1000 + COOLDOWN)], f.env)
+  assertEquals(f.sent.length, 1)
+  assertEquals([...f.rows.values()][0].value.count, 1)
+  await f.receive()([event(1000 + COOLDOWN + REPAGE)], f.env)
   assertEquals(f.sent.length, 2)
   assertEquals([...f.rows.values()][0].value.count, 1)
 })
 
 Deno.test('a batch spanning two outages pages each first event', async () => {
   let f = fixture()
-  await f.receive()([event(), event(1000 + COOLDOWN)], f.env)
+  await f.receive()([event(), event(1000 + REPAGE)], f.env)
   assertEquals(f.sent.length, 2)
   assertStringIncludes(f.sent[0].text, new Date(1000).toISOString())
-  assertStringIncludes(f.sent[1].text, new Date(1000 + COOLDOWN).toISOString())
+  assertStringIncludes(f.sent[1].text, new Date(1000 + REPAGE).toISOString())
 })
 
 Deno.test('sequential invocations respect the per-key write limit', async () => {

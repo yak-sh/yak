@@ -6,6 +6,7 @@ import {
   faults,
   normalise,
   record,
+  REPAGE,
   type Sample,
   signature,
 } from './incidents.ts'
@@ -154,4 +155,19 @@ Deno.test('cooldown lasts until thirty quiet minutes, preserves first sample acr
   assertEquals(fresh.page, true)
   assertEquals(fresh.incident.count, 1)
   assertEquals(fresh.incident.version, 'version-c')
+})
+
+Deno.test('a signature recurring after the cooldown re-pages only across a deploy or a quiet day', () => {
+  let hour = 60 * 60 * 1000
+  let previous = record(null, fault(0)).incident
+  for (let n = 1; n <= 16; n++) {
+    let next = record(previous, fault(n * hour))
+    assertEquals(next.page, false)
+    assertEquals(next.incident.count, 1)
+    assertEquals(next.incident.first, n * hour)
+    previous = next.incident
+  }
+  assertEquals(record(previous, fault(17 * hour, 'version-b')).page, true)
+  assertEquals(record(previous, fault(16 * hour + REPAGE)).page, true)
+  assertEquals(record(previous, fault(16 * hour + REPAGE - 1)).page, false)
 })
