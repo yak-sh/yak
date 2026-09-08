@@ -143,6 +143,7 @@ slow('management separates app creation from assistant setup', async () => {
 // OAuth grant and an app apiece (identity_test.ts holds those ends).
 let block = (
   at: Partial<Parameters<typeof spaceIndex>[0]> = {},
+  env: Parameters<typeof spaceIndex>[1] = {},
 ) =>
   spaceIndex({
     space: 'dana',
@@ -154,7 +155,7 @@ let block = (
     signIn: 'https://yaks.app/login',
     name: 'dana',
     ...at,
-  }).text()
+  }, env).text()
 
 Deno.test('the app library has navigation, not account forms', async () => {
   let page = await block({ apps: [{ slug: 'recipes', title: 'Recipes' }] })
@@ -181,21 +182,45 @@ Deno.test('profile and address save independently in settings', async () => {
   }
 })
 
-Deno.test('new app keeps the builder and upload behind separate disclosures', async () => {
+Deno.test('new app exposes separate build and upload forms below the chatbot route', async () => {
   let page = await block({ view: 'new' })
-  let options =
-    page.match(/<details class="Desk_Options"[\s\S]*?<\/details>/g) ?? []
-  assertEquals(options.length, 2)
-  assert(options[0] && options[1])
-  assertStringIncludes(options[0], '<textarea')
-  assertStringIncludes(options[1], 'type="file"')
-  for (let option of options) {
-    assert(!/^<details[^>]*\bopen\b/.test(option), option)
+  let { document } = parseHTML(page)
+  let build = document.querySelector('textarea')!
+  let upload = document.querySelector('input[type=file]')!
+  for (let field of [build, upload]) {
+    assert(!field.closest('details, [hidden]'))
+    assert(field.hasAttribute('required'))
+    assert(field.closest('section')?.querySelector('h2'))
   }
+  assertEquals(build.closest('form')?.getAttribute('action'), '/api/build')
+  assertEquals(upload.closest('form')?.getAttribute('action'), '/deploy')
+  assertEquals(
+    upload.closest('form')?.getAttribute('enctype'),
+    'multipart/form-data',
+  )
   assert(
     page.indexOf(`href="${managePath('connect')}"`) < page.indexOf('<textarea'),
     page,
   )
+})
+
+Deno.test('the fixed app address links to the displayed host and emphasizes its space name', async () => {
+  for (let env of [{}, { APEX: 'example.test' }]) {
+    let { document } = parseHTML(
+      await block({ view: 'settings', fixed: true }, env),
+    )
+    let address = document.querySelector('a.Address')!
+    assertEquals(
+      address.getAttribute('href'),
+      `https://${address.textContent}/`,
+    )
+    assertEquals(address.querySelector('.Address_Name')?.textContent, 'dana')
+    assertEquals(address.getAttribute('target'), '_blank')
+    assertEquals(address.querySelector('input'), null)
+  }
+  let { document } = parseHTML(await block({ view: 'settings', fixed: false }))
+  assertEquals(document.querySelector('a.Address'), null)
+  assert(document.querySelector('input[name=space]'))
 })
 
 Deno.test('connected empty library offers a copyable request', async () => {

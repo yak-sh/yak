@@ -563,6 +563,12 @@
     padding: 0;
     list-style: none;
   }
+  .Connections-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem 1.5rem;
+    margin: 0;
+  }
   .Connections_Row {
     display: flex;
     align-items: center;

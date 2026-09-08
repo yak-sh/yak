@@ -99,7 +99,7 @@ details.Note > summary { color: var(--accent); cursor: pointer }
 .Bill_Go-quiet { --button-fill: var(--paper); --button-ink: var(--accent) }
 .Drop_Zone { display: grid; place-items: center; gap: .5rem; padding: 1.4rem 1rem; border: 2px dashed var(--soft-ink); border-radius: 1.25rem; background: var(--ground); text-align: center; cursor: pointer }
 .Drop_Zone-over { border-color: var(--accent); background: var(--paper) }
-.Drop_File { border: 0; padding: 0; background: none; cursor: pointer }
+.Drop_File { min-width: 0; max-width: 100%; border: 0; padding: 0; background: none; cursor: pointer }
 .Drop_Say { color: var(--soft-ink); font-size: .9rem }
 .Files { display: grid; gap: .3rem; margin: 0; padding-left: 1.2rem; color: var(--soft-ink); font-size: .95rem }
 .Chat_Said { display: grid; gap: .45rem; margin: 0 0 1rem }
@@ -224,18 +224,18 @@ exactly as they were.</p>${home(env)}`,
 let dropZone = (slug?: string) =>
   `<form class="Drop" method="post" action="/deploy" enctype="multipart/form-data">
 <label class="Drop_Zone">
-<input class="Drop_File" type="file" name="file" required aria-label="App files">
-<span class="Drop_Say">A .zip of the app's files, or a single index.html</span>
+<input class="Drop_File" type="file" name="file" required aria-label="Website files">
+<span class="Drop_Say">A .zip of your website files, or a single index.html</span>
 </label>
 ${
     slug
       ? held('slug', slug)
       : `<input class="Field" name="slug" maxlength="63" ` +
-        `autocomplete="off" spellcheck="false" placeholder="what to call it" ` +
-        `aria-label="What to call the app">`
+        `autocomplete="off" spellcheck="false" placeholder="Name for your website" ` +
+        `aria-label="Website name">`
   }
 <button class="Button" type="submit">${
-    slug ? 'Update app' : 'Upload app'
+    slug ? 'Update app' : 'Upload website'
   }</button>
 </form>`
 
@@ -363,10 +363,10 @@ let chatAsk = () =>
 </form>`
 
 // The optional built-in builder, reached from New app.
-let chat = (built: boolean, frames?: Frame[]) =>
+let chat = () =>
   `<section class="Card Chat">
-<h2>${built ? 'Build another app' : 'What would you like to make?'}</h2>
-${transcript(frames ?? [])}${chatAsk()}
+<h2>Build an app here</h2>
+${transcript([])}${chatAsk()}
 </section>`
 
 // The live half (public/build.js), at the builder's own address so a space's
@@ -651,9 +651,12 @@ let deskCss = `
 .Desk_Empty { padding: 2.5rem 1rem; text-align: center }
 .Desk_Empty h2 { margin: 0 0 .5rem; font-size: 1.25rem }
 .Desk_Empty p { margin: 0 auto 1rem; max-width: 28rem }
-.Desk_Options { margin-top: 1.5rem }
-.Desk_Options > summary { cursor: pointer; color: var(--accent); font-weight: 700; padding: .5rem 0 }
-.Desk_Options > .Card { margin-top: .75rem }
+.Desk_Start { margin-bottom: 2rem }
+.Desk_Start h2 { margin: 0 0 .75rem; font-size: 1.15rem }
+.Desk_Options { display: grid; gap: 1rem; align-items: start }
+.Desk_Options > .Card { margin: 0 }
+.Desk_Options .Button { --button-fill: var(--paper); --button-ink: var(--ink) }
+@media (min-width: 1100px) { .Desk_Options { grid-template-columns: repeat(2, minmax(0, 1fr)) } }
 .Desk_Trash { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 0; margin: 0; border-top: 1px solid var(--line) }
 .Desk_Trash:first-of-type { border-top: 0 }
 .Desk_Trash p { color: var(--ink) }
@@ -773,9 +776,13 @@ let preferences = (at: SpacePage, env: Host) => {
 </div></div><footer class="Card_Footer"><button class="Button" type="submit">Save name</button></footer></form>
 <section class="Card"><h2>App address</h2>${
     at.fixed
-      ? `<p>${
+      ? `<p><a class="Address" href="https://${
         esc(spaceHost(env, at.space))
-      }</p><p class="Note">The address is fixed once you've created an app.</p>`
+      }/" target="_blank" rel="noopener"><strong class="Address_Name">${
+        esc(at.space)
+      }</strong>.${
+        esc(apex(env))
+      }</a></p><p class="Note">The address is fixed once you've created an app.</p>`
       : `<form method="post" action="${managePath('settings')}">
 <label for="your-address">Your address</label>
 <span class="At"><input class="Field" id="your-address" name="space" maxlength="63" autocomplete="off" spellcheck="false" value="${
@@ -882,11 +889,14 @@ let desk = (at: SpacePage, env: Host) => {
     body = `${connectionSetup(at.connections ?? [], env)}${copying}${tabbing}`
   }
   if (view == 'new') {
-    body = `${connectionList(at.connections ?? [])}${connectCard(at)}
-<details class="Desk_Options"><summary>Build an app here</summary>${
-      chat(!!at.apps.length)
-    }</details>
-<details class="Desk_Options"><summary>Upload an existing app</summary><section class="Card"><h2>Upload app files</h2>${dropZone()}</section></details>${chatLive}${dropping}`
+    body = `<section class="Desk_Start" ${
+      state(true, !!at.connections?.length)
+    }>
+<h2>Ask your chatbot for a new yaks.app</h2>${
+      connectionList(at.connections ?? [], 'links')
+    }</section>${connectCard(at)}
+<div class="Desk_Options">${chat()}
+<section class="Card"><h2>Upload your website</h2>${dropZone()}</section></div>${chatLive}${dropping}`
   }
   if (view == 'visits') {
     body = at.apps.length

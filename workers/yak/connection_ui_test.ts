@@ -12,14 +12,17 @@ let chatgpt: Connection = {
   connectedAt: 1,
 }
 
-let mount = (initial: Connection[] = [], withList = true) => {
+let mount = (
+  initial: Connection[] = [],
+  view: 'rows' | 'links' | false = 'rows',
+) => {
   let { document } = parseHTML(`<html><body>
 <p data-disconnected${initial.length ? ' hidden' : ''}>Connect your chatbot</p>
 <p data-connected${initial.length ? '' : ' hidden'}>Your chatbots</p>
 <details data-connection-setup${
     initial.length ? '' : ' open'
   }><input value="draft"></details>
-${withList ? connectionList(initial) : ''}${
+${view ? connectionList(initial, view) : ''}${
     connectionLive('/oauth/connections')
   }
 </body></html>`)
@@ -82,6 +85,47 @@ Deno.test('connection rows show names and only known web chatbot destinations', 
   )
   assert(m.list.querySelector('a')!.textContent!.includes('Open ChatGPT'))
   assertEquals(m.list.getAttribute('aria-label'), 'Connected chatbots')
+})
+
+Deno.test('compact connections render launch links and refresh without replacing drafts or stable links', async () => {
+  let claude: Connection = {
+    id: 'claude',
+    provider: 'claude',
+    name: 'Claude',
+    connectedAt: 2,
+  }
+  let local: Connection = {
+    id: 'local',
+    provider: 'claude-code',
+    name: '<img src=x onerror=alert(1)>',
+    connectedAt: 3,
+  }
+  let m = mount([chatgpt, local], 'links')
+  let draft = m.document.querySelector('input')!
+  assertEquals(m.list.children.length, 1)
+  assertEquals(m.list.querySelector('.Connections_Info'), null)
+  assertEquals(m.list.querySelector('.Connections_State'), null)
+  assertEquals(m.list.querySelector('img'), null)
+  assertEquals(m.list.querySelector('a')?.getAttribute('target'), '_blank')
+  await m.run()
+  let first = m.list.firstElementChild
+  await m.run()
+  assert(m.list.firstElementChild === first, 'unchanged links retain focus')
+  for (let connections of [[chatgpt, claude, local], [claude], []]) {
+    m.show(connections)
+    await m.run('visibilitychange')
+    assert(m.document.querySelector('input') === draft)
+    assertEquals(draft.value, 'draft')
+    assertEquals(
+      [...m.list.querySelectorAll('a[href]')].map((a) =>
+        a.getAttribute('href')
+      ),
+      connections.filter((c) => c != local).map((c) =>
+        c == chatgpt ? 'https://chatgpt.com/' : 'https://claude.ai/new'
+      ),
+    )
+    assertEquals(m.list.hidden, !connections.length)
+  }
 })
 
 Deno.test('connection refresh preserves drafts and changes setup only when connection state changes', async () => {
@@ -175,7 +219,7 @@ Deno.test('connection state refreshes without a chatbot list or row template', a
       assertEquals(prompt.hidden, !!connections.length)
       assertEquals(m.document.querySelector('.Connections'), null)
       assertEquals(m.document.querySelector('[data-connection-row]'), null)
-      assertEquals(m.document.querySelector('input'), draft)
+      assert(m.document.querySelector('input') === draft)
     }
   }
 })
