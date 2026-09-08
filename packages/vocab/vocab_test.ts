@@ -256,6 +256,22 @@ Deno.test('JSON columns store validated JSON text', () => {
   }
 })
 
+Deno.test('number and priority columns refuse non-finite values', () => {
+  for (let format of [undefined, 'priority']) {
+    let w = loadVocab({
+      $defs: {
+        reading: { properties: { value: { type: 'number', format } } },
+      },
+    })
+    for (let value of [NaN, Infinity, -Infinity]) {
+      assertEquals(w.check('reading', { value }), ['reading.value is a number'])
+    }
+    for (let value of [null, 0, -1, 1.5, Number.MAX_VALUE]) {
+      assertEquals(w.check('reading', { value }), [])
+    }
+  }
+})
+
 Deno.test('a computed column reads but never writes', () => {
   let w = loadVocab({
     $defs: {

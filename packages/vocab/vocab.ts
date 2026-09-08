@@ -464,7 +464,7 @@ export let loadVocab = (
         } else if (
           c.category == 'scalar' &&
           (c.scalar == 'number' || c.scalar == 'priority') &&
-          typeof val != 'number'
+          (typeof val != 'number' || !Number.isFinite(val))
         ) {
           errs.push(`${comp}.${k} is a number`)
         } else if (
