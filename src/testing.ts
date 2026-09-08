@@ -50,11 +50,13 @@ export let until = async <T>(
   } = {},
 ): Promise<T> => {
   let deadline = Date.now() + timeout
-  do {
+  while (true) {
     let v = await fact()
     if (v) return v
+    // A delayed poll may resume after the fact settled and the deadline.
+    if (Date.now() >= deadline) break
     await new Promise((go) => setTimeout(go, poll))
-  } while (Date.now() < deadline)
+  }
   throw new Error(
     `until: timed out after ${timeout}ms waiting for ${
       typeof label == 'function' ? label() : label
