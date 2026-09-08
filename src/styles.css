@@ -4127,6 +4127,29 @@ a[data-ref]:hover {
   overflow-wrap: anywhere;
 }
 
+/* A component's property list, shared by every Props view. The existing Prop
+   faces and controls sit in its value column with their usual gestures. */
+.Props {
+  margin: 0;
+}
+.Props_Row {
+  display: grid;
+  grid-template-columns: minmax(7em, 1fr) minmax(0, 3fr);
+  gap: var(--gap);
+  align-items: baseline;
+  padding-block: var(--half-gap);
+  border-bottom: 1px solid var(--border);
+}
+.Props_Row > dt {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.Props_Row > dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 /* <Prop> — a value that knows how to edit itself (editors.tsx). The
    value never moves: inline editors take its place at its metrics,
    popout controls anchor above it. */
