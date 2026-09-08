@@ -52,10 +52,21 @@ export let editors = (vocab: Vocab, options: EditOptions = {}): Renderer[] =>
       else props.value = text
       if (c.scalar == 'time') props.placeholder = 'YYYY-MM-DDTHH:mm:ssZ'
       if (tag == 'select') {
+        // An enum can declare the empty string. Give absence a distinct control
+        // value, translating it to null only at the action boundary.
+        let empty = ''
+        while (c.values!.includes(empty)) empty += '_'
+        let action = edit(vocab, { comp: c.comp, col: c.prop }, options)
+        props.value = value == null ? empty : text
+        props.onChange = {
+          ...action,
+          run: (bundle, input) =>
+            action.run(bundle, input === empty ? null : input),
+        } satisfies typeof action
         return h(
           tag,
           props,
-          h('option', { value: '' }, '—'),
+          h('option', { value: empty }, '—'),
           c.values!.map((value) => h('option', { value }, value)),
         )
       }

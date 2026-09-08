@@ -75,6 +75,8 @@ Deno.test('invalid input and read-only columns never produce patches', () => {
       ['owner', ' '],
       ['at', 'tomorrow'],
       ['at', '2026-09-08T12:00:00'],
+      ['at', '2026-02-31T12:00:00Z'],
+      ['at', '2026-09-08T24:00:00Z'],
       ['enabled', 'maybe'],
       ['data', '{'],
       ['data', { count: 2 }],
@@ -157,6 +159,25 @@ Deno.test('enum controls use the vocabulary and offer inert patch actions', () =
     doc: { state: 'done' },
   })
   assertEquals(bundle.doc, { title: 'Before', count: 2 })
+})
+
+Deno.test('empty and case-distinct enum members keep their declared values', () => {
+  let vocab = loadVocab({
+    $defs: {
+      doc: { properties: { state: { enum: ['', '_', 'A', 'a'] } } },
+    },
+  })
+  let registry = define(editors(vocab))
+  let ctx = { comp: 'doc', col: 'state' }
+  let node = resolve(registry, bundle, 'Edit', vocab, ctx)!
+    .render(bundle, h, ctx)
+  let choices = node.children.flat() as Node[]
+  assertEquals(choices.map((n) => n.props?.value), ['__', '', '_', 'A', 'a'])
+  assertEquals(node.props?.value, '__')
+  let action = node.props?.onChange as Action
+  for (let [input, value] of [['__', null], ['', ''], ['a', 'a'], ['A', 'A']]) {
+    assertEquals(action.run(bundle, input), { doc: { state: value } })
+  }
 })
 
 Deno.test('column overlays use ordinary specificity and suffix resolution', () => {

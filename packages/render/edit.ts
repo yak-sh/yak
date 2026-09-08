@@ -23,7 +23,10 @@ let parse = (input: unknown, c: Column): unknown => {
   if (input == null) return null
   let type = c.category == 'scalar' ? c.scalar : c.category
   // Empty text remains text; an empty optional scalar clears its column.
-  if (input === '' && !['text', 'url', 'query', 'json'].includes(type!)) {
+  if (
+    input === '' && !['text', 'url', 'query', 'json'].includes(type!) &&
+    !(type == 'enum' && c.values!.includes(''))
+  ) {
     return null
   }
   if (type == 'number' || type == 'priority') {
@@ -46,6 +49,7 @@ let parse = (input: unknown, c: Column): unknown => {
   }
   if (typeof input != 'string') return fail(c, 'text')
   if (type == 'enum') {
+    if (c.values!.includes(input)) return input
     let text = input.trim().toLowerCase()
     let alias = Object.entries(c.aliases ?? {})
       .find(([key]) => key.toLowerCase() == text)?.[1]
@@ -57,10 +61,15 @@ let parse = (input: unknown, c: Column): unknown => {
   if (type == 'ref') return input.trim() || fail(c, 'an entity id')
   if (type == 'time') {
     // Explicit offsets avoid changing the instant with the host's timezone.
+    let text = input.trim()
     let stamp =
-      /^\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[+-]\d\d:\d\d)$/i
-    let time = Date.parse(input)
-    return stamp.test(input) && Number.isFinite(time)
+      /^\d{4}-\d\d-\d\dT(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|[+-]\d\d:\d\d)$/i
+    let time = Date.parse(text)
+    let day = text.slice(0, 10)
+    // Date.parse normalizes February 31 into March; a timestamp must name an
+    // existing calendar day before its timezone offset is applied.
+    return stamp.test(text) && Number.isFinite(time) &&
+        new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) == day
       ? new Date(time).toISOString()
       : fail(c, 'an ISO timestamp with a timezone')
   }
