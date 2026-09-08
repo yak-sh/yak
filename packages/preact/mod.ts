@@ -32,10 +32,13 @@ import {
 } from 'preact'
 import { useLayoutEffect, useState } from 'preact/hooks'
 import {
+  type Action,
   type Bundle,
   type Context,
   type H,
+  type Patch,
   type Registration,
+  type RenderContext,
   type Renderer,
   resolve,
   type Selection,
@@ -44,7 +47,13 @@ import type { Vocab } from '@yaks/vocab'
 
 /** A native component; the host mounts it so Preact owns its hooks and identity. */
 export type ComponentRenderer<E = Bundle> = Registration & {
-  Render: FunctionComponent<Context & { e: E }>
+  Render: FunctionComponent<Context & Events & { e: E }>
+}
+
+/** The application applies a successful edit and may display rejected input. */
+export type Events = {
+  onPatch?: (patch: Patch, bundle: Bundle) => void
+  onError?: (error: unknown, bundle: Bundle) => void
 }
 
 /** Portable trees and native components share the same selection machinery. */
@@ -68,15 +77,50 @@ export type Options = {
 }
 
 /** An entity address and view; all remaining props are renderer context. */
-export type EntityProps = Context & { eid: string; view?: string }
+export type EntityProps = Context & Events & { eid: string; view?: string }
+
+let action = (value: unknown): value is Action =>
+  value != null && typeof value == 'object' && 'run' in value &&
+  typeof value.run == 'function'
+
+type Control = {
+  type?: string
+  checked?: boolean
+  value?: string
+  setCustomValidity?: (message: string) => void
+  reportValidity?: () => boolean
+}
+
+let change = (act: Action, bundle: Bundle, ctx: Events) => (event: Event) => {
+  let control = event.currentTarget as Control | null
+  let input = control?.type == 'checkbox' ? control.checked : control?.value
+  let patch: Patch
+  try {
+    patch = act.run(bundle, input)
+  } catch (error) {
+    control?.setCustomValidity?.(
+      error instanceof Error ? error.message : String(error),
+    )
+    control?.reportValidity?.()
+    ctx.onError?.(error, bundle)
+    return
+  }
+  control?.setCustomValidity?.('')
+  ctx.onPatch?.(patch, bundle)
+}
 
 // The shared child contract admits readonly arrays; Preact reads the same
 // structure but declares mutable arrays. Keep that type adaptation at the host.
-let hyperscript: H<VNode<Record<string, unknown>>> = (
-  tag,
-  props,
-  ...children
-) => h<Record<string, unknown>>(tag, props, children as ComponentChildren)
+let hyperscript = <E>(
+  bundle: Bundle,
+  ctx: Events,
+): H<Node<E>> =>
+(tag, props, ...children) => {
+  if (action(props?.onChange)) {
+    props = { ...props, onChange: change(props.onChange, bundle, ctx) }
+  }
+  return h<Record<string, unknown>>(tag, props, children as ComponentChildren)
+}
 
 /**
  * Resolve a view and build a Preact node. Native components are passed to h,
@@ -88,21 +132,21 @@ export function render(
   bundle: Bundle,
   view: string | undefined,
   vocab: Vocab,
-  ctx?: Context,
+  ctx?: Context & Events,
 ): VNode<Record<string, unknown>> | null
 export function render(
   registry: HostRegistry,
   bundle: Bundle,
   view: string | undefined,
   vocab: Vocab,
-  ctx?: Context,
+  ctx?: Context & Events,
 ): Node | null
 export function render<E>(
   registry: HostRegistry<E>,
   bundle: Bundle,
   view: string | undefined,
   vocab: Vocab,
-  ctx: Context,
+  ctx: Context & Events,
   props: Context & { e: E },
 ): Node<E> | null
 export function render<E>(
@@ -110,19 +154,38 @@ export function render<E>(
   bundle: Bundle,
   view: string | undefined,
   vocab: Vocab,
-  ctx: Context = {},
+  ctx: Context & Events = {},
   props?: Context & { e: E },
 ): Node<E> | null {
   let renderer = resolve(registry, bundle, view, vocab, ctx)
   if (!renderer) return null
+  let context: RenderContext<Node<E>> & Events = {
+    ...ctx,
+    render: (view, overrides) => {
+      let next = { ...ctx, ...overrides }
+      return render(
+        registry,
+        bundle,
+        view,
+        vocab,
+        next,
+        { ...props, ...next, e: props ? props.e : bundle as E },
+      )
+    },
+  }
   if ('Render' in renderer) {
     // Without explicit props the public overload requires E to be Bundle.
     return h(
       renderer.Render,
-      props ?? { e: bundle, ...ctx } as Context & { e: E },
+      {
+        ...context,
+        ...props,
+        render: context.render,
+        e: props ? props.e : bundle as E,
+      },
     )
   }
-  return renderer.render(bundle, hyperscript, ctx)
+  return renderer.render(bundle, hyperscript(bundle, ctx), context)
 }
 
 /**

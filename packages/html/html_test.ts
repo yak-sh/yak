@@ -87,7 +87,10 @@ Deno.test('HTML forwards column selection and renderer context', () => {
     match: parse('.column.type=string'),
     render: (b, h, ctx) => {
       assertEquals(b, bundle)
-      assertEquals(ctx, { comp: 'doc', col: 'title', label: 'Title' })
+      assertEquals(
+        [ctx.comp, ctx.col, ctx.label],
+        ['doc', 'title', 'Title'],
+      )
       return h('label', null, String(ctx.label))
     },
   }])
@@ -99,4 +102,28 @@ Deno.test('HTML forwards column selection and renderer context', () => {
     }),
     '<label>Title</label>',
   )
+})
+
+Deno.test('HTML omits portable action data without running it', () => {
+  let called = false
+  let registry = define([{
+    view: 'Edit',
+    match: true,
+    render: (_b, h) =>
+      h('input', {
+        value: 'Before',
+        onChange: {
+          name: 'Change title',
+          run: () => {
+            called = true
+            return { doc: { title: 'After' } }
+          },
+        },
+      }),
+  }])
+  assertEquals(
+    render(registry, bundle, 'Edit', vocab),
+    '<input value="Before"/>',
+  )
+  assertEquals(called, false)
 })

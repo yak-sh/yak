@@ -293,3 +293,63 @@ Deno.test('render resolves views and column context, and missing views are empty
   assertEquals(render(registry, bundle, 'Edit', vocab, ctx, 'plain'), 'A page')
   assertEquals(render(registry, bundle, 'Missing', vocab), '')
 })
+
+Deno.test('definition lists pair terms and values across grouped and direct rows', () => {
+  let node = h(
+    'dl',
+    null,
+    h('div', null, h('dt', null, 'Title'), h('dd', null, 'A *page*')),
+    h('dt', null, 'Count'),
+    h('dd', null, 2),
+    h('dd', null, 'More'),
+  )
+  assertEquals(markdown(node), 'Title: A \\*page\\*\nCount: 2\nMore')
+  assertEquals(plain(node), 'Title: A *page*\nCount: 2\nMore')
+})
+
+Deno.test('nested text views retain registry context and always render read-only', () => {
+  let registry = define([
+    {
+      view: 'Props',
+      match: true,
+      render: (_b, h, ctx) => {
+        assertEquals(ctx.readOnly, true)
+        return h(
+          'dl',
+          null,
+          h('dt', null, 'Title'),
+          h(
+            'dd',
+            null,
+            ctx.render?.('Nested.Editor', { col: 'title', readOnly: false }),
+          ),
+        )
+      },
+    },
+    {
+      view: 'Edit',
+      match: parse('.column.type=string'),
+      render: (b, h, ctx) => {
+        assertEquals(ctx.readOnly, true)
+        assertEquals(ctx.extra, 'kept')
+        return h('span', null, String((b.doc as { title: string }).title))
+      },
+    },
+  ], { aliases: { Editor: 'Edit' } })
+  let vocab = loadVocab([{
+    $defs: {
+      doc: { type: 'object', properties: { title: { type: 'string' } } },
+    },
+  }])
+  assertEquals(
+    render(
+      registry,
+      { entity: { eid: 'a' }, doc: { title: 'A page' } },
+      'Props',
+      vocab,
+      { comp: 'doc', extra: 'kept', readOnly: false },
+      'plain',
+    ),
+    'Title: A page',
+  )
+})

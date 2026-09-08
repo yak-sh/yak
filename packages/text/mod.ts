@@ -30,6 +30,7 @@ import {
   type Child,
   type Context,
   type Registry,
+  type RenderContext,
   resolve,
 } from '@yaks/render'
 import type { Vocab } from '@yaks/vocab'
@@ -54,8 +55,18 @@ export let render = (
   vocab: Vocab,
   ctx: Context = {},
   mode: Mode = 'markdown',
-): string =>
-  format(
-    resolve(registry, bundle, view, vocab, ctx)?.render(bundle, h, ctx),
-    mode,
-  )
+): string => {
+  let tree = (view: string | undefined, ctx: Context): Node | null => {
+    let context: RenderContext<Node> = {
+      ...ctx,
+      readOnly: true,
+      render: (view, overrides) => tree(view, { ...ctx, ...overrides }),
+    }
+    return resolve(registry, bundle, view, vocab, context)?.render(
+      bundle,
+      h,
+      context,
+    ) ?? null
+  }
+  return format(tree(view, ctx), mode)
+}

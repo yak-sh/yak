@@ -24,7 +24,9 @@ Dotted views, aliases, fallback views and column context follow `@yaks/render`.
 Text and attribute values are escaped by Preact's serializer; void elements,
 boolean attributes and nested children use its HTML semantics. Renderers own
 their tags, props and URL policy, just as they do in the browser. Event handlers
-are not serialized and no client script or hydration is added.
+are not serialized, including portable editor actions, and no client script or
+hydration is added. Property lists compose their editors through the same
+registry; pass `readOnly: true` to display values instead of controls.
 
 ## Compatibility
 

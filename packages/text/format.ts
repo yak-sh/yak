@@ -42,6 +42,9 @@ let known = new Set([
   'ul',
   'ol',
   'a',
+  'dl',
+  'dt',
+  'dd',
 ])
 let heading = (tag: string): boolean => /^h[1-6]$/.test(tag)
 
@@ -143,6 +146,27 @@ let list = (node: Node, mode: Mode): string => {
   }).join('\n')
 }
 
+let definitions = (node: Node, mode: Mode): string => {
+  let lines: string[] = []
+  let term = false
+  for (let item of flat(node.children)) {
+    if (element(item) && item.tag == 'div') {
+      lines.push(definitions(item, mode))
+      term = false
+    } else if (element(item) && item.tag == 'dt') {
+      lines.push(`${children(item, mode)}:`)
+      term = true
+    } else {
+      let text = piece(item, mode).text
+      if (term && element(item) && item.tag == 'dd') {
+        lines[lines.length - 1] += ` ${text}`
+      } else if (text) lines.push(text)
+      term = false
+    }
+  }
+  return lines.join('\n')
+}
+
 let piece = (child: Child<Node>, mode: Mode): Piece => {
   if (array(child)) {
     return {
@@ -177,7 +201,10 @@ let piece = (child: Child<Node>, mode: Mode): Piece => {
       kind: 'list',
     }
   }
+  if (tag == 'dl') return { text: definitions(child, mode), block: true }
   let text = children(child, mode)
+  if (tag == 'dt') return { text: `${text}: `, block: false }
+  if (tag == 'dd') return { text, block: false }
   if (heading(tag)) {
     return {
       text: md ? `${'#'.repeat(Number(tag[1]))} ${text}` : text,

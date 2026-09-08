@@ -19,15 +19,18 @@ plain(node) // 'Open yaks.app (https://yaks.app)'
 
 Or use `render(registry, bundle, view, vocab, ctx?, mode?)` with a registry from
 `@yaks/render`. The first five arguments match the Preact host. Mode defaults to
-`'markdown'`; pass `'plain'` for undecorated text. Context, including
-`{comp, col}` column selection, passes through unchanged. An unmatched view
-produces an empty string.
+`'markdown'`; pass `'plain'` for undecorated text. Context includes
+`{comp, col}` for column selection and `ctx.render(view, overrides?)` for
+composing nested views through the same registry. The host always supplies
+`readOnly: true`, including for nested views, so portable editors display their
+values. An unmatched view produces an empty string.
 
 | Elements                                                              | Markdown                                 | Plain text            |
 | --------------------------------------------------------------------- | ---------------------------------------- | --------------------- |
 | `h1`–`h6`                                                             | Heading markers                          | Heading words         |
 | `p`, `div`, `section`, `article`, `main`, `header`, `footer`, `aside` | Block spacing                            | Block spacing         |
 | `ul`, `ol`, `li`                                                      | Bullets/numbering and nested indentation | Same list structure   |
+| `dl`, `dt`, `dd`                                                      | One `term: value` line per property      | Same property lines   |
 | `a`                                                                   | Link syntax                              | Label and destination |
 | `code`                                                                | Backtick span                            | Literal code          |
 | `pre`                                                                 | Fenced code                              | Literal code          |

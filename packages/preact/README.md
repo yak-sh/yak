@@ -27,7 +27,18 @@ once, outside a component's render.
 `render(registry, bundle, view, vocab, ctx?)` directly builds a Preact node for
 callers that already own the subscription. A missing bundle at `Entity`, or an
 unmatched view, renders nothing. Portable renderers remain pure; native
-components own hooks, events and applying actions.
+components own hooks and state.
+
+The host supplies `ctx.render(view, overrides?)` for composing another view of
+the same bundle through the same registry. Overrides merge with the current
+context; native source props are preserved. Portable `onChange` props can carry
+an `Action` object. The host calls its `run(bundle, input)` with a checkbox's
+checked state or another control's value, then sends the resulting patch to
+`ctx.onPatch(patch, bundle)`. The application owns applying that patch. A
+rejected edit sets and reports the control's validity message and calls
+`ctx.onError(error, bundle)` when supplied; a successful edit clears the
+message. The exported `Events` type describes these callbacks. Ordinary event
+functions pass through unchanged.
 
 A native registration uses `{view, match, Render}` and can be typed as
 `ComponentRenderer`. The host builds `h(Render, {e: bundle, ...ctx})`, so Preact
