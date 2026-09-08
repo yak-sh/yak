@@ -1,0 +1,16 @@
+{
+  "name": "@yaks/html",
+  "version": "0.0.0",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "Server-side HTML from portable registry views through the Preact host.",
+  "imports": {
+    "preact-render-to-string": "npm:preact-render-to-string@6.7.0",
+    "preact": "npm:preact@^10.29.1",
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "linkedom": "npm:linkedom@^0.18.12"
+  },
+  "publish": {
+    "exclude": ["**/*_test.ts"]
+  }
+}

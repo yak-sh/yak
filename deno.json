@@ -45,6 +45,7 @@
     "./packages/match",
     "./packages/render",
     "./packages/preact",
+    "./packages/html",
     "./packages/text",
     "./packages/graph",
     "./packages/ram",

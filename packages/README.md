@@ -51,6 +51,8 @@ In dependency order:
 - **[@yaks/preact](./preact)** — the Preact host for that registry: an Entity
   component reading a function store, subscribing while mounted, and handing
   Preact's hyperscript to the same portable renderers.
+- **[@yaks/html](./html)** — server-side HTML from the same registry, composed
+  through the Preact host and its server serializer without a DOM.
 - **[@yaks/text](./text)** — Markdown and plain text from those same trees,
   preserving headings, lists, links, code and emphasis while stripping control
   bytes from every text leaf and destination.
