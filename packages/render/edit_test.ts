@@ -1,6 +1,17 @@
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals, assertStrictEquals, assertThrows } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
-import { edit } from './mod.ts'
+import { parse } from '@yaks/query'
+import {
+  type Action,
+  type Child,
+  define,
+  edit,
+  editors,
+  extend,
+  type H,
+  properties,
+  resolve,
+} from './mod.ts'
 
 let vocab = loadVocab({
   $defs: {
@@ -96,4 +107,103 @@ Deno.test('applications can parse and validate without changing the write path',
     edit(vocab, { comp: 'doc', col: 'count' }, { parse: () => 'wrong' })
       .run(bundle, 1)
   )
+})
+
+type Node = {
+  tag: string
+  props: Record<string, unknown> | null
+  children: Child<Node>[]
+}
+let h: H<Node> = (tag, props, ...children) => ({ tag, props, children })
+
+Deno.test('seven Edit families select by declaration with no stored value', () => {
+  let family = editors(vocab)
+  let registry = define(family)
+  let empty = { entity: { eid: 'empty' } }
+  let cases = [
+    ['title', 'input', 'text'],
+    ['count', 'input', 'number'],
+    ['state', 'select', undefined],
+    ['owner', 'input', 'text'],
+    ['at', 'input', 'text'],
+    ['enabled', 'input', 'checkbox'],
+    ['data', 'textarea', undefined],
+  ]
+  assertEquals(family.length, 7)
+  for (let [i, [col, tag, type]] of cases.entries()) {
+    let ctx = { comp: 'doc', col }
+    let renderer = resolve(registry, empty, 'Form.Edit', vocab, ctx)!
+    assertStrictEquals(renderer, family[i])
+    let node = renderer.render(empty, h, ctx)
+    assertEquals(node.tag, tag)
+    assertEquals(node.props?.type, type)
+    assertEquals(node.props?.['aria-label'], `doc.${col}`)
+    assertEquals(node.props?.value ?? node.props?.checked, i == 5 ? false : '')
+  }
+  assertStrictEquals(
+    resolve(registry, empty, 'Edit', vocab, { comp: 'doc', col: 'priority' }),
+    family[1],
+  )
+})
+
+Deno.test('enum controls use the vocabulary and offer inert patch actions', () => {
+  let registry = define(editors(vocab))
+  let ctx = { comp: 'doc', col: 'state' }
+  let node = resolve(registry, bundle, 'Edit', vocab, ctx)!
+    .render(bundle, h, ctx)
+  let choices = node.children.flat() as Node[]
+  assertEquals(choices.map((n) => n.props?.value), ['', 'open', 'done'])
+  assertEquals((node.props?.onChange as Action).run(bundle, 'done'), {
+    doc: { state: 'done' },
+  })
+  assertEquals(bundle.doc, { title: 'Before', count: 2 })
+})
+
+Deno.test('column overlays use ordinary specificity and suffix resolution', () => {
+  let registry = define(editors(vocab))
+  let custom = {
+    view: 'Edit',
+    match: parse('.column.type=string, .column.comp=doc, .column.col=title'),
+    render: <N>(_b: unknown, h: H<N>) => h('strong', null, 'custom title'),
+  }
+  extend(registry, [custom])
+  assertStrictEquals(
+    resolve(registry, bundle, 'Card.Edit', vocab, {
+      comp: 'doc',
+      col: 'title',
+    }),
+    custom,
+  )
+  assertEquals(
+    resolve(registry, bundle, 'Edit', vocab, { comp: 'doc', col: 'count' })!
+      .render(bundle, h, { comp: 'doc', col: 'count' }).tag,
+    'input',
+  )
+})
+
+Deno.test('Props lays out every declared column and delegates its editor', () => {
+  let registry = define([...editors(vocab), properties(vocab)])
+  let props = resolve(registry, bundle, 'Props', vocab, { comp: 'doc' })!
+  let calls: unknown[] = []
+  let node = props.render(bundle, h, {
+    comp: 'doc',
+    render: (view, ctx) => {
+      calls.push([view, ctx])
+      return h('span', null, ctx?.col)
+    },
+  })
+  assertEquals(node.tag, 'dl')
+  assertEquals(
+    calls,
+    vocab.columns('doc').map((col) => ['Edit', { comp: 'doc', col }]),
+  )
+  assertThrows(() => props.render(bundle, h, { comp: 'missing' }))
+  assertThrows(() => props.render(bundle, h, { comp: 'doc' }), Error, 'host')
+  for (let col of ['updated', 'rank']) {
+    let ctx = { comp: 'doc', col }
+    let node = resolve(registry, bundle, 'Edit', vocab, ctx)!
+      .render(bundle, h, ctx)
+    assertEquals(node.tag, 'span')
+    assertEquals(node.props?.onChange, undefined)
+  }
 })

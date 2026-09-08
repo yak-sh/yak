@@ -57,6 +57,7 @@ import type {
 } from './types.ts'
 
 export { edit, type EditOptions } from './edit.ts'
+export { editors, properties } from './editors.ts'
 
 export type { Bundle } from '@yaks/match'
 export type { Query } from '@yaks/query'

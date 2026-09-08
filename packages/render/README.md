@@ -64,34 +64,53 @@ factories receive the original typed entity. Without a separate source,
 factories receive the bundle. `Registry` defaults to portable `Renderer`,
 `Action` and `Bundle` for existing callers.
 
-Editors are ordinary renderers:
+Editors are ordinary renderers. Register the built-in family beside your entity
+views and add `Props` to lay out every declared column of a component:
 
 ```ts
-let editor = define([{
-  view: 'Edit',
-  match: parse('.column.type=string'),
-  render: (b, h, ctx) => {
-    let row = b[ctx.comp!] as Record<string, unknown> | undefined
-    return h('input', { value: row?.[ctx.col!] })
-  },
-}])
-let ctx = { comp: 'doc', col: 'title' }
-let renderer = resolve(editor, bundle, 'Edit', vocab, ctx)
-let node = renderer?.render(bundle, h, ctx)
+import { define, editors, properties } from '@yaks/render'
+import { render } from '@yaks/preact'
+
+let registry = define([...editors(vocab), properties(vocab)])
+let node = render(registry, bundle, 'Props', vocab, {
+  comp: 'doc',
+  onPatch: (patch, bundle) => store.patch(bundle.entity.eid, patch),
+  onError: (error) => showError(error),
+})
+// One column: render(registry, bundle, 'Edit', vocab, {comp: 'doc', col: 'title', onPatch})
 ```
+
+`editors(vocab, options?)` returns seven registrations: text (`string`, `url`,
+`query`), number (`number`, `priority`), enum, entity reference (`ref`),
+timestamp (`time`), boolean and JSON. Enum options come from
+`vocab.column().values`. JSON is declared `{type: 'string', format: 'json'}` and
+stored as JSON text. References accept entity ids; applications can overlay a
+picker with a more specific `.column.type=ref, .column.ref=project` query.
+
+Controls carry an `Action` as their `onChange` property. The Preact host turns
+that data into a change handler, calls `run(bundle, input)` and delivers the
+patch to `onPatch`. Validation failures reach `onError` and the control's native
+validation feedback. The package itself never applies a patch. Native controls
+can call the same `edit()` action while retaining their own gestures and paint.
+
+`Props` takes `{comp}` and uses the host's nested render callback to select each
+column's `Edit` in the same registry, including overlays. Its definition list
+includes absent values and read-only columns. The text host renders both views
+read-only in Markdown or plain text; values such as false and zero remain
+visible, and unset values show `—`. `readOnly: true` also works on Preact.
 
 When both `comp` and `col` are supplied, selection reads a schema projection
 `{entity: {eid: 'doc.title'}, column: {comp: 'doc', col: 'title', type: 'string',
 ref: undefined}}`.
 Its queryable fields are `comp`, `col`, `type`, `ref` under `column`. `type` is
 `string`, `number`, `boolean`, `ref`, `enum`, `time`, `url`, `query` or
-`priority`, according to the declaration. This selects the declared type even
-when the entity's value is absent. Render still receives the original bundle. An
-unknown column address or a `col` without `comp` throws. A `comp` alone supplies
-component context to an entity view. Entity queries and column queries describe
-different subjects; use appropriate views for each. An editor can close over
-`vocab.column(comp, col)` for enum choices or other schema details. No second
-registry or editor implementation is needed.
+`priority` or `json`, according to the declaration. This selects the declared
+type even when the entity's value is absent. Render still receives the original
+bundle. An unknown column address or a `col` without `comp` throws. A `comp`
+alone supplies component context to an entity view. Entity queries and column
+queries describe different subjects; use appropriate views for each. An editor
+can close over `vocab.column(comp, col)` for enum choices or other schema
+details. No second registry is needed.
 
 `edit(vocab, {comp, col}, options?)` creates an action whose
 `run(bundle, input)` parses a value and returns only `{[comp]: {[col]: value}}`.
