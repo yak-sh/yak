@@ -259,11 +259,20 @@ export let PLATFORM_THEME = '#4c773e'
 export let PLATFORM_BACKGROUND = '#fdf7ee'
 
 // The colour THIS app's chrome paints with: its own, if its owner set one
-// (`app_set(theme_color: …)`), else the platform's.
-let themeColorOf = (app: App) => app.theme?.themeColor ?? PLATFORM_THEME
+// (`app_set(theme_color: …)`), else the platform's. A stored colour is woven
+// straight into a `<meta content>` attribute and the manifest JSON below, so it
+// must be safe HERE, not only where app_set wrote it — the generic graph_apply
+// tier can set the `theme` component past that validator. The charset (the twin
+// of tools.ts `CSS_COLOR`, kept in step) admits hex, rgb()/hsl() and named
+// colours but no quote, angle bracket or backslash, so a value that fails it is
+// junk or an injection attempt: fall back to the platform's rather than emit it.
+let CSS_COLOR = /^[#a-zA-Z0-9(),.%\s-]{1,64}$/
+let safeColor = (v: string | null | undefined, fallback: string) =>
+  v && CSS_COLOR.test(v) ? v : fallback
+let themeColorOf = (app: App) =>
+  safeColor(app.theme?.themeColor, PLATFORM_THEME)
 let backgroundColorOf = (app: App) =>
-  app.theme?.backgroundColor ??
-    PLATFORM_BACKGROUND
+  safeColor(app.theme?.backgroundColor, PLATFORM_BACKGROUND)
 
 // The tags an app added to a home screen needs, and almost no app writes
 // (T-34493, T-33055). iOS takes its icon from `<link rel="apple-touch-icon">`

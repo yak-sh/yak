@@ -105,6 +105,22 @@ Deno.test("the app's own theme colour is what the injected meta and the manifest
   assertEquals(m.background_color, '#fff')
 })
 
+Deno.test('a hostile stored colour is refused at injection, wearing the platform instead', () => {
+  // The generic graph_apply tier can set `theme` past app_set's validator, so
+  // a value carrying a quote, angle bracket or script must never reach the head
+  // or the manifest — it falls back to the platform colour.
+  let evil = app('Cookbook', {
+    themeColor: '#000"><script>alert(1)</script>',
+    backgroundColor: 'x" onload="y',
+  })
+  let out = pinned('/cookbook/', page('<title>x</title>'), evil)
+  assert(out.includes(PLATFORM_META), out)
+  assert(!out.includes('<script>'), out)
+  let m = manifesting(evil, '/cookbook/')
+  assertEquals(m.theme_color, PLATFORM_THEME)
+  assertEquals(m.background_color, PLATFORM_BACKGROUND)
+})
+
 Deno.test('the generated manifest names the app, its root, its icon and its colours', () => {
   let m = manifesting(app('Cookbook'), '/cookbook/')
   assertEquals(m.name, 'Cookbook')
