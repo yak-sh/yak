@@ -127,3 +127,15 @@ Deno.test('HTML omits portable action data without running it', () => {
   )
   assertEquals(called, false)
 })
+
+Deno.test('an empty child list does not replace a textarea value during serialization', () => {
+  let registry = define([{
+    view: 'Edit',
+    match: true,
+    render: (_b, h) => h('textarea', { value: '<b>before</b>' }),
+  }])
+  assertEquals(
+    render(registry, bundle, 'Edit', vocab),
+    '<textarea>&lt;b>before&lt;/b></textarea>',
+  )
+})

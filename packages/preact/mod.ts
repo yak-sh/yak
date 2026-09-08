@@ -119,7 +119,9 @@ let hyperscript = <E>(
   if (action(props?.onChange)) {
     props = { ...props, onChange: change(props.onChange, bundle, ctx) }
   }
-  return h<Record<string, unknown>>(tag, props, children as ComponentChildren)
+  return children.length
+    ? h<Record<string, unknown>>(tag, props, children as ComponentChildren)
+    : h<Record<string, unknown>>(tag, props)
 }
 
 /**
