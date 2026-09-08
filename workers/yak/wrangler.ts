@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run=npm,npx,git
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run=npm,npx,git,pgrep,kill
 // The one door to this Worker's wrangler: `deno task deploy:yak`,
 // `deno task dev:yak`, their `-staging` variants and the probe (probe.ts) all
 // come through here, so the pinned version is spelled once and `node_modules`
@@ -94,20 +94,13 @@ export let command = (args: string[]) => {
   }
 }
 
-// Every process under `pid`, children before parents, read from /proc.
+// Every process under `pid`, children before parents. Through pgrep(1):
+// reading /proc is something Deno grants only to --allow-all.
 export let descendants = (pid: number): number[] => {
-  let kids: number[] = []
-  for (let entry of Deno.readDirSync('/proc')) {
-    if (!/^\d+$/.test(entry.name)) continue
-    try {
-      let stat = Deno.readTextFileSync(`/proc/${entry.name}/stat`)
-      // The comm field is parenthesised and may hold spaces; ppid follows it.
-      let ppid = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1])
-      if (ppid == pid) kids.push(Number(entry.name))
-    } catch {
-      // exited between the listing and the read
-    }
-  }
+  let out = new Deno.Command('pgrep', { args: ['-P', String(pid)] })
+    .outputSync()
+  let kids = new TextDecoder().decode(out.stdout).split('\n').filter(Boolean)
+    .map(Number)
   return kids.flatMap((kid) => [...descendants(kid), kid])
 }
 
@@ -134,16 +127,16 @@ if (import.meta.main) {
   // leaves wrangler streaming and its reader waiting on a pipe that never
   // closes (verify-deploy.ts hung ten minutes on a three-minute tail). The
   // child is npx, which does not pass a signal to the wrangler it spawned, so
-  // the whole subtree is signalled, deepest first.
+  // the whole subtree is signalled, deepest first. Through kill(1), not
+  // Deno.kill: that needs the unrestricted run permission, and this door
+  // runs with an allowlist (npm, npx, git, pgrep, kill).
   for (let signal of ['SIGINT', 'SIGTERM'] as const) {
     Deno.addSignalListener(signal, () => {
-      for (let pid of [...descendants(child.pid), child.pid]) {
-        try {
-          Deno.kill(pid, signal)
-        } catch {
-          // already gone
-        }
-      }
+      let pids = [...descendants(child.pid), child.pid].map(String)
+      new Deno.Command('kill', {
+        args: ['-s', signal.slice(3), ...pids],
+        stderr: 'null',
+      }).spawn()
     })
   }
   let { code } = await child.status

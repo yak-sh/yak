@@ -53,7 +53,7 @@ export let wrangler: Run = async (args) => {
       'run',
       '--allow-read',
       '--allow-write',
-      '--allow-run=npm,npx,git',
+      '--allow-run=npm,npx,git,pgrep,kill',
       wrapper,
       ...args,
     ],
