@@ -567,10 +567,15 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // one route, one `WWW-Authenticate`, one `/.well-known/…/mcp`, which the
   // challenge already builds from the pathname.
   let strict = url.searchParams.get('auth') == 'required'
+  // Where this call's time goes (timing.ts): the door's own hops — who is
+  // asking, building the server — and every hop a tool waits on, on the answer
+  // as `Server-Timing`, so `curl -i` on a slow app_files says which was slow
+  // (T-34986).
+  let c = clock()
   // Who is asking, if anybody. An anonymous request costs nothing to find
   // out — no header to unwrap, no cookie to verify (identity.ts) — and what
   // it gets is the pre-auth surface below rather than the door in its face.
-  let { who: auth, tried } = await asking(env, req)
+  let { who: auth, tried } = await c.time('asking', () => asking(env, req))
   // A credential that did not verify is NOT an anonymous caller: an expired or
   // revoked token, or one minted for something else, is refused here with the
   // 401 and the challenge, before the pre-auth surface can answer it. The spec
@@ -651,10 +656,6 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // (directory.ts). A deploy from anywhere else is news this door has to
   // have (C-32905 item 5).
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
-  // Where this call's time goes (timing.ts): a write names the hops it waits
-  // on, and the answer carries them as `Server-Timing`, so `curl -i` on a slow
-  // app_files says which of them was slow (T-34986).
-  let c = clock()
   let ctx: Ctx = {
     env,
     // A grant narrowed to one space is narrowed HERE, over the directory every
@@ -675,7 +676,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let session = rpc.method == 'initialize'
     ? crypto.randomUUID()
     : req.headers.get('mcp-session-id') ?? ''
-  let built = await door(ctx, session)
+  let built = await c.time('door', () => door(ctx, session))
   let out = timed(
     await built.handle(
       new Request(req.url, {
