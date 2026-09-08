@@ -7,8 +7,9 @@
 // A priority topological sort: emit the alphabetically-smallest kind whose
 // `before`-predecessors are all placed, so alphabetical is both the base order
 // and the tiebreak. `before[k]` lists the kinds k sorts BEFORE (k precedes them).
-// A `before` naming a non-kind refuses; a cycle refuses — the errors name the
-// file's fix, since a stale order is silent corruption otherwise.
+// A `before` naming a kind this subset does not load is no constraint, so a
+// document (mail's `before: doc`, canvas's `layout before doc`) composes in any
+// subset. A cycle refuses — a stale order is silent corruption otherwise.
 export let kindOrder = (
   kinds: string[],
   before: (k: string) => string[],
@@ -20,11 +21,7 @@ export let kindOrder = (
   for (let k of ks) preds[k] = new Set()
   for (let k of ks) {
     for (let x of before(k)) {
-      if (!set.has(x)) {
-        throw new Error(
-          `kind '${k}' declares before '${x}', which is not a kind`,
-        )
-      }
+      if (!set.has(x)) continue // target absent from this subset: no constraint
       preds[x].add(k) // k before x ⇒ k is a predecessor of x
     }
   }

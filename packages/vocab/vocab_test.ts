@@ -245,13 +245,33 @@ Deno.test('a computed column reads but never writes', () => {
   assert(w.check('task', { status: 'open' }).length == 1)
 })
 
-Deno.test('the order refuses cycles and unknown kinds', () => {
+Deno.test('the order refuses cycles', () => {
   assertThrows(
     () => kindOrder(['a', 'b'], (k) => (k == 'a' ? ['b'] : ['a'])),
     Error,
     'cycle',
   )
-  assertThrows(() => kindOrder(['a'], () => ['ghost']), Error, 'not a kind')
+})
+
+Deno.test('a `before` naming an absent kind is no constraint', () => {
+  // a document composes in any subset: an unloaded target just drops out
+  assertEquals(kindOrder(['a'], () => ['ghost']), ['a'])
+  assertEquals(kindOrder(['b', 'a'], (k) => (k == 'b' ? ['ghost'] : [])), [
+    'a',
+    'b',
+  ])
+  // but the same `before` binds once the target is present
+  assertEquals(kindOrder(['a', 'b'], (k) => (k == 'b' ? ['a'] : [])), [
+    'b',
+    'a',
+  ])
+})
+
+Deno.test('the fleet order is unchanged: memory and project precede doc', () => {
+  // the `before: doc` constraints still bind when doc loads alongside them
+  let at = (k: string) => v.kinds.indexOf(k)
+  assert(at('memory') < at('doc'))
+  assert(at('project') < at('doc'))
 })
 
 Deno.test('indexes merge the column flag with the composite lists', () => {
