@@ -62,5 +62,10 @@ jobs:
       - name: deploy gate
         run: deno task deploy:gate
 
+      # Box-side app-deploy:time records what an app_files write costs a person;
+      # this reads the committed rows and refuses a slower one (T-34986).
+      - name: app deploy gate
+        run: deno task app-deploy:gate
+
       - name: bench gate
         run: deno task bench:gate
