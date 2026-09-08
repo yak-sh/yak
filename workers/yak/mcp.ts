@@ -368,12 +368,16 @@ let markOf = (env: Env) => env.CF_VERSION_METADATA?.id ?? VERSION
 // tool names, and the version naming them, which `initialize` records for this
 // session and every later call is compared against.
 let door = async (ctx: Ctx, session: string) => {
-  let reach = await inReach(ctx, {})
+  // Each read the door makes before any tool runs is a named stage on the
+  // call's `Server-Timing` (timing.ts): this runs on EVERY call, so what it
+  // costs is the floor under every write (T-34986).
+  let c = ctx.clock ?? clock()
+  let reach = await c.time('reach', () => inReach(ctx, {}))
   // The COMMANDS the apps in reach declare (declared.ts). They are not tools
   // and never appear in the list; they are read here so the instructions can
   // name them under their app, and `commands` says them again with their
   // arguments when an agent asks.
-  let own = await listCommands(ctx)
+  let own = await c.time('commands', () => listCommands(ctx))
   // What the apps in reach say about themselves (standing.ts, T-34425): every
   // one of them named, with what it holds and its own commands. That ROSTER
   // rides on the INSTRUCTIONS, which is what a model reads before it reads
@@ -385,13 +389,13 @@ let door = async (ctx: Ctx, session: string) => {
   //
   // The reach and the commands are handed over rather than read again: this
   // runs on every call at the door, and both were just paid for.
-  let apps = await standing(ctx, reach, own)
+  let apps = await c.time('standing', () => standing(ctx, reach, own))
   ctx.standing = apps.notes
   // The graph, and how a column of it reads and writes: a reference answers
   // human, and a word two of the caller's spaces spell differently is typed
   // nowhere (agent.ts `reading`). The schemas in the tool list are derived
   // through it, so they describe what this door actually says.
-  let { graph, column } = await reaching(ctx, reach)
+  let { graph, column } = await c.time('reaching', () => reaching(ctx, reach))
   let opts = {
     graph,
     column,
@@ -425,7 +429,8 @@ let door = async (ctx: Ctx, session: string) => {
     // those are anonymous only on the door a stranger reads, where they are
     // ONE named app rather than the whole of somebody's reach.
     security: SIGNIN,
-    extend: extend(ctx, apps.apps),
+    extend: (server: McpServer) =>
+      c.time('extend', () => extend(ctx, apps.apps)(server)),
   }
   // What this door lists right now, and the name for it. `about` says both
   // (tools.ts), so a client that suspects its list is old has one call that

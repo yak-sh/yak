@@ -82,18 +82,24 @@ export let pinned = (prefix: string, sha: string) => `${prefix}versions/${sha}`
 // deploy, pinning those bytes where a later rollback can find them again.
 // Reading and pinning are the same pass because the bytes are in hand either
 // way; bytes already pinned are left alone, since the address IS the content.
+//
+// The files are walked AT ONCE: each is its own chain of round trips to the
+// bucket, and one file's chain has nothing to wait on in another's, so a
+// deploy's snapshot costs one file's time rather than every file's added up
+// (T-34986: pinning three files took three times one).
 let walk = async (blobs: Blobs, prefix: string, pin: boolean) => {
   let files: Files = {}
-  for (let key of await blobs.list(prefix)) {
-    let path = key.slice(prefix.length)
-    if (kept(path)) continue
-    let bytes = await blobs.get(key)
+  let paths = (await blobs.list(prefix))
+    .map((key) => key.slice(prefix.length))
+    .filter((path) => !kept(path))
+  await Promise.all(paths.map(async (path) => {
+    let bytes = await blobs.get(prefix + path)
     let sha = await sha256(bytes)
     files[path] = sha
     if (pin && !(await blobs.has(pinned(prefix, sha)))) {
       await blobs.put(pinned(prefix, sha), bytes)
     }
-  }
+  }))
   return files
 }
 
