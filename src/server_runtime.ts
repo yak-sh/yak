@@ -467,6 +467,18 @@ let workerN = 0
 // (graceful {close} teardown). TASKS_WS_WORKERS=0 is the escape hatch back to
 // inline serving if one is ever needed.
 let workersWanted = Deno.env.get('TASKS_WS_WORKERS') != '0'
+// Cap concurrent per-WS workers. Each is a V8 isolate + OS thread + its own
+// sqlite fd, and one is spawned per socket (below). An UNBOUNDED spawn — every
+// client reconnecting at once after a restart — pegs op_create_worker and
+// balloons RSS until the process OOMs, which is itself the next restart: a
+// crashloop (T-34786). Above the cap a socket serves inline (the same fallback
+// a failed worker takes), cheaper than a worker anyway. Default one per core —
+// the parallel-read ceiling the hardware can actually use; a storm then spawns
+// at most that many isolates and queues the rest onto inline serving.
+// TASKS_WS_WORKER_CAP overrides for tuning without a code change.
+let workerCap = Number(Deno.env.get('TASKS_WS_WORKER_CAP')) ||
+  navigator.hardwareConcurrency || 8
+let liveWorkers = 0
 let ws = (req: Request) => {
   let { socket, response } = host.upgrade(req)
   // The tab names itself once, at connect: ?client=<eid> is the writer for
@@ -510,6 +522,7 @@ let ws = (req: Request) => {
     let kill = () => {
       if (torn) return
       torn = true
+      liveWorkers--
       w.terminate()
     }
     let timer = setTimeout(kill, WORKER_CLOSE_MS)
@@ -519,7 +532,7 @@ let ws = (req: Request) => {
     }
     w.postMessage({ close: true })
   }
-  if (workersWanted && graph != ':memory:') {
+  if (workersWanted && graph != ':memory:' && liveWorkers < workerCap) {
     try {
       let w = new Worker(new URL('./wsworker.ts', import.meta.url), {
         type: 'module',
@@ -549,6 +562,7 @@ let ws = (req: Request) => {
       }
       w.onerror = (e) => console.warn('wsworker error —', e.message)
       s.worker = w
+      liveWorkers++
     } catch (e) {
       console.warn('ws: worker unavailable, serving inline —', e)
     }
