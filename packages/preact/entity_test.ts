@@ -2,7 +2,7 @@
 // repaint, while each mounted entity owns exactly its own subscription.
 
 import { assertEquals } from '@std/assert'
-import { h } from 'preact'
+import { h, type VNode } from 'preact'
 import { useLayoutEffect, useState } from 'preact/hooks'
 import { type Bundle, define } from '@yaks/render'
 import { parse } from '@yaks/query'
@@ -178,8 +178,14 @@ Deno.test('a change during subscription is not lost before the listener is ready
   }
 })
 
-Deno.test('direct rendering produces nodes through the same hyperscript', () => {
-  let m = mount(render(registry, bundle('a'), 'Tile', vocab))
+Deno.test('portable rendering preserves the host node type and hyperscript', () => {
+  let node: VNode<Record<string, unknown>> | null = render(
+    registry,
+    bundle('a'),
+    'Tile',
+    vocab,
+  )
+  let m = mount(node)
   try {
     assertEquals(m.root.innerHTML, '<h2>a</h2>')
   } finally {

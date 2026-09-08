@@ -84,6 +84,13 @@ let hyperscript: H<VNode<Record<string, unknown>>> = (
  * with another entity shape supply their typed props as the sixth argument.
  */
 export function render(
+  registry: Selection<Renderer>,
+  bundle: Bundle,
+  view: string | undefined,
+  vocab: Vocab,
+  ctx?: Context,
+): VNode<Record<string, unknown>> | null
+export function render(
   registry: HostRegistry,
   bundle: Bundle,
   view: string | undefined,
