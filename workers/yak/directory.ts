@@ -199,6 +199,14 @@ export type App = {
   // page and takes no mail, while its bytes, its store and its slug are all
   // still here for the thirty days `app_restore` has to bring it back.
   trashed: Trashed | null
+  // The colours this app's owner set for its installed chrome (apps.ts
+  // `manifesting`/`pinned`, T-33055): the phone's splash while it opens
+  // (`backgroundColor`) and the browser/status chrome around it
+  // (`themeColor`), both CSS, set through `app_set`. Either half null where
+  // the app never set it — the platform's own palette answers instead
+  // (apps.ts `PLATFORM_THEME`/`PLATFORM_BACKGROUND`), so an app that asked
+  // for neither is never colourless.
+  theme: { themeColor: string | null; backgroundColor: string | null } | null
 }
 export type Role = 'owner' | 'editor' | 'viewer'
 export type Access = 'public' | 'open' | 'private'
@@ -270,6 +278,7 @@ type Row = {
   gallery?: { asked_at?: string | null; listed_at?: string | null }
   seeded?: { at?: string | null; version?: number | null }
   trashed?: { at?: string | null; by?: Id | null }
+  theme?: { theme_color?: string | null; background_color?: string | null }
   hostname?: {
     name: string
     serves: Id
@@ -492,7 +501,7 @@ export let stamp = async (
 // where there is a value.
 let ABOUT =
   '.doc?&.former?&.home?&.meter?&.published?&.installed?&.gallery?&.seeded?' +
-  '&.trashed?'
+  '&.trashed?&.theme?'
 
 // And what every read of a SPACE asks for, for the same reason.
 let SPACE_ABOUT =
@@ -582,6 +591,12 @@ export let appOf = (r: Row): App => ({
     ? { at: r.seeded.at ?? '', version: r.seeded.version ?? 0 }
     : null,
   trashed: trashedOf(r),
+  theme: r.theme
+    ? {
+      themeColor: r.theme.theme_color ?? null,
+      backgroundColor: r.theme.background_color ?? null,
+    }
+    : null,
 })
 
 let hostOf = (r: Row): Host => ({

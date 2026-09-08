@@ -238,75 +238,94 @@ export let based = (href: string, page: string) =>
     ? page
     : intoHead(page, `<base href="${href}">`)
 
-// Whether the page already names a `rel` — one TOKEN of it, so
-// `rel="shortcut icon"` and `rel="apple-touch-icon-precomposed"` each count as
-// the author having answered.
-let declares = (page: string, rel: string) =>
-  new RegExp(`<link\\b[^>]*\\brel\\s*=\\s*['"]?[^'">]*\\b${rel}\\b`, 'i')
-    .test(page)
+// Whether the page already names a tag — one TOKEN of the attribute that
+// says what it IS, so `rel="shortcut icon"` and `rel="apple-touch-icon-
+// precomposed"` both count as the author having answered, and a `<meta
+// name="theme-color">` is asked the same way a `<link rel="manifest">` is:
+// one test, parameterised on the tag and the attribute that names it.
+let declares = (page: string, tag: string, attr: string, value: string) =>
+  new RegExp(
+    `<${tag}\\b[^>]*\\b${attr}\\s*=\\s*['"]?[^'">]*\\b${value}\\b`,
+    'i',
+  ).test(page)
 
-// The two links an app added to a home screen needs, and almost no app writes
-// (T-34493). iOS takes the icon from `<link rel="apple-touch-icon">` in the
-// head and nowhere else — Apple's *Configuring Web Applications*: a page names
+// The platform's own palette (public/tokens.css `--meadow`/`--linen`), for an
+// app that never set its own (T-33055): the one look a generated manifest and
+// the tags beside it can give honestly, since the browser's grey chrome and
+// blank splash read as broken while a borrowed brand at least reads as
+// intentional. An app carries its own instead (directory.ts `App.theme`, set
+// through `app_set`), and this is only ever the fallback.
+export let PLATFORM_THEME = '#4c773e'
+export let PLATFORM_BACKGROUND = '#fdf7ee'
+
+// The colour THIS app's chrome paints with: its own, if its owner set one
+// (`app_set(theme_color: …)`), else the platform's.
+let themeColorOf = (app: App) => app.theme?.themeColor ?? PLATFORM_THEME
+let backgroundColorOf = (app: App) =>
+  app.theme?.backgroundColor ??
+    PLATFORM_BACKGROUND
+
+// The tags an app added to a home screen needs, and almost no app writes
+// (T-34493, T-33055). iOS takes its icon from `<link rel="apple-touch-icon">`
+// and nowhere else — Apple's *Configuring Web Applications*: a page names
 // its icon there, 180×180 for current displays, `sizes` only when it offers
 // several, and the smallest icon LARGER than the device wants is the one
 // scaled, so one square file serves every device. Every other platform reads
-// the manifest's `icons` instead. A page written here has neither unless its
-// agent thought of both, so an app somebody kept on their phone came out
-// blank — owner, 2026-09-06: "the app's PWAs aren't getting icons (i tested
-// iOS), even when the site itself has an image icon."
+// the manifest's `icons` instead, at the address the manifest link names.
+// `apple-mobile-web-app-capable` is what makes iOS open the page as a window
+// rather than a browser tab at all, and `apple-mobile-web-app-status-bar-
+// style` is the one Apple still reads past `theme-color` for its own status
+// bar. A page written here has none of it unless its agent thought of all
+// five, so an app somebody kept on their phone came out blank or grey —
+// owner, 2026-09-06: "the app's PWAs aren't getting icons (i tested iOS),
+// even when the site itself has an image icon."
 //
-// So a page is given the link it did NOT write, at the app's own root: the
-// icon (`icon.png`, answered by the platform's tile when the app wrote none)
-// and the manifest (`manifest.webmanifest`, generated below). Each half is
-// decided on its own — a page naming an icon and no manifest gets the manifest
-// — and what the page declares is never touched, because a second `rel` beside
-// the author's is a second answer to a question they answered.
+// So a page is given every tag it did NOT write, at the app's own root: the
+// icon, the manifest (`manifest.webmanifest`, generated below), the chrome
+// colour, and the two Apple words. Each is decided on its own — a page naming
+// one gets the other four still — and what the page declares is never
+// touched, because a second answer beside the author's own is a second
+// answer to a question they already answered.
 //
 // The hrefs are absolute at the mount, like the reporter's, rather than
 // relative: a page carrying its own `<base>` keeps it (`based` above), and a
 // relative `icon.png` would then resolve against the author's base instead of
 // against the app.
-export let pinned = (at: string, page: string) => {
+export let pinned = (at: string, page: string, app: App) => {
   let tags =
-    (declares(page, 'apple-touch-icon')
+    (declares(page, 'link', 'rel', 'apple-touch-icon')
       ? ''
       : `<link rel="apple-touch-icon" href="${at}icon.png">`) +
-    (declares(page, 'manifest')
+    (declares(page, 'link', 'rel', 'manifest')
       ? ''
-      : `<link rel="manifest" href="${at}manifest.webmanifest">`)
+      : `<link rel="manifest" href="${at}manifest.webmanifest">`) +
+    (declares(page, 'meta', 'name', 'theme-color')
+      ? ''
+      : `<meta name="theme-color" content="${themeColorOf(app)}">`) +
+    (declares(page, 'meta', 'name', 'apple-mobile-web-app-capable')
+      ? ''
+      : '<meta name="apple-mobile-web-app-capable" content="yes">') +
+    (declares(page, 'meta', 'name', 'apple-mobile-web-app-status-bar-style')
+      ? ''
+      : '<meta name="apple-mobile-web-app-status-bar-style" content="default">')
   return tags ? intoHead(page, tags) : page
 }
 
-// The colour the page asked the browser to paint its chrome with, which is the
-// one answer a GENERATED manifest can honestly give for a colour: whatever the
-// app's own front page says in `<meta name="theme-color">`. A page that names
-// none gets a manifest with no colours in it rather than a guess — the
-// browser's default beats ours. A page naming several scopes the extras by
-// `prefers-color-scheme`, so the unscoped one is the one that always applies.
-let THEME = /<meta\b[^>]*\bname\s*=\s*['"]?theme-color\b[^>]*>/gi
-let CONTENT = /\bcontent\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i
-
-export let themed = (page: string) => {
-  let tags = [...page.matchAll(THEME)].map((m) => m[0])
-  let tag = tags.find((t) => !/\bmedia\s*=/i.test(t)) ?? tags[0]
-  if (!tag) return null
-  let c = CONTENT.exec(tag)
-  return (c?.[1] ?? c?.[2] ?? c?.[3] ?? '').trim() || null
-}
-
 // What an app's manifest says when the app wrote none: its name, its own root
-// as the scope a standalone window stays inside, and the icon at the two sizes
-// an installer looks for. The SAME file at both — one square png is all the
-// platform asks an agent for, and resizing it at the edge would be a second
-// set of bytes to serve and cache for an installer that scales anyway.
-export let manifesting = (app: App, at: string, theme: string | null) => ({
+// as the scope a standalone window stays inside, the icon at the two sizes an
+// installer looks for, and the two colours — the app's own, or the platform's
+// (`themeColorOf`/`backgroundColorOf` above). The SAME icon file at both
+// sizes — one square png is all the platform asks an agent for, and resizing
+// it at the edge would be a second set of bytes to serve and cache for an
+// installer that scales anyway.
+export let manifesting = (app: App, at: string) => ({
   name: app.title || app.slug,
   short_name: app.title || app.slug,
   start_url: at,
   scope: at,
   display: 'standalone',
-  ...(theme ? { background_color: theme, theme_color: theme } : {}),
+  background_color: backgroundColorOf(app),
+  theme_color: themeColorOf(app),
   icons: ['512x512', '192x192'].map((sizes) => ({
     src: `${at}icon.png`,
     type: 'image/png',
@@ -403,7 +422,6 @@ let unwritten = async (
   req: Request,
   env: Env,
   app: App,
-  prefix: string,
   path: string,
   at: string,
 ) => {
@@ -417,12 +435,10 @@ let unwritten = async (
     })
   }
   if (path != '/manifest.webmanifest') return null
-  // The colours off the app's own front page, which is the only page a
-  // manifest is about. A miss is no colours, never a failure.
-  let front = await bytes(env, app, prefix, '/')
-  if (!front.ok) await front.body?.cancel()
-  let theme = front.ok ? themed(await front.text()) : null
-  return new Response(JSON.stringify(manifesting(app, at, theme), null, 2), {
+  // The app's own colours (`app.theme`, set through `app_set`), or the
+  // platform's where it named none — `manifesting` decides, off the row
+  // already in hand, so this needs no trip to the app's own front page.
+  return new Response(JSON.stringify(manifesting(app, at), null, 2), {
     headers: {
       'content-type': 'application/manifest+json',
       'cache-control': keeping(app),
@@ -454,7 +470,7 @@ let asset = async (
   )
   if (got.status != 200) {
     await got.body?.cancel()
-    return await unwritten(req, env, app, prefix, path, at) ?? nothingHere(env)
+    return await unwritten(req, env, app, path, at) ?? nothingHere(env)
   }
   let type = got.headers.get('content-type') ?? 'application/octet-stream'
   let etag = await etagOf(got.headers.get(SHA) ?? '', at)
@@ -469,7 +485,7 @@ let asset = async (
   // and the reporter after it. The weaving is done HERE rather than behind the
   // cache because the same file is a different document at each mount, and one
   // cached copy of the bytes serving every mount beats one copy per mount.
-  let page = based(at, pinned(at, await got.text()))
+  let page = based(at, pinned(at, await got.text(), app))
   return reported(at, new Response(page, { headers }))
 }
 

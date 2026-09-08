@@ -155,7 +155,7 @@ Deno.test('a page is served with its base and its reporter', async () => {
   assert((await js.text()).includes('export let store ='))
 })
 
-Deno.test('an app is installable: the two links, the icon, the manifest', async () => {
+Deno.test('an app is installable: the five tags, the icon, the manifest', async () => {
   let { env, files } = platform()
   await seeded(env)
   files.held.set(
@@ -176,6 +176,22 @@ Deno.test('an app is installable: the two links, the icon, the manifest', async 
     ),
     html,
   )
+  // The page named its own theme-color, so the kernel defers rather than
+  // injecting a second one — but it still gives the app the two Apple words,
+  // which the page named neither of.
+  assertEquals(html.match(/theme-color/g)?.length, 1)
+  assert(
+    html.includes(
+      '<meta name="apple-mobile-web-app-capable" content="yes">',
+    ),
+    html,
+  )
+  assert(
+    html.includes(
+      '<meta name="apple-mobile-web-app-status-bar-style" content="default">',
+    ),
+    html,
+  )
 
   // The app wrote no icon, so the address the head names is the platform's
   // own tile rather than a 404 — an installed app is never blank.
@@ -187,7 +203,10 @@ Deno.test('an app is installable: the two links, the icon, the manifest', async 
   )
   assertEquals(new Uint8Array(await icon.arrayBuffer()), tile)
 
-  // And the manifest, generated from the app and the colour its page states.
+  // And the manifest, generated from the app: no colour of its own set
+  // through `app_set`, so the platform's own answers rather than a guess off
+  // the page (T-33055) — the page's own theme-color meta is about the page,
+  // not the manifest a wholly separate resource names.
   let got = await apps.fetch(visit('/cookbook/manifest.webmanifest'), env)
   assertEquals(got.status, 200)
   assertEquals(got.headers.get('content-type'), 'application/manifest+json')
@@ -197,8 +216,8 @@ Deno.test('an app is installable: the two links, the icon, the manifest', async 
     start_url: '/cookbook/',
     scope: '/cookbook/',
     display: 'standalone',
-    background_color: '#1b3a2f',
-    theme_color: '#1b3a2f',
+    background_color: apps.PLATFORM_BACKGROUND,
+    theme_color: apps.PLATFORM_THEME,
     icons: [
       { src: '/cookbook/icon.png', type: 'image/png', sizes: '512x512' },
       { src: '/cookbook/icon.png', type: 'image/png', sizes: '192x192' },
@@ -216,6 +235,40 @@ Deno.test('an app is installable: the two links, the icon, the manifest', async 
   assertEquals(await own.text(), 'mine')
   let theirs = await apps.fetch(visit('/cookbook/manifest.webmanifest'), env)
   assertEquals(await theirs.json(), { name: 'Ours' })
+})
+
+Deno.test("an app's own colours, set through app_set, win over the platform's", async () => {
+  let { env, files } = platform()
+  let { dir } = await seeded(env)
+  files.held.set(
+    'ada/cookbook/index.html',
+    new TextEncoder().encode('<!doctype html><head></head><body>hi'),
+  )
+  let ctx = { env, dir, person: ADA } as unknown as Ctx
+  await call(ctx, 'app_set', {
+    space: 'ada',
+    app: 'cookbook',
+    theme_color: '#1b3a2f',
+    background_color: '#fff8ec',
+  })
+
+  let html = await (await apps.fetch(visit('/cookbook/'), env)).text()
+  assert(
+    html.includes('<meta name="theme-color" content="#1b3a2f">'),
+    html,
+  )
+
+  let got =
+    await (await apps.fetch(visit('/cookbook/manifest.webmanifest'), env))
+      .json()
+  assertEquals(
+    (got as Record<string, unknown>).theme_color,
+    '#1b3a2f',
+  )
+  assertEquals(
+    (got as Record<string, unknown>).background_color,
+    '#fff8ec',
+  )
 })
 
 Deno.test('a page view is one data point, and it names no visitor', async () => {

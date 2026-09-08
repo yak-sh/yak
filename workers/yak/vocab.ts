@@ -623,6 +623,14 @@ export let platformDoc: VocabDoc = {
       type: 'object',
       properties: { asked_at: owned(time), listed_at: owned(time) },
     },
+    // The colours an app's owner set for its installed chrome (apps.ts
+    // `manifesting`/`pinned`, T-33055) — settable BY THE APP, through
+    // `app_set`, never guessed off its page: an app that names neither gets
+    // the platform's own palette instead of a browser's default grey.
+    theme: {
+      type: 'object',
+      properties: { theme_color: text, background_color: text },
+    },
     // That this app's store has been SEEDED, and by which release (seed.ts,
     // T-34327). The mark is what makes the seed a once — a redeploy finds it
     // and writes nothing, so the data an app comes with never lands on top of

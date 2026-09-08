@@ -73,6 +73,7 @@ let app: App = {
   gallery: null,
   seeded: null,
   trashed: null,
+  theme: null,
 }
 
 // Every entity the kernel wrote while a test ran, and WHICH store it went

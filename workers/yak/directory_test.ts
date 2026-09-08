@@ -41,6 +41,7 @@ let an: App = {
   gallery: null,
   seeded: null,
   trashed: null,
+  theme: null,
 }
 
 // A meta store that answers one app, at whatever version the test has set.

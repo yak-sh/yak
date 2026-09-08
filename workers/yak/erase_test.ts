@@ -73,6 +73,7 @@ let app = (over: Partial<App> = {}): App => ({
   gallery: null,
   seeded: null,
   trashed: null,
+  theme: null,
   ...over,
 })
 

@@ -401,6 +401,17 @@ let access = (v: unknown): Access => {
   return s as Access
 }
 
+// A CSS colour (apps.ts `manifesting`/`pinned`, T-33055) — a hex triple like
+// `#4c773e`, an `rgb()`/`hsl()` function, or a named colour. Loose enough for
+// any of those, tight enough that it can never break out of the HTML
+// attribute it is woven into unescaped.
+let CSS_COLOR = /^[#a-zA-Z0-9(),.%\s-]{1,64}$/
+let color = (v: unknown, what: string) => {
+  let s = text(v, what).trim()
+  if (!CSS_COLOR.test(s)) throw new Error(`${what}: a CSS colour like #4c773e`)
+  return s
+}
+
 // A yes or a no. Models send a JSON boolean where the schema says one and
 // the word where they are typing prose, so both are read rather than
 // teaching an agent to guess again (`list` above takes the same line).
@@ -2649,6 +2660,15 @@ let OURS: Row[] = [
             'https://yaks.app/gallery — it appears there once yaks.app ' +
             'agrees; false to take it off, or withdraw the ask, at once',
         },
+        theme_color: str(
+          "the browser/status-bar chrome colour around the app's installed " +
+            'window, as CSS — a hex triple like #4c773e is safest. Unset, ' +
+            "the app wears the platform's own",
+        ),
+        background_color: str(
+          "the phone's splash-screen colour while the app opens, as CSS. " +
+            "Unset, the app wears the platform's own",
+        ),
         forget: FORGET,
       },
       required: ['app'],
@@ -2664,13 +2684,20 @@ let OURS: Row[] = [
       // a refusal here has to leave the app exactly as it was (router.ts).
       let first = args.first == null ? null : globs(args.first, [META.app])
       let show = args.gallery == null ? null : flag(args.gallery, 'gallery')
+      let themeColor = args.theme_color == null
+        ? null
+        : color(args.theme_color, 'theme_color')
+      let background = args.background_color == null
+        ? null
+        : color(args.background_color, 'background_color')
       if (
         title == null && to == null && open == null && home == null &&
-        first == null && show == null && drop == null
+        first == null && show == null && drop == null &&
+        themeColor == null && background == null
       ) {
         throw new Error(
           'nothing to change: pass title, slug, access, home, first, ' +
-            'gallery, forget, or all',
+            'gallery, theme_color, background_color, forget, or all',
         )
       }
       // Letting an address go is the space owner's, the way the front page is:
@@ -2711,7 +2738,10 @@ let OURS: Row[] = [
       let onto = moving ? `${space.slug}/${to}/` : from
       let keys = moving ? await laid(blobs, from, onto) : []
       let entities: EntityLiteral[] = []
-      if (title != null || moving || open || had) {
+      if (
+        title != null || moving || open || had || themeColor != null ||
+        background != null
+      ) {
         entities.push({
           entity: { eid: app.eid },
           ...(title == null ? {} : { doc: { title } }),
@@ -2724,6 +2754,14 @@ let OURS: Row[] = [
             }
             : {}),
           ...(had ? { former: addresses(had) } : {}),
+          ...(themeColor != null || background != null
+            ? {
+              theme: {
+                ...(themeColor != null ? { theme_color: themeColor } : {}),
+                ...(background != null ? { background_color: background } : {}),
+              },
+            }
+            : {}),
         })
       }
       // The globs are COLUMNS of the word that says which app is home
@@ -2795,6 +2833,13 @@ let OURS: Row[] = [
             } before the apps that own them`
             : ' — it answers no path before the app that owns it'}${
           shown ? ` — ${saying(shown, ctx.env)}` : ''
+        }${
+          themeColor == null && background == null ? '' : ` — colours set: ${
+            [
+              themeColor == null ? '' : `theme ${themeColor}`,
+              background == null ? '' : `background ${background}`,
+            ].filter(Boolean).join(', ')
+          }`
         }${
           drop == null
             ? ''
