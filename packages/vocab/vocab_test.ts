@@ -104,6 +104,14 @@ Deno.test('a bare bang aims at the component a column shadows', () => {
   assertEquals(v.aim('title', true), [{ comp: 'doc', prop: 'title' }])
 })
 
+Deno.test('presence can name an undeclared component, comparisons cannot', () => {
+  assertEquals(v.aim('invoice', true), [{ comp: 'invoice', prop: '' }])
+  assertEquals(v.aim('entity', true), [{ comp: 'entity', prop: '' }])
+  assertEquals(v.aim('eid', true), [{ comp: 'entity', prop: 'eid' }])
+  assertThrows(() => v.aim('invoice'), Error, 'unknown prop')
+  assertThrows(() => v.aim('invoice.total', true), Error, 'unknown prop')
+})
+
 Deno.test('the spine routes its own identity, declared or not', () => {
   // no document declares `entity.eid`; the loader routes it because every
   // entity has one — so `.eid=` and `.entity.eid=` name entities

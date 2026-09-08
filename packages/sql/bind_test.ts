@@ -292,7 +292,11 @@ Deno.test('a request for a word this vocabulary never planted asks, and passes',
   let { sql } = compile(parse('.task!&.loan?'), v)
   assert(!sql.includes('loan'), sql)
   // The assertion form still refuses: an empty answer would say there are none.
-  assertThrows(() => compile(parse('.loan!'), v))
+  assertThrows(
+    () => compile(parse('.loan!'), v),
+    Unsupported,
+    'an undeclared component: loan',
+  )
   // And so does a request that is not a bare component name.
   assertThrows(() => compile(parse('.loan.to?'), v))
 })

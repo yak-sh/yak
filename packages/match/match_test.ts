@@ -4,6 +4,7 @@
 
 import { assert, assertEquals, assertFalse, assertThrows } from '@std/assert'
 import { Unsupported } from '@yaks/sql'
+import { and, pred } from '@yaks/query'
 import { filter, matcher } from './match.ts'
 import { bundles, NOW, shop } from './harness.ts'
 
@@ -35,6 +36,23 @@ Deno.test('a component is worn or it is not', () => {
   assertEquals(sel('.signed~='), ['b4'])
   assertFalse(sel('.signed=').includes('b4'))
   assert(sel('.signed=').includes('b1'))
+})
+
+Deno.test('presence reads plugin components without a declared schema', () => {
+  let e = { entity: { eid: 'i1' }, doc: { title: 'Invoice' }, invoice: {} }
+  let hit = filter(
+    and(pred('doc', '!', null), pred('invoice', '!', null)),
+    shop,
+  )
+  assert(hit(e))
+  assertFalse(hit({ ...e, invoice: null }))
+  assertFalse(hit({ entity: e.entity, doc: e.doc }))
+  assertFalse(filter('.missing!', shop)(e))
+  assert(filter('.entity!', shop)(e))
+  assert(filter('.eid!', shop)(e))
+  assert(filter('.title!', shop)(e))
+  assertFalse(filter('.title!', shop)({ ...e, doc: {} }))
+  assertThrows(() => filter('.invoice=1', shop), Error, 'unknown prop')
 })
 
 Deno.test('a bare bang names the component, not the column beside it', () => {

@@ -123,7 +123,8 @@ export type Vocab = {
   /** A dotted path → the hops it names. `facet` says the predicate is the bare
    * presence form (`.name!`), where a single segment naming a COMPONENT is that
    * component's facet even if a same-named column would otherwise claim the
-   * bare spelling. */
+   * bare spelling. A word no column claims names an undeclared component too;
+   * its presence needs no column schema. */
   aim: (path: string, facet?: boolean) => Hop[]
   assoc: (name: string) => Assoc | undefined
   kindOf: (has: Record<string, unknown>) => string
@@ -364,11 +365,15 @@ export let loadVocab = (
     // wins over a same-named column. It has to — a facet has no other spelling,
     // while the column keeps its qualified one (`.camera.canvas!`). Without it
     // `.canvas!` asks about camera's canvas reference and answers the wrong
-    // entities, or none.
+    // entities, or none. A word no column claims names a facet too: bundles can
+    // carry plugin components before their schemas are loaded. A store still
+    // decides whether it has a table for that component.
     aim: (path, facet) => {
       let segs = path.split('.')
-      if (facet && segs.length == 1 && routes.has(segs[0])) {
-        return [{ comp: segs[0], prop: '' }]
+      if (facet && segs.length == 1) {
+        let name = segs[0]
+        let column = owners.has(name) || (name == EID && routes.has(SPINE))
+        if (routes.has(name) || !column) return [{ comp: name, prop: '' }]
       }
       let out: Hop[] = []
       for (let i = 0; i < segs.length;) {

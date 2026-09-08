@@ -244,6 +244,10 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   let op = opOf(p)
   if (op == 'want') return TRUE // a projection request; the door hydrates it
   if (!hop.prop) {
+    // A bundle matcher can inspect an undeclared facet; SQL needs its table.
+    if (!ctx.v.comp(hop.comp)) {
+      throw new Unsupported('an undeclared component', hop.comp)
+    }
     ctx.tables.add(hop.comp)
     let eid = ctx.d.col(hop.comp, 'eid', ctx.v)!
     let present = op == '~' || op == EXISTS
