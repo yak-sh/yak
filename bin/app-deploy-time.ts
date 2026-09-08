@@ -158,10 +158,20 @@ if (import.meta.main) {
       single.push(await live('app.js', s, t0))
     }
   } finally {
-    await call('app_delete', { app, space, forever: true })
-    let gone = await fetch(url('index.html'), { cache: 'no-store' })
-    await gone.text()
-    console.log(`deleted forever; GET index.html → ${gone.status}`)
+    // The throwaway goes whatever happened above; a delete that fails must not
+    // hide the error that stopped the runs, so it is said beside it.
+    try {
+      await call('app_delete', { app, space, forever: true })
+      let gone = await fetch(url('index.html'), { cache: 'no-store' })
+      await gone.text()
+      console.log(`deleted forever; GET index.html → ${gone.status}`)
+    } catch (e) {
+      console.error(
+        `app_delete failed — delete ${space}/${app} by hand: ${
+          e instanceof Error ? e.message : e
+        }`,
+      )
+    }
   }
 
   let row: Row = {
