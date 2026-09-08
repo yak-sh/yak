@@ -40,11 +40,12 @@ export let editors = (vocab: Vocab, options: EditOptions = {}): Renderer[] =>
           ),
         )
       }
+      let action = edit(vocab, { comp: c.comp, col: c.prop }, options)
       let props: Record<string, unknown> = {
         class: 'Edit',
         'aria-label': `${c.comp}.${c.prop}`,
         title: c.description,
-        onChange: edit(vocab, { comp: c.comp, col: c.prop }, options),
+        onChange: action,
       }
       if (type) props.type = type
       if (type == 'number') props.step = 'any'
@@ -56,7 +57,6 @@ export let editors = (vocab: Vocab, options: EditOptions = {}): Renderer[] =>
         // value, translating it to null only at the action boundary.
         let empty = ''
         while (c.values!.includes(empty)) empty += '_'
-        let action = edit(vocab, { comp: c.comp, col: c.prop }, options)
         props.value = value == null ? empty : text
         props.onChange = {
           ...action,
