@@ -722,7 +722,11 @@ Deno.test('mailed: native failure and a missing from stamp errors', async () => 
       unsigned,
     )
     await mailed(cast)(bare, {})
-    assertMatch(String(erow(bare)?.message), /no sender/)
+    // An IDENTIFIED actor with no email comp — created.by resolved to
+    // `unsigned`, so the message names the address-book gap, not a missing
+    // author (T-32997: those are different defects, told apart by
+    // created.by).
+    assertMatch(String(erow(bare)?.message), /no sender.*no address on file/)
   } finally {
     restore()
     nativeEnvOff()
@@ -1085,6 +1089,15 @@ Deno.test('nothing signs by fallback: the relay, and the unattributed write', as
     { eid: m, name: 'deliver', comp: { to: 'x@y.test' } },
   ])
   assertEquals(row(m).from, null)
+  // created.by is ALSO blank for an unattributed write (T-32997) — the same
+  // gap that made the intermittent "no sender" reads as an address-book
+  // defect when really no actor was ever identified to ask.
+  assertEquals(
+    (db.prepare(`select "by" from created where ${OWNED}`).get(m) as {
+      by: number | null
+    }).by,
+    null,
+  )
   await mailed(cast)(m, {})
-  assertMatch(String(erow(m)?.message), /no sender/)
+  assertMatch(String(erow(m)?.message), /no sender.*no author/)
 })

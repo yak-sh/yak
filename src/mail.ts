@@ -226,8 +226,20 @@ export let mailed =
     // report, not one to sign on the author's behalf.
     let from = String(row.from ?? '')
     if (!from) {
+      // Two different defects wear the same empty column, and only
+      // `created.by` — apply()'s OWN record of who it resolved the write's
+      // author to be — tells them apart: no author at all (the write's
+      // session/actor never resolved — T-32997, where an intermittent x-via
+      // left `created.by` blank too) versus an author who resolved but
+      // carries no email comp. Collapsing both into "the actor has no
+      // address" is false in the first case — there was no actor to ask.
+      let by =
+        (readComp(db, eid, 'created') as { by?: string | null } | undefined)
+          ?.by
       return settle(eid, {}, {
-        error: 'no sender: the authoring actor has no address on file',
+        error: by
+          ? 'no sender: the authoring actor has no address on file'
+          : 'no sender: the write named no author to sign this letter with',
       }, cast)
     }
     // Local-first: a fleet recipient never leaves the graph — the sent
