@@ -13,6 +13,7 @@
 import type { R2 } from '../../src/r2.ts'
 import type { Binding } from './post.ts'
 import type { Dispatch, Fetcher, Namespace } from './door.ts'
+import type { Meta } from './meta.ts'
 import type { Sandboxes } from './sandbox.ts'
 
 // The door's own word, said again here: every part of this kernel names its
@@ -39,6 +40,10 @@ export type Inbound = {
 export type Env = {
   APEX?: string
   STORE: Namespace
+  // The directory's store answered in-process, set only by the object that IS
+  // the directory for the jobs it runs (graph.ts, meta.ts `meta`). Absent, the
+  // directory is reached through its stub like every other store.
+  META?: Meta
   // The person's own MCP stream (stream.ts): one object per signed-in
   // person, holding what an open connector is listening to.
   WIRE: Namespace

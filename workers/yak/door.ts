@@ -85,22 +85,30 @@ let VOUCH = [
  * space's home — a store is named at birth and never renamed (`storeName`). */
 export type Served = { eid: string; access: string | null; mail?: string }
 
-export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
-  return (path, init = {}, headers = {}) => {
-    // The stub is taken PER CALL. It is an I/O object, and the runtime binds
-    // one to the request that created it: a door memoized for the isolate
-    // (meta.ts `doors`) and reused on the next request throws "cannot perform
-    // I/O on behalf of a different request". Getting one costs nothing.
-    let stub = ns.get(ns.idFromName(name))
-    let req = new Request(`http://store${path}`, init)
-    for (let h of VOUCH) req.headers.delete(h)
-    for (let [k, v] of Object.entries(headers)) req.headers.set(k, v)
-    req.headers.set('x-store', name)
-    if (app) {
-      req.headers.set('x-yak-app', app.eid)
-      if (app.access) req.headers.set('x-yak-access', app.access)
-      if (app.mail) req.headers.set('x-yak-mail', app.mail)
-    }
-    return stub.fetch(req)
+/** The door as a request BUILDER over whatever answers it: the stub, or the
+ * object itself when the caller is that object (graph.ts). Either way the
+ * request is the kernel's, built from scratch here and nowhere else. */
+export let doorOf = (
+  send: (req: Request) => Promise<Response>,
+  name: string,
+  app?: Served,
+): Door =>
+(path, init = {}, headers = {}) => {
+  let req = new Request(`http://store${path}`, init)
+  for (let h of VOUCH) req.headers.delete(h)
+  for (let [k, v] of Object.entries(headers)) req.headers.set(k, v)
+  req.headers.set('x-store', name)
+  if (app) {
+    req.headers.set('x-yak-app', app.eid)
+    if (app.access) req.headers.set('x-yak-access', app.access)
+    if (app.mail) req.headers.set('x-yak-mail', app.mail)
   }
+  return send(req)
 }
+
+export let storeOf = (ns: Namespace, name: string, app?: Served): Door =>
+  // The stub is taken PER CALL. It is an I/O object, and the runtime binds
+  // one to the request that created it: a door memoized for the isolate
+  // (meta.ts `doors`) and reused on the next request throws "cannot perform
+  // I/O on behalf of a different request". Getting one costs nothing.
+  doorOf((req) => ns.get(ns.idFromName(name)).fetch(req), name, app)

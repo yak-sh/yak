@@ -132,7 +132,8 @@ import { PLUGINS } from './plugins.ts'
 import type { Env } from './env.ts'
 import { seeded } from './wake.ts'
 import { type Binding, posting } from './post.ts'
-import { type Namespace, PLATFORM_STORE } from './door.ts'
+import { doorOf, type Namespace, PLATFORM_STORE } from './door.ts'
+import { type Meta, metaOf } from './meta.ts'
 import { metering } from './meter.ts'
 import { apex, url } from './host.ts'
 import {
@@ -377,6 +378,7 @@ export class Store {
   #live!: Sockets
   #route!: Handler
   #auth!: Authenticate
+  #meta!: Meta
   #bind: Bindings
   // An object still holding the FLEET-shaped store this class replaces
   // (T-33809). Nothing above the storage is built while this is true — planting
@@ -563,10 +565,18 @@ export class Store {
         // (@yaks/graph rules.ts) — and a phase runs its rules before its hooks
         // wherever the list sits, so the place decides nothing but the order
         // two rules on one phase fire in.
+        // The directory's jobs read and write the directory — which is THIS
+        // object. They get it as a method call (`META`), never as a fetch to
+        // this object's own stub: a Durable Object shares one I/O context
+        // across every request in flight on it, so each self-request deepens
+        // the chain instead of starting one, and the hourly meter asking once
+        // per space hit the runtime's depth limit (T-34844).
         {
           name: 'yak/rules',
           rules: rulesOf(PLUGINS),
-          resources: { Env: () => meta ? this.#bind : undefined },
+          resources: {
+            Env: () => meta ? { ...this.#bind, META: this.#meta } : undefined,
+          },
         },
       ],
     })
@@ -581,6 +591,8 @@ export class Store {
     }
     this.#vocab = vocab
     this.#graph = g
+    // One per incarnation, like the graph: directory.ts seeds once per Meta.
+    this.#meta = metaOf(doorOf((req) => this.fetch(req), PLATFORM_STORE))
     let subs = subscriptions(g)
     this.#live = sockets(this.#naming(subs), ctx)
     // The one `Authenticate` (T-33813). The app is read at REQUEST time — the

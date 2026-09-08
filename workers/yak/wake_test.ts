@@ -124,6 +124,52 @@ Deno.test('the meter wake runs its job at the supplied hour through the schedule
   }
 })
 
+// A Durable Object shares one I/O context across its in-flight requests, so a
+// fetch to its own stub deepens the chain rather than starting one; the meter
+// asking the directory once per space ran past the runtime's depth limit
+// (T-34844). The harness answers stubs in-process, so the proof is the count:
+// the heartbeat knocks on the directory once, and the job it wakes never does.
+Deno.test('a directory job reads and writes the directory in-process, never through its own stub', async () => {
+  let fetch = globalThis.fetch
+  globalThis.fetch = () =>
+    Promise.resolve(Response.json({ data: { viewer: { accounts: [] } } }))
+  try {
+    let { env } = platform('tick depth', { CF_ANALYTICS_TOKEN: 'test' })
+    let ns = env.STORE
+    let knocks: string[] = []
+    env.STORE = {
+      idFromName: (n) => ns.idFromName(n),
+      get: (id) => {
+        let stub = ns.get(id)
+        return {
+          fetch: (r) => {
+            knocks.push(`${id} ${new URL(r.url).pathname}`)
+            return stub.fetch(r)
+          },
+        }
+      },
+    }
+    await meta(env).apply([
+      { entity: { eid: '$s' }, doc: { title: 'ada' }, space: { slug: 'ada' } },
+      {
+        entity: { eid: '$a' },
+        doc: { title: 'app' },
+        app: { slug: 'app', space: '$s', store: 'ada/app' },
+      },
+    ])
+    knocks.length = 0
+    await scheduled(beat('05:00'), env)
+    assertEquals(
+      knocks.filter((k) => k.startsWith(PLATFORM_STORE)),
+      [`${PLATFORM_STORE} /tick`],
+    )
+    let [space] = await meta(env).query('.space.slug=ada&.meter?')
+    assertEquals((space.meter as { month: string }).month, '2026-09')
+  } finally {
+    globalThis.fetch = fetch
+  }
+})
+
 Deno.test('only the kernel can tick the directory, and app stores cannot be ticked', async () => {
   let { env } = platform('wake access')
   let init = { method: 'POST', body: JSON.stringify(beat('04:15')) }

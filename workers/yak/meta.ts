@@ -72,8 +72,15 @@ let doors = new WeakMap<object, Meta>()
 
 /** The directory's store. The env is the one binding it reads, so a Store
  * object — which holds the namespace and no service binding — reaches the
- * directory the way the kernel does (meter.ts `metering`). */
-export let meta = (env: { STORE: Namespace }): Meta => {
+ * directory the way the kernel does (meter.ts `metering`).
+ *
+ * The directory object ITSELF hands its jobs an env carrying `META`: a Durable
+ * Object shares one I/O context across every request in flight on it, so a
+ * fetch to its own stub does not start a new chain but deepens the one it is
+ * on, and a sweep that asks the directory once per space ran out of depth
+ * (T-34844). In-process, the question is a method call. */
+export let meta = (env: { STORE: Namespace; META?: Meta }): Meta => {
+  if (env.META) return env.META
   let ns = env.STORE as unknown as object
   let held = doors.get(ns)
   if (!held) doors.set(ns, held = metaOf(storeOf(env.STORE, PLATFORM_STORE)))
