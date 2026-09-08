@@ -1092,7 +1092,7 @@ Deno.test('env.APP: a private app is written by its own worker, and by nobody el
   let asAda = (path: string) =>
     apps.fetch(visit(path, { headers: { cookie } }), env)
   let rows = await (await asAda(
-    '/api/query?.doc.title=The Okonkwos&.created?',
+    '/api/query?.doc.title="The Okonkwos"&.created?',
   )).json()
   assertEquals(rows.length, 1)
   // A bare eid, because the app is not a person and has no name in this store

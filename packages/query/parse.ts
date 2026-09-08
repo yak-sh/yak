@@ -20,7 +20,38 @@ import { And, Clause, every, Op, scalar, text, Value } from './ast.ts'
 
 // ---- values ----
 
-let stripQuotes = (v: string): string => v.replace(/^"(.*)"$/s, '$1')
+// Quotes are double or single, and a backslash inside escapes the next char.
+let QUOTED = /^(["'])(.*)\1$/s
+let stripQuotes = (v: string): string => {
+  let m = v.match(QUOTED)
+  return m ? m[2].replace(/\\(.)/gs, '$1') : v
+}
+
+// A split on `sep` that leaves quoted runs whole.
+let splitOutside = (s: string, sep: string): string[] => {
+  let out: string[] = []
+  let cur = ''
+  let quote = ''
+  for (let i = 0; i < s.length; i++) {
+    let c = s[i]
+    if (quote) {
+      cur += c
+      if (c == '\\' && i + 1 < s.length) cur += s[++i]
+      else if (c == quote) quote = ''
+    } else if (c == '"' || c == "'") {
+      quote = c
+      cur += c
+    } else if (c == sep) {
+      out.push(cur)
+      cur = ''
+    } else cur += c
+  }
+  out.push(cur)
+  return out
+}
+
+let LIST = 'a list has no spaces and no empty member (.status=open,wip); ' +
+  'quote a value with spaces (.status="open wip")'
 
 // One atom: a range (`x..y`, or `x...y` for an exclusive end) or a scalar. The
 // range split is generic — the current matcher applies `..` to every column, so
@@ -32,15 +63,14 @@ let atom = (raw: string): Value => {
   return { kind: 'range', lo: scalar(lo), hi: scalar(hi), exclusiveEnd: !!excl }
 }
 
-// A whole value: a comma list is any-of; a lone part is its atom. Members are
-// trimmed and an empty one dropped, so `open, wip` and a trailing comma left by
-// the clause split (`.status=open, .p=1`) say what they look like they say.
+// A whole value: a comma list is any-of; a lone part is its atom. A member is
+// never empty — `open,,wip` and a trailing comma are refused, not smoothed —
+// and a member holding a space was quoted, so the quotes come off here.
 let value = (raw: string): Value => {
-  if (!raw.includes(',')) return atom(raw)
-  let items = raw.split(',').map((s) => s.trim()).filter(Boolean)
-  return items.length > 1
-    ? { kind: 'list', items: items.map(atom) }
-    : atom(items[0] ?? raw)
+  let items = splitOutside(raw, ',')
+  if (items.length == 1) return atom(raw)
+  if (items.some((s) => !s)) throw new Error(LIST)
+  return { kind: 'list', items: items.map((s) => atom(stripQuotes(s))) }
 }
 
 // ---- component words ----
@@ -50,13 +80,12 @@ let value = (raw: string): Value => {
 let WORD = '[A-Za-z_-]+(?:\\.[A-Za-z_-]+)*'
 // A prefix SIGIL and the word it marks. `.` is the neutral one and stays
 // accepted before any other, so `+!created` and `+!.created` say the same thing.
-let SIGIL = new RegExp(`^(\\+!|[!+*#$])\\.?(${WORD})$`)
+// `?comp` is the prefix mirror of `!comp`: optional (selected when present,
+// never filtered on) beside missing.
+let SIGIL = new RegExp(`^(\\+!|[!+*#$?])\\.?(${WORD})$`)
 // A component word alone, dot-marked: present. The dot is what tells `.env`
 // (this entity wears `env`) from `env` (the word, searched for).
 let PLAIN = new RegExp(`^\\.(${WORD})$`)
-// The same word with no mark at all, which a comma can still put in query
-// position (`!foo, bar` asks for two components).
-let BARE = new RegExp(`^${WORD}$`)
 
 // ---- directive helpers ----
 
@@ -89,6 +118,9 @@ let sigil = (token: string): Clause[] | null => {
   let [, mark, word] = m
   if (mark == '!') {
     return [{ kind: 'pred', path: path(word), op: '=', value: scalar('') }]
+  }
+  if (mark == '?') {
+    return [{ kind: 'pred', path: path(word), op: '?', value: null }]
   }
   if (mark == '+') return [{ kind: 'ensure', comp: word }]
   if (mark == '+!') return [{ kind: 'gate', comp: word }]
@@ -232,11 +264,33 @@ export let parseDot = (token: string): Clause[] | null => {
 
 // ---- tokenizing a whole query ----
 
-// The `&` split, quote-aware: a quoted run is ONE value even across `&`.
-let segments = (q: string): string[] => q.match(/(?:"[^"]*"|[^&])+/g) ?? []
-// The whitespace split within a segment, quotes gluing a value together.
-let words = (seg: string): string[] =>
-  seg.match(/[^\s"]+"[^"]*"|"[^"]*"|\S+/g) ?? []
+// The token split: whitespace and `&` both end a token, a quoted run is one
+// token even across them. A quote OPENS only at a token's start or right after
+// an operator, so an apostrophe inside a word (`jeff's`) stays a letter. An
+// unclosed quote is refused: the rest of the line was not what the caller
+// meant.
+let tokens = (q: string): string[] => {
+  let out: string[] = []
+  let cur = ''
+  let quote = ''
+  for (let i = 0; i < q.length; i++) {
+    let c = q[i]
+    if (quote) {
+      cur += c
+      if (c == '\\' && i + 1 < q.length) cur += q[++i]
+      else if (c == quote) quote = ''
+    } else if ((c == '"' || c == "'") && /^$|[=<>,]$/.test(cur)) {
+      quote = c
+      cur += c
+    } else if (c == '&' || /\s/.test(c)) {
+      if (cur) out.push(cur)
+      cur = ''
+    } else cur += c
+  }
+  if (quote) throw new Error(`unclosed quote: ${cur}`)
+  if (cur) out.push(cur)
+  return out
+}
 
 // A token that has already taken an operator, so every comma after it is part
 // of its VALUE rather than a separator.
@@ -244,13 +298,27 @@ let VALUED = new RegExp(
   `^\\.?(?:${WORD}(?:!=|~=|<=|>=|<|>|=)|(?:reaches|edges)\\[)`,
 )
 
-// The clause parts of one token. `,` between clauses is AND; `,` inside a value
-// is any-of, and POSITION is what tells them apart: commas separate until a
-// clause takes an operator, and from there the rest of the token is that
-// clause's value (`entity,+!created` is two clauses, `.p=a,b` is one).
-let parts = (tok: string): string[] => {
+// The clause parts of one token. `,` between clauses is an optional separator;
+// `,` inside a value is any-of, and POSITION is what tells them apart: commas
+// separate until a clause takes an operator, and from there the rest of the
+// token is that clause's value (`.entity,+!created` is two clauses, `.p=a,b` is
+// one). A comma that touches a value's edge with a bare word on the other side
+// (`.p=a, b`, `.p=a ,b`) or nothing (`.p=a,`) is neither: it is a list broken
+// by a space, and is refused. With a clause on the other side (`.p=a, .q=b`,
+// `trashed.at=, #Actor`) it is the optional separator it looks like.
+let clauseish = (tok: string): boolean => {
+  let first = splitOutside(tok.replace(/^,+/, ''), ',')[0]
+  return first == '*' || /^["']/.test(first) || parseDot(first) != null
+}
+let parts = (tok: string, prev?: string, next?: string): string[] => {
+  if (
+    tok.startsWith(',') && prev && VALUED.test(prev) && !clauseish(tok)
+  ) throw new Error(LIST)
+  if (tok.endsWith(',') && VALUED.test(tok) && !(next && clauseish(next))) {
+    throw new Error(LIST)
+  }
   let out: string[] = []
-  for (let p of tok.split(',')) {
+  for (let p of splitOutside(tok.replace(/^,+|,+$/g, ''), ',')) {
     if (out.length && VALUED.test(out[out.length - 1])) {
       out[out.length - 1] += ',' + p
     } else out.push(p)
@@ -266,17 +334,14 @@ export type ParseOpts = {
   text?: boolean
 }
 
-// One token to its clauses. `q` marks a token a COMMA put in query position:
-// the comma announces another clause, so a bare word there is the component it
-// names rather than a word to search for.
-let read = (tok: string, q: boolean, opts: ParseOpts): Clause[] => {
+// One token to its clauses. A bare word is ONE thing, a text term; the
+// component it might name is the dot-marked spelling (`.entity`).
+let read = (tok: string, opts: ParseOpts): Clause[] => {
   if (tok == '*') return [every()]
-  if (!tok.startsWith('"')) {
+  if (!/^["']/.test(tok)) {
     let cs = parseDot(tok)
     if (cs) return cs
-    // A comma announced a clause, so the word names a component.
-    if (q && BARE.test(tok)) return [pres(tok)]
-    if (q || opts.text === false) {
+    if (opts.text === false) {
       throw new Error(
         `a query takes clauses, not words: ${tok} — quote it to search for it`,
       )
@@ -286,10 +351,11 @@ let read = (tok: string, q: boolean, opts: ParseOpts): Clause[] => {
 }
 
 /**
- * A query string to its AST. `&` separates first — an `&`-segment that IS one
- * dot-param keeps its spaces (`.title~=two words` survives) — and a segment
- * holding bare words or several clauses splits on whitespace and on the commas
- * between clauses, mixing filters and text terms the way a search box does.
+ * A query string to its AST. Whitespace and `&` both separate, every term
+ * stands alone, and a value holding a space is quoted (`.title~="two words"`);
+ * unquoted, `.title~=two words` is the filter `two` and the search term
+ * `words`. Filters and text terms mix the way a search box does. A comma
+ * between clauses is accepted and means nothing; inside a value it is any-of.
  *
  * A LONE `*` is the widest projection, not a word: it asks for every component
  * of every row selected. Only the whole token means it — a trailing `*` on a
@@ -299,25 +365,9 @@ let read = (tok: string, q: boolean, opts: ParseOpts): Clause[] => {
  * yields a lone `never`, so a blank board query does not stage the whole graph.
  */
 export let parse = (q: string, opts: ParseOpts = {}): And => {
-  let out: Clause[] = segments(q).map((s) => s.trim()).filter(Boolean).flatMap(
-    (seg) => {
-      // A segment that is ONE clause keeps its spaces, so a value may hold them.
-      if (!/\s\./.test(seg) && parts(seg).length == 1) {
-        let cs = parseDot(seg)
-        if (cs) return cs
-      }
-      let cs: Clause[] = []
-      let after = false // the token before this one ended in a comma
-      for (let w of words(seg)) {
-        let ps = parts(w)
-        let joined = ps.length > 1 || w.startsWith(',') || w.endsWith(',')
-        ps.forEach((p, i) =>
-          cs.push(...read(p, joined || (after && i == 0), opts))
-        )
-        after = w.endsWith(',')
-      }
-      return cs
-    },
+  let toks = tokens(q)
+  let out: Clause[] = toks.flatMap((tok, i) =>
+    parts(tok, toks[i - 1], toks[i + 1]).flatMap((p) => read(p, opts))
   )
   return { kind: 'and', clauses: out.length ? out : [{ kind: 'never' }] }
 }

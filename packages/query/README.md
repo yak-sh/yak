@@ -97,11 +97,15 @@ throws where it is read rather than falling back to text.
   tells the opless `.env` (wears `env`) from `env` (search for it).
 - `.p!` (present) and `.p=` (absent) are the older spellings of `.p` and `!p`,
   still parsed to the same nodes; saved queries keep working.
-- **Separators**: whitespace, `&`, and `,` all mean AND. A comma announces
-  another clause, so a bare word beside one is the component it names —
-  `!foo, bar hello there` is two clauses and two text terms. Inside a value a
-  comma is still any-of: position tells them apart, and once a clause has taken
-  an operator the rest of the token is its value (`.p=a,b` is one clause).
+- **Separators**: whitespace and `&` mean AND, and every term stands alone. A
+  comma between clauses is accepted and means nothing (`.entity, +!created` is
+  `.entity +!created`). Inside a value a comma is any-of, with no spaces and no
+  empty member: `.p=a,b` is one clause, `.p=a, b` is refused. A value holding a
+  space is quoted — `.title~="two words"`, `.status='open wip'`, a backslash
+  escaping inside — where unquoted `.title~=two words` is the filter `two` and
+  the search term `words`.
+- `?comp` is the prefix mirror of `!comp`: optional, selected when present and
+  never filtered on. `.comp?` is its older suffix spelling, still parsed.
 - `parse(q, { text: false })` refuses bare-word text terms, so a rule or a saved
   filter fails on a stray word instead of quietly gaining one. A quoted term is
   still allowed — quoting is how a strict query asks for a word.

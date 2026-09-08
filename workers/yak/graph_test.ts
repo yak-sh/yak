@@ -475,7 +475,7 @@ Deno.test("a plugin's rule reaches the store the host built", async () => {
   await ruling([{
     name: 'fixture/titled',
     phase: 'stamp',
-    match: 'recipe, +!doc, *doc',
+    match: '.recipe, +!doc, *doc',
     produce: { doc: { title: 'named by a rule' } },
   }], async () => {
     let store = await cookbook()

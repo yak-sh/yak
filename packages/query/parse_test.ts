@@ -52,10 +52,8 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['.status!=done', and(ne('status', 'done'))],
   ['.title~=word', and(contains('title', 'word'))],
   ['.domain=Ops,Eng', and(eq('domain', list('Ops', 'Eng')))],
-  // list members are trimmed; a clause-level comma leaves no empty member
-  ['.status=open, wip', and(eq('status', list('open', 'wip')))],
-  ['.status=open ,wip', and(eq('status', list('open', 'wip')))],
-  ['.status=open, .p=1', and(eq('status', 'open'), eq('p', '1'))],
+  // a quoted member may hold what a bare one cannot
+  ['.tag="a b",c', and(eq('tag', list('a b', 'c')))],
   ['.priority=1..5', and(eq('priority', range('1', '5')))],
   ['.priority=1...5', and(eq('priority', range('1', '5', true)))],
   ['.created.at=2026-07-25', and(eq('created.at', scalar('2026-07-25')))],
@@ -75,7 +73,20 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['$e', and(variable('e'))],
   ['.entity,+!created', and(present('entity'), gate('created'))],
   ['.entity, +!created', and(present('entity'), gate('created'))],
-  // `,` between clauses is AND; inside a value it stays any-of
+  ['.entity +!created', and(present('entity'), gate('created'))],
+  // `?comp` is the prefix mirror of `!comp`; `.comp?` stays its synonym
+  ['?doc', and(want('doc'))],
+  ['!doc ?former', and(absent('doc'), want('former'))],
+  [
+    '.task !doc ?former .status=open',
+    and(
+      present('task'),
+      absent('doc'),
+      want('former'),
+      eq('status', 'open'),
+    ),
+  ],
+  // `,` between clauses is optional; inside a value it stays any-of
   [
     '.status=open,.priority<=1&*task',
     and(
@@ -139,18 +150,54 @@ Deno.test('empty query is never', () => {
   assertEquals(parse('   '), and(never()))
 })
 
-// A quoted value glues across '&' and whitespace into one predicate.
+// A quoted value glues across '&' and whitespace into one predicate; unquoted,
+// whitespace ends the value and the rest is the next term.
 Deno.test('quotes glue a value across & and spaces', () => {
   assertEquals(
     parse('.web.url="https://x/p?a=1&b=2"'),
     and(eq('web.url', 'https://x/p?a=1&b=2')),
   )
-  assertEquals(parse('.title~=two words'), and(contains('title', 'two words')))
+  assertEquals(
+    parse('.title~="two words"'),
+    and(contains('title', 'two words')),
+  )
+  assertEquals(parse(".status='open wip'"), and(eq('status', 'open wip')))
+  assertEquals(
+    parse('.title~=two words'),
+    and(contains('title', 'two'), text('words')),
+  )
+  // a backslash escapes inside quotes
+  assertEquals(
+    parse('.title~="say \\"hi\\""'),
+    and(contains('title', 'say "hi"')),
+  )
+  assertThrows(() => parse('.title~="open'), Error, 'unclosed quote')
 })
 
-// A quoted bare word stays one phrase text term.
+// A quoted bare word stays one phrase text term; an apostrophe inside a word
+// opens nothing.
 Deno.test('quoted phrase is one text term', () => {
   assertEquals(parse('"two words"'), and(text('two words')))
+  assertEquals(parse("'two words'"), and(text('two words')))
+  assertEquals(parse("jeff's"), and(text("jeff's")))
+})
+
+// A list is one token: a space beside its comma, or an empty member, is refused
+// rather than read as the caller's most likely meaning.
+Deno.test('a list has no spaces and no empty member', () => {
+  assertThrows(() => parse('.status=open, wip'), Error, 'no spaces')
+  assertThrows(() => parse('.status=open ,wip'), Error, 'no spaces')
+  assertThrows(() => parse('.status=open,'), Error, 'no spaces')
+  assertThrows(() => parse('.status=open,,wip'), Error, 'no spaces')
+  // with a clause on the far side, the comma is the optional separator
+  assertEquals(
+    parse('.status=open, .p=1'),
+    and(eq('status', 'open'), eq('p', '1')),
+  )
+  assertEquals(
+    parse('*trashed, trashed.at=, #Actor'),
+    and(mutable('trashed'), absent('trashed.at'), resource('Actor')),
+  )
 })
 
 // A dot-marked word is the component, present; the same word bare is searched
@@ -161,13 +208,14 @@ Deno.test('the dot tells a component from a word', () => {
   assertEquals(parse('"comp.prop=1"'), and(text('comp.prop=1')))
 })
 
-// A comma announces another clause, so a bare word beside one is the component
-// it names — the rest of the line stays search terms.
-Deno.test('a comma puts a word in query position', () => {
+// A bare word is one thing wherever it stands: a search term. The component it
+// might name is the dot-marked spelling.
+Deno.test('a comma between clauses means nothing', () => {
   assertEquals(
     parse('!foo, bar hello there'),
-    and(absent('foo'), present('bar'), text('hello'), text('there')),
+    and(absent('foo'), text('bar'), text('hello'), text('there')),
   )
+  assertEquals(parse('!foo, .bar'), and(absent('foo'), present('bar')))
 })
 
 // `text: false` — a rule, or a saved filter, takes no bare-word search terms.

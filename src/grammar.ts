@@ -80,9 +80,13 @@ The stamps share column names, so spell out the component: '.created.at',
 which is why 'task decided' orders by it and not by when a thing was filed.
 Component names test facets directly: '.proposed=' means absent (the fix
 queue), while '.proposed!' means present (the idea backlog).
-Quotes hold a value together against BOTH separators, whitespace and '&':
-'.web.url="https://x.test/p?a=1&b=2"' is one predicate, where unquoted the
-'&' would start a second one.
+Whitespace and '&' separate terms; every term stands alone, and a comma
+between terms is optional. A list has no spaces ('.status=open,wip', never
+'open, wip'). Quotes, double or single, hold a value together against both
+separators: '.web.url="https://x.test/p?a=1&b=2"' is one predicate,
+'.title~="two words"' one filter, where unquoted '.title~=two words' is the
+filter 'two' and the search word 'words'. '?comp' selects a component when
+present without filtering on it, the mirror of '!comp' (missing).
 Reference filters resolve aliases and human ids ('.assignee=jeff',
 '.project=P-19'),
 and a DOTTED path walks one reference: '.assignee.title~=jeff' — but a

@@ -66,7 +66,7 @@ Deno.test('a body reads back through a query predicate too', () => {
   // the filter resolves the address the same way the gather does, so a saved
   // query over a body column means one thing in both readers
   assertEquals(db.rows('.body~=spain').map((r) => r.eid), ['p1'])
-  assertEquals(db.rows('.body=the rain in spain').map((r) => r.eid), ['p1'])
+  assertEquals(db.rows('.body="the rain in spain"').map((r) => r.eid), ['p1'])
 })
 
 Deno.test('the $was guard is hashed over the text, not the address', () => {

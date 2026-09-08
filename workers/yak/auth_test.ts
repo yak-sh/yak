@@ -295,7 +295,7 @@ Deno.test('an app writing as itself is signed by the app, and is not a person', 
   assert((await wrote.json() as Bundle[]).some((b) => by(b) == APP))
 
   // A private app, and the app reads it back through the same door.
-  let read = await get(store, '/query?q=.doc.title=The Okonkwos', mine)
+  let read = await get(store, '/query?q=.doc.title="The Okonkwos"', mine)
   assertEquals(read.status, 200)
   assertEquals((await read.json()).length, 1)
 
