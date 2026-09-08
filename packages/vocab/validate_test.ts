@@ -12,6 +12,22 @@ Deno.test('the slice is storable', () => {
   assertEquals(storable(slice), [])
 })
 
+Deno.test('JSON text is storable and nested JSON is refused', () => {
+  let schema = (type: string) =>
+    doc({
+      config: {
+        type: 'object',
+        properties: { value: { type, format: 'json' } },
+      },
+    })
+  assertEquals(storable(schema('string')), [])
+  for (let type of ['object', 'array']) {
+    assertEquals(storable(schema(type)), [
+      `config.value is ${type} — a column is a scalar`,
+    ])
+  }
+})
+
 Deno.test('storable refuses what a table cannot lower', () => {
   let errs = storable(doc({
     'Bad Name': { type: 'object' },
@@ -130,4 +146,21 @@ Deno.test('evolution is additive forever', () => {
   let errs = grow(was, dropped).errors.join('\n')
   assert(errs.includes('recipe.serves was dropped'))
   assert(errs.includes('recipe.state was dropped'))
+})
+
+Deno.test('text cannot become JSON after rows were written', () => {
+  let vocab = (format?: string) =>
+    loadVocab(doc({
+      config: {
+        type: 'object',
+        properties: { value: { type: 'string', format } },
+      },
+    }))
+  assertEquals(grow(vocab(), vocab('json')), {
+    added: [],
+    errors: [
+      'config.value was scalar:text:, now scalar:json: — a column keeps the type its rows were written under',
+    ],
+  })
+  assertEquals(grow(vocab('json'), vocab('json')), { added: [], errors: [] })
 })

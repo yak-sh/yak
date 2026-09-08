@@ -83,6 +83,12 @@ association never shadows a real column or component.
 
 `meta/vocab.schema.json` is the meta-schema a vocab file validates against.
 
+A JSON column uses `{ "type": "string", "format": "json" }`. The runtime reports
+scalar `json` with text affinity and accepts a string containing any valid JSON
+value. Objects and arrays are encoded in that string; a column never holds a
+nested object or array directly. A null clears the column, while the string
+`"null"` stores the JSON null value.
+
 ## Extension keywords
 
 The core keywords describe what a component _table_ needs. Anything past that —

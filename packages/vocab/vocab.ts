@@ -47,7 +47,18 @@ let scalarOf = (s: PropSchema): Scalar => {
   if (s.format == 'date-time') return 'time'
   if (s.format == 'uri') return 'url'
   if (s.format == 'query') return 'query'
+  if (s.format == 'json') return 'json'
   return 'text'
+}
+
+let jsonText = (value: unknown): boolean => {
+  if (typeof value != 'string') return false
+  try {
+    JSON.parse(value)
+    return true
+  } catch {
+    return false
+  }
 }
 
 let affinityOf = (
@@ -461,6 +472,10 @@ export let loadVocab = (
           typeof val != 'boolean' && val !== 0 && val !== 1
         ) {
           errs.push(`${comp}.${k} is a bool`)
+        } else if (
+          c.category == 'scalar' && c.scalar == 'json' && !jsonText(val)
+        ) {
+          errs.push(`${comp}.${k} is JSON text`)
         }
       }
       return errs

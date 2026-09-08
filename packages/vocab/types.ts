@@ -20,7 +20,7 @@ export type Death = 'cascade' | 'detach' | 'release' | 'keep'
 //   text   string, no format          number  number
 //   time   string, format:date-time   priority number, format:priority
 //   url    string, format:uri         bool    boolean
-//   query  string, format:query
+//   query  string, format:query       json    string, format:json
 //
 // Where a string column KEEPS its value is a separate question, and not this
 // meta-model's: @yaks/blob owns the `store` keyword and answers it.
@@ -30,6 +30,7 @@ export type Scalar =
   | 'priority'
   | 'bool'
   | 'query'
+  | 'json'
   | 'time'
   | 'url'
 

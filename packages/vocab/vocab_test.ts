@@ -234,6 +234,28 @@ Deno.test('instances check against the loaded shape', () => {
   assert(v.check('task', { domain: { nested: 1 } })[0].includes('scalar'))
 })
 
+Deno.test('JSON columns store validated JSON text', () => {
+  let w = loadVocab({
+    $defs: {
+      config: {
+        type: 'object',
+        properties: { value: { type: 'string', format: 'json' } },
+      },
+    },
+  })
+  let c = w.column('config', 'value')!
+  assertEquals([c.category, c.scalar, c.affinity], ['scalar', 'json', 'text'])
+  for (let value of [null, 'null', '{}', '[1, true]', '"text"', '0', 'false']) {
+    assertEquals(w.check('config', { value }), [])
+  }
+  for (let value of ['', 'undefined', '{oops}', '[1,]', 'NaN', false, 42]) {
+    assertEquals(w.check('config', { value }), ['config.value is JSON text'])
+  }
+  for (let value of [{ nested: 1 }, [1]]) {
+    assert(w.check('config', { value })[0].includes('is a scalar'))
+  }
+})
+
 Deno.test('a computed column reads but never writes', () => {
   let w = loadVocab({
     $defs: {
