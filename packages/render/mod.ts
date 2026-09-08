@@ -10,7 +10,8 @@
  * still receives the original bundle and that context, so it knows the value
  * and where a patch belongs. Column queries and entity queries describe
  * different subjects; register them under appropriate views. See column.ts
- * for the four queryable schema fields. No editor implementation lives here.
+ * for the four queryable schema fields. editors(vocab) supplies the portable
+ * Edit family; properties(vocab) lays out a component through that registry.
  *
  * A missing view returns undefined unless a matching JSON view is registered.
  * An unnamed request considers the configured views (all by default).
@@ -55,6 +56,8 @@ import type {
   Selection,
 } from './types.ts'
 
+export { edit, type EditOptions } from './edit.ts'
+
 export type { Bundle } from '@yaks/match'
 export type { Query } from '@yaks/query'
 export type {
@@ -67,6 +70,7 @@ export type {
   Patch,
   Registration,
   Registry,
+  RenderContext,
   Renderer,
   Selection,
 } from './types.ts'
@@ -130,7 +134,7 @@ export let resolve = <R extends Registration>(
   vocab: Vocab,
   ctx: Context = {},
 ): R | undefined => {
-  if (ctx.comp != null || ctx.col != null) {
+  if (ctx.col != null) {
     bundle = column(vocab, ctx)
     vocab = columnVocab
   }
@@ -161,7 +165,7 @@ export let applicable = <R extends Registration>(
   vocab: Vocab,
   ctx: Context = {},
 ): string[] => {
-  if (ctx.comp != null || ctx.col != null) {
+  if (ctx.col != null) {
     bundle = column(vocab, ctx)
     vocab = columnVocab
   }

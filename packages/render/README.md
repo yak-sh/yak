@@ -49,9 +49,9 @@ Actions are contributed with
 {name: 'clear', run: () => ({doc: {title: null}})}]}})`.
 Call `actions(registry, bundle)` to get their union in component registration
 order. Optional `when: parse('.task')` conditions filter the offerings.
-Duplicate names remain separate contributions. `run(bundle)` returns a component
-patch; the caller decides whether and how to apply it. The vocabulary may
-instead be passed as the third argument to `actions`.
+Duplicate names remain separate contributions. `run(bundle, input?)` returns a
+component patch; the caller decides whether and how to apply it. The vocabulary
+may instead be passed as the third argument to `actions`.
 
 Dynamic actions use an ordered array of `{match: Query | true, acts(source)}`
 contributors in `options.actions`. Every matching contributor runs when actions
@@ -87,10 +87,25 @@ Its queryable fields are `comp`, `col`, `type`, `ref` under `column`. `type` is
 `string`, `number`, `boolean`, `ref`, `enum`, `time`, `url`, `query` or
 `priority`, according to the declaration. This selects the declared type even
 when the entity's value is absent. Render still receives the original bundle. An
-incomplete or unknown column address throws. Entity queries and column queries
-describe different subjects; use appropriate views for each. An editor can close
-over `vocab.column(comp, col)` for enum choices or other schema details. No
-second registry or editor implementation is needed.
+unknown column address or a `col` without `comp` throws. A `comp` alone supplies
+component context to an entity view. Entity queries and column queries describe
+different subjects; use appropriate views for each. An editor can close over
+`vocab.column(comp, col)` for enum choices or other schema details. No second
+registry or editor implementation is needed.
+
+`edit(vocab, {comp, col}, options?)` creates an action whose
+`run(bundle, input)` parses a value and returns only `{[comp]: {[col]: value}}`.
+It never writes. Text remains text; numbers and booleans become typed values,
+enum aliases resolve to declared members, and timestamps require an explicit
+timezone. JSON columns hold validated JSON text. Null clears a column. Computed,
+stamped and non-wire columns refuse edits.
+
+An application's `options.parse(input, column, bundle)` supplies its value
+language; vocabulary checks still run afterward.
+`options.validate(value, column, bundle)` may throw to refuse a value before the
+action returns a patch. Creating or listing an action invokes neither hook.
+Hosts may inject `ctx.render(view, context?)` to compose nested views through
+the same registry and bundle, merging child context over the parent.
 
 ## Compatibility
 

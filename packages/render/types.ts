@@ -32,12 +32,17 @@ export type Context = {
   [key: string]: unknown
 }
 
+/** A host supplies nested rendering through the same registry and bundle. */
+export type RenderContext<Node> = Context & {
+  render?: (view: string, ctx?: Context) => Node | null
+}
+
 /** Selection metadata shared by portable and host-owned renderer payloads. */
 export type Registration = { view: string; match: Query | true }
 
 /** A pure view of a bundle, independent of any host's node representation. */
 export type Renderer = Registration & {
-  render: <Node>(bundle: Bundle, h: H<Node>, ctx: Context) => Node
+  render: <Node>(bundle: Bundle, h: H<Node>, ctx: RenderContext<Node>) => Node
 }
 
 /** Component changes for the caller to apply to the action's entity. */
@@ -47,7 +52,7 @@ export type Patch = Record<string, Record<string, unknown> | null>
 export type Action = {
   name: string
   when?: Query
-  run: (bundle: Bundle) => Patch
+  run: (bundle: Bundle, input?: unknown) => Patch
 }
 
 /** A dynamic contribution; selection reads a bundle, while the source stays typed. */

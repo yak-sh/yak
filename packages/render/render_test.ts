@@ -138,7 +138,11 @@ Deno.test('column types use declared schemas, even when the value is absent', ()
     }),
     owner,
   )
-  assertThrows(() => resolve(registry, bundle, 'Edit', vocab, { comp: 'doc' }))
+  assertEquals(
+    resolve(registry, bundle, 'Tile', vocab, { comp: 'doc' })?.view,
+    'Tile',
+  )
+  assertThrows(() => resolve(registry, bundle, 'Edit', vocab, { col: 'title' }))
   assertThrows(() =>
     resolve(registry, bundle, 'Edit', vocab, { comp: 'doc', col: 'missing' })
   )
