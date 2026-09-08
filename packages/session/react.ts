@@ -84,6 +84,12 @@ export type Deps = {
   model: ModelCall
   tools: Tool[]
   instructions?: string
+  /** the transport keeps responses, so a call may continue from the newest
+   * `response_id` with only what followed (`previous_response_id`). Off, every
+   * call replays the whole transcript — the only path a provider that stores
+   * nothing (the Codex backend sends `store: false`) can serve. The id is
+   * recorded either way. */
+  anchors?: boolean
   now?: () => string
   mint?: () => Eid
 }
@@ -205,26 +211,42 @@ export let react = async (
     if (t) toolEntities.set(eid, t)
   }
 
-  // An open tool call: perform it. A tool that throws is an exception and a
-  // result saying so, so the model hears what happened and the session goes on.
-  if (status == 'running' && !isModelCall(newest)) {
-    let c = comp(newest, CALL)!
-    let tool = toolEntities.get(String(c.to))
-    let args: Record<string, unknown> = {}
-    try {
-      args = JSON.parse(String(c.args ?? '{}'))
-    } catch { /* malformed arguments are the tool's problem to report */ }
+  // Open tool calls: perform every one the newest model call asked for that
+  // has no result yet, in one batch, so the model is never asked with a call
+  // it made still unanswered (the provider refuses that). A tool that throws
+  // is an exception and a result saying so, so the model hears what happened
+  // and the session goes on.
+  let asked = entries.filter(isModelCall).at(-1)
+  let answered = new Set(
+    entries.filter((b) => kindOf(b) == 'result')
+      .map((b) => String(comp(b, RESULT)?.call)),
+  )
+  let open = asked
+    ? entries.filter((b) =>
+      comp(b, CALL)?.source == asked.entity.eid &&
+      !answered.has(b.entity.eid)
+    )
+    : []
+  if (open.length) {
     let added: Bundle[] = []
-    let out: string
-    try {
-      out = tool
-        ? String(await tool.run(args))
-        : `no such tool: ${String(c.to)}`
-    } catch (e) {
-      out = `tool failed: ${String(e)}`
-      added.push(line({ [EXCEPTION]: {} }, String(e)))
+    for (let pending of open) {
+      let c = comp(pending, CALL)!
+      let tool = toolEntities.get(String(c.to))
+      let args: Record<string, unknown> = {}
+      try {
+        args = JSON.parse(String(c.args ?? '{}'))
+      } catch { /* malformed arguments are the tool's problem to report */ }
+      let out: string
+      try {
+        out = tool
+          ? String(await tool.run(args))
+          : `no such tool: ${String(c.to)}`
+      } catch (e) {
+        out = `tool failed: ${String(e)}`
+        added.push(line({ [EXCEPTION]: {} }, String(e)))
+      }
+      added.push(line({ [RESULT]: { call: pending.entity.eid } }, out))
     }
-    added.push(line({ [RESULT]: { call: newest.entity.eid } }, out))
     let step = await append(added)
     return { ...step, did: 'ran' }
   }
@@ -243,17 +265,13 @@ export let react = async (
       line({ [ERROR]: { code: 'no_model' } }, 'no model in force'),
     ])
   }
-  let anchor = entries.filter((b) =>
-    isModelCall(b) && comp(b, CALL)?.response_id
-  )
-    .at(-1)
+  let anchor = deps.anchors
+    ? entries.filter((b) => isModelCall(b) && comp(b, CALL)?.response_id)
+      .at(-1)
+    : undefined
   let window = anchor
     ? entries.filter((b) => seqOf(b) > seqOf(anchor))
     : entries
-  let call = line({
-    [CALL]: { to: modelEid, through: newest.entity.eid },
-    ...using ? { [USING]: using } : {},
-  })
   let req: ModelRequest = {
     model: modelName,
     effort: using?.effort == null ? undefined : String(using.effort),
@@ -280,7 +298,16 @@ export let react = async (
         : line({ [EXCEPTION]: {} }, String(e)),
     ])
   }
-  ;(call[CALL] as Comp).response_id = reply.id
+  // The call is recorded once the model answered: a call that never went out
+  // takes no seq, so the error or exception that stands for it does.
+  let call = line({
+    [CALL]: {
+      to: modelEid,
+      through: newest.entity.eid,
+      response_id: reply.id,
+    },
+    ...using ? { [USING]: using } : {},
+  })
   let added: Bundle[] = [call]
   let byName = new Map(
     [...toolEntities].map(([eid, t]) => [t.name, eid] as const),

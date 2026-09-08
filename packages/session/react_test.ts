@@ -88,7 +88,7 @@ Deno.test('an input is asked, a tool call is run, the transcript settles', async
     },
     { id: 'r2', model: 'fake-1', items: [{ type: 'message', text: 'done' }] },
   ])
-  let deps = { model, tools: [echo], mint }
+  let deps = { model, tools: [echo], mint, anchors: true }
   let status = await settle(g, ids.s, deps)
   assertEquals(status, 'settled')
   assertEquals(await kinds(g, ids.s), [
@@ -127,7 +127,7 @@ Deno.test('a stop is obeyed: nothing is asked or run after it', async () => {
       ],
     },
   ])
-  let deps = { model, tools: [echo], mint }
+  let deps = { model, tools: [echo], mint, anchors: true }
   await react(g, ids.s, deps) // asked: the tool call is now open
   g.apply([{
     entity: { eid: 'stop1' },
@@ -145,7 +145,7 @@ Deno.test('a fork continues from its anchor with only what followed', async () =
     { id: 'r1', model: 'fake-1', items: [{ type: 'message', text: 'done' }] },
     { id: 'r2', model: 'fake-1', items: [{ type: 'message', text: 'again' }] },
   ])
-  let deps = { model, tools: [echo], mint }
+  let deps = { model, tools: [echo], mint, anchors: true }
   await settle(g, ids.s, deps)
   let entries = await transcript(g, ids.s)
   let call = entries.find((b) => kindOf(b) == 'call')!
@@ -177,7 +177,7 @@ Deno.test('a fork continues from its anchor with only what followed', async () =
 Deno.test('errors retry to the bound, then the transcript is failed', async () => {
   let g = world()
   let { model, asked } = scripted([])
-  let deps = { model, tools: [echo], mint }
+  let deps = { model, tools: [echo], mint, anchors: true }
   assertEquals(await settle(g, ids.s, deps), 'failed')
   assertEquals(asked.length, 3)
   assertEquals(await kinds(g, ids.s), ['input', 'error', 'error', 'error'])
