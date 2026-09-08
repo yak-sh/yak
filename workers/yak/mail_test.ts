@@ -20,7 +20,16 @@ import { durable } from '../../packages/durable-object/harness.ts'
 import { canon, fleetAddress } from '../../src/mailaddr.ts'
 import { slow, until } from '../../src/testing.ts'
 import { type Namespace, PLATFORM_STORE, storeOf } from './door.ts'
-import { FROM, GRAPH, REPLY_TO, sending } from './mail.ts'
+import type { Env } from './env.ts'
+import {
+  account,
+  FROM,
+  GRAPH,
+  mail,
+  mailable,
+  REPLY_TO,
+  sending,
+} from './mail.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { monthOf } from './meter.ts'
@@ -83,6 +92,38 @@ Deno.test('one send carries every reader, from one address', async () => {
   ])
   assertEquals(posted.map((p) => p.from.address), [FROM, FROM])
   assertEquals(posted.map((p) => p.reply_to), [REPLY_TO, REPLY_TO])
+})
+
+// A deploy can send when it has the local adapter, or a token and an account;
+// the account may be the Worker's own (CF_ACCOUNT), so the token is the one
+// secret a deploy must set. Staging with only the Connect secret cannot.
+Deno.test('mailable: the token is the one secret a deploy needs', () => {
+  assertEquals(mailable({}), false)
+  assertEquals(mailable({ MAIL_DEV: '1' }), true)
+  assertEquals(mailable({ MAIL_TOKEN: 't' }), false)
+  assertEquals(mailable({ MAIL_TOKEN: 't', CF_ACCOUNT: 'acct' }), true)
+  assertEquals(mailable({ MAIL_TOKEN: 't', MAIL_ACCOUNT: 'm' }), true)
+  assertEquals(account({ MAIL_ACCOUNT: 'm', CF_ACCOUNT: 'acct' }), 'm')
+  assertEquals(account({ CF_ACCOUNT: 'acct' }), 'acct')
+})
+
+Deno.test('mail: the Worker account carries the send when MAIL_ACCOUNT is unset', async () => {
+  let urls: string[] = []
+  let real = globalThis.fetch
+  globalThis.fetch = ((url: string) => {
+    urls.push(url)
+    return Promise.resolve(new Response('{}'))
+  }) as unknown as typeof fetch
+  try {
+    await mail({
+      MAIL_TOKEN: 't',
+      CF_ACCOUNT: 'acct',
+      MAIL_API: 'https://api.test',
+    } as unknown as Env)({ to: 'a@b.c', subject: 's', body: 'b' })
+  } finally {
+    globalThis.fetch = real
+  }
+  assertEquals(urls, ['https://api.test/accounts/acct/email/sending/send'])
 })
 
 // The graph inbox is an address in the FLEET's mail namespace, not a spelling

@@ -214,6 +214,25 @@ slow(
   },
 )
 
+// A deploy with no mail secret (staging, before MAIL_TOKEN is set) answers the
+// card in one sentence naming what is missing, not a 500: nothing is minted,
+// so the address is not charged a letter it never got.
+slow(
+  'a deploy that cannot mail answers the sign-in card in one sentence',
+  async () => {
+    let k = await kernel({ MAIL_DEV: '0' })
+    try {
+      let r = await form(k, '/login', { email: 'nobody@yaks.app' })
+      assertEquals(r.status, 503)
+      // identity.ts NO_MAIL, by its opening words: the module itself imports
+      // `cloudflare:` and cannot be loaded here.
+      assertMatch(await r.text(), /Sign-in mail is not switched on here yet/)
+    } finally {
+      await k.stop()
+    }
+  },
+)
+
 slow('a person signs in by mail, and an agent by OAuth', async () => {
   let k = await kernel()
   try {

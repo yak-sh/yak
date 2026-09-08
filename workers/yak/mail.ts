@@ -66,10 +66,25 @@ export let sending =
 
 let API = 'https://api.cloudflare.com/client/v4'
 
+// The account the token sends on is the account the Worker runs on, so
+// CF_ACCOUNT (a var in wrangler.toml, never a secret) stands in when
+// MAIL_ACCOUNT is unset: one secret per deploy instead of a pair, and a
+// staging deploy cannot set half of it.
+export let account = (env: Pick<Env, 'MAIL_ACCOUNT' | 'CF_ACCOUNT'>) =>
+  env.MAIL_ACCOUNT || env.CF_ACCOUNT || ''
+
+// Whether a letter can leave this deploy at all: the local adapter, or Email
+// Sending with its token and an account. A door asks BEFORE it mints what the
+// letter would carry, so a deploy missing its mail secret answers in one
+// sentence (identity.ts `/login`) instead of a 500 after the fact.
+export let mailable = (
+  env: Pick<Env, 'MAIL_DEV' | 'MAIL_TOKEN' | 'MAIL_ACCOUNT' | 'CF_ACCOUNT'>,
+) => env.MAIL_DEV == '1' || !!(env.MAIL_TOKEN && account(env))
+
 export let mail = (env: Env): Mail => {
   let send = env.MAIL_DEV == '1' ? printed() : sending(
     env.MAIL_TOKEN ?? '',
-    env.MAIL_ACCOUNT ?? '',
+    account(env),
     env.MAIL_API ?? API,
     env,
   )

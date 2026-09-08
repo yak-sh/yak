@@ -77,8 +77,10 @@ export type Env = {
   CIMD?: string
   // The mail seam (mail.ts). MAIL_DEV=1 files a letter in the meta store
   // instead of sending it — local runs only. The other three are Cloudflare
-  // Email Sending: the API token, the account, and a base URL a probe aims
-  // somewhere else.
+  // Email Sending: the API token (a secret, the one thing a deploy must set
+  // to send), the account (falls back to CF_ACCOUNT), and a base URL a probe
+  // aims somewhere else. Unset token: `mailable` says no and the sign-in door
+  // answers 503 in one sentence.
   MAIL_DEV?: string
   // Staging keeps every outbound letter in the owner's inbox.
   MAIL_SINK?: string

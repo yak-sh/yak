@@ -111,7 +111,16 @@ import {
 } from './link.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { mail } from './mail.ts'
+import { mail, mailable } from './mail.ts'
+import { broke } from './billing.ts'
+
+// What the sign-in card says when no letter can leave: the deploy's operator
+// reads which secret is missing, and a visitor reads that nothing is wrong
+// with their address. The second is the provider's refusal, transient.
+export let NO_MAIL = 'Sign-in mail is not switched on here yet: this deploy ' +
+  'has no MAIL_TOKEN (README, Configuration).'
+export let NO_SEND = 'We could not send your code just now. Try again in a ' +
+  'minute.'
 import { KERNEL, meta } from './meta.ts'
 import {
   askAllow,
@@ -775,6 +784,14 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     if (!email.includes('@')) {
       return askEmail(field('q') || null, back, undefined, undefined, 400, env)
     }
+    // A deploy that cannot post a letter says so in one sentence, the way
+    // sell.ts answers for a missing secret, rather than minting a code nobody
+    // can receive and breaking on the send. Asked before `mint`, so the
+    // address spends none of its hour's letters (signin.ts SENDS) on it; and
+    // the same card for every address, which is all this door ever tells.
+    if (!mailable(env)) {
+      return askEmail(field('q') || null, back, undefined, NO_MAIL, 503, env)
+    }
     let code = await mint(meta(env), secret(env), email)
     if (code) {
       // The letter carries the code AND the one click that spends it
@@ -787,14 +804,22 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
         q: field('q') || undefined,
         back: back || undefined,
       }, apex(env))
-      await mail(env)({
-        to: email,
-        subject: `${code} is your yaks.app code`,
-        body: `Your yaks.app sign-in code is ${code}.\n\n` +
-          `Or sign in with one click: ${link}\n\n` +
-          'It lasts ten minutes. If you did not ask for it, nothing has ' +
-          'happened and you can ignore this.',
-      })
+      try {
+        await mail(env)({
+          to: email,
+          subject: `${code} is your yaks.app code`,
+          body: `Your yaks.app sign-in code is ${code}.\n\n` +
+            `Or sign in with one click: ${link}\n\n` +
+            'It lasts ten minutes. If you did not ask for it, nothing has ' +
+            'happened and you can ignore this.',
+        })
+      } catch (e) {
+        // The provider refused or the network did: a break for us to read
+        // (the same row a thrown one would have filed) and a card the person
+        // can act on, instead of a page that says nothing about what to do.
+        await broke(env, 'POST /login', e)
+        return askEmail(field('q') || null, back, undefined, NO_SEND, 503, env)
+      }
     }
     return askCode(email, field('q') || null, back, undefined, undefined, env)
   }
