@@ -3,10 +3,16 @@
 
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
+import { useLayoutEffect, useState } from 'preact/hooks'
 import { type Bundle, define } from '@yaks/render'
 import { parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
-import { entity, render, type Subscribe } from './mod.ts'
+import {
+  type ComponentRenderer,
+  entity,
+  render,
+  type Subscribe,
+} from './mod.ts'
 import { flush, mount } from './harness.ts'
 
 let vocab = loadVocab([{
@@ -178,5 +184,62 @@ Deno.test('direct rendering produces nodes through the same hyperscript', () => 
     assertEquals(m.root.innerHTML, '<h2>a</h2>')
   } finally {
     m.free()
+  }
+})
+
+Deno.test('native views own hook state and cleanup across view changes', async () => {
+  let cleaned: string[] = []
+  let face = (view: string): ComponentRenderer => ({
+    view,
+    match: true,
+    Render: ({ e, suffix }) => {
+      let [count, set] = useState(0)
+      useLayoutEffect(() => () => {
+        cleaned.push(view)
+      }, [])
+      return h(
+        'button',
+        { onClick: () => set(count + 1) },
+        `${view}:${e.entity.eid}:${count}${suffix}`,
+      )
+    },
+  })
+  let registry = define([face('Tile'), face('Full')])
+  let Entity = entity({ registry, vocab, store: () => bundle('a') })
+  let mounted = mount(h(Entity, { eid: 'a', view: 'Tile', suffix: '!' }))
+  try {
+    assertEquals(mounted.root.textContent, 'Tile:a:0!')
+    mounted.root.querySelector('button')!.click()
+    await flush()
+    assertEquals(mounted.root.textContent, 'Tile:a:1!')
+    mounted.update(h(Entity, { eid: 'a', view: 'Tile', suffix: '?' }))
+    assertEquals(mounted.root.textContent, 'Tile:a:1?')
+    mounted.update(h(Entity, { eid: 'a', view: 'Full', suffix: '!' }))
+    assertEquals(mounted.root.textContent, 'Full:a:0!')
+    assertEquals(cleaned, ['Tile'])
+  } finally {
+    mounted.free()
+  }
+  assertEquals(cleaned, ['Tile', 'Full'])
+})
+
+Deno.test('native props preserve the application entity beside a matchable bundle', () => {
+  type Ent = { eid: string; kids: string[] }
+  let e: Ent = { eid: 'a', kids: ['b'] }
+  let registry = define<ComponentRenderer<Ent>>([{
+    view: 'Tile',
+    match: parse('.doc'),
+    Render: ({ e: original, suffix }) => {
+      assertEquals(original === e, true)
+      return h('p', null, original.kids.join(','), String(suffix))
+    },
+  }])
+  let mounted = mount(
+    render(registry, bundle('a'), 'Tile', vocab, {}, { e, suffix: '!' }),
+  )
+  try {
+    assertEquals(mounted.root.innerHTML, '<p>b!</p>')
+  } finally {
+    mounted.free()
   }
 })

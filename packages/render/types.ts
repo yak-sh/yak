@@ -32,10 +32,11 @@ export type Context = {
   [key: string]: unknown
 }
 
+/** Selection metadata shared by portable and host-owned renderer payloads. */
+export type Registration = { view: string; match: Query | true }
+
 /** A pure view of a bundle, independent of any host's node representation. */
-export type Renderer = {
-  view: string
-  match: Query | true
+export type Renderer = Registration & {
   render: <Node>(bundle: Bundle, h: H<Node>, ctx: Context) => Node
 }
 
@@ -49,10 +50,18 @@ export type Action = {
   run: (bundle: Bundle) => Patch
 }
 
+/** A dynamic contribution; selection reads a bundle, while the source stays typed. */
+export type Contributor<A = Action, E = Bundle> = {
+  match: Query | true
+  acts: (source: E) => readonly (A & { when?: Query })[]
+}
+
 /** Registry configuration; actions preserve component and contribution order. */
-export type Options = {
+export type Options<A = Action, E = Bundle> = {
   aliases?: Readonly<Record<string, string>>
-  actions?: Readonly<Record<string, readonly Action[]>>
+  actions?:
+    | Readonly<Record<string, readonly (A & { when?: Query })[]>>
+    | readonly Contributor<A, E>[]
   /** Vocabulary for action conditions when actions() is called with two args. */
   vocab?: Vocab
   /** Views eligible for an unnamed request; defaults to every registered view. */
@@ -60,4 +69,14 @@ export type Options = {
 }
 
 /** One curated registry, with no global registrations or host state. */
-export type Registry = Options & { renderers: readonly Renderer[] }
+export type Registry<
+  R extends Registration = Renderer,
+  A = Action,
+  E = Bundle,
+> = Options<A, E> & { renderers: readonly R[] }
+
+/** The part of a registry selection needs, independent of its action types. */
+export type Selection<R extends Registration = Renderer> = Pick<
+  Registry<R>,
+  'renderers' | 'aliases' | 'views'
+>

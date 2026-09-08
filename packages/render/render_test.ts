@@ -4,7 +4,14 @@
 import { assertEquals, assertStrictEquals, assertThrows } from '@std/assert'
 import { and, parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
-import { actions, define, type Renderer, resolve } from './mod.ts'
+import {
+  actions,
+  applicable,
+  define,
+  extend,
+  type Renderer,
+  resolve,
+} from './mod.ts'
 
 let vocab = loadVocab([{
   $defs: {
@@ -176,4 +183,93 @@ Deno.test('actions union all worn components, preserve duplicates, and never run
   })
   assertThrows(() => actions(conditional, bundle), Error, 'vocabulary')
   assertEquals(actions(conditional, bundle, vocab).length, 1)
+})
+
+Deno.test('host registrations preserve payloads; overlays and tabs share matching', () => {
+  let original = {
+    view: 'Tile',
+    match: parse('.doc'),
+    Render: () => 'doc',
+    file: { ext: 'md' },
+  }
+  let specific = {
+    ...original,
+    match: parse('.doc .task'),
+    Render: () => 'task',
+  }
+  let json = { ...original, view: 'JSON', match: true as const }
+  let overlay = { ...original, Render: () => 'overlay' }
+  let registry = define([original, json], {
+    views: ['Missing', 'Tile', 'JSON'],
+  })
+  assertStrictEquals(
+    resolve(registry, bundle, 'Tile', vocab)?.Render,
+    original.Render,
+  )
+  assertStrictEquals(
+    resolve(registry, bundle, 'Tile', vocab)?.file,
+    original.file,
+  )
+  extend(registry, [overlay])
+  assertStrictEquals(resolve(registry, bundle, 'Tile', vocab), overlay)
+  extend(registry, [specific])
+  extend(registry, [original])
+  assertStrictEquals(resolve(registry, bundle, 'Tile', vocab), specific)
+  assertEquals(applicable(registry, bundle, vocab), ['Tile', 'JSON'])
+  assertEquals(applicable(registry, { entity: bundle.entity }, vocab), ['JSON'])
+  assertEquals(applicable(define([original, original, json]), bundle, vocab), [
+    'Tile',
+    'JSON',
+  ])
+  assertEquals(resolve(define([original]), bundle, 'Tile', vocab), original)
+})
+
+Deno.test('dynamic typed actions receive their source and refresh without running', () => {
+  type Source = { title: string }
+  type Verb = { label: string; run: () => void }
+  let runs = 0
+  let run = () => {
+    runs++
+  }
+  let source = { title: 'Before' }
+  let registry = define<Renderer, Verb, Source>([], {
+    vocab,
+    actions: [
+      { match: parse('.task'), acts: (e) => [{ label: e.title, run }] },
+      {
+        match: parse('.doc.title=missing'),
+        acts: () => {
+          throw new Error('unmatched factory ran')
+        },
+      },
+      {
+        match: true,
+        acts: () => [
+          { label: 'delete', run },
+          { label: 'delete', run },
+          { label: 'conditional', when: parse('.task.status=done'), run },
+        ],
+      },
+    ],
+  })
+  assertEquals(actions(registry, bundle, vocab, source).map((a) => a.label), [
+    'Before',
+    'delete',
+    'delete',
+  ])
+  source.title = 'After'
+  assertEquals(
+    actions(registry, bundle, undefined, source).map((a) => a.label),
+    ['After', 'delete', 'delete'],
+  )
+  assertEquals(runs, 0)
+  actions(registry, bundle, vocab, source)[0].run()
+  assertEquals(runs, 1)
+  let portable = define([], {
+    actions: [{
+      match: true,
+      acts: (b) => [{ name: b.entity.eid, run: () => ({}) }],
+    }],
+  })
+  assertEquals(actions(portable, bundle)[0].name, bundle.entity.eid)
 })

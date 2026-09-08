@@ -35,10 +35,23 @@ import {
   type Bundle,
   type Context,
   type H,
-  type Registry,
+  type Registration,
+  type Renderer,
   resolve,
+  type Selection,
 } from '@yaks/render'
 import type { Vocab } from '@yaks/vocab'
+
+/** A native component; the host mounts it so Preact owns its hooks and identity. */
+export type ComponentRenderer<E = Bundle> = Registration & {
+  Render: FunctionComponent<Context & { e: E }>
+}
+
+/** Portable trees and native components share the same selection machinery. */
+type HostRegistry<E = Bundle> = Selection<Renderer | ComponentRenderer<E>>
+type Node<E = Bundle> =
+  | VNode<Record<string, unknown>>
+  | VNode<Context & { e: E }>
 
 /** A synchronous read; absence is allowed so a subscription can announce arrival. */
 export type Store = (eid: string) => Bundle | undefined
@@ -48,7 +61,7 @@ export type Subscribe = (eid: string, notify: () => void) => () => void
 
 /** The values bound once when an application creates its Entity component. */
 export type Options = {
-  registry: Registry
+  registry: HostRegistry
   vocab: Vocab
   store: Store
   subscribe?: Subscribe
@@ -65,19 +78,45 @@ let hyperscript: H<VNode<Record<string, unknown>>> = (
   ...children
 ) => h<Record<string, unknown>>(tag, props, children as ComponentChildren)
 
-/** Resolve a portable view and build a Preact node, without mounting it. */
-export let render = (
-  registry: Registry,
+/**
+ * Resolve a view and build a Preact node. Native components are passed to h,
+ * never invoked directly. Native props default to {e: bundle, ...ctx}; callers
+ * with another entity shape supply their typed props as the sixth argument.
+ */
+export function render(
+  registry: HostRegistry,
+  bundle: Bundle,
+  view: string | undefined,
+  vocab: Vocab,
+  ctx?: Context,
+): Node | null
+export function render<E>(
+  registry: HostRegistry<E>,
+  bundle: Bundle,
+  view: string | undefined,
+  vocab: Vocab,
+  ctx: Context,
+  props: Context & { e: E },
+): Node<E> | null
+export function render<E>(
+  registry: HostRegistry<E>,
   bundle: Bundle,
   view: string | undefined,
   vocab: Vocab,
   ctx: Context = {},
-): VNode<Record<string, unknown>> | null =>
-  resolve(registry, bundle, view, vocab, ctx)?.render(
-    bundle,
-    hyperscript,
-    ctx,
-  ) ?? null
+  props?: Context & { e: E },
+): Node<E> | null {
+  let renderer = resolve(registry, bundle, view, vocab, ctx)
+  if (!renderer) return null
+  if ('Render' in renderer) {
+    // Without explicit props the public overload requires E to be Bundle.
+    return h(
+      renderer.Render,
+      props ?? { e: bundle, ...ctx } as Context & { e: E },
+    )
+  }
+  return renderer.render(bundle, hyperscript, ctx)
+}
 
 /**
  * Bind the application once: `let Entity = entity({registry, vocab, store,

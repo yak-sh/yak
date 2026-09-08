@@ -26,8 +26,20 @@ once, outside a component's render.
 
 `render(registry, bundle, view, vocab, ctx?)` directly builds a Preact node for
 callers that already own the subscription. A missing bundle at `Entity`, or an
-unmatched view, renders nothing. Shared renderers remain pure; host components
-own hooks, events and applying actions.
+unmatched view, renders nothing. Portable renderers remain pure; native
+components own hooks, events and applying actions.
+
+A native registration uses `{view, match, Render}` and can be typed as
+`ComponentRenderer`. The host builds `h(Render, {e: bundle, ...ctx})`, so Preact
+owns its hooks and component identity. `Entity` supports native and portable
+registrations in the same registry. A component change resets its state and runs
+its cleanup through ordinary reconciliation.
+
+For an application whose entities differ from `Bundle`, register
+`ComponentRenderer<MyEntity>` and call
+`render(registry, bundle, view, vocab, ctx, {e: entity, ...ctx})`. Selection
+reads the bundle; the mounted component receives the original typed entity. The
+host never calls a native `Render` as an ordinary function.
 
 ## Example
 

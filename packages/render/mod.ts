@@ -41,9 +41,19 @@
  */
 
 import { type Bundle, filter } from '@yaks/match'
+import type { Query } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import { column, columnVocab } from './column.ts'
-import type { Action, Context, Options, Registry, Renderer } from './types.ts'
+import type {
+  Action,
+  Context,
+  Contributor,
+  Options,
+  Registration,
+  Registry,
+  Renderer,
+  Selection,
+} from './types.ts'
 
 export type { Bundle } from '@yaks/match'
 export type { Query } from '@yaks/query'
@@ -51,28 +61,52 @@ export type {
   Action,
   Child,
   Context,
+  Contributor,
   H,
   Options,
   Patch,
+  Registration,
   Registry,
   Renderer,
+  Selection,
 } from './types.ts'
 
 /** Build an independent registry; earlier registrations win equal scores. */
-export let define = (
-  renderers: readonly Renderer[],
-  options: Options = {},
-): Registry => ({ ...options, renderers: [...renderers] })
+export function define<R extends Renderer = Renderer, A = Action, E = Bundle>(
+  renderers: readonly R[],
+  options?: Options<NoInfer<A>, E>,
+): Registry<R & Renderer, A, E>
+export function define<R extends Registration, A = Action, E = Bundle>(
+  renderers: readonly R[],
+  options?: Options<NoInfer<A>, E>,
+): Registry<R, A, E>
+export function define<R extends Registration, A = Action, E = Bundle>(
+  renderers: readonly R[],
+  options: Options<NoInfer<A>, E> = {},
+): Registry<R, A, E> {
+  return { ...options, renderers: [...renderers] }
+}
 
-let best = (
-  pool: readonly Renderer[],
+/** Prepend a host overlay to this registry; earlier rows win equal scores. */
+export let extend = <R extends Registration>(
+  registry: Selection<R>,
+  renderers: readonly R[],
+): void => {
+  registry.renderers = [...renderers, ...registry.renderers]
+}
+
+let matches = (match: Registration['match'], bundle: Bundle, vocab: Vocab) =>
+  match === true || filter(match, vocab)(bundle)
+
+let best = <R extends Registration>(
+  pool: readonly R[],
   bundle: Bundle,
   vocab: Vocab,
-): Renderer | undefined => {
-  let top: Renderer | undefined
+): R | undefined => {
+  let top: R | undefined
   let max = -Infinity
   for (let r of pool) {
-    if (r.match !== true && !filter(r.match, vocab)(bundle)) continue
+    if (!matches(r.match, bundle, vocab)) continue
     // Shift the whole query tier so an empty conjunction beats the catch-all
     // while still ranking below every query with clauses.
     let score = r.match === true ? 0.5 : 1 + r.match.clauses.length
@@ -89,13 +123,13 @@ let best = (
  * the remaining walk, as for a stored name renamed to another qualified view.
  * Cyclic alias walks stop before visiting a name twice.
  */
-export let resolve = (
-  registry: Registry,
+export let resolve = <R extends Registration>(
+  registry: Selection<R>,
   bundle: Bundle,
   view: string | undefined,
   vocab: Vocab,
   ctx: Context = {},
-): Renderer | undefined => {
+): R | undefined => {
   if (ctx.comp != null || ctx.col != null) {
     bundle = column(vocab, ctx)
     vocab = columnVocab
@@ -120,25 +154,66 @@ export let resolve = (
   return pick('JSON')
 }
 
+/** Exact, matching tab views in configured order, without JSON fallback. */
+export let applicable = <R extends Registration>(
+  registry: Selection<R>,
+  bundle: Bundle,
+  vocab: Vocab,
+  ctx: Context = {},
+): string[] => {
+  if (ctx.comp != null || ctx.col != null) {
+    bundle = column(vocab, ctx)
+    vocab = columnVocab
+  }
+  let views = registry.views ??
+    [...new Set(registry.renderers.map((r) => r.view))]
+  return views.filter((view) =>
+    registry.renderers.some((r) =>
+      r.view == view && matches(r.match, bundle, vocab)
+    )
+  )
+}
+
 /**
- * All verbs contributed by components the bundle wears, in registration order.
- * Duplicate names survive, as in the reference contributor union. Conditions
- * use the supplied vocabulary or the one given to define; run is never called.
+ * All matching contributions, preserving duplicates and registration order.
+ * Static offerings are keyed by worn component; dynamic contributors receive
+ * the source supplied by the caller, while their queries read the bundle.
+ * Conditions use the supplied vocabulary or define's default; run is never called.
  */
-export let actions = (
-  registry: Registry,
+export function actions<R extends Registration, A>(
+  registry: Registry<R, A>,
+  bundle: Bundle,
+  vocab?: Vocab,
+): A[]
+export function actions<R extends Registration, A, E>(
+  registry: Registry<R, A, E>,
+  bundle: Bundle,
+  vocab: Vocab | undefined,
+  source: E,
+): A[]
+export function actions<R extends Registration, A, E>(
+  registry: Registry<R, A, E>,
   bundle: Bundle,
   vocab: Vocab | undefined = registry.vocab,
-): Action[] =>
-  Object.entries(registry.actions ?? {}).flatMap(([comp, offered]) => {
-    if (
-      comp.startsWith('$') || !bundle[comp] || typeof bundle[comp] != 'object'
-    ) {
-      return []
-    }
-    return offered.filter((action) => {
-      if (!action.when) return true
-      if (!vocab) throw new Error('action conditions need a vocabulary')
-      return filter(action.when, vocab)(bundle)
-    })
-  })
+  source?: E,
+): A[] {
+  let test = (match: Registration['match']) => {
+    if (match === true) return true
+    if (!vocab) throw new Error('action conditions need a vocabulary')
+    return matches(match, bundle, vocab)
+  }
+  let offered: readonly (A & { when?: Query })[]
+  if (Array.isArray(registry.actions)) {
+    // The three-argument overload accepts Bundle sources only.
+    let input = (source === undefined ? bundle : source) as E
+    offered = (registry.actions as readonly Contributor<A, E>[])
+      .filter((c) => test(c.match)).flatMap((c) => c.acts(input))
+  } else {
+    offered = Object.entries(registry.actions ?? {}).flatMap(([comp, acts]) =>
+      !comp.startsWith('$') && bundle[comp] && typeof bundle[comp] == 'object'
+        ? acts
+        : []
+    )
+  }
+  return offered.filter((action) => !action.when || test(action.when))
+}

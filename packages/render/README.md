@@ -1,8 +1,8 @@
 # @yaks/render
 
 One renderer registry for yaks.app's browser, text and terminal hosts. Each
-renderer receives `(bundle, h, ctx)` and returns whatever the injected `h`
-builds. The package imports no host and performs no action.
+portable renderer receives `(bundle, h, ctx)` and returns whatever the injected
+`h` builds. The package imports no host and performs no action.
 
 ```ts
 import { define, resolve } from '@yaks/render'
@@ -32,6 +32,18 @@ stripping follows the renamed name. A cycle stops. A missing view falls to a
 matching `JSON` registration, or returns `undefined`. An unnamed request
 considers `options.views`, or every registered view when omitted.
 
+`Registration` is the selection contract, `{view, match}`. A registry preserves
+any additional renderer payload and its type, including native `Render`
+components and file metadata. `@yaks/preact` mounts native components; the
+portable `Renderer` remains the default for text and other hosts.
+
+`extend(registry, renderers)` prepends an overlay to that registry; an overlay
+wins equal scores while a more specific base renderer still wins. Other
+registries remain independent. `applicable(registry, bundle, vocab, ctx?)`
+returns matching exact view names in `options.views` order, or registration
+order when views are omitted. It does not use aliases or JSON fallback to invent
+tabs for unmatched names.
+
 Actions are contributed with
 `define(renderers, {vocab, actions: {doc: [
 {name: 'clear', run: () => ({doc: {title: null}})}]}})`.
@@ -40,6 +52,17 @@ order. Optional `when: parse('.task')` conditions filter the offerings.
 Duplicate names remain separate contributions. `run(bundle)` returns a component
 patch; the caller decides whether and how to apply it. The vocabulary may
 instead be passed as the third argument to `actions`.
+
+Dynamic actions use an ordered array of `{match: Query | true, acts(source)}`
+contributors in `options.actions`. Every matching contributor runs when actions
+are requested; each returns its current offerings, including optional `when`
+queries. Action callbacks are never invoked while listing. For an application
+with its own action and entity shapes, use
+`define<MyRenderer, MyAction, MyEntity>(renderers, options)` and
+`actions(registry, bundle, vocab, entity)`. Queries read the matchable bundle;
+factories receive the original typed entity. Without a separate source,
+factories receive the bundle. `Registry` defaults to portable `Renderer`,
+`Action` and `Bundle` for existing callers.
 
 Editors are ordinary renderers:
 
