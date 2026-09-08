@@ -110,9 +110,22 @@ if (import.meta.main) {
     argv.push('--message', new TextDecoder().decode(commit.stdout).trim())
   }
   let [cmd, ...args] = WRANGLER
-  let { code } = await new Deno.Command(cmd, {
+  let child = new Deno.Command(cmd, {
     args: [...args, ...argv],
     cwd: dir,
-  }).spawn().status
+  }).spawn()
+  // A signal to this door reaches wrangler too; otherwise a stopped `tail`
+  // leaves wrangler streaming and its reader waiting on a pipe that never
+  // closes (verify-deploy.ts hung ten minutes on a three-minute tail).
+  for (let signal of ['SIGINT', 'SIGTERM'] as const) {
+    Deno.addSignalListener(signal, () => {
+      try {
+        child.kill(signal)
+      } catch {
+        // already gone
+      }
+    })
+  }
+  let { code } = await child.status
   Deno.exit(code)
 }

@@ -101,10 +101,12 @@ export let connector = async (get: Fetch, site: string) => {
 /// fault({}) -> null
 // A line of `wrangler tail --format json`. A 4xx is a visitor asking for
 // something that is not there; a 5xx or a thrown exception is us.
-export let fault = (row: {
+type Row = {
   event?: { response?: { status?: number }; request?: { url?: string } }
   exceptions?: { name?: string; message?: string }[]
-}) => {
+  [rest: string]: unknown
+}
+export let fault = (row: Row) => {
   let thrown = row.exceptions?.[0]
   if (thrown) return `${thrown.name}: ${thrown.message}`
   let status = row.event?.response?.status ?? 0
@@ -133,9 +135,34 @@ export let WRANGLER = [
   'workers/yak/wrangler.ts',
 ]
 
+/// events('{"a":1}\n{\n  "b": 2\n}\nwarning\n{\n  "c": 3') -> [[{ a: 1 }, { b: 2 }], '{\n  "c": 3']
+// `wrangler tail --format json` pretty-prints each event over many lines and
+// mixes its own diagnostics into the same stdout, so an event is the text from
+// a line that opens an object to the line that closes it, and anything that
+// does not parse is a diagnostic. Returns the rows plus the unfinished tail.
+export let events = (text: string): [Row[], string] => {
+  let rows: Row[] = []
+  let open: string[] = []
+  let lines = text.split('\n')
+  let rest = lines.pop() ?? ''
+  for (let line of lines) {
+    if (!open.length && !line.startsWith('{')) continue
+    open.push(line)
+    if (line == '}' || (open.length == 1 && line.endsWith('}'))) {
+      try {
+        rows.push(JSON.parse(open.join('\n')))
+      } catch {
+        // a diagnostic that happened to open with a brace
+      }
+      open = []
+    }
+  }
+  return [rows, [...open, rest].join('\n')]
+}
+
 export let tail = async (secs: number, staging = false) => {
   let faults: string[] = []
-  let events = 0
+  let seen = 0
   let child = new Deno.Command(Deno.execPath(), {
     args: [
       ...WRANGLER,
@@ -150,25 +177,17 @@ export let tail = async (secs: number, staging = false) => {
   let stop = setTimeout(() => child.kill('SIGINT'), secs * 1000)
   let rest = ''
   for await (let chunk of child.stdout.pipeThrough(new TextDecoderStream())) {
-    let lines = (rest + chunk).split('\n')
-    rest = lines.pop() ?? ''
-    for (let line of lines) {
-      // wrangler mixes diagnostics into stdout, and a config warning can open
-      // with a brace too; only a line that parses is an event.
-      let row: Parameters<typeof fault>[0]
-      try {
-        row = JSON.parse(line)
-      } catch {
-        continue
-      }
-      events++
+    let rows: Row[]
+    ;[rows, rest] = events(rest + chunk)
+    for (let row of rows) {
+      seen++
       let bad = fault(row)
       if (bad) faults.push(bad)
     }
   }
   clearTimeout(stop)
   await child.status
-  return [events, faults] as const
+  return [seen, faults] as const
 }
 
 export let main = async (args = Deno.args, get = fetch, follow = tail) => {

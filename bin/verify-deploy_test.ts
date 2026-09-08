@@ -3,7 +3,14 @@
 // wrangler subprocess are the impure edges and are not exercised here — the
 // point of the fake is that a check can be wrong without a deploy being wrong.
 import { assertEquals } from '@std/assert'
-import { connector, DOORS, fault, main, verify } from './verify-deploy.ts'
+import {
+  connector,
+  DOORS,
+  events,
+  fault,
+  main,
+  verify,
+} from './verify-deploy.ts'
 
 let SITE = 'https://yaks.app'
 
@@ -140,6 +147,27 @@ Deno.test('connector: the auth challenge is a failure here — this door is publ
 Deno.test('verify: a fetch that throws is reported, not thrown', async () => {
   let dead = (() => Promise.reject(new Error('dns'))) as typeof fetch
   assertEquals((await verify(dead, SITE)).length, DOORS.length + 1)
+})
+
+Deno.test('events: pretty-printed objects, diagnostics skipped, tail kept', () => {
+  let text = [
+    'Successfully created tail',
+    '{',
+    '  "outcome": "ok",',
+    '  "event": { "response": { "status": 200 } }',
+    '}',
+    '{ "cwd": nope }',
+    '{"outcome":"exception"}',
+    '{',
+    '  "outcome": "ok"',
+  ].join('\n')
+  let [rows, rest] = events(text)
+  assertEquals(rows, [
+    { outcome: 'ok', event: { response: { status: 200 } } },
+    { outcome: 'exception' },
+  ])
+  assertEquals(rest, '{\n  "outcome": "ok"')
+  assertEquals(events(rest + '\n}\n'), [[{ outcome: 'ok' }], ''])
 })
 
 Deno.test('fault: 5xx and exceptions are ours, 4xx is not', () => {
