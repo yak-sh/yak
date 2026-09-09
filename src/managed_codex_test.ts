@@ -1376,6 +1376,7 @@ slow('restart leaves an uncertain side-effecting call ambiguous', async () => {
   let db = freshDb()
   let tree = Deno.makeTempDirSync()
   let sid = session(db, tree), old = uuid(), calls = 0
+  let casts: Change[] = []
   writeSession(db, sid, { base_revision: 'base' })
   apply(db, [{ eid: old, name: 'runner', comp: { name: 'old' } }])
   let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
@@ -1399,7 +1400,7 @@ slow('restart leaves an uncertain side-effecting call ambiguous', async () => {
   )
   let service = managedCodex({
     db,
-    cast: () => {},
+    cast: (changes) => casts.push(...changes),
     clock: () => new Date('2026-08-10T12:00:01Z'),
     transport: {
       run: () =>
@@ -1423,6 +1424,13 @@ slow('restart leaves an uncertain side-effecting call ambiguous', async () => {
   assertMatch(String(row.comps.error.message), /outcome is ambiguous/)
   assertEquals(row.comps.lease, undefined)
   assertEquals(calls, 0)
+  // Ambiguity is a known state on the interrupted call. It must not flash a
+  // Session exception on the live change stream: self-healing and settlement
+  // react before the successful recovery generation can clear that facet.
+  assertEquals(
+    casts.some((change) => change.eid == sid && change.name == 'exception'),
+    false,
+  )
   db.close()
 })
 

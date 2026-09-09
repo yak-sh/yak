@@ -177,8 +177,10 @@ let delivered = (
 
 // A managed Session's health (D-17077, T-17081). A fault reaching here is
 // always a genuine BREAK — a generation or call that threw PAST the cancel gate
-// (valid() screens a stop before this), a vanished runner, a failed prepare —
-// so it wears the `exception` facet (the self-healing trigger), never `error`.
+// (valid() screens a stop before this), or a failed prepare — so it wears the
+// `exception` facet (the self-healing trigger), never `error`. A vanished
+// runner is reconciled separately: safe work is replayed, while a possibly
+// side-effecting call gets a durable entry error without breaking the Session.
 // No live heal fires from here: excepted()'s dispatch door reads deliver.ts's
 // SINGLETON db, which this runner is not under test, so the break rides the
 // narrow table door and the boot sweep (HEAL_PENDING) files its deduped bug.
@@ -589,7 +591,13 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       }
       let message = 'runner disappeared; operation outcome is ambiguous'
       cast(failEntry(db, lease, message, clock))
-      sessionFault(db, lease.session, message, cast, clock)
+      // This is a known outcome of crash reconciliation, not a broken Session.
+      // The call's durable error keeps us from replaying a possible side
+      // effect, and advance() gives the model a synthetic interrupted result
+      // so it can inspect the world and continue. Stamping `exception` here is
+      // both transient (a successful next generation clears it) and harmful:
+      // live self-healing observes that edge, files a false incident, and
+      // session settlement may release the task claim while recovery proceeds.
     }
     return retries
   }
