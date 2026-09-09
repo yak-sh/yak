@@ -56,6 +56,10 @@ In dependency order:
 - **[@yaks/text](./text)** — Markdown and plain text from those same trees,
   preserving headings, lists, links, code and emphasis while stripping control
   bytes from every text leaf and destination.
+- **[@yaks/tui](./tui)** — the same Preact trees on a terminal: a fake DOM, a
+  swappable backend (a diffing ANSI painter today), and the three widgets a
+  console app is made of — a scrolling transcript, a multi-line input box, and a
+  frame with a sidebar of pluggable panels.
 - **[@yaks/ram](./ram)** — the storage adapter with nothing underneath it: a
   `Map` of bundles answering `@yaks/graph`'s `Storage`, reads through
   `@yaks/match`, synchronous, browser-ready. Tested batch for batch against
