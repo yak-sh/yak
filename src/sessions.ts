@@ -684,6 +684,44 @@ let repoOf = (row: Row) =>
     | { path: string; base_branch: string }
     | undefined
 
+let sidOf = (row: Row) => {
+  let e = db.prepare('select num from entity where eid = ?')
+    .get(String(row.eid)) as { num: number } | undefined
+  return e ? `S-${e.num}` : undefined
+}
+
+// A session owns the tree it CUT, and says so in its branch: spawn and regrow
+// both name it `session/S-N`. Any other branch on the row is the caller's own
+// (`task spawn --worktree <path>`) — a tree we neither remove nor recreate,
+// because attaching borrows a checkout, it does not adopt one. A swept row has
+// shed its branch (null), and is ours to regrow.
+let owns = (row: Row) => {
+  let branch = row.branch ? String(row.branch) : ''
+  let sid = sidOf(row)
+  return !branch || (!!sid && branch == `session/${sid}`)
+}
+
+// The caller's tree, judged once at the spawn door so a bad `--worktree` is a
+// one-line refusal instead of a launch that dies deeper in. It must be the TOP
+// of a worktree of this project's own repo, and on a branch — a detached head
+// has nothing for the session to commit onto.
+let attach = (
+  tree: string,
+  repoPath: string,
+): { branch: string } | { error: string } => {
+  let top = gitSync(tree, ['rev-parse', '--show-toplevel'])
+  if (!top.ok || resolve(top.out.trim()) != resolve(tree)) {
+    return { error: `not a git worktree: ${tree}` }
+  }
+  let common = gitSync(tree, ['rev-parse', '--git-common-dir']).out.trim()
+  let owner = gitSync(repoPath, ['rev-parse', '--git-common-dir']).out.trim()
+  if (resolve(tree, common) != resolve(repoPath, owner)) {
+    return { error: `not a worktree of ${repoPath}: ${tree}` }
+  }
+  let branch = gitSync(tree, ['branch', '--show-current']).out.trim()
+  return branch ? { branch } : { error: `worktree has no branch: ${tree}` }
+}
+
 // The session's own commits, named by the trailer installTrailer plants — so a
 // sha resolves to this session (and its task) through the GRAPH too: report()
 // rides them into the settle comment, which FTS indexes, so `task search <sha>`
@@ -780,6 +818,10 @@ let cleanup = async (row: Row, cast: Cast) => {
     let tree = String(row.cwd ?? '')
     let branch = String(row.branch ?? '')
     if (!tree || !branch) return
+    // An attached tree belongs to whoever handed it over: not ours to remove,
+    // and not ours to bookkeep either — shedding its branch would read to a
+    // later resume as a swept tree it should regrow.
+    if (!owns(row)) return
     try {
       Deno.statSync(tree)
     } catch (e) {
@@ -815,6 +857,9 @@ let cleanup = async (row: Row, cast: Cast) => {
 // the base, so the continuation starts where the base is now. Throws are
 // the caller's to say — a resume that can't regrow refuses out loud.
 let regrow = async (row: Row) => {
+  // An attached tree is the caller's ground. If it is gone, it is gone: we
+  // cannot honestly recreate a checkout we never cut.
+  if (!owns(row)) throw new Error(`attached worktree is gone: ${row.cwd}`)
   let repo = repoOf(row)
   if (!repo) throw new Error("the task's project has no repo")
   let { num } = db.prepare('select num from entity where eid = ?')
@@ -1958,11 +2003,19 @@ export let spawned =
     let { num } = db.prepare('select num from entity where eid = ?')
       .get(eid) as { num: number }
     let sid = `S-${num}`
+    // `task spawn --worktree <path>`: the request already names a tree, riding
+    // in as worktree.cwd. The session ATTACHES to it — on the branch it stands
+    // on, with nothing created here and nothing swept later (owns()) — because
+    // the caller owns that ground. Naming none takes the deterministic path.
+    let asked = row.cwd ? String(row.cwd) : undefined
+    if (asked && !repo) return fail('--worktree needs a repo-backed project')
+    let borrowed = asked && repo ? attach(asked, repo.path) : undefined
+    if (borrowed && 'error' in borrowed) return fail(borrowed.error)
     let workspace = repo
       ? {
         repo,
-        tree: `${worktreesDir()}/${basename(repo.path)}/${sid}`,
-        branch: `session/${sid}`,
+        tree: asked ?? `${worktreesDir()}/${basename(repo.path)}/${sid}`,
+        branch: borrowed?.branch ?? `session/${sid}`,
       }
       : undefined
     // The persona is the worn voice; the prompt is the task/role/chat brief.

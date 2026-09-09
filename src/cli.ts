@@ -148,6 +148,7 @@ import { projection, syncFiles } from './persona.ts'
 import { anchorPaths, type Freshness, freshness } from './anchor.ts'
 import { commit, revision } from './git.ts'
 import { gitSync } from './repo.ts'
+import { resolve } from 'node:path'
 import { land as landTree } from './land.ts'
 import { request } from './http.ts'
 import { commands, focusOf, run as runCommand } from './commands.ts'
@@ -1447,6 +1448,7 @@ let launch = async (
     effort?: string
     persona?: string
     prompt?: string
+    worktree?: string
   },
 ) => {
   let by = me()
@@ -1485,6 +1487,9 @@ let launch = async (
     persona: plan.persona,
     by,
     deps: persona?.deps,
+    // Absolute, because the path is judged by the SERVER, which stands
+    // somewhere else entirely.
+    cwd: flags.worktree ? resolve(flags.worktree) : undefined,
   }, caps)
   let applied = await send(made.changes)
   let onto = id ? find(all, id) : undefined
@@ -1507,6 +1512,7 @@ let spawn = async (got: Got) => {
     model: got.opts['--model'],
     effort: got.opts['--effort'],
     persona: got.opts['--persona'],
+    worktree: got.opts['--worktree'],
   })
 }
 

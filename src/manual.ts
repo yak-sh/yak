@@ -733,7 +733,13 @@ export let manuals = declare({
     examples: [
       'task spawn T-3',
       'task spawn T-3 --model=sonnet',
+      'task spawn T-3 --worktree ~/code/tasks-worktrees/tasks/fix',
     ],
+    detail: '--worktree attaches the session to an EXISTING worktree of the ' +
+      "project's repo, on the branch it stands on: nothing is created for it " +
+      'and nothing is swept afterwards, because the caller owns that tree. ' +
+      'Without it the spawn cuts its own worktree and collects it once the ' +
+      'work is merged.',
     root: true,
     args: [arg('id', id)],
     opts: [
@@ -741,6 +747,7 @@ export let manuals = declare({
       value('--model', model),
       { ...value('--effort', effort), or: 'high' },
       value('--persona', id),
+      value('--worktree', path, true),
     ],
   },
   land: {

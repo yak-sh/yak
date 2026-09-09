@@ -2575,6 +2575,10 @@ export let spawnChanges = (
     persona?: string
     by?: string
     deps?: Dep[]
+    // An existing git worktree to attach to (`task spawn --worktree`). It
+    // rides as worktree.cwd, which is where the server reads a tree the
+    // CALLER owns — one it must neither create nor sweep.
+    cwd?: string
   },
   caps?: string[],
 ) => {
@@ -2613,6 +2617,7 @@ export let spawnChanges = (
     ...(task ? { requested_task: task.eid } : {}),
     ...(persona ? { persona: persona.eid } : {}),
     ...(actor ? { actor: actor } : {}),
+    ...(s.cwd ? { cwd: s.cwd } : {}),
   }, caps === undefined ? undefined : facetsFor(caps))
   if (s.prompt) {
     changes.push({ eid, name: 'doc', comp: { title: '', body: s.prompt } })

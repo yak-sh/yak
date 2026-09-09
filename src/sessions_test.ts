@@ -2193,6 +2193,76 @@ slow('tidy: an absent tree is reconciled once', async () => {
   )
 })
 
+// `task spawn --worktree <path>`: the path rides in as worktree.cwd (the CLI
+// writes it beside the session alias, sessionFrames) and the session runs in
+// the tree the CALLER cut, on the branch it stands on.
+let beginAt = (task: string, tree: string) => {
+  let eid = uid()
+  let done = write([
+    {
+      eid,
+      name: 'session',
+      comp: {
+        id: uid(),
+        provider: 'fake',
+        model: 'fake-fast',
+        requested_task: task,
+        cwd: tree,
+      },
+    },
+    { eid, name: 'worktree', comp: { cwd: tree } },
+  ])
+  return { eid, done }
+}
+let treeComp = (eid: string) =>
+  db.prepare(
+    'select cwd, branch from worktree where entity = (select id from entity where eid = ?)',
+  ).get(eid) as { cwd: string; branch: string | null } | undefined
+// A worktree the caller owns: cut from main, so its branch is already merged
+// — anything tidy leaves behind, it leaves on purpose.
+let caller = (name: string) => {
+  let tree = `${tmp}/caller-${name}`
+  gitIn(scratch, 'worktree', 'add', '-b', name, tree, 'main')
+  return tree
+}
+
+slow('a spawn attaches to the worktree it was handed', async () => {
+  let tree = caller('attached')
+  let { eid, done } = beginAt(seed().t, tree)
+  await done
+  assertEquals(row(eid)?.status, 'completed')
+  // The comp names the caller's tree, on the branch that tree stands on.
+  assertEquals(treeComp(eid)?.cwd, tree)
+  assertEquals(treeComp(eid)?.branch, 'attached')
+  assert(Deno.statSync(tree).isDirectory)
+  // Nothing was cut for it: no session branch, and no tree under the root.
+  let { num } = db.prepare('select num from entity where eid = ?')
+    .get(eid) as { num: number }
+  assertEquals(gitOut(scratch, 'branch', '--list', `session/S-${num}`), '')
+  assert(!existsSync(`${tmp}/worktrees/${scratch.split('/').pop()}/S-${num}`))
+})
+
+slow('a path that is not a git worktree is refused, not launched', async () => {
+  let bare = `${tmp}/not-a-worktree`
+  Deno.mkdirSync(bare, { recursive: true })
+  let { eid, done } = beginAt(seed().t, bare)
+  await done
+  assertEquals(row(eid)?.status, 'failed')
+  assertEquals(failure(eid), `not a git worktree: ${bare}`)
+})
+
+slow('tidy leaves an attached tree — and its branch — alone', async () => {
+  let tree = caller('borrowed')
+  let { eid, done } = beginAt(seed().t, tree)
+  await done
+  await tidy(cast)
+  // Merged and clean: a tree we had cut would be gone by now. This one is the
+  // caller's, so both the checkout and its branch survive untouched.
+  assert(Deno.statSync(tree).isDirectory)
+  assertEquals(row(eid)?.branch, 'borrowed')
+  assertMatch(gitOut(scratch, 'branch', '--list', 'borrowed'), /borrowed/)
+})
+
 slow('a comment after the sweep regrows the worktree and resumes', async () => {
   let { p, t } = seed()
   let { eid, done } = begin(t)
