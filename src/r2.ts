@@ -17,6 +17,10 @@ export type R2 = {
   list(
     opts: { prefix: string; cursor?: string },
   ): Promise<
-    { objects: { key: string }[]; truncated: boolean; cursor?: string }
+    {
+      objects: { key: string; uploaded: Date }[]
+      truncated: boolean
+      cursor?: string
+    }
   >
 }

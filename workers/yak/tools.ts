@@ -194,6 +194,7 @@ import {
 import {
   held,
   history,
+  KEEP,
   manifest,
   own,
   pinned,
@@ -935,7 +936,7 @@ let released = async (
   let pinned = await c.time('snapshot', () => snapshot(blobs, prefix))
   await c.time(
     'record',
-    () => record(ctx.dir, blobs, prefix, who, app, version, pinned, worker),
+    () => record(ctx.dir, who, app, version, pinned, worker),
   )
   // What the versions before this one broke is closed by this one: the code
   // that produced it is not what serves any more (unseen.ts `healed`,
@@ -2522,12 +2523,15 @@ let OURS: Row[] = [
           space,
         }
       }
+      // The newest KEEP, and the count says how many there are: an app keeps
+      // every version it ever deployed (versions.ts), so the list is a page
+      // and the older ones are still there to roll back to by number.
       return {
         text: [
           `${space.slug}/${app.slug}: ${all.length} ${
             all.length == 1 ? 'version' : 'versions'
-          }`,
-          ...all.map((v, i) => {
+          }${all.length > KEEP ? `, newest ${KEEP}` : ''}`,
+          ...all.slice(0, KEEP).map((v, i) => {
             // A version a rollback made says so first: "restored v2" is what
             // the person asked for, and the file list is how it did it.
             let back = restored(all, i)
@@ -2583,8 +2587,9 @@ let OURS: Row[] = [
         if (!want) {
           throw new Error(
             `no v${args.version} of ${space.slug}/${app.slug} — it keeps ${
-              all.map((v) => `v${v.version}`).join(', ') || 'none'
-            }`,
+              all.slice(0, KEEP).map((v) => `v${v.version}`).join(', ') ||
+              'none'
+            }${all.length > KEEP ? ` and ${all.length - KEEP} older` : ''}`,
           )
         }
       }

@@ -14,9 +14,16 @@
 // tools.json, worker.js — so restoring the files and deploying them again is
 // the whole of a rollback; tools.ts spends no second vocabulary on it.
 //
-// An app keeps its last KEEP versions. Pruning is the only thing that ever
-// deletes a pinned blob, and it deletes only what no KEPT version names — so
-// the oldest rollback an app still offers always has its bytes.
+// An app keeps every version it ever deployed: a manifest is a few hundred
+// bytes, and git derives an app's commit chain from them (D-34942), so burying
+// the twenty-first would cut the history that promises. What KEEP bounds is
+// only how many a LIST shows at once.
+//
+// Bytes are kept by LIVENESS instead (T-34952): a blob lives while anything
+// names it — a deploy manifest, an entry in a path's history, a plugin's pins
+// — and the sweep recomputes that set from the referrers every time rather
+// than counting references, so a batch that died halfway is healed by the next
+// run instead of drifting forever.
 //
 // And the same machinery a size down (T-34508): every WRITE pins what it
 // replaced. A deploy is the release a person names; a write is the thing that
@@ -52,9 +59,16 @@ export type Version = {
   worker: string
 }
 
-// How many an app keeps. Twenty is a week of an agent's iterating and small
-// enough that the whole list is one read and one answer.
+// How many versions a list shows at once, and the floor under a path's history
+// (`trimmed`). Twenty is a week of an agent's iterating and small enough that
+// the page is one read and one answer.
 export let KEEP = 20
+
+// How long bytes nothing names are left alone anyway. A deploy pins its files
+// before it writes the row that names them, so an object minutes old may
+// belong to a deploy still in flight; a day is far longer than that gap and
+// costs one more day of bytes nobody wants.
+export let GRACE = 24 * 60 * 60_000
 
 // What the platform keeps BESIDE an app's files, under the app's own prefix:
 // the bytes a page uploaded (apps.ts `blobKey`), the bytes a version or a write
@@ -193,20 +207,20 @@ export let restored = (all: Version[], i: number) => {
 // Every version of an app, newest first.
 export let versions = (dir: Directory, app: App) => dir.deploys(app)
 
-// This deploy written down, and the versions past the last KEEP buried — then
-// the prune, which is the one place a pinned blob is ever deleted. The row and
-// the app's version counter go in one batch: the number an error names and the
-// number a rollback picks are the same number.
+// This deploy written down, and nothing else: no version is ever buried, and
+// the bytes are the daily sweep's to reckon about (`pruned`), not a deploy's —
+// a deploy that pruned its own pins would be deciding about bytes while it is
+// itself the reason the answer is about to change. The row and the app's
+// version counter go in one batch: the number an error names and the number a
+// rollback picks are the same number.
 export let record = async (
   dir: Directory,
-  blobs: Blobs,
-  prefix: string,
   who: Who,
   app: App,
   version: number,
   files: Files,
   worker: string,
-) => {
+) =>
   await dir.apply({
     entities: [
       { entity: { eid: app.eid }, app: { version } },
@@ -221,14 +235,6 @@ export let record = async (
       },
     ],
   }, vouched(who))
-  let old = (await versions(dir, app)).slice(KEEP)
-  if (old.length) {
-    await dir.apply({
-      entities: old.map((v) => ({ entity: { eid: v.eid }, tombstone: {} })),
-    }, vouched(who))
-  }
-  await pruned(dir, blobs, prefix, app)
-}
 
 // ---- what a write replaced (T-34508) ---------------------------------------
 
@@ -369,7 +375,23 @@ export let held = (all: Wrote[], at: number): Wrote | null => {
 
 /**
  * Every pinned blob nothing names any more, gone — the ONE place a pinned byte
- * is ever deleted, run on a deploy (above) and on the daily sweep (erase.ts).
+ * is ever deleted, run on the daily sweep (erase.ts `collected`) and nowhere
+ * else.
+ *
+ * MARK AND SWEEP, not reference counts (D-34942). The live set is recomputed
+ * from the referrers on every run: a count kept beside each write and delete
+ * drifts the first time a batch dies halfway and nothing can tell that it has,
+ * while a sweep that reads the referrers heals whatever the last one got
+ * wrong. Three things name a blob, and all three are asked here — every deploy
+ * manifest, every entry in a path's history, and every sha a plugin still
+ * points at (plugin.ts `pins`), which is the one a domain of its own could
+ * hold and neither of the others could say. A plugin that throws takes the
+ * sweep with it: not knowing what is named is never a reason to delete.
+ *
+ * The GRACE is the other half of "only what nothing names". A deploy pins its
+ * bytes and then writes the row that names them, so an object put moments ago
+ * may be a manifest still in flight; anything younger than a day is left
+ * alone whatever the mark says.
  *
  * It trims each path's history as it reads it, because what a blob is still
  * named by is exactly what the trim decides: the two cannot be separate passes
@@ -379,9 +401,13 @@ export let held = (all: Wrote[], at: number): Wrote | null => {
  * not under `versions/`, so this loop cannot reach them — and its pinned copy,
  * if nothing else names it, is a copy of bytes the app still has.
  *
- * What names a blob is not only this file's to know: a plugin says the shas it
- * still points at (plugin.ts `pins`) and they are kept beside the manifests and
- * the histories. `plugins` is the list it asks, which a test hands its own.
+ * The fourth referrer D-34942 names — an app's `blob` attachment rows — is not
+ * asked, because it cannot matter yet: an upload's bytes live under `blobs/`
+ * and a pin's under `versions/`, two key spaces this sweep cannot confuse.
+ * When both collapse into one global `sha/` key (T-34953) the store has to be
+ * read here, and that is the move that must add it.
+ *
+ * `plugins` is the list it asks, which a test hands its own.
  */
 export let pruned = async (
   dir: Directory,
@@ -405,22 +431,19 @@ export let pruned = async (
     }
     for (let w of keep) named.add(w.sha)
   }
-  // And every version the app still offers to put back, which is what makes
-  // the oldest rollback it offers work at all.
-  for (let v of (await versions(dir, app)).slice(0, KEEP)) {
+  // And every version the app can be put back to — all of them, since none is
+  // ever buried: the oldest rollback it offers has to have its bytes.
+  for (let v of await versions(dir, app)) {
     for (let sha of Object.values(v.files)) named.add(sha)
   }
-  // And every sha a PLUGIN still names (plugin.ts `pins`): bytes something of
-  // its own points at, which neither a manifest nor a path's history can say.
-  // A plugin that throws takes the sweep with it — not knowing what is named
-  // is never a reason to delete.
   for (let sha of await pinsOf(plugins, { dir, blobs, prefix, app, now })) {
     named.add(sha)
   }
   let at = `${prefix}versions/`
   let gone = 0
-  for (let key of await blobs.list(at)) {
+  for (let [key, landed] of Object.entries(await blobs.uploaded(at))) {
     if (named.has(key.slice(at.length))) continue
+    if (now - landed < GRACE) continue
     await blobs.delete(key)
     gone++
   }

@@ -10,4 +10,9 @@ export interface Blobs {
   get(key: string): Promise<Uint8Array<ArrayBuffer>>
   delete(key: string): Promise<void>
   list(prefix: string): Promise<string[]>
+  // The same listing with each object's age: key to the moment it landed, in
+  // epoch milliseconds. A retention sweep needs it (versions.ts `pruned`) —
+  // bytes written a minute ago may be a deploy whose row has not landed yet,
+  // and deleting those would take a version's files out from under it.
+  uploaded(prefix: string): Promise<Record<string, number>>
 }

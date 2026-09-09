@@ -14,6 +14,20 @@ import type { R2 } from './r2.ts'
 
 export type { R2 }
 
+// One walk of the prefix, every page of it, as key to when the object landed.
+// `list` is this with the times dropped, so the two answers can never disagree
+// about what is in the bucket.
+let walk = async (bucket: R2, prefix: string) => {
+  let at: Record<string, number> = {}
+  let cursor: string | undefined
+  do {
+    let page = await bucket.list({ prefix, cursor })
+    for (let o of page.objects) at[o.key] = o.uploaded.getTime()
+    cursor = page.truncated ? page.cursor : undefined
+  } while (cursor)
+  return at
+}
+
 export let r2Blobs = (bucket: R2): Blobs => ({
   has: async (key) => (await bucket.head(key)) != null,
   put: async (key, bytes) => {
@@ -31,14 +45,6 @@ export let r2Blobs = (bucket: R2): Blobs => ({
   delete: async (key) => {
     await bucket.delete(key)
   },
-  list: async (prefix) => {
-    let keys: string[] = []
-    let cursor: string | undefined
-    do {
-      let page = await bucket.list({ prefix, cursor })
-      keys.push(...page.objects.map((o) => o.key))
-      cursor = page.truncated ? page.cursor : undefined
-    } while (cursor)
-    return keys.sort()
-  },
+  list: async (prefix) => Object.keys(await walk(bucket, prefix)).sort(),
+  uploaded: (prefix) => walk(bucket, prefix),
 })

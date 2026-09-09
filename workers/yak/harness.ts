@@ -156,11 +156,19 @@ export let ai = (script: Turn[]) => {
   }
 }
 
-/** The bucket, as the slice `r2Blobs` asks for. */
+/**
+ * The bucket, as the slice `r2Blobs` asks for.
+ *
+ * `at` is when each object landed, which the retention sweep reads
+ * (versions.ts `pruned`); a test that wants an object to look old sets it,
+ * and everything else lands now.
+ */
 export let bucket = () => {
   let held = new Map<string, Uint8Array>()
+  let at = new Map<string, number>()
   return {
     held,
+    at,
     r2: {
       head: (k: string) => Promise.resolve(held.get(k) ?? null),
       get: (k: string) =>
@@ -169,15 +177,23 @@ export let bucket = () => {
             ? { arrayBuffer: () => Promise.resolve(held.get(k)!.buffer) }
             : null,
         ),
-      put: (k: string, v: ArrayBuffer | Uint8Array) =>
-        Promise.resolve(
-          void held.set(k, v instanceof Uint8Array ? v : new Uint8Array(v)),
-        ),
-      delete: (k: string) => Promise.resolve(void held.delete(k)),
+      put: (k: string, v: ArrayBuffer | Uint8Array) => {
+        held.set(k, v instanceof Uint8Array ? v : new Uint8Array(v))
+        if (!at.has(k)) at.set(k, Date.now())
+        return Promise.resolve()
+      },
+      delete: (k: string) => {
+        held.delete(k)
+        at.delete(k)
+        return Promise.resolve()
+      },
       list: ({ prefix }: { prefix: string }) =>
         Promise.resolve({
           objects: [...held.keys()].filter((k) => k.startsWith(prefix))
-            .map((key) => ({ key })),
+            .map((key) => ({
+              key,
+              uploaded: new Date(at.get(key) ?? Date.now()),
+            })),
           truncated: false,
         }),
     },

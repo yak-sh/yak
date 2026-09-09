@@ -923,10 +923,12 @@ export let directory = (via: Fetcher, now = false) => {
       }
       return out
     },
-    // Every deploy of an app, newest first — the versions app_versions lists
-    // and app_rollback picks from (versions.ts). Twenty at most, so the list
-    // is read whole and ordered here. Never cached: a deploy reads its own
-    // versions back the moment it writes one.
+    // Every deploy of an app, newest first — the versions app_versions pages
+    // through, app_rollback picks from, and the retention sweep marks live
+    // bytes off (versions.ts). None is ever buried, so this grows with the
+    // app; a manifest is a few hundred bytes and git derives its commit chain
+    // from them (D-34942). Never cached: a deploy reads its own versions back
+    // the moment it writes one.
     deploys: async (app: App) =>
       (await query(`.deploy.app=${app.eid}&.created?`, true))
         .map(deployOf)

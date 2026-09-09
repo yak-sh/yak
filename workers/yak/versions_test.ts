@@ -14,6 +14,7 @@ import type { Env } from './env.ts'
 import type { Plugin } from './plugin.ts'
 import type { Who } from './session.ts'
 import {
+  GRACE,
   held,
   history,
   KEEP,
@@ -33,30 +34,54 @@ let PREFIX = 'jeff/recipes/'
 let WHO: Who = { person: 'p1', role: 'owner' }
 let APP = { eid: 'a1', slug: 'recipes', version: 0 } as App
 
-// The blob seam in memory: no I/O, so the fast tier stays fast.
+// The blob seam in memory: no I/O, so the fast tier stays fast. `at` is when
+// each object landed, which the sweep's grace period reads — `clock` moves it,
+// so a test can put bytes that look a day old. `trips` counts what the seam was
+// asked, which is what the sweep costs per app.
 let memory = () => {
   let m = new Map<string, Uint8Array>()
+  let at = new Map<string, number>()
+  let clock = { now: Date.now() }
+  let trips = { list: 0, read: 0, put: 0, delete: 0 }
+  let keys = (prefix: string) =>
+    [...m.keys()].filter((k) => k.startsWith(prefix)).sort()
   let blobs: Blobs = {
     has: (k) => Promise.resolve(m.has(k)),
     put: (k, bytes) => {
+      trips.put++
       m.set(k, bytes)
+      at.set(k, clock.now)
       return Promise.resolve()
     },
-    read: (k) =>
-      Promise.resolve((m.get(k) ?? null) as Uint8Array<ArrayBuffer> | null),
+    read: (k) => {
+      trips.read++
+      return Promise.resolve(
+        (m.get(k) ?? null) as Uint8Array<ArrayBuffer> | null,
+      )
+    },
     get: (k) => {
       let v = m.get(k)
       if (!v) throw new Error(`no blob at ${k}`)
       return Promise.resolve(v as Uint8Array<ArrayBuffer>)
     },
     delete: (k) => {
+      trips.delete++
       m.delete(k)
+      at.delete(k)
       return Promise.resolve()
     },
-    list: (prefix) =>
-      Promise.resolve([...m.keys()].filter((k) => k.startsWith(prefix)).sort()),
+    list: (prefix) => {
+      trips.list++
+      return Promise.resolve(keys(prefix))
+    },
+    uploaded: (prefix) => {
+      trips.list++
+      return Promise.resolve(
+        Object.fromEntries(keys(prefix).map((k) => [k, at.get(k) ?? 0])),
+      )
+    },
   }
-  return { blobs }
+  return { blobs, clock, trips }
 }
 
 let bytes = (s: string) => new TextEncoder().encode(s)
@@ -169,11 +194,15 @@ Deno.test('a version made by a rollback says which one it restored', () => {
   assertEquals(restored(all, 0), 0, 'v4 changed nothing')
 })
 
-// The retention rule, which is the one that decides whether the oldest
-// rollback an app still offers works at all.
-Deno.test('past the last 20, only bytes no kept version names go', async () => {
-  let { blobs } = memory()
+// The retention rule (T-34952): a version is kept forever, because git derives
+// an app's commit chain from the manifests, and its bytes are kept as long as
+// it is — so the oldest rollback an app offers works however many deploys
+// later.
+Deno.test('no version is ever buried, and every one keeps its bytes', async () => {
+  let { blobs, clock } = memory()
   let { dir, rows } = directory()
+  // Two days back, so nothing the sweep sees is inside its grace period.
+  clock.now = Date.now() - 2 * GRACE
   // One file that never changes and one that changes every time, so each
   // version pins a byte set of its own beside a shared one.
   await blobs.put(PREFIX + 'style.css', bytes('body{}'))
@@ -182,12 +211,13 @@ Deno.test('past the last 20, only bytes no kept version names go', async () => {
     await blobs.put(PREFIX + 'index.html', bytes(`<h1>${n}</h1>`))
     let files = await snapshot(blobs, PREFIX)
     shared = files['style.css']
-    await record(dir, blobs, PREFIX, WHO, APP, n, files, '')
+    await record(dir, WHO, APP, n, files, '')
   }
   let kept = rows()
-  assertEquals(kept.length, KEEP)
-  assertEquals(kept.map((v) => v.version).sort((a, b) => a - b)[0], 4)
-  // Every kept version can still be put back.
+  assertEquals(kept.length, KEEP + 3)
+  assertEquals(kept.map((v) => v.version).sort((a, b) => a - b)[0], 1)
+  // Every version can still be put back, the first one included.
+  assertEquals(await pruned(dir, blobs, PREFIX, APP), 0)
   for (let v of kept) {
     for (let sha of Object.values(v.files)) {
       assert(
@@ -196,10 +226,9 @@ Deno.test('past the last 20, only bytes no kept version names go', async () => {
       )
     }
   }
-  // The unchanged file was named by the buried versions too, and stayed.
   assert(await blobs.has(`${PREFIX}versions/${shared}`))
-  // The three pages nothing names any more did not.
-  assertEquals((await blobs.list(`${PREFIX}versions/`)).length, KEEP + 1)
+  // One page per version, plus the stylesheet they all share.
+  assertEquals((await blobs.list(`${PREFIX}versions/`)).length, KEEP + 4)
 })
 
 // The worker's last hop. A dispatch namespace is remote-only, so what a
@@ -285,12 +314,13 @@ Deno.test('a write pins what it replaced, and a path answers its own past', asyn
 })
 
 Deno.test('the prune lets go only of bytes nothing names any more', async () => {
-  let { blobs } = memory()
+  let { blobs, clock } = memory()
   let { dir } = directory()
+  clock.now = Date.now() - 2 * GRACE
   // One deploy, so a version names the page it went out with.
   await blobs.put(PREFIX + 'index.html', bytes('<h1>shipped</h1>'))
   let one = await snapshot(blobs, PREFIX)
-  await record(dir, blobs, PREFIX, WHO, APP, 1, one, '')
+  await record(dir, WHO, APP, 1, one, '')
 
   // Then two writes over it, forty days apart, so one entry is inside the
   // window and one is well outside it.
@@ -330,11 +360,60 @@ Deno.test('the prune lets go only of bytes nothing names any more', async () => 
   }
 })
 
+// The liveness rule itself (T-34952, D-34942): what keeps a blob is that
+// something NAMES it, and never how recent it is — plus the day's grace that
+// keeps a deploy still in flight from being swept out from under.
+Deno.test('a blob lives while anything names it, and a day besides', async () => {
+  let { blobs, clock, trips } = memory()
+  let { dir } = directory()
+  clock.now = Date.now() - 2 * GRACE
+
+  // The first deploy, then enough after it that v1 is far past the page a
+  // version list shows.
+  await blobs.put(PREFIX + 'index.html', bytes('<h1>v1</h1>'))
+  let one = await snapshot(blobs, PREFIX)
+  await record(dir, WHO, APP, 1, one, '')
+  for (let n = 2; n <= KEEP + 3; n++) {
+    await blobs.put(PREFIX + 'index.html', bytes(`<h1>v${n}</h1>`))
+    await record(dir, WHO, APP, n, await snapshot(blobs, PREFIX), '')
+  }
+
+  // Bytes whose referrer is gone — an entry that aged out, a deploy that died
+  // before its row — and bytes a plugin still points at.
+  let orphan = 'a'.repeat(64)
+  let kept = 'b'.repeat(64)
+  await blobs.put(pinned(PREFIX, orphan), bytes('nobody names these'))
+  await blobs.put(pinned(PREFIX, kept), bytes('a plugin does'))
+  // And a deploy landing right now: its bytes are in the bucket, its row is
+  // not written yet, so nothing names them at all.
+  clock.now = Date.now() - 60 * 60_000
+  let flight = 'c'.repeat(64)
+  await blobs.put(pinned(PREFIX, flight), bytes('a deploy still in flight'))
+
+  let holder: Plugin = { name: 'holder', pins: [() => [kept]] }
+  let before = { ...trips }
+  assertEquals(await pruned(dir, blobs, PREFIX, APP, Date.now(), [holder]), 1)
+  assertEquals(await blobs.has(pinned(PREFIX, orphan)), false)
+  assert(await blobs.has(pinned(PREFIX, flight)), 'inside the day')
+  assert(await blobs.has(pinned(PREFIX, kept)), 'a plugin names it')
+  assert(
+    await blobs.has(pinned(PREFIX, one['index.html'])),
+    'v1 is past the page and still restorable',
+  )
+
+  // What the sweep costs an app: two listings of the bucket — the path logs
+  // and the pinned bytes — one read per log, and one delete per blob let go.
+  assertEquals(trips.list - before.list, 2)
+  assertEquals(trips.read - before.read, 0)
+  assertEquals(trips.delete - before.delete, 1)
+})
+
 // The third thing that can name a blob (plugin.ts `pins`): a domain holding
 // its own pinned bytes, which neither a manifest nor a path's history says.
 Deno.test('a plugin names bytes, and the sweep keeps them', async () => {
-  let { blobs } = memory()
+  let { blobs, clock } = memory()
   let { dir } = directory()
+  clock.now = Date.now() - 2 * GRACE
   await blobs.put(PREFIX + 'index.html', bytes('<h1>one</h1>'))
   // A write far outside the window, then KEEP writes after it, so its entry
   // ages out of the history and no version names its bytes either.
