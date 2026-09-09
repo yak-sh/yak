@@ -21,7 +21,7 @@ import { link, sentences } from './edge.ts'
 import { existsSync } from 'node:fs'
 import { type Change } from './types.ts'
 import { adapters } from './adapters.ts'
-import { dispatch, on, relay, trace } from './effects.ts'
+import { dispatch, fed, on, relay, trace } from './effects.ts'
 import { PENDING } from './deliver.ts'
 import { fakeClaude, fakeCodex } from './door_fake.ts'
 import { sessionRow, writeSession } from './session_store.ts'
@@ -65,6 +65,7 @@ let {
   landSpawnClaim,
   mergeDisposition,
   prepareWorktree,
+  processPending,
   reconfigured,
   reapLeases,
   recover,
@@ -115,7 +116,11 @@ let spawnRow = (eid: string) =>
     | undefined
 
 // The same curated list server.ts registers — the tests drive the wire.
-on('session', { created: spawned(cast), removed: deleted })
+on('session', {
+  created: spawned(cast),
+  removed: deleted,
+  sweep: { pending: processPending },
+})
 on('stop_request', {
   created: stopped(cast),
   sweep: { pending: PENDING('stop_request') },
@@ -417,7 +422,7 @@ slow('a new Codex spawn routes to the graph-native lifecycle', async () => {
       model: 'gpt-5.6-sol',
       requested_task: t,
     },
-  }])
+  }], fed())
   let pending = () =>
     !!db.prepare(
       `select 1 from session where entity = (select id from entity where eid = ?) and ${codexPending}`,
@@ -1089,6 +1094,47 @@ Deno.test('retired operator requests fail before any provider or workspace start
   assertEquals(failure(external), undefined)
   assertEquals(row(external)?.origin, 'external')
 })
+
+slow(
+  'boot launches an offline process request once, never later interactive metadata',
+  async () => {
+    let { t } = seed()
+    let requested = uid(), external = uid()
+    apply(db, [{
+      eid: requested,
+      name: 'session',
+      comp: {
+        id: uid(),
+        provider: 'fake',
+        model: 'fake-fast',
+        requested_task: t,
+      },
+    }], fed())
+    apply(db, [{
+      eid: external,
+      name: 'session',
+      comp: { id: uid(), cwd: scratch, requested_task: t },
+    }], fed())
+    apply(db, [{
+      eid: external,
+      name: 'spawn',
+      comp: { provider: 'fake', model: 'fake-fast' },
+    }], fed())
+    let pending = () =>
+      sweepRows(db, 'session', processPending).map((r) => r.eid)
+    assert(pending().includes(requested))
+    assertEquals(pending().includes(external), false)
+    await relay((name, where) => sweepRows(db, name, where))
+    assertEquals(row(requested)?.status, 'completed')
+    assertEquals(row(external)?.origin, 'external')
+    assertEquals(row(external)?.status, null)
+    assertEquals(logOf(external).entries, [])
+    let first = logOf(requested).entries
+    await relay((name, where) => sweepRows(db, name, where))
+    assertEquals(logOf(requested).entries, first)
+    assertEquals(pending().includes(requested), false)
+  },
+)
 
 slow('a canonical fake session dual-materializes and runs', async () => {
   let { t } = seed()

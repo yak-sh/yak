@@ -1,31 +1,27 @@
-// The CLI's local-read arm (T-22497, D-22388 step 2a): when this process
-// stands beside the graph file itself, pure reads answer from the db —
-// read-only, in-process, the same query pipeline the server runs — and a
-// stopped or busy server stops being a read dependency. Writes never ride the
-// arm: /apply stays the one write door, so lease checks, effects and broadcast
-// keep one home, and read-triggered stamps (opened, notified) stay wire writes.
+// The CLI's local graph arm: reads and mutations use the server's SQLite
+// kernels when the caller names a graph file on this machine. Mutations carry
+// a fed trace so the server and effects daemon observe the committed journal;
+// this process never executes effects or migrates the database.
 //
-// Eligibility is the caller's own naming, decided by armPath(): an explicit
-// DB_PATH names a graph FILE (probe discipline pairs it with a probe server),
-// so local reads are exactly right; a TASKS_HOST naming some OTHER server
-// with no DB_PATH names a graph whose file this process cannot know, so every
-// read stays on the wire; neither set — or TASKS_HOST naming the default
-// host — is the live pairing (liveDb ↔ DEFAULT_HOST). The default host is not
-// a remote: every spawned agent used to carry TASKS_HOST=127.0.0.1:5173 from
-// the launcher and so never armed, paying the server a burst of /query
-// requests per boot digest.
-// ':memory:' never arms — a private empty db is not the server's memory graph
-// — and TASKS_LOCAL=0 turns the arm off outright.
+// An explicit DB_PATH selects that file, while an explicit remote TASKS_HOST
+// without DB_PATH keeps every operation on HTTP. The default host pairs with
+// the owner graph. :memory: and TASKS_LOCAL=0 disable local access.
 //
-// The db opens READ-ONLY (sqlite.ts Options) and never migrates: schema changes
-// belong to an explicit open() at process boot (D-22388).
-// Version skew needs no handshake — a query against a schema this build does
-// not know throws, guarded() answers it over the wire and disarms, and the
-// local error only surfaces when the wire fails too, so a dead server still
-// reports the local truth (a filter typo, not ECONNREFUSED).
+// Reads retain their wire fallback on schema skew. A local write validates the
+// schema before mutation and surfaces any error directly: retrying a write over
+// HTTP could repeat a commit whose response failed after the transaction.
 import { DatabaseSync, liveDb } from './store/sqlite.ts'
 import { resolve } from 'node:path'
-import { depsOf, eager, journalBy, journalOf, scanAnomalies } from './db.ts'
+import {
+  depsOf,
+  eager,
+  journalBy,
+  journalOf,
+  mutate,
+  scanAnomalies,
+  schemaVersion,
+} from './db.ts'
+import { fed } from './effects.ts'
 import { localQuery } from './graph_query.ts'
 import { catalog } from './catalog.ts'
 import {
@@ -92,7 +88,10 @@ async (...a: A): Promise<R> => {
   }
 }
 
+let close: (() => void) | undefined
+
 export let disarm = () => {
+  arm.mutate = undefined
   arm.query =
     arm.work =
     arm.deps =
@@ -104,6 +103,8 @@ export let disarm = () => {
     arm.telemetryStats =
     arm.providers =
       undefined
+  close?.()
+  close = undefined
 }
 
 // The deps=1 layer's edge set, locally: the same depsOf + quarantine screen
@@ -121,16 +122,37 @@ async (eids, reveal = false) =>
 // armed — the wire remains, and nothing is worse than before. Mirrors
 // connect()'s refusal to touch the live graph under a test main module.
 export let armLocal = (path = envPath()): boolean => {
+  disarm()
   if (!path) return false
   if (
     Deno.mainModule.endsWith('_test.ts') && resolve(path) == resolve(liveDb())
   ) return false
   let db: DatabaseSync
+  let writer: DatabaseSync | undefined
   try {
     db = new DatabaseSync(path, { readOnly: true })
     db.exec('pragma busy_timeout = 5000')
   } catch {
     return false
+  }
+  close = () => {
+    writer?.close()
+    db.close()
+  }
+  // deno-lint-ignore require-await
+  arm.mutate = async (mutation, via) => {
+    // SQLITE_OPEN_CREATE is off: a missing graph is never silently replaced.
+    if (!writer) {
+      writer = new DatabaseSync(path, { create: false })
+      writer.exec('pragma busy_timeout = 5000')
+    }
+    if (writer.version != schemaVersion) {
+      throw new Error(
+        `local database schema version ${writer.version} does not match ` +
+          `CLI version ${schemaVersion}; use matching code or TASKS_LOCAL=0`,
+      )
+    }
+    return mutate(writer, mutation, fed(), via)
   }
   arm.query = guarded(localQuery(db), httpQuery)
   let query = localQuery(db)

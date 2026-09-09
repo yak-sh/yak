@@ -252,15 +252,11 @@ export let readTelemetry = (opts: TelemetryOpts = {}): Promise<Log[]> =>
 export let readTelemetryStats = (opts: TelemetryOpts = {}): Promise<Stat[]> =>
   arm.telemetryStats ? arm.telemetryStats(opts) : httpTelemetryStats(opts)
 
-// The local-read arm (T-22497, D-22388 step 2a): localread.ts arms these at
-// CLI boot when the process stands beside the graph file itself, and pure
-// reads answer from the db with no server in the path. Unset — the MCP server,
-// a remote TASKS_HOST, any process that never armed — each door runs its wire
-// form. Writes never ride the arm: /apply stays the one write door, so lease
-// checks, effects and broadcast keep one home. The armed functions carry their
-// own wire fallback and disarm on skew (localread.ts guarded), so these
-// routers stay one line.
+// The CLI's local graph arm uses the same query and mutation kernels as HTTP.
+// Processes with no known local graph keep their wire implementations. Reads
+// may fall back on schema skew; writes never retry after entering the kernel.
 export let arm: {
+  mutate?: typeof httpMutate
   query?: Querier
   work?: (
     lane: NonNullable<QueryOpts['work']>,
@@ -629,7 +625,7 @@ export let me = (
 // actor it acts for (attribution, never auth). The CLI's standing
 // identity is me() — hooks and spawned agents get their writes
 // attributed without asking.
-export let mutate = async <T extends Mutation>(
+export let httpMutate = async <T extends Mutation>(
   mutation: T,
   via = me(),
 ): Promise<MutationOutput<T>> => {
@@ -649,6 +645,12 @@ export let mutate = async <T extends Mutation>(
       : { changes: out.changes, aliases: out.aliases ?? {} }
   ) as MutationOutput<T>
 }
+
+export let mutate = <T extends Mutation>(
+  mutation: T,
+  via = me(),
+): Promise<MutationOutput<T>> =>
+  arm.mutate ? arm.mutate(mutation, via) : httpMutate(mutation, via)
 
 export let send = async (changes: Change[], via = me()) =>
   await mutate(changes, via)

@@ -3745,9 +3745,8 @@ if (import.meta.main) {
   // registrars are in place when a verb runs (D-18663 seam 1). Inert by
   // default: no TASKS_PLUGINS means an empty list and no imports.
   await loadPlugins(pluginSpecifiers())
-  // Arm local reads before dispatch: every pure read below answers from the
-  // graph file itself when this box holds it (localread.ts decides), so a
-  // stopped server still shows the board. Writes stay on the wire regardless.
+  // Use the local graph when this box holds it, including journaled writes.
+  // The server and effects daemon observe those commits through their feeds.
   armLocal()
   let [cmd, ...rest] = argv
   try {

@@ -1905,17 +1905,37 @@ export let landSpawnClaim = (
   }
 }
 
-// Boot reconciliation for a graph-native launch request whose created(session)
-// effect was lost. Lifecycle-bearing Codex rows belong to the process
-// compatibility door; a graph-native request stays statusless.
-export let codexPending = `
+// Boot replay admits only an unhandled launch request recorded in its birth
+// transaction. Later interactive tracking metadata never creates launch intent.
+// The journal's fed trace distinguishes requested effects from fixture/import
+// writes that deliberately ran without them.
+let spawnPending = `
   status is null and pid is null
-  and (requested_task is not null or role is not null)
+  and not exists (select 1 from error where error.entity = session.entity)
+  and exists (
+    select 1 from journal_change c
+    join journal_tx t on t.id = c.tx
+    join journal_field f on f.change = c.id
+    where c.entity = session.entity and c.component = 'session'
+      and c.operation = 'upsert' and f.field = 'provider'
+      and f.present = 1 and json_extract(f.value, '$') is not null
+      and exists (
+        select 1 from json_each(t.trace, '$.created') born
+        where born.value = 'session ' || (select eid from entity where id = session.entity)
+      )
+  )`
+
+// Process launches stamp started_at before asynchronous preparation. A replay
+// cannot cross that boundary twice; recover() owns anything already started.
+export let processPending = `${spawnPending} and started_at is null`
+
+// Graph-native preparation may have stamped started_at before its first entry.
+// The runner's durable entries are its replay boundary instead.
+export let codexPending = `${spawnPending}
   and exists (
     select 1 from spawn where spawn.entity = session.entity
       and spawn.provider in ('codex', 'codex-cli', 'ollama')
   )
-  and not exists (select 1 from error where error.entity = session.entity)
   and (
     base_revision is null
     or not exists (

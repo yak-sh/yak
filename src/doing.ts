@@ -54,6 +54,7 @@ import {
   deleted,
   graphCodex,
   type Launch,
+  processPending,
   reapLeases,
   reconfigured,
   recover,
@@ -208,6 +209,7 @@ export let wireDoing = (d: Doing) => {
       if (!nativeSpawn(eid)) return spawned(cast)(eid, comp)
     },
     removed: deleted,
+    sweep: { pending: processPending },
     doc: 'a session created with a process spawn spec is a launch request — ' +
       'validate, launch the agent; a deleted session stops its process',
   })
