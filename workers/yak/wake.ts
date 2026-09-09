@@ -20,7 +20,9 @@ export let sweepDoc: VocabDoc = {
   $defs: {
     sweep: {
       type: 'object',
-      properties: { kind: { type: 'string', enum: ['meter', 'trash'] } },
+      properties: {
+        kind: { type: 'string', enum: ['git', 'meter', 'trash'] },
+      },
     },
   },
 }

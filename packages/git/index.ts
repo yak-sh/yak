@@ -45,6 +45,17 @@ export type Mint = Omit<Commit, 'tree' | 'parents'> & {
   parents?: Oids[]
 }
 
+/**
+ * What writing objects asks of a graph: a query and a batch, and nothing else.
+ *
+ * Narrower than `Graph` on purpose. The object index is the same code whether
+ * the graph is in this process or behind a door — a Durable Object's `/query`
+ * and `/apply` answer both of these — and a parameter that demanded a whole
+ * `Graph` would have made a remote caller invent a storage and a vocabulary it
+ * has no use for.
+ */
+export type Writes = Pick<Graph, 'read' | 'apply'>
+
 /** Writing objects into one graph and one byte store. */
 export type Index = {
   /** the git blob object over bytes the store already holds */
@@ -82,7 +93,7 @@ let sha256 = async (bytes: Uint8Array<ArrayBuffer>): Promise<string> =>
  * // let head = await git.commit({ tree, author, committer, message: 'deploy 1' })
  * ```
  */
-export let index = (g: Graph, store: Blobs): Index => {
+export let index = (g: Writes, store: Blobs): Index => {
   // The bytes of a body we minted, under their own address. A blob object's
   // bytes are already there under the same address, which is why this is only
   // ever called for trees and commits.

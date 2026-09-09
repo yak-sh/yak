@@ -35,6 +35,13 @@ export type Dispatch = { get(name: string): Fetcher }
  * plugins that reaches the directory (plugin.ts). */
 export let PLATFORM_STORE = 'yak/platform'
 
+/** The store the git object graph lives in (git.ts, D-34943). One object for
+ * the whole platform, because a git object is named by its own bytes: the same
+ * blob deployed by two apps in two spaces is one row, and a graph that were
+ * per-app or per-space could not say so. Refs are the directory's — access to
+ * an app is decided there — so this object holds objects and nothing else. */
+export let GIT_STORE = 'yak/git'
+
 export type Stub = { fetch(req: Request): Promise<Response> }
 export type Namespace = {
   idFromName(name: string): unknown

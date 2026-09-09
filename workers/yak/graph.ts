@@ -132,7 +132,7 @@ import { PLUGINS } from './plugins.ts'
 import type { Env } from './env.ts'
 import { seeded } from './wake.ts'
 import type { Binding } from './post.ts'
-import { doorOf, type Namespace, PLATFORM_STORE } from './door.ts'
+import { doorOf, GIT_STORE, type Namespace, PLATFORM_STORE } from './door.ts'
 import { type Meta, metaOf } from './meta.ts'
 import { apex, url } from './host.ts'
 import {
@@ -172,11 +172,31 @@ import {
   appDerived,
   appDoc,
   appVocab,
+  gitVocab,
   grew,
   platformVocab,
   shortOf,
   teach,
 } from './vocab.ts'
+
+/**
+ * Which words an object wakes with, from the one thing that decides it: WHICH
+ * OBJECT IT IS. Two names on this platform are not apps — the directory
+ * (`yak/platform`) and the git object graph (`yak/git`, D-34943) — and each
+ * speaks its own vocabulary instead of an app's `vocab.json`. Every other name
+ * is an app.
+ *
+ * It is a function rather than two branches because both places that build a
+ * store — the boot, and the migration that carries one across (`carry`) — have
+ * to answer it the same way, and a third store would otherwise be a word added
+ * in one of them and forgotten in the other.
+ */
+export let vocabOfStore = (name: string, declared: unknown = {}): Vocab =>
+  name == PLATFORM_STORE
+    ? platformVocab()
+    : name == GIT_STORE
+    ? gitVocab()
+    : appVocab(declared)
 
 /**
  * The slice of a `DurableObjectState` this object needs: its storage, and its
@@ -440,18 +460,24 @@ export class Store {
 
   #build() {
     let ctx = this.#ctx
-    // Which words this object speaks is a question of WHICH OBJECT it is. One
-    // store on the platform is the directory (the meta space, T-33814): it
-    // wakes with the platform's own vocabulary, which declares the uniques its
-    // races are decided by. Every other object is an app, and wakes with the
-    // core plus whatever its `vocab.json` declared.
-    let meta = this.#get('name') == PLATFORM_STORE
-    let vocab = meta ? platformVocab() : appVocab(this.#get('vocab') ?? {})
+    // Which words this object speaks is a question of WHICH OBJECT it is
+    // (`vocabOfStore`). One store on the platform is the directory (the meta
+    // space, T-33814); one is the git object graph (D-34943); every other
+    // object is an app, and wakes with the core plus whatever its `vocab.json`
+    // declared.
+    let name = this.#get('name') ?? ''
+    let meta = name == PLATFORM_STORE
+    // Neither of the two is an APP, which is what the app-shaped extras below
+    // are for: `task.status` is an expression over words a git object graph
+    // does not have, and `vocab.json` is not a sentence to say to a caller of
+    // either one.
+    let own = meta || name == GIT_STORE
+    let vocab = vocabOfStore(name, this.#get('vocab') ?? {})
     let drive = driver(ctx.storage)
     this.#drive = drive
     let bytes = sqliteBlobs(drive)
     let store = storage(ctx.storage, vocab, {
-      derived: { ...blobRead(vocab), ...(meta ? {} : appDerived()) },
+      derived: { ...blobRead(vocab), ...(own ? {} : appDerived()) },
       // A body is stored as its address (@yaks/blob `store: "blob"`), so the
       // search index is told how to read one back as prose — or it would hold
       // hashes and a search would find a body by its title alone (T-33978).
@@ -520,7 +546,7 @@ export class Store {
         // is left out: its words are the platform's own, its callers are the
         // kernel's own, and `vocab.json` is not a sentence to say to any of
         // them.
-        ...(meta ? [] : [this.#teaching]),
+        ...(own ? [] : [this.#teaching]),
         // Before every check, because it is about the SHAPE a value arrived in.
         this.#lowering,
         edges(vocab),
@@ -1053,9 +1079,7 @@ export class Store {
       (storage, o) =>
         carry(storage, {
           ...o,
-          vocab: name == PLATFORM_STORE
-            ? platformVocab()
-            : appVocab(this.#get('vocab') ?? {}),
+          vocab: vocabOfStore(name, this.#get('vocab') ?? {}),
           // A build failure must unwind the whole carry transaction.
           plant: () => this.#build(),
           grantEid,

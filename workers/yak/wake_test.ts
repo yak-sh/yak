@@ -9,6 +9,7 @@ import { Store } from './graph.ts'
 import { platform, state } from './harness.ts'
 import { meta } from './meta.ts'
 import type { Plugin, Wake } from './plugin.ts'
+import { wakesOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import { GRAPHQL } from './usage.ts'
 import { scheduled } from './wake.ts'
@@ -94,7 +95,12 @@ Deno.test('seeded wake rows survive a directory restart without rewinding or res
   await scheduled(beat('04:20'), env)
   assertEquals((await wake(env, 'yak-trash')).wake?.at, null)
   assertEquals((await wake(env, 'yak-trash')).wake?.note, 'paused by the owner')
-  assertEquals((await meta(env).query('.wake')).length, 2)
+  // Every seeded row still stands: a restart re-seeds nothing and drops
+  // nothing, whatever the list happens to hold.
+  assertEquals(
+    (await meta(env).query('.wake')).length,
+    wakesOf(PLUGINS).length,
+  )
 })
 
 Deno.test('the meter wake runs its job at the supplied hour through the scheduled path', async () => {

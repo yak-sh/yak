@@ -140,8 +140,14 @@ let kinds = (sent: Frame[]) =>
       : 'ready'
   )
 
+// A whole build: three tools, a worker upload, and — since T-34950 — the
+// commit a deploy mints in the git object store, which is another object
+// waking up. The budget is only here so a stall fails instead of hanging, so
+// it is wide enough to hold the act on a loaded box rather than tight enough
+// to time it.
 let settled = (ws: { sent: Frame[] }) =>
   until(() => ws.sent.some((f) => 'done' in f), {
+    timeout: 10_000,
     label: () => `the build never finished: ${kinds(ws.sent).join(', ')}`,
   })
 

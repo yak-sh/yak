@@ -54,6 +54,7 @@ import { aliasDoc } from '@yaks/alias'
 import { blobKeywords } from '@yaks/blob'
 import { docDoc } from '@yaks/doc'
 import { EDGE_URI, edgeDoc, edgeKeywords } from '@yaks/edge'
+import { gitDoc } from '@yaks/git'
 import { idKeywords } from '@yaks/id'
 import { keyDoc, keyKeywords } from '@yaks/key'
 import { mailDoc } from '@yaks/mail'
@@ -780,6 +781,23 @@ export let platformDocs: VocabDoc[] = [
  * in is the meta store (graph.ts).
  */
 export let platformVocab = (): Vocab => loadVocab(platformDocs, appKeywords)
+
+// ---- the git object graph's store (D-34943) ---------------------------------
+
+/** What the git object store speaks: @yaks/git's words, the two carriers they
+ * ride (an `entry` and a `parent` are @yaks/edge links, a `compat` oid is a
+ * @yaks/key value), and the spine.
+ *
+ * It is NOT built on {@link coreDocs}, and the reason is one word: `blob`. The
+ * platform means a page's upload by it ({@link kernelDoc}) and @yaks/git means
+ * where an object's bytes are — one name, two meanings, so the two vocabularies
+ * cannot be loaded together and this store loads only the one it needs. Nothing
+ * is lost: this object holds git objects, and a git object has no title, no
+ * mailbox and no members. */
+export let gitDocs: VocabDoc[] = [coreDoc, edgeDoc, keyDoc, aliasDoc, gitDoc]
+
+/** The git object store's whole vocabulary (graph.ts, {@link gitDocs}). */
+export let gitVocab = (): Vocab => loadVocab(gitDocs, appKeywords)
 
 // What a column ADMITS, as a comparison makes it: the closed set, or the type.
 // The same rule reach.ts `colsOf` holds two spaces to.

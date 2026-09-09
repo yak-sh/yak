@@ -14,6 +14,7 @@
     "@yaks/edge": "../../packages/edge/mod.ts",
     "@yaks/effects": "../../packages/effects/mod.ts",
     "@yaks/fts": "../../packages/fts/mod.ts",
+    "@yaks/git": "../../packages/git/mod.ts",
     "@yaks/graph": "../../packages/graph/mod.ts",
     "@yaks/html": "../../packages/html/mod.ts",
     "@yaks/id": "../../packages/id/mod.ts",
