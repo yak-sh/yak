@@ -984,9 +984,40 @@ export let manuals = declare({
       'task session brief --body=@-',
       'task session turn idle',
       'task session wrap',
+      'task session wait S-12 --timeout 900',
     ],
     root: true,
     args: [arg('command', text, true, false)],
+  },
+  'session wait': {
+    about:
+      'block until a session is over, print its brief; exit 0 on a quiet ' +
+      'end, non-zero on a failure (the coordinator wake path: run it in the ' +
+      'background, its exit is the notification)',
+    args: [arg('id', id)],
+    opts: [
+      value('--timeout', num, true),
+      value('--interval', num, true),
+      json,
+    ],
+  },
+  sessions: {
+    about:
+      'the newest sessions, one line each, with status derived the same way ' +
+      'for the legacy comp set and native transcripts',
+    examples: ['task sessions', 'task sessions -n 50 --live'],
+    root: true,
+    args: [],
+    opts: [count, flag('--live'), json],
+  },
+  tail: {
+    about:
+      "a session's transcript: the last N entries, then each new one with " +
+      '--follow until the session is over',
+    examples: ['task tail S-12', 'task tail S-12 -n 5 --follow'],
+    root: true,
+    args: [arg('id', id)],
+    opts: [count, flag('--follow'), value('--interval', num, true)],
   },
   'session context': {
     about: 'reify and print the session digest',

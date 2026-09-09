@@ -154,6 +154,11 @@ import { commands, focusOf, run as runCommand } from './commands.ts'
 import { renderEntry, seqRange, type Sift, transcribe } from './log_text.ts'
 import { type EntryRow, graphLog, pageEntries } from './entry_log.ts'
 import {
+  sessions as sessionsVerb,
+  tail as tailVerb,
+  wait as sessionWait,
+} from './session_cli.ts'
+import {
   cliVerbs,
   help,
   manuals,
@@ -3787,6 +3792,9 @@ export let verbs = bind({
   'session brief': sessionBrief,
   'session peek': sessionPeek,
   'session turn': sessionTurn,
+  'session wait': sessionWait,
+  sessions: sessionsVerb,
+  tail: tailVerb,
   role,
   'role stop': (got) => roleState('stop', got),
   'role start': (got) => roleState('start', got),
