@@ -57,6 +57,7 @@ import type {
 } from '@yaks/query'
 import { bare } from '@yaks/query'
 import type { Assoc, Hop, Vocab } from '@yaks/vocab'
+import { Unknown } from '@yaks/vocab'
 import {
   and,
   type Bind,
@@ -254,9 +255,10 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   if (op == 'want') return TRUE // a projection request; the door hydrates it
   if (!hop.prop) {
     // A bundle matcher can inspect an undeclared facet; SQL needs its table.
-    if (!ctx.v.comp(hop.comp)) {
-      throw new Unsupported('an undeclared component', hop.comp)
-    }
+    // Nothing else can answer this one, so it is a REFUSAL and not a decline:
+    // the word is simply not in this vocabulary, and the sentence is the
+    // vocabulary's own — the same line `route()` prints, at every door.
+    if (!ctx.v.comp(hop.comp)) throw new Unknown(hop.comp)
     ctx.tables.add(hop.comp)
     let eid = ctx.d.col(hop.comp, 'eid', ctx.v)!
     let present = op == '~' || op == EXISTS

@@ -5,7 +5,7 @@
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { parse } from '@yaks/query'
-import { loadVocab } from '@yaks/vocab'
+import { loadVocab, Unknown } from '@yaks/vocab'
 import type { VocabDoc } from '@yaks/vocab'
 import { ARMS, compile, type Derived, Unsupported } from './mod.ts'
 
@@ -347,10 +347,12 @@ Deno.test('a request for a word this vocabulary never planted asks, and passes',
   let { sql } = compile(parse('.task!&.loan?'), v)
   assert(!sql.includes('loan'), sql)
   // The assertion form still refuses: an empty answer would say there are none.
+  // The refusal is the vocabulary's own sentence, so a door prints one line
+  // whether the word was routed away or bound away.
   assertThrows(
     () => compile(parse('.loan!'), v),
-    Unsupported,
-    'an undeclared component: loan',
+    Unknown,
+    'unknown prop: .loan',
   )
   // And so does a request that is not a bare component name.
   assertThrows(() => compile(parse('.loan.to?'), v))

@@ -24,6 +24,19 @@ import type {
 import type { Keywords } from './keywords.ts'
 import { kindOrder as deriveKindOrder } from './order.ts'
 
+/** A word this vocabulary does not know. One sentence for every door, minted
+ * here because the vocabulary is what decides: `route()` when nothing claims
+ * the bare spelling, and a binder (@yaks/sql) when a presence form names a
+ * component it has no table for. `prop` is the word, unadorned. */
+export class Unknown extends Error {
+  prop: string
+  constructor(prop: string) {
+    super(`unknown prop: .${prop}`)
+    this.prop = prop
+    this.name = 'Unknown'
+  }
+}
+
 // The extension keywords a registration admits, picked off a schema verbatim.
 // A keyword the caller did not register is invisible: the loader carries what
 // somebody asked for and nothing else.
@@ -364,7 +377,7 @@ export let loadVocab = (
       }
       if (routes.has(prop)) return { comp: prop, prop: '' }
       if (prop == EID && routes.has(SPINE)) return { comp: SPINE, prop: EID }
-      throw new Error(`unknown prop: .${prop}`)
+      throw new Unknown(prop)
     },
     // A dotted path → the hops it names, one rule per step: a segment naming a
     // COMPONENT with another segment behind it is the explicit `comp.prop`
