@@ -6,6 +6,7 @@ import {
   type EntryRow,
   graphLog,
   pageEntries,
+  sessionStateOf,
   standingOf,
 } from './entry_log.ts'
 
@@ -432,4 +433,30 @@ Deno.test('bounded standing window equals the whole-log scan', () => {
 
   // Empty log: idle, window is the (empty) whole log.
   equiv([], 'idle')
+})
+
+Deno.test('stop consumes queued input without losing the interrupted turn', () => {
+  let rows = [
+    row('input', 1, { message: { role: 'user' } }),
+    row('gen', 2, { generation: { through: 'input' }, delivered: { at: 'x' } }),
+    row('call', 3, { output: { source: 'gen' }, call: { key: 'c' } }),
+    row('result', 4, { result: { call: 'call' }, content: { body: 'ok' } }),
+    row('queued', 5, { attention: {} }),
+    row('stop', 6, { cancel: { target: 'gen' } }),
+  ]
+  equiv(rows, 'terminal')
+  assertEquals(sessionStateOf(rows), {
+    standing: 'terminal',
+    end: 'interrupted',
+  })
+  assertEquals(
+    sessionStateOf([
+      ...doneTurn(1),
+      row('queued', 4, { attention: {} }),
+      row('stop', 5, { cancel: { target: 'gen1' } }),
+    ]),
+    { standing: 'terminal', end: 'interrupted' },
+  )
+  equiv([...rows, row('resume', 7, { attention: {} })], 'idle')
+  equiv([...rows, row('resume', 7, { message: { role: 'user' } })], 'idle')
 })

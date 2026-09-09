@@ -11,8 +11,10 @@ import {
   settleGeneration,
   takeEntry,
 } from './entries.ts'
-import { graphLog } from './entry_log.ts'
+import { graphLog, sessionStateOf } from './entry_log.ts'
 import {
+  advanceable,
+  attention,
   graphSession,
   managedCodex,
   type ManagedCodexOptions,
@@ -1167,6 +1169,370 @@ slow(
     db.close()
   },
 )
+
+// Seed a turn at a scheduler boundary without running a provider. Settled
+// calls reproduce the gap where no ready entry or lease represents the turn.
+let stoppingTurn = (
+  state: 'ready' | 'leased' | 'settled',
+  requested = true,
+) => {
+  let db = freshDb(), sid = session(db), runner = uuid()
+  apply(db, [{ eid: runner, name: 'runner', comp: { name: 'stop-test' } }])
+  let input = append(db, sid, [{
+    message: { role: 'user' },
+    content: { body: 'keep this instruction' },
+  }]).eids[0]
+  let generation = append(db, sid, [{
+    generation: { through: input, provider: 'codex', model: 'test' },
+  }]).eids[0]
+  let won = takeEntry(db, generation, runner, 60_000)!
+  let call = append(db, sid, [{
+    output: { source: generation },
+    call: { key: 'stop-call' },
+    bash: { command: 'echo ignored' },
+  }]).eids[0]
+  settleGeneration(db, won.token)
+  if (state == 'leased') takeEntry(db, call, runner, 60_000)
+  if (state == 'settled') {
+    append(db, sid, [{ result: { call }, content: { body: 'tool finished' } }])
+  }
+  let request = uuid()
+  if (requested) {
+    apply(db, [{ eid: request, name: 'stop_request', comp: { target: sid } }])
+  }
+  return { db, sid, runner, input, generation, call, request }
+}
+
+for (let state of ['ready', 'leased', 'settled'] as const) {
+  for (let queued of ['none', 'attention', 'message'] as const) {
+    Deno.test(`stop holds a ${state} tool turn with ${queued} queued until new input`, async () => {
+      let { db, sid, runner, generation, call, request } = stoppingTurn(state)
+      let calls = 0, called: string[] = []
+      if (queued != 'none') {
+        append(db, sid, [
+          queued == 'attention' ? { attention: {} } : {
+            message: { role: 'user' },
+            content: { body: 'keep this queued instruction' },
+          },
+        ])
+      }
+      let history = readEntries(db, sid)
+      for (let row of history) delete row.comps.lease
+      let service = managedCodex({
+        db,
+        runner,
+        cast: () => {},
+        transport: {
+          run: () => {
+            calls++
+            return Promise.resolve(result([{
+              type: 'message',
+              content: [{ type: 'output_text', text: 'resumed' }],
+            }]))
+          },
+        },
+        tools: () => Promise.resolve(tools(called)),
+        prepare: () => Promise.resolve(),
+      })
+      try {
+        assertEquals(service.stop(request, sid), true)
+        let stopped = readEntries(db, sid)
+        assertEquals(
+          stopped.filter((r) => r.comps.cancel).map((r) =>
+            r.comps.cancel.target
+          ).sort(),
+          (state == 'settled' ? [generation] : [generation, call]).sort(),
+        )
+        assertEquals(readComp(db, request, 'delivered')?.via, 'cancelled')
+        assertEquals(advanceable(db, sid), [])
+        assertEquals(sessionStateOf(stopped), {
+          standing: 'terminal',
+          end: 'interrupted',
+        })
+        assertEquals(stopped.filter((r) => !r.comps.cancel), history)
+        await service.sweep()
+        assertEquals(calls, 0)
+        assertEquals(called, [])
+        assertEquals(readEntries(db, sid), stopped)
+
+        // A fresh notice must not deduplicate against an older stopped notice.
+        assert(attention(db, sid, () => {}, runner).length)
+        let resumed = readEntries(db, sid)
+        assertEquals(
+          service.stop(request, sid),
+          true,
+          'delivered replay is inert',
+        )
+        assertEquals(readEntries(db, sid), resumed)
+        await service.sweep()
+        assertEquals(calls, 1)
+        assertEquals(called, [])
+        assertEquals(
+          readEntries(db, sid).at(-1)?.comps.content?.body,
+          'resumed',
+        )
+      } finally {
+        await service.settle()
+        db.close()
+      }
+    })
+  }
+}
+
+Deno.test('stop aborts a running tool and refuses its late result or another generation', async () => {
+  let { db, sid, runner, request } = stoppingTurn('ready', false)
+  let started = Promise.withResolvers<void>(), aborted = false
+  let service = managedCodex({
+    db,
+    runner,
+    cast: () => {},
+    transport: {
+      run: () => {
+        throw new Error('provider must stay idle')
+      },
+    },
+    tools: () =>
+      Promise.resolve({
+        ...tools([]),
+        call: (_name, _args, context) => {
+          started.resolve()
+          return new Promise((resolve) => {
+            context?.signal?.addEventListener('abort', () => {
+              aborted = true
+              resolve({ output: 'late tool result' })
+            }, { once: true })
+          })
+        },
+      }),
+    prepare: () => {
+      throw new Error('prepare must stay idle')
+    },
+  })
+  let running = service.sweep()
+  try {
+    await started.promise
+    apply(db, [{ eid: request, name: 'stop_request', comp: { target: sid } }])
+    service.stop(request, sid)
+    await running
+    assert(aborted)
+    assertEquals(readEntries(db, sid).filter((r) => r.comps.result), [])
+    assertEquals(
+      readEntries(db, sid).filter((r) => r.comps.generation).length,
+      1,
+    )
+    assertEquals(readComp(db, sid, 'exception'), undefined)
+    assertEquals(advanceable(db, sid), [])
+  } finally {
+    await service.settle()
+    db.close()
+  }
+})
+
+for (let state of ['ready', 'leased', 'settled'] as const) {
+  Deno.test(`boot consumes a pending stop before ${state} work can run`, async () => {
+    let { db, sid, runner, request } = stoppingTurn(state)
+    let service = managedCodex({
+      db,
+      runner,
+      clock: () => new Date('2100-01-01T00:00:00Z'),
+      cast: () => {},
+      transport: {
+        run: () => {
+          throw new Error('provider must stay idle')
+        },
+      },
+      tools: () => {
+        throw new Error('tools must stay idle')
+      },
+      prepare: () => {
+        throw new Error('prepare must stay idle')
+      },
+    })
+    try {
+      await service.sweep()
+      assertEquals(readComp(db, request, 'delivered')?.via, 'cancelled')
+      assertEquals(advanceable(db, sid), [])
+      assertEquals(readyEntries(db, sid), [])
+      assertEquals(
+        readEntries(db, sid).filter((r) => r.comps.generation).length,
+        1,
+      )
+      assertEquals(readComp(db, sid, 'exception'), undefined)
+    } finally {
+      await service.settle()
+      db.close()
+    }
+  })
+}
+
+Deno.test('another stop closes fresh input even before a new generation exists', async () => {
+  let { db, sid, runner, request } = stoppingTurn('settled')
+  let service = managedCodex({
+    db,
+    runner,
+    cast: () => {},
+    transport: {
+      run: () => {
+        throw new Error('provider must stay idle')
+      },
+    },
+    tools: () => {
+      throw new Error('tools must stay idle')
+    },
+    prepare: () => {
+      throw new Error('prepare must stay idle')
+    },
+  })
+  try {
+    service.stop(request, sid)
+    attention(db, sid, () => {}, runner)
+    let second = uuid()
+    apply(db, [{ eid: second, name: 'stop_request', comp: { target: sid } }])
+    service.stop(second, sid)
+    await service.sweep()
+    assertEquals(advanceable(db, sid), [])
+    assertEquals(sessionStateOf(readEntries(db, sid)), {
+      standing: 'terminal',
+      end: 'interrupted',
+    })
+  } finally {
+    await service.settle()
+    db.close()
+  }
+})
+
+Deno.test('stop gate still refuses external and imported-only session turns', () => {
+  let { db, sid } = stoppingTurn('settled')
+  try {
+    writeSession(db, sid, { origin: 'external' })
+    assertThrows(
+      () =>
+        apply(db, [{
+          eid: uuid(),
+          name: 'stop_request',
+          comp: { target: sid },
+        }]),
+      Error,
+      'stop_request refused',
+    )
+    let imported = session(db),
+      input = uuid(),
+      generation = uuid(),
+      call = uuid()
+    append(
+      db,
+      imported,
+      [
+        { message: { role: 'user' } },
+        {
+          generation: { through: input, provider: 'codex', model: 'test' },
+          delivered: {},
+        },
+        { call: { key: 'imported-call' }, output: { source: generation } },
+        { result: { call }, content: { body: 'imported result' } },
+      ],
+      null,
+      [input, generation, call, uuid()],
+      { source: 'managed', line: 1 },
+    )
+    assertEquals(advanceable(db, imported), [])
+    assertThrows(
+      () =>
+        apply(db, [{
+          eid: uuid(),
+          name: 'stop_request',
+          comp: { target: imported },
+        }]),
+      Error,
+      'stop_request refused',
+    )
+  } finally {
+    db.close()
+  }
+})
+
+Deno.test('a stop overtaken by completion only delivers its receipt', () => {
+  let { db, sid, runner, request } = stoppingTurn('settled')
+  let through = readEntries(db, sid).at(-1)!.eid
+  let generation = append(db, sid, [{
+    generation: { through, provider: 'codex', model: 'test' },
+  }]).eids[0]
+  let lease = takeEntry(db, generation, runner, 60_000)!
+  append(db, sid, [{
+    output: { source: generation, phase: 'final_answer' },
+    message: { role: 'agent' },
+    content: { body: 'completed before stop was handled' },
+  }])
+  settleGeneration(db, lease.token)
+  let history = readEntries(db, sid)
+  let service = managedCodex({
+    db,
+    runner,
+    cast: () => {},
+    transport: {
+      run: () => {
+        throw new Error('provider must stay idle')
+      },
+    },
+    tools: () => {
+      throw new Error('tools must stay idle')
+    },
+    prepare: () => {
+      throw new Error('prepare must stay idle')
+    },
+  })
+  try {
+    assertEquals(service.stop(request, sid), true)
+    assertEquals(readEntries(db, sid), history)
+    assertEquals(readComp(db, request, 'delivered')?.via, 'cancelled')
+    assertEquals(sessionStateOf(history), {
+      standing: 'terminal',
+      end: 'completed',
+    })
+  } finally {
+    db.close()
+  }
+})
+
+Deno.test('stop rolls back cancellation and delivery together on journal failure', () => {
+  let { db, sid, runner, request } = stoppingTurn('leased')
+  let heard: Change[] = []
+  let service = managedCodex({
+    db,
+    runner,
+    cast: (changes) => heard.push(...changes),
+    transport: {
+      run: () => {
+        throw new Error('provider must stay idle')
+      },
+    },
+    tools: () => {
+      throw new Error('tools must stay idle')
+    },
+    prepare: () => {
+      throw new Error('prepare must stay idle')
+    },
+  })
+  let history = readEntries(db, sid), cursor = cursorOf(db)
+  // Fail only the final receipt, after cancellation and lease release ran.
+  db.exec(`create temp trigger reject_stop before insert on journal_field
+    when exists (select 1 from journal_change jc join stop_request r on r.entity = jc.entity
+                 where jc.id = new.change and jc.component = 'delivered')
+    begin select raise(abort, 'stop journal unavailable'); end`)
+  try {
+    assertThrows(
+      () => service.stop(request, sid),
+      Error,
+      'stop journal unavailable',
+    )
+    assertEquals(readEntries(db, sid), history)
+    assertEquals(cursorOf(db), cursor)
+    assertEquals(readComp(db, request, 'delivered'), undefined)
+    assertEquals(heard, [])
+  } finally {
+    db.close()
+  }
+})
 
 slow(
   'stop aborts the leased generation and refuses its late output',

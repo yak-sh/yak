@@ -7,6 +7,8 @@
 // is provider-agnostic. Process-backed compatibility remains in sessions.ts.
 import type { Sql } from './store/sql.ts'
 import { apply, stamp } from './db.ts'
+import { advanceable, pendingAttention } from './entry_work.ts'
+export { advanceable } from './entry_work.ts'
 import {
   append,
   cancelEntry,
@@ -125,16 +127,6 @@ export let graphBusy = (db: Sql, eid: string) =>
        )
      ) limit 1`,
   ).get(eid)
-
-let pendingAttention = (db: Sql, session: string) =>
-  !!db.prepare(
-    `select 1 from entry a join attention n on n.entity = a.entity
-     where a.session = (select id from entity where eid = ?) and not exists (
-       select 1 from entry e join generation g on g.entity = e.entity
-       join entry t on t.entity = g.through
-       where e.session = a.session and t.seq >= a.seq
-     ) limit 1`,
-  ).get(session)
 
 // Attention carries no graph prose. The provider sees only runner.ts's fixed
 // notice and must retrieve the exact pending items through task_context.
@@ -298,74 +290,6 @@ export let runnerSessions = (db: Sql) =>
      where e.entity = g.entity and i.entity is null
      order by e.session`,
   ).all() as { session: string }[]).map((row) => row.session)
-
-export let advanceable = (db: Sql) =>
-  db.prepare(`
-    with latest as (
-      select e.session, max(e.seq) as seq
-      from generation g cross join entry e
-      left join imported i on i.entity = g.entity
-      where e.entity = g.entity and i.entity is null
-      group by e.session
-    ), current as (
-      select e.session, e.entity as entity, e.seq, g.through,
-             g.provider, g.model, g.effort
-      from latest l
-      join entry e on e.session = l.session and e.seq = l.seq
-      join generation g on g.entity = e.entity
-    )
-    select (select eid from entity where id = c.session) as session,
-           c.provider, c.model, c.effort,
-           (select ee.eid from entry z join entity ee on ee.id = z.entity
-            where z.session = c.session
-            order by z.seq desc limit 1) as through
-    from current c
-    where not exists (select 1 from lease l where l.entity = c.entity)
-      and (
-        exists (select 1 from delivered d where d.entity = c.entity)
-        or exists (select 1 from error x where x.entity = c.entity)
-        or exists (select 1 from cancel z where z.target = c.entity)
-      )
-      and not exists (
-        select 1 from output o join call k on k.entity = o.entity
-        where o.source = c.entity
-          and not exists (select 1 from result r where r.call = k.entity)
-          and not exists (select 1 from error x where x.entity = k.entity)
-          and not exists (select 1 from cancel z where z.target = k.entity)
-      )
-      and (
-        exists (
-          select 1 from entry n
-          where n.session = c.session
-            and n.seq > coalesce(
-              (select t.seq from entry t where t.entity = c.through), c.seq
-            )
-            and (
-              exists (select 1 from attention a where a.entity = n.entity)
-              or (
-                exists (select 1 from message m
-                        where m.entity = n.entity and m.role = 'user')
-                and not exists (select 1 from output o where o.entity = n.entity)
-              )
-            )
-        )
-        or (
-          not exists (select 1 from error x where x.entity = c.entity)
-          and not exists (select 1 from cancel z where z.target = c.entity)
-          and exists (
-            select 1 from output o join call k on k.entity = o.entity
-            where o.source = c.entity
-          )
-        )
-      )
-    order by c.session
-  `).all() as {
-    session: string
-    through: string
-    provider: string
-    model: string
-    effort: string | null
-  }[]
 
 let advance = (
   db: Sql,
@@ -666,6 +590,16 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     // to a settled boundary and stops, leaving any newly-ready entry for the
     // successor. Every acquisition point below is gated by this one return.
     if (draining) return false
+    // Boot can relay the runner before stop_request. The scheduler must honor
+    // committed stops before recovering leases or acquiring another operation.
+    for (
+      let row of db.prepare(
+        `select o.eid as request, s.eid as session from stop_request r
+         join entity o on o.id = r.entity join entity s on s.id = r.target
+         where not exists (select 1 from delivered d where d.entity = r.entity)
+           and not exists (select 1 from error x where x.entity = r.entity)`,
+      ).all() as { request: string; session: string }[]
+    ) stop(row.request, row.session)
     let recovered = expire()
     let moved = advance(
       db,
@@ -835,55 +769,78 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     request: string,
     session: string,
   ) => {
-    if (!graphSession(db, session)) return false
-    let work = new Map<string, { eid: string }>(
-      readyEntries(db, session).map((row) => [row.eid, row]),
-    )
-    for (
-      let row of db.prepare(
-        `select o.eid as eid from entry e
-         join entity o on o.id = e.entity
-         join lease l on l.entity = e.entity
-         where e.session = (select id from entity where eid = ?)`,
-      ).all(session) as { eid: string }[]
-    ) work.set(row.eid, row)
-    let targets = [...work.values()].filter((row) =>
-      !db.prepare(
-        `select 1 from cancel where target = (select id from entity where eid = ?)`,
-      ).get(row.eid)
-    )
-    if (targets.length) {
-      cast(
-        append(
-          db,
-          session,
-          targets.map((row) => ({ cancel: { target: row.eid } })),
-          runner,
-        ).changes,
-      )
-    }
-    for (let row of targets) flights.get(row.eid)?.control.abort()
-    for (let row of targets) {
-      let lease = db.prepare(
-        `select o.eid as eid,
-                (select eid from entity where id = l.holder) as holder,
-                l.at, l.until
-         from lease l join entity o on o.id = l.entity
-         where l.entity = (select id from entity where eid = ?)`,
-      ).get(
-        row.eid,
-      ) as LeaseToken | undefined
-      if (lease) {
+    let out: Change[] = [], targets: string[] = [], cleared: string[] = []
+    let collect: Cast = (changes) => out.push(...changes)
+    let handled = db.transaction(() => {
+      if (!graphSession(db, session)) return false
+      let pending = db.prepare(
+        `select 1 from stop_request r
+         where r.${OWNED} and r.target = (select id from entity where eid = ?)
+           and not exists (select 1 from delivered d where d.entity = r.entity)
+           and not exists (select 1 from error x where x.entity = r.entity)`,
+      ).get(request, session)
+      if (!pending) return true
+      let work = new Set(readyEntries(db, session).map((row) => row.eid))
+      for (
+        let row of db.prepare(
+          `select o.eid as eid from entry e
+           join entity o on o.id = e.entity
+           join lease l on l.entity = e.entity
+           where e.session = (select id from entity where eid = ?)`,
+        ).all(session) as { eid: string }[]
+      ) work.add(row.eid)
+      // A delivered generation can still own a tool loop between operations.
+      // Close the whole turn, including input already queued when stop lands.
+      // Another stop after new input needs a new boundary even on the same gen.
+      // A stop overtaken by completion only needs its delivery receipt.
+      if (work.size || advanceable(db, session).length) {
+        let latest = db.prepare(
+          `select o.eid as eid from entry e
+           join entity o on o.id = e.entity
+           join generation g on g.entity = e.entity
+           where e.session = (select id from entity where eid = ?)
+             and not exists (select 1 from imported i where i.entity = e.entity)
+           order by e.seq desc limit 1`,
+        ).get(session) as { eid: string }
+        work.add(latest.eid)
+      }
+      targets = [...work]
+      if (targets.length) {
+        collect(
+          append(
+            db,
+            session,
+            targets.map((eid) => ({ cancel: { target: eid } })),
+            runner,
+          ).changes,
+        )
+      }
+      for (let eid of targets) {
+        let lease = db.prepare(
+          `select o.eid as eid,
+                  (select eid from entity where id = l.holder) as holder,
+                  l.at, l.until
+           from lease l join entity o on o.id = l.entity
+           where l.entity = (select id from entity where eid = ?)`,
+        ).get(eid) as LeaseToken | undefined
+        if (!lease) continue
         let cancelled = cancelEntry(db, lease)
-        cast(cancelled)
+        collect(cancelled)
         if (
           cancelled.length &&
-          db.prepare(`select 1 from generation where ${OWNED}`).get(row.eid)
-        ) observe({ session, generation: row.eid, kind: 'clear' })
+          db.prepare(`select 1 from generation where ${OWNED}`).get(eid)
+        ) cleared.push(eid)
       }
+      delivered(db, request, 'cancelled', collect, clock)
+      return true
+    }, true)
+    // No observer or provider sees a partial stop if journaling fails.
+    for (let eid of targets) flights.get(eid)?.control.abort()
+    if (out.length) cast(out)
+    for (let generation of cleared) {
+      observe({ session, generation, kind: 'clear' })
     }
-    delivered(db, request, 'cancelled', cast, clock)
-    return true
+    return handled
   }
 
   // Claimed work is the address. A direct graph-native session target stays as

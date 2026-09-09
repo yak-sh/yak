@@ -105,6 +105,7 @@ import {
   sourceResolve,
 } from './source.ts'
 import { workReadyJoinsSql, workReadyWhereSql } from './work.ts'
+import { advanceable } from './entry_work.ts'
 
 // Prepared-statement cache, per db handle. SQLite recompiles the SQL on
 // every prepare(); apply() alone recompiles ~35 statements per call (~318µs
@@ -5642,7 +5643,8 @@ export let apply = (
         ).get(target)
         if (
           !s || s.origin != 'managed' ||
-          (!sessionActive.includes(String(s.status)) && !graph)
+          (!sessionActive.includes(String(s.status)) && !graph &&
+            !advanceable(db, target).length)
         ) {
           throw new Error(
             `stop_request refused: session is ${

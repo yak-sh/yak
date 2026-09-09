@@ -225,10 +225,15 @@ export let sessionStateOf = (
   let edge =
     rows.find((row) => row.eid == generation?.comps.generation?.through)?.seq ??
       generation?.seq ?? 0
+  let stopped = generation
+    ? rows.findLast((row) => row.comps.cancel?.target == generation.eid)?.seq ??
+      0
+    : 0
   let input = rows.some((row) =>
-    row.seq > edge && (row.comps.attention ||
+    row.seq > Math.max(edge, stopped) && (row.comps.attention ||
       (row.comps.message?.role == 'user' && !row.comps.output))
   )
+  if (stopped && !input) return { standing: 'terminal', end: 'interrupted' }
   let completed = !input &&
     rows.some((row) =>
       row.comps.output?.source == generation?.eid &&
