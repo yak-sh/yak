@@ -599,9 +599,7 @@ let hook = async (env: Env, req: Request) => {
 
 export let fetch = (req: Request, env: Env): Promise<Response> => {
   let path = new URL(req.url).pathname
-  // `/api/stripe/webhook` is the older spelling; a Stripe endpoint created
-  // against it keeps working.
-  if (path == '/stripe/webhook' || path == '/api/stripe/webhook') {
+  if (path == '/stripe/webhook') {
     return hook(env, req)
   }
   if (req.method != 'POST') {

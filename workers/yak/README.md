@@ -254,10 +254,9 @@ account. `--as` picks the account when it is not the current one.
 ## STRIPE_WEBHOOK_SECRET — the billing door's events
 
 billing.ts is the platform's own plan: Stripe sells to us, and tells us at
-`POST /stripe/webhook` (`/api/stripe/webhook` is the older spelling and still
-answers). The handler reads five v1 events and nothing else (billing.ts
-`subjectOf`); the dashboard steps are the Connect ones below with these
-differences:
+`POST /stripe/webhook`. The handler reads five v1 events and nothing else
+(billing.ts `subjectOf`); the dashboard steps are the Connect ones below with
+these differences:
 
 | step | where                                                                                                                                                                                 |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

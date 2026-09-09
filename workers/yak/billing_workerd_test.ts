@@ -58,7 +58,7 @@ slow(
         }).plan
 
       let post = async (raw: string, at = Math.floor(Date.now() / 1000)) => {
-        let r = await k.at('yaks.app', '/api/stripe/webhook', {
+        let r = await k.at('yaks.app', '/stripe/webhook', {
           method: 'POST',
           body: raw,
           headers: {
@@ -137,7 +137,7 @@ slow('an unsigned webhook is refused, and no Origin is not', async () => {
     let at = Math.floor(Date.now() / 1000)
 
     let send = (headers: Record<string, string>) =>
-      k.at('yaks.app', '/api/stripe/webhook', {
+      k.at('yaks.app', '/stripe/webhook', {
         method: 'POST',
         body: raw,
         headers: { 'content-type': 'application/json', ...headers },

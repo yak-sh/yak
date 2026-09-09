@@ -174,16 +174,12 @@ let serve = async (req: Request, env: Env, r: Route) => {
     return bound(env.IDENTITY, identity.fetch, env).fetch(req)
   }
   // Money, before the connector: Stripe's webhook posts to `/stripe/webhook`
-  // (beside sell.ts's `/stripe/connect`); `/api/stripe/webhook` is the older
-  // spelling an existing Stripe endpoint may still post to. `/api/*` at the
-  // apex is otherwise all mcp.ts's, a door that answers a JSON 404 to
-  // everything but `/mcp`. The checkout and portal doors sit under that
-  // prefix because they are the same part (billing.ts) and are reachable only
-  // from a signed-in page — never from a tool answer (C-33033).
-  if (
-    path == '/stripe/webhook' || path.startsWith('/api/stripe/') ||
-    path.startsWith('/api/billing/')
-  ) {
+  // (beside sell.ts's `/stripe/connect`). `/api/*` at the apex is otherwise
+  // all mcp.ts's, a door that answers a JSON 404 to everything but `/mcp`.
+  // The checkout and portal doors sit under that prefix because they are the
+  // same part (billing.ts) and are reachable only from a signed-in page —
+  // never from a tool answer (C-33033).
+  if (path == '/stripe/webhook' || path.startsWith('/api/billing/')) {
     return bound(env.BILLING, billing.fetch, env).fetch(req)
   }
   // The OTHER Stripe door, and it is its own endpoint on purpose (sell.ts,

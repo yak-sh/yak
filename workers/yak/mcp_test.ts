@@ -7315,7 +7315,7 @@ slow('space_sell connects an account and hands back one link', async () => {
           },
         },
       })
-      let r = await k.at('yaks.app', '/api/stripe/webhook', {
+      let r = await k.at('yaks.app', '/stripe/webhook', {
         method: 'POST',
         body: raw,
         headers: {
