@@ -156,6 +156,16 @@ Deno.test('a column pick is remembered per registry, and an overlay replaces it'
     resolve(registry, bundle, 'Edit', vocab, { comp: 'task', col: 'rank' }),
     ranks,
   )
+  // The same address under a second vocabulary is a different declaration.
+  let other = loadVocab([{
+    $defs: {
+      doc: { type: 'object', properties: { title: { type: 'number' } } },
+    },
+  }])
+  let byType = define([plain, ranks])
+  let title = { comp: 'doc', col: 'title' }
+  assertStrictEquals(resolve(byType, bundle, 'Edit', vocab, title), plain)
+  assertStrictEquals(resolve(byType, bundle, 'Edit', other, title), ranks)
 })
 
 Deno.test('actions union all worn components, preserve duplicates, and never run', () => {

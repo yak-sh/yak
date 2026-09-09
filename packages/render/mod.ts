@@ -161,17 +161,25 @@ let walk = <R extends Registration>(
 }
 
 // A column ask throws the entity away — the projection is the DECLARATION, so
-// the chosen control depends only on the registry and the column's address,
-// while a property row asks again on every paint. Remember the pick per
-// registry, and drop the whole memo when either list is replaced (define and
-// extend assign, never splice), so a re-registration is honoured at once.
-type Memo<R> = { renderers: unknown; views: unknown; picks: Map<string, R> }
-let memos = new WeakMap<object, Memo<Registration | undefined>>()
-let memo = <R extends Registration>(registry: Selection<R>) => {
+// the chosen control depends only on the registry, the vocabulary and the
+// column's address, while a property row asks again on every paint. Remember
+// the pick, and drop the whole memo when any of those three moves: define and
+// extend ASSIGN the lists rather than splice them, so a re-registration (or a
+// second vocabulary through the same registry) is honoured at once.
+type Memo = {
+  renderers: unknown
+  views: unknown
+  vocab: Vocab
+  picks: Map<string, Registration | undefined>
+}
+let memos = new WeakMap<object, Memo>()
+let memo = <R extends Registration>(registry: Selection<R>, vocab: Vocab) => {
   let m = memos.get(registry)
-  if (!m || m.renderers !== registry.renderers || m.views !== registry.views) {
-    let { renderers, views } = registry
-    memos.set(registry, m = { renderers, views, picks: new Map() })
+  let { renderers, views } = registry
+  if (
+    !m || m.renderers !== renderers || m.views !== views || m.vocab !== vocab
+  ) {
+    memos.set(registry, m = { renderers, views, vocab, picks: new Map() })
   }
   return m.picks as Map<string, R | undefined>
 }
@@ -189,7 +197,7 @@ export let resolve = <R extends Registration>(
   ctx: Context = {},
 ): R | undefined => {
   if (ctx.col == null) return walk(registry, bundle, view, vocab)
-  let picks = memo(registry)
+  let picks = memo(registry, vocab)
   let key = `${view ?? ''}|${ctx.comp}|${ctx.col}`
   if (picks.has(key)) return picks.get(key)
   // An undeclared column throws out of column(); nothing is remembered.
