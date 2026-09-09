@@ -117,7 +117,7 @@ export class StatementSync implements Statement {
 export class DatabaseSync implements Sql {
   #db: InstanceType<typeof DriverDatabase>
   #ftsWorker?: Worker
-  #path?: string
+  #guard?: ReturnType<typeof registerGraphFile>
   can: Can = { fts: true, temp: true }
 
   constructor(path: string | URL, options: Options = {}) {
@@ -130,10 +130,7 @@ export class DatabaseSync implements Sql {
     try {
       this.#db.exec('pragma foreign_keys = on')
       let named = path instanceof URL ? fileURLToPath(path) : path
-      if (named != ':memory:') {
-        this.#path = named
-        registerGraphFile(named)
-      }
+      this.#guard = registerGraphFile(named)
     } catch (e) {
       this.#db.close()
       throw e
@@ -300,12 +297,9 @@ export class DatabaseSync implements Sql {
     // Never terminate an FFI-owning worker: let it finish its current slice
     // and close its own SQLite handle, including its WAL read mark.
     this.#ftsWorker?.postMessage({ stop: true })
-    try {
-      this.#db.close()
-    } finally {
-      if (this.#path) unregisterGraphFile(this.#path)
-      this.#path = undefined
-    }
+    this.#db.close()
+    if (this.#guard) unregisterGraphFile(this.#guard)
+    this.#guard = undefined
   }
 }
 

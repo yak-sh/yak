@@ -4,7 +4,8 @@
 
 import { resolve } from 'node:path'
 
-let opened = new Map<string, number>()
+type OpenGraph = { path: string; dev?: number | null; ino?: number | null }
+let opened = new Set<OpenGraph>()
 
 export let canonicalFile = (path: string) => {
   try {
@@ -15,25 +16,34 @@ export let canonicalFile = (path: string) => {
   }
 }
 
-export let registerGraphFile = (path: string) => {
-  if (path == ':memory:') return
-  let key = canonicalFile(path)
-  opened.set(key, (opened.get(key) ?? 0) + 1)
+let identity = (path: string) => {
+  try {
+    let { dev, ino } = Deno.statSync(path)
+    return { dev, ino }
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e
+    return {}
+  }
 }
 
-export let unregisterGraphFile = (path: string) => {
+export let registerGraphFile = (path: string): OpenGraph | undefined => {
   if (path == ':memory:') return
-  let key = canonicalFile(path), n = opened.get(key) ?? 0
-  if (n <= 1) opened.delete(key)
-  else opened.set(key, n - 1)
+  let entry = { path: canonicalFile(path), ...identity(path) }
+  opened.add(entry)
+  return entry
 }
+
+export let unregisterGraphFile = (entry: OpenGraph) => opened.delete(entry)
 
 export let assertNotGraphFile = (path: string) => {
   let key = canonicalFile(path)
-  for (let db of opened.keys()) {
+  let file = identity(path)
+  for (let db of opened) {
     if (
-      key == db || key == `${db}-wal` || key == `${db}-shm` ||
-      key == `${db}-journal`
+      key == db.path || key == `${db.path}-wal` ||
+      key == `${db.path}-shm` || key == `${db.path}-journal` ||
+      (file.dev != null && file.ino != null &&
+        file.dev == db.dev && file.ino == db.ino)
     ) {
       throw new Error(
         `refusing raw file access to an open SQLite database: ${path}`,
