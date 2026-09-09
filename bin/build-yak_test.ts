@@ -1,5 +1,48 @@
 import { assertEquals } from '@std/assert'
 
+// The deploy's critical path checks the module graphs it uploads and stops
+// there; the repo gate runs on the box (gate.yml) on this same commit. A
+// second copy here would add no coverage and cost every deploy its minute.
+Deno.test('build-yak: build mode checks the Worker graphs, not the repo', async () => {
+  let dir = await Deno.makeTempDir({
+    dir: new URL('./', import.meta.url).pathname,
+    prefix: 'yak-build-',
+  })
+  try {
+    let log = `${dir}/calls`
+    await Deno.writeTextFile(`${dir}/npm`, '#!/bin/sh\nprintf "%s\\n" "$1"\n', {
+      mode: 0o755,
+    })
+    await Deno.writeTextFile(
+      `${dir}/deno`,
+      `#!/bin/sh
+if [ "$1" = --version ]; then exit 0; fi
+printf '%s\\n' "$*" >> "$YAK_BUILD_LOG"
+`,
+      { mode: 0o755 },
+    )
+    await Deno.writeTextFile(log, '')
+    let out = await new Deno.Command('sh', {
+      args: [new URL('./build-yak', import.meta.url).pathname],
+      cwd: new URL('../workers/yak/', import.meta.url),
+      env: {
+        PATH: `${dir}:${Deno.env.get('PATH')}`,
+        YAK_BUILD_LOG: log,
+        DENO_INSTALL: dir,
+        DENO_DIR: dir,
+      },
+      stdout: 'piped',
+      stderr: 'piped',
+    }).output()
+    assertEquals(out.code, 0)
+    assertEquals((await Deno.readTextFile(log)).trim().split('\n'), [
+      'task check:workers',
+    ])
+  } finally {
+    await Deno.remove(dir, { recursive: true })
+  }
+})
+
 // Fake executables prove shell exit behavior without opening either deploy door.
 Deno.test('build-yak: production precedes staging, and either failure fails Builds', async () => {
   let dir = await Deno.makeTempDir({

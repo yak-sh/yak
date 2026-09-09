@@ -85,18 +85,23 @@ The build and deploy commands now do these steps:
 
 1. Restore Deno's path; install Deno only if its executable is absent. Download
    and extraction were not measured locally because Deno is already installed.
-2. Run `deno task check`: formatting, lint, byte hygiene, type checks, generated
-   content checks, and package tests. The warm run took 21.68s; the first run
-   with an isolated cache took 71.21s. Both passed 918 package tests. These are
-   local durations, not Cloudflare build timings.
-3. Run `deno task test:workers` for kernel and tail (28.52s locally, 575 tests
-   passed). Its probes call `ready()`. The build wrapper already had no extra
-   npm install to remove.
+2. Run `deno task check:workers`: the kernel and tail module graphs, type
+   checked under the Workers config they run on (0.61s warm locally).
+3. Nothing else. Until 2026-09-09 the build also ran `deno task check` and
+   `deno task test:workers` — the repo's whole gate, which
+   `.github/workflows/gate.yml` runs on the box on the same commit. That copy
+   added no coverage and put every test anyone wrote into the deploy's critical
+   path: measured warm on the box on 2026-09-09, `deno task check` took 30.21s
+   (1048 package tests, up from 918 on 09-07) and `deno task test:workers`
+   64.28s (668 tests, up from 575 — 28.52s on 09-07). Push to upload grew with
+   them: ~40s on 09-07, 56.7s at 09-08 13:15, 66.9s at 09-08 16:04, which is the
+   74.182s row that failed the 60s limit. See T-35253.
 4. The separate `bin/build-yak deploy` restores the same Deno/cache paths and
-   calls `deno task deploy:yak`. `ready()` reuses the probe's `node_modules`
-   (0.000058s locally). When required, the lockfile install prefers cached
-   packages and skips the audit/funding requests (1.963s into an empty tree from
-   a warm package cache).
+   calls `deno task deploy:yak`. `ready()` reuses an existing `node_modules`
+   (0.000058s locally); on Builds there is none — the worker probes that used to
+   fill it no longer run here — so it installs from the lockfile, preferring
+   cached packages and skipping the audit/funding requests (1.963s into an empty
+   tree from a warm package cache).
 5. Read the SHA and subject for the version annotation (0.00332s), then run
    pinned Wrangler with `--prefer-offline`. Wrangler startup, bundling and
    assets took 2.142s locally; upload and Cloudflare propagation were not
@@ -110,4 +115,6 @@ before the cache options). It bundled 3008.12 KiB, gzip 667.63 KiB, and read 46
 asset files. These are single samples; the difference is not evidence of a
 reliable speedup. The container build and remote upload remain unmeasured.
 
-No incremental build or skipped correctness check was introduced.
+No incremental build was introduced. The correctness checks the build no longer
+runs are not skipped: they run on the box, on the same commit, as their own
+`gate.yml` steps.
