@@ -11,7 +11,7 @@
 // on the parent task and on each open unclaimed child — belongs here as a
 // Rule, in-transaction, but it reads `claim` and the task tree, which this
 // package does not know. It is registered where @yaks/task and @yaks/session
-// meet (TODO T-35021: rules.ts `rewind`, once `transcript.status` can be read
+// meet (TODO T-35021: rules.ts `rewind`, once `session.status` can be read
 // in a rule's match).
 
 import type { Bundle, Comp, Hook } from '@yaks/graph'

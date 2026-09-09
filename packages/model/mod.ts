@@ -23,6 +23,11 @@
  * spells those four ways; a chat-completions API spells them differently; the
  * conversation should not know.
  *
+ * What a provider keeps about a reply — an id that anchors the next request,
+ * say — is the provider's own comp, declared and stamped by its package
+ * ({@link Model.mark}, {@link Model.vocab}) and read back by it
+ * ({@link Model.anchor}). The seam carries the question, never the answer.
+ *
  * A model that throws a {@link ModelError} said something the caller expects —
  * a refused request, a rate limit, no credential. Anything else it throws is a
  * defect, and the caller records it as one.
@@ -68,21 +73,36 @@ export type Request = {
   instructions?: string
   items: Item[]
   tools: Tool[]
-  /** a reply id to continue from, with `items` being only what followed it.
-   * Only a provider that keeps replies can honour one. */
+  /** an anchor to continue from, with `items` being only what followed it:
+   * whatever the same model's {@link Model.anchor} answered for an earlier
+   * reply. Opaque to the caller. */
   anchor?: string
 }
 
-/** One answer: its id (an anchor for later), the model that served, what it
- * said and asked for. */
+/** One answer: the provider's id for it, the model that served, what it said
+ * and asked for. */
 export type Reply = {
   id: string
   model: string
   items: Item[]
 }
 
-/** A model: one request in, one reply out. */
-export type Model = (req: Request) => Promise<Reply>
+/** The comps a provider stamps on the entry that records a reply. */
+export type Mark = Record<string, Record<string, unknown>>
+
+/**
+ * A model: one request in, one reply out. A provider that keeps something
+ * about a reply says so in three optional parts, so the conversation never
+ * learns a provider's words: `mark` is what to stamp on the entry recording the
+ * reply, `anchor` reads an anchor back off such an entry's comps (or answers
+ * nothing, and the caller replays the conversation), and `vocab` declares the
+ * comps `mark` writes. A bare function is a model that keeps nothing.
+ */
+export type Model = ((req: Request) => Promise<Reply>) & {
+  mark?: (reply: Reply) => Mark
+  anchor?: (comps: Record<string, unknown>) => string | undefined
+  vocab?: VocabDoc
+}
 
 /** The world said no, in a way the caller expects: `code` is the provider's
  * word for it when it has one, else the kind of refusal. */

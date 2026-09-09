@@ -337,11 +337,13 @@ Deno.test('gap: a doc body is content-addressed by the app, plain text here', ()
   )
 })
 
-Deno.test('parity: the claim lease and the stop gate, with @yaks/session in', () => {
-  // The two rules this file used to pin as gaps. Composing the plugin onto the
-  // SAME core database flips both to agreement: the plugin's `precondition`
-  // hook refuses what db.ts refuses, for the same reason, and its `audit` hook
-  // writes the same conflict record afterwards.
+Deno.test('parity: the claim lease, with @yaks/session in', () => {
+  // The rule this file used to pin as a gap. Composing the plugin onto the SAME
+  // core database flips it to agreement: the plugin's `precondition` hook
+  // refuses what db.ts refuses, for the same reason, and its `audit` hook
+  // writes the same conflict record afterwards. The stop gate is not here: a
+  // native stop is an entry (D-35040), and `stop_request` is the legacy
+  // process lever db.ts alone still guards.
   let leased = graph({
     storage: storage(driver, V, { derived: fleetDerived, now: NOW }),
     vocab: V,
@@ -389,13 +391,6 @@ Deno.test('parity: the claim lease and the stop gate, with @yaks/session in', ()
       [t],
     )
   }
-
-  // a stop_request may only be pulled on a session that is still going
-  refuse(
-    [{ eid: uuid(), name: 'stop_request', comp: { target: s1 } }],
-    /stop_request refused/,
-    leased,
-  )
 })
 
 Deno.test('gap: the fleet rules the core does not carry', () => {

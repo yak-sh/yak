@@ -52,45 +52,31 @@ let doc: VocabDoc = {
  * beside them. */
 export let pages: Vocab = loadVocab([sessionDoc, doc])
 
-/** The ids the tests share: two people, two of their runs, two pages. */
+/** The ids the tests share: two people, two of their runs, a run the graph
+ * never saw, two pages. */
 export let ids = {
   ada: 'ada',
   bo: 'bo',
-  run1: 'run1', // Ada's run — running
-  run2: 'run2', // Bo's run — running
-  over: 'over', // a run that ended
+  run1: 'run1', // Ada's run
+  run2: 'run2', // Bo's run
+  gone: 'gone', // a run no entity stands for
   p1: 'page1',
   p2: 'page2',
 }
 
-/** A store holding two people, three runs (two going, one ended) and two
- * pages, with nothing locked yet. */
+/** A store holding two people, two runs and two pages, with nothing locked
+ * yet. */
 export let store = (): Storage => {
   let s = ram(pages)
-  let { ada, bo, run1, run2, over, p1, p2 } = ids
+  let { ada, bo, run1, run2, p1, p2 } = ids
   graph({ storage: s, vocab: pages }).apply([
     { entity: { eid: ada }, person: { name: 'Ada' } },
     { entity: { eid: bo }, person: { name: 'Bo' } },
-    {
-      entity: { eid: run1 },
-      session: { id: 'one', actor: ada, status: 'running' },
-    },
-    {
-      entity: { eid: run2 },
-      session: { id: 'two', actor: bo, status: 'running' },
-    },
-    {
-      entity: { eid: over },
-      session: {
-        id: 'three',
-        actor: bo,
-        status: 'ended',
-        finished_at: '2026-01-01T00:00:00.000Z',
-      },
-    },
+    { entity: { eid: run1 }, session: { id: 'one' } },
+    { entity: { eid: run2 }, session: { id: 'two' } },
     { entity: { eid: p1 }, page: { title: 'Lemon cake', by: ada } },
     { entity: { eid: p2 }, page: { title: 'Potluck', by: bo } },
-  ], { trusted: true }) // the runner reports its own status
+  ], { trusted: true })
   return s
 }
 

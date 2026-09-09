@@ -7,9 +7,9 @@
 // Two shapes of session exist side by side and every verb reads both. A LEGACY
 // session is the comp set the CLI providers wear: server-stamped `session`
 // status columns and an entry log fed from the jsonl tail. A NATIVE session
-// wears `transcript` (@yaks/session): it has no status columns at all, its
-// status is derived from its newest entry (`statusOf`), and its entries print
-// through the package's own renderers. Every read goes through client.ts
+// (@yaks/session) is `session{id}` and nothing else: it has no status columns
+// at all, its status is derived from its newest entry (`statusOf`), and its
+// entries print through the package's own renderers. Every read goes through client.ts
 // `query`, so the local arm answers when this process stands beside the db file
 // and the wire answers otherwise. Nothing here writes.
 
@@ -25,7 +25,6 @@ import { renderEntry } from './log_text.ts'
 import { idOf } from './types.ts'
 import { safe } from './terminal.ts'
 import {
-  nativeDoc,
   sessionDoc,
   statusOf,
   type TranscriptStatus,
@@ -44,8 +43,12 @@ let LIVE = new Set(['starting', 'running', 'stopping'])
 let FAILED = new Set(['failed', 'lost'])
 let ENDED = new Set(['done', 'exited', 'completed', 'cancelled'])
 
-/** A native session wears `transcript`; everything else is the legacy shape. */
-export let native = (r: Row) => r.comps.transcript != null
+/** A native session is identity only — `session{id}` and no legacy column
+ * (the CLI providers' rows carry `agent_type`, `actor`, `turn`, a stamped
+ * `status`, …); everything else is the legacy shape. */
+export let native = (r: Row) =>
+  r.comps.session != null &&
+  Object.keys(r.comps.session).every((k) => k == 'id')
 
 let seq = (r: Row) => Number(r.comps.entry?.seq ?? 0)
 let bySeq = (rows: Row[]) => rows.toSorted((a, b) => seq(a) - seq(b))
@@ -163,10 +166,10 @@ export let entriesOf = async (r: Row): Promise<Row[]> => {
   return [...inherited.filter((b) => seq(b) <= seq(anchor)), ...bySeq(own)]
 }
 
-// The three documents a native transcript is read with, loaded once: the
+// The two documents a native transcript is read with, loaded once: the
 // renderer consults them on every line.
 let loaded: ReturnType<typeof loadVocab> | undefined
-let vocab = () => loaded ??= loadVocab([sessionDoc, modelDoc, nativeDoc])
+let vocab = () => loaded ??= loadVocab([sessionDoc, modelDoc])
 
 /** Native entries as lines, through the package's `Line` renderer. */
 export let nativeLines = (entries: Row[], v = vocab()) =>
@@ -215,7 +218,7 @@ let ms = (got: Got, name: string, dflt: number) => {
 
 let sessionAt = async (id: string) => {
   let r = await needed(id, '', 'session')
-  if (!r.comps.session && !r.comps.transcript) {
+  if (!r.comps.session) {
     throw new Error(`not a session: ${idOf({ ...r, kind: 'session' })}`)
   }
   return r

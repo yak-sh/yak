@@ -31,8 +31,11 @@ runs wherever `fetch` does.
 
 Every request streams and is read to its end; only the completed items come back
 as neutral items. `store` is `false` unless asked for: the Codex backend refuses
-anything else, and without it a reply's id cannot anchor the next request, so a
-caller there replays the conversation.
+anything else. What the API keeps about a reply is this package's own comp,
+`openai{response_id}` (`openaiDoc`, stamped by the model's `mark`); with `store`
+on, `anchor` reads it back so the next request continues from the reply with
+only what followed, and without it `anchor` answers nothing and a caller replays
+the conversation.
 
 A refusal the API named, a missing credential, and a transport that never
 connected are `ModelError`s. Anything else thrown is a defect.

@@ -90,10 +90,11 @@ In dependency order:
   roster (`member`), per-thing grants (`grant`), an access mode (`access`), the
   `precondition` hook that refuses a write the actor's role does not allow, and
   the `canRead` a door consults before it answers a query.
-- **[@yaks/session](./session)** — who is working and what they hold: a run
-  (`session`), its lock on any entity (`claim`), the `stop_request` lever, the
-  `brief` it leaves, and the `conflict` written down when two runs want one
-  thing — a `precondition` hook that refuses, an `audit` hook that remembers.
+- **[@yaks/session](./session)** — a session is a transcript: its `entry` lines
+  (prose as `content`, an `ask` of a model, a tool `call` and its `result`, a
+  `stop`), a status read off the newest one and never stored, the daemon that
+  reacts to it, its lock on any entity (`claim`), and the `conflict` written
+  down when two sessions want one thing.
 - **[@yaks/model](./model)** — the seam between a conversation and the model
   that serves it: provider-neutral items, one request and reply shape, and the
   `provider`, `model` and `tool` entities a graph keeps about serving.

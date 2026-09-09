@@ -28,7 +28,7 @@ export type Daemon = {
  *
  * ```ts
  * let fx = effects(vocab)
- * let g = graph({ storage: ram(vocab), vocab, plugins: [native(), fx] })
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [sessions(), fx] })
  * let d = daemon(g, fx, { model, tools })
  * g.apply([input])          // wakes the first step
  * await d.idle(session)     // settled, stopped, or failed

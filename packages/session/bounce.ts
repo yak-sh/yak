@@ -1,12 +1,11 @@
-// The two refusals. Both are shaped like every other refusal a graph throws —
-// an Error with a name, a message, and the facts as fields — so a caller reads
-// why rather than a translated summary of why, and a door can turn either into
-// a status code without parsing prose.
+// The refusal. Shaped like every other refusal a graph throws — an Error with a
+// name, a message, and the facts as fields — so a caller reads why rather than
+// a translated summary of why, and a door can turn it into a status code
+// without parsing prose.
 //
-// `Bounced` is the interesting one: it is also the input to the audit. The
-// three eids it carries are exactly what the `conflict` record needs, so the
-// refusal that rolls a batch back is the same value that writes the record of
-// it once the rollback is done.
+// It is also the input to the audit: the three eids it carries are exactly
+// what the `conflict` record needs, so the refusal that rolls a batch back is
+// the same value that writes the record of it once the rollback is done.
 
 import type { Eid } from '@yaks/graph'
 
@@ -20,9 +19,9 @@ import type { Eid } from '@yaks/graph'
  */
 export class Bounced extends Error {
   /**
-   * @param on the entity both runs wanted
-   * @param loser the run whose take was refused
-   * @param holder the run that already held the lock
+   * @param on the entity both sessions wanted
+   * @param loser the session whose take was refused
+   * @param holder the session that already held the lock
    */
   constructor(
     public on: Eid,
@@ -31,30 +30,5 @@ export class Bounced extends Error {
   ) {
     super(`${on} is already claimed by ${holder}`)
     this.name = 'Bounced'
-  }
-}
-
-/**
- * A stop aimed at a run that is not going. Stopping is a lever, not a note: it
- * may only be pulled on a run that is still there, so a stop for a run that
- * already ended (or was never seen) is refused rather than left lying around
- * as a request nothing will ever answer.
- */
-export class NotRunning extends Error {
-  /**
-   * @param target the run the stop was aimed at
-   * @param status what that run says it is, or `null` when it says nothing —
-   * `undefined` when there is no such run at all
-   */
-  constructor(
-    public target: Eid,
-    public status: string | null | undefined,
-  ) {
-    super(
-      `stop_request refused: ${target} is ${
-        status === undefined ? 'gone' : status ?? 'not running'
-      }`,
-    )
-    this.name = 'NotRunning'
   }
 }

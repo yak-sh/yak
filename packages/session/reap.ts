@@ -1,33 +1,31 @@
-// Boot reconciliation: the locks a run left behind when it did not end
-// properly.
+// Boot reconciliation: the locks whose holder is gone.
 //
-// A run that ends gracefully lets go of what it holds. A run that is killed,
-// crashes, or has its host restarted under it never gets the chance — and its
-// locks outlive it, so the graph says somebody is working on a document that
+// A session that lets go of what it holds releases its claims; a session whose
+// ENTITY is deleted takes its locks with it (`death: 'release'` in the
+// vocabulary). What neither covers is a lock naming a session the graph has no
+// entity for at all — a holder that was never committed, or was removed on
+// another store — so the graph says somebody is working on a document that
 // nobody is working on. Nothing expires on its own (a lease with a timeout
 // would have to be renewed, and a worker that is merely thinking hard would
-// lose its lock mid-edit), so the correction happens at the one moment there
-// is a fresh, honest answer available: start-up.
+// lose its lock mid-edit), so the correction happens at the one moment there is
+// a fresh, honest answer available: start-up.
 //
-// The vocabulary's `death: 'release'` covers the other case — a run whose
-// ENTITY is deleted takes its locks with it. This covers the case that is not a
-// deletion at all: the run is still there, it simply ended, and an ended run
-// holds nothing.
+// A session that is merely over — its transcript settled — still holds what it
+// holds. Letting go is the rewind's business (D-35040), not a sweep's.
 //
-// The universe read here is exactly the locks and the runs holding them, never
-// the whole graph: locks are few by nature, since only live work holds one.
-// It is idempotent by construction — a freed lock is gone, so the next start-up
-// finds nothing to do.
+// The universe read here is exactly the locks and the sessions holding them,
+// never the whole graph: locks are few by nature, since only live work holds
+// one. It is idempotent by construction — a freed lock is gone, so the next
+// start-up finds nothing to do.
 
 import type { Bundle, Comp, Eid, Storage, Tx } from '@yaks/graph'
-import { detached, then } from '@yaks/graph'
+import { detached, then, TOMBSTONE } from '@yaks/graph'
 import { CLAIM, SESSION } from './comp.ts'
-import { awake } from './words.ts'
 
 /**
- * The releases a graph needs: one `claim: null` bundle per lock whose run is
- * over, missing, or never said it was alive. Reads only — hand the result to
- * `apply()` if you want the release journaled and its effects fired.
+ * The releases a graph needs: one `claim: null` bundle per lock whose holder
+ * is not a session in this graph. Reads only — hand the result to `apply()` if
+ * you want the release journaled and its effects fired.
  */
 export let staleLeases = (tx: Tx): Bundle[] | Promise<Bundle[]> =>
   then(tx.read(`.${CLAIM}.session!`), (locked) => {
@@ -36,7 +34,7 @@ export let staleLeases = (tx: Tx): Bundle[] | Promise<Bundle[]> =>
     let runs = [...new Set(locked.map(holder))]
     return then(tx.get(runs), (found) => {
       let live = new Set<Eid>(
-        found.filter((b) => awake(b[SESSION] as Comp | undefined))
+        found.filter((b) => b[TOMBSTONE] == null && b[SESSION] != null)
           .map((b) => b.entity.eid),
       )
       return locked.filter((b) => !live.has(holder(b)))
@@ -45,8 +43,8 @@ export let staleLeases = (tx: Tx): Bundle[] | Promise<Bundle[]> =>
   })
 
 /**
- * Free every lock an ended run still holds, and answer with what was freed.
- * Call it once at start-up, before serving:
+ * Free every lock whose holder is gone, and answer with what was freed. Call
+ * it once at start-up, before serving:
  *
  * ```ts
  * import { reapLeases } from '@yaks/session'

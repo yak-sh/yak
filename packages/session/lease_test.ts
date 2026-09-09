@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { Bounced, NotRunning } from './bounce.ts'
-import { ids, locked, lockOn, seed, store } from './harness.ts'
+import { Bounced } from './bounce.ts'
+import { ids, locked, lockOn, store } from './harness.ts'
 
 let AT = '2026-03-04T05:06:07.000Z'
 let clock = { now: () => AT }
@@ -100,52 +100,7 @@ Deno.test('a dying run lets its locks go, and the page lives', () => {
   assertEquals((p1.page as Record<string, unknown>).title, 'Lemon cake')
 })
 
-Deno.test('a stop lands on a run that is still going', () => {
-  let s = store()
-  locked(s, clock).apply([
-    { entity: { eid: 'stop1' }, stop_request: { target: ids.run1 } },
-  ])
-  let r = (s.tx((tx) => tx.get(['stop1'])) as Bundle[])[0]
-  assertEquals((r.stop_request as Record<string, unknown>).target, ids.run1)
-})
-
-Deno.test('a stop is refused for a run that ended, or was never seen', () => {
-  let s = store()
-  let g = locked(s, clock)
-  let e = assertThrows(
-    () =>
-      g.apply([
-        { entity: { eid: 'stop1' }, stop_request: { target: ids.over } },
-      ]),
-    NotRunning,
-  ) as NotRunning
-  assertEquals(e.status, 'ended')
-  assert(/stop_request refused/.test(e.message))
-  assertEquals(
-    (assertThrows(
-      () =>
-        g.apply([
-          { entity: { eid: 'stop2' }, stop_request: { target: 'nobody' } },
-        ]),
-      NotRunning,
-    ) as NotRunning).status,
-    undefined,
-  )
-})
-
-Deno.test('a stop is refused for a run that never said it was alive', () => {
-  let s = store()
-  seed(s, { entity: { eid: 'quiet' }, session: { id: 'quiet' } })
-  assertThrows(
-    () =>
-      locked(s, clock).apply([
-        { entity: { eid: 'stop1' }, stop_request: { target: 'quiet' } },
-      ]),
-    NotRunning,
-  )
-})
-
-Deno.test('a batch touching neither locks nor stops is untouched', () => {
+Deno.test('a batch taking no lock is untouched', () => {
   let s = store()
   let out = locked(s, clock).apply([
     { entity: { eid: ids.p1 }, page: { text: 'three lemons' } },

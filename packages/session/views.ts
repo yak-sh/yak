@@ -7,38 +7,48 @@
 import type { Comp } from '@yaks/graph'
 import { parse } from '@yaks/query'
 import { type Bundle, define, type Registry } from '@yaks/render'
-import { CALL, ENTRY, TRANSCRIPT } from './native.ts'
-import { kindOf, statusOf } from './status.ts'
+import { SESSION } from './comp.ts'
+import { ASK, CALL, ENTRY } from './native.ts'
+import { kindOf, statusOf, textOf } from './status.ts'
 
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 
-/** What a call entry reached: `→ model (id…)` or `→ <tool>`. */
-let reached = (b: Bundle, names: Record<string, string>) => {
-  let c = comp(b, CALL)
-  if (!c) return ''
-  if (c.source != null) return `→ ${names[String(c.to)] ?? String(c.to)}`
-  let id = c.response_id ? ` (${String(c.response_id).slice(0, 12)}…)` : ''
-  return `→ model${id}`
+/** What an ask or a call reached: `→ gpt-6-astra`, `→ echo`. The names are the
+ * caller's (`ctx.names`, eid → name); a provider's anchor on an ask prints only
+ * when the caller can read it (`ctx.anchor`), because which comp holds it is
+ * the provider's business, not this view's. */
+let reached = (
+  b: Bundle,
+  names: Record<string, string>,
+  anchor?: (b: Bundle) => string | undefined,
+) => {
+  let to = comp(b, ASK)?.to ?? comp(b, CALL)?.to
+  if (to == null) return ''
+  let id = ASK in b ? anchor?.(b) : undefined
+  return `→ ${names[String(to)] ?? String(to)}` +
+    (id ? ` (${id.slice(0, 12)}…)` : '')
 }
 
 /** The transcript views: `Line` for an entry, `Status` for a transcript. The
- * context may carry `names` (tool eid → name) and `entries` (the transcript,
- * for `Status`). */
+ * context may carry `names` (model or tool eid → name), `anchor` (reads a
+ * provider's anchor off an ask entry), and `entries` (the transcript, for
+ * `Status`). */
 export let views: Registry = define([
   {
     view: 'Line',
     match: parse(`.${ENTRY}`),
     render: (b, h, ctx) => {
       let e = comp(b, ENTRY)!
-      let first = String(e.text ?? '').split('\n')[0].slice(0, 70)
+      let first = textOf(b).split('\n')[0].slice(0, 70)
       let names = (ctx.names ?? {}) as Record<string, string>
+      let anchor = ctx.anchor as ((b: Bundle) => string | undefined) | undefined
       return h(
         'p',
         null,
         [
           String(e.seq).padStart(3),
           (kindOf(b) ?? 'entry').padEnd(9),
-          reached(b, names),
+          reached(b, names, anchor),
           first,
         ].filter(Boolean).join(' '),
       )
@@ -46,10 +56,10 @@ export let views: Registry = define([
   },
   {
     view: 'Status',
-    match: parse(`.${TRANSCRIPT}`),
+    match: parse(`.${SESSION}`),
     render: (b, h, ctx) => {
       let entries = (ctx.entries ?? []) as Bundle[]
-      let name = String(comp(b, 'session')?.id ?? b.entity.eid)
+      let name = String(comp(b, SESSION)?.id ?? b.entity.eid)
       return h('p', null, `${name}: ${statusOf(entries)}`)
     },
   },

@@ -24,8 +24,17 @@ let row = (comps: Row['comps'], num = 7): Row => ({
 })
 let legacy = (session: Record<string, unknown>, more: Row['comps'] = {}) =>
   row({ session: { id: 'sid', ...session }, ...more })
+// A native entry: prose alone is an input, prose with a source an output, and
+// any other kind is the tag comp beside `entry`.
 let entry = (seq: number, kind: string, text = ''): Row =>
-  row({ entry: { session: 'e7', seq, text }, [kind]: {} }, 100 + seq)
+  row({
+    entry: { session: 'e7', seq },
+    ...kind == 'input'
+      ? { content: { body: text } }
+      : kind == 'output'
+      ? { content: { body: text, source: 'e101' } }
+      : { [kind]: {} },
+  }, 100 + seq)
 
 Deno.test('legacy status: the column, then exit, then a recorded end', () => {
   assertEquals(legacyStatus(legacy({ status: 'running' }).comps), 'running')
@@ -52,7 +61,13 @@ Deno.test('legacy status from the log: an exit entry, a call in flight', () => {
   assertEquals(legacyStatus(idle, [exit(0)]), 'settled')
   assertEquals(legacyStatus(idle, [exit(2)]), 'failed')
   // an exit that is not the newest entry ends nothing
-  assertEquals(legacyStatus(idle, [exit(0, 1), entry(2, 'message')]), 'idle')
+  assertEquals(
+    legacyStatus(idle, [
+      exit(0, 1),
+      row({ entry: { session: 'e7', seq: 2 }, message: {} }, 102),
+    ]),
+    'idle',
+  )
   // a call with no result is a turn in flight
   let call = row({ entry: { session: 'e7', seq: 1 }, call: { key: 'k' } }, 101)
   assertEquals(legacyStatus(idle, [call]), 'running')
@@ -68,7 +83,7 @@ Deno.test('legacy status from the log: an exit entry, a call in flight', () => {
 Deno.test('native status: the newest entry decides', () => {
   assertEquals(nativeStatus([]), 'empty')
   assertEquals(nativeStatus([entry(1, 'input')]), 'pending')
-  assertEquals(nativeStatus([entry(1, 'input'), entry(2, 'call')]), 'running')
+  assertEquals(nativeStatus([entry(1, 'input'), entry(2, 'ask')]), 'running')
   assertEquals(nativeStatus([entry(2, 'output'), entry(1, 'input')]), 'settled')
   assertEquals(nativeStatus([entry(1, 'input'), entry(2, 'stop')]), 'stopped')
   assertEquals(
@@ -77,8 +92,8 @@ Deno.test('native status: the newest entry decides', () => {
   )
 })
 
-Deno.test('statusFor picks the shape by the transcript facet', () => {
-  let n = row({ session: { id: 's' }, transcript: {} })
+Deno.test('statusFor picks the shape by the session columns', () => {
+  let n = row({ session: { id: 's' } })
   assert(native(n))
   assertEquals(statusFor(n, [entry(1, 'output')]), 'settled')
   let l = legacy({ status: 'running' })
@@ -99,7 +114,7 @@ Deno.test('exitCode: the legacy code, else 1 for failed, 0 for a quiet end', () 
   assertEquals(exitCode(legacy({ exit_code: 4 }), 'failed'), 4)
   assertEquals(exitCode(legacy({ status: 'lost' }), 'failed'), 1)
   assertEquals(exitCode(legacy({ status: 'done' }), 'settled'), 0)
-  assertEquals(exitCode(row({ transcript: {} }), 'stopped'), 0)
+  assertEquals(exitCode(row({ session: { id: 's' } }), 'stopped'), 0)
 })
 
 Deno.test('briefOf: the brief, else the legacy final text', () => {
@@ -127,10 +142,15 @@ Deno.test('sessionLine: id, status, runner, age, and what it is about', () => {
 Deno.test('nativeLines: the package Line renderer, seq kind text', () => {
   let lines = nativeLines([
     entry(1, 'input', 'List your tools'),
-    row({ entry: { session: 'e7', seq: 2 }, call: { to: 'm' } }, 102),
+    row({ entry: { session: 'e7', seq: 2 }, ask: { to: 'm' } }, 102),
+    row(
+      { entry: { session: 'e7', seq: 3 }, call: { to: 't', source: 'e102' } },
+      103,
+    ),
   ])
   assertEquals(lines[0], '1 input     List your tools')
-  assertEquals(lines[1], '2 call      → model')
+  assertEquals(lines[1], '2 ask       → m')
+  assertEquals(lines[2], '3 call      → t')
 })
 
 Deno.test('poll: reads until done, sleeping between, and times out', async () => {

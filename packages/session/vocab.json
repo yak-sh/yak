@@ -4,84 +4,49 @@
     "session": {
       "type": "object",
       "kind": true,
-      "description": "one run of a worker — a person’s editor, an agent’s turn",
+      "description": "a transcript the daemon reacts to. Identity only: who runs it is `created.by`; what it is doing is read off its entries, never stored",
       "properties": {
         "id": {
           "type": "string",
-          "description": "the runner’s own name for this run, stable across reconnects"
-        },
-        "actor": {
-          "type": "string",
-          "ref": "entity",
-          "death": "detach",
-          "description": "who the run works as — the person or agent behind it"
-        },
-        "parent": {
-          "type": "string",
-          "ref": "session",
-          "death": "detach",
-          "bare": false,
-          "description": "the run that started this one"
-        },
-        "provider": {
-          "type": "string",
-          "description": "which service is running it"
-        },
-        "model": {
-          "type": "string",
-          "description": "which model it is thinking in"
-        },
-        "effort": {
-          "type": "string",
-          "description": "how hard it was asked to think"
-        },
-        "turn": {
-          "enum": [
-            "idle",
-            "busy"
-          ],
-          "description": "mid-thought, or waiting for the next instruction — an idle run is still alive"
+          "description": "the runner’s own name for it"
         },
         "status": {
           "enum": [
-            "starting",
+            "empty",
+            "pending",
             "running",
-            "stopping",
-            "ended"
+            "settled",
+            "stopped",
+            "failed"
           ],
-          "stamped": true,
-          "description": "reported by the runner: starting, running, stopping mean it is still there"
-        },
-        "started_at": {
+          "persist": false,
+          "description": "what the newest entry says: pending awaits the model, running awaits an answer, settled has nothing to do"
+        }
+      }
+    },
+    "fork": {
+      "type": "object",
+      "description": "this session continues another transcript from one of its entries",
+      "properties": {
+        "from": {
           "type": "string",
-          "format": "date-time",
-          "stamped": true,
-          "description": "when it began"
-        },
-        "finished_at": {
-          "type": "string",
-          "format": "date-time",
-          "stamped": true,
-          "description": "when it ended — absent while it is still going"
-        },
-        "exit_code": {
-          "type": "number",
-          "stamped": true,
-          "description": "how it ended: 0 for cleanly"
+          "ref": "entry",
+          "death": "keep",
+          "description": "the entry this fork continues from: the parent's entries up to it are this transcript's prefix"
         }
       }
     },
     "claim": {
       "type": "object",
       "kind": true,
-      "description": "a run’s lock on the entity carrying it",
+      "description": "a session’s lock on the entity carrying it",
       "properties": {
         "session": {
           "type": "string",
           "ref": "session",
           "death": "release",
           "bare": false,
-          "description": "the run holding it — when that run’s entity dies the lock goes and the entity lives"
+          "description": "the session holding it — when that session’s entity dies the lock goes and the entity lives"
         },
         "claimed_at": {
           "type": "string",
@@ -91,33 +56,10 @@
         }
       }
     },
-    "stop_request": {
-      "type": "object",
-      "kind": true,
-      "description": "ask a run to wind down",
-      "properties": {
-        "target": {
-          "type": "string",
-          "ref": "session",
-          "death": "cascade",
-          "description": "the run to stop — the request dies with the run it is about"
-        }
-      }
-    },
-    "brief": {
-      "type": "object",
-      "description": "what a run says it did, in its own words",
-      "properties": {
-        "text": {
-          "type": "string",
-          "description": "the note it leaves behind"
-        }
-      }
-    },
     "conflict": {
       "type": "object",
       "kind": true,
-      "description": "two runs wanted one thing: written after the refusal, never by a client",
+      "description": "two sessions wanted one thing: written after the refusal, never by a client",
       "properties": {
         "target": {
           "type": "string",
@@ -133,7 +75,7 @@
           "death": "keep",
           "bare": false,
           "stamped": true,
-          "description": "the run whose write was refused"
+          "description": "the session whose write was refused"
         },
         "holder": {
           "type": "string",
@@ -141,7 +83,7 @@
           "death": "keep",
           "bare": false,
           "stamped": true,
-          "description": "the run that already held the lock"
+          "description": "the session that already held the lock"
         },
         "at": {
           "type": "string",
@@ -150,6 +92,132 @@
           "description": "when they collided"
         }
       }
+    },
+    "entry": {
+      "type": "object",
+      "kind": true,
+      "description": "one line of a transcript; the comp beside it says what kind",
+      "properties": {
+        "session": {
+          "type": "string",
+          "ref": "session",
+          "death": "cascade",
+          "description": "the transcript it belongs to"
+        },
+        "seq": {
+          "type": "number",
+          "description": "its place in the transcript"
+        }
+      }
+    },
+    "content": {
+      "type": "object",
+      "description": "the prose of an entry, when it has any. On its own it is an input, an instruction from a person or a system (the first one is the request that starts the session); with a `source` it is what a model said; beside a result, error or exception it is theirs",
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "ref": "entry",
+          "death": "keep",
+          "description": "the ask that said it; absent on prose a person or a system wrote"
+        }
+      }
+    },
+    "using": {
+      "type": "object",
+      "description": "provider, model and effort: on an input it sets or switches them, on an ask it records what was served",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "ref": "provider",
+          "death": "detach"
+        },
+        "model": {
+          "type": "string",
+          "ref": "model",
+          "death": "detach"
+        },
+        "effort": {
+          "type": "string"
+        }
+      }
+    },
+    "ask": {
+      "type": "object",
+      "description": "the model was asked here, from the prefix ending at `through`; what the provider keeps about it rides in that provider's own comp beside this one",
+      "properties": {
+        "to": {
+          "type": "string",
+          "ref": "model",
+          "death": "keep",
+          "description": "the model entity asked"
+        },
+        "through": {
+          "type": "string",
+          "ref": "entry",
+          "death": "keep",
+          "description": "the last entry of the prefix it was asked with"
+        }
+      }
+    },
+    "call": {
+      "type": "object",
+      "description": "a tool the model asked for",
+      "properties": {
+        "to": {
+          "type": "string",
+          "ref": "tool",
+          "death": "keep",
+          "description": "the tool entity called"
+        },
+        "id": {
+          "type": "string",
+          "description": "the provider's id for it, echoed in the result"
+        },
+        "args": {
+          "type": "string",
+          "description": "its arguments, as JSON"
+        },
+        "source": {
+          "type": "string",
+          "ref": "entry",
+          "death": "keep",
+          "description": "the ask that asked for it"
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "description": "what a tool answered",
+      "properties": {
+        "call": {
+          "type": "string",
+          "ref": "entry",
+          "death": "keep",
+          "description": "the tool call it answers"
+        }
+      }
+    },
+    "stop": {
+      "type": "object",
+      "description": "a mark in the transcript: the daemon performs nothing after it",
+      "properties": {}
+    },
+    "error": {
+      "type": "object",
+      "description": "an outcome the code expected and recorded: normal",
+      "properties": {
+        "code": {
+          "type": "string"
+        }
+      }
+    },
+    "exception": {
+      "type": "object",
+      "description": "an outcome the code did not expect, whoever caused it: a defect report, not a stop",
+      "properties": {}
     }
   }
 }

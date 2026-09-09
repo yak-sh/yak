@@ -17,7 +17,10 @@ Three things, and no transport:
   assistant turn, a call the model asked for, the result it was given.
 - **`Model`** — `(Request) => Promise<Reply>`. A request is a model name, the
   items, the tools, an optional anchor to continue from; a reply is an id, the
-  model that served, and the items it produced.
+  model that served, and the items it produced. A provider that keeps replies
+  adds `mark` (what to stamp on the record of a reply, as its own comp),
+  `anchor` (reads an anchor back off that record, or nothing) and `vocab` (the
+  comp `mark` writes) — the seam asks, the provider answers.
 - **`provider`, `model`, `tool`** — the entities a graph keeps about serving, as
   one vocabulary document (`modelDoc`), so which models exist is data.
 

@@ -1,5 +1,4 @@
-// The package as a graph plugin: the five components, the lock rules, and the
-// audit.
+// The package as a graph plugin: the vocabulary, the rules, and the audit.
 //
 // It needs nothing from the application — no app to speak for, no roster to
 // consult — because everything it decides is about the batch and the entities
@@ -11,11 +10,11 @@
 // rollback. One of them cannot do both jobs: a refusal that could also write
 // would write into the transaction it just condemned.
 
-import type { Plugin } from '@yaks/graph'
+import type { Hook, Plugin } from '@yaks/graph'
+import { then } from '@yaks/graph'
 import { sessionDoc } from './comp.ts'
 import { auditing, type AuditOpts } from './audit.ts'
 import { leasing } from './lease.ts'
-import { nativeDoc } from './native.ts'
 import { naming } from './rules.ts'
 
 /** How the plugin's two seams are wired: a clock for both stamps, and the name
@@ -23,44 +22,32 @@ import { naming } from './rules.ts'
 export type SessionOpts = AuditOpts
 
 /**
- * The session plugin: the `session`, `claim`, `stop_request`, `brief` and
- * `conflict` components, a `precondition` hook that refuses a take of a held
- * lock or a stop aimed at a run that is not going, and an `audit` hook that
- * records the collision after the rollback.
+ * The session plugin: the vocabulary ({@link sessionDoc}), a `precondition`
+ * hook that refuses a take of a held lock and a native comp naming the wrong
+ * kind of entity, and an `audit` hook that records a collision after the
+ * rollback.
  *
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
  * import { graph } from '@yaks/graph'
+ * import { modelDoc } from '@yaks/model'
  * import { sessionDoc, sessions } from '@yaks/session'
  *
- * let vocab = loadVocab([sessionDoc, mine])
+ * let vocab = loadVocab([sessionDoc, modelDoc, mine])
  * // let g = graph({ storage, vocab, plugins: [sessions()] })
  * ```
  *
- * What is NOT here: starting a run, stopping one, and everything in between.
- * A committed `stop_request` is acted on by a `created('stop_request')`
- * handler on {@link https://jsr.io/@yaks/effects | @yaks/effects} — post-commit
- * and isolated, so a process that will not die does not refuse the batch. This
- * package is the model and the rules.
+ * What is NOT here: anything that runs. Entries appear; what reacts to them is
+ * {@link react}, handed to an effects registry ({@link daemon}) or run in a
+ * loop. This package is the model and the rules.
  */
-export let sessions = (opts: SessionOpts = {}): Plugin => ({
-  name: '@yaks/session',
-  vocab: [sessionDoc],
-  hooks: { precondition: leasing(opts), audit: auditing(opts) },
-})
-
-/**
- * The native half: a session as a transcript (./native.ts). It brings the
- * entry vocabulary and the one precondition — a `fork.from` is an entry, a
- * `using` names a provider and a model. What reacts to entries is
- * {@link react}, handed to an effects registry or run in a loop; this plugin
- * is the model and the rule, like {@link sessions}.
- *
- * Load it beside {@link sessions}: `plugins: [sessions(), native()]`, with
- * `loadVocab([sessionDoc, nativeDoc, …])`.
- */
-export let native = (): Plugin => ({
-  name: '@yaks/session/native',
-  vocab: [nativeDoc],
-  hooks: { precondition: naming },
-})
+export let sessions = (opts: SessionOpts = {}): Plugin => {
+  let lease = leasing(opts)
+  let precondition: Hook = (bundles, tx, err) =>
+    then(lease(bundles, tx, err), (b) => naming(b, tx, err))
+  return {
+    name: '@yaks/session',
+    vocab: [sessionDoc],
+    hooks: { precondition, audit: auditing(opts) },
+  }
+}

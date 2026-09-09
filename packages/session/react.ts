@@ -10,11 +10,13 @@
 // fake in a test, and inside a Store on Cloudflare. It imports no platform API.
 //
 // A fork's transcript is the parent's entries up to the anchor plus its own.
-// When the model keeps replies (`deps.anchors`), a call is asked with the
-// newest model call's reply as its anchor plus only what followed; otherwise
-// the whole transcript travels every time. That one rule is what makes a
-// fork's first call cheap where the provider allows it: the anchor is the
-// parent's last reply, and only the fork's new input travels.
+// When the model can continue from a kept reply (`model.anchor` answers for
+// the newest ask), the model is asked with that anchor plus only what
+// followed; otherwise the whole transcript travels every time. That one rule is
+// what makes a fork's first ask cheap where the provider allows it: the anchor
+// is the parent's last reply, and only the fork's new input travels. What the
+// provider keeps about an ask is its own comp on the ask entry (`model.mark`),
+// which is why the question is the model's to answer.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import {
@@ -28,12 +30,13 @@ import {
   type Tool as Declared,
 } from '@yaks/model'
 import {
+  ASK,
   CALL,
+  CONTENT,
   ENTRY,
   ERROR,
   EXCEPTION,
   FORK,
-  OUTPUT,
   RESULT,
   USING,
 } from './native.ts'
@@ -42,6 +45,7 @@ import {
   ordered,
   seqOf,
   statusOf,
+  textOf,
   type TranscriptStatus,
   usingBefore,
 } from './status.ts'
@@ -56,11 +60,6 @@ export type Deps = {
   model: Model
   tools: Tool[]
   instructions?: string
-  /** the model keeps replies, so a call may continue from the newest reply
-   * with only what followed. Off, every call replays the whole transcript —
-   * the only path a provider that stores nothing (the Codex backend) can
-   * serve. The reply id is recorded either way. */
-  anchors?: boolean
   mint?: () => Eid
 }
 
@@ -72,7 +71,6 @@ export type Step = {
   added: Bundle[]
 }
 
-let text = (b: Bundle) => String((b[ENTRY] as Comp)?.text ?? '')
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 
 /** A transcript's entries: a fork's prefix from its parent up to the anchor,
@@ -94,9 +92,9 @@ export let transcript = async (g: Graph, session: Eid): Promise<Bundle[]> => {
 
 /** The model's view of a window of the transcript: inputs as user turns, what
  * the model said as assistant turns, tool calls and results as the pair a
- * model expects. Model call entries are our record, not the model's; a tool
- * call the anchored reply itself asked for is already in the provider's state,
- * so only its result travels. */
+ * model expects. Ask entries are our record, not the model's; a tool call the
+ * anchored reply itself asked for is already in the provider's state, so only
+ * its result travels. */
 export let project = (
   entries: Bundle[],
   tools: Map<Eid, Declared>,
@@ -106,29 +104,26 @@ export let project = (
   for (let b of entries) {
     let kind = kindOf(b)
     let c = comp(b, CALL)
-    if (kind == 'input') out.push({ kind: 'user', text: text(b) })
-    else if (kind == 'output') out.push({ kind: 'assistant', text: text(b) })
-    else if (kind == 'call' && c?.source != null && c.source != anchor) {
+    if (kind == 'input') out.push({ kind: 'user', text: textOf(b) })
+    else if (kind == 'output') out.push({ kind: 'assistant', text: textOf(b) })
+    else if (kind == 'call' && c?.source != anchor) {
       out.push({
         kind: 'call',
-        id: String(c.id),
-        name: tools.get(String(c.to))?.name ?? 'tool',
-        args: String(c.args ?? '{}'),
+        id: String(c!.id),
+        name: tools.get(String(c!.to))?.name ?? 'tool',
+        args: String(c!.args ?? '{}'),
       })
     } else if (kind == 'result') {
       let call = entries.find((e) => e.entity.eid == comp(b, RESULT)?.call)
       out.push({
         kind: 'result',
         id: String(comp(call!, CALL)?.id ?? ''),
-        output: text(b),
+        output: textOf(b),
       })
     }
   }
   return out
 }
-
-let isModelCall = (b: Bundle) =>
-  kindOf(b) == 'call' && comp(b, CALL)?.source == null
 
 /**
  * One step of the daemon over one transcript. Reads the newest entry, does the
@@ -149,9 +144,10 @@ export let react = async (
   let mint = deps.mint ?? (() => crypto.randomUUID() as Eid)
   let own = entries.filter((b) => comp(b, ENTRY)?.session == session)
   let next = (own.length ? seqOf(own.at(-1)!) : seqOf(newest)) + 1
-  let line = (extra: Record<string, Comp>, body = ''): Bundle => ({
+  let line = (extra: Record<string, Comp>, body?: string): Bundle => ({
     entity: { eid: mint() },
-    [ENTRY]: { session, seq: next++, text: body },
+    [ENTRY]: { session, seq: next++ },
+    ...body == null ? {} : { [CONTENT]: { body } },
     ...extra,
   })
   let append = async (added: Bundle[]): Promise<Step> => {
@@ -168,12 +164,12 @@ export let react = async (
     if (t) toolEntities.set(b.entity.eid, t)
   }
 
-  // Open tool calls: perform every one the newest model call asked for that
-  // has no result yet, in one batch, so the model is never asked with a call
-  // it made still unanswered (the provider refuses that). A tool that throws
-  // is an exception and a result saying so, so the model hears what happened
-  // and the session goes on.
-  let asked = entries.filter(isModelCall).at(-1)
+  // Open tool calls: perform every one the newest ask asked for that has no
+  // result yet, in one batch, so the model is never asked with a call it made
+  // still unanswered (the provider refuses that). A tool that throws is an
+  // exception and a result saying so, so the model hears what happened and
+  // the session goes on.
+  let asked = entries.filter((b) => kindOf(b) == 'ask').at(-1)
   let answered = new Set(
     entries.filter((b) => kindOf(b) == 'result')
       .map((b) => String(comp(b, RESULT)?.call)),
@@ -210,7 +206,7 @@ export let react = async (
   if (status == 'running') return nothing
 
   // Pending, or an error under the bound: ask the model. The anchor is the
-  // newest model call with a reply id; only what followed it travels.
+  // newest ask the model can continue from; only what followed it travels.
   let using = usingBefore(entries)
   let modelEid = using?.model == null ? undefined : String(using.model)
   let [modelEntity] = modelEid
@@ -223,25 +219,28 @@ export let react = async (
       line({ [ERROR]: { code: 'no_model' } }, 'no model in force'),
     ])
   }
-  let anchor = deps.anchors
-    ? entries.filter((b) => isModelCall(b) && comp(b, CALL)?.response_id)
-      .at(-1)
+  let anchorId = deps.model.anchor && asked
+    ? deps.model.anchor(asked)
     : undefined
-  let window = anchor
-    ? entries.filter((b) => seqOf(b) > seqOf(anchor))
+  let window = anchorId
+    ? entries.filter((b) => seqOf(b) > seqOf(asked!))
     : entries
   let effort = using?.effort ?? served?.effort
   let req: Request = {
     model: modelName,
     effort: effort == null ? undefined : String(effort),
     instructions: deps.instructions,
-    items: project(window, toolEntities, anchor?.entity.eid),
+    items: project(
+      window,
+      toolEntities,
+      anchorId ? asked!.entity.eid : undefined,
+    ),
     tools: deps.tools.map(({ name, description, parameters }) => ({
       name,
       description,
       parameters,
     })),
-    anchor: anchor ? String(comp(anchor, CALL)!.response_id) : undefined,
+    anchor: anchorId,
   }
   let reply: Reply
   try {
@@ -255,30 +254,30 @@ export let react = async (
         : line({ [EXCEPTION]: {} }, String(e)),
     ])
   }
-  // The call is recorded once the model answered: a call that never went out
-  // takes no seq, so the error or exception that stands for it does.
-  let call = line({
-    [CALL]: {
-      to: modelEid,
-      through: newest.entity.eid,
-      response_id: reply.id,
-    },
+  // The ask is recorded once the model answered: an ask that never went out
+  // takes no seq, so the error or exception that stands for it does. What the
+  // provider keeps about the reply rides beside it as the provider's own comp.
+  let ask = line({
+    [ASK]: { to: modelEid, through: newest.entity.eid },
     ...using ? { [USING]: using } : {},
+    ...deps.model.mark?.(reply) ?? {},
   })
-  let added: Bundle[] = [call]
+  let added: Bundle[] = [ask]
   let byName = new Map(
     [...toolEntities].map(([eid, t]) => [t.name, eid] as const),
   )
   for (let item of reply.items) {
     if (item.kind == 'assistant') {
-      added.push(line({ [OUTPUT]: { source: call.entity.eid } }, item.text))
+      added.push(
+        line({ [CONTENT]: { body: item.text, source: ask.entity.eid } }),
+      )
     } else if (item.kind == 'call') {
       added.push(line({
         [CALL]: {
           to: byName.get(item.name),
           id: item.id,
           args: item.args,
-          source: call.entity.eid,
+          source: ask.entity.eid,
         },
       }))
     }

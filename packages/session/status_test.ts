@@ -9,60 +9,52 @@ import { storage } from '@yaks/sqlite'
 import { mem } from '../sqlite/harness.ts'
 import { modelDoc } from '@yaks/model'
 import { sessionDoc } from './comp.ts'
-import { nativeDoc } from './native.ts'
 import {
-  nativeDerived,
+  kindOf,
+  sessionDerived,
   statusOf,
   type TranscriptStatus,
   usingBefore,
 } from './status.ts'
 
-let vocab = loadVocab([sessionDoc, modelDoc, nativeDoc])
+let vocab = loadVocab([sessionDoc, modelDoc])
 
 let S = 'sess'
-let entry = (n: number, kind: Record<string, unknown>, text = ''): Bundle => ({
+let entry = (n: number, kind: Record<string, unknown>): Bundle => ({
   entity: { eid: `e${n}` },
-  entry: { session: S, seq: n, text },
+  entry: { session: S, seq: n },
   ...kind,
 })
+let input = (n: number) => entry(n, { content: { body: 'hi' } })
+let said = (n: number, source: string) =>
+  entry(n, { content: { body: 'done', source } })
 
 // Every shape, as the entries that make it.
 let shapes: [string, Bundle[], TranscriptStatus][] = [
   ['nothing', [], 'empty'],
-  ['an input', [entry(1, { input: {} })], 'pending'],
-  ['a model call open', [
-    entry(1, { input: {} }),
-    entry(2, { call: { to: 'm' } }),
-  ], 'running'],
+  ['an input', [input(1)], 'pending'],
+  ['an ask open', [input(1), entry(2, { ask: { to: 'm' } })], 'running'],
   ['a tool call open', [
-    entry(1, { input: {} }),
-    entry(2, { call: { to: 'm', response_id: 'r' } }),
+    input(1),
+    entry(2, { ask: { to: 'm' } }),
     entry(3, { call: { to: 't', id: 'c1', source: 'e2' } }),
   ], 'running'],
   ['a result', [
-    entry(1, { input: {} }),
-    entry(2, { call: { to: 'm' } }),
+    input(1),
+    entry(2, { ask: { to: 'm' } }),
     entry(3, { call: { to: 't', id: 'c1', source: 'e2' } }),
-    entry(4, { result: { call: 'e3' } }),
+    entry(4, { result: { call: 'e3' }, content: { body: 'echo' } }),
   ], 'pending'],
-  ['an output', [
-    entry(1, { input: {} }),
-    entry(2, { call: { to: 'm' } }),
-    entry(3, { output: { source: 'e2' } }),
-  ], 'settled'],
-  ['a stop', [entry(1, { input: {} }), entry(2, { stop: {} })], 'stopped'],
   [
-    'an exception',
-    [entry(1, { input: {} }), entry(2, { exception: {} })],
-    'failed',
+    'an output',
+    [input(1), entry(2, { ask: { to: 'm' } }), said(3, 'e2')],
+    'settled',
   ],
-  [
-    'one error',
-    [entry(1, { input: {} }), entry(2, { error: { code: 'x' } })],
-    'pending',
-  ],
+  ['a stop', [input(1), entry(2, { stop: {} })], 'stopped'],
+  ['an exception', [input(1), entry(2, { exception: {} })], 'failed'],
+  ['one error', [input(1), entry(2, { error: { code: 'x' } })], 'pending'],
   ['three errors', [
-    entry(1, { input: {} }),
+    input(1),
     entry(2, { error: { code: 'x' } }),
     entry(3, { error: { code: 'x' } }),
     entry(4, { error: { code: 'x' } }),
@@ -75,12 +67,26 @@ Deno.test('statusOf reads the newest entry', () => {
   }
 })
 
+Deno.test('kindOf: prose alone is an input, prose with a source is an output', () => {
+  assertEquals(kindOf(input(1)), 'input')
+  assertEquals(kindOf(said(2, 'e1')), 'output')
+  assertEquals(
+    kindOf(entry(3, { result: { call: 'e2' }, content: { body: 'x' } })),
+    'result',
+  )
+  assertEquals(
+    kindOf(entry(4, { error: { code: 'x' }, content: { body: 'x' } })),
+    'error',
+  )
+  assertEquals(kindOf(entry(5, {})), undefined)
+})
+
 let store = (): Graph => {
-  let s = storage(mem(), vocab, { derived: nativeDerived })
+  let s = storage(mem(), vocab, { derived: sessionDerived })
   s.install()
   let g = graph({ storage: s, vocab })
   g.apply([
-    { entity: { eid: S }, session: { id: 'one' }, transcript: {} },
+    { entity: { eid: S }, session: { id: 'one' } },
     { entity: { eid: 'm' }, model: { name: 'fake' } },
     { entity: { eid: 't' }, tool: { name: 'echo' } },
   ])
@@ -91,20 +97,24 @@ Deno.test('the SQL view answers the same word as the rule', () => {
   for (let [name, entries, want] of shapes) {
     let g = store()
     if (entries.length) g.apply(entries, { trusted: true })
-    let [s] = g.read(`.transcript.status=${want}`) as Bundle[]
+    let [s] = g.read(`.session.status=${want}`) as Bundle[]
     assertEquals(s?.entity.eid, S, `${name} filters as ${want}`)
-    let [read] = g.read(`.transcript, .session.id=one`) as Bundle[]
-    assertEquals(read.transcript, { status: want }, `${name} reads as ${want}`)
+    let [read] = g.read(`.session.id=one`) as Bundle[]
+    assertEquals(
+      read.session,
+      { id: 'one', status: want },
+      `${name} reads as ${want}`,
+    )
   }
 })
 
 Deno.test('usingBefore is the newest using at or before a seq', () => {
   let entries = [
-    entry(1, { input: {}, using: { model: 'a' } }),
-    entry(2, { call: { to: 'a' }, using: { model: 'a' } }),
-    entry(3, { input: {}, using: { model: 'b' } }),
+    entry(1, { content: { body: 'a' }, using: { model: 'a' } }),
+    entry(2, { ask: { to: 'a' }, using: { model: 'a' } }),
+    entry(3, { content: { body: 'b' }, using: { model: 'b' } }),
   ]
   assertEquals(usingBefore(entries)?.model, 'b')
   assertEquals(usingBefore(entries, 2)?.model, 'a')
-  assertEquals(usingBefore([entry(1, { input: {} })]), undefined)
+  assertEquals(usingBefore([input(1)]), undefined)
 })

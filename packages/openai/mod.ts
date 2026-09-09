@@ -35,6 +35,8 @@ export {
   frames,
   input,
   items,
+  OPENAI_COMP,
+  openaiDoc,
   type Options,
   responses,
 } from './responses.ts'

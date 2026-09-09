@@ -16,7 +16,15 @@ import {
   type Reply,
   type Request,
 } from '@yaks/model'
+import type { VocabDoc } from '@yaks/vocab'
 import type { Credential } from './credential.ts'
+import doc from './vocab.json' with { type: 'json' }
+
+/** The one comp this provider stamps on an ask it answered:
+ * `openai{response_id}`. Load it beside the conversation's vocabulary. */
+export let openaiDoc: VocabDoc = doc
+
+export let OPENAI_COMP = 'openai'
 
 /** How the model is reached. */
 export type Options = {
@@ -206,8 +214,25 @@ let drain = async (
  * A refusal the API named (a 4xx, a failed response), no credential, and a
  * transport that never connected are all {@link ModelError}s; the daemon
  * records those as errors and goes on. Anything else thrown is a defect.
+ *
+ * The model stamps `openai{response_id}` on every ask it answers, and answers
+ * that id as an anchor only when `store` is on: the Codex backend keeps
+ * nothing, so through it a caller replays the conversation and the id is a
+ * record, not a handle.
  */
-export let responses = (opts: Options): Model => async (req) => {
+export let responses = (opts: Options): Model =>
+  Object.assign(ask(opts), {
+    vocab: openaiDoc,
+    mark: (reply: Reply) => ({ [OPENAI_COMP]: { response_id: reply.id } }),
+    anchor: (comps: Record<string, unknown>) => {
+      if (!opts.store) return undefined
+      let id = (comps[OPENAI_COMP] as Record<string, unknown> | undefined)
+        ?.response_id
+      return typeof id == 'string' && id ? id : undefined
+    },
+  })
+
+let ask = (opts: Options) => async (req: Request): Promise<Reply> => {
   let auth: Credential
   try {
     auth = await opts.credential()
