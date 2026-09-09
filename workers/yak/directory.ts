@@ -41,6 +41,13 @@ import { firstOf } from './router.ts'
 import { nameOf } from './signin.ts'
 
 export let META = { space: 'yak', app: 'platform' }
+// The platform's own admin person (D-35373). Agents run a named platform act
+// as it — `yak … --admin` — so the act is recorded as the admin and not as the
+// owner, who did not ask for it. A fleet address (src/mailaddr.ts
+// `mailDomain`), so its sign-in codes land in the tasks graph like any bot
+// account's and no mailbox of anybody's is involved. It is seeded, not waited
+// for: a fresh kernel has one before anybody signs in.
+export let ADMIN = 'admin@bot.yak.sh'
 // The meta space's own store, named the way every app's is. Its slugs are
 // the platform's own and never move, so the name is a constant — door.ts
 // spells it, beside the rest of what addresses a store.
@@ -366,15 +373,25 @@ let cache = new Map<string, { at: number; body: string }>()
 // seeds its own.
 let seeded = new WeakMap<Meta, Promise<void>>()
 
+// What the platform is made of, row by row: the meta space and its app, the
+// admin person, and the admin's seat in that space. Each half is asked for on
+// its own, so a store that has one and not the other — production, seeded
+// before the admin existed; a kernel where the admin signed in before the
+// first directory write minted its person (signin.ts `personOf` goes straight
+// at the store) — is completed rather than left as it is. Two round trips at
+// most, once per isolate, on a write.
 let seed = async (store: Meta) => {
-  if ((await store.query(`.space.slug=${META.space}`)).length) return
-  await store.apply([
-    {
+  let [[space], [admin]] = await Promise.all([
+    store.query(`.space.slug=${META.space}`),
+    store.query(`.person!&.email.address=${ADMIN}`),
+  ])
+  let batch: Bundle[] = []
+  if (!space) {
+    batch.push({
       entity: { eid: '$space' },
       doc: { title: META.space },
       space: { slug: META.space },
-    },
-    {
+    }, {
       entity: { eid: '$app' },
       doc: { title: META.app },
       // The one app whose handle is not minted (`handle`): the meta store is
@@ -383,8 +400,35 @@ let seed = async (store: Meta) => {
       // than left to the backfill, which would only ever arrive at the same
       // string by a longer road.
       app: { slug: META.app, space: '$space', store: META_STORE },
-    },
-  ])
+    })
+  }
+  if (!admin) {
+    batch.push({
+      entity: { eid: '$admin' },
+      person: {},
+      email: { address: ADMIN },
+    })
+  }
+  // Nothing can hold a seat that was minted a line ago, so the seat is only
+  // ever asked about when both ends already existed.
+  let seat = space && admin &&
+    (await store.query(
+      `.member.space=${space.entity.eid}&.member.person=${admin.entity.eid}`,
+    )).length
+  if (!seat) {
+    batch.push({
+      entity: { eid: '$seat' },
+      // Owner: the gate on every platform act is a seat in `yak` and the role
+      // it names — the fee is set by an owner of it (sell.ts `fees`), and the
+      // meter and a sale answer to the same authority.
+      member: {
+        space: space ? space.entity.eid : '$space',
+        person: admin ? admin.entity.eid : '$admin',
+        role: 'owner',
+      },
+    })
+  }
+  if (batch.length) await store.apply(batch)
 }
 
 let notFound = () => new Response('not found', { status: 404 })
@@ -1083,8 +1127,17 @@ export let directory = (via: Fetcher, now = false) => {
       return (await self.space(slug))!
     },
     // Whether nobody belongs yet: read only to admit the first member.
-    memberless: async (space: Space) =>
-      !(await one(`.member.space=${space.eid}&.limit=1`)),
+    // Whether anybody at all holds a seat here — what identity.ts asks of the
+    // meta space, so the first person ever to sign in owns the platform. The
+    // admin's own seat is the seed's (`seed` above), not somebody claiming the
+    // platform, so it does not answer that question: two rows are proof
+    // somebody else is here, one row has to be looked at.
+    memberless: async (space: Space) => {
+      let seats = await query(`.member.space=${space.eid}&.limit=2`)
+      if (seats.length != 1) return !seats.length
+      let seat = seats[0].member
+      return !!seat && idOf(seat.person) == await self.personAt(ADMIN)
+    },
   }
   return self
 }

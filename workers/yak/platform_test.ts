@@ -18,7 +18,7 @@ import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/harness.ts'
-import { directory, META, over, storeName } from './directory.ts'
+import { ADMIN, directory, META, over, storeName } from './directory.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
 import { mint, personOf, spend } from './signin.ts'
@@ -188,6 +188,88 @@ Deno.test('a person is found by their address, or minted at it', async () => {
   let [row] = await at.query(`.eid=${named}`)
   assertEquals((row.doc as { title: string }).title, 'Ana')
   assertEquals((row.email as { address: string }).address, 'ana@yaks.app')
+})
+
+// The platform's own admin (D-35373). It is SEEDED — a fresh kernel has one
+// before anybody signs in — and a store holding half of it is completed rather
+// than left: production was seeded long before the admin existed, and on a
+// kernel where the admin signs in first, `personOf` mints its person straight
+// at the store and never a seat.
+let planted = async (before: Bundle[]) => {
+  let p = platform()
+  // Written AROUND the door, so nothing is seeded by putting them there.
+  if (before.length) await p.at.apply(before)
+  await p.dir.apply({
+    entities: [{
+      entity: { eid: '$s' },
+      doc: { title: 'x' },
+      space: { slug: 'x' },
+    }],
+  })
+  let admin = await p.dir.personAt(ADMIN)
+  assert(admin, 'no admin person')
+  let yak = (await p.dir.space(META.space))!
+  // One of each, however much of it was there before.
+  assertEquals((await p.at.query(`.email.address=${ADMIN}`)).length, 1)
+  assertEquals((await p.at.query(`.member.space=${yak.eid}`)).length, 1)
+  assertEquals(await p.dir.role(yak, admin), 'owner')
+  return { ...p, admin, yak }
+}
+
+Deno.test('the platform seeds an admin person, and completes a half-seeded store', async () => {
+  // Nothing yet: the space, its app, the admin and the seat all arrive at once.
+  await planted([])
+  // The store as production has it: seeded before the admin existed.
+  await planted([
+    {
+      entity: { eid: '$space' },
+      doc: { title: META.space },
+      space: { slug: META.space },
+    },
+  ])
+  // And the admin's own sign-in, ahead of the first directory write.
+  let { at } = await planted([
+    { entity: { eid: '$who' }, person: {}, email: { address: ADMIN } },
+  ])
+  // The sign-in door asks for the person at that address and is answered the
+  // seeded row, so a session at the admin's address IS the admin.
+  assertEquals(
+    await personOf(at, ADMIN),
+    ((await at.query(`.email.address=${ADMIN}`))[0].entity as { eid: string })
+      .eid,
+  )
+})
+
+// Why the seat is worth having: a write made by the admin's session carries
+// the admin in `created.by`, so an agent's platform act reads as the admin and
+// never as the owner (M-31958).
+Deno.test('a write the admin makes is the admin’s', async () => {
+  let { at, admin } = await planted([])
+  await at.apply([{ entity: { eid: '$e' }, doc: { title: 'note' } }], {
+    'x-yak-person': admin,
+    'x-yak-role': 'owner',
+  })
+  let [row] = await at.query('.doc.title=note&.created!')
+  assertEquals((row.created as { by: string }).by, admin)
+})
+
+// The seat the seed writes is the platform's own, so it is not somebody
+// holding the platform: the first person to sign in still owns the meta space
+// (identity.ts), and after them it is theirs.
+Deno.test('the admin’s seat does not make the meta space somebody’s', async () => {
+  let { dir, yak } = await planted([])
+  assertEquals(await dir.memberless(yak), true)
+  let ada = crypto.randomUUID()
+  await dir.apply({
+    entities: [
+      { entity: { eid: ada }, person: {} },
+      {
+        entity: { eid: '$seat' },
+        member: { space: yak.eid, person: ada, role: 'owner' },
+      },
+    ],
+  })
+  assertEquals(await dir.memberless(yak), false)
 })
 
 Deno.test("a break the platform noted about itself is the meta store's", async () => {
