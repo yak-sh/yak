@@ -163,12 +163,12 @@ slow('an unsigned webhook is refused, and no Origin is not', async () => {
     })
     assertEquals((await old.json()).error.message, 'the signature is too old')
 
-    // THE ONE THAT MATTERS. `/api/*` at the apex is behind the Origin guard
-    // that separates spaces (route.ts `sameOrigin`, T-33118), and Stripe posts
-    // server to server with NO Origin at all. An absent Origin is allowed
-    // deliberately — a browser always sends one — and a webhook silently
-    // 403ing is a plan that never activates, which nobody would see until a
-    // customer complained. So: no Origin gets in...
+    // THE ONE THAT MATTERS. This door is behind the Origin guard that
+    // separates spaces (route.ts `sameOrigin`, named in `doorway`, T-33118),
+    // and Stripe posts server to server with NO Origin at all. An absent
+    // Origin is allowed deliberately — a browser always sends one — and a
+    // webhook silently 403ing is a plan that never activates, which nobody
+    // would see until a customer complained. So: no Origin gets in...
     let stripe = await send({
       'stripe-signature': await signed(SECRET, raw, at),
     })

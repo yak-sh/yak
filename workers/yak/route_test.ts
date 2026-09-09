@@ -193,7 +193,13 @@ Deno.test('doorway: the graph doors, not the pages', () => {
     // rewrites it (index.ts `aimed`).
     ['/api/apply', true],
     ['/mcp', true],
+    // The doors named rather than shaped: the drop form, and the two money
+    // doors that lost the guard when they left `/api/` (T-35357).
+    ['/deploy', true],
+    ['/stripe/webhook', true],
+    ['/stripe/connect', true],
     ['/', false],
+    ['/stripe/', false],
     ['/recipes/', false],
     ['/recipes/api', false],
     ['/recipes/apiary/x', false],

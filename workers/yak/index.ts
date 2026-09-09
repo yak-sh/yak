@@ -196,9 +196,11 @@ let serve = async (req: Request, env: Env, r: Route) => {
   }
   // The OTHER Stripe door, and it is its own endpoint on purpose (sell.ts,
   // T-34523): what a SELLER's connected account says happened, verified with a
-  // second signing secret. Not under `/api/` — that prefix is the graph's
-  // (route.ts `doorway`, which would make this a same-origin-guarded door), and
-  // this is server to server with no Origin at all.
+  // second signing secret. Not under `/api/` — that prefix is the graph's —
+  // but named in route.ts `doorway` all the same, so both money doors keep the
+  // same-origin guard their `/api/` spelling used to give them for free. It
+  // costs this one nothing: Stripe posts server to server with no Origin at
+  // all, and an absent Origin is allowed (route.ts `sameOrigin`).
   if (path == '/stripe/connect') return sell.fetch(req, env)
   // What the platform takes from a sale (sell.ts `fees`, T-34554), read and
   // set by whoever owns the `yak` space. Before the connector, for the reason

@@ -298,8 +298,18 @@ export let platform = (host: string, pathname: string, env: Host = {}) =>
 // the session cookie behind it, and sibling spaces are same-site, so a page in
 // anybody's space could aim a form at anybody else's `/deploy` and the cookie
 // would ride along. Same guard, same reason.
+//
+// So are the two money doors, by NAME rather than by prefix (T-35357). Both
+// were `/api/…` when they were written and were guarded by the shape above;
+// renaming the billing webhook to `/stripe/webhook` (ea6ddda6, 1855f420)
+// carried it out of that shape and quietly out of the guard, while the test
+// that asserts a stranger's page is refused there kept passing on the old
+// spelling. A door that MOVES money must not depend on its spelling for that,
+// so it is listed. Guarding costs Stripe nothing: it posts server to server
+// with no `Origin`, and an absent one is allowed below.
 export let doorway = (pathname: string) =>
   pathname == '/mcp' || pathname == '/deploy' ||
+  pathname == '/stripe/webhook' || pathname == '/stripe/connect' ||
   /^(?:\/[^/]+)?\/api\//.test(pathname)
 
 // The browser's own word for the page that asked, against the hostname it
