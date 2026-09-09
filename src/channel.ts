@@ -266,7 +266,6 @@ export let findSession = (
 // already opened or archived never re-rings. Narrowing later is one line here.
 // `operator` gates PROJECT mail to the operator loop. Missing identity fails
 // closed; claimed-work comments and session knocks are selected independently.
-// Direct session comments remain a deprecated compatibility arm.
 // A letter to the SESSION ITSELF (`S-31@<fleet domain>`, resolved in
 // src/mail.ts) is direct address and rings whatever loop this is — the
 // operator gate belongs to project mail alone, exactly as it does in the
@@ -406,12 +405,14 @@ let indexBatch = (changes: Change[], withBorn: boolean): Batch => {
 //
 //   1. a `comment` whose target is one of this run's CLAIMED tasks — but ONLY
 //      at mint, when the batch also carries the doc that holds the words (a
-//      bodiless later patch is skipped). It names the task in `on=` so the run
-//      knows which work changed. This session's eid is accepted only through
-//      the deprecated compatibility arm.
-//   1b. a `notice` (D-13858): keyed exactly like a comment (claimed task, plus
-//      the same session compatibility arm), but emitted, not said — off the
-//      mail relay and out of the conversation thread.
+//      bodiless later patch is skipped). It names the work in `on=` so the run
+//      knows which one changed. An operator loop also hears a comment on its
+//      ACTOR — said to the venture, not to one of its sessions — the same door
+//      the inbox predicate opens (client.ts `addressed`). A comment aimed at
+//      the session entity itself is a comment on that entity like any other:
+//      it reaches a run only when that run claims it.
+//   1b. a `notice` (D-13858): keyed exactly like a comment, but emitted, not
+//      said — off the mail relay and out of the conversation thread.
 //   2. a `knock` (types.ts): the shared `deliver {to}` is the recipient —
 //      this session or its actor — and target is what to look at; the
 //      words ride as a plain comment on the TARGET in the same batch (the
@@ -449,10 +450,15 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
     // resolves to no instrument), never == the reading session.
     if (created.get(c.eid)?.via == ctx.sessionEid) continue
 
+    // Said to this run: on work it claims, or to the actor it runs for when it
+    // is that actor's operator loop.
+    let mine = (at: string) =>
+      !!ctx.claimedEids?.has(at) ||
+      (ctx.operator == true && !!ctx.actorEid && at == ctx.actorEid)
+
     if (c.name == 'comment') {
       let at = str(c.comp.target)
-      let mine = at == ctx.sessionEid || !!ctx.claimedEids?.has(at)
-      if (!mine) continue
+      if (!mine(at)) continue
       let took = ctx.claimedAt?.(at)
       if (took && str(created.get(c.eid)?.at) <= took) continue
       if (metas.has(c.eid)) continue // a meta memo is harvested, never injected live
@@ -463,25 +469,24 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       let meta: Record<string, string> = {
         kind: 'comment',
         from: cleanAttr(from),
+        // Name the claimed work so the operator knows which one — the sweep
+        // line prefixes the same id.
+        on: cleanAttr(ctx.idOf(at) ?? at),
       }
       let id = ctx.idOf(c.eid)
       if (id) meta.id = id
-      // On a claimed TASK (not the session), name the target so the operator
-      // knows which one — the sweep line prefixes the same id.
-      if (at != ctx.sessionEid) meta.on = cleanAttr(ctx.idOf(at) ?? at)
       out.push({ content, meta, eid: c.eid })
       continue
     }
 
     // A `notice` (D-13858): something happened ABOUT its target that nobody
-    // said. Served beside comments and keyed the same way — its target is
-    // this session or a task it claims — but it is not a comment: it carries
-    // its own words in a doc, never rode a conversation, and fanout cannot
-    // see it. `kind` names what happened; the byline is the emitter.
+    // said. Served beside comments and keyed the same way — but it is not a
+    // comment: it carries its own words in a doc, never rode a conversation,
+    // and fanout cannot see it. `kind` names what happened; the byline is the
+    // emitter.
     if (c.name == 'notice') {
       let at = str(c.comp.target)
-      let mine = at == ctx.sessionEid || !!ctx.claimedEids?.has(at)
-      if (!mine) continue
+      if (!mine(at)) continue
       let took = ctx.claimedAt?.(at)
       if (took && str(created.get(c.eid)?.at) <= took) continue
       let content = words(docs.get(c.eid))
@@ -491,10 +496,10 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       let meta: Record<string, string> = {
         kind: 'notice',
         from: cleanAttr(from),
+        on: cleanAttr(ctx.idOf(at) ?? at),
       }
       let id = ctx.idOf(c.eid)
       if (id) meta.id = id
-      if (at != ctx.sessionEid) meta.on = cleanAttr(ctx.idOf(at) ?? at)
       out.push({ content, meta, eid: c.eid })
       continue
     }

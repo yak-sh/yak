@@ -39,7 +39,8 @@ Deno.test('attentionOf derives model receipt from transcript references', () => 
 
 Deno.test('channelEvents: one-pass indexing feeds every branch', () => {
   let batch: Change[] = [
-    // comment aimed at the served session — reads docs + created(byline)
+    // comment aimed at the served session entity — a comment on an entity
+    // this run does not claim, so it is not delivered
     { eid: 'c1', name: 'comment', comp: { target: 'S' } },
     { eid: 'c1', name: 'doc', comp: { title: '', body: 'hello session' } },
     { eid: 'c1', name: 'created', comp: { by: 'U-1' } },
@@ -47,8 +48,8 @@ Deno.test('channelEvents: one-pass indexing feeds every branch', () => {
     { eid: 'c2', name: 'comment', comp: { target: 'TASK' } },
     { eid: 'c2', name: 'doc', comp: { title: '', body: 'on the task' } },
     { eid: 'c2', name: 'created', comp: { by: 'U-2' } },
-    // a `meta`-tagged comment on the session — must be SKIPPED (metas index)
-    { eid: 'c3', name: 'comment', comp: { target: 'S' } },
+    // a `meta`-tagged comment on claimed work — must be SKIPPED (metas index)
+    { eid: 'c3', name: 'comment', comp: { target: 'TASK' } },
     { eid: 'c3', name: 'doc', comp: { title: '', body: 'a dream memo' } },
     { eid: 'c3', name: 'meta', comp: {} },
     // a live knock to the session — recipients index + its note comment on X
@@ -85,34 +86,29 @@ Deno.test('channelEvents: one-pass indexing feeds every branch', () => {
   let evs = channelEvents(batch, ctx)
 
   assertEquals(evs.map((e) => e.meta.kind), [
-    'comment', // c1
     'comment', // c2
     'knock', // k1
     'mail', // m1
     'recall', // r1  (proves the trailing session-less entry did NOT erase it)
   ])
-  // c3 (meta) and k2 (settled) are absent.
+  // c1 (aimed at the session entity), c3 (meta) and k2 (settled) are absent.
 
-  // deprecated direct-session compatibility: bare, no `on`
-  assertEquals(evs[0].content, 'hello session')
-  assertEquals(evs[0].meta.from, 'U-1')
-  assertEquals(evs[0].meta.on, undefined)
   // comment on the claimed task: names the task, byline from created
-  assertEquals(evs[1].content, 'on the task')
-  assertEquals(evs[1].meta.on, 'T-9')
-  assertEquals(evs[1].meta.from, 'U-2')
+  assertEquals(evs[0].content, 'on the task')
+  assertEquals(evs[0].meta.on, 'T-9')
+  assertEquals(evs[0].meta.from, 'U-2')
   // knock: head from recipients+target, note from the target's comment (docs)
-  assertEquals(evs[2].content, 'look at T-5 — look here')
+  assertEquals(evs[1].content, 'look at T-5 — look here')
   // mail: verified arrival rendered from its doc
-  assertEquals(evs[3].content, 'a letter')
-  assertEquals(evs[3].meta.auth, 'VERIFIED')
+  assertEquals(evs[2].content, 'a letter')
+  assertEquals(evs[2].meta.auth, 'VERIFIED')
   // recall: content from the bodies index
-  assertEquals(evs[4].content, 'M-1 · a memory')
+  assertEquals(evs[3].content, 'M-1 · a memory')
 })
 
-// A notice (D-13858) is served beside comments, keyed the same way — about
-// the session or a claimed task — but as its own `notice` kind, with the
-// emitter's byline. A notice about an unrelated entity reaches nobody here.
+// A notice (D-13858) is served beside comments, keyed the same way — about a
+// claimed task — but as its own `notice` kind, with the emitter's byline. A
+// notice about the session entity or an unrelated entity reaches nobody here.
 Deno.test('channelEvents: notices serve beside comments', () => {
   let batch: Change[] = [
     { eid: 'nz', name: 'notice', comp: { target: 'S', event: 'lapse' } },
@@ -121,19 +117,16 @@ Deno.test('channelEvents: notices serve beside comments', () => {
     { eid: 'nt', name: 'notice', comp: { target: 'TASK', event: 'sweep' } },
     { eid: 'nt', name: 'doc', comp: { title: '', body: 'sweep found it' } },
     { eid: 'nt', name: 'created', comp: { by: 'U-2' } },
-    // about an entity that is neither the session nor a claimed task — dropped
+    // about an entity this session does not claim — dropped
     { eid: 'nx', name: 'notice', comp: { target: 'OTHER', event: 'scene' } },
     { eid: 'nx', name: 'doc', comp: { title: '', body: 'not for me' } },
   ]
   let evs = channelEvents(batch, ctx)
-  assertEquals(evs.map((e) => e.meta.kind), ['notice', 'notice'])
-  // on the session: bare, byline from created
-  assertEquals(evs[0].content, 'lease lapsed')
-  assertEquals(evs[0].meta.on, undefined)
-  assertEquals(evs[0].meta.from, 'U-1')
-  // on the claimed task: names the task
-  assertEquals(evs[1].content, 'sweep found it')
-  assertEquals(evs[1].meta.on, 'T-9')
+  assertEquals(evs.map((e) => e.meta.kind), ['notice'])
+  // on the claimed task: names the task, byline from created
+  assertEquals(evs[0].content, 'sweep found it')
+  assertEquals(evs[0].meta.on, 'T-9')
+  assertEquals(evs[0].meta.from, 'U-2')
 })
 
 // A session's OWN write is never a message back to itself (T-20163). The skip

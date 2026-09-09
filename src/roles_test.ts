@@ -1104,7 +1104,7 @@ let settled = (role: string, project: string) => {
 }
 
 // Attention aimed at `target`: a comment on the scope reaches its operator
-// loop, a comment on a session reaches that session directly.
+// loop — the one door a role's attention comes through.
 let ping = (target: string, body = 'ping') => {
   let msg = uid()
   apply(db, [
@@ -1162,7 +1162,7 @@ Deno.test('wake_policy attention advances an existing settled session when atten
   assertEquals(mspawns(role), 0) // idle: no pin
 
   let run = settled(role, project)
-  ping(run) // a notice straight at the session
+  ping(project) // said to the venture; its settled operator advances
   await rolesSweep(cast, { ...deps, now: () => new Date().toISOString() })
   // Advanced in place, not re-spawned: the same door got the wake stamp.
   assertEquals(mspawns(role), 1)
@@ -1208,7 +1208,7 @@ Deno.test('a native role refuses a non-always wake_policy with a durable error',
 })
 
 Deno.test('graph-native role attention is content-free and coalesced', async () => {
-  let { role } = seed('managed', 'codex')
+  let { project, role } = seed('managed', 'codex')
   let runner = uid()
   apply(db, [{ eid: runner, name: 'runner', comp: { name: 'tasksd' } }])
   await rolesSweep(cast, deps)
@@ -1235,7 +1235,7 @@ Deno.test('graph-native role attention is content-free and coalesced', async () 
       name: 'doc',
       comp: { title: '', body: 'SECRET ROLE WORDS' },
     },
-    { eid: message, name: 'comment', comp: { target: run.eid } },
+    { eid: message, name: 'comment', comp: { target: project } },
   ])
 
   await rolesSweep(cast, { ...deps, now: () => new Date().toISOString() })

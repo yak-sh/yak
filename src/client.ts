@@ -2726,9 +2726,8 @@ export let commitsOn = (deps: Dep[], all: Row[], eid: string) =>
 
 // The operator loop is the session that TRIAGES a project — the only door that
 // receives project-wide mail and actor knocks. Every run still participates in
-// the graph and hears comments on its claimed work; direct session comments
-// remain migration compatibility. No session means a deliberate preview/bare
-// view, which keeps showing project mail.
+// the graph and hears comments on its claimed work. No session means a
+// deliberate preview/bare view, which keeps showing project mail.
 export let isOperator = (s?: Record<string, unknown>) =>
   !s ||
   (s.operator == true && !s.requested_task &&
@@ -2788,9 +2787,8 @@ export let subsOf = (all: Row[], actor?: string) => {
 }
 
 // Addressed to this reader — the four doors an item reaches attention
-// through: a comment on work it claims (or the deprecated direct-session
-// compatibility arm), a knock aimed at the session or its actor, or mail that
-// ARRIVED
+// through: a comment on work it claims or on the session itself, a knock aimed
+// at the session or its actor, or mail that ARRIVED
 // (message_id is the inbound mark; sent mail carries none). One predicate,
 // so the digest, the TUI, and the web read the SAME inbox.
 export let addressed = (who: Reader) => (r: Row): boolean => {
@@ -2806,8 +2804,8 @@ export let addressed = (who: Reader) => (r: Row): boolean => {
     return t == who.session || !!who.claims?.has(t) ||
       (who.operator == true && !!who.actor && t == who.actor)
   }
-  // A notice reaches the same doors a comment does — claimed work, the legacy
-  // session address, or the actor for an operator loop — but it was emitted,
+  // A notice reaches the same doors a comment does — claimed work, the
+  // session itself, or the actor for an operator loop — but it was emitted,
   // not said (D-13858). Same addressing, different provenance.
   let n = r.comps.notice
   if (n) {
@@ -3966,8 +3964,8 @@ export let contextDigest = (
 
 // The comms bus, read side. The Claude channel's own pure filter is reused over
 // a set of rows so every provider gets the same recipient and verification
-// rules: claimed-work comments, the direct-session compatibility arm, knocks,
-// and verified project mail for an operator. This is an agent QUERY, not an
+// rules: claimed-work comments, knocks, and verified project mail for an
+// operator. This is an agent QUERY, not an
 // inbox read: serving it writes no read-state. The result's eids let a caller
 // avoid rendering the same row twice inside one response, and its newest clock
 // lets a transport compare an accepted wake with later work.
@@ -4413,8 +4411,8 @@ export let projectionSnapshot = async (): Promise<Snapshot> => {
 }
 
 // The rows the bus's selector might pick, as index queries: a comment on work
-// this run claims (plus the direct-session compatibility arm), a knock aimed at
-// the session or its actor, and mail aimed at the session or its project.
+// this run claims, a knock aimed at the session or its actor, and mail aimed
+// at the session or its project.
 // Human read-state never screens this agent query. `archived` is completion,
 // while `opened`/`notified` written for a human must not hide work from a model.
 //
@@ -4435,9 +4433,9 @@ export let busRows = async (who: Reader, q: Querier = query) => {
     .filter(Boolean).join(',')
   let [said, emitted, aimed, letters, floated] = await Promise.all([
     q([`.comment.target=${held}`]),
-    // A notice (D-13858) is addressed like a comment — claimed task, legacy
-    // session target, or the operator's actor — so it rides the same `held`
-    // list. Its own arm keeps busRows the SUPERSET of channelEvents' branch.
+    // A notice (D-13858) is addressed like a comment, so it rides the same
+    // `held` list. Its own arm keeps busRows the SUPERSET of channelEvents'
+    // branch.
     q([`.notice.target=${held}`]),
     // WHO a knock is for is the shared deliver.to; the same facet a wake/mail
     // wears, so keep only the knock rows the bus renders.

@@ -430,7 +430,7 @@ Deno.test('find: T-num, bare num, eid, alias slug', () => {
   assertEquals(find(all, 'T-99'), undefined)
 })
 
-Deno.test('notices: claimed-work comments + direct-session compatibility', () => {
+Deno.test('notices: claimed-work comments only', () => {
   let B = 'aaaaaaaa-0000-4000-8000-000000000010' // another session
   let P = 'aaaaaaaa-0000-4000-8000-000000000011' // their shared actor
   let mk = (
@@ -468,7 +468,7 @@ Deno.test('notices: claimed-work comments + direct-session compatibility', () =>
       // on the claimed task, after the cutoff: heard
       ...mk('c-1', T1, B, '2026-01-02', 'heads up'),
       { eid: 'c-1', name: 'review', comp: { verdict: 'approved' } },
-      // aimed at the session itself: heard (a message TO sess-x)
+      // aimed at the session entity: not claimed work, so not heard
       ...mk('c-2', S, B, '2026-01-03', 'ping'),
       // spoken via the listener: never echoed back
       ...mk('c-3', T1, S, '2026-01-04', 'my own note'),
@@ -478,18 +478,18 @@ Deno.test('notices: claimed-work comments + direct-session compatibility', () =>
     deps: snap.deps,
   }
   let n = noticesFor(busSnap, 'sess-x')
-  assertEquals(n.lines.length, 2)
+  assertEquals(n.lines.length, 1)
   assertEquals(n.lines[0].includes('heads up'), true)
   assertEquals(n.lines.some((line) => line.includes('older than')), false)
   assertEquals(n.lines[0].includes('[approved]'), true)
-  assertEquals(n.lines[1].includes('P-81 · via S-80: ping'), true)
-  assertEquals(n.eids.sort(), ['c-1', 'c-2'])
+  assertEquals(n.lines.some((line) => line.includes('ping')), false)
+  assertEquals(n.eids, ['c-1'])
   // Human inbox state cannot hide work from an agent.
   let pre: Snapshot = {
     changes: [...busSnap.changes, { eid: 'c-1', name: 'notified', comp: {} }],
     deps: snap.deps,
   }
-  assertEquals(noticesFor(pre, 'sess-x').lines.length, 2)
+  assertEquals(noticesFor(pre, 'sess-x').lines.length, 1)
   // The retired session cursor cannot hide them either.
   let acked: Snapshot = {
     changes: busSnap.changes.map((c) =>
@@ -499,7 +499,7 @@ Deno.test('notices: claimed-work comments + direct-session compatibility', () =>
     ),
     deps: snap.deps,
   }
-  assertEquals(noticesFor(acked, 'sess-x').lines.length, 2)
+  assertEquals(noticesFor(acked, 'sess-x').lines.length, 1)
   // unknown session: silent
   assertEquals(noticesFor(busSnap, 'sess-nobody'), {
     lines: [],
@@ -613,10 +613,21 @@ Deno.test('notices: an explicit context read is bounded and stateless', () => {
         comp: { at: `2026-01-${String(i + 1).padStart(2, '0')}` },
       },
       { eid, name: 'doc', comp: { title: '', body: `message ${i}` } },
-      { eid, name: 'comment', comp: { target: S } },
+      { eid, name: 'comment', comp: { target: T1 } },
     ]
   }).flat()
-  let g: Snapshot = { changes: [...snap.changes, ...comments], deps: snap.deps }
+  let g: Snapshot = {
+    changes: [
+      ...snap.changes,
+      {
+        eid: T1,
+        name: 'claim',
+        comp: { session: S, claimed_at: '2025-12-31' },
+      },
+      ...comments,
+    ],
+    deps: snap.deps,
+  }
   let first = noticesFor(g, 'sess-x')
   assertEquals(first.lines.length, 11) // 10 items + overflow summary
   assertEquals(first.eids.length, 10)
@@ -629,11 +640,16 @@ Deno.test('notices: human stamps cannot drain an agent query', () => {
     { eid, name: 'entity', comp: { eid, num: 90 } },
     { eid, name: 'created', comp: { at, via: B } },
     { eid, name: 'doc', comp: { title: '', body } },
-    { eid, name: 'comment', comp: { target: S } },
+    { eid, name: 'comment', comp: { target: T1 } },
   ]
   let g: Snapshot = {
     changes: [
       ...snap.changes,
+      {
+        eid: T1,
+        name: 'claim',
+        comp: { session: S, claimed_at: '2026-01-01' },
+      },
       { eid: B, name: 'entity', comp: { eid: B, num: 30, created_at: '' } },
       { eid: B, name: 'session', comp: { id: 'sess-b' } },
       ...mk('m-1', '2026-01-02', 'first ping'),

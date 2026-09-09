@@ -68,24 +68,24 @@ let ctx = (over: Partial<Ctx> = {}): Ctx => ({
 
 // --- comments ----------------------------------------------------------------
 
-Deno.test('a deprecated direct-session comment still emits', () => {
+// A comment aimed at the session entity is a comment on an entity this run
+// does not claim: nothing is delivered, in any mode.
+Deno.test('a comment aimed at the session entity is not delivered', () => {
   let batch = [
     ch('c1', 'doc', { title: '', body: 'ping' }),
     ...comment('c1', 'sess'),
   ]
-  let expected = [{
-    content: 'ping',
-    meta: { kind: 'comment', from: 'P-1 · via S-1' },
-    eid: 'c1',
-  }]
-  for (let mode of [undefined, 'catchup', 'resume'] as const) {
-    assertEquals(channelEvents(batch, ctx({ mode })), expected)
+  for (let mode of [undefined, 'catchup', 'resume', 'inbox'] as const) {
+    assertEquals(channelEvents(batch, ctx({ mode })), [])
   }
 })
 
+let claimed = (over: Partial<Ctx> = {}) =>
+  ctx({ claimedEids: new Set(['t9']), ...over })
+
 Deno.test('a comment mint with no doc in the batch is skipped (bodiless)', () => {
-  let batch = comment('c1', 'sess')
-  assertEquals(channelEvents(batch, ctx()), [])
+  let batch = comment('c1', 't9')
+  assertEquals(channelEvents(batch, claimed()), [])
 })
 
 Deno.test('a comment aimed elsewhere is ignored', () => {
@@ -96,18 +96,17 @@ Deno.test('a comment aimed elsewhere is ignored', () => {
   assertEquals(channelEvents(batch, ctx()), [])
 })
 
-Deno.test('a meta-tagged comment on the session is NOT delivered live (T-17319)', () => {
-  // The load-bearing half: a :meta memo that falls back to anchoring on the
-  // session entity would otherwise deliver as an ordinary comment aimed at
-  // that session. The `meta` tag rides the same batch and suppresses it, so
-  // the doer is never knocked — the dream harvests it later instead.
+Deno.test('a meta-tagged comment on claimed work is NOT delivered live (T-17319)', () => {
+  // A :meta memo anchored on claimed work would otherwise deliver as an
+  // ordinary comment. The `meta` tag rides the same batch and suppresses it,
+  // so the doer is never knocked — the dream harvests it later instead.
   let batch = [
     ch('c1', 'doc', { title: '', body: 'a note for the dream' }),
-    ...comment('c1', 'sess'),
+    ...comment('c1', 't9'),
     ch('c1', 'meta', {}),
   ]
   for (let mode of [undefined, 'catchup', 'resume', 'inbox'] as const) {
-    assertEquals(channelEvents(batch, ctx({ mode })), [])
+    assertEquals(channelEvents(batch, claimed({ mode })), [])
   }
 })
 
@@ -153,17 +152,17 @@ Deno.test('claim acquisition takes the comments already on the task', () => {
 Deno.test('unresolvable provenance renders as unknown', () => {
   let batch = [
     ch('c1', 'doc', { title: '', body: 'hey' }),
-    ...comment('c1', 'sess', 'zzz', 'xxx'),
+    ...comment('c1', 't9', 'zzz', 'xxx'),
   ]
-  assertEquals(channelEvents(batch, ctx())[0].meta.from, 'unknown')
+  assertEquals(channelEvents(batch, claimed())[0].meta.from, 'unknown')
 })
 
 Deno.test('a comment falls back to its title when the body is empty', () => {
   let batch = [
     ch('c1', 'doc', { title: 'subject only', body: '' }),
-    ...comment('c1', 'sess'),
+    ...comment('c1', 't9'),
   ]
-  assertEquals(channelEvents(batch, ctx())[0].content, 'subject only')
+  assertEquals(channelEvents(batch, claimed())[0].content, 'subject only')
 })
 
 // --- knocks ------------------------------------------------------------------
@@ -404,7 +403,8 @@ slow('a catch-up comment keeps its actor and instrument byline', () => {
       name: 'session',
       comp: { id: writerId, actor: actor },
     },
-    { eid: target, name: 'session', comp: { id: crypto.randomUUID() } },
+    { eid: target, name: 'doc', comp: { title: 'claimed work' } },
+    { eid: target, name: 'task', comp: {} },
   ])
   let base = snapshot(db)
   let eid = crypto.randomUUID()
@@ -425,7 +425,8 @@ slow('a catch-up comment keeps its actor and instrument byline', () => {
   let human = (eid: string) => humanId(index, eid)
   assertEquals(
     channelEvents(replay, {
-      sessionEid: target,
+      sessionEid: crypto.randomUUID(),
+      claimedEids: new Set([target]),
       idOf: human,
       mode: 'catchup',
     }),
@@ -434,6 +435,7 @@ slow('a catch-up comment keeps its actor and instrument byline', () => {
       meta: {
         kind: 'comment',
         from: `${human(actor)} · via ${human(writer)}`,
+        on: human(target)!,
         id: human(eid)!,
       },
       eid,

@@ -407,11 +407,15 @@ Deno.test('command: setting a wake returns every pending wake for its session', 
 Deno.test('task_context surfaces agent input without human read-state', async () => {
   let { db, io } = graph()
   let s = crypto.randomUUID()
+  let t = crypto.randomUUID()
   let c = crypto.randomUUID()
   apply(db, [
     { eid: s, name: 'session', comp: { id: 'inbox-reader' } },
+    { eid: t, name: 'doc', comp: { title: 'claimed work', body: '' } },
+    { eid: t, name: 'task', comp: {} },
+    { eid: t, name: 'claim', comp: { session: s, claimed_at: '2026-01-01' } },
     { eid: c, name: 'doc', comp: { title: '', body: 'please review' } },
-    { eid: c, name: 'comment', comp: { target: s } },
+    { eid: c, name: 'comment', comp: { target: t } },
   ])
   let writes: Change[][] = []
   let write = io.write

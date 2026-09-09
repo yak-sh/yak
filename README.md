@@ -19,8 +19,7 @@ project, `S-31` session, `M-40` memory, `E-9` mail…).
   stored list: a task is on a board because it matches, so membership can't
   drift
 - a **comment** is `doc` + `comment(target)` — aimed at ANY entity; steering
-  belongs on the task, where its current or next run reads it (comments aimed at
-  sessions remain a deprecated compatibility path)
+  belongs on the task, where its current or next run reads it
 - a **session** is an agent run, reified; a **claim** is its lease on a task —
   the server refuses to hand a held lease to another session
 - mail, memories, personas, people, webhook deliveries are entities too — one
@@ -147,8 +146,7 @@ carry a result-only `rank` component; `/` in the web UI, `task search`, and MCP
   channel plugin.
 - **Channel plugin** (`channels/`) — a Claude Code channel that pushes comments
   on a run's claimed work INTO its running transcript, fed by the same `/ws`
-  broadcast every browser hears. Direct session comments still arrive for
-  migration compatibility, but steering should target the task. Project mail and
+  broadcast every browser hears. Steering targets the task. Project mail and
   project-actor knocks require project-attention capability (`--operator` for an
   ad-hoc session, or a role binding). `channels/README.md` has the mechanism and
   enablement.
@@ -167,7 +165,7 @@ bare `claude` and `codex` launches keep their native configuration untouched.
 SessionStart reifies the session and returns the normal graph digest, including
 claimable work, to every task-launched agent. `--operator` grants only
 project-wide attention: project mail and project-actor knocks. Comments on
-claimed work reach its run; direct session messages remain compatibility only.
+claimed work reach its run.
 
 Projects may add Claude-only invocation settings in
 `.tasks/claude-settings.json`; hook arrays append after Tasks' lifecycle hooks

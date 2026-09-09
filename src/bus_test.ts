@@ -166,9 +166,9 @@ let cases: [string, Snapshot, number][] = [
   ['nothing waiting', graph(), 0],
   ['a comment on the claimed task', graph(said('c1', 20, T, 'heads up')), 1],
   [
-    'a deprecated direct-session comment still arrives',
+    'a comment aimed at the session entity is not delivered',
     graph(said('c2', 21, S, 'ping')),
-    1,
+    0,
   ],
   [
     // Three comments sharing one created.at, inserted num-DESCENDING so the
@@ -179,9 +179,9 @@ let cases: [string, Snapshot, number][] = [
     // T-15463. The eid tie-break makes both orders identical.
     'tied timestamps resolve identically for both suppliers',
     graph(
-      said('z3', 42, S, 'gamma', '2026-01-05'),
-      said('z2', 41, S, 'beta', '2026-01-05'),
-      said('z1', 40, S, 'alpha', '2026-01-05'),
+      said('z3', 42, T, 'gamma', '2026-01-05'),
+      said('z2', 41, T, 'beta', '2026-01-05'),
+      said('z1', 40, T, 'alpha', '2026-01-05'),
     ),
     3,
   ],
@@ -195,10 +195,12 @@ let cases: [string, Snapshot, number][] = [
     graph(said('c4', 23, T, 'my own note', '2026-01-02', S)),
     0,
   ],
+  // Said to the venture, not to one of its sessions: the operator loop hears
+  // it, the same door the inbox predicate opens.
   [
-    'a comment aimed at the actor, not the session',
+    'a comment aimed at the actor reaches its operator loop',
     graph(said('c5', 24, P, 'to the venture')),
-    0,
+    1,
   ],
   [
     'a knock, with the words riding as a comment on its target',
@@ -257,13 +259,13 @@ let cases: [string, Snapshot, number][] = [
     'everything at once',
     graph(
       said('c8', 34, T, 'heads up'),
-      said('c9', 35, S, 'ping'),
+      said('c9', 35, S, 'ping'), // aimed at the session entity: not delivered
       said('ca', 36, X, 'away'),
       knocked('k3', 37, S, T),
       letter('m6', 38, P),
       letter('m7', 39, P, { verified: 0 }),
     ),
-    4,
+    3,
   ],
   [
     'more than one screenful',
@@ -274,7 +276,7 @@ let cases: [string, Snapshot, number][] = [
           said(
             `o${i}`,
             50 + i,
-            S,
+            T,
             `message ${i}`,
             `2026-02-${String(i + 1).padStart(2, '0')}`,
           ),

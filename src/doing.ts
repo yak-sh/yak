@@ -318,9 +318,7 @@ export let wireDoing = (d: Doing) => {
   })
   on('comment', {
     created: commented(cast),
-    doc:
-      'a comment on claimed work resumes or steers its process-backed run; ' +
-      'a direct session target remains deprecated compatibility',
+    doc: 'a comment on claimed work resumes or steers its process-backed run',
   })
   on('comment', {
     created: (_eid, comp) => roleAttention(cast)(String(comp.target)),
@@ -334,7 +332,7 @@ export let wireDoing = (d: Doing) => {
     where: 'serve',
     created: (eid, comp) => native.comment(String(comp.target), eid),
     doc: 'a comment on claimed work appends content-free attention to its ' +
-      'graph-native run; direct session targets remain compatibility',
+      'graph-native run',
   })
   on('comment', {
     created: obeyed(cast, d.codexReady),

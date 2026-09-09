@@ -346,8 +346,7 @@ export let elide = (r: Row) =>
 
 let BUS = `Pass your stable session id and the reply also carries anything
 you haven't seen — especially comments on work you claim. Steering belongs on
-the task, where the current or next run reads it; comments aimed at S-* remain
-deprecated compatibility.`
+the task, where the current or next run reads it.`
 
 // The one habit tool-arg strings breed: form-filling. Agents who write
 // beautiful .md FILES compress a body ARG into one run-on paragraph —
@@ -450,8 +449,8 @@ export let mcpServer = (io: IO) => {
   // find() over the wire: the row an address names, or undefined — the same
   // four forms (T-3, num, slug, uuid), resolved by the server's locate().
   let got = async (id: string) => find(await io.get([id]), id)
-  // A persona tier tied in through the generic door earns the same note
-  // `task link` prints: an unaccepted memory sits in the tier saying nothing
+  // A persona tier tied in through the generic door earns the same note the
+  // edge sentence prints: an unaccepted memory sits in the tier saying nothing
   // until a person decides it (client.ts tierNote). Reads the EFFECTIVE batch,
   // where dualEdge has already lowered every spelling into edge{from,to} — one
   // shape to scan, and real eids rather than whatever the caller typed.
@@ -1619,8 +1618,8 @@ with an id). An optional verdict makes it a review; its body is the
 rationale and may be empty for a bare verdict. Pass the same stable
 session identifier you claim with, for attribution.
 
-Steer agents by commenting on the task or tree root. A comment aimed at
-an S-* run still works during migration, but that address is deprecated.
+Steer agents by commenting on the task or tree root: a comment reaches a
+run through the work it claims, never through its S-* address.
 
 Returns the comment's own id (C-13). A comment is an ordinary entity, so
 REVISE a wrong one in place — graph_apply {eid: 'C-13', name: 'doc',

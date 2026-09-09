@@ -112,7 +112,7 @@ Ordinary sessions and role sessions share the same graph primitives. They differ
 only in the attention they are eligible to receive:
 
 - Every session receives comments on tasks it claims and knocks aimed at its
-  session. Direct session comments are a deprecated compatibility input.
+  session.
 - A session with project-attention capability additionally receives verified
   project mail and knocks aimed at the project actor.
 - A managed specialist spawned for one task is not a project operator merely
