@@ -149,7 +149,18 @@ own `uploadpack.allowAnySHA1InWant=false` — because serving an object by
 guessing its id publishes what nobody published.
 
 It routes nothing: which repository a URL names, and who may read it, belong to
-whoever mounts it.
+whoever mounts it. yaks.app mounts an app's deploy history at `<app>.git` and
+answers the app's own address — the URL from the browser's address bar — with a
+301 to it, so either is a clone:
+
+```sh
+git clone https://ada.yaks.app/recipes/
+git clone https://ada.yaks.app/recipes.git   # where the first one lands
+```
+
+The query is what tells a clone from a page: `?service=git-upload-pack` is
+something no browser asks for, and git follows that first redirect and fetches
+from where it landed.
 
 ## What is not here
 

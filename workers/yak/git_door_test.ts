@@ -134,6 +134,60 @@ Deno.test('git clones an app at <app>.git, and its history is its deploys', asyn
   }
 })
 
+Deno.test('git clones the browser address, with and without its slash', async () => {
+  let { env } = platform('a probe secret')
+  let { app } = await standing(env, 'public')
+  // A file at the very address the door now answers: what proves the app is
+  // still the one serving its pages.
+  await deploy(env, app, 1, {
+    'index.html': '<h1>hi</h1>\n',
+    'info/refs': 'a static file\n',
+  })
+
+  let server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
+    let path = new URL(req.url).pathname
+    let at = { env, req, path, space: 'ada' }
+    return await gitPlugin.routes![0](at) ?? new Response('no', { status: 404 })
+  })
+  let dir = await Deno.makeTempDir({ prefix: 'yaks-app-clone-' })
+  try {
+    let base = `http://127.0.0.1:${server.addr.port}/recipes`
+    // The URL straight from the browser, and the same without its slash: git
+    // strips the slash, so both ask for the same advertisement, follow the
+    // 301, and post the fetch to the address they landed on.
+    for (let [n, url] of [`${base}/`, base].entries()) {
+      let into = `${dir}/${n}`
+      await git('-c', 'protocol.version=2', 'clone', '--quiet', url, into)
+      assertEquals(await git('-C', into, 'log', '--format=%s'), 'deploy 1\n')
+      assertEquals(
+        await Deno.readTextFile(`${into}/info/refs`),
+        'a static file\n',
+      )
+      await git('-C', into, 'fsck', '--strict')
+    }
+  } finally {
+    await server.shutdown()
+    await Deno.remove(dir, { recursive: true })
+  }
+})
+
+Deno.test('the browser address redirects to the repository, query and all', async () => {
+  let { env } = platform('a probe secret')
+  await standing(env, 'public')
+  let res = await asked(env, '/recipes/info/refs?service=git-upload-pack', {
+    'git-protocol': 'version=2',
+  })
+  assertEquals(res!.status, 301)
+  assertEquals(
+    res!.headers.get('location'),
+    'https://ada.yaks.app/recipes.git/info/refs?service=git-upload-pack',
+  )
+  // A browser asking for the app's own `info/refs`, and the fetch endpoint
+  // under the app: both are the app's to answer, which is what `null` says.
+  assertEquals(await asked(env, '/recipes/info/refs'), null)
+  assertEquals(await asked(env, '/recipes/git-upload-pack'), null)
+})
+
 Deno.test('a private app has no repository, to anyone who is not a member', async () => {
   let { env } = platform('a probe secret')
   let { app } = await standing(env, 'private')
