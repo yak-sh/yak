@@ -52,6 +52,7 @@ import {
   isAdmin,
   isTest,
   isTestAddress,
+  LEGACY,
   localPart,
   named,
   pick,
@@ -75,6 +76,7 @@ import {
   feeNow,
   linkFor,
   meAt,
+  renewing,
   rpc,
   saidBy,
   setFee,
@@ -119,6 +121,20 @@ let store = () => {
 
 let write = (path: string, text: string) => (writeEnv(path, text), text)
 
+// A session the platform renewed, written back under the same account
+// (yaks_api.ts `renewing`, workers/yak/session.ts `slid`): the platform
+// re-mints a cookie past half its life, and a box that kept the old value
+// would sign out ninety days after its first sign-in however often it called.
+// The file is re-read here rather than reused from `acting`, so a renewal
+// never carries away a line another shell wrote in the meantime.
+let keep = (at: Account, fresh: string) => {
+  let { path, text } = store()
+  write(
+    path,
+    at.address ? saved(text, at.address, fresh) : setEnv(text, LEGACY, fresh),
+  )
+}
+
 // WHO this command runs as, and the mark it wears when the answer is somebody
 // else's own account. Every verb that touches the platform goes through here.
 let acting = (s: Said, note: (line: string) => void): Account => {
@@ -130,6 +146,7 @@ let acting = (s: Said, note: (line: string) => void): Account => {
     current: env[CURRENT],
   })
   if (!isTest(at)) note(banner(at))
+  renewing((fresh) => keep(at, fresh))
   return at
 }
 

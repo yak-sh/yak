@@ -105,6 +105,7 @@ import {
   shared,
 } from './route.ts'
 import * as sell from './sell.ts'
+import { slid } from './session.ts'
 import { metaBreaks, noted, refusal } from './unseen.ts'
 import { scheduled } from './wake.ts'
 
@@ -461,7 +462,7 @@ let report = async (env: Env, what: string, e: unknown) => {
   })
 }
 
-export default {
+let router = {
   async fetch(req: Request, env: Env): Promise<Response> {
     let host = hostOf(req)
     let r = route(host, new URL(req.url).pathname, env)
@@ -593,4 +594,17 @@ export default {
       )
     }
   },
+}
+
+// The Worker itself: the router above, with every answer leaving past the
+// SLIDING session (session.ts `slid`, T-35380). A request whose cookie is
+// more than half way through its life is answered with a fresh one, so an
+// account that keeps asking never signs out. It is wrapped around the whole
+// router rather than written into a route, because every door has to slide
+// and the request is the same one at all of them — `fetch` below reads the
+// cookie the browser sent, whatever the router made of the request inside.
+export default {
+  ...router,
+  fetch: async (req: Request, env: Env): Promise<Response> =>
+    slid(req, env, await router.fetch(req, env)),
 }

@@ -27,6 +27,7 @@ import {
   meta,
   signIn,
 } from './probe.ts'
+import { COOKIE, sign } from '../../src/token.ts'
 import { SENDS } from './signin.ts'
 import { MANAGE, managePath } from './route.ts'
 import type { Connection } from './connections.ts'
@@ -1446,3 +1447,34 @@ slow('a link signs a person in, once or until it is revoked', async () => {
     await k.stop()
   }
 })
+
+// The renewal, wired (session.ts `slid`, T-35380): every answer leaves the
+// router past it, so a cookie past half its life comes back fresh from a door
+// that knows nothing about sessions — here the apex's own home page.
+slow(
+  'an answer to a request past half a session renews the cookie',
+  async () => {
+    let k = await kernel()
+    try {
+      let aged = async (days: number) =>
+        `${COOKIE}=${await sign(
+          {
+            person: 'p-1',
+            space: null,
+            exp: Math.floor(Date.now() / 1000) + (90 - days) * 24 * 60 * 60,
+          },
+          k.secret,
+        )}`
+      let home = async (cookie: string) => {
+        let r = await k.at('yaks.app', '/', { headers: { cookie } })
+        await r.body?.cancel()
+        return r.headers.get('set-cookie')
+      }
+      assertMatch((await home(await aged(46))) ?? '', /^yak_session=/)
+      assertEquals(await home(await aged(30)), null)
+      assertEquals(await home(await aged(91)), null)
+    } finally {
+      await k.stop()
+    }
+  },
+)

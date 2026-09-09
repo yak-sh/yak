@@ -10,8 +10,10 @@ import {
   claimsOf,
   codeIn,
   cookieOf,
+  feeNow,
   listedOn,
   plain,
+  renewing,
   saidBy,
   saidOn,
   storeUrl,
@@ -147,4 +149,56 @@ Deno.test('a kernel page is read back as the words it says', () => {
     'dana & sam lose their way in',
   ])
   assertEquals(saidOn('not a page'), { title: '', lead: '' })
+})
+
+// The sliding session, this end (T-35380): the platform re-mints a cookie past
+// half its life, so any answer may carry a new value for the same account and
+// the box must write it down — src/yak.ts puts the account file behind
+// `renewing`. The fetch is stubbed, and the answer is as little of one as the
+// client reads: what it says, and the header a renewal would arrive in. A web
+// `Response` would cost this process its whole fetch warm-up for a test that
+// never leaves it.
+let fee = (set?: string) => ({
+  ok: true,
+  headers: {
+    get: (name: string) => (name == 'set-cookie' ? set ?? null : null),
+  },
+  text: () => Promise.resolve('{"bps":250,"rate":"2.5%"}'),
+})
+
+let answering = (res: ReturnType<typeof fee>) => {
+  let real = globalThis.fetch
+  let sent: Record<string, string>[] = []
+  globalThis.fetch = ((_url: string, init: RequestInit) => {
+    sent.push(init.headers as Record<string, string>)
+    return Promise.resolve(res)
+  }) as unknown as typeof fetch
+  return { sent, done: () => void (globalThis.fetch = real) }
+}
+
+Deno.test('a renewed cookie is handed on, and an ordinary answer is quiet', async () => {
+  let fresh: string[] = []
+  renewing((v) => fresh.push(v))
+  let renewed = answering(
+    fee('yak_session=slid.token; Domain=yaks.app; Path=/; Max-Age=7776000'),
+  )
+  try {
+    await feeNow('old.token')
+    assertEquals(renewed.sent[0].cookie, 'yak_session=old.token')
+    assertEquals(fresh, ['slid.token'])
+  } finally {
+    renewed.done()
+  }
+  // Nothing set, and the very cookie that was sent echoed back: neither is a
+  // renewal, and neither touches the account.
+  for (let set of [undefined, 'yak_session=old.token; Path=/']) {
+    let quiet = answering(fee(set))
+    try {
+      await feeNow('old.token')
+      assertEquals(fresh, ['slid.token'])
+    } finally {
+      quiet.done()
+    }
+  }
+  renewing(() => {})
 })

@@ -59,17 +59,41 @@ export let cookieOf = (setCookie: string | null): string | null => {
   return m ? m[1] : null
 }
 
+// A session the platform RENEWED, told to whoever is keeping it (T-35380).
+// The platform slides a cookie past half its life (workers/yak/identity.ts
+// `slid`), so any answer here may carry a new value for the same account, and
+// a client that dropped it would sign this box out ninety days after its
+// first sign-in however busy it had been. This module holds no credential and
+// must not learn where one lives, so it hands the value on: src/yak.ts puts
+// the account file behind this.
+let told: (fresh: string) => void = () => {}
+
+export let renewing = (note: (fresh: string) => void) => (told = note)
+
+// EVERY call this client makes: the account's cookie goes out here and a
+// renewed one is read back here, so no verb has to think about either.
+let sent = async (
+  url: string,
+  session?: string,
+  init: RequestInit & { headers?: Record<string, string> } = {},
+) => {
+  let r = await fetch(url, {
+    ...init,
+    headers: { ...init.headers, ...(session ? head(session) : {}) },
+  })
+  let fresh = session ? cookieOf(r.headers.get('set-cookie')) : null
+  if (fresh && fresh != session) told(fresh)
+  return r
+}
+
 let form = (fields: Record<string, string>) =>
   new URLSearchParams(fields).toString()
 
 let posted = (url: string, fields: Record<string, string>, session?: string) =>
-  fetch(url, {
+  sent(url, session, {
     method: 'POST',
     redirect: 'manual',
-    headers: {
-      'content-type': 'application/x-www-form-urlencoded',
-      ...(session ? head(session) : {}),
-    },
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: form(fields),
   })
 
@@ -130,7 +154,7 @@ export let FEE = '/api/fee'
 /** The rate as it stands. Any signed-in account may ask; only an owner of the
  * `yak` space is answered. */
 export let feeNow = (session: string): Promise<Fee> =>
-  said(fetch(apex(FEE), { headers: head(session) }))
+  said(sent(apex(FEE), session))
 
 /** Set it. Whole basis points — 250 is 2.5%, 0 takes nothing. */
 export let setFee = (session: string, bps: number): Promise<Fee> =>
@@ -200,9 +224,9 @@ export let codeFor = async (
 export let rpc = (session: string) => {
   let n = 0
   return async (method: string, params: unknown = {}) => {
-    let r = await fetch(apex('/mcp'), {
+    let r = await sent(apex('/mcp'), session, {
       method: 'POST',
-      headers: { ...head(session), 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method, params }),
     })
     if (r.status != 200) {
@@ -275,7 +299,7 @@ export let storeQuery = async (
   let url = `${storeUrl(at, '/query')}?${
     filters.map(encodeURIComponent).join('&')
   }`
-  let r = await fetch(url, { headers: head(session) })
+  let r = await sent(url, session)
   let body = await bodyOf(r)
   if (!r.ok) throw new Error(`${at} refused the query: ${JSON.stringify(body)}`)
   return body
@@ -286,9 +310,9 @@ export let storeApply = async (
   at: string,
   batch: unknown,
 ) => {
-  let r = await fetch(storeUrl(at, '/apply'), {
+  let r = await sent(storeUrl(at, '/apply'), session, {
     method: 'POST',
-    headers: { ...head(session), 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify(batch),
   })
   let body = await bodyOf(r)
@@ -308,7 +332,7 @@ export type Me = {
 // client door that answers a ROLE, so a space with no app in it has no way to
 // be asked — `whoami` says so rather than guessing.
 export let meAt = async (session: string, at: string): Promise<Me | null> => {
-  let r = await fetch(storeUrl(at, '/me'), { headers: head(session) })
+  let r = await sent(storeUrl(at, '/me'), session)
   if (!r.ok) {
     await r.body?.cancel()
     return null
@@ -370,8 +394,7 @@ let read = (status: number, html: string) => {
 // What deleting this space would destroy, as the page names it. A GET only
 // ever draws (identity.ts `closing`), so asking changes nothing.
 export let doomedIn = async (session: string, slug: string) => {
-  let r = await fetch(apex(`/space/${slug}/delete`), {
-    headers: head(session),
+  let r = await sent(apex(`/space/${slug}/delete`), session, {
     redirect: 'manual',
   })
   let html = await r.text()

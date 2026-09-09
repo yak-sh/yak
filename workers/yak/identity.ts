@@ -81,7 +81,7 @@ import {
   OAuthProvider,
   type OAuthProviderOptions,
 } from '@cloudflare/workers-oauth-provider'
-import { cookie, cookieValue, sign, verify } from '../../src/token.ts'
+import { cookieValue, verify } from '../../src/token.ts'
 import { connectionsOf } from './connections.ts'
 import { HANDOFF, handoffTo, opener, safeNext, spender } from './handoff.ts'
 export { HANDOFF } from './handoff.ts'
@@ -133,11 +133,7 @@ import {
 } from './pages.ts'
 import { hostOf, MANAGE, OAUTH, onZone, says, SLUG } from './route.ts'
 import { canon, mint, nameOf, personOf, spend } from './signin.ts'
-import type { Caller } from './session.ts'
-
-// A month of not signing in again. The cookie is the browser's; an agent's
-// token has the provider's own, shorter life.
-let SESSION = 30 * 24 * 60 * 60
+import { type Caller, minted } from './session.ts'
 
 // What a grant carries and a token gives back: the person, nothing else.
 // Membership is read from the directory at request time, never a claim.
@@ -277,14 +273,6 @@ let redirect = (to: string, set?: string, status = 302) =>
 // address spells, else the first they own.
 let backTo = (mine: string, back: string, env: Host) =>
   (back && onZone(back, env)) || `https://${mine}.${apex(env)}${MANAGE}`
-
-// The cookie's Domain: the platform's own apex, so one sign-in serves every
-// space's hostname. On a dev host there is no domain to share — an IP takes
-// no Domain attribute at all — so the cookie stays host-only.
-let domainOf = (req: Request, env: Host) => {
-  let host = hostOf(req)
-  return host == apex(env) || host.endsWith(`.${apex(env)}`) ? apex(env) : ''
-}
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
@@ -546,15 +534,11 @@ export let handoff = async (req: Request, env: Env): Promise<Response> => {
       }`,
     )
   }
-  let token = await sign(
-    { person, space: null, exp: Math.floor(Date.now() / 1000) + SESSION },
-    secret(env),
-  )
   return new Response(null, {
     status: 303,
     headers: {
       location: to,
-      'set-cookie': cookie(token, domainOf(req, env), SESSION),
+      'set-cookie': await minted(req, env, secret(env), person),
       'referrer-policy': 'no-referrer',
     },
   })
@@ -596,11 +580,7 @@ let landed = async (
       signed_in: { at: new Date().toISOString(), via },
     }], KERNEL)
   }
-  let token = await sign(
-    { person, space: null, exp: Math.floor(Date.now() / 1000) + SESSION },
-    secret(env),
-  )
-  let set = cookie(token, domainOf(req, env), SESSION)
+  let set = await minted(req, env, secret(env), person)
   // See Other: the code was POSTed, and where it sends them is a page to GET,
   // never that form again. A return on a customer's own hostname becomes a
   // HANDOFF (the platform cookie just set never rides there); anything else is
