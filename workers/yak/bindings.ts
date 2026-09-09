@@ -38,13 +38,22 @@ export let resourceName = async (
   return `${label || 'app'}-${key}`
 }
 
-export let bindings = async (env: Env, app: Pick<App, 'eid'>) =>
-  (await meta(env).query(`.binding.app=${app.eid}`)).map((r) => ({
+// What is bound to an app — or to MANY apps in one read, which is how a
+// listing asks (tools.ts `app_list`, T-35431). Every row names its own app, so
+// the flat answer groups without a second question.
+export let bindings = async (
+  env: Env,
+  app: Pick<App, 'eid'> | Pick<App, 'eid'>[],
+) => {
+  let eids = [app].flat().map((a) => a.eid)
+  if (!eids.length) return []
+  return (await meta(env).query(`.binding.app=${eids.join(',')}`)).map((r) => ({
     ...(r.binding as Omit<Binding, 'eid'>),
     eid: r.entity.eid,
   })).sort((a, b) =>
     a.name.localeCompare(b.name) || a.type.localeCompare(b.type)
   )
+}
 
 let paths: Record<Product, string> = {
   d1: '/d1/database',

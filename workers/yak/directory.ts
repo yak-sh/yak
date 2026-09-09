@@ -878,9 +878,16 @@ export let directory = (via: Fetcher, now = false) => {
         .find((a) => a.slug != slug && a.slugs.includes(slug))
       return app ?? null
     },
-    // Every app in a space, oldest first — the order they were made.
-    apps: async (space: Space): Promise<App[]> =>
-      (await query(`.app.space=${space.eid}&${ABOUT}`)).map(appOf),
+    // Every app in a space, oldest first — the order they were made. MANY
+    // spaces is one read rather than one per space, because a person's whole
+    // listing is one question (tools.ts `app_list`, T-35431); the answer is
+    // still one flat list, and a caller wanting them per space groups by
+    // `app.space`.
+    apps: async (space: Space | Space[]): Promise<App[]> => {
+      let eids = [space].flat().map((s) => s.eid)
+      if (!eids.length) return []
+      return (await query(`.app.space=${eids.join(',')}&${ABOUT}`)).map(appOf)
+    },
     // The space that pays as this Stripe customer (billing.ts). It is how a
     // subscription event is attributed when its metadata does not say — a
     // space keeps ONE customer for its whole life, so the answer is one space
@@ -1051,7 +1058,17 @@ export let directory = (via: Fetcher, now = false) => {
     // still means their own space when they name none. Name a role and the
     // answer is the spaces they hold it in — `owner` is the set that means
     // "spaces of theirs", which is not the set they can see (T-33142).
-    spaces: async (person: string, role?: Role): Promise<Space[]> => {
+    spaces: async (person: string, role?: Role): Promise<Space[]> =>
+      (await self.seats(person, role)).map((s) => s.space),
+    // The same question with the seat kept: what the person IS in each space,
+    // which the membership read already answered. Asking `role` back per space
+    // afterwards was a second read for a row this one held, and reading the
+    // spaces one eid at a time was a third per space — three spaces cost eight
+    // round trips where the whole answer is three (T-35431).
+    seats: async (
+      person: string,
+      role?: Role,
+    ): Promise<{ space: Space; role: Role }[]> => {
       // A filter resolves an eid to an entity, so a person the meta store has
       // never seen — someone who signed in before it kept a row — makes the
       // question itself unanswerable. No row, no memberships. Nobody at all
@@ -1060,14 +1077,17 @@ export let directory = (via: Fetcher, now = false) => {
       let members = await query(
         `.member.person=${person}${role ? `&.member.role=${role}` : ''}`,
       )
-      let spaces: Space[] = []
+      let held = new Map<string, Role>()
       for (let m of members) {
-        let row = m.member && await one(`.eid=${idOf(m.member.space)}`)
-        if (row?.space && row.space.slug != META.space) {
-          spaces.push(spaceOf(row))
-        }
+        if (m.member) held.set(idOf(m.member.space), m.member.role)
       }
-      return spaces
+      if (!held.size) return []
+      // Bare `.eid=` and nothing else: naming components would PROJECT the row
+      // down to them, and a space is read whole ({@link spaceOf}).
+      let rows = await query(`.eid=${[...held.keys()].join(',')}`)
+      return rows
+        .filter((r) => r.space && r.space.slug != META.space)
+        .map((r) => ({ space: spaceOf(r), role: held.get(r.entity.eid)! }))
     },
     // The next free spelling of a derived name: the name itself, else
     // numbered until nothing answers to it. What `own` mints, and what the

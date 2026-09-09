@@ -30,6 +30,7 @@ import { inApp } from './tool.ts'
 import { letters } from './letters.ts'
 import { appVocab } from './vocab.ts'
 import { clock } from './timing.ts'
+import { KERNEL, meta } from './meta.ts'
 import { stages } from '../../bin/app-deploy-time.ts'
 
 Deno.test('staging tool URLs and app mail use the same configured host', async () => {
@@ -400,5 +401,68 @@ Deno.test('a deploy says how many round trips it took', async () => {
   assertEquals(
     await costs('app_deploy', { space: 'ada', app: 'recipes' }),
     { hops: 17, r2: 27 },
+  )
+})
+
+// And what a LISTING costs (T-35431). The shape is what the exact numbers are
+// here to hold: the directory is asked a FIXED five times however many spaces
+// and apps the answer has — the caller's seats, the apps across them, what is
+// bound to those apps — and only the one fact an app's own store alone holds
+// (what is broken in it, unseen.ts `noted`) costs per app, two facets each,
+// asked as one wave. Space by space and app by app it was 38.
+Deno.test('a listing asks the directory a fixed number of times', async () => {
+  let { env } = platform('listing-hops-secret')
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  let ADA = 'a0000000-0000-4000-8000-0000000000ad'
+  let setup: Ctx = { env, dir, person: ADA }
+  for (let space of ['one', 'two', 'three']) {
+    await call(setup, 'space_new', { slug: space, title: space })
+    for (let app of ['a', 'b', 'c']) {
+      await call(setup, 'app_new', { space, slug: `${app}pp`, title: app })
+    }
+  }
+  let costs = async (args: Record<string, unknown>) => {
+    let c = clock()
+    await c.counting(() =>
+      call({ env, dir, person: ADA, clock: c }, 'app_list', args)
+    )
+    let said = stages(c.header())
+    return { hops: said.hops, r2: said.r2 }
+  }
+  // 3 seats + 1 apps + 1 bindings, then 9 apps × 2 facets.
+  assertEquals(await costs({}), { hops: 23, r2: 0 })
+  // One space named is read and its seat asked for by name — 2 for 3 apps.
+  assertEquals(await costs({ space: 'one' }), { hops: 10, r2: 0 })
+})
+
+// The other half of asking once: every row of the one answer has to find its
+// way back to the app it is about. A binding names its own app, so it does.
+Deno.test('one read of the bindings still lands each on its own app', async () => {
+  let { env } = platform('listing-bindings-secret')
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  let ADA = 'a0000000-0000-4000-8000-0000000000ad'
+  let ctx: Ctx = { env, dir, person: ADA }
+  await call(ctx, 'space_new', { slug: 'ada', title: 'Ada' })
+  await call(ctx, 'app_new', { space: 'ada', slug: 'recipes', title: 'R' })
+  await call(ctx, 'app_new', { space: 'ada', slug: 'garden', title: 'G' })
+  let [space] = await dir.spaces(ADA)
+  let [recipes] = await dir.apps(space)
+  await meta(env).apply([{
+    entity: { eid: '$binding' },
+    binding: {
+      app: recipes.eid,
+      name: 'DB',
+      type: 'd1',
+      id: '',
+      resource: 'recipes-db',
+    },
+  }], KERNEL)
+  let said = await call(ctx, 'app_list', {})
+  let listed = (said.data as {
+    spaces: { apps: { slug: string; bindings: unknown[] }[] }[]
+  }).spaces[0].apps
+  assertEquals(
+    listed.map((a) => [a.slug, a.bindings.length]),
+    [['recipes', 1], ['garden', 0]],
   )
 })

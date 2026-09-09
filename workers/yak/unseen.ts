@@ -309,6 +309,11 @@ let graphAt = (env: Env, space: Space, app: App, who: Who) => {
 
 // The open items of one app: both facets, unseen only unless `all`. A hit wears
 // the facet as its `kind`, which is what an id is spelled from (`line`).
+//
+// Two reads because they are two tables and the filter grammar has no
+// alternation — but ONE round trip, since the second never needed the first's
+// answer. Asked in turn, a listing over a person's apps paid the app store's
+// latency twice per app (T-35431).
 export let openIn = async (
   env: Env,
   space: Space,
@@ -317,17 +322,18 @@ export let openIn = async (
   all = false,
 ) => {
   let seen = all ? '' : '&.notified='
-  let hits: Hit[] = []
-  for (let facet of ['exception', 'error']) {
-    try {
-      let found = await graphAt(env, space, app, who)
-        .query(`.${facet}!&.doc?&.archived=${seen}`)
-      hits.push(...found.map((b) => ({ kind: facet, ...b }) as unknown as Hit))
-    } catch (e) {
-      throw new Error(`${app.slug}: ${e instanceof Error ? e.message : e}`)
-    }
+  let at = graphAt(env, space, app, who)
+  try {
+    let found = await Promise.all(
+      ['exception', 'error'].map(async (facet) =>
+        (await at.query(`.${facet}!&.doc?&.archived=${seen}`))
+          .map((b) => ({ kind: facet, ...b }) as unknown as Hit)
+      ),
+    )
+    return found.flat()
+  } catch (e) {
+    throw new Error(`${app.slug}: ${e instanceof Error ? e.message : e}`)
   }
-  return hits
 }
 
 // What the app has already moved past, for the RIDER only (T-34338). A break

@@ -228,6 +228,17 @@ export let inSpace = async (ctx: Ctx, args: Args, write = false) => {
   return { space, who }
 }
 
+// One named space as a SEAT — the shape `directory.seats` answers in, so a
+// listing over one space and a listing over all of them read the same
+// (tools.ts `app_list`).
+export let seatIn = async (ctx: Ctx, slug: string) => {
+  let space = await ctx.dir.space(slug)
+  if (!space) throw new Error(`no space ${slug}`)
+  let role = await ctx.dir.role(space, ctx.person)
+  if (!role) throw new Error(`not a member of ${space.slug}`)
+  return [{ space, role }]
+}
+
 export let inApp = async (ctx: Ctx, args: Args, write = false) => {
   let { space, who } = await inSpace(ctx, args, write)
   let slug = text(args.app, 'app')

@@ -221,6 +221,7 @@ import {
   type Out,
   ownSpace,
   type Row,
+  seatIn,
   type Shape,
   SPACE,
   str,
@@ -3137,26 +3138,48 @@ let OURS: Row[] = [
         space: str('one space to list; leave it out for all of theirs'),
       },
     },
+    // The listing is one question, so it is asked as one (T-35431): five
+    // directory reads that do not grow with the answer — the caller's SEATS
+    // (which spaces, and what they are in each), every app across them, and
+    // everything bound to those apps — then one parallel wave for the single
+    // fact only an app's own store holds. Asked space by space and app by app
+    // it was eleven reads before the first app and three more per app, in
+    // turn: three spaces of three apps cost 38 round trips and now cost 23,
+    // 18 of them at once (tools_test.ts).
     run: async (ctx, args) => {
-      let spaces = args.space == null
-        ? await ctx.dir.spaces(ctx.person)
-        : [await ctx.dir.space(text(args.space, 'space'))]
-      if (!spaces.length) spaces = [await ctx.dir.own(ctx.person)]
+      let seats = args.space == null
+        ? await ctx.dir.seats(ctx.person)
+        : await seatIn(ctx, text(args.space, 'space'))
+      // Nobody's space yet: `own` mints them one, and it is theirs to own.
+      if (!seats.length) {
+        seats = [{ space: await ctx.dir.own(ctx.person), role: 'owner' }]
+      }
+      let seatOf = new Map(seats.map((s) => [s.space.eid, s]))
+      let every = await ctx.dir.apps(seats.map((s) => s.space))
+      // Two lists, because they are two different things to say: what the
+      // person HAS, and what they threw away and can still have back
+      // (erase.ts, T-34430).
+      let living = every.filter((a) => !a.trashed)
+      let bound = await bindings(ctx.env, living)
+      // What is broken in each app, which only that app's store knows
+      // (unseen.ts `noted` writes it there, dispatch.ts files it). One wave
+      // for all of them, so the listing waits once however many apps it has.
+      let broken = new Map(
+        await Promise.all(living.map(async (app) => {
+          let { space, role } = seatOf.get(app.space)!
+          let who: Who = { person: ctx.person, role }
+          return [
+            app.eid,
+            (await openIn(ctx.env, space, app, who, true)).length,
+          ] as const
+        })),
+      )
       let lines: string[] = []
       let out = []
-      for (let space of spaces) {
-        if (!space) throw new Error(`no space ${args.space}`)
-        let who: Who = {
-          person: ctx.person,
-          role: await ctx.dir.role(space, ctx.person),
-        }
-        if (!who.role) throw new Error(`not a member of ${space.slug}`)
-        let all = await ctx.dir.apps(space)
-        // Two lists, because they are two different things to say: what the
-        // person HAS, and what they threw away and can still have back
-        // (erase.ts, T-34430).
-        let apps = all.filter((a) => !a.trashed)
-        let bin = all.filter((a) => a.trashed)
+      for (let { space, role } of seats) {
+        let mine = every.filter((a) => a.space == space.eid)
+        let apps = mine.filter((a) => !a.trashed)
+        let bin = mine.filter((a) => a.trashed)
         // The space itself may be in the trash (erase.ts, T-34431), and then
         // NOTHING under it is answering however true the rest of the listing
         // still is — every app is kept exactly as it is, and that address is
@@ -3172,8 +3195,8 @@ let OURS: Row[] = [
         )
         let listed = []
         for (let app of apps) {
-          let bound = await bindings(ctx.env, app)
-          let errors = (await openIn(ctx.env, space, app, who, true)).length
+          let held = bound.filter((b) => b.app == app.eid)
+          let errors = broken.get(app.eid) ?? 0
           // What this app spent this month, as the hourly sweep last read it
           // (usage.ts). Nothing metered yet says nothing.
           let its = app.meter?.month == monthOf(new Date()) ? app.meter : null
@@ -3193,7 +3216,7 @@ let OURS: Row[] = [
             errors,
             usage: its,
             home: front,
-            bindings: bound.map(({ name, type, resource }) => ({
+            bindings: held.map(({ name, type, resource }) => ({
               name,
               type,
               resource,
@@ -3208,7 +3231,7 @@ let OURS: Row[] = [
               front ? ' — the front page' : ''
             }`,
           )
-          lines.push(...bindingLines(bound).map((line) => `  ${line}`))
+          lines.push(...bindingLines(held).map((line) => `  ${line}`))
         }
         if (!apps.length) lines.push('- no apps yet')
         // Where the space stands against what it is allowed (T-32758), in a
@@ -3241,7 +3264,7 @@ let OURS: Row[] = [
           // membership is the directory's fact: a client that asked an app's
           // `/me` for it instead would wake a Durable Object per space to
           // learn what this one answer already knows (T-35384).
-          role: who.role,
+          role,
           apps: listed,
           trash: bin.map((a) => ({
             slug: a.slug,
@@ -3264,7 +3287,7 @@ let OURS: Row[] = [
         text: lines.join('\n'),
         data: { spaces: out },
         // Only one space in hand has an unseen channel to append to.
-        space: spaces.length == 1 ? spaces[0]! : undefined,
+        space: seats.length == 1 ? seats[0]!.space : undefined,
       }
     },
   },
