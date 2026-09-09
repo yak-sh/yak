@@ -30,7 +30,7 @@ let registry = define([{
       h('button', { disabled: true, onClick: () => {} }, 'Open'),
       h('span', { hidden: false, 'aria-hidden': false }, 'Visible'),
     ),
-}], { aliases: { Card: 'Tile' } })
+}])
 let ctx = { href: '/?q="<&' }
 
 let signature = (root: Element): unknown => [
@@ -42,7 +42,7 @@ let signature = (root: Element): unknown => [
 ]
 
 Deno.test('HTML escapes content and agrees with the mounted Preact view', () => {
-  let html = render(registry, bundle, 'Library.Card', vocab, ctx)
+  let html = render(registry, bundle, 'Library.Tile', vocab, ctx)
   let { document } = parseHTML(`<main>${html}</main>`)
   let root = document.querySelector('main')!
   root.normalize()
@@ -54,7 +54,7 @@ Deno.test('HTML escapes content and agrees with the mounted Preact view', () => 
   assertEquals(card.querySelector('button')?.getAttribute('onClick'), null)
   assertEquals(card.querySelector('span')?.hasAttribute('hidden'), false)
   let Entity = entity({ registry, vocab, store: () => bundle })
-  let mounted = mount(h(Entity, { eid: 'page', view: 'Library.Card', ...ctx }))
+  let mounted = mount(h(Entity, { eid: 'page', view: 'Library.Tile', ...ctx }))
   try {
     mounted.root.normalize()
     assertEquals(signature(card), signature(mounted.root.firstElementChild!))

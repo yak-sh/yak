@@ -181,7 +181,7 @@ Deno.test('nested views use the same registry, context and native source props',
       h(
         'div',
         null,
-        ctx.render?.('Form.Editor', { col: 'title', suffix: '!' }),
+        ctx.render?.('Form.Edit', { col: 'title', suffix: '!' }),
       ),
   }
   let editor: ComponentRenderer<Ent> = {
@@ -193,7 +193,7 @@ Deno.test('nested views use the same registry, context and native source props',
       return h('strong', null, e.title + suffix)
     },
   }
-  let registry = define([props, editor], { aliases: { Editor: 'Edit' } })
+  let registry = define([props, editor])
   let mounted = mount(render(
     registry,
     bundle,

@@ -124,9 +124,9 @@ let best = <R extends Registration>(
 }
 
 /**
- * Resolve the closest view, then its most specific renderer. Aliasing changes
- * the remaining walk, as for a stored name renamed to another qualified view.
- * Cyclic alias walks stop before visiting a name twice.
+ * Resolve the closest view, then its most specific renderer: the walk strips
+ * the leftmost role at each step, so a short registration serves every longer
+ * ask.
  */
 export let resolve = <R extends Registration>(
   registry: Selection<R>,
@@ -139,7 +139,7 @@ export let resolve = <R extends Registration>(
     bundle = column(vocab, ctx)
     vocab = columnVocab
   }
-  let { renderers, aliases = {}, views } = registry
+  let { renderers, views } = registry
   let pick = (name: string) =>
     best(renderers.filter((r) => r.view == name), bundle, vocab)
   if (!view) {
@@ -149,10 +149,7 @@ export let resolve = <R extends Registration>(
       vocab,
     ) ?? pick('JSON')
   }
-  let seen = new Set<string>()
-  for (let v = view; v && !seen.has(v); v = v.replace(/^[^.]+\.?/, '')) {
-    seen.add(v)
-    v = Object.hasOwn(aliases, v) ? aliases[v] : v
+  for (let v = view; v; v = v.replace(/^[^.]+\.?/, '')) {
     let found = pick(v)
     if (found) return found
   }

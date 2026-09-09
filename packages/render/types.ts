@@ -63,7 +63,6 @@ export type Contributor<A = Action, E = Bundle> = {
 
 /** Registry configuration; actions preserve component and contribution order. */
 export type Options<A = Action, E = Bundle> = {
-  aliases?: Readonly<Record<string, string>>
   actions?:
     | Readonly<Record<string, readonly (A & { when?: Query })[]>>
     | readonly Contributor<A, E>[]
@@ -83,5 +82,5 @@ export type Registry<
 /** The part of a registry selection needs, independent of its action types. */
 export type Selection<R extends Registration = Renderer> = Pick<
   Registry<R>,
-  'renderers' | 'aliases' | 'views'
+  'renderers' | 'views'
 >

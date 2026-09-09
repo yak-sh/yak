@@ -26,10 +26,8 @@ let node = renderer?.render(bundle, h, {})
 
 At each view name, the matching query with the most top-level clauses wins; ties
 preserve registration order. `true` scores 0.5, below every query match. The
-walk tries `Board.List.Tile`, `List.Tile`, then `Tile`. `define` accepts
-`{aliases: {Show: 'Full'}}`; an alias is consulted at each level, and subsequent
-stripping follows the renamed name. A cycle stops. A missing view falls to a
-matching `JSON` registration, or returns `undefined`. An unnamed request
+walk tries `Board.List.Tile`, `List.Tile`, then `Tile`. A missing view falls to
+a matching `JSON` registration, or returns `undefined`. An unnamed request
 considers `options.views`, or every registered view when omitted.
 
 `Registration` is the selection contract, `{view, match}`. A registry preserves
@@ -41,8 +39,8 @@ portable `Renderer` remains the default for text and other hosts.
 wins equal scores while a more specific base renderer still wins. Other
 registries remain independent. `applicable(registry, bundle, vocab, ctx?)`
 returns matching exact view names in `options.views` order, or registration
-order when views are omitted. It does not use aliases or JSON fallback to invent
-tabs for unmatched names.
+order when views are omitted. It does not use the JSON fallback to invent tabs
+for unmatched names.
 
 Actions are contributed with
 `define(renderers, {vocab, actions: {doc: [

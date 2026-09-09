@@ -78,21 +78,11 @@ Deno.test('closest role wins before specificity; leftmost qualifiers strip', () 
   assertStrictEquals(pick([miss, list], 'Board.List.Tile'), list)
 })
 
-Deno.test('aliases apply at every walk level, and rename the remaining walk', () => {
+Deno.test('an unknown view name resolves to nothing, not to a prototype key', () => {
   let tile = face('Tile', true)
-  let registry = define([tile], {
-    aliases: {
-      Show: 'Tile',
-      'List.Old': 'Tile',
-      Legacy: 'Panel.Tile',
-      Loop: 'Again.Loop',
-    },
-  })
-  for (let view of ['Show', 'Card.Show', 'Board.List.Old', 'Legacy']) {
-    assertStrictEquals(resolve(registry, bundle, view, vocab), tile)
-  }
-  assertEquals(resolve(registry, bundle, 'Loop', vocab), undefined)
+  let registry = define([tile])
   assertEquals(resolve(registry, bundle, 'toString', vocab), undefined)
+  assertStrictEquals(resolve(registry, bundle, 'Card.Tile', vocab), tile)
 })
 
 Deno.test('unnamed views honor the configured list; JSON is an explicit fallback', () => {

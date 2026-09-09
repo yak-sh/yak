@@ -286,10 +286,10 @@ Deno.test('render resolves views and column context, and missing views are empty
         null,
         String((b[ctx.comp!] as Record<string, unknown>)[ctx.col!]),
       ),
-  }], { aliases: { Old: 'Edit' } })
+  }])
   let bundle = { entity: { eid: 'a' }, doc: { title: 'A page' } }
   let ctx = { comp: 'doc', col: 'title' }
-  assertEquals(render(registry, bundle, 'Form.Old', vocab, ctx), '`A page`')
+  assertEquals(render(registry, bundle, 'Form.Edit', vocab, ctx), '`A page`')
   assertEquals(render(registry, bundle, 'Edit', vocab, ctx, 'plain'), 'A page')
   assertEquals(render(registry, bundle, 'Missing', vocab), '')
 })
@@ -322,7 +322,7 @@ Deno.test('nested text views retain registry context and always render read-only
           h(
             'dd',
             null,
-            ctx.render?.('Nested.Editor', { col: 'title', readOnly: false }),
+            ctx.render?.('Nested.Edit', { col: 'title', readOnly: false }),
           ),
         )
       },
@@ -336,7 +336,7 @@ Deno.test('nested text views retain registry context and always render read-only
         return h('span', null, String((b.doc as { title: string }).title))
       },
     },
-  ], { aliases: { Editor: 'Edit' } })
+  ])
   let vocab = loadVocab([{
     $defs: {
       doc: { type: 'object', properties: { title: { type: 'string' } } },
