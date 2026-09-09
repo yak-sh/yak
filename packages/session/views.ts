@@ -32,25 +32,30 @@ let reached = (
 /** The transcript views: `Line` for an entry, `Status` for a transcript. The
  * context may carry `names` (model or tool eid → name), `anchor` (reads a
  * provider's anchor off an ask entry), and `entries` (the transcript, for
- * `Status`). */
+ * `Status`), and `full` (untruncated entry prose for transcript panes). */
 export let views: Registry = define([
   {
     view: 'Line',
     match: parse(`.${ENTRY}`),
     render: (b, h, ctx) => {
       let e = comp(b, ENTRY)!
-      let first = textOf(b).split('\n')[0].slice(0, 70)
+      let first = ctx.full ? textOf(b) : textOf(b).split('\n')[0].slice(0, 70)
       let names = (ctx.names ?? {}) as Record<string, string>
       let anchor = ctx.anchor as ((b: Bundle) => string | undefined) | undefined
+      let line = [
+        String(e.seq).padStart(3),
+        (kindOf(b) ?? 'entry').padEnd(9),
+        reached(b, names, anchor),
+        first,
+      ].filter(Boolean).join(' ')
+      // Text hosts strip literal control bytes. Structural breaks preserve
+      // transcript lines without letting other controls through.
       return h(
         'p',
         null,
-        [
-          String(e.seq).padStart(3),
-          (kindOf(b) ?? 'entry').padEnd(9),
-          reached(b, names, anchor),
-          first,
-        ].filter(Boolean).join(' '),
+        ...line.split('\n').flatMap((text, i) =>
+          i ? [h('br', null), text] : [text]
+        ),
       )
     },
   },
