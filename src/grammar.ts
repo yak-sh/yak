@@ -80,9 +80,10 @@ The stamps share column names, so spell out the component: '.created.at',
 which is why 'task decided' orders by it and not by when a thing was filed.
 Component names test facets directly: '.proposed=' means absent (the fix
 queue), while '.proposed!' means present (the idea backlog).
-Whitespace and '&' separate terms; every term stands alone, and a comma
-between terms is optional. A list has no spaces ('.status=open,wip', never
-'open, wip'). Quotes, double or single, hold a value together against both
+Whitespace separates terms; every term stands alone. Between terms '&' and
+',' are aliases for whitespace ('&' is the same query as a URL string);
+inside a value ',' is the list operator, with no spaces ('.status=open,wip',
+never 'open, wip'). Quotes, double or single, hold a value together against both
 separators: '.web.url="https://x.test/p?a=1&b=2"' is one predicate,
 '.title~="two words"' one filter, where unquoted '.title~=two words' is the
 filter 'two' and the search word 'words'. '?comp' selects a component when
@@ -99,8 +100,15 @@ has any comment, '.comments=' has none, '.comments>=5' counts them, and a
 '!' on the association negates — '.comments!.created.by=jeff' has NONE by
 jeff, '.comments!.created.by!=jeff' has EVERY comment by jeff (ALL, by De
 Morgan). Bare words are text terms (doc contains).
+A WALK follows a relation or a reference column transitively:
+'.requires->T-42' keeps what reaches T-42 through at most 16 requires edges
+(its dependents), '.requires<-T-42' what T-42 reaches (its prerequisites),
+'.requires[<=3]->T-42' caps the depth, and '.comment.target->T-42' walks a
+reference column the same way. The bracket is a QUALIFIER on the path — the
+walk's cap is the only one today, so '.status[<=3]=open' is refused, never
+ignored.
 AGGREGATES reduce the selection to a VALUE instead of rows: '.count!' how
-many ('.status=open&.count!'), '.tally=status' each value's count,
+many ('.status=open .count!'), '.tally=status' each value's count,
 '.distinct=domain' the values themselves. They ride beside the filters that
 select what they reduce, and they answer from the index — a caller wanting a
 number asks for the number, never for the rows to count.

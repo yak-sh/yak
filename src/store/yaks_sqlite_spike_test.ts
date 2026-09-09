@@ -22,7 +22,7 @@
 //     table — the layouts are column-for-column the same (T-33538).
 //   - The reverse-hop grammar (`.comments!`, `.comments>=5`, `.comments.<path>`)
 //     compiles and agrees with the app (T-33540).
-//   - The traversal grammar (`.edges!`, `.reaches[requires,<=N]=<eid>`) compiles
+//   - The traversal grammar (`.edges!`, `.requires[<=N]-><eid>`) compiles
 //     through @yaks/edge's @yaks/sql extension and agrees with the app (T-33539).
 //   - `read()` gathers doc.body as TEXT off the app's blob layout, through
 //     @yaks/blob's read override — the transparent-CAS seam, resolved in the
@@ -105,7 +105,7 @@ let driver: Driver = {
   query: (sql, params) => db.prepare(sql).all(...params),
   exec: (sql) => db.exec(sql),
 }
-// @yaks/edge registers the traversal clauses (`.edges`, `.reaches`) the way
+// @yaks/edge registers the traversal clauses (`.edges`, the walk) the way
 // @yaks/fts registers search: an extension over the same compiler. @yaks/blob
 // registers the other half of the app's layout: doc.body is an id into
 // `blob_text`, and `blobRead` is the read override that resolves it — the app's
@@ -206,24 +206,27 @@ Deno.test('spike: an aggregate count matches through rows()', () => {
 
 Deno.test('spike: the traversal grammar agrees with the app', () => {
   // Was the last of the declining directives (T-33539). @yaks/edge compiles both
-  // clauses against the same fleet vocabulary — `.reaches` as a recursive CTE
+  // clauses against the same fleet vocabulary — the walk as a recursive CTE
   // over the edge table, `.edges` as the rider that narrows nothing — so they
   // are held against the app's own compiler rather than declining.
   for (
     let q of [
-      '.reaches[requires,<=1]=' + T1,
-      '.reaches[requires,<=2]=' + T1,
-      '.reaches[requires,<=9]=' + T1,
-      '.reaches[contains,<=9]=' + T1,
-      '.reaches[requires,<=9]=' + T1 + '&.status=done',
+      '.requires[<=1]->' + T1,
+      '.requires[<=2]->' + T1,
+      '.requires[<=9]->' + T1,
+      '.requires->' + T1,
+      '.requires<-' + T3,
+      '.contains[<=9]->' + T1,
+      '.requires[<=9]->' + T1 + '&.status=done',
       '.edges!',
       '.edges[requires]!',
       '.edges!&.status=open',
     ]
   ) agree(q)
   // and the agreement is not vacuous: the seeded chain is T3 → T2 → T1
-  assertEquals(mine('.reaches[requires,<=1]=' + T1), [T2])
-  assertEquals(mine('.reaches[requires,<=2]=' + T1).sort(), [T2, T3].sort())
+  assertEquals(mine('.requires[<=1]->' + T1), [T2])
+  assertEquals(mine('.requires[<=2]->' + T1).sort(), [T2, T3].sort())
+  assertEquals(mine('.requires<-' + T3).sort(), [T1, T2].sort())
 })
 
 Deno.test('spike: the reverse-hop grammar agrees with the app', () => {

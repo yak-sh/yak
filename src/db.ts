@@ -58,11 +58,12 @@ import {
   matchQuery,
   parseQuery,
   type Pred,
+  type Reach,
   resolveRefs,
   teaches,
   TEXT,
 } from './query.ts'
-import { where } from './sql.ts'
+import { reachCte, where } from './sql.ts'
 import { type Frag, toSql } from './relation.ts'
 import {
   Invalid,
@@ -8568,34 +8569,23 @@ export let selectedDeps = (
   return rows.map(shedOrd).sort(reading)
 }
 
-// The bounded transitive closure `.reaches[type,<=N]=id` selects: the eids that
-// reach `target` through at most `depth` edges of one type, walking child→parent
-// so every step is an `edge_to` seek (one nature, so the type is the branch and
-// not a term the planner can prefer). The target itself is excluded — reaching is
-// a path of at least one hop. This is the JS matcher's half of the same closure
-// the compiler emits, so a query mixing `.reaches` with a pred SQL declines
-// still answers, and answers identically.
+// The walk `.requires[<=N]->id` selects: the eids that reach `target` through
+// at most `depth` steps along the arrow (sql.ts reachCte — one CTE, shared, so
+// the two readers cannot drift). The target itself is excluded — reaching is a
+// path of at least one hop. This is the JS matcher's half of the same closure
+// the compiler emits, so a query mixing a walk with a pred SQL declines still
+// answers, and answers identically.
 //
 // There is no whole-graph edge reader beside it, deliberately: `allDeps` — the
 // dump every joining client used to receive — is gone (T-22371). Edges are
 // delivered SCOPED, by depsOf above, to whatever a subscription selected.
-export let reaching = (
-  db: Sql,
-  target: string,
-  type: string,
-  depth: number,
-): string[] =>
+export let reaching = (db: Sql, target: string, r: Reach): string[] =>
   (prep(
     db,
-    `with recursive __reach(id, depth) as (
-       select id, 0 from entity where eid = ?
-       union select d.parent, __reach.depth + 1 from (${sentences(type)}) d
-         join __reach on d.child = __reach.id
-         where __reach.depth < ?
-     )
+    `${reachCte(r)}
      select o.eid as eid from __reach join entity o on o.id = __reach.id
       where __reach.depth > 0`,
-  ).all(target, depth) as { eid: string }[]).map((r) => r.eid)
+  ).all(target, r.depth) as { eid: string }[]).map((r) => r.eid)
 
 // Who points AT these entities through a typed eid column — one keyed
 // statement per column in the readable vocabulary (`stamped` included, so an

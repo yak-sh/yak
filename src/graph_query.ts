@@ -124,19 +124,17 @@ export { personaGraph, projectionGraph } from './persona_graph.ts'
 let narrows = (preds: Pred[]) =>
   preds.some((p) => p.op != ORDER && p.op != EDGES && p.op != WANT)
 
-// A traversal accessor bound to a db, memoised for ONE evaluation pass: the
-// closure `.reaches[requires,<=3]=T-42` names is the same for every candidate
-// row, so it is resolved once (one recursive CTE, db.ts reaching) and every row
-// then tests it with a Set lookup. Built per call so nothing caches a closure
-// across writes — an edge landing between two queries must move the answer.
+// A walk accessor bound to a db, memoised for ONE evaluation pass: the closure
+// `.requires[<=3]->T-42` names is the same for every candidate row, so it is
+// resolved once (one recursive CTE, db.ts reaching) and every row then tests it
+// with a Set lookup. Built per call so nothing caches a closure across writes —
+// an edge landing between two queries must move the answer.
 export let walker = (db: Sql): Walk => {
   let memo = new Map<string, Set<string>>()
   return (r, target) => {
-    let key = `${r.type}\0${r.depth}\0${target}`
+    let key = `${r.type}\0${r.dir}\0${r.depth}\0${target}`
     let hit = memo.get(key)
-    if (!hit) {
-      memo.set(key, hit = new Set(reaching(db, target, r.type, r.depth)))
-    }
+    if (!hit) memo.set(key, hit = new Set(reaching(db, target, r)))
     return hit
   }
 }

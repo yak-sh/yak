@@ -306,7 +306,7 @@ Deno.test('gaps: advanced directives throw Unsupported', () => {
     let q of [
       '.near=e1&.order=similar',
       '.edges!',
-      '.reaches[requires,<=3]=e1',
+      '.requires[<=3]->e1',
     ]
   ) {
     let threw: unknown

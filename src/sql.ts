@@ -29,6 +29,7 @@ import {
   ORDER,
   type Pred,
   PROJECT,
+  type Reach,
   REACHES,
   refCols,
   TEXT,
@@ -759,29 +760,40 @@ let revSql = (p: Pred, now: number): Frag | null => {
   }
 }
 
-// The bounded traversal compiled: `.reaches[requires,<=3]=T-42` is a recursive
-// CTE that walks the sentence store BACKWARD from the target — each step reads
-// `d.child = <current>`, which is `edge_to` (the reverse endpoint's own index),
-// so the closure is a sequence of index SEARCHES and never a scan. The depth cap
-// is the recursion's own guard, so a cycle terminates by arithmetic rather than
-// by SQLite's dedupe alone. `depth > 0` excludes the target: reaching is at
-// least one hop.
+// The walk compiled: `.requires[<=3]->T-42` is a recursive CTE seeded at the
+// target and stepped along the arrow — `->` reads `d.child = <current>` and
+// collects parents, which is `edge_to` (the reverse endpoint's own index), so
+// the closure is a sequence of index SEARCHES and never a scan; `<-` reads the
+// parent and collects children. The depth cap is the recursion's own guard, so
+// a cycle terminates by arithmetic rather than by SQLite's dedupe alone.
+// `depth > 0` excludes the target: reaching is at least one hop.
 //
 // One nature, one branch (edge.ts sentences), so the type is no longer a term
 // the planner can prefer over the endpoint — which is what the old `+d.type`
 // existed to prevent, back when a stale ANALYZE made the type index look
-// cheaper than a seek.
+// cheaper than a seek. A reference column is the same (parent, child) shape:
+// the owner and what it points at.
+export let stepSql = (r: Reach): string =>
+  r.via
+    ? `select t.entity as parent, t."${r.via.prop}" as child` +
+      ` from "${r.via.comp}" t`
+    : sentences(r.type)
+export let reachCte = (r: Reach): string => {
+  let [here, there] = r.dir == '<-' ? ['parent', 'child'] : ['child', 'parent']
+  return `with recursive __reach(id, depth) as (` +
+    ` select id, 0 from entity where eid = ?` +
+    ` union select d.${there}, __reach.depth + 1` +
+    ` from (${stepSql(r)}) d` +
+    ` join __reach on d.${here} = __reach.id` +
+    ` where __reach.depth < ?` +
+    `)`
+}
 let reachSql = (p: Pred): Frag | null => {
   let r = p.reach
   if (!r || !p.value) return null
   return {
-    sql: `"entity"."id" in (with recursive __reach(id, depth) as (` +
-      ` select id, 0 from entity where eid = ?` +
-      ` union select d.parent, __reach.depth + 1` +
-      ` from (${sentences(r.type)}) d` +
-      ` join __reach on d.child = __reach.id` +
-      ` where __reach.depth < ?` +
-      `) select id from __reach where depth > 0)`,
+    sql: `"entity"."id" in (${reachCte(r)}` +
+      ` select id from __reach where depth > 0)`,
     params: [p.value, r.depth],
   }
 }

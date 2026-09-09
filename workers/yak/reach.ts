@@ -106,7 +106,7 @@ let doorOf = (env: Env, r: Reach, said?: string) => async (line: string) => {
 // grammar's own riders and its aggregates. Everything else after a dot is a
 // component or a prop that routes to one, and either way it is the segment's
 // part.
-let RIDERS = ['order', 'near', 'limit', 'after', 'edges', 'reaches', 'kind']
+let RIDERS = ['order', 'near', 'limit', 'after', 'edges', 'kind']
 let AGGS = ['count', 'distinct', 'tally']
 
 let firstWord = (seg: string) => /^\.([a-z0-9_]+)/i.exec(seg)?.[1] ?? ''

@@ -913,7 +913,7 @@ export let subserve = (db: Sql, send: (frame: Frame) => void) => {
     }
     let patch = new Map<string, Change[]>()
     for (let c of batch) patch.set(c.eid, [...(patch.get(c.eid) ?? []), c])
-    // One traversal memo for the whole pass: a `.reaches` sub's closure is the
+    // One walk memo for the whole pass: a walking sub's closure is the
     // same for every candidate eid, and re-resolving it per row would put a
     // recursive walk on the write path.
     let walk = walker(db)

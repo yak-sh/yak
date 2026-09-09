@@ -738,31 +738,45 @@ Deno.test('the EDGES rider is a delivery, never a filter', () => {
   assert(matchQuery({ doc: { title: 'anything' } }, parseQuery('.edges!')))
 })
 
-Deno.test('.reaches parses to a bounded traversal and refuses the unbounded', () => {
-  assertEquals(preds('.reaches[requires,<=3]=T-42'), [
+Deno.test('a walk parses to a bounded closure, either way, capped', () => {
+  assertEquals(preds('.requires[<=3]->T-42'), [
     {
       comp: '',
       prop: '',
       op: REACHES,
       value: 'T-42',
-      reach: { type: 'requires', depth: 3 },
+      reach: { type: 'requires', depth: 3, dir: '->' },
     },
   ])
-  // whitespace inside the bracket is allowed; the cap is not optional
-  assertEquals(preds('.reaches[contains, <= 2]=T-1')![0].reach, {
+  // whitespace inside the bracket is allowed; with no bracket the cap is 16
+  assertEquals(preds('.contains[ <= 2 ]<-T-1')![0].reach, {
     type: 'contains',
     depth: 2,
+    dir: '<-',
   })
-  // An unbounded or malformed spelling must REFUSE, never fall through to a
-  // bare text term that silently searches for the traversal nobody ran.
-  assertThrows(() => preds('.reaches[requires]=T-42'), Error, 'depth cap')
-  assertThrows(() => preds('.reaches[requires,<=0]=T-42'), Error, 'one hop')
-  assertThrows(() => preds('.reaches[nonsense,<=2]=T-42'), Error, 'edge type')
-  assertThrows(() => preds('.reaches[requires,<=2]='), Error)
+  assertEquals(preds('.requires->T-1')![0].reach?.depth, 16)
+  // a reference column walks too, and says which column it follows
+  assertEquals(preds('.comment.target->T-1')![0].reach, {
+    type: 'comment.target',
+    depth: 16,
+    dir: '->',
+    via: { comp: 'comment', prop: 'target' },
+  })
+  // `<` before a negative number is a comparison, not a walk
+  assertEquals(preds('.priority<-1')![0].op, '<')
+  assertEquals(preds('.priority<-1')![0].value, '-1')
+  // A malformed spelling must REFUSE, never fall through to a bare text term
+  // that silently searches for the walk nobody ran.
+  assertThrows(() => preds('.requires[3]->T-42'), Error, 'depth cap')
+  assertThrows(() => preds('.requires[<=0]->T-42'), Error, 'one hop')
+  assertThrows(() => preds('.nonsense->T-42'), Error, 'unknown prop')
+  assertThrows(() => preds('.doc.title->T-42'), Error, 'reference')
+  assertThrows(() => preds('.requires->'), Error)
+  assertThrows(() => preds('.requires->a,b'), Error, 'one entity')
 })
 
 Deno.test('a traversal reads its closure from the walk, once, not per row', () => {
-  let ps = parseQuery('.reaches[requires,<=2]=T-9')
+  let ps = parseQuery('.requires[<=2]->T-9')
   let asked: string[] = []
   let walk: Walk = (r, target) => {
     asked.push(`${r.type}/${r.depth}/${target}`)

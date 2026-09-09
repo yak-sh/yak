@@ -140,11 +140,12 @@ export type Pred = {
   // first, and the reply states the total it is a prefix of. Its own field
   // rather than `win`, which is the ROW window and spells itself `.limit=`.
   limit?: number
-  // A bounded TRAVERSAL rather than a column read: `.reaches[requires,<=3]=T-42`
-  // selects the entities that reach `value` through at most `depth` edges of one
-  // type. op is REACHES. The cap is part of the grammar — an unbounded closure
-  // over the edge table is refused, never silently walked (M-17862).
-  reach?: { type: string; depth: number }
+  // A bounded WALK rather than a column read: `.requires[<=3]->T-42` selects
+  // the entities that reach `value` through at most `depth` hops of one step —
+  // an edge type, or a reference column (`via`) — and `<-` walks the other way.
+  // op is REACHES. The cap is part of the grammar (16 with no bracket) — an
+  // unbounded closure over the edge table has no spelling (M-17862).
+  reach?: Reach
 }
 
 // A window: how many of the selection to answer with, and where to continue.
@@ -311,8 +312,7 @@ for (let name of reverseAssocs.keys()) {
 // The reserved query WORDS — directives that are neither a column nor an
 // association: `.refs` (the multi-column reverse-union), the `.distinct` /
 // `.tally` aggregates, `.fields` (the projection), `.limit`/`.after` (the
-// window), `.edges` (the incident-edge rider), `.reaches` (the bounded
-// traversal). Guarded here the way scopes and reverse assocs are, so a
+// window), `.edges` (the incident-edge rider). Guarded here the way scopes and reverse assocs are, so a
 // vocabulary that ever grows one of these as a real prop is a load error rather
 // than a silently dead directive.
 export let reserved = [
@@ -323,7 +323,6 @@ export let reserved = [
   'limit',
   'after',
   'edges',
-  'reaches',
 ]
 for (let name of reserved) {
   if (owned(name)) {
@@ -644,25 +643,32 @@ export let edgeRider = (preds: Pred[]): EdgeRider | undefined => {
   }
 }
 
-// A BOUNDED TRAVERSAL pred — `.reaches[requires,<=3]=T-42` — is a real filter,
-// not a rider: it SELECTS the entities within a depth-capped transitive closure
-// over one edge type. sql.ts compiles it to a recursive CTE over the indexed dep
-// table; the JS matcher answers it from a `walk` that resolves the same closure
-// once per query rather than per row.
+// A WALK pred — `.requires[<=3]->T-42` — is a real filter, not a rider: it
+// SELECTS the entities within a depth-capped transitive closure over one step.
+// sql.ts compiles it to a recursive CTE over the indexed dep table (or the
+// reference column); the JS matcher answers it from a `walk` that resolves the
+// same closure once per query rather than per row.
 export let REACHES = 'reaches'
+
+// The walk's step and shape: `type` is the edge type walked, or the raw path of
+// a reference column, which `via` then names; `dir` is the arrow — `->` the
+// candidate reaches the target, `<-` the target reaches the candidate.
+export type Reach = {
+  type: string
+  depth: number
+  dir: '->' | '<-'
+  via?: Hop
+}
+export let WALK_DEPTH = 16
 
 // The traversal closures a pred list asks for, deduped — what a door precomputes
 // before matching so the walk happens once, not per candidate row.
 export let reachesOf = (preds: Pred[]): Pred[] =>
   preds.filter((p) => p.op == REACHES)
 
-// Who reaches a traversal's target: the eids within `depth` edges of `value`,
-// walking edge type `type` from child back to parent. One per query — every row
-// then tests with a Set lookup.
-export type Walk = (
-  reach: { type: string; depth: number },
-  target: string,
-) => Set<string>
+// Who reaches a walk's target: the eids within `depth` steps of `value`, along
+// the arrow. One per query — every row then tests with a Set lookup.
+export type Walk = (reach: Reach, target: string) => Set<string>
 
 // A query addresses the LAZY entry partition when it names any session-log
 // component (sessionComps) — `.entry.session`, `.generation.provider`,
@@ -971,43 +977,47 @@ let revHop = (token: string): Pred | null => {
 // hyphenated, so nothing new routes — but before this, '.blocked-by=T-1' failed
 // the pattern and fell through to a bare TEXT term, silently searching for the
 // filter the caller thought they wrote.
-// `.reaches[requires,<=3]=T-42` — the bracket carries what a dot-param cannot:
-// WHICH edge type to walk and HOW FAR. The cap is required by the shape itself,
-// so an unbounded closure has no spelling to be refused later. Matched before
-// the dot-param pattern, which stops at the '['.
-let REACH = /^\.reaches\[([A-Za-z_]+)\s*,\s*<=\s*(\d+)\]=(.*)$/s
+// `.requires[<=3]->T-42` — the walk: a path, the bracket that caps it, an arrow
+// and one entity. Matched before the dot-param pattern, which would read the
+// arrow's `-` as part of the name and its `>` as a comparison.
+let WALK = /^\.([A-Za-z_]+(?:\.[A-Za-z_]+)*)(\[[^\]]*\])?(->|<-)(.*)$/s
+let CAP = /^\[\s*<=\s*(\d+)\s*\]$/
 let EDGE_SELECT =
   /^\.edges\[([A-Za-z_]+)(?:\s*,\s*([A-Za-z_-]+(?:\.[A-Za-z_-]+)*))?\]!$/s
 
 export let preds = (token: string, vocab: Vocab = NONE): Pred[] | null => {
-  // Any `.reaches[…` spelling answers HERE, right or wrong: a malformed one that
-  // fell through would not match the dot-param pattern either and would end up a
-  // bare TEXT term, silently searching for the traversal the caller thought they
-  // wrote (the hyphen lesson below, same trap).
-  if (token.startsWith('.reaches[') && !owned('reaches')) {
-    let reach = token.match(REACH)
-    let [, type, depth, value] = reach ?? []
-    if (!reach || !value) {
+  // Any arrow spelling answers HERE, right or wrong: a malformed walk that fell
+  // through would be read as a hyphenated name and a comparison, or end up a
+  // bare TEXT term silently searching for the walk the caller thought they wrote
+  // (the hyphen lesson below, same trap). `.priority<-1` is the one exception:
+  // less than a negative number, never a walk to the entity `1`.
+  let walked = token.match(WALK)
+  if (walked && !(walked[3] == '<-' && /^\d+(\.\d+)?$/.test(walked[4]))) {
+    let [, path, bracket, dir, value] = walked
+    let cap = bracket?.match(CAP)
+    if ((bracket && !cap) || !value || value.includes(',')) {
       throw new Error(
-        '.reaches names an edge type, a depth cap and an entity: ' +
-          '.reaches[requires,<=3]=T-42',
+        'a walk names a path, an optional depth cap and one entity: ' +
+          '.requires[<=3]->T-42',
       )
     }
-    if (!(edges as readonly string[]).includes(type)) {
-      throw new Error(
-        `.reaches walks an edge type (${edges.join(', ')}) — not ${type}`,
-      )
+    let depth = cap ? Number(cap[1]) : WALK_DEPTH
+    if (depth < 1) {
+      throw new Error(`a walk needs at least one hop: <=${cap![1]}`)
     }
-    if (Number(depth) < 1) {
-      throw new Error(`.reaches needs at least one hop: got <=${depth}`)
+    let reach: Reach = { type: path, depth, dir: dir as Reach['dir'] }
+    if (!(edges as readonly string[]).includes(path)) {
+      let groups = groupsOf(path.split('.'), vocab)
+      let via = groups[groups.length - 1]
+      if (groups.length > 1 || !via.prop || !isRef(via.comp, via.prop)) {
+        throw new Error(
+          `a walk follows an edge type (${edges.join(', ')}) or a reference ` +
+            `column — not ${path}`,
+        )
+      }
+      reach.via = via
     }
-    return [{
-      comp: '',
-      prop: '',
-      op: REACHES,
-      value,
-      reach: { type, depth: Number(depth) },
-    }]
+    return [{ comp: '', prop: '', op: REACHES, value, reach }]
   }
   // `.edges[referenced,entry.session]!` — select one STORED edge type
   // and optionally project either endpoint through one `{eid}` column. The

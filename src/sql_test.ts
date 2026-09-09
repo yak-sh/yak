@@ -19,6 +19,7 @@ import {
   matchQuery,
   parseQuery,
   PROJECT,
+  type Reach,
   tally,
   type Walk,
 } from './query.ts'
@@ -200,7 +201,7 @@ put('c3', {
   created: { by: 'p1', at: '2026-08-04T00:00:00.000Z', via: null },
 })
 
-// The stored edges. `.reaches[type,<=N]=id` walks these, so the compiler's
+// The stored edges. `.type[<=N]->id` walks these, so the compiler's
 // recursive CTE and an ordinary JS breadth-first walk have to name the same
 // set. The chain is a CYCLE on purpose (e1→e2→e3→e1): an
 // unbounded closure over it would never terminate, so the depth cap is what
@@ -229,20 +230,23 @@ link('e2', 'requires', 'e3')
 link('e3', 'requires', 'e1')
 link('e4', 'contains', 'e3')
 
-// The traversal as a plain breadth-first walk: from the target, back along
-// child→parent, `depth` hops, the target itself excluded. This is the
-// DEFINITION the CTE has to match — written independently of it, or the test
-// would only prove SQL agrees with itself.
-let reachers = (type: string, target: string, depth: number) => {
+// The walk as a plain breadth-first walk: from the target, along the arrow
+// (`->` child→parent, `<-` parent→child), `depth` hops, the target itself
+// excluded. This is the DEFINITION the CTE has to match — written independently
+// of it, or the test would only prove SQL agrees with itself.
+let reachers = (r: Reach, target: string) => {
   let seen = new Set<string>()
   let frontier = [target]
-  for (let d = 0; d < depth; d++) {
+  let [here, there]: ['child' | 'parent', 'child' | 'parent'] = r.dir == '<-'
+    ? ['parent', 'child']
+    : ['child', 'parent']
+  for (let d = 0; d < r.depth; d++) {
     let next: string[] = []
     for (let node of frontier) {
       for (let e of EDGES) {
-        if (e.type != type || e.child != node) continue
-        next.push(e.parent)
-        seen.add(e.parent)
+        if (e.type != r.type || e[here] != node) continue
+        next.push(e[there])
+        seen.add(e[there])
       }
     }
     frontier = next
@@ -310,7 +314,7 @@ let graph = () => {
 let world = graph()
 
 let kids = kidsOf(new Map(Object.entries(world)))
-let walk: Walk = (r, target) => reachers(r.type, target, r.depth)
+let walk: Walk = (r, target) => reachers(r, target)
 let byJs = (q: string) => {
   let preds = parseQuery(q)
   return Object.entries(world)
@@ -531,17 +535,22 @@ let COMPILES = [
   // `~=` over a stamp is a literal substring, never a phrase
   '.created.at~=2026-08',
   '.created.at~=nope',
-  // the bounded traversal: a recursive CTE over the edge table, held against a
-  // plain BFS. Each depth is its own case because the cap IS the semantics.
-  '.reaches[requires,<=1]=e3',
-  '.reaches[requires,<=2]=e3',
-  '.reaches[requires,<=3]=e3', // the cycle closes: e3 reaches itself
-  '.reaches[requires,<=9]=e3', // and a deeper cap adds nothing more
-  '.reaches[contains,<=3]=e3', // one edge type only — e4, never the requires chain
-  '.reaches[requires,<=2]=e4', // nothing points at e4 through requires
-  '.reaches[requires,<=2]=nobody', // an unknown target reaches nothing
+  // the walk: a recursive CTE over the edge table, held against a plain BFS.
+  // Each depth is its own case because the cap IS the semantics.
+  '.requires[<=1]->e3',
+  '.requires[<=2]->e3',
+  '.requires[<=3]->e3', // the cycle closes: e3 reaches itself
+  '.requires[<=9]->e3', // and a deeper cap adds nothing more
+  '.requires->e3', // the default cap
+  '.contains[<=3]->e3', // one edge type only — e4, never the requires chain
+  '.requires[<=2]->e4', // nothing points at e4 through requires
+  '.requires[<=2]->nobody', // an unknown target reaches nothing
+  // the other arrow: what the target reaches
+  '.requires[<=1]<-e1',
+  '.requires<-e1',
+  '.contains<-e4',
   // composes with an ordinary column pred, ANDed like any other filter
-  '.reaches[requires,<=3]=e3&.task.status=open',
+  '.requires[<=3]->e3&.task.status=open',
   // the EDGES rider is a DELIVERY, not a filter: it must not move the answer
   '.task.status=open&.edges!',
   '.task.status=open&.edges.peers=task.status,doc.title',
