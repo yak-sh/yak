@@ -8,7 +8,7 @@
 // and a change to that is a change somebody meant to make.
 import { assertEquals, assertMatch } from '@std/assert'
 import { counts, hop, type Tally, tallying } from './hops.ts'
-import { apply } from './db.ts'
+import { apply, human } from './db.ts'
 import { freshDb } from './testdb.ts'
 import { askOf, askRows, layered } from './graph_query.ts'
 import { slow } from './testing.ts'
@@ -44,6 +44,35 @@ Deno.test('a nested tally is the inner one, and the outer resumes', () => {
     hop('hops')
   })
   assertEquals([counts(outer).hops, counts(inner).hops], [2, 1])
+})
+
+Deno.test('human reads the spine and worn names, not one table per kind', () => {
+  let db = freshDb()
+  let eid = crypto.randomUUID()
+  apply(db, [
+    { eid, name: 'doc', comp: { title: 'named' } },
+    { eid, name: 'task', comp: { priority: 'P2' } },
+  ])
+  let { num } = db.prepare('select num from entity where eid = ?').get(eid) as {
+    num: number
+  }
+  let expect = (eid: string, id: string, hops: number) => {
+    let tally: Tally = new Map()
+    assertEquals(tallying(tally, () => human(db, eid)), id)
+    assertEquals(counts(tally).hops, hops)
+  }
+  // Precedence, a late kind, and no kind all cost the same two statements.
+  expect(eid, `T-${num}`, 2)
+  apply(db, [{ eid, name: 'task', comp: null }])
+  expect(eid, `D-${num}`, 2)
+  apply(db, [{ eid, name: 'entity', comp: null }])
+  expect(eid, `E-${num}`, 2)
+
+  // No human number means no component probe, whether the spine exists or not.
+  let cheap = 'dead1234-0000-4000-8000-00000000cafe'
+  expect(cheap, 'dead1234', 1)
+  db.prepare('insert into entity (eid) values (?)').run(cheap)
+  expect(cheap, 'dead1234', 1)
 })
 
 // What reading ONE entity by id costs in statements. A read visits the

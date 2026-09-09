@@ -28,6 +28,7 @@ import {
   governed,
   type Hit,
   idOf,
+  kindOf,
   kindOrder,
   lazy,
   learnKinds,
@@ -2462,7 +2463,7 @@ let ident = resolveId
 // at the one moment (a refusal) it most wants to open the entity.
 // A tombstone keeps its num on its retained spine row (D-18866 — the id
 // never recycles), so it is still named BY that num; only its components
-// died, so kindOrder finds none and it wears the generic prefix rather
+// died, so kindOf finds none and it wears the generic prefix rather
 // than a kind-specific one. The raw-eid fallback is for an entity with no
 // num at all (a numless cheap/bulk entity, or a numless old grave), never
 // a demotion a death itself imposes.
@@ -2471,13 +2472,9 @@ export let human = (db: Sql, eid: string): string => {
     | { num: number }
     | undefined
   if (!row?.num) return shortId(eid)
-  let kind = kindOrder.find((k) =>
-    prep(
-      db,
-      `select 1 from ${sqlName(k)}
-         where entity = (select id from entity where eid = ?)`,
-    ).get(eid)
-  ) ?? 'entity'
+  let kind = kindOf(
+    Object.fromEntries(worn(db, fromEid, eid).map((n) => [n, true])),
+  )
   return idOf({ eid, kind, num: row.num })
 }
 
