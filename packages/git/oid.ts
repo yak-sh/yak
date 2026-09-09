@@ -63,17 +63,20 @@ export let bin = (id: string): Uint8Array =>
     (_, i) => parseInt(id.slice(i * 2, i * 2 + 2), 16),
   )
 
+/** Naming an object under one algorithm: the shape {@link oid} and
+ * {@link oid256} both wear. */
+export type Namer = (type: Kind, body: Uint8Array) => Promise<string>
+
 /** The object id under one algorithm: `digest(algo, "<type> <size>\0<body>")`.
  * {@link oid} and {@link oid256} are the two spellings anybody says. */
 export let objectId =
-  (algo: 'SHA-1' | 'SHA-256') =>
-  async (type: Kind, body: Uint8Array): Promise<string> =>
+  (algo: 'SHA-1' | 'SHA-256'): Namer => async (type, body) =>
     hex(new Uint8Array(await crypto.subtle.digest(algo, framed(type, body))))
 
 /** Git's own name for an object: the SHA-1 of header and body. */
-export let oid = objectId('SHA-1')
+export let oid: Namer = objectId('SHA-1')
 
 /** The same object's SHA-256 name. Give it the SHA-256 BODY — the one whose
  * children are named by their own `oid256` — or the answer is a digest of
  * nothing anybody can ask for. */
-export let oid256 = objectId('SHA-256')
+export let oid256: Namer = objectId('SHA-256')
