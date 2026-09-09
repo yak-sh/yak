@@ -136,6 +136,16 @@ Deno.test('a storm — identical and volatile-differing — files ONE ticket', (
   assert(body.includes(`recurred ${2 * N}×`))
 })
 
+Deno.test('a number glued as a suffix is volatile too (savepoint tx_N)', () => {
+  // The savepoint counter varies while the fault is one shape; a `\b` before
+  // the digits never fired after the `_`, so tx_947/tx_226/tx_234 split into
+  // three tickets instead of deduping to one.
+  let sp = (n: number) => `no such savepoint: tx_${n}`
+  let key = faultKey('session', sp(947), null)
+  assertEquals(faultKey('session', sp(226), null), key)
+  assertEquals(faultKey('session', sp(234), null), key)
+})
+
 Deno.test('a recovered break files nothing (the tri-state guard)', () => {
   // (a) the exception was cleared before the effect ran (healed)
   let e1 = session()

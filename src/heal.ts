@@ -44,8 +44,8 @@ let UNSETTLED = (t: string) =>
 
 // The volatile tokens a storm varies while the fault stays the same: uuids,
 // human ids (T-3, S-45), iso timestamps, absolute paths, :line:col, hex blobs,
-// and bare numbers all collapse to one placeholder. What is left is the shape
-// of the fault.
+// and numbers — bare or glued as a suffix (savepoint tx_947) — all collapse to
+// one placeholder. What is left is the shape of the fault.
 export let normalize = (text: string) =>
   text
     .toLowerCase()
@@ -58,7 +58,7 @@ export let normalize = (text: string) =>
     .replace(/\/[^\s:]+/g, '#') // absolute paths
     .replace(/:\d+(:\d+)?/g, '#') // :line:col
     .replace(/\b[0-9a-f]{6,}\b/g, '#') // hex blobs / short hashes
-    .replace(/\b\d+\b/g, '#') // bare numbers
+    .replace(/(?<![a-z0-9])\d+\b/g, '#') // bare numbers, incl. a suffix like tx_947
     .replace(/#+/g, '#')
     .replace(/\s+/g, ' ')
     .trim()
