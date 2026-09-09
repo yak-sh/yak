@@ -1,0 +1,72 @@
+// What the agent can do here: run a program, and read and write its own graph.
+//
+// Both halves already exist as packages — @yaks/process declares the shell as
+// session tools, @yaks/mcp declares the generic graph tier as graph tools — and
+// the only thing missing between them is a dialect. A graph tool says its
+// arguments in Zod, because that is what MCP's SDK takes; a model wants JSON
+// Schema. So this file is one conversion and one adapter: `parametersOf` says a
+// tool's arguments the way a model reads them, and `graphTools` hands each
+// tool the {@link ToolCtx} it expects and flattens what it answers to text.
+//
+// The conversion is not hand-written. `shapeOf` (@yaks/mcp) is where a tool's
+// Zod shape already comes from, and `zod-to-json-schema` is what the MCP SDK
+// itself converts with — a second reading of Zod's type table would be a copy
+// to keep in step for nothing. References are inlined ($refStrategy 'none'):
+// a provider reads a tool's parameters on its own, without a document to
+// resolve `$ref` against.
+
+import type { Entity, Graph, Tool as GraphTool, ToolCtx } from '@yaks/graph'
+import { shapeOf } from '@yaks/mcp'
+import { core, type Depth } from '@yaks/mcp'
+import { shellTools } from '@yaks/process'
+import type { Tool } from '@yaks/session'
+import { z } from 'zod'
+import { zodToJsonSchema } from 'zod-to-json-schema'
+
+/** A graph tool's arguments as JSON Schema, the way a model declaration takes
+ * them. */
+export let parametersOf = (tool: GraphTool): Record<string, unknown> => {
+  let json = zodToJsonSchema(z.object(shapeOf(tool)), {
+    $refStrategy: 'none',
+  }) as Record<string, unknown>
+  delete json.$schema
+  return json
+}
+
+// A tool's answer as the transcript keeps it. Bundles are the usual answer, and
+// a model reads JSON as well as it reads anything; a tool that already speaks
+// prose is left alone.
+let said = (out: unknown): string =>
+  typeof out == 'string' ? out : JSON.stringify(out, null, 1)
+
+/**
+ * The generic graph tier as tools a model may call: `graph_apply`,
+ * `graph_query`, `graph_show`, `graph_schema`. The agent reads and writes the
+ * same graph its transcript lives in.
+ */
+export let graphTools = (
+  g: Graph,
+  opts: { actor?: Entity | null; depth?: Depth } = {},
+): Tool[] => {
+  let ctx: ToolCtx = {
+    graph: g,
+    actor: opts.actor ?? null,
+    apply: (change) => g.apply(change),
+    read: (query, o) => g.read(query, o),
+  }
+  return core({ vocab: g.vocab, depth: opts.depth ?? 'names' }).map((t) => ({
+    name: t.name,
+    description: t.description,
+    parameters: parametersOf(t),
+    run: async (args: Record<string, unknown>) => said(await t.run(args, ctx)),
+  }))
+}
+
+/** Everything the harness gives an agent: the shell, and the graph. */
+export let harnessTools = (
+  g: Graph,
+  opts: { cwd?: string; depth?: Depth } = {},
+): Tool[] => [
+  ...shellTools(g, { cwd: opts.cwd }),
+  ...graphTools(g, { depth: opts.depth }),
+]

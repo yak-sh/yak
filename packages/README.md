@@ -141,6 +141,12 @@ In dependency order:
   has no verb list of its own, so it cannot drift from the connector an agent is
   talking to — and a PLUGIN, a table of verbs contributed at boot, is how a box
   adds words of its own beside them under one help.
+- **[@yaks/harness](./harness)** — the packages above as a working agent, with
+  nothing under it but a file: one SQLite database it makes itself, the session
+  daemon in the same process, the shell and the generic graph tools handed to
+  the model, and a command (`new`, `send`, `ls`, `show`, `tasks`, `models`) over
+  @yaks/cli's plugin seam. No server, no sync — everything in and out is a
+  bundle or a query, so the same rows move into a fleet's graph unchanged.
 - **[@yaks/workers](./workers)** — that handler as a Cloudflare Worker: the
   `WebSocketPair` upgrade `/ws` needs, the `fetch` entrypoint a Worker exports,
   a door that reads a cookie or a bearer token, and the hop to a Durable Object

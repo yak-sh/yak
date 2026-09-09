@@ -1,0 +1,21 @@
+{
+  "name": "@yaks/harness",
+  "version": "0.0.0",
+  "exports": {
+    ".": "./mod.ts",
+    "./bin": "./bin.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "A self-contained agent harness: one SQLite file, the session daemon, the shell and graph tools, and a command that drives them.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "@db/sqlite": "jsr:@db/sqlite@0.13.0",
+    "zod": "npm:zod@^3.24.0",
+    "zod-to-json-schema": "npm:zod-to-json-schema@^3.25.1"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts"
+    ]
+  }
+}

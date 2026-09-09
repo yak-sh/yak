@@ -21,6 +21,7 @@
     "app-deploy:time": "deno run --allow-read --allow-write --allow-env --allow-net bin/app-deploy-time.ts",
     "app-deploy:gate": "deno run --allow-read --allow-env bin/app-deploy-gate.ts",
     "session:spike": "deno run -A packages/session/cli.ts",
+    "harness": "deno run -A packages/harness/bin.ts",
     "tui": "sh -c 'while :; do deno run -A src/tui/main.tsx && break; [ $? -eq 42 ] || break; done'",
     "install": "sh -c 'cd \"$(git worktree list --porcelain | head -1 | cut -c 10-)\" && git config core.hooksPath .githooks && deno install -g -f --name task -A --config deno.json src/cli.ts && deno install -g -f --name task-turn --allow-env=HOME --allow-write --config deno.json src/turn.ts && deno install -g -f --name yak -A --config deno.json src/yak.ts'",
     "mcp": "deno run -A --unstable-worker-options src/mcp.ts",
@@ -78,7 +79,8 @@
     "./packages/git",
     "./packages/alias",
     "./packages/memory",
-    "./packages/yaml"
+    "./packages/yaml",
+    "./packages/harness"
   ],
   "exclude": [
     "src/vendor",
