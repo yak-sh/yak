@@ -27,9 +27,13 @@
 // read it back. One store, one pin, and therefore ONE prune (`pruned`): the
 // rule "delete only what nothing names any more" can only be right if the thing
 // applying it can see everything that names — the kept versions AND the kept
-// history — which is why both live in this file.
+// history — which is why both live in this file. What a PLUGIN names is the
+// third (plugin.ts `pins`): the sweep asks the list rather than guessing, since
+// a domain holding its own pinned bytes is the one thing this file cannot see.
 import type { Blobs } from '../../src/store/blobs.ts'
 import type { App, Directory } from './directory.ts'
+import { pinsOf } from './plugin.ts'
+import { PLUGINS } from './plugins.ts'
 import { vouched, type Who } from './session.ts'
 
 // A version's file set: the path the app serves it at, and the name of its
@@ -374,6 +378,10 @@ export let held = (all: Wrote[], at: number): Wrote | null => {
  * A file's LIVE bytes are never at risk here. They sit at the path's own key,
  * not under `versions/`, so this loop cannot reach them — and its pinned copy,
  * if nothing else names it, is a copy of bytes the app still has.
+ *
+ * What names a blob is not only this file's to know: a plugin says the shas it
+ * still points at (plugin.ts `pins`) and they are kept beside the manifests and
+ * the histories. `plugins` is the list it asks, which a test hands its own.
  */
 export let pruned = async (
   dir: Directory,
@@ -381,6 +389,7 @@ export let pruned = async (
   prefix: string,
   app: App,
   now = Date.now(),
+  plugins = PLUGINS,
 ) => {
   let named = new Set<string>()
   for (let key of await blobs.list(`${prefix}history/`)) {
@@ -400,6 +409,13 @@ export let pruned = async (
   // the oldest rollback it offers work at all.
   for (let v of (await versions(dir, app)).slice(0, KEEP)) {
     for (let sha of Object.values(v.files)) named.add(sha)
+  }
+  // And every sha a PLUGIN still names (plugin.ts `pins`): bytes something of
+  // its own points at, which neither a manifest nor a path's history can say.
+  // A plugin that throws takes the sweep with it — not knowing what is named
+  // is never a reason to delete.
+  for (let sha of await pinsOf(plugins, { dir, blobs, prefix, app, now })) {
+    named.add(sha)
   }
   let at = `${prefix}versions/`
   let gone = 0

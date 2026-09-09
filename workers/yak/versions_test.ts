@@ -11,6 +11,7 @@ import type { Blobs } from '../../src/blobs.ts'
 import type { App, Directory } from './directory.ts'
 import { carried, upload } from './dispatch.ts'
 import type { Env } from './env.ts'
+import type { Plugin } from './plugin.ts'
 import type { Who } from './session.ts'
 import {
   held,
@@ -327,6 +328,32 @@ Deno.test('the prune lets go only of bytes nothing names any more', async () => 
   for (let key of await blobs.list(`${PREFIX}versions/`)) {
     assert(named.has(key.slice(`${PREFIX}versions/`.length)), key)
   }
+})
+
+// The third thing that can name a blob (plugin.ts `pins`): a domain holding
+// its own pinned bytes, which neither a manifest nor a path's history says.
+Deno.test('a plugin names bytes, and the sweep keeps them', async () => {
+  let { blobs } = memory()
+  let { dir } = directory()
+  await blobs.put(PREFIX + 'index.html', bytes('<h1>one</h1>'))
+  // A write far outside the window, then KEEP writes after it, so its entry
+  // ages out of the history and no version names its bytes either.
+  let old = await replaced(blobs, PREFIX, 'index.html', 'p1', ago(40))
+  await blobs.put(PREFIX + 'index.html', bytes('<h1>two</h1>'))
+  for (let i = 0; i < KEEP; i++) {
+    await replaced(blobs, PREFIX, 'index.html', 'p1', ago(1))
+    await blobs.put(PREFIX + 'index.html', bytes(`<h1>${i}</h1>`))
+  }
+  let pinner: Plugin = {
+    name: 'pinner',
+    pins: [(at) => at.app.eid == APP.eid ? [old!.sha] : []],
+  }
+  assertEquals(await pruned(dir, blobs, PREFIX, APP, Date.now(), [pinner]), 0)
+  assert(await blobs.has(pinned(PREFIX, old!.sha)), 'a plugin names it')
+  // And nothing is kept for its own sake: with nobody naming them, the same
+  // bytes go on the next sweep.
+  assertEquals(await pruned(dir, blobs, PREFIX, APP, Date.now(), []), 1)
+  assertEquals(await blobs.has(pinned(PREFIX, old!.sha)), false)
 })
 
 Deno.test('a history that cannot be read is a history with nothing in it', async () => {

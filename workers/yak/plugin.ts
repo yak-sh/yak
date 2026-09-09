@@ -27,6 +27,8 @@
 //            own post-commit registry (@yaks/effects, graph.ts `#boot`)
 //   wakes    rows seeded once in the directory: when to write `fired`, with
 //            the tags the plugin's effect rules match beside it
+//   pins     the pinned bytes it still names, so the retention sweep keeps
+//            them (versions.ts `pruned`)
 //
 // `rules` is the one slot that is not an extraction: it is @yaks/graph's own
 // phase seam, offered here so a domain says what it does about a WRITE in the
@@ -41,8 +43,9 @@ import type { Effects as Registry } from '@yaks/effects'
 import type { Bundle, Rule } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Wake as Schedule } from '@yaks/wake'
+import type { Blobs } from '../../src/store/blobs.ts'
 import { PAGES } from './content.ts'
-import type { App, Space } from './directory.ts'
+import type { App, Directory, Space } from './directory.ts'
 import type { Env } from './env.ts'
 // The store's own bindings type. Type-only, so nothing here loads graph.ts:
 // graph.ts reads this list (`rulesOf`, `effected`) and the shape it hands an
@@ -145,6 +148,31 @@ export type Stored = {
  */
 export type Effect = (on: Registry, at: Stored) => void
 
+/**
+ * One app's pinned bytes, as the retention sweep holds them (versions.ts
+ * `pruned`): the store they are in, the app's own prefix in it, and the moment
+ * the sweep is reckoning from.
+ */
+export type Swept = {
+  dir: Directory
+  blobs: Blobs
+  /** the app's own prefix in the blob store */
+  prefix: string
+  app: App
+  /** the moment the sweep reckons age from */
+  now: number
+}
+
+/**
+ * The pinned blobs a plugin still NAMES — bytes the sweep must keep because
+ * something of the plugin's own points at them, which a manifest and a path's
+ * history cannot say.
+ *
+ * A throw takes the sweep with it, deliberately: not knowing what is named is
+ * never a reason to delete.
+ */
+export type Pins = (at: Swept) => Promise<Iterable<string>> | Iterable<string>
+
 /** A self-contained contribution to this Worker. */
 export type Plugin = {
   /** the plugin's name, for diagnostics and for the list to read as a list */
@@ -168,6 +196,8 @@ export type Plugin = {
   effects?: Effect[]
   /** schedules seeded once in the directory; existing rows keep their state */
   wakes?: Wake[]
+  /** the pinned bytes it still names, which the sweep must keep */
+  pins?: Pins[]
 }
 
 /**
@@ -199,6 +229,23 @@ export let toolsOf = (plugins: Plugin[]): Tool[] =>
  * @yaks/graph's own (graph.ts `#boot`). */
 export let rulesOf = (plugins: Plugin[]): Rule[] =>
   plugins.flatMap((p) => p.rules ?? [])
+
+/**
+ * Every sha any plugin still names for one app, as one set (versions.ts
+ * `pruned`). Asked in plugin order and awaited one at a time: a sweep is a
+ * background job, and a plugin reading its own store is a read the sweep can
+ * wait for.
+ */
+export let pinsOf = async (
+  plugins: Plugin[],
+  at: Swept,
+): Promise<Set<string>> => {
+  let keep = new Set<string>()
+  for (let p of plugins) {
+    for (let pins of p.pins ?? []) for (let sha of await pins(at)) keep.add(sha)
+  }
+  return keep
+}
 
 /** Every schedule row, in plugin order, for the directory's first tick. */
 export let wakesOf = (plugins: Plugin[]): Wake[] =>
