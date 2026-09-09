@@ -3,10 +3,16 @@
 // (yaks_api_test.ts) and the account rule (yaks_account_test.ts); what is left
 // here is the argv a person actually types, and that the rule survived the
 // move onto the `yak` plugin seam.
-import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+  assertThrows,
+} from '@std/assert'
 import type { Ctx } from '@yaks/cli'
 import { known, owner, verbs } from './yak.ts'
-import { envOf, Refused } from './yaks_account.ts'
+import { ADMIN, envOf, Refused } from './yaks_account.ts'
 import {
   boundaries,
   type Commit,
@@ -84,6 +90,7 @@ Deno.test('operations require the named owner before reading credentials or runn
     assert(verb(name))
     await assertRejects(() => ran(name, []), Refused, '--owner')
     await assertRejects(() => ran(name, ['--owner=false']), Refused, '--owner')
+    await assertRejects(() => ran(name, ['--admin=false']), Refused, '--admin')
     await assertRejects(() => ran(name, ['--owner', '--unknown']), Error)
   }
   await assertRejects(() => ran('revert', ['--owner', 'HEAD']), Error, '<sha>')
@@ -92,6 +99,37 @@ Deno.test('operations require the named owner before reading credentials or runn
     Error,
     '--since',
   )
+})
+
+// The same act, named by an agent instead of by Jeff (D-35373). It gets past
+// the guard — the usage refusal below is the verb's own, which is only
+// reached once the flag has been accepted — and it never reads as Jeff.
+Deno.test('an agent names a platform operation with --admin', async () => {
+  await assertRejects(() => ran('revert', ['--admin', 'HEAD']), Error, '<sha>')
+  await assertRejects(
+    () => ran('errors', ['--admin', '--since']),
+    Error,
+    '--since',
+  )
+  let said: string[] = []
+  await assertRejects(() =>
+    Promise.resolve(
+      verb('revert').run({
+        ...ctx(['--admin', 'HEAD']),
+        note: (l) => {
+          said.push(l)
+        },
+      }),
+    )
+  )
+  assertStringIncludes(said.join('\n'), 'ADMIN ACCOUNT')
+  assertStringIncludes(said.join('\n'), ADMIN)
+})
+
+// Signing the admin in is a named act of its own, and its session is never the
+// remembered default: `--admin` is the only door to it.
+Deno.test('login refuses the admin address that nobody named as the admin', async () => {
+  await assertRejects(() => ran('login', [ADMIN]), Refused, '--admin')
 })
 
 // The address nobody wrote down is asked of the platform ONCE and kept

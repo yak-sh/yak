@@ -7,10 +7,13 @@
 // The rule, and the reason this file exists at all: an ACCOUNT IS AN ADDRESS,
 // and an address ending `@bot.yak.sh` is a test account. Everything else —
 // including a session whose address was never recorded — is somebody's own,
-// and reaching it takes `--owner` in the argv. There is deliberately no
-// ambient path to an owner account: `current` refuses to hold one, so the
-// pull toward the warm default lands on a throwaway every time (M-31946, and
-// three corrections in one session before this existed).
+// and reaching it takes `--owner` in the argv. One address on that domain is
+// not a throwaway either: `admin@bot.yak.sh` is the platform's own admin
+// person, whom an agent runs a platform act as, and reaching it takes
+// `--admin`. There is deliberately no ambient path to either: `current`
+// refuses to hold one, so the pull toward the warm default lands on a
+// throwaway every time (M-31946, and three corrections in one session before
+// this existed).
 //
 // Nothing here ever renders a session value. `render` shows addresses and
 // kinds; the token crosses only between the file and an http header — and the
@@ -19,6 +22,13 @@
 import { COOKIE } from './token.ts'
 
 export let BOT = '@bot.yak.sh'
+
+// The platform's own admin person (D-35373, workers/yak/directory.ts `ADMIN`,
+// which seeds the row). It wears a fleet address so its sign-in codes land in
+// the graph like a throwaway's — but it is NOT a throwaway: an act of the
+// platform's is the admin's, recorded as the admin, and reaching it takes
+// `--admin` the way reaching the owner's takes `--owner`.
+export let ADMIN = `admin${BOT}`
 
 export type Account = {
   // The address it signed in as, '' when the session was pasted in by hand.
@@ -30,10 +40,13 @@ export type Account = {
   name: string
 }
 
-// A test account is provably a throwaway: the bot domain and nothing else.
-// An address we cannot see is NOT proof, so it reads as the owner's — the
-// safe direction to be wrong in.
-export let isTest = (a: Account) => a.address.endsWith(BOT)
+// A test account is provably a throwaway: the bot domain, and not the one
+// address on it that is the platform's admin. An address we cannot see is NOT
+// proof, so it reads as the owner's — the safe direction to be wrong in.
+export let isTestAddress = (address: string) =>
+  address.endsWith(BOT) && address != ADMIN
+export let isTest = (a: Account) => isTestAddress(a.address)
+export let isAdmin = (a: Account) => a.address == ADMIN
 
 // The storage key for an address. Uppercase, non-alphanumerics folded, so
 // `probe-1a2b@bot.yak.sh` is one legal env name.
@@ -162,14 +175,18 @@ let say = (all: Account[]) =>
     ? all.map((a) => `  ${a.name} — ${a.address || '?'}`).join('\n')
     : '  (none)'
 
-// WHICH account a command runs as. `owner` is the argv flag, `current` the
-// remembered test account. The whole point of the function: an owner-grade
-// account is reachable only when `owner` is set, and `current` can never
-// name one (see `usable`), so no chain of defaults arrives there.
+// WHICH account a command runs as. `owner` and `admin` are the argv flags,
+// `current` the remembered test account. The whole point of the function: an
+// account that is not a throwaway is reachable only when its own flag is set,
+// and `current` can never name one (see `usable`), so no chain of defaults
+// arrives there.
 export let pick = (
   all: Account[],
-  want: { as?: string; owner?: boolean; current?: string },
+  want: { as?: string; owner?: boolean; admin?: boolean; current?: string },
 ): Account => {
+  if (want.owner && want.admin) {
+    throw new Refused('--owner and --admin name two accounts: pick one')
+  }
   if (want.as) {
     let hit = named(all, want.as)
     if (!hit.length) {
@@ -181,11 +198,22 @@ export let pick = (
           say(hit),
       )
     }
-    if (!isTest(hit[0]) && !want.owner) throw ownerRefusal(hit[0])
+    let said = isAdmin(hit[0]) ? want.admin : isTest(hit[0]) || want.owner
+    if (!said) throw refusal(hit[0])
     return hit[0]
   }
+  if (want.admin) {
+    let it = all.find(isAdmin)
+    if (!it) {
+      throw new Refused(
+        `no admin account signed in — \`yak login ${ADMIN} --admin\``,
+      )
+    }
+    return it
+  }
   if (want.owner) {
-    let theirs = all.filter((a) => !isTest(a))
+    // The admin is nobody's own account, so `--owner` never lands on it.
+    let theirs = all.filter((a) => !isTest(a) && !isAdmin(a))
     if (!theirs.length) {
       throw new Refused(
         'no owner account signed in — `yak login <address> --owner`',
@@ -213,15 +241,26 @@ export let pick = (
   )
 }
 
-let ownerRefusal = (a: Account) =>
+// What reaching this account is, said back to whoever did not say it.
+let refusal = (a: Account) =>
   new Refused(
-    `${a.address || a.name} is not a test account. Acting as its owner is a ` +
-      'named act: add --owner. A throwaway is `yak test`.',
+    isAdmin(a)
+      ? `${a.address} is the platform’s admin. Acting as it is a named act: ` +
+        'add --admin. A throwaway is `yak test`.'
+      : `${a.address || a.name} is not a test account. Acting as its owner ` +
+        'is a named act: add --owner. A throwaway is `yak test`.',
   )
 
-// `use` remembers a test account and REFUSES an owner one, so the remembered
-// default can never be the owner's — the flag is the only door.
+// `use` remembers a test account and REFUSES every other kind, so the
+// remembered default can never be the owner's or the admin's — the flag is
+// the only door to either.
 export let usable = (a: Account): Account => {
+  if (isAdmin(a)) {
+    throw new Refused(
+      `${a.address} is the platform’s admin and is never made current. ` +
+        'Reach it per command with --admin.',
+    )
+  }
   if (!isTest(a)) {
     throw new Refused(
       `${a.address || a.name} is an owner account and is never made current. ` +
@@ -231,11 +270,14 @@ export let usable = (a: Account): Account => {
   return a
 }
 
-// The mark on every command run as somebody's own account. stderr, so a piped
-// stdout stays the answer the caller asked for.
+// The mark on every command that is not a throwaway's: whose acts these are.
+// stderr, so a piped stdout stays the answer the caller asked for.
 export let banner = (a: Account) =>
-  `!! OWNER ACCOUNT — ${a.address || 'address unrecorded'} — ` +
-  'every act below is theirs, not a test !!'
+  isAdmin(a)
+    ? `!! ADMIN ACCOUNT — ${a.address} — every act below is the platform ` +
+      'admin’s, not the owner’s and not a test !!'
+    : `!! OWNER ACCOUNT — ${a.address || 'address unrecorded'} — ` +
+      'every act below is theirs, not a test !!'
 
 // The accounts as a person reads them. No session value appears here, or
 // anywhere else this module prints.
@@ -244,7 +286,7 @@ export let render = (all: Account[], current: string, at?: Account) =>
     ? all.map((a) =>
       `${a == at ? '*' : ' '} ${a.name.padEnd(16)} ${
         (a.address || '(address unrecorded)').padEnd(28)
-      } ${isTest(a) ? 'test' : 'OWNER'}${
+      } ${isAdmin(a) ? 'ADMIN' : isTest(a) ? 'test' : 'OWNER'}${
         a.address && a.address == current ? ' · current' : ''
       }`
     ).join('\n')

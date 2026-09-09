@@ -16,8 +16,8 @@ fresh worktree has none and a bare `wrangler deploy` dies at `mcp.ts`
 `import { z } from 'zod'`. `probe.ts` installs through the same door before it
 boots a `wrangler dev`.
 
-Correct a deployed regression with `yak revert <sha> --owner`: main is always
-deployed. `yak rollback [version] --owner` is for a broken build path and
+Correct a deployed regression with `yak revert <sha> --admin`: main is always
+deployed. `yak rollback [version] --admin` is for a broken build path and
 refuses to cross a data migration boundary. A Durable Object already migrated
 keeps its data, even when older code is deployed.
 
@@ -65,15 +65,22 @@ separate shell commands, so deploy mode restores Deno's path before it runs
 commit. `yak deploys --owner` estimates older, unannotated versions from commit
 times and marks that estimate in its output.
 
-The owner’s incident commands, using only this box’s Wrangler/GitHub login:
+The incident commands, using only this box’s Wrangler/GitHub login. An agent
+names the act with `--admin` and it is recorded as the platform’s admin person
+(`admin@bot.yak.sh`, seeded into the directory); Jeff names it with `--owner`
+and it is his. Same commands, same credentials — the flag says whose act it is,
+and the banner on stderr says so out loud.
 
 ```sh
-yak deploys --owner
-yak errors --since 10m --owner
-yak tail --owner
-yak rollback [version] --owner
-yak revert <sha> --owner
+yak deploys --admin              # or --owner, when it is Jeff
+yak errors --since 10m --admin
+yak tail --admin
+yak rollback [version] --admin
+yak revert <sha> --admin
 ```
+
+`yak login admin@bot.yak.sh --admin` signs this box in as that person; the
+session is kept beside the owner’s and is never the remembered default.
 
 `deploys` joins uploads to deployments and reads each commit’s `BOUNDARIES` from
 `migrate.ts` (`MARKS` in older commits). Rollback retains every boundary main

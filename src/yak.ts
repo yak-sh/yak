@@ -10,9 +10,11 @@
 //   yak query jeff/recipes .doc!    an app's store, through the filter grammar
 //
 // The one rule this plugin is shaped around: A TEST ACCOUNT IS THE DEFAULT AND
-// THE OWNER'S IS A NAMED ACT. No chain of defaults arrives at an owner account
-// — reaching one takes `--owner` on that command line, and every command that
-// runs as one wears a banner on stderr (yaks_account.ts).
+// EVERY OTHER ACCOUNT IS A NAMED ACT. No chain of defaults arrives at one —
+// reaching the owner's takes `--owner` and reaching the platform's admin takes
+// `--admin` on that command line, and every command that runs as either wears
+// a banner on stderr (yaks_account.ts). `--admin` is what an agent uses for a
+// platform act, so the act is recorded as the admin and not as Jeff (D-35373).
 //
 // It sits FIRST in the plugin list, so `login` and `logout` here shadow the
 // ones the package ships. Nothing is lost by that: this box keeps two
@@ -40,13 +42,16 @@ import {
 import {
   type Account,
   accountsIn,
+  ADMIN,
   banner,
   BOT,
   CURRENT,
   envOf,
   envPath,
   forgotten,
+  isAdmin,
   isTest,
+  isTestAddress,
   localPart,
   named,
   pick,
@@ -121,6 +126,7 @@ let acting = (s: Said, note: (line: string) => void): Account => {
   let at = pick(all, {
     as: s.opts.as,
     owner: s.flags.has('owner'),
+    admin: s.flags.has('admin'),
     current: env[CURRENT],
   })
   if (!isTest(at)) note(banner(at))
@@ -164,8 +170,9 @@ let signIn = async (
   let session = await spendCode(address, code)
   let { path, text } = store()
   let next = saved(text, address, session)
-  // Only a throwaway is ever remembered as the default (yaks_account.ts).
-  write(path, bot ? setEnv(next, CURRENT, address) : next)
+  // Only a throwaway is ever remembered as the default (yaks_account.ts) — the
+  // admin wears a bot address and is still not one.
+  write(path, isTestAddress(address) ? setEnv(next, CURRENT, address) : next)
   return session
 }
 
@@ -211,19 +218,29 @@ let one = (all: Account[], want: string): Account => {
 // box's Wrangler/GitHub logins, independent of a yaks.app account session.
 let root = new URL('../', import.meta.url).pathname.replace(/\/$/, '')
 let platform = (args: string[], note: (line: string) => void): Said => {
-  // --owner is a boolean here, wherever it stands; the general key/value
-  // grammar otherwise consumes a following version or sha as its value.
-  if (!args.includes('--owner')) {
+  // --admin and --owner are booleans here, wherever they stand; the general
+  // key/value grammar otherwise consumes a following version or sha as a value.
+  // The act is named either way; the flag says WHOSE it is — an agent's
+  // (`--admin`) or Jeff's (`--owner`) — and the banner says that out loud. The
+  // credentials below are this box's Cloudflare/GitHub login for both, until
+  // the admin path has a token of its own (T-35375).
+  let flag = args.find((a) => a == '--admin' || a == '--owner')
+  if (!flag) {
     throw new Refused(
-      'yaks.app operations are the platform owner’s: add --owner',
+      'yaks.app operations are a named act: add --admin (an agent) or ' +
+        '--owner (Jeff)',
     )
   }
-  let s = said(args.filter((a) => a != '--owner'))
-  note(banner({
-    name: 'platform',
-    address: 'yaks.app (this box’s Cloudflare/GitHub login)',
-    session: '',
-  }))
+  let s = said(args.filter((a) => a != flag))
+  note(
+    flag == '--admin'
+      ? banner({ name: 'admin', address: ADMIN, session: '' })
+      : banner({
+        name: 'platform',
+        address: 'yaks.app (this box’s Cloudflare/GitHub login)',
+        session: '',
+      }),
+  )
   return s
 }
 
@@ -244,68 +261,68 @@ let operation = (
 let verbs: Verb[] = [
   {
     name: 'deploys',
-    args: '--owner',
+    args: '--admin|--owner',
     about: 'yaks.app versions, commits, live times, and data boundaries',
     help: () =>
-      'yak deploys --owner\n\n  Recent uploads and deployments; ~ marks a commit inferred by time.\n  Migration boundaries survive code rollbacks. Unknown history refuses rollback.',
+      'yak deploys --admin\n\n  Recent uploads and deployments; ~ marks a commit inferred by time.\n  Migration boundaries survive code rollbacks. Unknown history refuses rollback.',
     run: async (c) => {
       let s = platform(c.args, c.note)
-      operation(s, 0, 'yak deploys --owner')
+      operation(s, 0, 'yak deploys --admin|--owner')
       c.out(table(await deploys(root)))
       return 0
     },
   },
   {
     name: 'errors',
-    args: '[--since 10m] --owner',
+    args: '[--since 10m] --admin|--owner',
     about: 'yaks.app exceptions and error logs grouped by signature',
     help: () =>
-      'yak errors [--since 10m] --owner\n\n  Count, first/last seen, entrypoint and version for each error signature.\n  Uses Workers Logs when available; otherwise observes the NEXT window by tail.',
+      'yak errors [--since 10m] --admin\n\n  Count, first/last seen, entrypoint and version for each error signature.\n  Uses Workers Logs when available; otherwise observes the NEXT window by tail.',
     run: async (c) => {
       let s = platform(c.args, c.note)
-      operation(s, 0, 'yak errors [--since 10m] --owner', ['since'])
+      operation(s, 0, 'yak errors [--since 10m] --admin|--owner', ['since'])
       return await errors(root, s.opts.since ?? '10m', c.out, c.note)
     },
   },
   {
     name: 'tail',
-    args: '--owner',
+    args: '--admin|--owner',
     about: 'yaks.app live events: outcome, entrypoint, request and errors',
     help: () =>
-      'yak tail --owner\n\n  One line per live event. Ctrl-C stops the tail.',
+      'yak tail --admin\n\n  One line per live event. Ctrl-C stops the tail.',
     run: async (c) => {
       let s = platform(c.args, c.note)
-      operation(s, 0, 'yak tail --owner')
+      operation(s, 0, 'yak tail --admin|--owner')
       return await tail(root, c.out, c.note)
     },
   },
   {
     name: 'rollback',
-    args: '[version] --owner',
+    args: '[version] --admin|--owner',
     about:
       'emergency rollback for a broken build path; refuses data boundaries',
     help: () =>
-      'yak rollback [version] --owner\n\n  Only for a broken build path. Code corrections use yak revert: main deploys\n  every push. Defaults to the prior deployed version; refuses data boundaries\n  and uncertain commits, then probes the public doors after a rollback.',
+      'yak rollback [version] --admin\n\n  Only for a broken build path. Code corrections use yak revert: main deploys\n  every push. Defaults to the prior deployed version; refuses data boundaries\n  and uncertain commits, then probes the public doors after a rollback.',
     run: async (c) => {
       let s = platform(c.args, c.note)
-      operation(s, 1, 'yak rollback [version] --owner')
+      operation(s, 1, 'yak rollback [version] --admin|--owner')
       c.note(
-        'Cloudflare rollback is for a broken build path. Code corrections belong on main: yak revert <sha> --owner.',
+        'Cloudflare rollback is for a broken build path. Code corrections belong on main: yak revert <sha> --admin.',
       )
       return await rollback(root, s.words[0], c.out)
     },
   },
   {
     name: 'revert',
-    args: '<sha> --owner',
+    args: '<sha> --admin|--owner',
     about: 'revert on fresh main, gate, land/push, and time the live deploy',
     help: () =>
-      'yak revert <sha> --owner\n\n  Reverts a main commit in a fresh worktree, runs deno task check, then uses\n  task land to publish main. Re-gates after a rebase and waits up to 20m for\n  an annotated version to serve the revert. Failed worktrees are kept.\n  Workers Builds deploy command: ../../bin/build-yak deploy',
+      'yak revert <sha> --admin\n\n  Reverts a main commit in a fresh worktree, runs deno task check, then uses\n  task land to publish main. Re-gates after a rebase and waits up to 20m for\n  an annotated version to serve the revert. Failed worktrees are kept.\n  Workers Builds deploy command: ../../bin/build-yak deploy',
     run: async (c) => {
       let s = platform(c.args, c.note)
-      operation(s, 1, 'yak revert <sha> --owner')
+      operation(s, 1, 'yak revert <sha> --admin|--owner')
       if (!/^[a-f\d]{7,40}$/i.test(s.words[0] ?? '')) {
-        throw new Usage('yak revert <sha> --owner')
+        throw new Usage('yak revert <sha> --admin|--owner')
       }
       return await revert(root, s.words[0], c.out, c.note)
     },
@@ -319,7 +336,11 @@ let verbs: Verb[] = [
       c.out(`account   ${at.address || '(address unrecorded)'}`)
       c.out(
         `kind      ${
-          isTest(at) ? 'test — a throwaway' : 'OWNER — somebody’s own'
+          isAdmin(at)
+            ? 'ADMIN — the platform’s own'
+            : isTest(at)
+            ? 'test — a throwaway'
+            : 'OWNER — somebody’s own'
         }`,
       )
       c.out(`person    ${claims?.person ?? '(session unreadable)'}`)
@@ -387,11 +408,13 @@ let verbs: Verb[] = [
     args: '<address|token>',
     about: 'sign in as an address — or keep a bearer for this host',
     help: () =>
-      'yak login <address> [--owner] [--code=NNNNNN]\nyak login <token>\n\n' +
+      'yak login <address> [--admin|--owner] [--code=NNNNNN]\n' +
+      'yak login <token>\n\n' +
       '  An address signs this box in as that account: a bot code is read ' +
       'from\n  the graph, anyone else’s is typed. A word that is not an ' +
       'address is a\n  connector bearer, kept for this host.\n\n' +
-      '  yak login probe@bot.yak.sh\n  yak login you@example.com --owner',
+      '  yak login probe@bot.yak.sh\n  yak login you@example.com --owner\n' +
+      `  yak login ${ADMIN} --admin`,
     run: async (c) => {
       let s = said(c.args)
       let word = s.words[0]
@@ -403,7 +426,15 @@ let verbs: Verb[] = [
         return 0
       }
       let address = word.trim().toLowerCase()
-      if (!address.endsWith(BOT) && !s.flags.has('owner')) {
+      if (address == ADMIN && !s.flags.has('admin')) {
+        throw new Refused(
+          `${address} is the platform’s admin. Signing in as it is a named ` +
+            'act: add --admin. A throwaway is `yak test`.',
+        )
+      }
+      if (
+        !isTestAddress(address) && address != ADMIN && !s.flags.has('owner')
+      ) {
         throw new Refused(
           `${address} is not a test address. Signing in as somebody is a ` +
             'named act: add --owner. A throwaway is `yak test`.',
@@ -487,17 +518,18 @@ let verbs: Verb[] = [
     args: '[bps]',
     about: 'what the platform takes from a sale, in basis points',
     help: () =>
-      'yak fee [bps] --owner\n\n  The platform’s own rate — read it, or move ' +
-      'it.\n\n  yak fee --owner\n  yak fee 250 --owner',
-    // The rate is the PLATFORM's, so it is the platform owner's to read and to
-    // move — never a throwaway's, and never a default's. `--owner` is what
-    // says so out loud, the same named act `login` asks for.
+      'yak fee [bps] --admin|--owner\n\n  The platform’s own rate — read it, ' +
+      'or move it.\n\n  yak fee --admin\n  yak fee 250 --owner',
+    // The rate is the PLATFORM's, so it is read and moved by a seat in `yak`
+    // (workers/yak/sell.ts `fees`) — never a throwaway's, and never a
+    // default's. The flag is what says so out loud, the same named act `login`
+    // asks for.
     run: async (c) => {
       let s = said(c.args)
-      if (!s.flags.has('owner')) {
+      if (!s.flags.has('owner') && !s.flags.has('admin')) {
         throw new Refused(
-          'the fee is the platform owner’s: add --owner. A test account ' +
-            'cannot read it or set it.',
+          'the fee is the platform’s: add --admin (an agent) or --owner ' +
+            '(Jeff). A test account cannot read it or set it.',
         )
       }
       // Read before the account is: a typo is a typo whoever is signed in.
@@ -577,7 +609,7 @@ let verbs: Verb[] = [
 /** The accounts this box is signed in as, and what they may do. */
 export let owner: Plugin = {
   name: 'owner',
-  about: 'this box’s accounts  [--as=ACCOUNT] [--owner]',
+  about: 'this box’s accounts  [--as=ACCOUNT] [--admin] [--owner]',
   verbs: () => verbs,
 }
 

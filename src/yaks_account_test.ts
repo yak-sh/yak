@@ -5,9 +5,11 @@ import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
 import {
   type Account,
   accountsIn,
+  ADMIN,
   banner,
   envOf,
   forgotten,
+  isAdmin,
   isTest,
   keyOf,
   pick,
@@ -28,6 +30,7 @@ let bot = (name: string, session = 'tok'): Account => ({
 })
 let jeff: Account = { address: 'jeff@yak.sh', session: 'tok', name: 'jeff' }
 let legacy: Account = { address: '', session: 'tok', name: 'owner' }
+let admin: Account = { address: ADMIN, session: 'tok', name: 'admin' }
 
 let ENV = `# dotenv
 STRIPE_OPERATOR_KEY=sk_live_keepme
@@ -70,18 +73,57 @@ Deno.test('with no throwaway signed in, the answer is how to mint one', () => {
   assertEquals(pick([bot('a'), bot('b')], { current: 'b' }).name, 'b')
 })
 
+// The platform's admin wears a bot address so its sign-in codes land in the
+// graph, and is a throwaway in nobody's eyes: its own flag reaches it, no
+// default does, and `--owner` never lands on it either (D-35373).
+Deno.test('the admin is neither a throwaway nor anybody’s own', () => {
+  assertEquals(isAdmin(admin), true)
+  assertEquals(isTest(admin), false)
+  assertEquals(isAdmin(bot('probe')), false)
+  let all = [admin, bot('probe'), jeff]
+  assertEquals(pick(all, {}).address, 'probe@bot.yak.sh')
+  assertEquals(pick(all, { current: 'admin' }).address, 'probe@bot.yak.sh')
+  assertEquals(pick(all, { owner: true }).address, 'jeff@yak.sh')
+  // Asked for by name without the flag: refused, and the refusal teaches.
+  let no = assertThrows(() => pick(all, { as: 'admin' }), Refused)
+  assertStringIncludes((no as Error).message, '--admin')
+  // With the flag, by name or by itself.
+  assertEquals(pick(all, { as: 'admin', admin: true }).address, ADMIN)
+  assertEquals(pick(all, { admin: true }).address, ADMIN)
+  // The owner's flag is not the admin's, either way round.
+  assertThrows(() => pick(all, { as: 'admin', owner: true }), Refused)
+  assertThrows(() => pick(all, { as: 'jeff', admin: true }), Refused)
+  let both = assertThrows(
+    () => pick(all, { owner: true, admin: true }),
+    Refused,
+  )
+  assertStringIncludes((both as Error).message, 'pick one')
+  let none = assertThrows(() => pick([bot('p')], { admin: true }), Refused)
+  assertStringIncludes((none as Error).message, 'yak login')
+})
+
 Deno.test('an owner account is never made the remembered default', () => {
   assertEquals(usable(bot('probe')).name, 'probe')
   assertThrows(() => usable(jeff), Refused)
   assertThrows(() => usable(legacy), Refused)
+  assertStringIncludes(
+    (assertThrows(() => usable(admin), Refused) as Error).message,
+    '--admin',
+  )
 })
 
 Deno.test('acting as the owner is marked, and no session is ever printed', () => {
   assertStringIncludes(banner(jeff), 'OWNER ACCOUNT')
   assertStringIncludes(banner(jeff), 'jeff@yak.sh')
   assertStringIncludes(banner(legacy), 'address unrecorded')
-  let out = render([bot('probe', 'sekret'), jeff, legacy], 'probe@bot.yak.sh')
+  assertStringIncludes(banner(admin), 'ADMIN ACCOUNT')
+  assertStringIncludes(banner(admin), ADMIN)
+  let out = render(
+    [bot('probe', 'sekret'), jeff, legacy, admin],
+    'probe@bot.yak.sh',
+  )
   assertStringIncludes(out, 'OWNER')
+  assertStringIncludes(out, 'ADMIN')
   assertStringIncludes(out, 'current')
   assertEquals(out.includes('sekret'), false)
   assertEquals(out.includes('tok'), false)
