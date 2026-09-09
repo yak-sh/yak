@@ -18,8 +18,8 @@
 // or to `Unsupported`.
 //
 // Extensions are consulted BEFORE the built-in compilation, so one may also
-// replace a built-in — a search package that indexes many components takes over
-// the dialect's single-index `text` lowering.
+// replace a built-in predicate. Text has no built-in lowering: @yaks/fts
+// contributes that clause together with the indexes it targets.
 //
 // Example — a `library` component whose `shelf` column is a filter this
 // compiler has no grammar for:

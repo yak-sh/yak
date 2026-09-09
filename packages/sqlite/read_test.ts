@@ -1,8 +1,9 @@
 // Reads compile a query and gather whole entities: a filter selects, a
-// reference reads back as the eid it points at, a bare word searches the text,
+// reference reads back as the eid it points at, bare words require an extension,
 // and an aggregate comes back as raw rows.
 
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertThrows } from '@std/assert'
+import { Unsupported } from '@yaks/sql'
 import type { Bundle, Comp } from './bundle.ts'
 import { seed, store } from './harness.ts'
 
@@ -39,18 +40,9 @@ Deno.test('a reference-deref path filters through the target', () => {
   assertEquals(eids(s.read('.product.maker.doc.title~=acme')), ['p1'])
 })
 
-Deno.test('a bare-word query matches document title and body', () => {
+Deno.test('a bare-word query requires an explicitly registered extension', () => {
   let s = store()
-  seed(s, [
-    {
-      entity: { eid: 'a' },
-      doc: { title: 'Blue mug', body: 'ceramic and glazed' },
-    },
-    { entity: { eid: 'b' }, doc: { title: 'Red plate', body: 'enamel' } },
-  ])
-  assertEquals(eids(s.read('mug')), ['a'])
-  assertEquals(eids(s.read('ceramic')), ['a'])
-  assertEquals(eids(s.read('enamel')), ['b'])
+  assertThrows(() => s.read('mug'), Unsupported)
 })
 
 Deno.test('the kind scope selects the most specific kind', () => {

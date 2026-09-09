@@ -554,10 +554,6 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
   let ext = extended(ctx, c)
   if (ext) return ext
   if (c.kind == 'never') return FALSE
-  if (c.kind == 'text') {
-    ctx.tables.add('doc')
-    return raw(ctx.d.text(c.value))
-  }
   if (c.kind == 'and') return and(...c.clauses.map((x) => clause(ctx, x)))
   if (c.kind == 'or') return or(...(c as Or).clauses.map((x) => clause(ctx, x)))
   if (c.kind == 'refs') return refsUnion(ctx, c)

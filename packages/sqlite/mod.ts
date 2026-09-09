@@ -160,8 +160,8 @@ let unit = <R>(driver: Driver, body: () => R): R => {
 /**
  * What `storage()` is bound with: @yaks/sql's read options (a derived-column
  * registry, a fixed `now` for time phrases), plus `text` — how a column whose
- * stored value is not its own words reads as text, which is what keeps the
- * full-text index holding prose rather than, say, a blob's address
+ * stored value is not its own words reads as text through `doc_value`,
+ * rather than returning, say, a blob's address
  * (`blobText(vocab)` from @yaks/blob is one). The read options ride every read;
  * `text` rides the schema.
  */

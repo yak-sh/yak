@@ -68,6 +68,7 @@
 // is one of them: nothing in workers/yak installs @yaks/journal, so an app store
 // has no `batch`/`delta` table to carry `journal_tx`/`journal_change`/
 // `journal_field` into. It is archived to R2 with the rest and said so.
+import { fields, schema as ftsSchema } from '@yaks/fts'
 import { driver, type DurableStorage, reserved } from '@yaks/durable-object'
 import { edgeEid } from '@yaks/edge'
 import { sha256 } from '@yaks/graph'
@@ -296,6 +297,10 @@ export let install = (
       }),
   }
   for (let stmt of indexed(ready)) d.exec(stmt)
+  // Search is app composition, after all indexed columns have been raised.
+  for (
+    let stmt of ftsSchema(fields(vocab).filter((f) => f.comp == 'doc'), text)
+  ) d.exec(stmt)
 }
 
 // A full-text index is several tables — the virtual one and its shadows — and

@@ -1,5 +1,5 @@
 // The extension seam: another package's clause compiler, registered through
-// `compile`. These pin the whole contract — it wins over the built-in, it can
+// `compile`. These pin the whole contract — it can claim bare words, it can
 // pull a table in, declining falls back, and claiming a directive stops it
 // declining.
 
@@ -58,16 +58,20 @@ Deno.test('an extension compiles a clause the binder would decline', () => {
   assert(sql.includes('select entity from "vec"'), sql)
 })
 
-Deno.test('an extension wins over the built-in lowering', () => {
+Deno.test('an extension supplies text compilation', () => {
   let { sql, params } = compile(parse('poetry'), v, { extend: [shelves] })
   assert(!sql.includes('doc_fts'), sql)
   assertEquals(params, ['poetry'])
 })
 
-Deno.test('declining falls back to the built-in compilation', () => {
+Deno.test('declining text without another handler is unsupported', () => {
   let quiet: Extension = { name: 'quiet', compile: { text: () => null } }
-  let { sql } = compile(parse('poetry'), v, { extend: [quiet] })
-  assert(sql.includes('doc_fts match ?'), sql)
+  assertThrows(
+    () => compile(parse('poetry'), v, { extend: [quiet] }),
+    Unsupported,
+  )
+  let { params } = compile(parse('poetry'), v, { extend: [quiet, shelves] })
+  assertEquals(params, ['poetry'])
 })
 
 Deno.test('site.join pulls a component table into the statement', () => {

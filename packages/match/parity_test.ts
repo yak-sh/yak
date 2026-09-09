@@ -11,6 +11,7 @@ import { assertEquals, assertThrows } from '@std/assert'
 import { Database } from '@db/sqlite'
 import type { Bundle } from './read.ts'
 import { storage } from '@yaks/sqlite'
+import { fields, schema as ftsSchema, search } from '@yaks/fts'
 import { type Derived, type Extension, Unsupported } from '@yaks/sql'
 import { compute, derived as taskDerived, taskDoc } from '@yaks/task'
 import { edgeDoc, edgeKeywords, link, traverse } from '@yaks/edge'
@@ -32,15 +33,18 @@ let loaded = (
 ) => {
   let db = new Database(':memory:')
   db.exec('pragma foreign_keys = on')
+  // Match the in-memory evaluator's doc-only text policy explicitly.
+  let text = fields(v).filter((f) => f.comp == 'doc')
   let s = storage(
     {
       query: (q, params) => db.prepare(q).all(...params),
       exec: (q) => db.exec(q),
     },
     v,
-    { now: NOW, derived, extend },
+    { now: NOW, derived, extend: [...extend, search(text)] },
   )
   s.install()
+  for (let stmt of ftsSchema(text)) db.exec(stmt)
   s.tx((tx) => tx.patch(rows))
   return s
 }

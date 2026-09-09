@@ -94,7 +94,13 @@ import { effects } from '@yaks/effects'
 import { edges } from '@yaks/edge'
 import { keys } from '@yaks/key'
 import { aliases } from '@yaks/alias'
-import { type Driver, fields, find } from '@yaks/fts'
+import {
+  type Driver,
+  fields,
+  find,
+  schema as ftsSchema,
+  search,
+} from '@yaks/fts'
 import {
   type Bundle,
   type Comp,
@@ -476,18 +482,25 @@ export class Store {
     let drive = driver(ctx.storage)
     this.#drive = drive
     let bytes = sqliteBlobs(drive)
+    // Keep the app's doc-only search policy explicit; sqlite owns no index.
+    let searchable = fields(vocab).filter((f) => f.comp == 'doc')
     let store = storage(ctx.storage, vocab, {
+      extend: [search(searchable)],
       derived: { ...blobRead(vocab), ...(own ? {} : appDerived()) },
       // A body is stored as its address (@yaks/blob `store: "blob"`), so the
-      // search index is told how to read one back as prose — or it would hold
-      // hashes and a search would find a body by its title alone (T-33978).
+      // read view resolves it as prose. The FTS schema below receives the
+      // same resolution, keeping hashes out of the index (T-33978).
       text: blobText(vocab),
     })
     // Every index the vocabulary declares is already in `store.ddl()` — the
     // directory's uniques included, since they are words of `platformDoc`.
     // The blob table FIRST: the `doc_value` view and the search triggers read
     // a body's text out of it, so it has to be standing before they are.
-    let ddl = [...blobSchema(), ...store.ddl()]
+    let ddl = [
+      ...blobSchema(),
+      ...store.ddl(),
+      ...ftsSchema(searchable, blobText(vocab)),
+    ]
     // The schema this object stands at, as one word: a wake under the same
     // vocabulary runs no DDL at all, and a deploy that added a component
     // raises its table on the next request.
@@ -1447,7 +1460,7 @@ export class Store {
     let text = parse(line).clauses
       .flatMap((c) => c.kind == 'text' ? [c.value] : []).join(' ')
     if (!text.trim() || !rows.length) return rows
-    // Only what @yaks/sqlite raised an index for, which is `doc` (ddl.ts).
+    // The same doc-only field policy used at boot for schema and membership.
     let hits = find(
       this.#drive,
       fields(this.#vocab).filter((f) => f.comp == 'doc'),

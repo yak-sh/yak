@@ -57,7 +57,6 @@ export type Dialect = {
   time: (colExpr: string, op: string, value: string, now: number) => Frag | null
   refEq: (colExpr: string, eids: string[], negate: boolean) => Frag
   refPresent: (colExpr: string, negate: boolean) => Frag
-  text: (value: string) => Frag
 }
 
 let q = (name: string) => `"${name}"`
@@ -183,13 +182,6 @@ let spanFn = (s: string, now: number): Span | null => {
   let sp: QSpan | null = timeSpan(s, now)
   return sp ? { start: sp.start, end: sp.end } : null
 }
-// The safe FTS MATCH spelling: user text is a quoted phrase, never operator
-// syntax; only a trailing `*` prefix-matches the final token.
-let ftsTerm = (value: string): string => {
-  let prefix = /\*+$/.test(value)
-  let phrase = value.replace(/\*+$/, '').replaceAll('"', '').trim()
-  return phrase ? `"${phrase}"${prefix ? '*' : ''}` : ''
-}
 let iso = (ms: number) => new Date(ms).toISOString()
 let bound = (c: string, op: string, ms: number): Frag => ({
   sql: `${c} ${op} ?`,
@@ -269,14 +261,4 @@ export let sqlite: Dialect = {
     sql: `${c} is ${negate ? '' : 'not '}null`,
     params: [],
   }),
-  text: (value) => {
-    let term = ftsTerm(value)
-    return term
-      ? {
-        sql:
-          `"doc"."rowid" in (select rowid from doc_fts where doc_fts match ?)`,
-        params: [term],
-      }
-      : { sql: '0', params: [] }
-  },
 }

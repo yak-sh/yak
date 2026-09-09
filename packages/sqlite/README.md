@@ -72,7 +72,7 @@ let driver = {
 }
 
 let store = storage(driver, vocab)
-store.install() // create the tables, the doc view, the search index
+store.install() // create the tables, the doc view, the declared indexes
 ```
 
 ### Write
@@ -132,7 +132,6 @@ they point at:
 ```ts
 store.read('.published=true') // every published post, whole
 store.read('.kind=post&.limit=10') // the ten newest posts
-store.read('hello') // a bare word is a full-text search over doc title + body
 store.read('.post.author.doc.title~=kate') // filter through a reference
 
 store.rows('.published=true&.count!') // raw aggregate rows: [{ value: '', n: 3 }]
@@ -207,8 +206,11 @@ SQLite connection wants.
 - one index per `unique`/`index` a component declares, named after the columns
   it covers (`app_space_slug`) — a unique one is the constraint a race is
   decided by, and the losing insert is refused by the engine;
-- a `doc_value` view and a `doc_fts` full-text index over the `doc` component's
-  text columns, when the vocabulary declares one.
+- a `doc_value` read view when the vocabulary declares a `doc` component.
+
+Full-text search is opt-in: the application runs `schema(fields)` from
+`@yaks/fts` after installing storage, and passes `{ extend: [search(fields)] }`
+to `storage()`. SQLite does not depend on FTS or create its indexes.
 
 ## License
 

@@ -1,5 +1,5 @@
 // The schema a vocabulary implies: one identity table, one graveyard, one table
-// per component, and the doc view plus its search index.
+// per component, and the doc view (search indexes belong to @yaks/fts).
 
 import { assert, assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
@@ -51,29 +51,19 @@ Deno.test('a boolean column takes integer affinity, a text column text', () => {
   assert(/"price" real/.test(all), all)
 })
 
-Deno.test('a doc vocabulary gets a doc_value view and a full-text index', () => {
+Deno.test('a doc vocabulary gets a read view but no implicit search index', () => {
   assert(all.includes('create view if not exists doc_value'), all)
-  assert(/using fts5\(\s*"title", "body"/.test(all), all)
-  // The index reads a column back out of the view, never the table: that is
-  // the one seam a resolved column can be applied at (`snippet`, `rebuild`).
-  assert(all.includes(`content='doc_value', content_rowid='entity'`), all)
+  assert(!all.includes('fts5'), all)
+  assert(!all.includes('create trigger'), all)
 })
 
-// A column whose stored value is not its own words — @yaks/blob swaps a body
-// for its address. Both the view and the two trigger sides resolve it, or the
-// index holds hashes and a search finds a body by its title alone.
-Deno.test('a resolved doc column is read as text by the view and the triggers', () => {
+Deno.test('a resolved doc column is read as text by the view', () => {
   let resolved = schema(shop, {
     'doc.body': (stored) =>
       `(select "words" from "stash" where "k" = ${stored})`,
   }).join('\n')
   assert(resolved.includes(`"k" = "body") as "body"`), resolved)
-  assert(resolved.includes(`"k" = new."body")`), resolved)
-  assert(resolved.includes(`"k" = old."body")`), resolved)
-  // The column that IS its own text is untouched, on both sides.
-  assert(resolved.includes(`coalesce(new."title", '')`), resolved)
-  // And the view still publishes every stored column, since @yaks/sql reads
-  // whole `doc` rows through it.
+  // The view still publishes every stored column for whole-document reads.
   for (let col of ['"entity"', '"title" as "title"', 'as "body"']) {
     assert(resolved.includes(col), col)
   }

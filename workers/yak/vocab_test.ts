@@ -259,9 +259,9 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
       'cooked',
     ].sort(),
   )
-  // and the prose index over `doc`, which is what search is
+  // Search is installed by the app, not by the storage vocabulary.
   assert(
-    sql.some((s) => s.includes('create virtual table if not exists doc_fts')),
+    !sql.some((s) => s.includes('using fts5')),
   )
 })
 

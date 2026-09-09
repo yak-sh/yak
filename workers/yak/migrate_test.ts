@@ -1435,3 +1435,43 @@ Deno.test('a schema that moves re-cuts its definitions and refills', async () =>
   assertEquals((await now.query('limes', APP)).length, 1)
   assertEquals((await now.query('lemons', APP)).length, 1)
 })
+
+Deno.test('a doc_value-backed legacy index upgrades to the composed FTS schema', async () => {
+  let ctx = state()
+  let now = newer(ctx, 'ada/cookbook')
+  let write = (store: ReturnType<typeof newer>, body: string) =>
+    store.door('/apply', {
+      method: 'POST',
+      headers: { 'x-yak-kernel': '1' },
+      body: JSON.stringify([
+        { entity: { eid: ONE }, doc: { title: 'Cake', body } },
+      ]),
+    }, APP)
+  assertEquals((await write(now, 'three lemons')).status, 200)
+  let sql = ctx.storage.sql
+  // The retired sqlite DDL read external content through doc_value. Its
+  // resolved triggers have the same mirror rule as FTS's, so leave them in
+  // place to prove boot replaces the index without losing the stored prose.
+  sql.exec('drop table doc_fts')
+  sql.exec('drop view doc_text')
+  sql.exec(`create virtual table doc_fts using fts5(
+    title, body, content='doc_value', content_rowid='entity'
+  )`)
+  sql.exec("insert into doc_fts(doc_fts) values ('rebuild')")
+  sql.exec("update yak_kv set v = 'legacy sqlite FTS' where k = 'schema'")
+
+  let upgraded = newer(ctx, 'ada/cookbook')
+  let hits = await upgraded.query('lemons', APP)
+  assertEquals(hits.length, 1)
+  assertEquals(hits[0].entity.eid, ONE)
+  let definition = sql.exec(
+    "select sql from sqlite_master where name = 'doc_fts'",
+  ).toArray()
+  assert(String(definition[0].sql).includes("content='doc_text'"))
+  // New writes use the new triggers, removing the old words and adding prose
+  // rather than a blob address. Another wake keeps those results intact.
+  assertEquals((await write(upgraded, 'four limes')).status, 200)
+  assertEquals((await upgraded.query('lemons', APP)).length, 0)
+  assertEquals((await upgraded.query('limes', APP)).length, 1)
+  assertEquals((await newer(ctx, 'ada/cookbook').query('limes', APP)).length, 1)
+})

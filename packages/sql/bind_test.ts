@@ -75,10 +75,8 @@ Deno.test('JSON equality compares the stored text without numeric coercion', () 
   assert(sql.includes('cast("config"."value" as text) = ?'), sql)
 })
 
-Deno.test('a text term becomes a bound FTS match', () => {
-  let { sql, params } = compile(parse('hello'), v)
-  assert(sql.includes('doc_fts match ?'), sql)
-  assertEquals(params, ['"hello"'])
+Deno.test('a text term requires a search extension', () => {
+  assertThrows(() => compile(parse('hello'), v), Unsupported)
 })
 
 Deno.test('a contains needle rides as a param', () => {

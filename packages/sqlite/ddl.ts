@@ -20,10 +20,7 @@
 //                 is decided by; the vocabulary is where that is said.
 //   doc_value     a view over the `doc` component (when the vocabulary declares
 //                 one): its columns read as TEXT, plus a `rowid` alias. It is
-//                 what @yaks/sql reads a `doc` row through, and what the search
-//                 index reads a column back out of.
-//   doc_fts       a full-text index over the `doc` text columns, kept current
-//                 by triggers, so a bare-word query resolves through it.
+//                 what @yaks/sql reads a `doc` row through.
 //
 // Columns are nullable by design: a patch may create a row from any subset of
 // its columns (that is what PATCH means), so no column may demand a value an
@@ -86,29 +83,10 @@ let indexDdl = (comp: string, i: Index): string =>
   `create ${i.unique ? 'unique ' : ''}index if not exists ` +
   `${comp}_${i.cols.join('_')} on ${q(comp)} (${i.cols.map(q).join(', ')})`
 
-// The `doc` view and its full-text index, emitted only when the vocabulary
-// declares a `doc` component. The view republishes `doc`'s columns plus a
-// `rowid` alias (the owner id) so `doc_fts` — which matches by rowid — lines up
-// with it; @yaks/sql reads whole `doc` rows through it too. The index is
-// EXTERNAL-CONTENT over that view (it stores no second copy, just the inverted
-// index) and is kept current by triggers. It covers the text columns; a `doc`
-// with none gets a view but no index, and a text query over it declines
-// upstream rather than hit a missing table.
-//
-// A column is not always its own text: @yaks/blob swaps a body for its SHA-256
-// and keeps the prose beside the rows, so an index reading the column would
-// hold addresses and a search would find a body by its title alone. A
-// {@link Text} entry says how to resolve one, and it is applied in the view AND
-// in both sides of every trigger — the view because FTS5 reads the content back
-// for `snippet()` and `rebuild`, the triggers because that is what goes into
-// the index. Resolving in a trigger is sound: a blob is immutable and
-// content-addressed, so the delete side reads exactly what the insert side did.
+// How a stored document column reads as text. @yaks/blob swaps a body for
+// its address; the doc_value view resolves it for ordinary document reads.
+// Search indexes are composed separately by the application using @yaks/fts.
 export type Text = Record<string, (stored: string) => string>
-
-let textCols = (v: Vocab, comp: string): string[] =>
-  stored(v, comp)
-    .filter((c) => c.category == 'scalar' && c.scalar == 'text')
-    .map((c) => c.prop)
 
 let docDdl = (v: Vocab, text: Text): string[] => {
   if (!v.all.includes('doc')) return []
@@ -121,55 +99,28 @@ let docDdl = (v: Vocab, text: Text): string[] => {
   // virtue — it followed a table that GREW — so the view is DROPPED and raised
   // again rather than left standing: it holds no rows, so re-cutting it costs
   // nothing, and a view that lags its table is a read that fails at the engine.
-  let out = [
+  return [
     `drop view if exists doc_value`,
     `create view if not exists doc_value as
     select "entity", ${
       cols.map((p) => `${read(p, q(p))} as ${q(p)}`).join(', ')
     }, "entity" as rowid from doc`,
   ]
-  let texts = textCols(v, 'doc')
-  if (!texts.length) return out
-  let index = texts.map(q).join(', ')
-  // The value each trigger writes to the index. An external-content index must
-  // be handed, on delete, exactly what it was handed on insert, so both sides
-  // read the same way: the column as text, or '' for a null (the index never
-  // holds a null term).
-  let side = (s: string) =>
-    texts.map((t) => `coalesce(${read(t, `${s}.${q(t)}`)}, '')`).join(', ')
-  out.push(
-    `create virtual table if not exists doc_fts using fts5(
-      ${index}, content='doc_value', content_rowid='entity'
-    )`,
-    `create trigger if not exists doc_fts_insert after insert on doc begin
-      insert into doc_fts(rowid, ${index}) values (new.entity, ${side('new')});
-    end`,
-    `create trigger if not exists doc_fts_delete after delete on doc begin
-      insert into doc_fts(doc_fts, rowid, ${index})
-        values ('delete', old.entity, ${side('old')});
-    end`,
-    `create trigger if not exists doc_fts_update after update on doc begin
-      insert into doc_fts(doc_fts, rowid, ${index})
-        values ('delete', old.entity, ${side('old')});
-      insert into doc_fts(rowid, ${index}) values (new.entity, ${side('new')});
-    end`,
-  )
-  return out
 }
 
 // The whole schema as an ordered list of statements: the spine, then one table
 // per component (the `entity` spine component is the identity table above, not
-// a component table), then the indexes those tables declare, then the doc view
-// and its search index. `install()` in ./mod.ts runs them; a caller may also
-// read them to inspect or migrate by hand.
+// a component table), the doc view, and the indexes those tables declare.
+// `install()` in ./mod.ts runs them; a caller may also read them to inspect or
+// migrate by hand.
 export let schema = (vocab: Vocab, text: Text = {}): string[] => [
   ...tabled(vocab, text),
   // After every table: an index names a column the create above just raised.
   ...indexed(vocab),
 ]
 
-// The spine and one table per component, with the doc view and its search
-// index. Everything an index may need to already exist.
+// The spine and one table per component, with the doc view. Everything an
+// index may need to already exist.
 export let tabled = (vocab: Vocab, text: Text = {}): string[] => {
   let comps = vocab.all.filter((name) => name != 'entity')
   return [
@@ -199,10 +150,6 @@ export let indexed = (vocab: Vocab): string[] =>
 // because rows are already written under the words the table has. A column
 // arrives nullable with no default, which is the one form SQLite accepts an
 // `add column` carrying a foreign key in.
-//
-// Known gap: `doc_fts` indexes the text columns `doc` had when it was created,
-// so a `doc` that grows a text column is not searchable on it until the index
-// is rebuilt. Nothing in the platform grows `doc`; an app grows its own words.
 export let grown = (driver: Driver, vocab: Vocab): string[] =>
   vocab.all
     .filter((name) => name != 'entity')

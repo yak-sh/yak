@@ -17,8 +17,8 @@ import { term } from './term.ts'
 let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
 
 // The @yaks/sql extension that answers bare words out of the search indexes.
-// It claims the `text` clause, replacing the dialect's own single-index
-// lowering with one that covers every field indexed.
+// It owns the `text` clause, covering every field indexed. Without this
+// extension @yaks/sql declines bare words rather than assuming an index.
 export let search = (fields: Field[]): Extension => ({
   name: 'fts',
   compile: {
