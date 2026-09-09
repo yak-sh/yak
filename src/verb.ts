@@ -28,6 +28,8 @@ export type Opt = {
   name: string
   kind?: Kind
   or?: string
+  /** A bare flag or an attached =value; never consumes the next argument. */
+  optionalValue?: boolean
   alias?: string
 }
 
@@ -114,6 +116,7 @@ let meta = (kind: Kind) => {
 
 let option = (opt: Opt, verb: Decl) => {
   let value = opt.kind ? `=${opt.or ?? meta(opt.kind)}` : ''
+  if (opt.optionalValue) value = `[${value}]`
   let shape = `${opt.name}${value}`
   return verb.some?.length == 1 && verb.some[0] == opt.name
     ? shape

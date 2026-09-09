@@ -44,6 +44,11 @@ let arg = (
 ): Arg => ({ name, kind, rest, need })
 
 let flag = (name: string): Opt => ({ name })
+let follow: Opt = {
+  name: '--follow',
+  kind: { name: 'filter', test: /.+/ },
+  optionalValue: true,
+}
 let value = (name: string, kind = text): Opt => ({
   name,
   kind,
@@ -755,8 +760,10 @@ export let manuals = declare({
       'session is over and ends with its brief and its exit code. ' +
       '--timeout takes seconds (900 or 900s), minutes (45m), or hours (2h); ' +
       'omitting it waits indefinitely. --interval is milliseconds (default 1000). ' +
-      'No transcript streams — that ' +
-      'is `task tail`.',
+      '--follow[=FILTER] implies --wait and prints only matching entries, ' +
+      'one flushed line each, without spawn/settle receipts. Bare --follow ' +
+      'selects notify, error or stop; --follow=.error selects errors. ' +
+      '--json makes each entry a complete JSONL bundle.',
     root: true,
     args: [arg('id', id)],
     opts: [
@@ -766,6 +773,8 @@ export let manuals = declare({
       value('--persona', id),
       value('--worktree', path),
       flag('--wait'),
+      follow,
+      json,
       value('--timeout', duration),
       value('--interval', num),
     ],
@@ -1040,7 +1049,13 @@ export let manuals = declare({
     examples: ['task tail S-12', 'task tail S-12 -n 5 --follow'],
     root: true,
     args: [arg('id', id)],
-    opts: [count, flag('--follow'), value('--interval', num)],
+    detail:
+      'Bare --follow shows every entry; --follow=FILTER selects entries ' +
+      'with row-local query predicates (.error, .notify, .stop, or ' +
+      "'.content.body~=landed'). Component names without an operator mean " +
+      'presence. Filters joined by & are ANDed. --json prints complete entry ' +
+      'bundles as JSONL, without status receipts. Follow exits by the session outcome.',
+    opts: [count, follow, value('--interval', num), json],
   },
   'session context': {
     about: 'reify and print the session digest',
@@ -1786,7 +1801,7 @@ let parsed = (
       throw usageError(name, manual, `does not take ${optionName(arg)}`)
     }
     present.add(opt.alias ?? opt.name)
-    if (!opt.kind) {
+    if (!opt.kind || (opt.optionalValue && arg == opt.name)) {
       flags.add(opt.name)
       continue
     }

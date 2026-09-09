@@ -107,7 +107,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       subject: '<id> [show|is|as|edge] …',
       spawn: 'spawn <id> [--provider=PROVIDER] [--model=MODEL] ' +
         '[--effort=high] [--persona=ID] [--worktree=DIR] [--wait] ' +
-        '[--timeout=DURATION] [--interval=N]',
+        '[--follow[=FILTER]] [--json] [--timeout=DURATION] [--interval=N]',
       land: 'land',
       commit: 'commit <id> [sha]',
       comment:
@@ -131,7 +131,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       'session wait':
         'session wait <id> [--timeout=DURATION] [--interval=N] [--json]',
       sessions: 'sessions [-n=N] [--live] [--json]',
-      tail: 'tail <id> [-n=N] [--follow] [--interval=N]',
+      tail: 'tail <id> [-n=N] [--follow[=FILTER]] [--interval=N] [--json]',
       role: 'role [command…] [--json]',
       'role stop': 'role stop [ids…] [--all]',
       'role start': 'role start [ids…] [--all]',
@@ -244,7 +244,7 @@ Deno.test('spawn accepts equals and space values; provider remains optional (T-3
   }
 })
 
-Deno.test('every manual value option parses both spellings to the same Got (T-35503)', () => {
+Deno.test('every required-value option parses both spellings to the same Got (T-35503)', () => {
   let file = Deno.makeTempFileSync()
   Deno.writeTextFileSync(file, 'file body\n')
   let samples: Record<string, string> = {
@@ -263,7 +263,8 @@ Deno.test('every manual value option parses both spellings to the same Got (T-35
     // options on different verbs inherit the same syntax contract.
     for (let [name, manual] of Object.entries(manuals)) {
       for (let opt of manual.opts ?? []) {
-        if (!opt.kind) continue
+        // Optional values use = so a bare flag cannot eat a positional id.
+        if (!opt.kind || opt.optionalValue) continue
         let prefix = (manual.args ?? []).filter((arg) => arg.need !== false)
           .map((arg) => sample(arg.kind))
         let raw = sample(opt.kind)

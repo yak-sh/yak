@@ -14,7 +14,7 @@
 // `query`, so the local arm answers when this process stands beside the db file
 // and the wire answers otherwise. Nothing here writes.
 
-import { needed, query, type Row } from './client.ts'
+import { jsonOf, needed, query, type Row } from './client.ts'
 import { duration, type Got } from './verb.ts'
 import {
   type EntryRow,
@@ -35,6 +35,7 @@ import { modelDoc } from '@yaks/model'
 import type { Bundle } from '@yaks/render'
 import { render } from '@yaks/text'
 import { loadVocab } from '@yaks/vocab'
+import { EXISTS, matchQuery, parseQuery, pred, TEXT } from './query.ts'
 
 /** What a session is doing, in one word for both shapes. `idle` is a legacy
  * session with no live process and no recorded end. */
@@ -192,6 +193,90 @@ export let legacyLines = (
   })
 }
 
+export let following = (got: Got) =>
+  got.flags.has('--follow') || got.opts['--follow'] != null
+
+/** Entry-local query predicates, using the ordinary typed query parser and
+ * matcher. The follow door also accepts the package grammar's `.comp`
+ * presence spelling. No comma presence union exists in the Tasks grammar:
+ * commas list VALUES, so the default is three ordinary presence queries ORed.
+ * Refuse graph-wide clauses rather than silently ignoring them locally. */
+export let followFilter = (raw?: string, spawn = false) => {
+  let filters = raw == null
+    ? spawn ? ['.notify!', '.error!', '.stop!'] : ['.entry!']
+    : [raw]
+  let groups = filters.map((filter) => {
+    let ps = parseQuery(filter, { notify: {} }).map((p) => {
+      if (p.op == TEXT && /^\.[A-Za-z_]+$/.test(p.value)) {
+        return pred(`${p.value}!`, { notify: {} })!
+      }
+      return p
+    })
+    if (
+      ps.some((p) =>
+        (!p.comp && !p.prop) || p.op == TEXT || p.at || p.rev || p.refs ||
+        !['', EXISTS, '~', '!', '<', '<=', '>', '>='].includes(p.op)
+      )
+    ) {
+      throw new Error(
+        '--follow needs entry-local predicates, e.g. .error or .content.body~=landed',
+      )
+    }
+    return ps
+  })
+  return (r: Row) =>
+    groups.some((ps) =>
+      matchQuery({ ...r.comps, entity: { eid: r.eid, num: r.num } }, ps)
+    )
+}
+
+/** Exactly one physical line for EVERY selected entry, even one the legacy
+ * transcript renderer normally hides. JSON is not terminal-sanitized: its
+ * own escaping preserves every byte of content without emitting newlines. */
+export let entryLines = (r: Row, all: Row[], selected: Row[], json = false) => {
+  if (json) {
+    return selected.map((e) =>
+      JSON.stringify(jsonOf(e, {
+        ...e.comps,
+        entity: { ...e.comps.entity, eid: e.eid, num: e.num },
+      }))
+    )
+  }
+  let rendered = native(r)
+    ? new Map(nativeLines(selected).map((line, i) => [selected[i].eid, line]))
+    : new Map(
+      graphLog(asLog(all)).entries.map((e) => [e.eid, renderEntry(e, 200)]),
+    )
+  return selected.map((e) => {
+    let line = rendered.get(e.eid)
+    if (!line) {
+      let tags = Object.keys(e.comps).filter((k) =>
+        k != 'entity' && k != 'entry'
+      )
+      line = `${seq(e)} ${tags.join(' ')} ${e.comps.content?.body ?? ''}`
+    }
+    return safe(line).replace(/\s+/g, ' ').trim()
+  })
+}
+
+/** A follower remembers entry identities, not a filtered sequence watermark:
+ * fork prefixes may come from different partitions with overlapping seqs. */
+export let entryFollower = (got: Got, spawn = false) => {
+  let matches = followFilter(got.opts['--follow'], spawn)
+  let seen = new Set<string>()
+  return (r: Row, all: Row[], candidates = all) => {
+    let fresh = candidates.filter((e) => !seen.has(e.eid) && matches(e))
+    for (let e of all) seen.add(e.eid)
+    return entryLines(r, all, fresh, got.flags.has('--json'))
+  }
+}
+
+// console.log writes synchronously to stdout on Deno, one call per entry.
+// In particular do not join an entire poll's output into a single write.
+let emitEntries = (lines: string[]) => {
+  for (let line of lines) console.log(line)
+}
+
 /** Poll `read` until `done` says so, or the deadline passes. `sleep` is a seam
  * so a test drives the loop without a clock. */
 export let poll = async <T>(
@@ -287,43 +372,35 @@ export let sessions = async (got: Got) => {
 export let tail = async (got: Got) => {
   let id = got.args.id
   if (!id) throw new Error('task tail <S> [-n N] [--follow] [--interval MS]')
+  let show = entryFollower(got)
   let r = await sessionAt(id)
   let n = ms(got, '-n', 20)
-  let follow = got.flags.has('--follow')
+  let follow = following(got)
   let interval = ms(got, '--interval', 1000)
   let entries = await entriesOf(r)
-  let show = native(r)
-    ? (es: Row[]) => nativeLines(es)
-    : (es: Row[]) => legacyLines(es)
-  let last = Math.max(0, ...entries.map(seq))
-  for (let line of show(entries.slice(-n))) out(line)
-  out(
-    `${idOf({ eid: r.eid, kind: 'session', num: r.num })}: ${
-      statusFor(r, entries)
-    }`,
-  )
+  emitEntries(show(r, entries, entries.slice(-n)))
+  if (!follow && !got.flags.has('--json')) {
+    out(
+      `${idOf({ eid: r.eid, kind: 'session', num: r.num })}: ${
+        statusFor(r, entries)
+      }`,
+    )
+  }
   if (!follow) return
+  if (over(statusFor(r, entries))) {
+    let code = exitCode(r, statusFor(r, entries), entries)
+    if (code) Deno.exit(code)
+    return
+  }
   for (;;) {
     await new Promise((go) => setTimeout(go, interval))
     let [again] = await query([`id=${r.eid}`])
     if (!again) return
     let all = await entriesOf(again)
-    let fresh = all.filter((e) => seq(e) > last)
-    if (fresh.length) {
-      // Legacy lines need the whole log to pair calls with results; render
-      // all and keep the new tail.
-      let lines = native(again) ? nativeLines(fresh) : legacyLines(all, {
-        after: last,
-      })
-      for (let line of lines) out(line)
-      last = Math.max(last, ...fresh.map(seq))
-    }
+    emitEntries(show(again, all))
     if (over(statusFor(again, all))) {
-      out(
-        `${idOf({ eid: r.eid, kind: 'session', num: r.num })}: ${
-          statusFor(again, all)
-        }`,
-      )
+      let code = exitCode(again, statusFor(again, all), all)
+      if (code) Deno.exit(code)
       return
     }
   }
@@ -360,18 +437,22 @@ export let wait = (got: Got) => {
  * the session is the `id` argument. */
 export let waitFor = async (id: string, got: Got) => {
   let timeout = timeoutMs(got.opts['--timeout'])
+  let show = following(got) ? entryFollower(got, true) : undefined
   let r = await sessionAt(id)
   let interval = ms(got, '--interval', 1000)
   let read = async () => {
     let [again] = await query([`id=${r.eid}`])
     if (!again) throw new Error(`${id}: gone`)
     let entries = await entriesOf(again)
+    if (show) emitEntries(show(again, entries))
     return { r: again, s: statusFor(again, entries), entries }
   }
   let end = await poll(read, ({ s }) => over(s), { interval, timeout })
   let code = exitCode(end.r, end.s, end.entries)
   let name = idOf({ eid: end.r.eid, kind: 'session', num: end.r.num })
-  if (got.flags.has('--json')) {
+  if (show) {
+    // Only entry lines in follow mode, including at the terminal poll.
+  } else if (got.flags.has('--json')) {
     out(
       JSON.stringify({ id: name, status: end.s, code, brief: briefOf(end.r) }),
     )

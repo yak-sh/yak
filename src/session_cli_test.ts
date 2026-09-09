@@ -11,7 +11,11 @@ import {
 import { arm, type Row } from './client.ts'
 import {
   briefOf,
+  entryFollower,
+  entryLines,
   exitCode,
+  followFilter,
+  following,
   legacyStatus,
   native,
   nativeLines,
@@ -20,9 +24,11 @@ import {
   poll,
   sessionLine,
   statusFor,
+  tail,
   timeoutMs,
   waitFor,
 } from './session_cli.ts'
+import { manuals, parse } from './manual.ts'
 
 Deno.test('wait timeout converts seconds, minutes, and hours without an unbounded fallback (T-35458)', () => {
   assertEquals(timeoutMs(), 0)
@@ -48,6 +54,11 @@ let row = (comps: Row['comps'], num = 7): Row => ({
   num,
   kind: 'session',
   comps,
+})
+let wire = (r: Row) => ({
+  kind: r.kind,
+  entity: { eid: r.eid, num: r.num },
+  ...r.comps,
 })
 let legacy = (session: Record<string, unknown>, more: Row['comps'] = {}) =>
   row({ session: { id: 'sid', ...session }, ...more })
@@ -244,4 +255,184 @@ Deno.test('waitFor: the settled session, its brief, and the --json line', async 
   assertEquals(await waited(r, ['--json']), [
     '{"id":"S-7","status":"settled","code":0,"brief":"landed abc123"}',
   ])
+})
+
+Deno.test('follow filters use typed row predicates and a presence OR default (T-35492)', () => {
+  let es = ['input', 'notify', 'error', 'stop', 'call'].map((k, i) =>
+    entry(i + 1, k)
+  )
+  assertEquals(es.filter(followFilter(undefined, true)), es.slice(1, 4))
+  assertEquals(es.filter(followFilter()), es)
+  for (let [i, name] of ['notify', 'error', 'stop'].entries()) {
+    assertEquals(es.filter(followFilter(`.${name}`)), [es[i + 1]])
+    assertEquals(es.filter(followFilter(`.${name}!`)), [es[i + 1]])
+  }
+  assertEquals(es.filter(followFilter('.entry.seq=2,4')), [es[1], es[3]])
+  assertEquals(
+    es.filter(followFilter('.entry.seq>=2&.entry.seq<4')),
+    es.slice(1, 3),
+  )
+  assertEquals(
+    es.filter(followFilter('.entry.seq!=2')),
+    es.filter((_, i) => i != 1),
+  )
+  assertEquals(es.filter(followFilter('.error=')), es.filter((_, i) => i != 2))
+  assert(
+    followFilter('.content.body~=landed')(entry(9, 'output', 'Landed abc')),
+  )
+  for (
+    let bad of [
+      '',
+      '.typo',
+      '.entry.seq=bad',
+      '.order=hot',
+      'words',
+      '.entry.session.doc.title=x',
+    ]
+  ) {
+    assertThrows(() => followFilter(bad))
+  }
+})
+
+Deno.test('spawn and tail parse bare/filtered follow, JSON, and redundant --wait (T-35492)', () => {
+  for (let name of ['spawn', 'tail']) {
+    for (
+      let option of ['--follow', '--follow=.error', '--follow=.entry.seq=2,4']
+    ) {
+      let got = parse(name, manuals[name], [
+        option,
+        'S-7',
+        '--json',
+        ...name == 'spawn' ? ['--wait'] : [],
+      ])
+      assert(following(got))
+      assert(got.flags.has('--json'))
+      if (option == '--follow') assert(got.flags.has('--follow'))
+      else assertEquals(got.opts['--follow'], option.slice('--follow='.length))
+    }
+    assertThrows(() => parse(name, manuals[name], ['S-7', '--follow=']))
+  }
+})
+
+Deno.test('entry follower emits complete bundles once, one physical line each (T-35492)', () => {
+  let r = legacy({ status: 'running' })
+  let note = row({
+    entry: { session: 'e7', seq: 2 },
+    notify: {},
+    content: { body: 'hello\nworld\u001b\u0085' },
+    extra: { arbitrary: true },
+  }, 102)
+  let stop = entry(3, 'stop')
+  let es = [entry(1, 'input'), note, stop]
+  let got = parse('spawn', manuals.spawn, ['T-1', '--follow', '--json'])
+  let show = entryFollower(got, true)
+  let lines = show(r, es.slice(0, 2))
+  assertEquals(lines.map((l) => JSON.parse(l)), [wire(note)])
+  assertEquals(lines[0].split('\n').length, 1)
+  assertEquals(show(r, es).map((l) => JSON.parse(l)), [wire(stop)])
+  assertEquals(show(r, es), [])
+  let text = entryLines(r, es, [note, stop])
+  assertEquals(text.length, 2)
+  assert(text.every((l) => l && !l.includes('\n') && !l.includes('\u001b')))
+  // Fork entries use identities, not the greatest seq in an inherited prefix.
+  let forked = row({ entry: { session: 'child', seq: 1 }, notify: {} }, 200)
+  assertEquals(show(r, [...es, forked]).map((l) => JSON.parse(l)), [
+    wire(forked),
+  ])
+})
+
+Deno.test('wait follow polls unfiltered status, emits the terminal entry, and exits by outcome (T-35492)', async () => {
+  let lines: string[] = []
+  let log = console.log
+  let exit = Deno.exit
+  let codes: number[] = []
+  let reads = 0
+  let r = legacy({ status: 'running' })
+  let es = [entry(1, 'call'), entry(2, 'notify'), entry(3, 'stop')]
+  console.log = (line: string) => void lines.push(line)
+  Deno.exit = ((code: number) => {
+    codes.push(code)
+  }) as typeof Deno.exit
+  arm.query = (filters) => {
+    if (filters.some((f) => f.startsWith('.entry'))) {
+      return Promise.resolve(es.slice(0, ++reads == 1 ? 2 : 3))
+    }
+    return Promise.resolve([
+      reads ? legacy({ status: 'failed', exit_code: 7 }) : r,
+    ])
+  }
+  try {
+    await waitFor(
+      'S-7',
+      parse('spawn', manuals.spawn, [
+        'T-1',
+        '--follow=.stop',
+        '--json',
+        '--interval=1',
+      ]),
+    )
+    assertEquals(lines.map((l) => JSON.parse(l)), [wire(es[2])])
+    assertEquals(codes, [7])
+  } finally {
+    console.log = log
+    Deno.exit = exit
+    delete arm.query
+  }
+})
+
+Deno.test('tail JSONL filters its initial window and stops without a status receipt (T-35492)', async () => {
+  let r = legacy({ status: 'done' })
+  let es = [entry(1, 'input'), entry(2, 'notify'), entry(3, 'stop')]
+  let lines: string[] = []
+  let log = console.log
+  console.log = (line: string) => void lines.push(line)
+  arm.query = (filters) =>
+    Promise.resolve(filters.some((f) => f.startsWith('.entry')) ? es : [r])
+  try {
+    await tail(
+      parse('tail', manuals.tail, ['S-7', '--follow=.notify', '--json']),
+    )
+    assertEquals(lines.map((l) => JSON.parse(l)), [wire(es[1])])
+  } finally {
+    console.log = log
+    delete arm.query
+  }
+})
+
+Deno.test('entry JSONL uses the query bundle spine and strips storage eids (T-35492)', () => {
+  let e = row({
+    entity: { eid: 'e101', num: 101 },
+    entry: { eid: 'e101', session: 'e7', seq: 1 },
+    notify: { eid: 'e101' },
+    content: { eid: 'e101', body: 'first\nsecond' },
+  }, 101)
+  e.kind = 'notify'
+  let lines = entryLines(legacy({ status: 'running' }), [e], [e], true)
+  assertEquals(lines.length, 1)
+  assertEquals(lines[0].split('\n').length, 1)
+  assertEquals(JSON.parse(lines[0]), {
+    kind: 'notify',
+    entity: { eid: 'e101', num: 101 },
+    entry: { session: 'e7', seq: 1 },
+    notify: {},
+    content: { body: 'first\nsecond' },
+  })
+})
+
+Deno.test('native follower defaults to notify/error/stop, including a hidden stop (T-35492)', () => {
+  let r = row({ session: { id: 'native' } })
+  let es = [
+    entry(1, 'input', 'input'),
+    entry(2, 'notify'),
+    entry(3, 'error'),
+    entry(4, 'stop'),
+  ]
+  let show = entryFollower(
+    parse('spawn', manuals.spawn, ['T-1', '--follow']),
+    true,
+  )
+  let lines = show(r, es)
+  assertEquals(lines.length, 3)
+  assert(lines.every((l) => l.length > 0 && !l.includes('\n')))
+  assertEquals(show(r, es), [])
 })

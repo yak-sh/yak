@@ -155,6 +155,8 @@ import { commands, focusOf, run as runCommand } from './commands.ts'
 import { renderEntry, seqRange, type Sift, transcribe } from './log_text.ts'
 import { type EntryRow, graphLog, pageEntries } from './entry_log.ts'
 import {
+  followFilter,
+  following,
   sessions as sessionsVerb,
   tail as tailVerb,
   wait as sessionWait,
@@ -1476,6 +1478,7 @@ let launch = async (
     persona?: string
     prompt?: string
     worktree?: string
+    quiet?: boolean
   },
 ) => {
   let by = me()
@@ -1521,7 +1524,9 @@ let launch = async (
   let applied = await send(made.changes)
   let onto = id ? find(all, id) : undefined
   let minted = mintedIn(applied, made.eid)
-  print(`${minted} spawned${onto ? ` onto ${idOf(onto)}` : ''}`)
+  if (!flags.quiet) {
+    print(`${minted} spawned${onto ? ` onto ${idOf(onto)}` : ''}`)
+  }
   return minted
 }
 
@@ -1536,16 +1541,23 @@ export let spawnFlags = (got: Got): Parameters<typeof launch>[1] => ({
 })
 
 let spawn = async (got: Got) => {
+  let follow = following(got)
+  // Refuse a malformed follow filter BEFORE creating a session.
+  if (follow) followFilter(got.opts['--follow'], true)
   let id = got.args.id
   if (!id) {
     throw new Error(
       'task spawn <id> [--provider=X] [--model=Y] [--effort=Z] [--persona=P-9]',
     )
   }
-  let minted = await launch(id, spawnFlags(got))
+  let minted = await launch(id, {
+    ...spawnFlags(got),
+    quiet: follow || got.flags.has('--json'),
+  })
   // --wait is the two verbs said once: the S-id line stands exactly as it
   // does without it, then `session wait`'s own path takes over.
-  if (got.flags.has('--wait')) await waitFor(minted, got)
+  if (got.flags.has('--wait') || follow) await waitFor(minted, got)
+  else if (got.flags.has('--json')) print(JSON.stringify({ id: minted }))
 }
 
 // All the sweep wants from the graph: the id a probe carries, the ground a
