@@ -2,10 +2,12 @@
 // reference reads back as the eid it points at, bare words require an extension,
 // and an aggregate comes back as raw rows.
 
-import { assertEquals, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertThrows } from '@std/assert'
 import { Unsupported } from '@yaks/sql'
 import type { Bundle, Comp } from './bundle.ts'
-import { seed, store } from './harness.ts'
+import { mem, seed, shop as vocab, store } from './harness.ts'
+
+import { storage } from './mod.ts'
 
 let c = (b: Bundle, name: string): Comp => b[name] as Comp
 let eids = (bs: Bundle[]): string[] => bs.map((b) => b.entity.eid).sort()
@@ -86,4 +88,37 @@ Deno.test('a gathered bundle carries the entity number storage minted', () => {
     { entity: { eid: 'p2' }, product: { price: 2 } },
   ])
   assertEquals(s.read('.price=2')[0].entity, { eid: 'p2', num: 2 })
+})
+
+Deno.test('whole-set gathers are bounded by vocabulary, not the 1000 entities; get preserves identity order', () => {
+  let driver = mem()
+  let queries = 0
+  let s = storage({
+    ...driver,
+    query: (sql, params) => {
+      queries++
+      return driver.query(sql, params)
+    },
+  }, vocab)
+  s.install()
+  seed(
+    s,
+    Array.from({ length: 1000 }, (_, i) => ({
+      entity: { eid: `bulk${i}` },
+      product: { price: i },
+      doc: { title: `item ${i}` },
+    })),
+  )
+  queries = 0
+  let all = s.read('.product')
+  assertEquals(all.length, 1000)
+  assert(queries <= vocab.all.length + 1, `query count ${queries}`)
+  let ids = all.map((b) => b.entity.eid).reverse()
+  let fetched = s.tx((tx) => tx.get([...ids, 'absent', ids[0]]))
+  assertEquals(fetched.map((b) => b.entity.eid), [...ids, ids[0]])
+  assertEquals(c(fetched[0], 'doc'), c(all.at(-1)!, 'doc'))
+  s.tx((tx) => tx.remove([all[0].entity]))
+  let dead = s.tx((tx) => tx.get([all[0].entity.eid]))[0]
+  assertEquals(dead.tombstone, {})
+  assertEquals(dead.product, undefined)
 })

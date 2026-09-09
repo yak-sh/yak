@@ -149,23 +149,6 @@ export let setSql = (
 ): string =>
   selectComp(v, comp, derived, [`o.eid as "${OWNER}"`], `o.eid in (${sub})`)
 
-// The identity of an eid, as stored: its `num`, and whether it is buried.
-let spineOf = (
-  driver: Driver,
-  eid: string,
-): { num?: number; dead: boolean } | undefined => {
-  let row = driver.query(
-    `select e.num as num, t.entity as dead from entity e
-       left join tombstone t on t.entity = e.id where e.eid = ?`,
-    [eid],
-  )[0]
-  if (!row) return undefined
-  return {
-    num: row.num == null ? undefined : Number(row.num),
-    dead: row.dead != null,
-  }
-}
-
 /**
  * Identity, not search: these entities as they stand, whole. A tombstoned one
  * comes back wearing `tombstone` (it is still an identity, just a dead one);
@@ -177,39 +160,45 @@ export let get = (
   vocab: Vocab,
   eids: string[],
   opts: BindOpts = {},
-): Bundle[] =>
-  eids.flatMap((eid) => {
-    let spine = spineOf(driver, eid)
-    if (!spine) return []
-    let entity = { eid, ...(spine.num == null ? {} : { num: spine.num }) }
-    return [
-      spine.dead ? tombstoned(entity) : bundleOf(driver, vocab, eid, opts),
-    ]
-  })
-
-// Every component an entity wears, gathered into a bundle. Iterates the
-// vocabulary's components and keeps only those with a row for this eid. The
-// spine `entity` is the identity component: its eid keys the bundle under
-// `entity`, never at the root, and its server-minted `num` rides beside the eid
-// — a caller ordering or paging a set it holds reads the window from there.
-let bundleOf = (
-  driver: Driver,
-  vocab: Vocab,
-  eid: string,
-  opts: BindOpts = {},
-): Bundle => {
-  let spine = spineOf(driver, eid)
-  let out: Bundle = {
-    entity: { eid, ...(spine?.num == null ? {} : { num: spine.num }) },
+): Bundle[] => {
+  let found = new Map<string, Bundle>()
+  // Bound parameter count and SQL-cache size; gather a COMPONENT per set,
+  // never every component per entity (a 1,000-entry transcript is otherwise
+  // tens of thousands of queries). A JSON array uses one bind and one stable
+  // prepared statement shape regardless of cardinality (SQLite 3.38+).
+  // Materialize the selected ids once: re-running a window subquery
+  // for each component could select different owners under a concurrent writer.
+  // Keep caller order and duplicate semantics.
+  for (let i = 0; i < eids.length; i += 4096) {
+    let ids = eids.slice(i, i + 4096)
+    let params = [JSON.stringify(ids)]
+    let sub = 'select value from json_each(?)'
+    for (
+      let row of driver.query(
+        `select e.eid, e.num, t.entity as dead from entity e
+       left join tombstone t on t.entity = e.id where e.eid in (${sub})`,
+        params,
+      )
+    ) {
+      let eid = String(row.eid)
+      let entity = { eid, ...row.num == null ? {} : { num: Number(row.num) } }
+      found.set(eid, row.dead == null ? { entity } : tombstoned(entity))
+    }
+    if (!ids.some((id) => found.has(id))) continue
+    for (let comp of vocab.all) {
+      if (comp == 'entity') continue
+      for (
+        let row of driver.query(setSql(vocab, comp, sub, opts.derived), params)
+      ) {
+        let b = found.get(String(row[OWNER]))!
+        if ('tombstone' in b) continue
+        delete row[OWNER]
+        delete row.present
+        b[comp] = row as Comp
+      }
+    }
   }
-  for (let comp of vocab.all) {
-    if (comp == 'entity') continue
-    let row = driver.query(compSql(vocab, comp, opts.derived), [eid])[0]
-    if (!row) continue
-    delete (row as Record<string, unknown>).present
-    out[comp] = row as Comp
-  }
-  return out
+  return eids.flatMap((eid) => found.has(eid) ? [found.get(eid)!] : [])
 }
 
 /**
@@ -273,6 +262,10 @@ export let read = (
   query: Query,
   opts: BindOpts = {},
 ): Bundle[] =>
-  rows(driver, vocab, query, opts)
-    .filter((r) => r.eid != null)
-    .map((r) => bundleOf(driver, vocab, r.eid as string, opts))
+  get(
+    driver,
+    vocab,
+    rows(driver, vocab, query, opts)
+      .filter((r) => r.eid != null).map((r) => String(r.eid)),
+    opts,
+  )

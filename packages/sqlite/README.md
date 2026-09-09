@@ -215,3 +215,10 @@ to `storage()`. SQLite does not depend on FTS or create its indexes.
 ## License
 
 Apache-2.0
+
+Whole-entity gathers use `json_each(?)` to bind a bounded set of identities as
+one array, rather than preparing a statement per entity or a new placeholder
+shape per batch size. This requires SQLite's JSON functions (built in since
+SQLite 3.38; JSON1 on older builds). Selected identities are fixed before the
+component gathers, so a concurrent writer cannot change the membership of a
+window halfway through reading its components.

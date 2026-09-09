@@ -77,10 +77,28 @@ export let dbPath = (
 ): string => env('HARNESS_DB') || `${env('HOME')}/.harness/harness.db`
 
 /** @yaks/sqlite's two-method driver over an embedded database. */
-export let driver = (db: Database): Driver => ({
-  query: (sql, params) => db.prepare(sql).all(...params),
-  exec: (sql) => db.exec(sql),
-})
+export let driver = (db: Database): Driver => {
+  // The adapter repeatedly issues the same parameterized gathers/writes. Keep
+  // a bounded statement cache, not tens of thousands of prepare/finalize pairs
+  // per transcript. Database.close() finalizes the retained statements.
+  let cache = new Map<string, ReturnType<Database['prepare']>>()
+  return {
+    query: (sql, params) => {
+      let statement = cache.get(sql)
+      if (!statement) {
+        if (cache.size >= 256) {
+          let key = cache.keys().next().value!
+          cache.get(key)!.finalize()
+          cache.delete(key)
+        }
+        statement = db.prepare(sql)
+        cache.set(sql, statement)
+      }
+      return statement.all(...params)
+    },
+    exec: (sql) => db.exec(sql),
+  }
+}
 
 /** An open harness graph: the file it is, the store under it, the graph over
  * it, and the effects registry the daemon hangs on. */
