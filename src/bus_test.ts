@@ -11,9 +11,18 @@
 // The fake door parses the filter line through query.ts, so a candidate query
 // is answered as narrowly as the server would answer it (graph_fake.ts).
 
-import { assertEquals } from '@std/assert'
-import { bus, contextDigest, contextSnapshot, noticesFor } from './client.ts'
-import { fakeGraph } from './graph_fake.ts'
+import { assertEquals, assertRejects } from '@std/assert'
+import {
+  bus,
+  contextDigest,
+  contextSnapshot,
+  noticesFor,
+  readerFor,
+  rowOf,
+  rows,
+} from './client.ts'
+import { followInbox, inboxDelta } from './inbox_follow.ts'
+import { answers, fakeGraph } from './graph_fake.ts'
 import type { Change, Snapshot } from './types.ts'
 
 let U = (n: number) => `dddddddd-0000-4000-8000-${String(n).padStart(12, '0')}`
@@ -414,4 +423,126 @@ Deno.test('bus: a session id naming nothing is silent, and asks nothing more', a
   assertEquals(got, { lines: [], eids: [], at: '' })
   assertEquals(got, noticesFor(graph(said('c1', 20, T, 'hi')), 'nobody'))
   assertEquals(seen, ['/query?.kind=session&.session.id=nobody'])
+})
+
+Deno.test('inbox follow: snapshot delta shares the bus recipients and verification', () => {
+  for (let [what, snap, want] of cases) {
+    let all = rows(snap)
+    let delta = inboxDelta(all, readerFor(all, 'sess-x'), new Set())
+    // Follow alone consumes notified: the ordinary bus deliberately ignores it.
+    let stamped = all.filter((r) => r.comps.notified).length
+    assertEquals(
+      delta.length,
+      (what == 'more than one screenful' ? 22 : want) - stamped,
+      what,
+    )
+    assertEquals(delta.every((item) => !item.line.includes('\n')), true, what)
+  }
+})
+
+Deno.test('inbox follow: initial backlog, first lines, repeat and durable receipts', () => {
+  let snap = graph(
+    ...Array.from(
+      { length: 12 },
+      (_, i) =>
+        said(`c-${i}`, 100 + i, T, `hello ${i}\nnot another notification`),
+    ),
+    said('settle', 120, T, 'S-3 completed · exit 0\nwork landed'),
+    knocked('kn', 121, S, X),
+    letter('ml', 122, P),
+    letter('late', 123, P, { verified: 0 }),
+  )
+  let all = rows(snap)
+  let who = readerFor(all, 'sess-x')
+  let delta = inboxDelta(all, who, new Set())
+  assertEquals(delta.length, 15) // no ten-item digest cap or summary pseudo-notice
+  assertEquals(delta[0].line, 'comment · P-1 via S-3 · T-4 · hello 0')
+  assertEquals(
+    delta.find((x) => x.eid == 'settle')?.line,
+    'comment · P-1 via S-3 · T-4 · S-3 completed · exit 0',
+  )
+  assertEquals(
+    delta.find((x) => x.eid == 'ml')?.line,
+    'mail · friend@example.test · P-1 · mail body',
+  )
+  let seen = new Set(delta.map((x) => x.eid))
+  assertEquals(inboxDelta(all, who, seen), [])
+  let stamped = rows({
+    ...snap,
+    changes: [
+      ...snap.changes,
+      ...delta.map(({ eid }) => ({ eid, name: 'notified', comp: {} })),
+    ],
+  })
+  assertEquals(inboxDelta(stamped, who, new Set()), []) // restarted monitor
+  // A newly verified, older letter is news even behind the latest timestamp.
+  let later = rows({
+    ...snap,
+    changes: [...snap.changes, ...letter('late', 123, P)],
+  })
+  assertEquals(inboxDelta(later, who, seen).map((x) => x.eid), ['late'])
+})
+
+Deno.test('inbox follow: polls through silence, writes once, propagates server loss', async () => {
+  let poll = 0
+  let out: string[] = []
+  let stamps: Change[] = []
+  let sleeps: number[] = []
+  let snap = graph(said('fresh', 100, T, 'wake me'))
+  await assertRejects(
+    () =>
+      followInbox('sess-x', '/w', 25, (s) => out.push(s), {
+        query: (filters) => {
+          if (poll == 4) return Promise.reject(new Error('server gone'))
+          let answer = answers(poll == 0 ? graph() : snap)
+          return Promise.resolve(
+            answer(filters.join('&')).map((r) =>
+              rowOf(r as Record<string, unknown>)
+            ),
+          )
+        },
+        stamp: (cs) => {
+          stamps.push(...cs)
+          return Promise.resolve()
+        },
+        pause: (ms) => {
+          sleeps.push(ms)
+          poll++
+          return Promise.resolve()
+        },
+      }),
+    Error,
+    'server gone',
+  )
+  assertEquals(out, ['comment · P-1 via S-3 · T-4 · wake me'])
+  assertEquals(stamps, [{ eid: 'fresh', name: 'notified', comp: {} }])
+  assertEquals(sleeps, [25, 25, 25, 25])
+})
+
+Deno.test('inbox follow: stamp failures and invalid intervals do not keep polling', async () => {
+  let snap = graph(said('fresh', 100, T, 'wake me'))
+  let io = {
+    query: (filters: string[]) =>
+      Promise.resolve(
+        answers(snap)(filters.join('&')).map((r) =>
+          rowOf(r as Record<string, unknown>)
+        ),
+      ),
+    stamp: () => Promise.reject(new Error('stamp failed')),
+    pause: () => {
+      throw new Error('must not sleep')
+    },
+  }
+  await assertRejects(
+    () => followInbox('sess-x', '/w', 1, () => {}, io),
+    Error,
+    'stamp failed',
+  )
+  for (let interval of [0, -1, 1.5, NaN, Infinity, 2147483648]) {
+    await assertRejects(
+      () => followInbox('sess-x', '/w', interval, () => {}, io),
+      Error,
+      '--interval must be',
+    )
+  }
 })

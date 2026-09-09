@@ -179,6 +179,7 @@ import { complete } from './tabcomplete.ts'
 import { watching } from './timing.ts'
 import { loadPlugins, pluginSpecifiers } from './plugins.ts'
 import { safe } from './terminal.ts'
+import { followInbox } from './inbox_follow.ts'
 import { VERSION } from './version.ts'
 import { sha } from './sha.ts'
 import { type WorkCandidate, workCandidates, type WorkLane } from './work.ts'
@@ -1294,6 +1295,29 @@ let inboxLine = (r: Row) => {
 // automate: closing a task hides its correspondence, and this is the way
 // back to it.
 let inboxList = async (got: Got) => {
+  if (got.flags.has('--follow')) {
+    if (
+      got.words.length ||
+      ['--all', '--sent', '--json'].some((f) => got.flags.has(f))
+    ) {
+      throw new Error(
+        '--follow cannot be combined with inbox filters, --all, --sent or --json',
+      )
+    }
+    let session = me()
+    if (!session) {
+      throw new Error('task inbox --follow needs a session (TASKS_SESSION)')
+    }
+    return followInbox(
+      session,
+      Deno.cwd(),
+      Number(got.opts['--interval'] ?? 1000),
+      print,
+    )
+  }
+  if (got.opts['--interval'] != null) {
+    throw new Error('--interval requires --follow')
+  }
   let json = got.flags.has('--json')
   let every = got.flags.has('--all')
   let sent = got.flags.has('--sent')

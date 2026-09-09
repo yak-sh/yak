@@ -611,6 +611,7 @@ export let manuals = declare({
     examples: [
       'task inbox',
       'task inbox --all',
+      'task inbox --follow --interval=1000',
       'task inbox .from=jeff@yak.sh',
       'task inbox show E-9',
       'task inbox archive E-9',
@@ -620,10 +621,19 @@ export let manuals = declare({
       'and ignores `task mute`. Closing a task archives the correspondence ' +
       'about it, so --all is where that correspondence went. --sent is the ' +
       'letters you sent. Filters speak `task help grammar` \u2014 the same one ' +
-      'parser every list door uses.',
+      'parser every list door uses. --follow streams the session comms bus until killed, ' +
+      'one line per new notice, marking each notified (not opened or archived). ' +
+      '--interval is milliseconds (default 1000); empty polls stay silent and server ' +
+      'failure exits non-zero. Follow takes no filters, --all, --sent or --json.',
     root: true,
     args: [arg('filters', text, true, false)],
-    opts: [json, flag('--all'), flag('--sent')],
+    opts: [
+      json,
+      flag('--all'),
+      flag('--sent'),
+      flag('--follow'),
+      value('--interval', num, true),
+    ],
   },
   'inbox show': {
     about: 'show the item and mark it opened',

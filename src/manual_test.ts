@@ -93,7 +93,8 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       'backfill prompt': 'backfill prompt',
       watch: 'watch <id> [--gone]',
       mute: 'mute <id> [--gone]',
-      inbox: 'inbox [filters…] [--json] [--all] [--sent]',
+      inbox:
+        'inbox [filters…] [--json] [--all] [--sent] [--follow] [--interval=N]',
       'inbox show': 'inbox show <id> [--json]',
       'inbox archive': 'inbox archive <id>',
       archive: 'archive <id>',
@@ -801,4 +802,19 @@ Deno.test('a colon arity error over an entity-shaped arg names the entity-first 
     Error,
     'usage: task :done',
   )
+})
+
+Deno.test('inbox follow parses both interval spellings', () => {
+  for (
+    let args of [['--follow', '--interval=25'], [
+      '--follow',
+      '--interval',
+      '25',
+    ]]
+  ) {
+    let got = parse('inbox', manuals.inbox, args)
+    assertEquals(got.flags.has('--follow'), true)
+    assertEquals(Number(got.opts['--interval']), 25)
+    assertEquals(got.words, [])
+  }
 })

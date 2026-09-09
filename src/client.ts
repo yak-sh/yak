@@ -3996,13 +3996,17 @@ let noticeLine = (ev: InboxEvent, row?: Row) => {
 // (noticesFor, below) and a handful of keyed queries is the other (bus), and
 // a second implementation of the selection would drift from this one the
 // first time either arm moved.
-export let notices = (all: Row[], who: Reader) => {
-  let none = { lines: [] as string[], eids: [] as string[], at: '' }
-  if (!who.session) return none
+export let noticeEvents = (
+  all: Row[],
+  who: Reader,
+  sent?: (eid: string) => boolean,
+): InboxEvent[] => {
+  if (!who.session) return []
   let sessEid = who.session
   let byEid = new Map(all.map((r) => [r.eid, r]))
   let events = channelEvents(changesOf(all), {
     sessionEid: sessEid,
+    sent,
     actorEid: who.actor,
     homeEid: who.scope,
     claimedEids: who.claims,
@@ -4051,7 +4055,15 @@ export let notices = (all: Row[], who: Reader) => {
   events = events.filter((ev) =>
     ev.meta.kind != 'knock' || bornAt(byEid.get(ev.eid)!) >= stale
   )
-  if (!events.length) return none
+  return events
+}
+
+export let notices = (all: Row[], who: Reader) => {
+  let events = noticeEvents(all, who)
+  let byEid = new Map(all.map((r) => [r.eid, r]))
+  if (!events.length) {
+    return { lines: [] as string[], eids: [] as string[], at: '' }
+  }
   let served = events.slice(0, 10)
   let lines = served.map((ev) => noticeLine(ev, byEid.get(ev.eid)))
   if (events.length > served.length) {
