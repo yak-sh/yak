@@ -68,6 +68,19 @@ Deno.test('legacy status from the log: an exit entry, a call in flight', () => {
     ]),
     'idle',
   )
+  // A shell command's own exit rides a tool RESULT — it ends the command, not
+  // the run, however many of them the log holds (T-35230).
+  let ran = row({
+    entry: { session: 'e7', seq: 4 },
+    result: { call: 'e101' },
+    content: { body: 'ok' },
+    exit: { code: 0 },
+  }, 104)
+  assertEquals(legacyStatus(idle, [ran]), 'idle')
+  assertEquals(
+    legacyStatus(legacy({ status: 'running' }).comps, [ran]),
+    'running',
+  )
   // a call with no result is a turn in flight
   let call = row({ entry: { session: 'e7', seq: 1 }, call: { key: 'k' } }, 101)
   assertEquals(legacyStatus(idle, [call]), 'running')

@@ -5,17 +5,24 @@
 // together. There is no third copy: a `status` column that had to be kept in
 // sync is exactly what the old session comp was, and why its views disagreed.
 //
-// The newest entry decides. Settled means nothing is owed: no input without an
-// ask after it, no ask or call without its answer — which, read off a
-// transcript in order, is "the newest entry is what a model said".
-//   input, result  → pending   the model is owed a turn
-//   ask, call      → running   a model or a tool is owed an answer
-//   output         → settled   nothing to do
-//   stop           → stopped   nothing may be done
-//   exception      → failed    the daemon could not continue past it
-//   error          → failed once the last RETRIES entries are all errors,
-//                    else pending (the daemon retries)
-//   nothing        → empty
+// Settled means NOTHING IS OWED. The newest entry says most of it, but not all:
+// a model that says something before it calls a tool leaves an `output` newest
+// in the middle of its turn, and reading that alone ended a run 14 minutes
+// early (T-35230). So an open call — one the newest ask asked for that no
+// result answers — outranks the newest entry, and it is the same set `react`
+// performs next, so the word and the step cannot disagree.
+//   an open call  → running   a tool is owed an answer, whatever landed after
+//   input, result → pending   the model is owed a turn
+//   ask, call     → running   a model or a tool is owed an answer
+//   output        → settled   the turn returned prose and asked for nothing
+//   stop          → stopped   nothing may be done
+//   exception     → failed    the daemon could not continue past it
+//   error         → failed once the last RETRIES entries are all errors,
+//                   else pending (the daemon retries)
+//   nothing       → empty
+//
+// A turn lands as ONE batch — the ask, the prose, and the calls together — so
+// no reader ever sees the prose without the calls that came with it.
 //
 // There is no `input` or `output` comp. Prose is `content{body}`; alone it is
 // an input, with a `source` (the ask it came from) it is what a model said.
@@ -91,22 +98,44 @@ export let textOf = (b: Bundle): string => String(content(b)?.body ?? '')
 export let ordered = (entries: Bundle[]): Bundle[] =>
   entries.toSorted((a, b) => seqOf(a) - seqOf(b))
 
+/** The newest `ask` of a transcript: the model turn in force. */
+export let newestAsk = (entries: Bundle[]): Bundle | undefined =>
+  ordered(entries).filter((b) => kindOf(b) == 'ask').at(-1)
+
+/** The calls the newest ask asked for that no result answers — what the daemon
+ * performs next, and what keeps a transcript running past the prose the model
+ * said beside them. */
+export let openCalls = (entries: Bundle[]): Bundle[] => {
+  let all = ordered(entries)
+  let ask = newestAsk(all)
+  if (!ask) return []
+  let answered = new Set(
+    all.filter((b) => kindOf(b) == 'result')
+      .map((b) => String((b[RESULT] as Comp)?.call)),
+  )
+  return all.filter((b) =>
+    (b[CALL] as Comp)?.source == ask.entity.eid && !answered.has(b.entity.eid)
+  )
+}
+
 /** The status of a transcript, from its entries in any order. */
 export let statusOf = (entries: Bundle[]): TranscriptStatus => {
   let all = ordered(entries)
   let newest = all.at(-1)
   if (!newest) return 'empty'
   let kind = kindOf(newest)
-  if (kind == 'input' || kind == 'result') return 'pending'
-  if (kind == 'ask' || kind == 'call') return 'running'
-  if (kind == 'output') return 'settled'
   if (kind == 'stop') return 'stopped'
   if (kind == 'exception') return 'failed'
-  // error: failed once the last RETRIES entries are all errors
-  let tail = all.slice(-RETRIES)
-  return tail.length == RETRIES && tail.every((b) => kindOf(b) == 'error')
-    ? 'failed'
-    : 'pending'
+  if (kind == 'error') {
+    // failed once the last RETRIES entries are all errors
+    let tail = all.slice(-RETRIES)
+    return tail.length == RETRIES && tail.every((b) => kindOf(b) == 'error')
+      ? 'failed'
+      : 'pending'
+  }
+  if (openCalls(all).length) return 'running'
+  if (kind == 'ask' || kind == 'call') return 'running'
+  return kind == 'output' ? 'settled' : 'pending'
 }
 
 /** The `using` in force at an entry: the newest one at or before it. */
@@ -137,6 +166,16 @@ export let sessionStatus = {
     let allErrors = `(select count(*) from "entry" e2
       where e2."session" = ${owner} and e2.seq > ${seq} - ${RETRIES}
         and exists (select 1 from "error" x where x.entity = e2.entity)) = ${RETRIES}`
+    // The newest ask, and whether a call it made is still unanswered — the
+    // openCalls rule above, said in SQL.
+    let ask = `(select e.entity from "entry" e where e."session" = ${owner}
+      and exists (select 1 from "${ASK}" a where a.entity = e.entity)
+      order by e.seq desc limit 1)`
+    let open = `exists (select 1 from "${CALL}" c
+      join "entry" e on e.entity = c.entity
+      where e."session" = ${owner} and c."source" = ${ask}
+        and not exists (
+          select 1 from "${RESULT}" r where r."call" = c.entity))`
     return `case
       when ${newest} is null then 'empty'
       when ${wears(STOP_ENTRY)} then 'stopped'
@@ -144,6 +183,7 @@ export let sessionStatus = {
       when ${
       wears(ERROR)
     } then case when ${allErrors} then 'failed' else 'pending' end
+      when ${open} then 'running'
       when ${wears(ASK)} or ${wears(CALL)} then 'running'
       when ${wears(RESULT)} then 'pending'
       when ${wears(CONTENT, ' and k."source" is not null')} then 'settled'

@@ -50,6 +50,21 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     [input(1), entry(2, { ask: { to: 'm' } }), said(3, 'e2')],
     'settled',
   ],
+  // The model said something and then asked for a tool: the prose is the
+  // newest entry, and the run is not over (T-35230).
+  ['prose beside an open call', [
+    input(1),
+    entry(2, { ask: { to: 'm' } }),
+    said(3, 'e2'),
+    entry(4, { call: { to: 't', id: 'c1', source: 'e2' } }),
+  ], 'running'],
+  ['prose beside an answered call', [
+    input(1),
+    entry(2, { ask: { to: 'm' } }),
+    said(3, 'e2'),
+    entry(4, { call: { to: 't', id: 'c1', source: 'e2' } }),
+    entry(5, { result: { call: 'e4' }, content: { body: 'echo' } }),
+  ], 'pending'],
   ['a stop', [input(1), entry(2, { stop: {} })], 'stopped'],
   ['an exception', [input(1), entry(2, { exception: {} })], 'failed'],
   ['one error', [input(1), entry(2, { error: { code: 'x' } })], 'pending'],
@@ -64,6 +79,26 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
 Deno.test('statusOf reads the newest entry', () => {
   for (let [name, entries, want] of shapes) {
     assertEquals(statusOf(entries.toReversed()), want, name)
+  }
+})
+
+// A whole tool-using turn, read as it lands. The daemon appends an ask with
+// everything the model said and asked for in ONE batch, so the prefixes below
+// are the states a reader can actually see: running while the tool is owed an
+// answer, and settled only at the last output, which asked for nothing.
+Deno.test('a turn that uses a tool is running until its last output', () => {
+  let turn = [
+    input(1),
+    entry(2, { ask: { to: 'm' } }),
+    said(3, 'e2'), // the model's prose, before its call
+    entry(4, { call: { to: 't', id: 'c1', source: 'e2' } }),
+    entry(5, { result: { call: 'e4' }, content: { body: 'echo' } }),
+    entry(6, { ask: { to: 'm' } }),
+    said(7, 'e6'),
+  ]
+  let want: TranscriptStatus[] = ['pending', 'running', 'pending', 'settled']
+  for (let [i, upto] of [1, 4, 5, 7].entries()) {
+    assertEquals(statusOf(turn.slice(0, upto)), want[i], `through ${upto}`)
   }
 })
 

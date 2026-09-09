@@ -61,10 +61,13 @@ let asLog = (entries: Row[]): EntryRow[] =>
   })
 
 /** The `exit` entry that ends a legacy log, when it is the newest entry: the
- * explicit end a process's launcher (or a probe) records. */
+ * explicit end a process's launcher (or a probe) records. A tool RESULT wears
+ * `exit` too — one shell command's code, not the run's — so the run is over
+ * only when the newest entry is an exit that answers no call (T-35230: every
+ * `$ …` a codex run finished read as the run finishing). */
 let exitEntry = (entries: Row[]) => {
   let last = bySeq(entries).at(-1)
-  return last?.comps.exit ? last : undefined
+  return last?.comps.exit && !last.comps.result ? last : undefined
 }
 
 /** The legacy reading, most authoritative first: the server-stamped end on the

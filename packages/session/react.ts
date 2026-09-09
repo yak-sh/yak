@@ -42,6 +42,8 @@ import {
 } from './native.ts'
 import {
   kindOf,
+  newestAsk,
+  openCalls,
   ordered,
   seqOf,
   statusOf,
@@ -168,18 +170,10 @@ export let react = async (
   // result yet, in one batch, so the model is never asked with a call it made
   // still unanswered (the provider refuses that). A tool that throws is an
   // exception and a result saying so, so the model hears what happened and
-  // the session goes on.
-  let asked = entries.filter((b) => kindOf(b) == 'ask').at(-1)
-  let answered = new Set(
-    entries.filter((b) => kindOf(b) == 'result')
-      .map((b) => String(comp(b, RESULT)?.call)),
-  )
-  let open = asked
-    ? entries.filter((b) =>
-      comp(b, CALL)?.source == asked.entity.eid &&
-      !answered.has(b.entity.eid)
-    )
-    : []
+  // the session goes on. This is the SAME set statusOf reads as `running`, so
+  // a transcript is never called settled with work left here (T-35230).
+  let asked = newestAsk(entries)
+  let open = openCalls(entries)
   if (open.length) {
     let added: Bundle[] = []
     for (let pending of open) {
