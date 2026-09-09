@@ -261,7 +261,11 @@ Deno.test('a failed native turn settles, releases, and can reopen', () => {
   cast(failEntry(db, lease.token, 'provider unavailable'))
   assertEquals(standing(eid), 'terminal')
   assertEquals(sessionRow(db, eid)?.status, 'failed')
-  assert(sessionRow(db, eid)?.finished_at)
+  // A run that ends by failing is timed by its last entry too (T-35242).
+  assertEquals(
+    finishedAt(eid),
+    readEntries(db, eid).at(-1)!.comps.created?.at,
+  )
   assertEquals(
     db.prepare(`select 1 from claim where ${OWNED}`).get(task),
     undefined,
@@ -457,6 +461,38 @@ Deno.test('a delivered wake lets a still-terminal operator finish', () => {
   )
   maintainStanding(eid, cast)
   assert(finishedAt(eid) != null)
+})
+
+Deno.test('a finished run is timed by its last entry and leaves a brief', () => {
+  // T-35242: the end is an ENTRY. The session's own columns stop moving while
+  // it runs, so a run timed from them finished the second it began.
+  let eid = native()
+  let claimed = uid()
+  apply(db, [
+    { eid: claimed, name: 'doc', comp: { title: 'held', body: '' } },
+    { eid: claimed, name: 'task', comp: {} },
+    { eid: claimed, name: 'claim', comp: { session: eid } },
+  ])
+  let started = sessionRow(db, eid)?.started_at ?? null
+  toTerminal(eid)
+
+  let entries = readEntries(db, eid)
+  let last = entries.at(-1)!
+  assertEquals(finishedAt(eid), last.comps.created?.at)
+  assert(
+    String(finishedAt(eid)) > String(entries[0].comps.created?.at),
+    'the end is later than the first line of the run',
+  )
+  assert(started == null || String(finishedAt(eid)) >= started)
+  // The last final answer is the words the run leaves behind: final_text, and
+  // through settle()'s wrap, the brief the digest quotes.
+  assertEquals(sessionRow(db, eid)?.final_text, 'done')
+  assertEquals(
+    (db.prepare(`select text from brief where ${OWNED}`).get(eid) as
+      | { text: string }
+      | undefined)?.text,
+    'done',
+  )
 })
 
 Deno.test('finished_at holds steady across re-derives (no lastHeard churn)', () => {

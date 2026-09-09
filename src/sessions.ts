@@ -52,7 +52,7 @@ import {
   importedLines,
   standingWindow,
 } from './entries.ts'
-import { sessionStateOf } from './entry_log.ts'
+import { type EntryRow, sessionStateOf } from './entry_log.ts'
 import {
   type Batch,
   ingestEntries,
@@ -336,17 +336,42 @@ export let maintainStanding = (eid: string, cast: Cast) => {
   // the run facet keeps the resumable door visibly alive. This presence is
   // also what boot lease reaping was missing when native Sessions were
   // statusless. Busy, idle, or parked → reopened, exactly as watch() reopens
-  // an external door. Preserve any existing ending stamp rather than
-  // recompute lastHeard: a fresh lastHeard each edge would move updated.at and
-  // re-trigger; the first stamp of an already-shut door uses lastHeard, not
-  // now(), so a boot backfill of a long-settled run stamps its true ending.
+  // an external door. Preserve any existing ending stamp rather than recompute
+  // it: a fresh time each edge would move updated.at and re-trigger; the first
+  // stamp of an already-shut door reads the terminal ENTRY's time (endedAt),
+  // not now(), so a boot backfill of a long-settled run stamps its true ending.
   let done = ending != null && !pendingWake(eid)
   let was = storedSession(db, eid)
+  let final = saidLast(entries)
   stamp(eid, {
     standing,
     status: done ? ending : 'running',
-    finished_at: done ? (was?.finished_at ?? lastHeard(eid)) : null,
+    finished_at: done
+      ? (was?.finished_at ?? endedAt(entries) ?? lastHeard(eid))
+      : null,
+    // The words the run leaves behind, so settle()'s wrap has a brief to
+    // write. A brief the session wrote itself is never overwritten (client.ts
+    // brief()), and neither is a final_text already captured.
+    ...done && final && !was?.final_text ? { final_text: final } : {},
   }, cast)
+}
+
+// When a graph-native run ENDED: the terminal ENTRY's own time. A session's own
+// timestamps stop moving while it runs — the row is stamped `running` once and
+// then only `latest_seq`, which never casts — so lastHeard() reads back the
+// START and a 17-minute run finished a second after it began (T-35242). The log
+// is the clock; lastHeard stays the fallback for a partition with no stamp.
+let endedAt = (entries: EntryRow[]) =>
+  entries.at(-1)?.comps.created?.at as string | undefined
+
+// What the run SAID last: the final answer of the turn that ended it. A
+// process-backed session gets this from its adapter (final_text); a graph-native
+// one has only its log, and without this it ends with no brief at all (T-35242).
+let saidLast = (entries: EntryRow[]) => {
+  let said = entries.findLast((e) =>
+    e.comps.output?.phase == 'final_answer' && e.comps.message?.role == 'agent'
+  )
+  return String(said?.comps.content?.body ?? '')
 }
 
 // A wake still armed for this session — a `wake` aimed at it (deliver.to) that
