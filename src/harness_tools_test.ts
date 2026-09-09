@@ -1,7 +1,7 @@
 // Hosted-tool contracts: local calls receive host authority with an allowlisted
 // environment, Tasks identity stays outside model arguments, and calls return
 // durable facets.
-import { assertEquals, assertMatch, assertRejects } from '@std/assert'
+import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
 import { combineTools, localTools, tasksTools } from './harness_tools.ts'
 import { type IO } from './mcp.ts'
 import { type Change, type Snapshot } from './types.ts'
@@ -103,6 +103,26 @@ slow('large command streams move whole output to named files', async () => {
     )
   } finally {
     for (let file of files) await Deno.remove(file).catch(() => {})
+    await Deno.remove(tree, { recursive: true })
+  }
+})
+
+slow('a shell timeout kills descendants holding its output pipes', async () => {
+  let tree = await scratch()
+  try {
+    let tools = await localTools({ tree })
+    let began = Date.now()
+    // The background sleep inherits stdout/stderr. Killing only the Bash
+    // parent makes child.status settle but leaves both drain() calls waiting
+    // for thirty seconds — the production runner-disappearance failure.
+    let out = await tools.call('shell', {
+      command: 'sleep 30 & wait',
+      timeout_ms: 100,
+    })
+    assert(Date.now() - began < 2_000)
+    assertEquals(out.failed, true)
+    assertMatch(String(out.facets?.stderr.text), /timed out after 100ms/)
+  } finally {
     await Deno.remove(tree, { recursive: true })
   }
 })

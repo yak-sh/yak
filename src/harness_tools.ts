@@ -204,8 +204,15 @@ export let localTools = async (
     let cwd = await Deno.realPath(resolve(tree, rel)).catch(() => '')
     if (!cwd) throw new Error('tool cwd does not exist')
     let timeout = bounded(timeoutValue)
-    let child = new Deno.Command(command, {
-      args,
+    // A tool command is a TREE, not just its first shell. `task land`, test
+    // runners, and most useful shell lines spawn descendants which inherit the
+    // captured pipes. Killing only Bash at the deadline leaves those writers
+    // alive, so the drains below never close and a 120s call can hold its
+    // runner lease forever. Give every call its own process group; timeout and
+    // cancellation can then end the whole operation at the boundary promised
+    // by the tool schema.
+    let child = new Deno.Command('setsid', {
+      args: [command, ...args],
       cwd,
       clearEnv: true,
       env: childEnv(options.session, tree),
@@ -219,9 +226,15 @@ export let localTools = async (
     let timedOut = false
     let kill = () => {
       try {
-        child.kill('SIGKILL')
+        Deno.kill(-child.pid, 'SIGKILL')
       } catch {
-        // It won the race and already exited.
+        // `setsid` may have lost the race before forming its group (or the
+        // command already exited). The direct-child kill is the safe fallback.
+        try {
+          child.kill('SIGKILL')
+        } catch {
+          // It won the race and already exited.
+        }
       }
     }
     let timer = setTimeout(() => {
