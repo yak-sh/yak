@@ -47,9 +47,11 @@ import {
   envPath,
   forgotten,
   isTest,
+  localPart,
   named,
   pick,
   readEnv,
+  recorded,
   Refused,
   render,
   saved,
@@ -59,6 +61,7 @@ import {
   writeEnv,
 } from './yaks_account.ts'
 import {
+  addressOf,
   askCode,
   claimsOf,
   close,
@@ -122,6 +125,25 @@ let acting = (s: Said, note: (line: string) => void): Account => {
   })
   if (!isTest(at)) note(banner(at))
   return at
+}
+
+// The account whose address nobody wrote down — the hand-pasted session that
+// predates this file (yaks_account.ts LEGACY) — asked about ONCE. The platform
+// is the only one who knows it (yaks_api.ts `addressOf`), and the answer is
+// written into the file (`recorded`), so every later command reads it there. A
+// platform that cannot say leaves both the file and the account as they were:
+// an unknown address goes on reading as the owner's, which is what it did
+// before this asked at all.
+export let known = async (
+  at: Account,
+  ask: (session: string) => Promise<string> = addressOf,
+): Promise<Account> => {
+  if (at.address) return at
+  let address = await ask(at.session).catch(() => '')
+  if (!address) return at
+  let { path, text } = store()
+  write(path, recorded(text, at, address))
+  return { ...at, address, name: localPart(address) }
 }
 
 // Sign in end to end. A `@bot.yak.sh` code comes back through the tasks graph
@@ -292,7 +314,7 @@ let verbs: Verb[] = [
     name: 'whoami',
     about: 'the account this box acts as, its spaces, and its role in each',
     run: async (c) => {
-      let at = acting(said(c.args), c.note)
+      let at = await known(acting(said(c.args), c.note))
       let claims = claimsOf(at.session)
       c.out(`account   ${at.address || '(address unrecorded)'}`)
       c.out(

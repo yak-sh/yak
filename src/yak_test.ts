@@ -5,8 +5,8 @@
 // move onto the `yak` plugin seam.
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import type { Ctx } from '@yaks/cli'
-import { owner, verbs } from './yak.ts'
-import { Refused } from './yaks_account.ts'
+import { known, owner, verbs } from './yak.ts'
+import { envOf, Refused } from './yaks_account.ts'
 import {
   boundaries,
   type Commit,
@@ -92,6 +92,44 @@ Deno.test('operations require the named owner before reading credentials or runn
     Error,
     '--since',
   )
+})
+
+// The address nobody wrote down is asked of the platform ONCE and kept
+// (T-35376). What the file becomes is yaks_account.ts `recorded`; what is
+// here is the asking: a temp `.env` and a fake platform, so no box's own file
+// moves.
+let legacy = { address: '', session: 'legacy.token', name: 'owner' }
+let filed = async (answer: (session: string) => Promise<string>) => {
+  let path = Deno.makeTempFileSync()
+  Deno.writeTextFileSync(path, 'YAKS_SESSION=legacy.token\n')
+  Deno.env.set('YAKS_ENV', path)
+  try {
+    let at = await known(legacy, answer)
+    return { at, env: envOf(Deno.readTextFileSync(path)) }
+  } finally {
+    Deno.env.delete('YAKS_ENV')
+    Deno.removeSync(path)
+  }
+}
+
+Deno.test('an account with no address asks the platform once, and the answer is kept', async () => {
+  let asked: string[] = []
+  let { at, env } = await filed((s) => {
+    asked.push(s)
+    return Promise.resolve('jeff@yak.sh')
+  })
+  assertEquals(asked, ['legacy.token'])
+  assertEquals([at.address, at.name], ['jeff@yak.sh', 'jeff'])
+  assertEquals(env.YAKS_ADDRESS_JEFF_YAK_SH, 'jeff@yak.sh')
+  assertEquals(env.YAKS_SESSION, undefined)
+  // An address already written down asks nobody.
+  let mine = { ...legacy, address: 'x@bot.yak.sh' }
+  assertEquals(await known(mine, () => Promise.reject('asked anyway')), mine)
+  // And a platform that cannot say leaves the account as it was and writes
+  // nothing — however it failed to say it.
+  for (let no of [() => Promise.resolve(''), () => Promise.reject('down')]) {
+    assertEquals(await known(legacy, no), legacy)
+  }
 })
 
 let at = (n: number) => new Date(n * 1000).toISOString()

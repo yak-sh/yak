@@ -11,6 +11,7 @@ import {
   isTest,
   keyOf,
   pick,
+  recorded,
   Refused,
   render,
   saved,
@@ -129,4 +130,20 @@ Deno.test('.env reads back as accounts, legacy included', () => {
   assertEquals(gone.STRIPE_OPERATOR_KEY, 'sk_live_keepme')
   // Forgetting the legacy one takes the bare key.
   assertEquals(envOf(forgotten(text, all[0])).YAKS_SESSION, undefined)
+})
+
+Deno.test('an address learned for the legacy session re-keys it and drops the legacy line', () => {
+  let all = accountsIn(envOf(ENV))
+  let text = recorded(ENV, all[0], 'jeff@yak.sh')
+  let env = envOf(text)
+  assertEquals(env.YAKS_SESSION_JEFF_YAK_SH, 'legacy.token')
+  assertEquals(env.YAKS_ADDRESS_JEFF_YAK_SH, 'jeff@yak.sh')
+  assertEquals(env.YAKS_SESSION, undefined)
+  assertEquals(env.STRIPE_OPERATOR_KEY, 'sk_live_keepme')
+  // A keyed session whose address line went missing keeps the key it has:
+  // only the line this session came in on is dropped.
+  let other = accountsIn(envOf('YAKS_SESSION_OLD=other.token\n'))[0]
+  let kept = envOf(recorded(ENV, other, 'her@example.com'))
+  assertEquals(kept.YAKS_SESSION, 'legacy.token')
+  assertEquals(kept.YAKS_SESSION_HER_EXAMPLE_COM, 'other.token')
 })

@@ -317,6 +317,18 @@ export let meAt = async (session: string, at: string): Promise<Me | null> => {
   return typeof body == 'object' ? body as Me : null
 }
 
+// The ADDRESS a session signed in as, which only the platform knows. `/me`
+// answers a name and deliberately never an address (workers/yak/apps.ts,
+// T-32654); `about` — the one tool every client may call — says who is asking
+// once it is signed in (workers/yak/tools.ts `whoami`), and that sentence is
+// the door. Read off the words rather than a field because that is what the
+// tool answers; nothing to say reads as nothing, never a guess.
+export let addressIn = (said: string) =>
+  /signed in as [^\n<]*<([^\s<>@]+@[^\s<>]+)>/.exec(said)?.[1] ?? ''
+
+export let addressOf = async (session: string) =>
+  addressIn(await tool(session, 'about', {}))
+
 // ── Closing a space (workers/yak/erase.ts, T-33166) ────────────────────────
 //
 // The delete door is the signed-in WEB surface — it reads the session cookie

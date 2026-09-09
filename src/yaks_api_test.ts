@@ -4,6 +4,7 @@
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
 import type { Row } from './client.ts'
 import {
+  addressIn,
   argOf,
   argsOf,
   claimsOf,
@@ -95,6 +96,29 @@ Deno.test('a tool answers its words, and an erring one throws them', () => {
     })
   )
   assertStringIncludes((no as Error).message, 'no space notes')
+})
+
+Deno.test('the address a session signed in as is read off what about says', async () => {
+  let said = 'yaks.app is a place to make small web apps.\n\n' +
+    'You are signed in as Jeff <jeff@yak.sh>, through a connector you signed ' +
+    'in to, until 2026-10-01T00:00:00.000Z.'
+  assertEquals(addressIn(said), 'jeff@yak.sh')
+  // Signed out, `about` says the same paragraph and no sentence about anyone.
+  assertEquals(addressIn('yaks.app is a place to make small web apps.'), '')
+  // A person known by their address alone still has one to read.
+  assertEquals(
+    addressIn(
+      'You are signed in as <a.b+c@x.co>, in a signed-in ' +
+        'browser.',
+    ),
+    'a.b+c@x.co',
+  )
+  // And the sentence itself is the platform's, so a drift there is caught
+  // here rather than in a `whoami` that quietly stops recording (T-35376).
+  let tools = await Deno.readTextFile(
+    new URL('../workers/yak/tools.ts', import.meta.url),
+  )
+  assertStringIncludes(tools, 'You are signed in as ${')
 })
 
 Deno.test('a tool argument keeps its type when it has one', () => {

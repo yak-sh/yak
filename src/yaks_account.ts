@@ -124,6 +124,21 @@ export let saved = (
   )
 }
 
+// An account the platform named an address for, written down the way a
+// sign-in writes one — and the legacy line it arrived on dropped, so nothing
+// asks a second time (yak.ts `known`, T-35376). Only THAT line goes: a keyed
+// session missing its address line keeps the key it already has.
+export let recorded = (text: string, a: Account, address: string): string => {
+  let legacy = envOf(text)[LEGACY]
+  return saved(
+    legacy && sessionOf(legacy) == a.session
+      ? setEnv(text, LEGACY, null)
+      : text,
+    address,
+    a.session,
+  )
+}
+
 export let forgotten = (text: string, a: Account): string => {
   if (!a.address) return setEnv(text, LEGACY, null)
   let key = keyOf(a.address)
