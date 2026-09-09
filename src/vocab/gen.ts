@@ -47,7 +47,6 @@ type Manifest = {
   name: string
   enums?: Record<string, { rank: number; values: string[] }>
   comps?: Record<string, CompSpec>
-  renames?: Record<string, string>
   edges?: string[]
   governed?: string[]
   session_active?: string[]
@@ -72,7 +71,6 @@ export let assemble = (manifests: Manifest[]) => {
   let enumOwner: Record<string, string> = {}
   let comps: Record<string, CompSpec & { plugin: string }> = {}
   let enums: Record<string, { rank: number; values: string[] }> = {}
-  let renames: Record<string, string> = {}
   let edges: string[] | undefined
   let governed: string[] | undefined
   let sessionActive: string[] | undefined
@@ -98,10 +96,6 @@ export let assemble = (manifests: Manifest[]) => {
       }
       enumOwner[name] = m.name
       enums[name] = spec
-    }
-    for (let [k, v] of Object.entries(m.renames ?? {})) {
-      if (k in renames) refuse(`rename '${k}' declared twice`)
-      renames[k] = v
     }
     let one = <T>(cur: T | undefined, next: T | undefined, what: string) => {
       if (cur != null && next != null) refuse(`${what} declared twice`)
@@ -175,7 +169,6 @@ export let assemble = (manifests: Manifest[]) => {
   return {
     comps,
     enums,
-    renames,
     edges: edges ?? refuse('no manifest declares edges'),
     governed: governed ?? refuse('no manifest declares governed comps'),
     sessionActive: sessionActive ?? refuse('no session_active'),
@@ -268,17 +261,6 @@ export let emit = (a: ReturnType<typeof assemble>): string => {
   )
   for (let name of a.compOrder) {
     out.push(`  ${name}: ${colBlock(a.comps[name].cols ?? {})},`)
-  }
-  out.push('}', '')
-
-  // renames — kernel-owned, global, add-only.
-  out.push(
-    '// Old spellings that still resolve — the compatibility promise in',
-    '// data. A rename ADDS a row and never removes one.',
-    'export let renames: Record<string, string> = {',
-  )
-  for (let k of Object.keys(a.renames).sort()) {
-    out.push(`  ${q(k)}: ${q(a.renames[k])},`)
   }
   out.push('}', '')
 

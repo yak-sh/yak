@@ -136,19 +136,6 @@ export let settled = (status?: string | null) =>
   status == 'done' || status == 'cancelled'
 
 
-// The two doors read two projections of the one table, split by the `view:`
-// namespace so a new row lands at the right door by its key alone: view names
-// for the renderer/sweep, graph names for the write/filter rewrite.
-export let viewRenames: Record<string, string> = Object.fromEntries(
-  Object.entries(renames)
-    .filter(([k]) => k.startsWith('view:'))
-    .map(([k, v]) => [k.slice('view:'.length), v]),
-)
-export let propRenames: Record<string, string> = Object.fromEntries(
-  Object.entries(renames).filter(([k]) => !k.startsWith('view:')),
-)
-
-
 // The shape of one index declaration (see the indexes map in the data
 // section above): its columns, uniqueness, and an optional partial-index
 // predicate.

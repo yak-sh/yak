@@ -23,7 +23,7 @@ import { parseProp, propAt } from '../props.ts'
 import { ent, findEid, mutate, problem } from '../live.ts'
 import { editorViews } from './editors.tsx'
 import { and, present } from '@yaks/query'
-import { type Ent, statusOf, viewRenames } from '../types.ts'
+import { type Ent, statusOf } from '../types.ts'
 import { fleetVocab } from '../vocab/fleet_vocab.ts'
 
 export type Renderer = ComponentRenderer<Ent> & {
@@ -35,7 +35,6 @@ export type Render = Renderer['Render']
 export type Action = { label: string; run: () => void; mod?: string }
 export type Contributor = Contribution<Action, Ent>
 
-export let alias = viewRenames
 export let vocab = fleetVocab()
 // The fleet adds its input language (P2, relative times and human ids); the
 // package still owns column patches and vocabulary validation.
@@ -50,10 +49,7 @@ let columns = (): Entry[] => [
   ...editors(vocab, editOptions),
   properties(vocab),
 ]
-export let registry = registryOf<Entry, Action, Ent>(columns(), {
-  aliases: alias,
-  vocab,
-})
+export let registry = registryOf<Entry, Action, Ent>(columns(), { vocab })
 
 // Ent flattens the spine and adds display/edge data. Queries read components;
 // native views and action factories still receive the original Ent.

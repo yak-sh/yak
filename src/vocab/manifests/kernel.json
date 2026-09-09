@@ -342,13 +342,6 @@
     "wants": {},
     "worked": {}
   },
-  "renames": {
-    "view:Debug.ListItem": "Debug.Tile",
-    "view:Id": "Inline",
-    "view:List.Item": "List.Tile",
-    "view:Show": "Full",
-    "view:Task.Row": "Board.List.Tile"
-  },
   "edges": [
     "requires",
     "contains",

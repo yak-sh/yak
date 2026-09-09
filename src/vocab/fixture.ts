@@ -2,8 +2,8 @@
 // types.ts, so "the generated file says exactly what the hand-written one
 // said" is a string comparison. Key order is kept where it is load-bearing
 // (comps/sessionComps/stamped drive delete order and doc generation; arrays
-// are ordered by nature) and sorted where it is not (renames, partition,
-// prefix, indexes), so a harmless emission-order difference never fails the
+// are ordered by nature) and sorted where it is not (partition, prefix,
+// indexes), so a harmless emission-order difference never fails the
 // gate while a real vocabulary drift always does.
 
 // deno-lint-ignore no-explicit-any
@@ -38,7 +38,7 @@ let plain = [
   'sessionActive',
 ]
 // Maps whose key order is incidental — sorted before comparison.
-let unordered = ['renames', 'viewRenames', 'propRenames', 'partition', 'prefix']
+let unordered = ['partition', 'prefix']
 // Sets — compared as sorted arrays.
 let sets = ['byName', 'plurals']
 // Maps of arrays (indexes) — keys sorted, rows kept in order.

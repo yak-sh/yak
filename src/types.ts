@@ -623,16 +623,6 @@ export let comps: Record<string, Record<string, PropType>> = {
   yield: {},
 }
 
-// Old spellings that still resolve — the compatibility promise in
-// data. A rename ADDS a row and never removes one.
-export let renames: Record<string, string> = {
-  'view:Debug.ListItem': 'Debug.Tile',
-  'view:Id': 'Inline',
-  'view:List.Item': 'List.Tile',
-  'view:Show': 'Full',
-  'view:Task.Row': 'Board.List.Tile',
-}
-
 // Composite indexes and single-column overrides (see index.ts).
 export let indexes: Record<string, Idx[]> = {
   app: [{ cols: ['space', 'slug'], unique: true }],
@@ -1146,18 +1136,6 @@ export let statusOf = (has: Record<string, unknown>) =>
 // instead of 'done' alone, so a cancelled blocker releases its gate too.
 export let settled = (status?: string | null) =>
   status == 'done' || status == 'cancelled'
-
-// The two doors read two projections of the one table, split by the `view:`
-// namespace so a new row lands at the right door by its key alone: view names
-// for the renderer/sweep, graph names for the write/filter rewrite.
-export let viewRenames: Record<string, string> = Object.fromEntries(
-  Object.entries(renames)
-    .filter(([k]) => k.startsWith('view:'))
-    .map(([k, v]) => [k.slice('view:'.length), v]),
-)
-export let propRenames: Record<string, string> = Object.fromEntries(
-  Object.entries(renames).filter(([k]) => !k.startsWith('view:')),
-)
 
 // The shape of one index declaration (see the indexes map in the data
 // section above): its columns, uniqueness, and an optional partial-index
