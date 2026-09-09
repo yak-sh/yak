@@ -45,6 +45,30 @@ export let records = (text: string): Deploy[] =>
     }
   })
 
+// A deploy is two halves with different owners. `upload` is Cloudflare's —
+// build queue, clone, cache restore, bundle, version create — and `propagate`
+// is that version to the first verified 200. Which half moved is the whole
+// question when a number grows, so every line that prints a total prints the
+// split beside it.
+//
+// Derived, never stored: the row keeps its three stamps and the arithmetic
+// runs on them, so a row written before this existed reads the same way as one
+// written after. Splitting Cloudflare's queue back out of `upload` would need
+// the Workers Builds API, which refuses every credential on this box — it
+// takes a user-scoped API token (bench/deploys.md).
+export let stages = (r: Deploy) => ({
+  upload: (Date.parse(r.uploaded) - Date.parse(r.pushed)) / 1000,
+  propagate: r.live == null
+    ? null
+    : (Date.parse(r.live) - Date.parse(r.uploaded)) / 1000,
+})
+
+export let split = (r: Deploy) => {
+  let { upload, propagate } = stages(r)
+  return `upload ${upload.toFixed(3)}s` +
+    (propagate == null ? '' : ` + propagate ${propagate.toFixed(3)}s`)
+}
+
 export let readRecords = async (path: string | URL = RECORD) => {
   try {
     return records(await Deno.readTextFile(path))
@@ -84,12 +108,14 @@ export let gate = (rows: Deploy[], margin = 0.25) => {
       code: 1,
       floor,
       limit,
-      message: `${latest.sha.slice(0, 8)}: no verified live response`,
+      message: `${latest.sha.slice(0, 8)}: no verified live response (${
+        split(latest)
+      })`,
     }
   }
-  let detail = `${latest.sha.slice(0, 8)}: ${
-    latest.seconds.toFixed(3)
-  }s; floor ${floor!.toFixed(3)}s, limit ${limit.toFixed(3)}s`
+  let detail = `${latest.sha.slice(0, 8)}: ${latest.seconds.toFixed(3)}s (${
+    split(latest)
+  }); floor ${floor!.toFixed(3)}s, limit ${limit.toFixed(3)}s`
   if (times.length == 1) {
     return {
       code: 0,

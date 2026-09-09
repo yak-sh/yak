@@ -1,14 +1,17 @@
 # Deploy timing
 
 Every push to main times its own deploy: the gate workflow's `deploy time` step
-runs the recorder on `github.sha` before `deploy gate` judges (T-35336). The
-workflow runs on the box, so the recorder reads the same GitHub and Wrangler
-logins under `$HOME` that a hand run does; no Actions secret is added, and
-`deploy-gate` still makes no live call. A pull request has no main push to time,
-so the step is push-only and a PR judges the committed rows alone. A push that
-touches none of the Worker's build watch paths deploys nothing at all: the
-recorder waits for the version, finds no Cloudflare build check for the commit,
-says `no Workers Build — nothing to time`, and the gate judges the rows already
+runs the recorder on `github.sha` before `deploy gate` judges (T-35336). It is
+the workflow's FIRST step, right after the checkout, because `live` is the
+recorder's own first successful probe — anything the job does before it is
+measured as deploy latency (T-35426, below). The workflow runs on the box, so
+the recorder reads the same GitHub and Wrangler logins under `$HOME` that a hand
+run does; no Actions secret is added, and `deploy-gate` still makes no live
+call. A pull request has no main push to time, so the step is push-only and a PR
+judges the committed rows alone. A push that touches none of the Worker's build
+watch paths deploys nothing at all: the recorder waits for the version, finds no
+Cloudflare build check for the commit, says
+`no Workers Build — nothing to time`, and the gate judges the rows already
 recorded.
 
 By hand — the same two commands, and what the workflow runs:
@@ -51,7 +54,10 @@ nearest upload after the push and carry `estimated: true`; another SHA's
 annotation is never treated as a match.
 
 `live` is the first successful probe observed by the recorder, and `seconds` is
-`(live - pushed) / 1000`. The probe requests `https://yaks.app/` with
+`(live - pushed) / 1000` — so it is an UPPER BOUND, and it is only as tight as
+the recorder is prompt. A late start is indistinguishable from a slow deploy;
+that is why the gate runs the recorder before its own tests. The probe requests
+`https://yaks.app/` with
 `Cloudflare-Workers-Version-Overrides: yak="<version id>"`. A 200 must also
 carry the matching `x-yak-version` response header, taken from the Worker's
 existing `CF_VERSION_METADATA` binding. Cloudflare can silently ignore an
@@ -65,6 +71,18 @@ retry appends its completion; the gate counts that deploy once. Repeating a
 successful record keeps its first observation. Historical probes either cannot
 verify the version or yield a late upper bound; `backfill: true` excludes both
 from the ratchet.
+
+Every line that prints a total prints the split beside it: `upload` is
+`uploaded - pushed`, Cloudflare's half — build queue, clone, cache restore,
+bundle, version create — and `propagate` is `live - uploaded`, that version to
+the first verified 200. `stages()` and `split()` in `bin/deploy-gate.ts` derive
+both from the three stamps a row already carries, so a row written before the
+split existed reads the same way as one written after; nothing derived is
+stored. Splitting Cloudflare's queue back out of `upload` would take the
+[Workers Builds API](https://developers.cloudflare.com/workers/ci-cd/builds/api-reference/),
+which needs a user-scoped API token minted in the dashboard: the box's wrangler
+OAuth login has no builds scope and every `/builds/` path answers 403, so the
+build's own queued/started/finished stamps are not readable from here.
 
 The floor is the minimum recorded prospective live time, so recomputing it from
 the append-only history only moves it down. Like `bin/bench-gate.ts`, the margin
@@ -155,3 +173,35 @@ So the limit stands at the owner's 60s, and nothing in the repo is holding the
 deploy back. The gate will read red whenever a recorded deploy lands in the slow
 tail, because one recorded row is the whole sample. Recording every push, not
 the occasional one, is what would make the ratchet mean anything.
+
+## What the 175s rows were (2026-09-09, T-35426)
+
+The gate timing itself. `deploy time` was the workflow's last step, so the
+recorder did not reach its first probe until `deno task check`, `test` and
+`test:workers` had run — about two and a half minutes after the push. By then
+the version had been serving for a minute or more, the first probe succeeded
+immediately, and that late observation was written as `live`:
+
+| SHA        |  upload |     live | gate step ran |
+| ---------- | ------: | -------: | ------------- |
+| `d03e4fba` | 39.929s | 175.689s | push +2m48    |
+| `d59bb215` | 55.790s | 180.670s | push +2m45    |
+| `ef364c57` | 59.188s | 203.932s | push +3m12    |
+
+Every `upload` is ordinary — the same 39–71s Cloudflare spread T-35253 measured.
+The rest is the gate's own test suite, counted as propagation. Run 34359974213's
+steps say it plainly: job started 7s after the push, `deploy
+time` ran
+13:56:01–13:56:06, five seconds for a version that had existed since 13:53:5x.
+Three REGRESSIONs in a row, none of them a deploy.
+
+The premise that a landing storm queues in Workers Builds does not survive the
+numbers either: `d03e4fba` uploaded in 39.929s, the fastest of the night, in the
+middle of fifteen landings in an hour. A storm slows the gate's own runner, not
+Cloudflare's build queue — and a late recorder turns that into a deploy
+regression.
+
+Two changes: the recorder is now the first step after the checkout, so `live` is
+the deploy's, and every verdict prints `upload` and `propagate` separately, so a
+number that grows says which half grew. The 60s limit and the ratchet are
+unchanged.

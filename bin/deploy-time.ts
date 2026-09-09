@@ -6,7 +6,13 @@
 // every push times its own deploy (T-35336); it reads the box's gh and
 // wrangler logins under $HOME and never an Actions secret. deploy-gate itself
 // stays credential-free and makes no live call.
-import { type Deploy, readRecords, RECORD, records } from './deploy-gate.ts'
+import {
+  type Deploy,
+  readRecords,
+  RECORD,
+  records,
+  split,
+} from './deploy-gate.ts'
 import { WRANGLER } from '../workers/yak/wrangler.ts'
 import type { Version } from '../src/yak_deploys.ts'
 
@@ -269,7 +275,7 @@ export let main = async (args = Deno.args) => {
     )
     if (recorded) {
       console.log(
-        `${sha.slice(0, 8)}: live ${
+        `${sha.slice(0, 8)}: ${split(recorded)}; live ${
           recorded.seconds!.toFixed(3)
         }s — already recorded`,
       )
@@ -298,9 +304,9 @@ export let main = async (args = Deno.args) => {
     let added = await append(row)
     if (added) written.push(row)
     console.log(
-      `${sha.slice(0, 8)}: upload ${
-        ((Date.parse(uploaded) - Date.parse(push.pushed)) / 1000).toFixed(3)
-      }s${match.estimated ? ' (estimated SHA match)' : ''}; ${
+      `${sha.slice(0, 8)}: ${split(row)}${
+        match.estimated ? ' (estimated SHA match)' : ''
+      }; ${
         live
           ? `live ${row.seconds!.toFixed(3)}s${
             backfill ? ' (historical upper bound, excluded from ratchet)' : ''

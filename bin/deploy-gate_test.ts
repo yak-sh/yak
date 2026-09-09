@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from '@std/assert'
-import { type Deploy, gate, records } from './deploy-gate.ts'
+import { type Deploy, gate, records, split, stages } from './deploy-gate.ts'
 
 let row = (seconds: number, n = 0): Deploy => ({
   sha: `${n}`.padStart(40, 'a'),
@@ -49,6 +49,30 @@ Deno.test('deploy records: corrupt measurements cannot reset the gate', () => {
     () => records(`${JSON.stringify(row(20))}\n{broken`),
     Error,
     ':2:',
+  )
+})
+
+Deno.test('deploy stages: the split is arithmetic on the stamps every row already has', () => {
+  // Cloudflare owns `upload`, we own `propagate`; the verdict never says which
+  // grew unless both are on the line. T-35426's three REGRESSIONs were 40s of
+  // upload and two minutes of "propagate" that was the gate's own test suite.
+  assertEquals(stages(row(60)), { upload: 30, propagate: 30 })
+  assertEquals(split(row(60)), 'upload 30.000s + propagate 30.000s')
+  let unverified = { ...row(60), live: null, seconds: null }
+  assertEquals(stages(unverified), { upload: 30, propagate: null })
+  assertEquals(split(unverified), 'upload 30.000s')
+})
+
+Deno.test('deploy gate: every verdict carries the split, verified or not', () => {
+  assertEquals(
+    gate(history(40, 60)).message,
+    'aaaaaaaa: 60.000s (upload 30.000s + propagate 30.000s); ' +
+      'floor 40.000s, limit 50.000s — REGRESSION',
+  )
+  assertEquals(
+    gate([...history(40), { ...row(60, 1), live: null, seconds: null }])
+      .message,
+    'aaaaaaaa: no verified live response (upload 30.000s)',
   )
 })
 

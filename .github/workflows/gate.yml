@@ -39,6 +39,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # FIRST, before a single test: `live` is the recorder's first successful
+      # probe, so whatever the job does before this step is measured as deploy
+      # latency. Run last (T-35336), the recorder reached the probe ~2m30 after
+      # the push, found the version long since serving, and wrote that 2m30 as
+      # the number — 175.689s for d03e4fba, 180.670s for d59bb215, 203.932s for
+      # ef364c57, each of them `upload` under a minute. Three REGRESSIONs in a
+      # row that were the gate timing its own test suite (T-35426).
+      #
+      # The commit under test times its own deploy. Push only: a PR has no main
+      # push to time. A push outside the Worker's watch paths deploys nothing,
+      # and the recorder says so instead of waiting (workers/yak/README.md). No
+      # Actions secret is added — the recorder uses the box's own gh and
+      # wrangler logins under $HOME. Nothing here pushes, so the row lands in
+      # this run's checkout and in the job summary; commit it with the next
+      # change, like bench-gate's baseline. A bench-row commit on main would
+      # start another Workers Build and another gate.
+      - name: deploy time
+        if: github.event_name == 'push'
+        run: deno task deploy:time ${{ github.sha }}
+
       - name: deno task check
         run: deno task check
 
@@ -60,26 +80,10 @@ jobs:
       - name: worker tests
         run: deno task test:workers
 
-      # The commit under test times its own deploy. Until T-35336 rows were
-      # only written when someone hand-ran deploy:time, so one unlucky Workers
-      # Builds row (39–71s, Cloudflare-side) stayed "the latest deploy" and
-      # failed every later commit. The recorder waits for the version that
-      # names this SHA, probes it, and appends the row; deploy-gate then judges
-      # that fresh row against the committed floor, the 60s limit unchanged.
-      #
-      # Push only: a PR has no main push to time. A push outside the Worker's
-      # watch paths deploys nothing, and the recorder says so instead of waiting
-      # (workers/yak/README.md). No Actions secret is added —
-      # the recorder uses the box's own gh and wrangler logins under $HOME.
-      # Nothing here pushes, so the row lands in this run's checkout and in the
-      # job summary; commit it with the next change, like bench-gate's
-      # baseline. A bench-row commit on main would start another Workers Build
-      # and another gate.
-      - name: deploy time
-        if: github.event_name == 'push'
-        run: deno task deploy:time ${{ github.sha }}
-
-      # Reads rows only; needs no credentials.
+      # Reads the row `deploy time` wrote; needs no credentials. Until
+      # T-35336 rows were only written when someone hand-ran deploy:time, so
+      # one unlucky Workers Builds row (39–71s, Cloudflare-side) stayed "the
+      # latest deploy" and failed every later commit.
       - name: deploy gate
         run: deno task deploy:gate
 
