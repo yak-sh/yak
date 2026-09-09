@@ -105,6 +105,23 @@ let bareCli = (env: Record<string, string>) =>
 
 let text = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
 
+Deno.test('spawn usage errors exit non-zero before dispatch (T-35458)', async () => {
+  for (
+    let args of [
+      ['--provider'],
+      ['--provider='],
+      ['--provider', '--wait'],
+      ['--model=gpt-6-astra', '--timeout=bad'],
+    ]
+  ) {
+    let out = await cli('spawn', 'T-35447', ...args)
+    assertEquals(out.code, 1)
+    assertEquals(text(out.stdout), '')
+    assertMatch(text(out.stderr), /task: spawn --(?:provider|timeout) needs/)
+    assertStringIncludes(text(out.stderr), 'usage: task spawn')
+  }
+})
+
 let commentBody = (args: string[], io: Parameters<typeof parse>[3]) =>
   parse('comment', manuals.comment, ['T-1', ...args], io).body
 
@@ -1700,6 +1717,47 @@ let busGraph: Snapshot = {
 let busServer = () => fakeGraph(busGraph)
 
 let graphServer = (snap = graph) => fakeGraph(snap)
+
+Deno.test('session wait exits non-zero after printing failed (T-35458)', async () => {
+  let fake = graphServer({
+    changes: [
+      { eid: N, name: 'entity', comp: { eid: N, num: 3, created_at: '' } },
+      {
+        eid: N,
+        name: 'session',
+        comp: { id: 'failed-session', status: 'failed' },
+      },
+    ],
+    deps: [],
+  })
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '--cached-only',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'session',
+        'wait',
+        'S-3',
+        '--timeout',
+        '2h',
+      ],
+      clearEnv: true,
+      env: {
+        TASKS_HOST: fake.host,
+        TASKS_BACKOFF: '',
+        ...(runnerCache ? { DENO_DIR: runnerCache } : {}),
+      },
+    }).output()
+    assertEquals(out.code, 1)
+    assertEquals(text(out.stdout), 'S-3: failed\n')
+    assertEquals(text(out.stderr), '')
+    assertEquals(fake.mutations, [])
+  } finally {
+    await fake.server.shutdown()
+  }
+})
 
 slow(
   'work verify prints the bounded candidate projection from HTTP',

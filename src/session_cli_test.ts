@@ -1,7 +1,13 @@
 // The session verbs' pure seams: one status word for both session shapes, what
 // counts as over, the exit code `wait` ends with, the listing line, native
 // lines through the package renderer, and the poll loop with an injected clock.
-import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertMatch,
+  assertRejects,
+  assertThrows,
+} from '@std/assert'
 import { arm, type Row } from './client.ts'
 import {
   briefOf,
@@ -14,8 +20,28 @@ import {
   poll,
   sessionLine,
   statusFor,
+  timeoutMs,
   waitFor,
 } from './session_cli.ts'
+
+Deno.test('wait timeout converts seconds, minutes, and hours without an unbounded fallback (T-35458)', () => {
+  assertEquals(timeoutMs(), 0)
+  for (
+    let [raw, expected] of Object.entries({
+      '900': 900_000,
+      '900s': 900_000,
+      '45m': 2_700_000,
+      '2h': 7_200_000,
+    })
+  ) assertEquals(timeoutMs(raw), expected)
+  for (let raw of ['', '0', 'bad', '45minutes', '999999999999999h']) {
+    assertThrows(
+      () => timeoutMs(raw),
+      Error,
+      '--timeout needs a positive duration',
+    )
+  }
+})
 
 let row = (comps: Row['comps'], num = 7): Row => ({
   eid: `e${num}`,

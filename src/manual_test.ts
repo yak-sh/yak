@@ -106,7 +106,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       subject: '<id> [show|is|as|edge] …',
       spawn: 'spawn <id> [--provider=PROVIDER] [--model=MODEL] ' +
         '[--effort=high] [--persona=ID] [--worktree=DIR] [--wait] ' +
-        '[--timeout=N] [--interval=N]',
+        '[--timeout=DURATION] [--interval=N]',
       land: 'land',
       commit: 'commit <id> [sha]',
       comment:
@@ -127,7 +127,8 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       'session brief': 'session brief [text…] [--body=BODY]',
       'session peek': 'session peek <id> [--lines=N]',
       'session turn': 'session turn [idle|busy] [sid] [--hook]',
-      'session wait': 'session wait <id> [--timeout=N] [--interval=N] [--json]',
+      'session wait':
+        'session wait <id> [--timeout=DURATION] [--interval=N] [--json]',
       sessions: 'sessions [-n=N] [--live] [--json]',
       tail: 'tail <id> [-n=N] [--follow] [--interval=N]',
       role: 'role [command…] [--json]',
@@ -210,6 +211,57 @@ Deno.test('spawn help and parsing share the provider vocabulary', () => {
     Error,
     '--model needs model',
   )
+})
+
+Deno.test('spawn accepts equals and space values; provider remains optional (T-35458)', () => {
+  let opts = {
+    '--provider': 'codex',
+    '--model': 'gpt-6-astra',
+    '--effort': 'high',
+    '--persona': 'P-9',
+    '--worktree': '/tmp/a worktree',
+    '--timeout': '45m',
+    '--interval': '500',
+  }
+  for (let separate of [false, true]) {
+    let args = Object.entries(opts).flatMap(([k, v]) =>
+      separate ? [k, v] : [`${k}=${v}`]
+    )
+    let got = parse('spawn', manuals.spawn, ['T-35447', ...args, '--wait'])
+    assertEquals(got.opts, opts)
+    assertEquals(got.args, { id: 'T-35447' })
+    assertEquals(got.flags, new Set(['--wait']))
+  }
+  for (let args of [[], ['--model', 'gpt-6-astra'], ['--model=gpt-6-astra']]) {
+    let got = parse('spawn', manuals.spawn, ['T-1', ...args])
+    assertEquals(got.opts['--provider'], undefined)
+  }
+  for (let flag of Object.keys(opts)) {
+    for (let args of [[flag], [flag, '--wait'], [`${flag}=`]]) {
+      assertThrows(check('spawn', ['T-1', ...args]), Error, `${flag} needs`)
+    }
+  }
+})
+
+Deno.test('spawn and session wait share timeout spellings and units (T-35458)', () => {
+  for (let name of ['spawn', 'session wait']) {
+    for (let raw of ['900', '900s', '45m', '2h']) {
+      for (let args of [['--timeout', raw], [`--timeout=${raw}`]]) {
+        assertEquals(
+          parse(name, manuals[name], ['T-1', ...args]).opts['--timeout'],
+          raw,
+        )
+      }
+    }
+    for (let raw of ['', '0', '0m', '-1', '1.5h', '45minutes', 'forever']) {
+      assertThrows(
+        check(name, ['T-1', `--timeout=${raw}`]),
+        Error,
+        '--timeout needs duration',
+      )
+    }
+    assertMatch(help(name.split(' ')), /seconds.+45m.+2h/s)
+  }
 })
 
 Deno.test('query is the generic filtered graph read', () => {

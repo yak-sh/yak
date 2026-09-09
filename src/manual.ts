@@ -19,6 +19,7 @@ import {
   type Arg,
   body as bodyKind,
   type Decl,
+  duration,
   enumOf,
   file,
   type Got,
@@ -734,7 +735,7 @@ export let manuals = declare({
       'task spawn T-3',
       'task spawn T-3 --model=sonnet',
       'task spawn T-3 --worktree ~/code/tasks-worktrees/tasks/fix',
-      'task spawn T-3 --wait --timeout 900',
+      'task spawn T-3 --provider codex --model gpt-6-astra --wait --timeout 45m',
     ],
     detail: '--worktree attaches the session to an EXISTING worktree of the ' +
       "project's repo, on the branch it stands on: nothing is created for it " +
@@ -743,18 +744,20 @@ export let manuals = declare({
       'work is merged.\n\n--wait is `task session wait <S>` folded in: the ' +
       'S-id line prints as it always does, then the spawn blocks until that ' +
       'session is over and ends with its brief and its exit code. ' +
-      "--timeout/--interval are that wait's. No transcript streams — that " +
+      '--timeout takes seconds (900 or 900s), minutes (45m), or hours (2h); ' +
+      'omitting it waits indefinitely. --interval is milliseconds (default 1000). ' +
+      'No transcript streams — that ' +
       'is `task tail`.',
     root: true,
     args: [arg('id', id)],
     opts: [
-      value('--provider', provider),
-      value('--model', model),
-      { ...value('--effort', effort), or: 'high' },
-      value('--persona', id),
+      value('--provider', provider, true),
+      value('--model', model, true),
+      { ...value('--effort', effort, true), or: 'high' },
+      value('--persona', id, true),
       value('--worktree', path, true),
       flag('--wait'),
-      value('--timeout', num, true),
+      value('--timeout', duration, true),
       value('--interval', num, true),
     ],
   },
@@ -1002,9 +1005,12 @@ export let manuals = declare({
       'block until a session is over, print its brief; exit 0 on a quiet ' +
       'end, non-zero on a failure (the coordinator wake path: run it in the ' +
       'background, its exit is the notification)',
+    detail: '--timeout takes seconds (900 or 900s), minutes (45m), or hours ' +
+      '(2h); omitting it waits indefinitely. --interval is milliseconds ' +
+      '(default 1000).',
     args: [arg('id', id)],
     opts: [
-      value('--timeout', num, true),
+      value('--timeout', duration, true),
       value('--interval', num, true),
       json,
     ],

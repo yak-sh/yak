@@ -76,6 +76,8 @@ export let path: Kind = { name: 'dir', test: /.+/ }
 export let body: Kind = { name: 'body', test: /.+/, read: true }
 export let file: Kind = { name: 'file', test: /.+/, read: 'file' }
 export let num: Kind = { name: 'n', test: /^[1-9]\d*$/ }
+// Bare durations retain the CLI's seconds convention.
+export let duration: Kind = { name: 'duration', test: /^[1-9]\d*[smh]?$/ }
 
 export let of = (
   name: string,
@@ -83,6 +85,8 @@ export let of = (
 ): Kind => ({
   name,
   of: values,
+  // A remote catalog may be unknown, but an empty value is still missing.
+  test: /.+/,
 })
 
 export let enumOf = (type: PropType, name = 'value'): Kind => {

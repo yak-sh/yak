@@ -15,7 +15,7 @@
 // and the wire answers otherwise. Nothing here writes.
 
 import { needed, query, type Row } from './client.ts'
-import type { Got } from './verb.ts'
+import { duration, type Got } from './verb.ts'
 import {
   type EntryRow,
   graphLog,
@@ -329,13 +329,27 @@ export let tail = async (got: Got) => {
   }
 }
 
-/** `task session wait <S> [--timeout S] [--interval MS] [--json]`: block until
+/** A missing timeout is unbounded; a bare number still means seconds. */
+export let timeoutMs = (raw?: string): number => {
+  if (raw == null) return 0
+  let unit = raw.slice(-1)
+  let scale = unit == 'h' ? 3600 : unit == 'm' ? 60 : 1
+  let n = Number(raw.replace(/[smh]$/, '')) * scale * 1000
+  if (!duration.test!.test(raw) || !Number.isSafeInteger(n)) {
+    throw new Error('--timeout needs a positive duration (seconds, 45m, or 2h)')
+  }
+  return n
+}
+
+/** `task session wait <S> [--timeout DURATION] [--interval MS] [--json]`: block until
  * the session is over, print its brief, exit 0 on a quiet end and non-zero on
  * a failure (the legacy exit code when there is one). */
 export let wait = (got: Got) => {
   let id = got.args.id
   if (!id) {
-    throw new Error('task session wait <S> [--timeout S] [--interval MS]')
+    throw new Error(
+      'task session wait <S> [--timeout DURATION] [--interval MS]',
+    )
   }
   return waitFor(id, got)
 }
@@ -345,9 +359,9 @@ export let wait = (got: Got) => {
  * code. `got` carries only the options (`--timeout`, `--interval`, `--json`);
  * the session is the `id` argument. */
 export let waitFor = async (id: string, got: Got) => {
+  let timeout = timeoutMs(got.opts['--timeout'])
   let r = await sessionAt(id)
   let interval = ms(got, '--interval', 1000)
-  let timeout = ms(got, '--timeout', 0) * 1000
   let read = async () => {
     let [again] = await query([`id=${r.eid}`])
     if (!again) throw new Error(`${id}: gone`)
