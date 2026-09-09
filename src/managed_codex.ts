@@ -184,7 +184,10 @@ let delivered = (
 // narrow table door and the boot sweep (HEAL_PENDING) files its deduped bug.
 // That is the RIGHT floor, not a shortcut — a break that self-recovers clears
 // the facet (below) before any boot, so only an UNRECOVERED one is ever filed.
-// A clean turn sheds both facets so a recovered Session reads well.
+// A clean turn sheds the facet it wrote — `exception`, and only that. `error`
+// is a KNOWN STATE somebody else owns (the settle's UNLANDED verdict, a
+// refused resume), and shedding it here deleted a verdict written 28ms earlier
+// (S-35264): a run that ended well can still have left work stranded.
 let sessionFault = (
   db: Sql,
   eid: string,
@@ -194,11 +197,6 @@ let sessionFault = (
 ) => {
   let changes: Change[] = []
   if (fault == null) {
-    if (
-      db.prepare(`delete from error where ${OWNED}`).run(eid).changes
-    ) {
-      changes.push({ eid, name: 'error', comp: null })
-    }
     if (
       db.prepare(`delete from exception where ${OWNED}`).run(eid).changes
     ) {
@@ -266,7 +264,7 @@ export let retryCredential = (
     record(db, changes)
     cast(changes)
     // The session's own break is over too: it reads as work in flight again,
-    // and a recovered fault sheds both facets exactly as a clean turn does.
+    // shedding the `exception` exactly as a clean turn does.
     sessionFault(db, row.session, null, cast, clock)
     retried.push(row.eid)
   }
