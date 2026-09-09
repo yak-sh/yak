@@ -71,6 +71,7 @@ import { type IO, mcpServer } from './mcp.ts'
 import { localIO } from './local_io.ts'
 import { nativeRunner } from './native_runner.ts'
 import { drain as drainTurns } from './turn.ts'
+import { watchVault } from './vault_watch.ts'
 import { maintainStandingFor } from './sessions.ts'
 import { codexIssuer, codexStore } from './codex_auth.ts'
 import { accountHttp, accountService } from './accounts.ts'
@@ -1545,38 +1546,18 @@ function turnSweep() {
   }
 }
 
-// The user's theme (~/.tasks/theme.css, T-12778) lives outside src/, so it
-// gets its own watch: a save broadcasts {css} like any other stylesheet edit,
-// re-fetching the sheet with no reload. Non-recursive keeps this off the
-// vault's worktrees/ and logs/ churn; a top-level db write wakes the loop but
-// goes nowhere, since we act only on theme.css — which also catches a theme
-// created (or removed) while the server runs, where watching the file itself
-// could not. No vault dir (a bare probe) means nothing to watch.
-let themeWatch = async () => {
-  let dir = `${Deno.env.get('HOME')}/.tasks`
-  let w
-  try {
-    w = Deno.watchFs(dir, { recursive: false })
-  } catch {
-    return
-  }
-  for await (let e of w) {
-    // Only a WRITE arms the spool drain. Drain's own read emits an `access`
-    // event on turns.jsonl, and acting on it re-armed the drain in a tight
-    // loop (~8.7k opens/s of steady CPU) — the second half of the feedback the
-    // empty-spool truncate guard (turn.ts) closed. A hook's append is
-    // `modify`, so filtering access keeps every real report and kills the echo.
-    if (
-      e.kind != 'access' && e.paths.some((p) => p.endsWith('/turns.jsonl'))
-    ) turnSweep()
-    if (!e.paths.some((p) => p.endsWith('/theme.css'))) continue
+// The theme hot-swaps without a reload; hook writes drain from a dedicated
+// subdirectory. Neither watch subscribes to the vault root's database churn.
+let stopVaultWatch = watchVault(
+  `${Deno.env.get('HOME')}/.tasks`,
+  () => {
     let msg = JSON.stringify({ css: ++gen })
     for (let { sock } of served) {
       if (sock.readyState == WebSocket.OPEN) sock.send(msg)
     }
-  }
-}
-themeWatch()
+  },
+  turnSweep,
+)
 
 let draining = false
 let drain = async () => {
@@ -1588,6 +1569,7 @@ let drain = async () => {
   // interval another turn, so a hung drain can no longer leak stale-code writes
   // at the live db (T-19494).
   stopTimers()
+  stopVaultWatch()
   // Let in-flight graph-native generations/calls finish and settle BEFORE the
   // listener closes: this drain keeps a source-edit restart from killing a live
   // codex turn, and it can run for minutes (settle caps at 300s). Through this

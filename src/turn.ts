@@ -51,17 +51,20 @@ let readAll = (f: Deno.FsFile) => {
 
 export let report = (
   body: Record<string, unknown>,
-  path = `${Deno.env.get('HOME')}/.tasks/turns.jsonl`,
+  path = `${Deno.env.get('HOME')}/.tasks/spool/turns.jsonl`,
 ) => {
   let sid = String(body.session_id ?? '')
   let turn = turnOf(body)
   if (!sid || !turn) return
+  // Hooks can run before the server has created the dedicated spool directory.
+  let slash = path.lastIndexOf('/')
+  if (slash > 0) Deno.mkdirSync(path.slice(0, slash), { recursive: true })
   append(path, `${JSON.stringify({ sid, turn })}\n`)
 }
 
 export let drain = (
   act: (turn: { sid: string; turn: string }) => void,
-  path = `${Deno.env.get('HOME')}/.tasks/turns.jsonl`,
+  path = `${Deno.env.get('HOME')}/.tasks/spool/turns.jsonl`,
 ) => {
   let f: Deno.FsFile
   try {

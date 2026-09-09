@@ -1,6 +1,7 @@
 // The tiny turn-hook executable durably queues lifecycle payloads without
 // importing the full CLI graph or waiting for the server event loop.
 import { assertEquals } from '@std/assert'
+import { stub } from '@std/testing/mock'
 import { slow } from './testing.ts'
 import { drain, report, turnOf } from './turn.ts'
 
@@ -106,4 +107,30 @@ slow('drain leaves an empty spool untouched — no truncate, no fs event', () =>
   assertEquals(turns, [])
   assertEquals(Deno.statSync(path).mtime!.getTime(), past.getTime())
   Deno.removeSync(dir, { recursive: true })
+})
+
+Deno.test('default hook spool is created before the server starts', () => {
+  let home = Deno.makeTempDirSync()
+  let get = Deno.env.get.bind(Deno.env)
+  using _env = stub(Deno.env, 'get', (key) => key == 'HOME' ? home : get(key))
+  try {
+    // Unrecognized hook payloads must not create anything.
+    report({ hook_event_name: 'SessionStart', session_id: 'ignored' })
+    assertEquals([...Deno.readDirSync(home)], [])
+    report({ hook_event_name: 'Stop', session_id: 'first' })
+    let path = `${home}/.tasks/spool/turns.jsonl`
+    assertEquals(JSON.parse(Deno.readTextFileSync(path)), {
+      sid: 'first',
+      turn: 'idle',
+    })
+    let turns: unknown[] = []
+    drain((t) => turns.push(t))
+    assertEquals(turns, [{ sid: 'first', turn: 'idle' }])
+    assertEquals(Deno.readTextFileSync(path), '')
+    assertEquals([...Deno.readDirSync(`${home}/.tasks`)].map((e) => e.name), [
+      'spool',
+    ])
+  } finally {
+    Deno.removeSync(home, { recursive: true })
+  }
 })
