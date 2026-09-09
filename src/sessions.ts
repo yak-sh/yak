@@ -1955,6 +1955,19 @@ export let spawned =
       }, cast)
     let row = runRow(eid)
     if (!row?.spawn_provider) return // external, or deleted in its own batch
+    // A process-backed birth crosses its durable launch boundary when the
+    // first handler stamps started_at below. Dispatch is at-most-once in the
+    // steady state, but the same birth can still be handed to this effect
+    // twice while that first asynchronous worktree preparation is in flight
+    // (for example, a role boot reconcile racing its own session receipt).
+    // Without this guard both handlers eventually call ad.argv(job), and
+    // Claude receives two `--session-id <same uuid>` launches: one owns the
+    // thread while the loser marks their shared Session failed with "already
+    // in use". The stamp is deliberately the guard rather than running/pid:
+    // neither exists until after slow preparation, and it survives a daemon
+    // restart. Graph-native launches keep their codexPending replay contract;
+    // their injected `native` runner remains responsible for idempotency.
+    if (!native && row.started_at) return
     // The allowlist is the GRAPH (catalog.ts): a provider entity per provider,
     // a model entity per model. `trouble` is the same reading the sugar tools'
     // early door gives, so a request accepted there cannot fail here.

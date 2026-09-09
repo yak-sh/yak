@@ -606,6 +606,36 @@ slow('Codex routing keeps both process fallback doors explicit', () => {
   assertEquals(graphCodex('claude', undefined), false)
 })
 
+slow(
+  'a repeated process birth launches its provider session exactly once',
+  async () => {
+    let { t } = seed()
+    let eid = uid()
+    apply(db, [{
+      eid,
+      name: 'session',
+      comp: {
+        id: uid(),
+        provider: 'fake',
+        model: 'fake-fast',
+        requested_task: t,
+      },
+    }])
+
+    // Invoke the same committed birth twice before the first launch's async
+    // worktree preparation can finish. This is the role/effect race that made
+    // two Claude CLIs contend for one --session-id.
+    let launch = spawned(cast)
+    await Promise.all([launch(eid, {}), launch(eid, {})])
+
+    let prompts = Deno.readTextFileSync(log(eid)).split('\n').filter((line) =>
+      line.includes('"type":"session.prompt"')
+    )
+    assertEquals(prompts.length, 1)
+    assertEquals(row(eid)?.status, 'completed')
+  },
+)
+
 slow('a stale spawn claim preserves the session that won', () => {
   let { t } = seed()
   let mine = uid(), other = uid()
