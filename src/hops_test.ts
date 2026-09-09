@@ -46,13 +46,13 @@ Deno.test('a nested tally is the inner one, and the outer resumes', () => {
   assertEquals([counts(outer).hops, counts(inner).hops], [2, 1])
 })
 
-// What reading ONE entity by id costs in statements. The read fans out over
-// the component tables rather than joining them, which is exactly what the
-// count is here to show: it is not a bug asserted as correct, it is the number
-// a fix has to move — and until somebody moves it, the number that must not
-// grow. The same number twice below, in-process and over HTTP, because the
-// route is an adapter and adds nothing of its own.
-let ONE = 145
+// What reading ONE entity by id costs in statements. A read visits the
+// components the results WEAR — one statement says which (db.ts `worn`), and
+// the rest read those — so the number is the shape of the answer and not the
+// size of the vocabulary. It was 145, one statement per declared component
+// whether or not anything wore it. The same number twice below, in-process and
+// over HTTP, because the route is an adapter and adds nothing of its own.
+let ONE = 7
 
 Deno.test('reading one entity is the statements it costs', async () => {
   let db = freshDb()
@@ -67,6 +67,29 @@ Deno.test('reading one entity is the statements it costs', async () => {
   })
   assertEquals(rows.length, 1)
   assertEquals(counts(tally).hops, ONE)
+})
+
+// And what a LIST costs. The point of the number is that it is the SAME ORDER
+// as one row's: a hundred rows wearing the same handful of components are read
+// in the same handful of statements, and neither count grows with how many
+// components the vocabulary declares — which is what made a single-entity read
+// cost 143.
+Deno.test('a hundred rows cost the components they wear, not the vocabulary', async () => {
+  let db = freshDb()
+  for (let i = 0; i < 100; i++) {
+    let eid = crypto.randomUUID()
+    apply(db, [
+      { eid, name: 'doc', comp: { title: `row ${i}` } },
+      { eid, name: 'task', comp: { priority: 'P2' } },
+    ])
+  }
+  let tally: Tally = new Map()
+  let rows = await tallying(tally, async () => {
+    let ask = askOf(['.task.priority=P2', 'limit=100'])
+    return layered(db, await askRows(db, ask), ask)
+  })
+  assertEquals(rows.length, 100)
+  assertEquals(counts(tally).hops, 6)
 })
 
 // And the same number on the wire. The boot is the heavy tier's (agg_sub_test.ts

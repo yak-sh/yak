@@ -7847,6 +7847,57 @@ export let cursorStale = (
 ): boolean =>
   epochHeld != epochOf(db) || vocabHeld != vocabHash || since > cursorOf(db)
 
+// A SQL string literal, for a name the reader has to SAY rather than address —
+// the component name each branch of the probe below returns as its answer.
+let sqlText = (s: string) => `'${s.replaceAll("'", "''")}'`
+
+// WHICH COMPONENTS a set of entities wears, in ONE statement. The graph
+// declares ~140 components and an entity wears a handful, so a reader that
+// visits every table to find out spends its whole cost on tables with nothing
+// in them: a single-entity read was 143 statements, ~139 of them empty
+// (T-35451). One compound `exists` answers for every table at once, each branch
+// stopping at its first row, and the reads that follow are exactly the
+// components the results carry.
+//
+// `drive` writes one branch's FROM, given the component table — and it must
+// drive from the ENTITIES, never from the component table, because the entity
+// set is small and a component table is not. Left to choose, the planner scans
+// the table and probes the entities: a `join` spelling of the same branch made
+// one /query on the live graph take minutes. `cross join` is SQLite's stated
+// join order, which is the whole point here.
+//
+// The parameters a branch takes are repeated for every branch: the store seam
+// binds positionally (store/sql.ts), so a value named once and read by 140
+// branches is not something every backend can be asked for.
+let worn = (
+  db: Sql,
+  drive: (table: string) => string,
+  arg?: SqlValue,
+): string[] => {
+  let names = readNames(db).filter((n) => n != 'entity')
+  if (!names.length) return []
+  let sql = names.map((n) =>
+    `select ${sqlText(n)} as c where exists (select 1 from ${
+      drive(sqlName(n))
+    })`
+  ).join(' union all ')
+  let has = new Set(
+    (prep(db, sql).all(...(arg === undefined ? [] : names.map(() => arg))) as {
+      c: string
+    }[]).map((r) => r.c),
+  )
+  // In readNames order — the order a snapshot row's comps have always carried,
+  // stated rather than left to the compound's evaluation order.
+  return names.filter((n) => has.has(n))
+}
+
+// The two drivers: everything `hit` holds, and one entity by eid.
+let fromHit = (t: string) =>
+  `hit h cross join entity o on o.eid = h.eid cross join ${t} c ` +
+  `on c.entity = o.id`
+let fromEid = (t: string) =>
+  `entity o cross join ${t} c on c.entity = o.id where o.eid = ?`
+
 // One entity's current components, keyed read — what subscription maintenance
 // tests a touched eid against (design §2). Shaped like a snapshot row's comps
 // (eid→comp, entity as {eid,num}); a missing spine returns {} (tombstoned or
@@ -7865,8 +7916,7 @@ export let eager = (
     return {}
   }
   let out: Record<string, Record<string, unknown>> = { entity: spine }
-  for (let name of readNames(db)) {
-    if (name == 'entity') continue
+  for (let name of worn(db, fromEid, eid)) {
     let row = reads(db, name, 'where eid = ?').get(eid)
     if (row) out[name] = row
   }
@@ -8299,8 +8349,7 @@ let staged = (db: Sql) => {
   let spine = reads(db, 'entity', only).all()
   for (let r of spine) out.set(String(r.eid), { entity: r })
   if (!out.size) return []
-  for (let name of readNames(db)) {
-    if (name == 'entity') continue
+  for (let name of worn(db, fromHit)) {
     let rows = reads(db, name, only).all()
     for (let r of rows) {
       let e = out.get(String(r.eid))
