@@ -115,6 +115,36 @@ Deno.test('staging tool URLs and app mail use the same configured host', async (
   }])
 })
 
+// The listing answers WHO THE CALLER IS in each space it lists, off the
+// directory's own `member` row (T-35384). It is the only door that says a role
+// for every space at once: before this, a client had to ask each space's front
+// app `/me`, one round trip apiece, for a fact the directory already held.
+Deno.test('app_list says the caller’s role in each space it lists', async () => {
+  let { env } = platform('member-role-secret', {
+    MAIL: { send: () => Promise.resolve({ messageId: 'sent' }) },
+  })
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  let hers = 'a0000000-0000-4000-8000-00000000ada0'
+  let ada: Ctx = { env, dir, person: hers }
+  await call(ada, 'space_new', { slug: 'ada', title: 'Ada' })
+  await call(ada, 'member_add', {
+    space: 'ada',
+    email: 'bo@books.example',
+    role: 'viewer',
+  })
+  let bo = { env, dir, person: (await dir.personAt('bo@books.example'))! }
+  await call(bo, 'space_new', { slug: 'bo', title: 'Bo' })
+
+  let seen = async (as: Ctx) =>
+    ((await call(as, 'app_list', {})).data as {
+      spaces: { slug: string; role: string }[]
+    }).spaces.map((s) => [s.slug, s.role])
+  assertEquals(await seen(ada), [['ada', 'owner']])
+  // Hers is her own; his is the seat she gave him, said as the directory
+  // spells it — never guessed at from the fact that he can see it at all.
+  assertEquals(await seen(bo), [['ada', 'viewer'], ['bo', 'owner']])
+})
+
 let bytes = (s: string) => new TextEncoder().encode(s)
 
 // The tool as an agent reads it, since the description IS the contract and

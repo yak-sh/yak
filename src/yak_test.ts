@@ -170,6 +170,72 @@ Deno.test('an account with no address asks the platform once, and the answer is 
   }
 })
 
+// `whoami` asks ONCE (T-35384). The listing carries the caller's role in each
+// space (workers/yak tools.ts `app_list`), so what is asserted here is the
+// shape of the asking: one /mcp call and no per-space door, however many
+// spaces come back. Asking each space its own role was seconds of sequential
+// round trips, one Durable Object woken apiece.
+let listing = (spaces: unknown[]) =>
+  JSON.stringify({
+    jsonrpc: '2.0',
+    id: 1,
+    result: { content: [], structuredContent: { spaces } },
+  })
+
+let asking = async (spaces: unknown[]) => {
+  let hit: string[] = []
+  let path = Deno.makeTempFileSync()
+  Deno.writeTextFileSync(
+    path,
+    'YAKS_SESSION_ANA_BOT_YAK_SH=ana.token\n' +
+      'YAKS_ADDRESS_ANA_BOT_YAK_SH=ana@bot.yak.sh\n',
+  )
+  Deno.env.set('YAKS_ENV', path)
+  let real = globalThis.fetch
+  globalThis.fetch = ((url: string | URL | Request) => {
+    hit.push(String(url))
+    return Promise.resolve(new Response(listing(spaces)))
+  }) as typeof fetch
+  let said: string[] = []
+  try {
+    await verb('whoami').run({ ...ctx([]), out: (l) => said.push(l) })
+    return { hit, said: said.join('\n') }
+  } finally {
+    globalThis.fetch = real
+    Deno.env.delete('YAKS_ENV')
+    Deno.removeSync(path)
+  }
+}
+
+let space = (slug: string, role: string, apps: number) => ({
+  slug,
+  title: slug,
+  url: `https://${slug}.yaks.app/`,
+  tier: 'free',
+  role,
+  apps: Array.from({ length: apps }, (_, i) => ({ slug: `a${i}` })),
+})
+
+Deno.test('whoami asks the listing once and no space its own role', async () => {
+  let { hit, said } = await asking([
+    space('ana', 'owner', 3),
+    space('mom', 'editor', 1),
+    // A space with nothing in it had no app to ask and printed `?`. The
+    // directory knows the seat whether or not anything is built on it.
+    space('empty', 'viewer', 0),
+  ])
+  assertEquals(hit, ['https://yaks.app/mcp'])
+  for (let want of ['ana', 'owner', 'mom', 'editor', 'empty', 'viewer']) {
+    assertStringIncludes(said, want)
+  }
+})
+
+Deno.test('whoami with no spaces still asks once', async () => {
+  let { hit, said } = await asking([])
+  assertEquals(hit, ['https://yaks.app/mcp'])
+  assertStringIncludes(said, 'spaces    (none)')
+})
+
 let at = (n: number) => new Date(n * 1000).toISOString()
 let commit = (n: number): Commit => ({
   sha: String(n).repeat(40),

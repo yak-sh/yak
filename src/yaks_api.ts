@@ -320,26 +320,11 @@ export let storeApply = async (
   return body
 }
 
-export type Me = {
-  person: string | null
-  name: string | null
-  role: string | null
-  reads: boolean
-  writes: boolean
-}
-
-// Who the platform says this session is, in one app's space. It is the only
-// client door that answers a ROLE, so a space with no app in it has no way to
-// be asked — `whoami` says so rather than guessing.
-export let meAt = async (session: string, at: string): Promise<Me | null> => {
-  let r = await sent(storeUrl(at, '/me'), session)
-  if (!r.ok) {
-    await r.body?.cancel()
-    return null
-  }
-  let body = await bodyOf(r)
-  return typeof body == 'object' ? body as Me : null
-}
+// An app's `/me` (workers/yak/apps.ts) is deliberately absent from this file.
+// It answers for ONE app's store, so asking it a question about the person —
+// their role — cost a round trip per space and woke a Durable Object to say
+// what the directory already knew. `app_list` answers the role beside each
+// space (T-35384); ask an app only what only an app knows.
 
 // The ADDRESS a session signed in as, which only the platform knows. `/me`
 // answers a name and deliberately never an address (workers/yak/apps.ts,

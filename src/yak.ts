@@ -75,7 +75,6 @@ import {
   doomedIn,
   feeNow,
   linkFor,
-  meAt,
   renewing,
   rpc,
   saidBy,
@@ -212,7 +211,11 @@ type Space = {
   title: string
   url: string
   tier: string
-  apps: { slug: string; home: boolean }[]
+  // The caller's own role here, which the listing answers because membership
+  // is the DIRECTORY's fact and it read that row already (workers/yak
+  // tools.ts `app_list`). One question, every space.
+  role: string | null
+  apps: { slug: string }[]
 }
 
 let spacesOf = async (at: Account): Promise<Space[]> => {
@@ -376,15 +379,8 @@ let verbs: Verb[] = [
       }
       c.out('spaces')
       for (let s of spaces) {
-        let front = s.apps.find((a) => a.home) ?? s.apps[0]
-        // The role door is an APP's (`/<app>/api/me`); a space with nothing
-        // in it has none, and no client door answers a role without one —
-        // say `?` rather than assume owner.
-        let me = front
-          ? await meAt(at.session, `${s.slug}/${front.slug}`)
-          : null
         c.out(
-          `  ${s.slug.padEnd(16)} ${(me?.role ?? '?').padEnd(8)} ` +
+          `  ${s.slug.padEnd(16)} ${(s.role ?? '?').padEnd(8)} ` +
             `${String(s.apps.length).padStart(2)} apps  ${
               (s.tier ?? 'free').padEnd(5)
             }  ${s.url}`,

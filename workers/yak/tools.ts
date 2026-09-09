@@ -3236,6 +3236,12 @@ let OURS: Row[] = [
           slug: space.slug,
           title: space.title,
           url: `https://${spaceHost(ctx.env, space.slug)}/`,
+          // What the caller IS here — the directory's `member` row, which
+          // this listing already read to answer at all. Said out loud because
+          // membership is the directory's fact: a client that asked an app's
+          // `/me` for it instead would wake a Durable Object per space to
+          // learn what this one answer already knows (T-35384).
+          role: who.role,
           apps: listed,
           trash: bin.map((a) => ({
             slug: a.slug,
