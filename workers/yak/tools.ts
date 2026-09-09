@@ -197,7 +197,7 @@ import {
   KEEP,
   manifest,
   own,
-  pinned,
+  pins,
   record,
   replaced,
   restore,
@@ -2164,7 +2164,7 @@ let OURS: Row[] = [
                 'there is already what it was then',
           )
         }
-        let bytes = await blobs.read(pinned(prefix, want.sha))
+        let bytes = await pins(blobs, prefix).get(want.sha)
         if (!bytes) {
           throw new Error(
             `${path}'s bytes from ${want.at} are no longer kept — the history ` +

@@ -80,7 +80,7 @@ import { apex, type Host as HostEnv } from './host.ts'
 import { destroyed } from './sandbox.ts'
 import { vouched, type Who } from './session.ts'
 import { storeOf } from './door.ts'
-import { own, pruned } from './versions.ts'
+import { moved, own, type Pinner, pruned } from './versions.ts'
 
 // An hour to walk over to the inbox and read the letter. Longer than a
 // sign-in code's ten minutes, because nobody is standing at the form waiting
@@ -558,13 +558,21 @@ export { DAILY } from './trash.ts'
 export let collected = async (env: Env, now = new Date()) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let gone = 0
-  let unpinned = 0
+  // Every app left standing when the erasures are done, which is exactly the
+  // set of things that can NAME a pinned blob. It is collected rather than
+  // acted on app by app because the pins are one key space for the whole bucket
+  // now (versions.ts `pruned`, D-34942): an object one app stopped naming may
+  // be a file another app serves. A trashed app inside its thirty days is in
+  // the list on purpose — the erasure above is what frees its bytes, not its
+  // mark — and so is the platform's own space, which is skipped for erasure and
+  // holds pins like any other.
+  let standing: Pinner[] = []
   for (let space of await dir.all()) {
     // Never the directory itself, whatever its row says: the app that holds
     // every space on the platform is not one a sweep may erase (`refused`
     // above and tools.ts app_delete hold the same line at the doors).
-    if (space.slug == META.space) continue
-    if (space.trashed && due(space.trashed, now.getTime())) {
+    let sweepable = space.slug != META.space
+    if (sweepable && space.trashed && due(space.trashed, now.getTime())) {
       await erase(env, dir, await doomed(dir, space), {
         person: space.trashed.by,
         role: 'owner',
@@ -573,31 +581,35 @@ export let collected = async (env: Env, now = new Date()) => {
       continue
     }
     let apps = await dir.apps(space)
-    for (let app of overdue(apps, now.getTime())) {
-      await erased(env, dir, space, app, {
-        person: app.trashed!.by,
-        role: 'owner',
-      })
-      gone++
+    let went = new Set<string>()
+    if (sweepable) {
+      for (let app of overdue(apps, now.getTime())) {
+        await erased(env, dir, space, app, {
+          person: app.trashed!.by,
+          role: 'owner',
+        })
+        went.add(app.eid)
+        gone++
+      }
     }
-    // And, on the same walk, what the LIVING apps are still holding on to: the
-    // bytes a write or a deploy pinned that nothing names any more (versions.ts
-    // `pruned`, T-34508). It rides here rather than on every write because the
-    // rule needs to see the whole app at once, and rather than only on a deploy
-    // because an app that stopped deploying would then keep its pins forever.
-    let blobs = r2Blobs(env.BLOBS)
     for (let app of apps) {
-      if (app.trashed) continue
-      unpinned += await pruned(
-        dir,
-        blobs,
-        under(space, app),
-        app,
-        now.getTime(),
-      )
+      if (!went.has(app.eid)) standing.push({ prefix: under(space, app), app })
     }
   }
+  // And then what those apps are still holding on to: the bytes a write or a
+  // deploy pinned that nothing names any more (versions.ts `pruned`, T-34508).
+  // It rides here rather than on every write because the rule needs to see the
+  // whole bucket at once, and rather than only on a deploy because an app that
+  // stopped deploying would then keep its pins forever.
+  let blobs = r2Blobs(env.BLOBS)
+  // First the pins the old per-app key still holds, carried into that one key
+  // space (versions.ts `moved`) — before the mark, so nothing is marked out of
+  // a key space the sweep does not read.
+  let carried = 0
+  for (let { prefix } of standing) carried += await moved(blobs, prefix)
+  let unpinned = await pruned(dir, blobs, standing, now.getTime())
   if (gone) console.log(`yak-trash: ${gone} erased at ${now.toISOString()}`)
+  if (carried) console.log(`yak-trash: ${carried} pins carried to sha/`)
   if (unpinned) console.log(`yak-trash: ${unpinned} pinned blobs let go`)
   return gone
 }
