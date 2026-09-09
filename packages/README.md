@@ -103,7 +103,9 @@ In dependency order:
   needs one points at it instead of keeping a pid: `process{pid, command, cwd}`,
   `exit{code}`, and its output as @yaks/session's `content{body, source}`. Three
   entry points over one loop — launch a child detached, adopt one by pid,
-  re-adopt every unfinished row at boot.
+  re-adopt every unfinished row at boot — and the same rows as a session's
+  `shell`, `wait` and `stop` tools, so a long tool call answers with the process
+  instead of blocking on it.
 - **[@yaks/model](./model)** — the seam between a conversation and the model
   that serves it: provider-neutral items, one request and reply shape, and the
   `provider`, `model` and `tool` entities a graph keeps about serving.

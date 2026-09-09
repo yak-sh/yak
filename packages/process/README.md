@@ -51,6 +51,34 @@ can be adopted back with nothing held in memory. Nothing here reaps.
 That makes the launcher Linux-shaped on purpose. A host without `setsid` and a
 user manager wants a different launcher, not a weaker one.
 
+## The shell, as a session's tools
+
+`shellTools(graph)` is three tools for a [@yaks/session](../session) daemon —
+`shell`, `wait`, `stop` — over these same rows.
+
+```ts
+import { shellTools } from '@yaks/process'
+
+let tools = [...shellTools(graph), ...mine]
+
+// shell { command: 'deno task dev', timeout: 2000 }
+//   -> 'process 7f3… still running (pid 4242) after 2000ms — wait or stop it
+//       by that id'
+// wait  { process: '7f3…', timeout: 60000 }  -> its code and the tail of it
+// stop  { process: '7f3…' }                  -> SIGTERM, SIGKILL, its exit
+```
+
+Every command is a tracked process from the first moment; the budget only
+decides whether the answer is the output or the id. A call that blocked until
+`deno task dev` exits would wedge the session, and one that killed the child at
+the budget could only ever run short commands — handing back the entity does
+neither. The child keeps running, its lines keep arriving as `content`, and the
+operator reading the graph sees the same process the session started.
+
+`wait` and `stop` read the ending off the graph rather than a handle held in
+memory, so a process launched before a restart answers exactly like one launched
+a moment ago: `watch()` re-adopts it and stamps the ending on the row they poll.
+
 ## The store
 
 `Store` is two verbs: `apply` a batch, and ask which processes are `running`.

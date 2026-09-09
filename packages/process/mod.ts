@@ -23,6 +23,10 @@
  * The supervisor can restart without taking any of them with it, which is the
  * only reason the launcher is shaped the way it is.
  *
+ * {@link shellTools} hands the same rows to a session as three tools — `shell`,
+ * `wait`, `stop` — so a tool call that outlives its budget answers with the
+ * process instead of blocking on it.
+ *
  * @module
  */
 
@@ -30,3 +34,4 @@ export * from './comp.ts'
 export * from './store.ts'
 export * from './plugin.ts'
 export * from './run.ts'
+export * from './tools.ts'
