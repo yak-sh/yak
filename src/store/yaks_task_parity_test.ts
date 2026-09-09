@@ -38,11 +38,10 @@ import {
   taskDoc,
 } from '@yaks/task'
 
-import { fleetVocab } from '../vocab/fleet_vocab.ts'
 import { link } from '../edge.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply } = await import('../db.ts')
+let { apply, fleetVocabOf } = await import('../db.ts')
 let { bareDb } = await import('../testdb.ts')
 let { uuid } = await import('../types.ts')
 let { parseQuery } = await import('../query.ts')
@@ -51,7 +50,8 @@ let { run } = await import('../relation.ts')
 let { derived: fleetDerived } = await import('../sql_derived.ts')
 
 let NOW = Date.parse('2026-08-20T15:00:00.000Z')
-let FLEET = fleetVocab()
+let db = bareDb()
+let FLEET = fleetVocabOf(db)
 
 // The fleet's ladder: the package's two marks, plus the lease rung.
 let LADDER: Mark[] = [...MARKS, {
@@ -201,7 +201,6 @@ Deno.test('parity: the package derives the fleet status expression exactly', () 
 
 // ---- STATUS: and the answer over a graph the app itself seeded -------------
 
-let db = bareDb()
 let P = uuid(), S = uuid()
 let T1 = uuid(), T2 = uuid(), T3 = uuid(), T4 = uuid()
 

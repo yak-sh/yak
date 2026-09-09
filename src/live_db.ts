@@ -14,7 +14,7 @@
 // ownVector(), taken by whichever process runs the embed sweep (doing.ts).
 // The app-plane compatibility process opens read-only. Production refuses that
 // mode on the owner graph; disposable parity copies may still exercise it.
-import { appPlane } from './db.ts'
+import { appPlane, fleetVocabOf } from './db.ts'
 import { connect, file, liveDb, open, sameGraphFile } from './store/sqlite.ts'
 
 if (appPlane() && sameGraphFile(file, liveDb())) {
@@ -25,3 +25,7 @@ if (appPlane() && sameGraphFile(file, liveDb())) {
 }
 
 export let db = appPlane() ? connect(file, true, true) : open(file, true)
+
+// Boot the package vocabulary once beside this connection; the legacy graph
+// still owns every read and write until the next server-refactor step.
+export let vocab = fleetVocabOf(db)

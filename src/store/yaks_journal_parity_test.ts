@@ -32,34 +32,23 @@ import { ram } from '@yaks/ram'
 import type { Batch } from '@yaks/journal'
 import { history, journal, journalDoc } from '@yaks/journal'
 import { loadVocab } from '@yaks/vocab'
+import type { Change } from '../types.ts'
+import { asBundle } from './wire.ts'
 import { fleetDocs, fleetKeywords } from '../vocab/fleet_vocab.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, journalOf } = await import('../db.ts')
 let { bareDb } = await import('../testdb.ts')
 let { uuid } = await import('../types.ts')
-type Change = {
-  eid: string
-  name: string
-  comp: Record<string, unknown> | null
-}
-
 let V = loadVocab([...fleetDocs(), journalDoc], fleetKeywords)
 let appDb = bareDb()
 let core = graph({ storage: ram(V), vocab: V, plugins: [journal(V)] })
 
 let VIA = uuid()
 
-// The app's flat change spelling as a bundle, with the writing instrument
-// riding along the way the core takes it.
-let asBundle = (c: Change) =>
-  c.name == 'entity' && c.comp == null
-    ? { entity: { eid: c.eid }, $delete: true, $actor: { via: VIA } }
-    : { entity: { eid: c.eid }, [c.name]: c.comp, $actor: { via: VIA } }
-
 // One batch through both writers.
 let both = (changes: Change[]) => {
-  core.apply(changes.map(asBundle))
+  core.apply(changes.map((c) => ({ ...asBundle(c), $actor: { via: VIA } })))
   apply(appDb, changes as never, undefined, VIA)
 }
 

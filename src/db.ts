@@ -75,6 +75,8 @@ import {
 } from './config.ts'
 import { derivedCols, indexDdlOne, tableDdl } from './ddl.ts'
 import { FILTERS, type Vocab, vocabOps } from './store/vocab.ts'
+import type { Vocab as FleetVocab } from '@yaks/vocab'
+import { fleetVocab } from './vocab/fleet_vocab.ts'
 import {
   edgeEid,
   link,
@@ -3732,6 +3734,21 @@ let owned: Record<string, string[]> = Object.fromEntries(
     ...Object.keys(stamped[name] ?? {}),
   ]]),
 )
+
+// The @yaks vocabulary handle, held beside the SQL connection and warmed by
+// live_db.ts at boot. Other handles (including test clones) build it on first
+// request. This is the fleet schema only, distinct from an app's ownVocab
+// below; no reads or writes route through the package graph yet.
+let fleetVocabs = new WeakMap<Sql, FleetVocab>()
+
+export let fleetVocabOf = (db: Sql): FleetVocab => {
+  let vocab = fleetVocabs.get(db)
+  if (!vocab) {
+    vocab = fleetVocab()
+    fleetVocabs.set(db, vocab)
+  }
+  return vocab
+}
 
 // An APP's own components, declared by its vocab.json and planted in its own
 // store (T-32502, store/vocab.ts). Held per HANDLE, never as module state: one

@@ -22,24 +22,17 @@ import { sessions } from '@yaks/session'
 import { storage } from '@yaks/sqlite'
 import type { Driver } from '@yaks/sqlite'
 
-import { fleetVocab } from '../vocab/fleet_vocab.ts'
+import type { Change } from '../types.ts'
+import { asBundle, asChanges } from './wire.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { open } = await import('./sqlite.ts')
-let { apply } = await import('../db.ts')
+let { apply, fleetVocabOf } = await import('../db.ts')
 let { bareDb } = await import('../testdb.ts')
 let { uuid } = await import('../types.ts')
 let { sha } = await import('../sha.ts')
 let { derived: fleetDerived } = await import('../sql_derived.ts')
-type Change = {
-  eid: string
-  name: string
-  comp: Record<string, unknown> | null
-  was?: Record<string, string | null>
-}
-
 let NOW = Date.parse('2026-08-20T15:00:00.000Z')
-let V = fleetVocab()
 
 // ---- the two writers -------------------------------------------------------
 
@@ -48,6 +41,7 @@ let V = fleetVocab()
 // migrated handle emptied the same way bareDb() empties its snapshot.
 let appDb = bareDb()
 let coreDb = open(':memory:')
+let V = fleetVocabOf(coreDb)
 coreDb.exec('pragma foreign_keys = off')
 for (
   let { name } of coreDb.prepare(
@@ -78,32 +72,6 @@ let reader = (db: typeof appDb) =>
     V,
     { derived: fleetDerived, now: NOW },
   )
-
-// A change is the app's wire shape; a bundle is @yaks/graph's. One bundle per
-// change keeps the order identical, which is what a batch's semantics rest on.
-let asBundle = (c: Change): Bundle =>
-  c.name == 'entity' && c.comp == null
-    ? { entity: { eid: c.eid }, $delete: true }
-    : {
-      entity: { eid: c.eid },
-      [c.name]: c.comp,
-      ...(c.was ? { $was: { [c.name]: c.was } } : {}),
-    }
-
-// A bundle lowered back to the flat spelling, so the two returns compare.
-let asChanges = (b: Bundle): Change[] => {
-  let eid = b.entity.eid
-  if (b.$delete || b.tombstone) return [{ eid, name: 'entity', comp: null }]
-  let out: Change[] = []
-  if (b.entity.num != null) {
-    out.push({ eid, name: 'entity', comp: { eid, num: b.entity.num } })
-  }
-  for (let [name, comp] of Object.entries(b)) {
-    if (name == 'entity' || name.startsWith('$')) continue
-    out.push({ eid, name, comp: comp as Record<string, unknown> | null })
-  }
-  return out
-}
 
 // ---- how the two returns are compared, and what is deliberately loose ------
 //

@@ -25,21 +25,18 @@ import { derived as fleetDerived } from './sql_derived.ts'
 import { parseQuery } from './query.ts'
 import { aggregateSql, countSql, select, where, windowed } from './sql.ts'
 import { run } from './relation.ts'
-import { textBlob } from './db.ts'
+import { fleetVocabOf, textBlob } from './db.ts'
 import { isRef } from './props.ts'
 import { open } from './store/sqlite.ts'
-import { fleetVocab } from './vocab/fleet_vocab.ts'
-
-// The fleet vocabulary, converted and loaded through the shared fleet glue
-// (src/vocab/fleet_vocab.ts) — the same conversion the @yaks/vocab parity test
-// and the @yaks/sqlite integration spike load.
-let V = fleetVocab()
-// Match the fleet's doc-only search policy against its existing index.
-let extend = [search(fields(V).filter((f) => f.comp == 'doc'))]
 
 // ---- the graph (the fleet compiler's own fixture) --------------------------
 
 let db = open(':memory:')
+// The same per-connection package vocabulary warmed by the server at boot.
+let V = fleetVocabOf(db)
+// Match the fleet's doc-only search policy against its existing index.
+let extend = [search(fields(V).filter((f) => f.comp == 'doc'))]
+
 let base = Number(
   (db.prepare('select max(num) as n from entity').get() as { n: number }).n ??
     0,
