@@ -59,8 +59,8 @@ Deno.test('every verb usage is rendered from its declaration', () => {
         'list [kind] [filters…] [--all] [--kind=KIND] [--limit=N] [--sort=SORT] [--json]',
       work: 'work <lane> [filters…] [--limit=N] [--recursive] [--json]',
       verify: 'verify <id>',
-      query: 'query [filters…] [--json]',
-      graph_query: 'graph_query [filters…] [--json]',
+      query: 'query [filters…] [--limit=N] [--json]',
+      graph_query: 'graph_query [filters…] [--limit=N] [--json]',
       decided: 'decided [filters…] [--all] [--json]',
       docs: 'docs [filters…] [--json]',
       stale: 'stale [filters…] [--all] [--json]',
@@ -332,7 +332,7 @@ Deno.test('spawn and session wait share timeout spellings and units (T-35458)', 
 
 Deno.test('query is the generic filtered graph read', () => {
   let out = help(['query'])
-  assertMatch(out, /task query \[filters…\] \[--json\]/)
+  assertMatch(out, /task query \[filters…\] \[--limit=N\] \[--json\]/)
   assertMatch(out, /task query \.kind=persona/)
   check('query', ['.kind=persona', '--json'])()
   check('graph_query', ['.kind=comment', '--json'])()
@@ -340,7 +340,7 @@ Deno.test('query is the generic filtered graph read', () => {
 
 Deno.test('graph_query is a hidden compatibility alias for the CLI query', () => {
   let out = help(['graph_query'])
-  assertMatch(out, /task graph_query \[filters…\] \[--json\]/)
+  assertMatch(out, /task graph_query \[filters…\] \[--limit=N\] \[--json\]/)
   check('graph_query', ['kind=comment'])()
   assertEquals(usage().includes('task graph_query'), false)
 })

@@ -12,14 +12,12 @@
 import {
   addressed,
   around,
-  authoringLine,
   belongs,
   bornAt,
   bus,
   byBoard,
   byList,
   checkedRefs,
-  claimant,
   commentChanges,
   commitChanges,
   contextDigest,
@@ -109,14 +107,7 @@ import { link, unlink } from './edge.ts'
 import { editChange, parsePropPatch } from './edit.ts'
 import { entityUrl } from './url.ts'
 import { prune, reap, sweep } from './probes.ts'
-import {
-  EDGE_DOOR,
-  edgeish,
-  noFilter,
-  type Pred,
-  pred,
-  resolution,
-} from './query.ts'
+import { EDGE_DOOR, edgeish, noFilter, type Pred, pred } from './query.ts'
 import { checks, mailCheck, type Result, run as runChecks } from './doctor.ts'
 import {
   type Change,
@@ -128,14 +119,13 @@ import {
   sessionOf,
   type Snapshot,
   statuses,
-  statusOf,
 } from './types.ts'
 import { cost, type Dim, group, report, roll, type Use, use } from './usage.ts'
 import { armLocal, localReadPath } from './localread.ts'
 import { type BackfillKind, landBackfill, readBackfill } from './backfill.ts'
 import type { JournalEntry } from './client.ts'
 import { local } from './time.ts'
-import { wakeList, wakeTitle } from './title.ts'
+import { wakeList } from './title.ts'
 import {
   agentPid,
   bornAt as processBornAt,
@@ -219,8 +209,8 @@ export let reportUsage = async (
 // JSON.stringify already escapes C0, but writes DEL and C1 as terminal bytes.
 // Spell those as JSON escapes so the parsed value and machine shape stay whole.
 let jsonCtrl = /[\x7f-\x9f]/g
-export let jsonText = (value: unknown) =>
-  (JSON.stringify(value, null, 2) ?? '').replace(
+export let jsonText = (value: unknown, space: number = 2) =>
+  (JSON.stringify(value, null, space) ?? '').replace(
     jsonCtrl,
     (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
   )
@@ -393,111 +383,48 @@ export let listArgs = (got: Pick<Got, 'opts' | 'words'>) => {
 export let kindArg = (word: string) =>
   kindWord(word.match(/^\.?kind=(.+)$/)?.[1] ?? word)
 
+// Query selection belongs to the graph grammar, not to a CLI kind gate.
+// Render the returned bundles themselves: re-fetching each hit with `show`
+// would discard projections and race the selection with another read.
+let queryOutput = async (hits: Row[], json: boolean) => {
+  if (json) {
+    for (let row of hits) print(jsonText(jsonOf(row), 0))
+    return
+  }
+  if (!hits.length) return warn('(no matches)')
+  let refs = await fetched(hits.flatMap(refsIn))
+  let authors = await fetched(refs.flatMap(refsIn))
+  let context = [...hits, ...refs, ...authors]
+  for (let row of hits) print(showMd({ deps: [] }, context, row))
+}
+
+let graphQuery = async (got: Got) =>
+  queryOutput(
+    await query(got.words, {
+      limit: got.opts['--limit'] ? Number(got.opts['--limit']) : undefined,
+    }),
+    got.flags.has('--json'),
+  )
+
 let list = async (got: Got) => {
-  let json = got.flags.has('--json')
   let all = got.flags.has('--all')
   let asked = got.opts['--limit'] ? Number(got.opts['--limit']) : undefined
-  // --kind is syntax sugar at this boundary. From here on it is the same
-  // ordinary `.kind=` filter as every other spelling, so query behavior keeps
-  // one owner (T-18549).
-  let args = listArgs(got)
-  // A bare word names the KIND to list (`task list projects`); `.kind=` rides
-  // `line` like any other filter.
-  let words = args.map((a) => [a, kindArg(a)] as const)
-  let bare = words.find(([, k]) => k)?.[1]
-  // Here a bare word is also a KIND, so one that is neither names both
-  // doors rather than only the filter one.
-  let line = words.filter(([, k]) => !k).map(([a]) => a)
-  let preds = predicates(
-    line,
-    (a) =>
-      a.startsWith('.')
-        ? ''
-        : '; a bare word may name a KIND, as in task list projects',
-  )
-  // A handle that names nothing is a typo, not an empty result: the caller
-  // typed it a moment ago and can act on the correction. The server's own
-  // resolveRefs is forgiving (a saved board must not throw), so the strict
-  // reading rides a keyed check here (client.ts checkedRefs).
-  await checkedRefs(preds)
-  // The kind this listing walks: a bare word, else the `.kind=` a filter
-  // already names, else task. It rides the filter line as `.kind=` —
-  // prepended for the bare word and the default, already present when the
-  // caller wrote it dotted (so `task list .kind=project` is not re-scoped to
-  // tasks). Derived titles and the ⚑ column resolve through one bounded read.
-  let named = line.map((a) => a.match(/^\.kind=(.+)$/)?.[1]).find(Boolean)
-  let kind = bare ?? (named ? kindWord(named) ?? 'task' : 'task')
-  // A bare `task list` — no filter, no kind, no --all, no --limit — is the
-  // WORKING SET, not the whole graph (T-22643): open+wip tasks in board order,
-  // bounded to WORKING_SET. Widening is explicit — any filter, a bare kind,
-  // --all (every status, unbounded), or --limit=N. Not the windows grammar
-  // yet (T-22617); adopt its `.limit` when it lands.
-  let base = line.length == 0 && !bare && !named && !all && asked == undefined
+  // Explicit kind words remain sugar; ordinary words remain text predicates.
+  // ?task asks for that facet when present, it never filters by derived kind.
+  let args = listArgs(got).map((a) => {
+    let kind = kindArg(a)
+    return kind ? `.kind=${kind}` : a
+  })
+  let base = !args.length && !all && asked == undefined
+  let filters = ['?task', ...args, ...(base ? ['.status=open,wip'] : [])]
   let limit = base ? WORKING_SET : asked
-  let filters = named ? line : [`.kind=${kind}`, ...line]
-  if (base) filters = [...filters, '.status=open,wip']
   let sort = got.opts['--sort']
-  // The default and an explicit --sort both order in the client, so the slice
-  // takes the board/sort top-N; only a server-bounded --limit truncates first.
   let paged = base || Boolean(sort)
   let hits = (await query(filters, { limit: paged ? undefined : limit })).sort(
     sort ? byList(sort) : byBoard,
   )
   if (paged && limit) hits = hits.slice(0, limit)
-  let refs = await fetched(
-    hits.flatMap((r) => [
-      String(r.comps.claim?.session ?? ''),
-      String(r.comps.deliver?.to ?? ''),
-      String(r.comps.created?.by ?? ''),
-      String(r.comps.created?.via ?? ''),
-      String(r.comps.updated?.by ?? ''),
-      String(r.comps.updated?.via ?? ''),
-      String(r.comps.proposed?.by ?? ''),
-      String(r.comps.proposed?.via ?? ''),
-      String(r.comps.decided?.by ?? ''),
-      String(r.comps.decided?.via ?? ''),
-    ]).filter((s) => s),
-  )
-  let authors = await fetched(refs.flatMap(refsIn))
-  let context = [...refs, ...authors]
-  if (json) {
-    return print(jsonText(hits.map((r) => jsonAuthored(context, r))))
-  }
-  // Ids alone do not disambiguate — two projects are both titled `holdco`
-  // — so the second column carries the handle a caller can TYPE: a task's
-  // status, everything else's alias.
-  let lines = hits.map((r) =>
-    [
-      r,
-      String(
-        r.comps.task ? statusOf(r.comps) : r.comps.alias?.slug ?? '',
-      ),
-    ] as const
-  )
-  let wide = Math.max(5, ...lines.map(([, handle]) => handle.length))
-  for (let [r, handle] of lines) {
-    let who = claimant(refs, r)
-    let flag = who ? `  \u2691 ${who}` : ''
-    let title = r.comps.wake
-      ? wakeTitle(r.comps, (eid) => refs.find((x) => x.eid == eid))
-      : String(r.comps.doc?.title ?? '')
-    let authoring = authoringLine(context, r)
-    print(
-      `${idOf(r).padEnd(6)} ${handle.padEnd(wide)} ${title}${flag}${
-        authoring ? ` · ${authoring}` : ''
-      }`,
-    )
-  }
-  if (!hits.length) {
-    let why = resolution(preds, kind)
-    warn(
-      why
-        ? `(no matches) · filters resolved to ${why} — list returns ${
-          plural(kind)
-        }`
-        : '(no matches)',
-    )
-  }
+  return queryOutput(hits, got.flags.has('--json'))
 }
 
 let workLine = (candidate: WorkCandidate) => {
@@ -3644,8 +3571,8 @@ export let verbs = bind({
   codex,
   list,
   work,
-  query: list,
-  graph_query: list,
+  query: graphQuery,
+  graph_query: graphQuery,
   decided,
   docs,
   stale,

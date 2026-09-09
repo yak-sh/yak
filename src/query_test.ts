@@ -1742,3 +1742,14 @@ Deno.test('query: a trailing question asks for a component, never about it', () 
   ])
   assertEquals(matchQuery(fix, parseQuery('.doc!&.loan?')), true)
 })
+
+Deno.test('prefix optional/missing components share the full query grammar', () => {
+  assertEquals(parseQuery('?memory'), parseQuery('.memory?'))
+  assertEquals(parseQuery('!task'), parseQuery('.task='))
+  assertEquals(
+    parseQuery('.doc! ?memory !task'),
+    parseQuery('.doc! .memory? .task='),
+  )
+  assertEquals(pred('?memory'), pred('.memory?'))
+  assertEquals(matchQuery(row({}), parseQuery('?memory')), true)
+})

@@ -148,7 +148,7 @@ export let manuals = declare({
   },
   list: {
     dots: 'filters',
-    about: 'list tasks — or any kind (filter grammar)',
+    about: 'query bundles in board order (working set by default)',
     examples: [
       'task list .status=open .priority<=1',
       'task list .project=harness .updated.at>="1 week ago"',
@@ -156,17 +156,17 @@ export let manuals = declare({
       'task projects',
       'task list boards .title~=fleet',
     ],
-    detail: 'A bare `task list` shows the WORKING SET, not the whole graph: ' +
-      'open+wip tasks in board order, bounded to the newest ' +
-      `${WORKING_SET}. Widen explicitly — a status/project/other filter, a ` +
-      'bare kind, `--all` (every status, unbounded), or `--limit=N`. ' +
-      'A leading KIND word says what to list — `projects`, ' +
-      '`--kind=project` and `.kind=project` all name it, and the plural is a ' +
-      'verb of its own (`task projects`). Tasks are the default. The second ' +
-      "column is the handle you can type: a task's status, everything " +
-      `else's alias. --sort accepts priority, created, updated or num; ` +
-      `prefix the value with - for descending order. Quarantined rows require an explicit ` +
-      `'.quarantined!' filter. Kinds: ${kindOrder.join(', ')}.`,
+    detail: 'Sugar over `task query` that adds `?task` (an optional facet, ' +
+      'not a kind filter) and board order. Like query, output is rendered ' +
+      'bundles, or one bundle per line with --json. A bare `task list` shows ' +
+      'the WORKING SET: open+wip tasks in board order, bounded to ' +
+      `${WORKING_SET}. Widen explicitly with any filter, a bare kind, ` +
+      '`--all` (every status), or `--limit=N`. Explicit kind words, ' +
+      '`--kind=project` and `.kind=project` select a kind; plural verbs ' +
+      '(`task projects`) do the same. No kind is implied. ' +
+      '--sort accepts priority, created, updated or num; prefix with - for ' +
+      'descending order. Quarantined rows require `.quarantined!`. ' +
+      `Kinds: ${kindOrder.join(', ')}.`,
     root: true,
     args: [arg('kind', text, false, false), arg('filters', text, true, false)],
     opts: [
@@ -213,24 +213,28 @@ export let manuals = declare({
     about: 'query the graph (filter grammar)',
     examples: [
       'task query .kind=persona',
+      'task query archetype ?memory --limit=20',
       'task query .project=P-19 .status=open --json',
     ],
     detail: 'The CLI spelling of the same filtered graph read as ' +
-      '`graph_query` and `/query`. It renders through `task list`; a ' +
-      '`.kind=` filter selects any entity kind, and tasks are the default.',
+      '`graph_query` and `/query`: any entity kind, with no implied kind filter. ' +
+      'Accepts the full grammar, including bare-word text search, `.comp.col` ' +
+      'filters and `?comp` (select an optional component, without filtering). ' +
+      'Bundles render as documents like `task show`; --json emits one JSONL ' +
+      'bundle per entity in the /query shape. --limit bounds the answer.',
     root: true,
     args: [arg('filters', text, true, false)],
-    opts: [json],
+    opts: [value('--limit', num), json],
   },
   // Tool names leak into shell instructions, so the MCP spelling remains a
   // hidden alias while `query` stays the CLI vocabulary (T-21811).
   graph_query: {
     dots: 'filters',
     about: 'query the graph (filter grammar)',
-    examples: ['task graph_query kind=comment'],
+    examples: ['task graph_query .kind=comment'],
     alias: true,
     args: [arg('filters', text, true, false)],
-    opts: [json],
+    opts: [value('--limit', num), json],
   },
   decided: {
     dots: 'filters',

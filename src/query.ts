@@ -1002,6 +1002,9 @@ let EDGE_SELECT =
   /^\.edges\[([A-Za-z_]+)(?:\s*,\s*([A-Za-z_-]+(?:\.[A-Za-z_-]+)*))?\]!$/s
 
 export let preds = (token: string, vocab: Vocab = NONE): Pred[] | null => {
+  // Prefix component selectors share the existing presence/optional grammar.
+  let sigil = token.match(/^([?!])\.?([A-Za-z_][A-Za-z_0-9]*)$/)
+  if (sigil) token = `.${sigil[2]}${sigil[1] == '?' ? '?' : '='}`
   // Any arrow spelling answers HERE, right or wrong: a malformed walk that fell
   // through would be read as a hyphenated name and a comparison, or end up a
   // bare TEXT term silently searching for the walk the caller thought they wrote
@@ -1390,12 +1393,12 @@ export let NEVER = 'never'
 export let never = (): Pred => ({ comp: '', prop: '', op: NEVER, value: '' })
 export let parseQuery = (q: string, vocab: Vocab = NONE): Pred[] => {
   let out = segments(q).map((t) => t.trim()).filter(Boolean).flatMap((seg) => {
-    if (seg.startsWith('.') && !/\s\./.test(seg)) {
+    if (seg.startsWith('.') && !/\s[.?!]/.test(seg)) {
       let p = preds(seg, vocab) // null = an opless dot-word (.env) — a term
       if (p) return p
     }
     return (seg.match(/[^\s"]+"[^"]*"|"[^"]*"|\S+/g) ?? []).flatMap((tok) => {
-      if (tok.startsWith('.')) {
+      if (/^[.?!]/.test(tok)) {
         let p = preds(tok, vocab)
         if (p) return p
       }

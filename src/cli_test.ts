@@ -2605,16 +2605,16 @@ slow(
       decided: { at: '2026-08-03T00:00:00.000Z' },
     }
     try {
-      let listed = await run('list', '--limit', '1', '--json')
+      let listed = await run('list', '.kind=task', '--limit', '1', '--json')
       let decided = await run('decided', '--all', '--json')
       let shown = await run('show', 'T-41', '--json')
       let formatted = await run('show', 'T-41', '--format=json')
       assertEquals(listed.code, 0)
-      assertEquals(seen[0], '/query?limit=1&.kind=task')
+      assertEquals(seen[0], '/query?limit=1&?task&.kind=task')
       assertEquals(decided.code, 0)
       assertEquals(shown.code, 0)
       assertEquals(formatted.code, 0)
-      assertEquals(JSON.parse(text(listed.stdout)), [entity])
+      assertEquals(JSON.parse(text(listed.stdout)), entity)
       assertEquals(JSON.parse(text(decided.stdout)), [entity])
       assertEquals(text(formatted.stdout), text(shown.stdout))
       assertEquals(JSON.parse(text(shown.stdout)), {
