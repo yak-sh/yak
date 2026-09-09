@@ -105,7 +105,8 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       forget: 'forget <id> [--cascade] [--force]',
       subject: '<id> [show|is|as|edge] …',
       spawn: 'spawn <id> [--provider=PROVIDER] [--model=MODEL] ' +
-        '[--effort=high] [--persona=ID] [--worktree=DIR]',
+        '[--effort=high] [--persona=ID] [--worktree=DIR] [--wait] ' +
+        '[--timeout=N] [--interval=N]',
       land: 'land',
       commit: 'commit <id> [sha]',
       comment:

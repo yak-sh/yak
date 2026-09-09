@@ -158,6 +158,7 @@ import {
   sessions as sessionsVerb,
   tail as tailVerb,
   wait as sessionWait,
+  waitFor,
 } from './session_cli.ts'
 import {
   cliVerbs,
@@ -1493,11 +1494,9 @@ let launch = async (
   }, caps)
   let applied = await send(made.changes)
   let onto = id ? find(all, id) : undefined
-  print(
-    `${mintedIn(applied, made.eid)} spawned${
-      onto ? ` onto ${idOf(onto)}` : ''
-    }`,
-  )
+  let minted = mintedIn(applied, made.eid)
+  print(`${minted} spawned${onto ? ` onto ${idOf(onto)}` : ''}`)
+  return minted
 }
 
 let spawn = async (got: Got) => {
@@ -1507,13 +1506,16 @@ let spawn = async (got: Got) => {
       'task spawn <id> [--provider=X] [--model=Y] [--effort=Z] [--persona=P-9]',
     )
   }
-  await launch(id, {
+  let minted = await launch(id, {
     provider: got.opts['--provider'],
     model: got.opts['--model'],
     effort: got.opts['--effort'],
     persona: got.opts['--persona'],
     worktree: got.opts['--worktree'],
   })
+  // --wait is the two verbs said once: the S-id line stands exactly as it
+  // does without it, then `session wait`'s own path takes over.
+  if (got.flags.has('--wait')) await waitFor(minted, got)
 }
 
 // All the sweep wants from the graph: the id a probe carries, the ground a

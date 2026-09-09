@@ -2,7 +2,8 @@
 // (what is running and what just ran), `task tail <S>` (a transcript as it
 // grows), and `task session wait <S>` (block until a session is over, print its
 // brief, exit by its outcome). `wait` is the coordinator's wake path: run as a
-// harness-tracked background command, its exit IS the notification (T-35019).
+// harness-tracked background command, its exit IS the notification (T-35019),
+// and `task spawn --wait` blocks on the same `waitFor` right after minting.
 //
 // Two shapes of session exist side by side and every verb reads both. A LEGACY
 // session is the comp set the CLI providers wear: server-stamped `session`
@@ -331,11 +332,19 @@ export let tail = async (got: Got) => {
 /** `task session wait <S> [--timeout S] [--interval MS] [--json]`: block until
  * the session is over, print its brief, exit 0 on a quiet end and non-zero on
  * a failure (the legacy exit code when there is one). */
-export let wait = async (got: Got) => {
+export let wait = (got: Got) => {
   let id = got.args.id
   if (!id) {
     throw new Error('task session wait <S> [--timeout S] [--interval MS]')
   }
+  return waitFor(id, got)
+}
+
+/** The wait itself, named apart from its verb so `task spawn --wait` blocks on
+ * the session it just minted through this same path — same output, same exit
+ * code. `got` carries only the options (`--timeout`, `--interval`, `--json`);
+ * the session is the `id` argument. */
+export let waitFor = async (id: string, got: Got) => {
   let r = await sessionAt(id)
   let interval = ms(got, '--interval', 1000)
   let timeout = ms(got, '--timeout', 0) * 1000

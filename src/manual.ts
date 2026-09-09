@@ -734,12 +734,17 @@ export let manuals = declare({
       'task spawn T-3',
       'task spawn T-3 --model=sonnet',
       'task spawn T-3 --worktree ~/code/tasks-worktrees/tasks/fix',
+      'task spawn T-3 --wait --timeout 900',
     ],
     detail: '--worktree attaches the session to an EXISTING worktree of the ' +
       "project's repo, on the branch it stands on: nothing is created for it " +
       'and nothing is swept afterwards, because the caller owns that tree. ' +
       'Without it the spawn cuts its own worktree and collects it once the ' +
-      'work is merged.',
+      'work is merged.\n\n--wait is `task session wait <S>` folded in: the ' +
+      'S-id line prints as it always does, then the spawn blocks until that ' +
+      'session is over and ends with its brief and its exit code. ' +
+      "--timeout/--interval are that wait's. No transcript streams — that " +
+      'is `task tail`.',
     root: true,
     args: [arg('id', id)],
     opts: [
@@ -748,6 +753,9 @@ export let manuals = declare({
       { ...value('--effort', effort), or: 'high' },
       value('--persona', id),
       value('--worktree', path, true),
+      flag('--wait'),
+      value('--timeout', num, true),
+      value('--interval', num, true),
     ],
   },
   land: {

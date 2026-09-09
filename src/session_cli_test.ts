@@ -2,7 +2,7 @@
 // counts as over, the exit code `wait` ends with, the listing line, native
 // lines through the package renderer, and the poll loop with an injected clock.
 import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
-import type { Row } from './client.ts'
+import { arm, type Row } from './client.ts'
 import {
   briefOf,
   exitCode,
@@ -14,6 +14,7 @@ import {
   poll,
   sessionLine,
   statusFor,
+  waitFor,
 } from './session_cli.ts'
 
 let row = (comps: Row['comps'], num = 7): Row => ({
@@ -184,4 +185,37 @@ Deno.test('poll: reads until done, sleeping between, and times out', async () =>
     Error,
     'timed out',
   )
+})
+
+// The seam `task session wait` and `task spawn --wait` share: a fake session
+// that is already settled, read through the local arm, so the wait ends on its
+// first read and prints what it found.
+let waited = async (r: Row, flags: string[] = []) => {
+  let lines: string[] = []
+  let log = console.log
+  console.log = (line: string) => void lines.push(line)
+  arm.query = (filters) =>
+    Promise.resolve(filters.some((f) => f.startsWith('.entry')) ? [] : [r])
+  try {
+    await waitFor('S-7', {
+      args: {},
+      many: {},
+      opts: {},
+      flags: new Set(flags),
+      params: [],
+      words: [],
+    })
+  } finally {
+    console.log = log
+    delete arm.query
+  }
+  return lines
+}
+
+Deno.test('waitFor: the settled session, its brief, and the --json line', async () => {
+  let r = legacy({ status: 'done' }, { brief: { text: 'landed abc123' } })
+  assertEquals(await waited(r), ['S-7: settled', 'landed abc123'])
+  assertEquals(await waited(r, ['--json']), [
+    '{"id":"S-7","status":"settled","code":0,"brief":"landed abc123"}',
+  ])
 })
