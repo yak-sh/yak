@@ -138,6 +138,26 @@ Deno.test('column types use declared schemas, even when the value is absent', ()
   )
 })
 
+Deno.test('a column pick is remembered per registry, and an overlay replaces it', () => {
+  let plain = face('Edit', '.column.type=string')
+  let registry = define([plain])
+  let ask = () =>
+    resolve(registry, bundle, 'Edit', vocab, { comp: 'doc', col: 'title' })
+  assertStrictEquals(ask(), plain)
+  assertStrictEquals(ask(), plain)
+  let titles = face('Edit', '.column.comp=doc, .column.col=title')
+  extend(registry, [titles])
+  assertStrictEquals(ask(), titles)
+  // Two columns of the same type are different asks, never one another's answer.
+  let ranks = face('Edit', '.column.type=number')
+  extend(registry, [ranks])
+  assertStrictEquals(ask(), titles)
+  assertStrictEquals(
+    resolve(registry, bundle, 'Edit', vocab, { comp: 'task', col: 'rank' }),
+    ranks,
+  )
+})
+
 Deno.test('actions union all worn components, preserve duplicates, and never run', () => {
   let ran = 0
   let run = () => {

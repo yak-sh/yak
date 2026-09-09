@@ -41,7 +41,7 @@
  * @module
  */
 
-import { type Bundle, filter } from '@yaks/match'
+import { type Bundle, type Filter, filter } from '@yaks/match'
 import type { Query } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import { column, columnVocab } from './column.ts'
@@ -100,8 +100,22 @@ export let extend = <R extends Registration>(
   registry.renderers = [...renderers, ...registry.renderers]
 }
 
+// Selection asks the SAME registered queries again on every resolve, so
+// compiling one per test made matching, not rendering, the cost of a view — a
+// property row resolves its editor on each paint. The AST and the vocabulary
+// are stable objects, so key the compiled predicate on the pair: each compiles
+// once and a registry that is replaced drops its entries with it.
+let cache = new WeakMap<Query, WeakMap<Vocab, Filter>>()
+let predicate = (match: Query, vocab: Vocab): Filter => {
+  let byVocab = cache.get(match)
+  if (!byVocab) cache.set(match, byVocab = new WeakMap())
+  let f = byVocab.get(vocab)
+  if (!f) byVocab.set(vocab, f = filter(match, vocab))
+  return f
+}
+
 let matches = (match: Registration['match'], bundle: Bundle, vocab: Vocab) =>
-  match === true || filter(match, vocab)(bundle)
+  match === true || predicate(match, vocab)(bundle)
 
 let best = <R extends Registration>(
   pool: readonly R[],
@@ -123,22 +137,12 @@ let best = <R extends Registration>(
   return top
 }
 
-/**
- * Resolve the closest view, then its most specific renderer: the walk strips
- * the leftmost role at each step, so a short registration serves every longer
- * ask.
- */
-export let resolve = <R extends Registration>(
+let walk = <R extends Registration>(
   registry: Selection<R>,
   bundle: Bundle,
   view: string | undefined,
   vocab: Vocab,
-  ctx: Context = {},
 ): R | undefined => {
-  if (ctx.col != null) {
-    bundle = column(vocab, ctx)
-    vocab = columnVocab
-  }
   let { renderers, views } = registry
   let pick = (name: string) =>
     best(renderers.filter((r) => r.view == name), bundle, vocab)
@@ -154,6 +158,44 @@ export let resolve = <R extends Registration>(
     if (found) return found
   }
   return pick('JSON')
+}
+
+// A column ask throws the entity away — the projection is the DECLARATION, so
+// the chosen control depends only on the registry and the column's address,
+// while a property row asks again on every paint. Remember the pick per
+// registry, and drop the whole memo when either list is replaced (define and
+// extend assign, never splice), so a re-registration is honoured at once.
+type Memo<R> = { renderers: unknown; views: unknown; picks: Map<string, R> }
+let memos = new WeakMap<object, Memo<Registration | undefined>>()
+let memo = <R extends Registration>(registry: Selection<R>) => {
+  let m = memos.get(registry)
+  if (!m || m.renderers !== registry.renderers || m.views !== registry.views) {
+    let { renderers, views } = registry
+    memos.set(registry, m = { renderers, views, picks: new Map() })
+  }
+  return m.picks as Map<string, R | undefined>
+}
+
+/**
+ * Resolve the closest view, then its most specific renderer: the walk strips
+ * the leftmost role at each step, so a short registration serves every longer
+ * ask.
+ */
+export let resolve = <R extends Registration>(
+  registry: Selection<R>,
+  bundle: Bundle,
+  view: string | undefined,
+  vocab: Vocab,
+  ctx: Context = {},
+): R | undefined => {
+  if (ctx.col == null) return walk(registry, bundle, view, vocab)
+  let picks = memo(registry)
+  let key = `${view ?? ''}|${ctx.comp}|${ctx.col}`
+  if (picks.has(key)) return picks.get(key)
+  // An undeclared column throws out of column(); nothing is remembered.
+  let found = walk(registry, column(vocab, ctx), view, columnVocab)
+  picks.set(key, found)
+  return found
 }
 
 /** Exact, matching tab views in configured order, without JSON fallback. */
