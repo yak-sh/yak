@@ -41,18 +41,9 @@ The dashboard settings, in full (Workers & Pages → `yak` → Settings → Buil
 | Non-production branches | build only, no deploy — preview URLs do not apply to a Durable Object Worker |
 
 Everything the build actually does is in `bin/build-yak`, so the dashboard holds
-one line: install Deno (not on the Ubuntu 24.04 image), then
-`deno task check:workers` — the kernel and tail module graphs, under the Workers
-config they run on. A build that cannot type-check what it is about to upload
-deploys nothing.
-
-The repo's correctness gate is not on this path. `deno task check` and
-`deno task test:workers` run on the box, on this same commit, in
-`.github/workflows/gate.yml`; a second copy inside the build added no coverage
-and cost every deploy the time — the two together measured ~30s and ~57s on the
-day push-to-live went past a minute (T-35253). So a red commit can deploy, and
-main is corrected forward: `yak revert`, `yak rollback`, and the watchdog that
-pages on a broken door.
+one line: install Deno (not on the Ubuntu 24.04 image), `deno task check` from
+the repo root, `deno task test:workers` (kernel and tail). A red build deploys
+nothing.
 
 `yak-tail` pages on kernel exceptions and Store/default console errors. Its
 incident KV is also the source for `yak errors`; `bin/yak-watch` probes the live

@@ -85,23 +85,18 @@ The build and deploy commands now do these steps:
 
 1. Restore Deno's path; install Deno only if its executable is absent. Download
    and extraction were not measured locally because Deno is already installed.
-2. Run `deno task check:workers`: the kernel and tail module graphs, type
-   checked under the Workers config they run on (0.61s warm locally).
-3. Nothing else. Until 2026-09-09 the build also ran `deno task check` and
-   `deno task test:workers` — the repo's whole gate, which
-   `.github/workflows/gate.yml` runs on the box on the same commit. That copy
-   added no coverage and put every test anyone wrote into the deploy's critical
-   path: measured warm on the box on 2026-09-09, `deno task check` took 30.21s
-   (1048 package tests, up from 918 on 09-07) and `deno task test:workers`
-   64.28s (668 tests, up from 575 — 28.52s on 09-07). Push to upload grew with
-   them: ~40s on 09-07, 56.7s at 09-08 13:15, 66.9s at 09-08 16:04, which is the
-   74.182s row that failed the 60s limit. See T-35253.
+2. Run `deno task check`: formatting, lint, byte hygiene, type checks, generated
+   content checks, and package tests. The warm run took 21.68s; the first run
+   with an isolated cache took 71.21s. Both passed 918 package tests. These are
+   local durations, not Cloudflare build timings.
+3. Run `deno task test:workers` for kernel and tail (28.52s locally, 575 tests
+   passed). Its probes call `ready()`. The build wrapper already had no extra
+   npm install to remove.
 4. The separate `bin/build-yak deploy` restores the same Deno/cache paths and
-   calls `deno task deploy:yak`. `ready()` reuses an existing `node_modules`
-   (0.000058s locally); on Builds there is none — the worker probes that used to
-   fill it no longer run here — so it installs from the lockfile, preferring
-   cached packages and skipping the audit/funding requests (1.963s into an empty
-   tree from a warm package cache).
+   calls `deno task deploy:yak`. `ready()` reuses the probe's `node_modules`
+   (0.000058s locally). When required, the lockfile install prefers cached
+   packages and skips the audit/funding requests (1.963s into an empty tree from
+   a warm package cache).
 5. Read the SHA and subject for the version annotation (0.00332s), then run
    pinned Wrangler with `--prefer-offline`. Wrangler startup, bundling and
    assets took 2.142s locally; upload and Cloudflare propagation were not
@@ -115,6 +110,30 @@ before the cache options). It bundled 3008.12 KiB, gzip 667.63 KiB, and read 46
 asset files. These are single samples; the difference is not evidence of a
 reliable speedup. The container build and remote upload remain unmeasured.
 
-No incremental build was introduced. The correctness checks the build no longer
-runs are not skipped: they run on the box, on the same commit, as their own
-`gate.yml` steps.
+No incremental build or skipped correctness check was introduced.
+
+## What the 74.182s row was (2026-09-09, T-35253)
+
+Not a repo regression. Push to upload — the Workers Builds half — is what
+varies, and it varies run to run with the commit's content held irrelevant:
+39.7s, 40.6s, 41.1s (09-07), 56.7s, 66.9s (09-08), 39s, 41s, 53s, 71s, 39s
+(09-09, from each commit's Cloudflare check-suite `created_at` to its version's
+`created_on`). 74.182s is 66.9s of that plus 7.2s of propagation — the slow tail
+of that spread, banked as the only measured row and compared against the hard
+60s ceiling.
+
+Measured against it: a build that dropped `deno task check` and
+`deno task test:workers` — ~94s of work on this box (30.21s and 64.28s warm on
+2026-09-09) — moved neither number. Four deploys built that way uploaded in
+40.3s, 42.0s, 40.4s and 42.6s, and their whole Builds run (build, production
+deploy, staging deploy) spanned 3m06 and 3m21, inside the 3m01–3m34 of the five
+built the old way that morning. The arithmetic leaves no room for those
+commands: the deploy's cost is Cloudflare's queue, container, clone, cache
+restore, bundle and upload. Whether the dashboard's build command runs
+`bin/build-yak` at all is a question for the dashboard; it is not visible from
+here, and the Builds API refuses the box's Wrangler OAuth token.
+
+So the limit stands at the owner's 60s, and nothing in the repo is holding the
+deploy back. The gate will read red whenever a recorded deploy lands in the slow
+tail, because one recorded row is the whole sample. Recording every push, not
+the occasional one, is what would make the ratchet mean anything.

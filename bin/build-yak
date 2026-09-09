@@ -19,22 +19,10 @@
 # workers/yak, so nothing here may assume a working directory — every path is
 # derived from this file's own location.
 #
-# Build mode checks what it is about to upload, and nothing else: the two
-# Worker module graphs, under the Workers config they run on. The repo's
-# correctness gate — `deno task check` (fmt, lint, types, codegen, package
-# tests) and `deno task test:workers` — runs on the box, on this same commit,
-# in .github/workflows/gate.yml. Running it here too adds no coverage; it only
-# makes every deploy wait for it, and it grows with every test anyone writes.
-# That treadmill is what pushed push-to-live past a minute (T-35253): the same
-# two commands cost ~30s and ~57s on the box the day the gate went red, inside
-# a 60s budget (bench/deploys.md, bench/deploys.jsonl).
-#
-# So a red commit CAN deploy; main is corrected forward, fast — `yak revert`,
-# `yak rollback`, and the watchdog that pages on a broken door.
-#
 # What it does not do: `deno task test` (the fast tier boots probe servers and
-# is the Actions runner's job) and bin/verify-deploy (Builds runs the build
-# BEFORE the deploy, so there is nothing yet to verify — see the README).
+# is the Actions runner's job, .github/workflows/gate.yml) and bin/verify-deploy
+# (Builds runs the build BEFORE the deploy, so there is nothing yet to verify —
+# see the README).
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -75,7 +63,10 @@ case "${1:-}" in
   *) echo "usage: bin/build-yak [deploy]" >&2; exit 2 ;;
 esac
 
-echo "--- deno task check:workers"
-deno task check:workers
+echo "--- deno task check"
+deno task check
+
+echo "--- deno task test:workers"
+deno task test:workers
 
 echo "--- build ok; Workers Builds deploys from here"
