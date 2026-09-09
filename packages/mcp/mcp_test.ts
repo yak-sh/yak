@@ -187,7 +187,7 @@ Deno.test('an unattributed server leaves the actor off', async () => {
   assertEquals(comp(found[0], 'created').by, undefined)
 })
 
-Deno.test('graph_show answers the entity, what points at it, and the edges', async () => {
+Deno.test('graph_show answers only bundles, including what points at the entity', async () => {
   let graph = shopGraph()
   await graph.apply([spring, {
     entity: { eid: 'r1' },
@@ -195,14 +195,13 @@ Deno.test('graph_show answers the entity, what points at it, and the edges', asy
   }])
   let client = await connect({ graph })
   let out = result(await called(client, 'graph_show', { ids: ['b1'] }))
-  assert(out && typeof out == 'object' && 'bundles' in out && 'edges' in out)
+  assert(out && typeof out == 'object' && 'bundles' in out)
+  assertEquals(Object.keys(out), ['bundles'])
   assertEquals(bundles(out.bundles).map((b) => b.entity.eid), ['b1', 'r1'])
-  assertEquals(out.edges, [{
-    from: 'r1',
-    to: 'b1',
-    comp: 'review',
-    prop: 'book',
-  }])
+  assertEquals(comp(bundles(out.bundles)[1], 'review'), {
+    stars: 5,
+    book: 'b1',
+  })
 
   let alone = result(
     await called(client, 'graph_show', {
@@ -211,7 +210,9 @@ Deno.test('graph_show answers the entity, what points at it, and the edges', asy
     }),
   )
   assert(alone && typeof alone == 'object' && 'bundles' in alone)
+  assertEquals(Object.keys(alone), ['bundles'])
   assertEquals(bundles(alone.bundles).map((b) => b.entity.eid), ['b1'])
+  await client.close()
 })
 
 // The backlinks are asked as `.refs=`, which is ONE term per reference column,

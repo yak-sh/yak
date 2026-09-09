@@ -60,6 +60,16 @@ Deno.test('both depths name every component and column', async () => {
   }
 })
 
+Deno.test('graph_show declares only bundles in its answer', async () => {
+  let client = await connect()
+  let { tools } = await client.listTools()
+  let tool = tools.find((t: { name: string }) => t.name == 'graph_show')
+  let schema = at(tool?.outputSchema, 'properties', 'result')
+  assertEquals(Object.keys(at(schema, 'properties') as object), ['bundles'])
+  assertEquals(at(schema, 'required'), ['bundles'])
+  await client.close()
+})
+
 Deno.test('names costs less than full, which is the default anyway', async () => {
   let cheap = await queried('names')
   let rich = await queried('full')

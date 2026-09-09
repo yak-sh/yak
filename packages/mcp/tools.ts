@@ -20,7 +20,6 @@ import {
   type ToolCtx,
 } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import { edges } from './edges.ts'
 import {
   type BundleOpts,
   bundleSchema,
@@ -119,7 +118,7 @@ let pointed = (err: unknown): never => {
 
 // The entities, then everything pointing at them, each one whole and each one
 // once. `.refs=<id>` is the query grammar's backlink union, so the incoming
-// half of an entity's edges costs one query, not one per reference column.
+// references cost one query, not one per reference column.
 let gather = async (
   ctx: ToolCtx,
   said: string[],
@@ -247,8 +246,8 @@ export let core = (opts: CoreOpts): Tool[] => {
       description:
         `Read entities out of this store by eid, whole: one or several, ` +
         `every component each one carries, plus ` +
-        `everything that points AT it, each as its own bundle, and the ` +
-        `references between them as edges. This is identity, not search — ` +
+        `everything that points AT it, each as its own bundle in {bundles}. ` +
+        `Edge entities are ordinary bundles too. This is identity, not search — ` +
         `pass eids, or the name an entity answers to where this store keeps ` +
         `names (an eid wins over a name that spells it). Set backrefs false ` +
         `when you only want the entities themselves.`,
@@ -263,7 +262,7 @@ export let core = (opts: CoreOpts): Tool[] => {
         let ids = strings(args.ids)
         if (!ids.length) throw new Refused('graph_show needs at least one id')
         let found = await gather(ctx, ids, args.backrefs !== false)
-        return { bundles: found, edges: edges(vocab, found) }
+        return { bundles: found }
       },
     },
     {

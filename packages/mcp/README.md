@@ -48,13 +48,13 @@ There is no tool per component here — no `book_shelve`, no `review_write`. A
 components, which columns), so an agent that knows the wire can write anything
 your vocabulary declares.
 
-| tool           | what it does                                                   |
-| -------------- | -------------------------------------------------------------- |
-| `graph_apply`  | bundles in, the batch as applied out — one bundle per entity   |
-| `graph_query`  | a query line in, bundles out                                   |
-| `graph_show`   | entities whole, with what points at them and the edges between |
-| `graph_schema` | the index of your words, or one of them in full                |
-| `search`       | words, ranked — only when you pass a `search` seam             |
+| tool           | what it does                                                 |
+| -------------- | ------------------------------------------------------------ |
+| `graph_apply`  | bundles in, the batch as applied out — one bundle per entity |
+| `graph_query`  | a query line in, bundles out                                 |
+| `graph_show`   | entities whole, with what points at them, as bundles         |
+| `graph_schema` | the index of your words, or one of them in full              |
+| `search`       | words, ranked — only when you pass a `search` seam           |
 
 ```jsonc
 // graph_apply
@@ -69,14 +69,17 @@ your vocabulary declares.
 
 // graph_show
 { "ids": ["b1"] }
-// → { bundles: [the book, and each review of it],
-//     edges: [{ from: "r1", to: "b1", comp: "review", prop: "book" }] }
+// → { bundles: [the book, and each review of it] }
 
 // graph_schema — bare, one word, or a kind
 {}                      // the index: every component, its line, its columns
 { "component": "book" } // that one whole: types, meaning, references, example
 { "kind": "book" }      // what an entity of that kind is made of
 ```
+
+`graph_show` answers `{bundles}` only. References remain in the bundles’ own
+columns; edge entities are ordinary bundles, not a separate list. Set
+`backrefs: false` to return only the named entities.
 
 `graph_query` takes the query line [@yaks/query](https://jsr.io/@yaks/query)
 owns, and an optional `filters` list joined onto it with `&` — dot-param sugar,

@@ -197,23 +197,10 @@ export let bundleSchema = (
     // client re-reads.
   }).passthrough()
 
-/**
- * One reference, as `graph_show` reports it: a column on one entity holding
- * another entity's id. Both directions of an entity's edges are this shape.
- */
-export let edgeSchema: z.ZodTypeAny = z.object({
-  from: z.string(),
-  to: z.string(),
-  comp: z.string(),
-  prop: z.string(),
-})
-
-/** `graph_show`'s answer: the entities themselves, and every reference between
- * them. */
+/** `graph_show`'s answer: the entities and their backrefs, each as a bundle. */
 export let showSchema = (bundle: z.ZodTypeAny): z.ZodTypeAny =>
   z.object({
     bundles: z.array(bundle),
-    edges: z.array(edgeSchema),
   })
 
 /**

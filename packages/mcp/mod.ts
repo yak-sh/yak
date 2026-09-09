@@ -8,8 +8,7 @@
  * - **`graph_apply`** — bundles in, the batch as applied out, one bundle per
  *   entity;
  * - **`graph_query`** — a query line in, bundles out;
- * - **`graph_show`** — entities whole, with what points at them and the edges
- *   between them;
+ * - **`graph_show`** — entities whole, with what points at them, as bundles;
  * - **`graph_schema`** — the index of every component, or one of them in full:
  *   each column's type and meaning, what points at it, and a bundle that
  *   writes it;
@@ -74,12 +73,10 @@ export {
 } from './server.ts'
 export { rosterLine, rosterVersion } from './roster.ts'
 export { core, type CoreOpts, type Search } from './tools.ts'
-export { type Edge, edges } from './edges.ts'
 export {
   type BundleOpts,
   bundleSchema,
   type Depth,
-  edgeSchema,
   outputSchema,
   showSchema,
 } from './schema.ts'
