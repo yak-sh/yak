@@ -382,6 +382,34 @@ slow(
   },
 )
 
+// A spawn is told what to do; T-35272 is where it is told how to STOP. S-35264
+// committed, released and settled `completed` with the work stranded on its
+// branch — the ending protocol was nowhere in the prompt it received.
+Deno.test('a task spawn is told how a run ends: land, done, release', async () => {
+  let { t } = seed()
+  let eid = uid()
+  apply(db, [{
+    eid,
+    name: 'session',
+    comp: {
+      id: uid(),
+      provider: 'codex',
+      model: 'gpt-5.6-sol',
+      requested_task: t,
+    },
+  }])
+  let prompt = ''
+  await spawned(cast, (_got, launch) => {
+    prompt = String(launch.prompt ?? '')
+    return Promise.resolve()
+  })(eid, {})
+  let id = human(db, t)
+  assertStringIncludes(prompt, '`task land`')
+  assertStringIncludes(prompt, 're-run the gate')
+  assertStringIncludes(prompt, `\`task ${id} is done\``)
+  assertStringIncludes(prompt, `\`task release ${id}\``)
+})
+
 slow('a new Codex spawn routes to the graph-native lifecycle', async () => {
   let { t } = seed()
   let eid = uid(), routed = 0
@@ -1293,8 +1321,9 @@ slow('a settled session says so on its task', async () => {
 slow(
   'a completed session reports and stamps its unlanded commits',
   async () => {
-    let verdict = 'project gate failed with exit 7'
-    let body = `delay:300 ${'context '.repeat(80)}${verdict}`
+    // Long enough that both the stamp (240 chars) and the comment's gist
+    // (80 … 157) truncate what the run said.
+    let body = `delay:300 ${'context '.repeat(80)}`
     let { t } = seed(body)
     heard = []
     let { eid, done } = begin(t)
@@ -1318,14 +1347,21 @@ slow(
       message,
       new RegExp(`^UNLANDED: 1 commit on ${branch} not in main`),
     )
-    assertMatch(message, new RegExp(`${verdict}$`))
+    // The run's LAST WORDS ride both the stamp and the comment, so a reader
+    // sees why the work was left behind. The fake echoes its whole
+    // instruction, so those words are the prompt's tail — the ending protocol
+    // it was handed — and both doors keep at least the final 157 characters.
+    let tail = String(row(eid)?.final_text ?? '').replace(/\s+/g, ' ').trim()
+      .slice(-157)
+    assert(tail.length == 157)
+    assertStringIncludes(message, tail)
     let said = settleComments(t, eid)
     assertEquals(said.length, 1)
     assertMatch(
       said[0],
       new RegExp(`⚠ UNLANDED: 1 commit on ${branch} not in main`),
     )
-    assertMatch(said[0], new RegExp(`${verdict}$`))
+    assertStringIncludes(said[0], tail)
     assert(heard.some((c) => c.eid == eid && c.name == 'error'))
     // The commit self-attributes: the trailer is in the message (git-side)
     // and its sha rides the settle comment (graph-side) → `task search <sha>`.

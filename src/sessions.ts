@@ -1837,6 +1837,25 @@ let PARK_DIRECTIVE =
   `resumed automatically (warm, with this context) when a blocker lands. Do ` +
   `NOT mark the task done until it is truly complete.`
 
+// How a run ENDS (T-35272). A spawn was told what to do and never how to stop:
+// S-35264 committed, released its claim and settled `completed` with the commit
+// stranded on its branch and the task still open, and every door read the run
+// as clean. Three moves, named with the verbs that perform them. A repo-less
+// spawn has nothing to land, so it hears only the last two.
+let ending = (id: string, repo: boolean) =>
+  `When the work is done, end the run in this order:\n` +
+  (repo
+    ? `1. \`task land\` — it fast-forwards your branch into its base. If it ` +
+      `rebases you onto a base that moved instead, re-run the gate and ` +
+      `\`task land\` again; the work is not landed until it says so.\n`
+    : '') +
+  `${repo ? 2 : 1}. \`task ${id} is done\`, with a ONE-LINE comment carrying ` +
+  `the commit sha (\`task comment ${id} <text>\`).\n` +
+  `${
+    repo ? 3 : 2
+  }. \`task release ${id}\` — drop the claim if anything still ` +
+  `holds it, and always when you end without finishing.`
+
 // Session runtime beside its normalized launch spec. Explicit aliases avoid
 // duplicate column names and keep validation on the canonical component.
 let runRow = (eid: string) => {
@@ -2075,6 +2094,7 @@ export let spawned =
       // blocker lands (the blockers are listed with status in the boot digest).
       // Reaches EVERY gated-task spawn, not just the sweep's parked parents.
       task && gatedTask(String(row.requested_task)) && PARK_DIRECTIVE,
+      task && ending(`T-${task.num}`, !!workspace),
       role && `# R-${role.num} ${role.title ?? ''}`,
       role?.body,
       role &&
