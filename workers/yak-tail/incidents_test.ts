@@ -143,6 +143,28 @@ Deno.test('a deploy reset is not a fault; a storage reset is one that waits for 
   assertEquals((await faults(event()))[0].patience, undefined)
 })
 
+Deno.test('an eviction and a textless exception outcome are weather: recorded, patient', async () => {
+  let [gone] = await faults(event({
+    exceptions: [{
+      name: 'Error',
+      message:
+        'Connection closed: this Durable Object instance is no longer active. Reconnect or retry the request.',
+    }],
+    event: null,
+  }))
+  assertEquals(gone.patience, PATIENCE)
+  let [blank] = await faults(event({ exceptions: [], event: null }))
+  assertEquals(blank.sample.name, 'exception')
+  assertEquals(blank.patience, PATIENCE)
+  // Two blanks a minute apart page; one alone never does.
+  let first = record(null, blank)
+  assertEquals(first.page, false)
+  assertEquals(
+    record(first.incident, { ...blank, at: blank.at + 60_000 }).page,
+    true,
+  )
+})
+
 let fault = (at: number, version = 'version-a'): Fault => ({
   signature: 'sig',
   version,

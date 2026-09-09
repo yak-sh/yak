@@ -5,15 +5,25 @@ export let COOLDOWN = 30 * 60 * 1000
 // hourly job failing every hour is one break, not an outage an hour (T-34844).
 // It pages again only when it survives a deploy, or after a quiet day.
 export let REPAGE = 24 * 60 * 60 * 1000
-// Cloudflare resetting a Durable Object mid-request is theirs and passing;
-// one is weather, two inside an hour is a break worth a page.
+// Cloudflare resetting or evicting a Durable Object mid-request is theirs and
+// passing; one is weather, two inside an hour is a break worth a page.
 export let PATIENCE = 60 * 60 * 1000
 
-// The runtime's own words for the two resets. The first is what every deploy
-// does to an object with a request in flight: a deploy event, never a fault.
+// The runtime's own words for a deploy's reset: what every deploy does to an
+// object with a request in flight. A deploy event, never a fault.
 let DEPLOY_RESET = /^Durable Object reset because its code was updated\.?$/
-let STORAGE_RESET =
-  /^Internal error in Durable Object storage caused object to be reset/
+
+// Weather: the shapes the runtime itself throws around a deploy or an
+// eviction. Each is recorded (readable by `yak errors`) but pages only when it
+// repeats inside PATIENCE. Add a row, never a branch.
+let WEATHER: RegExp[] = [
+  /^Internal error in Durable Object storage caused object to be reset/,
+  /^Connection closed: this Durable Object instance is no longer active/,
+  // An exception outcome that carried no text: the runtime knows something
+  // ended the invocation, and only that.
+  /^exception outcome without exception text$/,
+]
+let weather = (message: string) => WEATHER.some((w) => w.test(message.trim()))
 
 export type Sample = {
   name: string
@@ -183,7 +193,7 @@ export let faults = async (
       version: event.scriptVersion?.id ?? null,
       at: event.eventTimestamp ?? now,
       sample,
-      ...(STORAGE_RESET.test(e.message) ? { patience: PATIENCE } : {}),
+      ...(weather(e.message) ? { patience: PATIENCE } : {}),
     })
   }
   return [...unique.values()]
