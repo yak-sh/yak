@@ -725,6 +725,7 @@ Deno.test('verifier identity fails closed when alias, persona, or role configura
   assertThrows(() => verifierIdentity(), Error, 'does not wear persona')
   apply(db, [{ eid: persona, name: 'persona', comp: { home: project } }])
   apply(db, [{ eid: persona, name: 'role', comp: null }])
+  assertEquals(verifierTuning().off, true)
   assertThrows(() => verifierIdentity(), Error, 'does not wear role')
   apply(db, [{
     eid: persona,
@@ -739,6 +740,7 @@ Deno.test('verifier identity fails closed when alias, persona, or role configura
     },
   }])
   apply(db, [{ eid: persona, name: 'alias', comp: null }])
+  assertEquals(verifierTuning().off, true)
   assertThrows(() => verifierIdentity(), Error, 'alias is missing')
   apply(db, [{ eid: persona, name: 'alias', comp: { slug: 'verifier' } }])
 })

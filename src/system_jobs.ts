@@ -1,5 +1,6 @@
 // In-process jobs with graph-backed tuning and decision records. Only code
-// registered here runs; historical role rows never create or stop operators.
+// registered here and explicitly enabled runs; historical role rows never
+// create or stop operators.
 import { locate, readComp, record } from './db.ts'
 import { db } from './live_db.ts'
 import { isRef } from './props.ts'
@@ -122,12 +123,6 @@ export let systemSweep = (cast: Cast, now = () => new Date().toISOString()) => {
     let eid = locate(db, spec.alias)
     if (eid && readComp(db, eid, 'role')) {
       reconcileSystem(eid, spec, cast, now)
-    } else {
-      try {
-        spec.run(spec.defaults, cast)
-      } catch (e) {
-        console.warn(`${spec.alias} sweep —`, e)
-      }
     }
   }
 }

@@ -31,6 +31,11 @@ let { slow } = await import('./testing.ts')
 let { assertEquals } = await import('@std/assert')
 
 let uid = () => crypto.randomUUID()
+let control = uid()
+apply(db, [
+  { eid: control, name: 'alias', comp: { slug: 'dream' } },
+  { eid: control, name: 'role', comp: { state: 'running' } },
+])
 let DAY = 86_400_000
 let ago = (days: number) => new Date(Date.now() - days * DAY).toISOString()
 let noop = () => {}
@@ -504,10 +509,9 @@ slow(
 slow(
   'dreamComb: a filed finding is authored by the dream persona',
   async () => {
-    let dp = uid()
+    let dp = control
     apply(db, [
       { eid: dp, name: 'doc', comp: { title: 'dream', body: '' } },
-      { eid: dp, name: 'alias', comp: { slug: 'dream' } },
       { eid: dp, name: 'persona', comp: {} },
     ])
     try {
@@ -529,7 +533,10 @@ slow(
       ).get(findingKey(f)) as { by: string | null } | undefined
       assertEquals(row?.by, dp)
     } finally {
-      apply(db, [{ eid: dp, name: 'entity', comp: null }])
+      apply(db, [
+        { eid: dp, name: 'doc', comp: null },
+        { eid: dp, name: 'persona', comp: null },
+      ])
     }
   },
 )
@@ -709,49 +716,49 @@ Deno.test('dreamRun seeds every unwoken dream, then reports all armed', () => {
   })
 })
 
-Deno.test('a stopped dream role consumes a knock without combing or re-arming', async () => {
-  let role = uid()
-  apply(db, [
-    { eid: role, name: 'doc', comp: { title: 'dream', body: '' } },
-    { eid: role, name: 'alias', comp: { slug: 'dream' } },
-    {
-      eid: role,
-      name: 'role',
-      comp: { state: 'stopped', surface: 'native' },
-    },
-  ])
-  try {
-    let p = proj('Paused venture')
-    let f0 = ago(30)
-    let d = dreamEnt(p, f0)
-    let s = sess(p, ago(2))
-    msg(s.eid, 'work that would have been combed')
-    let k = knock(d)
-    let combed = false
-    let fake = () => {
-      combed = true
-      return Promise.resolve(null)
-    }
-    await dreamComb(noop, fake as never)(k)
-    // The knock is consumed — delivered, via the off stamp — but no model ran,
-    // the floor did not move, and no cadence wake re-armed.
-    let via = db.prepare(
-      `select via from delivered
+for (let state of ['stopped', 'missing role', 'missing alias']) {
+  Deno.test(`a ${state} dream control consumes a knock without combing or re-arming`, async () => {
+    apply(db, [{
+      eid: control,
+      name: state == 'missing alias' ? 'alias' : 'role',
+      comp: state == 'stopped' ? { state } : null,
+    }])
+    try {
+      let p = proj('Paused venture')
+      let f0 = ago(30)
+      let d = dreamEnt(p, f0)
+      let s = sess(p, ago(2))
+      msg(s.eid, 'work that would have been combed')
+      let k = knock(d)
+      let combed = false
+      let fake = () => {
+        combed = true
+        return Promise.resolve(null)
+      }
+      await dreamComb(noop, fake as never)(k)
+      // The knock is consumed — delivered, via the off stamp — but no model ran,
+      // the floor did not move, and no cadence wake re-armed.
+      let via = db.prepare(
+        `select via from delivered
         where entity = (select id from entity where eid = ?)`,
-    ).get(k) as { via: string } | undefined
-    assertEquals(via?.via, 'dream off')
-    assertEquals(combed, false)
-    let floor = (db.prepare(
-      `select floor from dream
+      ).get(k) as { via: string } | undefined
+      assertEquals(via?.via, 'dream off')
+      assertEquals(combed, false)
+      let floor = (db.prepare(
+        `select floor from dream
         where entity = (select id from entity where eid = ?)`,
-    ).get(d) as { floor: string }).floor
-    assertEquals(floor, f0)
-    let wake = db.prepare(
-      `select 1 from wake w join deliver dv on dv.entity = w.entity
+      ).get(d) as { floor: string }).floor
+      assertEquals(floor, f0)
+      let wake = db.prepare(
+        `select 1 from wake w join deliver dv on dv.entity = w.entity
         where dv."to" = (select id from entity where eid = ?)`,
-    ).get(d)
-    assertEquals(!!wake, false)
-  } finally {
-    apply(db, [{ eid: role, name: 'entity', comp: null }])
-  }
-})
+      ).get(d)
+      assertEquals(!!wake, false)
+    } finally {
+      apply(db, [
+        { eid: control, name: 'alias', comp: { slug: 'dream' } },
+        { eid: control, name: 'role', comp: { state: 'running' } },
+      ])
+    }
+  })
+}

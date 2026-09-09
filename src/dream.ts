@@ -57,7 +57,7 @@ export let DREAM_MODEL = Deno.env.get('TASKS_DREAM_MODEL') || 'gpt-5.6-luna'
 // venture's combs (a fired knock is consumed, nothing re-arms; turning the
 // role back on re-seeds via the sweep), cooldown (seconds) overrides the
 // CADENCE env between combs, quiet is the seed delay for an unwoken dream.
-// Absent row = these code defaults, exactly the pre-port behavior. The
+// An absent control row leaves the job dormant. The
 // per-venture dream entities keep their own scope + floor cursors.
 export let DREAM_TUNING: SystemTuning = { quiet: 1, cooldown: CADENCE / 1000 }
 
@@ -70,7 +70,7 @@ let dreamTuning = (): { cadenceMs: number; off: boolean } => {
     : undefined
   return {
     cadenceMs: Number(row?.cooldown ?? DREAM_TUNING.cooldown) * 1000,
-    off: !!row && row.state != 'running',
+    off: row?.state != 'running',
   }
 }
 
@@ -740,9 +740,8 @@ export let dreamRun = (
 }
 
 // The registration server.ts hands system_jobs.ts: the dream IS the system role
-// aliased `dream` — mint a role row on that alias to pause it (state !=
-// running) or retune the cadence (cooldown, seconds); absent, the code
-// defaults above hold and every venture combs on the env CADENCE.
+// aliased `dream` — a running role row on that alias enables the job;
+// cooldown (seconds) retunes its cadence. An absent row stays dormant.
 export let DREAM_ROLE: SystemSpec = {
   alias: 'dream',
   defaults: DREAM_TUNING,

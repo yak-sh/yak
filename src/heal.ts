@@ -214,8 +214,7 @@ export let FIXER_COOLDOWN_MS = 30 * 60 * 1000
 // The fixer as a SYSTEM ROLE (T-18729): cap/cooldown/mute live as graph data
 // on a role entity aliased `fixer`, read for BOTH doors — the live
 // created(bug) effect and the role's sweep — so one row tunes them alike.
-// Absent row = the code defaults above, exactly the pre-port gates. A present
-// row with state != running is the mute made role data (the global lever);
+// Only a row with state = running enables the job (the global lever);
 // per-venture `nofix` markers still apply beneath it.
 export let FIXER_TUNING: SystemTuning = {
   quiet: 0,
@@ -238,7 +237,7 @@ export let fixerTuning = (): FixerGates => {
     quiet: 0,
     cooldown: Number(row?.cooldown ?? FIXER_TUNING.cooldown),
     cap: Number(row?.cap ?? FIXER_TUNING.cap),
-    off: !!row && row.state != 'running',
+    off: row?.state != 'running',
   }
 }
 
@@ -406,7 +405,7 @@ export let fixerRun = (
 
 // The registration server.ts hands system_jobs.ts: the fixer IS the system role
 // aliased `fixer` — mint a role row on that alias to tune cap/cooldown or
-// mute it (state != running); absent, the code defaults above hold.
+// mute it (state != running); absent, the job stays dormant.
 export let FIXER_ROLE: SystemSpec = {
   alias: 'fixer',
   defaults: FIXER_TUNING,

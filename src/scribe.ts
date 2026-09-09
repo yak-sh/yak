@@ -9,7 +9,7 @@
 // the predicate and work live here, registered with system_jobs.ts — a `role`
 // comp on the scribe-desk entity carries on/off and the throttle values
 // (quiet/cooldown, seconds) as graph data, and each pass stamps its
-// decision there; absent that row, the code defaults below apply.
+// decision there; absent that row, the job stays dormant.
 import { apply, depsOf, locate } from './db.ts'
 import { db } from './live_db.ts'
 import { commitEffects } from './effects.ts'

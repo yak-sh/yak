@@ -23,7 +23,7 @@ let seed = (slug: string, comp: Record<string, unknown> = {}) => {
   return eid
 }
 
-Deno.test('jobs use code defaults, graph tuning, and stopped state', () => {
+Deno.test('jobs require a running control and use graph tuning over defaults', () => {
   let calls: unknown[] = []
   registerSystem({
     alias: 'test-job',
@@ -34,8 +34,19 @@ Deno.test('jobs use code defaults, graph tuning, and stopped state', () => {
     },
   })
   systemSweep(cast)
+  assertEquals(calls, [])
+  let eid = crypto.randomUUID()
+  apply(db, [{ eid, name: 'alias', comp: { slug: 'test-job' } }])
+  systemSweep(cast)
+  assertEquals(calls, [])
+  apply(db, [{ eid, name: 'role', comp: { state: 'running' } }])
+  systemSweep(cast)
   assertEquals(calls, [{ quiet: 900, cooldown: 3600 }])
-  let eid = seed('test-job', { quiet: 60, cooldown: 120, cap: 5 })
+  apply(db, [{
+    eid,
+    name: 'role',
+    comp: { quiet: 60, cooldown: 120, cap: 5 },
+  }])
   let unregistered = seed('test-operator')
   systemSweep(cast)
   assertEquals(calls.at(-1), { quiet: 60, cooldown: 120 })
@@ -45,6 +56,9 @@ Deno.test('jobs use code defaults, graph tuning, and stopped state', () => {
   systemSweep(cast)
   assertEquals(calls.length, 2)
   assertEquals(readComp(db, eid, 'role')?.reason, 'state stopped')
+  apply(db, [{ eid, name: 'role', comp: null }])
+  systemSweep(cast)
+  assertEquals(calls.length, 2)
 })
 
 Deno.test('jobs record observed work and recover from errors', () => {

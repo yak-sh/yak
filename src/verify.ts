@@ -73,7 +73,7 @@ export let verifierTuning = (): VerifierGates => {
     quiet: Number(row?.quiet ?? VERIFIER_TUNING.quiet),
     cooldown: Number(row?.cooldown ?? VERIFIER_TUNING.cooldown),
     cap: Number(row?.cap ?? VERIFIER_TUNING.cap),
-    off: !!row && row.state != 'running',
+    off: row?.state != 'running',
   }
 }
 

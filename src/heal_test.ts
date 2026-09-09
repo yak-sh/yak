@@ -34,6 +34,11 @@ let {
 
 let uid = () => crypto.randomUUID()
 let now = () => new Date().toISOString()
+let control = uid()
+apply(db, [
+  { eid: control, name: 'alias', comp: { slug: 'fixer' } },
+  { eid: control, name: 'role', comp: { state: 'running' } },
+])
 
 // Component/edge tables are id-keyed (entity int → entity(id)); the spine keeps
 // text eid. OWNED locates a component row by its owner eid; idOf resolves an eid
@@ -411,14 +416,15 @@ Deno.test('fixer gates read the tuning handed in — cap and off', () => {
 
 Deno.test('fixerTuning reads the role row on the fixer alias', () => {
   reset()
-  assertEquals(fixerTuning().off, false) // absent row: code defaults, live
+  apply(db, [{ eid: control, name: 'role', comp: null }])
+  assertEquals(fixerTuning().off, true)
   assertEquals(fixerTuning().cap, FIXER_CAP)
-  let role = uid()
+  let bug = makeBug('role-muted-key')
+  ensureFixer(cast)(bug)
+  assertEquals(fixersFor(bug).length, 0)
   apply(db, [
-    { eid: role, name: 'doc', comp: { title: 'fixer', body: '' } },
-    { eid: role, name: 'alias', comp: { slug: 'fixer' } },
     {
-      eid: role,
+      eid: control,
       name: 'role',
       comp: { state: 'stopped', surface: 'native', cooldown: 60, cap: 7 },
     },
@@ -428,10 +434,20 @@ Deno.test('fixerTuning reads the role row on the fixer alias', () => {
   assertEquals(t.cooldown, 60)
   assertEquals(t.off, true)
   // the live door respects the role mute: the ticket stands, no fixer
-  let bug = makeBug('role-muted-key')
   ensureFixer(cast)(bug)
   assertEquals(fixersFor(bug).length, 0)
-  apply(db, [{ eid: role, name: 'entity', comp: null }])
+  apply(db, [{ eid: control, name: 'alias', comp: null }])
+  assertEquals(fixerTuning().off, true)
+  ensureFixer(cast)(bug)
+  assertEquals(fixersFor(bug).length, 0)
+  apply(db, [
+    { eid: control, name: 'alias', comp: { slug: 'fixer' } },
+    {
+      eid: control,
+      name: 'role',
+      comp: { state: 'running', cooldown: null, cap: null },
+    },
+  ])
   assertEquals(fixerTuning().off, false)
 })
 
