@@ -684,6 +684,25 @@ let repoOf = (row: Row) =>
     | { path: string; base_branch: string }
     | undefined
 
+// The checkout a PROJECT names — or the patch that would name one. A project
+// with no `repo` component cannot be cut a worktree, and that is a gap in the
+// graph, never a path this code guesses from disk: the refusal spells the
+// command that closes it (T-35222 died on "set repo.path first", which named
+// neither the project nor the door). base_branch defaults to main in storage,
+// so path is the whole ask.
+export let projectRepo = (
+  project: string,
+): { path: string; base_branch: string } | { error: string } => {
+  let row = db.prepare(`select path, base_branch from repo where ${OWNED}`)
+    .get(project) as { path: string; base_branch: string } | undefined
+  if (row) return row
+  let id = human(db, project)
+  return {
+    error: `${id} has no repo — set it: ` +
+      `task set ${id} .repo.path=<absolute path>`,
+  }
+}
+
 let sidOf = (row: Row) => {
   let e = db.prepare('select num from entity where eid = ?')
     .get(String(row.eid)) as { num: number } | undefined
@@ -1937,15 +1956,9 @@ export let spawned =
     // The workspace comes from the GRAPH, never the request: the task's
     // or role's project says which checkout. A graph-native no-code run is the
     // one worktree-less composition; process providers still need a checkout.
-    let repo = project
-      ? db.prepare(`select path, base_branch from repo where ${OWNED}`)
-        .get(project) as
-          | { path: string; base_branch: string }
-          | undefined
-      : undefined
-    if (project && !repo) {
-      return fail(`${human(db, project)} has no repo — set repo.path first`)
-    }
+    let found = project ? projectRepo(String(project)) : undefined
+    if (found && 'error' in found) return fail(found.error)
+    let repo = found
     if (!project && !nativeRun) {
       let subject = task ? `T-${task.num}` : `R-${role!.num}`
       return fail(
