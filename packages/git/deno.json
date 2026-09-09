@@ -1,0 +1,18 @@
+{
+  "name": "@yaks/git",
+  "version": "0.0.0",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "Git objects as entities: an object index whose entity id is its SHA-1 object id, a SHA-256 name beside it, and trees and commits built from a file manifest.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "@db/sqlite": "jsr:@db/sqlite@0.13.0"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "./harness.ts",
+      "./browser.json"
+    ]
+  }
+}

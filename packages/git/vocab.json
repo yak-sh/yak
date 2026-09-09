@@ -1,0 +1,72 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/edge": true,
+    "https://yaks.sh/vocab/key": true
+  },
+  "title": "git",
+  "$defs": {
+    "gitobj": {
+      "type": "object",
+      "kind": true,
+      "description": "one git object — its entity id IS its SHA-1 object id, so writing the same object twice writes one row",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "blob",
+            "tree",
+            "commit",
+            "tag"
+          ],
+          "bare": false,
+          "description": "the word in the object's own header"
+        },
+        "size": {
+          "type": "number",
+          "bare": false,
+          "description": "the body's length in bytes — the number in that same header"
+        }
+      }
+    },
+    "blob": {
+      "type": "object",
+      "description": "where an object's bytes are: their address in the @yaks/blob store",
+      "properties": {
+        "sha": {
+          "type": "string",
+          "bare": false,
+          "description": "the SHA-256 of the bytes — for a git blob it is the app file's own address, never a re-encoded copy"
+        }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "edge": true,
+      "description": "a tree holds a child under a name — the walk a pack's reachability needs",
+      "properties": {
+        "name": {
+          "type": "string",
+          "bare": false,
+          "description": "the name this child answers to in this tree; the same tree is a child of many trees under different names, which is why the name is on the link"
+        },
+        "mode": {
+          "type": "string",
+          "bare": false,
+          "description": "the mode as the tree body spells it: 100644 a file, 40000 a directory"
+        }
+      }
+    },
+    "parent": {
+      "type": "object",
+      "edge": true,
+      "description": "this commit follows that one — `ord` on the edge carries parent order",
+      "properties": {}
+    },
+    "compat": {
+      "type": "object",
+      "key": true,
+      "description": "git's compat oid: the same object's SHA-256 name, keyed off its SHA-1 one, so either id resolves (git's own hash-function transition, as key rows)"
+    }
+  }
+}

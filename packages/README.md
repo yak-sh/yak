@@ -73,6 +73,10 @@ In dependency order:
   an entity, lifted into a key of its own, so a seed written twice patches one
   entity — and a name goes wherever an eid goes, in a reference column and at a
   door.
+- **[@yaks/git](./git)** — git objects as entities: an object's eid IS its SHA-1
+  object id, with its SHA-256 name beside it as a key, its body in a @yaks/blob
+  store, and the two walks a pack makes (`entry`, `parent`) as edges — plus the
+  builders that turn a `path → sha256` manifest into trees and a commit.
 - **[@yaks/effects](./effects)** — what a graph DOES about what it commits:
   `created`/`changed`/`removed` handlers per component, run after the
   transaction, each isolated, with an optional durable ledger. The mechanism —
