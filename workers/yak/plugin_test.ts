@@ -6,6 +6,7 @@
 // what it pins is the two things a host relies on: order is the list's, and a
 // slot nobody filled contributes nothing.
 import { assert, assertEquals } from '@std/assert'
+import type { Effects as Registry } from '@yaks/effects'
 import type { Rule } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 import type { App, Space } from './directory.ts'
@@ -14,10 +15,12 @@ import {
   answered,
   type Arrived,
   type Asked,
+  effected,
   pagesOf,
   type Plugin,
   routed,
   rulesOf,
+  type Stored,
   toolsOf,
   type Visit,
   vocabOf,
@@ -74,10 +77,39 @@ let fixture: Plugin = {
   ],
   watch: (v) => seen.push(v),
   rules: [rule('fixture/one')],
+  effects: [(on, at) => {
+    // The gate a real one has (outbox.ts): an app's store, never the
+    // platform's own.
+    if (at.meta || !at.app) return
+    registered.push(`${at.app} ${at.mail() ?? ''}`)
+    on.created('fixture', () => {})
+  }],
   wakes: [{ entity: { eid: 'fixture' }, wake: { every: '@daily' } }],
 }
 
 let seen: Visit[] = []
+let registered: string[] = []
+
+// A registry, as much of one as a registration can tell (@yaks/effects owns
+// what a handler MEANS — its own registry_test.ts): what was registered, on
+// what component.
+let registry = () => {
+  let on: string[] = []
+  let fx = {
+    created: (comp: string) => (on.push(comp), fx),
+    changed: (comp: string) => (on.push(comp), fx),
+    removed: (comp: string) => (on.push(comp), fx),
+  } as unknown as Registry
+  return { fx, on }
+}
+
+let stored = (at: Partial<Stored> = {}): Stored => ({
+  env: {},
+  meta: false,
+  app: 'an-app',
+  mail: () => 'one.app@yaks.app',
+  ...at,
+})
 
 // A plugin that fills nothing: the host must be able to hold it.
 let quiet: Plugin = { name: 'quiet' }
@@ -127,6 +159,22 @@ Deno.test('a plugin answers a root door, and knows which root it is', async () =
   // A path no plugin claims falls through to the kernel's own table.
   assertEquals(await routed(list, arrived('/fixture')), null)
   assertEquals(await routed([quiet], arrived('/fixture.git/info/refs')), null)
+})
+
+Deno.test('a plugin registers its effects on the store it is handed', () => {
+  registered = []
+  let { fx, on } = registry()
+  effected([fixture, quiet], fx, stored())
+  assertEquals(on, ['fixture'])
+  assertEquals(registered, ['an-app one.app@yaks.app'])
+  // The store says what it is, and a plugin decides for itself: the
+  // platform's own store and one that holds no app yet register nothing.
+  registered = []
+  let bare = registry()
+  effected([fixture], bare.fx, stored({ meta: true }))
+  effected([fixture], bare.fx, stored({ app: null }))
+  assertEquals(bare.on, [])
+  assertEquals(registered, [])
 })
 
 Deno.test('order is the list order', async () => {

@@ -107,7 +107,7 @@ import {
   sha256,
   then,
 } from '@yaks/graph'
-import { DELIVER, MAIL, mailbox, sending } from '@yaks/mail'
+import { DELIVER, MAIL, mailbox } from '@yaks/mail'
 import {
   actorOf,
   Denied,
@@ -127,14 +127,13 @@ import type { Vocab } from '@yaks/vocab'
 import { wakes } from '@yaks/wake'
 import { scheduled } from '@yaks/wake/cloudflare'
 import { named, type Row } from './listing.ts'
-import { rulesOf, wakesOf } from './plugin.ts'
+import { effected, rulesOf, wakesOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import type { Env } from './env.ts'
 import { seeded } from './wake.ts'
-import { type Binding, posting } from './post.ts'
+import type { Binding } from './post.ts'
 import { doorOf, type Namespace, PLATFORM_STORE } from './door.ts'
 import { type Meta, metaOf } from './meta.ts'
-import { metering } from './meter.ts'
 import { apex, url } from './host.ts'
 import {
   addressed,
@@ -498,10 +497,9 @@ export class Store {
     }
     let app = this.#get('app')
     // The registry an app's own effects register on (T-33816), and the one
-    // this platform puts on it: a letter leaves through the Email Sending
-    // binding, post-commit (T-33686). It is FRESH on every boot, so the
-    // registration below happens once per incarnation however often a store
-    // is rebuilt.
+    // every plugin of this Worker registers on below. It is FRESH on every
+    // boot, so those registrations happen once per incarnation however often
+    // a store is rebuilt.
     // An effect writes back through the KERNEL's own door — a new batch
     // through this graph's `apply()`, trusted and unsigned — so what a letter
     // came to is journaled, cast to every open socket, and seen by whatever
@@ -510,18 +508,6 @@ export class Store {
     // graph it names is whichever one this object last built, which is the
     // only one that could be committing.
     let fx = effects(vocab, { write: (b) => this.#trust(b, null) })
-    // Who carries a letter out of THIS store, and only for an app: the
-    // platform's own store writes its sign-in codes through mail.ts from the
-    // fleet's own address, and has no app whose name a letter could leave
-    // under. No binding is a sender that refuses (post.ts), so a deploy
-    // without one bounces a letter rather than swallowing it — and the send is
-    // metered against the space's month on the way through (meter.ts), which
-    // is why the address is read at SEND time and not at boot.
-    let post = meta || !app ? null : metering(
-      this.#bind,
-      () => this.#get('mail'),
-      posting(this.#bind.MAIL, this.#bind),
-    )
     let g = graph({
       storage: store,
       vocab,
@@ -555,7 +541,7 @@ export class Store {
         // step further out still — `doc` is one of the words every store on
         // this platform already speaks (vocab.ts `coreDocs`), so there is
         // nothing left for a `docs()` to declare.
-        ...(post && app
+        ...(!meta && app
           ? [this.#posting(app), mailbox({ domain: apex(this.#bind) })]
           : []),
         // What every domain of this Worker declares about a WRITE, as data
@@ -580,15 +566,17 @@ export class Store {
         },
       ],
     })
-    // A letter goes when it asks to, whichever of its two components arrives
-    // last: `sending` reads the whole entity rather than the patch that woke
-    // it, so a letter written whole and one that gains its recipient later go
-    // the same way. It is idempotent — a letter already carrying `delivered`
-    // or `bounced` is left alone — so two slots are still one send.
-    if (post) {
-      fx.created(MAIL, sending({ sender: post }))
-      fx.created(DELIVER, sending({ sender: post }))
-    }
+    // What every domain of this Worker does about data this store COMMITTED
+    // (plugin.ts `effects`, plugins.ts): a letter that asks to go is the one
+    // there is today (outbox.ts). The store hands over what only it knows —
+    // its bindings, whether it is the platform's own, the app it holds and the
+    // address it writes from — and knows nothing of what is registered.
+    effected(PLUGINS, fx, {
+      env: this.#bind,
+      meta,
+      app,
+      mail: () => this.#get('mail'),
+    })
     this.#vocab = vocab
     this.#graph = g
     // One per incarnation, like the graph: directory.ts seeds once per Meta.

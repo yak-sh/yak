@@ -23,6 +23,8 @@
 //   rules    what it does INSIDE a store, as data: a query over one bundle in
 //            a batch plus what comes out (@yaks/graph `Rule`), run by the phase
 //            it names in every store this Worker builds (graph.ts `#boot`)
+//   effects  what it does AFTER a store commits: registrations on that store's
+//            own post-commit registry (@yaks/effects, graph.ts `#boot`)
 //   wakes    rows seeded once in the directory: when to write `fired`, with
 //            the tags the plugin's effect rules match beside it
 //
@@ -35,12 +37,17 @@
 // A plugin holds no state and is composed once, at module load — `PLUGINS`
 // (plugins.ts) is the one list, and the host modules read that list instead of
 // naming a domain each.
+import type { Effects as Registry } from '@yaks/effects'
 import type { Bundle, Rule } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Wake as Schedule } from '@yaks/wake'
 import { PAGES } from './content.ts'
 import type { App, Space } from './directory.ts'
 import type { Env } from './env.ts'
+// The store's own bindings type. Type-only, so nothing here loads graph.ts:
+// graph.ts reads this list (`rulesOf`, `effected`) and the shape it hands an
+// effect is its own to say.
+import type { Bindings } from './graph.ts'
 import type { Page } from './guide.ts'
 import type { Who } from './session.ts'
 import type { Tool } from './tool.ts'
@@ -111,6 +118,33 @@ export type Watch = (v: Visit) => void
 /** A directory row a plugin seeds once, wearing the tags its rules match. */
 export type Wake = Bundle & { wake: Schedule }
 
+/**
+ * The store an effect is being registered in, said as what a plugin may know
+ * about it (graph.ts `#boot`): the Worker's bindings, whether this is the
+ * platform's own directory store rather than an app's, and the app it holds.
+ *
+ * `mail` is a FUNCTION because the object learns its own address from the
+ * requests it answers — a registration reads it when the effect runs, never at
+ * boot, or a store told its address after it woke would send from nowhere.
+ */
+export type Stored = {
+  env: Bindings
+  /** the platform's own directory store, rather than an app's */
+  meta: boolean
+  /** the app this store holds, or null while it holds none */
+  app: string | null
+  /** the address a letter leaves this store under, asked at send time */
+  mail: () => string | null
+}
+
+/**
+ * What a plugin does about data a store COMMITTED: registrations on that
+ * store's own registry, made once per incarnation. It runs at boot, so it must
+ * not throw — an effect a store cannot register is a store that will not
+ * build.
+ */
+export type Effect = (on: Registry, at: Stored) => void
+
 /** A self-contained contribution to this Worker. */
 export type Plugin = {
   /** the plugin's name, for diagnostics and for the list to read as a list */
@@ -130,6 +164,8 @@ export type Plugin = {
   watch?: Watch
   /** the rules it declares, run inside every store this Worker builds */
   rules?: Rule[]
+  /** what it registers on a store's post-commit registry, once per boot */
+  effects?: Effect[]
   /** schedules seeded once in the directory; existing rows keep their state */
   wakes?: Wake[]
 }
@@ -167,6 +203,16 @@ export let rulesOf = (plugins: Plugin[]): Rule[] =>
 /** Every schedule row, in plugin order, for the directory's first tick. */
 export let wakesOf = (plugins: Plugin[]): Wake[] =>
   plugins.flatMap((p) => p.wakes ?? [])
+
+/**
+ * Register every plugin's effects on one store's registry, in plugin order
+ * (graph.ts `#boot`). A store gets every plugin's — one about a component this
+ * store does not speak never fires, the way an inert rule never matches — so
+ * the list decides nothing but the order two handlers on one component run in.
+ */
+export let effected = (plugins: Plugin[], on: Registry, at: Stored) => {
+  for (let p of plugins) for (let fx of p.effects ?? []) fx(on, at)
+}
 
 /** Every guide page, in plugin order. */
 export let pagesOf = (plugins: Plugin[]): Page[] =>
