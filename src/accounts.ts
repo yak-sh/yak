@@ -3,6 +3,7 @@
 // the browser sees ceremony data, never the credential or its account id.
 import {
   type AuthStore,
+  CODEX_REAUTH,
   codexMessage,
   isCodexRpcError,
   type Issuer,
@@ -753,7 +754,13 @@ export let accountService = (
     cancel,
     logout,
     refresh: refreshed,
-    credentials: { get, refresh: () => refreshed().then(() => current!) },
+    credentials: {
+      get,
+      refresh: () => refreshed().then(() => current!),
+      // Only a person can renew this, so the transport's fault says how —
+      // a failed Session reads as one actionable line (T-35017).
+      hint: CODEX_REAUTH,
+    },
     close,
   }
 }

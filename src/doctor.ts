@@ -11,8 +11,13 @@
 // reads the LIVE rule set; a hand-maintained expected list is exactly how the
 // drift hid. The static snapshot below is the degrade seam for when no token
 // can read Email Routing, and it says so loudly. CLIENT-SAFE: the checks read
-// through the Querier (HTTP) and env + fetch only, never the db directly.
+// through the Querier (HTTP) and env + fetch only, never the db directly. The
+// one local read is the credential check below — the Codex credential is a
+// file on THIS box, so that check reports the box the doctor runs on rather
+// than the graph it queries.
 import { base } from './mailer.ts'
+import { CODEX_REAUTH, type CodexClock, codexClock } from './codex_auth.ts'
+import { CREDENTIAL_FAULT } from './responses.ts'
 import { atFleet, canon } from './mailaddr.ts'
 import { idOf, sessionActive } from './types.ts'
 import { parseQuery } from './query.ts'
@@ -449,6 +454,36 @@ export let undispatched = (
   }]
 }
 
+// The Codex credential expires, and once its refresh lineage is gone nothing
+// renews it but a person. That failure is silent from the graph's side: every
+// graph-native spawn just fails `responses: credential unavailable`, which is
+// how this box spent three days with no working spawn before anyone looked
+// (T-33916). The credential carries its own clock, so read it and say the one
+// thing a human can act on. A box with no account root (a probe) and an API
+// key (no clock) have nothing to report.
+export let credentialExpiry = (
+  cred: CodexClock | null,
+  now: number,
+  hours = 24,
+): Report[] => {
+  if (!cred) return []
+  let at = new Date(cred.expires).toISOString()
+  let left = cred.expires - now
+  if (left <= 0) {
+    return [{
+      level: 'fail',
+      text: `the Codex credential expired ${at} — every graph-native spawn ` +
+        `fails '${CREDENTIAL_FAULT}' until you ${CODEX_REAUTH}`,
+    }]
+  }
+  if (left > hours * 3_600_000) return []
+  return [{
+    level: 'warn',
+    text: `the Codex credential expires ${at}, under ${hours}h from now — ` +
+      CODEX_REAUTH,
+  }]
+}
+
 // The registry. A new check is one more row here — its verdict a pure
 // function above, its run() a thin read through the Querier.
 export let checks: Check[] = [
@@ -488,6 +523,22 @@ export let checks: Check[] = [
     name: 'vector',
     about: 'the ANN index is being rebuilt by the sweep that owns it',
     run: async (_q, now) => vectorStale(await integrity(), now),
+  },
+  {
+    name: 'credential',
+    about: 'the Codex credential is neither expired nor expiring',
+    run: async (_q, now) => {
+      try {
+        return credentialExpiry(await codexClock(), now)
+      } catch {
+        // A file that exists but will not read or parse: no clock to judge,
+        // and the account service is the only thing that can repair it.
+        return [{
+          level: 'warn',
+          text: `the Codex credential file will not read — ${CODEX_REAUTH}`,
+        }]
+      }
+    },
   },
   {
     name: 'effects',

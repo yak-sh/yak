@@ -6,6 +6,7 @@ import {
   bookOf,
   brokenBoards,
   type Check,
+  credentialExpiry,
   diagnose,
   integrityReport,
   mailCheck,
@@ -20,6 +21,7 @@ import {
   vectorStale,
 } from './doctor.ts'
 import { canon } from './mailaddr.ts'
+import { CODEX_REAUTH, codexClock } from './codex_auth.ts'
 import type { Querier, Row } from './client.ts'
 import { assertEquals } from '@std/assert'
 
@@ -398,4 +400,59 @@ Deno.test('vectorStale: a dirty mark outliving the sweep is the split-brain', ()
   // a server too old to report the state is unverified, never an all-clear
   assertEquals(vectorStale({ orphans: {}, dangling: {} }, now)[0].level, 'warn')
   assertEquals(vectorStale(null, now)[0].level, 'warn')
+})
+
+// The credential check (T-35017): a Codex credential whose clock has run out
+// takes every graph-native spawn with it, silently — the box spent three days
+// that way (T-33916). The fake credential wears auth.json's shape and is read
+// through the door the check uses, so the parse is proven with the verdict.
+let credFile = (dir: string, name: string, exp: number, iat = exp - 60) => {
+  let part = (value: unknown) =>
+    btoa(JSON.stringify(value)).replaceAll('+', '-').replaceAll('/', '_')
+      .replaceAll('=', '')
+  let path = `${dir}/${name}.json`
+  Deno.writeTextFileSync(
+    path,
+    JSON.stringify({
+      auth_mode: 'chatgpt',
+      tokens: {
+        access_token: `${part({ alg: 'none' })}.${part({ exp, iat })}.sig`,
+      },
+    }),
+  )
+  return path
+}
+
+Deno.test('credential: expired fails, expiring soon warns, healthy is silent', async () => {
+  let dir = Deno.makeTempDirSync()
+  let now = Date.parse('2026-09-08T12:00:00Z')
+  let secs = (ms: number) => Math.floor((now + ms) / 1000)
+  let clock = (ms: number) => ({ issued: 0, expires: now + ms })
+
+  // The incident, read off a file: three days past its expiry (T-33916).
+  let past = await codexClock(credFile(dir, 'past', secs(-3 * 24 * 3_600_000)))
+  // The clock is the token's own, issue time included — that is what buys the
+  // retry sweep exactly one shot per sign-in.
+  assertEquals(past?.expires, secs(-3 * 24 * 3_600_000) * 1000)
+  assertEquals(past?.issued, (secs(-3 * 24 * 3_600_000) - 60) * 1000)
+  let out = credentialExpiry(past, now)
+  assertEquals(out.length, 1)
+  assertEquals(out[0].level, 'fail')
+  assertEquals(out[0].text.includes('expired 2026-09-05T12:00:00.000Z'), true)
+  assertEquals(out[0].text.includes(CODEX_REAUTH), true)
+
+  // Two hours left: the warning that beats the outage to it.
+  let near = credentialExpiry(clock(2 * 3_600_000), now)
+  assertEquals(near.length, 1)
+  assertEquals(near[0].level, 'warn')
+  assertEquals(near[0].text.includes(CODEX_REAUTH), true)
+
+  // Nine days out — a freshly refreshed credential says nothing.
+  assertEquals(credentialExpiry(clock(9 * 24 * 3_600_000), now), [])
+
+  // No account root, no file, an API key with no clock: nothing to report.
+  assertEquals(await codexClock(`${dir}/missing.json`), null)
+  assertEquals(await codexClock(undefined), null)
+  assertEquals(credentialExpiry(null, now), [])
+  Deno.removeSync(dir, { recursive: true })
 })

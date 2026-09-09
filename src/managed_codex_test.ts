@@ -5,6 +5,7 @@ import { apply, journalOf, journalSince } from './db.ts'
 import {
   append,
   expiredLeases,
+  failEntry,
   readEntries,
   readyEntries,
   settleGeneration,
@@ -15,10 +16,13 @@ import {
   graphSession,
   managedCodex,
   type ManagedCodexOptions,
+  retryCredential,
   runnerSessions,
 } from './managed_codex.ts'
+import { CODEX_REAUTH } from './codex_auth.ts'
 import { type Observation } from './observations.ts'
 import {
+  CREDENTIAL_FAULT,
   type ResponseEvent,
   type ResponseResult,
   responses,
@@ -27,7 +31,7 @@ import { writeSession } from './session_store.ts'
 import { type ToolHost } from './harness_tools.ts'
 import { type Change, uuid } from './types.ts'
 import { slow, until } from './testing.ts'
-import { freshDb } from './testdb.ts'
+import { bareDb, freshDb } from './testdb.ts'
 import { open } from './store/sqlite.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -2000,6 +2004,123 @@ slow(
       new Set([source, checkpoint, tail, current]),
     )
     assertEquals(readEntries(db, sid).length, 5_007)
+    db.close()
+  },
+)
+
+// The credential outage (T-33916, T-35017): a generation that died because
+// nobody could sign in is work that ran during an outage, and it stayed failed
+// long after the re-auth. A credential minted AFTER the failure puts it back.
+let failedAt = () => new Date(Date.parse('2026-09-05T06:07:59.000Z'))
+let failed = (db: ReturnType<typeof open>, sid: string, message: string) => {
+  let holder = uuid()
+  apply(db, [{ eid: holder, name: 'runner', comp: { name: 'tasksd' } }])
+  let input = uuid()
+  let eid = append(
+    db,
+    sid,
+    [{ message: { role: 'user' } }, {
+      generation: { through: input, provider: 'codex', model: 'gpt-requested' },
+    }],
+    null,
+    [input, uuid()],
+  ).eids[1]
+  failEntry(db, takeEntry(db, eid, holder)!.token, message, failedAt)
+  return eid
+}
+
+Deno.test('a credential minted after the failure retries it, once', () => {
+  // bareDb: this test writes every row it reads, so the demo seed is cost
+  // with no subject (testing.ts).
+  let db = bareDb()
+  let sid = session(db)
+  let eid = failed(db, sid, `${CREDENTIAL_FAULT} — ${CODEX_REAUTH}`)
+  let other = failed(db, sid, 'responses: HTTP 400 — malformed request')
+  assertEquals(readyEntries(db, sid).map((row) => row.eid), [])
+
+  // The credential on disk predates the failure — it is the SAME dead one.
+  let before = Date.parse('2026-09-04T00:00:00Z')
+  assertEquals(retryCredential(db, () => {}, before), [])
+  assertEquals(readyEntries(db, sid).map((row) => row.eid), [])
+
+  // Signed in again: the credential-failed generation is ready work again,
+  // and nothing else is touched — a malformed request is still our own bug.
+  let after = Date.parse('2026-09-08T20:08:16Z')
+  let heard: Change[] = []
+  assertEquals(retryCredential(db, (c) => heard.push(...c), after), [eid])
+  assertEquals(readyEntries(db, sid).map((row) => row.eid), [eid])
+  assertEquals(heard.some((c) => c.eid == eid && c.comp == null), true)
+  assertEquals(
+    !!db.prepare(
+      'select 1 from error where entity = (select id from entity where eid = ?)',
+    ).get(other),
+    true,
+  )
+
+  // Once per sign-in: the same credential buys no second retry, so a session
+  // wedged for another reason cannot loop on this sweep.
+  assertEquals(retryCredential(db, () => {}, after), [])
+  db.close()
+})
+
+slow(
+  'a spawn that failed on the credential says the step, and runs when it returns',
+  async () => {
+    let db = freshDb()
+    let sid = session(db)
+    // The outage, end to end: the account service cannot hand out a
+    // credential, so the transport faults before any HTTP.
+    let service = managedCodex({
+      db,
+      cast: () => {},
+      transport: responses({
+        credentials: {
+          get: () => Promise.reject(new Error('Codex is not signed in.')),
+          hint: CODEX_REAUTH,
+        },
+        fetch: () => {
+          throw new Error('a missing credential reached HTTP')
+        },
+      }),
+      tools: () => Promise.resolve(tools([])),
+      prepare: () => Promise.resolve(),
+    })
+    await service.start(sid, noCodeJob())
+    // One line naming the step, and no stack — this is what the board shows.
+    let broke = db.prepare(
+      'select message, stack from exception where entity = (select id from entity where eid = ?)',
+    ).get(sid) as { message: string; stack: string | null } | undefined
+    assertEquals(broke?.message, `${CREDENTIAL_FAULT} — ${CODEX_REAUTH}`)
+    assertEquals(broke?.stack, null)
+    assertEquals(readyEntries(db, sid).length, 0)
+
+    // The re-auth: a credential issued now, and the runner picks the session
+    // back up on its next pass with no new spawn and no human replay.
+    assertEquals(retryCredential(db, () => {}, Date.now()).length, 1)
+    assertEquals(
+      db.prepare(
+        'select 1 from exception where entity = (select id from entity where eid = ?)',
+      ).get(sid),
+      undefined,
+    )
+    let back = managedCodex({
+      db,
+      cast: () => {},
+      transport: {
+        run: () =>
+          Promise.resolve(result([{
+            type: 'message',
+            content: [{ type: 'output_text', text: 'signed in again' }],
+          }])),
+      },
+      tools: () => Promise.resolve(tools([])),
+      prepare: () => Promise.resolve(),
+    })
+    await back.sweep()
+    assertEquals(
+      readEntries(db, sid).at(-1)?.comps.content?.body,
+      'signed in again',
+    )
     db.close()
   },
 )

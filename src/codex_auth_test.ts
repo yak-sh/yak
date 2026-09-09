@@ -4,6 +4,8 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { tick } from './testing.ts'
 import {
   bootstrapCodexAuth,
+  codexAuthFile,
+  codexClock,
   codexEnv,
   codexHome,
   codexMessage,
@@ -69,6 +71,13 @@ Deno.test('Codex account roots stay outside scratch graphs and environments', ()
     nativeCodexAuth(env({ HOME: '/owner' })),
     '/owner/.codex/auth.json',
   )
+  // The credential clock reads the account root's own file — and a scratch
+  // graph, which has no root, has no clock to read (T-35017).
+  assertEquals(
+    codexAuthFile('/state/tasks/codex'),
+    '/state/tasks/codex/auth.json',
+  )
+  assertEquals(codexAuthFile(undefined), undefined)
 
   assertEquals(
     codexEnv(
@@ -86,6 +95,22 @@ Deno.test('Codex account roots stay outside scratch graphs and environments', ()
       SSL_CERT_FILE: '/ca.pem',
     },
   )
+})
+
+Deno.test('a credential with no clock reads as none; a broken one is loud', async () => {
+  let root = await Deno.makeTempDir()
+  try {
+    let path = `${root}/auth.json`
+    // An API key never expires, so there is nothing for the doctor to judge.
+    await Deno.writeTextFile(path, JSON.stringify({ OPENAI_API_KEY: 'x' }))
+    assertEquals(await codexClock(path), null)
+    // A file that exists but will not parse is a broken credential store —
+    // never a silent all-clear.
+    await Deno.writeTextFile(path, 'not json')
+    await assertRejects(() => codexClock(path))
+  } finally {
+    await Deno.remove(root, { recursive: true })
+  }
 })
 
 Deno.test('Codex probe bootstrap imports once without sharing a live store', async () => {

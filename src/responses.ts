@@ -12,7 +12,16 @@ export type Credential = {
 export type CredentialSource = {
   get: () => Promise<Credential>
   refresh?: () => Promise<Credential>
+  // What a HUMAN must do when get() fails. A credential is a person's to
+  // renew, so the fault names the step instead of leaving `credential
+  // unavailable` as the whole story on a failed Session (T-35017). The source
+  // owns the sentence; this transport stays provider-neutral.
+  hint?: string
 }
+
+// The one credential fault. The retry sweep matches on it (managed_codex.ts),
+// so it is a constant, not a spelled string.
+export let CREDENTIAL_FAULT = 'responses: credential unavailable'
 
 export type ResponseRequest = {
   model: string
@@ -403,12 +412,15 @@ let credentials = async (
   optional = false,
   retries = 0,
   pause: (ms: number) => Promise<void> = sleep,
+  hint?: string,
 ) => {
   for (let failures = 0;; failures++) {
     try {
       return credential(await load(), optional)
     } catch {
-      if (failures >= retries) throw fault(message)
+      if (failures >= retries) {
+        throw fault(hint ? `${message} — ${hint}` : message)
+      }
       await pause(200 * 2 ** failures)
     }
   }
@@ -446,10 +458,11 @@ export let responses = (options: ResponseOptions) => {
   ): Promise<ResponseResult> => {
     let auth = await credentials(
       options.credentials.get,
-      'responses: credential unavailable',
+      CREDENTIAL_FAULT,
       options.authentication == 'optional',
       retries,
       pause,
+      options.credentials.hint,
     )
     remember(auth)
     let refreshed = false
@@ -543,7 +556,7 @@ export let responses = (options: ResponseOptions) => {
     try {
       auth = await credentials(
         options.credentials.get,
-        'responses: credential unavailable',
+        CREDENTIAL_FAULT,
         options.authentication == 'optional',
       )
     } catch {

@@ -358,13 +358,31 @@ Deno.test('responses scrubs failed-stream evidence and credential errors', async
       throw Error('credential failure reached HTTP')
     },
   })
-  await assertRejects(
+  let bare = await assertRejects(
     () => unavailable.run({ model: 'm', input: [] }),
     Error,
     'credential unavailable',
   )
   assertEquals(attempts, 3)
   assertEquals(waits, [200, 400])
+  // The source's own diagnosis stays out of it — a credential error can carry
+  // the credential ('secret-old' here) — but its HINT, which the source wrote,
+  // is what a human needs and rides the fault (T-35017).
+  assertEquals(bare.message.includes('secret-old'), false)
+  let hinted = responses({
+    credentials: {
+      get: () => Promise.reject(new Error('secret-old')),
+      hint: 'sign in again: somewhere',
+    },
+    fetch: () => {
+      throw Error('credential failure reached HTTP')
+    },
+  })
+  await assertRejects(
+    () => hinted.run({ model: 'm', input: [] }),
+    Error,
+    'responses: credential unavailable — sign in again: somewhere',
+  )
 })
 
 Deno.test('responses preserves an incomplete reason', async () => {

@@ -65,6 +65,8 @@ import {
   watched,
 } from './sessions.ts'
 import { nativeSweep, noticeAccepted } from './tmux.ts'
+import { codexClock } from './codex_auth.ts'
+import { retryCredential } from './managed_codex.ts'
 import {
   registerSystem,
   roleAttention,
@@ -691,6 +693,17 @@ export let bootDoing = (d: Doing, syncSoon: () => void) => {
   standingBackfill(cast).catch((e) => console.warn('standing backfill —', e))
 
   tick('native', () => nativeSweep(cast), 2_000)
+
+  // The other half of the credential outage (T-35017): the doctor shouts that
+  // the credential died, and this puts back the spawns that died with it. The
+  // credential is a file, so the gate is that file's own clock — not the
+  // account service's cached status, which a daemon that read `signed out`
+  // once would hold forever.
+  tick('credential', async () => {
+    let cred = await codexClock()
+    if (!cred || cred.expires <= Date.now()) return
+    if (retryCredential(db, cast, cred.issued).length) d.native?.soon()
+  }, 60_000)
 
   // What sessions leave running (probes.ts): a headless browser squatting on
   // a CDP port, a probe server on a scratch db, a worktree with nothing left

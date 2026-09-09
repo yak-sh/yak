@@ -1,6 +1,8 @@
 // Codex account storage and RPC: one opaque credential blob moves through a
 // locked staging CODEX_HOME, while app-server alone speaks OAuth and refresh.
-// Nothing here parses auth.json; provider errors cross only after redaction.
+// The blob stays opaque — the only thing read out of auth.json is the token's
+// CLOCK (codexClock below), never a byte of the token; provider errors cross
+// only after redaction.
 import { join } from 'node:path'
 import { VERSION } from './version.ts'
 
@@ -230,6 +232,68 @@ export let codexMessage = (value: unknown) => {
   clean = clean.replace(/\b[A-Za-z0-9_-]{40,}\b/g, '[redacted]')
   clean = clean.replace(/\s+/g, ' ').trim()
   return clean ? clean.slice(0, 240) : undefined
+}
+
+// Signing in again is a ceremony the account service owns (accounts.ts), not a
+// shell command — so this is the one sentence that names the step, and the
+// doctor check, the spawn failure and the retry sweep all say it (T-35017).
+export let CODEX_REAUTH =
+  'sign in again: Configuration → Codex (web sidebar, or `task tui`)'
+
+// The stored credential's clock, in ms. `issued` is what tells the retry sweep
+// a credential minted AFTER a failure is present; `expires` is what lets the
+// doctor say the credential is dead before a spawn discovers it. Both are
+// metadata claims of the access token — the token itself never leaves here,
+// and nothing here can refresh it (app-server still owns OAuth).
+export type CodexClock = { issued: number; expires: number }
+
+export let codexAuthFile = (root = codexHome()) =>
+  root ? join(root, 'auth.json') : undefined
+
+let claims = (jwt: unknown) => {
+  if (typeof jwt != 'string') return
+  let part = jwt.split('.')[1]
+  if (!part) return
+  try {
+    let bytes = Uint8Array.from(
+      atob(part.replace(/-/g, '+').replace(/_/g, '/')),
+      (c) => c.charCodeAt(0),
+    )
+    let value: unknown = JSON.parse(new TextDecoder().decode(bytes))
+    return record(value) ? value : undefined
+  } catch {
+    // An unreadable claim set is no clock, never a crash — the file is still
+    // the account service's to interpret.
+    return
+  }
+}
+
+// null = there is nothing to read: no account root (a probe), no file, or an
+// API key, which has no clock. A file that exists but cannot be read or parsed
+// throws — a broken credential store is a loud fact, not an all-clear.
+export let codexClock = async (
+  path = codexAuthFile(),
+): Promise<CodexClock | null> => {
+  if (!path) return null
+  let text: string
+  try {
+    text = await Deno.readTextFile(path)
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) return null
+    throw unavailable()
+  }
+  let value: unknown
+  try {
+    value = JSON.parse(text)
+  } catch {
+    throw unavailable()
+  }
+  let tokens = record(value) ? value.tokens : undefined
+  let claim = claims(record(tokens) ? tokens.access_token : undefined)
+  let at = (name: string) =>
+    typeof claim?.[name] == 'number' ? claim[name] * 1000 : undefined
+  let expires = at('exp')
+  return expires == null ? null : { issued: at('iat') ?? 0, expires }
 }
 
 let rpcError = (value: unknown, fallback: Error) => {

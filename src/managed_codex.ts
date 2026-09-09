@@ -31,6 +31,7 @@ import {
   type ResponseTransport,
 } from './runner.ts'
 import { claudeGeneration } from './claude_print.ts'
+import { CREDENTIAL_FAULT } from './responses.ts'
 import { type ToolHost } from './harness_tools.ts'
 import { type Observation } from './observations.ts'
 import { sessionRow } from './session_store.ts'
@@ -221,6 +222,55 @@ let sessionFault = (
     record(db, changes)
     cast(changes)
   }
+}
+
+// A generation that died because nobody could sign in is not a broken session:
+// it is work that ran during a credential outage — three days of every spawn
+// failing `credential unavailable`, and every one of them stayed failed after
+// the re-auth (T-33916). So when a credential minted AFTER the failure is
+// present, drop that one error and the ordinary ready query leases the
+// generation again. Keyed on the credential's ISSUE time, which is what makes
+// this at-most-once: a session that fails the same way again waits for the
+// next sign-in rather than looping on a wedge that has nothing to do with the
+// credential.
+export let retryCredential = (
+  db: Sql,
+  cast: Cast,
+  issued: number,
+  clock: () => Date = now,
+): string[] => {
+  let stuck = (db.prepare(
+    `select o.eid as eid, x.at as at,
+            (select eid from entity where id = e.session) as session
+     from entry e
+     join entity o on o.id = e.entity
+     join error x on x.entity = e.entity
+     join generation g on g.entity = e.entity
+     where x.message like ?
+       and not exists (select 1 from lease l where l.entity = e.entity)
+       and not exists (select 1 from cancel c where c.target = e.entity)
+       and not exists (select 1 from imported i where i.entity = e.entity)
+       and not exists (select 1 from output t where t.source = e.entity)
+     order by e.seq`,
+  ).all(`${CREDENTIAL_FAULT}%`) as {
+    eid: string
+    at: string
+    session: string
+  }[]).filter((row) => Date.parse(row.at) < issued)
+  let retried: string[] = []
+  for (let row of stuck) {
+    if (!db.prepare(`delete from error where ${OWNED}`).run(row.eid).changes) {
+      continue
+    }
+    let changes: Change[] = [{ eid: row.eid, name: 'error', comp: null }]
+    record(db, changes)
+    cast(changes)
+    // The session's own break is over too: it reads as work in flight again,
+    // and a recovered fault sheds both facets exactly as a clean turn does.
+    sessionFault(db, row.session, null, cast, clock)
+    retried.push(row.eid)
+  }
+  return retried
 }
 
 // A runner pass starts from generations: startOne() mints one before it makes
