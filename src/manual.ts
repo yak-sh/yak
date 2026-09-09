@@ -494,28 +494,17 @@ export let manuals = declare({
     root: true,
     args: [],
   },
-  mail: {
-    dots: 'filters',
-    about: 'the mail-only slice of your items',
-    deprecated: 'superseded by task inbox, where mail is one kind of item',
-    examples: [
-      'task inbox',
-      'task mail send jeff Subject words --body=@draft.md',
-    ],
-    detail:
-      '<to> is an address or graph reference (alias, P-9, eid); the address ' +
-      'book resolves it at delivery. Filters speak `task help grammar`.',
-    args: [arg('filters', text, true, false)],
-    opts: [json, flag('--all'), flag('--sent')],
-  },
+  // There is no bare `task mail`: the inbox lists mail beside every other
+  // item (`task inbox`, same filters, --all, --sent). The doors below are the
+  // acts the inbox has no verb for.
   'mail show': {
     about: 'show the mail and thread; mark it opened',
     args: [arg('id', id)],
     opts: [json],
   },
   'mail send': {
-    // Root because `mail` itself is deprecated: sending a letter is not
-    // superseded by the inbox, so it keeps its own door in the usage.
+    // Root: sending a letter has no inbox equivalent, so it keeps its own
+    // door in the usage.
     dots: ['body'],
     body: 'body',
     about: 'send a letter; - and @- read the body from stdin',
@@ -796,8 +785,7 @@ export let manuals = declare({
       'Comments render markdown exactly as bodies do, so author a rich one ' +
       'through the body door rather than as a flat inline string. A comment ' +
       'is something you WROTE, and it reaches whoever the entity concerns. ' +
-      'Steering belongs on the task, where the current or next run reads it; ' +
-      'commenting on an S-* run is deprecated compatibility.\n\n' +
+      'Steering belongs on the task, where the current or next run reads it.\n\n' +
       "Prints the comment's own id. A comment is an ordinary entity, so " +
       'REVISE a wrong one in place — `task set C-13 .body="…"` — rather ' +
       'than posting a correction beneath it. `task history C-13` keeps every ' +
@@ -834,21 +822,17 @@ export let manuals = declare({
     opts: [body],
     some: ['text', '--body'],
   },
-  link: {
+  // An edge is spelled as a sentence — `task T-3 requires T-9 [--gone]` —
+  // and cli.ts `subject()` routes that sentence here. `syntax` marks it a
+  // router target, not a verb: `task edge …` spelled directly is refused, so
+  // the family word never becomes a second spelling.
+  edge: {
+    syntax: '<id> <type> <child> [--gone]',
     about: 'link or unlink an edge',
     examples: [
-      'task link T-3 requires T-9',
-      'task link T-3 requires T-9 --gone',
+      'task T-3 requires T-9',
+      'task T-3 requires T-9 --gone',
     ],
-    root: true,
-    args: [arg('id', id), arg('type'), arg('child', id)],
-    opts: [flag('--gone')],
-  },
-  dep: {
-    about: 'link or unlink an edge',
-    deprecated: 'superseded by task link <id> <type> <child> [--gone]',
-    examples: ['task link T-3 requires T-9'],
-    root: true,
     args: [arg('id', id), arg('type'), arg('child', id)],
     opts: [flag('--gone')],
   },
@@ -1268,22 +1252,11 @@ export let manuals = declare({
     args: [arg('id', id)],
     opts: transcriptOpts,
   },
-  ls: {
-    dots: 'filters',
-    about: 'list tasks (filter grammar)',
-    deprecated: 'superseded by task list',
-    examples: ['task list .status=open'],
-    alias: true,
-    args: [arg('filters', text, true, false)],
-    opts: [json],
-  },
   // context/wrap stay as supported top-level aliases of `session context`/
   // `session wrap` — the ergonomic warm path the persona teaches for
-  // reconstitution, and the hook form other repos already carry. They are
-  // NOT deprecated: T-16375 made every deprecated verb hard-error, which
-  // caught these two as collateral and broke every post-clear operator
-  // (T-16484). `alias: true` keeps them out of root help; the canonical
-  // spelling lives under `session`.
+  // reconstitution, and the hook form other repos already carry (T-16484).
+  // `alias: true` keeps them out of root help; the canonical spelling lives
+  // under `session`.
   context: {
     about: 'reify and print the session digest',
     examples: ['task session context'],
@@ -1367,14 +1340,23 @@ export let manuals = declare({
   },
 })
 
-export let cliVerbs = new Set(
-  Object.entries(manuals)
+// A family word whose only verbs are nested (`mail send`, never bare `mail`).
+export let families = new Set(
+  Object.keys(manuals)
+    .filter((name) => name.includes(' ')).map((name) => name.split(' ')[0])
+    .filter((name) => !(name in manuals)),
+)
+
+// Every first word the CLI owns, so subject-first never reads one as an id.
+export let cliVerbs = new Set([
+  ...Object.entries(manuals)
     .filter(([name, m]) =>
       !['subject', ':'].includes(name) &&
-      !name.includes(' ') && (m.root || m.alias)
+      !name.includes(' ') && (m.root || m.alias || m.syntax)
     )
     .map(([name]) => name),
-)
+  ...families,
+])
 
 export let subjectUsage = (id = '<id>') =>
   `task ${id} — subject-first verbs
@@ -1394,7 +1376,7 @@ let linkHelp = () =>
   task T-3 requires T-9
   task T-3 requires T-9 --gone`
 
-let roots = () => Object.values(manuals).filter((m) => m.root && !m.deprecated)
+let roots = () => Object.values(manuals).filter((m) => m.root)
 
 export let usage = () =>
   `task — the entity graph, from a shell
@@ -1413,8 +1395,7 @@ filter grammar; 'task help <verb>' shows examples.`
 
 let children = (name: string) =>
   Object.entries(manuals)
-    .filter(([key, manual]) =>
-      !manual.deprecated &&
+    .filter(([key]) =>
       key.startsWith(`${name} `) && !key.slice(name.length + 1)
         .includes(' ')
     )
@@ -1436,7 +1417,6 @@ let reference = (m: Manual) => {
 
 let render = (name: string, m: Manual) => {
   let out = `task ${usageOf(m)}\n  ${m.about}`
-  if (m.deprecated) out += `\n\nDeprecated: ${m.deprecated}`
   let subs = children(name)
   if (subs.length) {
     out += '\n\n' +
@@ -1450,6 +1430,13 @@ let render = (name: string, m: Manual) => {
   }
   return out
 }
+
+// A family word with no verb of its own (`mail`): its help is the list of its
+// sub-verbs, and there is nothing to run at the bare word.
+let familyHelp = (name: string) =>
+  `task ${name} <command> …\n\n` +
+  children(name).map((s) => `  task ${usageOf(s).padEnd(58)} ${s.about}`)
+    .join('\n')
 
 let commandHelp = (name = '') => {
   let show = name ? { [name]: commands[name] } : commands
@@ -1478,8 +1465,8 @@ export let help = (args: string[]) => {
   if (!args.length) return usage()
   if (args[0] == '<id>' && args.length == 1) return subjectUsage()
   if (args[0] == 'subject' && args.length <= 2) return subjectUsage(args[1])
-  // Root help says `edge`; `link` is the plain-language route to that topic.
-  if (['edge', 'link'].includes(args[0]) && args.length == 1) return linkHelp()
+  // Root help says `edge`: the sentence form, not a verb of its own.
+  if (args[0] == 'edge' && args.length == 1) return linkHelp()
   if (args[0] == 'grammar' && args.length == 1) {
     return `${GRAMMAR}\n\n${FILTERS}\n\n${EDIT_OP}`
   }
@@ -1491,6 +1478,7 @@ export let help = (args: string[]) => {
   if (concept) return concept
   let manual = manuals[name]
   if (manual) return render(name, manual)
+  if (families.has(name)) return familyHelp(name)
   if (args.length == 1 && commands[args[0]]) return commandHelp(args[0])
   throw new UsageError(`no such help topic: ${name} (task help lists them)`)
 }
@@ -1535,21 +1523,13 @@ export let requestedHelp = (argv: string[]) => {
   ) return render(selected.name, selected.manual)
 }
 
-// Nested verbs are canonical, but a few action-shaped flags are the spelling
-// callers reach for before they know the family vocabulary. Keep those warm
-// paths at the router so validation and execution still use one declaration.
-let routeAliases: Record<string, string> = {
-  'inbox --archive': 'inbox archive',
-}
-
 export let route = <V extends Manual = Manual>(
   cmd: string | undefined,
   args: string[],
   all: Record<string, V> = manuals as Record<string, V>,
 ) => {
   if (!cmd) return
-  let asked = `${cmd} ${args[0]}`
-  let nestedName = routeAliases[asked] ?? asked
+  let nestedName = `${cmd} ${args[0]}`
   let nested = all[nestedName]
   let familyHelp = args[0] == 'help' &&
     Object.keys(all).some((name) => name.startsWith(`${cmd} `))
@@ -1592,8 +1572,7 @@ export class UsageError extends Error {}
 
 let usageError = (name: string, manual: Manual, message: string) =>
   new UsageError(
-    `${name} ${message}\nusage: task ${usageOf(manual)}` +
-      (manual.deprecated ? `\ndeprecated: ${manual.deprecated}` : ''),
+    `${name} ${message}\nusage: task ${usageOf(manual)}`,
   )
 
 let accepts = (kind: NonNullable<Opt['kind']>, value: string) => {

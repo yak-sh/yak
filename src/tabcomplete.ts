@@ -9,22 +9,12 @@
 // thunk; help and validate never do, so they — and `--help` against a down
 // server — stay offline. The thunk is called at most once, lazily.
 
-import { cliVerbs, manuals, route } from './manual.ts'
+import { cliVerbs, families, manuals, route } from './manual.ts'
 import { commands } from './commands.ts'
 import { plurals } from './types.ts'
 import type { Arg, Decl, Opt } from './verb.ts'
 
 let starts = (pre: string) => (s: string) => s.startsWith(pre)
-
-// Every first word a bare `task <TAB>` accepts: the top-level verbs, the plural
-// kinds that ARE listing verbs (`task projects`), and every `:` command.
-let heads = (): string[] => [
-  ...Object.keys(manuals).filter((n) =>
-    !n.includes(' ') && !['subject', ':'].includes(n) && !manuals[n].deprecated
-  ),
-  ...[...plurals].filter((p) => !cliVerbs.has(p)),
-  ...Object.keys(commands).map((n) => `:${n}`),
-]
 
 // The subcommands one word deep under a parent verb (`mail send`, `role stop`).
 let subverbs = (parent: string): string[] =>
@@ -33,6 +23,19 @@ let subverbs = (parent: string): string[] =>
       n.startsWith(`${parent} `) && !n.slice(parent.length + 1).includes(' ')
     )
     .map((n) => n.slice(parent.length + 1))
+
+// Every first word a bare `task <TAB>` accepts: the top-level verbs, a family
+// word that only has sub-verbs (`mail`), the plural kinds that ARE listing
+// verbs (`task projects`), and every `:` command. A router target (`syntax`)
+// is not typed as a first word.
+let heads = (): string[] => [
+  ...Object.keys(manuals).filter((n) =>
+    !n.includes(' ') && !['subject', ':'].includes(n) && !manuals[n].syntax
+  ),
+  ...families,
+  ...[...plurals].filter((p) => !cliVerbs.has(p)),
+  ...Object.keys(commands).map((n) => `:${n}`),
+]
 
 // A Kind's finite candidate set, if it has one — enums and provider tables
 // carry `of`; an entity reference borrows the graph's ids through `at`.
@@ -75,7 +78,11 @@ export let complete = (
   if (!prior.length) return heads().filter(starts(cur))
 
   let sel = route(prior[0], prior.slice(1))
-  if (!sel) return []
+  // A family word with no verb of its own (`task mail <TAB>`) offers its
+  // sub-verbs and nothing else.
+  if (!sel) {
+    return prior.length == 1 ? subverbs(prior[0]).filter(starts(cur)) : []
+  }
   let verb = sel.manual
   let opts = verb.opts ?? []
 

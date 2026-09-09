@@ -160,6 +160,7 @@ import {
 } from './session_cli.ts'
 import {
   cliVerbs,
+  families,
   help,
   manuals,
   parse,
@@ -279,7 +280,7 @@ export let subject = (id: string | undefined, args: string[]) => {
   ) return
   let [typed, ...objects] = args
   // An edge is a subject verb even when the caller carries the palette's
-  // explicit colon into the entity-first form. Both spellings enter `dep`;
+  // explicit colon into the entity-first form. Both spellings enter `edge`;
   // other colon verbs still need the focused palette command path below.
   let verb = typed?.startsWith(':') &&
       (edges as readonly string[]).includes(typed.slice(1))
@@ -330,7 +331,7 @@ export let subject = (id: string | undefined, args: string[]) => {
     ) {
       throw new UsageError(`task ${id} ${verb} <id> [--gone]`)
     }
-    return { cmd: 'dep', args: [id, verb, ...objects] }
+    return { cmd: 'edge', args: [id, verb, ...objects] }
   }
   if (verb == 'is') {
     // Status is DERIVED (D-24102): `is <status>` drives the palette verb that
@@ -1129,12 +1130,9 @@ let seek = async (got: Got) => {
 // (T-14187). A param the verb does NOT take never gets this far — manual.ts
 // `dots` refuses it by name.
 
-// The bare `task mail` list form is retired (T-10847): `task inbox` speaks the
-// same filter grammar, --all and --sent, so the mail-only listing logic is
-// gone — its reasoning already lives on in inboxList's comments. `mail` stays
-// deprecated, so bare `task mail` hard-errors with a one-line pointer at
-// `task inbox` (T-16375), and this handler only ever prints help if that mark
-// is ever lifted; the real doors are the `mail send`/`reply`/`show` subverbs.
+// There is no bare `task mail`: `task inbox` speaks the same filter grammar,
+// --all and --sent, so the doors here are the acts the inbox has no verb for —
+// `mail show`/`send`/`reply`/`search`/`files`/`doctor`.
 
 // One mail whole, its thread beneath — and reading IS the mark: the
 // `opened` stamp (T-7006) lands by a normal wire patch. Nothing else
@@ -1295,10 +1293,8 @@ let inboxList = async (got: Got) => {
   let json = got.flags.has('--json')
   let every = got.flags.has('--all')
   let sent = got.flags.has('--sent')
-  // The one filter grammar, same as every other list door. Deprecating
-  // `task mail` must not NARROW the surface: it took filters and --sent, so
-  // the door that supersedes it takes them too, or the warm path stays the
-  // deprecated one (T-10767).
+  // The one filter grammar, same as every other list door. The inbox is the
+  // only listing of mail, so it takes filters and --sent as well (T-10767).
   let preds = got.words.map((a) => {
     let p = pred(a)
     if (!p) throw new Error(`not an inbox filter: ${a}\n\n${help(['inbox'])}`)
@@ -2013,11 +2009,11 @@ let role = async (got: Got) => {
 
 // An edge is a sentence — "<id> requires <child>" — and the comp names the
 // whole triple, so link and unlink are the same Change with gone flipped.
-let dep = async (got: Got) => {
+let edge = async (got: Got) => {
   let gone = got.flags.has('--gone')
   let id = got.args.id, type = got.args.type, childId = got.args.child
   if (!id || !type || !childId) {
-    throw new Error('task dep <id> <type> <child> [--gone]')
+    throw new Error('task <id> <type> <child> [--gone]')
   }
   if (!edges.includes(type as Edge)) {
     throw new Error(`edge type is one of: ${edges.join(', ')}`)
@@ -2036,7 +2032,7 @@ let dep = async (got: Got) => {
 }
 
 let requireEdge = (got: Got) =>
-  dep({
+  edge({
     ...got,
     args: {
       id: got.args.parent,
@@ -3746,7 +3742,6 @@ export let verbs = bind({
   logs: transcript,
   search: seek,
   doctor: () => doctor(),
-  mail: () => print(help(['mail'])),
   'mail show': mailShow,
   'mail send': mailSend,
   'mail reply': mailReply,
@@ -3777,8 +3772,7 @@ export let verbs = bind({
   comment,
   commit: landed,
   meta: (got) => colon(undefined, ['meta', got.body ?? '']),
-  link: dep,
-  dep,
+  edge,
   backup: () => backup(),
   sync,
   design,
@@ -3812,7 +3806,6 @@ export let verbs = bind({
   help: (got) => print(help(got.words)),
   complete: completeCmd,
   log: transcript,
-  ls: list,
   context,
   wrap,
   create,
@@ -3857,25 +3850,11 @@ if (import.meta.main) {
       if (selected) {
         let got = parse(selected.name, selected.manual, selected.args)
         hook = got.flags.has('--hook')
-        // A deprecated verb hard-errors — it points at its replacement and
-        // REFUSES to run, because print-and-continue hides a partial run: the
-        // `dep` alias forwarded its args wrong and dropped `--gone` silently,
-        // so the edge survived while the caller assumed success (T-16375).
-        // Exiting non-zero forces the caller onto the current form. stderr,
-        // because stdout is what the caller asked for and is usually piped.
-        // The gate belongs to the SPELLING, not the handler it lands in:
-        // `link` and subject-first sentences reuse the old verb's code, but
-        // only a caller that still spells `dep` is refused.
-        let spelled = selected.name == 'help' && rest[0] == 'help'
-          ? manuals[cmd]
-          : selected.manual
-        if (spelled.deprecated && !routed) {
-          await reportUsage(
-            Deno.args,
-            `task ${spelled.name}: deprecated — ${spelled.deprecated}`,
-          )
-          warn(`task ${spelled.name}: deprecated — ${spelled.deprecated}`)
-          Deno.exit(1)
+        // A `syntax` manual is a router target, reached only through the
+        // sentence a router builds (`task T-3 requires T-9` → `edge`). Spelled
+        // directly it is refused, so the family word is not a second spelling.
+        if (selected.manual.syntax && !routed) {
+          throw new UsageError(`task ${selected.manual.syntax}`)
         }
         await selected.manual.run(got)
       } else if (cmd.startsWith(':')) {
@@ -3890,6 +3869,15 @@ if (import.meta.main) {
         // Explicit-target sugar validates its own args below, not the focused
         // palette command's word count.
         await finishes[cmd](rest)
+      } else if (families.has(cmd)) {
+        // A family word has no verb of its own: `task mail` teaches its
+        // sub-verbs and exits like any other unknown verb.
+        await reportUsage(
+          Deno.args,
+          `no such verb: ${[cmd, rest[0]].join(' ')}`,
+        )
+        print(help([cmd]))
+        Deno.exit(2)
       } else if (cmd && commands[cmd]) {
         validateCommand(cmd, rest)
         await colon(undefined, [cmd, ...rest])

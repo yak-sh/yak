@@ -56,7 +56,6 @@ export type Decl = {
   some?: string[]
   examples?: string[]
   detail?: string
-  deprecated?: string
   retired?: Record<string, string>
   root?: boolean
   alias?: boolean

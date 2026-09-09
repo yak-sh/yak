@@ -14,6 +14,8 @@ Deno.test('tab: word 0 filters by prefix', () => {
   let out = complete(['cl'])
   assertArrayIncludes(out, ['claim', 'claude'])
   assertEquals(out.every((c) => c.startsWith('cl')), true)
+  // A router target (`edge`) is not a first word anyone types.
+  assertEquals(complete(['ed']).includes('edge'), false)
 })
 
 Deno.test('tab: an id positional completes to the graph ids', () => {

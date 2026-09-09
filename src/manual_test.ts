@@ -5,6 +5,7 @@ import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import { commands } from './commands.ts'
 import { TASK_TREE_ADOPTION } from './client.ts'
 import {
+  cliVerbs,
   help,
   manuals,
   parse,
@@ -73,7 +74,6 @@ Deno.test('every verb usage is rendered from its declaration', () => {
         'logs <id> [--prose] [--seq=RANGE] [--after=N] [--limit=N] [--since=ISO] [--until=ISO] [--json]',
       search: 'search [words…] [--json]',
       doctor: 'doctor',
-      mail: 'mail [filters…] [--json] [--all] [--sent]',
       'mail show': 'mail show <id> [--json]',
       'mail send': 'mail send <to> <subject…> --body=BODY',
       'mail reply': 'mail reply <id> [text…] [--body=BODY]',
@@ -104,8 +104,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       comment:
         'comment <id> [text…] [--body=BODY] [-F=FILE] [--verdict=VERDICT]',
       meta: 'meta [text…] [--body=BODY]',
-      link: 'link <id> <type> <child> [--gone]',
-      dep: 'dep <id> <type> <child> [--gone]',
+      edge: '<id> <type> <child> [--gone]',
       backup: 'backup',
       sync: 'sync [--no-commit] [--check]',
       design: 'design <title…> [--body=BODY]',
@@ -140,7 +139,6 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       complete: 'complete [words…]',
       log:
         'log <id> [--prose] [--seq=RANGE] [--after=N] [--limit=N] [--since=ISO] [--until=ISO] [--json]',
-      ls: 'ls [filters…] [--json]',
       context: 'context [sid] [--hook] [--subagent]',
       wrap: 'wrap [sid] [--hook]',
       create: 'create [title…]',
@@ -159,8 +157,6 @@ Deno.test('help topics cover nested and colon vocabularies', () => {
   assertMatch(help(['session', 'brief']), /^task session brief/)
   assertMatch(help(['add']), /^task add \[title…\]/)
   assertMatch(requestedHelp(['add', '--help']) ?? '', /^task add \[title…\]/)
-  assertMatch(help(['link']), /^task <parent> requires\|contains/)
-  assertMatch(help(['link']), /task T-3 requires T-9 --gone/)
   assertMatch(help(['edge']), /^task <parent> requires\|contains/)
   assertMatch(help(['edge']), /task T-3 requires T-9 --gone/)
   assertMatch(help(['fix']), /^task :fix/)
@@ -178,12 +174,13 @@ Deno.test('help topics cover nested and colon vocabularies', () => {
   assertThrows(() => help([':fix', 'extra']), Error, 'no such help topic')
 })
 
-Deno.test('inbox --archive routes through the canonical archive verb', () => {
-  let selected = route('inbox', ['--archive', 'K-9'])!
+Deno.test('inbox archive is the one spelling; --archive is refused', () => {
+  let selected = route('inbox', ['archive', 'K-9'])!
   assertEquals(selected.name, 'inbox archive')
   assertEquals(selected.args, ['K-9'])
   let got = parse(selected.name, selected.manual, selected.args)
   assertEquals(got.args.id, 'K-9')
+  assertThrows(check('inbox', ['--archive', 'K-9']), Error, '--archive')
 })
 
 Deno.test('recall help translates the MCP tool into CLI vocabulary', () => {
@@ -222,22 +219,23 @@ Deno.test('graph_query is a hidden compatibility alias for the CLI query', () =>
   assertEquals(usage().includes('task graph_query'), false)
 })
 
-Deno.test('deprecated routes leave the index but keep their manuals', () => {
-  let index = usage()
-  for (let [name, manual] of Object.entries(manuals)) {
-    if (!manual.deprecated) continue
-    if (manual.root) {
-      assertEquals(index.includes(`task ${usageOf(manual)}`), false, name)
-    }
-    let direct = help(name.split(' '))
-    assertMatch(direct, /^task /)
-    assert(direct.includes(`Deprecated: ${manual.deprecated}`), name)
+// A superseded spelling is deleted, never kept as a synonym (M-35109): the
+// old verbs have no manual, and the edge sentence's router target is not a
+// verb of its own.
+Deno.test('superseded spellings are gone; edge is a router target only', () => {
+  for (let name of ['dep', 'link', 'ls', 'mail']) {
+    assertEquals(name in manuals, false, name)
   }
-  assertThrows(
-    check('dep', []),
-    Error,
-    'deprecated: superseded by task link <id> <type> <child> [--gone]',
-  )
+  for (let name of ['dep', 'link', 'ls']) {
+    assertEquals(cliVerbs.has(name), false, name)
+  }
+  // `mail` survives only as the family word of its sub-verbs.
+  assertEquals(cliVerbs.has('mail'), true)
+  assertMatch(help(['mail']), /^task mail <command> …\n\n {2}task mail show/)
+  assertEquals(manuals.edge.syntax, '<id> <type> <child> [--gone]')
+  assertEquals(manuals.edge.root, undefined)
+  assertEquals(usage().includes('task edge'), false)
+  assertEquals(cliVerbs.has('edge'), true)
 })
 
 let check = (name: string, args: string[]) => {
@@ -646,7 +644,7 @@ let validateExample = (line: string) => {
   }
   if (!verb) return validate('show', manuals.show, [cmd])
   if ((edges as readonly string[]).includes(verb)) {
-    return validate('dep', manuals.dep, [cmd, verb, ...rest])
+    return validate('edge', manuals.edge, [cmd, verb, ...rest])
   }
   if (verb == 'is') {
     return validate('set', manuals.set, [cmd, `.status=${rest[0]}`])

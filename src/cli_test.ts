@@ -290,15 +290,15 @@ Deno.test('subject: sentences route through the existing CLI verbs', () => {
     ]
   ) {
     assertEquals(route(`T-3 ${edge} T-9 --gone`), {
-      cmd: 'dep',
+      cmd: 'edge',
       args: ['T-3', edge, 'T-9', '--gone'],
     })
     assertEquals(route(`T-3 :${edge} T-9 --gone`), {
-      cmd: 'dep',
+      cmd: 'edge',
       args: ['T-3', edge, 'T-9', '--gone'],
     })
     assertEquals(route(`T-3 ${edge} ${edge} T-9 --gone`), {
-      cmd: 'dep',
+      cmd: 'edge',
       args: ['T-3', edge, 'T-9', '--gone'],
     })
   }
@@ -388,8 +388,7 @@ Deno.test('subject: a singular kind can list through the existing list verb', ()
 Deno.test('subject: old commands and explicit focused commands keep their door', () => {
   assertEquals(subject('show', ['T-3']), undefined)
   assertEquals(subject('recall', ['M-4455']), undefined)
-  assertEquals(subject('link', ['T-3', 'requires', 'T-9']), undefined)
-  assertEquals(subject('dep', ['T-3', 'requires', 'T-9']), undefined)
+  assertEquals(subject('edge', ['T-3', 'requires', 'T-9']), undefined)
   assertEquals(subject('require', ['T-3', 'T-9']), undefined)
   assertEquals(subject('query', ['.kind=persona']), undefined)
   assertEquals(subject('graph_query', ['kind=comment']), undefined)
@@ -1029,32 +1028,37 @@ slow('task logs help resolves the transcript alias', async () => {
   assertEquals(text(out.stderr), '')
 })
 
-slow('deprecated routes leave root help but teach at their door', async () => {
+slow('the edge sentence is the one spelling; old verbs are gone', async () => {
   let root = await cli('--help')
   assertEquals(root.code, 0)
-  assertMatch(text(root.stdout), /^\s+task link\b/m)
-  assertEquals(/^\s+task dep\b/m.test(text(root.stdout)), false)
+  for (let old of ['link', 'dep', 'ls', 'edge']) {
+    assertEquals(
+      new RegExp(`^\\s+task ${old}\\b`, 'm').test(text(root.stdout)),
+      false,
+    )
+  }
+  assertMatch(text(root.stdout), /^\s+task <id> \[show\|is\|as\|edge\]/m)
 
-  let link = await cli('link', '--help')
-  assertEquals(link.code, 0)
-  assertMatch(
-    text(link.stdout),
-    /task link <id> <type> <child> \[--gone\]/,
-  )
+  let edge = await cli('edge', '--help')
+  assertEquals(edge.code, 0)
+  assertMatch(text(edge.stdout), /^task <id> <type> <child> \[--gone\]/)
+  assertMatch(text(edge.stdout), /task T-3 requires T-9 --gone/)
 
-  let direct = await cli('dep', '--help')
-  assertEquals(direct.code, 0)
-  assertMatch(
-    text(direct.stdout),
-    /task dep <id> <type> <child> \[--gone\][\s\S]*Deprecated: superseded by task link/,
-  )
-
-  let bare = await cli('dep')
-  assertEquals(bare.code, 0)
-  assertMatch(
-    text(bare.stdout),
-    /task dep <id> <type> <child> \[--gone\][\s\S]*Deprecated: superseded by task link/,
-  )
+  // The old first words are no verbs: the router reads them as a subject id
+  // and refuses the sentence that follows.
+  for (
+    let old of [['link', 'T-3', 'requires', 'T-9'], [
+      'dep',
+      'T-3',
+      'requires',
+      'T-9',
+    ], ['ls', '.status=open']]
+  ) {
+    let gone = await cli(...old)
+    assertEquals(gone.code, 1, old[0])
+    assertEquals(text(gone.stdout), '')
+    assertMatch(text(gone.stderr), /no subject verb/)
+  }
 })
 
 slow('task require is a supported alias with focused help', async () => {
@@ -1070,56 +1074,54 @@ slow('task require is a supported alias with focused help', async () => {
   )
 })
 
-// A deprecated spelling HARD-ERRORS — it points at its replacement and
-// refuses to run, so print-and-continue can't hide a partial run (T-16375).
-// The gate follows the spelling typed, not the handler reached: both current
-// doors run on (and, against an empty graph, die on `no entity`).
-slow('a deprecated spelling hard-errors before its handler runs', async () => {
-  // /query answers with a JSON ARRAY (a narrowed verb resolves its id
-  // there first); everything else gets the empty-snapshot shape.
-  let empty = Deno.serve(
-    { port: 0, onListen: () => {} },
-    (req) =>
-      new URL(req.url).pathname == '/query'
-        ? Response.json([])
-        : Response.json({ changes: [], deps: [] }),
-  )
-  let run = (...args: string[]) =>
-    new Deno.Command(Deno.execPath(), {
-      args: [
-        'run',
-        '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
-        ...args,
-      ],
-      env: { TASKS_HOST: `127.0.0.1:${empty.addr.port}` },
-    }).output()
-  try {
-    // The deprecated verb exits non-zero with the notice and never reaches
-    // its handler — no `no entity` from a lookup it must not attempt.
-    let typed = await run('dep', 'T-3', 'requires', 'T-9')
-    assertEquals(typed.code, 1)
-    assertMatch(text(typed.stderr), /task dep: deprecated — superseded by/)
-    assertEquals(/no entity/.test(text(typed.stderr)), false)
+// The edge sentence reaches its handler; the router target spelled directly
+// (`task edge …`) is refused before any lookup, so the family word never
+// becomes a second spelling.
+slow(
+  'the edge sentence runs; `task edge` spelled directly is refused',
+  async () => {
+    // /query answers with a JSON ARRAY (a narrowed verb resolves its id
+    // there first); everything else gets the empty-snapshot shape.
+    let empty = Deno.serve(
+      { port: 0, onListen: () => {} },
+      (req) =>
+        new URL(req.url).pathname == '/query'
+          ? Response.json([])
+          : Response.json({ changes: [], deps: [] }),
+    )
+    let run = (...args: string[]) =>
+      new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          new URL('./cli.ts', import.meta.url).pathname,
+          ...args,
+        ],
+        env: { TASKS_HOST: `127.0.0.1:${empty.addr.port}` },
+      }).output()
+    try {
+      // The router target spelled directly exits non-zero with the sentence
+      // form and never reaches its handler — no `no entity` from a lookup it
+      // must not attempt.
+      let typed = await run('edge', 'T-3', 'requires', 'T-9')
+      assertEquals(typed.code, 1)
+      assertMatch(text(typed.stderr), /task <id> <type> <child> \[--gone\]/)
+      assertEquals(/no entity/.test(text(typed.stderr)), false)
 
-    // The successor sentence runs its handler and dies on the empty graph.
-    let sentence = await run('T-3', 'requires', 'T-9')
-    assertMatch(text(sentence.stderr), /no entity: T-3/)
-    assertEquals(/deprecated/.test(text(sentence.stderr)), false)
+      // The sentence runs its handler and dies on the empty graph.
+      let sentence = await run('T-3', 'requires', 'T-9')
+      assertMatch(text(sentence.stderr), /no entity: T-3/)
 
-    // Carrying the focused-command colon into the sentence is the same edge
-    // operation, not a lookup for a palette command named `requires`.
-    let focused = await run('T-3', ':requires', 'T-9')
-    assertMatch(text(focused.stderr), /no entity: T-3/)
-    assertEquals(/not a command/.test(text(focused.stderr)), false)
-
-    let link = await run('link', 'T-3', 'requires', 'T-9')
-    assertMatch(text(link.stderr), /no entity: T-3/)
-    assertEquals(/deprecated/.test(text(link.stderr)), false)
-  } finally {
-    await empty.shutdown()
-  }
-})
+      // Carrying the focused-command colon into the sentence is the same edge
+      // operation, not a lookup for a palette command named `requires`.
+      let focused = await run('T-3', ':requires', 'T-9')
+      assertMatch(text(focused.stderr), /no entity: T-3/)
+      assertEquals(/not a command/.test(text(focused.stderr)), false)
+    } finally {
+      await empty.shutdown()
+    }
+  },
+)
 
 slow('the --blocked-by refusal names the current edge door', async () => {
   let out = await cli('new', 'Title', '--blocked-by=T-1')
@@ -1406,14 +1408,11 @@ slow(
   },
 )
 
-slow('task dep rejects surplus positional arguments', async () => {
-  let out = await cli('dep', 'T-1', 'requires', 'T-2', 'surplus')
+slow('the edge sentence rejects surplus positional arguments', async () => {
+  let out = await cli('T-1', 'requires', 'T-2', 'surplus')
   assertEquals(out.code, 1)
   assertEquals(text(out.stdout), '')
-  assertMatch(
-    text(out.stderr),
-    /task dep <id> <type> <child> \[--gone\]/,
-  )
+  assertMatch(text(out.stderr), /task T-1 requires <id> \[--gone\]/)
 })
 
 Deno.test('launchers scope lifecycle hooks to their provider invocation', () => {
