@@ -14,6 +14,20 @@ plugin          the verbs, over @yaks/cli                      cli.ts
 
 ## Use
 
+`deno task harness` with no verb opens the terminal UI. The transcript scrolls
+and word-wraps beside the Sessions, Subagents, Tasks and Keys panels. Enter
+starts a session (or sends to the selected one); Shift+Enter inserts a newline.
+Ctrl+N / Ctrl+P or Alt+Down / Alt+Up select sessions, Ctrl+O selects a new one,
+PgUp / PgDn scroll, and Ctrl+C quits. Shift+Enter needs a terminal supporting
+kitty keyboard sequences (Alt+Enter also inserts a newline).
+
+Typing only touches the editor. Post-commit graph effects refresh the content,
+including model replies arriving while stdin is idle; there is no polling loop.
+The sidebar is `Opts.panels` in `app.ts`: each contribution in `panels.ts` is
+`{title, read, Render}`, with `read` returning bundles from graph-backed doors.
+To embed the app, mount `App` with `{agent: a, subscribe: changes(a), panels}`;
+use `run(() => h(App, opts), {backend})` to choose a terminal backend.
+
 ```sh
 deno task harness new 'reply with the word pong'
 deno task harness ls
@@ -54,8 +68,8 @@ for (let e of await a.transcript(s)) console.log(a.line(e))
 
 ## Not here
 
-No TUI (that is @yaks/tui), no sync, no server, no durable effect ledger — the
-daemon is woken again by `resume()` instead.
+No sync, no server, no durable effect ledger — the daemon is woken again by
+`resume()` instead. The terminal host and widgets come from @yaks/tui.
 
 ## Compatibility
 

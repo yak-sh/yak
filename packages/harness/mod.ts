@@ -39,3 +39,6 @@ export * from './store.ts'
 export * from './tools.ts'
 export * from './run.ts'
 export { plugin } from './cli.ts'
+
+export { App, changes, type Opts as AppOpts, tui } from './app.ts'
+export { type Context, type Panel, panels, type UIAgent } from './panels.ts'

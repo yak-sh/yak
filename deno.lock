@@ -1534,6 +1534,7 @@
         "dependencies": [
           "jsr:@db/sqlite@0.13.0",
           "jsr:@std/assert@1",
+          "npm:preact@^10.29.1",
           "npm:zod-to-json-schema@^3.25.1",
           "npm:zod@^3.24.0"
         ]
