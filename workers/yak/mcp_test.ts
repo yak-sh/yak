@@ -906,7 +906,7 @@ slow(
       let once = minted(await seeding('Lemon cakes'), '$r')
       assertEquals(minted(await seeding('Lemon cakes, better'), '$r'), once)
       let cakes = JSON.parse(
-        await agent.tool('graph_query', { q: '.doc.title~=Lemon cakes' }),
+        await agent.tool('graph_query', { q: '.doc.title~="Lemon cakes"' }),
       ) as { entity: { eid: string } }[]
       assertEquals(cakes.map((b) => b.entity.eid), [once])
       // and the name stands where an eid does, on the line and at the door
@@ -3746,7 +3746,7 @@ slow('a read with no app composes every app the caller can reach', async () => {
       ['Lemon cake', 'Pancakes', 'Lemon zester'],
     )
     // `*` is the debugging form: every component, wherever it lives.
-    let [whole] = await rows(`.doc.title~=Lemon cake&*`)
+    let [whole] = await rows(`.doc.title~="Lemon cake"&*`)
     assertEquals(whole.recipe!.serves, 4)
     assertEquals(whole.loan!.to, 'Maya')
     // A word nobody planted is nobody's, and the store's own sentence says so

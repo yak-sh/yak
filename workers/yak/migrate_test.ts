@@ -216,7 +216,7 @@ slow('an app store carries every row across, and reconciles', async () => {
   let files = bucket()
 
   let now = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
-  let docs = await now.query(`.doc.title=Lemon cake&.doc?`, APP)
+  let docs = await now.query(`.doc.title="Lemon cake"&.doc?`, APP)
 
   let report = reportIn(files.held)
   assert(report.ok, report.message)

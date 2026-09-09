@@ -200,7 +200,7 @@ slow('a letter lands in the app its address named', async () => {
     assertEquals(file.attachment.name, 'list.csv')
     assertEquals(file.attachment.mime, 'text/csv')
     let [held] = await recipes
-      .get('.doc.title=The list&.doc!') as unknown as Row[]
+      .get('.doc.title="The list"&.doc!') as unknown as Row[]
     assertEquals(held.doc.body, 'It is attached.')
     let links = await recipes.get(
       '.edge.from=' + held.entity.eid,
@@ -433,7 +433,7 @@ slow(
       await write('The hundred and first')
       assertEquals(await spent(), 101)
       assertEquals(
-        (await page.get('.doc.title=The hundred and first&.doc!')).length,
+        (await page.get('.doc.title="The hundred and first"&.doc!')).length,
         1,
       )
       // And the SEND door, past the same allowance, says so on the letter.
