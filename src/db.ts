@@ -12,6 +12,7 @@
 // `num` is the server-minted human number (T-7 in the UI, one global counter).
 import type { SchemaOp, Sql, SqlValue, Statement } from './store/sql.ts'
 import { SEED } from './catalog.ts'
+import { composedChanges } from './store/wire.ts'
 export type { SchemaOp } from './store/sql.ts'
 import { initVector } from './vector.ts'
 import { dirname, resolve } from 'node:path'
@@ -4891,7 +4892,7 @@ export let writerVia = (
 // Apply a batch atomically. Unknown component names are ignored (a newer
 // client speaking to an older server shouldn't wedge the socket). num is
 // server-owned — never writable over the wire. Returns the
-// EFFECTIVE batch: the input plus a synthesized entity-null for every
+// EFFECTIVE batch, composed to final state: a synthesized entity-null for every
 // cascade victim and the minted spine of every entity BORN here (num is
 // server-owned, so no cache — the sender's included — knows it otherwise),
 // so casting the return keeps every client cache honest.
@@ -5532,7 +5533,10 @@ export let apply = (
       // A deleted entity stays deleted: the tombstone voids every late or
       // replayed change for its eid — an edit racing a delete loses
       // deterministically, and nothing can resurrect the id.
-      if (dead.get(eid)) continue
+      if (dead.get(eid)) {
+        dropped.add(change)
+        continue
+      }
       for (let ref of refs) {
         if (ref.name == name && comp?.[ref.col] != null) {
           refWrites.set(`${name}\0${eid}\0${ref.col}`, [ref, eid])
@@ -6415,7 +6419,12 @@ export let apply = (
         journalWrite(db, now, actor, via, trace, logged)
       }
     }
-    return [...changes, ...extra]
+    // The journal keeps ordered operations (including create-then-drop); the
+    // answer is final state, not an operation log. Compose before lowering so
+    // every casualty answers ONLY entity-null, even if an earlier patch or a
+    // later synthesized echo also named it. Whole creation rows above retain
+    // their defaults; pipeline-only guards never escape to a client.
+    return composedChanges([...changes, ...extra])
   }
   try {
     return db.transaction(run, true)

@@ -266,23 +266,6 @@ Deno.test('parity: the two databases themselves agree', () => {
 // @yaks/blob) — as a hook on the phase named in each test. Filed under
 // V-33493; pinned here so the boundary is executable rather than remembered.
 
-Deno.test('gap: a dead entity takes no patch — but the app still echoes it', () => {
-  // Both writers refuse to WRITE a patch aimed at a tombstone (the assertion
-  // at the end). They differ in what they say about it: the app leaves the
-  // void change in its returned batch, the core drops it, since nothing
-  // happened. The core's answer is the one a cache can apply blindly.
-  let mine = core.apply([{
-    entity: { eid: T2 },
-    task: { priority: 9 },
-  }]) as Bundle[]
-  let theirs = apply(appDb, [
-    { eid: T2, name: 'task', comp: { priority: 9 } },
-  ] as never) as unknown as Change[]
-  assertEquals(mine.flatMap(asChanges), [])
-  assertEquals(theirs.length, 1)
-  assertEquals(core.read(`.priority=9`), [])
-})
-
 Deno.test('gap: a doc body is content-addressed by the app, plain text here', () => {
   // db.ts casBodies materializes every doc body as a `blob` entity and stores
   // doc.body as a reference to it (NOT NULL). @yaks/graph has no CAS — that is

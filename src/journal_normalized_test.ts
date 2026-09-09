@@ -17,9 +17,9 @@ let fresh = () => bareDb()
 let uid = () => crypto.randomUUID()
 type DB = InstanceType<typeof DatabaseSync>
 
-// What apply() journals: its returned batch minus the server-stamped provenance
-// echoes (created/updated repeat the ts + actor the journal_tx row keeps) and
-// minus any `eid` a comp spells (the change's entity, never a field).
+// The comparable fields of a composed answer: omit provenance echoes (the
+// journal keeps those in its envelope) and a comp's redundant eid. The journal
+// keeps operation order; the answer groups final components by entity.
 let logged = (out: Change[]): Change[] =>
   out.filter((c) => c.name != 'created' && c.name != 'updated').map((c) =>
     c.comp && 'eid' in c.comp
@@ -82,16 +82,20 @@ let fieldsAt = (d: DB, ordinal: number) => {
   ).all(change) as { field: string; present: number; value: string | null }[]
 }
 
-Deno.test('journal: rows reconstruct the applied batch exactly, in order', () => {
+Deno.test('journal: rows retain every applied value independently of answer order', () => {
   let d = fresh()
   let t = uid()
   let out = apply(d, [
     { eid: t, name: 'doc', comp: { title: 'a', body: '' } },
     { eid: t, name: 'task', comp: { priority: 'P2' } },
   ])
-  // The record is byte-for-byte the applied batch — same changes, same order
-  // (doc before task before the synthesized entity birth).
-  assertEquals(normalizedBatch(d), logged(out))
+  // This create has one operation per component: the values agree exactly,
+  // even though the answer now groups each entity's identity before its comps.
+  let sorted = (cs: Change[]) =>
+    cs.toSorted((a, b) =>
+      `${a.eid} ${a.name}`.localeCompare(`${b.eid} ${b.name}`)
+    )
+  assertEquals(sorted(normalizedBatch(d)), sorted(logged(out)))
 })
 
 Deno.test('journal: one journal_tx per apply carries the provenance', () => {
@@ -108,10 +112,10 @@ Deno.test('journal: one journal_tx per apply carries the provenance', () => {
 Deno.test('journal: within-batch ordinals reproduce applied order', () => {
   let d = fresh()
   let t = uid()
-  let batch = logged(apply(d, [
+  apply(d, [
     { eid: t, name: 'doc', comp: { title: 'a', body: '' } },
     { eid: t, name: 'task', comp: { priority: 'P2' } },
-  ]))
+  ])
   let tx = (d.prepare('select max(id) as id from journal_tx').get() as {
     id: number
   }).id
@@ -119,8 +123,14 @@ Deno.test('journal: within-batch ordinals reproduce applied order', () => {
     'select ordinal, component from journal_change where tx = ? order by ordinal',
   ).all(tx) as { ordinal: number; component: string }[]
   // (tx, ordinal) is a dense 0..n-1 sequence matching the batch positions.
-  assertEquals(rows.map((r) => r.ordinal), batch.map((_, i) => i))
-  assertEquals(rows.map((r) => r.component), batch.map((c) => c.name))
+  assertEquals(rows.map((r) => r.ordinal), [0, 1, 2, 3, 4])
+  assertEquals(rows.map((r) => r.component), [
+    'blob',
+    'doc',
+    'task',
+    'entity',
+    'entity',
+  ])
 })
 
 Deno.test('journal: a present null field is distinct from a tombstone', () => {

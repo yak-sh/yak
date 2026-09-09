@@ -931,7 +931,16 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
     {
       eid: subject,
       name: 'session',
-      comp: { pid: 600, operator: 1, pane: '%7', turn: 'idle' },
+      comp: {
+        pid: 600,
+        operator: 1,
+        pane: '%7',
+        turn: 'idle',
+        // The answer folds canonical facet echoes into this same row.
+        provider_session_id: null,
+        serving_model: null,
+        transcript: null,
+      },
     },
     {
       eid: subject,
@@ -953,11 +962,11 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
   // canonicalizes to the eid the store keeps.
   let num = Number(comp(target, 'entity')?.num)
   let said = edgeEid(subject, 'about', target)
-  let [edge] = apply(db, [{
+  let edge = apply(db, [{
     eid: said,
     name: 'edge',
     comp: { from: 'typed-subject', to: String(num) },
-  }, { eid: said, name: 'about', comp: {} }])
+  }, { eid: said, name: 'about', comp: {} }]).find((c) => c.name == 'edge')
   assertEquals(edge, {
     eid: said,
     name: 'edge',
@@ -5575,4 +5584,73 @@ Deno.test('an explicit null still clears; a stale guard refuses even a matching 
     }])
   )
   assertEquals(journalCount(), before)
+})
+
+// T-36660: the answer is a composed final state; the journal remains an
+// ordered operation log. Assert against an actual cache, not another writer
+// using the same composition helper.
+Deno.test('apply answer: death wins over patches and every casualty clears the cache', () => {
+  let d = bareDb()
+  let target = uid(), comment = uid()
+  let cache: Bag = { cache: {}, deps: [] }
+  land(
+    cache,
+    apply(d, [
+      { eid: target, name: 'task', comp: { domain: 'before' } },
+      { eid: comment, name: 'comment', comp: { target } },
+    ]),
+  )
+  let out = apply(d, [
+    { eid: comment, name: 'comment', comp: { target } },
+    { eid: target, name: 'task', comp: { domain: 'during' } },
+    { eid: target, name: 'entity', comp: null },
+    { eid: target, name: 'task', comp: { domain: 'after' } },
+  ])
+  for (let eid of [target, comment]) {
+    assertEquals(out.filter((c) => c.eid == eid), [
+      { eid, name: 'entity', comp: null },
+    ])
+  }
+  land(cache, out)
+  assertEquals(cache.cache, {})
+  assertEquals(
+    apply(d, [
+      { eid: target, name: 'task', comp: { domain: 'replayed' } },
+      { eid: target, name: 'entity', comp: null },
+    ]),
+    [],
+  )
+})
+
+Deno.test('apply answer: ordered guarded patches compose, defaults survive, guards do not', () => {
+  let d = bareDb(), eid = uid()
+  let born = apply(d, [{ eid, name: 'task', comp: { domain: 'before' } }])
+  let row = born.find((c) => c.eid == eid && c.name == 'task')!.comp!
+  assertEquals(row.priority, 0)
+  assertEquals(row.project, null)
+  let out = apply(d, [
+    {
+      eid,
+      name: 'task',
+      comp: { domain: 'during' },
+      was: { domain: sha('before') },
+    },
+    { eid, name: 'task', comp: { domain: 'after', priority: 1 } },
+  ])
+  assertEquals(out.filter((c) => c.name == 'task'), [
+    { eid, name: 'task', comp: { domain: 'after', priority: 1 } },
+  ])
+  assertEquals(out.some((c) => c.was), false)
+})
+
+Deno.test('apply answer: a birth deleted in its own batch has no surviving echoes', () => {
+  let d = bareDb(), eid = uid()
+  assertEquals(
+    apply(d, [
+      { eid, name: 'task', comp: { domain: 'briefly alive' } },
+      { eid, name: 'entity', comp: null },
+      { eid, name: 'task', comp: { priority: 1 } },
+    ]),
+    [{ eid, name: 'entity', comp: null }],
+  )
 })

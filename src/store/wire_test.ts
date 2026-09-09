@@ -2,7 +2,7 @@
 // in, and lower only committed components and identity on the way out.
 import { assertEquals } from '@std/assert'
 import type { Change } from '../types.ts'
-import { asBundle, asChanges } from './wire.ts'
+import { asBundle, asChanges, composedChanges } from './wire.ts'
 
 Deno.test('wire: lift ordered patches, component drops and guards', () => {
   let changes: Change[] = [
@@ -52,4 +52,24 @@ Deno.test('wire: lower minted identity and components, not pipeline metadata', (
     ],
   )
   assertEquals(asChanges({ entity: { eid: 'a' } }), [])
+})
+
+Deno.test('wire: composed answers preserve unnumbered births but never a dead spine', () => {
+  let changes: Change[] = [
+    { eid: 'a', name: 'doc', comp: { title: 'first' } },
+    { eid: 'a', name: 'entity', comp: { eid: 'a', num: null } },
+    { eid: 'a', name: 'doc', comp: { title: 'last' }, was: { title: 'token' } },
+  ]
+  assertEquals(composedChanges(changes), [
+    { eid: 'a', name: 'entity', comp: { eid: 'a', num: null } },
+    { eid: 'a', name: 'doc', comp: { title: 'last' } },
+  ])
+  assertEquals(
+    composedChanges([
+      ...changes,
+      { eid: 'a', name: 'entity', comp: null },
+      ...changes,
+    ]),
+    [{ eid: 'a', name: 'entity', comp: null }],
+  )
 })

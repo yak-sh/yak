@@ -4,7 +4,7 @@
 // committed answer (including minted identity and deletion) back to changes.
 // Reserved pipeline metadata is not a component in that answer.
 
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, composed, dead } from '@yaks/graph'
 import type { Change } from '../types.ts'
 
 // A change is the app's wire shape; a bundle is @yaks/graph's. One bundle per
@@ -31,4 +31,23 @@ export let asChanges = (b: Bundle): Change[] => {
     out.push({ eid, name, comp: comp as Record<string, unknown> | null })
   }
   return out
+}
+
+// The fleet answer uses the core's final-state composition, but retains an
+// explicit spine for unnumbered births (blobs, entries, etc.). In this store
+// num:null is meaningful; the core's optional number omits it. Keep that app
+// spelling here rather than teaching the generic identity about fleet kinds.
+export let composedChanges = (changes: Change[]): Change[] => {
+  let identities = new Map(
+    changes.filter((c) => c.name == 'entity' && c.comp != null)
+      .map((c) => [c.eid, c.comp!]),
+  )
+  return composed(changes.map(asBundle)).flatMap((b) => {
+    let out = asChanges(b)
+    let identity = identities.get(b.entity.eid)
+    if (!dead(b) && b.entity.num == null && identity) {
+      out.unshift({ eid: b.entity.eid, name: 'entity', comp: identity })
+    }
+    return out
+  })
 }
