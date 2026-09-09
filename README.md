@@ -171,35 +171,9 @@ Projects may add Claude-only invocation settings in
 `.tasks/claude-settings.json`; hook arrays append after Tasks' lifecycle hooks
 and are never loaded by bare `claude`.
 
-Persistent roles are graph-declared fleet capacity. A role can keep either a
-native Claude/Codex TUI or a detached managed session available, and every run
-points back to the role that owns it. Roles receive project-wide attention by
-virtue of that graph binding; they do not need the ad-hoc `--operator` flag.
-`docs/ADAPTERS.md` defines the shared contract and compatibility matrix.
-
-A role is _desired_ capacity, so the reconciler continuously drives real
-processes toward it. Killing a pane or a tmux session is therefore not a stop —
-the next sweep puts it back. Stopping means patching the desire, which is what
-the CLI does:
-
-```sh
-task role                  # what should be running, what is, and any launch error
-task role stop R-12        # this role stays down — across daemon and machine restarts
-task role stop --all       # the fleet-wide off switch
-task role start R-12       # hand it back to the reconciler
-task role pause R-12       # reversible operator pause
-task role resume R-12      # return paused capacity to reconciliation
-```
-
-Role scope may be any entity; `role.checkout` separately names execution ground
-when the scoped entity is not a repo-bearing project. Optional schedule, wake
-policy, and wake target facts express activation without a registry.
-`supervises` and `delegates` edges add hierarchy only where an installation
-wants it. The role's decision, reason, observed session, and decision time are
-the reconciler receipt shown beside desired state.
-
-`task role stop` with nothing named is refused rather than treated as "stop
-everything"; the fleet-wide form has to be spelled `--all`.
+Persistent operator roles are retired. The server and effects daemon never
+reconcile role state into agent processes. Historical role configuration and
+session links remain readable; new headless work uses session launch requests.
 
 SessionEnd runs `task session wrap --hook` — claims are released and the closing
 summary is kept as the session brief (`task session brief` writes one

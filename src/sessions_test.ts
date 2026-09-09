@@ -58,7 +58,6 @@ let { referencedEntry } = await import('./referenced.ts')
 let {
   codexPending,
   commented,
-  continueSession,
   deleted,
   drainNative,
   logsDir,
@@ -398,7 +397,7 @@ Deno.test('a task spawn is told how a run ends: land, done, release', async () =
   await spawned(cast, (_got, launch) => {
     prompt = String(launch.prompt ?? '')
     return Promise.resolve()
-  })(eid, {})
+  })(eid, spawnRow(eid) ?? {})
   let id = human(db, t)
   assertStringIncludes(prompt, '`task land`')
   assertStringIncludes(prompt, 're-run the gate')
@@ -454,7 +453,7 @@ slow('a new Codex spawn routes to the graph-native lifecycle', async () => {
       },
     ])
     return Promise.resolve()
-  })(eid, {})
+  })(eid, spawnRow(eid) ?? {})
 
   assertEquals(routed, 1)
   assertEquals(row(eid)?.origin, 'managed')
@@ -510,7 +509,7 @@ slow(
       assertEquals(launch.task, undefined)
       assertEquals(launch.instruction.includes(prompt), true)
       return Promise.resolve()
-    })(eid, {})
+    })(eid, spawnRow(eid) ?? {})
     assertEquals(row(eid)?.origin, 'managed')
     assertEquals(row(eid)?.requested_task, null)
   },
@@ -530,7 +529,7 @@ slow('correcting a preflight-failed chat retries its launch', async () => {
     routed++
     return Promise.resolve()
   }
-  await spawned(cast, native)(eid, {})
+  await spawned(cast, native)(eid, spawnRow(eid) ?? {})
   assertEquals(row(eid)?.status, 'failed')
   assertMatch(failure(eid) ?? '', /taskless chat requires/)
 
@@ -569,7 +568,7 @@ slow('a projectless Codex task starts as a no-code graph session', async () => {
     assertMatch(launch.instruction, /no repo-backed project/)
     assertEquals(launch.instruction.includes('task land'), false)
     return Promise.resolve()
-  })(eid, {})
+  })(eid, spawnRow(eid) ?? {})
 
   assertEquals(routed, 1)
   assertEquals(row(eid)?.cwd, null)
@@ -626,7 +625,10 @@ slow(
     // worktree preparation can finish. This is the role/effect race that made
     // two Claude CLIs contend for one --session-id.
     let launch = spawned(cast)
-    await Promise.all([launch(eid, {}), launch(eid, {})])
+    await Promise.all([
+      launch(eid, spawnRow(eid) ?? {}),
+      launch(eid, spawnRow(eid) ?? {}),
+    ])
 
     let prompts = Deno.readTextFileSync(log(eid)).split('\n').filter((line) =>
       line.includes('"type":"session.prompt"')
@@ -1020,7 +1022,7 @@ slow('both Codex rollback names run through process JSONL', async () => {
       await spawned(cast, () => {
         routed++
         return Promise.resolve()
-      })(eid, {})
+      })(eid, spawnRow(eid) ?? {})
       assertEquals(row(eid)?.status, 'completed')
       assertEquals(spawnRow(eid)?.provider, provider)
       // The process JSONL path now ALSO ingests its transcript as entries
@@ -1045,104 +1047,48 @@ slow('both Codex rollback names run through process JSONL', async () => {
   }
 })
 
-slow(
-  'a unified operator (role comp on the project) launches in its own repo, actor = itself',
-  async () => {
-    // The role comp sits ON the project with NO scope — the project IS its own
-    // operator (D-19459). The launch must resolve the workspace to the project's
-    // own repo (scope defaults to self) and stamp actor = the project entity.
-    let project = uid(), eid = uid(), id = uid()
-    let done = write([
-      { eid: project, name: 'doc', comp: { title: 'Task Graph', body: '' } },
-      { eid: project, name: 'project', comp: {} },
-      {
-        eid: project,
-        name: 'repo',
-        comp: { path: scratch, base_branch: 'main' },
-      },
-      {
-        eid: project,
-        name: 'role',
-        comp: { state: 'running', surface: 'managed' },
-      },
-      {
+Deno.test('retired operator requests fail before any provider or workspace starts', async () => {
+  let role = uid()
+  apply(db, [{
+    eid: role,
+    name: 'role',
+    comp: { state: 'running', surface: 'managed' },
+  }])
+  for (let binding of [{ role }, { operator: 1 }]) {
+    for (let provider of ['fake', 'codex']) {
+      let eid = uid()
+      apply(db, [{
         eid,
         name: 'session',
-        comp: {
-          id,
-          provider: 'fake',
-          model: 'fake-fast',
-          role: project,
-          operator: 1,
-        },
-      },
-    ])
-    await done
-    assertEquals(row(eid)?.status, 'completed', JSON.stringify(row(eid)))
-    assertEquals(row(eid)?.actor, project) // actor = role = project, one entity
-    assertEquals(row(eid)?.cwd != null, true) // launched with a worktree
-    assertEquals(failure(eid), undefined)
-  },
-)
-
-slow(
-  'a managed role runs in its project and resumes content-free',
-  async () => {
-    let project = uid(), role = uid(), eid = uid(), id = uid()
-    let done = write([
-      { eid: project, name: 'doc', comp: { title: 'Project', body: '' } },
-      { eid: project, name: 'project', comp: {} },
-      {
-        eid: project,
-        name: 'repo',
-        comp: { path: scratch, base_branch: 'main' },
-      },
-      {
-        eid: role,
-        name: 'doc',
-        comp: { title: 'Coordinator', body: 'report-role-env' },
-      },
-      {
-        eid: role,
-        name: 'role',
-        comp: { state: 'running', surface: 'managed', scope: project },
-      },
-      {
-        eid,
-        name: 'session',
-        comp: {
-          id,
-          provider: 'fake',
-          model: 'fake-fast',
-          role: role,
-          operator: 1,
-        },
-      },
-    ])
-    await done
-    assertEquals(row(eid)?.status, 'completed', JSON.stringify(row(eid)))
-    assertEquals(row(eid)?.actor, project)
-    assertEquals(row(eid)?.requested_task, null)
-    let events = Deno.readTextFileSync(log(eid)).split('\n').filter(Boolean)
-    assert(
-      events.some((line) => line.includes(`"text":"role:${role}"`)),
-    )
-
-    await continueSession(
-      eid,
-      'You have pending Tasks messages. Call task_context now.',
-      cast,
-    )
-    assertEquals(row(eid)?.status, 'completed')
-    let inputs = Deno.readTextFileSync(log(eid)).split('\n').filter(Boolean)
-      .map((line) => JSON.parse(line) as { type?: string; text?: string })
-      .filter((event) => event.type == 'session.input')
-    assertEquals(
-      inputs.at(-1)?.text,
-      'You have pending Tasks messages. Call task_context now.',
-    )
-  },
-)
+        comp: { id: uid(), provider, model: 'fake-fast', ...binding },
+      }])
+      let launched = false
+      let native = provider == 'codex'
+        ? () => {
+          launched = true
+          return Promise.resolve()
+        }
+        : undefined
+      await spawned(cast, native)(eid, spawnRow(eid) ?? {})
+      assertEquals(row(eid)?.status, 'failed')
+      assertEquals(failure(eid), 'persistent operators are retired')
+      assertEquals(row(eid)?.started_at, null)
+      assertEquals(row(eid)?.cwd, null)
+      assertEquals(launched, false)
+      assertEquals(running.has(eid), false)
+    }
+  }
+  // An interactive hook can still announce its historical membership.
+  let external = uid()
+  apply(db, [{
+    eid: external,
+    name: 'session',
+    comp: { id: uid(), role, operator: 1 },
+  }])
+  await spawned(cast)(external, {})
+  assertEquals(failure(external), undefined)
+  assertEquals(row(external)?.origin, 'external')
+})
 
 slow('a canonical fake session dual-materializes and runs', async () => {
   let { t } = seed()
@@ -1171,23 +1117,29 @@ slow('a canonical fake session dual-materializes and runs', async () => {
   assert(logOf(eid).entries.length > 1)
 })
 
-slow('an external provider patch is not a launch request', async () => {
-  let eid = uid()
-  await write([{
-    eid,
-    name: 'session',
-    comp: { id: uid(), cwd: scratch },
-  }])
-  assertEquals(spawnRow(eid)?.provider, null)
-  await write([{
-    eid,
-    name: 'session',
-    comp: { provider: 'fake', model: 'fake-fast' },
-  }])
-  assertEquals(spawnRow(eid)?.provider, 'fake')
-  assertEquals(row(eid)?.origin, 'external')
-  assertEquals(row(eid)?.status, null)
-  assertEquals(logOf(eid).entries, [])
+Deno.test('delayed session births do not reinterpret interactive metadata as launch intent', async () => {
+  for (
+    let initial of [{}, { pid: Deno.pid }, { pid: Deno.pid, provider: 'fake' }]
+  ) {
+    let eid = uid(), t = trace()
+    let birth = apply(db, [{
+      eid,
+      name: 'session',
+      comp: { id: uid(), cwd: scratch, ...initial },
+    }], t)
+    // The daemon has not consumed birth when the hook reports its provider.
+    apply(db, [{
+      eid,
+      name: 'spawn',
+      comp: { provider: 'fake', model: 'fake-fast' },
+    }])
+    let before = row(eid)
+    await dispatch(birth, t)
+    assertEquals(row(eid), before)
+    assertEquals(row(eid)?.origin, 'external')
+    assertEquals(row(eid)?.status, null)
+    assertEquals(logOf(eid).entries, [])
+  }
 })
 
 slow('a worn persona rides the prompt whole — tiers and all', async () => {
@@ -2069,8 +2021,7 @@ slow('a comment resumes nothing it should not', async () => {
     ).get(bare) as { via: string | null }).via,
     bare,
   )
-  // a persistent role never receives graph words through provider argv;
-  // roles.ts sends a fixed task_context wake after the turn settles.
+  // Historical operator sessions stay down when comments arrive.
   let role = uid(), roleRun = plant([INIT])
   apply(db, [
     {

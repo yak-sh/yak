@@ -132,14 +132,6 @@ Deno.test('every verb usage is rendered from its declaration', () => {
         'session wait <id> [--timeout=DURATION] [--interval=N] [--json]',
       sessions: 'sessions [-n=N] [--live] [--json]',
       tail: 'tail <id> [-n=N] [--follow[=FILTER]] [--interval=N] [--json]',
-      role: 'role [command…] [--json]',
-      'role stop': 'role stop [ids…] [--all]',
-      'role start': 'role start [ids…] [--all]',
-      'role cycle': 'role cycle [ids…] [--all]',
-      'role pause': 'role pause [ids…] [--all]',
-      'role resume': 'role resume [ids…] [--all]',
-      'role disable': 'role disable [ids…] [--all]',
-      'role retire': 'role retire [ids…] [--all]',
       probes: 'probes [--all] [--reap] [--grace=30]',
       telemetry: 'telemetry [--errors] [--stats] [--since=ISO] [-n=N] [--json]',
       usage: 'usage [filters…] [--by=DIM] [--json]',
@@ -418,10 +410,6 @@ Deno.test('manual validation rejects loss-shaped arguments', () => {
     ['mail send', ['jeff', 'Subject', '.oops=1'], 'does not take .oops='],
     ['comment', ['T-1', 'text', '.oops=1'], 'does not take .oops='],
     ['claim', ['T-1', '.session=S-3'], 'does not take .session='],
-    // An unscoped stop must never be read as "stop everything".
-    ['role stop', [], 'needs <ids> or --all'],
-    ['role start', [], 'needs <ids> or --all'],
-    ['role cycle', [], 'needs <ids> or --all'],
   ]
   for (let [name, args, message] of cases) {
     assertThrows(check(name, args), Error, message)
@@ -473,10 +461,6 @@ Deno.test('manual validation accepts each supported option shape', () => {
   ])()
   check('set', ['T-1', '--body=@notes.md'])()
   check('mail send', ['jeff', 'Subject', '--body', 'the', 'letter'])()
-  check('role stop', ['R-1'])()
-  check('role stop', ['--all'])()
-  check('role start', ['R-1', 'R-2'])()
-  check('role cycle', ['R-1'])()
   // The body at the dot spelling, where the verb declares it — and it is a
   // VALUE, so it never counts toward the words the title needs.
   check('design', ['A title', '.body=@plan.md'])()

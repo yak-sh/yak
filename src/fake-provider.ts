@@ -59,13 +59,6 @@ if (says('signal-ready')) {
 }
 await beat()
 say({ type: 'message', role: 'assistant', text: `working: ${instruction}` })
-if (says('report-role-env')) {
-  say({
-    type: 'message',
-    role: 'assistant',
-    text: `role:${Deno.env.get('TASKS_ROLE') ?? ''}`,
-  })
-}
 if (says('noise')) console.error('fake: stderr noise')
 await beat()
 say({ type: 'tool', name: 'read', input: { path: 'README.md' } })

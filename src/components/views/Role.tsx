@@ -5,8 +5,8 @@ import { Prop } from '../editors.tsx'
 import { Entity } from '../Entity.tsx'
 import { Id } from './Inline.tsx'
 
-// A role is desired capacity, so its face leads with the desired controls and
-// the reconciler's receipt. Sessions remain ordinary linked entities below.
+// Historical role configuration and run receipts remain readable after
+// operator retirement. Sessions retain their links to the original role.
 let Frame = block('div', 'Role', {
   Head: 'h1',
   State: 'span',
@@ -34,7 +34,6 @@ let Config = (
       comp={comp}
       prop={prop}
       name={name}
-      editable
     />
   </Field>
 )

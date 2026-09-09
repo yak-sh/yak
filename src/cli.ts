@@ -119,14 +119,12 @@ import {
 } from './query.ts'
 import { checks, mailCheck, type Result, run as runChecks } from './doctor.ts'
 import {
-  awake,
   type Change,
   type Edge,
   edges,
   kindWord,
   plural,
   plurals,
-  type Session,
   sessionOf,
   type Snapshot,
   statuses,
@@ -1875,186 +1873,6 @@ let wakeVerb = (got: Got) => {
     ...got.words,
     ...(got.body != null ? ['--', got.body] : []),
   ])
-}
-
-// A role is DESIRED capacity, so the only honest stop is a state patch. The
-// reconciler drives processes toward this row every couple of seconds, which
-// means killing a pane or a tmux session is not a stop — it is a relaunch with
-// extra steps. `task role stop` is therefore the whole off switch, and it is
-// durable: it survives a daemon restart because the desire, not the process,
-// is what got written down.
-let neededRole = async (id: string) => {
-  let row = await needed(id)
-  if (!row.comps.role) throw new Error(`not a role: ${id}`)
-  return row
-}
-
-let roleSession = (all: Row[], eid: string) =>
-  all.filter((r) => r.comps.session?.role == eid)
-    .sort((a, b) => a.num - b.num).at(-1)
-
-let roleLine = (all: Row[], r: Row) => {
-  let role = r.comps.role, spawn = r.comps.spawn ?? {}
-  let scope = all.find((x) => x.eid == role.scope)
-  let live = roleSession(all, r.eid)
-  let cells = [
-    idOf(r).padEnd(7),
-    String(role.state ?? '').padEnd(8),
-    String(role.surface ?? '').padEnd(8),
-    `${spawn.provider ?? '?'}/${spawn.model ?? '?'}`.padEnd(16),
-    (scope ? String(scope.comps.doc?.title ?? idOf(scope)) : '—').padEnd(14),
-    live ? `${idOf(live)} ${live.comps.session?.turn ?? ''}`.trim() : '—',
-  ]
-  return cells.join('  ').trimEnd() +
-    (r.comps.error?.message
-      ? `\n${' '.repeat(9)}error: ${r.comps.error.message}`
-      : '')
-}
-
-let wantState = (sub: string) =>
-  sub == 'start' || sub == 'resume' || sub == 'cycle'
-    ? 'running'
-    : sub == 'stop'
-    ? 'stopped'
-    : sub == 'pause'
-    ? 'paused'
-    : sub == 'disable'
-    ? 'disabled'
-    : 'retired'
-
-// The roles a state verb aims at: named ids, or every role under `--all`.
-// `.role.state!`, not `.role!` — bare `.role` is session.role, which would
-// list sessions. state is NOT NULL on every role, so its presence IS the
-// component's.
-let roleTargets = async (sub: string, got: Got) => {
-  let ids = got.many.ids ?? []
-  let targets = got.flags.has('--all')
-    ? (await query(['.role.state!'])).sort((a, b) => a.num - b.num)
-    : await Promise.all(ids.map(neededRole))
-  if (!targets.length) {
-    throw new Error(got.flags.has('--all') ? 'no roles' : help(['role', sub]))
-  }
-  return targets
-}
-
-// Patch the desired state onto a set of roles and report each. Shared by the
-// simple state verbs and by `cycle`, which drives stopped→running itself.
-let moveRoles = async (targets: Row[], want: string) => {
-  let moved = targets.filter((r) => r.comps.role.state != want)
-  // Start is the owner's "try again now": it also fences the crash-loop
-  // breaker (retry_at) so deaths before this instant no longer count. The
-  // reconciler clears the shared error only after the retry succeeds.
-  let comp = want == 'running'
-    ? { state: want, retry_at: new Date().toISOString() }
-    : { state: want }
-  await send(moved.map((r) => ({ eid: r.eid, name: 'role', comp })))
-  for (let r of targets) {
-    let already = !moved.includes(r) ? ' (already)' : ''
-    print(`${idOf(r)} ${want}${already}  ${r.comps.doc?.title ?? ''}`)
-  }
-}
-
-let roleState = async (sub: string, got: Got) =>
-  moveRoles(await roleTargets(sub, got), wantState(sub))
-
-// A role's sessions still holding a live process. The reconciler ADOPTS any
-// live session for a role (dedup), so it refuses to spawn a fresh one while one
-// lives. Reads wire-visible liveness (awake): a session we spawned says it in
-// its status, an external one while it holds a process the server hasn't watched
-// shut. Pure, so cli_test drives the decision without a server.
-export let liveRoleSessions = (sessions: Row[]) =>
-  sessions.filter((r) => r.comps.session && awake(r.comps.session as Session))
-
-// A role's stop is FULLY reconciled — safe to restart — when its live session
-// is gone AND the reconciler has cleared the role's applied_hash. That hash is
-// the respawn idempotency key (roles.ts reconcileManaged): while it still
-// matches, a settled session is adopted, not replaced. reconcileStopped clears
-// it only once the session is inactive, so waiting on the dead session alone
-// races that bookkeeping — a restart that wins the race finds a matching hash
-// and declines to spawn. `role stop; role start` works by hand only because
-// seconds pass between them; cycle closes that window. Pure and exported so the
-// whole restart decision is tested without a server.
-export let restartReady = (role: Row | undefined, sessions: Row[]) =>
-  !!role && role.comps.role?.applied_hash == null &&
-  !liveRoleSessions(sessions).length
-
-// Wait for a role's stop to fully settle before the restart. A managed role has
-// no periodic reconcile (only native roles get the liveness poller), so once its
-// session dies asynchronously nothing re-drives the role to clear applied_hash
-// on its own. Re-asserting the stop is that trigger: reconcileStopped, run again
-// with the session now inactive, nulls the hash — idiomatic desired-state
-// convergence, the same patch `role stop` casts. Bounded: a wedged stop reports
-// rather than hanging the verb forever.
-let settledDown = async (eid: string, timeoutMs = 60_000) => {
-  let start = Date.now()
-  while (true) {
-    let [role] = await fetched([eid])
-    let sessions = await query([`.session.role=${eid}`])
-    if (restartReady(role, sessions)) return
-    if (role && !liveRoleSessions(sessions).length) {
-      // Session gone, hash still set — nudge the reconciler to settle it.
-      await send([{ eid, name: 'role', comp: { state: 'stopped' } }])
-    }
-    if (Date.now() - start > timeoutMs) {
-      let live = liveRoleSessions(sessions)[0]
-      throw new Error(
-        live
-          ? `${idOf(live)} did not stop within ${timeoutMs / 1000}s`
-          : `${role ? idOf(role) : eid} stop did not settle within ${
-            timeoutMs / 1000
-          }s`,
-      )
-    }
-    await new Promise((ok) => setTimeout(ok, 250))
-  }
-}
-
-// `task role cycle <entity>` — a deliberate clean handoff PAST the adopt/dedup
-// guard. Stop reuses `role stop`'s state patch, so the reconciler kills the live
-// session and its wrapper stamps final_text; the predecessor's brief (T-19460)
-// or that final_text is what briefOf hands the successor. Then wait for the stop
-// to fully settle, and reuse `role start` to spawn fresh. This authors no brief
-// — a session writes its own during its life; cycle only preserves and hands it
-// off.
-let roleCycle = async (got: Got) => {
-  let targets = await roleTargets('cycle', got)
-  await moveRoles(targets, 'stopped')
-  for (let r of targets) await settledDown(r.eid)
-  // Re-resolve before starting: the first targets carry their PRE-stop state,
-  // and moveRoles skips a role already in the wanted state — so a stale
-  // 'running' would make the restart a no-op. A fresh read sees 'stopped'.
-  await moveRoles(await roleTargets('cycle', got), 'running')
-}
-
-let role = async (got: Got) => {
-  let sub = got.args.command
-  if (sub) {
-    throw new Error(`not a role verb: ${sub}\n\n${help(['role'])}`)
-  }
-  // Three keyed queries stand in for the corpus: the roles, the entities
-  // they scope, and every session carrying a role (roleSession picks
-  // the newest per role). roleLine/roleSession read them as one set.
-  // `.role.state!` (state is NOT NULL on every role), not `.role!` — bare
-  // `.role` is session.role and would list sessions.
-  let roles = (await query(['.role.state!'])).sort((a, b) => a.num - b.num)
-  let scopes = await fetched(
-    roles.map((r) => String(r.comps.role.scope ?? '')).filter(Boolean),
-  )
-  let all = [...roles, ...scopes, ...await query(['.session.role!'])]
-  if (got.flags.has('--json')) {
-    return print(jsonText(
-      roles.map((r) => ({
-        id: idOf(r),
-        title: r.comps.doc?.title ?? null,
-        ...r.comps.role,
-        error: r.comps.error?.message ?? null,
-        spawn: r.comps.spawn ?? null,
-        session: roleSession(all, r.eid)?.comps.session?.id ?? null,
-      })),
-    ))
-  }
-  if (!roles.length) return print('no roles')
-  for (let r of roles) print(roleLine(all, r))
 }
 
 // An edge is a sentence — "<id> requires <child>" — and the comp names the
@@ -3890,14 +3708,6 @@ export let verbs = bind({
   'session wait': sessionWait,
   sessions: sessionsVerb,
   tail: tailVerb,
-  role,
-  'role stop': (got) => roleState('stop', got),
-  'role start': (got) => roleState('start', got),
-  'role cycle': roleCycle,
-  'role pause': (got) => roleState('pause', got),
-  'role resume': (got) => roleState('resume', got),
-  'role disable': (got) => roleState('disable', got),
-  'role retire': (got) => roleState('retire', got),
   probes,
   telemetry,
   usage: usageReport,

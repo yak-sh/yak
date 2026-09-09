@@ -40,7 +40,6 @@ export let childPath = (home: string) => {
 export let childEnv = (
   session: string | undefined,
   tree: string,
-  role?: string,
 ) => {
   let home = Deno.env.get('HOME') ?? ''
   return {
@@ -49,7 +48,6 @@ export let childEnv = (
     TERM: Deno.env.get('TERM') ?? 'dumb',
     ...(session ? { TASKS_SESSION: session } : {}),
     TASKS_TREE: tree,
-    ...(role ? { TASKS_ROLE: role } : {}),
     ...(Deno.env.get('TASKS_HOST')
       ? { TASKS_HOST: Deno.env.get('TASKS_HOST')! }
       : {}),

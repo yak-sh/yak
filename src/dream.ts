@@ -31,7 +31,7 @@ import { rowsFor } from './graph_query.ts'
 import { normalize } from './heal.ts'
 import { embed, FLOOR, similar, textOf } from './embed.ts'
 import { HARD_SCOPE, type HygieneResult, hygieneSweep } from './hygiene.ts'
-import type { SystemSpec, SystemTuning } from './roles.ts'
+import type { SystemSpec, SystemTuning } from './system_jobs.ts'
 
 type Cast = (changes: Change[]) => void
 
@@ -739,7 +739,7 @@ export let dreamRun = (
     : { reason: 'every dream is armed' }
 }
 
-// The registration server.ts hands roles.ts: the dream IS the system role
+// The registration server.ts hands system_jobs.ts: the dream IS the system role
 // aliased `dream` — mint a role row on that alias to pause it (state !=
 // running) or retune the cadence (cooldown, seconds); absent, the code
 // defaults above hold and every venture combs on the env CADENCE.

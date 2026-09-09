@@ -35,7 +35,6 @@ Deno.test('tab: an id positional completes to the graph ids', () => {
 
 Deno.test('tab: a parent verb offers its subcommands', () => {
   assertArrayIncludes(complete(['mail', '']), ['send', 'show', 'reply'])
-  assertArrayIncludes(complete(['role', '']), ['stop', 'start'])
 })
 
 Deno.test('tab: an option name completes, minus those already given', () => {

@@ -22,7 +22,7 @@ import { spawnChanges } from './client.ts'
 import { rowsFor } from './graph_query.ts'
 import { commitEffects } from './effects.ts'
 import { record as telemetry } from './telemetry.ts'
-import type { SystemSpec, SystemTuning } from './roles.ts'
+import type { SystemSpec, SystemTuning } from './system_jobs.ts'
 
 type Cast = (changes: Change[]) => void
 let now = () => new Date().toISOString()
@@ -404,7 +404,7 @@ export let fixerRun = (
   }
 }
 
-// The registration server.ts hands roles.ts: the fixer IS the system role
+// The registration server.ts hands system_jobs.ts: the fixer IS the system role
 // aliased `fixer` — mint a role row on that alias to tune cap/cooldown or
 // mute it (state != running); absent, the code defaults above hold.
 export let FIXER_ROLE: SystemSpec = {

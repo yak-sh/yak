@@ -6,7 +6,7 @@
 // The desk is a standing task (alias scribe-desk) because a spawn's
 // workspace derives task → project → repo; the persona (alias scribe)
 // carries the runbook, editable in the graph. A SYSTEM ROLE (T-18728):
-// the predicate and work live here, registered with roles.ts — a `role`
+// the predicate and work live here, registered with system_jobs.ts — a `role`
 // comp on the scribe-desk entity carries on/off and the throttle values
 // (quiet/cooldown, seconds) as graph data, and each pass stamps its
 // decision there; absent that row, the code defaults below apply.
@@ -16,7 +16,7 @@ import { commitEffects } from './effects.ts'
 import { type Change, type Dep } from './types.ts'
 import { DESK, find, type Row, spawnChanges, STUB } from './client.ts'
 import { evalGraph, rowsFor } from './graph_query.ts'
-import { type SystemSpec, type SystemTuning } from './roles.ts'
+import { type SystemSpec, type SystemTuning } from './system_jobs.ts'
 
 type Cast = (changes: Change[]) => void
 
@@ -120,7 +120,7 @@ export let scribeRun = (
 }
 let sweeping = false
 
-// The registration server.ts hands roles.ts: the scribe IS the system role
+// The registration server.ts hands system_jobs.ts: the scribe IS the system role
 // bound to the scribe-desk entity, throttle defaults above.
 export let SCRIBE: SystemSpec = {
   alias: DESK.task,

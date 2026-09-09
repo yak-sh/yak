@@ -16,7 +16,7 @@ import type { Arg, Decl, Opt } from './verb.ts'
 
 let starts = (pre: string) => (s: string) => s.startsWith(pre)
 
-// The subcommands one word deep under a parent verb (`mail send`, `role stop`).
+// The subcommands one word deep under a parent verb (`mail send`, `session wait`).
 let subverbs = (parent: string): string[] =>
   Object.keys(manuals)
     .filter((n) =>

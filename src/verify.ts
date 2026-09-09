@@ -10,7 +10,7 @@ import { rowsFor } from './graph_query.ts'
 import { commitEffects } from './effects.ts'
 import { sha } from './sha.ts'
 import { type Change } from './types.ts'
-import type { SystemSpec, SystemTuning } from './roles.ts'
+import type { SystemSpec, SystemTuning } from './system_jobs.ts'
 import {
   activeVerifier,
   latestVerificationReview,

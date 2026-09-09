@@ -391,27 +391,6 @@ defineActions([
         : [],
   },
   {
-    match: parse('.role'),
-    acts: (e) => [{
-      label: e.role!.state == 'running' ? 'pause role' : 'resume role',
-      // Start also fences the crash-loop breaker (retry_at). Reconciliation
-      // clears the shared error only after the role starts successfully.
-      run: () =>
-        mutate({
-          eid: e.eid,
-          name: 'role',
-          comp: e.role!.state == 'running' ? { state: 'paused' } : {
-            state: 'running',
-            retry_at: new Date().toISOString(),
-          },
-        }),
-    }, {
-      label: 'stop role',
-      run: () =>
-        mutate({ eid: e.eid, name: 'role', comp: { state: 'stopped' } }),
-    }],
-  },
-  {
     // Watch and mute, on ANYTHING — a standing instruction is about a
     // thread, and a thread can be a task, a venture, a session. Offered
     // only to a viewer whose client names an actor: without one there is

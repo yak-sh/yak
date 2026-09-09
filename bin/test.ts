@@ -1,7 +1,7 @@
 // Run the broad suite with Deno's module-level parallelism while preserving
 // fresh-process isolation for fixtures whose contract is process-global state.
 // A parallel worker reuses one module graph and environment for several files:
-// roles owns HOME, sessions_contention owns a file DB_PATH, and sessions owns
+// sessions_contention owns a file DB_PATH, and sessions owns
 // the managed-process directories. Co-locating any of them can make a cached
 // import observe whichever file happened to load first.
 //
@@ -9,7 +9,6 @@
 // preserve module isolation but not scheduler isolation: debounce and process
 // fixtures would again be tested under artificial saturation.
 let isolated = new Set([
-  'src/roles_test.ts',
   'src/sessions_contention_test.ts',
   'src/sessions_test.ts',
   // Native transcript confinement reads HOME while each drain runs. A
