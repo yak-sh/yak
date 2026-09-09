@@ -27,6 +27,13 @@ import { BLOB, ENTRY, GITOBJ, PARENT } from './comp.ts'
 import type { Kind } from './oid.ts'
 import { type Obj, pack } from './pack.ts'
 
+/**
+ * What reading objects asks of a graph: a query, and nothing else — the read
+ * half of {@link Writes}, for the same reason (./index.ts). Serving a pack
+ * happens wherever the request landed, which may be nowhere near the graph.
+ */
+export type Reads = Pick<Graph, 'read'>
+
 /** Reading a graph's git objects out, in the order a pack states them. */
 export type Objects = {
   /** every object these commits need, each once: commits, then trees, then
@@ -48,7 +55,7 @@ let comp = (b: Bundle, name: string): Comp => (b[name] ?? {}) as Comp
 
 /** An object reader over a graph carrying this package's vocabulary and the
  * @yaks/blob store holding the bytes — the same pair the index writes to. */
-export let objects = (g: Graph, store: Blobs): Objects => {
+export let objects = (g: Reads, store: Blobs): Objects => {
   // One query per bite of the frontier, the answers appended.
   let some = async (
     query: (list: string) => string,
@@ -78,8 +85,12 @@ export let objects = (g: Graph, store: Blobs): Objects => {
   let read = async function* (oids: string[]): AsyncIterable<Obj> {
     for (let i = 0; i < oids.length; i += BITE) {
       let bite = oids.slice(i, i + BITE)
+      // `.blob?` is not decoration: a query answers the comps it NAMES, and a
+      // graph behind a door (@yaks/api's read door) answers exactly those —
+      // so a read that only said `.gitobj!` got rows with nowhere to read the
+      // bytes from, and every object was missing.
       let rows = new Map(
-        (await some((l) => `.${GITOBJ}!&.entity.eid=${l}`, bite))
+        (await some((l) => `.${GITOBJ}!&.${BLOB}?&.entity.eid=${l}`, bite))
           .map((r) => [r.entity.eid, r]),
       )
       for (let oid of bite) {

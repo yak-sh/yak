@@ -74,6 +74,16 @@ export let DAILY = '50 4 * * *'
 export let gitPlugin: Plugin = {
   name: 'yak/git',
   vocab: [gitDirectoryDoc],
+  // `<app>.git` on a space's hostname, ahead of the apps (git_door.ts,
+  // T-34946). Loaded when it RUNS, for seo_door.ts's reason: the door reaches
+  // directory.ts and apps.ts's neighbours, and plugins.ts is what those are
+  // composed from — a load-time import here would close the circle.
+  routes: [
+    async (at) =>
+      at.space == null
+        ? null
+        : await (await import('./git_door.ts')).answer(at),
+  ],
   wakes: [{
     entity: { eid: 'yak-git' },
     wake: {
