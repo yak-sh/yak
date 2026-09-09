@@ -30,11 +30,12 @@ export type Handler = (eid: string, comp: Record<string, unknown>) => unknown
 
 // Which PROCESS a row belongs to when effects run split across two
 // (D-22388 step 3). 'do' — the default, and the effects daemon's half — is
-// the worldly outbox: spawns, kills, mail, knocks, sweeps. 'serve' marks the
-// few rows welded to the serving process's in-memory state (the graph-native
-// runner, whose observation stream needs the sockets). Inline mode (one
-// process) dispatches both; split mode gives each process a complementary
-// `want` filter, so every row still fires in exactly one place.
+// the worldly outbox: spawns, kills, mail, knocks, sweeps, and the
+// graph-native runner. 'serve' marks a row welded to the serving process's
+// in-memory state; the runner was the last one and left in T-35018, so no
+// registration claims it today. Inline mode (one process) dispatches both;
+// split mode gives each process a complementary `want` filter, so every row
+// still fires in exactly one place.
 export type Where = 'serve' | 'do'
 
 export type Effect = {

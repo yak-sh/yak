@@ -7,12 +7,11 @@
 //                           itself, exactly the pre-extraction behavior. Tests,
 //                           probes, and any bare `deno run src/server.ts` get
 //                           this with no configuration.
-//   split (TASKS_EFFECTS=daemon) — the server wires the registry (it still
-//                           relays and dispatches the few `where:'serve'` rows
-//                           welded to its in-memory runner) but bootDoing()
-//                           and every `where:'do'` row belong to the effects
-//                           daemon (effectsd.ts), a journal-cursor consumer
-//                           holding the `-effects.lock` lease.
+//   split (TASKS_EFFECTS=daemon) — the server wires the registry but fires
+//                           nothing from it: bootDoing(), the graph-native
+//                           runner (T-35018) and every `where:'do'` row belong
+//                           to the effects daemon (effectsd.ts), a journal-
+//                           cursor consumer holding the `-effects.lock` lease.
 //
 // The registry is ALWAYS wired whole in both processes — a row a process does
 // not own registers with its real handler or an inert stub, and the dispatch/
@@ -21,10 +20,10 @@
 // and the sweep declarations must see one complete list wherever they read it.
 //
 // Handlers here run where the DOING process runs. Their casts reach browsers
-// either directly (inline) or — in split mode, where the daemon's cast is a
-// no-op — through the serving process's journal feed, which rebroadcasts every
-// journaled row (apply() and record() both journal). That is what retires the
-// handler-internal-cast residue T-22496 documented.
+// either directly (inline) or — in split mode, where the daemon's cast reaches
+// no socket — through the serving process's journal feed, which rebroadcasts
+// every journaled row (apply() and record() both journal). That is what retires
+// the handler-internal-cast residue T-22496 documented.
 import { type Change } from './types.ts'
 import { sentences } from './edge.ts'
 import { db } from './live_db.ts'
@@ -96,10 +95,10 @@ type Cast = (changes: Change[]) => void
 // list so a fresh process cannot briefly treat one as an operator role.
 let SYSTEMS = [SCRIBE, FIXER_ROLE, DREAM_ROLE, VERIFIER_ROLE]
 
-// The serving process's in-memory runner hooks (managedCodex + the graph-
-// native sweep debounce). Present only where that runner lives; the daemon
-// registers the same rows with inert stubs it will never fire (the `want`
-// filter owns that guarantee, not the stubs).
+// The in-memory hooks of the graph-native runner (managedCodex + its sweep
+// debounce), held by whichever process owns the DOING half — effectsd in the
+// split, the serving process inline (native_runner.ts). A process that holds
+// no runner registers the same rows with inert stubs it will never fire.
 export type Native = {
   soon: () => void
   start: (eid: string, job: Launch) => Promise<void>
@@ -120,41 +119,84 @@ export type Doing = {
 export let splitEffects = () => Deno.env.get('TASKS_EFFECTS') == 'daemon'
 
 // The committed spawn's provider, read post-commit — what routes a session
-// row to the graph-native arm (serve) or the process arm (do). An external
-// session (no spawn row) has no provider and belongs to the process arm,
-// whose spawned() already returns without one.
+// row to the graph-native arm or the process arm. An external session (no
+// spawn row) has no provider and belongs to the process arm, whose spawned()
+// already returns without one.
 let spawnProviderOf = (eid: string): string | undefined =>
   (db.prepare(
     `select s.provider as provider from spawn s
      join entity e on e.id = s.entity where e.eid = ?`,
   ).get(eid) as { provider: string | null } | undefined)?.provider ?? undefined
 
-// Registrations, whole, in every process. Rows welded to the serving
-// process's runner carry where:'serve'; everything else defaults to 'do'.
-export let wireDoing = (d: Doing) => {
-  let { cast } = d
-  let native: Native = d.native ?? {
-    soon: () => {},
-    start: () => Promise.resolve(),
-    remove: () => {},
-    stop: () => {},
-    comment: () => {},
-  }
-  // The graph-native runner rows — serve-owned: the runner streams
-  // observations over the serving process's sockets and settles in its drain.
+// Is this committed session the graph-native runner's to drive?
+let nativeSpawn = (eid: string) => {
+  let p = spawnProviderOf(eid)
+  return !!p && graphCodex(p)
+}
+
+// The graph-native runner's own rows. They were the serving process's
+// (where:'serve') while the runner lived there; the runner is the doing
+// half's now (T-35018), so they default to 'do' like everything else and fire
+// wherever the runner runs. Registered separately because they are ONE
+// subject — every hook here is a call into that runner.
+export let wireNative = (cast: Cast, native: Native) => {
   on('runner', {
-    where: 'serve',
     created: native.soon,
     sweep: { pending: "name = 'tasksd'" },
     doc: 'boot the graph-native runner through the ordinary effect relay; ' +
       'live entry births wake it through their own hook',
   })
   on('entry', {
-    where: 'serve',
     created: native.soon,
     doc: 'a new Session entry wakes the graph-native runner; ' +
       'its indexed candidate query decides whether there is work',
   })
+  // One launch request, two arms: the provider decides which arm acts. This is
+  // the graph-native one; the process arm — claude, codex-cli, and every
+  // spawnless external session — is registered in wireDoing below. spawned()
+  // itself validates either way; the gate only keeps the wrong arm from acting.
+  on('session', {
+    created: (eid, comp) => {
+      if (nativeSpawn(eid)) return spawned(cast, native.start)(eid, comp)
+    },
+    removed: (eid) => native.remove(eid),
+    sweep: { pending: codexPending },
+    doc: 'a session created with a graph-native spawn spec launches on the ' +
+      'runner; a deleted session stops its native run',
+  })
+  let retry = (eid: string, comp: Row) =>
+    nativeSpawn(eid) ? reconfigured(cast, native.start)(eid, comp) : undefined
+  on('spawn', {
+    changed: { provider: retry, model: retry, effort: retry, persona: retry },
+    doc: 'correcting a graph-native launch spec retries a failed Session',
+  })
+  on('stop_request', {
+    created: (eid, comp) => native.stop(eid, String(comp.target)),
+    sweep: { pending: PENDING('stop_request') },
+    doc: 'a graph-native Codex stop appends cancellation, aborts its leased ' +
+      'operation, and settles the stop request without a process signal',
+  })
+  on('comment', {
+    created: (eid, comp) => native.comment(String(comp.target), eid),
+    doc: 'a comment on claimed work appends content-free attention to its ' +
+      'graph-native run',
+  })
+}
+
+// Registrations, whole, in every process. The `want` filter (effects.ts) is
+// what keeps each row firing in exactly one of them.
+export let wireDoing = (d: Doing) => {
+  let { cast } = d
+  wireNative(
+    cast,
+    d.native ?? {
+      soon: () => {},
+      start: () => Promise.resolve(),
+      remove: () => {},
+      stop: () => {},
+      comment: () => {},
+    },
+  )
   on('message', {
     created: recallEntry(cast),
     doc: 'memory auto-recall (T-17306): a new message entry surfaces the ' +
@@ -170,55 +212,24 @@ export let wireDoing = (d: Doing) => {
       'ids and page urls, and each resolved citation lands as an ' +
       'entry→referenced→target edge — pure mechanics, no inference',
   })
-  // One launch request, two arms: the provider decides which process acts.
-  // The graph-native arm lives beside the runner (serve); the process arm —
-  // claude, codex-cli, and every spawnless external session — is the doing
-  // half's. spawned() itself validates either way; the gate only keeps the
-  // wrong process from acting.
-  on('session', {
-    where: 'serve',
-    created: (eid, comp) => {
-      let p = spawnProviderOf(eid)
-      if (p && graphCodex(p)) return spawned(cast, native.start)(eid, comp)
-    },
-    removed: (eid) => native.remove(eid),
-    sweep: { pending: codexPending },
-    doc: 'a session created with a graph-native spawn spec launches on the ' +
-      'in-process runner; a deleted session stops its native run',
-  })
+  // The process arm of the launch request whose graph-native arm wireNative
+  // registered above: claude, codex-cli, and every spawnless external session.
   on('session', {
     created: (eid, comp) => {
-      let p = spawnProviderOf(eid)
-      if (!p || !graphCodex(p)) return spawned(cast)(eid, comp)
+      if (!nativeSpawn(eid)) return spawned(cast)(eid, comp)
     },
     removed: deleted,
     doc: 'a session created with a process spawn spec is a launch request — ' +
       'validate, launch the agent; a deleted session stops its process',
   })
-  let respawn = (arm: 'native' | 'process') => (eid: string, comp: Row) => {
-    let p = spawnProviderOf(eid)
-    let mine = !!p && graphCodex(p) == (arm == 'native')
-    if (!mine) return
-    return arm == 'native'
-      ? reconfigured(cast, native.start)(eid, comp)
-      : reconfigured(cast)(eid, comp)
-  }
-  on('spawn', {
-    where: 'serve',
-    changed: {
-      provider: respawn('native'),
-      model: respawn('native'),
-      effort: respawn('native'),
-      persona: respawn('native'),
-    },
-    doc: 'correcting a graph-native launch spec retries a failed Session',
-  })
+  let respawn = (eid: string, comp: Row) =>
+    nativeSpawn(eid) ? undefined : reconfigured(cast)(eid, comp)
   on('spawn', {
     changed: {
-      provider: respawn('process'),
-      model: respawn('process'),
-      effort: respawn('process'),
-      persona: respawn('process'),
+      provider: respawn,
+      model: respawn,
+      effort: respawn,
+      persona: respawn,
     },
     doc: 'correcting the launch spec retries a Session that failed before ' +
       'its provider or workspace started',
@@ -240,13 +251,6 @@ export let wireDoing = (d: Doing) => {
     created: stopped(cast),
     sweep: { pending: PENDING('stop_request') },
     doc: 'the brake: signal the targeted session to stop, settle delivered',
-  })
-  on('stop_request', {
-    where: 'serve',
-    created: (eid, comp) => native.stop(eid, String(comp.target)),
-    sweep: { pending: PENDING('stop_request') },
-    doc: 'a graph-native Codex stop appends cancellation, aborts its leased ' +
-      'operation, and settles the stop request without a process signal',
   })
   on('role', {
     created: roleBoot(cast),
@@ -327,12 +331,6 @@ export let wireDoing = (d: Doing) => {
   on('knock', {
     created: (_eid, comp) => roleAttention(cast)(String(comp.target)),
     doc: 'a knock wakes only the role that owns or scopes its target',
-  })
-  on('comment', {
-    where: 'serve',
-    created: (eid, comp) => native.comment(String(comp.target), eid),
-    doc: 'a comment on claimed work appends content-free attention to its ' +
-      'graph-native run',
   })
   on('comment', {
     created: obeyed(cast, d.codexReady),
@@ -756,8 +754,8 @@ export let bootDoing = (d: Doing, syncSoon: () => void) => {
   // Then the outbox relay: intents that committed but never fired their
   // effect (a crash in the post-commit gap) re-fire now — strictly AFTER
   // recover(), so a re-driven stop finds the adopted pid to signal. Only the
-  // sweeps this process owns: in split mode the server relays its own
-  // serve-owned rows.
+  // sweeps this process owns — which, since the runner moved here (T-35018),
+  // is every one of them.
   relay(
     (comp, pending) => db.prepare(sweepSelect(comp, pending)).all() as Row[],
     undefined,

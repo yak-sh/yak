@@ -3,7 +3,7 @@
 // top-level script — it takes the temporary effects lease and runs forever on
 // import — so it can't be imported; what this file proves is the MODEL it is
 // assembled from, at the seam, WITHOUT ever launching a real agent (every
-// handler here is a stub and no `session` spawn row is committed):
+// handler here is a stub, the runner's included):
 //
 //   1. Two catchup feeds over one journal — a server feed filtered to
 //      `where:'serve'` and a daemon feed filtered to `where:'do'` — fire every
@@ -17,6 +17,8 @@
 //      proven in effects_test.ts (`split relay`).
 //   3. The temporary effects lease admits one dispatcher until durable
 //      per-effect claims replace process-level election.
+//   4. The graph-native runner is dispatched by the DAEMON's filter, not the
+//      server's (T-35018) — so a native session no longer waits on the web.
 import {
   assert,
   assertEquals,
@@ -33,6 +35,8 @@ import {
   on,
 } from './effects.ts'
 import { takeEffectsLease } from './effects_lease.ts'
+import { wireNative } from './doing.ts'
+import { db as live } from './live_db.ts'
 import { bareDb } from './testdb.ts'
 import { slow } from './testing.ts'
 import type { Change } from './types.ts'
@@ -65,8 +69,9 @@ Deno.test('two feeds, one journal: each effect fires in exactly one process', ()
     changed: { body: (eid) => fired.push(`do:signal ${eid}`) },
     removed: (eid) => fired.push(`do:kill ${eid}`),
   })
-  // The serve-owned sibling (the graph-native runner's rows) must fire ONLY in
-  // the server, never in the daemon.
+  // A serve-owned sibling must fire ONLY in the server, never in the daemon.
+  // Synthetic on purpose: the runner was the last real one and left (T-35018),
+  // and the partition must keep working for whatever claims that half next.
   on('doc', {
     where: 'serve',
     created: (eid) => fired.push(`serve:create ${eid}`),
@@ -251,3 +256,62 @@ slow(
     next!.close()
   },
 )
+
+// 4. The graph-native runner is the DAEMON's (T-35018). Its rows carried
+//    where:'serve' while it lived in the web server, which made every native
+//    session wait on the web; they are ordinary 'do' rows now, so a session
+//    born while the server is slow or dead still reaches the runner.
+Deno.test('the graph-native runner rows fire in the daemon, not the server', () => {
+  let woke = 0
+  let started: string[] = []
+  let removed: string[] = []
+  wireNative(() => {}, {
+    soon: () => woke++,
+    start: (eid) => {
+      started.push(eid)
+      return Promise.resolve()
+    },
+    remove: (eid) => removed.push(eid),
+    stop: () => {},
+    comment: () => {},
+  })
+  let { server, daemon } = split(live)
+  let pass = () => {
+    server.settle()
+    daemon.settle()
+  }
+
+  // The runner's own boot row: it wakes the sweep.
+  let boot = crypto.randomUUID()
+  apply(live, [{ eid: boot, name: 'runner', comp: { name: 'tasksd' } }], fed())
+  pass()
+  assertEquals(woke, 1, 'the daemon woke the runner exactly once')
+
+  // A graph-native session, its brake, and its death — the rows the runner
+  // owns. The launch is the crux: this spawn spec used to reach the runner
+  // only through the serving process's feed.
+  let session = crypto.randomUUID()
+  apply(live, [
+    { eid: session, name: 'doc', comp: { title: '', body: 'Say hello.' } },
+    {
+      eid: session,
+      name: 'session',
+      comp: {
+        id: crypto.randomUUID(),
+        provider: 'codex',
+        model: 'gpt-5.6-sol',
+      },
+    },
+  ], fed())
+  pass()
+  assertEquals(started, [session], 'the daemon launched the native session')
+  apply(live, [{ eid: session, name: 'entity', comp: null }], fed())
+  pass()
+  assertEquals(removed, [session], 'the daemon stopped the deleted native run')
+
+  // The server's half of the split saw none of it: with the runner gone from
+  // that process, its feed has nothing of the runner's left to dispatch —
+  // every count above is the daemon's alone.
+  assertEquals(woke, 1)
+  assertEquals(started.length, 1)
+})

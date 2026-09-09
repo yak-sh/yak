@@ -20,7 +20,7 @@
 
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { link } from './edge.ts'
-import { slow } from './testing.ts'
+import { slow, until } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { db } = await import('./live_db.ts')
@@ -323,6 +323,47 @@ slow(
       assertEquals(new Set(after.scoped), new Set([tier, loose]))
     } finally {
       client.close()
+    }
+  },
+)
+
+// The other end of the same door (T-35018). The graph-native runner lives in
+// the effects daemon now, so its transient progress arrives here over the
+// /observe socket (observe_link.ts) instead of being broadcast in-process — and
+// must reach the same partition watchers, and only them.
+slow(
+  'an observation pushed in over /observe reaches the partition watcher',
+  alone,
+  async () => {
+    let session = uid(), generation = uid()
+    let watching = await subscriber(), elsewhere = await subscriber()
+    let push = new WebSocket(`ws://${U}/observe`)
+    // Claim the open BEFORE the first await below: this socket can finish its
+    // handshake while the subscriptions settle, and a handler attached after
+    // that would wait for an event already fired.
+    let ready = new Promise((ok, no) => {
+      push.onopen = ok
+      push.onerror = () => no(new Error('/observe refused'))
+    })
+    try {
+      await watching.open(`entries:${session}`, `.entry.session=${session}`)
+      await elsewhere.open('entries:elsewhere', `.entry.session=${uid()}`)
+      await ready
+      push.send(
+        JSON.stringify({ session, generation, kind: 'model', text: 'x' }),
+      )
+      await until(() => watching.observations().length > 0)
+      assertEquals(watching.observations(), [{
+        session,
+        generation,
+        kind: 'model',
+        text: 'x',
+      }])
+      assertEquals(elsewhere.observations(), [])
+    } finally {
+      push.close()
+      watching.close()
+      elsewhere.close()
     }
   },
 )

@@ -36,8 +36,6 @@ import {
   scanAnomalies,
   settingEid,
   settingValue,
-  sweepSelect,
-  touch,
   writerUrl,
 } from './db.ts'
 import { file as graph } from './store/sqlite.ts'
@@ -50,7 +48,6 @@ import {
   configureEffects,
   dispatch,
   fed,
-  relay,
   trace,
   type Where,
 } from './effects.ts'
@@ -69,24 +66,18 @@ import { landBlob, serveBlob } from './blob.ts'
 import { filed } from './page.ts'
 import { fleetRaw, mailIdOf } from './inbound.ts'
 import { FLOOR, setEmbedConfig, setModel, similarTo, textOf } from './embed.ts'
-import { dbReads, type IO, mcpServer } from './mcp.ts'
+import { type IO, mcpServer } from './mcp.ts'
+import { localIO } from './local_io.ts'
+import { nativeRunner } from './native_runner.ts'
 import { drain as drainTurns } from './turn.ts'
-import {
-  maintainStandingFor,
-  prepareWorktree,
-  recoverWorktree,
-} from './sessions.ts'
+import { maintainStandingFor } from './sessions.ts'
 import { codexIssuer, codexStore } from './codex_auth.ts'
 import { accountHttp, accountService } from './accounts.ts'
 import { credentialHttp, credentialService } from './credentials.ts'
-import { combineTools, localTools, tasksTools } from './harness_tools.ts'
-import { managedCodex } from './managed_codex.ts'
-import { sessionRow as storedSession } from './session_store.ts'
 import { responses } from './responses.ts'
 import { codexReadiness } from './codex_ready.ts'
-import { type OllamaConfig, ollamaProbe, ollamaTransport } from './ollama.ts'
+import { type OllamaConfig, ollamaProbe } from './ollama.ts'
 import { resolve, settingRows } from './config.ts'
-import { codexGeneration } from './runner.ts'
 import { type Observation, safeObservation } from './observations.ts'
 import { outcome, recent, record, stats, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
@@ -300,6 +291,12 @@ export let maintain = (batch: Change[]) => {
 // load; the parity data plane is the bridge's /apply + /ws.
 let appOnly = appPlane()
 
+// Why an app-plane reader refuses every write, said once (the HTTP doors throw
+// it, and the mounted IO hands it to localIO's refuse).
+let APP_PLANE_READER =
+  'app-plane-only mode (TASKS_PLANE=app): writes go to the data-plane ' +
+  'writer (the Rust bridge /apply), not this Deno server'
+
 export let aged = (now = Date.now()) => {
   for (let s of served) {
     if (s.sock.readyState != WebSocket.OPEN) continue
@@ -307,8 +304,6 @@ export let aged = (now = Date.now()) => {
     else s.worker!.postMessage({ aged: now })
   }
 }
-
-let runnerSoon = () => {}
 
 // Broadcast a committed batch to every connection — inline sockets serve it
 // here (live stream + subscription fold, subserve.cast), worker sockets get
@@ -345,13 +340,14 @@ let cast = (changes: Change[], except?: WebSocket, at?: number) => {
 // The effect half of a write, run AFTER the casts: a slow or failing
 // handler can never hold the wire, and a failure is telemetry, not a
 // broken batch (effects.ts owns the doctrine). In split mode
-// (TASKS_EFFECTS=daemon) this process fires only the `where:'serve'` rows
-// welded to its in-memory runner; the effects daemon owns the rest, off the
-// same journal rows through its own cursor.
-// An app-plane reader fires NO effects: the worldly half (`where:'do'`) is the
-// effects daemon's, and the serve-side runner (`where:'serve'`) drives model
-// turns that WRITE, which belongs to the writer side — so this process just
-// broadcasts committed rows to its sockets and dispatches nothing.
+// (TASKS_EFFECTS=daemon) this process fires only `where:'serve'` rows — and
+// since the graph-native runner moved to the daemon (T-35018) no registration
+// claims that half, so the filter stands as the seam a serving-welded effect
+// would use rather than as a working list. The effects daemon owns the rest,
+// off the same journal rows through its own cursor.
+// An app-plane reader fires NO effects at all: every handler either WRITES or
+// belongs to the daemon — so this process just broadcasts committed rows to
+// its sockets and dispatches nothing.
 let wantHere: (w: Where) => boolean = appOnly
   ? () => false
   : splitEffects()
@@ -481,6 +477,23 @@ let workersWanted = Deno.env.get('TASKS_WS_WORKERS') != '0'
 let workerCap = Number(Deno.env.get('TASKS_WS_WORKER_CAP')) ||
   navigator.hardwareConcurrency || 8
 let liveWorkers = 0
+
+// The inbound half of the observation stream (observe_link.ts): the doing
+// owner's socket, one frame per delta, write-only. A reader-plane server takes
+// them too — fanning a frame out to a watcher is serving, not writing.
+let observed = (req: Request) => {
+  let { socket, response } = host.upgrade(req)
+  socket.onmessage = (m) => {
+    try {
+      broadcastObservation(JSON.parse(String(m.data)))
+    } catch {
+      // A frame we cannot read is a lost hint, never a broken socket.
+    }
+  }
+  socket.onerror = () => {}
+  return response
+}
+
 let ws = (req: Request) => {
   let { socket, response } = host.upgrade(req)
   // The tab names itself once, at connect: ?client=<eid> is the writer for
@@ -622,44 +635,13 @@ let ws = (req: Request) => {
 // Every tools/call is timed and recorded on the way through (telemetry.ts
 // classifies the body — this route is the only place that sees both the
 // request and its reply).
-let graphIO: IO = {
-  // Local and stdio MCP share these exact SQLite readers. The remaining
-  // capabilities below are service-owned mutations or external operations.
-  ...dbReads(db),
-  // deno-lint-ignore require-await
-  write: async (mutation, via) => {
-    if (appOnly) refuseWrite()
-    let out = mutationResult(mutate(db, mutation, fed(), via))
-    feed.settle()
-    return out
-  },
-  // deno-lint-ignore require-await
-  verify: async (id, via) => {
-    if (appOnly) refuseWrite()
-    return requestVerifier(cast, id, via)
-  },
-  upload: async (eid, html) => {
-    if (appOnly) refuseWrite()
-    // store() journals its stamp (record); the feed carries it to the sockets.
-    let res = await store(eid, html, () => feed.settle())
-    if (!res.ok) throw new Error(await res.text())
-  },
-  // The one writer of recall stats: stamp, then cast, so every cache hears
-  // the new warmth (the apply wire refuses these rows).
-  // deno-lint-ignore require-await
-  touch: async (eids, confirm) => {
-    // Recall warmth is a WRITE (unjournaled, but still a row edit), so the
-    // read-only app-plane reader skips it silently — a read must never fail
-    // because it tried to bump recall stats. The writer owns warmth.
-    if (appOnly) return
-    // Recall touches are deliberately NOT journaled (reading is not editing),
-    // so they cannot ride the feed: the direct cast is their only delivery,
-    // live-only by design.
-    let out = touch(db, eids, confirm)
-    if (out.length) cast(out)
-  },
+let graphIO: IO = localIO({
+  db,
+  cast,
+  settle: () => feed.settle(),
   providers: () => readyProviders(),
-}
+  refuse: () => appOnly ? APP_PLANE_READER : undefined,
+})
 
 let codexAccount = accountService(codexStore(), codexIssuer())
 
@@ -720,35 +702,20 @@ let readyProviders = async () => {
   let ok = await codexReady()
   return known(db, (name) => name != 'codex' || ok)
 }
-let managed = managedCodex({
+// The graph-native runner belongs to the DOING owner (T-35018), which in the
+// split topology is effectsd — a native session must not wait on the web. This
+// process holds one only when it owns the doing half itself: inline mode, which
+// is every bare `deno run src/server.ts` (tests, probes). An app-plane reader
+// never holds one: the runner drives model turns that WRITE.
+let runner = splitEffects() || appOnly ? undefined : nativeRunner({
   db,
   cast,
+  io: graphIO,
   transport: codexTransport,
-  generators: {
-    ollama: codexGeneration(
-      ollamaTransport({ retries: 1, stallMs }, ollamaConfig),
-    ),
-  },
-  tools: async (tree, session) => {
-    let tasks = await tasksTools(graphIO, session)
-    if (!tree) return tasks
-    try {
-      // A reaped checkout regrows before any tool runs in it (T-16761): the
-      // provider thread outlives its worktree, so a later turn recreates the
-      // recorded path from the base rather than dying at localTools' realPath.
-      await recoverWorktree(session, cast)
-      let identity = String(storedSession(db, session)?.id ?? session)
-      return combineTools(await localTools({ tree, session: identity }), tasks)
-    } catch (error) {
-      await tasks.close?.()
-      throw error
-    }
-  },
-  prepare: prepareWorktree,
+  ollama: ollamaConfig,
+  stallMs,
   observe: broadcastObservation,
 })
-runnerSoon = () =>
-  managed.sweep().catch((e) => console.warn('Codex runner sweep —', e))
 
 let mcp = async (req: Request) => {
   let call: ReturnType<typeof toolCall> = null
@@ -861,12 +828,6 @@ let port = Number(Deno.env.get('PORT') ?? 5173)
 // Whose graph holds this address (src/bind.ts). Any occupied port is refused:
 // one address has exactly one serving process.
 let serving: Serving = { db: graph, epoch: epochOf(db), pid: Deno.pid }
-let refuseWrite = (): never => {
-  throw new Error(
-    'app-plane-only mode (TASKS_PLANE=app): writes go to the data-plane ' +
-      'writer (the Rust bridge /apply), not this Deno server',
-  )
-}
 // The graph-mutating HTTP doors, named once. /error and /usage are excluded on
 // purpose: they only record() telemetry, which swallows a read-only failure and
 // never touches the graph. /ws and /mcp are mixed read/write doors and refuse
@@ -1043,6 +1004,12 @@ let handle: Handler = async (req) => {
     )
   }
   if (path == '/ws') return ws(req)
+  // The graph-native runner's transient progress, pushed IN by the process that
+  // RUNS it (effectsd, T-35018) and fanned out here to whoever is watching that
+  // Session. Nothing is read back over this socket and it joins no broadcast
+  // set; broadcastObservation validates every frame (safeObservation), so a
+  // malformed or oversized one is dropped, never served.
+  if (path == '/observe') return observed(req)
   // The advertised capability tokens, cheaply — a headless spawn door
   // (client.ts serverCaps) reads this to decide whether to speak canonical
   // `spawn` without paying for a whole snapshot — and the reachability
@@ -1423,19 +1390,13 @@ registerCodexSource()
 registerManagedSource()
 
 // The curated effects moved whole to doing.ts (D-22388 step 3): one list,
-// wired in every process — this server passes its in-memory runner hooks for
-// the few `where:'serve'` rows, and in split mode (TASKS_EFFECTS=daemon) the
-// effects daemon owns everything else. wireDoing returns the persona-sync
+// wired in every process — inline this one owns all of it, including the
+// runner hooks; in split mode (TASKS_EFFECTS=daemon) the effects daemon owns
+// every row and this registry fires nothing. wireDoing returns the persona-sync
 // debounce boot still needs below.
 let doingDeps: Doing = {
   cast,
-  native: {
-    soon: () => runnerSoon(),
-    start: managed.start,
-    remove: (eid) => managed.remove(eid),
-    stop: (eid, target) => managed.stop(eid, target),
-    comment: (target, eid) => managed.comment(target, eid),
-  },
+  native: runner?.native,
   codexReady,
   readyProviders,
 }
@@ -1456,29 +1417,13 @@ turnSweep()
 tick('subs', () => aged(), 30_000, false)
 
 // The doing half: boot reconcile + recurring sweeps + the outbox relay
-// (doing.ts). Inline (default) this process owns all of it, exactly as
-// before the extraction. Split (TASKS_EFFECTS=daemon) the effects daemon
-// runs bootDoing after this process's READY beat, and this server relays
-// only the `where:'serve'` sweeps its in-memory runner owns — the runner
-// re-boot row and the graph-native pending re-drives.
-if (appOnly) {
-  // App-plane-only owns NO doing: the boot reconcilers (reapLeases,
-  // standingBackfill, the outbox relay) all WRITE, and the serve-side runner
-  // drives model turns that WRITE — both belong to the writer side (the bridge)
-  // and the effects daemon (its own -effects.lock). This reader just serves.
-} else if (splitEffects()) {
-  relay(
-    (comp, pending) =>
-      db.prepare(sweepSelect(comp, pending)).all() as Record<
-        string,
-        unknown
-      >[],
-    undefined,
-    (w) => w == 'serve',
-  )
-} else {
-  bootDoing(doingDeps, syncSoon)
-}
+// (doing.ts). Inline (default) this process owns all of it, exactly as before
+// the extraction. Split (TASKS_EFFECTS=daemon) the effects daemon runs
+// bootDoing after this process's READY beat and owns EVERY row — the
+// graph-native runner included since T-35018 — so this process reconciles
+// nothing. App-plane-only likewise: the boot reconcilers (reapLeases,
+// standingBackfill, the outbox relay) all WRITE, and a reader holds no baton.
+if (!appOnly && !splitEffects()) bootDoing(doingDeps, syncSoon)
 
 // Watch app and package source and tell every client what a save means
 // (debounced — editors fire several events per save):
@@ -1600,8 +1545,9 @@ let drain = async () => {
   // listener closes: this drain keeps a source-edit restart from killing a live
   // codex turn, and it can run for minutes (settle caps at 300s). Through this
   // settle we remain the port's one listener. The supervisor waits for our exit
-  // before it starts the replacement.
-  await managed.settle()
+  // before it starts the replacement. Split mode holds no runner — effectsd
+  // settles its own on SIGTERM — so this is instant there.
+  await runner?.settle()
   for (let { sock } of served) sock.close(1012, 'server restart')
   // shutdown() waits for EVERY in-flight response, and the streaming doors
   // (a /logs tail) hold theirs open indefinitely. Bound it: past the bound,
