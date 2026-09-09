@@ -3103,6 +3103,82 @@ Deno.test('mailChanges/replyChanges: to as given, Re: derived, thread edge set',
   assertEquals(replyChanges(sent, 'more').changes[1].comp?.to, 'them@y.test')
 })
 
+// Replying RETIRES an answered arrival from the boot digest: the reply
+// batch stamps `archived` on the inbound row, so the pending-messages block
+// stops re-surfacing a thread we already answered (T-35950 — three boots
+// each re-answered one unarchived letter). A LATER inbound message on the
+// thread is a fresh unarchived arrival and rings again. Following up on our
+// OWN sent letter retires nothing — it never rang the inbox.
+Deno.test('replyChanges retires an answered arrival; a later inbound rings again', () => {
+  let P = 'aaaaaaaa-0000-4000-8000-000000000451'
+  let SS = 'aaaaaaaa-0000-4000-8000-000000000452'
+  let M = 'aaaaaaaa-0000-4000-8000-000000000453'
+  let M2 = 'aaaaaaaa-0000-4000-8000-000000000454'
+  let base: Change[] = [
+    { eid: P, name: 'entity', comp: { eid: P, num: 451 } },
+    { eid: P, name: 'doc', comp: { title: 'Home', body: '' } },
+    { eid: P, name: 'project', comp: {} },
+    { eid: SS, name: 'entity', comp: { eid: SS, num: 452 } },
+    {
+      eid: SS,
+      name: 'session',
+      comp: { id: 'sess-op', cwd: '/w', actor: P, operator: 1 },
+    },
+    { eid: M, name: 'entity', comp: { eid: M, num: 453 } },
+    { eid: M, name: 'created', comp: { at: '2026-01-04' } },
+    { eid: M, name: 'doc', comp: { title: 'asked', body: 'a question' } },
+    {
+      eid: M,
+      name: 'mail',
+      comp: {
+        target: P,
+        from: 'owner@x.test',
+        received_at: '2026-01-04',
+        message_id: 'm-1',
+        verified: 1,
+      },
+    },
+  ]
+  let pending = () => noticesFor({ changes: base, deps: [] }, 'sess-op').eids
+  // The unanswered arrival is pending, exactly as every fresh boot saw it.
+  assertEquals(pending(), [M])
+
+  // Replying appends the retiring stamp (never before deliver.to at [1]).
+  let inbound = rows({ changes: base }).find((r) => r.eid == M)!
+  let reply = replyChanges(inbound, 'answered')
+  assertEquals(reply.changes[1].comp?.to, 'owner@x.test')
+  assertEquals(reply.changes.at(-1), { eid: M, name: 'archived', comp: {} })
+
+  // With that stamp landed, the answered thread falls out of the digest.
+  let answered = [...base, ...reply.changes.filter((c) => c.eid == M)]
+  assertEquals(noticesFor({ changes: answered, deps: [] }, 'sess-op').eids, [])
+
+  // A later inbound message on the same thread is a fresh arrival — it rings.
+  let later: Change[] = [
+    { eid: M2, name: 'entity', comp: { eid: M2, num: 454 } },
+    { eid: M2, name: 'created', comp: { at: '2026-01-06' } },
+    { eid: M2, name: 'doc', comp: { title: 'Re: asked', body: 'one more' } },
+    {
+      eid: M2,
+      name: 'mail',
+      comp: {
+        target: P,
+        from: 'owner@x.test',
+        received_at: '2026-01-06',
+        message_id: 'm-2',
+        reply_to: M,
+        verified: 1,
+      },
+    },
+  ]
+  assertEquals(
+    noticesFor({ changes: [...answered, ...later], deps: [] }, 'sess-op').eids,
+    [
+      M2,
+    ],
+  )
+})
+
 // The misroute homelab reported: a letter that ARRIVED but carries no
 // sender used to fall back to the address it was delivered to — our own
 // inbox — so the reply looked sent and went nowhere near the writer.

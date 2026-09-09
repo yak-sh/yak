@@ -3048,6 +3048,16 @@ export let reSubject = (s: string) =>
 // near miss is our own inbox (the address the letter was delivered to),
 // so a reply that quietly goes to the wrong desk looks sent and isn't.
 // An unsigned letter earns a refusal instead; mail it directly.
+//
+// Answering an arrival RETIRES it: the reply batch also stamps `archived`
+// on the inbound row, so the boot digest's pending block stops re-surfacing
+// a thread we have already answered (the digest omits archived mail — see
+// channel.ts injects). Without this every fresh boot re-presented the same
+// unanswered-looking letter and each session replied again (T-35950). A
+// LATER inbound message on the thread is a distinct row with its own
+// received_at and no archived stamp, so it re-surfaces on its own. Only an
+// arrival is retired (message_id) — following up on our own sent letter
+// never rang the inbox to begin with, so there is nothing to hide.
 export let replyChanges = (row: Row, body: string) => {
   let m = row.comps.mail ?? {}
   // The far side: an arrival's sender (m.from), our own sent letter's
@@ -3058,12 +3068,17 @@ export let replyChanges = (row: Row, body: string) => {
       'cannot reply: that letter carries no sender — send a fresh mail',
     )
   }
-  return mailChanges({
+  let made = mailChanges({
     to,
     subject: reSubject(String(row.comps.doc?.title ?? '')),
     body,
     replyTo: row.eid,
   })
+  // Append (never insert): callers read made.changes[1] for the destination.
+  if (m.message_id && !row.comps.archived) {
+    made.changes.push({ eid: row.eid, name: 'archived', comp: {} })
+  }
+  return made
 }
 
 // A mail's THREAD: ancestors up the reply_to chain, descendants by
