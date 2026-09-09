@@ -2,9 +2,10 @@
 // the same component vocabulary as its stored rows.
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
 import { compTone } from '../comp.ts'
-import { cache, ent } from '../../live.ts'
+import { cache, ent, useRoute } from '../../live.ts'
 import { applicable } from '../registry.ts'
 import { slow } from '../../testing.ts'
 
@@ -130,8 +131,12 @@ slow('a reference reads as one association row, eid and all', async () => {
     },
   }
   let root = document.querySelector('main')!
+  // Debug holds a backlink query even when only its reference cells matter.
+  // This complete cache fixture needs no server; intercept the transport, not
+  // the query, so the real resolver and hook lifetime still run.
+  let priorRoute = useRoute(() => {})
   try {
-    render(h(Debug, { e: ent(job) }), root)
+    act(() => render(h(Debug, { e: ent(job) }), root))
     let keys = [...root.querySelectorAll('.Debug_Props .Debug_Key')]
       .map((k) => k.textContent)
     assertEquals(keys.filter((k) => k == 'task.assignee').length, 1)
@@ -142,7 +147,8 @@ slow('a reference reads as one association row, eid and all', async () => {
     assertEquals(ids.includes(owner), true)
     assertEquals(root.textContent.includes('Owner'), true)
   } finally {
-    render(null, root)
+    act(() => render(null, root))
+    useRoute(priorRoute)
     cache.value = {}
     if (prior) Object.defineProperty(globalThis, 'document', prior)
     else delete (globalThis as { document?: unknown }).document
@@ -199,8 +205,10 @@ slow('project backlinks omit attribution and cap associations', async () => {
     }
   }
   let root = document.querySelector('main')!
+  // The seeded graph is the whole backlink set, not a live owner's cache.
+  let priorRoute = useRoute(() => {})
   try {
-    render(h(ProjectDebug, { e: ent(project) }), root)
+    act(() => render(h(ProjectDebug, { e: ent(project) }), root))
     assertEquals(root.textContent.includes('created.by'), false)
     assertEquals(root.textContent.includes('Action 1'), false)
     assertEquals(root.textContent.includes('Task 5'), true)
@@ -208,18 +216,22 @@ slow('project backlinks omit attribution and cap associations', async () => {
     let more = [...root.querySelectorAll<HTMLAnchorElement>(
       '.Debug_Linked[href]',
     )]
-    assertEquals(more[0].textContent.includes('+2 more tasks'), true)
+    // Reverse-index traversal need not follow fixture insertion order. Check
+    // each group's cap and query together, independent of group order.
     assertEquals(
-      more[0].getAttribute('href'),
-      '/admin/task?q=.task.project%3DP-19',
-    )
-    assertEquals(more[1].textContent.includes('+1 more session'), true)
-    assertEquals(
-      more[1].getAttribute('href'),
-      '/admin/session?q=.session.actor%3DP-19',
+      more.map((node) => [node.getAttribute('href'), node.textContent])
+        .sort(([a], [b]) => a!.localeCompare(b!)),
+      [
+        [
+          '/admin/session?q=.session.actor%3DP-19',
+          '← session.actor+1 more sessions',
+        ],
+        ['/admin/task?q=.task.project%3DP-19', '← task.project+2 more tasks'],
+      ],
     )
   } finally {
-    render(null, root)
+    act(() => render(null, root))
+    useRoute(priorRoute)
     cache.value = {}
     if (prior) Object.defineProperty(globalThis, 'document', prior)
     else delete (globalThis as { document?: unknown }).document
