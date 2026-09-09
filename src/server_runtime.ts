@@ -41,6 +41,7 @@ import {
 } from './db.ts'
 import { file as graph } from './store/sqlite.ts'
 import { db } from './live_db.ts'
+import { checkpointBoot } from './boot_checkpoint.ts'
 import { catchup } from './catchup.ts'
 import { published, withBackupLock } from './redaction.ts'
 import { type Subserve, subserve } from './subserve.ts'
@@ -1610,9 +1611,10 @@ let drain = async () => {
 // already stopped and reaped the old process, so the public port has one
 // serving process and needs no listener overlap.
 await warmBrowser()
+if (!appOnly) checkpointBoot(db, Deno.pid)
 export let http = host.serve(port, handle)
 host.onSignal('SIGINT', drain)
 host.onSignal('SIGTERM', drain)
 booted()
-// One readiness beat: fully migrated and serving.
+// One readiness beat: boot writes committed and checkpointed, then serving.
 await signalReady()

@@ -133,6 +133,9 @@ export let launch = async (
     stdout: 'inherit',
     stderr: 'piped',
   }).spawn()
+  console.error(
+    `server pid ${child.pid} spawned — waiting for checkpointed ready`,
+  )
   // Drain and durably record the child's stderr for its whole life. Piped
   // stderr MUST be consumed or a chatty child blocks on a full pipe.
   let recorded = record(child.stderr, child.pid)
@@ -164,11 +167,7 @@ export let launch = async (
     console.error(`server pid ${child.pid} ready in ${Date.now() - began}ms`)
     return child
   } catch (e) {
-    try {
-      child.kill('SIGTERM')
-    } catch {
-      // It already said why it could not start.
-    }
+    await retire(child, 'server boot')
     // The child is condemned, so its stderr will close; wait for the pump so
     // the reason it died is on disk before this rejection propagates.
     await recorded
@@ -181,6 +180,83 @@ export let launch = async (
 let stopping = new WeakSet<Deno.ChildProcess>()
 // The server this supervisor is answerable for.
 let current: Deno.ChildProcess | undefined
+let exiting = false
+
+let gone = (e: unknown) =>
+  e instanceof Deno.errors.NotFound ||
+  (e instanceof TypeError &&
+    e.message == 'Child process has already terminated')
+
+// A settle is a grace period, not permission to retain a writer beside its
+// replacement. Even after SIGKILL, wait for status: sending a signal is not
+// proof that the process (and every SQLite descriptor it held) has exited.
+export let retire = async (
+  child: Pick<Deno.ChildProcess, 'pid' | 'kill' | 'status'>,
+  name: string,
+  ms = 30_000,
+) => {
+  console.error(`${name} pid ${child.pid} SIGTERM — exit deadline ${ms}ms`)
+  try {
+    child.kill('SIGTERM')
+  } catch (e) {
+    if (!gone(e)) throw e
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    let exited = await Promise.race([
+      child.status.then(() => true),
+      new Promise<false>((resolve) => {
+        timer = setTimeout(() => resolve(false), ms)
+      }),
+    ])
+    if (!exited) {
+      console.error(
+        `${name} pid ${child.pid} exit deadline exceeded — SIGKILL (runner loss)`,
+      )
+      try {
+        child.kill('SIGKILL')
+      } catch (e) {
+        if (!gone(e)) throw e
+      }
+    }
+    let status = await child.status
+    console.error(
+      `${name} pid ${child.pid} exited code=${status.code} signal=${
+        status.signal ?? 'none'
+      }`,
+    )
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// The sequencing seam shared by edit swaps, crash recovery, and exit 42.
+// Stop the doing owner BEFORE closing the old server's connection set; start
+// its successor only AFTER launch has received the checkpointed READY beat.
+// Callers serialize this whole pair, including invalidating respawn backoffs.
+export let handoff = (o: {
+  stopEffects: () => Promise<void>
+  stopServer: () => Promise<void>
+  launch: () => Promise<void>
+  startEffects: () => void
+}) => {
+  let stop = async () => {
+    await o.stopEffects()
+    await o.stopServer()
+  }
+  let start = async () => {
+    await o.launch()
+    o.startEffects()
+  }
+  return {
+    stop,
+    start,
+    replace: async () => {
+      await stop()
+      await start()
+    },
+  }
+}
 
 // Every mint and retire runs here, one at a time. A crash-relaunch and an
 // edit-swap both replace `current`, and interleaved they can lose a handle to a
@@ -241,12 +317,14 @@ export let insist = (
 // heal in a second costs every operator mid-turn instead (T-11139). There is
 // no failure a child can have that the supervisor improves by dying too.
 let revive = async (departed: Deno.ChildProcess) => {
-  if (current != departed) return // a swap already replaced it
-  for (let n = 0;; n++) {
+  if (exiting || current != departed) return // a swap already replaced it
+  await lifecycle.stop()
+  for (let n = 0; !exiting; n++) {
     let ms = RETRY[Math.min(n, RETRY.length - 1)]
     if (ms) await wait(ms)
     try {
-      current = watch(await launch())
+      if (exiting) return
+      await lifecycle.start()
       return
     } catch (e) {
       console.error('server relaunch failed —', e)
@@ -256,8 +334,10 @@ let revive = async (departed: Deno.ChildProcess) => {
 
 let watch = (child: Deno.ChildProcess) => {
   child.status.then((status) => {
-    if (stopping.has(child)) return
-    console.error(`server stopped unexpectedly (${status.code}) — relaunching`)
+    if (exiting || stopping.has(child)) return
+    console.error(
+      `server pid ${child.pid} stopped unexpectedly (${status.code}) — relaunching`,
+    )
     serial(() => revive(child))
   })
   return child
@@ -265,12 +345,7 @@ let watch = (child: Deno.ChildProcess) => {
 
 let stop = async (child: Deno.ChildProcess) => {
   stopping.add(child)
-  try {
-    child.kill('SIGTERM')
-  } catch {
-    // A process that already left is drained.
-  }
-  await child.status
+  await retire(child, 'server')
 }
 
 // Sequential replacement. Stop and reap the old server before a new process
@@ -279,8 +354,7 @@ let stop = async (child: Deno.ChildProcess) => {
 let swap = async () => {
   let old = current!
   try {
-    await stop(old)
-    current = watch(await launch())
+    await lifecycle.replace()
     return true
   } catch (e) {
     console.error('server replacement failed —', e)
@@ -301,10 +375,14 @@ let swap = async () => {
 // cgroup mass-kill instead (T-11139), and a bare `deno run src/dev.ts` gets a
 // clean stop and this line, which beats serving yesterday's code in silence.
 let relaunch = async () => {
-  console.error('supervisor source changed — exiting 42 to be relaunched')
+  exiting = true
+  console.error(
+    `supervisor pid ${Deno.pid} source changed — draining for exit 42`,
+  )
   await serial(async () => {
-    if (current) await stop(current)
+    await lifecycle.stop()
   })
+  console.error(`supervisor pid ${Deno.pid} children exited — exiting 42`)
   Deno.exit(42)
 }
 
@@ -364,7 +442,7 @@ let effectsGen = 0
 let spawnEffects = () => {
   let gen = ++effectsGen
   let boot = (n: number) => {
-    if (gen != effectsGen) return // replaced while we were backing off
+    if (exiting || gen != effectsGen) return // replaced while backing off
     try {
       let child = new Deno.Command(deno, {
         args: effectsArgs,
@@ -372,12 +450,15 @@ let spawnEffects = () => {
         stdout: 'inherit',
         stderr: 'piped',
       }).spawn()
+      console.error(
+        `effectsd pid ${child.pid} spawned after server pid ${current?.pid} checkpointed ready`,
+      )
       record(child.stderr, child.pid)
       effectsd = child
       child.status.then((status) => {
         if (gen != effectsGen) return // condemned by a replace or shutdown
         console.error(
-          `effectsd stopped unexpectedly (${status.code}) — relaunching`,
+          `effectsd pid ${child.pid} stopped unexpectedly (${status.code}) — relaunching`,
         )
         setTimeout(
           () => boot(n + 1),
@@ -394,31 +475,30 @@ let spawnEffects = () => {
 let stopEffects = async () => {
   effectsGen++ // condemn: the status handler above stands down
   let child = effectsd
+  if (child) await retire(child, 'effectsd')
   effectsd = undefined
-  try {
-    child?.kill('SIGTERM')
-  } catch {
-    // already gone
-  }
-  await child?.status
 }
+let lifecycle = handoff({
+  stopEffects,
+  stopServer: async () => {
+    if (current) await stop(current)
+  },
+  launch: async () => {
+    current = watch(await launch())
+  },
+  startEffects: spawnEffects,
+})
 let supervise = async () => {
   current = await firstBoot()
   spawnEffects()
   let reload = insist(() =>
     serial(async () => {
-      // Stop every process that imports the served tree before replacement.
-      // The new server migrates first; only then does the effects worker open
-      // the settled schema.
-      await stopEffects()
-      let ok = await swap()
-      spawnEffects()
-      return ok
+      if (exiting) return true
+      return await swap()
     })
   )
   for await (let event of Deno.watchFs(src)) {
     if (event.paths.some(devFile)) {
-      await stopEffects()
       return relaunch()
     }
     if (event.paths.some(serverFile)) reload()

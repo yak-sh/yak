@@ -1,7 +1,8 @@
 // The supervisor trusts a child only after its private ready handshake. This
 // probe uses a tiny child instead of booting the graph server.
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
-import { insist, launch } from './dev.ts'
+import { handoff, insist, launch, retire } from './dev.ts'
+import { FakeTime } from '@std/testing/time'
 import { slow } from './testing.ts'
 
 let tick = (ms = 0) => new Promise((r) => setTimeout(r, ms))
@@ -127,4 +128,147 @@ slow('insist: edits arriving together make one attempt', async () => {
   poke()
   await tick(60)
   assertEquals(tries, 1)
+})
+
+// Fast-tier protocol tests: status and READY are independent gates. A signal
+// (even SIGKILL) must never be mistaken for an exited writer.
+let deferred = <T>() => Promise.withResolvers<T>()
+let status = { success: true, code: 0, signal: null }
+let process = (pid: number, events: string[]) => {
+  let exited = deferred<Deno.CommandStatus>()
+  let killed = deferred<void>()
+  return {
+    pid,
+    status: exited.promise,
+    killed: killed.promise,
+    kill: (signal: Deno.Signal = 'SIGTERM') => {
+      events.push(`${pid} ${signal}`)
+      if (signal == 'SIGKILL') killed.resolve()
+    },
+    exit: () => exited.resolve(status),
+  }
+}
+
+for (let mode of ['swap', 'server crash', 'exit 42']) {
+  Deno.test(`handoff: ${mode} reaps both old writers before replacement`, async () => {
+    using time = new FakeTime()
+    let events: string[] = []
+    let effects = process(10, events)
+    let server = process(11, events)
+    if (mode == 'server crash') server.exit()
+    let ready = deferred<void>()
+    let launched = deferred<void>()
+    let serverStopping = deferred<void>()
+    let pair = handoff({
+      stopEffects: () => retire(effects, 'effectsd'),
+      stopServer: () => {
+        serverStopping.resolve()
+        return retire(server, 'server')
+      },
+      launch: async () => {
+        events.push('new server opens graph')
+        launched.resolve()
+        await ready.promise
+        events.push('new server checkpointed ready')
+      },
+      startEffects: () => events.push('new effects opens graph'),
+    })
+    let replacing = mode == 'exit 42' ? pair.stop() : pair.replace()
+    assertEquals(events, ['10 SIGTERM'])
+    // A settle can use its whole grace period, but no new writer starts.
+    await time.tickAsync(29_999)
+    assertEquals(events, ['10 SIGTERM'])
+    effects.exit()
+    await serverStopping.promise
+    assertEquals(events, ['10 SIGTERM', '11 SIGTERM'])
+    server.exit()
+    if (mode == 'exit 42') {
+      await replacing
+      assertEquals(events, ['10 SIGTERM', '11 SIGTERM'])
+      // The shell's next supervisor only starts after this one's stop.
+      replacing = pair.start()
+    }
+    await launched.promise
+    assertEquals(events.at(-1), 'new server opens graph')
+    assertEquals(events.includes('new effects opens graph'), false)
+    ready.resolve()
+    await replacing
+    assertEquals(events.slice(-2), [
+      'new server checkpointed ready',
+      'new effects opens graph',
+    ])
+  })
+}
+
+Deno.test('handoff: deadline kills a settler but still waits for kernel exit', async () => {
+  using time = new FakeTime()
+  let events: string[] = []
+  let effects = process(20, events)
+  let pair = handoff({
+    stopEffects: () => retire(effects, 'effectsd'),
+    stopServer: () => {
+      events.push('old server stopped')
+      return Promise.resolve()
+    },
+    launch: () => {
+      events.push('new server ready')
+      return Promise.resolve()
+    },
+    startEffects: () => events.push('new effects started'),
+  })
+  let said = await saying(async () => {
+    let replacing = pair.replace()
+    await time.tickAsync(30_000)
+    await effects.killed
+    assertEquals(events, ['20 SIGTERM', '20 SIGKILL'])
+    await time.tickAsync(60_000)
+    assertEquals(events, ['20 SIGTERM', '20 SIGKILL'])
+    effects.exit()
+    await replacing
+  })
+  assertEquals(events.slice(2), [
+    'old server stopped',
+    'new server ready',
+    'new effects started',
+  ])
+  assertStringIncludes(said, 'effectsd pid 20 exit deadline exceeded — SIGKILL')
+  assertStringIncludes(said, 'effectsd pid 20 exited code=0')
+})
+
+Deno.test('handoff: failed readiness never starts effectsd; retry stays ordered', async () => {
+  let events: string[] = []
+  let attempt = 0
+  let pair = handoff({
+    stopEffects: () => {
+      events.push('effects exited')
+      return Promise.resolve()
+    },
+    stopServer: () => {
+      events.push('server exited')
+      return Promise.resolve()
+    },
+    launch: () => {
+      events.push('launch')
+      return ++attempt == 1
+        ? Promise.reject(new Error('checkpoint failed'))
+        : Promise.resolve()
+    },
+    startEffects: () => events.push('effects started'),
+  })
+  await assertRejects(pair.replace, Error, 'checkpoint failed')
+  assertEquals(events, ['effects exited', 'server exited', 'launch'])
+  await pair.start()
+  assertEquals(events.slice(3), ['launch', 'effects started'])
+})
+
+Deno.test('retire: already departed child is reaped without waiting for deadline', async () => {
+  using time = new FakeTime()
+  await retire({
+    pid: 30,
+    status: Promise.resolve(status),
+    kill: () => {
+      throw new TypeError('Child process has already terminated')
+    },
+  }, 'server')
+  assertEquals(time.now, time.start)
 })
