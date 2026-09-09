@@ -12,9 +12,11 @@ import type { App, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import {
   answered,
+  type Arrived,
   type Asked,
   pagesOf,
   type Plugin,
+  routed,
   rulesOf,
   toolsOf,
   type Visit,
@@ -64,6 +66,12 @@ let fixture: Plugin = {
     brief: 'a fixture',
   }],
   answers: [(at) => at.path == '/fixture' ? new Response('counted') : null],
+  routes: [
+    (at) =>
+      at.path.startsWith('/fixture.git/')
+        ? new Response(at.space ?? 'apex')
+        : null,
+  ],
   watch: (v) => seen.push(v),
   rules: [rule('fixture/one')],
   wakes: [{ entity: { eid: 'fixture' }, wake: { every: '@daily' } }],
@@ -96,6 +104,29 @@ Deno.test('a plugin answers its own door and passes on every other', async () =>
   // A path no plugin claims is null, so the host goes on to its own doors.
   assertEquals(await answered(list, asked('/stats')), null)
   assertEquals(await answered([quiet], asked('/fixture')), null)
+})
+
+let arrived = (path: string, space: string | null = 'one'): Arrived => ({
+  env: {} as Env,
+  req: new Request(`https://${space ?? 'www'}.yaks.app${path}`),
+  path,
+  space,
+})
+
+Deno.test('a plugin answers a root door, and knows which root it is', async () => {
+  let list = [fixture, quiet]
+  // The whole path on the hostname, so a door claims what no app slug can.
+  assertEquals(
+    await (await routed(list, arrived('/fixture.git/info/refs')))?.text(),
+    'one',
+  )
+  assertEquals(
+    await (await routed(list, arrived('/fixture.git/info/refs', null)))?.text(),
+    'apex',
+  )
+  // A path no plugin claims falls through to the kernel's own table.
+  assertEquals(await routed(list, arrived('/fixture')), null)
+  assertEquals(await routed([quiet], arrived('/fixture.git/info/refs')), null)
 })
 
 Deno.test('order is the list order', async () => {

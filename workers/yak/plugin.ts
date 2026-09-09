@@ -17,6 +17,8 @@
 //   pages    guide pages, offered by the `guide` tool and served as MCP
 //            resources (guide.ts `PAGES`)
 //   answers  a door at an app's own address (apps.ts `api`)
+//   routes   a door at the apex or on a space's hostname, answered before any
+//            app is (index.ts `serve`)
 //   watch    what a plugin does about a page an app served (apps.ts `viewed`)
 //   rules    what it does INSIDE a store, as data: a query over one bundle in
 //            a batch plus what comes out (@yaks/graph `Rule`), run by the phase
@@ -66,6 +68,31 @@ export type Answer = (
   asked: Asked,
 ) => Promise<Response | null> | Response | null
 
+/**
+ * A request as the ROUTER holds it, before any part of the kernel has taken
+ * it: the whole path on the hostname, and which space that hostname names —
+ * `null` at the apex. Not `Route`'s `path` (route.ts), which is already the
+ * path within an app; a door here sits above the app split and needs the
+ * address as the client wrote it.
+ */
+export type Arrived = {
+  env: Env
+  req: Request
+  /** the whole path on the hostname, as asked */
+  path: string
+  /** the space the hostname names, or null at the apex */
+  space: string | null
+}
+
+/**
+ * A door a plugin answers at the apex or on a space's hostname, or `null` for
+ * a path that is not its business — the same way an `Answer` says no, so a
+ * plugin has one shape for "not mine" wherever it sits.
+ */
+export type Door = (
+  at: Arrived,
+) => Promise<Response | null> | Response | null
+
 /** A page an app served, and which app it was a page of. */
 export type Visit = {
   env: Env
@@ -96,6 +123,9 @@ export type Plugin = {
   pages?: Page[]
   /** the doors it answers at an app's address */
   answers?: Answer[]
+  /** the doors it answers at the apex, or on a space's hostname before its
+   * apps */
+  routes?: Door[]
   /** what it does about a page an app served */
   watch?: Watch
   /** the rules it declares, run inside every store this Worker builds */
@@ -155,6 +185,28 @@ export let answered = async (
   for (let p of plugins) {
     for (let answer of p.answers ?? []) {
       let said = await answer(asked)
+      if (said) return said
+    }
+  }
+  return null
+}
+
+/**
+ * The same fold over the ROOT doors (index.ts `serve`), and the same rule: the
+ * first plugin to answer wins, `null` means the kernel goes on to its own
+ * table. It is asked ahead of the apps on a space's hostname — including the
+ * home app, which otherwise answers every address no app claims (T-33040) — so
+ * a door here claims a path an app cannot: a first segment carrying a dot is
+ * no slug (route.ts `SLUG`), which is what makes `/<app>.git/*` sayable here
+ * and unsayable by an app.
+ */
+export let routed = async (
+  plugins: Plugin[],
+  at: Arrived,
+): Promise<Response | null> => {
+  for (let p of plugins) {
+    for (let door of p.routes ?? []) {
+      let said = await door(at)
       if (said) return said
     }
   }

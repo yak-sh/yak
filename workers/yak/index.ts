@@ -48,9 +48,12 @@
 //     /stripe/connect         sell.ts: what a SELLER's account says happened
 //     /mcp, /api/*            mcp.ts (T-32329; a JSON 404 until then)
 //     /robots.txt, /sitemap.xml, /llms.txt, /llms-full.txt
-//                             seo.ts: the site said as a list, generated
+//                             seo.ts: the site said as a list, generated —
+//                             reached through PLUGINS (plugin.ts `routes`),
+//                             which is where every root door of a domain sits
 //     anything else           ./public, else a soft 404
-//   <space>.yaks.app          apps.ts, and one door of its own:
+//   <space>.yaks.app          apps.ts, the plugin root doors ahead of it, and
+//                             one door of its own:
 //     /_yaks, /_yaks/*        apps.ts: management, beside any custom homepage
 //     POST /deploy            drop.ts: a zip of files, or one index.html,
 //                             dropped on the space's page — an app made or
@@ -87,6 +90,8 @@ import { sprite } from './icons.ts'
 import { arrived, Refused } from './inbox.ts'
 import * as mcp from './mcp.ts'
 import { lost, oops, provisioning } from './pages.ts'
+import { routed } from './plugin.ts'
+import { PLUGINS } from './plugins.ts'
 import {
   aimedAt,
   doorway,
@@ -100,7 +105,6 @@ import {
   shared,
 } from './route.ts'
 import * as sell from './sell.ts'
-import * as seo from './seo.ts'
 import { metaBreaks, noted, refusal } from './unseen.ts'
 import { scheduled } from './wake.ts'
 
@@ -143,14 +147,22 @@ export class Files extends WorkerEntrypoint {
 }
 
 let serve = async (req: Request, env: Env, r: Route) => {
+  let asked = new URL(req.url).pathname
   if (r.space != null) {
     // The one path on a space's hostname the kernel answers itself (drop.ts,
     // T-34230): a file dropped on the space's own page, which becomes an app.
     // POST only, so an app whose slug happens to be `deploy` still serves its
     // own pages at the same address.
-    if (req.method == 'POST' && new URL(req.url).pathname == '/deploy') {
+    if (req.method == 'POST' && asked == '/deploy') {
       return drop.fetch(req, env)
     }
+    // What a PLUGIN answers on this hostname (plugin.ts `routes`, T-34947).
+    // Ahead of apps.ts and so ahead of the home app, which answers every
+    // address no app claims (T-33040) — the one place a door for a whole
+    // hostname can sit. After the kernel's own line above, so a plugin never
+    // takes a path this file already answers.
+    let mine = await routed(PLUGINS, { env, req, path: asked, space: r.space })
+    if (mine) return mine
     return bound(env.APPS, apps.fetch, env).fetch(req)
   }
   let path = r.path
@@ -207,13 +219,14 @@ let serve = async (req: Request, env: Env, r: Route) => {
       { headers: { 'content-type': 'text/plain; charset=utf-8' } },
     )
   }
-  // What the apex says about itself to a crawler or a model (seo.ts): the
-  // robots file, the sitemap, and the two llms.txt addresses. Generated rather
-  // than static, because each is a LIST — of the pages, of the guide — and a
-  // list kept by hand goes stale the first time a page is added. Here, in the
-  // apex branch, because a space's hostname is the customer's face and its
-  // robots file is its own (route.ts).
-  let said = await seo.answer(path, env)
+  // What a PLUGIN answers at the apex (plugin.ts `routes`), the same list the
+  // space branch above asks. What the apex says about itself to a crawler or a
+  // model is the one door there is today (seo.ts `seoPlugin`): the robots
+  // file, the sitemap, and the two llms.txt addresses, generated rather than
+  // static because each is a LIST — of the pages, of the guide — and a list
+  // kept by hand goes stale the first time a page is added. Here, below the
+  // kernel's own doors, so a plugin cannot take one of them.
+  let said = await routed(PLUGINS, { env, req, path, space: null })
   if (said) return said
   // The gallery (gallery.ts, T-34477): the published apps their owners asked
   // us to show, and the door the approval link in our own letter lands at.
