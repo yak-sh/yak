@@ -31,6 +31,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { storage } from '@yaks/sqlite'
 import { fields, hashEmbedder, semantic, sweep } from '@yaks/embedding'
+import { fields as ftsFields, search } from '@yaks/fts'
 import type { Driver } from '@yaks/sqlite'
 import { traverse } from '@yaks/edge'
 import { blobRead } from '@yaks/blob'
@@ -111,10 +112,12 @@ let driver: Driver = {
 // `blob_text`, and `blobRead` is the read override that resolves it — the app's
 // table named column for column, so the existing rows are read where they lie.
 let bodies = blobRead(V, { table: 'blob_text', key: 'entity', value: 'value' })
+// @yaks/sql carries no built-in text lowering; @yaks/fts contributes the search
+// clause, pointed at the app's doc-only index (`doc_fts`, kept by db.ts).
 let opts = {
   derived: { ...fleetDerived, ...bodies },
   now: NOW,
-  extend: [traverse(V)],
+  extend: [traverse(V), search(ftsFields(V).filter((f) => f.comp == 'doc'))],
 }
 let store = storage(driver, V, opts)
 

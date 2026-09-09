@@ -39,6 +39,7 @@ import { loadVocab } from '@yaks/vocab'
 import type { Column, PropSchema, Vocab } from '@yaks/vocab'
 import { idKeywords } from '@yaks/id'
 import { schema } from '@yaks/sqlite'
+import { fields, schema as ftsSchema } from '@yaks/fts'
 import { docDoc } from '@yaks/doc'
 import { mailDoc } from '@yaks/mail'
 import { fleetDocs, fleetKeywords, fleetVocab } from './fleet_vocab.ts'
@@ -145,10 +146,13 @@ Deno.test('parity: the same DDL for the comps the packages ship whole', () => {
 })
 
 Deno.test('parity: doc whole — the table, the view, the index and its triggers', () => {
-  // Every statement @yaks/sqlite raises for `doc`, which is more than a table:
-  // the `doc_value` view search reads through, the external-content FTS5 index,
-  // and the three triggers that keep it current.
-  let docish = (v: Vocab) => schema(v).filter((s) => s.includes('doc')).sort()
+  // The application composes the read table/view from sqlite with FTS's
+  // index and triggers. Both vocabularies must still yield the same schema.
+  let docish = (v: Vocab) =>
+    [
+      ...schema(v),
+      ...ftsSchema(fields(v).filter((f) => f.comp == 'doc')),
+    ].filter((s) => s.includes('doc')).sort()
   let mine = docish(swap(['doc']))
   assert(mine.some((s) => s.includes('doc_fts')), 'the index is raised')
   assertEquals(mine, docish(fleet))
