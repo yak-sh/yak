@@ -51,7 +51,14 @@ import type { Who } from './session.ts'
 import { storeOf } from './door.ts'
 import { failed, noted, refusal, serving } from './unseen.ts'
 import { KERNEL, metaOf } from './meta.ts'
-import { type Bound, type Config, metadata } from './wrangler_app.ts'
+import {
+  type Bound,
+  type Config,
+  metadata,
+  WORKER,
+  WRAPPER,
+} from './wrangler_app.ts'
+export { WORKER } from './wrangler_app.ts'
 
 // The namespace the account holds (`wrangler dispatch-namespace create
 // yak-apps`), named here as well as in wrangler.toml because the upload
@@ -100,20 +107,17 @@ type Grant = {
 export let scriptName = (store: string) =>
   store.replaceAll(/[^a-zA-Z0-9-]/g, '_')
 
-// The app's own entry, the one file the platform looks for and the name the
-// shim imports.
-export let WORKER = 'worker.js'
-
 // What the platform runs, with the app's own module inside it. Uploaded as
-// the script's `main_module` beside `worker.js`, which it imports — a
+// the script's `main_module` beside the configured app source it imports — a
 // multipart upload may carry several ES modules, and the entry is whichever
 // one `main_module` names
 // (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/reference/platform-examples/).
 //
 // It is deliberately tiny and deliberately first: it is the only thing
 // between the app's code and the grant.
-export let SHIM = `import app from './${WORKER}'
-export * from './${WORKER}'
+export let shim = (main = WORKER) =>
+  `import app from ${JSON.stringify('./' + main)}
+export * from ${JSON.stringify('./' + main)}
 
 let GRANT = '${GRANT}'
 let SELF = '${SELF}'
@@ -150,6 +154,8 @@ export default {
   },
 }
 `
+
+export let SHIM = shim()
 
 // The visitor an app's worker acts as, for one minute, on one store.
 export let granting = (secret: string, store: string, who: Who) =>
@@ -551,7 +557,7 @@ let resolved = (from: string, spec: string) => {
 }
 
 /**
- * The modules the script carries: `worker.js`, everything it imports, and
+ * The modules the script carries: the app source (default `worker.js`), its imports, and
  * everything those import, read out of the app's own files by `read`.
  *
  * A specifier naming a file the app never wrote is left out, and Cloudflare
@@ -560,14 +566,17 @@ let resolved = (from: string, spec: string) => {
  */
 export let carried = async (
   read: (path: string) => Promise<Uint8Array<ArrayBuffer> | null>,
-  main = 'entry.js',
+  main = WORKER,
 ): Promise<Module[]> => {
   let out: Module[] = []
-  // `entry.js` is OURS: an app file by that name is never walked to and never
-  // replaces the shim.
-  let seen = new Set([main])
+  let seen = new Set<string>()
   let walk = async (name: string) => {
     if (seen.has(name)) return
+    if (name == WRAPPER || name == 'metadata') {
+      throw new Error(
+        `refused module ${name}: reserved for the platform upload`,
+      )
+    }
     seen.add(name)
     let bytes = await read(name)
     if (!bytes) return
@@ -579,7 +588,7 @@ export let carried = async (
       await walk(resolved(name, spec))
     }
   }
-  await walk(WORKER)
+  await walk(main)
   return out
 }
 
@@ -615,7 +624,7 @@ export let upload = async (
   config: Config = {},
   bound: Bound[] = [],
 ) => {
-  let names = new Set(['metadata', config.main ?? 'entry.js'])
+  let names = new Set(['metadata', WRAPPER])
   for (let { name } of modules) {
     if (names.has(name)) {
       throw new Error(
@@ -648,7 +657,7 @@ export let upload = async (
     bytes: string | Uint8Array<ArrayBuffer>,
     type: string,
   ) => body.append(name, new Blob([bytes], { type }), name)
-  part(config.main ?? 'entry.js', SHIM, ESM)
+  part(WRAPPER, shim(config.main), ESM)
   for (let m of modules) part(m.name, m.bytes, moduleType(m.name))
   return named(
     await answered(

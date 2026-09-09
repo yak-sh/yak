@@ -27,7 +27,7 @@ slow(
         { CF_ACCOUNT: 'acct', CF_WORKERS_TOKEN: 'test-token' } as Env,
         'app.abc123',
         [{
-          name: 'worker.js',
+          name: 'dist/server.mjs',
           bytes: new TextEncoder().encode(`
           export class Counter { value() { return 7 } }
           export default {
@@ -43,6 +43,7 @@ slow(
           }
         `),
         }],
+        { main: 'dist/server.mjs' },
       )
     } finally {
       globalThis.fetch = was

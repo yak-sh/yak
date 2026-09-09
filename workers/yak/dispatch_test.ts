@@ -475,8 +475,8 @@ Deno.test('an upload sends the shim, the app, and one way home', async () => {
   let form = calls[0].body as FormData
   let meta = JSON.parse(await (form.get('metadata') as File).text())
   // The entry is OURS, and the app's own module rides beside it.
-  assertEquals(meta.main_module, 'entry.js')
-  assertEquals(await (form.get('entry.js') as File).text(), SHIM)
+  assertEquals(meta.main_module, '__yak_entry.js')
+  assertEquals(await (form.get('__yak_entry.js') as File).text(), SHIM)
   assertEquals(
     await (form.get('worker.js') as File).text(),
     'export default { fetch: () => {} }',
@@ -663,11 +663,11 @@ Deno.test('a wasm module goes up as a module part of its own type', async () => 
   )
   let form = calls[0].body as FormData
   let meta = JSON.parse(await (form.get('metadata') as File).text())
-  assertEquals(meta.main_module, 'entry.js')
+  assertEquals(meta.main_module, '__yak_entry.js')
   // Every part named by the module name that imports it, and typed by what
   // the runtime must do with it: link the two ES modules, compile the wasm.
   let part = (name: string) => form.get(name) as File
-  assertEquals(part('entry.js').type, 'application/javascript+module')
+  assertEquals(part('__yak_entry.js').type, 'application/javascript+module')
   assertEquals(part('worker.js').type, 'application/javascript+module')
   assertEquals(part('add.wasm').type, 'application/wasm')
   // And the wasm's bytes are the file's, unchanged — a module the upload
@@ -689,10 +689,10 @@ Deno.test('a wasm module goes up as a module part of its own type', async () => 
  */
 slow('workerd links the shim, the app, and its wasm', async () => {
   let w = await script({
-    'entry.js': SHIM,
+    '__yak_entry.js': SHIM,
     'worker.js': new TextDecoder().decode(APP),
     'add.wasm': WASM,
-  })
+  }, '__yak_entry.js')
   try {
     let r = await w.at('/api/add?a=2&b=3')
     assertEquals(r.status, 200)

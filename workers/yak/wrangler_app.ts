@@ -2,6 +2,10 @@
 // come from the directory: accepting an account id from an app would let one
 // tenant ask for another tenant's data.
 import { migrationMetadata } from './app_migrations.ts'
+// The upload wrapper is platform-owned, never the app's `main`.
+export const WRAPPER = '__yak_entry.js'
+export const WORKER = 'worker.js'
+
 export type ResourceType = 'd1' | 'r2_bucket' | 'vectorize'
 export type Bound = {
   name: string
@@ -169,16 +173,21 @@ export let allowlist = (value: unknown): Parsed => {
     }
   }
   if ('main' in value) {
+    let main = typeof value.main == 'string'
+      ? value.main.replace(/^(?:\.\/)+/, '')
+      : value.main
     if (
-      typeof value.main != 'string' ||
-      !/^[A-Za-z0-9_-][A-Za-z0-9_.-]*\.(?:js|mjs)$/.test(value.main) ||
-      value.main == 'worker.js'
+      typeof main != 'string' ||
+      !/^(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+\.(?:js|mjs)$/
+        .test(main) ||
+      main.split('/').some((part) => part == '.' || part == '..') ||
+      main == WRAPPER
     ) {
       no(
         'main',
-        'expected a JavaScript module filename other than worker.js; worker.js holds the app source and main names its entry wrapper',
+        'expected an app-relative JavaScript source path (.js or .mjs); directories are allowed, __yak_entry.js is reserved for the platform',
       )
-    } else config.main = value.main
+    } else config.main = main
   }
   if ('compatibility_date' in value) {
     if (
@@ -383,7 +392,7 @@ export let metadata = (
   if (config.ai) bindings.push({ type: 'ai', name: config.ai.binding })
   let migrations = migrationMetadata(config.migrations, tag)
   return {
-    main_module: config.main ?? 'entry.js',
+    main_module: WRAPPER,
     compatibility_date: config.compatibility_date ?? '2025-05-08',
     ...(config.compatibility_flags
       ? { compatibility_flags: config.compatibility_flags }

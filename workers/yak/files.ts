@@ -20,6 +20,7 @@ import { keepable, purge, tagsOf } from './cache.ts'
 import type { App } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { sha256 } from './versions.ts'
+import { parse, WORKER } from './wrangler_app.ts'
 
 // What the gateway tells this part, in headers rather than the path, because
 // the PATH is the cache key and these two are not part of what distinguishes
@@ -138,6 +139,17 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // away, and asking whether the file is there before asking for it paid that
   // trip twice for every file the app serves.
   let key = keyed(prefix, path)
+  // Server source is not a public asset, even when `main` names a nested
+  // build output. Do this behind the file cache so warm assets need no config
+  // lookup; app_files and releases purge this app's entries on changes.
+  if (/\.(?:js|mjs)$/.test(key)) {
+    let config = await blobs.read(prefix + '/wrangler.jsonc') ??
+      await blobs.read(prefix + '/wrangler.json')
+    let main = config
+      ? parse(new TextDecoder().decode(config)).config.main
+      : undefined
+    if (key == prefix + '/' + (main ?? WORKER)) return missing(keep)
+  }
   let bytes = await blobs.read(key)
   if (!bytes && pretty(path)) {
     key = keyed(prefix, '/')

@@ -16,7 +16,7 @@ let PERSON = 'a0000000-0000-4000-8000-0000000000ad'
 let who = { 'x-yak-person': PERSON, 'x-yak-role': 'owner' }
 let where = { space: 'ada', app: 'cookbook' }
 let configuration = {
-  main: 'launch.js',
+  main: 'dist/server.mjs',
   compatibility_date: '2026-01-01',
   vars: { TITLE: 'Cookbook', SETTINGS: { shared: false } },
   d1_databases: [{ binding: 'DB', database_id: 'somebody-elses-database' }],
@@ -74,12 +74,14 @@ let fixture = async () => {
       files: [
         { path: 'index.html', content: '<h1>The files keep serving</h1>' },
         { path: 'worker.js', content: 'export default { fetch() {} }' },
+        { path: 'dist/server.mjs', content: 'export default { fetch() {} }' },
         { path, content: JSON.stringify(config) },
       ],
     })
   let calls: { method: string; path: string; body: Record<string, unknown> }[] =
     []
   let uploads: Record<string, unknown>[] = []
+  let uploadedFiles: FormData[] = []
   let state = {
     fail: '',
     objects: new Set<string>(),
@@ -97,11 +99,10 @@ let fixture = async () => {
     let multipart = request.headers.get('content-type')?.startsWith(
       'multipart/',
     )
-    let body = multipart
-      ? JSON.parse(
-        await ((await request.formData()).get('metadata') as File)
-          .text(),
-      )
+    let form = multipart ? await request.formData() : undefined
+    if (form) uploadedFiles.push(form)
+    let body = form
+      ? JSON.parse(await (form.get('metadata') as File).text())
       : request.method == 'POST'
       ? await request.json()
       : {}
@@ -166,6 +167,7 @@ let fixture = async () => {
     write,
     calls,
     uploads,
+    uploadedFiles,
     resources,
     state,
     rows: (q: string) => meta(env).query(q),
@@ -190,7 +192,7 @@ Deno.test('app bindings survive redeploy, removal and trash until permanent dele
       assertStringIncludes(deployed, name)
     }
     let metadata = k.uploads[0]
-    assertEquals(metadata.main_module, 'launch.js')
+    assertEquals(metadata.main_module, '__yak_entry.js')
     assertEquals(metadata.compatibility_date, '2026-01-01')
     assertEquals(metadata.keep_bindings, ['secret_text'])
     assertEquals(JSON.stringify(metadata).includes('somebody-elses'), false)
@@ -320,16 +322,16 @@ Deno.test('a refused provisioning scope leaves files serving and uploads no work
   }
 })
 
-Deno.test('a main filename collision refuses before resource creation or upload', async () => {
+Deno.test('a missing explicit main refuses before resource creation, upload or deletion', async () => {
   let k = await fixture()
   try {
-    await k.write(configuration)
-    await k.tool('app_files', {
-      files: [{ path: 'launch.js', content: 'export let value = 1' }],
-    })
+    await k.write({ ...configuration, main: 'missing/server.js' })
     let result = await k.tool('app_deploy')
-    assertStringIncludes(result, 'refused main: launch.js is an app file')
-    assertStringIncludes(result, 'choose an unused module filename')
+    assertStringIncludes(
+      result,
+      'refused main: missing/server.js is not an app file',
+    )
+    assertStringIncludes(result, 'upload the server source at that path')
     assertEquals(k.calls, [])
     assertEquals(k.uploads, [])
     assertEquals(await k.rows('.binding!'), [])
@@ -458,6 +460,95 @@ Deno.test('permanent deletion empties R2 and keeps ownership through a failed re
       ).length,
       1,
     )
+  } finally {
+    k.done()
+  }
+})
+
+Deno.test('main deploys the chosen nested source and its imports, never the default worker', async () => {
+  let k = await fixture()
+  try {
+    await k.write({ main: './dist/server.mjs' })
+    await k.tool('app_files', {
+      files: [
+        {
+          path: 'dist/server.mjs',
+          content: `import { value } from '../entry.js'
+export { Room } from './room.js'
+export default { fetch() { return new Response(value) } }`,
+        },
+        { path: 'entry.js', content: `export let value = 'custom server'` },
+        { path: 'dist/room.js', content: 'export class Room {}' },
+        {
+          path: 'worker.js',
+          content: 'this default source must not be uploaded',
+        },
+      ],
+    })
+    let result = await k.tool('app_deploy')
+    assertStringIncludes(result, 'worker: dist/server.mjs answers first')
+    assertStringIncludes(result, 'main is the server source; default worker.js')
+    assertStringIncludes(result, 'wrapper is platform-owned')
+    let form = k.uploadedFiles[0]
+    assertEquals([...form.keys()], [
+      'metadata',
+      '__yak_entry.js',
+      'dist/server.mjs',
+      'entry.js',
+      'dist/room.js',
+    ])
+    let wrapper = await (form.get('__yak_entry.js') as File).text()
+    assertStringIncludes(wrapper, 'import app from "./dist/server.mjs"')
+    assertStringIncludes(wrapper, 'export * from "./dist/server.mjs"')
+    assertEquals(wrapper.includes('./worker.js'), false)
+    for (let path of ['dist/server.mjs', 'dist/%73erver.mjs']) {
+      let res = await apps.fetch(
+        new Request('https://ada.yaks.app/cookbook/' + path),
+        k.env,
+      )
+      assertEquals(
+        res.status,
+        404,
+        'configured server source must not be public',
+      )
+    }
+    let browser = await apps.fetch(
+      new Request('https://ada.yaks.app/cookbook/entry.js'),
+      k.env,
+    )
+    assertEquals(browser.status, 200, 'entry.js is now an ordinary app file')
+    await browser.body?.cancel()
+  } finally {
+    k.done()
+  }
+})
+
+Deno.test('explicit worker.js and entry.js are valid server sources', async () => {
+  let k = await fixture()
+  try {
+    for (let main of ['worker.js', 'entry.js']) {
+      await k.write({ main })
+      await k.tool('app_files', {
+        files: [{ path: main, content: 'export default { fetch() {} }' }],
+      })
+      let result = await k.tool('app_deploy')
+      assertStringIncludes(result, `worker: ${main} answers first`)
+      let form = k.uploadedFiles.at(-1)!
+      assertEquals([...form.keys()], ['metadata', '__yak_entry.js', main])
+    }
+  } finally {
+    k.done()
+  }
+})
+
+Deno.test('invalid main leaves the prior script intact even with no default source', async () => {
+  let k = await fixture()
+  try {
+    await k.tool('app_files', {
+      files: [{ path: 'wrangler.jsonc', content: '{"main":"../server.js"}' }],
+    })
+    assertStringIncludes(await k.tool('app_deploy'), 'refused main:')
+    assertEquals(k.calls, [])
   } finally {
     k.done()
   }

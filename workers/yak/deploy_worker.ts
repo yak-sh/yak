@@ -37,15 +37,20 @@ export let deployWorker = async (
   let held = await bindings(env, app)
   let worker = ''
   let unchanged = 'the files are deployed and serving; the worker is unchanged'
-  let source = await read(WORKER)
-  if (source && await read(config.main ?? 'entry.js')) {
+  let main = config.main ?? WORKER
+  let source = await read(main)
+  if (!source && config.main) {
     refused.push(
-      `refused main: ${
-        config.main ?? 'entry.js'
-      } is an app file; choose an unused module filename for the entry wrapper`,
+      `refused main: ${main} is not an app file; upload the server source at that path`,
     )
   }
   let ids = idReport(config, held)
+  if (refused.length) {
+    return {
+      worker,
+      lines: [...report, ...ids, ...refused, unchanged, ...bindingLines(held)],
+    }
+  }
   if (!source) {
     if (env.CF_WORKERS_TOKEN) await drop(env, store)
     else if (held.length) {
@@ -62,12 +67,6 @@ export let deployWorker = async (
     return {
       worker,
       lines: [...report, ...ids, ...refused, ...retained(held, {})],
-    }
-  }
-  if (refused.length) {
-    return {
-      worker,
-      lines: [...report, ...ids, ...refused, unchanged, ...bindingLines(held)],
     }
   }
   if (!env.CF_WORKERS_TOKEN) {
@@ -108,7 +107,7 @@ export let deployWorker = async (
     lines: [
       ...report,
       ...idReport(config, bound),
-      'worker: worker.js answers first; a 404 from it serves the files',
+      `worker: ${main} answers first; a 404 from it serves the files (main is the server source; default worker.js; the upload wrapper is platform-owned)`,
       ...bindingLines(bound),
       ...retained(held, config),
     ],

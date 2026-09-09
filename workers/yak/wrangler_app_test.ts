@@ -12,7 +12,7 @@ let read = (value: unknown) => parse(JSON.stringify(value))
 
 Deno.test('app config: JSONC preserves quoted comment markers and trailing commas in strings', () => {
   let source = `{
-    // The source remains worker.js; this names its wrapper.
+    // The app source can use its own filename.
     "main": "app-entry.mjs",
     "compatibility_flags": ["nodejs_compat", /* a comma before a comment */],
     "vars": {
@@ -153,8 +153,10 @@ Deno.test('app config: KERNEL is reserved across binding types and duplicates re
 
 Deno.test('app config: wrong shapes refuse before provisioning or uploading', () => {
   let cases: [unknown, string][] = [
-    [{ main: 'worker.js' }, 'main'],
-    [{ main: 'lib/entry.js' }, 'main'],
+    [{ main: '__yak_entry.js' }, 'main'],
+    [{ main: '/lib/entry.js' }, 'main'],
+    [{ main: 'lib/../entry.js' }, 'main'],
+    [{ main: 'src/server.ts' }, 'main'],
     [{ main: '../entry.js' }, 'main'],
     [{ main: 'metadata' }, 'main'],
     [{ compatibility_date: 'tomorrow' }, 'compatibility_date'],
@@ -238,7 +240,7 @@ Deno.test('app config: Vectorize creation options become requests, not upload bi
 
 Deno.test('app metadata: no config keeps the current entry, compatibility date, kernel and limits', () => {
   assertEquals(metadata(), {
-    main_module: 'entry.js',
+    main_module: '__yak_entry.js',
     compatibility_date: '2025-05-08',
     bindings: [{ type: 'service', name: 'KERNEL', service: 'yak' }],
     keep_bindings: ['secret_text'],
@@ -288,7 +290,7 @@ Deno.test('app metadata: every allowed binding uses its own shape and only graph
   ]
   assertEquals(parsed.refused, [])
   assertEquals(metadata(parsed.config, bound), {
-    main_module: 'custom.js',
+    main_module: '__yak_entry.js',
     compatibility_date: '2026-09-01',
     compatibility_flags: ['nodejs_compat'],
     bindings: [
@@ -333,4 +335,36 @@ Deno.test('app allowlist: caller data is not mutated', () => {
   let before = structuredClone(value)
   allowlist(value)
   assertEquals(value, before)
+})
+
+Deno.test('main selects the app source, including directories and explicit worker.js', () => {
+  for (
+    let main of [
+      'worker.js',
+      'entry.js',
+      'dist/server.mjs',
+      'src/server.js',
+      '.output/server/index.mjs',
+    ]
+  ) {
+    assertEquals(read({ main }).refused, [])
+    assertEquals(read({ main }).config.main, main)
+    assertEquals(read({ main: './' + main }).config.main, main)
+    assertEquals(metadata(read({ main }).config).main_module, '__yak_entry.js')
+  }
+  for (
+    let main of [
+      '',
+      null,
+      1,
+      'dist//server.js',
+      'dist/../../server.js',
+      'dist\\server.js',
+      'https://example.com/server.js',
+      'server.js?x',
+      './__yak_entry.js',
+    ]
+  ) {
+    assertStringIncludes(read({ main }).refused[0], 'refused main:')
+  }
 })

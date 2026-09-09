@@ -1,5 +1,12 @@
 import { assertEquals, assertRejects } from '@std/assert'
-import { drop, dropSecret, secrets, setSecret, upload } from './dispatch.ts'
+import {
+  carried,
+  drop,
+  dropSecret,
+  secrets,
+  setSecret,
+  upload,
+} from './dispatch.ts'
 import type { Env } from './env.ts'
 
 let env = { CF_ACCOUNT: 'acct', CF_WORKERS_TOKEN: 'test-token' } as Env
@@ -75,12 +82,12 @@ Deno.test('upload sends only migrations after the dispatch script tag', async ()
       }
       let body = await req.formData()
       sent = JSON.parse(await (body.get('metadata') as File).text())
-      assertEquals((body.get('custom.js') as File).name, 'custom.js')
+      assertEquals((body.get('__yak_entry.js') as File).name, '__yak_entry.js')
       return Response.json({ success: true, result: { version_id: 'release' } })
     }) as typeof fetch
     try {
       let run = () =>
-        upload(env, 'app.abc123', modules, {
+        upload(env, 'app.abc123', [{ ...modules[0], name: 'custom.js' }], {
           main: 'custom.js',
           migrations: history,
         })
@@ -113,7 +120,7 @@ Deno.test('upload refuses a module that would replace the wrapper', async () => 
     () =>
       upload(env, 'app.abc123', [
         ...modules,
-        { ...modules[0], name: 'entry.js' },
+        { ...modules[0], name: '__yak_entry.js' },
       ]),
     Error,
     'distinct module names',
@@ -135,5 +142,24 @@ Deno.test('only permanent deletion removes a script owning Durable Objects', asy
     assertEquals(forced, [null, 'true'])
   } finally {
     globalThis.fetch = was
+  }
+})
+
+Deno.test('reserved imports refuse before provisioning can start', async () => {
+  for (let reserved of ['__yak_entry.js', 'metadata']) {
+    await assertRejects(
+      () =>
+        carried(
+          (path) =>
+            Promise.resolve(
+              path == 'dist/server.js'
+                ? new TextEncoder().encode(`import '../${reserved}'`)
+                : null,
+            ),
+          'dist/server.js',
+        ),
+      Error,
+      'reserved for the platform upload',
+    )
   }
 })

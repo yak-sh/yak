@@ -51,6 +51,14 @@ write is what runs:
 bindings, `ctx` is the runtime's. There is no build step: the file is uploaded
 as-is at `app_deploy` and run as-is.
 
+To use a different server output, put `wrangler.jsonc` (or `wrangler.json`) at
+the app root with `{"main":"dist/server.mjs"}`. `main` is the app-relative
+server source path, defaulting to `worker.js`; directories and a leading `./`
+are allowed. Deploy follows that source's relative imports. The platform upload
+wrapper has an internal name the app never configures. The server source is not
+served publicly. Use JavaScript ES modules (`.js` or `.mjs`); compile TypeScript
+before uploading.
+
 ### More than one file
 
 `worker.js` may import the files beside it, and the deploy carries every module

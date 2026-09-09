@@ -591,12 +591,14 @@ answers 404 falls through to the files**. So a worker owns the routes it names
 and leaves every page, stylesheet and picture to the platform — you never have
 to serve your own `index.html`.
 
-The file itself is never served: `GET /<app>/worker.js` is a 404, and so are
-`vocab.json`, `tools.json`, `wrangler.jsonc` and `wrangler.json` — the app's
-inside, not its pages, and only a member reads them back (`app_files` read).
+The configured server source itself is never served; with the default entry,
+`GET /<app>/worker.js` is a 404, and so are `vocab.json`, `tools.json`,
+`wrangler.jsonc` and `wrangler.json` — the app's inside, not its pages, and only
+a member reads them back (`app_files` read).
 
 An app may carry `wrangler.jsonc` or `wrangler.json` beside `worker.js`. The
-supported keys are `main` (the uploaded entry name, `entry.js` by default),
+supported keys are `main` (the app-relative server source path, `worker.js` by
+default; directories such as `dist/server.js` are allowed),
 `compatibility_date`, `compatibility_flags`, `vars`, `d1_databases`,
 `r2_buckets`, `durable_objects.bindings` with local `class_name`, `migrations`,
 `ai`, and `vectorize`. D1 databases, R2 buckets and Vectorize indexes belong to
@@ -606,7 +608,9 @@ unsupported settings and `app_list` names the bindings. Removing a binding keeps
 its resource and data until the app is permanently deleted; the app's 30 days in
 the trash keep them too.
 
-It is a plain ES module, and `env` holds:
+The upload wrapper is internal and is never configured by the app. The server
+source must be a JavaScript ES module (`.js` or `.mjs`); compile TypeScript
+before uploading. `env` holds:
 
 - `env.STORE` — the app's own graph, at the same doors `client.js` uses, **as
   the person looking at the page**. `env.STORE.fetch('/query?.doc!')`,

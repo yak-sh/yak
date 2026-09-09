@@ -426,3 +426,14 @@ Deno.test("the clipping page's own reader handles a schema.org page", () => {
   assertEquals(h.str({ name: 'a name' }), 'a name')
   assertEquals(h.src(['https://x.test/a.png']), 'https://x.test/a.png')
 })
+
+Deno.test('the guide describes main as server source, not the upload wrapper', () => {
+  for (let text of [guide, INSTRUCTIONS, pageText('code')]) {
+    let plain = text.replaceAll('`', '').replace(/\s+/g, ' ')
+    assert(plain.includes('server source path'))
+    assert(plain.includes('worker.js'))
+    assert(plain.includes('dist/server.'))
+    assert(plain.includes('wrapper'))
+    assert(!plain.includes('uploaded entry name'))
+  }
+})
