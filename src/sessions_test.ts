@@ -1563,6 +1563,32 @@ slow(
 )
 
 slow(
+  'teardown: a supervisor SIGTERM with no stop_request is interrupted, not broke',
+  async () => {
+    // A hot-reload restart tears the session's scope down with SIGTERM and
+    // writes no stop_request; the wrapper traps it and reports exit 143. That
+    // is operational teardown — an interruption, never a self-heal break
+    // (T-35995). Signal the group directly, standing in for the supervisor.
+    let { t } = seed('delay:9000')
+    let { eid, done } = begin(t)
+    await until(() => row(eid)?.status == 'running', 'the init event')
+    await until(() => existsSync(`${logsDir()}/${eid}.pid`), 'the pidfile')
+    let grp = Number(
+      Deno.readTextFileSync(`${logsDir()}/${eid}.pid`).trim().split(/\s+/)[0],
+    )
+    Deno.kill(-grp, 'SIGTERM')
+    await done
+    let s = row(eid)!
+    assertEquals(s.status, 'interrupted')
+    assertEquals(s.exit_code, 143)
+    assert(!s.stop_requested_at)
+    // No stop_request, yet no fault facet: nothing for self-healing to file.
+    assertEquals(broke(eid), undefined)
+    assertEquals(failure(eid), undefined)
+  },
+)
+
+slow(
   'stop: 25ms grace observes SIGTERM in 20 fresh provider processes',
   async () => {
     for (let i = 0; i < 20; i++) {

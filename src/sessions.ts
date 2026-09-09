@@ -1300,7 +1300,13 @@ let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
     : !ok
     ? errTail(eid).trim().slice(-2000)
     : ''
-  let status = row.stop_requested_at
+  // A reported SIGTERM (exit 143) with no stop_request is the supervisor
+  // tearing the session's systemd scope down — a hot-reload restart — a stop we
+  // sent and then observed, just not through a stop_request entity. It is an
+  // interruption, not a failure: the same operational teardown already exempted
+  // for an unobservable exit (code == null below), so it wears no fault facet
+  // and never wakes the self-healer.
+  let status = row.stop_requested_at || code == 143
     ? 'interrupted'
     : ok
     ? 'completed'
