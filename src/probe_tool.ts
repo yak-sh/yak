@@ -74,7 +74,7 @@ export let stop = async (
   comm = commOf,
   kill = Deno.kill,
   rest = pause,
-): Promise<'killed' | 'gone'> => {
+): Promise<'killed' | 'gone' | 'busy'> => {
   if (!ours(pid, comm)) return 'gone'
   try {
     kill(pid, 'SIGTERM')
@@ -84,8 +84,11 @@ export let stop = async (
     try {
       kill(pid, 'SIGKILL')
     } catch { /* raced us to exit */ }
+    // SIGKILL is a request, not an exit receipt. Removing a graph while its
+    // process still holds SQLite open can unlink its WAL under that handle.
+    for (let n = 0; n < 40 && ours(pid, comm); n++) await rest(50)
   }
-  return 'killed'
+  return ours(pid, comm) ? 'busy' : 'killed'
 }
 
 // A consistent snapshot of the live graph into the scratch db: VACUUM INTO
@@ -170,6 +173,7 @@ let up = async (args: string[]) => {
     try {
       child.kill('SIGKILL')
     } catch { /* already dead */ }
+    await child.status
     let tail = (await Deno.readTextFile(log).catch(() => '')).split('\n')
       .slice(-12).join('\n')
     await rmDir(scratch)
@@ -220,6 +224,11 @@ let down = async (args: string[]) => {
   }
   for (let p of targets) {
     let how = await stop(p.pid)
+    if (how == 'busy') {
+      console.error(`probe: pid ${p.pid} still exists; retained ${p.scratch}`)
+      Deno.exitCode = 1
+      continue
+    }
     let swept = await rmDir(p.scratch)
     forget(p.port)
     console.log(

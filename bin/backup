@@ -6,7 +6,7 @@
 # mid-transaction — so each run snapshots it atomically (VACUUM INTO) and
 # then writes that snapshot out as TEXT for history to hold.
 #
-# Restore = clone, then
+# Restore into a NEW directory with no database or SQLite sidecars, then
 #   cat snap/schema.sql snap/graph.sql.part.* snap/journal.sql.part.* | sqlite3 tasks.db
 # and start the server. The FTS index rebuilds from the boot-time integrity
 # check and embeddings backfill on the sweep, which is why neither is dumped.
@@ -40,8 +40,9 @@ export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/
 # hour, the cron stacked the next on top, the dump and its verify copy filled
 # the disk, and the server died under the I/O. So the whole run re-execs itself
 # under a hard timeout (15 min; TERM, then KILL 30s later), and every temp file
-# it makes is removed on ANY exit, so an aborted run leaves no half-written
-# parts or verify copy behind for the next one to trip on.
+# it makes belongs to that run. Interrupted SQLite files stay together in
+# their private directory; a later run never replaces their main file while
+# an old subprocess or recovery journal may still need it.
 if [ -z "${TASKS_BACKUP_BOUND:-}" ]; then
   TASKS_BACKUP_BOUND=1 exec timeout -k 30 "${TASKS_BACKUP_TIMEOUT:-900}" "$0" "$@"
 fi
@@ -53,12 +54,6 @@ cd "$data"
 
 started=$(date +%s)
 echo "backup: start $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-cleanup() {
-  rm -f snap/.verify.db snap/*.sql.tmp
-}
-trap cleanup EXIT
-trap 'echo "backup: aborted (timeout or signal)" >&2; exit 124' TERM INT
-
 # Redaction holds the same lock through its database scrub and published-
 # history report. Otherwise this job could snapshot the old bytes first, wait
 # while redaction reports, then commit and push one new leak afterward.
@@ -67,11 +62,20 @@ trap 'echo "backup: aborted (timeout or signal)" >&2; exit 124' TERM INT
 exec 9>.git/tasks-backup.lock
 flock -w 60 -x 9 || { echo "backup: another backup or redaction holds the lock" >&2; exit 1; }
 
-# Only one snapshot ever lives on disk: the previous run's snapshot, parts and
-# verify copy go before this run writes anything, so peak disk use is one
-# snapshot + one dump + one verify copy, never two runs' worth.
+# Never recycle a database pathname: a previous crash may have left a hot
+# journal, or a reader may still hold the old inode open. Private paths also
+# mean a run that fails to acquire the lock cannot delete another run's DB.
+work=$(mktemp -d .git/tasks-backup.XXXXXXXX)
+snapshot="$work/snapshot.db"
+probe="$work/verify.db"
+cleanup() {
+  rm -rf "$work"
+}
+trap cleanup EXIT
+# The foreground SQLite child may still be unwinding when a signal reaches
+# this shell. Preserve its entire directory instead of unlinking open files.
+trap 'trap - EXIT; echo "backup: aborted; retained $work" >&2; exit 124' HUP INT QUIT TERM
 mkdir -p snap
-rm -f snap/tasks.db snap/.verify.db snap/*.sql.tmp
 
 # Plain output regardless of any ~/.sqliterc (box modes break the checks).
 sq() { sqlite3 -batch -init /dev/null -noheader -list "$@"; }
@@ -103,9 +107,8 @@ sq tasks.db "PRAGMA quick_check;" | grep -qx ok || {
 # run covers ungraceful exits (crash/kill) that never reach the drain.
 sq tasks.db "PRAGMA optimize;"
 
-rm -f snap/tasks.db # VACUUM INTO refuses to overwrite
-sq tasks.db "VACUUM INTO 'snap/tasks.db'"
-sq snap/tasks.db "pragma integrity_check;" | grep -qx ok || {
+sq tasks.db "VACUUM INTO '$snapshot'"
+sq "$snapshot" "pragma integrity_check;" | grep -qx ok || {
   echo "backup: snapshot failed integrity_check" >&2
   exit 1
 }
@@ -134,10 +137,10 @@ derived="name glob 'embedding*' or name glob 'vector0_embedding*' or name = '_sq
 # Each file wraps itself, so any subset still concatenates and replays.
 dump_data() {
   echo 'BEGIN TRANSACTION;'
-  for t in $(sq snap/tasks.db "select name from sqlite_master
+  for t in $(sq "$snapshot" "select name from sqlite_master
       where type = 'table' and name not like 'sqlite_%' and not ($derived)
         and ($1) order by name"); do
-    sqlite3 -batch -init /dev/null snap/tasks.db \
+    sqlite3 -batch -init /dev/null "$snapshot" \
       ".mode insert \"$t\"" "select * from \"$t\";"
   done
   echo 'COMMIT;'
@@ -160,17 +163,17 @@ dump_data() {
 # glob 'sqlite_stat*', not a blanket 'sqlite_%': sqlite_autoindex_* already
 # fall out on `sql is not null`, and were AUTOINCREMENT ever added its
 # sqlite_sequence counters would matter for restore — leave that door shut.
-sqlite3 -batch -init /dev/null snap/tasks.db \
+sqlite3 -batch -init /dev/null "$snapshot" \
   "select sql || ';' from sqlite_master
    where sql is not null and not (type = 'table'
      and (name glob 'doc_fts_*' or name glob 'doc_gram_*'
        or name glob 'content_fts_*' or name glob 'content_gram_*'
        or name glob 'vector0_embedding*' or name = '_sqliteai_vector'
        or name glob 'sqlite_stat*'))
-   order by rowid" > snap/schema.sql.tmp
+   order by rowid" > "$work/schema.sql"
 journal="name in ('journal_tx', 'journal_change', 'journal_field')"
-dump_data "$journal" > snap/journal.sql.tmp
-dump_data "not ($journal)" > snap/graph.sql.tmp
+dump_data "$journal" > "$work/journal.sql"
+dump_data "not ($journal)" > "$work/graph.sql"
 
 # SHARD the big dumps into parts under GitHub's 100 MB hard limit (target <50 MB
 # to clear the soft warning too); zero-padded numeric suffixes glob in order and
@@ -182,39 +185,35 @@ dump_data "not ($journal)" > snap/graph.sql.tmp
 # the data repo grew by a gigabyte a day and filled the disk. With whole rows
 # per part, a run that touches a few rows changes a few parts and the rest
 # dedupe to the blobs history already holds.
-rm -f snap/graph.sql.part.* snap/journal.sql.part.*
-split -C 45M -d -a 3 snap/graph.sql.tmp   snap/graph.sql.part.
-split -C 45M -d -a 3 snap/journal.sql.tmp snap/journal.sql.part.
+split -C 45M -d -a 3 "$work/graph.sql"   "$work/graph.sql.part."
+split -C 45M -d -a 3 "$work/journal.sql" "$work/journal.sql.part."
 
 # The gate: the dump must restore to the same graph it came from — and it must do
 # so FROM THE SHARDS, so a bad split is caught here, not at restore. Comparing row
 # counts per table catches a truncated write, a quoting bug, a table silently
 # dropped from the dump, and a shard that failed to reassemble — the failures that
 # would otherwise be found at restore time, the one moment there is no second chance.
-probe="snap/.verify.db"
-rm -f "$probe"
-cat snap/schema.sql.tmp snap/graph.sql.part.* snap/journal.sql.part.* |
+cat "$work/schema.sql" "$work"/graph.sql.part.* "$work"/journal.sql.part.* |
   sqlite3 -batch -init /dev/null "$probe" || {
   echo "backup: dump did not load back" >&2
-  rm -f "$probe" snap/*.sql.tmp snap/graph.sql.part.* snap/journal.sql.part.*
   exit 1
 }
-for t in $(sq snap/tasks.db "select name from sqlite_master
+for t in $(sq "$snapshot" "select name from sqlite_master
     where type = 'table' and name not like 'sqlite_%' and not ($derived)
     order by name"); do
-  a=$(sq snap/tasks.db "select count(*) from \"$t\"")
+  a=$(sq "$snapshot" "select count(*) from \"$t\"")
   b=$(sq "$probe" "select count(*) from \"$t\"")
   [ "$a" = "$b" ] || {
     echo "backup: round-trip lost rows in $t ($a → $b)" >&2
-    rm -f "$probe" snap/*.sql.tmp snap/graph.sql.part.* snap/journal.sql.part.*
     exit 1
   }
 done
-rm -f "$probe"
 # schema whole; graph/journal live only as parts now — drop any monolithic files a
 # previous (pre-shard) run left tracked, so `git add -A` records the switch.
-mv snap/schema.sql.tmp snap/schema.sql
-rm -f snap/graph.sql snap/journal.sql snap/graph.sql.tmp snap/journal.sql.tmp
+rm -f snap/graph.sql.part.* snap/journal.sql.part.*
+mv "$work/schema.sql" snap/schema.sql
+mv "$work"/graph.sql.part.* "$work"/journal.sql.part.* snap/
+rm -f snap/graph.sql snap/journal.sql
 
 git add -A
 
@@ -255,7 +254,7 @@ if git diff --cached --quiet; then
   exit 0
 fi
 
-n=$(sq snap/tasks.db 'select count(*) from entity')
+n=$(sq "$snapshot" 'select count(*) from entity')
 git -c user.name=backup -c user.email=backup@yak.sh \
   commit -qm "backup: $(date -u +%Y-%m-%dT%H:%M:%SZ) — $n entities"
 

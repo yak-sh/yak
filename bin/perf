@@ -747,8 +747,9 @@ let seed = async () => {
   // the seeded root canvas: pin cards onto it in a grid. /query for the canvas
   // entities (the snapshot door is retired) and take the one that isn't the
   // panCanvas we just minted — that's the seeded root.
-  let canvases = await (await fetch(`${base}/query?${encodeURIComponent('.canvas!')}`))
-    .json() as { entity: { eid: string } }[]
+  let canvases =
+    await (await fetch(`${base}/query?${encodeURIComponent('.canvas!')}`))
+      .json() as { entity: { eid: string } }[]
   let canvasEid = canvases.map((c) => c.entity.eid)
     .find((eid) => eid != panCanvas)
   if (!canvasEid) throw new Error('no root canvas in the seed')
@@ -825,13 +826,23 @@ let server = async (port: number, dbPath: string) => {
     stdout: 'null',
     stderr: 'null',
   }).spawn()
-  await until(async () => {
+  try {
+    await until(async () => {
+      try {
+        return (await fetch(`http://127.0.0.1:${port}/capabilities`)).ok
+      } catch {
+        return false
+      }
+    })
+  } catch (error) {
+    // The caller has not received this child yet. Reap it before its error
+    // cleanup removes scratch; an open SQLite graph must keep its pathname.
     try {
-      return (await fetch(`http://127.0.0.1:${port}/capabilities`)).ok
-    } catch {
-      return false
-    }
-  })
+      cmd.kill('SIGKILL')
+    } catch { /* already gone */ }
+    await cmd.status
+    throw error
+  }
   return cmd
 }
 
@@ -914,8 +925,9 @@ let main = async () => {
     base = urlArg.replace(/\/$/, '')
     // reuse a board on that server: /query for board entities (the snapshot
     // door is retired), each entity JSON carrying its own num.
-    let boards = await (await fetch(`${base}/query?${encodeURIComponent('.board!')}`))
-      .json() as { entity: { num: number } }[]
+    let boards =
+      await (await fetch(`${base}/query?${encodeURIComponent('.board!')}`))
+        .json() as { entity: { num: number } }[]
     if (boards[0]) board = `B-${boards[0].entity.num}`
   }
 

@@ -4,7 +4,9 @@
 // probe_tool is a subprocess/registry side effect exercised by using the tool.
 
 import { assertEquals } from '@std/assert'
-import { ours, stop } from './probe_tool.ts'
+import { copyGraph, ours, stop } from './probe_tool.ts'
+import { DatabaseSync } from './store/sqlite.ts'
+import { slow } from './testing.ts'
 
 Deno.test('ours: a pid is a probe only while it is a live deno', () => {
   assertEquals(ours(42, () => 'deno'), true)
@@ -34,7 +36,7 @@ Deno.test('stop: our deno gets TERM, and KILL only if it lingers', async () => {
   assertEquals(sent, ['SIGTERM']) // gone before the KILL was needed
 })
 
-Deno.test('stop: a wedged deno is escalated to SIGKILL', async () => {
+Deno.test('stop: a wedged deno keeps its scratch graph until exit is confirmed', async () => {
   let sent: string[] = []
   let how = await stop(
     1234,
@@ -42,6 +44,54 @@ Deno.test('stop: a wedged deno is escalated to SIGKILL', async () => {
     (_p, sig) => void sent.push(String(sig)),
     () => Promise.resolve(),
   )
-  assertEquals(how, 'killed')
+  assertEquals(how, 'busy')
   assertEquals(sent, ['SIGTERM', 'SIGKILL'])
 })
+
+Deno.test('stop: waits for SIGKILL to finish before allowing graph cleanup', async () => {
+  let sent: string[] = []
+  let waiting = 0
+  let how = await stop(
+    1234,
+    () => waiting < 3 ? 'deno' : '',
+    (_p, sig) => void sent.push(String(sig)),
+    () => {
+      if (sent.includes('SIGKILL')) waiting++
+      return Promise.resolve()
+    },
+  )
+  assertEquals(how, 'killed')
+  assertEquals(sent, ['SIGTERM', 'SIGKILL'])
+  assertEquals(waiting, 3)
+})
+
+slow(
+  'copyGraph snapshots committed WAL data with the writer still open',
+  () => {
+    let dir = Deno.makeTempDirSync({ prefix: 'probe-copy-' })
+    let source = new DatabaseSync(`${dir}/source.db`)
+    try {
+      source.exec('pragma journal_mode=wal; create table item (value);')
+      source.exec("insert into item values ('kept in WAL')")
+      copyGraph(`${dir}/source.db`, `${dir}/copy.db`)
+      let copy = new DatabaseSync(`${dir}/copy.db`)
+      try {
+        assertEquals(copy.prepare('select * from item').all(), [{
+          value: 'kept in WAL',
+        }])
+        assertEquals(copy.prepare('pragma integrity_check').get(), {
+          integrity_check: 'ok',
+        })
+        source.exec("insert into item values ('after snapshot')")
+        assertEquals(copy.prepare('select count(*) as n from item').get(), {
+          n: 1,
+        })
+      } finally {
+        copy.close()
+      }
+    } finally {
+      source.close()
+      Deno.removeSync(dir, { recursive: true })
+    }
+  },
+)
