@@ -933,6 +933,9 @@ slow('both Codex rollback names run through process JSONL', async () => {
   let oldMode = Deno.env.get('TASKS_CODEX_RUNNER')
   let routed = 0
   try {
+    // Only the LAUNCH is faked: the model allowlist is graph data (catalog.ts),
+    // so the request names a model codex actually serves — codex-cli serves
+    // codex's models, which is the routing this test is about.
     adapters.codex = adapters.fake
     adapters['codex-cli'] = adapters.fake
     for (let provider of ['codex-cli', 'codex']) {
@@ -945,7 +948,7 @@ slow('both Codex rollback names run through process JSONL', async () => {
         comp: {
           id: uid(),
           provider,
-          model: 'fake-fast',
+          model: 'gpt-5.6-sol',
           requested_task: t,
         },
       }])
