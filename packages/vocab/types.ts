@@ -80,8 +80,8 @@ export type Identity = string[]
 
 // One index over a component's table: the columns it covers, in order, and
 // whether it also promises uniqueness. Derived from the `unique`/`index`
-// keywords (a column's own flag, plus the component's composite lists), never
-// hand-listed — see `Vocab.indexes`.
+// keywords (a column's own flag, plus the component's composite lists), identity,
+// and automatic reference indexes — see `Vocab.indexes`.
 export type Index = { cols: string[]; unique: boolean }
 
 // One deref step of a dotted path: the component a segment landed in and the
@@ -131,7 +131,8 @@ export type PropSchema = {
   wire?: boolean
   bare?: boolean
   // On a COLUMN a boolean (this column alone); on a COMPONENT the composite
-  // column lists. `Vocab.indexes` merges the two spellings.
+  // column lists. `Vocab.indexes` merges the two spellings. Stored references
+  // are always indexed: index: true is redundant and false does not opt out.
   unique?: boolean | string[][]
   index?: boolean | string[][]
   // What the entity's id is DERIVED from. On a COLUMN, true; on a COMPONENT,

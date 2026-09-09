@@ -136,7 +136,7 @@ export type Vocab = {
   comp: (name: string) => CompInfo | undefined
   columns: (comp: string) => string[] // readable columns (writable ∪ stamped)
   column: (comp: string, prop: string) => Column | undefined
-  /** The indexes a component declares, merged from both spellings — see
+  /** Declared indexes plus automatic reference indexes — see
    * {@link Index}. A storage adapter renders them; nothing else reads them. */
   indexes: (comp: string) => Index[]
   /** The columns this component's entities are IDENTIFIED by — the tuple the
@@ -187,7 +187,8 @@ let identityOf = (comp: PropSchema | undefined): Identity => {
 // own `unique`/`index` flag is that one column's index, and the component's
 // lists are the composites. Column flags come first, in declaration order, then
 // the composites; a pair of columns declared twice is ONE index, unique if
-// either spelling asked for uniqueness.
+// either spelling asked for uniqueness. Every stored reference is indexed too,
+// unless it already leads a declared index (including a composite identity).
 let indexesOf = (
   comp: PropSchema | undefined,
   cols: (prop: string) => Column | undefined,
@@ -212,6 +213,13 @@ let indexesOf = (
   // be one entity — so the index says out loud what the derivation already
   // guarantees, and a store that somehow held two says so at the row.
   add(identityOf(comp).filter((p) => cols(p)?.persist), true)
+  let leading = new Set([...out.values()].map((i) => i.cols[0]))
+  for (let prop of Object.keys(comp.properties ?? {})) {
+    let col = cols(prop)
+    if (col?.persist && col.category == 'ref' && !leading.has(prop)) {
+      add([prop], false)
+    }
+  }
   return [...out.values()]
 }
 

@@ -3,6 +3,9 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
+import { parse } from '@yaks/query'
+import { compile } from '@yaks/sql'
+import memberDoc from '../member/vocab.json' with { type: 'json' }
 import { schema } from './ddl.ts'
 import { storage } from './mod.ts'
 import type { Driver } from './driver.ts'
@@ -147,6 +150,80 @@ Deno.test('a column a component grew is added to the live table', () => {
   let grew = storage(d, now)
   grew.install()
   assertEquals(cols(d, 'book'), ['entity', 'title', 'isbn', 'of'])
+  assertEquals(
+    d.query(
+      `select name from sqlite_master where type = 'index' and name = 'book_of'`,
+      [],
+    ),
+    [{ name: 'book_of' }],
+  )
   // And a wake under a vocabulary the tables already match adds nothing.
   assertEquals(grew.grown(), [])
+})
+
+Deno.test('reference indexes are installed on new and existing member stores', () => {
+  let vocab = loadVocab(memberDoc)
+  for (let existing of [false, true]) {
+    let d = mem()
+    let s = storage(d, vocab)
+    s.install()
+    if (existing) {
+      // A database created before references were indexed by default.
+      for (
+        let name of [
+          'member_space',
+          'member_person',
+          'grant_app',
+          'grant_person',
+        ]
+      ) {
+        d.exec(`drop index ${name}`)
+      }
+    }
+    s.tx((tx) =>
+      tx.patch([
+        { entity: { eid: 'person' } },
+        { entity: { eid: 'space' } },
+        { entity: { eid: 'app' } },
+        {
+          entity: { eid: 'seat' },
+          member: { person: 'person', space: 'space' },
+        },
+        {
+          entity: { eid: 'permission' },
+          grant: { person: 'person', app: 'app' },
+        },
+      ])
+    )
+    // Reopening installs missing indexes additively; repeated installs are safe.
+    s = storage(d, vocab)
+    s.install()
+    s.install()
+    for (
+      let [comp, prop, value, expected] of [
+        ['member', 'person', 'person', 'seat'],
+        ['member', 'space', 'space', 'seat'],
+        ['grant', 'person', 'person', 'permission'],
+        ['grant', 'app', 'app', 'permission'],
+      ]
+    ) {
+      let query = `.${comp}.${prop}=${value}`
+      let { sql, params } = compile(parse(query), vocab)
+      let plan = d.query(
+        `explain query plan ${sql}`,
+        params as (string | number)[],
+      )
+        .map((r) => String(r.detail)).join('\n')
+      assert(/SEARCH/.test(plan) && plan.includes(`${comp}_${prop}`), plan)
+      assertEquals(s.read(query).map((b) => b.entity.eid), [expected])
+      assertEquals(
+        s.read(`.${comp}.${prop}=missing`).map((b) => b.entity.eid),
+        [],
+      )
+      assertEquals(
+        s.read(`${query},missing`).map((b) => b.entity.eid),
+        [expected],
+      )
+    }
+  }
 })

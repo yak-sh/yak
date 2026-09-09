@@ -43,6 +43,9 @@ export type Dialect = {
   // A column read expression. Refs project to an eid; `eid` reads the owner key;
   // `entity` reads the spine directly. `null` if the column is not in the schema.
   col: (comp: string, prop: string, v: Vocab) => string | null
+  // The stored reference key, before projecting it to an eid. Equality can
+  // look up the operand once and compare this indexed integer column.
+  refCol?: (comp: string, prop: string) => string
   presence: (comp: string) => Frag
   // Value lowerings. Each returns a Frag or null when it cannot be expressed
   // with the matcher's exact semantics (the caller then declines the whole
@@ -217,6 +220,7 @@ let edge = (c: string, op: string, s: Span): Frag => {
 }
 
 export let sqlite: Dialect = {
+  refCol: (comp, prop) => `${q(comp)}.${q(prop)}`,
   name: 'sqlite',
   spine: '"entity"',
   membership: '"entity"."eid" as eid',

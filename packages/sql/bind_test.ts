@@ -357,3 +357,32 @@ Deno.test('a request for a word this vocabulary never planted asks, and passes',
   // And so does a request that is not a bare component name.
   assertThrows(() => compile(parse('.loan.to?'), v))
 })
+
+Deno.test('reference equality compares indexed keys, not projected eids', () => {
+  for (let value of ['target', 'target,other']) {
+    let { sql, params } = compile(parse(`.note.about=${value}`), v)
+    assert(
+      sql.includes('"note"."about" = (select id from entity where eid = ?)'),
+      sql,
+    )
+    assert(!sql.includes('__re'), sql)
+    assertEquals(params, value.split(','))
+  }
+  // Projection-based semantics still handle absent values, ranges and text
+  // matching; these must not be mistaken for a list of literal reference ids.
+  for (
+    let query of [
+      '.note.about=',
+      '.note.about=a..z',
+      '.note.about~=target',
+    ]
+  ) {
+    let { sql } = compile(parse(query), v)
+    assert(sql.includes('__re'), sql)
+  }
+  // A derived override is authoritative even if the column is stored.
+  let { sql } = compile(parse('.note.about=target'), v, {
+    derived: { 'note.about': { tag: 'eid', expr: () => "'override'" } },
+  })
+  assert(sql.includes("cast('override' as text) = ?"), sql)
+})

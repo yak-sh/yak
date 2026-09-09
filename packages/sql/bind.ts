@@ -277,6 +277,19 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
       `.${hop.comp}.${hop.prop} has no registered expression`,
     )
   }
+  let value = flat(p.value)
+  let col = ctx.v.column(hop.comp, hop.prop)
+  if (
+    op == '' && value && !value.includes('..') &&
+    value.split(',').every(Boolean) && col?.category == 'ref' && col.persist &&
+    !ctx.derived[`${hop.comp}.${hop.prop}`] && ctx.d.refCol
+  ) {
+    return raw(ctx.d.refEq(
+      ctx.d.refCol(hop.comp, hop.prop),
+      value.split(','),
+      false,
+    ))
+  }
   let frag = lowerScalar(ctx, read.expr, op, flat(p.value), read.tag)
   if (!frag) {
     throw new Unsupported('this predicate', `.${hop.comp}.${hop.prop} ${p.op}`)

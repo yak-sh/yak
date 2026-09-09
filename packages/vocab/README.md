@@ -31,6 +31,11 @@ vocabulary (declared via JSON Schema's own `$vocabulary` mechanism,
 | `before`   | comp   | kinds this kind sorts before (feeds the derived kindOrder)        |
 | `wire`     | comp   | `false` = readable-not-writable component (the spine)             |
 
+Every stored `ref` column is indexed automatically, including stamped refs and
+refs with `death: "keep"`. No `index: true` is needed, and `index: false` does
+not opt out. A reference that already leads a declared index (including a
+composite unique or identity index) needs no additional single-column index.
+
 **`identity` is the one that names the entity.** A component whose column says
 `"identity": true` has its entities' ids DERIVED from that value — the same
 derivation an edge and a key already use — so a file, a row or a seed written

@@ -64,7 +64,7 @@
       ]
     },
     "index": {
-      "description": "An index to read by, carrying no uniqueness. On a COLUMN, true = index it. On a COMPONENT, the composite indexes as column lists: [[\"app\", \"version\"]].",
+      "description": "An index to read by, carrying no uniqueness. On a COLUMN, true = index it. Stored refs are always indexed: true is redundant and false does not opt out. On a COMPONENT, the composite indexes as column lists: [[\"app\", \"version\"]].",
       "anyOf": [
         { "type": "boolean" },
         {

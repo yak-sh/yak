@@ -371,3 +371,56 @@ Deno.test('a word has one home across documents', () => {
     'declared twice',
   )
 })
+
+Deno.test('every stored reference is indexed without an opt-in', () => {
+  let ref = { type: 'string', ref: 'entity', death: 'keep' }
+  let w = loadVocab({
+    $defs: {
+      link: {
+        type: 'object',
+        wire: false,
+        properties: {
+          target: ref,
+          by: { ...ref, stamped: true },
+          explicit: { ...ref, index: true },
+          off: { ...ref, index: false },
+          unique: { ...ref, unique: true },
+          computed: { ...ref, persist: false },
+          scalar: { type: 'string' },
+        },
+      },
+    },
+  })
+  assertEquals(w.indexes('link'), [
+    { cols: ['explicit'], unique: false },
+    { cols: ['unique'], unique: true },
+    { cols: ['target'], unique: false },
+    { cols: ['by'], unique: false },
+    { cols: ['off'], unique: false },
+  ])
+})
+
+Deno.test('only the leading reference is covered by a composite index', () => {
+  for (
+    let declaration of [
+      { index: [['from', 'to']] },
+      { unique: [['from', 'to']] },
+      { identity: ['from', 'to'] },
+    ]
+  ) {
+    let ref = { type: 'string', ref: 'entity', death: 'cascade' }
+    let w = loadVocab({
+      $defs: {
+        link: {
+          type: 'object',
+          ...declaration,
+          properties: { from: ref, to: ref },
+        },
+      },
+    })
+    assertEquals(w.indexes('link'), [
+      { cols: ['from', 'to'], unique: !('index' in declaration) },
+      { cols: ['to'], unique: false },
+    ])
+  }
+})

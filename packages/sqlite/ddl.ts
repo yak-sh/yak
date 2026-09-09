@@ -15,7 +15,7 @@
 //                 A scalar column stores its value; a reference stores the
 //                 referent's integer id; a component with no columns is a bare
 //                 tag whose presence is the fact.
-//   <index>       one per `unique`/`index` a component declares, named after
+//   <index>       declared indexes plus automatic reference indexes, named after
 //                 the columns it covers. A unique one is the constraint a race
 //                 is decided by; the vocabulary is where that is said.
 //   doc_value     a view over the `doc` component (when the vocabulary declares
@@ -179,7 +179,7 @@ export let tabled = (vocab: Vocab, text: Text = {}): string[] => {
   ]
 }
 
-// The indexes the components declare. Raised last, after `grown()`: an index
+// Declared and automatic reference indexes. Raised last, after `grown()`: an index
 // may name a column its table only gained on this boot, and SQLite refuses one
 // over a column that is not there yet.
 export let indexed = (vocab: Vocab): string[] =>
