@@ -831,7 +831,7 @@ export type Mail = {
   to_addr?: string | null
   message_id?: string | null
   received_at?: string | null
-  verified?: number | null
+  verified?: boolean | null
   sent_id?: string | null
   in_reply_to?: string | null
 }
@@ -911,7 +911,7 @@ export type Hook = {
   method?: string | null
   path?: string | null
   headers?: string | null
-  sig_ok?: number | null
+  sig_ok?: boolean | null
 }
 
 // A comment is a doc AIMED at something — and since target is any

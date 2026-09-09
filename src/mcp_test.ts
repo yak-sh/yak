@@ -1681,6 +1681,27 @@ Deno.test('MCP tools declare and return their text output', async () => {
   })
 })
 
+Deno.test('graph_query answers a bool as a boolean, not SQLite 0/1', async () => {
+  let { db, io } = graph()
+  let eid = crypto.randomUUID()
+  apply(db, [
+    { eid, name: 'doc', comp: { title: 'Task Graph' } },
+    { eid, name: 'project', comp: {} },
+    { eid, name: 'repo', comp: { path: '/home/yaks/code/tasks', push: true } },
+  ])
+  await protocol(io, async (client) => {
+    // The declared boolean is the contract: an integer here fails the tool's
+    // own output validation, and every result carrying a repo with it (T-35365).
+    let out = await client.callTool({
+      name: 'graph_query',
+      arguments: { filters: ['.repo.push!'] },
+    })
+    assertEquals(out.isError, undefined)
+    let found = JSON.parse(said(out)) as { repo: { push: unknown } }[]
+    assertEquals(found.map((r) => r.repo.push), [true])
+  })
+})
+
 Deno.test('a JSON-shaped tool declares a result schema; a prose one does not', async () => {
   await protocol(blank(), async (client) => {
     let tools: Tool[] = (await client.listTools()).tools

@@ -316,17 +316,18 @@ Deno.test('undo flips an edge: a link becomes an unlink', () => {
   )
 })
 
-Deno.test('undo restores a bool column (wire true/false vs stored 0/1)', () => {
+Deno.test('undo restores a bool column, whichever way the wire spelled it', () => {
   let db = freshDb(), p = uid()
   apply(db, [
     { eid: p, name: 'doc', comp: { title: 'venture', body: '' } },
     { eid: p, name: 'repo', comp: { path: '/x', push: false } },
   ])
   let before = compOf(db, p, 'repo')?.push
-  apply(db, [{ eid: p, name: 'repo', comp: { push: true } }])
-  assertNotEquals(compOf(db, p, 'repo')?.push, before) // the write took
-  // If the was-guard hashed the wire `true` instead of the stored 1, this undo
-  // would refuse as "moved". It restores, proving the stored-shape normalization.
+  assertEquals(before, false)
+  apply(db, [{ eid: p, name: 'repo', comp: { push: 1 } }])
+  assertEquals(compOf(db, p, 'repo')?.push, true) // the write took
+  // The was-guard hashes what the column READS BACK (a boolean), whatever
+  // spelling wrote it — hashing the other shape refuses this undo as "moved".
   undoLast(db, p)
   assertEquals(compOf(db, p, 'repo')?.push, before)
 })

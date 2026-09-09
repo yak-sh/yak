@@ -855,16 +855,25 @@ Deno.test('favorite: presence freezes when it joined navigation', () => {
   assertEquals(readComp(db, eid, 'favorite')?.at, at)
 })
 
-Deno.test('declared booleans bind as SQLite integers', () => {
+Deno.test('a declared bool rides the wire as a boolean', () => {
   let s = uid()
   apply(db, [{
     eid: s,
     name: 'session',
     comp: { id: uid(), operator: false },
   }])
-  assertEquals(comp(s, 'session')?.operator, 0)
+  // Stored as SQLite's 0/1, read back as the type the vocabulary declares —
+  // an integer on the wire refused every schema derived from it (T-35365).
+  assertEquals(comp(s, 'session')?.operator, false)
+  assertEquals(eager(db, s).session.operator, false)
+  // Either spelling writes; both read back the same way.
+  apply(db, [{ eid: s, name: 'session', comp: { operator: 1 } }])
+  assertEquals(comp(s, 'session')?.operator, true)
   apply(db, [{ eid: s, name: 'session', comp: { operator: true } }])
-  assertEquals(comp(s, 'session')?.operator, 1)
+  assertEquals(comp(s, 'session')?.operator, true)
+  // Cleared is absent, not false.
+  apply(db, [{ eid: s, name: 'session', comp: { operator: null } }])
+  assertEquals(comp(s, 'session')?.operator, null)
 })
 
 Deno.test('apply canonicalizes every scalar and reference spelling', () => {
@@ -934,7 +943,7 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
     },
   ])
   assertEquals(comp(subject, 'task')?.priority, 2)
-  assertEquals(comp(subject, 'session')?.operator, 1)
+  assertEquals(comp(subject, 'session')?.operator, true)
   let logged = JSON.stringify(rowChanges(journalSince(db, 0).at(-1)!))
   assertEquals(logged.includes('P02'), false)
 

@@ -85,7 +85,7 @@ import { obeyed } from './obey.ts'
 import { record } from './telemetry.ts'
 import { readEntries } from './entries.ts'
 import { graphLog } from './entry_log.ts'
-import { sweepSelect, vocabularyDoc } from './db.ts'
+import { sweepRows, vocabularyDoc } from './db.ts'
 import { projectionGraph } from './graph_query.ts'
 import { vocabularyMd } from './schema.ts'
 import { repeat } from './timers.ts'
@@ -777,7 +777,7 @@ export let bootDoing = (d: Doing, syncSoon: () => void) => {
   // sweeps this process owns — which, since the runner moved here (T-35018),
   // is every one of them.
   relay(
-    (comp, pending) => db.prepare(sweepSelect(comp, pending)).all() as Row[],
+    (comp, pending) => sweepRows(db, comp, pending) as Row[],
     undefined,
     (w) => w == 'do',
   )

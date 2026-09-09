@@ -369,7 +369,7 @@ Deno.test('mail Full section shows its envelope and delivery receipt', () => {
         from: 'stranger@x.test',
         message_id: 'received@x.test',
         received_at: '2026-07-30T13:00:00Z',
-        verified: 0,
+        verified: false,
       },
     },
   }

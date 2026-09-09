@@ -4131,6 +4131,38 @@ let select = (db: Sql, name: string): string => {
     }) __s`
 }
 
+// SQLite has no boolean: a `bool` column stores 0/1 and reads back a number,
+// contradicting the type its vocabulary declares and every schema derived from
+// it — the MCP output schema refused every result carrying a `repo` over
+// exactly this (T-35365). So the graph speaks the declared type: reading a row,
+// a bool column becomes true/false. The declared types answer, never a list of
+// names, so every bool column of every component is covered — a store's own
+// vocabulary included. Null stays null: an unset bool is absent, not false.
+// Writes stay lenient (bound() takes 0/1 and true/false alike).
+let unbool = (db: Sql, name: string) => {
+  let cols = (readOf(db, name) ?? [])
+    .filter((c) => typeAt(db, name, c) == 'bool')
+  return (row: Record<string, unknown>) => {
+    for (let c of cols) if (row[c] != null) row[c] = !!row[c]
+    return row
+  }
+}
+
+// prep() for a select() projection — the ONE door graph-out rows come through,
+// so a reader cannot skip the flip above and no site has to remember it.
+let reads = (db: Sql, name: string, tail = '') => {
+  let st = prep(db, tail ? `${select(db, name)} ${tail}` : select(db, name))
+  let fix = unbool(db, name)
+  type Row = Record<string, unknown>
+  return {
+    get: (...args: SqlValue[]) => {
+      let row = st.get(...args) as Row | undefined
+      return row && fix(row)
+    },
+    all: (...args: SqlValue[]) => (st.all(...args) as Row[]).map(fix),
+  }
+}
+
 // A write that changes nothing IS nothing. Given a comp bound for an existing
 // row, return it with every column whose value already matches the stored one
 // removed; `null` when nothing is left (the change is a no-op: not written,
@@ -4145,9 +4177,7 @@ let settled = (
   eid: string,
   comp: Record<string, unknown>,
 ): Record<string, unknown> | null => {
-  let row = prep(db, `${select(db, name)} where eid = ?`).get(eid) as
-    | Record<string, unknown>
-    | undefined
+  let row = reads(db, name, 'where eid = ?').get(eid)
   if (!row) return comp
   let same = (col: string) => {
     if (!(col in row)) return false
@@ -4175,7 +4205,8 @@ let settled = (
 // stopped() binds as `comp.target`. Unlike select(), this is NOT wrapped in a
 // subquery: the base table stays in FROM under its own name so the sweep's
 // pending predicate (deliver.ts PENDING) can still filter on `${comp}.entity`.
-export let sweepSelect = (name: string, pending: string): string => {
+// Read it through sweepRows below, never bare: the wire's bools are booleans.
+let sweepSelect = (name: string, pending: string): string => {
   let base = sqlName(name)
   let joins: string[] = []
   let cols = readable[name].map((c) => {
@@ -4197,6 +4228,16 @@ export let sweepSelect = (name: string, pending: string): string => {
     `join entity __o on __o.id = ${base}.entity` +
     `${joins.length ? ' ' + joins.join(' ') : ''} where ${pending}`
 }
+
+// The sweep's rows, read the way the wire delivered them — the projection
+// above, with bools said as booleans (unbool). The relay's one door.
+export let sweepRows = (
+  db: Sql,
+  name: string,
+  pending: string,
+): Record<string, unknown>[] =>
+  (prep(db, sweepSelect(name, pending)).all() as Record<string, unknown>[])
+    .map(unbool(db, name))
 
 // The boot snapshot omits every entity carrying a LAZY-partition comp
 // (types.ts `partition`) — the whole entity, so a lazy entity's eager comps
@@ -4808,9 +4849,7 @@ let editOps = (db: Sql, changes: Change[]): Change[] => {
     let ops = Object.entries(change.comp).filter(([, v]) => isFieldOp(v))
     if (!ops.length) return noted(change)
     if (!readOf(db, change.name)) return noted(change)
-    let row = prep(db, `${select(db, change.name)} where eid = ?`).get(
-      change.eid,
-    ) as Record<string, unknown> | undefined
+    let row = reads(db, change.name, 'where eid = ?').get(change.eid)
     let comp = { ...change.comp }
     let was = { ...(change.was ?? {}) }
     for (let [col, op] of ops) {
@@ -5282,12 +5321,7 @@ export let apply = (
     let found = new Map<string, Record<string, unknown> | undefined>()
     for (let { eid, name, was } of changes) {
       if (!was || !readOf(db, name) || found.has(`${name}\0${eid}`)) continue
-      found.set(
-        `${name}\0${eid}`,
-        prep(db, `${select(db, name)} where eid = ?`).get(eid) as
-          | Record<string, unknown>
-          | undefined,
-      )
+      found.set(`${name}\0${eid}`, reads(db, name, 'where eid = ?').get(eid))
     }
     for (let change of changes) {
       let { eid, name, was } = change
@@ -6884,17 +6918,17 @@ let stateBefore = (
   return state
 }
 
-// The guard tokens for the columns a change wrote: sha of each value AS STORED,
-// null for a column it cleared. A bool rides the wire as true/false but apply()
-// reads it back as the 0/1 SQLite keeps, so it must hash in that shape or the
-// guard would refuse an unchanged column. apply() refuses the inverse if any
-// token has moved since the batch wrote it.
+// The guard tokens for the columns a change wrote: sha of each value AS READ
+// BACK, null for a column it cleared. A bool reads back true/false whatever
+// spelling the wire used (unbool), so hash it in that shape or the guard would
+// refuse an unchanged column. apply() refuses the inverse if any token has
+// moved since the batch wrote it.
 let wasOf = (name: string, comp: Record<string, unknown>, keys: string[]) => {
   let types = (comps as Record<string, Record<string, unknown>>)[name] ?? {}
   let was: Record<string, string | null> = {}
   for (let k of keys) {
     let v = comp[k]
-    was[k] = v == null ? null : sha(types[k] == 'bool' ? (v ? 1 : 0) : v)
+    was[k] = v == null ? null : sha(types[k] == 'bool' ? !!v : v)
   }
   return was
 }
@@ -7442,8 +7476,7 @@ export let touch = (
     out.push({
       eid,
       name: 'recall',
-      comp: prep(db, `${select(db, 'recall')} where eid = ?`)
-        .get(eid) as Change['comp'],
+      comp: reads(db, 'recall', 'where eid = ?').get(eid) as Change['comp'],
     })
     if (
       confirm &&
@@ -7453,8 +7486,7 @@ export let touch = (
       out.push({
         eid,
         name: 'memory',
-        comp: prep(db, `${select(db, 'memory')} where eid = ?`)
-          .get(eid) as Change['comp'],
+        comp: reads(db, 'memory', 'where eid = ?').get(eid) as Change['comp'],
       })
     }
   }
@@ -7634,13 +7666,11 @@ export let search = (db: Sql, q: string, limit = 20): Hit[] => {
     let names = [...new Set(filters.flatMap(predComps))]
       .filter((c) => readOf(db, c))
     let get = new Map(
-      names.map((c) => [c, prep(db, `${select(db, c)} where eid = ?`)]),
+      names.map((c) => [c, reads(db, c, 'where eid = ?')]),
     )
     let compsOf = (eid: string) => {
       let comps: Record<string, Record<string, unknown> | undefined> = {}
-      for (let [c, s] of get) {
-        comps[c] = s.get(eid) as Record<string, unknown> | undefined
-      }
+      for (let [c, s] of get) comps[c] = s.get(eid)
       return comps
     }
     // A reverse hop's children, hydrated the same way — referrersOf reads the
@@ -7794,8 +7824,7 @@ export let eager = (
   db: Sql,
   eid: string,
 ): Record<string, Record<string, unknown>> => {
-  let spine = prep(db, `${select(db, 'entity')} where eid = ?`)
-    .get(eid) as Record<string, unknown> | undefined
+  let spine = reads(db, 'entity', 'where eid = ?').get(eid)
   if (!spine) {
     // No persisted rows — a pass-through entity is hydrated from its source.
     if (hasSources()) {
@@ -7807,8 +7836,7 @@ export let eager = (
   let out: Record<string, Record<string, unknown>> = { entity: spine }
   for (let name of readNames(db)) {
     if (name == 'entity') continue
-    let row = prep(db, `${select(db, name)} where eid = ?`)
-      .get(eid) as Record<string, unknown> | undefined
+    let row = reads(db, name, 'where eid = ?').get(eid)
     if (row) out[name] = row
   }
   return out
@@ -7962,8 +7990,9 @@ export let snapshot = (db: Sql): Snapshot => {
   let changes: Change[] = []
   for (let name of readNames(db)) {
     for (
-      let row of prep(
+      let row of reads(
         db,
+        name,
         // A tombstoned entity keeps its spine row (so its int id can never
         // recycle, C-19754#2) but leaves the wire: exclude it from the entity
         // walk. Component tables never hold a dead entity's row (the delete
@@ -7977,11 +8006,11 @@ export let snapshot = (db: Sql): Snapshot => {
         // still shifts the plan), and tombstone is a tiny indexed scan, so the
         // saving is nil and the wire-order cost is real. Verified byte-identical
         // on a live-size copy (T-20299).
-        `${select(db, name)} where eid not in (select eid from _omit)
+        `where eid not in (select eid from _omit)
            and eid not in (
              select e.eid from tombstone t join entity e on e.id = t.entity
            )`,
-      ).all() as Record<string, unknown>[]
+      ).all()
     ) {
       changes.push({ eid: row.eid as string, name, comp: row })
     }
@@ -8177,11 +8206,7 @@ export let readComp = (
   eid: string,
   name: string,
 ): Record<string, unknown> | undefined =>
-  readOf(db, name)
-    ? prep(db, `${select(db, name)} where eid = ?`).get(eid) as
-      | Record<string, unknown>
-      | undefined
-    : undefined
+  readOf(db, name) ? reads(db, name, 'where eid = ?').get(eid) : undefined
 
 // An id to an eid, through the index — client.ts `find()`'s rules (X-123 or a
 // bare number by num, an eid verbatim or by its short handle, an alias slug)
@@ -8240,14 +8265,12 @@ let stage = (db: Sql, eids: string[]) => {
 let staged = (db: Sql) => {
   let out = new Map<string, Record<string, Record<string, unknown>>>()
   let only = `where eid in (select eid from hit)`
-  let spine = prep(db, `${select(db, 'entity')} ${only}`)
-    .all() as Record<string, unknown>[]
+  let spine = reads(db, 'entity', only).all()
   for (let r of spine) out.set(String(r.eid), { entity: r })
   if (!out.size) return []
   for (let name of readNames(db)) {
     if (name == 'entity') continue
-    let rows = prep(db, `${select(db, name)} ${only}`)
-      .all() as Record<string, unknown>[]
+    let rows = reads(db, name, only).all()
     for (let r of rows) {
       let e = out.get(String(r.eid))
       if (e) e[name] = r

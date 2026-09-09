@@ -45,7 +45,7 @@ let {
   journalOf,
   journalSince,
   snapshot,
-  sweepSelect,
+  sweepRows,
 } = await import(
   './db.ts'
 )
@@ -125,13 +125,9 @@ on('comment', { created: commented(cast) })
 on('entry', { created: referencedEntry(cast) })
 
 // The relay's row fetch, as server.ts performs it at boot — one door
-// (sweepSelect), so the swept row carries eids for the owner and every
+// (sweepRows), so the swept row carries eids for the owner and every
 // reference, matching the wire comp the created() effect expects (D-18866).
-let pending = (comp: string, cond: string) =>
-  db.prepare(sweepSelect(comp, cond)).all() as Record<
-    string,
-    unknown
-  >[]
+let pending = (comp: string, cond: string) => sweepRows(db, comp, cond)
 // A stop_request settles into the shared delivered facet now (D-14945).
 let acted = (sr: string) =>
   (db.prepare(
