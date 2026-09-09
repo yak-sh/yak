@@ -19,12 +19,13 @@
 //   - A bare word agrees on doc titles. It cannot agree on doc BODIES here,
 //     because the app stores a body as a blob id the gathered bundle carries
 //     verbatim (the gap the spike filed), and because @yaks/match searches every
-//     text column while the SQLite dialect searches the doc index alone.
+//     text column while @yaks/fts here searches the app's doc index alone.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { storage } from '@yaks/sqlite'
 import type { Bundle, Driver } from '@yaks/sqlite'
 import { Unsupported } from '@yaks/sql'
+import { fields as ftsFields, search } from '@yaks/fts'
 import { matcher } from '@yaks/match'
 import { compute, type Mark, MARKS } from '@yaks/task'
 
@@ -69,7 +70,13 @@ let driver: Driver = {
   query: (sql, params) => db.prepare(sql).all(...params),
   exec: (sql) => db.exec(sql),
 }
-let store = storage(driver, V, { derived: fleetDerived, now: NOW })
+// @yaks/sql has no built-in text lowering; @yaks/fts contributes the search
+// clause, pointed at the app's doc-only index (`doc_fts`, kept by db.ts).
+let store = storage(driver, V, {
+  derived: fleetDerived,
+  now: NOW,
+  extend: [search(ftsFields(V).filter((f) => f.comp == 'doc'))],
+})
 
 // Every live entity, gathered whole — the bundle set the in-memory evaluator is
 // handed, exactly as a client that had synced the graph would hold it. Two
