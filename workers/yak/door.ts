@@ -106,9 +106,39 @@ export let doorOf = (
   return send(req)
 }
 
-export let storeOf = (ns: Namespace, name: string, app?: Served): Door =>
+// The runtime evicts an object out from under a request during a deploy or a
+// storage reset and says so with `retryable` (its own flag on the error) or, on
+// an older runtime, in words. Its guidance for both is: fetch again.
+export let evicted = (e: unknown): boolean =>
+  e instanceof Error &&
+  (('retryable' in e && e.retryable === true) ||
+    /Durable Object instance is no longer active|Durable Object reset because/
+      .test(e.message))
+
+// A request can be built twice from its init only while the body is a value:
+// a stream, or a Request whose body the first build took, is spent.
+let rebuildable = (init: RequestInit | Request) =>
+  init instanceof Request ? !init.body : !(init.body instanceof ReadableStream)
+
+export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
   // The stub is taken PER CALL. It is an I/O object, and the runtime binds
   // one to the request that created it: a door memoized for the isolate
   // (meta.ts `doors`) and reused on the next request throws "cannot perform
-  // I/O on behalf of a different request". Getting one costs nothing.
-  doorOf((req) => ns.get(ns.idFromName(name)).fetch(req), name, app)
+  // I/O on behalf of a different request". Getting one costs nothing, so an
+  // eviction is answered by taking another and building the request again
+  // from the same init. Only a streamed body cannot be sent twice; that one
+  // error passes through.
+  let door = doorOf(
+    (req) => ns.get(ns.idFromName(name)).fetch(req),
+    name,
+    app,
+  )
+  return async (path, init = {}, headers = {}) => {
+    try {
+      return await door(path, init, headers)
+    } catch (e) {
+      if (!evicted(e) || !rebuildable(init)) throw e
+      return door(path, init, headers)
+    }
+  }
+}
