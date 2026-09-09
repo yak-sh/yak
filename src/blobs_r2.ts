@@ -9,7 +9,7 @@
 // The slice itself is r2.ts, which imports nothing: a Worker that only
 // DECLARES a bucket binding must be able to name the shape without loading
 // this adapter. `store/blobs.ts` keeps the byte-store contract portable too.
-import type { Blobs } from './store/blobs.ts'
+import { type Blobs, counted } from './store/blobs.ts'
 import type { R2 } from './r2.ts'
 
 export type { R2 }
@@ -28,23 +28,26 @@ let walk = async (bucket: R2, prefix: string) => {
   return at
 }
 
-export let r2Blobs = (bucket: R2): Blobs => ({
-  has: async (key) => (await bucket.head(key)) != null,
-  put: async (key, bytes) => {
-    await bucket.put(key, bytes)
-  },
-  read: async (key) => {
-    let object = await bucket.get(key)
-    return object ? new Uint8Array(await object.arrayBuffer()) : null
-  },
-  get: async (key) => {
-    let object = await bucket.get(key)
-    if (!object) throw new Error(`no blob at ${key}`)
-    return new Uint8Array(await object.arrayBuffer())
-  },
-  delete: async (key) => {
-    await bucket.delete(key)
-  },
-  list: async (prefix) => Object.keys(await walk(bucket, prefix)).sort(),
-  uploaded: (prefix) => walk(bucket, prefix),
-})
+// Counted (blobs.ts `counted`): every trip to the bucket lands on the
+// request's tally, and the request reports the total as `r2;dur=<n>`.
+export let r2Blobs = (bucket: R2): Blobs =>
+  counted({
+    has: async (key) => (await bucket.head(key)) != null,
+    put: async (key, bytes) => {
+      await bucket.put(key, bytes)
+    },
+    read: async (key) => {
+      let object = await bucket.get(key)
+      return object ? new Uint8Array(await object.arrayBuffer()) : null
+    },
+    get: async (key) => {
+      let object = await bucket.get(key)
+      if (!object) throw new Error(`no blob at ${key}`)
+      return new Uint8Array(await object.arrayBuffer())
+    },
+    delete: async (key) => {
+      await bucket.delete(key)
+    },
+    list: async (prefix) => Object.keys(await walk(bucket, prefix)).sort(),
+    uploaded: (prefix) => walk(bucket, prefix),
+  })

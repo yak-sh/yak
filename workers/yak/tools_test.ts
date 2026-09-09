@@ -29,6 +29,8 @@ import * as dirPart from './directory.ts'
 import { inApp } from './tool.ts'
 import { letters } from './letters.ts'
 import { appVocab } from './vocab.ts'
+import { clock } from './timing.ts'
+import { stages } from '../../bin/app-deploy-time.ts'
 
 Deno.test('staging tool URLs and app mail use the same configured host', async () => {
   let delivered: { to: string; from: string }[] = []
@@ -355,4 +357,48 @@ Deno.test('a view declares its sandbox origin and what it may reach', () => {
   assertEquals(its['openai/widgetCSP'].resource_domains, [site])
   // `base-uri` has no older spelling; the standard surface carries it alone.
   assertEquals(its['openai/widgetCSP'].connect_domains, [])
+})
+
+// How many round trips a deploy took, on its own answer (timing.ts, hops.ts):
+// `hops` is the store doors it went through (door.ts) and `r2` the bucket
+// operations it made (blobs.ts `counted`), both counted where they are made.
+// The numbers are asserted EXACTLY, and that is the point of the test: a
+// duration says a deploy got slower, and only a count says it got slower
+// because something started asking one file at a time. Read back through the
+// bench's own parser (bin/app-deploy-time.ts `stages`), so what a run records
+// is what the header says.
+Deno.test('a deploy says how many round trips it took', async () => {
+  let { env } = platform('hops-secret')
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  let ADA = 'a0000000-0000-4000-8000-0000000000ad'
+  let setup: Ctx = { env, dir, person: ADA }
+  await call(setup, 'space_new', { slug: 'ada', title: 'Ada' })
+  await call(setup, 'app_new', { space: 'ada', slug: 'recipes', title: 'R' })
+
+  // A request is one Ctx and one clock (mcp.ts), so each gesture below gets
+  // its own — a per-request memo shared across two calls would count the
+  // second one short.
+  let costs = async (name: string, args: Record<string, unknown>) => {
+    let c = clock()
+    let ctx: Ctx = { env, dir, person: ADA, clock: c }
+    await c.counting(() => call(ctx, name, args))
+    let said = stages(c.header())
+    return { hops: said.hops, r2: said.r2 }
+  }
+
+  assertEquals(
+    await costs('app_files', {
+      space: 'ada',
+      app: 'recipes',
+      files: [
+        { path: 'index.html', content: '<h1>hi</h1>' },
+        { path: 'style.css', content: 'h1{color:teal}' },
+      ],
+    }),
+    { hops: 5, r2: 4 },
+  )
+  assertEquals(
+    await costs('app_deploy', { space: 'ada', app: 'recipes' }),
+    { hops: 17, r2: 27 },
+  )
 })

@@ -14,6 +14,7 @@ import retiredDataDoorList from './retired_data_doors.json' with {
   type: 'json',
 }
 import { guard, type Serving } from './bind.ts'
+import { counts, type Tally, tallying } from './hops.ts'
 import type { Handler } from './host.ts'
 import { host } from './host_deno.ts'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
@@ -843,6 +844,25 @@ let methodNotAllowed = (allow: string) =>
     headers: { allow },
   })
 
+// How many SQLite statements this answer cost, on the answer itself as
+// `Server-Timing: hops;dur=<n>` — the same entry the yaks.app worker reports
+// for its own round trips (workers/yak/timing.ts), and `dur` carries a COUNT
+// there too. The standard has no unit but time, and a count is worth the
+// liberty: a duration cannot tell one slow statement from forty fast ones, and
+// forty fast ones is what an N+1 is. Counted at the one db seam (db.ts
+// `counting`), so nothing on the way here has to be told it is being counted.
+let tallied = async (work: () => Promise<Response>) => {
+  let tally: Tally = new Map()
+  let res = await tallying(tally, work)
+  let headers = new Headers(res.headers)
+  headers.set('server-timing', `hops;dur=${counts(tally).hops}`)
+  return new Response(res.body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers,
+  })
+}
+
 // The strangler write-proxy (T-22927): in TASKS_PLANE=app this reader forwards a
 // write to the data-plane writer (the Rust bridge) and hands its answer back
 // untouched — the Deno→bridge mirror of the bridge's own proxy_apply (main.rs).
@@ -1027,51 +1047,55 @@ let handle: Handler = async (req) => {
     // `backlinks=1` adds who points at each hit (eid columns + edges),
     // `deps=1` the hit's own edges both ways; `id=` names entities outright.
     // A malformed filter is the typist's news, not a server error.
-    try {
-      // The route is an ADAPTER: segments in, JSON out. Everything between —
-      // `id=` addressing, the quarantine reveal, paging, similarity ranking,
-      // the deps/backlinks layers — is graph_query.ts, which the CLI's local
-      // arm and the in-process MCP tool read through the same askOf/askRows.
-      // Two parses is how 0d4d4b4a's per-id hydration fix missed the arm and
-      // had to be made twice; there is one now.
-      let segs = url.search.slice(1).split('&').filter(Boolean)
-        .map(decodeURIComponent)
-      let ask = askOf(segs)
-      // Work is its own exact row selection, and its ENVELOPE (the bounded
-      // project/claim/persona hydration) is a projection over that selection,
-      // so it runs through the IO's work reader rather than the row door.
-      // askOf has already refused the riders a work query cannot carry.
-      if (ask.work) {
-        return Response.json(
-          await graphIO.work!(ask.work as WorkLane, {
-            filters: ask.filters,
-            limit: ask.limit,
-            recursive: ask.recursive,
-          }),
-        )
-      }
-      // An aggregate projection (`.count!` / `.distinct=col` / `.tally=col`)
-      // answers with the reduction, not a row set — the census asks for values,
-      // so rows, layers and id= addressing don't apply. Keys come back sorted
-      // the way the census always has; `.count!` is one number under `count`.
-      let agg = evalAgg(db, ask.filters.join('&'))
-      if (agg) {
-        if (agg.op == 'count') {
-          return Response.json({ count: agg.values.get('') ?? 0 })
+    return tallied(async () => {
+      try {
+        // The route is an ADAPTER: segments in, JSON out. Everything between —
+        // `id=` addressing, the quarantine reveal, paging, similarity ranking,
+        // the deps/backlinks layers — is graph_query.ts, which the CLI's local
+        // arm and the in-process MCP tool read through the same askOf/askRows.
+        // Two parses is how 0d4d4b4a's per-id hydration fix missed the arm and
+        // had to be made twice; there is one now.
+        let segs = url.search.slice(1).split('&').filter(Boolean)
+          .map(decodeURIComponent)
+        let ask = askOf(segs)
+        // Work is its own exact row selection, and its ENVELOPE (the bounded
+        // project/claim/persona hydration) is a projection over that
+        // selection, so it runs through the IO's work reader rather than the
+        // row door. askOf has already refused the riders a work query cannot
+        // carry.
+        if (ask.work) {
+          return Response.json(
+            await graphIO.work!(ask.work as WorkLane, {
+              filters: ask.filters,
+              limit: ask.limit,
+              recursive: ask.recursive,
+            }),
+          )
         }
-        let keys = [...agg.values.keys()].sort()
-        return Response.json(
-          agg.op == 'distinct' ? { distinct: keys } : {
-            tally: Object.fromEntries(
-              keys.map((k) => [k, agg.values.get(k)]),
-            ),
-          },
-        )
+        // An aggregate projection (`.count!` / `.distinct=col` / `.tally=col`)
+        // answers with the reduction, not a row set — the census asks for
+        // values, so rows, layers and id= addressing don't apply. Keys come
+        // back sorted the way the census always has; `.count!` is one number
+        // under `count`.
+        let agg = evalAgg(db, ask.filters.join('&'))
+        if (agg) {
+          if (agg.op == 'count') {
+            return Response.json({ count: agg.values.get('') ?? 0 })
+          }
+          let keys = [...agg.values.keys()].sort()
+          return Response.json(
+            agg.op == 'distinct' ? { distinct: keys } : {
+              tally: Object.fromEntries(
+                keys.map((k) => [k, agg.values.get(k)]),
+              ),
+            },
+          )
+        }
+        return Response.json(layered(db, await askRows(db, ask), ask))
+      } catch (e) {
+        return new Response(String((e as Error).message ?? e), { status: 400 })
       }
-      return Response.json(layered(db, await askRows(db, ask), ask))
-    } catch (e) {
-      return new Response(String((e as Error).message ?? e), { status: 400 })
-    }
+    })
   }
   if (path == '/mcp' && req.method == 'POST') return mcp(req)
   if (path == '/error' && req.method == 'POST') return clientError(req)
@@ -1104,34 +1128,36 @@ let handle: Handler = async (req) => {
         ms: performance.now() - t0,
         error,
       })
-    return req.json().then((mutation: Mutation) => {
-      if (!Array.isArray(mutation) && 'mutation' in mutation) {
-        name = mutation?.mutation == 'undo' ? 'undo' : 'mutation'
-      }
-      // Attribution is an honesty header, not auth: the CLI names its
-      // session in x-via (the instrument), apply resolves it to the actor
-      // it acts for, and an anonymous post falls back to the box owner.
-      let out = mutationResult(mutate(
-        db,
-        mutation,
-        fed(),
-        req.headers.get('x-via'),
-      ))
-      feed.settle()
-      note(true)
-      return Response.json(
-        !Array.isArray(mutation) && 'entities' in mutation
-          ? { ok: true, ...out }
-          : { ok: true, changes: out.changes },
-      )
-    }).catch((e) => {
-      // The MESSAGE, not String(e) — a rejection is read by a person or
-      // an agent, and `String(new Error(x))` prefixes a stray "Error:"
-      // that the CLI then wraps again ("apply failed: Error: …").
-      let why = e instanceof Error ? e.message : String(e)
-      note(false, why)
-      return new Response(why, { status: 400 })
-    })
+    return tallied(() =>
+      req.json().then((mutation: Mutation) => {
+        if (!Array.isArray(mutation) && 'mutation' in mutation) {
+          name = mutation?.mutation == 'undo' ? 'undo' : 'mutation'
+        }
+        // Attribution is an honesty header, not auth: the CLI names its
+        // session in x-via (the instrument), apply resolves it to the actor
+        // it acts for, and an anonymous post falls back to the box owner.
+        let out = mutationResult(mutate(
+          db,
+          mutation,
+          fed(),
+          req.headers.get('x-via'),
+        ))
+        feed.settle()
+        note(true)
+        return Response.json(
+          !Array.isArray(mutation) && 'entities' in mutation
+            ? { ok: true, ...out }
+            : { ok: true, changes: out.changes },
+        )
+      }).catch((e) => {
+        // The MESSAGE, not String(e) — a rejection is read by a person or
+        // an agent, and `String(new Error(x))` prefixes a stray "Error:"
+        // that the CLI then wraps again ("apply failed: Error: …").
+        let why = e instanceof Error ? e.message : String(e)
+        note(false, why)
+        return new Response(why, { status: 400 })
+      })
+    )
   }
   if (path == '/verify') {
     if (req.method != 'POST') return methodNotAllowed('POST')

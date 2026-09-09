@@ -17,6 +17,7 @@ import { initVector } from './vector.ts'
 import { dirname, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { sha } from './sha.ts'
+import { hop } from './hops.ts'
 import {
   capabilities,
   type Change,
@@ -120,12 +121,32 @@ let stmtCache = new WeakMap<Sql, Map<string, Statement>>()
 // db.prepare() — open()'s migrations behave identically to before — and only the
 // post-open runtime populates the cache.
 let caching = true
+// Every statement EXECUTED is one round trip to the store, counted on the
+// request's tally (hops.ts) — the count /query and /apply report as
+// `hops;dur=<n>` on their Server-Timing, so an N+1 is a number in the header
+// and not a pause. Counted here and not at prepare: a cached statement is
+// prepared once and stepped a thousand times, and the thousand is the news.
+// The wrapper is built with the statement, so it too is cached.
+let counting = (s: Statement): Statement => ({
+  get: <T extends object = Record<string, unknown>>(...args: SqlValue[]) => {
+    hop('hops')
+    return s.get<T>(...args)
+  },
+  all: <T extends object = Record<string, unknown>>(...args: SqlValue[]) => {
+    hop('hops')
+    return s.all<T>(...args)
+  },
+  run: (...args: SqlValue[]) => {
+    hop('hops')
+    return s.run(...args)
+  },
+})
 let prep = (db: Sql, sql: string): Statement => {
   if (!caching) return db.prepare(sql)
   let m = stmtCache.get(db)
   if (!m) stmtCache.set(db, m = new Map())
   let s = m.get(sql)
-  if (!s) m.set(sql, s = db.prepare(sql))
+  if (!s) m.set(sql, s = counting(db.prepare(sql)))
   return s
 }
 

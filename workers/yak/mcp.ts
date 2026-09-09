@@ -106,7 +106,7 @@ import {
   VIEW_MIME,
 } from './tools.ts'
 import { listen, rostered } from './stream.ts'
-import { clock, timed } from './timing.ts'
+import { type Clock, clock, timed } from './timing.ts'
 
 // The views this door offers beside the guide, whose resources are
 // preauth.ts's — the guide is world-readable and served to anybody, and these
@@ -558,7 +558,20 @@ let stranger = async (
   )
 }
 
-export let fetch = async (req: Request, env: Env): Promise<Response> => {
+// The door, with the stopwatch and the round-trip tally running (timing.ts,
+// hops.ts): `answered` below is the whole call, and everything it awaits
+// counts its hops here, so `Server-Timing` says both where the time went and
+// how many trips it took to get there.
+export let fetch = (req: Request, env: Env): Promise<Response> => {
+  let c = clock()
+  return c.counting(() => answered(req, env, c))
+}
+
+let answered = async (
+  req: Request,
+  env: Env,
+  c: Clock,
+): Promise<Response> => {
   let url = new URL(req.url)
   if (url.pathname != '/mcp') {
     return json(404, { error: { code: 'not_found' } })
@@ -578,11 +591,6 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // one route, one `WWW-Authenticate`, one `/.well-known/…/mcp`, which the
   // challenge already builds from the pathname.
   let strict = url.searchParams.get('auth') == 'required'
-  // Where this call's time goes (timing.ts): the door's own hops — who is
-  // asking, building the server — and every hop a tool waits on, on the answer
-  // as `Server-Timing`, so `curl -i` on a slow app_files says which was slow
-  // (T-34986).
-  let c = clock()
   // Who is asking, if anybody. An anonymous request costs nothing to find
   // out — no header to unwrap, no cookie to verify (identity.ts) — and what
   // it gets is the pre-auth surface below rather than the door in its face.

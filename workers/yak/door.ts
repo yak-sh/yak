@@ -10,6 +10,8 @@
 // (meter.ts `metering`). This is why the door was lifted out of the store that
 // graph.ts replaced: living beside that class dragged src/db.ts into the
 // object's graph and failed that check. That class is gone (T-33807).
+import { hop } from '../../src/hops.ts'
+
 /** Anything a request can be handed to: a service binding, or a part of this
  * Worker called in-process (env.ts `bound`). */
 export type Fetcher = { fetch(req: Request): Promise<Response> }
@@ -94,7 +96,14 @@ export type Served = { eid: string; access: string | null; mail?: string }
 
 /** The door as a request BUILDER over whatever answers it: the stub, or the
  * object itself when the caller is that object (graph.ts). Either way the
- * request is the kernel's, built from scratch here and nowhere else. */
+ * request is the kernel's, built from scratch here and nowhere else.
+ *
+ * And therefore the ONE place a hop to a store is counted (hops.ts): every
+ * caller reaches an object through here — `storeOf` below is this function
+ * with a stub behind it, and the store's own door onto the directory is this
+ * function with the object behind it — so `hops;dur=<n>` on a request is
+ * exact rather than a sample. A retry (`storeOf`) is two hops, which is what
+ * it cost. */
 export let doorOf = (
   send: (req: Request) => Promise<Response>,
   name: string,
@@ -110,6 +119,7 @@ export let doorOf = (
     if (app.access) req.headers.set('x-yak-access', app.access)
     if (app.mail) req.headers.set('x-yak-mail', app.mail)
   }
+  hop('hops')
   return send(req)
 }
 

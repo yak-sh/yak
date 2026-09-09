@@ -10,11 +10,21 @@
 // completes — so a mark measures WAITING and reads zero for pure compute.
 // That is exactly the thing being measured here; a stage that is slow because
 // of CPU belongs in a profile, not a header.
+//
+// Two entries carry a COUNT in `dur` rather than milliseconds: `hops`, the
+// round trips this request made to a store (door.ts), and `r2`, the operations
+// it made against the bucket (blobs.ts `counted`). Server-Timing has no unit
+// but time, and a count is worth more than the field's tidiness: a duration
+// cannot tell one slow wait from forty fast ones, and forty fast ones is the
+// bug we keep writing. `hops;dur=7` is an N+1 read straight off a curl.
+import { counts, type Tally, tallying } from '../../src/hops.ts'
+
 export type Clock = ReturnType<typeof clock>
 
 export let clock = () => {
   let marks: string[] = []
   let sums = new Map<string, number>()
+  let tally: Tally = new Map()
   let born = Date.now()
   let mark = (name: string, ms: number, desc?: string | null) =>
     marks.push(`${name};dur=${ms}${desc ? `;desc=${desc}` : ''}`)
@@ -55,12 +65,20 @@ export let clock = () => {
       let at = Date.now()
       return (name: string) => mark(name, Date.now() - at)
     },
-    header: () =>
-      [
+    // The request's round trips, counted wherever they are made rather than
+    // threaded down to them (hops.ts): run the whole request in here and
+    // everything it awaits lands on this clock's tally.
+    counting: <T>(work: () => T) => tallying(tally, work),
+    header: () => {
+      let { hops, r2 } = counts(tally)
+      return [
         ...marks,
         ...[...sums].map(([name, ms]) => `${name};dur=${ms}`),
+        `hops;dur=${hops}`,
+        `r2;dur=${r2}`,
         `all;dur=${Date.now() - born}`,
-      ].join(', '),
+      ].join(', ')
+    },
   }
 }
 

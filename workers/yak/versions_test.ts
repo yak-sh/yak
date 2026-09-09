@@ -8,6 +8,8 @@
 // uses.
 import { assert, assertEquals } from '@std/assert'
 import type { Blobs } from '../../src/blobs.ts'
+import { counted } from '../../src/store/blobs.ts'
+import type { Tally } from '../../src/hops.ts'
 import type { App, Directory } from './directory.ts'
 import { carried, upload } from './dispatch.ts'
 import type { Env } from './env.ts'
@@ -45,55 +47,57 @@ let ONE: Pinner[] = [{ prefix: PREFIX, app: APP }]
 
 // The blob seam in memory: no I/O, so the fast tier stays fast. `at` is when
 // each object landed, which the sweep's grace period reads — `clock` moves it,
-// so a test can put bytes that look a day old. `trips` counts what the seam was
-// asked, which is what the sweep costs per app and what a deploy costs per file.
+// so a test can put bytes that look a day old.
+//
+// It is COUNTED by the platform's own counter (blobs.ts `counted`), told this
+// test's tally rather than a request's, so what the numbers below assert is
+// what a deploy reports as `r2;dur=<n>` on its Server-Timing — one truth, and
+// not a second tally that can drift from it. `trips()` is a snapshot, so a
+// case says what one gesture cost by subtracting.
 let memory = () => {
   let m = new Map<string, Uint8Array>()
   let at = new Map<string, number>()
   let clock = { now: Date.now() }
-  let trips = { list: 0, read: 0, get: 0, has: 0, put: 0, delete: 0 }
+  let tally: Tally = new Map()
   let keys = (prefix: string) =>
     [...m.keys()].filter((k) => k.startsWith(prefix)).sort()
-  let blobs: Blobs = {
-    has: (k) => {
-      trips.has++
-      return Promise.resolve(m.has(k))
-    },
-    put: (k, bytes) => {
-      trips.put++
-      m.set(k, bytes)
-      at.set(k, clock.now)
-      return Promise.resolve()
-    },
-    read: (k) => {
-      trips.read++
-      return Promise.resolve(
-        (m.get(k) ?? null) as Uint8Array<ArrayBuffer> | null,
-      )
-    },
-    get: (k) => {
-      trips.get++
-      let v = m.get(k)
-      if (!v) throw new Error(`no blob at ${k}`)
-      return Promise.resolve(v as Uint8Array<ArrayBuffer>)
-    },
-    delete: (k) => {
-      trips.delete++
-      m.delete(k)
-      at.delete(k)
-      return Promise.resolve()
-    },
-    list: (prefix) => {
-      trips.list++
-      return Promise.resolve(keys(prefix))
-    },
-    uploaded: (prefix) => {
-      trips.list++
-      return Promise.resolve(
-        Object.fromEntries(keys(prefix).map((k) => [k, at.get(k) ?? 0])),
-      )
-    },
-  }
+  let blobs = counted(
+    {
+      has: (k) => Promise.resolve(m.has(k)),
+      put: (k, bytes) => {
+        m.set(k, bytes)
+        at.set(k, clock.now)
+        return Promise.resolve()
+      },
+      read: (k) =>
+        Promise.resolve((m.get(k) ?? null) as Uint8Array<ArrayBuffer> | null),
+      get: (k) => {
+        let v = m.get(k)
+        if (!v) throw new Error(`no blob at ${k}`)
+        return Promise.resolve(v as Uint8Array<ArrayBuffer>)
+      },
+      delete: (k) => {
+        m.delete(k)
+        at.delete(k)
+        return Promise.resolve()
+      },
+      list: (prefix) => Promise.resolve(keys(prefix)),
+      uploaded: (prefix) =>
+        Promise.resolve(
+          Object.fromEntries(keys(prefix).map((k) => [k, at.get(k) ?? 0])),
+        ),
+    } satisfies Blobs,
+    tally,
+  )
+  let n = (verb: string) => tally.get(`r2.${verb}`) ?? 0
+  let trips = () => ({
+    list: n('list'),
+    read: n('read'),
+    get: n('get'),
+    has: n('has'),
+    put: n('put'),
+    delete: n('delete'),
+  })
   return { blobs, clock, trips }
 }
 
@@ -145,30 +149,31 @@ Deno.test('a manifest names paths and shas, not the bytes', async () => {
   await blobs.put(PREFIX + 'style.css', bytes('body{}'))
   // What the platform keeps beside the app's files is not the app's files.
   await blobs.put(PREFIX + 'blobs/deadbeef', bytes('a photo'))
-  let before = { ...trips }
+  let before = trips()
   let files = await snapshot(blobs, PREFIX)
   assertEquals(Object.keys(files).sort(), ['index.html', 'style.css'])
   assert(/^[0-9a-f]{64}$/.test(files['index.html']), 'a sha, not the text')
   // What a deploy costs the bucket, and what the global key must never make
   // dearer (T-34953): one listing, then per file one get, one head and — only
   // where the object is new — one put.
+  let cost = trips()
   assertEquals(
     {
-      list: trips.list - before.list,
-      get: trips.get - before.get,
-      has: trips.has - before.has,
-      put: trips.put - before.put,
+      list: cost.list - before.list,
+      get: cost.get - before.get,
+      has: cost.has - before.has,
+      put: cost.put - before.put,
     },
     { list: 1, get: 2, has: 2, put: 2 },
   )
 
   // The bytes are pinned once, at their own name, so an unchanged file across
   // two deploys is one object — and the second deploy pays the head and no put.
-  let mid = { ...trips }
+  let mid = trips()
   let again = await snapshot(blobs, PREFIX)
   assertEquals(again, files)
-  assertEquals(trips.has - mid.has, 2)
-  assertEquals(trips.put - mid.put, 0)
+  assertEquals(trips().has - mid.has, 2)
+  assertEquals(trips().put - mid.put, 0)
   assertEquals((await blobs.list(SHA)).length, 2)
   assertEquals(own(['index.html', 'blobs/x', 'versions/y']), ['index.html'])
 })
@@ -427,7 +432,7 @@ Deno.test('a blob lives while anything names it, and a day besides', async () =>
   await blobs.put(addressed(flight), bytes('a deploy still in flight'))
 
   let holder: Plugin = { name: 'holder', pins: [() => [kept]] }
-  let before = { ...trips }
+  let before = trips()
   assertEquals(await pruned(dir, blobs, ONE, Date.now(), [holder]), 1)
   assertEquals(await blobs.has(addressed(orphan)), false)
   assert(await blobs.has(addressed(flight)), 'inside the day')
@@ -439,9 +444,10 @@ Deno.test('a blob lives while anything names it, and a day besides', async () =>
 
   // What the sweep costs an app: two listings of the bucket — the path logs
   // and the pinned bytes — one read per log, and one delete per blob let go.
-  assertEquals(trips.list - before.list, 2)
-  assertEquals(trips.read - before.read, 0)
-  assertEquals(trips.delete - before.delete, 1)
+  let cost = trips()
+  assertEquals(cost.list - before.list, 2)
+  assertEquals(cost.read - before.read, 0)
+  assertEquals(cost.delete - before.delete, 1)
 })
 
 // The third thing that can name a blob (plugin.ts `pins`): a domain holding

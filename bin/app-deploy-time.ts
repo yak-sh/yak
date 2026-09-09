@@ -107,19 +107,26 @@ let three = (m: string) => [
   { path: 'app.js', content: `console.log('${m}')` },
 ]
 
+// `hops` and `r2` are COUNTS and not milliseconds (workers/yak/timing.ts): the
+// round trips a call made to a store and to the bucket. They ride the same
+// `dur` field as every stage, so they are pulled out here and said as counts
+// beside the stage line rather than sorted in among the times — an N+1 shows
+// up as a number that grew, in the row the gate already keeps.
+let TRIPS = ['hops', 'r2']
+
 let table = (row: Row) =>
   [
     `${row.host} v${row.version ?? '?'} runs=${row.runs}`,
     `files → live   ${row.files3.live.median} ms (call ${row.files3.call.median}, p95 ${row.files3.live.p95})`,
     `deploy         ${row.deploy.call.median} ms (p95 ${row.deploy.call.p95})`,
     `one file → live ${row.single.live.median} ms (call ${row.single.call.median}, p95 ${row.single.live.p95})`,
-    ...Object.entries(row.timing ?? {}).map(([tool, by]) =>
+    ...Object.entries(row.timing ?? {}).flatMap(([tool, by]) => [
       `  ${tool}: ${
-        Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, v]) =>
-          `${k} ${v}`
-        ).join(', ')
-      }`
-    ),
+        Object.entries(by).filter(([k]) => !TRIPS.includes(k))
+          .sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ')
+      }`,
+      `    round trips: ${TRIPS.map((k) => `${k} ${by[k] ?? 0}`).join(', ')}`,
+    ]),
   ].join('\n')
 
 if (import.meta.main) {

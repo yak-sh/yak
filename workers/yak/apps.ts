@@ -1426,9 +1426,12 @@ let firstly = async (
   return page && { page, app: home }
 }
 
-export let fetch = async (req: Request, env: Env): Promise<Response> => {
+export let fetch = (req: Request, env: Env): Promise<Response> => {
   let c = clock()
-  return timed(await served(req, env, c), c)
+  // Inside `counting`, so every store hop and bucket op the chain below makes
+  // is counted on this request's own tally (hops.ts) and reported beside the
+  // stages it took.
+  return c.counting(async () => timed(await served(req, env, c), c))
 }
 
 // Serving an app, with the stopwatch running (timing.ts): every stage below
