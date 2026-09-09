@@ -14,7 +14,7 @@ import { gitPlugin } from './git.ts'
 import { ledger, mint } from './grants.ts'
 import { platform } from './harness.ts'
 import type { Who } from './session.ts'
-import { pins, record, sha256 } from './versions.ts'
+import { pinned, pins, record, sha256 } from './versions.ts'
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let BEN = 'b0000000-0000-4000-8000-0000000000be'
@@ -213,6 +213,71 @@ Deno.test('the browser address redirects to the repository, query and all', asyn
   // under the app: both are the app's to answer, which is what `null` says.
   assertEquals(await asked(env, '/recipes/info/refs'), null)
   assertEquals(await asked(env, '/recipes/git-upload-pack'), null)
+})
+
+// One pkt-line, and the two commands a clone is made of.
+let pkt = (line: string) =>
+  (utf8.encode(line).length + 4).toString(16).padStart(4, '0') + line
+
+// An app deployed before the pins moved to one global key has its bytes ONLY
+// under its own prefix (versions.ts `pinned`), and the door has to read them
+// there. Handed the slugs without their separator it asked for
+// `ada/recipesversions/<sha>`, found nothing, and threw INSIDE the response
+// stream — a 200 that stops after the section header, which git reports as
+// `early EOF` and which no status code says anything about.
+Deno.test('an app whose bytes are pinned per-app still serves a pack', async () => {
+  let { env } = platform(SECRET)
+  let { app } = await standing(env, 'public')
+  let blobs = r2Blobs(env.BLOBS)
+  let files = { 'index.html': '<h1>hi</h1>\n' }
+  let manifest: Record<string, string> = {}
+  for (let [path, body] of Object.entries(files)) {
+    let bytes = utf8.encode(body)
+    manifest[path] = await sha256(bytes)
+    await blobs.put(pinned('ada/recipes/', manifest[path]), bytes)
+  }
+  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
+  await record(dir, WHO, app, 1, manifest, '')
+
+  let post = async (body: string) => {
+    let url = new URL('https://ada.yaks.app/recipes.git/git-upload-pack')
+    let req = new Request(url, {
+      method: 'POST',
+      headers: {
+        'git-protocol': 'version=2',
+        'content-type': 'application/x-git-upload-pack-request',
+      },
+      body: utf8.encode(body),
+    })
+    let res = await gitPlugin.routes![0]({
+      env,
+      req,
+      path: url.pathname,
+      space: 'ada',
+    })
+    assert(res, 'the door answers')
+    return new Uint8Array(await res.arrayBuffer())
+  }
+
+  let refs = text.decode(
+    await post(
+      pkt('command=ls-refs\n') + pkt('object-format=sha1\n') + '0001' +
+        pkt('peel\n') + '0000',
+    ),
+  )
+  let oid = /([0-9a-f]{40}) refs\/heads\/main/.exec(refs)?.[1]
+  assert(oid, `the branch is advertised: ${refs}`)
+  let pack = await post(
+    pkt('command=fetch\n') + pkt('object-format=sha1\n') + '0001' +
+      pkt('thin-pack\n') + pkt('no-progress\n') + pkt('ofs-delta\n') +
+      pkt(`want ${oid}\n`) + pkt('done\n') + '0000',
+  )
+  // The whole answer, not just its opening: the section header, band-1 data,
+  // and the flush that ends it. A pack that broke mid-stream is the header
+  // alone, because the band packets are cut at the end of the walk.
+  assertEquals(text.decode(pack.subarray(0, 13)), '000dpackfile\n')
+  assert(pack.length > 13, 'the pack itself is served, not just its header')
+  assertEquals(text.decode(pack.subarray(-4)), '0000')
 })
 
 Deno.test('a private app asks for a credential, and judges the one it gets', async () => {

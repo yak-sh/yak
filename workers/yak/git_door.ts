@@ -182,7 +182,15 @@ export let answer = async (at: Arrived): Promise<Response | null> => {
     refs,
     objects(
       graphOf(env.STORE),
-      bodies(r2Blobs(env.BLOBS), prefixOf(space, app)),
+      // The prefix a PIN key is built from, so it ends in the separator:
+      // `pinned` (versions.ts) writes `<prefix>versions/<sha>`, where
+      // `keyed` gets the same separator from a path's own leading slash.
+      // Handed the slugs alone, the fallback that reads an unmigrated app's
+      // bytes asks for `ada/recipesversions/<sha>`, finds nothing, and the
+      // pack breaks mid-stream — which is a clone that fails after the
+      // commits are already minted. gitobj.ts `placed` mints with this same
+      // spelling, so the door reads what the commit was written from.
+      bodies(r2Blobs(env.BLOBS), `${prefixOf(space, app)}/`),
     ),
   )
 }
