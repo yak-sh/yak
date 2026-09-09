@@ -6,6 +6,7 @@
     "jsr:@hexagon/croner@^10.0.1": "10.0.1",
     "jsr:@std/assert@*": "1.0.19",
     "jsr:@std/assert@1": "1.0.19",
+    "jsr:@std/assert@^1.0.19": "1.0.19",
     "jsr:@std/async@^1.5.0": "1.5.0",
     "jsr:@std/bytes@^1.0.6": "1.0.6",
     "jsr:@std/collections@^1.1.3": "1.3.0",
@@ -133,6 +134,7 @@
     "@std/testing@1.0.20": {
       "integrity": "21380ed438672762e4ec549cbf4fe41c5b68f5598773a30b64abe7375513e721",
       "dependencies": [
+        "jsr:@std/assert@^1.0.19",
         "jsr:@std/async",
         "jsr:@std/data-structures"
       ]

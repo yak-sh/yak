@@ -76,7 +76,7 @@ export let clock = () => {
         ...[...sums].map(([name, ms]) => `${name};dur=${ms}`),
         `hops;dur=${hops}`,
         `r2;dur=${r2}`,
-        `all;dur=${Date.now() - born}`,
+        `total;dur=${Date.now() - born}`,
       ].join(', ')
     },
   }

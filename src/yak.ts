@@ -634,6 +634,6 @@ if (import.meta.main) {
   // says the line for the connector door. These verbs go somewhere else (the
   // apex, through yaks_api.ts `sent`), so the same flag arms the same line
   // here, read rather than consumed.
-  watching(Deno.args.includes('--timing'), Deno.env.get('YAK_TIMING'))
+  watching(Deno.args.includes('--timing'), Deno.env.get('YAKS_TIMING'))
   Deno.exit(await main(Deno.args, [owner, ...PLUGINS]))
 }

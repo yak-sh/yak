@@ -72,8 +72,8 @@ Deno.test('app deploy gate: one number regressing fails; hosts never compare', (
 
 Deno.test('server-timing: stages parsed, medians per stage, absent header is empty', () => {
   assertEquals(
-    stages('inApp;dur=120, pin;dur=300, put;dur=210;desc=r2, all;dur=900'),
-    { inApp: 120, pin: 300, put: 210, all: 900 },
+    stages('inApp;dur=120, pin;dur=300, put;dur=210;desc=r2, total;dur=900'),
+    { inApp: 120, pin: 300, put: 210, total: 900 },
   )
   assertEquals(stages(null), {})
   assertEquals(

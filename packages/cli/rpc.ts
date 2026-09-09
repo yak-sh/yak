@@ -100,7 +100,9 @@ export let rpc = (door: Door): Rpc => {
 
 /** A `fetch` that says one line per answer, for `yak --timing`:
  *
- *     POST /mcp 200  door;dur=12, hops;dur=3, all;dur=41
+ *     POST /mcp 200  door;dur=12, hops;dur=3, total;dur=41
+ *
+ * `total` is wall time in milliseconds; `hops` and `r2` are counts.
  *
  * The numbers are the server's own `Server-Timing` (workers/yak/timing.ts),
  * printed as they arrived and never reworded, so this line and a `curl -i`

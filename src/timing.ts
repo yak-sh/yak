@@ -12,7 +12,7 @@
 //
 // Off unless asked. Each CLI arms it once, before it parses a verb, from its
 // own flag and its own env var (`task --timing` / TASKS_TIMING, `yak --timing`
-// / YAK_TIMING), so the flag holds for every verb rather than for the ones
+// / YAKS_TIMING), so the flag holds for every verb rather than for the ones
 // that remembered to declare it.
 
 // The switch and the sink, as one settable thing: a test reads the lines

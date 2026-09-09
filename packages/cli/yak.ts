@@ -62,9 +62,9 @@ export let globals = (
   let host = Deno.env.get('YAKS_HOST') ?? HOST
   let json = false
   let help = false
-  // A whole shell asks for the timing line with YAK_TIMING=1; one command
+  // A whole shell asks for the timing line with YAKS_TIMING=1; one command
   // asks with the flag.
-  let timing = Deno.env.get('YAK_TIMING') == '1'
+  let timing = Deno.env.get('YAKS_TIMING') == '1'
   let rest: string[] = []
   for (let i = 0; i < argv.length; i++) {
     let a = argv[i]
@@ -83,7 +83,7 @@ let HEAD = 'yak — the tools this server lists, and the verbs this box adds'
 let TAIL = `  --host <host>   which server (default $YAKS_HOST, else ${HOST})
   --json          print the structured result instead of the words
   --timing        a line on stderr per answer, with its Server-Timing
-                  (or YAK_TIMING=1)
+                  (or YAKS_TIMING=1)
   --help          this, or a verb's own
 
 A value that is @path is that file, and - is stdin. $YAKS_TOKEN is the

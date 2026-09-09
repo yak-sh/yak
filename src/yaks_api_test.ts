@@ -216,7 +216,7 @@ Deno.test('--timing says one line per account call, and none without', async () 
     ...fee(),
     headers: {
       get: (name: string) =>
-        name == 'server-timing' ? 'hops;dur=2, all;dur=31' : null,
+        name == 'server-timing' ? 'hops;dur=2, total;dur=31' : null,
     },
   })
   try {
@@ -228,5 +228,5 @@ Deno.test('--timing says one line per account call, and none without', async () 
     timing.say = say
     stub.done()
   }
-  assertEquals(said, ['GET /api/fee 200  hops;dur=2, all;dur=31'])
+  assertEquals(said, ['GET /api/fee 200  hops;dur=2, total;dur=31'])
 })
