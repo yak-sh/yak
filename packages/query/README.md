@@ -22,7 +22,7 @@ deno add jsr:@yaks/query
 ```ts
 import { parse } from '@yaks/query'
 
-parse('.status=open&.priority<=1&.team=frontend,backend')
+parse('.status=open .priority<=1 .team=frontend,backend')
 // {
 //   kind: 'and',
 //   clauses: [
@@ -34,8 +34,8 @@ parse('.status=open&.priority<=1&.team=frontend,backend')
 // }
 ```
 
-Bare words are full-text terms, and `&` and whitespace both separate clauses, so
-a search box mixes filters and text on one line:
+Bare words are full-text terms, and whitespace separates clauses, so a search
+box mixes filters and text on one line:
 
 ```ts
 parse('crash on save .updated.at=today')
@@ -50,7 +50,7 @@ builder calls:
 ```ts
 import { and, eq, le, list, parse } from '@yaks/query'
 
-let a = parse('.status=open&.priority<=1&.team=frontend,backend')
+let a = parse('.status=open .priority<=1 .team=frontend,backend')
 let b = and(
   eq('status', 'open'),
   le('priority', 1),
@@ -64,9 +64,10 @@ Vocabulary: `eq ne contains lt le gt ge present absent want pred` (predicates);
 `list range scalar
 time text` (values and terms); `and or` (composition);
 `clauses orderOf nearOf
-windowOf declared` (accessors); and the directives
+windowOf declared` (accessors); the walk `walk`; and the
+directives
 `order near refs hasRefs
-count distinct tally fields every limit after edges reaches`.
+count distinct tally fields every limit after edges`.
 
 ## The format
 
@@ -74,6 +75,11 @@ A token is one of three things **by its own shape**: a component clause (it
 wears a sigil, or it carries an operator), a quoted text term, or a bare word,
 which is a text term. Nothing is read by trying and failing — a malformed clause
 throws where it is read rather than falling back to text.
+
+A clause is `path [qualifiers]? operator value`. The bracket binds to the
+**path** and is read before any operator, so `.requires[<=3]->T-42` is the path
+`requires` qualified by a cap, then the walk operator; a bracket after the
+operator is part of the value (`.title~=x[1]`).
 
 - **Sigils** mark a component word: `.comp` present · `!comp` absent · `+comp`
   ensure (add it before the rule runs) · `+!comp` gate (it must be absent, and
@@ -90,6 +96,20 @@ throws where it is read rather than falling back to text.
   (inclusive), `1...5` exclusive end · `.p!=v` not · `.p~=v` contains (literal)
   · `.p<v .p<=v .p>v .p>=v` comparisons · `.p?` want the field alongside the
   filter.
+- **The walk**: `.requires->T-42` selects what reaches `T-42` through at most 16
+  `requires` hops; `.requires<-T-42` walks the other way (what `T-42` reaches);
+  `.requires[<=3]->T-42` caps the depth. The path is a relation name or a
+  reference column (`.fork.from->S-7`) — which is schema — and the target is one
+  entity, by eid or human id. The cap is part of the grammar: an unbounded walk
+  has no spelling. Parses to a `walk` node
+  (`walk(field, dir,
+  target, depth?)`).
+- **Qualifiers**: a path may wear a bracket of comma-separated arguments — `<=3`
+  (an operator and a value), `key=value`, or a bare `word`. Each clause says
+  which it accepts: the walk takes exactly one depth cap, `.edges[type,
+  via]`
+  two bare words, and every other clause none — an unknown qualifier is refused
+  by name (`.status[<=3]=open` throws), never dropped.
 - The leading `.` is **accepted everywhere and required nowhere**: it keeps a
   URL query string's filters apart from its `page` and `per`, and a rule that
   never travels in a URL may drop it — `comp.prop=1` is the same clause as
@@ -97,13 +117,13 @@ throws where it is read rather than falling back to text.
   tells the opless `.env` (wears `env`) from `env` (search for it).
 - `.p!` (present) and `.p=` (absent) are the older spellings of `.p` and `!p`,
   still parsed to the same nodes; saved queries keep working.
-- **Separators**: whitespace and `&` mean AND, and every term stands alone. A
-  comma between clauses is accepted and means nothing (`.entity, +!created` is
-  `.entity +!created`). Inside a value a comma is any-of, with no spaces and no
-  empty member: `.p=a,b` is one clause, `.p=a, b` is refused. A value holding a
-  space is quoted — `.title~="two words"`, `.status='open wip'`, a backslash
-  escaping inside — where unquoted `.title~=two words` is the filter `two` and
-  the search term `words`.
+- **Separators**: between terms, whitespace, `&` and `,` are aliases for AND
+  (`&` is the URL-query form), and every term stands alone; inside a value `,`
+  is the list operator. A list has no spaces and no empty member: `.p=a,b` is
+  one clause, `.p=a, b` is refused. A value holding a space is quoted —
+  `.title~="two words"`, `.status='open wip'`, a backslash escaping inside —
+  where unquoted `.title~=two words` is the filter `two` and the search term
+  `words`.
 - `?comp` is the prefix mirror of `!comp`: optional, selected when present and
   never filtered on. `.comp?` is its older suffix spelling, still parsed.
 - `parse(q, { text: false })` refuses bare-word text terms, so a rule or a saved
@@ -114,8 +134,8 @@ throws where it is read rather than falling back to text.
 - Directives ride the clause list: `.order=hot` `.near=42` `.refs=42` `.count!`
   `.distinct=col` `.tally=col` `.fields=pin.x,pin.z~` `*` (every component)
   `.limit=200` `.after=13882` `.edges!` `.edges.peers=status,title`
-  `.edges[watches,author.team]!` `.reaches[blocks,<=3]=42`.
-- Quotes glue a value across whitespace and `&`; the empty query selects nothing
+  `.edges[watches,author.team]!`.
+- Quotes glue a value across whitespace; the empty query selects nothing
   (`{ kind: 'never' }`).
 - `.after=<num>` is the window's cursor: the spine number of the entity to
   continue past, and the ONLY cursor spelling. It is order-agnostic on purpose —
@@ -159,10 +179,11 @@ left as raw tokens for a schema-aware compiler such as `@yaks/sql`:
   record type that references this one, which is schema. Non-bang reverse forms
   parse as ordinary path predicates for the compiler to restructure; the
   mid-bang form is refused at this layer (it is indistinguishable from a
-  forgotten `&` without the schema).
+  forgotten space without the schema).
 - **Scopes** — `.kind=book` parses as an ordinary predicate; expanding it to the
   presence/absence clauses a kind implies needs the schema's kind order.
-- **Directive validation** — which edge types `.reaches`/`.edges` may name, and
-  whether a `.distinct`/`.fields` path is a single column, is schema.
+- **Directive validation** — whether a walk's path names a relation or a
+  reference column, which edge types `.edges` may name, and whether a
+  `.distinct`/`.fields` path is a single column, is schema.
 - **Evaluation** — matching rows, compiling SQL, and interpreting `.order`
   rankings (`hot`, `search`, `similar`) against real data.

@@ -4,7 +4,7 @@
 // a list, a range, a directive) and never what a field means; deciding whether
 // `status` is a real column, a ref, or an enum is a downstream (schema) job.
 //
-// The whole point of the boundary: `parse('.a=1&.b=2')` deep-equals
+// The whole point of the boundary: `parse('.a=1 .b=2')` deep-equals
 // `and(eq('a', '1'), eq('b', '2'))`. Builders and parser meet on one shape, so
 // a caller may hand-write a query, parse one, or transform between the two.
 
@@ -72,15 +72,26 @@ export type After = { kind: 'after'; n: number }
 // far-endpoint columns (each a raw path) to carry back.
 export type EdgeSelect = { type: string; via?: string[] }
 export type Edges = { kind: 'edges'; select?: EdgeSelect; peers: string[][] }
-// A bounded traversal: reach `target` through at most `depth` edges of one
-// type. The depth cap is part of the grammar — an unbounded closure has no
-// spelling. `edgeType` is unvalidated here (which types exist is schema).
-export type Reaches = {
-  kind: 'reaches'
-  edgeType: string
+// A QUALIFIER: one argument of the bracket a path may wear (`.p[<=3]`,
+// `.p[key=v]`, `.p[word]`). The bracket binds to the path and is read before
+// any operator, so a clause kind declares which qualifiers it accepts and
+// refuses the rest by name; today only the walk takes one (its depth cap).
+export type Qual = { key?: string; op?: string; value: string }
+
+// A transitive WALK: `.requires[<=3]->T-42` selects what reaches `target`
+// through at most `depth` hops of `path`; `<-` walks the other way. The path is
+// raw segments — a relation name or a reference column, which is schema. The
+// cap is part of the grammar (default WALK_DEPTH; an unbounded closure has no
+// spelling) and `target` is one entity, by eid or human id.
+export type Dir = '->' | '<-'
+export type Walk = {
+  kind: 'walk'
+  path: string[]
+  dir: Dir
   depth: number
   target: string
 }
+export let WALK_DEPTH = 16
 
 // ---- rule sigils ----
 // A component word may wear a PREFIX SIGIL saying what a rule does with it.
@@ -118,7 +129,7 @@ export type Clause =
   | Limit
   | After
   | Edges
-  | Reaches
+  | Walk
   | Ensure
   | Gate
   | Mutable
@@ -229,11 +240,12 @@ export let tally = (field: string): Tally => ({
 })
 export let limit = (n: number): Limit => ({ kind: 'limit', n })
 export let after = (n: number): After => ({ kind: 'after', n })
-export let reaches = (
-  edgeType: string,
-  depth: number,
+export let walk = (
+  field: string,
+  dir: Dir,
   target: string,
-): Reaches => ({ kind: 'reaches', edgeType, depth, target })
+  depth = WALK_DEPTH,
+): Walk => ({ kind: 'walk', path: dot(field), dir, depth, target })
 
 // A field selector from `'pin.x'` or `'pin.z~'` (volatile), or a ready one.
 export let field = (spec: string | FieldSel): FieldSel => {

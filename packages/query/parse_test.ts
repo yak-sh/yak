@@ -32,13 +32,13 @@ import {
   parse,
   present,
   range,
-  reaches,
   refs,
   resource,
   scalar,
   tally,
   text,
   variable,
+  walk,
   want,
 } from './mod.ts'
 
@@ -104,6 +104,11 @@ let cases: [string, ReturnType<typeof and>][] = [
     and(contains('comment.target.doc.title', 'foo')),
   ],
   ['.pin.x=12', and(eq('pin.x', '12'))],
+  // a hyphen inside a word is a letter; `<` before a negative number stays a
+  // comparison, never a walk
+  ['.blocked-by=T-1', and(eq('blocked-by', 'T-1'))],
+  ['.priority<-1', and(lt('priority', '-1'))],
+  ['.x<-1.5', and(lt('x', '-1.5'))],
   // rankings and directives
   ['.order=hot', and(order('hot'))],
   ['.near=T-3', and(near('T-3'))],
@@ -126,11 +131,19 @@ let cases: [string, ReturnType<typeof and>][] = [
     '.edges.peers=status,title',
     and(edges({ peers: [['status'], ['title']] })),
   ],
+  // the bracket on `edges` is the select, read as two bare qualifiers
   [
     '.edges[referenced,entry.session]!',
     and(edges({ select: { type: 'referenced', via: ['entry', 'session'] } })),
   ],
-  ['.reaches[requires,<=3]=T-42', and(reaches('requires', 3, 'T-42'))],
+  ['.edges[cites]', and(edges({ select: { type: 'cites' } }))],
+  // the walk: a path, its optional cap, an arrow, one entity
+  ['.requires->T-42', and(walk('requires', '->', 'T-42'))],
+  ['.requires<-T-42', and(walk('requires', '<-', 'T-42'))],
+  ['.requires[<=3]->T-42', and(walk('requires', '->', 'T-42', 3))],
+  ['.fork.from[<=2]<-S-7', and(walk('fork.from', '<-', 'S-7', 2))],
+  ['requires->T-42', and(walk('requires', '->', 'T-42'))],
+  ['.requires<-3fa85f64-5717', and(walk('requires', '<-', '3fa85f64-5717'))],
   // text terms, and a search-style mix
   ['runner', and(text('runner'))],
   ['runner exit', and(text('runner'), text('exit'))],
@@ -138,11 +151,32 @@ let cases: [string, ReturnType<typeof and>][] = [
   // separators: & and whitespace both mean AND
   ['.status=open&.priority<=1', and(eq('status', 'open'), le('priority', '1'))],
   ['.status=open .priority<=1', and(eq('status', 'open'), le('priority', '1'))],
+  [
+    '.requires[<=2]->T-1&.status=open',
+    and(walk('requires', '->', 'T-1', 2), eq('status', 'open')),
+  ],
+  [
+    '.edges[cites,author]!,.post',
+    and(edges({ select: { type: 'cites', via: ['author'] } }), present('post')),
+  ],
+  // a bracket after the operator is part of the value
+  ['.title~=x[1]', and(contains('title', 'x[1]'))],
+  ['.tag=a[1],b', and(eq('tag', list('a[1]', 'b')))],
 ]
 
 for (let [q, want] of cases) {
   Deno.test(`parse ${q}`, () => assertEquals(parse(q), want))
 }
+
+// Every term stands alone: a pasted line parses to the same thing whether the
+// terms arrive together or one at a time (the shell-pasting property).
+Deno.test('each term stands alone', () => {
+  let line = '.requires[<=3]->T-42 .status=open ?doc *task !done runner'
+  assertEquals(
+    parse(line),
+    and(...line.split(' ').flatMap((t) => parse(t).clauses)),
+  )
+})
 
 // The empty query selects nothing.
 Deno.test('empty query is never', () => {
@@ -200,14 +234,6 @@ Deno.test('a list has no spaces and no empty member', () => {
   )
 })
 
-// A dot-marked word is the component, present; the same word bare is searched
-// for. Quotes make a text term of anything, operators included.
-Deno.test('the dot tells a component from a word', () => {
-  assertEquals(parse('.env'), and(present('env')))
-  assertEquals(parse('env'), and(text('env')))
-  assertEquals(parse('"comp.prop=1"'), and(text('comp.prop=1')))
-})
-
 // A bare word is one thing wherever it stands: a search term. The component it
 // might name is the dot-marked spelling.
 Deno.test('a comma between clauses means nothing', () => {
@@ -218,14 +244,19 @@ Deno.test('a comma between clauses means nothing', () => {
   assertEquals(parse('!foo, .bar'), and(absent('foo'), present('bar')))
 })
 
+// A dot-marked word is the component, present; the same word bare is searched
+// for. Quotes make a text term of anything, operators included.
+Deno.test('the dot tells a component from a word', () => {
+  assertEquals(parse('.env'), and(present('env')))
+  assertEquals(parse('env'), and(text('env')))
+  assertEquals(parse('"comp.prop=1"'), and(text('comp.prop=1')))
+})
+
 // `text: false` — a rule, or a saved filter, takes no bare-word search terms.
 Deno.test('text: false refuses a bare word', () => {
   assertEquals(
     parse('.doc, *task', { text: false }),
-    and(
-      present('doc'),
-      mutable('task'),
-    ),
+    and(present('doc'), mutable('task')),
   )
   assertThrows(() => parse('.doc hello', { text: false }), Error, 'not words')
   // quoting is how a strict query still asks for a word
@@ -240,14 +271,49 @@ Deno.test('list of ranges', () => {
   )
 })
 
+// The bracket binds to the path and each clause says what it accepts: the
+// walk takes one depth cap, nothing else takes any — an unknown qualifier is
+// refused by name, never dropped.
+Deno.test('qualifiers', () => {
+  assertThrows(() => parse('.status[<=3]=open'), Error, 'no qualifier')
+  assertThrows(() => parse('.doc[x]'), Error, 'no qualifier')
+  assertThrows(() => parse('.order[k=v]=hot'), Error, 'no qualifier')
+  assertThrows(() => parse('.requires[<=0]->X'), Error, 'at least one')
+  assertThrows(() => parse('.requires[<=]->X'), Error, 'one depth cap')
+  assertThrows(() => parse('.requires[3]->X'), Error, 'one depth cap')
+  assertThrows(() => parse('.requires[<=3,<=4]->X'), Error, 'one depth cap')
+  assertThrows(() => parse('.requires[]->X'), Error, 'empty qualifier')
+  assertThrows(() => parse('.requires[<=3->X'), Error, 'unclosed bracket')
+  assertThrows(() => parse('.requires->'), Error, 'one entity')
+  assertThrows(() => parse('.requires->a,b'), Error, 'one entity')
+  assertThrows(() => parse('.edges[a,b,c]!'), Error, 'one edge type')
+  assertThrows(() => parse('.edges[<=3]!'), Error, 'one edge type')
+  // whitespace inside the bracket is the bracket's own
+  assertEquals(
+    parse('.edges[referenced, entry.session]!'),
+    and(edges({ select: { type: 'referenced', via: ['entry', 'session'] } })),
+  )
+  assertEquals(
+    parse('.requires[ <= 3 ]->T-1'),
+    and(walk('requires', '->', 'T-1', 3)),
+  )
+})
+
 // Malformed or ambiguous forms are refused at the format layer.
 Deno.test('refusals', () => {
   assertThrows(() => parse('.limit=abc'), Error, 'whole number')
-  assertThrows(() => parse('.reaches[requires,<=0]=X'), Error, 'at least one')
   assertThrows(() => parse('.distinct='), Error, 'names a column')
   assertThrows(() => parse('.refs<3'), Error, '.refs')
-  // Two presence filters mashed together — a forgotten '&'.
-  assertThrows(() => parse('.assignee!.status=done'), Error, 'join filters')
+  // Two presence filters mashed together — a forgotten space.
+  assertThrows(() => parse('.assignee!.status=done'), Error, 'separate filters')
+  // the removed spelling of the walk: its bracket is an unknown qualifier
+  assertThrows(
+    () => parse('.reaches[requires,<=3]=T-42'),
+    Error,
+    'no qualifier',
+  )
+  assertThrows(() => parse('?doc[x]'), Error, 'not a clause')
+  assertThrows(() => parse('.doc[x]?'), Error, 'no qualifier')
 })
 
 // A reserved word without its bracket is just a raw path here — validating it
