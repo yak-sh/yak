@@ -44,15 +44,14 @@ let arg = (
 ): Arg => ({ name, kind, rest, need })
 
 let flag = (name: string): Opt => ({ name })
-let value = (name: string, kind = text, separate = false): Opt => ({
+let value = (name: string, kind = text): Opt => ({
   name,
   kind,
-  separate,
 })
 
 let json = flag('--json')
 let verbose = flag('--verbose')
-let format = value('--format', of('format', () => ['markdown', 'json']), true)
+let format = value('--format', of('format', () => ['markdown', 'json']))
 let quarantined = flag('--quarantined')
 let kind = of('kind', () => [...new Set([...kindOrder, ...plurals])])
 // `show` is already whole and renders comments; these flags affirm those
@@ -60,7 +59,7 @@ let kind = of('kind', () => [...new Set([...kindOrder, ...plurals])])
 let full = flag('--full')
 let comments = flag('--comments')
 let body = value('--body', bodyKind)
-let bodyFile = { ...value('-F', file, true), alias: '--body' }
+let bodyFile = { ...value('-F', file), alias: '--body' }
 let bodyText = { ...bodyKind, name: 'text' }
 // Retired flags whose habit outlives them, said once each (Manual.retired).
 let BRIEF_BODY = "takes no --body — did you mean 'task session brief --body=…'?"
@@ -68,7 +67,7 @@ let REMEMBER_TYPE =
   'takes no --type: the memory.type enum is retired (T-12585) — ' +
   '--scope=P-19 says project, --feedback=jeff says who gave it, and ' +
   'saying nothing IS a reference'
-let count = value('-n', num, true)
+let count = value('-n', num)
 let empty = { name: 'text', test: /.*/ }
 let minutes = { name: 'minutes', test: /^\d+$/ }
 let timestamp = { name: 'iso', test: /.+/ }
@@ -82,11 +81,11 @@ let listSort = of(
 let lane = of('lane', () => ['evaluate', 'build', 'verify'])
 let transcriptOpts = [
   flag('--prose'),
-  value('--seq', { name: 'range', test: /^\d*\.\.\d*$/ }, true),
-  value('--after', num, true),
-  value('--limit', num, true),
-  value('--since', timestamp, true),
-  value('--until', timestamp, true),
+  value('--seq', { name: 'range', test: /^\d*\.\.\d*$/ }),
+  value('--after', num),
+  value('--limit', num),
+  value('--since', timestamp),
+  value('--until', timestamp),
   json,
 ]
 let verdict = enumOf(comps.review.verdict, 'verdict')
@@ -168,8 +167,8 @@ export let manuals = declare({
     opts: [
       flag('--all'),
       value('--kind', kind),
-      value('--limit', num, true),
-      value('--sort', listSort, true),
+      value('--limit', num),
+      value('--sort', listSort),
       json,
     ],
   },
@@ -191,7 +190,7 @@ export let manuals = declare({
       'approving review, newest completion first.',
     root: true,
     args: [arg('lane', lane), arg('filters', text, true, false)],
-    opts: [value('--limit', num, true), flag('--recursive'), json],
+    opts: [value('--limit', num), flag('--recursive'), json],
   },
   verify: {
     about: 'start independent verification of a completed task',
@@ -544,7 +543,7 @@ export let manuals = declare({
   'mail files': {
     about: 'download attachments',
     args: [arg('id', id)],
-    opts: [value('--out', path, true)],
+    opts: [value('--out', path)],
   },
   'mail doctor': {
     about: 'compare every book address with the Cloudflare routing rules',
@@ -632,7 +631,7 @@ export let manuals = declare({
       flag('--all'),
       flag('--sent'),
       flag('--follow'),
-      value('--interval', num, true),
+      value('--interval', num),
     ],
   },
   'inbox show': {
@@ -668,7 +667,7 @@ export let manuals = declare({
     // omitting this optional slot. Agent briefs commonly carry a session
     // placeholder before the child has a provider id (T-19193).
     args: [arg('id', id), arg('session', empty, false, false)],
-    opts: [value('--session', empty, true), flag('--approve')],
+    opts: [value('--session', empty), flag('--approve')],
   },
   release: {
     about: 'drop one or more leases',
@@ -683,7 +682,7 @@ export let manuals = declare({
     ],
     root: true,
     args: [arg('id', id, true)],
-    opts: [value('--claim', text, true)],
+    opts: [value('--claim', text)],
   },
   block: {
     about: 'mark a task stuck on an EXTERNAL reason (not a task→task dep)',
@@ -761,14 +760,14 @@ export let manuals = declare({
     root: true,
     args: [arg('id', id)],
     opts: [
-      value('--provider', provider, true),
-      value('--model', model, true),
-      { ...value('--effort', effort, true), or: 'high' },
-      value('--persona', id, true),
-      value('--worktree', path, true),
+      value('--provider', provider),
+      value('--model', model),
+      { ...value('--effort', effort), or: 'high' },
+      value('--persona', id),
+      value('--worktree', path),
       flag('--wait'),
-      value('--timeout', duration, true),
-      value('--interval', num, true),
+      value('--timeout', duration),
+      value('--interval', num),
     ],
   },
   land: {
@@ -1020,8 +1019,8 @@ export let manuals = declare({
       '(default 1000).',
     args: [arg('id', id)],
     opts: [
-      value('--timeout', duration, true),
-      value('--interval', num, true),
+      value('--timeout', duration),
+      value('--interval', num),
       json,
     ],
   },
@@ -1041,7 +1040,7 @@ export let manuals = declare({
     examples: ['task tail S-12', 'task tail S-12 -n 5 --follow'],
     root: true,
     args: [arg('id', id)],
-    opts: [count, flag('--follow'), value('--interval', num, true)],
+    opts: [count, flag('--follow'), value('--interval', num)],
   },
   'session context': {
     about: 'reify and print the session digest',
@@ -1064,7 +1063,7 @@ export let manuals = declare({
   'session peek': {
     about: "tail a session's rendered entry log",
     args: [arg('id', id)],
-    opts: [value('--lines', num, true)],
+    opts: [value('--lines', num)],
   },
   'session turn': {
     about: 'announce a native provider turn boundary',
@@ -1619,8 +1618,8 @@ let option = (arg: string) =>
   arg != '--' && (arg.startsWith('--') || /^-[A-Za-z]/.test(arg))
 
 let match = (opt: Opt, arg: string) => {
-  if (!opt.kind) return arg == opt.name
-  if (arg == opt.name) return opt.separate
+  if (arg == opt.name) return true
+  if (!opt.kind) return false
   if (opt.name.startsWith('--')) return arg.startsWith(`${opt.name}=`)
   return arg.startsWith(opt.name)
 }
@@ -1784,38 +1783,6 @@ let parsed = (
       }
       let gone = manual.retired?.[optionName(arg)]
       if (gone) throw usageError(name, manual, gone)
-      // A KNOWN value option given bare (`--body foo`, not `--body=foo`):
-      // match() only accepts the `=` spelling for a non-separate value, so it
-      // falls through here.
-      let bare = manual.opts?.find((o) => o.kind && o.name == optionName(arg))
-      if (bare) {
-        // Warm path: a body option in its SPACE form, as the LAST option on the
-        // line, binds the trailing words as the body — exactly as `--body=…`
-        // would (T-18566/T-18481: agents keep reaching for `--body …` and won't
-        // change habits from an error, so make the habit WORK). Unambiguous only
-        // when body is genuinely trailing: every remaining token must be a plain
-        // word, so nothing after it (an option, a `--` fold, a dot-param) is
-        // swallowed. Body-type only (kind.read); other value options keep the
-        // `=` requirement, since their value is a single token, not trailing.
-        let trailing = argv.slice(i + 1)
-        if (
-          bare.kind!.read && trailing.length &&
-          trailing.every((a) => a != '--' && !option(a) && !dotted(a))
-        ) {
-          let raw = trailing.join(' ')
-          present.add(bare.name)
-          value(bare, raw, `${bare.name}=${raw}`)
-          break
-        }
-        // Name the real fault — it needs a value at the `=` spelling — rather
-        // than "does not take", which reads as unknown flag and sends authors
-        // in circles (T-18396: agents kept reaching for `--body …`).
-        throw usageError(
-          name,
-          manual,
-          `${bare.name} needs ${wanted(bare.kind!)} — use ${bare.name}=…`,
-        )
-      }
       throw usageError(name, manual, `does not take ${optionName(arg)}`)
     }
     present.add(opt.alias ?? opt.name)
@@ -1833,11 +1800,23 @@ let parsed = (
       : arg.slice(opt.name.length).replace(/^=/, '')
     if (arg == opt.name) {
       let next = argv[i + 1]
-      if (!opt.separate || !next || option(next)) {
+      if (next == null || next == '--' || option(next) || dotted(next)) {
         throw usageError(name, manual, `${opt.name} needs ${wanted(opt.kind)}`)
       }
-      got = next
-      i++
+      // Body-kind options keep their trailing-words spelling, but only when
+      // every remaining token is prose. Otherwise all value options consume
+      // exactly one token, leaving options, folds and dot-params to the parser.
+      let trailing = argv.slice(i + 1)
+      if (
+        opt.kind.read &&
+        trailing.every((a) => a != '--' && !option(a) && !dotted(a))
+      ) {
+        got = trailing.join(' ')
+        i = argv.length - 1
+      } else {
+        got = next
+        i++
+      }
     }
     value(opt, got, arg == opt.name ? `${opt.name}=${got}` : arg)
   }

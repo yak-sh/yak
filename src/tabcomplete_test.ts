@@ -62,6 +62,23 @@ Deno.test('tab: an unknown verb completes to nothing', () => {
   assertEquals(complete(['nope', '']), [])
 })
 
+Deno.test('tab: formerly equals-only options complete spaced values (T-35503)', () => {
+  for (
+    let [prefix, flag, value] of [
+      [['comment', 'T-1'], '--verdict', 'app'],
+      [['list'], '--kind', 'ta'],
+      [['goal', 'a title'], '--scope', 'T-'],
+    ] as [string[], string, string][]
+  ) {
+    assertEquals(
+      complete([...prefix, flag, value], ids).map((v) => `${flag}=${v}`),
+      complete([...prefix, `${flag}=${value}`], ids),
+    )
+  }
+  // A consumed body value must not displace the id positional.
+  assertEquals(complete(['set', '--body', 'a note', 'T-'], ids), ids())
+})
+
 // A global is the program's flag, typed anywhere on the line (manual.ts
 // GLOBALS): it completes before the verb and beside a verb's own options, it
 // is not offered twice, and having been typed it does not stop the verb from

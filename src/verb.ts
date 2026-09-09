@@ -28,7 +28,6 @@ export type Opt = {
   name: string
   kind?: Kind
   or?: string
-  separate?: boolean
   alias?: string
 }
 

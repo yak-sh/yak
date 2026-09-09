@@ -24,7 +24,7 @@ import {
   validateCommand,
 } from './manual.ts'
 import { edges, plurals } from './types.ts'
-import { usageOf } from './verb.ts'
+import { type Kind, usageOf } from './verb.ts'
 
 Deno.test('every CLI route and palette command answers help from its table', () => {
   for (let name of Object.keys(manuals)) {
@@ -244,6 +244,78 @@ Deno.test('spawn accepts equals and space values; provider remains optional (T-3
   }
 })
 
+Deno.test('every manual value option parses both spellings to the same Got (T-35503)', () => {
+  let file = Deno.makeTempFileSync()
+  Deno.writeTextFileSync(file, 'file body\n')
+  let samples: Record<string, string> = {
+    n: '7',
+    minutes: '5',
+    duration: '45m',
+    range: '1..3',
+    iso: '2026-09-09T12:00:00Z',
+    id: 'T-1',
+    file,
+  }
+  let sample = (kind: Kind) =>
+    kind.of?.()?.[0] ?? samples[kind.name] ?? 'sample value'
+  try {
+    // Walk declarations, not a hand-picked flag list: new options and shared
+    // options on different verbs inherit the same syntax contract.
+    for (let [name, manual] of Object.entries(manuals)) {
+      for (let opt of manual.opts ?? []) {
+        if (!opt.kind) continue
+        let prefix = (manual.args ?? []).filter((arg) => arg.need !== false)
+          .map((arg) => sample(arg.kind))
+        let raw = sample(opt.kind)
+        let joined = parse(name, manual, [...prefix, `${opt.name}=${raw}`])
+        let spaced = parse(name, manual, [...prefix, opt.name, raw])
+        assertEquals(spaced, joined, `${name} ${opt.name}`)
+        assertEquals(
+          spaced.opts[opt.alias ?? opt.name],
+          opt.kind.read == 'file' ? 'file body\n' : raw,
+          `${name} ${opt.name} consumes its value`,
+        )
+        for (let tail of [[], ['--json'], ['-x'], ['--'], ['.body=note']]) {
+          assertThrows(
+            () => parse(name, manual, [...prefix, opt.name, ...tail]),
+            Error,
+            `${opt.name} needs`,
+          )
+        }
+      }
+    }
+  } finally {
+    Deno.removeSync(file)
+  }
+})
+
+Deno.test('a nontrailing spaced body consumes one token without swallowing syntax', () => {
+  for (
+    let [name, prefix, tail] of [
+      ['comment', ['T-1'], ['--verdict', 'approved']],
+      ['remember', ['a fact'], ['.scope=P-19']],
+      ['comment', ['T-1'], ['--', 'literal words']],
+    ] as [string, string[], string[]][]
+  ) {
+    let spaced = parse(name, manuals[name], [
+      ...prefix,
+      '--body',
+      'a note',
+      ...tail,
+    ])
+    assertEquals(
+      spaced,
+      parse(name, manuals[name], [...prefix, '--body=a note', ...tail]),
+    )
+    assertEquals(spaced.body, 'a note')
+  }
+  // Empty tokens are values when the kind permits them, not missing tokens.
+  assertEquals(
+    parse('remember', manuals.remember, ['a fact', '--feedback', '']),
+    parse('remember', manuals.remember, ['a fact', '--feedback=']),
+  )
+})
+
 Deno.test('spawn and session wait share timeout spellings and units (T-35458)', () => {
   for (let name of ['spawn', 'session wait']) {
     for (let raw of ['900', '900s', '45m', '2h']) {
@@ -331,22 +403,6 @@ Deno.test('manual validation rejects loss-shaped arguments', () => {
       ['T-1'],
       'needs <text> or --body=<text, @file, - or @-> or --verdict=<verdict>',
     ],
-    // The space form is warm only when body is TRAILING (accepts test below).
-    // A bare body option FOLLOWED by another option is not trailing, so it can
-    // not safely swallow the rest — it names the value and the `=` spelling
-    // rather than eating `--verdict` (T-18566/T-18481).
-    [
-      'comment',
-      ['T-1', '--body', 'a note', '--verdict', 'approved'],
-      '--body needs text, @file, - or @- — use --body=…',
-    ],
-    // A NON-body value option given bare keeps the `=` requirement — its value
-    // is one token, never trailing, so the space form does not apply to it.
-    [
-      'comment',
-      ['T-1', '--verdict', 'approved'],
-      '--verdict needs verdict — use --verdict=…',
-    ],
     ['telemetry', ['-n', '--errors'], '-n needs a positive number'],
     ['wrap', ['sid', '--body=@x'], 'task session brief --body=…'],
     // A RETIRED flag names its replacement instead of "does not take": the
@@ -391,6 +447,8 @@ Deno.test('manual validation accepts each supported option shape', () => {
   check('history', ['T-1', '-n2'])()
   check('mail files', ['E-1', '--out', 'tmp'])()
   check('mail files', ['E-1', '--out=tmp'])()
+  check('comment', ['T-1', '--body', 'a note', '--verdict', 'approved'])()
+  check('comment', ['T-1', '--verdict', 'approved'])()
   check('comment', ['T-1', '--verdict=approved'])()
   check('comment', ['T-1', '--verdict=approve'])()
   // A comment body rides the same door a task body does, at either spelling —

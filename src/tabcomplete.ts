@@ -45,9 +45,8 @@ let candidates = (
 ): string[] => (kind?.of ? kind.of() ?? [] : kind?.id ? at() : [])
 
 // The positionals already settled among a verb's post-name words — options and
-// their separate values don't count, so the caller's cursor lands on the right
-// slot. (A separate-value option like `-n 5` is rare beside a positional; the
-// value is skipped by name where it can be.)
+// their spaced values don't count, so the caller's cursor lands on the right
+// slot. Every value option accepts this spelling.
 let filled = (verb: Decl, args: string[]): number => {
   let opts = verb.opts ?? []
   let n = 0
@@ -57,7 +56,7 @@ let filled = (verb: Decl, args: string[]): number => {
     if (a.startsWith('-')) {
       let opt = opts.find((o) => a == o.name || a.startsWith(`${o.name}=`))
       // `-n 5`: the bare flag eats the next word as its value.
-      if (opt?.kind && opt.separate && a == opt.name) i++
+      if (opt?.kind && a == opt.name) i++
       continue
     }
     n++
@@ -114,10 +113,9 @@ export let complete = (
     )
   }
 
-  // A separate-value option awaiting its value (`--effort <TAB>`, `-n <TAB>`).
+  // A value option awaiting its value (`--effort <TAB>`, `-n <TAB>`).
   let last = sel.args.at(-1)
-  let awaiting = last &&
-    opts.find((o) => o.name == last && o.separate && o.kind)
+  let awaiting = last && opts.find((o) => o.name == last && o.kind)
   if (awaiting) return candidates(awaiting.kind, ids).filter(starts(cur))
 
   // Otherwise: the subcommands under this verb, plus the next positional slot.
