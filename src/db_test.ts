@@ -44,6 +44,7 @@ let {
   resolveId,
   retireMemoryType,
   search,
+  schemaVersion,
   senderActor,
   sha,
   snapshot,
@@ -3452,6 +3453,28 @@ Deno.test('migrate refuses a schema version from a newer binary', () => {
     "schema version 2 is newer than this binary's version 1",
   )
   newer.close()
+})
+
+Deno.test('apply refuses a newer schema committed before it acquires the writer lock', () => {
+  let db = fresh(), eid = uid()
+  let transaction = db.transaction.bind(db)
+  let before = cursorOf(db)
+  // Model a migration completing after a caller's preflight but before BEGIN.
+  db.transaction = (run, immediate) => {
+    db.version = schemaVersion + 1
+    return transaction(run, immediate)
+  }
+  try {
+    assertThrows(
+      () => apply(db, [{ eid, name: 'doc', comp: { title: 'refused' } }]),
+      Error,
+      'is newer than this binary',
+    )
+    assertEquals(cursorOf(db), before)
+    assertEquals(eager(db, eid), {})
+  } finally {
+    db.close()
+  }
 })
 
 slow('open migrates the legacy instruction marker to prompt once', () => {

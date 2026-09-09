@@ -2961,6 +2961,17 @@ export let mintEpoch = (db: Sql) =>
 // an older binary instead of letting that binary infer compatibility.
 export let schemaVersion = 1
 
+let writableVersion = (db: Sql) => {
+  let stored = db.version
+  if (stored > schemaVersion) {
+    throw new Error(
+      `database schema version ${stored} is newer than this binary's ` +
+        `version ${schemaVersion}; upgrade the serving process`,
+    )
+  }
+  return stored
+}
+
 // Migrate a connected handle in place: the hand + derived schema, the additive
 // column/index fills, and the vector index.
 // The schema work runs under one BEGIN IMMEDIATE and is idempotent: concurrent
@@ -2983,13 +2994,7 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       // schema the winner committed; no application sidecar lock is involved.
       // The version check belongs after that wait: reading it before BEGIN lets
       // an older waiter overwrite a newer migrator's version after it commits.
-      let stored = db.version
-      if (stored > schemaVersion) {
-        throw new Error(
-          `database schema version ${stored} is newer than this binary's ` +
-            `version ${schemaVersion}; upgrade the serving process`,
-        )
-      }
+      let stored = writableVersion(db)
       migratePrompt(db)
       // Retire a doc_value/doc_fts pair that predates the mail envelope; the
       // schema below recreates both carrying it.
@@ -5313,6 +5318,9 @@ export let apply = (
   // upgrade. Under claimWork() the run nests inside the transaction that
   // resolved and synthesized the batch, and commits or rolls back with it.
   let run = () => {
+    // Another process may have migrated while this writer waited for the
+    // lock. An open-time or CLI preflight check cannot cover that interval.
+    writableVersion(db)
     // Claim release is the interruption event. Capture the holder before the
     // row can vanish — including through a session cascade — then derive the
     // durable actor stack from the transaction's final state below.
@@ -6560,8 +6568,8 @@ export let journalWrite = (
 // (frozen_at and kin), made by direct SQL beside this call. delta()
 // promises catch-up clients the same content the live cast carried, so
 // a stamp must reach the journal too, or every tab that boots by replay
-// silently loses the column (T-7437). Recording never throws, like the
-// journal insert in apply().
+// silently loses the column (T-7437). This legacy stamp door is best-effort;
+// apply() journals atomically with the graph write.
 export let record = (
   db: Sql,
   changes: Change[],
