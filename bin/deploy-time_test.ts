@@ -1,6 +1,6 @@
 import { assertEquals } from '@std/assert'
-import { append, probe, pushTime, versionFor } from './deploy-time.ts'
-import { type Deploy, gate, readRecords } from './deploy-gate.ts'
+import { append, probe, pushTime, summary, versionFor } from './deploy-time.ts'
+import { type Deploy, gate, readRecords, records } from './deploy-gate.ts'
 import type { Version } from '../src/yak_deploys.ts'
 
 let SHA = 'a'.repeat(40)
@@ -116,6 +116,34 @@ Deno.test('deploy probe: transport and body errors remain failures', async () =>
       ),
     )) as typeof fetch
   assertEquals(await probe(ID, truncated), 'body truncated')
+})
+
+let deploy = (n: number, seconds: number): Deploy => {
+  let pushed = new Date(Date.parse(PUSHED) + n * 600_000).toISOString()
+  return {
+    sha: `${n}`.padStart(40, 'c'),
+    pushed,
+    uploaded: new Date(Date.parse(pushed) + seconds * 500).toISOString(),
+    live: new Date(Date.parse(pushed) + seconds * 1000).toISOString(),
+    seconds,
+  }
+}
+
+Deno.test('deploy timing: the commit under test is judged, not the last hand-recorded row', () => {
+  // T-35336: rows were only appended by hand, so one unlucky Workers Builds
+  // row stayed "the latest deploy" and failed every later commit. The gate step
+  // records this commit's own deploy first, which puts it last by upload.
+  let stale = [deploy(1, 40), deploy(2, 74)]
+  assertEquals(gate(stale).code, 1)
+  let fresh = gate([...stale, deploy(3, 47)])
+  assertEquals([fresh.code, fresh.floor, fresh.limit], [0, 40, 50])
+})
+
+Deno.test('deploy timing: the job summary carries the row the record accepts', () => {
+  let rows = [deploy(1, 40), deploy(2, 47)]
+  let text = summary(rows)
+  assertEquals(records(text.split('```')[1]), rows)
+  assertEquals(text.includes('bench/deploys.jsonl'), true)
 })
 
 Deno.test('deploy record: concurrent append is idempotent, and a failed probe can complete', async () => {

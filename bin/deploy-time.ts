@@ -2,7 +2,10 @@
 // Run on the credentialed box as soon as a push starts its build:
 //   deno task deploy:time [sha]
 // Historical uploads: deno task deploy:time --backfill 3
-// No credentials or live API calls belong in deploy-gate / Actions.
+// The gate workflow runs this on the same box before deploy-gate judges, so
+// every push times its own deploy (T-35336); it reads the box's gh and
+// wrangler logins under $HOME and never an Actions secret. deploy-gate itself
+// stays credential-free and makes no live call.
 import { type Deploy, readRecords, RECORD, records } from './deploy-gate.ts'
 import { WRANGLER } from '../workers/yak/wrangler.ts'
 import type { Version } from '../src/yak_deploys.ts'
@@ -121,6 +124,16 @@ let versions = (): Promise<Version[]> =>
   )
 let pause = () => new Promise((ok) => setTimeout(ok, 1000))
 
+// In the gate the recorder measures the commit under test, and the row lives
+// only in that run's checkout: no workflow here pushes, and a bench-row commit
+// on main would start another Workers Build and another gate. So the row rides
+// the job summary the way bench-gate's baseline rides its log — copy it into
+// bench/deploys.jsonl with the next change and the floor keeps ratcheting.
+export let summary = (rows: Deploy[]) =>
+  `### deploy timing\n\nAppend to \`bench/deploys.jsonl\`:\n\n\`\`\`\n${
+    rows.map((r) => JSON.stringify(r)).join('\n')
+  }\n\`\`\`\n`
+
 let writing = Promise.resolve()
 export let append = (row: Deploy, path: string | URL = RECORD) => {
   // POSIX locks serialize processes; the queue also serializes callers in
@@ -225,6 +238,7 @@ export let main = async (args = Deno.args) => {
   }
   if (!pending.length) throw new Error('no uploads match recent pushes')
   let code = 0
+  let written: Deploy[] = []
   let old = await readRecords()
   for (let { sha, push, match } of pending.reverse()) {
     let uploaded = match.version.metadata.created_on
@@ -260,6 +274,7 @@ export let main = async (args = Deno.args) => {
       ...(problem ? { probe: problem } : {}),
     }
     let added = await append(row)
+    if (added) written.push(row)
     console.log(
       `${sha.slice(0, 8)}: upload ${
         ((Date.parse(uploaded) - Date.parse(push.pushed)) / 1000).toFixed(3)
@@ -272,6 +287,10 @@ export let main = async (args = Deno.args) => {
       } — ${added ? 'recorded' : 'already recorded'}`,
     )
     if (!backfill && problem) code = 1
+  }
+  let job = Deno.env.get('GITHUB_STEP_SUMMARY')
+  if (job && written.length) {
+    await Deno.writeTextFile(job, summary(written), { append: true })
   }
   return code
 }
