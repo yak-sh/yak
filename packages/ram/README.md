@@ -154,12 +154,12 @@ loose:
   with integer affinity reads back as `1`.
 
 A question the reads cannot answer exactly — an aggregate (`.count`, `.tally`,
-`.distinct`), a nearest-neighbour (`.near`), a graph walk (`.reaches`,
-`.edges!`), a computed column — throws `@yaks/match`'s `Unsupported`, the same
-decline `@yaks/sql` throws; that package's README lists every one. There is no
-full-text index either: a bare word is matched token by token over the text the
-bundles hold, which selects what an index over the same words would select,
-without the ranking.
+`.distinct`), a nearest-neighbour (`.near`), the `.edges!` rider, a computed
+column — throws `@yaks/match`'s `Unsupported`, the same decline `@yaks/sql`
+throws; that package's README lists every one. There is no full-text index
+either: a bare word is matched token by token over the text the bundles hold,
+which selects what an index over the same words would select, without the
+ranking.
 
 ## Compatibility
 

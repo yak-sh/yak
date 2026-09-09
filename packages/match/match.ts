@@ -64,7 +64,7 @@ let ast = (q: Query): And => typeof q == 'string' ? parse(q) : q
 
 // The directives that ride the clause list rather than filter, and the ones
 // this package refuses: an aggregate is a row shape, not a selection of
-// entities, and a nearest-neighbour or a graph walk needs an index no bundle
+// entities, and a nearest-neighbour or the edge rider needs an index no bundle
 // carries. A projection (`fields`, `*`) says which columns an answer carries
 // and nothing about which bundles belong, so it rides and never judges.
 let DIRECTIVES = new Set([
@@ -78,7 +78,6 @@ let DIRECTIVES = new Set([
   'limit',
   'after',
   'edges',
-  'reaches',
 ])
 let DECLINED = new Set([
   'near',
@@ -86,7 +85,6 @@ let DECLINED = new Set([
   'distinct',
   'tally',
   'edges',
-  'reaches',
 ])
 
 let find = <T extends Clause>(cs: Clause[], kind: string): T | undefined =>

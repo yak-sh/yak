@@ -33,7 +33,7 @@ export type Walk = {
   /** the entities that link to this one through `relation` */
   in: (eid: Eid, relation: string) => Eid[] | Promise<Eid[]>
   /** everything within `depth` hops — the start included only if a path of at
-   * least one hop leads back to it, which is what `.reaches` selects too */
+   * least one hop leads back to it, which is what `.cites->p1` selects too */
   reach: (
     eid: Eid,
     relation: string,

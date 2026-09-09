@@ -57,7 +57,7 @@ Deno.test('reach walks either way', () => {
 
 Deno.test('a cycle ends the walk rather than spinning', () => {
   // p1 cites p4, closing the ring — so p4 reaches itself, and the walk still
-  // stops. This is the answer `.reaches[cites,<=9]=p1` gives too (sql_test).
+  // stops. This is the answer `.cites[<=9]->p1` gives too (sql_test).
   let s = chain()
   blogGraph(s).apply([link('p1', 'cites', 'p4')])
   assertEquals(now(walk(s, blog).reach('p4', 'cites', 99)), [
@@ -68,7 +68,7 @@ Deno.test('a cycle ends the walk rather than spinning', () => {
   ])
 })
 
-Deno.test('the walk and .reaches answer the same question', () => {
+Deno.test('the walk and the query operator answer the same question', () => {
   // Two evaluators of one idea: this one reads bundles a hop at a time, the
   // other compiles a recursive CTE. They must not disagree.
   let s = chain()
@@ -76,7 +76,7 @@ Deno.test('the walk and .reaches answer the same question', () => {
   for (let depth of [1, 2, 9]) {
     assertEquals(
       now(w.reach('p1', 'cites', depth, 'in')),
-      (s.read(`.reaches[cites,<=${depth}]=p1`) as { entity: { eid: Eid } }[])
+      (s.read(`.cites[<=${depth}]->p1`) as { entity: { eid: Eid } }[])
         .map((b) => b.entity.eid).sort(),
       `depth ${depth}`,
     )

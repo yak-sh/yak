@@ -99,18 +99,21 @@ wearing a friendly name.
 ## In a query line
 
 Register the [@yaks/sql](https://jsr.io/@yaks/sql) extension and two clauses
-that package declines on its own start compiling:
+that package cannot answer on its own start compiling:
 
 ```ts
 import { traverse } from '@yaks/edge'
 
-compile(parse('.reaches[cites,<=3]=p1'), vocab, { extend: [traverse(vocab)] })
+compile(parse('.cites[<=3]->p1'), vocab, { extend: [traverse(vocab)] })
 ```
 
-- `.reaches[cites,<=3]=p1` — the entities that reach `p1` through at most three
-  `cites` links. It compiles to a recursive CTE walked backward from the target,
-  so every step is an index seek; the cap is the recursion's own guard, so a
-  cycle terminates by arithmetic.
+- `.cites[<=3]->p1` — the entities that reach `p1` through at most three `cites`
+  links; `.cites<-p1` is what `p1` reaches; with no bracket the cap is 16.
+  @yaks/sql owns the recursive CTE (`walkSql`) — seeded at the target, one index
+  seek per step, the cap the recursion's own guard so a cycle terminates by
+  arithmetic — and this extension supplies the STEP: the edge table narrowed to
+  the tag the relation name declares. A path that names no relation is left to
+  @yaks/sql, which walks it as a reference column (`.fork.from->S-7`).
 - `.edges[cites]!` — a **rider**: it does not change which entities the query
   selects, it asks for their links to be carried back beside them. It compiles
   to a condition that filters nothing, and `walk` is the delivery.
@@ -120,17 +123,17 @@ clause naming nothing is a typo, not a query that matches everything.
 
 ## The surface
 
-| export                       | is                                               |
-| ---------------------------- | ------------------------------------------------ |
-| `edgeKeywords`, `EDGE_URI`   | the `relation` keyword vocabulary, to register   |
-| `edgeDoc`, `EDGE`            | the `edge` component, to load beside your own    |
-| `relations(v)`, `names(v)`   | the declared relations, each way round           |
-| `link`, `unlink`             | the bundle that states a link, and takes it back |
-| `edgeEid`, `derive`, `tagOf` | the id a sentence names                          |
-| `edges(v)`                   | the @yaks/graph plugin (component, id, refusal)  |
-| `stated(v)`                  | the refusal on its own                           |
-| `walk(storage, v)`           | `out`, `in`, and a bounded `reach`               |
-| `traverse(v)`                | the @yaks/sql extension for `.reaches`/`.edges`  |
+| export                       | is                                                |
+| ---------------------------- | ------------------------------------------------- |
+| `edgeKeywords`, `EDGE_URI`   | the `relation` keyword vocabulary, to register    |
+| `edgeDoc`, `EDGE`            | the `edge` component, to load beside your own     |
+| `relations(v)`, `names(v)`   | the declared relations, each way round            |
+| `link`, `unlink`             | the bundle that states a link, and takes it back  |
+| `edgeEid`, `derive`, `tagOf` | the id a sentence names                           |
+| `edges(v)`                   | the @yaks/graph plugin (component, id, refusal)   |
+| `stated(v)`                  | the refusal on its own                            |
+| `walk(storage, v)`           | `out`, `in`, and a bounded `reach`                |
+| `traverse(v)`                | the @yaks/sql extension for the walk and `.edges` |
 
 ## Where it sits
 

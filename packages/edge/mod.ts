@@ -34,9 +34,10 @@
  * - **Walking is querying.** {@link walk} answers `out`, `in` and a bounded
  *   `reach` through {@link https://jsr.io/@yaks/graph | @yaks/graph}'s Storage
  *   seam, and {@link traverse} teaches
- *   {@link https://jsr.io/@yaks/sql | @yaks/sql} the two clauses it declines on
- *   its own — `.reaches[cites,<=3]=p1` as a recursive walk, `.edges[cites]!` as
- *   the rider that carries a result's links back with it.
+ *   {@link https://jsr.io/@yaks/sql | @yaks/sql} the two clauses it cannot
+ *   answer on its own — `.cites[<=3]->p1` as a recursive walk over one
+ *   relation, `.edges[cites]!` as the rider that carries a result's links back
+ *   with it.
  *
  * It imports no platform API, so the same code runs on a server, in a worker,
  * and in a browser tab.

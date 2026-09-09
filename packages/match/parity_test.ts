@@ -11,8 +11,9 @@ import { assertEquals, assertThrows } from '@std/assert'
 import { Database } from '@db/sqlite'
 import type { Bundle } from './read.ts'
 import { storage } from '@yaks/sqlite'
-import { type Derived, Unsupported } from '@yaks/sql'
+import { type Derived, type Extension, Unsupported } from '@yaks/sql'
 import { compute, derived as taskDerived, taskDoc } from '@yaks/task'
+import { edgeDoc, edgeKeywords, link, traverse } from '@yaks/edge'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { matcher } from './match.ts'
 import { bundles, corpus, DEAD, NOW, shop } from './harness.ts'
@@ -23,7 +24,12 @@ import { bundles, corpus, DEAD, NOW, shop } from './harness.ts'
 // Straight into storage: this test is about READS, so it skips the graph's
 // apply() and puts the rows where the two evaluators can be held against each
 // other.
-let loaded = (v: Vocab, rows: Bundle[], derived: Derived = {}) => {
+let loaded = (
+  v: Vocab,
+  rows: Bundle[],
+  derived: Derived = {},
+  extend: Extension[] = [],
+) => {
   let db = new Database(':memory:')
   db.exec('pragma foreign_keys = on')
   let s = storage(
@@ -32,7 +38,7 @@ let loaded = (v: Vocab, rows: Bundle[], derived: Derived = {}) => {
       exec: (q) => db.exec(q),
     },
     v,
-    { now: NOW, derived },
+    { now: NOW, derived, extend },
   )
   s.install()
   s.tx((tx) => tx.patch(rows))
@@ -216,6 +222,81 @@ Deno.test('a query neither side can answer is declined by both', () => {
   for (let q of ['.near=b1', '.edges!', '.refs!', '.reviews~=deep']) {
     assertThrows(() => s.read(q), Error, 'cannot compile', q)
     assertThrows(() => matcher(q, shop), Error, 'cannot compile', q)
+  }
+})
+
+// ---- the walk over edges, both evaluators ----------------------------------
+//
+// A relation is an edge BUNDLE (`edge{from,to}` beside the tag), and a walk over
+// one is @yaks/edge's to compile for SQL and this package's to answer in memory.
+// The same chain, both directions, the cap, and a cycle.
+
+let blog: Vocab = loadVocab([edgeDoc, {
+  $defs: {
+    entity: {
+      type: 'object',
+      wire: false,
+      properties: { num: { type: 'number', stamped: true } },
+    },
+    post: {
+      type: 'object',
+      kind: true,
+      properties: { title: { type: 'string' } },
+    },
+    cites: { type: 'object', relation: true },
+    links: { type: 'object', relation: 'linked' },
+  },
+}], [edgeKeywords])
+
+let posts: Bundle[] = [
+  ...['p1', 'p2', 'p3', 'p4', 'p9'].map((eid, i) => ({
+    entity: { eid, num: i + 1 },
+    post: { title: eid },
+  })),
+  link('p2', 'cites', 'p1'),
+  link('p3', 'cites', 'p2'),
+  link('p4', 'cites', 'p3'),
+  link('p1', 'cites', 'p4'), // the ring closes
+  link('p9', 'links', 'p1'),
+]
+
+let WALKS = [
+  '.cites->p1',
+  '.cites[<=1]->p1',
+  '.cites[<=2]->p1',
+  '.cites[<=1]<-p1',
+  '.cites<-p1',
+  '.cites->P-1',
+  '.linked->p1',
+  '.linked<-p1',
+  '.cites->p9',
+  '.cites->p1 .post.title=p3',
+]
+
+Deno.test('a walk over edges selects the same entities', () => {
+  let s = loaded(blog, posts, {}, [traverse(blog)])
+  for (let q of WALKS) {
+    let mine = eids(matcher(q, blog, { now: NOW })(posts)).sort()
+    assertEquals(mine, eids(fromSql(s, q)).sort(), `query: ${q}`)
+  }
+  // and the agreement is not vacuous
+  assertEquals(eids(matcher('.cites[<=2]->p1', blog)(posts)).sort(), [
+    'p2',
+    'p3',
+  ])
+  assertEquals(eids(matcher('.cites<-p1', blog)(posts)).sort(), [
+    'p1',
+    'p2',
+    'p3',
+    'p4',
+  ])
+})
+
+Deno.test('a walk over nothing declares is declined by both', () => {
+  let s = loaded(blog, posts, {}, [traverse(blog)])
+  for (let q of ['.admires->p1', '.post.title->p1']) {
+    assertThrows(() => s.read(q), Error, 'cannot compile', q)
+    assertThrows(() => matcher(q, blog), Error, 'cannot compile', q)
   }
 })
 

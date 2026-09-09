@@ -16,6 +16,7 @@ import {
   type Range,
   type Refs,
   type Value,
+  type Walk,
 } from '@yaks/query'
 import { identity, Unsupported } from '@yaks/sql'
 import type { Assoc, Hop, Vocab } from '@yaks/vocab'
@@ -199,6 +200,85 @@ let refs = (ctx: Ctx, r: Refs): Test => {
     cols.some(([c, p]) => comp(b, c)?.[p] === r.value)
 }
 
+// The WALK, in memory: `.cites[<=3]->p1` selects the bundles that reach the
+// target through at most `depth` hops of one step; `<-` the bundles the target
+// reaches. A step is one (from, to) pair a bundle states — an edge bundle
+// wearing the relation's tag (`edge{from,to}` beside `cites{}`), or an entity's
+// own reference column (`fork.from` reads as this entity → the entry) — read
+// off the same vocabulary @yaks/edge and @yaks/sql read. The closure is one
+// breadth-first fixpoint per bundle set, capped like the CTE, then a set lookup
+// per candidate; the target itself belongs only when a cycle leads back to it.
+let relation = (v: Vocab, name: string): string | undefined =>
+  v.comp('edge') && v.all.find((tag) => {
+    let kw = v.comp(tag)?.keywords
+    let said = kw?.edge ?? kw?.relation
+    return said === true ? tag == name : said === name
+  })
+
+type Step = (b: Bundle) => [string, string] | undefined
+let stepOf = (ctx: Ctx, w: Walk): Step => {
+  let spelled = `.${w.path.join('.')}`
+  let tag = w.path.length == 1 ? relation(ctx.v, w.path[0]) : undefined
+  if (tag) {
+    return (b) => {
+      let e = wears(b, tag) ? comp(b, 'edge') : undefined
+      return typeof e?.from == 'string' && typeof e?.to == 'string'
+        ? [e.from, e.to]
+        : undefined
+    }
+  }
+  let hops: Hop[] = []
+  try {
+    hops = ctx.v.aim(w.path.join('.'))
+  } catch { /* an unknown word: refused below */ }
+  let h = hops[0]
+  if (hops.length != 1 || !h.prop || !isRef(ctx.v, h)) {
+    throw new Unsupported(
+      'a walk',
+      `${spelled} is neither a relation nor a reference column`,
+      BY,
+    )
+  }
+  return (b) => {
+    let v = comp(b, h.comp)?.[h.prop]
+    return typeof v == 'string' ? [b.entity.eid, v] : undefined
+  }
+}
+
+let walk = (ctx: Ctx, w: Walk): Test => {
+  let step = stepOf(ctx, w)
+  let [here, there] = w.dir == '->' ? [1, 0] : [0, 1]
+  let id = identity('eid', w.target)
+  let reached = new WeakMap<Index, Set<string>>()
+  let closure = (among: Index): Set<string> => {
+    let out = new Set<string>()
+    let t = among.of(w.target) ??
+      among.list.find((b) =>
+        b.entity.num != null && id?.nums.includes(b.entity.num)
+      )
+    if (!t) return out
+    let pairs = among.list.flatMap((b) => {
+      let p = step(b)
+      return p ? [p] : []
+    })
+    let frontier = new Set([t.entity.eid])
+    for (let d = 0; d < w.depth && frontier.size; d++) {
+      let next = new Set<string>()
+      for (let p of pairs) {
+        if (frontier.has(p[here]) && !out.has(p[there])) next.add(p[there])
+      }
+      for (let e of next) out.add(e)
+      frontier = next
+    }
+    return out
+  }
+  return (b, among) => {
+    let hit = reached.get(among)
+    if (!hit) reached.set(among, hit = closure(among))
+    return hit.has(b.entity.eid)
+  }
+}
+
 // The operators a cardinality test compares its count with.
 let COUNTS: Record<string, string> = {
   '=': '=',
@@ -299,6 +379,7 @@ export let clause = (ctx: Ctx, c: Clause): Test => {
     return (b, among) => ts.some((t) => t(b, among))
   }
   if (c.kind == 'refs') return refs(ctx, c)
+  if (c.kind == 'walk') return walk(ctx, c)
   if (c.kind == 'pred') {
     if (c.path[0] == 'kind' && c.path.length == 1) {
       return kindScope(ctx, flat(c.value))

@@ -63,7 +63,7 @@ In dependency order:
 - **[@yaks/edge](./edge)** — links between entities as a component: the
   `edge{from, to}` an entity carries, the id it derives from the sentence it
   states, the relations a vocabulary declares, and traversal — as a walk over
-  storage, and as the `@yaks/sql` extension compiling `.reaches`/`.edges`.
+  storage, and as the `@yaks/sql` extension compiling `.cites->p1`/`.edges`.
 - **[@yaks/key](./key)** — the values an entity answers to, as entities: the
   `key{of, value}` carrier tagged by your own kinds (`isbn`, `email`, `alias`),
   each key named by `sha256("<kind>|<value>")` — so a value is unique within its
@@ -182,8 +182,8 @@ on its own:
   page, a worker, or a test that has no database to install.
 - `@yaks/edge` adds relationships the same way search was added: a component
   your entities carry, and a clause compiler registered with `@yaks/sql` — so
-  `.reaches[cites,<=3]=p1` is answered by the database rather than by a walk in
-  your own code.
+  `.cites[<=3]->p1` is answered by the database rather than by a walk in your
+  own code.
 - `@yaks/effects` is the other end of a write: the graph's phases decide what a
   batch MEANS, and this decides what to do about it once it is true — a
   notification, a receipt, a spawned process — registered per component, run

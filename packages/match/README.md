@@ -152,8 +152,10 @@ A question this package cannot answer **exactly** throws
 both has one decline contract and one `catch`. Every decline happens when the
 query is compiled, before a bundle is read:
 
-- **`.near`** — nearest-neighbour needs vectors; **`.edges!`** and `.reaches`
-  need a stored link table. None of that rides in a bundle.
+- **`.near`** — nearest-neighbour needs vectors; **`.edges!`** asks for links to
+  be delivered beside an answer. Neither rides in a bundle. (The walk,
+  `.cites[<=3]->p1` or `.fork.from->S-7`, IS answered: a fixpoint over the
+  bundle set, the edge bundles or the reference column being the steps.)
 - **`.count!`, `.distinct=`, `.tally=`** — an aggregate is a row shape, not a
   selection of entities. Count what comes back instead.
 - **A computed column** (`persist: false` in the vocabulary) **nobody

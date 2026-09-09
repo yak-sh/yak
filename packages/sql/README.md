@@ -148,9 +148,10 @@ carry is still asked in one statement.
 
 Advanced directives it cannot yet reach throw **`Unsupported`** rather than
 answer almost-right — a caller catches it to fall back to a JS matcher or to
-report the gap. The current gaps are the `.edges`/`.reaches` graph walks, and
-the `.near` KNN unless a vector package claims it — `@yaks/embedding` does,
-ordering included (`bind.ts` has the exact list).
+report the gap. The current gaps are the `.edges` rider and the edge-typed walk
+(`.cites->p1`, claimed by `@yaks/edge`), and the `.near` KNN unless a vector
+package claims it — `@yaks/embedding` does, ordering included (`bind.ts` has the
+exact list).
 
 ## Naming entities
 

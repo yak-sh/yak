@@ -25,11 +25,17 @@
 // marks computed (`persist: false`) reads through the DERIVED hook or, absent a
 // registration, DECLINES — the binder never invents a value it cannot read.
 //
+// The WALK (`.fork.from->S-7`) compiles here when its path is a reference
+// column — one recursive CTE over that column (./walk.ts). A path naming a
+// RELATION is @yaks/edge's: the extension seam is consulted first, and that
+// package owns the edge table and the tags an edge wears, which this vocabulary
+// does not carry.
+//
 // What is NOT here declines LOUDLY (an `Unsupported` throw, never a silent
-// wrong answer): the `.edges`/`.reaches` graph walks and the lazy partition they
-// read (their edge-nature normalization is application logic the vocab does not
-// carry), and the `.near` KNN, which needs vectors this package does not hold —
-// `@yaks/embedding` registers as an extension and answers it, ordering included.
+// wrong answer): the `.edges` rider (edge-typed, so @yaks/edge's), a walk over
+// neither a relation nor a reference column, and the `.near` KNN, which needs
+// vectors this package does not hold — `@yaks/embedding` registers as an
+// extension and answers it, ordering included.
 
 import type {
   After,
@@ -46,6 +52,7 @@ import type {
   Refs,
   Tally,
   Value,
+  Walk,
 } from '@yaks/query'
 import { bare } from '@yaks/query'
 import type { Assoc, Hop, Vocab } from '@yaks/vocab'
@@ -69,6 +76,7 @@ import { type Dialect, sqlite, type Tag, tagOf } from './sqlite.ts'
 import type { Derived } from './derived.ts'
 import type { Extension, Site } from './extend.ts'
 import { type Identity, identity } from './ident.ts'
+import { walkSql } from './walk.ts'
 
 // Thrown for a clause the binder cannot express EXACTLY. A caller catches it to
 // fall back to another evaluator, or to report the gap. `by` names the package
@@ -491,6 +499,28 @@ let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Cond => {
   })
 }
 
+// The column-shaped walk: `.fork.from->S-7` follows one reference column of one
+// component, so the step is that component's own rows read as (owner, referent)
+// pairs. A path that is a relation name was an extension's to claim first; one
+// that is neither is refused, never answered empty.
+let walk = (ctx: Ctx, c: Walk): Cond => {
+  let spelled = `.${c.path.join('.')}`
+  let hops: Hop[] = []
+  try {
+    hops = ctx.v.aim(c.path.join('.'))
+  } catch { /* an unknown word: refused below */ }
+  let h = hops[0]
+  if (hops.length != 1 || !h.prop || !isRef(ctx.v, h.comp, h.prop)) {
+    throw new Unsupported(
+      'a walk',
+      `${spelled} is neither a relation nor a reference column`,
+    )
+  }
+  let step = `select "${h.comp}"."entity" as "from", "${h.comp}"."${h.prop}"` +
+    ` as "to" from ${ctx.d.table(h.comp)}`
+  return walkSql(ctx.d.ownerKey('entity'), c, step)
+}
+
 // One filter clause to a condition. Directives are stripped before this runs.
 let clause = (ctx: Ctx, c: Clause): Cond => {
   let ext = extended(ctx, c)
@@ -503,6 +533,7 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
   if (c.kind == 'and') return and(...c.clauses.map((x) => clause(ctx, x)))
   if (c.kind == 'or') return or(...(c as Or).clauses.map((x) => clause(ctx, x)))
   if (c.kind == 'refs') return refsUnion(ctx, c)
+  if (c.kind == 'walk') return walk(ctx, c)
   if (c.kind == 'pred') {
     if (c.path[0] == 'kind' && c.path.length == 1) {
       return kindScope(ctx, flat(c.value))
@@ -535,9 +566,9 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
 
 // The directives, read off the top-level clause list. Order/limit/after ride a
 // membership; count/distinct/tally reshape it; fields/`*` project it;
-// near/edges/reaches decline unless an extension claims them, in which case
-// they filter like any clause.
-let UNREACHED = new Set(['near', 'edges', 'reaches'])
+// near/edges decline unless an extension claims them, in which case they filter
+// like any clause.
+let UNREACHED = new Set(['near', 'edges'])
 let DIRECTIVES = new Set([
   'order',
   'near',
@@ -549,7 +580,6 @@ let DIRECTIVES = new Set([
   'limit',
   'after',
   'edges',
-  'reaches',
 ])
 let find = <T extends Clause>(cs: Clause[], kind: string): T | undefined =>
   cs.find((c) => c.kind == kind) as T | undefined
