@@ -173,6 +173,80 @@ slow('the runner ignores imported-only session partitions', () => {
 })
 
 slow(
+  'retired operators stay idle through starts, boot recovery, and comments',
+  async () => {
+    let db = freshDb()
+    let role = uuid(), old = uuid(), calls = 0
+    apply(db, [
+      { eid: role, name: 'role', comp: { state: 'running' } },
+      { eid: old, name: 'runner', comp: { name: 'old' } },
+    ])
+    let clock = () => new Date('2026-09-09T12:00:00Z')
+    let service = managedCodex({
+      db,
+      cast: () => {},
+      clock,
+      transport: {
+        run: () => {
+          calls++
+          return Promise.resolve(result([{
+            type: 'message',
+            content: [{ type: 'output_text', text: 'done' }],
+          }]))
+        },
+      },
+      tools: () => Promise.resolve(tools([])),
+      prepare: () => Promise.resolve(),
+    })
+    try {
+      for (let binding of [{ role }, { operator: true }]) {
+        for (let state of ['fresh', 'ready', 'expired', 'leased', 'settled']) {
+          let sid = session(db)
+          apply(db, [{ eid: sid, name: 'session', comp: binding }])
+          if (state != 'fresh') {
+            let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
+            let generation = append(db, sid, [{
+              generation: { through: input, provider: 'codex', model: 'test' },
+            }]).eids[0]
+            if (state != 'ready') {
+              let time = state == 'expired'
+                ? new Date(clock().getTime() - 1_000)
+                : clock()
+              let lease = takeEntry(db, generation, old, 100, () => time)!
+              if (state == 'settled') {
+                settleGeneration(db, lease.token)
+                append(db, sid, [{ attention: {} }])
+              }
+            }
+          }
+          let before = readEntries(db, sid)
+          await service.start(sid, noCodeJob())
+          await service.sweep()
+          if (state != 'fresh') {
+            let task = uuid(), comment = uuid()
+            apply(db, [
+              { eid: task, name: 'task', comp: {} },
+              { eid: task, name: 'claim', comp: { session: sid } },
+              { eid: comment, name: 'comment', comp: { target: task } },
+            ])
+            service.comment(task, comment)
+            service.comment(sid, comment)
+            await service.sweep()
+          }
+          assertEquals(readEntries(db, sid), before, state)
+          assertEquals(calls, 0, state)
+        }
+      }
+      await service.start(session(db), noCodeJob())
+      assertEquals(calls, 1, 'ordinary headless sessions still run')
+    } finally {
+      await service.settle()
+      db.close()
+    }
+  },
+)
+
+slow(
   'managed Codex starts, runs tools, and settles in ordered entries',
   async () => {
     let db = freshDb()

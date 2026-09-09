@@ -53,7 +53,6 @@ export type ManagedJob = {
   instruction: string
   session_id: string
   task?: string
-  role?: string
   repo?: { path: string; base_branch: string }
   tree?: string
   branch?: string
@@ -410,6 +409,14 @@ export let managedCodex = (options: ManagedCodexOptions) => {
   let draining = false
   let expiry: ReturnType<typeof setTimeout> | undefined
 
+  // Old operator generations remain readable history. Every admission path,
+  // including lease recovery, must leave them idle after roles are retired.
+  let retired = (eid: string) =>
+    !!db.prepare(
+      `select 1 from session where ${OWNED}
+       and (role is not null or operator = 1)`,
+    ).get(eid)
+
   // While an operation is in flight, keep its lease fresh so a restart never
   // mistakes a turn that outlives the base TTL for a dead runner and reclaims
   // or fails an operation this process is still running. Renewal leaves the
@@ -546,7 +553,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       kind: 'generation' | 'call'
     }[] = []
     for (let lease of expiredLeases(db, clock().toISOString())) {
-      if (flights.has(lease.eid)) continue
+      if (flights.has(lease.eid) || retired(lease.session)) continue
       if (
         db.prepare(`select 1 from generation where ${OWNED}`).get(lease.eid) &&
         db.prepare(
@@ -603,6 +610,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
   }
 
   let runnable = (session: string) => {
+    if (retired(session)) return false
     let row = sessionRow(db, session)
     // A no-code Session has nothing to prepare, so the absence of a cwd is
     // its durable ready fact. `prepared` only bridges workspace preparation
@@ -619,11 +627,15 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     expiry = undefined
     if (draining || !db.isOpen) return
     let leases = db.prepare(
-      `select o.eid as eid, l.until from lease l
+      `select o.eid as eid, l.until,
+              (select eid from entity where id = e.session) as session
+       from lease l join entry e on e.entity = l.entity
        join entity o on o.id = l.entity order by l.until`,
     )
-      .all() as { eid: string; until: string }[]
-    let next = leases.find((row) => !flights.has(row.eid))
+      .all() as { eid: string; until: string; session: string }[]
+    let next = leases.find((row) =>
+      !flights.has(row.eid) && !retired(row.session)
+    )
     if (!next) return
     let delay = Math.max(0, Date.parse(next.until) - clock().getTime())
     expiry = setTimeout(() => {
@@ -798,6 +810,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
   }
 
   let start = (eid: string, job: ManagedJob) => {
+    if (retired(eid)) return Promise.resolve()
     let running = starting.get(eid)
     if (running) return running
     running = startOne(eid, job).finally(() => starting.delete(eid))
@@ -879,15 +892,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       | { via: string | null }
       | undefined
     if (made?.via == eid) return true
-    let row = db.prepare(
-      `select (select eid from entity where id = s.role) as role
-       from session s where s.${OWNED}`,
-    ).get(eid) as
-      | { role: string | null }
-      | undefined
-    // Role reconciliation owns direct role inbox wake-ups. Claimed work is
-    // narrower and belongs to the holder immediately, role or not.
-    if (target == eid && row?.role) return true
+    if (retired(eid)) return true
     attention(db, eid, cast, runner)
     sweep()
     return true
