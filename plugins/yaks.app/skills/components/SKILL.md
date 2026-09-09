@@ -424,8 +424,8 @@ These are the names, all of them:
     persona pin plan process project prompt proposed provider published
     quarantined reads
     reasoning recall recalled redaction references repo report requires
-    response result resume review role run runner runtime satisfies session
-    setting settled shelf signin space spawn stderr stop_request
+    response result resume review role run runner runtime satisfies service
+    session setting settled shelf signin space spawn stderr stop stop_request
     subscription supersedes supervises task task_context timeout tool
     updated usage venture verifier wake wants web worked worktree yield
 

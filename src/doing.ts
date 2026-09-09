@@ -64,7 +64,7 @@ import {
   tidy,
   watched,
 } from './sessions.ts'
-import { watchProcesses } from './processes.ts'
+import { superviseServices, watchProcesses } from './processes.ts'
 import { nativeSweep, noticeAccepted } from './tmux.ts'
 import { codexClock } from './codex_auth.ts'
 import { retryCredential } from './managed_codex.ts'
@@ -686,6 +686,16 @@ export let bootDoing = (d: Doing, syncSoon: () => void) => {
   // pidfiles and stamp the ones that are already gone. Sessions are only one
   // kind of process; this covers every other one the graph tracks.
   watchProcesses(cast)
+
+  // The desired half (T-35328): a `service` row says a program is wanted, and
+  // this pass makes the world match it — spawn what is missing, respawn what
+  // ended per its `restart` with a bounded backoff, take down what carries a
+  // `stop`. Effects are data, so there is no start/stop route: the row IS the
+  // request. Nothing here supervises this process; exactly one supervisor sits
+  // above it, and today that is systemd (processes.ts refuses effectsd's own
+  // command). The tick runs after the watcher above, which is what stamps an
+  // ending — this pass reads that word and never guesses one.
+  tick('supervise', superviseServices(cast), 2_000)
 
   // The lease half of the same reconcile: a session that ended abnormally
   // never ran its wrap, so its claim leaked and the board lies about who is

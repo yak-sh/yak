@@ -52,7 +52,7 @@ Deno.test('a nested tally is the inner one, and the outer resumes', () => {
 // a fix has to move — and until somebody moves it, the number that must not
 // grow. The same number twice below, in-process and over HTTP, because the
 // route is an adapter and adds nothing of its own.
-let ONE = 143
+let ONE = 145
 
 Deno.test('reading one entity is the statements it costs', async () => {
   let db = freshDb()

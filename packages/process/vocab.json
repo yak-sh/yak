@@ -1,6 +1,31 @@
 {
   "title": "process",
   "$defs": {
+    "service": {
+      "type": "object",
+      "kind": true,
+      "before": ["process"],
+      "description": "desired state: a program that should be running. It rides the same entity its `process` lands on — the service says what is wanted, the process says what is, and `stop` beside it says the wanting is over",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "the command line to run, argv joined by a space — the supervisor's own copy, kept here rather than read back off the process, because relaunching needs what we said and not what the kernel remembers"
+        },
+        "cwd": {
+          "type": "string",
+          "description": "where to run it; absent means the supervisor's own cwd"
+        },
+        "restart": {
+          "type": "string",
+          "enum": ["never", "on-failure", "always"],
+          "description": "what to do when it ends, in systemd's three words; absent means never, so an unstated row runs once and stays down"
+        },
+        "attempts": {
+          "type": "integer",
+          "description": "how many times the supervisor has respawned it after an ending — the backoff climbs with this number, and a run that outlives the longest backoff starts the tally over"
+        }
+      }
+    },
     "process": {
       "type": "object",
       "kind": true,
@@ -22,7 +47,7 @@
     },
     "exit": {
       "type": "object",
-      "description": "the process is over — written once, and never taken back",
+      "description": "the process is over — never rewritten, and cleared only by the batch that lands the next attempt on a supervised row",
       "properties": {
         "code": {
           "type": "integer",

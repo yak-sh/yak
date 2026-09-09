@@ -1,8 +1,9 @@
-// The two components this package ships, as one vocabulary document to load
+// The three components this package ships, as one vocabulary document to load
 // beside your own.
 //
-//   process{pid, command, cwd}   a program running on a host
-//   exit{code}                   it is over, and how
+//   service{command, cwd, restart, attempts}   a program that SHOULD run
+//   process{pid, command, cwd}                 a program that IS running
+//   exit{code}                                 it is over, and how
 //
 // A process is an ENTITY, not a field on whatever asked for it. That is the
 // whole idea: the same row describes a provider CLI a session is a transcript
@@ -15,11 +16,22 @@
 // and a supervisor that must relaunch keeps its own desired state rather than
 // reading them back.
 //
+// `service` is the desired half of the same row — effects are data, so a
+// supervisor acts on a row that says a program is wanted, never on a call. It
+// rides the SAME entity the process lands on: one row is one supervised thing,
+// and reading it tells the whole story (what we want, what is running, how the
+// last attempt ended, how many times it has flapped). Down is spelled `stop`,
+// the marker @yaks/session already has for "nothing is performed after this" —
+// a bare mark on the row itself, so there is no second entity to reap and no
+// reference to type.
+//
 // `exit` is separate from `process` rather than a nullable column on it,
 // because their absence means different things: a process with no `exit` is
 // running (or was, when we last looked), and that is the query a boot
-// reconcile makes. Stamping it is a one-way door — a row that has exited is
-// history, and a new run is a new entity.
+// reconcile makes. It is never rewritten; on a supervised row the batch that
+// lands the next attempt clears it, so nothing ever reads a fresh pid beside a
+// stale ending. An unsupervised process keeps its stamp forever, and a new run
+// of it is a new entity.
 //
 // Output is not declared here. A line a process wrote is `content{body,
 // source}` with `source` naming the process — the same word @yaks/session uses
@@ -30,11 +42,29 @@ import type { Entity } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 
+/** The component wanting a program to run. */
+export let SERVICE = 'service'
+
 /** The component naming a running program. */
 export let PROCESS = 'process'
 
 /** The component stamping that it is over. */
 export let EXIT = 'exit'
+
+/** What to do when a service's process ends — systemd's three words. */
+export type Restart = 'never' | 'on-failure' | 'always'
+
+/** A program that should be running. */
+export type Service = {
+  /** the command line to run, argv joined by a space */
+  command?: string | null
+  /** where to run it; absent means the supervisor's own cwd */
+  cwd?: string | null
+  /** what to do when it ends; absent means never */
+  restart?: Restart | null
+  /** how many times it has been respawned after an ending */
+  attempts?: number | null
+}
 
 /** A tracked process. */
 export type Process = {

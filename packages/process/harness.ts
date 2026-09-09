@@ -20,6 +20,22 @@ export let host: Vocab = loadVocab([processDoc, sessionDoc, modelDoc])
 export let tracked = (): Graph =>
   graph({ storage: ram(host), vocab: host, plugins: [processes()] })
 
+/** Wait for a fact by polling it, never by guessing a duration. The budget is
+ * only there to fail instead of hang. */
+export let until = async <T>(
+  fact: () => T | Promise<T>,
+  label = 'it',
+  timeout = 5000,
+): Promise<T> => {
+  let deadline = Date.now() + timeout
+  while (true) {
+    let v = await fact()
+    if (v) return v
+    if (Date.now() >= deadline) throw new Error(`until: timed out on ${label}`)
+    await new Promise((go) => setTimeout(go, 5))
+  }
+}
+
 /** A pid that certainly is not running: a child spawned, waited on, and gone.
  * The number is free, so this is the closest a test gets to a dead process. */
 export let gone = async (): Promise<number> => {

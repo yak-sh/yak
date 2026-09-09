@@ -100,12 +100,14 @@ In dependency order:
   reacts to it, its lock on any entity (`claim`), and the `conflict` written
   down when two sessions want one thing.
 - **[@yaks/process](./process)** — a running program as an entity, so whatever
-  needs one points at it instead of keeping a pid: `process{pid, command, cwd}`,
-  `exit{code}`, and its output as @yaks/session's `content{body, source}`. Three
-  entry points over one loop — launch a child detached, adopt one by pid,
-  re-adopt every unfinished row at boot — and the same rows as a session's
-  `shell`, `wait` and `stop` tools, so a long tool call answers with the process
-  instead of blocking on it.
+  needs one points at it instead of keeping a pid: `process{pid, command, cwd}`
+  for the one that is running, `service{command, cwd, restart, attempts}` for
+  the one that should be, `exit{code}`, and its output as @yaks/session's
+  `content{body, source}`. Four entry points over one loop — launch a child
+  detached, adopt one by pid, re-adopt every unfinished row at boot, and
+  supervise the wanted ones from a host's tick — plus the same rows as a
+  session's `shell`, `wait` and `stop` tools, so a long tool call answers with
+  the process instead of blocking on it.
 - **[@yaks/model](./model)** — the seam between a conversation and the model
   that serves it: provider-neutral items, one request and reply shape, and the
   `provider`, `model` and `tool` entities a graph keeps about serving.

@@ -1,6 +1,24 @@
 {
   "name": "process",
   "comps": {
+    "service": {
+      "kind": true,
+      "before": [
+        "process"
+      ],
+      "cols": {
+        "command": "text",
+        "cwd": "text",
+        "restart": {
+          "enum": [
+            "never",
+            "on-failure",
+            "always"
+          ]
+        },
+        "attempts": "number"
+      }
+    },
     "process": {
       "kind": true,
       "cols": {
@@ -8,6 +26,7 @@
         "command": "text",
         "cwd": "text"
       }
-    }
+    },
+    "stop": {}
   }
 }

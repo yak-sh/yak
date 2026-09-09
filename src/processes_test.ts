@@ -1,7 +1,8 @@
-// The fleet's binding of @yaks/process (T-35323): the two verbs the package
-// asks a host for, answered against a :memory: graph. What is under test is the
-// SEAM — a bundle lowered into apply(), the one query that finds unfinished
-// processes, and the boot reconcile stamping an ending nobody was there to see.
+// The fleet's binding of @yaks/process (T-35323, T-35328): the three verbs the
+// package asks a host for, answered against a :memory: graph. What is under
+// test is the SEAM — a bundle lowered into apply(), the query that finds
+// unfinished processes, the join that reads desired state whole, and the boot
+// reconcile stamping an ending nobody was there to see.
 // The launcher itself is the package's own test (packages/process/run_test.ts);
 // no child is spawned here.
 import { assert, assertEquals } from '@std/assert'
@@ -78,6 +79,48 @@ Deno.test('running() is every process with no exit and no session of its own', a
   assert(eids.includes(live))
   assert(!eids.includes(done))
   assert(!eids.includes(owned))
+})
+
+Deno.test('services() reads desired state whole, and only what is there', async () => {
+  let want = uuid(), up = uuid(), ended = uuid(), stopped = uuid()
+  let store = processStore(cast)
+  await store.apply([
+    { entity: { eid: want }, service: { command: 'sleep 1' } },
+    {
+      entity: { eid: up },
+      service: { command: 'sleep 2', restart: 'always' },
+      process: { pid: 11 },
+    },
+    {
+      entity: { eid: ended },
+      service: { command: 'sleep 3', restart: 'on-failure', attempts: 2 },
+      process: { pid: 12 },
+    },
+    {
+      entity: { eid: stopped },
+      service: { command: 'sleep 4' },
+      process: { pid: 13 },
+    },
+  ])
+  await store.apply([{ entity: { eid: ended }, exit: { code: 7 } }])
+  await store.apply([{ entity: { eid: stopped }, stop: {} }])
+  let rows = Object.fromEntries(
+    (await store.services()).map((b) => [b.entity.eid, b]),
+  )
+  // The three absences the supervisor decides on: no process yet, no ending
+  // yet, no stop.
+  assertEquals(rows[want].process, undefined)
+  assertEquals(rows[want].service, {
+    command: 'sleep 1',
+    cwd: null,
+    restart: null,
+    attempts: null,
+  })
+  assertEquals(rows[up].exit, undefined)
+  assertEquals(rows[up].stop, undefined)
+  assertEquals(rows[ended].exit, { code: 7 })
+  assertEquals((rows[ended].service as Record<string, unknown>).attempts, 2)
+  assertEquals(rows[stopped].stop, {})
 })
 
 Deno.test('the boot reconcile stamps a process that died while we were away', async () => {

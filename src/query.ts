@@ -392,10 +392,14 @@ let sessionTwin = (owners: string[]) =>
 // `.pid` and `.cwd` already mean the SESSION's — the reading every board and
 // CLI filter has — and `.command` means the bash entry's. `.process.pid=`
 // reaches the newcomer, and `.process!` still asks which entities are one.
+// The service that wants one (T-35328) yields its two namesakes for the same
+// reason; `.restart` and `.attempts` are its own words, so they stay bare.
 let bareShy = new Set([
   'process.pid',
   'process.cwd',
   'process.command',
+  'service.cwd',
+  'service.command',
   'fork.from',
   'accept.body',
   'edge.from',

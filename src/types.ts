@@ -548,6 +548,12 @@ export let comps: Record<string, Record<string, PropType>> = {
     transcript: 'text',
   },
   satisfies: {},
+  service: {
+    command: 'text',
+    cwd: 'text',
+    restart: { enum: ['never', 'on-failure', 'always'] },
+    attempts: 'number',
+  },
   session: {
     id: 'text',
     cwd: 'text',
@@ -590,6 +596,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   stderr: {
     text: 'body',
   },
+  stop: {},
   stop_request: {
     target: { eid: 'session', death: 'cascade' },
   },
@@ -921,7 +928,6 @@ export let kindOrder = [
   'pane',
   'person',
   'plan',
-  'process',
   'project',
   'board',
   'email',
@@ -931,6 +937,8 @@ export let kindOrder = [
   'review',
   'comment',
   'runner',
+  'service',
+  'process',
   'session',
   'signin',
   'space',

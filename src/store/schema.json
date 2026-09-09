@@ -133,6 +133,14 @@
   },
   {
     "kind": "exec",
+    "sql": "create table if not exists \"service\" (\n    entity integer primary key references entity(id),\n    \"command\" text,\n    \"cwd\" text,\n    \"restart\" text,\n    \"attempts\" real\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"stop\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
     "sql": "create table if not exists \"space\" (\n    entity integer primary key references entity(id),\n    \"slug\" text,\n    \"home\" integer references entity(id)\n  );"
   },
   {
@@ -658,6 +666,30 @@
     "table": "process",
     "col": "cwd",
     "sql": "alter table process add column \"cwd\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "service",
+    "col": "command",
+    "sql": "alter table service add column \"command\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "service",
+    "col": "cwd",
+    "sql": "alter table service add column \"cwd\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "service",
+    "col": "restart",
+    "sql": "alter table service add column \"restart\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "service",
+    "col": "attempts",
+    "sql": "alter table service add column \"attempts\" real"
   },
   {
     "kind": "addColumn",

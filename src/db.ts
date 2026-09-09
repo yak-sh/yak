@@ -1062,6 +1062,10 @@ export let derived = [
   // A tracked process (T-35323, @yaks/process): {pid number, command/cwd text}
   // — three nullable columns on an entity-keyed spine, so it derives.
   'process',
+  // Desired state for one (T-35328): {command/cwd text, restart word, attempts
+  // number}, and the bare mark that says the wanting is over. Both derive.
+  'service',
+  'stop',
   // The platform directory (D-32318): nullable text/real columns and {eid}
   // references by death word, so all three derive.
   'space',
@@ -5298,7 +5302,13 @@ export let apply = (
       if (name == 'entry' && !comp?.session) {
         throw new Error(`entry ${shortId(eid)} needs a session`)
       }
-      if (name != 'entry' && !appends.has(eid)) {
+      // This half of the rule is about ATTACHING a fact, and a null attaches
+      // nothing: the entity here has no entry (the immutable check above owns
+      // that case), so clearing a log word off it removes something that
+      // cannot be there. A supervisor's relaunch batch carries exactly such a
+      // clear (`exit: null` beside the new `process`, T-35328), and demanding
+      // an entry for it would be asking for a transcript nobody wrote.
+      if (name != 'entry' && comp != null && !appends.has(eid)) {
         throw new Error(`${name} ${shortId(eid)} needs entry in its batch`)
       }
     }
