@@ -1,14 +1,4 @@
-// The Responses API as a `Model`: neutral items in, one streamed exchange over
-// fetch, neutral items out. The stream is read to its end and only the
-// completed items are kept — a daemon records what a model said and asked
-// for, not how it arrived — so this file owns no deltas and no watcher.
-//
-// Two facts about the wire live here and nowhere else. Every request streams
-// (`stream: true`) because the Codex backend answers nothing else. Every
-// request says whether the provider may keep it (`store`): the public API can,
-// and then a reply's id anchors the next request; the Codex backend refuses
-// anything but `store: false`, so a caller there replays the conversation.
-
+// Neutral model items in and out; transport.ts alone owns the Responses wire.
 import {
   type Item,
   type Model,
@@ -19,6 +9,14 @@ import {
 import type { VocabDoc } from '@yaks/vocab'
 import type { Credential } from './credential.ts'
 import doc from './vocab.json' with { type: 'json' }
+import {
+  request,
+  ResponseError,
+  type ResponseOptions,
+  type ResponseRequest,
+  type RunOptions,
+  transport,
+} from './transport.ts'
 
 /** The one comp this provider stamps on an ask it answered:
  * `openai{response_id}`. Load it beside the conversation's vocabulary. */
@@ -27,12 +25,10 @@ export let openaiDoc: VocabDoc = doc
 export let OPENAI_COMP = 'openai'
 
 /** How the model is reached. */
-export type Options = {
+export type Options = Omit<ResponseOptions, 'credentials'> & RunOptions & {
   credential: () => Credential | Promise<Credential>
-  fetch?: typeof fetch
-  /** the provider keeps the reply, so its id can anchor the next request.
-   * The Codex backend refuses `true`. */
-  store?: boolean
+  /** Retry a rejected credential once with a fresh bearer. */
+  refresh?: () => Credential | Promise<Credential>
 }
 
 type Frame = Record<string, unknown>
@@ -74,17 +70,15 @@ export let input = (items: Item[]): unknown[] =>
   items.map((i) => shape[i.kind](i))
 
 /** The whole request body. */
-export let body = (req: Request, store = false): Frame => ({
-  model: req.model,
-  ...req.instructions ? { instructions: req.instructions } : {},
-  input: input(req.items),
-  tools: req.tools.map((t) => ({ type: 'function', strict: false, ...t })),
-  ...req.effort ? { reasoning: { effort: req.effort } } : {},
-  ...req.anchor ? { previous_response_id: req.anchor } : {},
-  include: ['reasoning.encrypted_content'],
-  store,
-  stream: true,
-})
+export let body = (req: Request, store = false): ResponseRequest =>
+  request({
+    model: req.model,
+    ...req.instructions ? { instructions: req.instructions } : {},
+    input: input(req.items),
+    tools: req.tools.map((t) => ({ type: 'function', strict: false, ...t })),
+    ...req.effort ? { reasoning: { effort: req.effort } } : {},
+    ...req.anchor ? { previous_response_id: req.anchor } : {},
+  }, store)
 
 /** Completed output items as neutral items; reasoning and anything else the
  * API adds are not part of the conversation and are dropped. */
@@ -106,98 +100,6 @@ export let items = (done: Frame[]): Item[] => {
     }
   }
   return out
-}
-
-let frame = (block: string): Frame | undefined => {
-  let data = block.split(/\r?\n/)
-    .filter((line) => line.startsWith('data:'))
-    .map((line) => line.slice(5).trimStart())
-    .join('\n')
-  if (!data || data == '[DONE]') return undefined
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(data)
-  } catch {
-    throw new ModelError('malformed_stream', 'malformed SSE data')
-  }
-  return record(parsed) ? parsed : undefined
-}
-
-/** The events of a server-sent event stream, one parsed frame at a time. */
-export let frames = async function* (
-  stream: ReadableStream<Uint8Array>,
-): AsyncGenerator<Frame> {
-  let reader = stream.getReader()
-  let decoder = new TextDecoder()
-  let pending = ''
-  while (true) {
-    let part = await reader.read()
-    pending += decoder.decode(part.value, { stream: !part.done })
-    let blocks = pending.split(/\r?\n\r?\n/)
-    pending = blocks.pop() ?? ''
-    for (let block of blocks) {
-      let f = frame(block)
-      if (f) yield f
-    }
-    if (part.done) break
-  }
-  let last = pending.trim() && frame(pending)
-  if (last) yield last
-}
-
-// The short machine word an error body or event carries, when it has one.
-let codeOf = (value: unknown): string | undefined => {
-  if (!record(value)) return undefined
-  let error = record(value.error) ? value.error : value
-  let code = error.code
-  return typeof code == 'string' && /^[\w.:-]{1,64}$/.test(code)
-    ? code
-    : undefined
-}
-
-let reasonOf = (value: unknown): string | undefined => {
-  if (!record(value)) return undefined
-  let error = record(value.error) ? value.error : value
-  return typeof error.message == 'string' ? error.message : undefined
-}
-
-let refused = async (response: Response): Promise<never> => {
-  let text = await response.text()
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch { /* not JSON: the status is the word */ }
-  let reason = reasonOf(parsed)
-  throw new ModelError(
-    codeOf(parsed) ?? `http_${response.status}`,
-    `HTTP ${response.status}${reason ? ` — ${reason}` : ''}`,
-  )
-}
-
-// Read the stream to its end: the completed items, and the completion frame
-// that names the reply and the serving model.
-let drain = async (
-  stream: ReadableStream<Uint8Array>,
-): Promise<{ done: Frame[]; completed: Frame }> => {
-  let done: Frame[] = []
-  let completed: Frame | undefined
-  let ended: Frame | undefined
-  for await (let f of frames(stream)) {
-    if (f.type == 'response.output_item.done' && record(f.item)) {
-      done.push(f.item)
-    } else if (f.type == 'response.completed' && record(f.response)) {
-      completed = f.response
-    } else if (
-      f.type == 'response.failed' || f.type == 'response.incomplete' ||
-      f.type == 'error'
-    ) ended = f
-  }
-  if (!completed) {
-    let status = str(ended?.type, 'disconnected').replace('response.', '')
-    let inner = record(ended?.response) ? ended!.response : ended
-    throw new ModelError(codeOf(inner) ?? status, `response ${status}`)
-  }
-  return { done, completed }
 }
 
 /**
@@ -232,40 +134,27 @@ export let responses = (opts: Options): Model =>
     },
   })
 
-let ask = (opts: Options) => async (req: Request): Promise<Reply> => {
-  let auth: Credential
-  try {
-    auth = await opts.credential()
-  } catch (e) {
-    throw new ModelError('no_credential', (e as Error).message)
-  }
-  let headers = new Headers({
-    'content-type': 'application/json',
-    accept: 'text/event-stream',
-    authorization: `Bearer ${auth.token}`,
+let ask = (opts: Options) => {
+  let client = transport({
+    ...opts,
+    credentials: { get: opts.credential, refresh: opts.refresh },
+    // The Model previously made one attempt; retries are caller policy.
+    retries: opts.retries ?? 0,
   })
-  if (auth.account) headers.set('chatgpt-account-id', auth.account)
-  let go = opts.fetch ?? fetch
-  let response: Response
-  try {
-    response = await go(`${auth.base.replace(/\/$/, '')}/responses`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body(req, opts.store)),
-    })
-  } catch (e) {
-    throw new ModelError(
-      'transport',
-      `transport failed: ${(e as Error).message}`,
-    )
+  return async (req: Request): Promise<Reply> => {
+    try {
+      let out = await client.run(body(req, opts.store), {
+        signal: opts.signal,
+        event: opts.event,
+      })
+      return {
+        id: str(out.response.id),
+        model: out.model,
+        items: items(out.items),
+      }
+    } catch (error) {
+      if (!(error instanceof ResponseError)) throw error
+      throw new ModelError(error.code ?? error.kind, error.message)
+    }
   }
-  if (!response.ok) return refused(response)
-  if (!response.body) throw new ModelError('no_stream', 'no stream')
-  let { done, completed } = await drain(response.body)
-  let reply: Reply = {
-    id: str(completed.id),
-    model: str(completed.model, req.model),
-    items: items(done),
-  }
-  return reply
 }

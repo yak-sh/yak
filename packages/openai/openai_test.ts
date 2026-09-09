@@ -112,7 +112,10 @@ Deno.test('a streamed reply is read to its end', async () => {
           content: [{ type: 'output_text', text: 'done' }],
         },
       },
-      { type: 'response.completed', response: { id: 'r1', model: 'm-2' } },
+      {
+        type: 'response.completed',
+        response: { id: 'r1', model: 'm-2', status: 'completed' },
+      },
     ),
   )
   let model = responses({ credential: () => codex, fetch: fetcher })
@@ -201,4 +204,61 @@ Deno.test('a credential comes from the environment or a Codex auth.json', async 
     'k',
   )
   await assertRejects(() => credential(env({}), read)(), Error, 'no credential')
+})
+
+Deno.test('the Model shares refresh, redacted frame hooks, store, and anchor policy', async () => {
+  let attempts = 0
+  let seen: unknown[] = []
+  let model = responses({
+    credential: () => ({ ...codex, token: 'old-key' }),
+    refresh: () => ({ ...codex, token: 'new-key' }),
+    store: true,
+    redact: true,
+    event: (frame) => seen.push(frame.delta),
+    fetch: (_url, init) => {
+      assertEquals(JSON.parse(String(init?.body)).store, true)
+      if (++attempts == 1) {
+        return Promise.resolve(new Response('', { status: 401 }))
+      }
+      assertEquals(
+        new Headers(init?.headers).get('authorization'),
+        'Bearer new-key',
+      )
+      return Promise.resolve(
+        new Response(sse(
+          { type: 'response.output_text.delta', delta: 'new-key' },
+          {
+            type: 'response.completed',
+            response: { id: 'r1', model: 'm', status: 'completed' },
+          },
+        )),
+      )
+    },
+  })
+  let reply = await model(req)
+  assertEquals(seen[0], '[redacted]')
+  assertEquals(model.mark!(reply), { openai: { response_id: 'r1' } })
+  assertEquals(model.anchor!(model.mark!(reply)), 'r1')
+  assertEquals(
+    responses({ credential: () => codex }).anchor!(model.mark!(reply)),
+    undefined,
+  )
+})
+
+Deno.test('the Model maps the shared watchdog to ModelError', async () => {
+  let model = responses({
+    credential: () => codex,
+    stallMs: 20,
+    fetch: (_url, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () =>
+          reject(new DOMException('aborted', 'AbortError')))
+      }),
+  })
+  let error = await assertRejects(
+    () => model(req),
+    ModelError,
+    'transport stalled',
+  )
+  assertEquals(error.code, 'stalled')
 })

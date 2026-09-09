@@ -32,7 +32,6 @@ export {
 } from './credential.ts'
 export {
   body,
-  frames,
   input,
   items,
   OPENAI_COMP,
@@ -40,3 +39,21 @@ export {
   type Options,
   responses,
 } from './responses.ts'
+
+export {
+  CREDENTIAL_FAULT,
+  type CredentialSource,
+  frames,
+  type RateLimits,
+  ResponseError,
+  type ResponseEvent,
+  type ResponseFault,
+  type ResponseItem,
+  type ResponseOptions,
+  type ResponseRequest,
+  type ResponseResult,
+  type ResponseUsage,
+  type RunOptions,
+  transport,
+  type TransportCredential,
+} from './transport.ts'
