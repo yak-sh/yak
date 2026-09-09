@@ -129,8 +129,19 @@ Deno.test('mail: the Worker account carries the send when MAIL_ACCOUNT is unset'
 // The graph inbox is an address in the FLEET's mail namespace, not a spelling
 // of its own: src/mailaddr.ts is what the tasks server's sweep routes by, and
 // the two must name the same mailbox or the report lands nowhere.
+//
+// TASKS_MAIL_DOMAIN is process-global and belongs to whichever file claims it
+// — src/mail_test.ts sets it to bot.test to be hermetic about its own
+// namespace — so the fleet's namespace is read here the way life reads it,
+// with no override in the environment, whatever else shares this process.
 Deno.test('the graph inbox is the fleet address the sweep routes', () => {
-  assertEquals(GRAPH, canon(fleetAddress('task')))
+  let had = Deno.env.get('TASKS_MAIL_DOMAIN')
+  Deno.env.delete('TASKS_MAIL_DOMAIN')
+  try {
+    assertEquals(GRAPH, canon(fleetAddress('task')))
+  } finally {
+    if (had != null) Deno.env.set('TASKS_MAIL_DOMAIN', had)
+  }
 })
 
 // The binding, faked: what it was handed, and a refusal on demand — the

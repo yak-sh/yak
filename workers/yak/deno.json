@@ -1,0 +1,3 @@
+{
+  "_": "This directory's membership in the repo's one deno.json `workspace`, spelled as a deno config so deno stops reading package.json for it. The file is deliberately empty otherwise: the kernel is not a JSR package (no name, no exports, so `deno publish` skips it) and its imports resolve through the root import map. What it buys is the warning it removes — a member known only by a package.json with no `version` made deno print `Linked package ignored because package.json was missing version field` on every `task` invocation (T-35343), and dropping the member instead stops deno's config discovery at package.json, which silently costs this directory the repo's fmt settings and the import map. package.json says why it has no version."
+}
