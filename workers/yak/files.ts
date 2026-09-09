@@ -16,6 +16,7 @@
 // default entrypoint, so no request from the internet arrives here — a caller
 // has to be this Worker.
 import { r2Blobs } from '../../src/blobs_r2.ts'
+import type { Blobs } from '../../src/store/blobs.ts'
 import { keepable, purge, tagsOf } from './cache.ts'
 import type { App } from './directory.ts'
 import { bound, type Env } from './env.ts'
@@ -89,6 +90,20 @@ let missing = (keep: Record<string, string>) =>
     headers: { 'content-type': 'text/plain; charset=utf-8', ...keep },
   })
 
+// The app-relative path of its server source: `main` out of either wrangler
+// spelling, `worker.js` where it names none. Both spellings are asked for at
+// once — an app carries at most one, so the miss is unavoidable and paying for
+// it twice over is not.
+let mainOf = async (blobs: Blobs, prefix: string) => {
+  let [jsonc, json] = await Promise.all([
+    blobs.read(`${prefix}/wrangler.jsonc`),
+    blobs.read(`${prefix}/wrangler.json`),
+  ])
+  let config = jsonc ?? json
+  if (!config) return WORKER
+  return parse(new TextDecoder().decode(config)).config.main ?? WORKER
+}
+
 // The address the purge door answers at. A POST, so it can never be confused
 // with a file: only GET and HEAD are cached, so this request runs the
 // entrypoint every time — which is exactly what a purge needs, since the purge
@@ -139,18 +154,14 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // away, and asking whether the file is there before asking for it paid that
   // trip twice for every file the app serves.
   let key = keyed(prefix, path)
-  // Server source is not a public asset, even when `main` names a nested
-  // build output. Do this behind the file cache so warm assets need no config
-  // lookup; app_files and releases purge this app's entries on changes.
-  if (/\.(?:js|mjs)$/.test(key)) {
-    let config = await blobs.read(prefix + '/wrangler.jsonc') ??
-      await blobs.read(prefix + '/wrangler.json')
-    let main = config
-      ? parse(new TextDecoder().decode(config)).config.main
-      : undefined
-    if (key == prefix + '/' + (main ?? WORKER)) return missing(keep)
-  }
+  // Server source is not a public asset, even when `main` names a nested build
+  // output. apps.ts `MANIFEST` already refuses the default `/worker.js` at the
+  // gateway; this covers the CONFIGURED path, which only the config names.
+  // Started here and awaited after the file, so the lookup rides in the same
+  // round trip as the bytes rather than in front of every script an app serves.
+  let source = /\.(?:js|mjs)$/.test(key) ? mainOf(blobs, prefix) : null
   let bytes = await blobs.read(key)
+  if (source && key == keyed(prefix, `/${await source}`)) return missing(keep)
   if (!bytes && pretty(path)) {
     key = keyed(prefix, '/')
     bytes = await blobs.read(key)

@@ -3,8 +3,8 @@
 // tenant ask for another tenant's data.
 import { migrationMetadata } from './app_migrations.ts'
 // The upload wrapper is platform-owned, never the app's `main`.
-export const WRAPPER = '__yak_entry.js'
-export const WORKER = 'worker.js'
+export let WRAPPER = '__yak_entry.js'
+export let WORKER = 'worker.js'
 
 export type ResourceType = 'd1' | 'r2_bucket' | 'vectorize'
 export type Bound = {
