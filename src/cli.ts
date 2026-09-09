@@ -999,7 +999,7 @@ let finish =
     let sid = me()
     if (status == 'wip') {
       if (!sid) throw new UsageError('wip: run under a session')
-      await mutate(workClaimMutation(id, sid, { cwd: Deno.cwd() }))
+      await mutate(workClaimMutation(id, sid, { cwd: Deno.cwd(), caller: sid }))
       let row = await needed(id)
       if (comment) {
         let sess = await sessionRow(sid)
@@ -1452,16 +1452,16 @@ let claim = async (got: Got) => {
   if (!session) {
     throw new Error('task claim <id> <session> (or run under a session)')
   }
+  let namedSession = await sessionArg(session)
   await mutate(
     workClaimMutation(
       id,
-      session,
-      { cwd: Deno.cwd(), approve: got.flags.has('--approve') },
+      namedSession,
+      { cwd: Deno.cwd(), caller: me(), approve: got.flags.has('--approve') },
     ),
   )
   // Resolution is writer-owned; read only after the take for its human receipt.
   let row = await needed(id)
-  let namedSession = await sessionArg(session)
   print(`${idOf(row)} claimed by ${namedSession}`)
 }
 

@@ -13,6 +13,7 @@ Deno.env.set('DB_PATH', ':memory:')
 let { apply, human, mutate } = await import('./db.ts')
 let { addSource, clearSources } = await import('./source.ts')
 let { bareDb } = await import('./testdb.ts')
+let { writeSession } = await import('./session_store.ts')
 
 let task = (
   eid: string,
@@ -279,6 +280,97 @@ Deno.test('claim_work mints an unknown stable uuid and resumes an exact session'
     Number(cell(db, 'select count(*) as n from journal_tx')?.n),
     journal,
   )
+})
+
+Deno.test('claim_work: an operator cannot move an existing session cwd or pid', () => {
+  let { db, project } = world()
+  for (let managed of [false, true]) {
+    let target = uuid(), session = uuid(), sid = uuid()
+    apply(db, [
+      ...task(target, project),
+      {
+        eid: session,
+        name: 'session',
+        comp: { id: sid, cwd: '/tree', pid: 123 },
+      },
+    ])
+    if (managed) {
+      writeSession(db, session, {
+        origin: 'managed',
+        branch: `session/${human(db, session)}`,
+      })
+    }
+    take(db, target, human(db, session))
+    assertEquals(holder(db, target), session)
+    for (let table of ['session', 'worktree']) {
+      assertEquals(
+        cell(
+          db,
+          `select cwd from ${table}
+          where entity = (select id from entity where eid = ?)`,
+          session,
+        ),
+        { cwd: '/tree' },
+      )
+    }
+    for (let table of ['session', 'runtime']) {
+      assertEquals(
+        cell(
+          db,
+          `select pid from ${table}
+          where entity = (select id from entity where eid = ?)`,
+          session,
+        ),
+        { pid: 123 },
+      )
+    }
+  }
+})
+
+Deno.test('client writes cannot relocate an owned managed tree; server regrow can', () => {
+  let { db } = world()
+  let session = uuid()
+  apply(db, [{ eid: session, name: 'session', comp: { id: uuid() } }])
+  for (let branch of [`session/${human(db, session)}`, null, 'borrowed']) {
+    writeSession(db, session, { origin: 'managed', cwd: '/tree', branch })
+    let owned = branch != 'borrowed'
+    for (let name of ['session', 'worktree']) {
+      apply(db, [{ eid: session, name, comp: { cwd: '/main' } }])
+      for (let table of ['session', 'worktree']) {
+        assertEquals(
+          cell(
+            db,
+            `select cwd from ${table}
+            where entity = (select id from entity where eid = ?)`,
+            session,
+          ),
+          { cwd: owned ? '/tree' : '/main' },
+        )
+      }
+    }
+    if (owned) {
+      apply(db, [{ eid: session, name: 'worktree', comp: null }])
+      assertEquals(
+        cell(
+          db,
+          `select cwd from session
+          where entity = (select id from entity where eid = ?)`,
+          session,
+        ),
+        { cwd: '/tree' },
+      )
+    }
+    writeSession(db, session, { cwd: '/regrown' })
+    assertEquals(
+      cell(
+        db,
+        `select cwd from worktree
+        where entity = (select id from entity where eid = ?)`,
+        session,
+      ),
+      { cwd: '/regrown' },
+    )
+  }
 })
 
 Deno.test('claim_work atomically graduates a source Session at its existing identity', () => {

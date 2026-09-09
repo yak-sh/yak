@@ -5339,6 +5339,34 @@ export let apply = (
     changes = dualSpawn(db, changes)
     changes = dualFacet(db, changes, 'worktree')
     changes = dualFacet(db, changes, 'runtime')
+    // Client hooks and old claim clients cannot relocate a managed tree.
+    // Check under the writer lock, after alias projection, so neither cwd
+    // spelling (nor a worktree delete) bypasses ownership. Server regrow is
+    // still allowed. A null branch is a swept tree we own, as in owns().
+    if (!server) {
+      let owned = new Set<string>()
+      for (let c of changes) {
+        if (c.name != 'session' && c.name != 'worktree') continue
+        if (
+          prep(
+            db,
+            `select 1 from session s
+           join entity e on e.id = s.entity
+           join worktree w on w.entity = s.entity
+           where e.eid = ? and s.origin = 'managed'
+             and (w.branch is null or w.branch = ''
+               or w.branch = 'session/S-' || e.num)`,
+          ).get(c.eid)
+        ) owned.add(c.eid)
+      }
+      changes = changes.flatMap((c) => {
+        if (!owned.has(c.eid)) return [c]
+        if (c.name == 'worktree' && c.comp == null) return []
+        if ((c.name != 'session' && c.name != 'worktree') || !c.comp) return [c]
+        let { cwd: _cwd, ...comp } = c.comp
+        return Object.keys(comp).length ? [{ ...c, comp }] : []
+      })
+    }
     changes = mirrorLineage(db, changes)
     // A write that engages a source-materialized entity graduates it — hydrates
     // its source comps into this batch (D-17790). After the dual* transforms so
@@ -7279,7 +7307,9 @@ let claimWork = (
       ).get(target) as { eid: string | null } | undefined
       let seid = session?.eid ?? uuid()
       let comp: Record<string, unknown> = session ? {} : { id: ask.session }
-      if (ask.cwd !== undefined && session?.cwd != ask.cwd) comp.cwd = ask.cwd
+      // Claims establish a new identity, not its process coordinates. Only
+      // the session's own hooks refresh an existing cwd/pid.
+      if (!session && ask.cwd !== undefined) comp.cwd = ask.cwd
       if (actor?.eid && !session?.actor) comp.actor = actor.eid
       let changes: Change[] = [
         ...(Object.keys(comp).length

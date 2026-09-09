@@ -1387,6 +1387,35 @@ Deno.test('sessionFor: task context fills only a missing actor', () => {
   )
 })
 
+Deno.test('sessionFor: hooks cannot relocate an owned managed worktree', () => {
+  for (let branch of ['session/S-1', null, 'borrowed']) {
+    let g = all.map((r) =>
+      r.eid != S ? r : {
+        ...r,
+        comps: {
+          ...r.comps,
+          session: { ...r.comps.session, origin: 'managed' },
+          worktree: { cwd: '/w', branch },
+        },
+      }
+    )
+    let changes = sessionFor(g, 'sess-x', '/main', 4242).changes
+    assertEquals(
+      changes,
+      branch == 'borrowed'
+        ? [
+          { eid: S, name: 'session', comp: { cwd: '/main', pid: 4242 } },
+          { eid: S, name: 'worktree', comp: { cwd: '/main' } },
+          { eid: S, name: 'runtime', comp: { pid: 4242 } },
+        ]
+        : [
+          { eid: S, name: 'session', comp: { pid: 4242 } },
+          { eid: S, name: 'runtime', comp: { pid: 4242 } },
+        ],
+    )
+  }
+})
+
 Deno.test('me: provider ids name external sessions; launchers name managed ones', () => {
   let env = (vals: Record<string, string>) => (k: string) => vals[k]
   assertEquals(
@@ -1485,7 +1514,11 @@ Deno.test('claimChanges points at the session entity', () => {
 
 Deno.test('workClaimMutation exposes only the guarded writer intent', () => {
   assertEquals(
-    workClaimMutation('T-3', 'worker', { approve: true, cwd: '/work' }),
+    workClaimMutation('T-3', 'worker', {
+      approve: true,
+      cwd: '/work',
+      caller: 'worker',
+    }),
     {
       mutation: 'claim_work',
       target: 'T-3',
@@ -1494,6 +1527,20 @@ Deno.test('workClaimMutation exposes only the guarded writer intent', () => {
       cwd: '/work',
     },
   )
+})
+
+Deno.test('workClaimMutation: claiming for another session sends no process coordinates', () => {
+  for (let caller of ['operator', undefined]) {
+    assertEquals(
+      workClaimMutation('T-3', 'worker', { caller, cwd: '/main' }),
+      {
+        mutation: 'claim_work',
+        target: 'T-3',
+        session: 'worker',
+        mode: 'ready',
+      },
+    )
+  }
 })
 
 Deno.test('spawnChanges: request speaks canonical and rollback frames', () => {

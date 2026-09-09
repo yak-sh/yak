@@ -2348,7 +2348,12 @@ export let sessionFor = (
   let s = all.find((r) => r.comps.session && r.comps.session.id == session)
   let eid = s?.eid ?? uuid()
   let comp: Record<string, unknown> = s ? {} : { id: session }
-  if (cwd && s?.comps.session.cwd != cwd) comp.cwd = cwd
+  // Like sessions.ts owns(): a swept branch is still ours to regrow. Hooks
+  // may refresh a provider pid, but never relocate a tree the server cut.
+  let tree = s?.comps.worktree
+  let owned = s?.comps.session.origin == 'managed' && tree &&
+    (!tree.branch || tree.branch == `session/S-${s.num}`)
+  if (cwd && !owned && s?.comps.session.cwd != cwd) comp.cwd = cwd
   if (pid && s?.comps.session.pid != pid) comp.pid = pid
   for (let k of ['agent_type', 'source', 'transcript', 'turn'] as const) {
     if (self?.[k] && s?.comps.session[k] != self[k]) comp[k] = self[k]
@@ -2436,13 +2441,14 @@ export let claimChanges = (
 export let workClaimMutation = (
   target: string,
   session: string,
-  opts: { cwd?: string; approve?: boolean } = {},
+  opts: { cwd?: string; caller?: string; approve?: boolean } = {},
 ): WorkClaimMutation => ({
   mutation: 'claim_work',
   target,
   session,
   mode: opts.approve ? 'approve' : 'ready',
-  ...(opts.cwd ? { cwd: opts.cwd } : {}),
+  // The caller's process coordinates say nothing about another session.
+  ...(opts.cwd && opts.caller == session ? { cwd: opts.cwd } : {}),
 })
 
 // One launch spec, however it is spelled: the four fields a spawn carries,
