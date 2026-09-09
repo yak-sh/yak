@@ -2,14 +2,12 @@
 // one content entity, attachments point to it, and image dimensions belong to
 // the shared content. No test opens the owner's graph.
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import { DatabaseSync } from 'node:sqlite'
 import { sha as hash } from './sha.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 Deno.env.set('HOME', await Deno.makeTempDir())
 let { imageSize, landBlob, serveBlob } = await import('./blob.ts')
 let { apply, snapshot } = await import('./db.ts')
-let { open } = await import('./store/sqlite.ts')
 let { db } = await import('./live_db.ts')
 
 // A minimal PNG: 8-byte signature, IHDR length+tag, then width/height as
@@ -157,148 +155,6 @@ Deno.test('doc bodies deduplicate behind their wire projection', () => {
     c.name == 'doc' && (c.eid == a || c.eid == b)
   )
   assertEquals(docs.map((c) => c.comp?.body), [body, body])
-})
-
-Deno.test('legacy inline doc bodies migrate atomically to shared content', async () => {
-  let path = await Deno.makeTempFile({ suffix: '.db' })
-  let raw = new DatabaseSync(path)
-  let a = crypto.randomUUID(), b = crypto.randomUUID()
-  raw.exec(`
-    create table entity (
-      id integer primary key, eid text unique not null, num integer unique
-    );
-    create table doc (
-      entity integer primary key references entity(id),
-      title text not null, body text not null default ''
-    );
-    insert into entity (id, eid, num)
-      values (1, '${a}', 1), (2, '${b}', 2);
-    insert into doc (entity, title, body)
-      values (1, 'one', 'shared body'), (2, 'two', 'shared body');
-  `)
-  raw.close()
-
-  let migrated = open(path)
-  try {
-    assertEquals(
-      migrated.prepare(
-        `select lower(type) type from pragma_table_info('doc')
-         where name = 'body'`,
-      ).get(),
-      { type: 'integer' },
-    )
-    assertEquals(
-      migrated.prepare(
-        `select count(distinct d.body) n from doc d join entity e on e.id = d.entity
-         where e.eid in (?, ?)`,
-      ).get(a, b),
-      { n: 1 },
-    )
-    assertEquals(
-      migrated.prepare(
-        `select d.title, d.body from doc_value d join entity e on e.id = d.entity
-         where e.eid in (?, ?) order by d.title`,
-      ).all(a, b),
-      [{ title: 'one', body: 'shared body' }, {
-        title: 'two',
-        body: 'shared body',
-      }],
-    )
-    assertEquals(
-      migrated.prepare(
-        `select e.eid, e.num from blob b join entity e on e.id = b.entity
-         where e.eid = ?`,
-      ).all(hash('shared body')),
-      [{ eid: hash('shared body'), num: null }],
-    )
-    assertEquals(migrated.prepare('pragma foreign_key_check').all(), [])
-  } finally {
-    migrated.close()
-    await Deno.remove(path)
-  }
-})
-
-Deno.test('legacy attachment rows migrate to shared blob entities', async () => {
-  let path = await Deno.makeTempFile({ suffix: '.db' })
-  let raw = new DatabaseSync(path)
-  let a = crypto.randomUUID(), b = crypto.randomUUID()
-  let sha = 'ab'.repeat(32)
-  raw.exec(`
-    create table entity (
-      id integer primary key, eid text unique not null, num integer unique
-    );
-    create table blob (
-      entity integer primary key references entity(id), mime text, name text,
-      sha text, bytes integer, w integer, h integer
-    );
-    create index blob_sha on blob(sha);
-    insert into entity (id, eid, num) values (1, '${a}', 1), (2, '${b}', 2);
-    insert into blob values
-      (1, 'image/png', 'a.png', '${sha}', 24, 10, 20),
-      (2, 'image/png', 'b.png', '${sha}', 24, 10, 20);
-  `)
-  raw.close()
-  let migrated = open(path)
-  try {
-    assertEquals(
-      migrated.prepare(
-        'select count(*) n from blob join entity e on e.id = blob.entity where e.eid = ?',
-      ).get(sha),
-      { n: 1 },
-    )
-    assertEquals(
-      migrated.prepare('select count(*) n from attachment').get(),
-      { n: 2 },
-    )
-    assertEquals(
-      migrated.prepare('select count(*) n from image').get(),
-      { n: 1 },
-    )
-    let changes = snapshot(migrated).changes
-    let attachments = changes.filter((c) => c.name == 'attachment')
-    assertEquals(attachments.map((c) => c.comp?.blob), [sha, sha])
-    assertEquals(
-      migrated.prepare('pragma foreign_key_check').all(),
-      [],
-    )
-  } finally {
-    migrated.close()
-    await Deno.remove(path)
-  }
-})
-
-Deno.test('legacy attachment migration refuses missing content identity', async () => {
-  let path = await Deno.makeTempFile({ suffix: '.db' })
-  let raw = new DatabaseSync(path)
-  raw.exec(`
-    create table entity (
-      id integer primary key, eid text unique not null, num integer unique
-    );
-    create table blob (
-      entity integer primary key references entity(id), mime text, name text,
-      sha text, bytes integer, w integer, h integer
-    );
-    insert into entity (id, eid, num)
-      values (1, '${crypto.randomUUID()}', 1);
-    insert into blob values (1, 'text/plain', 'lost.txt', null, 4, null, null);
-  `)
-  raw.close()
-  assertThrows(() => open(path), Error, 'without SHA-256 content identity')
-  let unchanged = new DatabaseSync(path)
-  try {
-    assertEquals(unchanged.prepare('select count(*) n from blob').get(), {
-      n: 1,
-    })
-    assertEquals(
-      unchanged.prepare(
-        `select count(*) n from pragma_table_info('blob') where name = 'sha'`,
-      ).get(),
-      { n: 1 },
-    )
-  } finally {
-    unchanged.close()
-    await Deno.remove(path)
-  }
 })
 
 Deno.test('serveBlob refuses a non-sha path and 404s a missing blob', async () => {

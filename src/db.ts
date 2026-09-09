@@ -1357,163 +1357,6 @@ export let hasIdx = (db: Sql, name: string) =>
   !!prep(db, `select 1 from sqlite_master where type = 'index' and name = ?`)
     .get(name)
 
-// References used to repeat their representation in every column name. The
-// PropType now carries that fact alone; this is the one cutover from the old
-// spellings. A migration is history, so this list is deliberately frozen — a
-// future ref must never make an unrelated old column start moving.
-let refRenames = [
-  { table: 'task', old: 'project_eid', col: 'project' },
-  { table: 'task', old: 'assignee_eid', col: 'assignee' },
-  { table: 'role', old: 'scope_eid', col: 'scope' },
-  { table: 'layout', old: 'root_eid', col: 'root' },
-  { table: 'pane', old: 'layout_eid', col: 'layout' },
-  { table: 'pane', old: 'parent_eid', col: 'parent' },
-  { table: 'pane', old: 'content_eid', col: 'content' },
-  { table: 'card', old: 'target_eid', col: 'target' },
-  { table: 'pin', old: 'canvas_eid', col: 'canvas' },
-  { table: 'client', old: 'actor_eid', col: 'actor' },
-  { table: 'camera', old: 'client_eid', col: 'client' },
-  { table: 'camera', old: 'canvas_eid', col: 'canvas' },
-  { table: 'fold', old: 'client_eid', col: 'client' },
-  { table: 'fold', old: 'board_eid', col: 'board' },
-  { table: 'shelf', old: 'client_eid', col: 'client' },
-  { table: 'session', old: 'requested_task_eid', col: 'requested_task' },
-  { table: 'session', old: 'role_eid', col: 'role' },
-  { table: 'session', old: 'persona_eid', col: 'persona' },
-  { table: 'session', old: 'actor_eid', col: 'actor' },
-  { table: 'session', old: 'parent_eid', col: 'parent' },
-  { table: 'spawn', old: 'persona_eid', col: 'persona' },
-  { table: 'claim', old: 'session_eid', col: 'session' },
-  { table: 'subscription', old: 'actor_eid', col: 'actor' },
-  { table: 'subscription', old: 'target_eid', col: 'target' },
-  { table: 'stop_request', old: 'target_eid', col: 'target' },
-  { table: 'knock', old: 'target_eid', col: 'target' },
-  { table: 'wake', old: 'target_eid', col: 'target' },
-  { table: 'mail', old: 'target_eid', col: 'target' },
-  { table: 'mail', old: 'reply_to_eid', col: 'reply_to' },
-  { table: 'conflict', old: 'target_eid', col: 'target' },
-  { table: 'comment', old: 'target_eid', col: 'target' },
-  { table: 'persona', old: 'home_eid', col: 'home' },
-  { table: 'memory', old: 'scope_eid', col: 'scope' },
-]
-
-let renameFilter = (query: string) => {
-  let out = query
-  let names = new Map(refRenames.map((r) => [r.old, r.col]))
-  for (let [old, col] of names) {
-    let key = new RegExp(
-      `(^|[&\\s])((?:\\.[A-Za-z_]+)?\\.)${old}(?=[.!<>=~])`,
-      'g',
-    )
-    out = (out.match(/"[^"]*"|[^"]+/g) ?? [])
-      .map((part) =>
-        part.startsWith('"') ? part : part.replace(key, `$1$2${col}`)
-      )
-      .join('')
-  }
-  return out
-}
-
-// Memories and personas teach the vocabulary back to every later session, so
-// their prose is schema data too. Identifier-shaped keys all lose the suffix;
-// standalone explanations are frozen here with the cutover they name.
-let renameTeaching = (text: string) =>
-  text.replace(/\b([A-Za-z][A-Za-z0-9_]*)_eid\b/g, '$1')
-    .replaceAll('`eid`/`*_eid` values', '`eid` and reference values')
-    .replaceAll(
-      'the `_eid` sugar in `route()`',
-      'the reference property in `route()`',
-    )
-    .replaceAll(
-      'a `<name>_eid` column elsewhere',
-      'a same-named reference column elsewhere',
-    )
-
-export let migrateRefs = (db: Sql) => {
-  let renames = refRenames.filter((r) => hasCol(db, r.table, r.old))
-  let boards = hasCol(db, 'board', 'query')
-    ? prep(
-      db,
-      `select o.eid as eid, query from board b join entity o on o.id = b.entity
-       where query is not null`,
-    )
-      .all() as {
-        eid: string
-        query: string
-      }[]
-    : []
-  let staleBoards = boards.map((r) => ({ ...r, next: renameFilter(r.query) }))
-    .filter((r) => r.next != r.query)
-  let kinds = ['memory', 'persona'].filter((table) =>
-    hasCol(db, table, 'entity')
-  )
-  let teachings = hasCol(db, 'doc', 'body') && kinds.length
-    ? prep(
-      db,
-      `select o.eid as eid, d.title, d.body
-       from doc_value d join entity o on o.id = d.entity where ${
-        kinds.map((table) =>
-          `exists (select 1 from ${table} where ${table}.entity = d.entity)`
-        ).join(' or ')
-      }`,
-    ).all() as { eid: string; title: string; body: string }[]
-    : []
-  let staleDocs = teachings.map((r) => ({
-    ...r,
-    nextTitle: renameTeaching(r.title),
-    nextBody: renameTeaching(r.body),
-  })).filter((r) => r.nextTitle != r.title || r.nextBody != r.body)
-  if (!renames.length && !staleBoards.length && !staleDocs.length) return
-  db.transaction(() => {
-    for (let { table, old, col } of renames) {
-      if (hasCol(db, table, col)) {
-        throw new Error(
-          `reference migration found both ${table}.${old} and ${col}`,
-        )
-      }
-      db.exec(
-        `alter table ${sqlName(table)} rename column ${sqlName(old)} to ${
-          sqlName(col)
-        }`,
-      )
-    }
-    let writeBoard = prep(
-      db,
-      'update board set query = ? where entity = (select id from entity where eid = ?)',
-    )
-    for (let r of staleBoards) writeBoard.run(r.next, r.eid)
-    let writeDoc = prep(
-      db,
-      `update doc set title = ?, body = ?
-       where entity = (select id from entity where eid = ?)`,
-    )
-    for (let r of staleDocs) {
-      writeDoc.run(r.nextTitle, textBlob(db, r.nextBody), r.eid)
-    }
-  })
-}
-
-// Journal bytes are audit history, so the migration never rewrites them. A
-// reader translates former active keys at the boundary, keeping history and
-// replay on the vocabulary spoken by this process.
-export let canonicalChanges = (changes: Change[]): Change[] => {
-  let names = new Map(
-    refRenames.map((r) => [`${r.table}.${r.old}`, r.col]),
-  )
-  let record = (name: string, value: Record<string, unknown>) =>
-    Object.fromEntries(
-      Object.entries(value).map((
-        [key, v],
-      ) => [names.get(`${name}.${key}`) ?? key, v]),
-    )
-  return changes.map((change) => ({
-    ...change,
-    ...(change.comp && { comp: record(change.name, change.comp) }),
-    ...(change.was &&
-      { was: record(change.name, change.was) as Change['was'] }),
-  }))
-}
-
 let ddlOf = (db: Sql, name: string) =>
   (prep(db, `select sql from sqlite_master where type = 'table' and name = ?`)
     .get(name) as { sql: string } | undefined)?.sql
@@ -1692,32 +1535,6 @@ export let backfillVia = (db: Sql) => {
        )`,
     )
   }
-}
-
-// Retire the JSON journal (T-18883). Every reader and writer is on the
-// normalized tables, so the legacy `journal` (one JSON batch per row) and
-// `journal_touch` (its seek index) are dropped once the normalized log holds a
-// journal_tx for every parseable batch -- never history the new log does not
-// carry. The one torn, unparseable row (T-24020) has no normalized twin and is
-// not history anything can read, so it does not hold the drop. Guarded by table
-// presence, so every later boot is a pure read; the backup's git history keeps
-// the last JSON dumps.
-export let retireJsonJournal = (db: Sql) => {
-  if (!tableExists(db, 'journal')) return
-  let missing = (prep(
-    db,
-    `select count(*) as n from journal j
-     where json_valid(j.batch)
-       and not exists (select 1 from journal_tx t where t.id = j.rowid)`,
-  ).get() as { n: number }).n
-  if (missing) {
-    console.warn(
-      `journal: ${missing} JSON batches have no normalized row — keeping the legacy tables`,
-    )
-    return
-  }
-  db.exec('drop table if exists journal_touch; drop table if exists journal;')
-  prep(db, `delete from server_meta where k = 'journal_backfill'`).run()
 }
 
 // Is the journal keyed by spine id, every change naming one? The guard both
@@ -2923,358 +2740,10 @@ let tableExists = (db: Sql, t: string) =>
   !!prep(db, `select 1 from sqlite_master where type = 'table' and name = ?`)
     .get(t)
 
-// The graph tables the eid→id reshape reshapes (D-18866): the spine and every
-// component table. The log/derived tables (the journal, tool_call, embedding,
-// the FTS shadows) and the grave are not reshaped here: each keys on the spine
-// through its own guarded step (migrateJournalKeys, migrateTombstone,
-// migrateEmbedding) or rebuilds itself.
+// The graph tables: the spine and every component table. The log/derived
+// tables (the journal, tool_call, embedding, the FTS shadows) and the grave key
+// on the spine through their own guarded steps.
 let graphTables = () => ['entity', ...Object.keys(comps)]
-
-// What one table's copy CLEANED — the anomalies a real legacy graph carries
-// that the eid-keyed readers tolerated but the constraint-tight id-keyed schema
-// rejects (D-18866, T-18874). Each is dead or detached data, handled
-// deterministically and REPORTED (never silent — M-16612):
-//  - orphans: component rows whose owner eid has no spine row — already
-//    unreachable, so skipped.
-//  - dropped: rows with a NOT NULL reference to a deleted entity (conflict.target,
-//    result.call, a dangling edge end) — the row is ABOUT a corpse and has
-//    no valid id to carry, so the whole row goes.
-//  - nulled: NULLABLE references to a deleted entity — detached to null, the same
-//    absence an eid-keyed reader already saw through the missing join.
-type CopyReport = {
-  table: string
-  orphans: number
-  dropped: Record<string, number>
-  nulled: Record<string, number>
-}
-
-// Does an eid-bearing legacy column resolve to a live spine id? Parenthesized so
-// `not resolves(c)` reads as "does not resolve" regardless of operator precedence.
-let resolves = (col: string) =>
-  `((select id from entity where eid = o.${sqlName(col)}) is not null)`
-
-// Copy one renamed-aside legacy table's rows into its fresh id-keyed twin,
-// resolving every eid to its int id: the owner `eid`→`entity`, each `{eid}`
-// reference to the referent's id, plain scalars
-// straight across. A fresh column the legacy table predates takes its default.
-// The reverse — a legacy column the fresh DDL no longer spells (task.status,
-// project.retired_at) — rides across under its legacy type: the reshape keys
-// the graph, it never retires, and the retirement that owns the column runs
-// later in migrate(), guarded by the column's presence, and drops it when done.
-// Real-data anomalies are cleaned per the policy above and returned as counts;
-// the INSERT only carries rows whose owner and every NOT NULL reference resolve.
-let copyLegacyTable = (
-  db: Sql,
-  t: string,
-  old: string,
-): CopyReport => {
-  let legacy = prep(db, 'select name, type from pragma_table_info(?)')
-    .all(old) as { name: string; type: string }[]
-  let oldCols = new Set(legacy.map((c) => c.name))
-  let fresh = new Set(colNames(db, t))
-  let notnull = new Map(
-    (prep(db, 'select name, "notnull" as nn from pragma_table_info(?)')
-      .all(t) as { name: string; nn: number }[]).map((r) => [r.name, !!r.nn]),
-  )
-  let dst: string[] = []
-  let src: string[] = []
-  let hasOwner = false
-  let refs: { col: string; required: boolean }[] = []
-  for (let c of colNames(db, t)) {
-    if (c == 'entity') {
-      if (!oldCols.has('eid')) continue
-      hasOwner = true
-      dst.push('entity')
-      src.push('(select id from entity where eid = o.eid)')
-    } else if (!oldCols.has(c)) {
-      continue
-    } else if (isRef(t, c)) {
-      refs.push({ col: c, required: !!notnull.get(c) })
-      dst.push(sqlName(c))
-      src.push(`(select id from entity where eid = o.${sqlName(c)})`)
-    } else {
-      dst.push(sqlName(c))
-      src.push(`o.${sqlName(c)}`)
-    }
-  }
-  for (let { name, type } of legacy) {
-    if (name == 'eid' || fresh.has(name)) continue
-    db.exec(`alter table ${sqlName(t)} add column ${sqlName(name)} ${type}`)
-    dst.push(sqlName(name))
-    src.push(`o.${sqlName(name)}`)
-  }
-  let count = (where: string) =>
-    (prep(db, `select count(*) as n from ${sqlName(old)} o where ${where}`)
-      .get() as { n: number }).n
-  let report: CopyReport = { table: t, orphans: 0, dropped: {}, nulled: {} }
-  // A row survives when its owner resolves AND every NOT NULL reference resolves;
-  // `keep` accumulates those predicates and the INSERT filters by their AND.
-  let keep: string[] = []
-  if (hasOwner) {
-    report.orphans = count(`not ${resolves('eid')}`)
-    keep.push(resolves('eid'))
-  }
-  let ownerOk = hasOwner ? `${resolves('eid')} and ` : ''
-  for (let { col } of refs.filter((r) => r.required)) {
-    // Among owner-resolved rows (orphans already counted), a NOT NULL ref that
-    // points at a corpse — drop the row.
-    report.dropped[col] = count(`${ownerOk}not ${resolves(col)}`)
-    keep.push(resolves(col))
-  }
-  for (let { col } of refs.filter((r) => !r.required)) {
-    // Among rows that survive, a present nullable ref that doesn't resolve is
-    // detached to null.
-    let kept = keep.length ? `${keep.join(' and ')} and ` : ''
-    report.nulled[col] = count(
-      `${kept}o.${sqlName(col)} is not null and not ${resolves(col)}`,
-    )
-  }
-  let where = keep.length ? ` where ${keep.join(' and ')}` : ''
-  db.exec(
-    `insert into ${sqlName(t)} (${dst.join(', ')})
-     select ${src.join(', ')} from ${sqlName(old)} o${where}`,
-  )
-  return report
-}
-
-// Announce what the reshape cleaned — one stderr line per non-zero anomaly class
-// per table, so the cutover operator (and the session row's stderr tail) sees
-// exactly which dead or detached rows the migration removed or nulled. A clean
-// graph prints nothing; silence here would be the opaque migration M-16612 forbids.
-let reportMigration = (reports: CopyReport[]) => {
-  let orphans = 0, dropped = 0, nulled = 0
-  for (let r of reports) {
-    if (r.orphans) {
-      orphans += r.orphans
-      console.error(
-        `migrate: ${r.table} — skipped ${r.orphans} orphan row(s) (owner eid has no spine)`,
-      )
-    }
-    for (let [col, n] of Object.entries(r.dropped)) {
-      if (!n) continue
-      dropped += n
-      console.error(
-        `migrate: ${r.table}.${col} — dropped ${n} row(s) referencing a deleted entity (NOT NULL)`,
-      )
-    }
-    for (let [col, n] of Object.entries(r.nulled)) {
-      if (!n) continue
-      nulled += n
-      console.error(
-        `migrate: ${r.table}.${col} — nulled ${n} dangling reference(s)`,
-      )
-    }
-  }
-  if (orphans || dropped || nulled) {
-    console.error(
-      `migrate: eid→id reshape cleaned ${orphans} orphan row(s), ` +
-        `${dropped} dropped row(s), ${nulled} nulled reference(s)`,
-    )
-  }
-}
-
-// Every eid-keyed graph predates content-addressed bodies (T-18875): its doc
-// body is inline text, which the current `body integer references blob(entity)`
-// cannot hold — copied across, the text dangles against blob and the reshape's
-// foreign_key_check refuses the whole migration. So the reshape keys doc by id
-// and leaves the body text; migrateDocBodies, next in migrate(), moves the text
-// into blobs by the same guard it applies to any pre-blob doc table.
-let legacyDocDdl = `create table doc (
-  entity integer primary key references entity(id),
-  title text not null,
-  body text not null default '')`
-
-// The legacy eid→id migration (D-18866; the boot step the T-18883 cutover
-// rehearses). A db is legacy when its spine is still keyed by eid — no `id`
-// column. Reshape every graph table to the CANONICAL id-keyed shape (owner
-// `entity` int, references int), preserving the wire exactly: each entity keeps
-// its eid and takes a stable int id (its former rowid), every stored reference
-// resolves through those eids. A fresh scratch db hands us the exact target DDL
-// for each table (constraints and all), so the reshape reuses the one schema
-// definition rather than reconstructing it. One transaction, FK-deferred until
-// the whole graph is remapped, then foreign_key_check proves no reference was
-// left dangling. Idempotent: an id-keyed (or brand-new) db returns at the door.
-let migrateToIdKeys = (db: Sql, fresh?: () => Sql) => {
-  if (!tableExists(db, 'entity') || hasCol(db, 'entity', 'id')) return []
-  let scratch = scratchOf(fresh)
-  let ddlOf = (t: string) =>
-    (scratch.prepare(
-      `select sql from sqlite_master where type = 'table' and name = ?`,
-    ).get(t) as { sql: string }).sql
-  let reports: CopyReport[]
-  try {
-    reports = db.transaction(() => {
-      // The spine first, so every reference below resolves against real ids.
-      db.exec('alter table entity rename to __mig_entity')
-      db.exec(ddlOf('entity'))
-      db.exec(
-        'insert into entity (id, eid, num) select rowid, eid, num from __mig_entity',
-      )
-      db.exec('drop table __mig_entity')
-      // D-18866 fidelity: a pre-flip death lives ONLY in `tombstone` — deletion
-      // removed its `entity` row — so seeding the spine from the old entity table
-      // alone leaves every old-tombstoned eid with no id. copyLegacyTable would
-      // then NULL each nullable reference history still holds to such an eid, and
-      // DROP the whole row for a NOT NULL one — losing journal/provenance/contention
-      // records D-18866 keeps valid, and baking a two-representation split (old
-      // deaths eid-only, post-cutover deaths spine-retained). Carry every tombstone
-      // eid into the spine as a RETAINED row instead: a fresh id STRICTLY above the
-      // live max (num never recycles, so no id collision), its grave `num` kept.
-      // A dead entity now has BOTH a spine row and a tombstone row — exactly the
-      // go-forward representation apply() maintains (T-18878). The `tombstone` table
-      // is untouched (never in graphTables, so the copy loop below skips it), so
-      // refToId still refuses writes AT these graves by reading it directly — history
-      // resolves without any grave becoming writable. Guarded for a legacy db that
-      // predates the tombstone table or its num column.
-      if (hasCol(db, 'tombstone', 'eid')) {
-        let tnum = hasCol(db, 'tombstone', 'num') ? 'num' : 'null'
-        db.exec(
-          `insert into entity (id, eid, num)
-             select (select coalesce(max(id), 0) from entity)
-                      + row_number() over (order by eid),
-                    eid, ${tnum}
-               from tombstone
-              where eid not in (select eid from entity)`,
-        )
-      }
-      let reports: CopyReport[] = []
-      for (let t of graphTables()) {
-        if (t == 'entity' || !tableExists(db, t)) continue
-        db.exec(`alter table ${sqlName(t)} rename to __mig_${t}`)
-        db.exec(t == 'doc' ? legacyDocDdl : ddlOf(t))
-        reports.push(copyLegacyTable(db, t, `__mig_${t}`))
-        db.exec(`drop table __mig_${t}`)
-      }
-      return reports
-    })
-  } catch (e) {
-    scratch.close()
-    throw e
-  }
-  scratch.close()
-  let orphans = db.prepare('pragma foreign_key_check').all()
-  if (orphans.length) {
-    throw new Error(
-      `eid→id migration left ${orphans.length} dangling reference(s)`,
-    )
-  }
-  return reports
-}
-
-// The attachment table used to own both per-use metadata and the content
-// address. Split it once: each distinct SHA becomes the eid of one blob entity,
-// attachments point to it, and intrinsic image dimensions move to that shared
-// content. This runs after eid→id, so every reference is born in final form.
-let migrateBlobEntities = (db: Sql) => {
-  if (!tableExists(db, 'blob') || !hasCol(db, 'blob', 'sha')) return
-  let invalid = prep(
-    db,
-    `select count(*) n from blob
-     where sha is null or length(sha) != 64
-        or lower(sha) glob '*[^0-9a-f]*'`,
-  ).get() as { n: number }
-  if (invalid.n) {
-    throw new Error(
-      `cannot migrate ${invalid.n} blob row(s) without SHA-256 content identity`,
-    )
-  }
-  db.transaction(() =>
-    db.exec(`
-      drop index if exists blob_sha;
-      alter table blob rename to __legacy_blob;
-      create table blob (
-        entity integer primary key references entity(id),
-        bytes integer
-      );
-      create table if not exists attachment (
-        entity integer primary key references entity(id),
-        blob integer not null references entity(id),
-        mime text,
-        name text
-      );
-      create table if not exists image (
-        entity integer primary key references blob(entity),
-        w integer,
-        h integer
-      );
-      insert or ignore into entity (eid)
-        select distinct lower(sha) from __legacy_blob;
-      insert into blob (entity, bytes)
-        select e.id, max(b.bytes) from __legacy_blob b
-        join entity e on e.eid = lower(b.sha)
-        group by e.id;
-      insert into attachment (entity, blob, mime, name)
-        select b.entity, e.id, b.mime, b.name from __legacy_blob b
-        join entity e on e.eid = lower(b.sha);
-      insert into image (entity, w, h)
-        select e.id, max(b.w), max(b.h) from __legacy_blob b
-        join entity e on e.eid = lower(b.sha)
-        where b.w is not null or b.h is not null
-        group by e.id;
-      drop table __legacy_blob;
-    `)
-  )
-}
-
-// doc.body is a wire value and a storage reference. Move legacy inline text to
-// the internal blob backend atomically, keeping doc's owner rowids stable so
-// every component/reference join still addresses the same entity. FTS/gram are
-// derived and are rebuilt from the resolved projection by the current schema.
-let migrateDocBodies = (db: Sql) => {
-  if (!tableExists(db, 'doc') || !hasCol(db, 'doc', 'body')) return
-  let col = prep(
-    db,
-    `select lower(type) as type from pragma_table_info('doc') where name = 'body'`,
-  ).get() as { type: string } | undefined
-  if (col?.type == 'integer') return
-  db.transaction(() => {
-    db.exec(`
-      drop trigger if exists doc_ai;
-      drop trigger if exists doc_ad;
-      drop trigger if exists doc_au;
-      drop trigger if exists doc_fts_ai;
-      drop trigger if exists doc_fts_ad;
-      drop trigger if exists doc_fts_au;
-      drop trigger if exists doc_gram_ai;
-      drop trigger if exists doc_gram_ad;
-      drop trigger if exists doc_gram_au;
-      drop table if exists doc_fts;
-      drop table if exists doc_gram;
-      drop view if exists doc_value;
-      create table if not exists blob (
-        entity integer primary key references entity(id),
-        bytes integer
-      );
-      create table if not exists blob_text (
-        entity integer primary key references blob(entity),
-        value text not null
-      );
-      alter table doc rename to __legacy_doc;
-      create table doc (
-        entity integer primary key references entity(id),
-        title text not null,
-        body integer not null references blob(entity)
-      );
-    `)
-    let rows = prep(
-      db,
-      'select entity, title, body from __legacy_doc order by entity',
-    )
-      .all() as { entity: number; title: string; body: string }[]
-    let put = prep(db, 'insert into doc (entity, title, body) values (?, ?, ?)')
-    for (let row of rows) put.run(row.entity, row.title, textBlob(db, row.body))
-    db.exec(`
-      drop table __legacy_doc;
-      -- The pre-envelope projection ON PURPOSE: mail is created by schema,
-      -- below, and a view over a table that does not exist yet breaks every
-      -- reader between here and there (migrateRefs reads this one). The last
-      -- migration, migrateDocAddr, is what grows it the envelope.
-      create view doc_value as
-        select d.entity as rowid, d.entity, d.title, b.value as body
-        from doc d join blob_text b on b.entity = d.body;
-    `)
-  })
-}
 
 // The envelope joined the projection (T-32657): a doc_value without `addr`,
 // and the two-column doc_fts built from it, predate the change. Both are
@@ -3324,8 +2793,8 @@ export let mintEpoch = (db: Sql) =>
 // an older binary instead of letting that binary infer compatibility.
 let schemaVersion = 1
 
-// Migrate a connected handle in place: the eid→id reshape, ref migration, the
-// hand + derived schema, the additive column/index fills, and the vector index.
+// Migrate a connected handle in place: the hand + derived schema, the additive
+// column/index fills, and the vector index.
 // The schema work runs under one BEGIN IMMEDIATE and is idempotent: concurrent
 // openers serialize in SQLite, and a waiter rechecks every guard after the
 // winner commits. Returns the same handle for the one-line open() below.
@@ -3334,16 +2803,12 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
   // intermediate schema. Compile raw until the schema is final, then restore.
   let wasCaching = caching
   caching = false
-  // The legacy reshape rebuilds tables whose old foreign keys name the old
-  // spine, and the journal rekey drops parent tables whose children it keeps.
-  // This pragma must be set before BEGIN; SQLite deliberately ignores
-  // foreign_keys changes inside a transaction. Every other migration keeps FK
-  // enforcement enabled.
-  let legacy = (tableExists(db, 'entity') && !hasCol(db, 'entity', 'id')) ||
-    !journalKeyed(db)
+  // The journal rekey drops parent tables whose children it keeps. This pragma
+  // must be set before BEGIN; SQLite deliberately ignores foreign_keys changes
+  // inside a transaction. Every other migration keeps FK enforcement enabled.
+  let legacy = !journalKeyed(db)
   if (legacy) db.exec('pragma foreign_keys = off')
   try {
-    let reports: CopyReport[] = []
     let migrated = db.transaction(() => {
       // One SQLite transaction owns the schema transition. Concurrent openers
       // wait at BEGIN IMMEDIATE, then re-run the idempotent guards against the
@@ -3357,27 +2822,9 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
             `version ${schemaVersion}; upgrade the serving process`,
         )
       }
-      // The eid→id storage reshape (D-18866) runs FIRST: it reshapes an
-      // eid-keyed legacy graph to the canonical id-keyed spine every statement
-      // below assumes, so migrateRefs/schema/the backfills all see id-keyed
-      // tables. Its focused atomic boundary becomes a savepoint inside this
-      // transaction. A no-op on an already-id-keyed or brand-new db.
-      reports = migrateToIdKeys(db, fresh)
-      // Split the legacy blob table into content/attachment/image entities,
-      // minting each distinct SHA as a blob entity's eid. Runs after eid→id so
-      // every reference is born on the canonical id-keyed spine.
-      migrateBlobEntities(db)
-      // Move legacy inline doc bodies to the internal blob text backend, so
-      // doc.body becomes a content-addressed reference. FTS/gram are rebuilt
-      // from the resolved projection by the schema below.
-      migrateDocBodies(db)
-      // This must precede schema: an old table may not yet have the canonical
-      // columns named by a newly added index in the current DDL.
-      migrateRefs(db)
       migratePrompt(db)
       // Retire a doc_value/doc_fts pair that predates the mail envelope; the
-      // schema below recreates both carrying it. LAST of the migrations, since
-      // the ones above (migrateRefs) still read the view.
+      // schema below recreates both carrying it.
       migrateDocAddr(db)
       // A mirror about to be CREATED is born empty, and the boot integrity
       // check below cannot see that: count(*) over an external-content table
@@ -3585,9 +3032,6 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       migrateErrors(db)
       migrateDelivery(db)
       migrateDeliver(db)
-      // The FK-era mail rebuild (mendMail, T-4593) is retired: migrateToIdKeys
-      // rebuilds mail to the canonical ddl first, so no db can reach here still
-      // wearing the eid FK.
       // Mend the inbound letters an earlier migrateDeliver stranded in deliver{to}
       // (T-15110).
       healInboundDeliver(db)
@@ -3731,7 +3175,6 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       }
       backfillVia(db)
       backfillOpened(db)
-      retireJsonJournal(db)
       migrateJournalKeys(db, fresh)
       gcJournal(db)
       migrateJournalRefs(db)
@@ -3802,9 +3245,6 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       if (stored != schemaVersion) db.version = schemaVersion
       return db
     }, true)
-    // Announce cleanup only after the encompassing schema transaction commits;
-    // a later migration failure must not report data whose reshape rolled back.
-    reportMigration(reports)
     return migrated
   } finally {
     if (legacy) db.exec('pragma foreign_keys = on')
@@ -3871,8 +3311,8 @@ export let freshStats = (db: Sql) => {
 // an OLD db that predates a newly-derived column needs it. They are spliced in
 // right after the derived table creates, before the index realization that may
 // name such a column. Additive only: the historical one-time reshapes
-// (migrateToIdKeys, board→project, the backfills/retirements) are no-ops on a
-// fresh db and never captured — the live graph is already past them, and
+// (board→project, the backfills/retirements) are no-ops on a fresh db and
+// never captured — the live graph is already past them, and
 // "anything shapier needs the owner" (M-17876).
 export let schemaDdl = (real: Sql): SchemaOp[] => {
   let recorded: string[] = []
@@ -7189,9 +6629,8 @@ export type JournalEntry = {
 // (comp: null — a component removal, or entity death when component='entity')
 // or `upsert` (comp rebuilt from its present after-image field rows, each
 // JSON-decoded, in field order; an empty component has no field rows and
-// rebuilds as {}). canonicalChanges keeps a forward-renamed ref column reading
-// under its current name, exactly as the JSON reader did. The one thing the
-// JSON batch carried that this does NOT is `was` — apply()'s per-column CAS
+// rebuilds as {}). The one thing the JSON batch carried that this does NOT is
+// `was` — apply()'s per-column CAS
 // guard, a write-time precondition and never history (D-18861: canonical rows
 // do not duplicate before-values). No reader reads `was` back (historyLine
 // shows comp keys, delta column-merges, inverseBatch recomputes its own via
@@ -7215,7 +6654,7 @@ let rebuildChanges = (db: Sql, rows: ChangeRow[]): Change[] => {
      from journal_field jf left join blob_text bt on bt.entity = jf.ref
      where jf.change = ? and jf.present = 1 order by jf.ordinal`,
   )
-  return canonicalChanges(rows.map((ch) => {
+  return rows.map((ch) => {
     if (ch.operation == 'remove') {
       return { eid: ch.eid, name: ch.component, comp: null }
     }
@@ -7228,7 +6667,7 @@ let rebuildChanges = (db: Sql, rows: ChangeRow[]): Change[] => {
       }[]
     ) comp[f.field] = f.text ?? JSON.parse(f.value ?? 'null')
     return { eid: ch.eid, name: ch.component, comp }
-  }))
+  })
 }
 
 // One journaled batch reconstructed whole (all eids) or, with `eid`, screened
