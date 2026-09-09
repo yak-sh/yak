@@ -6,9 +6,9 @@
 // provenance, not storage, decides the trust. Server-only.
 import { parseHTML } from 'linkedom'
 import { type Change } from './types.ts'
-import { record, textBlob } from './db.ts'
+import { stamp, textBlob } from './db.ts'
 import { db } from './live_db.ts'
-import { errored, healthy } from './deliver.ts'
+import { errored, healthChange } from './deliver.ts'
 import { dirBlobs } from './blobs.ts'
 
 // Freeze a pasted URL: monolith fetches the page and inlines every asset
@@ -102,22 +102,22 @@ let land = (
   title: string | undefined,
   cast: (c: Change[]) => void,
 ) => {
-  healthy(eid, cast)
-  let changes: Change[] = [
-    { eid, name: 'web', comp: { frozen_at: new Date().toISOString() } },
-  ]
-  db.prepare(`update web set frozen_at = ? where ${OWNED}`)
-    .run(changes[0].comp!.frozen_at as string, eid)
-  let hasDoc = db.prepare(`select 1 from doc_value where ${OWNED}`).get(eid)
-  if (title && !hasDoc) {
-    db.prepare(`insert into doc (entity, title, body) values (${idOf}, ?, ?)`)
-      .run(eid, title, textBlob(db, ''))
-    changes.push({ eid, name: 'doc', comp: { title } })
-  }
-  // The stamp must reach the journal as well as the sockets: a tab that
-  // boots by catch-up replay hears only journal batches, and an archive
-  // whose frozen_at it never hears renders as "freezing …" forever.
-  record(db, changes)
+  let changes = stamp(db, () => {
+    let changes: Change[] = [
+      { eid, name: 'web', comp: { frozen_at: new Date().toISOString() } },
+    ]
+    db.prepare(`update web set frozen_at = ? where ${OWNED}`)
+      .run(changes[0].comp!.frozen_at as string, eid)
+    let hasDoc = db.prepare(`select 1 from doc_value where ${OWNED}`).get(eid)
+    if (title && !hasDoc) {
+      db.prepare(`insert into doc (entity, title, body) values (${idOf}, ?, ?)`)
+        .run(eid, title, textBlob(db, ''))
+      changes.push({ eid, name: 'doc', comp: { title } })
+    }
+    let healthy = healthChange(eid)
+    if (healthy) changes.push(healthy)
+    return changes
+  })
   cast(changes)
   return Response.json(changes)
 }

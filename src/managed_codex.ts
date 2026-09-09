@@ -6,7 +6,7 @@
 // readiness, leases, hosted calls, worktree preparation, attention, and stop —
 // is provider-agnostic. Process-backed compatibility remains in sessions.ts.
 import type { Sql } from './store/sql.ts'
-import { apply, record } from './db.ts'
+import { apply, stamp } from './db.ts'
 import {
   append,
   cancelEntry,
@@ -162,16 +162,17 @@ let delivered = (
   cast: Cast,
   clock: () => Date,
 ) => {
-  let at = clock().toISOString()
-  let comp = { eid, at, via }
-  db.prepare(
-    `insert into delivered (entity, at, via)
+  let changes = stamp(db, () => {
+    let at = clock().toISOString()
+    let comp = { eid, at, via }
+    db.prepare(
+      `insert into delivered (entity, at, via)
        values ((select id from entity where eid = ?), ?, ?)
      on conflict(entity) do update set at = excluded.at, via = excluded.via`,
-  ).run(eid, at, via)
-  let change: Change = { eid, name: 'delivered', comp }
-  record(db, [change])
-  cast([change])
+    ).run(eid, at, via)
+    return [{ eid, name: 'delivered', comp }]
+  })
+  cast(changes)
 }
 
 // A managed Session's health (D-17077, T-17081). A fault reaching here is
@@ -189,13 +190,12 @@ let delivered = (
 // is a KNOWN STATE somebody else owns (the settle's UNLANDED verdict, a
 // refused resume), and shedding it here deleted a verdict written 28ms earlier
 // (S-35264): a run that ended well can still have left work stranded.
-let sessionFault = (
+let faultChanges = (
   db: Sql,
   eid: string,
   fault: string | null,
-  cast: Cast,
   clock: () => Date,
-) => {
+): Change[] => {
   let changes: Change[] = []
   if (fault == null) {
     if (
@@ -207,7 +207,7 @@ let sessionFault = (
     let old = db.prepare(`select message from exception where ${OWNED}`).get(
       eid,
     ) as { message: string } | undefined
-    if (old?.message == fault) return
+    if (old?.message == fault) return []
     let comp = { eid, at: clock().toISOString(), message: fault, stack: null }
     db.prepare(
       `insert into exception (entity, at, message, stack)
@@ -217,10 +217,18 @@ let sessionFault = (
     ).run(eid, comp.at, fault)
     changes.push({ eid, name: 'exception', comp })
   }
-  if (changes.length) {
-    record(db, changes)
-    cast(changes)
-  }
+  return changes
+}
+
+let sessionFault = (
+  db: Sql,
+  eid: string,
+  fault: string | null,
+  cast: Cast,
+  clock: () => Date,
+) => {
+  let changes = stamp(db, () => faultChanges(db, eid, fault, clock))
+  if (changes.length) cast(changes)
 }
 
 // A generation that died because nobody could sign in is not a broken session:
@@ -258,15 +266,20 @@ export let retryCredential = (
   }[]).filter((row) => Date.parse(row.at) < issued)
   let retried: string[] = []
   for (let row of stuck) {
-    if (!db.prepare(`delete from error where ${OWNED}`).run(row.eid).changes) {
-      continue
-    }
-    let changes: Change[] = [{ eid: row.eid, name: 'error', comp: null }]
-    record(db, changes)
+    let changes = stamp(db, () => {
+      if (
+        !db.prepare(`delete from error where ${OWNED}`).run(row.eid).changes
+      ) {
+        return []
+      }
+      // The generation and its session become healthy together on replay.
+      return [
+        { eid: row.eid, name: 'error', comp: null },
+        ...faultChanges(db, row.session, null, clock),
+      ]
+    })
+    if (!changes.length) continue
     cast(changes)
-    // The session's own break is over too: it reads as work in flight again,
-    // shedding the `exception` exactly as a clean turn does.
-    sessionFault(db, row.session, null, cast, clock)
     retried.push(row.eid)
   }
   return retried

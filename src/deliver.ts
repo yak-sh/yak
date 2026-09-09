@@ -19,7 +19,7 @@
 // by aspect: `error` is a known/expected failure state, `exception` is a BUG
 // (something unexpected broke), and it is the self-healing trigger. excepted()
 // stamps it and fires the heal effect on the spot.
-import { record } from './db.ts'
+import { stamp } from './db.ts'
 import { db } from './live_db.ts'
 import { record as telemetry } from './telemetry.ts'
 import { effectTrace, routeEffects } from './effects.ts'
@@ -35,34 +35,28 @@ let now = () => new Date().toISOString()
 let OWNED = `entity = (select id from entity where eid = ?)`
 let idOf = `(select id from entity where eid = ?)`
 let refEid = (col: string) => `(select eid from entity where id = ${col})`
-let publish = (changes: Change[], cast: Cast) => {
-  if (!changes.length) return
-  record(db, changes)
-  cast(changes)
-}
 
 // Settle a deliverable as DELIVERED. Insert-or-replace on the eid: an
 // effect records one outcome, and a boot-sweep re-drive overwrites the same
 // row rather than piling a second up.
 export let delivered = (eid: string, via: string, cast: Cast) => {
-  let at = now()
-  db.prepare(
-    `insert into delivered (entity, at, via) values (${idOf}, ?, ?)
+  let changes = stamp(db, () => {
+    let at = now()
+    db.prepare(
+      `insert into delivered (entity, at, via) values (${idOf}, ?, ?)
      on conflict(entity) do update set at = excluded.at, via = excluded.via`,
-  ).run(eid, at, via || null)
-  let changes: Change[] = [
-    { eid, name: 'delivered', comp: { eid, at, via: via || null } },
-  ]
-  // One outcome at a time (the D-14945 tri-state): a success clears any prior
-  // failure, so a pending query (neither facet) and the `.error` health query
-  // can never disagree about the same deliverable.
-  if (db.prepare(`delete from error where ${OWNED}`).run(eid).changes) {
-    changes.push({ eid, name: 'error', comp: null })
-  }
-  // publish, not a bare cast: record() journals the outcome so a catch-up
-  // client replays it. `delivered` alone skipped the journal while `error`
-  // (through publish) did not — the replayability gap this closes.
-  publish(changes, cast)
+    ).run(eid, at, via || null)
+    let changes: Change[] = [
+      { eid, name: 'delivered', comp: { eid, at, via: via || null } },
+    ]
+    // One outcome at a time: success clears failure in the same transaction,
+    // so graph queries and journal replay agree on the deliverable's state.
+    if (db.prepare(`delete from error where ${OWNED}`).run(eid).changes) {
+      changes.push({ eid, name: 'error', comp: null })
+    }
+    return changes
+  })
+  cast(changes)
 }
 
 // Stamp the shared failure facet. It is broader than delivery: roles,
@@ -81,16 +75,19 @@ export let errored = (
   cast: Cast,
   at = now(),
 ) => {
-  let change = errorChange(eid, message, at)
-  let changes = change ? [change] : []
-  // The tri-state's other edge: a failure clears any prior delivered. Run
-  // unconditionally — even when errorChange dedups an unchanged error, a stray
-  // `delivered` beside it must still go — and guarded on `.changes`, so a plain
-  // unchanged error with no delivered publishes nothing (the no-storm rule).
-  if (db.prepare(`delete from delivered where ${OWNED}`).run(eid).changes) {
-    changes.push({ eid, name: 'delivered', comp: null })
-  }
-  publish(changes, cast)
+  let changes = stamp(db, () => {
+    let change = errorChange(eid, message, at)
+    let changes = change ? [change] : []
+    // The tri-state's other edge: a failure clears any prior delivered. Run
+    // unconditionally — even when errorChange dedups an unchanged error, a stray
+    // `delivered` beside it must still go — and guarded on `.changes`, so a plain
+    // unchanged error with no delivered publishes nothing (the no-storm rule).
+    if (db.prepare(`delete from delivered where ${OWNED}`).run(eid).changes) {
+      changes.push({ eid, name: 'delivered', comp: null })
+    }
+    return changes
+  })
+  if (changes.length) cast(changes)
 }
 
 // The data half is exported for writers that atomically move their own
@@ -157,13 +154,21 @@ export let excepted = (
   cast: Cast,
   at = now(),
 ) => {
-  let change = exceptionChange(eid, message, stack, at)
-  if (!change) return
   let t = effectTrace()
-  t.created.add(`exception ${change.eid}`)
-  record(db, [change], undefined, t)
-  cast([change])
-  routeEffects([change], t, (comp, e) =>
+  let changes = stamp(
+    db,
+    () => {
+      let change = exceptionChange(eid, message, stack, at)
+      if (!change) return []
+      t.created.add(`exception ${change.eid}`)
+      return [change]
+    },
+    undefined,
+    t,
+  )
+  if (!changes.length) return
+  cast(changes)
+  routeEffects(changes, t, (comp, e) =>
     telemetry(db, {
       source: 'srv',
       name: `effect:${comp}`,
@@ -175,8 +180,11 @@ export let excepted = (
 // Absence is healthy. Delete the facet through the same journal + cast door
 // as a failure stamp so catch-up clients and live clients shed it together.
 export let healthy = (eid: string, cast: Cast) => {
-  let change = healthChange(eid)
-  if (change) publish([change], cast)
+  let changes = stamp(db, () => {
+    let change = healthChange(eid)
+    return change ? [change] : []
+  })
+  if (changes.length) cast(changes)
 }
 
 export let healthChange = (eid: string): Change | undefined => {

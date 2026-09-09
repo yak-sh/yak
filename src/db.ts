@@ -6495,7 +6495,7 @@ let casField = (name: string, field: string, v: unknown): v is string =>
 // nothing in the change loop. Called inside the caller's transaction; the
 // A failure propagates through apply()'s transaction, rolling graph and
 // journal back together. Returns the transaction id.
-export let journalWrite = (
+let journalWrite = (
   db: Sql,
   ts: string,
   actor: string | null,
@@ -6568,37 +6568,50 @@ export let journalWrite = (
 // (frozen_at and kin), made by direct SQL beside this call. delta()
 // promises catch-up clients the same content the live cast carried, so
 // a stamp must reach the journal too, or every tab that boots by replay
-// silently loses the column (T-7437). This legacy stamp door is best-effort;
-// apply() journals atomically with the graph write.
+// silently loses the column (T-7437). The caller must own the transaction;
+// a journal failure rolls back its SQL too. stamp() owns both for simple writers.
 export let record = (
   db: Sql,
   changes: Change[],
   writer?: string | null,
   effects?: Trace,
 ) => {
-  try {
-    let now = new Date().toISOString()
-    let actor = writerActor(db, writer)
-    let via = writerVia(db, writer)
-    // Most stamps carry no trace; the few effect-bearing lifecycle stamps pass
-    // the process driver's trace so split ownership is preserved.
-    journalWrite(
-      db,
-      now,
-      actor,
-      via,
-      effects?.fed
-        ? JSON.stringify({
-          created: [...effects.created],
-          removed: [...effects.removed],
-        })
-        : null,
-      changes,
-    )
-  } catch (e) {
-    console.warn('journal skipped —', e)
-  }
+  if (!db.inTransaction) throw new Error('record requires a write transaction')
+  writableVersion(db)
+  let now = new Date().toISOString()
+  let actor = writerActor(db, writer)
+  let via = writerVia(db, writer)
+  // Most stamps carry no trace; the few effect-bearing lifecycle stamps pass
+  // the process driver's trace so split ownership is preserved.
+  journalWrite(
+    db,
+    now,
+    actor,
+    via,
+    effects?.fed
+      ? JSON.stringify({
+        created: [...effects.created],
+        removed: [...effects.removed],
+      })
+      : null,
+    changes,
+  )
 }
+
+// Server-owned SQL and its replay batch commit together. Keep casts and effects
+// outside this callback so neither can publish a write that later rolls back.
+export let stamp = (
+  db: Sql,
+  write: () => Change[],
+  writer?: string | null,
+  effects?: Trace,
+): Change[] =>
+  db.transaction(() => {
+    writableVersion(db)
+    let changes = write()
+    if (changes.length) record(db, changes, writer, effects)
+    return changes
+  }, true)
 
 export type RedactionResult = {
   changes: Change[]

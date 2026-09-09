@@ -22,9 +22,11 @@ import { graphLog, standingOf } from './entry_log.ts'
 import { slow } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, delta, numbered, snapshot } = await import('./db.ts')
+let { apply, cursorOf, delta, numbered, readComp, snapshot } = await import(
+  './db.ts'
+)
 let { open } = await import('./store/sqlite.ts')
-let { freshDb } = await import('./testdb.ts')
+let { bareDb, freshDb, rejectJournal } = await import('./testdb.ts')
 
 let OWNED = `entity = (select id from entity where eid = ?)`
 
@@ -33,6 +35,50 @@ let session = (db: ReturnType<typeof open>, id = uuid()) => {
   apply(db, [{ eid, name: 'session', comp: { id } }])
   return eid
 }
+
+Deno.test('entry lease and settlement roll back when their journal fails', () => {
+  let db = bareDb()
+  let sid = session(db)
+  let holder = uuid()
+  apply(db, [{ eid: holder, name: 'runner', comp: { name: 'test' } }])
+  let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
+  let eid = append(db, sid, [{
+    generation: { through: input, provider: 'codex', model: 'test' },
+  }]).eids[0]
+  let cursor = cursorOf(db)
+  let restore = rejectJournal(db)
+  try {
+    assertThrows(() => takeEntry(db, eid, holder), Error, 'journal unavailable')
+    assertEquals(readComp(db, eid, 'lease'), undefined)
+    assertEquals(cursorOf(db), cursor)
+    assertEquals(readyEntries(db, sid).map((e) => e.eid), [eid])
+  } finally {
+    restore()
+  }
+  let lease = takeEntry(db, eid, holder)!
+  let before = readComp(db, eid, 'lease')
+  cursor = cursorOf(db)
+  restore = rejectJournal(db)
+  try {
+    assertThrows(
+      () =>
+        settleGeneration(db, lease.token, {
+          input: 4,
+          cached: 1,
+          output: 2,
+          reasoning: 0,
+        }),
+      Error,
+      'journal unavailable',
+    )
+    assertEquals(readComp(db, eid, 'lease'), before)
+    assertEquals(readComp(db, eid, 'delivered'), undefined)
+    assertEquals(readComp(db, eid, 'usage'), undefined)
+    assertEquals(cursorOf(db), cursor)
+  } finally {
+    restore()
+  }
+})
 
 Deno.test('entries append in partition order and stay out of the root graph', () => {
   let db = freshDb()

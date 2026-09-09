@@ -1,7 +1,7 @@
 // The graph-native managed lifecycle against an in-memory graph and injected
 // provider/tools. No process, credential, or owner graph participates.
-import { assert, assertEquals, assertMatch } from '@std/assert'
-import { apply, journalOf, journalSince } from './db.ts'
+import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
+import { apply, cursorOf, journalOf, journalSince, readComp } from './db.ts'
 import {
   append,
   expiredLeases,
@@ -31,7 +31,7 @@ import { writeSession } from './session_store.ts'
 import { type ToolHost } from './harness_tools.ts'
 import { type Change, uuid } from './types.ts'
 import { slow, until } from './testing.ts'
-import { bareDb, freshDb } from './testdb.ts'
+import { bareDb, freshDb, rejectJournal } from './testdb.ts'
 import { open } from './store/sqlite.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -2143,6 +2143,34 @@ Deno.test('a credential minted after the failure retries it, once', () => {
   // wedged for another reason cannot loop on this sweep.
   assertEquals(retryCredential(db, () => {}, after), [])
   db.close()
+})
+
+Deno.test('credential retry keeps the failure when journaling is unavailable', () => {
+  let db = bareDb()
+  let sid = session(db)
+  let eid = failed(db, sid, CREDENTIAL_FAULT)
+  let before = readComp(db, eid, 'error')
+  let cursor = cursorOf(db)
+  let heard: Change[] = []
+  let restore = rejectJournal(db)
+  try {
+    assertThrows(
+      () =>
+        retryCredential(
+          db,
+          (cs) => heard.push(...cs),
+          Date.parse('2026-09-09'),
+        ),
+      Error,
+      'journal unavailable',
+    )
+    assertEquals(readComp(db, eid, 'error'), before)
+    assertEquals(readyEntries(db, sid), [])
+    assertEquals(cursorOf(db), cursor)
+    assertEquals(heard, [])
+  } finally {
+    restore()
+  }
 })
 
 slow(

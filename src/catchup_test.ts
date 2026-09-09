@@ -4,7 +4,7 @@
 // the feed to dispatch effects. The polling half (foreign wake) uses a file db
 // and lives in the slow tier.
 import { assert, assertEquals } from '@std/assert'
-import { apply, journalSince, recast, record } from './db.ts'
+import { apply, journalSince, recast, stamp } from './db.ts'
 import { catchup } from './catchup.ts'
 import { dispatch, fed, on, trace } from './effects.ts'
 import type { Change } from './types.ts'
@@ -37,8 +37,15 @@ Deno.test('only a fed() trace journals an effect ask', () => {
   let since = feed.at()
   apply(db, [doc('fed')], fed())
   apply(db, [doc('inline')], trace())
-  apply(db, [doc('none')])
-  record(db, [doc('stamp')])
+  let plain = doc('none')
+  apply(db, [plain])
+  stamp(db, () => {
+    db.prepare(
+      'update doc set title = ? where entity = (select id from entity where eid = ?)',
+    )
+      .run('stamp', plain.eid)
+    return [{ ...plain, comp: { title: 'stamp' } }]
+  })
   let rows = journalSince(db, since)
   assertEquals(rows.length, 4)
   assert(rows[0].trace, 'fed() journals the trace')

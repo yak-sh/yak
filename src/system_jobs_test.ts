@@ -1,12 +1,13 @@
 // Registered jobs retain graph tuning, state gates, and decision records.
 // Unregistered historical roles have no behavior, even when marked running.
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertThrows } from '@std/assert'
 import type { Change } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, readComp } = await import('./db.ts')
+let { apply, cursorOf, readComp } = await import('./db.ts')
 let { db } = await import('./live_db.ts')
 let { registerSystem, stamp, systemSweep } = await import('./system_jobs.ts')
+let { rejectJournal } = await import('./testdb.ts')
 let heard: Change[] = []
 let cast = (changes: Change[]) => heard.push(...changes)
 let seed = (slug: string, comp: Record<string, unknown> = {}) => {
@@ -83,4 +84,30 @@ Deno.test('decision time changes only with the decision or observed work', () =>
   heard = []
   decide('spawn', '2 waiting', 'T4')
   assertEquals(heard, [])
+})
+
+Deno.test('a job decision and its error roll back when journaling fails', () => {
+  let eid = seed('test-journal-failure')
+  let before = readComp(db, eid, 'role')
+  let cursor = cursorOf(db)
+  heard = []
+  let restore = rejectJournal(db)
+  try {
+    assertThrows(
+      () =>
+        stamp(eid, {
+          decision: 'skip',
+          reason: 'failed',
+          error: 'unavailable',
+        }, cast),
+      Error,
+      'journal unavailable',
+    )
+    assertEquals(readComp(db, eid, 'role'), before)
+    assertEquals(readComp(db, eid, 'error'), undefined)
+    assertEquals(cursorOf(db), cursor)
+    assertEquals(heard, [])
+  } finally {
+    restore()
+  }
 })

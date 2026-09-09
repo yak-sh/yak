@@ -4,11 +4,12 @@
 // D-14945 tri-state, so a pending query and the .error health query can never
 // disagree about one deliverable). T-15458.
 Deno.env.set('DB_PATH', ':memory:')
-import { assertEquals } from '@std/assert'
-import { apply, journalOf } from './db.ts'
+import { assertEquals, assertThrows } from '@std/assert'
+import { apply, cursorOf, journalOf, readComp } from './db.ts'
 import { db } from './live_db.ts'
-import { delivered, errored } from './deliver.ts'
+import { delivered, errored, excepted, healthy } from './deliver.ts'
 import { type Change, uuid } from './types.ts'
+import { rejectJournal } from './testdb.ts'
 
 // A deliverable spine to hang outcomes on — a knock will do.
 let mint = () => {
@@ -63,3 +64,32 @@ Deno.test('errored clears a prior delivered (the other edge)', () => {
     true,
   )
 })
+
+for (let name of ['delivered', 'errored', 'healthy', 'excepted']) {
+  Deno.test(`${name}: journal failure restores outcomes and sends no cast`, () => {
+    let eid = mint()
+    if (name == 'errored') delivered(eid, 'prior', () => {})
+    else errored(eid, 'prior', () => {})
+    let state = () =>
+      ['delivered', 'error', 'exception'].map((c) => readComp(db, eid, c))
+    let before = state()
+    let cursor = cursorOf(db)
+    let casts: Change[] = []
+    let cast = (changes: Change[]) => casts.push(...changes)
+    let write = () => {
+      if (name == 'delivered') delivered(eid, 'next', cast)
+      if (name == 'errored') errored(eid, 'next', cast)
+      if (name == 'healthy') healthy(eid, cast)
+      if (name == 'excepted') excepted(eid, 'next', null, cast)
+    }
+    let restore = rejectJournal(db)
+    try {
+      assertThrows(write, Error, 'journal unavailable')
+      assertEquals(state(), before)
+      assertEquals(cursorOf(db), cursor)
+      assertEquals(casts, [])
+    } finally {
+      restore()
+    }
+  })
+}

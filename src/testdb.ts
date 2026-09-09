@@ -13,6 +13,7 @@
 // stays db-free so the ~40 files that want only those primitives never trip it.
 
 import { DatabaseSync, open } from './store/sqlite.ts'
+import type { Sql } from './store/sql.ts'
 import { initVector, loadVector, ownVector } from './vector.ts'
 
 // The clones are isolated :memory: handles: busy_timeout has no peer to wait
@@ -98,4 +99,13 @@ export let bareDb = () => {
     d.close()
   }
   return clone(bareSnap)
+}
+
+// Fail after journal_tx and journal_change have inserted, proving that a writer
+// rolls back the whole batch, not just the statement that threw. Always undo
+// the connection-local fault in finally when sharing a singleton test database.
+export let rejectJournal = (db: Sql) => {
+  db.exec(`create temp trigger reject_journal before insert on journal_field
+    begin select raise(abort, 'journal unavailable'); end`)
+  return () => db.exec('drop trigger reject_journal')
 }

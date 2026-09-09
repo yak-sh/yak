@@ -3,13 +3,15 @@
 // frozen_at — and the stamp must ride the JOURNAL, not just the sockets,
 // or a tab booting by catch-up replay shows "freezing …" over an archive
 // that exists (T-7437).
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 
 Deno.env.set('DB_PATH', ':memory:')
 Deno.env.set('HOME', await Deno.makeTempDir())
 let { freeze, store } = await import('./freeze.ts')
-let { apply, delta } = await import('./db.ts')
+let { apply, cursorOf, delta, readComp } = await import('./db.ts')
 let { db } = await import('./live_db.ts')
+let { errored } = await import('./deliver.ts')
+let { rejectJournal } = await import('./testdb.ts')
 
 let PAGE = `<html><head><title>Ten dots</title>
   <script src="https://evil.example/x.js"></script>
@@ -91,4 +93,27 @@ Deno.test('freeze: failures stamp shared health and successful storage clears it
 Deno.test('store: no such web entity refuses without touching disk', async () => {
   let res = await store(crypto.randomUUID(), PAGE, () => {})
   assertEquals(res.status, 404)
+})
+
+Deno.test('store: failed journal restores frozen state, title, and health', async () => {
+  let eid = crypto.randomUUID()
+  apply(db, [{ eid, name: 'web', comp: { url: '' } }])
+  errored(eid, 'prior', () => {})
+  let state = () => ['web', 'doc', 'error'].map((c) => readComp(db, eid, c))
+  let before = state()
+  let cursor = cursorOf(db)
+  let heard: unknown[] = []
+  let restore = rejectJournal(db)
+  try {
+    await assertRejects(
+      () => store(eid, PAGE, (cs) => heard.push(...cs)),
+      Error,
+      'journal unavailable',
+    )
+    assertEquals(state(), before)
+    assertEquals(cursorOf(db), cursor)
+    assertEquals(heard, [])
+  } finally {
+    restore()
+  }
 })
