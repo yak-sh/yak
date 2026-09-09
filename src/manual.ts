@@ -427,14 +427,15 @@ export let manuals = declare({
     opts: [{ ...count, or: '20' }, full],
   },
   hooks: {
-    about: 'install the lifecycle hooks into ~/.claude/settings.json',
+    about: 'install the lifecycle hooks into ~/.claude/settings.json and ' +
+      '~/.codex/hooks.json',
     examples: ['task hooks', 'task hooks --gone'],
-    detail:
-      'With the hooks in the user settings every claude session on the box — ' +
-      'a bare `claude` included — reifies its graph row at start, has its ' +
-      "transcript tailed live (the owner's words land as typed), and wraps " +
-      "at end. Idempotent: Tasks' entries are replaced, others kept. `--gone` " +
-      'removes them. `task claude` skips its own copy once these are here.',
+    detail: 'With the hooks in each provider file every session on the box — ' +
+      'a bare `claude` or `codex` included — reifies its graph row at start, ' +
+      "has its transcript tailed live (the owner's words land as typed), and " +
+      "wraps at end. Idempotent: Tasks' entries are replaced, others kept. " +
+      '`--gone` removes them. `task claude`/`task codex` skip their own copy ' +
+      'once these are here.',
     root: true,
     opts: [flag('--gone')],
   },

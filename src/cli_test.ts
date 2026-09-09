@@ -14,6 +14,7 @@ import {
   claudeHookSettings,
   claudeLaunch,
   codexArgs,
+  codexGlobalHooks,
   codexHookArgs,
   codexLaunch,
   finalText,
@@ -22,6 +23,7 @@ import {
   hookProvider,
   hookSession,
   hookTurn,
+  installCodexHooks,
   isolationWarning,
   jsonText,
   kindArg,
@@ -596,7 +598,8 @@ Deno.test('parse: a value never reaches the words, at either spelling', () => {
 
 Deno.test('codexArgs: full access and lifecycle lead, caller args keep order', () => {
   let hooks = codexHookArgs()
-  assertEquals(codexArgs(['resume', '--last']), [
+  // No global codex hooks yet ({}), so the launcher injects its own.
+  assertEquals(codexArgs(['resume', '--last'], {}), [
     '--dangerously-bypass-approvals-and-sandbox',
     '--dangerously-bypass-hook-trust',
     ...hooks,
@@ -604,6 +607,13 @@ Deno.test('codexArgs: full access and lifecycle lead, caller args keep order', (
     '--last',
   ])
   assertEquals(hooks.filter((arg) => arg == '-c').length, 5)
+  // Once `task hooks` has armed the global file, the -c injection is dropped:
+  // codex merges -c hooks with the file's, so injecting again fires each twice.
+  assertEquals(codexArgs(['resume'], lifecycleHooks('codex')), [
+    '--dangerously-bypass-approvals-and-sandbox',
+    '--dangerously-bypass-hook-trust',
+    'resume',
+  ])
 })
 
 Deno.test('finalText: Claude and Codex transcripts yield the closing answer', () => {
@@ -797,7 +807,7 @@ Deno.test('task claude --operator wears the operator persona via --agent', () =>
 
 Deno.test('task codex scopes operator capability and strips its local flag', () => {
   assertEquals(
-    codexLaunch(['--operator', 'resume', '--last'], 42, '/repo'),
+    codexLaunch(['--operator', 'resume', '--last'], 42, '/repo', {}),
     {
       args: [
         '--dangerously-bypass-approvals-and-sandbox',
@@ -815,10 +825,10 @@ Deno.test('task codex scopes operator capability and strips its local flag', () 
       },
     },
   )
-  let ordinary = codexLaunch(['resume', '--last'], 42, '/repo')
+  let ordinary = codexLaunch(['resume', '--last'], 42, '/repo', {})
   assertEquals(ordinary.env.TASKS_OPERATOR, '')
   assertEquals(ordinary.args.some((arg) => arg.includes('instructions')), false)
-  let literal = codexLaunch(['--', '--operator'], 42, '/repo')
+  let literal = codexLaunch(['--', '--operator'], 42, '/repo', {})
   assertEquals(literal.args.slice(-2), ['--', '--operator'])
   assertEquals(literal.args.some((arg) => arg.includes('instructions')), false)
 })
@@ -1588,6 +1598,55 @@ Deno.test('mergedHooks replaces its own entries, keeps others, and removes clean
     SessionStart: [theirs],
     PreToolUse: [theirs],
   })
+})
+
+// `task hooks` writes Tasks' codex entries into $CODEX_HOME/hooks.json so a
+// bare `codex` is captured eagerly, the twin of the claude settings install.
+// Its own earlier entries are replaced, anyone else's are kept, and --gone
+// leaves only those.
+Deno.test('installCodexHooks writes, replaces, preserves, and removes', () => {
+  let dir = Deno.makeTempDirSync()
+  let path = `${dir}/hooks.json`
+  try {
+    // Fresh install into a non-existent file mints the whole set.
+    installCodexHooks(path)
+    let hooks = codexGlobalHooks(path)
+    assertEquals(
+      Object.keys(hooks),
+      [
+        'SessionStart',
+        'SubagentStart',
+        'UserPromptSubmit',
+        'Stop',
+        'SessionEnd',
+      ],
+    )
+    assertEquals(hooks.SessionStart, lifecycleHooks('codex').SessionStart)
+
+    // A user's own key and hook survive a reinstall; ours are not stacked.
+    let mine = { hooks: [{ type: 'command', command: 'echo hi' }] }
+    let had = JSON.parse(Deno.readTextFileSync(path))
+    had.description = 'keep me'
+    had.hooks.SessionStart.push(mine)
+    had.hooks.PreToolUse = [mine]
+    Deno.writeTextFileSync(path, JSON.stringify(had))
+    installCodexHooks(path)
+    let after = JSON.parse(Deno.readTextFileSync(path))
+    assertEquals(after.description, 'keep me')
+    assertEquals(after.hooks.SessionStart, [
+      ...lifecycleHooks('codex').SessionStart,
+      mine,
+    ])
+    assertEquals(after.hooks.PreToolUse, [mine])
+
+    // --gone strips Tasks' entries and keeps everything else.
+    installCodexHooks(path, true)
+    let gone = JSON.parse(Deno.readTextFileSync(path))
+    assertEquals(gone.hooks, { SessionStart: [mine], PreToolUse: [mine] })
+    assertEquals(gone.description, 'keep me')
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
 })
 
 // `task new P1 …` honors the documented shorthand (T-6741): a LEADING

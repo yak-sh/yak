@@ -3473,10 +3473,58 @@ export let installHooks = (path = settingsPath(), gone = false) => {
   return path
 }
 
+let codexHome = () =>
+  Deno.env.get('CODEX_HOME') ?? `${Deno.env.get('HOME')}/.codex`
+let codexHooksPath = () => `${codexHome()}/hooks.json`
+
+// Codex's twin of installHooks: its global hooks file (`$CODEX_HOME/hooks.json`,
+// loaded by every `codex` run) is where a bare Codex session gets its lifecycle
+// hooks, exactly as ~/.claude/settings.json arms a bare Claude. Without it a
+// bare `codex` reifies no session and nothing arms the tailer; `task codex`
+// still injects the same hooks as -c args for an invocation that predates the
+// file. Tasks' own entries lead each event and are replaced (never stacked) on
+// reinstall; anything else in the file is kept, and --gone leaves only that.
+export let installCodexHooks = (path = codexHooksPath(), gone = false) => {
+  let had: Record<string, unknown> = {}
+  try {
+    had = JSON.parse(Deno.readTextFileSync(path))
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e
+  }
+  let hooks = mergedHooks(
+    had.hooks as Record<string, unknown> | undefined,
+    lifecycleHooks('codex'),
+    gone,
+  )
+  let next: Record<string, unknown> = { ...had, hooks }
+  if (!Object.keys(hooks).length) delete next.hooks
+  Deno.mkdirSync(path.replace(/\/[^/]+$/, ''), { recursive: true })
+  Deno.writeTextFileSync(path, `${JSON.stringify(next, null, 2)}\n`)
+  return path
+}
+
+// The codex twin of globalHooks(): the hooks table in the global codex hooks
+// file, so `task codex` can tell whether `task hooks` already armed a bare
+// codex. If it has, the launcher skips its -c injection, or every lifecycle
+// hook would fire twice — codex MERGES -c hooks with the file's, never
+// overriding them.
+export let codexGlobalHooks = (
+  path = codexHooksPath(),
+): Record<string, unknown> => {
+  try {
+    let s = JSON.parse(Deno.readTextFileSync(path))
+    return s?.hooks && typeof s.hooks == 'object' ? s.hooks : {}
+  } catch {
+    return {}
+  }
+}
+
 let hooks = (got: Got) => {
   let gone = got.flags.has('--gone')
-  let path = installHooks(undefined, gone)
-  print(`${gone ? 'removed' : 'installed'} tasks lifecycle hooks: ${path}`)
+  let claude = installHooks(undefined, gone)
+  let codex = installCodexHooks(undefined, gone)
+  let verb = gone ? 'removed' : 'installed'
+  print(`${verb} tasks lifecycle hooks: ${claude}, ${codex}`)
 }
 
 let toml = (value: unknown): string => {
@@ -3654,13 +3702,14 @@ let codexLaunchGot = (
   got: Got,
   pid = Deno.pid,
   cwd = Deno.cwd(),
+  global?: Record<string, unknown>,
 ) => {
   let scope = terminalScope(got, pid)
   return {
     args: [
       '--dangerously-bypass-approvals-and-sandbox',
       '--dangerously-bypass-hook-trust',
-      ...codexHookArgs(),
+      ...(installed(global ?? codexGlobalHooks()) ? [] : codexHookArgs()),
       ...(scope.env.TASKS_OPERATOR
         ? [
           '-c',
@@ -3679,9 +3728,11 @@ export let codexLaunch = (
   args: string[],
   pid = Deno.pid,
   cwd = Deno.cwd(),
-) => codexLaunchGot(parse('codex', manuals.codex, args), pid, cwd)
+  global?: Record<string, unknown>,
+) => codexLaunchGot(parse('codex', manuals.codex, args), pid, cwd, global)
 
-export let codexArgs = (args: string[]) => codexLaunch(args).args
+export let codexArgs = (args: string[], global?: Record<string, unknown>) =>
+  codexLaunch(args, Deno.pid, Deno.cwd(), global).args
 
 let codex = async (got: Got) => {
   let launch = codexLaunchGot(got)
