@@ -33,6 +33,7 @@ export {
   type Metrics,
   screenful,
   type Seg,
+  wrap,
 } from './paint.ts'
 export { everforest, type Sheet, type Style, theme } from './theme.ts'
 export {

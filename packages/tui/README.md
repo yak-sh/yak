@@ -45,13 +45,14 @@ takes another one; nothing in a widget names ANSI.
 
 Four structural attributes, because only the painter knows the terminal's size:
 
-| attribute        | means                                                      |
-| ---------------- | ---------------------------------------------------------- |
-| `row`            | element children side by side                              |
-| `col`            | element children stacked                                   |
-| `width` / `grow` | a fixed column, or the one that takes what is left         |
-| `height`         | a fixed box                                                |
-| `scroll`         | window this box's content from that offset, and measure it |
+| attribute        | means                                                                         |
+| ---------------- | ----------------------------------------------------------------------------- |
+| `row`            | element children side by side                                                 |
+| `col`            | element children stacked                                                      |
+| `width` / `grow` | a fixed column, or the one that takes what is left                            |
+| `wrap`           | fold text at word boundaries (hard-fold long words) before scroll measurement |
+| `height`         | a fixed box                                                                   |
+| `scroll`         | window this box's content from that offset, and measure it                    |
 
 Everything else flows: block elements stack as lines, inline elements (`span`,
 `b`, `i`, `a`, `button`, `label`) run into them, `pre` keeps its newlines, and

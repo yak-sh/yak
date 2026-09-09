@@ -124,3 +124,38 @@ Deno.test('the backend paints only the lines that changed', () => {
   back.reset()
   assertEquals(back.draw(tree).written, 4) // a resize repaints everything
 })
+
+Deno.test('wrap folds words and long tokens before measuring and scrolling', () => {
+  let tree = el(
+    'div',
+    { wrap: '1', scroll: '1', id: 'log' },
+    'hello world\nabcdefghijk\n\nend',
+  )
+  let { lines, metrics } = screenful(tree, 6, 4)
+  assertEquals(words(lines), ['world', 'abcdef', 'ghijk', ''])
+  assertEquals(metrics.log, { total: 6, height: 4 })
+  assertEquals(seen(el('div', { wrap: '1' }, 'abcdef'), 3, 2), ['abc', 'def'])
+  assertEquals(seen(el('div', { wrap: '1' }, 'abc'), 0, 1), [''])
+})
+
+Deno.test('wrap preserves inline styles, explicit blank lines and indent width', () => {
+  let tree = el(
+    'div',
+    { wrap: '1', class: 'Inset' },
+    el('span', { class: 'Title' }, 'hello '),
+    el('span', {}, 'world'),
+  )
+  let { lines } = screenful(tree, 8, 3, {
+    Inset: { indent: 2 },
+    Title: { bold: true },
+  })
+  assertEquals(words(lines), ['  hello', '  world', ''])
+  assertEquals(lines[0][1].style.bold, true)
+  assertEquals(lines[1][1].style.bold, undefined)
+  assertEquals(seen(el('pre', { wrap: '1' }, '123456\n\nx'), 3, 4), [
+    '123',
+    '456',
+    '',
+    'x',
+  ])
+})

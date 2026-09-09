@@ -230,11 +230,15 @@ export let lay = (
   let o = own(el, c.sheet)
   let s = inherit(st, o)
   let box = num(el, 'height') ?? h
+  let contentWidth = Math.max(0, w - (o.indent ?? 0))
   let lines = el.attr('row') != null
-    ? row(el, s, w, box, c)
+    ? row(el, s, contentWidth, box, c)
     : el.attr('col') != null
-    ? col(el, s, w, box, c)
-    : flow(el, s, w, box, c)
+    ? col(el, s, contentWidth, box, c)
+    : flow(el, s, contentWidth, el.attr('wrap') != null ? null : box, c)
+  if (el.attr('wrap') != null) {
+    lines = lines.flatMap((line) => wrap(line, contentWidth))
+  }
   if (el.attr('scroll') != null) lines = windowed(el, lines, box, c)
   if (o.indent) {
     lines = lines.map((l) => [{ text: ' '.repeat(o.indent!), style: s }, ...l])
@@ -267,6 +271,42 @@ export let clip = (line: Line, w: number): Line => {
       if (w > len) out.push({ ...s, text: s.text.slice(0, w - len) })
       break
     }
+  }
+  return out
+}
+
+/** Fold at word boundaries (hard-fold long words), preserving every styled
+ * character. Uses the same column units as clip; runs before scroll measures. */
+export let wrap = (line: Line, columns: number): Line[] => {
+  let w = Math.floor(columns)
+  if (w <= 0) return [[]]
+  let text = line.map((s) => s.text).join('')
+  if (text.length <= w) return [line]
+  let out: Line[] = []
+  let start = 0, seg = 0, offset = 0
+  while (start < text.length) {
+    let end = Math.min(start + w, text.length)
+    if (end < text.length) {
+      let space = text.slice(start, end).lastIndexOf(' ')
+      if (space >= 0) end = start + space + 1
+    }
+    let row: Line = []
+    let left = end - start
+    while (left > 0 && seg < line.length) {
+      let s = line[seg]
+      let n = Math.min(left, s.text.length - offset)
+      if (n) {
+        row.push({ text: s.text.slice(offset, offset + n), style: s.style })
+      }
+      left -= n
+      offset += n
+      if (offset == s.text.length) {
+        seg++
+        offset = 0
+      }
+    }
+    out.push(row)
+    start = end
   }
   return out
 }

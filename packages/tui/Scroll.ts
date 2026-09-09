@@ -69,6 +69,13 @@ export let Scroll = (
     setTop(to)
     return true
   })
+  // A different id is a different transcript, without remounting the key
+  // handler above the editor in the focus stack.
+  useLayoutEffect(() => {
+    live.current = 0
+    setTop(0)
+    setStick(follow)
+  }, [id, follow])
   // Content grew while pinned to the bottom: follow it there. Setting the same
   // offset renders nothing, so this settles after one paint.
   useLayoutEffect(() => {
