@@ -1979,7 +1979,7 @@ export let spawned =
     // first handler stamps started_at below. Dispatch is at-most-once in the
     // steady state, but the same birth can still be handed to this effect
     // twice while that first asynchronous worktree preparation is in flight
-    // (for example, a role boot reconcile racing its own session receipt).
+    // (for example, boot replay racing its own session receipt).
     // Without this guard both handlers eventually call ad.argv(job), and
     // Claude receives two `--session-id <same uuid>` launches: one owns the
     // thread while the loser marks their shared Session failed with "already

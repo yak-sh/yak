@@ -10,8 +10,7 @@
 // Reads retain their wire fallback on schema skew. A local write validates the
 // schema before mutation and surfaces any error directly: retrying a write over
 // HTTP could repeat a commit whose response failed after the transaction.
-import { DatabaseSync, liveDb } from './store/sqlite.ts'
-import { resolve } from 'node:path'
+import { DatabaseSync, liveDb, sameGraphFile } from './store/sqlite.ts'
 import {
   depsOf,
   eager,
@@ -125,7 +124,7 @@ export let armLocal = (path = envPath()): boolean => {
   disarm()
   if (!path) return false
   if (
-    Deno.mainModule.endsWith('_test.ts') && resolve(path) == resolve(liveDb())
+    Deno.mainModule.endsWith('_test.ts') && sameGraphFile(path, liveDb())
   ) return false
   let db: DatabaseSync
   let writer: DatabaseSync | undefined

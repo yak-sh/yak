@@ -133,6 +133,13 @@ carry a result-only `rank` component; `/` in the web UI, `task search`, and MCP
   task help grammar              # the whole filter grammar
   ```
 
+  On the graph's machine, reads and writes go directly through SQLite, so graph
+  edits work while the HTTP server is down. Writes use the same validation and
+  journal as HTTP; the CLI never runs effects. `DB_PATH` selects a local graph.
+  An explicit remote `TASKS_HOST` without `DB_PATH`, or `TASKS_LOCAL=0`, keeps
+  requests on HTTP. Local writes require a matching schema version and never
+  migrate the graph.
+
 - **MCP** — the server IS an MCP server: `POST /mcp` (Streamable HTTP,
   stateless), or `deno task mcp` over stdio. Two tiers: `task_*` sugar
   (list/new/update/show/claim/release/comment/context…) and the generic tier —
