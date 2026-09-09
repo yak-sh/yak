@@ -229,7 +229,7 @@ let mcp = new Server(
       experimental: { 'claude/channel': {} },
     },
     instructions: [
-      'Events about work you claim arrive here as <channel source="tasks" kind="…" from="…">…</channel>. They flow into this transcript; they are NOT typed on the human\'s input line.',
+      'Events about work you claim arrive here as <channel source="tasks" kind="…" from="…">…</channel>. They flow into this transcript; they are NOT typed on the human\'s input line. Your OWN writes never echo back — and a `task` CLI command run from your shell is yours by process ancestry (its answer says `as S-…`), so a self-posted comment is not a delivery test.',
       '',
       'kind="comment" carries words written on claimed work, with from= the actor/instrument byline and on= the work item. Direct S-* comments still arrive as deprecated compatibility. kind="knock" is a nudge to look at a named entity, with any words that rode along. kind="mail" is a letter that arrived for your project — from= the sender address, subj= the subject, auth= the DKIM verdict, id= the mail entity (`task mail show <id>` for the full letter, `task inbox` to triage). Only verified mail is delivered here; unverified mail waits in the store. kind="recall" is your OWN memory floating up — one M-id · title per line, the memories nearest to what you just said, surfaced the way a thought arrives unbidden; recall one with `task show <M-id>` if it bears on the moment, or let it pass.',
       '',

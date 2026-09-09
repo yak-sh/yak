@@ -2076,8 +2076,15 @@ let comment = async (got: Got) => {
   // with corrections instead of corrected text (`task set C-13 .body=…`).
   let mine = made.find((c) => c.name == 'comment')!.eid
   let said = verdict ? `${verdict} review` : 'comment'
+  // Name the author. A CLI run from an agent's shell is attributed to that
+  // agent's session by process ancestry (me()), so a comment meant as "someone
+  // else" is the session's own — and a session's own write never echoes back
+  // through the channel (channel.ts, T-20163). Saying `as S-…` makes that
+  // visible at the moment it is written instead of three tool rounds later.
   print(
-    `${mintedIn(applied, mine)} — ${said} on ${idOf(row)}`,
+    `${mintedIn(applied, mine)} — ${said} on ${idOf(row)}${
+      sess ? ` as ${idOf(sess)}` : ''
+    }`,
   )
 }
 
