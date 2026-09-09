@@ -70,6 +70,7 @@ export {
   Say,
   type Security,
   server,
+  shapeOf,
 } from './server.ts'
 export { rosterLine, rosterVersion } from './roster.ts'
 export { core, type CoreOpts, type Search } from './tools.ts'

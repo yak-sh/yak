@@ -198,7 +198,14 @@ let metaOf = (
     : tool.meta
 }
 
-let shapeOf = (tool: Tool): Record<string, z.ZodTypeAny> =>
+/**
+ * A tool's arguments as one Zod shape — the `input` bag with every schema
+ * checked to be a Zod one. What this server hands the SDK, and what anything
+ * else that has to say a tool's arguments in another dialect starts from: a
+ * model's tool declaration takes JSON Schema, and `z.object(shapeOf(tool))` is
+ * the thing to convert.
+ */
+export let shapeOf = (tool: Tool): Record<string, z.ZodTypeAny> =>
   Object.fromEntries(
     Object.entries(tool.input ?? {}).map((
       [name, s],
