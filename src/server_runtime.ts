@@ -65,7 +65,7 @@ import { freeze, serveFrozen, store } from './freeze.ts'
 import { landBlob, serveBlob } from './blob.ts'
 import { filed } from './page.ts'
 import { fleetRaw, mailIdOf } from './inbound.ts'
-import { FLOOR, setEmbedConfig, setModel, similarTo, textOf } from './embed.ts'
+import { configureEmbed, FLOOR, similarTo, textOf } from './embed.ts'
 import { type IO, mcpServer } from './mcp.ts'
 import { localIO } from './local_io.ts'
 import { nativeRunner } from './native_runner.ts'
@@ -671,11 +671,10 @@ let ollamaConfig: OllamaConfig = {
 
 // The embed transport shares that config view, and its model resolves through
 // the graph plane too (OLLAMA_EMBED_MODEL override>env>default). Injected once
-// at boot: the embed sweep and similarity-ranked /query run in this process, so a saved
-// override reaches them, and MODEL is fixed for the process (a change is a
-// deliberate corpus re-embed, T-22784 / D-22781).
-setEmbedConfig(ollamaConfig)
-setModel(resolve('OLLAMA_EMBED_MODEL', (key) => settingValue(db, key)).value!)
+// at boot for similarity-ranked /query and inline sweeps; effectsd does the same
+// for split sweeps. MODEL is fixed for the process (a change is a deliberate
+// corpus re-embed, T-22784 / D-22781), not reset on each request.
+configureEmbed(ollamaConfig, (key) => settingValue(db, key))
 
 // How long a provider exchange may make no progress — no headers, no first
 // frame, no next frame — before the transport aborts it as stalled. A hung

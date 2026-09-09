@@ -26,17 +26,30 @@ export { FLOOR, textOf }
 // (config.ts). It folds into hash() and rides the `model` column, so a change
 // invalidates every stored row and the KNN filter screens the old space out —
 // the two must move together (D-22781). This is an ES module live binding: the
-// server re-resolves it against the graph plane at boot via setModel(), and
+// serving and doing owners resolve it against the graph plane at boot, and
 // every importer (hash, put, stored, the KNN filter) sees the new value.
 export let MODEL = resolve('OLLAMA_EMBED_MODEL', () => undefined).value!
 export let setModel = (m: string) => MODEL = m
 
-// The transport's config view (base + optional key), injected by the server so a
+// The transport's config view (base + optional key), injected by each owner so a
 // saved OLLAMA_BASE_URL/OLLAMA_API_KEY override reaches the next embed with no
 // restart. The default (envConfig) resolves env>default with no key — enough for
 // a bare client or a test, which never reaches the network (TASKS_EMBED=0).
 let config: OllamaConfig = envConfig
 export let setEmbedConfig = (c: OllamaConfig) => config = c
+
+// Both the server (similarity queries / inline sweeps) and effectsd (split
+// sweeps) must configure this BEFORE doing any embedding. The URL/key stay
+// live through the config closures; the model is a boot snapshot. No clearing
+// vectors or boot nonce: only an explicit model change (or edited text) moves
+// hash(), so restarting with the same configuration owes no corpus re-embed.
+export let configureEmbed = (
+  c: OllamaConfig,
+  override: (key: string) => string | undefined,
+) => {
+  setEmbedConfig(c)
+  setModel(resolve('OLLAMA_EMBED_MODEL', override).value!)
+}
 
 // FNV-1a over model+text — names the exact embedding a row holds, so the
 // sweep can skip the unchanged without storing the text twice.

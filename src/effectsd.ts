@@ -40,6 +40,7 @@ import { observeLink } from './observe_link.ts'
 import { type Change } from './types.ts'
 import { record } from './telemetry.ts'
 import { stop as stopTimers } from './timers.ts'
+import { configureEmbed } from './embed.ts'
 
 // The same last line of defence the server keeps: an unhandled rejection ends
 // a Deno process, and this process dying parks every pending effect until the
@@ -100,6 +101,11 @@ let ollama: OllamaConfig = {
   base: () => resolve('OLLAMA_BASE_URL', (key) => settingValue(db, key)).value!,
   key: () => secrets.secret('OLLAMA_API_KEY'),
 }
+
+// The sweep lives here in split mode, not in the server's module instance.
+// Share the runner's file-backed config and resolve the model before bootDoing
+// can schedule the first sweep. An unchanged model preserves stored hashes.
+configureEmbed(ollama, (key) => settingValue(db, key))
 
 // The transient observation stream is the only thing the runner still owes the
 // sockets, and this is the wire that carries it there (best-effort by design).
