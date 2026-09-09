@@ -428,8 +428,8 @@ These are the names, all of them:
     generation goal graph_query headers hook hostname image imported
     installed knock layout lease mail member memory message meta meter model
     nofix notice notified noverify opaque opened output pane patch person
-    persona pin plan project prompt proposed provider published quarantined
-    reads
+    persona pin plan process project prompt proposed provider published
+    quarantined reads
     reasoning recall recalled redaction references repo report requires
     response result resume review role run runner runtime satisfies session
     setting settled shelf signin space spawn stderr stop_request

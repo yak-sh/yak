@@ -109,7 +109,11 @@
     "content": {
       "log": true,
       "cols": {
-        "body": "body"
+        "body": "body",
+        "source": {
+          "eid": "entity",
+          "death": "cascade"
+        }
       }
     },
     "entry": {
@@ -352,6 +356,10 @@
         "transcript": "text",
         "agent_type": "text",
         "source": "text",
+        "process": {
+          "eid": "process",
+          "death": "detach"
+        },
         "operator": "bool",
         "provider": "text",
         "model": "text",

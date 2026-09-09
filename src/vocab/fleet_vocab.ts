@@ -30,6 +30,7 @@ import identity from './manifests/identity.json' with { type: 'json' }
 import kernel from './manifests/kernel.json' with { type: 'json' }
 import mail from './manifests/mail.json' with { type: 'json' }
 import platform from './manifests/platform.json' with { type: 'json' }
+import proc from './manifests/process.json' with { type: 'json' }
 import roles from './manifests/roles.json' with { type: 'json' }
 import sessions from './manifests/sessions.json' with { type: 'json' }
 import work from './manifests/work.json' with { type: 'json' }
@@ -65,6 +66,7 @@ let manifests: Manifest[] = [
   kernel,
   mail,
   platform,
+  proc,
   roles,
   sessions,
   work,

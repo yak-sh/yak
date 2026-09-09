@@ -99,6 +99,11 @@ In dependency order:
   `stop`), a status read off the newest one and never stored, the daemon that
   reacts to it, its lock on any entity (`claim`), and the `conflict` written
   down when two sessions want one thing.
+- **[@yaks/process](./process)** — a running program as an entity, so whatever
+  needs one points at it instead of keeping a pid: `process{pid, command, cwd}`,
+  `exit{code}`, and its output as @yaks/session's `content{body, source}`. Three
+  entry points over one loop — launch a child detached, adopt one by pid,
+  re-adopt every unfinished row at boot.
 - **[@yaks/model](./model)** — the seam between a conversation and the model
   that serves it: provider-neutral items, one request and reply shape, and the
   `provider`, `model` and `tool` entities a graph keeps about serving.

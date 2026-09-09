@@ -57,6 +57,9 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'comment.target',
       // a commit row dies with the task it was landed for (M-31946 §7)
       'commit.target',
+      // a line dies with the stream it came off: the ask that said it, or the
+      // process that wrote it (T-35323)
+      'content.source',
       // a notice dies with the entity it is about (D-13858)
       'notice.target',
       // both ends: a standing instruction is meaningless without the
@@ -113,6 +116,9 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'chat.target',
       'session.actor',
       'session.parent',
+      // the process the run happened in outlives nothing and takes nothing
+      // with it: forget the process, keep the transcript (T-35323)
+      'session.process',
       'session.requested_task',
       'session.persona',
       // a fork lets go of its fork-point entry rather than dying with it

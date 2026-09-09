@@ -518,6 +518,7 @@ let contracts = [
   contract('stop_request', 'target', 'session'),
   contract('session', 'role', 'role', { id: 'role-session' }),
   contract('session', 'parent', 'session', { id: 'child-session' }),
+  contract('session', 'process', 'process', { id: 'harnessed-session' }),
   contract('entry', 'session', 'session'),
   contract('fork', 'from', 'entry'),
   contract(

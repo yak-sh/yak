@@ -910,6 +910,17 @@ slow('a fake session runs end to end', async () => {
   assertEquals(s.provider, 'fake') // dormant old-reader alias
   assertEquals(s.model, 'fake-fast')
   assertMatch(String(s.final_text), /^done: /)
+  // A provider-harness run is TWO tracked things (T-35323): the session, and
+  // the child that produced its transcript. The second is a `process` row the
+  // session names, carrying the argv and cwd we launched with.
+  let proc = db.prepare(
+    `select p.pid, p.command, p.cwd from process p
+       join session x on x.process = p.entity
+      where x.entity = (select id from entity where eid = ?)`,
+  ).get(eid) as { pid: number; command: string; cwd: string } | undefined
+  assert(proc, 'the session names the process it ran in')
+  assert(proc.pid > 0)
+  assertStringIncludes(proc.command, 'fake')
   // The self-authored handoff lands on the first-class `brief` component, not
   // doc.body — the wrap auto-capture decoupled the two (T-19460 / ded8019), so
   // doc.body stays free for the scribe's narrative.

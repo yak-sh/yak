@@ -1,0 +1,13 @@
+{
+  "name": "process",
+  "comps": {
+    "process": {
+      "kind": true,
+      "cols": {
+        "pid": "number",
+        "command": "text",
+        "cwd": "text"
+      }
+    }
+  }
+}

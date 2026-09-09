@@ -66,6 +66,7 @@
     "./packages/workers",
     "./packages/task",
     "./packages/session",
+    "./packages/process",
     "./packages/model",
     "./packages/openai",
     "./packages/wake",

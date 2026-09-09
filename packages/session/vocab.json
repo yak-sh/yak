@@ -119,9 +119,9 @@
         },
         "source": {
           "type": "string",
-          "ref": "entry",
+          "ref": "entity",
           "death": "keep",
-          "description": "the ask that said it; absent on prose a person or a system wrote"
+          "description": "what said it — the ask, for a model's own words, or the stream it came off (@yaks/process); absent on prose a person or a system wrote"
         }
       }
     },

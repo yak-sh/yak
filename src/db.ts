@@ -521,9 +521,12 @@ let schema = `
     entity  integer primary key references entity(id),
     call integer not null
   );
+  -- How something ended. A transcript's exit always carries a code; a tracked
+  -- process's ending (T-35323) may be witnessed without one — the wrapper died
+  -- unreporting, or nobody was watching — so the column is nullable.
   create table if not exists exit (
     entity  integer primary key references entity(id),
-    code integer not null
+    code integer
   );
   create table if not exists response (
     entity    integer primary key references entity(id),
@@ -1035,6 +1038,9 @@ export let derived = [
   // A commit (M-31946 §7): {target FK cascade, sha/repo/message text} — the
   // notice shape with three nullable text columns, so it derives.
   'commit',
+  // A tracked process (T-35323, @yaks/process): {pid number, command/cwd text}
+  // — three nullable columns on an entity-keyed spine, so it derives.
+  'process',
   // The platform directory (D-32318): nullable text/real columns and {eid}
   // references by death word, so all three derive.
   'space',
@@ -2956,6 +2962,17 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       ) {
         db.exec('alter table entity alter column num drop not null')
       }
+      // The same in-place ALTER for a live graph's `exit` (T-35323): a process
+      // whose ending was seen but whose code was not is `exit{}`. Every
+      // transcript exit already standing carries one, so nothing is rewritten.
+      if (
+        (prep(
+          db,
+          `select "notnull" as nn from pragma_table_info('exit') where name = 'code'`,
+        ).get() as { nn: number } | undefined)?.nn
+      ) {
+        db.exec('alter table exit alter column code drop not null')
+      }
       // Retired by per-item human notification state; agents derive attention
       // from claims and transcript references instead of this session cursor.
       dropCol('session', 'acked_at')
@@ -3006,10 +3023,18 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       // Self-reported at SessionStart (types.ts): what kind of session, how it booted.
       addCol('session', 'agent_type', 'agent_type text')
       addCol('session', 'source', 'source text')
+      // The process this session is a transcript OF (T-35323): a provider-harness
+      // run is two tracked things — the session, and the child that produced it.
+      // `source` above is already the boot mode a SessionStart hook self-reports,
+      // so the reference wears the word it names.
+      addCol('session', 'process', 'process integer references entity(id)')
       addCol('session', 'operator', 'operator integer')
       // The operator session a delegated agent descends from (types.ts): a child
       // reifies as its own row rather than a second writer on the operator's.
       addCol('session', 'parent', 'parent integer references entity(id)')
+      // What said it (T-35323): the ask, for a model's own words, or the process
+      // whose stream the line came off. Absent on prose a person wrote.
+      addCol('content', 'source', 'source integer references entity(id)')
       // Which way the decision went (D-21212); null reads as approved.
       addCol('decided', 'verdict', 'verdict text')
       for (
@@ -5186,8 +5211,22 @@ export let apply = (
       db,
       'select 1 from entry where entity = (select id from entity where eid = ?)',
     )
+    // A transcript entry is not the only thing a log fact can be a line OF
+    // (T-35323). A tracked process is the other: the lines it writes are
+    // `content{body, source}` naming it, and its ending is its own `exit{code}`.
+    // The anchor there is a `process` row that already STANDS, not one named in
+    // the same batch — a process's ending is necessarily later than its birth,
+    // which is exactly what an entry may never be. Entries keep the stricter
+    // rule below; this only says that a line off a stream is not a loose fact.
+    let processed = prep(
+      db,
+      'select 1 from process where entity = (select id from entity where eid = ?)',
+    )
+    let streamed = (eid: string, comp: Change['comp']) =>
+      !!processed.get(eid) ||
+      (comp?.source != null && !!processed.get(String(comp.source)))
     for (let { eid, name, comp } of changes) {
-      if (!facts.has(name) || edged.has(eid)) continue
+      if (!facts.has(name) || edged.has(eid) || streamed(eid, comp)) continue
       // The one late mark: `prompt` may be ADDED to an existing turn, never
       // revised or removed. `task backfill prompt` re-reads the turn's own
       // transcript line for the tag ingest stamps at birth today; a tag is

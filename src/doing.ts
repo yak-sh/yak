@@ -64,6 +64,7 @@ import {
   tidy,
   watched,
 } from './sessions.ts'
+import { watchProcesses } from './processes.ts'
 import { nativeSweep, noticeAccepted } from './tmux.ts'
 import { codexClock } from './codex_auth.ts'
 import { retryCredential } from './managed_codex.ts'
@@ -679,6 +680,12 @@ export let bootDoing = (d: Doing, syncSoon: () => void) => {
   // still alive, finalize the ones that died while we were away. Nothing here
   // reaps a child; the watcher must never learn how.
   recover(cast)
+
+  // The generic half of that same reconcile (T-35323): a `process` row with no
+  // `exit` is a program we were watching. Pick the live ones back up from their
+  // pidfiles and stamp the ones that are already gone. Sessions are only one
+  // kind of process; this covers every other one the graph tracks.
+  watchProcesses(cast)
 
   // The lease half of the same reconcile: a session that ended abnormally
   // never ran its wrap, so its claim leaked and the board lies about who is

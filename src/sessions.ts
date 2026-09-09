@@ -31,6 +31,7 @@
 //    return takes — server-constructed, post-commit, so every cache hears
 //    the truth exactly once and none of it ever rode the wire inbound.
 import { basename, dirname, resolve } from 'node:path'
+import { processStore } from './processes.ts'
 import { childEnv } from './agent_env.ts'
 import { sentences } from './edge.ts'
 import { type Adapter, adapters, type Event, type Summary } from './adapters.ts'
@@ -638,6 +639,17 @@ let settled = (eid: string, status: string, cast: Cast) => {
     [],
     String(row.final_text ?? '') || undefined,
   )
+  // The process the run happened in ends with the run (T-35323), carrying the
+  // code the tailer actually observed — null when the ending was seen but the
+  // code was not, which is the same story the session's own row tells.
+  let proc = processOf(eid)
+  if (proc) {
+    changes.push({
+      eid: proc,
+      name: 'exit',
+      comp: { code: row.exit_code ?? null },
+    })
+  }
   changes.push(
     ...report(
       eid,
@@ -2345,6 +2357,46 @@ let launch = async (
   }
 }
 
+// The child a provider-harness run happens in is its own entity (T-35323): a
+// session and the process that produced its transcript are two tracked things,
+// and only the second one is a pid. `runtime{pid, pane}` stays where it is —
+// its retirement is T-35021's — so this adds the reference, it does not move
+// anything. A resume is a new child and therefore a new process entity; the
+// session points at whichever one is current.
+// TODO(@yaks/tmux): `runtime.pane` is a terminal address, not a process
+// column. It belongs beside the process as `tmux{pane}`, in its own package —
+// a process usually has no pane at all.
+let attachProcess = async (
+  eid: string,
+  argv: string[],
+  cwd: string,
+  cast: Cast,
+) => {
+  let born = Date.now()
+  let pid = 0
+  while (!pid && running.has(eid) && Date.now() - born < birth()) {
+    pid = pidOf(eid) ?? 0
+    if (!pid) await sleep(poll())
+  }
+  // No pid means stillborn, and a run replaced in the meantime is not ours.
+  if (!pid || !running.has(eid)) return
+  // The row only — not @yaks/process's watcher. The tailer above is already
+  // watching this pid and settle() below stamps the process's `exit` with the
+  // code it observed, so a second poller would only race it to a worse answer.
+  let proc = uuid()
+  await processStore(cast).apply([{
+    entity: { eid: proc },
+    process: { pid, command: argv.join(' '), cwd },
+  }])
+  cast(apply(db, [{ eid, name: 'session', comp: { process: proc } }]))
+}
+
+// The process a session ran in, when it has one.
+let processOf = (eid: string) =>
+  (db.prepare(
+    `select ${refEid('process')} as process from session where ${OWNED}`,
+  ).get(eid) as { process: string | null } | undefined)?.process ?? null
+
 // Spawn a detached child, record its pid, and follow its output into the
 // row until it exits. The seam a fresh launch and a resume share — the only
 // difference between them is the worktree (launch makes one; a resume runs
@@ -2382,6 +2434,9 @@ let track = (
     done: Promise.resolve(),
   }
   running.set(eid, run)
+  attachProcess(eid, argv, cwd, cast).catch((e) =>
+    console.warn('process attach —', e)
+  )
   run.done = following(eid, ad, cast, from)
   return run.done
 }

@@ -1,0 +1,34 @@
+{
+  "title": "process",
+  "$defs": {
+    "process": {
+      "type": "object",
+      "kind": true,
+      "description": "a program running on a host, tracked by pid — whether or not we started it",
+      "properties": {
+        "pid": {
+          "type": "integer",
+          "description": "the process id, on the host that tracks it — the one durable handle an adopted process has"
+        },
+        "command": {
+          "type": "string",
+          "description": "the command line as launched, argv joined by a space; absent when the process was adopted rather than started here"
+        },
+        "cwd": {
+          "type": "string",
+          "description": "where it was launched; absent for the same reason as command"
+        }
+      }
+    },
+    "exit": {
+      "type": "object",
+      "description": "the process is over — written once, and never taken back",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "description": "the status it reported; absent when the ending was witnessed but the code was not (a signal took the wrapper, or nobody was watching)"
+        }
+      }
+    }
+  }
+}

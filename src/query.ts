@@ -388,7 +388,14 @@ let sessionTwin = (owners: string[]) =>
 // (T-35023) yield both bare words to the SPAWN spelling every board and CLI
 // filter already means by them — `.provider=codex` asks which agent ran, not
 // which entity serves a model; `.model.provider=` reads the catalog.
+// A tracked process (T-35323) yields all three of its bare words the same way:
+// `.pid` and `.cwd` already mean the SESSION's — the reading every board and
+// CLI filter has — and `.command` means the bash entry's. `.process.pid=`
+// reaches the newcomer, and `.process!` still asks which entities are one.
 let bareShy = new Set([
+  'process.pid',
+  'process.cwd',
+  'process.command',
   'fork.from',
   'accept.body',
   'edge.from',

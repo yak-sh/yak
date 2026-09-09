@@ -78,6 +78,7 @@ export let sessionComps: Record<string, Record<string, PropType>> = {
   },
   content: {
     body: 'body',
+    source: { eid: 'entity', death: 'cascade' },
   },
   entry: {
     session: { eid: 'session', death: 'cascade' },
@@ -261,6 +262,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   contains: {},
   content: {
     body: 'body',
+    source: { eid: 'entity', death: 'cascade' },
   },
   created: {
     by: { eid: 'entity', death: 'keep' },
@@ -454,6 +456,11 @@ export let comps: Record<string, Record<string, PropType>> = {
     z: 'number',
   },
   plan: {},
+  process: {
+    pid: 'number',
+    command: 'text',
+    cwd: 'text',
+  },
   project: {
     color: 'text',
   },
@@ -550,6 +557,7 @@ export let comps: Record<string, Record<string, PropType>> = {
     transcript: 'text',
     agent_type: 'text',
     source: 'text',
+    process: { eid: 'process', death: 'detach' },
     operator: 'bool',
     provider: 'text',
     model: 'text',
@@ -913,6 +921,7 @@ export let kindOrder = [
   'pane',
   'person',
   'plan',
+  'process',
   'project',
   'board',
   'email',
