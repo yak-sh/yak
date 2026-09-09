@@ -2,8 +2,8 @@
 // real socket against the door the plugin mounts, then `git log` and `git fsck`
 // in what it wrote. Everything below the wire is @yaks/git's and is checked
 // there (packages/git/http_test.ts); what is pinned here is the MOUNT — which
-// app a URL names, that a private one is not there at all, and that a path
-// which is no repository is left for the apps.
+// app a URL names, who may clone it and how they say so, and that a path which
+// is no repository is left for the apps.
 import { assert, assertEquals } from '@std/assert'
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { directory } from './directory.ts'
@@ -11,26 +11,36 @@ import * as dirPart from './directory.ts'
 import type { App, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { gitPlugin } from './git.ts'
+import { ledger, mint } from './grants.ts'
 import { platform } from './harness.ts'
 import type { Who } from './session.ts'
 import { pins, record, sha256 } from './versions.ts'
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
+let BEN = 'b0000000-0000-4000-8000-0000000000be'
+let SECRET = 'a probe secret'
 let by = { 'x-yak-person': ADA, 'x-yak-role': 'owner' }
 let WHO: Who = { person: ADA, role: 'owner' }
 let utf8 = new TextEncoder()
 let text = new TextDecoder()
 
-// A space with one app in it, at the access mode this test is about.
-let standing = async (env: Env, access: string) => {
+// A space with one app in it, at the access mode this test is about. Ada owns
+// the space, which is what a credential of hers has to find to reach a private
+// app; Ben is a person of the platform with no seat here at all.
+let standing = async (env: Env, access: string, trashed = false) => {
   let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
   await dir.apply({
     entities: [
       { entity: { eid: ADA }, person: {}, doc: { title: 'Ada' } },
+      { entity: { eid: BEN }, person: {}, doc: { title: 'Ben' } },
       {
         entity: { eid: '$space' },
         doc: { title: 'ada' },
         space: { slug: 'ada' },
+      },
+      {
+        entity: { eid: '$seat' },
+        member: { space: '$space', person: ADA, role: 'owner' },
       },
       {
         entity: { eid: '$app' },
@@ -42,6 +52,9 @@ let standing = async (env: Env, access: string) => {
           access,
           store: 'ada/recipes.aaa111',
         },
+        ...(trashed
+          ? { trashed: { at: '2026-09-09T00:00:00Z', by: ADA } }
+          : {}),
       },
     ],
   }, by)
@@ -76,7 +89,18 @@ let asked = (env: Env, address: string, headers: HeadersInit = {}) => {
   return gitPlugin.routes![0]({ env, req, path: url.pathname, space: 'ada' })
 }
 
-let git = async (...args: string[]) => {
+// A grant of this person's, as `yak login` writes one down: the token the door
+// takes as a Basic password, and the credential a `git clone` URL carries.
+let tokenFor = async (env: Env, person: string) =>
+  (await mint(SECRET, ledger(env.OAUTH_KV)!, { person })).token
+
+// The credential git sends once it has been challenged. The username is
+// decoration — the door reads the password.
+let basic = (token: string) => ({
+  authorization: `Basic ${btoa(`x:${token}`)}`,
+})
+
+let run = async (...args: string[]) => {
   let { code, stdout, stderr } = await new Deno.Command('git', {
     args,
     env: {
@@ -87,12 +111,25 @@ let git = async (...args: string[]) => {
     stdout: 'piped',
     stderr: 'piped',
   }).output()
-  assertEquals(code, 0, `git ${args.join(' ')}: ${text.decode(stderr)}`)
-  return text.decode(stdout)
+  return { code, out: text.decode(stdout), err: text.decode(stderr) }
 }
 
+let git = async (...args: string[]) => {
+  let { code, out, err } = await run(...args)
+  assertEquals(code, 0, `git ${args.join(' ')}: ${err}`)
+  return out
+}
+
+// The door on a socket, so a real `git` speaks to the mount the router mounts.
+let serving = (env: Env) =>
+  Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
+    let path = new URL(req.url).pathname
+    let at = { env, req, path, space: 'ada' }
+    return await gitPlugin.routes![0](at) ?? new Response('no', { status: 404 })
+  })
+
 Deno.test('git clones an app at <app>.git, and its history is its deploys', async () => {
-  let { env } = platform('a probe secret')
+  let { env } = platform(SECRET)
   let { app } = await standing(env, 'public')
   await deploy(env, app, 1, { 'index.html': '<h1>hi</h1>\n' })
   await deploy(env, app, 2, {
@@ -100,13 +137,7 @@ Deno.test('git clones an app at <app>.git, and its history is its deploys', asyn
     'lib/app.js': 'export let go = () => 1\n',
   })
 
-  // The whole mount on a socket: everything a clone sends arrives as the
-  // router would deliver it, and nothing of this test is in the answer.
-  let server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
-    let path = new URL(req.url).pathname
-    let at = { env, req, path, space: 'ada' }
-    return await gitPlugin.routes![0](at) ?? new Response('no', { status: 404 })
-  })
+  let server = serving(env)
   let dir = await Deno.makeTempDir({ prefix: 'yaks-app-clone-' })
   try {
     let url = `http://127.0.0.1:${server.addr.port}/recipes.git`
@@ -135,7 +166,7 @@ Deno.test('git clones an app at <app>.git, and its history is its deploys', asyn
 })
 
 Deno.test('git clones the browser address, with and without its slash', async () => {
-  let { env } = platform('a probe secret')
+  let { env } = platform(SECRET)
   let { app } = await standing(env, 'public')
   // A file at the very address the door now answers: what proves the app is
   // still the one serving its pages.
@@ -144,11 +175,7 @@ Deno.test('git clones the browser address, with and without its slash', async ()
     'info/refs': 'a static file\n',
   })
 
-  let server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
-    let path = new URL(req.url).pathname
-    let at = { env, req, path, space: 'ada' }
-    return await gitPlugin.routes![0](at) ?? new Response('no', { status: 404 })
-  })
+  let server = serving(env)
   let dir = await Deno.makeTempDir({ prefix: 'yaks-app-clone-' })
   try {
     let base = `http://127.0.0.1:${server.addr.port}/recipes`
@@ -172,7 +199,7 @@ Deno.test('git clones the browser address, with and without its slash', async ()
 })
 
 Deno.test('the browser address redirects to the repository, query and all', async () => {
-  let { env } = platform('a probe secret')
+  let { env } = platform(SECRET)
   await standing(env, 'public')
   let res = await asked(env, '/recipes/info/refs?service=git-upload-pack', {
     'git-protocol': 'version=2',
@@ -188,20 +215,110 @@ Deno.test('the browser address redirects to the repository, query and all', asyn
   assertEquals(await asked(env, '/recipes/git-upload-pack'), null)
 })
 
-Deno.test('a private app has no repository, to anyone who is not a member', async () => {
-  let { env } = platform('a probe secret')
+Deno.test('a private app asks for a credential, and judges the one it gets', async () => {
+  let { env } = platform(SECRET)
   let { app } = await standing(env, 'private')
   await deploy(env, app, 1, { 'index.html': '<h1>hi</h1>\n' })
+  let hers = await tokenFor(env, ADA)
+  let his = await tokenFor(env, BEN)
   for (let path of ['/recipes.git/info/refs', '/recipes.git/git-upload-pack']) {
-    let res = await asked(env, path, { 'git-protocol': 'version=2' })
-    assertEquals(res!.status, 404, path)
-    // Not a 403: whether an app is there at all is its owner's to tell.
+    let v2 = { 'git-protocol': 'version=2' }
+    // Nothing offered: the challenge, which is the only way git learns to
+    // send anything at all.
+    let none = await asked(env, path, v2)
+    assertEquals(none!.status, 401, path)
+    assertEquals(
+      none!.headers.get('www-authenticate'),
+      'Basic realm="yaks.app"',
+      path,
+    )
+    // Offered and worthless — a token under nobody's secret — is the same
+    // answer, because nobody has proved anything yet.
+    let junk = await asked(env, path, { ...v2, ...basic('yaks_nonsense') })
+    assertEquals(junk!.status, 401, path)
+    // Ben proved who he is and holds no seat in Ada's space: told for good.
+    let ben = await asked(env, path, { ...v2, ...basic(his) })
+    assertEquals(ben!.status, 403, path)
+    assertEquals(await ben!.text(), 'git: not your repository\n')
+  }
+  // And Ada's own grant reaches her own app: the advertisement itself, at the
+  // address a clone asks for it at.
+  let ada = await asked(env, '/recipes.git/info/refs?service=git-upload-pack', {
+    'git-protocol': 'version=2',
+    ...basic(hers),
+  })
+  assertEquals(ada!.status, 200)
+  assertEquals(
+    ada!.headers.get('content-type'),
+    'application/x-git-upload-pack-advertisement',
+  )
+})
+
+Deno.test('a trashed app is gone to a credential as much as to nobody', async () => {
+  let { env } = platform(SECRET)
+  let { app } = await standing(env, 'private', true)
+  await deploy(env, app, 1, { 'index.html': '<h1>hi</h1>\n' })
+  let hers = await tokenFor(env, ADA)
+  for (let head of [{}, basic(hers)]) {
+    let res = await asked(env, '/recipes.git/info/refs', {
+      'git-protocol': 'version=2',
+      ...head,
+    })
+    assertEquals(res!.status, 404)
+    // Not a challenge: there is nothing here to sign in to.
+    assertEquals(res!.headers.get('www-authenticate'), null)
     assertEquals(await res!.text(), 'git: no such repository\n')
   }
 })
 
+Deno.test('git clones a private app with the token as the password', async () => {
+  let { env } = platform(SECRET)
+  let { app } = await standing(env, 'private')
+  await deploy(env, app, 1, { 'index.html': '<h1>hi</h1>\n' })
+  let hers = await tokenFor(env, ADA)
+
+  let server = serving(env)
+  let dir = await Deno.makeTempDir({ prefix: 'yaks-app-clone-' })
+  try {
+    let at = `127.0.0.1:${server.addr.port}/recipes.git`
+    // No credential, and no terminal to ask on: git stops at the challenge.
+    let shut = await run(
+      '-c',
+      'protocol.version=2',
+      'clone',
+      `http://${at}`,
+      `${dir}/a`,
+    )
+    assert(shut.code != 0, 'a clone with no credential fails')
+    assert(
+      /terminal prompts disabled|Authentication failed|401/i.test(shut.err),
+      `the 401 is what stopped it: ${shut.err}`,
+    )
+    // The same URL wearing the token, which is what a person is handed.
+    await git(
+      '-c',
+      'protocol.version=2',
+      'clone',
+      '--quiet',
+      `http://x:${hers}@${at}`,
+      `${dir}/b`,
+    )
+    assertEquals(
+      await git('-C', `${dir}/b`, 'log', '--format=%s'),
+      'deploy 1\n',
+    )
+    assertEquals(
+      await Deno.readTextFile(`${dir}/b/index.html`),
+      '<h1>hi</h1>\n',
+    )
+  } finally {
+    await server.shutdown()
+    await Deno.remove(dir, { recursive: true })
+  }
+})
+
 Deno.test('an app that is not there, and a path that is no repository', async () => {
-  let { env } = platform('a probe secret')
+  let { env } = platform(SECRET)
   await standing(env, 'public')
   let gone = await asked(env, '/nothing.git/info/refs', {
     'git-protocol': 'version=2',
@@ -214,7 +331,7 @@ Deno.test('an app that is not there, and a path that is no repository', async ()
 })
 
 Deno.test('the advertisement is served at info/refs on a public app', async () => {
-  let { env } = platform('a probe secret')
+  let { env } = platform(SECRET)
   await standing(env, 'public')
   let res = await asked(env, '/recipes.git/info/refs?service=git-upload-pack', {
     'git-protocol': 'version=2',

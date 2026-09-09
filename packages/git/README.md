@@ -162,6 +162,10 @@ The query is what tells a clone from a page: `?service=git-upload-pack` is
 something no browser asks for, and git follows that first redirect and fetches
 from where it landed.
 
+A PRIVATE app answers `401 WWW-Authenticate: Basic` instead, because git sends
+no credential unprompted; the password git then sends is a `yak login` grant,
+and the username beside it is ignored — `git clone https://x:<token>@…`.
+
 ## What is not here
 
 No push, no ref storage, no delta compression, no shallow clone, and no
