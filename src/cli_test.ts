@@ -40,6 +40,7 @@ import {
   roleEid,
   sharedCheckout,
   showing,
+  spawnFlags,
   strayFile,
   strayFlag,
   subagentDigest,
@@ -124,6 +125,24 @@ Deno.test('spawn usage errors exit non-zero before dispatch (T-35458)', async ()
 
 let commentBody = (args: string[], io: Parameters<typeof parse>[3]) =>
   parse('comment', manuals.comment, ['T-1', ...args], io).body
+
+Deno.test('spawn flags: model alone carries no provider into the launch request', () => {
+  let ask = (flags: string[]) =>
+    spawnFlags(parse('spawn', manuals.spawn, ['T-1', ...flags]))
+  assertEquals(ask(['--model=gpt-6-astra']), {
+    provider: undefined,
+    model: 'gpt-6-astra',
+    effort: 'high',
+    persona: undefined,
+    worktree: undefined,
+  })
+  assertEquals(
+    ask(['--provider=codex', '--model=gpt-6-astra']).provider,
+    'codex',
+  )
+  assertEquals(ask([]).provider, undefined)
+  assertEquals(ask([]).model, undefined)
+})
 
 let unsafe = (text: string) =>
   [...text].filter((c) => {

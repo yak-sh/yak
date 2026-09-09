@@ -2481,7 +2481,8 @@ export let spawnDefaults = (all: Row[], session?: string): SpawnAsk => {
 // provider: a lower tier's model is dropped when a higher tier pins a
 // DIFFERENT provider, unless the table says that provider can also run it —
 // so a codex caller's model never rides an explicit --provider=claude. An
-// explicit model implies its provider where the table names exactly one host.
+// explicit model without a provider leaves transport selection to readiness,
+// never to a lower tier's provider (even when several transports serve it).
 export let spawnPlan = (
   all: Row[],
   ps: Provider[],
@@ -2501,33 +2502,23 @@ export let spawnPlan = (
         persona: x.persona ? String(x.persona) : undefined,
       }
       : {}
-  // The provider a model implies, but only when the table names exactly one
-  // host — an ambiguous model leaves inference to the lower tier and the table.
-  let host = (model?: string): string | undefined => {
-    if (!model) return undefined
-    let hosts = ps.filter((p) => p.models.includes(model)).map((p) => p.name)
-    return hosts.length == 1 ? hosts[0] : undefined
-  }
   // A model this provider can run — the tie-break's "advertises them".
   let runs = (provider?: string, model?: string) =>
     !!provider && !!model &&
     ps.some((p) => p.name == provider && p.models.includes(model))
-  // Each tier's provider is its explicit one, else the one its explicit model
-  // implies — so an explicit model authoritatively carries its provider.
-  let norm = (t: SpawnAsk): SpawnAsk => ({
-    ...t,
-    provider: t.provider ?? host(t.model),
-  })
   let hint = o.task ? find(all, o.task)?.comps.spawn : undefined
   let tiers = [o.ask ?? {}, asSpec(hint), spawnDefaults(all, o.session)]
-    .map(norm)
   // Fold low→high: the higher tier's provider wins and carries its own
   // model/effort; a lower tier's model/effort survive only when they still
   // fit the winning provider (same provider, or one that advertises the model).
   let spec = tiers.reduceRight<SpawnAsk>((lo, hi) => {
-    let provider = hi.provider ?? lo.provider
+    // A model-only tier clears the inherited provider so spawnDefault can
+    // route it across primary/fallback transports, or reject an unserved model.
+    let provider = hi.provider ?? (hi.model ? undefined : lo.provider)
     let same = !hi.provider || !lo.provider || hi.provider == lo.provider
-    let keep = same || runs(provider, lo.model)
+    let keep = hi.model && !hi.provider
+      ? runs(lo.provider, hi.model)
+      : same || runs(provider, lo.model)
     return {
       provider,
       model: hi.model ?? (keep ? lo.model : undefined),

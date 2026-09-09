@@ -2,7 +2,13 @@
 // every door speaks, the menu rules (an alias accepted but unoffered, a
 // fallback transport carrying models but no menu, the test rig callable but
 // unlisted), and the validation gate spawning reads.
-import { assertEquals, assertMatch, assertNotEquals } from '@std/assert'
+import {
+  assertEquals,
+  assertMatch,
+  assertNotEquals,
+  assertThrows,
+} from '@std/assert'
+import { spawnDefault } from './providers.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { db } = await import('./live_db.ts')
@@ -14,6 +20,38 @@ let ps = known(db)
 let of = (name: string) => ps.find((p) => p.name == name)!
 let ask = (o: { provider?: string; model?: string; effort?: string }) =>
   trouble(known(db), o)
+
+Deno.test('spawnDefault: model-only Astra routes through the graph catalog by readiness', () => {
+  assertEquals(spawnDefault(known(db), { model: 'gpt-6-astra' }), {
+    provider: 'codex',
+    model: 'gpt-6-astra',
+  })
+  assertEquals(
+    spawnDefault(known(db, (name) => name != 'codex'), {
+      model: 'gpt-6-astra',
+    }),
+    { provider: 'codex-cli', model: 'gpt-6-astra' },
+  )
+})
+
+Deno.test('spawnDefault: an unserved model reports the available graph providers', () => {
+  let table = known(db)
+  let error = assertThrows(
+    () => spawnDefault(table, { model: 'unserved-model' }),
+    Error,
+  )
+  assertEquals(
+    error.message,
+    `no provider serves model: unserved-model; available providers: ${
+      table.map((p) => p.name).join(', ')
+    }`,
+  )
+  assertThrows(
+    () => spawnDefault([], { model: 'unserved-model' }),
+    Error,
+    'no provider serves model: unserved-model; available providers: (none)',
+  )
+})
 
 Deno.test('catalog: one row per provider, allowlists only — no argv', () => {
   assertEquals(

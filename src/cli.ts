@@ -1501,6 +1501,16 @@ let launch = async (
   return minted
 }
 
+// Only flags name a provider here; a model-only ask must reach spawnPlan
+// without the calling session's transport attached.
+export let spawnFlags = (got: Got): Parameters<typeof launch>[1] => ({
+  provider: got.opts['--provider'],
+  model: got.opts['--model'],
+  effort: got.opts['--effort'],
+  persona: got.opts['--persona'],
+  worktree: got.opts['--worktree'],
+})
+
 let spawn = async (got: Got) => {
   let id = got.args.id
   if (!id) {
@@ -1508,13 +1518,7 @@ let spawn = async (got: Got) => {
       'task spawn <id> [--provider=X] [--model=Y] [--effort=Z] [--persona=P-9]',
     )
   }
-  let minted = await launch(id, {
-    provider: got.opts['--provider'],
-    model: got.opts['--model'],
-    effort: got.opts['--effort'],
-    persona: got.opts['--persona'],
-    worktree: got.opts['--worktree'],
-  })
+  let minted = await launch(id, spawnFlags(got))
   // --wait is the two verbs said once: the S-id line stands exactly as it
   // does without it, then `session wait`'s own path takes over.
   if (got.flags.has('--wait')) await waitFor(minted, got)

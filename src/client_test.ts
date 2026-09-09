@@ -1914,14 +1914,58 @@ Deno.test('spawnPlan: an explicit model infers its provider when unambiguous', (
   assertEquals(plan.model, 'claude-opus-4-8')
 })
 
-Deno.test('spawnPlan: an ambiguous model keeps the lower tier provider', () => {
-  // `shared` runs on both, so no inference — the caller's codex disambiguates.
-  let plan = spawnPlan(planRows(), table, {
+Deno.test('spawnPlan: a shared model routes by the table, not the lower tier provider', () => {
+  // `shared` runs on both: the table's first ready transport wins, not caller.
+  let plan = spawnPlan(planRows(), [...table].reverse(), {
     session: 'caller',
     ask: { model: 'shared' },
   })
-  assertEquals(plan.provider, 'codex')
+  assertEquals(plan.provider, 'claude')
   assertEquals(plan.model, 'shared')
+})
+
+Deno.test('spawnPlan: model-only ask overrides a Claude caller and hint, including fallback', () => {
+  let all = planRows()
+  all.find((r) => r.comps.session)!.comps.session = {
+    id: 'caller',
+    provider: 'claude',
+    model: 'claude-opus-4-8',
+  }
+  let ps = [
+    table[1],
+    { name: 'codex-cli', models: ['gpt-6-astra'], fallback: true },
+    { name: 'codex', models: ['gpt-6-astra'] },
+  ]
+  for (let blocked of [false, true]) {
+    let plan = spawnPlan(all, ps, {
+      task: 'T-2',
+      session: 'caller',
+      ask: { model: 'gpt-6-astra' },
+      blocked: (name) => blocked && name == 'codex',
+    })
+    assertEquals(plan.provider, blocked ? 'codex-cli' : 'codex')
+    assertEquals(plan.model, 'gpt-6-astra')
+    assertEquals(plan.effort, undefined) // no Claude-only effort inherited
+  }
+  assertThrows(
+    () =>
+      spawnPlan(all, ps, {
+        session: 'caller',
+        ask: { model: 'unserved-model' },
+      }),
+    Error,
+    'no provider serves model: unserved-model; available providers: claude, codex-cli, codex',
+  )
+  // Neither flag still inherits the caller; explicit provider stays explicit.
+  assertEquals(spawnPlan(all, ps, { session: 'caller' }).provider, 'claude')
+  assertEquals(
+    spawnPlan(all, ps, {
+      session: 'caller',
+      ask: { provider: 'codex', model: 'gpt-6-astra' },
+      blocked: () => true,
+    }).provider,
+    'codex',
+  )
 })
 
 Deno.test('spawnPlan: nothing named falls to the provider-table default', () => {

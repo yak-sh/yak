@@ -95,7 +95,7 @@ export let transport = (
 // The provider-neutral spawn default. Every door inherits a calling session
 // first; without one they meet here, so a comment, command bar, CLI, and tool
 // cannot silently choose different agents. An explicit provider is a direct
-// request, honored as-is; otherwise the default model routes to its best usable
+// request, honored as-is; otherwise the chosen model routes to its best usable
 // transport by readiness.
 export let spawnDefault = (
   ps: Provider[],
@@ -115,6 +115,13 @@ export let spawnDefault = (
       : ranked(ps)[0]?.models[0])
   if (!model) return { provider: undefined, model: undefined }
   let ts = transportsOf(ps, model)
+  if (!ts.length) {
+    throw new Error(
+      `no provider serves model: ${model}; available providers: ${
+        ps.map((p) => p.name).join(', ') || '(none)'
+      }`,
+    )
+  }
   return {
     provider: ts.find((name) => !blocked(name)) ?? ts[ts.length - 1],
     model,
