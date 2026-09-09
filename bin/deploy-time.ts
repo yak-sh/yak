@@ -74,6 +74,14 @@ export let versionFor = (sha: string, pushed: string, versions: Version[]) => {
   return nearest ? { version: nearest, estimated: true } : null
 }
 
+// Cloudflare builds a push only when it touches the Worker's watch paths
+// (`workers/yak/*`, `packages/*` — workers/yak/README.md), so a commit can be
+// pushed and never deploy: waiting for its version would fail the gate on
+// every docs-or-CI commit. Cloudflare's own check run is the signal, asked for
+// only after the version wait expires, when a real build's check exists.
+export let built = (runs: { name: string }[]) =>
+  runs.some((r) => r.name.startsWith('Workers Builds'))
+
 // Cloudflare silently ignores an override for a version outside the active
 // deployment. A 200 alone can therefore be the OLD code, even during rollout.
 export let probe = async (version: string, get = fetch) => {
@@ -211,6 +219,7 @@ export let main = async (args = Deno.args) => {
     match: NonNullable<ReturnType<typeof versionFor>>
   }[] = []
   let used = new Set<string>()
+  let skipped = false
   for (let sha of shas) {
     let suites = await api(`commits/${sha}/check-suites`).catch(() => ({
       check_suites: [],
@@ -228,7 +237,17 @@ export let main = async (args = Deno.args) => {
         await pause()
         match = versionFor(sha, push.pushed, await versions())
       }
-      if (!match) throw new Error(`no uploaded version for ${sha} after 120s`)
+      if (!match) {
+        let checks = await api(`commits/${sha}/check-runs`).catch(() => ({
+          check_runs: [],
+        }))
+        if (!built(checks.check_runs)) {
+          console.log(`${sha.slice(0, 8)}: no Workers Build — nothing to time`)
+          skipped = true
+          continue
+        }
+        throw new Error(`no uploaded version for ${sha} after 120s`)
+      }
     }
     if (match && !used.has(match.version.id)) {
       pending.push({ sha, push, match })
@@ -236,7 +255,10 @@ export let main = async (args = Deno.args) => {
     }
     if (pending.length == count) break
   }
-  if (!pending.length) throw new Error('no uploads match recent pushes')
+  if (!pending.length) {
+    if (skipped) return 0
+    throw new Error('no uploads match recent pushes')
+  }
   let code = 0
   let written: Deploy[] = []
   let old = await readRecords()

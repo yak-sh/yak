@@ -40,6 +40,10 @@ The dashboard settings, in full (Workers & Pages → `yak` → Settings → Buil
 | Build watch paths       | `workers/yak/*`, `packages/*`                                                |
 | Non-production branches | build only, no deploy — preview URLs do not apply to a Durable Object Worker |
 
+A push outside the watch paths deploys nothing: no build check, no version, and
+so nothing for the gate's `deploy time` step to measure — it says so and the
+deploy gate judges the rows already recorded (`bench/deploys.md`).
+
 Everything the build actually does is in `bin/build-yak`, so the dashboard holds
 one line: install Deno (not on the Ubuntu 24.04 image), `deno task check` from
 the repo root, `deno task test:workers` (kernel and tail). A red build deploys

@@ -5,7 +5,11 @@ runs the recorder on `github.sha` before `deploy gate` judges (T-35336). The
 workflow runs on the box, so the recorder reads the same GitHub and Wrangler
 logins under `$HOME` that a hand run does; no Actions secret is added, and
 `deploy-gate` still makes no live call. A pull request has no main push to time,
-so the step is push-only and a PR judges the committed rows alone.
+so the step is push-only and a PR judges the committed rows alone. A push that
+touches none of the Worker's build watch paths deploys nothing at all: the
+recorder waits for the version, finds no Cloudflare build check for the commit,
+says `no Workers Build — nothing to time`, and the gate judges the rows already
+recorded.
 
 By hand — the same two commands, and what the workflow runs:
 

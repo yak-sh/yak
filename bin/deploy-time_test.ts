@@ -1,5 +1,12 @@
 import { assertEquals } from '@std/assert'
-import { append, probe, pushTime, summary, versionFor } from './deploy-time.ts'
+import {
+  append,
+  built,
+  probe,
+  pushTime,
+  summary,
+  versionFor,
+} from './deploy-time.ts'
 import { type Deploy, gate, readRecords, records } from './deploy-gate.ts'
 import type { Version } from '../src/yak_deploys.ts'
 
@@ -137,6 +144,15 @@ Deno.test('deploy timing: the commit under test is judged, not the last hand-rec
   assertEquals(gate(stale).code, 1)
   let fresh = gate([...stale, deploy(3, 47)])
   assertEquals([fresh.code, fresh.floor, fresh.limit], [0, 40, 50])
+})
+
+Deno.test('deploy timing: a commit Cloudflare never built has nothing to time', () => {
+  // cdabdded touched only bin/ and .github/, outside the Worker's watch paths:
+  // Cloudflare skipped it, no version was ever minted, and waiting for one
+  // failed the gate. Only Cloudflare's own build check says a deploy is coming.
+  assertEquals(built([{ name: 'gate' }, { name: 'dry-run' }]), false)
+  assertEquals(built([]), false)
+  assertEquals(built([{ name: 'gate' }, { name: 'Workers Builds: yak' }]), true)
 })
 
 Deno.test('deploy timing: the job summary carries the row the record accepts', () => {

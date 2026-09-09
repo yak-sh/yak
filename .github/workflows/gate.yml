@@ -67,7 +67,9 @@ jobs:
       # names this SHA, probes it, and appends the row; deploy-gate then judges
       # that fresh row against the committed floor, the 60s limit unchanged.
       #
-      # Push only: a PR has no main push to time. No Actions secret is added —
+      # Push only: a PR has no main push to time. A push outside the Worker's
+      # watch paths deploys nothing, and the recorder says so instead of waiting
+      # (workers/yak/README.md). No Actions secret is added —
       # the recorder uses the box's own gh and wrangler logins under $HOME.
       # Nothing here pushes, so the row lands in this run's checkout and in the
       # job summary; commit it with the next change, like bench-gate's
