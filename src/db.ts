@@ -947,7 +947,7 @@ let mailFts = `create trigger if not exists mail_fts_ai after insert on mail
   end;`
 
 // The FTS5 mirrors, apart from `schema` because they are the one part of it a
-// backend may lack (Can.fts): both derive from doc and the integrity pass in
+// backend may lack (Can.fts): these derive from doc and the integrity pass in
 // migrate() rebuilds them, so a store without FTS5 skips them whole and its
 // search() refuses instead of failing on a missing table.
 let ftsSchema = `
@@ -1006,6 +1006,82 @@ let ftsSchema = `
       (select value from blob_text where entity = new.body));
   end;
 `
+
+// Content is already inline text (unlike doc.body's blob reference). Keep
+// token and substring semantics separate, just as for docs. docsize is FTS5's
+// actual membership, not count(*) on an external-content table (which reads
+// the source). Guard deletes because old rows may await the additive backfill.
+let contentIndexes = ['content_fts', 'content_gram']
+let contentFtsSchema = contentIndexes.map((t) => `
+  create virtual table if not exists ${t} using fts5(
+    body, content='content', content_rowid='entity'
+    ${t.endsWith('_gram') ? ", tokenize='trigram', detail='none'" : ''}
+  );
+  create trigger if not exists ${t}_ai after insert on content begin
+    insert into ${t} (rowid, body) values (new.entity, new.body);
+  end;
+  create trigger if not exists ${t}_ad after delete on content
+  when exists (select 1 from ${t}_docsize where id = old.entity) begin
+    insert into ${t} (${t}, rowid, body)
+      values ('delete', old.entity, old.body);
+  end;
+  create trigger if not exists ${t}_au after update on content begin
+    insert into ${t} (${t}, rowid, body)
+      select 'delete', old.entity, old.body
+      where exists (select 1 from ${t}_docsize where id = old.entity);
+    insert into ${t} (rowid, body) values (new.entity, new.body);
+  end;
+`).join('\n')
+
+export let contentFtsPending = (db: Sql): boolean =>
+  db.can.fts &&
+  !!prep(db, "select 1 from server_meta where k = 'content_fts_pending'").get()
+
+// One bounded, resumable maintenance slice, never a full rebuild on boot.
+// Writers and concurrent openers serialize with the slice: a source row is
+// read and indexed under the same lock, so edits/deletes cannot strand stale
+// prose. The cursor skips rows already maintained by triggers. A crash loses
+// at most this transaction; the next open resumes it.
+export let fillContentFts = (db: Sql, limit = 64): boolean => {
+  if (!contentFtsPending(db)) return false
+  return db.transaction(() => {
+    let state = prep(
+      db,
+      "select v from server_meta where k = 'content_fts_pending'",
+    ).get() as { v: string } | undefined
+    if (!state) return false
+    let rows = prep(
+      db,
+      `select entity, body from content
+      where entity > ? order by entity limit ?`,
+    ).all(Number(state.v), limit) as { entity: number; body: string }[]
+    // Bound text volume too: one unusually long entry is indivisible, but never
+    // compound it with another batch of long responses in the same slice.
+    let chars = 0, through = Number(state.v)
+    for (let row of rows) {
+      for (let t of contentIndexes) {
+        prep(
+          db,
+          `insert into ${t} (rowid, body)
+          select ?, ? where not exists (select 1 from ${t}_docsize where id = ?)`,
+        )
+          .run(row.entity, row.body, row.entity)
+      }
+      through = row.entity
+      chars += row.body.length
+      if (chars >= 256_000) break
+    }
+    if (!rows.length) {
+      db.exec("delete from server_meta where k = 'content_fts_pending'")
+      // Ask the usual integrity pass to verify the finished mirrors next boot.
+      db.exec("delete from server_meta where k = 'fts_check'")
+      return false
+    }
+    prep(db, "update server_meta set v = ? where k = 'content_fts_pending'")
+      .run(String(through))
+    return true
+  }, true)
+}
 
 // The component tables DERIVED from the vocabulary (T-12764) rather than
 // hand-written in `schema` above — the last twin of `comps` closed, generated at
@@ -2928,8 +3004,17 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       // it — has its rows put back here, once, in this transaction.
       let unbuilt = !db.can.fts ? [] : ['doc_fts', 'doc_gram']
         .filter((t) => !tableExists(db, t))
+      let contentUnbuilt = db.can.fts &&
+        contentIndexes.some((t) => !tableExists(db, t))
       db.exec(schema)
-      if (db.can.fts) db.exec(ftsSchema)
+      if (db.can.fts) {
+        db.exec(ftsSchema)
+        db.exec(contentFtsSchema)
+        if (contentUnbuilt && prep(db, 'select 1 from content limit 1').get()) {
+          db.exec(`insert or replace into server_meta (k, v)
+            values ('content_fts_pending', '0')`)
+        }
+      }
       for (let t of unbuilt) {
         db.exec(`insert into ${t} (${t}) values ('rebuild')`)
       }
@@ -3174,13 +3259,10 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       migrateTombstone(db)
       migrateEmbedding(db)
       migrateConflict(db)
-      // Both doc mirrors follow it by trigger from here on. Anything older,
-      // any out-of-band writer, or shadow-table damage (overlapping watcher
-      // restarts have managed it) shows up here as a failed integrity check
-      // or a count drift — one rebuild pass over the content table heals
-      // both, and at this scale it costs milliseconds on boot. A doc_gram
-      // that has never been built is exactly a count drift, so the index
-      // arrives filled on the first boot that knows about it.
+      // All mirrors follow their source by trigger. Out-of-band writes and
+      // shadow-table damage show up as a failed integrity check or actual
+      // membership drift. Docs heal inline; the much larger transcript indexes
+      // reset here and resume their bounded backfill off the serving thread.
       let count = (t: string) =>
         (prep(db, `select count(*) as n from ${t}`).get() as { n: number }).n
       type FtsFault = {
@@ -3208,12 +3290,13 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
           }
         }
         try {
-          let indexed = count(t), docs = count('doc')
+          let source = t.startsWith('content_') ? 'content' : 'doc'
+          let indexed = count(`${t}_docsize`), docs = count(source)
           if (indexed != docs) {
             return {
               operation: 'count-check',
               error: new Error(
-                `${t} returned ${indexed} rows; doc returned ${docs}`,
+                `${t} returned ${indexed} rows; ${source} returned ${docs}`,
               ),
             }
           }
@@ -3232,9 +3315,26 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
           return `failed: ${diagnosis(error)}`
         }
       }
-      for (let t of db.can.fts ? ['doc_fts', 'doc_gram'] : []) {
+      for (
+        let t of db.can.fts ? ['doc_fts', 'doc_gram', ...contentIndexes] : []
+      ) {
+        if (contentIndexes.includes(t) && contentFtsPending(db)) continue
         let before = fault(t)
         if (!before) continue
+        if (contentIndexes.includes(t)) {
+          // Drop only derived mirrors on damage. Recreate both atomically,
+          // then refill off the boot path, with the same guarded triggers.
+          for (let index of contentIndexes) {
+            db.exec(`drop trigger if exists ${index}_ai;
+              drop trigger if exists ${index}_ad;
+              drop trigger if exists ${index}_au;
+              drop table ${index};`)
+          }
+          db.exec(contentFtsSchema)
+          db.exec(`insert or replace into server_meta (k, v)
+            values ('content_fts_pending', '0')`)
+          continue
+        }
         try {
           db.exec(`insert into ${t} (${t}) values ('rebuild')`)
         } catch (error) {
@@ -7524,8 +7624,8 @@ export let touch = (
   return out
 }
 
-// Full-text search over every doc — tasks, boards, projects, comments all
-// carry one. User words are quoted into FTS terms (AND semantics) so raw
+// Full-text search over docs and content — including doc-less transcript
+// entries, whose identity remains the entry, not its session. User words are quoted into FTS terms (AND semantics) so raw
 // operator syntax can't error, and EVERY term prefix-matches — search is
 // typed live, so the words are half-typed more often than not ('card fon'
 // must already find the font mockups). Rank blends bm25 (title hits well
@@ -7563,11 +7663,11 @@ export let textMatches = (
   let term = ftsTerm(pred.value)
   return !!term && !!prep(
     db,
-    `select 1 from doc_fts
-      join doc_value d on d.rowid = doc_fts.rowid
-      join entity e on e.id = d.entity
-     where doc_fts match ? and e.eid = ?`,
-  ).get(term, eid)
+    `select 1 from entity e where e.eid = ? and e.id in (
+      select rowid from doc_fts where doc_fts match ?
+      union select rowid from content_fts where content_fts match ?
+    )`,
+  ).get(eid, term, term)
 }
 
 export let search = (db: Sql, q: string, limit = 20): Hit[] => {
@@ -7625,10 +7725,30 @@ export let search = (db: Sql, q: string, limit = 20): Hit[] => {
       left join updated up on up.entity = e.id
       left join created cr on cr.entity = e.id
       where doc_fts match ? ${screen}
+      union all
+      select e.eid, '' as title, '' as title_hit,
+        snippet(content_fts, 0, char(1), char(2), '…', 10) as snip,
+        -(bm25(content_fts)
+          - 2.0 / (1 + julianday('now') - julianday(coalesce(up.at, cr.at))))
+          as score,
+        e.num
+      from content_fts
+      join entity e on e.id = content_fts.rowid
+      left join updated up on up.entity = e.id
+      left join created cr on cr.entity = e.id
+      where content_fts match ? ${screen}
+        and e.id not in (select rowid from doc_fts where doc_fts match ?)
       order by score desc
         ${cap}
     `,
-    ).all(match, ...params, ...(cap ? [limit] : [])) as (Omit<
+    ).all(
+      match,
+      ...params,
+      match,
+      ...params,
+      match,
+      ...(cap ? [limit] : []),
+    ) as (Omit<
       Hit,
       'kind' | 'open' | 'retired'
     >)[]
@@ -7637,8 +7757,8 @@ export let search = (db: Sql, q: string, limit = 20): Hit[] => {
       `
       select e.eid, d.title, d.title as title_hit, '' as snip,
         coalesce(julianday(up.at), julianday(cr.at), 0) as score, e.num
-      from doc_value d
-      join entity e on e.id = d.entity
+      from entity e
+      left join doc_value d on d.entity = e.id
       left join updated up on up.entity = e.id
       left join created cr on cr.entity = e.id
       where 1 ${screen}

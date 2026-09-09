@@ -804,6 +804,7 @@ let outsideVocabulary: Record<string, string> = {
 // they refill from source rows and hold no vocabulary.
 let derivedShadow = (t: string) =>
   t.startsWith('doc_fts') || t.startsWith('doc_gram') ||
+  t.startsWith('content_fts') || t.startsWith('content_gram') ||
   t.startsWith('vector0_embedding') || t == '_sqliteai_vector'
 
 // The universal invariant CLAUDE.md names: every stored column is declared in

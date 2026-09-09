@@ -376,46 +376,48 @@ let GRAM = 3
 let grams = (needle: string) =>
   needle.split(/[%_]/).some((run) => [...run].length >= GRAM)
 
-// Only doc's own columns are indexed, so the rowid is doc's.
+// Each mirror keys on its own component owner, never a sibling doc row.
 let narrow = (
   cols: string[],
   needle: string,
   exact: Frag | null,
+  comp = 'doc',
 ): Frag | null =>
   exact && grams(needle)
     ? {
-      sql: `("doc"."rowid" in (${
-        cols.map((c) => `select rowid from doc_gram where "${c}" like ?`)
+      sql: `("${comp}"."rowid" in (${
+        cols.map((c) => `select rowid from ${comp}_gram where "${c}" like ?`)
           .join(' union ')
       }) and ${exact.sql})`,
       params: [...cols.map(() => `%${needle}%`), ...exact.params],
     }
     : null
 
-// A bare word is an exact FTS membership test over doc title/body. The same
+// A bare word is exact FTS membership over doc title/body/address or content.
+// The base may be a reverse hop child, not the outer entity. The same
 // quoted-term builder drives ranked retrieval, so an initial subscription
 // cannot widen token matches into legacy substring matches.
-let text = (value: string): Frag | null => {
+let text = (value: string, base = 'entity'): Frag | null => {
   let term = ftsTerm(value)
   return term
     ? {
-      sql: `"doc"."rowid" in (
+      sql: `"${base}"."${base == 'entity' ? 'id' : 'entity'}" in (
         select rowid from doc_fts where doc_fts match ?
+        union select rowid from content_fts where content_fts match ?
       )`,
-      params: [term],
+      params: [term, term],
     }
     : { sql: '0', params: [] }
 }
 
-// A body is never scanned. `~=` over doc.body goes through the index; every
-// other op, and every other body column (hook.payload, session.final_text —
-// none of them indexed), declines and the JS matcher answers.
+// Bodies are never scanned. Only doc.body and content.body have trigram
+// mirrors; other body columns and operations decline to the JS matcher.
 let body = (p: Pred, c: string): Frag | null =>
-  p.op != '~' || p.comp != 'doc' || p.prop != 'body'
+  p.op != '~' || !['doc', 'content'].includes(p.comp) || p.prop != 'body'
     ? null
     : p.value == ''
     ? has(c, p.value)
-    : narrow(['body'], p.value, has(c, p.value))
+    : narrow(['body'], p.value, has(c, p.value), p.comp)
 
 // The ops query.ts routes to cmp(), spelled the same in SQL.
 let CMP: Record<string, string> = { '<': '<', '<=': '<=', '>': '>', '>=': '>=' }
@@ -639,7 +641,7 @@ let build = (
   let parts: Frag[] = []
   let kept: Pred[] = []
   for (let p of preds) {
-    let s = one(p, now)
+    let s = p.op == TEXT ? text(p.value, base) : one(p, now)
     if (!s) {
       if (!drop) return null
       // partial narrowing: refine this pred in JS — over the root's rows
@@ -657,8 +659,8 @@ let build = (
     // `1`, the door hydrates the row's components itself, and a store that
     // never planted the word has no table to join at all.
     if (p.op == WANT) continue
-    if (p.op == TEXT) tables.add('doc')
-    else if (p.comp) tables.add(p.comp)
+    if (p.op == TEXT) continue
+    if (p.comp) tables.add(p.comp)
     // the far half of the updated.at fallback (readCol)
     if (!p.at && falls(p.comp, p.prop)) tables.add('created')
   }

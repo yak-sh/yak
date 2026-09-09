@@ -357,7 +357,9 @@ export let evalFast = (
   let bounded = !entries && (win.limit != null || win.after != null)
   let hits = matching(db, toSql(bounded ? windowed(built, win) : built))
     .map(rowed)
-    .filter((r) => entries || !r.comps.entry)
+    .filter((r) =>
+      entries || inputs.some((p) => p.op == TEXT) || !r.comps.entry
+    )
   hits = withResults(db, preds, hits)
     .filter((r) => selected(r.comps, preds))
   if (resultsOf(preds).length) {
@@ -414,7 +416,7 @@ export let evalQuery = (
     : doors.matching(db, toSql(whereSome(inputs))).map(rowed)
       // matching() may union source rows wearing entry; eager queries do not
       // opt into that partition.
-      .filter((r) => !r.comps.entry)
+      .filter((r) => inputs.some((p) => p.op == TEXT) || !r.comps.entry)
   all = withResults(db, preds, all)
   let hits = all.filter((r) =>
     selected(r.comps, preds) &&

@@ -15,7 +15,7 @@
 import { sqlitePath as path } from './sqlitepath.ts'
 import * as sqlite from 'jsr:@db/sqlite@0.13.0'
 import { dirname, resolve } from 'node:path'
-import { freshStats, migrate } from '../db.ts'
+import { contentFtsPending, freshStats, migrate } from '../db.ts'
 import { loadVector } from '../vector.ts'
 import {
   type Can,
@@ -109,6 +109,7 @@ export class StatementSync implements Statement {
 
 export class DatabaseSync implements Sql {
   #db: InstanceType<typeof DriverDatabase>
+  #ftsWorker?: Worker
   can: Can = { fts: true, temp: true }
 
   constructor(path: string | URL, options: Options = {}) {
@@ -235,7 +236,35 @@ export class DatabaseSync implements Sql {
     }
   }
 
+  // Historical indexing must not run on the serving event loop. The worker
+  // owns a separate connection, yields between transactions, and resumes the
+  // durable cursor after a process exit. New writes are indexed by triggers.
+  backfillFts(path: string) {
+    if (path == ':memory:' || !contentFtsPending(this) || this.#ftsWorker) {
+      return
+    }
+    let worker = this.#ftsWorker = new Worker(
+      new URL('./content_fts_worker.ts', import.meta.url),
+      { type: 'module' },
+    )
+    worker.onmessage = (event) => {
+      if (event.data.error) {
+        console.warn('content FTS backfill paused:', event.data.error)
+      }
+      this.#ftsWorker = undefined
+    }
+    worker.onerror = (event) => {
+      event.preventDefault()
+      console.warn('content FTS backfill worker failed:', event.message)
+      this.#ftsWorker = undefined
+    }
+    worker.postMessage({ path: resolve(path) })
+  }
+
   close() {
+    // Never terminate an FFI-owning worker: let it finish its current slice
+    // and close its own SQLite handle, including its WAL read mark.
+    this.#ftsWorker?.postMessage({ stop: true })
     this.#db.close()
   }
 }
@@ -313,7 +342,7 @@ export let connect = (path = file, vector = false, readOnly = false) => {
   // reintroduce this footgun fails at the door instead of quietly reseeding
   // the owner's board (T-14260).
   if (
-    Deno.mainModule.endsWith('_test.ts') &&
+    Deno.mainModule?.endsWith('_test.ts') &&
     sameGraphFile(path, liveDb())
   ) {
     throw new Error(
@@ -380,6 +409,7 @@ let wal = (db: DatabaseSync) => {
 export let open = (path = file, vector = false) => {
   let db = migrate(wal(connect(path, vector)), () => connect(':memory:'))
   freshStats(db)
+  db.backfillFts(path)
   return db
 }
 

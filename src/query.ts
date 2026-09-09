@@ -764,7 +764,7 @@ export let screened = (preds: Pred[], entries: boolean): Pred[] => [
   ...preds,
   ...reveals(preds) ? [] : [absent('quarantined')],
   ...namesBlobs(preds) ? [] : [absent('blob')],
-  ...entries ? [] : [absent('entry')],
+  ...entries || preds.some((p) => p.op == TEXT) ? [] : [absent('entry')],
 ]
 
 // kind=K as a filter, not a JS screen. kindOf is "the first kindOrder

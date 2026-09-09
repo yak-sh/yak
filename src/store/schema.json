@@ -9,6 +9,10 @@
   },
   {
     "kind": "exec",
+    "sql": "\n  create virtual table if not exists content_fts using fts5(\n    body, content='content', content_rowid='entity'\n    \n  );\n  create trigger if not exists content_fts_ai after insert on content begin\n    insert into content_fts (rowid, body) values (new.entity, new.body);\n  end;\n  create trigger if not exists content_fts_ad after delete on content\n  when exists (select 1 from content_fts_docsize where id = old.entity) begin\n    insert into content_fts (content_fts, rowid, body)\n      values ('delete', old.entity, old.body);\n  end;\n  create trigger if not exists content_fts_au after update on content begin\n    insert into content_fts (content_fts, rowid, body)\n      select 'delete', old.entity, old.body\n      where exists (select 1 from content_fts_docsize where id = old.entity);\n    insert into content_fts (rowid, body) values (new.entity, new.body);\n  end;\n\n\n  create virtual table if not exists content_gram using fts5(\n    body, content='content', content_rowid='entity'\n    , tokenize='trigram', detail='none'\n  );\n  create trigger if not exists content_gram_ai after insert on content begin\n    insert into content_gram (rowid, body) values (new.entity, new.body);\n  end;\n  create trigger if not exists content_gram_ad after delete on content\n  when exists (select 1 from content_gram_docsize where id = old.entity) begin\n    insert into content_gram (content_gram, rowid, body)\n      values ('delete', old.entity, old.body);\n  end;\n  create trigger if not exists content_gram_au after update on content begin\n    insert into content_gram (content_gram, rowid, body)\n      select 'delete', old.entity, old.body\n      where exists (select 1 from content_gram_docsize where id = old.entity);\n    insert into content_gram (rowid, body) values (new.entity, new.body);\n  end;\n"
+  },
+  {
+    "kind": "exec",
     "sql": "create table if not exists \"project\" (\n    entity integer primary key references entity(id),\n    \"color\" text\n  );"
   },
   {

@@ -350,6 +350,11 @@ let agrees = (q: string) => {
 }
 
 let COMPILES = [
+  'boom',
+  'kick',
+  '.content.body~=boom',
+  '.content.body~=ick',
+  '.content.body~=',
   // equality, the plain case and the one where affinity would betray it
   '.task.status=open',
   '.task.priority=1',
@@ -577,9 +582,6 @@ let DECLINES = [
   // matchers do not mean the same thing by `~=café`
   '.doc.body~=café',
   '.doc.title~=café',
-  // a body substring on a NON-doc body: sql.ts only ever narrows doc.body, so a
-  // content-body scan declines and the matcher answers it over the partition
-  '.content.body~=boom',
   // A path body has a different owner from the outer row, so doc_gram's
   // outer-doc narrowing cannot be reused. It declines instead of emitting a
   // dangling `doc.rowid` reference.
@@ -837,4 +839,12 @@ Deno.test('the compiled skeleton is unchanged, clause for clause', () => {
     toSql(windowed(where(ps)!, {})).sql,
     SKELETON + ' order by "entity"."num" desc',
   )
+})
+
+Deno.test('a reverse child TEXT predicate tests the child, not the outer spine', () => {
+  let [pred] = parseQuery('.comments.doc.title~=first')
+  pred.rev!.preds = parseQuery('first')
+  assertEquals(run<{ eid: string }>(db, where([pred])!).map((r) => r.eid), [
+    'e1',
+  ])
 })
