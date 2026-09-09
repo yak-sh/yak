@@ -164,6 +164,7 @@ import {
   cliVerbs,
   families,
   help,
+  lifted,
   manuals,
   parse,
   requestedHelp,
@@ -175,6 +176,7 @@ import {
 } from './manual.ts'
 import { type Got, type Run, usageOf, type Verb } from './verb.ts'
 import { complete } from './tabcomplete.ts'
+import { watching } from './timing.ts'
 import { loadPlugins, pluginSpecifiers } from './plugins.ts'
 import { safe } from './terminal.ts'
 import { VERSION } from './version.ts'
@@ -3827,9 +3829,14 @@ export let verbs = bind({
 // Only run the CLI when invoked as the program — importing this module (e.g.
 // from tests) must not dispatch a command or call Deno.exit.
 if (import.meta.main) {
+  // `--timing` is the program's flag, not a verb's: lift it out of the line
+  // before anything routes or parses one, so every verb takes it and no verb
+  // declares it. A whole shell asks with TASKS_TIMING=1 instead.
+  let [timed, argv] = lifted(Deno.args, '--timing')
+  watching(timed, Deno.env.get('TASKS_TIMING'))
   // Version probes must stay offline: they are commonly used to discover an
   // executable before either the Tasks server or configured plugins exist.
-  if (Deno.args[0] == '--version') {
+  if (argv[0] == '--version') {
     print(`task ${VERSION}`)
     Deno.exit(0)
   }
@@ -3841,9 +3848,9 @@ if (import.meta.main) {
   // graph file itself when this box holds it (localread.ts decides), so a
   // stopped server still shows the board. Writes stay on the wire regardless.
   armLocal()
-  let [cmd, ...rest] = Deno.args
+  let [cmd, ...rest] = argv
   try {
-    let asked = requestedHelp(Deno.args)
+    let asked = requestedHelp(argv)
     let hook = false
     if (asked != null) print(asked)
     else if (!cmd) await bare()
@@ -3881,7 +3888,7 @@ if (import.meta.main) {
         // A family word has no verb of its own: `task mail` teaches its
         // sub-verbs and exits like any other unknown verb.
         await reportUsage(
-          Deno.args,
+          argv,
           `no such verb: ${[cmd, rest[0]].join(' ')}`,
         )
         print(help([cmd]))
@@ -3890,7 +3897,7 @@ if (import.meta.main) {
         validateCommand(cmd, rest)
         await colon(undefined, [cmd, ...rest])
       } else {
-        await reportUsage(Deno.args, `no such verb: ${cmd}`)
+        await reportUsage(argv, `no such verb: ${cmd}`)
         print(usage())
         Deno.exit(2)
       }
@@ -3899,7 +3906,7 @@ if (import.meta.main) {
     await heard(hook)
   } catch (e) {
     if (e instanceof UsageError) {
-      await reportUsage(Deno.args, e.message)
+      await reportUsage(argv, e.message)
     }
     warn(`task: ${(e as Error).message} (server: ${host()})`)
     Deno.exit(1)

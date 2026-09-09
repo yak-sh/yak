@@ -9,7 +9,7 @@
 // thunk; help and validate never do, so they — and `--help` against a down
 // server — stay offline. The thunk is called at most once, lazily.
 
-import { cliVerbs, families, manuals, route } from './manual.ts'
+import { cliVerbs, families, GLOBALS, manuals, route } from './manual.ts'
 import { commands } from './commands.ts'
 import { plurals } from './types.ts'
 import type { Arg, Decl, Opt } from './verb.ts'
@@ -72,10 +72,19 @@ export let complete = (
   ids: () => string[] = () => [],
 ): string[] => {
   let cur = words.at(-1) ?? ''
+  // A global belongs to the program, not to a verb (manual.ts GLOBALS): drop
+  // it before routing, the way cli.ts lifts it, so `task --timing sh<TAB>`
+  // still completes the verb — and offer the ones not yet typed wherever an
+  // option is offered.
+  let named = GLOBALS.map((g) => g.name)
   let prior = words.slice(0, -1)
+  let globals = named.filter((n) => !prior.includes(n))
+  prior = prior.filter((w) => !named.includes(w))
 
-  // Word 0: the heads.
-  if (!prior.length) return heads().filter(starts(cur))
+  // Word 0: the heads — or the globals, once a dash says a flag is wanted.
+  if (!prior.length) {
+    return (cur.startsWith('-') ? globals : heads()).filter(starts(cur))
+  }
 
   let sel = route(prior[0], prior.slice(1))
   // A family word with no verb of its own (`task mail <TAB>`) offers its
@@ -100,7 +109,7 @@ export let complete = (
     let given = new Set(
       sel.args.filter((a) => a.startsWith('-')).map((a) => a.split('=')[0]),
     )
-    return opts.map((o) => o.name).filter((n) =>
+    return [...opts.map((o) => o.name), ...globals].filter((n) =>
       !given.has(n) && n.startsWith(cur)
     )
   }

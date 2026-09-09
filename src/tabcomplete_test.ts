@@ -61,3 +61,18 @@ Deno.test('tab: after --model= the graph catalog completes', () => {
 Deno.test('tab: an unknown verb completes to nothing', () => {
   assertEquals(complete(['nope', '']), [])
 })
+
+// A global is the program's flag, typed anywhere on the line (manual.ts
+// GLOBALS): it completes before the verb and beside a verb's own options, it
+// is not offered twice, and having been typed it does not stop the verb from
+// completing.
+Deno.test('tab: --timing completes anywhere, once', () => {
+  assertEquals(complete(['--tim']), ['--timing'])
+  assertEquals(complete(['']).includes('--timing'), false)
+  assertArrayIncludes(complete(['show', 'T-3', '--']), ['--timing'])
+  assertEquals(
+    complete(['show', 'T-3', '--timing', '--']).includes('--timing'),
+    false,
+  )
+  assertArrayIncludes(complete(['--timing', 'sho']), ['show'])
+})

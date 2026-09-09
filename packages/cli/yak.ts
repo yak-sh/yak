@@ -32,7 +32,7 @@ import {
   verbFor,
 } from './plugin.ts'
 import { platform, printed, rosterOf } from './platform.ts'
-import { doorUrl, rpc } from './rpc.ts'
+import { doorUrl, rpc, timed } from './rpc.ts'
 import type { Result } from './roster.ts'
 import { safe } from './show.ts'
 import { forgetToken, saveToken, tokenFor } from './store.ts'
@@ -52,26 +52,38 @@ let reads: Reads = {
  * verb ever sees it. */
 export let globals = (
   argv: string[],
-): { host: string; json: boolean; help: boolean; rest: string[] } => {
+): {
+  host: string
+  json: boolean
+  help: boolean
+  timing: boolean
+  rest: string[]
+} => {
   let host = Deno.env.get('YAKS_HOST') ?? HOST
   let json = false
   let help = false
+  // A whole shell asks for the timing line with YAK_TIMING=1; one command
+  // asks with the flag.
+  let timing = Deno.env.get('YAK_TIMING') == '1'
   let rest: string[] = []
   for (let i = 0; i < argv.length; i++) {
     let a = argv[i]
     if (a == '--json') json = true
     else if (a == '--help' || a == '-h') help = true
+    else if (a == '--timing') timing = true
     else if (a == '--host') host = argv[++i] ?? host
     else if (a.startsWith('--host=')) host = a.slice(7)
     else rest.push(a)
   }
-  return { host, json, help, rest }
+  return { host, json, help, timing, rest }
 }
 
 let HEAD = 'yak — the tools this server lists, and the verbs this box adds'
 
 let TAIL = `  --host <host>   which server (default $YAKS_HOST, else ${HOST})
   --json          print the structured result instead of the words
+  --timing        a line on stderr per answer, with its Server-Timing
+                  (or YAK_TIMING=1)
   --help          this, or a verb's own
 
 A value that is @path is that file, and - is stdin. $YAKS_TOKEN is the
@@ -169,7 +181,7 @@ export let run = async (
   argv: string[],
   plugins: Plugin[] = PLUGINS,
 ): Promise<number> => {
-  let { host, json, help, rest } = globals(argv)
+  let { host, json, help, timing, rest } = globals(argv)
   let [word, ...args] = rest
   let c: Ctx = {
     host,
@@ -177,7 +189,11 @@ export let run = async (
     args,
     json,
     help,
-    ask: rpc({ url: doorUrl(host), token: tokenFor(host) }),
+    ask: rpc({
+      url: doorUrl(host),
+      token: tokenFor(host),
+      fetch: timing ? timed(note) : undefined,
+    }),
     reads,
     out,
     note,

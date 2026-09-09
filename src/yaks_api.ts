@@ -18,6 +18,7 @@
 import { LINK } from '../workers/yak/link.ts'
 import { PLATFORM } from '../workers/yak/route.ts'
 import { COOKIE } from './token.ts'
+import { noted } from './timing.ts'
 import { type Querier, query as graphQuery, type Row } from './client.ts'
 
 // The zone this client points at, so a probe can aim somewhere else.
@@ -70,17 +71,22 @@ let told: (fresh: string) => void = () => {}
 
 export let renewing = (note: (fresh: string) => void) => (told = note)
 
-// EVERY call this client makes: the account's cookie goes out here and a
-// renewed one is read back here, so no verb has to think about either.
+// EVERY call this client makes: the account's cookie goes out here, a renewed
+// one is read back here, and `yak --timing` says its line here (timing.ts), so
+// no verb has to think about any of the three.
 let sent = async (
   url: string,
   session?: string,
   init: RequestInit & { headers?: Record<string, string> } = {},
 ) => {
-  let r = await fetch(url, {
-    ...init,
-    headers: { ...init.headers, ...(session ? head(session) : {}) },
-  })
+  let r = noted(
+    init.method ?? 'GET',
+    url,
+    await fetch(url, {
+      ...init,
+      headers: { ...init.headers, ...(session ? head(session) : {}) },
+    }),
+  )
   let fresh = session ? cookieOf(r.headers.get('set-cookie')) : null
   if (fresh && fresh != session) told(fresh)
   return r

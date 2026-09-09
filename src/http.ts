@@ -1,6 +1,11 @@
 // The graph HTTP door shared by headless clients. A watched server may vanish
 // for a few seconds between processes; transport failures wait for its return.
 // HTTP status responses are never retried — callers own their semantics.
+//
+// It is also the one place every headless request passes, so `task --timing`
+// says its line from here (timing.ts) and no verb has to opt in.
+
+import { noted } from './timing.ts'
 
 type Fetch = (
   input: string | URL,
@@ -40,13 +45,15 @@ export let request = async (
   pause: (ms: number) => Promise<void> = sleep,
   backoff: number[] = BACKOFF,
 ) => {
+  let answered = async () =>
+    noted(init?.method ?? 'GET', input, await run(input, init))
   // A rejected write may have committed before its response vanished.
-  if (!replayable(init)) return run(input, init)
+  if (!replayable(init)) return answered()
   let last: unknown
   for (let ms of [0, ...backoff]) {
     if (ms) await pause(ms)
     try {
-      return await run(input, init)
+      return await answered()
     } catch (e) {
       last = e
     }

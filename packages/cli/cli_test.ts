@@ -8,10 +8,11 @@ import { Unauthorized as Refuse } from '@yaks/api'
 import { mcp } from '@yaks/mcp'
 import { shopGraph } from '../mcp/harness.ts'
 import { argsFor, type Reads } from './args.ts'
-import { doorUrl, initialize, rpc, Unauthorized } from './rpc.ts'
+import { doorUrl, initialize, rpc, timed, Unauthorized } from './rpc.ts'
 import { saidBy } from './roster.ts'
 import { toolHelp } from './show.ts'
 import type { Tool } from './tool.ts'
+import { globals } from './yak.ts'
 
 let reads: Reads = { file: () => '', stdin: () => '' }
 
@@ -115,4 +116,31 @@ Deno.test('a reply framed as one SSE event reads the same', async () => {
       ),
   })
   assertEquals(await ask('tools/list'), { tools: [] })
+})
+
+// `yak --timing`: one line per answer on stderr, the door's own
+// `Server-Timing` printed as it arrived.
+Deno.test('--timing says one line per answer, the header verbatim', async () => {
+  let said: string[] = []
+  let go = (r: Request) =>
+    new Response('{}', {
+      status: 200,
+      headers: r.url.endsWith('/mcp')
+        ? { 'server-timing': 'door;dur=12, hops;dur=3, all;dur=41' }
+        : {},
+    })
+  let say = (line: string) => said.push(line)
+  await timed(say, go)(
+    new Request('https://yaks.app/mcp', { method: 'POST', body: '{}' }),
+  )
+  assertEquals(said, ['POST /mcp 200  door;dur=12, hops;dur=3, all;dur=41'])
+  // A door that sends no timing is still one line.
+  await timed(say, go)(new Request('https://yaks.app/api/fee?all=1'))
+  assertEquals(said[1], 'GET /api/fee?all=1 200')
+})
+
+Deno.test('the timing flag is the program’s, and off unless asked', () => {
+  assertEquals(globals(['app_list']).timing, false)
+  assertEquals(globals(['--timing', 'app_list']).rest, ['app_list'])
+  assert(globals(['app_list', '--timing']).timing)
 })

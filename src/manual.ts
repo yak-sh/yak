@@ -1402,6 +1402,32 @@ let linkHelp = () =>
 
 let roots = () => Object.values(manuals).filter((m) => m.root)
 
+// The flags the PROGRAM keeps, not a verb: cli.ts lifts them out of the line
+// before anything routes it, so they hold for every verb rather than for the
+// ones that remembered to declare them. Tab-completion offers them from the
+// same list (tabcomplete.ts).
+export let GLOBALS: { name: string; env: string; about: string }[] = [{
+  name: '--timing',
+  env: 'TASKS_TIMING',
+  about: 'a stderr line per response, with its timing',
+}]
+
+// Lift one global out of a command line: true if it was typed, and the line
+// without it. Never out of the body after `--`, where the same word is a
+// person's text rather than a flag.
+export let lifted = (
+  argv: string[],
+  name: string,
+): [boolean, string[]] => {
+  let end = argv.indexOf('--')
+  let head = end < 0 ? argv : argv.slice(0, end)
+  let kept = head.filter((a) => a != name)
+  return [
+    kept.length < head.length,
+    end < 0 ? kept : [...kept, ...argv.slice(end)],
+  ]
+}
+
 export let usage = () =>
   `task — the entity graph, from a shell
 
@@ -1410,6 +1436,13 @@ ${
       usageOf(m).length > 29
         ? `  task ${usageOf(m)}\n${' '.repeat(38)}${m.about}`
         : `  task ${usageOf(m).padEnd(29)}  ${m.about}`
+    ).join('\n')
+  }
+
+any verb:
+${
+    GLOBALS.map((g) =>
+      `  ${g.name.padEnd(34)}  ${g.about}\n${' '.repeat(38)}or ${g.env}=1`
     ).join('\n')
   }
 

@@ -98,6 +98,30 @@ export let rpc = (door: Door): Rpc => {
   }
 }
 
+/** A `fetch` that says one line per answer, for `yak --timing`:
+ *
+ *     POST /mcp 200  door;dur=12, hops;dur=3, all;dur=41
+ *
+ * The numbers are the server's own `Server-Timing` (workers/yak/timing.ts),
+ * printed as they arrived and never reworded, so this line and a `curl -i`
+ * agree. A door that sends none still gets a line. (The owner checkout says
+ * the same line for the calls it makes outside this door — src/timing.ts.) */
+export let timed = (
+  say: (line: string) => void,
+  go: (request: Request) => Response | Promise<Response> = (r) => fetch(r),
+) =>
+async (request: Request): Promise<Response> => {
+  let res = await go(request)
+  let at = new URL(request.url)
+  let entries = res.headers.get('server-timing')
+  say(
+    `${request.method} ${at.pathname}${at.search} ${res.status}${
+      entries ? `  ${entries}` : ''
+    }`,
+  )
+  return res
+}
+
 /** The handshake, for the listing path: what the server calls itself and
  * which protocol version it agreed to. */
 export let initialize = async (ask: Rpc): Promise<Record<string, unknown>> =>

@@ -84,6 +84,7 @@ import {
   unlink,
   zone,
 } from './yaks_api.ts'
+import { watching } from './timing.ts'
 import { deploys, rollback, table } from './yak_deploys.ts'
 import { errors, tail } from './yak_logs.ts'
 import { revert } from './yak_revert.ts'
@@ -628,4 +629,11 @@ export let owner: Plugin = {
 
 export { verbs }
 
-if (import.meta.main) Deno.exit(await main(Deno.args, [owner, ...PLUGINS]))
+if (import.meta.main) {
+  // `--timing` is @yaks/cli's own global — it lifts the flag off the line and
+  // says the line for the connector door. These verbs go somewhere else (the
+  // apex, through yaks_api.ts `sent`), so the same flag arms the same line
+  // here, read rather than consumed.
+  watching(Deno.args.includes('--timing'), Deno.env.get('YAK_TIMING'))
+  Deno.exit(await main(Deno.args, [owner, ...PLUGINS]))
+}

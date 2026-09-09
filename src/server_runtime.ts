@@ -851,11 +851,26 @@ let methodNotAllowed = (allow: string) =>
 // liberty: a duration cannot tell one slow statement from forty fast ones, and
 // forty fast ones is what an N+1 is. Counted at the one db seam (db.ts
 // `counting`), so nothing on the way here has to be told it is being counted.
-let tallied = async (work: () => Promise<Response>) => {
+//
+// Three numbers, because one of them alone lies: `total;dur` is the wall time
+// this handler took, `hops;dur` the statements it cost, and `rows;dur` how
+// many things it answered with — the handler says that one, since only it
+// knows what it is counting (entities for /query, changes for /apply). Slow
+// with few rows and many hops is an N+1; slow with many rows is a wide ask.
+let tallied = async (
+  work: (rows: (n: number) => void) => Promise<Response>,
+) => {
+  let born = performance.now()
   let tally: Tally = new Map()
-  let res = await tallying(tally, work)
+  let rows = 0
+  let res = await tallying(tally, () => work((n) => rows = n))
   let headers = new Headers(res.headers)
-  headers.set('server-timing', `hops;dur=${counts(tally).hops}`)
+  headers.set(
+    'server-timing',
+    `hops;dur=${counts(tally).hops}, rows;dur=${rows}, total;dur=${
+      Math.round(performance.now() - born)
+    }`,
+  )
   return new Response(res.body, {
     status: res.status,
     statusText: res.statusText,
@@ -1047,7 +1062,7 @@ let handle: Handler = async (req) => {
     // `backlinks=1` adds who points at each hit (eid columns + edges),
     // `deps=1` the hit's own edges both ways; `id=` names entities outright.
     // A malformed filter is the typist's news, not a server error.
-    return tallied(async () => {
+    return tallied(async (rows) => {
       try {
         // The route is an ADAPTER: segments in, JSON out. Everything between —
         // `id=` addressing, the quarantine reveal, paging, similarity ranking,
@@ -1064,13 +1079,13 @@ let handle: Handler = async (req) => {
         // row door. askOf has already refused the riders a work query cannot
         // carry.
         if (ask.work) {
-          return Response.json(
-            await graphIO.work!(ask.work as WorkLane, {
-              filters: ask.filters,
-              limit: ask.limit,
-              recursive: ask.recursive,
-            }),
-          )
+          let lane = await graphIO.work!(ask.work as WorkLane, {
+            filters: ask.filters,
+            limit: ask.limit,
+            recursive: ask.recursive,
+          })
+          rows(lane.length)
+          return Response.json(lane)
         }
         // An aggregate projection (`.count!` / `.distinct=col` / `.tally=col`)
         // answers with the reduction, not a row set — the census asks for
@@ -1080,9 +1095,11 @@ let handle: Handler = async (req) => {
         let agg = evalAgg(db, ask.filters.join('&'))
         if (agg) {
           if (agg.op == 'count') {
+            rows(1)
             return Response.json({ count: agg.values.get('') ?? 0 })
           }
           let keys = [...agg.values.keys()].sort()
+          rows(keys.length)
           return Response.json(
             agg.op == 'distinct' ? { distinct: keys } : {
               tally: Object.fromEntries(
@@ -1091,7 +1108,9 @@ let handle: Handler = async (req) => {
             },
           )
         }
-        return Response.json(layered(db, await askRows(db, ask), ask))
+        let hits = layered(db, await askRows(db, ask), ask)
+        rows(hits.length)
+        return Response.json(hits)
       } catch (e) {
         return new Response(String((e as Error).message ?? e), { status: 400 })
       }
@@ -1128,7 +1147,7 @@ let handle: Handler = async (req) => {
         ms: performance.now() - t0,
         error,
       })
-    return tallied(() =>
+    return tallied((rows) =>
       req.json().then((mutation: Mutation) => {
         if (!Array.isArray(mutation) && 'mutation' in mutation) {
           name = mutation?.mutation == 'undo' ? 'undo' : 'mutation'
@@ -1144,6 +1163,9 @@ let handle: Handler = async (req) => {
         ))
         feed.settle()
         note(true)
+        // A write's "rows" are the changes that landed — casualties of a
+        // delete included, since apply() synthesizes those into the same list.
+        rows(out.changes.length)
         return Response.json(
           !Array.isArray(mutation) && 'entities' in mutation
             ? { ok: true, ...out }

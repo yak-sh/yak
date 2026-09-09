@@ -79,6 +79,11 @@ if (Deno.env.get('TASKS_SLOW')) {
 }
 let alone = { sanitizeOps: false, sanitizeResources: false }
 
+// Three numbers on the answer, and the third is the point of the other two:
+// `total` is the wall time, `hops` what it was spent on, `rows` how much came
+// back. A read's rows are the entities it answered with; a write's are the
+// changes that landed, which is more than the batch asked for — the spine and
+// the stamps ride back in the same list.
 slow('a /query says its statement count in Server-Timing', alone, async () => {
   let eid = crypto.randomUUID()
   let wrote = await fetch(`http://${U}/apply`, {
@@ -87,8 +92,14 @@ slow('a /query says its statement count in Server-Timing', alone, async () => {
     body: JSON.stringify([{ eid, name: 'doc', comp: { title: 'hops' } }]),
   })
   await wrote.text()
-  assertMatch(wrote.headers.get('server-timing') ?? '', /^hops;dur=\d+$/)
+  assertMatch(
+    wrote.headers.get('server-timing') ?? '',
+    /^hops;dur=\d+, rows;dur=[1-9]\d*, total;dur=\d+$/,
+  )
   let res = await fetch(`http://${U}/query?id=${eid}`)
   assertEquals((await res.json()).length, 1)
-  assertEquals(res.headers.get('server-timing'), `hops;dur=${ONE}`)
+  assertMatch(
+    res.headers.get('server-timing') ?? '',
+    new RegExp(`^hops;dur=${ONE}, rows;dur=1, total;dur=\\d+$`),
+  )
 })

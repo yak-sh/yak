@@ -18,6 +18,7 @@ import {
   saidOn,
   storeUrl,
 } from './yaks_api.ts'
+import { timing, watching } from './timing.ts'
 
 let row = (title: string, to: string, at: string): Row => ({
   eid: crypto.randomUUID(),
@@ -160,6 +161,7 @@ Deno.test('a kernel page is read back as the words it says', () => {
 // never leaves it.
 let fee = (set?: string) => ({
   ok: true,
+  status: 200,
   headers: {
     get: (name: string) => (name == 'set-cookie' ? set ?? null : null),
   },
@@ -201,4 +203,30 @@ Deno.test('a renewed cookie is handed on, and an ordinary answer is quiet', asyn
     }
   }
   renewing(() => {})
+})
+
+// `yak --timing`, this end: the account's calls do not go through the
+// connector door, so `sent` says the same line for them (timing.ts). The stub
+// answers the header a platform answer would carry.
+Deno.test('--timing says one line per account call, and none without', async () => {
+  let said: string[] = []
+  let say = timing.say
+  timing.say = (line) => said.push(line)
+  let stub = answering({
+    ...fee(),
+    headers: {
+      get: (name: string) =>
+        name == 'server-timing' ? 'hops;dur=2, all;dur=31' : null,
+    },
+  })
+  try {
+    watching(true)
+    await feeNow('a.token')
+    watching(false)
+    await feeNow('a.token')
+  } finally {
+    timing.say = say
+    stub.done()
+  }
+  assertEquals(said, ['GET /api/fee 200  hops;dur=2, all;dur=31'])
 })
