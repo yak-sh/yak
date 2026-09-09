@@ -62,6 +62,7 @@ let bytesAt = (pointer: Deno.PointerObject, size: number) =>
 
 type Options = {
   readOnly?: boolean
+  create?: boolean
 }
 
 export class StatementSync implements Statement {
@@ -117,6 +118,7 @@ export class DatabaseSync implements Sql {
       int64: true,
       parseJson: false,
       readonly: options.readOnly,
+      create: options.create,
     })
     this.#db.exec('pragma foreign_keys = on')
   }

@@ -2959,7 +2959,7 @@ export let mintEpoch = (db: Sql) =>
 // Bumped with every serving-schema change. Guards remain idempotent for
 // expand/contract upgrades; the version makes a newer database fail closed in
 // an older binary instead of letting that binary infer compatibility.
-let schemaVersion = 1
+export let schemaVersion = 1
 
 // Migrate a connected handle in place: the hand + derived schema, the additive
 // column/index fills, and the vector index.
@@ -6361,9 +6361,9 @@ export let apply = (
     // births synthesized), so the record includes what the rules did, not
     // just what was asked. The server-stamped echoes are LEFT OUT: created/
     // updated and the notification stamps repeat the journal's provenance
-    // envelope. Recording never throws: a broken journal must not break the
-    // write it records.
-    try {
+    // envelope. The journal is part of the write: a failure rolls the whole
+    // transaction back so subscribers and history cannot miss graph state.
+    {
       // Only the server-STAMPED provenance echoes (extra) are dropped —
       // created/updated and the notification stamps (stampedPresence) just
       // repeat the ts + actor + via the journal row keeps. The wire's own
@@ -6387,8 +6387,6 @@ export let apply = (
         // actor is the resolved writing actor (T-6669), same as the by-default.
         journalWrite(db, now, actor, via, trace, logged)
       }
-    } catch (e) {
-      console.warn('journal skipped —', e)
     }
     return [...changes, ...extra]
   }
@@ -6487,8 +6485,8 @@ let casField = (name: string, field: string, v: unknown): v is string =>
 // after-image, present rows for an upsert and tombstones for a removal. Derived
 // wholly from `logged` plus the append-only field log itself, so it touches
 // nothing in the change loop. Called inside the caller's transaction; the
-// caller's try guards it -- a broken journal must not break the write it
-// records. Returns the transaction id.
+// A failure propagates through apply()'s transaction, rolling graph and
+// journal back together. Returns the transaction id.
 export let journalWrite = (
   db: Sql,
   ts: string,

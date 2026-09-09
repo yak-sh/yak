@@ -4196,15 +4196,17 @@ Deno.test('a change and its commentary land in one atomic batch', () => {
   assertEquals(after.n, before.n)
 })
 
-Deno.test('journal: recording failure never breaks the write', () => {
+Deno.test('journal: recording failure rolls the graph write back', () => {
   db.exec('alter table journal_tx rename to journal_hidden')
   let t = uid()
   try {
-    apply(db, [{ eid: t, name: 'doc', comp: { title: 'still lands' } }])
+    assertThrows(() =>
+      apply(db, [{ eid: t, name: 'doc', comp: { title: 'must roll back' } }])
+    )
   } finally {
     db.exec('alter table journal_hidden rename to journal_tx')
   }
-  assertEquals(comp(t, 'doc')?.title, 'still lands')
+  assertEquals(comp(t, 'doc'), undefined)
 })
 
 Deno.test('journalOf: newest first, cut to the eid', () => {
