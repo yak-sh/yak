@@ -34,10 +34,13 @@
  * - **A git blob is our blob.** The bytes an app deployed are already stored
  *   under their SHA-256; the object is a header hashed over them, and nothing
  *   is re-encoded or copied.
+ * - **A clone is those walks, packed.** {@link objects} names every object
+ *   reachable from a set of wants, minus what the client has, and
+ *   {@link pack} streams them as a v2 packfile — whole objects, no deltas.
  *
- * It imports no platform API beyond `crypto.subtle`, so the same code runs on a
- * server, in a worker, and in a browser tab. It writes no pack and speaks no
- * HTTP.
+ * It imports no platform API beyond `crypto.subtle` and `CompressionStream`,
+ * so the same code runs on a server, in a worker, and in a browser tab. It
+ * speaks no HTTP: the wire that carries a pack is somebody else's.
  *
  * @module
  */
@@ -47,3 +50,6 @@ export * from './oid.ts'
 export * from './tree.ts'
 export * from './commit.ts'
 export * from './index.ts'
+export * from './sha1.ts'
+export * from './pack.ts'
+export * from './objects.ts'

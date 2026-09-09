@@ -52,6 +52,21 @@ export let seconds = (at: Who['at']): number =>
 export let signature = (who: Who): string =>
   `${ident(who.name)} <${ident(who.email)}> ${seconds(who.at)} +0000`
 
+/**
+ * The tree a commit body names, or nothing if these bytes are not a commit.
+ *
+ * The one link in this package no edge carries: a commit's parents are rows
+ * (./comp.ts) because history is walked constantly, but its tree is written
+ * only here, in the first line of the body the id was taken over — and a pack
+ * reads the body anyway on its way out.
+ */
+export let treeOf = (body: Uint8Array): string | undefined => {
+  let [word, id] = new TextDecoder().decode(body.subarray(0, 80))
+    .split('\n')[0]
+    .split(' ')
+  return word == 'tree' && /^[0-9a-f]+$/.test(id ?? '') ? id : undefined
+}
+
 /** A commit object's body. */
 export let commitBody = (c: Commit): Uint8Array<ArrayBuffer> => {
   let lines = [

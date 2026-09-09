@@ -79,6 +79,31 @@ An `entry` is named `sha256("entry|<tree>|<name>")` rather than by @yaks/edge's
 own sentence, because two names in one tree may point at one blob — within a
 tree the NAME is what is unique.
 
+## A clone is a pack
+
+```ts
+import { objects } from '@yaks/git'
+
+let from = objects(g, store)
+
+await from.reach([head.oid]) // every object it needs, each once
+await from.pack([head.oid], have) // …as a v2 packfile, streaming
+```
+
+`reach` walks `parent` edges for history and `entry` edges for reachability — a
+commit's tree is read from the first line of its body, the one link no row
+carries. A `have` is subtraction, not negotiation: everything the client says it
+holds is walked first and is simply missing from the answer, and a `have` naming
+an object this graph never had is ignored.
+
+`pack` writes the format as it is: `PACK`, version 2, the count, then each
+object's type-and-size varint and its zlib-deflated body, then the SHA-1 of
+every byte before it. Whole objects, never deltas — a pack is always allowed to
+be. Two things a hand-written one usually gets wrong: the entry states the
+UNPACKED size, and the body is zlib (`CompressionStream('deflate')`), not raw
+deflate. It streams, and ./sha1.ts takes the trailer as the bytes go by, so a
+clone of any size costs one object's body in memory.
+
 ## The bytes, on their own
 
 The builders are independent of any graph, and each is checked against what git
@@ -101,9 +126,12 @@ over UTF-8 bytes.
 
 ## What is not here
 
-No pack format, no HTTP, no ref: this package writes objects. It also writes no
-`commit{target}` row — joining a commit to the deploy it was minted from belongs
-to whoever mints it, on the same entity.
+No HTTP, no ref, no delta compression, no shallow or multi-round negotiation:
+this package writes objects and the pack they travel in, and the wire that
+carries it is somebody else's. It also writes no `commit{target}` row — joining
+a commit to the deploy it was minted from belongs to whoever mints it, on the
+same entity.
 
-`crypto.subtle` is the one platform API, so the same code runs on a server, in a
-worker and in a browser tab — and because it is async, so is writing an object.
+`crypto.subtle` and `CompressionStream` are the platform APIs, so the same code
+runs on a server, in a worker and in a browser tab — and because they are async,
+so is writing an object.
