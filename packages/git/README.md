@@ -124,13 +124,40 @@ one usually goes wrong: a directory's mode is `40000` in the body (no leading
 zero, unlike `git ls-tree`'s printing), and a directory sorts as `name + '/'`,
 over UTF-8 bytes.
 
+## And a clone is HTTP
+
+```ts
+import { advertise, uploadPack } from '@yaks/git'
+
+let refs = { list: async () => [{ name: 'refs/heads/main', oid: head.oid }] }
+
+// GET  <repo>/info/refs?service=git-upload-pack
+advertise(req)
+// POST <repo>/git-upload-pack
+await uploadPack(req, refs, objects(g, store))
+```
+
+Git's smart HTTP, protocol version 2, read only. The advertisement says what
+this server can do and no refs at all — that is what v2 is for, and `ls-refs` is
+where a client asks. `fetch` answers a pack, side-band framed as v2 requires, of
+everything the wants reach less everything the haves reach.
+
+Only what is implemented is advertised: `ls-refs`, `fetch`, `object-format=sha1`
+and `server-option`, so a client never asks for a shallow clone, a filter or a
+SHA-256 pack. And a `want` no ref reaches is refused with an `ERR` line — git's
+own `uploadpack.allowAnySHA1InWant=false` — because serving an object by
+guessing its id publishes what nobody published.
+
+It routes nothing: which repository a URL names, and who may read it, belong to
+whoever mounts it.
+
 ## What is not here
 
-No HTTP, no ref, no delta compression, no shallow or multi-round negotiation:
-this package writes objects and the pack they travel in, and the wire that
-carries it is somebody else's. It also writes no `commit{target}` row — joining
-a commit to the deploy it was minted from belongs to whoever mints it, on the
-same entity.
+No push, no ref storage, no delta compression, no shallow clone, and no
+negotiation — a `have` is subtraction, so a client still exchanging them is
+answered `NAK` and gets its pack when it says `done`. This package also writes
+no `commit{target}` row: joining a commit to the deploy it was minted from
+belongs to whoever mints it, on the same entity.
 
 `crypto.subtle` and `CompressionStream` are the platform APIs, so the same code
 runs on a server, in a worker and in a browser tab — and because they are async,

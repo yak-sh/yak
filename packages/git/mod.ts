@@ -37,10 +37,14 @@
  * - **A clone is those walks, packed.** {@link objects} names every object
  *   reachable from a set of wants, minus what the client has, and
  *   {@link pack} streams them as a v2 packfile — whole objects, no deltas.
+ * - **And a clone is HTTP.** {@link advertise} and {@link uploadPack} are
+ *   git's smart HTTP, protocol v2, read only — `Request` in, `Response` out,
+ *   over a {@link Refs} and an {@link Objects} somebody else mounts.
  *
- * It imports no platform API beyond `crypto.subtle` and `CompressionStream`,
- * so the same code runs on a server, in a worker, and in a browser tab. It
- * speaks no HTTP: the wire that carries a pack is somebody else's.
+ * It imports no platform API beyond `crypto.subtle`, `CompressionStream` and
+ * `Request`/`Response`, so the same code runs on a server, in a worker, and in
+ * a browser tab. It routes nothing: which repository a URL names, and who may
+ * read it, are the mount's to decide.
  *
  * @module
  */
@@ -53,3 +57,5 @@ export * from './index.ts'
 export * from './sha1.ts'
 export * from './pack.ts'
 export * from './objects.ts'
+export * from './pkt.ts'
+export * from './http.ts'
