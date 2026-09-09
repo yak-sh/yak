@@ -39,9 +39,16 @@ export let assertNotGraphFile = (path: string) => {
   let key = canonicalFile(path)
   let file = identity(path)
   for (let db of opened) {
+    let sidecars = ['-wal', '-shm', '-journal'].map((suffix) =>
+      `${db.path}${suffix}`
+    )
+    let sameInode = (other: string) => {
+      let found = identity(other)
+      return file.dev != null && file.ino != null && found.dev == file.dev &&
+        found.ino == file.ino
+    }
     if (
-      key == db.path || key == `${db.path}-wal` ||
-      key == `${db.path}-shm` || key == `${db.path}-journal` ||
+      key == db.path || sidecars.includes(key) || sidecars.some(sameInode) ||
       (file.dev != null && file.ino != null &&
         file.dev == db.dev && file.ino == db.ino)
     ) {

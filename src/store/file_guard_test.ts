@@ -9,9 +9,15 @@ Deno.test('raw readers refuse an open graph and its sidecars through aliases', (
   Deno.symlinkSync(path, alias)
   let hard = `${root}/hard.db`
   Deno.linkSync(path, hard)
+  db.exec('pragma journal_mode = wal')
+  db.exec('create table t (v text)')
+  db.exec("insert into t values ('held in wal')")
+  let hardWal = `${root}/hard.wal`
+  Deno.linkSync(`${path}-wal`, hardWal)
   try {
     assertThrows(() => assertNotGraphFile(alias), Error, 'open SQLite')
     assertThrows(() => assertNotGraphFile(hard), Error, 'open SQLite')
+    assertThrows(() => assertNotGraphFile(hardWal), Error, 'open SQLite')
     assertThrows(() => assertNotGraphFile(`${path}-wal`), Error, 'open SQLite')
     assertThrows(
       () => assertNotGraphFile(`${path}-journal`),
