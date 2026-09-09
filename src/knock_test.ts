@@ -1,7 +1,6 @@
-// The knock ladder, rung by rung: cast to whoever is awake, spawn a
-// project with nobody running, mail an addressed person, and say why
-// when no door opens — against an in-memory db, no processes (the spawn
-// rung asserts the minted session request, never a launch).
+// The knock ladder: deliver to an existing session or an addressed recipient,
+// and record a missed delivery without creating another session. Process
+// fixtures below exercise interactive session reachability without a provider.
 import { type Change } from './types.ts'
 import { fakeClaude } from './door_fake.ts'
 Deno.env.set('DB_PATH', ':memory:')
@@ -34,7 +33,7 @@ let erow = (eid: string) =>
     | Record<string, string | null>
     | undefined
 
-// A project with a repo, and a task on it — the spawnable ask.
+// A project with a repo and a task on it.
 let project = (() => {
   let eid = uid()
   apply(db, [
@@ -87,7 +86,7 @@ Deno.test('awake operator actor: the cast is the delivery', () => {
 // The T-15147 hijack: a managed spawn wearing the actor is NOT the
 // operator loop — every delivery door (channel, bus) drops actor address
 // for it, so a cast there is a stamp nobody hears. With no operator
-// awake the ladder must descend to the spawn rung, never lie.
+// awake the ladder must record the missed delivery.
 Deno.test('a managed spawn wearing the actor does not take the cast', () => {
   let s = uid()
   apply(db, [{
@@ -100,23 +99,23 @@ Deno.test('a managed spawn wearing the actor does not take the cast', () => {
      requested_task = ${idOf} where ${OWNED}`,
   ).run(task, s)
   let k = knock(task, project)
-  assertMatch(String(drow(k)?.via), /^spawned S-\d+$/)
+  assertMatch(String(erow(k)?.message), /no door/)
   db.prepare(`update session set status = 'completed' where ${OWNED}`).run(s)
 })
 
-Deno.test('nobody awake at a project: spawn onto the target task', () => {
-  let k = knock(task, project)
-  assertMatch(String(drow(k)?.via), /^spawned S-\d+$/)
-  // the spawn request rides the graph: a session asking for the task
-  let s = db.prepare(
-    `select * from session where requested_task = ${idOf} order by rowid desc`,
-  ).get(task) as Record<string, string>
-  assertEquals(Boolean(s.provider && s.model), true)
-  // a knock about something unspawnable says so
-  let d = uid()
-  apply(db, [{ eid: d, name: 'doc', comp: { title: 'just a doc' } }])
-  let k2 = knock(d, project)
-  assertMatch(String(erow(k2)?.message), /not spawnable/)
+Deno.test('an unattended project never launches a session, regardless of its legacy role', () => {
+  let sessions = () => db.prepare('select count(*) as n from session').get()
+  let before = sessions()
+  for (let state of [undefined, 'stopped', 'running']) {
+    if (state) {
+      apply(db, [{ eid: project, name: 'role', comp: { state } }])
+    }
+    let k = knock(task, project)
+    assertMatch(String(erow(k)?.message), /no door/)
+    assertEquals(drow(k), undefined)
+    assertEquals(sessions(), before)
+  }
+  apply(db, [{ eid: project, name: 'role', comp: null }])
 })
 
 Deno.test('an addressed person: the knock rides mail, words and all', () => {
@@ -178,7 +177,7 @@ Deno.test('an operator is a door: external claude hears it, its child does not',
   await c.status
   // the door shuts with the process: the ladder descends again — past
   // the still-running managed spawn, which is not a door for the actor
-  assertMatch(String(drow(knock(task, project))?.via), /^spawned S-\d+$/)
+  assertMatch(String(erow(knock(task, project))?.message), /no door/)
   db.prepare(`update session set status = 'completed' where ${OWNED}`).run(
     spawn,
   )

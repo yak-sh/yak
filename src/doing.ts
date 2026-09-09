@@ -38,7 +38,6 @@ import { closingTask } from './closing.ts'
 import { unblocking } from './unblock.ts'
 import { knocked } from './knock.ts'
 import { waking } from './wake.ts'
-import { scheduleArm, scheduleKnocked, scheduleSettled } from './schedule.ts'
 import { DREAM_PENDING, DREAM_ROLE, dreamComb } from './dream.ts'
 import { ensureVerifier, settleVerification, VERIFIER_ROLE } from './verify.ts'
 import { fleetApi, inboundSweep, isLive, mayStamp } from './inbound.ts'
@@ -68,18 +67,7 @@ import { superviseServices, watchProcesses } from './processes.ts'
 import { nativeSweep, noticeAccepted } from './tmux.ts'
 import { codexClock } from './codex_auth.ts'
 import { retryCredential } from './managed_codex.ts'
-import {
-  registerSystem,
-  roleAttention,
-  roleBoot,
-  roleClaim,
-  roleConfig,
-  roleDoc,
-  rolePersona,
-  roleRemoved,
-  roleSession,
-  systemSweep,
-} from './roles.ts'
+import { registerSystem, systemSweep } from './system_jobs.ts'
 import { prune as pruneTree, reap as reapProbes, sweep } from './probes.ts'
 import { obeyed } from './obey.ts'
 import { record } from './telemetry.ts'
@@ -93,9 +81,7 @@ import type { Sql } from './store/sql.ts'
 
 type Cast = (changes: Change[]) => void
 
-// System identity must exist before any role row is replayed: roleBoot chooses
-// the system reconciler through this registry. Keep every built-in spec in one
-// list so a fresh process cannot briefly treat one as an operator role.
+// Built-in background jobs share one registry for their tuning and sweep.
 let SYSTEMS = [SCRIBE, FIXER_ROLE, DREAM_ROLE, VERIFIER_ROLE]
 
 // The in-memory hooks of the graph-native runner (managedCodex + its sweep
@@ -255,85 +241,9 @@ export let wireDoing = (d: Doing) => {
     sweep: { pending: PENDING('stop_request') },
     doc: 'the brake: signal the targeted session to stop, settle delivered',
   })
-  on('role', {
-    created: roleBoot(cast),
-    changed: {
-      state: roleConfig(cast),
-      surface: roleConfig(cast),
-      scope: roleConfig(cast),
-      checkout: roleConfig(cast),
-      schedule: roleConfig(cast),
-      wake_policy: roleConfig(cast),
-      wake_target: roleConfig(cast),
-      retry_at: roleConfig(cast),
-      quiet: roleConfig(cast),
-      cooldown: roleConfig(cast),
-      cap: roleConfig(cast),
-    },
-    removed: roleRemoved(cast),
-    sweep: { pending: '1' },
-    doc: 'a desired-state change wakes its role; a removed role closes its ' +
-      'deterministic native tmux door',
-  })
-  on('doc', {
-    created: roleDoc(cast),
-    changed: {
-      title: roleDoc(cast),
-      body: roleDoc(cast),
-    },
-    doc: 'role and project instructions changing re-drive only their roles',
-  })
-  on('repo', {
-    created: roleConfig(cast),
-    changed: {
-      path: roleConfig(cast),
-      base_branch: roleConfig(cast),
-    },
-    doc: 'a role scope repo change re-drives that scope’s roles',
-  })
-  on('project', {
-    created: roleConfig(cast),
-    changed: { color: roleConfig(cast) },
-    doc: 'a role scope palette change re-drives that scope’s native roles',
-  })
-  on('spawn', {
-    created: roleConfig(cast),
-    changed: {
-      provider: roleConfig(cast),
-      model: roleConfig(cast),
-      effort: roleConfig(cast),
-      persona: rolePersona(cast),
-    },
-    doc: 'role launch configuration changes wake only the role that owns it',
-  })
-  on('session', {
-    created: roleSession(cast),
-    changed: {
-      status: roleSession(cast),
-      origin: roleSession(cast),
-      finished_at: roleSession(cast),
-      notice_at: roleSession(cast),
-    },
-    doc: 'a persistent role run changing re-drives only its owning role',
-  })
-  on('session', {
-    created: roleClaim(cast),
-    doc:
-      'an operator claims its role on boot (T-19453): whoever holds the live ' +
-      'claim IS the operator, so the reconciler defers to it and never spawns a ' +
-      'duplicate — managed spawns and interactive operators alike, no hook needed',
-  })
   on('comment', {
     created: commented(cast),
     doc: 'a comment on claimed work resumes or steers its process-backed run',
-  })
-  on('comment', {
-    created: (_eid, comp) => roleAttention(cast)(String(comp.target)),
-    doc: 'a comment wakes only the role that owns or scopes its target',
-  })
-  on('knock', {
-    created: (_eid, comp) => roleAttention(cast)(String(comp.target)),
-    doc: 'a knock wakes only the role that owns or scopes its target',
   })
   on('comment', {
     created: obeyed(cast, d.codexReady),
@@ -373,8 +283,7 @@ export let wireDoing = (d: Doing) => {
     created: knocked(cast),
     sweep: { pending: PENDING('knock') },
     doc: 'attention, resolved: cast to whoever is awake for the recipient, ' +
-      'spawn a project operator onto the target, or mail an addressed ' +
-      'person — settle delivered/error either way',
+      'or mail an addressed recipient — settle delivered/error either way',
   })
   on('knock', {
     created: dreamComb(cast),
@@ -384,29 +293,6 @@ export let wireDoing = (d: Doing) => {
     doc: 'the dream: a cadence knock to a venture dream combs its sessions ' +
       'finished since the floor cursor, flagging drift as consider tasks and ' +
       'capturing owner decisions as memories — FLAG-only, never a fix (T-12800)',
-  })
-  on('role', {
-    created: (eid) => scheduleArm(eid, cast),
-    changed: {
-      schedule: (eid) => scheduleArm(eid, cast),
-      wake_policy: (eid) => scheduleArm(eid, cast),
-      state: (eid) => scheduleArm(eid, cast),
-    },
-    // Boot: every role reconciles its clock — a cadence missed while the
-    // server was down is one pending row again, never a storm.
-    sweep: { pending: '1' },
-    doc: 'a running scheduled role keeps exactly one pending self-wake at ' +
-      'its next instant; any other role keeps none (D-18722 part B)',
-  })
-  on('session', {
-    changed: { status: scheduleSettled(cast) },
-    doc: 'a role session reaching a terminal status re-arms its scheduled ' +
-      'role’s next self-wake',
-  })
-  on('knock', {
-    created: (eid) => scheduleKnocked(cast)(eid),
-    doc: 'a fired cadence knock re-arms the next instant, so the cadence ' +
-      'never stalls on a run that misses its terminal stamp',
   })
   on('wake', {
     created: waking(cast),
@@ -664,10 +550,7 @@ export let tick = (
 export let bootDoing = (d: Doing, syncSoon: () => void) => {
   let { cast } = d
 
-  // Register before every boot reconciler, especially the role outbox relay
-  // below. A replay that enters roleBoot first can otherwise take the operator
-  // flight; the immediate system sweep then sees that flight and skips its own
-  // first pass.
+  // Register background jobs before their first sweep.
   for (let spec of SYSTEMS) registerSystem(spec)
 
   // Boot migrations may reshape graph-owned teachings without an apply
@@ -819,9 +702,7 @@ export let bootDoing = (d: Doing, syncSoon: () => void) => {
         'HOLDCO_CF_ACCOUNT_ID',
   )
 
-  // The system roles' ten-minute tick carries their time-based triggers. Their
-  // identities were registered before boot replay above; registration here
-  // would be too late for a role row the relay already handed to roleBoot.
+  // Background jobs' ten-minute tick carries their time-based triggers.
   tick('system', () => systemSweep(cast), 10 * 60_000)
 
   // Embeddings (embed.ts): every non-comment doc keeps a semantic vector,

@@ -10,10 +10,8 @@ import { db } from './live_db.ts'
 import { reachable } from './door.ts'
 import { delivered, errored, excepted, toOf } from './deliver.ts'
 import { commitEffects } from './effects.ts'
-import { capabilities, type Change, uuid } from './types.ts'
-import { isOperator, spawnChanges, spawnPlan } from './client.ts'
-import { rowsFor } from './graph_query.ts'
-import { known } from './catalog.ts'
+import { type Change, uuid } from './types.ts'
+import { isOperator } from './client.ts'
 
 type Cast = (changes: Change[]) => void
 
@@ -48,7 +46,7 @@ let wordsFor = (target: string): string => {
 // for a session whose every door drops actor address, and the operator
 // never hears its own wake (T-15147, the T-7288 lie again). A gate, not
 // a preference — with no operator reachable the ladder must descend
-// (spawn, mail), never settle for a stamp nobody hears. Newest first
+// to mail, never settle for a stamp nobody hears. Newest first
 // among the eligible, because that is the order the doors close in: a
 // /clear leaves the old row behind and the higher num is the live one.
 let awake = (to: string): { eid: string; num: number } | undefined =>
@@ -77,20 +75,8 @@ export let knocked =
     if (!to) return fail('no recipient')
     // A dream knock is combed by dreamComb (dream.ts), which owns its own
     // delivered stamp — this ladder has no door for it, so abstain rather than
-    // descend to rung 4 and stamp a spurious "no door" error every cadence.
+    // stamp a spurious "no door" error every cadence.
     if (db.prepare(`select 1 from dream where ${OWNED}`).get(to)) return
-    // A SCOPED role entity (role comp, not a unified project-role) has no
-    // door either: roleAttention already ran the reconciler on this knock's
-    // creation, and that reconcile owns the response (D-18722). Settle it —
-    // a cadence knock must not stamp 'no door' every tick. A unified
-    // operator (role ON its project) keeps the full ladder: its doors are
-    // its sessions.
-    if (
-      db.prepare(
-        `select 1 from role where ${OWNED}
-         and not exists (select 1 from project where ${OWNED})`,
-      ).get(to, to)
-    ) return done('role reconcile')
     // Who asked. The knock's own provenance is the author of anything it
     // sends on their behalf.
     let knocker = () =>
@@ -106,7 +92,7 @@ export let knocked =
       // 1b: a settled managed session still owns a compatibility door:
       // commented() can wake it from a direct comment. A knock takes that
       // existing door rather than growing a second mechanism, exactly as rung
-      // 3 takes mail: each rung says the knock in the medium its target hears.
+      // 2 takes mail: each rung says the knock in the medium its target hears.
       // Only a MANAGED session: an external one has no run to continue,
       // and rung 1 already caught every session that was reachable.
       let managed = db.prepare(
@@ -131,7 +117,7 @@ export let knocked =
                   },
                 },
                 // Not an event: these are the knocker's own words relayed, the
-                // same reason rung 3's letter is a letter (M-4062). An event
+                // same reason rung 2's letter is a letter (M-4062). An event
                 // would also be ignored by commented(), so nothing would wake.
                 { eid: c, name: 'comment', comp: { target: to } },
               ],
@@ -144,41 +130,7 @@ export let knocked =
         // keeps its own trail — the same division as `mailed`.
         return done(`commented ${human(db, to)}`)
       }
-      // 2: an actor with a repo and nobody awake — spawn onto the
-      // target task; the session boots holding the ask.
-      let project = db.prepare(
-        `select 1 from project where ${OWNED}`,
-      ).get(to)
-      if (project) {
-        let isTask = db.prepare(`select 1 from task where ${OWNED}`).get(target)
-        if (!isTask) {
-          return fail(`nobody awake and ${human(db, target)} is not spawnable`)
-        }
-        // The same precedence every door shares: the target task's spawn
-        // hint decides the agent (no caller session at this rung), the
-        // provider table defaulting the rest.
-        // spawnPlan reads the target task's spawn hint; spawnChanges resolves
-        // the target and the planned persona (no deps here, so no owner walk).
-        // Read just those, never the whole graph (M-21143).
-        let plan = spawnPlan(rowsFor(db, [target]), known(db), {
-          task: target,
-        })
-        if (!plan.provider || !plan.model) {
-          return fail(
-            `nobody awake and no provider to spawn ${human(db, target)}`,
-          )
-        }
-        let made = spawnChanges(rowsFor(db, [target, plan.persona]), {
-          task: target,
-          provider: plan.provider,
-          model: plan.model,
-          effort: plan.effort,
-          persona: plan.persona,
-        }, capabilities)
-        commitEffects((t) => apply(db, made.changes, t), cast)
-        return done(`spawned ${human(db, made.eid)}`)
-      }
-      // 3: a person (or anything addressed) — the knock rides mail; the
+      // 2: a person (or anything addressed) — the knock rides mail; the
       // mail effect owns delivery and its own audit trail.
       let addressed = db.prepare(`select 1 from email where ${OWNED}`).get(to)
       if (addressed) {
@@ -210,11 +162,10 @@ export let knocked =
         )
         return done(`mailed ${human(db, to)}`)
       }
-      // 4: a settled session keeps that compatibility door; the knock records
-      // the miss only after it fails.
-      fail(`no door: ${human(db, to)} is not awake, spawnable-at, or addressed`)
+      // No existing session or address can accept this delivery.
+      fail(`no door: ${human(db, to)} is not awake or addressed`)
     } catch (e) {
-      // A ladder rung THREW — an unexpected break (a spawn/apply that blew up),
+      // A ladder rung THREW — an unexpected break (an apply that blew up),
       // not the known "no door reachable" miss above (D-17081). Stamp the
       // `exception` facet with its stack; excepted() files the deduped bug live.
       excepted(eid, String(e).slice(0, 500), (e as Error).stack ?? null, cast)

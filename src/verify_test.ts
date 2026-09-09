@@ -818,7 +818,7 @@ Deno.test('VERIFY_PENDING plans from authored indexes with bounded target subque
   assert(!/SCAN session\b/.test(capDetails), capDetails)
 })
 
-Deno.test('boot registers system roles before replay, so verifier runs on its first sweep', async () => {
+Deno.test('boot runs background jobs without operator lifecycle hooks', async () => {
   reset()
   let work = task()
   apply(db, [{
@@ -828,7 +828,7 @@ Deno.test('boot registers system roles before replay, so verifier runs on its fi
   }])
 
   let { bootDoing, wireDoing } = await import('./doing.ts')
-  let { configureEffects } = await import('./effects.ts')
+  let { configureEffects, docs } = await import('./effects.ts')
   let { tick: nextTick } = await import('./testing.ts')
   let { stop } = await import('./timers.ts')
   let restore = configureEffects({
@@ -843,6 +843,13 @@ Deno.test('boot registers system roles before replay, so verifier runs on its fi
       readyProviders: () => Promise.resolve([]),
     }
     let { syncSoon } = wireDoing(doing)
+    assert(
+      docs().filter((effect) => effect.comp == 'role').every((effect) =>
+        !effect.sweep &&
+        !effect.hooks.some((hook) => hook.startsWith('changed('))
+      ),
+      'legacy role state has no lifecycle handler or boot replay',
+    )
     bootDoing(doing, syncSoon)
     await nextTick()
 
