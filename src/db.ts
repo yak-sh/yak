@@ -10,7 +10,8 @@
 //
 // Ids: `eid` is a UUID so ANY side (client included) can mint entities;
 // `num` is the server-minted human number (T-7 in the UI, one global counter).
-import type { SchemaOp, Sql, Statement } from './store/sql.ts'
+import type { SchemaOp, Sql, SqlValue, Statement } from './store/sql.ts'
+import { SEED } from './catalog.ts'
 export type { SchemaOp } from './store/sql.ts'
 import { initVector } from './vector.ts'
 import { dirname, resolve } from 'node:path'
@@ -1016,6 +1017,11 @@ export let derived = [
   'hook',
   'person',
   'persona',
+  // The spawn catalog (T-35023): a provider is a name, a transport word, where
+  // its credential comes from and two flags; a model adds a provider ref and
+  // its effort levels. Nullable text/bool columns and one {eid} reference by
+  // death word, so both derive.
+  'provider',
   'model',
   'memory',
   'feedback',
@@ -1249,6 +1255,63 @@ let seedLink = (db: Sql, parent: string, type: string, child: string) => {
   )
     .run(eid, parent, child)
   prep(db, `insert into ${sqlName(nature)} (entity) values (${ID})`).run(eid)
+}
+
+// The spawn catalog carried into the graph (T-35023, catalog.ts SEED). Runs on
+// every boot and is a no-op after the first: each provider and model is found
+// by NAME or minted, and only columns still blank are filled — so an owner's
+// edit (a retired model, a renamed label) survives, and a model entity that
+// already existed for another reason gains its catalog facts instead of a twin.
+let seedCatalog = (db: Sql) => {
+  let key = (table: 'provider' | 'model', name: string) =>
+    (prep(db, `select entity from ${table} where name = ?`).get(name) as
+      | { entity: number }
+      | undefined)?.entity
+  let idOf = (table: 'provider' | 'model', name: string, title: string) => {
+    let had = key(table, name)
+    if (had) return had
+    let eid = ent(db)
+    doc(db, eid, title)
+    prep(db, `insert into ${table} (entity, name) values (${ID}, ?)`)
+      .run(eid, name)
+    mintNum(db, eid)
+    return key(table, name)!
+  }
+  let fill = (table: string, id: number, cols: Record<string, SqlValue>) => {
+    for (let [col, v] of Object.entries(cols)) {
+      if (v == null) continue
+      prep(
+        db,
+        `update ${table} set "${col}" = ?
+          where entity = ? and "${col}" is null`,
+      ).run(v, id)
+    }
+  }
+  let flag = (v?: boolean) => (v === false ? 0 : 1)
+  let seats: Record<string, number> = {}
+  for (let p of SEED) {
+    let id = idOf('provider', p.name, p.title)
+    seats[p.name] = id
+    fill('provider', id, {
+      transport: p.transport,
+      credential: p.credential ?? null,
+      fallback: p.fallback ? 1 : null,
+      offered: flag(p.offered),
+    })
+  }
+  for (let p of SEED) {
+    if (p.serves) fill('provider', seats[p.name], { serves: seats[p.serves] })
+    for (let m of p.models) {
+      let id = idOf('model', m.name, m.title)
+      fill('model', id, {
+        provider: seats[p.name],
+        label: m.label ?? m.title,
+        efforts: m.efforts ?? null,
+        effort: m.effort ?? null,
+        offered: flag(m.offered),
+      })
+    }
+  }
 }
 
 // A handful of neutral demo rows — a board containing tasks, one edge of
@@ -3157,6 +3220,9 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
         n: number
       }
       if (!n) seed(db)
+      // The spawn catalog is graph data, so every graph carries it: a fresh
+      // one, the live one, and a test's :memory: alike (T-35023).
+      seedCatalog(db)
       // Provenance components (T-6670), now the ONLY home: birth and last-edit
       // moved off the spine, and this is the last pass that reads the old
       // columns before they go. Runs AFTER seed so the demo entities (direct

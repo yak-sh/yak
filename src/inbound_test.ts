@@ -62,6 +62,10 @@ let holdco = (() => {
     { eid, name: 'doc', comp: { title: 'Holdco' } },
     { eid, name: 'project', comp: {} },
   ])
+  // The catalog seed (catalog.ts) fills the low numbers, so free the holdco
+  // slot before taking it — nothing here cares what its occupant is numbered.
+  db.prepare(`update entity set num = (select max(num) + 1 from entity)
+              where num = 20`).run()
   db.prepare('update entity set num = 20 where eid = ?').run(eid)
   return eid
 })()

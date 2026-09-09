@@ -21,7 +21,7 @@ import { catchup } from './catchup.ts'
 import { configureEffects, dispatch, type Where } from './effects.ts'
 import { takeEffectsLease } from './effects_lease.ts'
 import { bootDoing, type Doing, wireDoing } from './doing.ts'
-import { providers } from './adapters.ts'
+import { known } from './catalog.ts'
 import { accountService } from './accounts.ts'
 import { codexIssuer, codexStore } from './codex_auth.ts'
 import { responses } from './responses.ts'
@@ -61,7 +61,7 @@ let codexReady = codexReadiness(
 // `where:'serve'` arm over there.
 let readyProviders = async () => {
   let ok = await codexReady()
-  return providers((name) => name != 'codex' || ok)
+  return known(db, (name) => name != 'codex' || ok)
 }
 let noop = () => {}
 

@@ -19,7 +19,7 @@ let { rows, spawnChanges, spawnPlan, memoryChanges, DESK, STUB } = await import(
   './client.ts'
 )
 let { rowsFor, evalGraph } = await import('./graph_query.ts')
-let { providers } = await import('./adapters.ts')
+let { known } = await import('./catalog.ts')
 
 // Minted-eid-blind comparison: mask the builder's own fresh primary eid and any
 // fresh session.id it stamped, then hold everything else — every reference to a
@@ -101,7 +101,7 @@ Deno.test('heal — spawnChanges over the scoped bug equals the snapshot', () =>
 // as the caller passes them.
 Deno.test('knock — spawnPlan + spawnChanges scoped equal the snapshot', () => {
   let { db, B } = seed()
-  let ps = providers()
+  let ps = known(db)
   let scopedPlan = spawnPlan(rowsFor(db, [B]), ps, { task: B })
   let fullPlan = spawnPlan(rows(snapshot(db)), ps, { task: B })
   assertEquals(scopedPlan, fullPlan)

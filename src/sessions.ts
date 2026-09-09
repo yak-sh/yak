@@ -33,13 +33,8 @@
 import { basename, dirname, resolve } from 'node:path'
 import { childEnv } from './agent_env.ts'
 import { sentences } from './edge.ts'
-import {
-  type Adapter,
-  adapters,
-  type Event,
-  providerSpec,
-  type Summary,
-} from './adapters.ts'
+import { type Adapter, adapters, type Event, type Summary } from './adapters.ts'
+import { known, trouble } from './catalog.ts'
 import { apply, depsOf, eager, human, locate, record, resolveId } from './db.ts'
 import { db } from './live_db.ts'
 import { evalGraph, personaGraph, rowed } from './graph_query.ts'
@@ -1840,22 +1835,17 @@ export let spawned =
       }, cast)
     let row = runRow(eid)
     if (!row?.spawn_provider) return // external, or deleted in its own batch
-    let spec = providerSpec(String(row.spawn_provider))
-    if (!spec) return fail(`unknown provider: ${row.spawn_provider}`)
-    let ad = adapters[String(row.spawn_provider)]
+    // The allowlist is the GRAPH (catalog.ts): a provider entity per provider,
+    // a model entity per model. `trouble` is the same reading the sugar tools'
+    // early door gives, so a request accepted there cannot fail here.
     let model = String(row.spawn_model)
-    if (!spec.models.includes(model)) {
-      return fail(`unknown model: ${row.spawn_model}`)
-    }
-    // Empty allowlist = the provider ignores effort (see adapters.trouble):
-    // an effort mirrored or inherited onto a claude/ollama spawn is a no-op,
-    // never a failed session. A provider that offers efforts still rejects one.
-    if (
-      row.spawn_effort && spec.efforts.length &&
-      !spec.efforts.includes(String(row.spawn_effort))
-    ) {
-      return fail(`unknown effort: ${row.spawn_effort}`)
-    }
+    let bad = trouble(known(db), {
+      provider: String(row.spawn_provider),
+      model,
+      effort: row.spawn_effort ? String(row.spawn_effort) : undefined,
+    })
+    if (bad) return fail(bad.split(' — ')[0])
+    let ad = adapters[String(row.spawn_provider)]
     let task = row.requested_task
       ? db.prepare(`
       select ${refEid('t.project')} as project, e.num, d.title, d.body

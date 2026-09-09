@@ -1,8 +1,8 @@
 // The adapter readers against REAL captured events — each fixture line is
 // pasted from a live probe of the CLI it mimics (trimmed, same shape).
 // If a vendor changes dialect, these say exactly which reader went deaf.
-import { assertEquals, assertMatch, assertNotEquals } from '@std/assert'
-import { adapters, ollama, providers, trouble } from './adapters.ts'
+import { assertEquals } from '@std/assert'
+import { adapters } from './adapters.ts'
 
 let { claude, codex } = adapters
 
@@ -121,103 +121,6 @@ Deno.test('codex: each agent_message overwrites final_text; usage closes', () =>
   )
 })
 
-Deno.test('providers: every adapter but fake, allowlists only — no argv', () => {
-  let ps = providers()
-  assertEquals(
-    ps.map((p) => p.name),
-    [...Object.keys(adapters).filter((n) => n != 'fake'), 'ollama'],
-  )
-  // Every non-fallback provider projects the four allowlist fields; the CLI
-  // fallback adds only its `fallback` marker — never argv, never a `ready`
-  // (unstamped table).
-  for (let p of ps) {
-    assertEquals(
-      Object.keys(p),
-      p.name == 'codex-cli'
-        ? ['name', 'models', 'efforts', 'labels', 'fallback']
-        : ['name', 'models', 'efforts', 'labels'],
-    )
-  }
-  // the browser offers exactly what a start request is checked against
-  assertEquals(
-    ps.find((p) => p.name == 'claude')?.models,
-    adapters.claude.models,
-  )
-  // every friendly-named offer fronts an allowlisted model
-  for (let p of ps) {
-    for (let m of Object.keys(p.labels)) {
-      assertEquals(p.models.includes(m), true)
-    }
-  }
-  assertEquals(ps.find((p) => p.name == 'claude')?.efforts, [])
-  assertEquals(
-    ps.find((p) => p.name == 'codex')?.efforts,
-    adapters.codex.efforts,
-  )
-  // The fallback carries the models (a valid, directly-requestable transport)
-  // but NO menu of its own — the same models are already offered once through
-  // graph-native codex, so a picker never shows them twice.
-  let fallback = ps.find((p) => p.name == 'codex-cli')!
-  assertEquals(fallback.models, adapters.codex.models)
-  assertEquals(fallback.labels, {})
-  assertEquals(fallback.fallback, true)
-  assertEquals('argv' in fallback, false)
-})
-
-Deno.test('providers: a readiness probe stamps ready per provider', () => {
-  let ps = providers((name) => name != 'codex')
-  assertEquals(ps.find((p) => p.name == 'codex')?.ready, false)
-  assertEquals(ps.find((p) => p.name == 'codex-cli')?.ready, true)
-  assertEquals(ps.find((p) => p.name == 'claude')?.ready, true)
-})
-
-Deno.test('claude: opus-5 and the bare opus alias are barred; 4-8 is the default', () => {
-  // A non-opus line rides its alias (latest is wanted); opus does not.
-  assertEquals(trouble({ provider: 'claude', model: 'sonnet' }), null)
-  assertEquals(trouble({ provider: 'claude', model: 'claude-opus-4-8' }), null)
-  // The 1M-context variant is the same pin, accepted alongside the base.
-  assertEquals(
-    trouble({ provider: 'claude', model: 'claude-opus-4-8[1m]' }),
-    null,
-  )
-  // The ban is a rejection, never a silent downgrade — both spellings that
-  // reach claude-opus-5 are refused: the pinned id and the alias that
-  // resolves to it.
-  assertNotEquals(trouble({ provider: 'claude', model: 'claude-opus-5' }), null)
-  assertNotEquals(trouble({ provider: 'claude', model: 'opus' }), null)
-  // Derived from the allowlist, not sampled, so the ban can't rot into a
-  // decoy: nothing the adapter accepts may be opus-5 or the poison alias.
-  assertEquals(claude.models.includes('claude-opus-5'), false)
-  assertEquals(claude.models.includes('opus'), false)
-  // claude-opus-4-8 leads, so an explicit Claude request defaults to it.
-  assertEquals(claude.models[0], 'claude-opus-4-8')
-  // The menu offers Opus, and the model behind it is the pinned 4-8.
-  assertEquals(claude.labels['claude-opus-4-8'], 'Opus')
-  assertEquals(Object.keys(claude.labels)[0], 'claude-opus-4-8')
-})
-
-Deno.test('codex: the probed celestial line, with Sol as the default', () => {
-  assertEquals(codex.models, [
-    'gpt-5.6-sol',
-    'gpt-5.6-terra',
-    'gpt-5.6-luna',
-  ])
-  assertEquals(codex.efforts, [
-    'low',
-    'medium',
-    'high',
-    'xhigh',
-    'max',
-    'ultra',
-  ])
-  assertEquals(codex.labels, {
-    'gpt-5.6-sol': 'GPT-5.6 Sol',
-    'gpt-5.6-terra': 'GPT-5.6 Terra',
-    'gpt-5.6-luna': 'GPT-5.6 Luna',
-  })
-  assertEquals(codex.models[0], 'gpt-5.6-sol')
-})
-
 Deno.test('codex-cli is the same process adapter under an explicit request', () => {
   let fallback = adapters['codex-cli']
   let job = {
@@ -232,65 +135,8 @@ Deno.test('codex-cli is the same process adapter under an explicit request', () 
     codex.resume(job, 'thread', 'continue'),
   )
   assertEquals(fallback.row, codex.row)
-  // Same models, but no menu of its own and marked as the fallback transport.
-  assertEquals(fallback.models, codex.models)
-  assertEquals(fallback.labels, {})
-  assertEquals(fallback.fallback, true)
-})
-
-Deno.test('ollama: direct model ids are provider offers, not adapters', () => {
-  assertEquals(ollama.models[0], 'kimi-k2.7-code')
-  assertEquals(ollama.models.includes('gpt-oss:120b'), true)
-  assertEquals(
-    ollama.models.some((model) => model.endsWith('-cloud')),
-    false,
-  )
-  assertEquals(
-    ollama.models.some((model) => model.endsWith(':cloud')),
-    false,
-  )
-  assertEquals(ollama.labels['kimi-k2.7-code'], 'Kimi K2.7 Code')
-  assertEquals('ollama' in adapters, false)
-  assertEquals(
-    trouble({ provider: 'ollama', model: 'kimi-k2.7-code' }),
-    null,
-  )
-})
-
-Deno.test('trouble: unknown provider/model/effort each name the valid ones', () => {
-  assertMatch(
-    trouble({ provider: 'oracle', model: 'x' })!,
-    /unknown provider: oracle — have .*claude/,
-  )
-  assertMatch(
-    trouble({ provider: 'claude', model: 'gpt-9' })!,
-    /unknown model: gpt-9 — claude has .*opus/,
-  )
-  assertMatch(
-    trouble({ provider: 'codex', model: 'gpt-5.6-sol', effort: 'heroic' })!,
-    /unknown effort: heroic — codex has .*high/,
-  )
-  // a good codex request (effort in the allowlist) passes clean
-  assertEquals(
-    trouble({ provider: 'codex', model: 'gpt-5.6-sol', effort: 'high' }),
-    null,
-  )
-})
-
-// T-15352: a provider with no launch-effort knob (empty allowlist) IGNORES an
-// effort rather than rejecting it — so switching a spawn onto claude never dies
-// on an inherited/passed effort. A provider that offers efforts still rejects
-// an unknown one (guarded above).
-Deno.test('trouble: an empty effort allowlist ignores effort, never rejects', () => {
-  assertEquals(claude.efforts, []) // premise: claude offers no launch effort
-  assertEquals(
-    trouble({ provider: 'claude', model: 'haiku', effort: 'high' }),
-    null,
-  )
-  assertEquals(
-    trouble({ provider: 'ollama', model: 'kimi-k3', effort: 'high' }),
-    null,
-  )
+  // Which models it carries, and that it ranks behind graph-native codex, are
+  // the provider ENTITY's business now (catalog_test.ts).
 })
 
 Deno.test('argv: no secrets, instruction rides last behind --', () => {

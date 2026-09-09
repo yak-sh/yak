@@ -91,6 +91,11 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'deploy.app',
       // a hostname aimed at a dead app serves nothing (T-33037)
       'hostname.app',
+      // the spawn catalog (T-35023): a model is nothing without the provider
+      // that serves it, and a fallback transport nothing without the provider
+      // whose models it carries
+      'model.provider',
+      'provider.serves',
       // an edge dies with either endpoint (D-23820): the reverse-index reap
       'edge.from',
       'edge.to',

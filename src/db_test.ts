@@ -537,6 +537,10 @@ let contracts = [
   contract('memory', 'scope', 'project'),
   contract('goal', 'scope', 'project'),
   contract('dream', 'scope', 'project'),
+  // the spawn catalog (T-35023): a model's provider, and the provider whose
+  // models a fallback transport carries
+  contract('model', 'provider', 'provider'),
+  contract('provider', 'serves', 'provider'),
   contract('layout', 'root', 'pane'),
   contract('pane', 'layout', 'layout'),
   contract('pane', 'parent', 'pane'),

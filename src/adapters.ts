@@ -1,10 +1,11 @@
 // The provider seam: what a managed session RUNS, and how to read what it
-// prints. One hard-coded table — a provider is its argv, the two
-// allowlists a start request is checked against, and the two readers that
-// turn its JSONL into session summary columns. Every provider speaks the
-// same shape (a line of JSON per event), so sessions.ts never learns a
-// vendor's dialect: it asks the adapter "is this the init?", "is this the
-// end?" and stamps whatever comes back.
+// prints. A provider is its argv and the readers that turn its JSONL into
+// session summary columns — code, and only code. WHICH providers exist, which
+// models each admits and at which effort levels is graph data (catalog.ts):
+// adding a model is a write, not a release. Every provider speaks the same
+// shape (a line of JSON per event), so sessions.ts never learns a vendor's
+// dialect: it asks the adapter "is this the init?", "is this the end?" and
+// stamps whatever comes back.
 //
 // `fake` ships in-repo for tests; `claude` and `codex-cli` shell the
 // installed CLIs (subscription auth rides HOME — no keys in argv or env).
@@ -47,16 +48,6 @@ export type Adapter = {
   // A plain string keeps this module free of the server-only ingest graph, so
   // the browser can still import the adapter table.
   dialect: 'claude' | 'codex' | 'fake'
-  models: string[]
-  efforts: string[]
-  // The spawn menu: offered model → friendly name. A subset of models —
-  // short aliases stay accepted but unoffered, so a form never shows the
-  // same model twice. A fallback transport (below) carries no menu at all.
-  labels: Record<string, string>
-  // A CLI fallback transport: valid and directly requestable, but never a menu
-  // entry of its own and always ranked behind the graph-native provider, so a
-  // model it shares never appears twice in a picker.
-  fallback?: boolean
   argv: (job: Job) => string[]
   // Resume a settled thread with more to say: the same flags as argv, but
   // pointed at an existing provider session and carrying the new prompt.
@@ -136,117 +127,6 @@ let gist = (input: unknown): string => {
 // without clocks (codex, fake) adds nothing.
 let at = (e: Event) => e.timestamp ? { at: String(e.timestamp) } : {}
 
-// The table as a browser may see it (GET /providers): the names, the
-// two allowlists, and the friendly-named menu — nothing else; argv (and the
-// paths in it) is this side's business. Derived, so a new provider needs
-// no second edit.
-// fake is a test rig, not an offer — it stays callable (tests, API smoke
-// runs) but never shows up in a Run form.
-// `ready` stamps per-provider readiness when the server passes an account
-// probe; the default spawn blocker routes around any provider it marks unready,
-// so a stamped /providers picks the graph-native → CLI transport for free.
-export type ProviderSpec = Pick<Adapter, 'models' | 'efforts' | 'labels'> & {
-  fallback?: boolean
-}
-
-// The `ollama` provider is a direct HTTP provider (the owner's ollama server,
-// `ollama.yak.sh`), not an installed process adapter. These are the model ids
-// it offers; they carry no `:cloud` suffix.
-export let ollama: ProviderSpec = {
-  models: [
-    'kimi-k2.7-code',
-    'glm-5.2',
-    'gpt-oss:120b',
-    'kimi-k2.6',
-    'deepseek-v4-pro:preview',
-    'mistral-large-3:675b',
-    'kimi-k3',
-    'gpt-oss:20b',
-    'nemotron-3-ultra',
-    'minimax-m2.7',
-    'gemma4:31b',
-    'deepseek-v4-flash:0731',
-    'glm-5.1',
-    'deepseek-v4-flash:preview',
-    'nemotron-3-nano:30b',
-    'minimax-m3',
-    'nemotron-3-super',
-    'deepseek-v4-pro:0813',
-    'qwen3.5:397b',
-  ],
-  efforts: [],
-  labels: {
-    'kimi-k2.7-code': 'Kimi K2.7 Code',
-    'glm-5.2': 'GLM-5.2',
-    'gpt-oss:120b': 'GPT-OSS 120B',
-    'kimi-k2.6': 'Kimi K2.6',
-    'deepseek-v4-pro:preview': 'DeepSeek V4 Pro Preview',
-    'mistral-large-3:675b': 'Mistral Large 3 675B',
-    'kimi-k3': 'Kimi K3',
-    'gpt-oss:20b': 'GPT-OSS 20B',
-    'nemotron-3-ultra': 'Nemotron 3 Ultra',
-    'minimax-m2.7': 'MiniMax M2.7',
-    'gemma4:31b': 'Gemma 4 31B',
-    'deepseek-v4-flash:0731': 'DeepSeek V4 Flash 0731',
-    'glm-5.1': 'GLM-5.1',
-    'deepseek-v4-flash:preview': 'DeepSeek V4 Flash Preview',
-    'nemotron-3-nano:30b': 'Nemotron 3 Nano 30B',
-    'minimax-m3': 'MiniMax M3',
-    'nemotron-3-super': 'Nemotron 3 Super',
-    'deepseek-v4-pro:0813': 'DeepSeek V4 Pro 0813',
-    'qwen3.5:397b': 'Qwen 3.5 397B',
-  },
-}
-
-export let providerSpec = (name: string): ProviderSpec | undefined =>
-  name == 'ollama' ? ollama : adapters[name]
-
-export let providers = (ready?: (name: string) => boolean) =>
-  [...Object.entries(adapters), ['ollama', ollama] as const]
-    .filter(([name]) => name != 'fake')
-    .map(([name, a]) => ({
-      name,
-      models: a.models,
-      efforts: a.efforts,
-      labels: a.labels,
-      ...(a.fallback ? { fallback: true } : {}),
-      ...(ready ? { ready: ready(name) } : {}),
-    }))
-
-// A start request weighed against a provider's allowlists — the friendly
-// gate the sugar tool answers BEFORE it mints a session, so a bad model is
-// a clear error to the caller (naming the valid ones), never a doomed husk
-// on the board. Null means it will launch. The created(session) effect
-// re-checks in-transaction for the raw wire; this is the early door.
-export let trouble = (
-  { provider, model, effort }: {
-    provider?: string
-    model?: string
-    effort?: string
-  },
-): string | null => {
-  let spec = providerSpec(String(provider))
-  if (!spec) {
-    return `unknown provider: ${provider} — have ${
-      providers().map((p) => p.name).join(', ')
-    }`
-  }
-  if (!model || !spec.models.includes(model)) {
-    return `unknown model: ${model} — ${provider} has ${spec.models.join(', ')}`
-  }
-  // An empty allowlist means the provider has no launch-time effort knob
-  // (claude takes no --effort flag), so an effort that reaches it — passed,
-  // inherited from the caller, or mirrored off a session/task hint — is a
-  // no-op, not a failure. Only a provider that DOES offer efforts rejects an
-  // unknown one, so a real typo (codex + 'heroic') still errors clearly.
-  if (effort && spec.efforts.length && !spec.efforts.includes(effort)) {
-    return `unknown effort: ${effort} — ${provider} has ${
-      spec.efforts.join(', ')
-    }`
-  }
-  return null
-}
-
 // --- usage normalization -------------------------------------------------
 // The two providers report token counts in different shapes; these readers
 // fold both into the ONE Tokens vocabulary (types.ts). Absent beats zero: a
@@ -305,9 +185,6 @@ let fake = new URL('./fake-provider.ts', import.meta.url).pathname
 export let adapters: Record<string, Adapter> = {
   fake: {
     dialect: 'fake',
-    models: ['fake-fast', 'fake-slow'],
-    efforts: ['low', 'medium', 'high'],
-    labels: { 'fake-fast': 'Fake Fast', 'fake-slow': 'Fake Slow' },
     argv: (j) => [
       Deno.execPath(),
       'run',
@@ -382,44 +259,6 @@ export let adapters: Record<string, Adapter> = {
   // ours are the same string — correlation for free.
   claude: {
     dialect: 'claude',
-    // Pinned full ids ARE the offer — the version is part of it, so a
-    // pinned id can't silently move when Anthropic ships. The CLI natively
-    // resolves a short alias to the latest of its line (`sonnet`→latest
-    // sonnet), so we accept those for the lines whose latest is what we
-    // want. `opus` is NOT one of them: its latest is claude-opus-5, which is
-    // barred, so opus is pinned to claude-opus-4-8 — the bare `opus` alias
-    // is neither offered nor accepted, and a request for `opus` or
-    // `claude-opus-5` is refused outright, never silently downgraded.
-    // claude-opus-4-8[1m] is the same pinned 4-8, served with the 1M-token
-    // context window — a first-party variant the CLI accepts, so it rides
-    // the same pin (opus-5 stays barred either way).
-    // claude-opus-4-8 leads, so it is the default when a caller explicitly
-    // names Claude without a model. Probed live against the CLI.
-    models: [
-      'claude-opus-4-8',
-      'claude-opus-4-8[1m]',
-      'sonnet',
-      'haiku',
-      'fable',
-      'claude-fable-5',
-      'claude-sonnet-5',
-      'claude-haiku-4-5',
-    ],
-    // No launch-time effort knob — `claude -p` takes no --effort flag, so the
-    // effort a claude run reports is observed, never selected here. Empty means
-    // an effort passed/inherited to a claude spawn is IGNORED, not rejected
-    // (adapters.trouble) — so switching provider to claude never dooms a spawn.
-    efforts: [],
-    // The MENU is the labels map. Opus is the pinned
-    // 4-8; the other lines ride their alias, so the menu needs no edit when a
-    // non-opus line ships a new latest.
-    labels: {
-      'claude-opus-4-8': 'Opus',
-      'claude-opus-4-8[1m]': 'Opus 1M',
-      fable: 'Fable',
-      sonnet: 'Sonnet',
-      haiku: 'Haiku',
-    },
     argv: (j) => [
       'claude',
       '-p',
@@ -623,14 +462,6 @@ export let adapters: Record<string, Adapter> = {
   // standing is the final text) and turn.completed closes with usage.
   codex: {
     dialect: 'codex',
-    // The celestial line, all probed live against the CLI.
-    models: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
-    efforts: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
-    labels: {
-      'gpt-5.6-sol': 'GPT-5.6 Sol',
-      'gpt-5.6-terra': 'GPT-5.6 Terra',
-      'gpt-5.6-luna': 'GPT-5.6 Luna',
-    },
     argv: (j) => [
       'codex',
       'exec',
@@ -746,14 +577,9 @@ export let adapters: Record<string, Adapter> = {
 // The direct runner owns `codex`; naming the substrate is the deliberate
 // per-session escape hatch. Both process spellings share one implementation
 // so the fallback cannot drift from the path a process-wide rollback uses.
-// It carries no menu (`labels: {}`) — the same models are already offered once
-// through graph-native `codex`, and this transport is chosen by readiness, not
-// picked by name from a list. `fallback` ranks it behind `codex` everywhere.
-adapters['codex-cli'] = {
-  ...adapters.codex,
-  labels: {},
-  fallback: true,
-}
+// Which models it carries, and that it ranks behind graph-native codex, are
+// the `provider` entity's business (catalog.ts): here it is the same code.
+adapters['codex-cli'] = adapters.codex
 
 // A codex item, as much of it as row() reads.
 type Item = {

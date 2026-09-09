@@ -13,7 +13,7 @@
 // owns retrieval and acknowledgement.
 import { createHash } from 'node:crypto'
 import { childPath } from './agent_env.ts'
-import { trouble } from './adapters.ts'
+import { known, trouble } from './catalog.ts'
 import { apply, cursorOf, locate, readComp, record } from './db.ts'
 import { db } from './live_db.ts'
 import { localQuery, personaGraph } from './graph_query.ts'
@@ -655,7 +655,7 @@ let config = (eid: string): RoleConfig => {
   let provider = String(row.provider ?? '')
   let model = String(row.model ?? '')
   let effort = String(row.effort ?? '') || undefined
-  let bad = trouble({ provider, model, effort })
+  let bad = trouble(known(db), { provider, model, effort })
   if (bad) throw new Error(bad)
   let persona = String(row.persona ?? '') || undefined
   return {

@@ -1003,7 +1003,11 @@ let blank = (): IO => ({
   upload: () => Promise.resolve(),
   touch: () => Promise.resolve(),
   history: () => Promise.resolve([]),
-  providers: () => Promise.resolve([{ name: 'test', models: ['test'] }]),
+  providers: () =>
+    Promise.resolve([
+      { name: 'test', models: ['test'] },
+      { name: 'claude', models: ['claude-opus-4-8'] },
+    ]),
   backfill: () => Promise.resolve([]),
 })
 
@@ -1044,7 +1048,11 @@ let graph = () => {
       return Promise.resolve()
     },
     history: (eid, limit) => Promise.resolve(journalOf(db, eid, limit)),
-    providers: () => Promise.resolve([{ name: 'test', models: ['test'] }]),
+    providers: () =>
+      Promise.resolve([
+        { name: 'test', models: ['test'] },
+        { name: 'claude', models: ['claude-opus-4-8'] },
+      ]),
     backfill: (kind) => Promise.resolve(backfillChanges(db, kind)),
   }
   return { db, io, pages }

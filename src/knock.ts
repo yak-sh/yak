@@ -13,7 +13,7 @@ import { commitEffects } from './effects.ts'
 import { capabilities, type Change, uuid } from './types.ts'
 import { isOperator, spawnChanges, spawnPlan } from './client.ts'
 import { rowsFor } from './graph_query.ts'
-import { providers } from './adapters.ts'
+import { known } from './catalog.ts'
 
 type Cast = (changes: Change[]) => void
 
@@ -160,7 +160,7 @@ export let knocked =
         // spawnPlan reads the target task's spawn hint; spawnChanges resolves
         // the target and the planned persona (no deps here, so no owner walk).
         // Read just those, never the whole graph (M-21143).
-        let plan = spawnPlan(rowsFor(db, [target]), providers(), {
+        let plan = spawnPlan(rowsFor(db, [target]), known(db), {
           task: target,
         })
         if (!plan.provider || !plan.model) {

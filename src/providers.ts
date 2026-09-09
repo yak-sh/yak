@@ -17,6 +17,12 @@ export type Provider = {
   // Stamped by the server from account readiness; ready === false means the
   // provider cannot run right now, so the default blocker routes around it.
   ready?: boolean
+  // model → the effort to ask for when no tier named one (catalog.ts
+  // `model.effort`), keyed the way `labels` is.
+  defaults?: Record<string, string>
+  // False for a provider that stays callable by name but is never listed —
+  // the in-repo `fake` rig. The served catalog has already dropped these.
+  offered?: boolean
 }
 type Spawn = { provider?: string; model?: string }
 

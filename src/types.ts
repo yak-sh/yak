@@ -50,6 +50,7 @@ export let dirs = ['h', 'v'] as const
 export let subModes = ['watch', 'mute'] as const
 export let verdicts = ['approved', 'rejected', 'changes_requested'] as const
 export let grades = ['frontier', 'mid', 'small'] as const
+export let transports = ['process', 'http'] as const
 export let noticeKinds = ['lapse', 'sweep', 'scene', 'wake'] as const
 export let effectStates = ['pending', 'leased', 'delivered', 'failed'] as const
 export let appAccess = ['public', 'open', 'private'] as const
@@ -404,6 +405,11 @@ export let comps: Record<string, Record<string, PropType>> = {
     name: 'text',
     vendor: 'text',
     grade: { enum: grades },
+    provider: { eid: 'provider', death: 'cascade' },
+    label: 'text',
+    efforts: 'text',
+    effort: 'text',
+    offered: 'bool',
   },
   nofix: {},
   notice: {
@@ -455,6 +461,14 @@ export let comps: Record<string, Record<string, PropType>> = {
   proposed: {
     at: 'time',
     by: { eid: 'entity', death: 'keep' },
+  },
+  provider: {
+    name: 'text',
+    transport: { enum: transports },
+    credential: 'text',
+    fallback: 'bool',
+    serves: { eid: 'provider', death: 'cascade' },
+    offered: 'bool',
   },
   published: {
     name: 'text',
@@ -902,6 +916,7 @@ export let kindOrder = [
   'project',
   'board',
   'email',
+  'provider',
   'redaction',
   'report',
   'review',
@@ -933,6 +948,7 @@ export let byName = new Set([
   'person',
   'project',
   'board',
+  'provider',
   'role',
   'persona',
 ])
@@ -953,6 +969,7 @@ export let prefix: Record<string, string> = {
   person: 'U',
   persona: 'N',
   project: 'P',
+  provider: 'Y',
   redaction: 'X',
   role: 'R',
   session: 'S',

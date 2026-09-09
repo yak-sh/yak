@@ -6,7 +6,11 @@ import type { PropType } from './types.ts'
 
 export type Kind = {
   name: string
-  of?: () => string[]
+  // The finite candidate set, when one is knowable HERE. `undefined` means
+  // "this process cannot say" — a catalog that lives in the graph, read by a
+  // CLI with no graph beside it — and every reader must then fall back to the
+  // metavar name and to accepting the value, never to rejecting everything.
+  of?: () => string[] | undefined
   test?: RegExp
   id?: boolean
   read?: boolean | 'file'
@@ -73,7 +77,10 @@ export let body: Kind = { name: 'body', test: /.+/, read: true }
 export let file: Kind = { name: 'file', test: /.+/, read: 'file' }
 export let num: Kind = { name: 'n', test: /^[1-9]\d*$/ }
 
-export let of = (name: string, values: () => string[]): Kind => ({
+export let of = (
+  name: string,
+  values: () => string[] | undefined,
+): Kind => ({
   name,
   of: values,
 })
@@ -98,7 +105,7 @@ let positional = (arg: Arg) =>
 export let slotsOf = (args: Arg[] = []) => args.map(positional).join(' ')
 
 let meta = (kind: Kind) => {
-  let values = kind.of?.().join('|')
+  let values = kind.of?.()?.join('|')
   return values && values.length <= 24 ? values : kind.name.toUpperCase()
 }
 

@@ -3,14 +3,15 @@
 // this module renders it directly, so neither vocabulary can drift.
 
 import { commands } from './commands.ts'
-import { providers } from './adapters.ts'
 import {
+  arm,
   type Param,
   param,
   type Stdin,
   TASK_TREE_ADOPTION,
   WORKING_SET,
 } from './client.ts'
+import type { Provider } from './providers.ts'
 import { inflate, separated, stdin } from './client_host.ts'
 import { EDIT_OP, FILTERS, GRAMMAR } from './grammar.ts'
 import { comps, edges, kindOrder, plurals, statuses } from './types.ts'
@@ -88,14 +89,22 @@ let transcriptOpts = [
   json,
 ]
 let verdict = enumOf(comps.review.verdict, 'verdict')
-let provider = of('provider', () => providers().map((p) => p.name))
+// The spawn catalog is graph data (catalog.ts), so these three read the graph
+// this process stands beside (client.ts `arm.providers`). Away from the graph
+// there is nothing to list: the manual prints the metavar and the value rides
+// through to the server, which owns the allowlist either way.
+let listed = <T>(f: (ps: Provider[]) => T[]) => () => {
+  let ps = arm.providers?.()
+  return ps ? f(ps) : undefined
+}
+let provider = of('provider', listed((ps) => ps.map((p) => p.name)))
 let model = of(
   'model',
-  () => [...new Set(providers().flatMap((p) => p.models))],
+  listed((ps) => [...new Set(ps.flatMap((p) => p.models))]),
 )
 let effort = of(
   'effort',
-  () => [...new Set(providers().flatMap((p) => p.efforts))],
+  listed((ps) => [...new Set(ps.flatMap((p) => p.efforts ?? []))]),
 )
 
 let declare = (

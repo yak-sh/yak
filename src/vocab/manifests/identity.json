@@ -8,6 +8,13 @@
         "mid",
         "small"
       ]
+    },
+    "transports": {
+      "rank": 135,
+      "values": [
+        "process",
+        "http"
+      ]
     }
   },
   "comps": {
@@ -47,7 +54,15 @@
         "vendor": "text",
         "grade": {
           "enum": "grades"
-        }
+        },
+        "provider": {
+          "eid": "provider",
+          "death": "cascade"
+        },
+        "label": "text",
+        "efforts": "text",
+        "effort": "text",
+        "offered": "bool"
       }
     },
     "person": {
@@ -74,6 +89,27 @@
           "eid": "project",
           "death": "detach"
         }
+      }
+    },
+    "provider": {
+      "kind": true,
+      "before": [
+        "doc"
+      ],
+      "prefix": "Y",
+      "by_name": true,
+      "cols": {
+        "name": "text",
+        "transport": {
+          "enum": "transports"
+        },
+        "credential": "text",
+        "fallback": "bool",
+        "serves": {
+          "eid": "provider",
+          "death": "cascade"
+        },
+        "offered": "bool"
       }
     }
   }

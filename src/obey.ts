@@ -16,7 +16,7 @@ import { apply, mutate } from './db.ts'
 import { db } from './live_db.ts'
 import { dbReader } from './graph_query.ts'
 import { commitEffects } from './effects.ts'
-import { providers } from './adapters.ts'
+import { known } from './catalog.ts'
 import {
   commandOut,
   orderIn,
@@ -75,7 +75,7 @@ export let order = (
         : g
       let want = spawnSpec(out.spawn)
       let mine = spawnDefaults(spawnCorpus(after, want, session), session)
-      let table = providers()
+      let table = known(db)
       let { provider, model } = spawnDefault(table, {
         provider: want.provider ?? mine.provider,
         model: want.model ?? (want.provider ? undefined : mine.model),

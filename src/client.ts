@@ -273,6 +273,12 @@ export let arm: {
   integrity?: typeof httpIntegrity
   telemetry?: typeof httpTelemetry
   telemetryStats?: typeof httpTelemetryStats
+  // The spawn catalog, read straight off the graph file — SYNCHRONOUS, because
+  // the manual renders and validates its `--provider/--model/--effort` values
+  // in a plain function. Absent means this process has no graph beside it, and
+  // every reader must then degrade to the metavar name rather than to an empty
+  // allowlist that refuses everything.
+  providers?: () => Provider[]
 } = {}
 
 export type QueryOpts = {
@@ -2535,10 +2541,18 @@ export let spawnPlan = (
     provider: spec.provider,
     model: spec.model,
   }, o.blocked)
+  let provider = spec.provider ?? d.provider
+  let model = spec.model ?? d.model
   return {
     ...spec,
-    provider: spec.provider ?? d.provider,
-    model: spec.model ?? d.model,
+    provider,
+    model,
+    // The chosen model's own default effort, if it declares one and nothing
+    // above named an effort (catalog.ts `model.effort`).
+    effort: spec.effort ??
+      (model
+        ? ps.find((p) => p.name == provider)?.defaults?.[model]
+        : undefined),
   }
 }
 

@@ -148,6 +148,20 @@ export let assemble = (manifests: Manifest[]) => {
     placed.add(ready)
   }
 
+  // A human id is prefix + num, so two kinds claiming one letter make `V-3`
+  // ambiguous at every door that resolves it. Only DECLARED prefixes are
+  // guarded: an unprefixed kind falls back to its own initial (types.ts idOf),
+  // and those fallbacks have always overlapped without anyone naming them.
+  let prefixOwner: Record<string, string> = {}
+  for (let k of kindOrder) {
+    let p = comps[k].prefix
+    if (!p) continue
+    if (prefixOwner[p]) {
+      refuse(`prefix '${p}' claimed by both '${prefixOwner[p]}' and '${k}'`)
+    }
+    prefixOwner[p] = k
+  }
+
   // Named enum references must resolve.
   for (let [name, spec] of Object.entries(comps)) {
     for (

@@ -89,7 +89,11 @@
   },
   {
     "kind": "exec",
-    "sql": "create table if not exists \"model\" (\n    entity integer primary key references entity(id),\n    \"name\" text,\n    \"vendor\" text,\n    \"grade\" text\n  );"
+    "sql": "create table if not exists \"provider\" (\n    entity integer primary key references entity(id),\n    \"name\" text,\n    \"transport\" text,\n    \"credential\" text,\n    \"fallback\" integer,\n    \"serves\" integer references entity(id),\n    \"offered\" integer\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"model\" (\n    entity integer primary key references entity(id),\n    \"name\" text,\n    \"vendor\" text,\n    \"grade\" text,\n    \"provider\" integer references entity(id),\n    \"label\" text,\n    \"efforts\" text,\n    \"effort\" text,\n    \"offered\" integer\n  );"
   },
   {
     "kind": "exec",
@@ -455,6 +459,42 @@
   },
   {
     "kind": "addColumn",
+    "table": "provider",
+    "col": "name",
+    "sql": "alter table provider add column \"name\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "provider",
+    "col": "transport",
+    "sql": "alter table provider add column \"transport\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "provider",
+    "col": "credential",
+    "sql": "alter table provider add column \"credential\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "provider",
+    "col": "fallback",
+    "sql": "alter table provider add column \"fallback\" integer"
+  },
+  {
+    "kind": "addColumn",
+    "table": "provider",
+    "col": "serves",
+    "sql": "alter table provider add column \"serves\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "provider",
+    "col": "offered",
+    "sql": "alter table provider add column \"offered\" integer"
+  },
+  {
+    "kind": "addColumn",
     "table": "model",
     "col": "name",
     "sql": "alter table model add column \"name\" text"
@@ -470,6 +510,36 @@
     "table": "model",
     "col": "grade",
     "sql": "alter table model add column \"grade\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "model",
+    "col": "provider",
+    "sql": "alter table model add column \"provider\" integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
+    "table": "model",
+    "col": "label",
+    "sql": "alter table model add column \"label\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "model",
+    "col": "efforts",
+    "sql": "alter table model add column \"efforts\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "model",
+    "col": "effort",
+    "sql": "alter table model add column \"effort\" text"
+  },
+  {
+    "kind": "addColumn",
+    "table": "model",
+    "col": "offered",
+    "sql": "alter table model add column \"offered\" integer"
   },
   {
     "kind": "addColumn",
@@ -1468,6 +1538,10 @@
   },
   {
     "kind": "exec",
+    "sql": "create index if not exists model_provider on \"model\" (\"provider\");"
+  },
+  {
+    "kind": "exec",
     "sql": "create index if not exists notice_target on \"notice\" (\"target\");"
   },
   {
@@ -1521,6 +1595,10 @@
   {
     "kind": "exec",
     "sql": "create index if not exists proposed_via on \"proposed\" (\"via\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists provider_serves on \"provider\" (\"serves\");"
   },
   {
     "kind": "exec",

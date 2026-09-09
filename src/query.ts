@@ -384,13 +384,18 @@ let sessionTwin = (owners: string[]) =>
 // owning the absent half made one bare word name two things — and an app's
 // page, which asks for people with `.person!` and for everything else with
 // `.person=`, could spell only half of that (T-32627). `.member.person=`
-// still reads the membership.
+// still reads the membership. A catalog model's `provider` and `effort`
+// (T-35023) yield both bare words to the SPAWN spelling every board and CLI
+// filter already means by them — `.provider=codex` asks which agent ran, not
+// which entity serves a model; `.model.provider=` reads the catalog.
 let bareShy = new Set([
   'fork.from',
   'accept.body',
   'edge.from',
   'edge.to',
   'member.person',
+  'model.provider',
+  'model.effort',
 ])
 
 // These associations already had one bare filter across several suffixed

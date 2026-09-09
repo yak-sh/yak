@@ -6,14 +6,18 @@
 // over the SAME adapter table a managed session runs (adapters.ts), reads the
 // stream to the reply, and returns the text.
 //
-// It touches NO graph state. The caller writes any result as ordinary graph
-// data, so provenance is the writer's — and a model-produced value can never be
-// a projection, so it enters as data minted once, not something a read derives.
+// It WRITES no graph state — it reads the catalog to learn which provider
+// serves the named model, and nothing else. The caller writes any result as
+// ordinary graph data, so provenance is the writer's — and a model-produced
+// value can never be a projection, so it enters as data minted once, not
+// something a read derives.
 //
 // Graceful absence is the contract: no provider for the model, no CLI on PATH,
 // a nonzero exit, or the deadline all yield `null`, never a throw. The feature
 // that wanted a summary degrades to "not summarized," never to an error.
 import { adapters } from './adapters.ts'
+import { known } from './catalog.ts'
+import { db } from './live_db.ts'
 import { childEnv } from './agent_env.ts'
 import { uuid } from './types.ts'
 
@@ -26,12 +30,14 @@ export type CompleteOpts = {
   env?: Record<string, string>
 }
 
-// The provider whose allowlist admits this model. Insertion order puts a
-// graph-native provider ahead of its CLI fallback (codex before codex-cli), so
-// a shared model resolves to the primary transport; `fake` stays selectable so
-// the whole path is exercised without a model or a key.
+// The provider whose allowlist admits this model, read off the catalog
+// (catalog.ts). Catalog order puts a graph-native provider ahead of its CLI
+// fallback (codex before codex-cli), so a shared model resolves to the primary
+// transport; `fake` stays selectable so the whole path is exercised without a
+// model or a key. A provider with no process adapter (ollama speaks HTTP) has
+// nothing to spawn here, so it degrades to null like any unknown model.
 let providerFor = (model: string) =>
-  Object.values(adapters).find((a) => a.models.includes(model))
+  adapters[known(db).find((p) => p.models.includes(model))?.name ?? '']
 
 // Ask `model` one thing and get its reply, or null. `system` frames `user`:
 // the CLI transport takes ONE positional prompt, so the two are joined rather

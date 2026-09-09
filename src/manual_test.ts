@@ -3,7 +3,14 @@
 
 import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import { commands } from './commands.ts'
-import { TASK_TREE_ADOPTION } from './client.ts'
+import { arm, TASK_TREE_ADOPTION } from './client.ts'
+
+// The spawn catalog is graph data, and the manual reads it through the same
+// local arm the CLI arms beside the graph file (localread.ts).
+Deno.env.set('DB_PATH', ':memory:')
+let { db } = await import('./live_db.ts')
+let { catalog } = await import('./catalog.ts')
+arm.providers = () => catalog(db)
 import {
   cliVerbs,
   help,

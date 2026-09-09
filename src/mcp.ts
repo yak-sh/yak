@@ -44,7 +44,7 @@ import {
   type MutationResult,
   mutationResult,
 } from './mutation.ts'
-import { trouble } from './adapters.ts'
+import { trouble } from './catalog.ts'
 import { type Dim, report, type Use, use } from './usage.ts'
 import { sha } from './sha.ts'
 import { EDIT_OP, FILTERS, GRAMMAR } from './grammar.ts'
@@ -1241,7 +1241,8 @@ then the shared anonymous default. persona names the persona entity
       ])
       // One precedence for every door: explicit args > the task's spawn hint
       // > the CALLER's own spec (its session row) > the provider-table default.
-      let plan = spawnPlan(base, await io.providers(), {
+      let table = await io.providers()
+      let plan = spawnPlan(base, table, {
         task: id,
         session,
         ask: { provider, model, effort, persona },
@@ -1253,7 +1254,7 @@ then the shared anonymous default. persona names the persona entity
       // a clear error to the caller, not a doomed husk on the board (the
       // raw wire still husks — that contract is the created(session)
       // effect's, for graph_apply).
-      let bad = trouble({
+      let bad = trouble(table, {
         provider: plan.provider,
         model: plan.model,
         effort: plan.effort,

@@ -17,7 +17,7 @@ import { guard, type Serving } from './bind.ts'
 import type { Handler } from './host.ts'
 import { host } from './host_deno.ts'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { providers } from './adapters.ts'
+import { known } from './catalog.ts'
 import { capabilities, type Change } from './types.ts'
 import { eager, locate } from './db.ts'
 import { type Mutation, mutationResult } from './mutation.ts'
@@ -718,7 +718,7 @@ let codexReady = codexReadiness(
 )
 let readyProviders = async () => {
   let ok = await codexReady()
-  return providers((name) => name != 'codex' || ok)
+  return known(db, (name) => name != 'codex' || ok)
 }
 let managed = managedCodex({
   db,
@@ -1254,8 +1254,9 @@ let handle: Handler = async (req) => {
       return new Response(why, { status: 400 })
     }
   }
-  // The adapter table, for a browser that must offer what a spawn
-  // request will be checked against (adapters.ts is server-only).
+  // The catalog, for a browser that must offer what a spawn request will
+  // be checked against — every provider the graph knows, the unoffered ones
+  // (the `fake` rig) carrying no menu of their own.
   if (path == '/providers') return Response.json(await readyProviders())
   // Mail attachments, proxied read-only: the fleet-mail worker holds
   // them in R2 behind a token that stays in THIS process — clients

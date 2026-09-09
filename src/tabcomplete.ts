@@ -42,7 +42,7 @@ let heads = (): string[] => [
 let candidates = (
   kind: Arg['kind'] | Opt['kind'],
   at: () => string[],
-): string[] => (kind?.of ? kind.of() : kind?.id ? at() : [])
+): string[] => (kind?.of ? kind.of() ?? [] : kind?.id ? at() : [])
 
 // The positionals already settled among a verb's post-name words — options and
 // their separate values don't count, so the caller's cursor lands on the right

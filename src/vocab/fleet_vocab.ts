@@ -109,6 +109,8 @@ let shy = new Set([
   'edge.from',
   'edge.to',
   'member.person',
+  'model.provider',
+  'model.effort',
   'pane.parent',
   'session.parent',
 ])

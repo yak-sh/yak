@@ -27,6 +27,7 @@ import { DatabaseSync, liveDb } from './store/sqlite.ts'
 import { resolve } from 'node:path'
 import { depsOf, eager, journalBy, journalOf, scanAnomalies } from './db.ts'
 import { localQuery } from './graph_query.ts'
+import { catalog } from './catalog.ts'
 import {
   arm,
   DEFAULT_HOST,
@@ -101,6 +102,7 @@ export let disarm = () => {
     arm.integrity =
     arm.telemetry =
     arm.telemetryStats =
+    arm.providers =
       undefined
 }
 
@@ -156,6 +158,9 @@ export let armLocal = (path = envPath()): boolean => {
   arm.integrity = guarded(() => scanAnomalies(db), httpIntegrity)
   arm.telemetry = guarded((opts) => recent(db, opts), httpTelemetry)
   arm.telemetryStats = guarded((opts) => stats(db, opts), httpTelemetryStats)
+  // The spawn catalog is graph data (catalog.ts), so a CLI beside the graph
+  // reads its own manual's model list from the file — no server, no round trip.
+  arm.providers = () => catalog(db)
   // Search is the text form of query, so the query arm above covers it too.
   arm.search = undefined
   return true
