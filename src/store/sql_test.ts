@@ -3,7 +3,7 @@
 // FTS5 still migrates, and its search door says so; an empty handle planted
 // from schemaDdl() serves the wire like a migrated one.
 Deno.env.set('DB_PATH', ':memory:')
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals, assertStrictEquals, assertThrows } from '@std/assert'
 import { slow } from '../testing.ts'
 import { type Can, present, type Sql, textPresent, WHITESPACE } from './sql.ts'
 let { DatabaseSync } = await import('./sqlite.ts')
@@ -67,6 +67,82 @@ Deno.test('transaction(): nested failure rolls back alone, outer keeps', () => {
   assertEquals(db.version, 7)
   db.close()
 })
+
+for (let nested of [false, true]) {
+  Deno.test(`transaction(): abandoned ${nested ? 'nested' : 'outer'} keeps the body error`, () => {
+    let db = new DatabaseSync(':memory:')
+    let original = new Error('body failed')
+    let body = () => {
+      db.exec('rollback') // Simulate SQLite abandoning the entire transaction.
+      throw original
+    }
+    try {
+      let error = assertThrows(() =>
+        db.transaction(() => nested ? db.transaction(body) : body())
+      )
+      assertStrictEquals(error, original)
+      if (nested) {
+        assertEquals(original.cause instanceof Error, true)
+        assertEquals(
+          (original.cause as Error).message.startsWith(
+            'no such savepoint: tx_',
+          ),
+          true,
+        )
+      } else assertEquals(original.cause, undefined)
+      assertEquals(db.inTransaction, false)
+      assertEquals(db.transaction(() => 42), 42)
+    } finally {
+      db.close()
+    }
+  })
+}
+
+for (let cleanup of ['rollback', 'release']) {
+  Deno.test(`transaction(): failed ${cleanup} is the original error's cause`, () => {
+    let db = new DatabaseSync(':memory:')
+    let exec = db.exec.bind(db)
+    let original = new Error('body failed')
+    let failure = new Error('cleanup failed')
+    db.exec = (sql) => {
+      if (sql.split(' ')[0] == cleanup) throw failure
+      exec(sql)
+    }
+    try {
+      if (cleanup == 'release') exec('begin')
+      let error = assertThrows(() =>
+        db.transaction(() => {
+          throw original
+        })
+      )
+      assertStrictEquals(error, original)
+      assertStrictEquals(original.cause, failure)
+    } finally {
+      if (db.inTransaction) exec('rollback')
+      db.close()
+    }
+  })
+}
+
+for (let original of ['body failed', Object.freeze(new Error('body failed'))]) {
+  Deno.test(`transaction(): cleanup preserves ${typeof original == 'string' ? 'primitive' : 'frozen'} exceptions`, () => {
+    let db = new DatabaseSync(':memory:')
+    try {
+      let error = assertThrows(() =>
+        db.transaction(() =>
+          db.transaction(() => {
+            db.exec('rollback')
+            throw original
+          })
+        )
+      )
+      assertStrictEquals(error, original)
+      assertEquals(db.inTransaction, false)
+    } finally {
+      db.close()
+    }
+  })
+}
 
 // A backend is whatever answers Sql: delegate to the adapter, own the `can`.
 let backend = (can: Can): Sql => {

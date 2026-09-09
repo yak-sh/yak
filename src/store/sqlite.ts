@@ -160,10 +160,26 @@ export class DatabaseSync implements Sql {
       this.exec(nested ? `release ${name}` : 'commit')
       return value
     } catch (e) {
-      if (nested) {
-        this.exec(`rollback to ${name}`)
-        this.exec(`release ${name}`)
-      } else if (this.inTransaction) this.exec('rollback')
+      try {
+        if (nested) {
+          this.exec(`rollback to ${name}`)
+          this.exec(`release ${name}`)
+        } else if (this.inTransaction) this.exec('rollback')
+      } catch (rollbackError) {
+        // SQLite can abandon the whole transaction on a statement failure,
+        // taking the savepoint with it. Cleanup must not mask that diagnosis.
+        try {
+          if (e instanceof Error) {
+            Object.defineProperty(e, 'cause', {
+              value: rollbackError,
+              configurable: true,
+              writable: true,
+            })
+          }
+        } catch {
+          // Even a frozen error must survive cleanup unchanged.
+        }
+      }
       throw e
     }
   }
