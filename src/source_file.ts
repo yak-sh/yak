@@ -14,6 +14,7 @@
 // rides to the browser the way types.ts does.
 
 import { createHash } from 'node:crypto'
+import { assertNotGraphFile } from './store/file_guard.ts'
 import type { Change } from './types.ts'
 import { adapters } from './adapters.ts'
 import { ingestEntries, ingestTranscript } from './ingest.ts'
@@ -86,6 +87,7 @@ export let indexer = (walk: () => Located[], ttl = 5_000) => {
 
 export let readLines = (path: string): string[] => {
   try {
+    assertNotGraphFile(path)
     return Deno.readTextFileSync(path).trim().split('\n')
   } catch {
     return []
@@ -96,6 +98,7 @@ let readTranscript = (
   path: string,
 ): { lines: string[] } | { reason: 'missing' | 'unreadable' } => {
   try {
+    assertNotGraphFile(path)
     return { lines: Deno.readTextFileSync(path).trim().split('\n') }
   } catch (error) {
     return {

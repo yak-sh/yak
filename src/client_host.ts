@@ -5,6 +5,7 @@
 // hands it the process (client.ts `proc`). Everything here reads lazily, at
 // the call, never at import.
 import { type Param, proc, type Stdin } from './client.ts'
+import { assertNotGraphFile } from './store/file_guard.ts'
 
 // The linked git worktree a path stands in, or undefined in the main checkout.
 // A linked worktree's `.git` is a FILE (a `gitdir:` pointer) while the main
@@ -196,6 +197,7 @@ export let inflate = (
     return p
   }
   if (v.startsWith('@@')) return { ...p, value: v.slice(1) }
+  assertNotGraphFile(v.slice(1))
   try {
     return { ...p, value: Deno.readTextFileSync(v.slice(1)) }
   } catch {

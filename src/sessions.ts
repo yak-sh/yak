@@ -62,6 +62,7 @@ import {
   scrub,
 } from './ingest.ts'
 import { graphSession, runnerSessions } from './managed_codex.ts'
+import { assertNotGraphFile } from './store/file_guard.ts'
 import {
   commitEffects,
   dispatch,
@@ -187,7 +188,9 @@ let observed = (eid: string, lines: string[]): Summary => {
 let transcriptLines = (eid: string) => {
   try {
     let path = transcriptOf(eid)?.path
-    return path ? Deno.readTextFileSync(path).trim().split('\n') : []
+    if (!path) return []
+    assertNotGraphFile(path)
+    return Deno.readTextFileSync(path).trim().split('\n')
   } catch {
     return []
   }

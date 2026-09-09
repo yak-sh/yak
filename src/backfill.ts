@@ -3,6 +3,7 @@
 // generic write boundary. This module never writes SQLite itself — /apply or
 // the in-process MCP write capability remains the one graph mutation path.
 import { DatabaseSync } from './store/sqlite.ts'
+import { assertNotGraphFile } from './store/file_guard.ts'
 import { historicalWorked } from './db.ts'
 import { historicalReferenced } from './reference_changes.ts'
 import { type Change, uuid } from './types.ts'
@@ -20,7 +21,10 @@ export type BackfillKind = typeof backfillKinds[number]
 // transcript is held at a time; a missing or rewritten file yields nothing.
 export let historicalPrompts = (
   db: DatabaseSync,
-  read = (path: string) => Deno.readTextFileSync(path),
+  read = (path: string) => {
+    assertNotGraphFile(path)
+    return Deno.readTextFileSync(path)
+  },
 ): Change[] => {
   let rows = db.prepare(
     `select o.eid as eid, i.line as line, s.transcript as path

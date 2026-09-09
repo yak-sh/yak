@@ -15,6 +15,12 @@
 import { sqlitePath as path } from './sqlitepath.ts'
 import * as sqlite from 'jsr:@db/sqlite@0.13.0'
 import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import {
+  canonicalFile,
+  registerGraphFile,
+  unregisterGraphFile,
+} from './file_guard.ts'
 import { contentFtsPending, freshStats, migrate } from '../db.ts'
 import { loadVector } from '../vector.ts'
 import {
@@ -111,6 +117,7 @@ export class StatementSync implements Statement {
 export class DatabaseSync implements Sql {
   #db: InstanceType<typeof DriverDatabase>
   #ftsWorker?: Worker
+  #path?: string
   can: Can = { fts: true, temp: true }
 
   constructor(path: string | URL, options: Options = {}) {
@@ -120,7 +127,17 @@ export class DatabaseSync implements Sql {
       readonly: options.readOnly,
       create: options.create,
     })
-    this.#db.exec('pragma foreign_keys = on')
+    try {
+      this.#db.exec('pragma foreign_keys = on')
+      let named = path instanceof URL ? fileURLToPath(path) : path
+      if (named != ':memory:') {
+        this.#path = named
+        registerGraphFile(named)
+      }
+    } catch (e) {
+      this.#db.close()
+      throw e
+    }
   }
 
   get isOpen() {
@@ -283,7 +300,12 @@ export class DatabaseSync implements Sql {
     // Never terminate an FFI-owning worker: let it finish its current slice
     // and close its own SQLite handle, including its WAL read mark.
     this.#ftsWorker?.postMessage({ stop: true })
-    this.#db.close()
+    try {
+      this.#db.close()
+    } finally {
+      if (this.#path) unregisterGraphFile(this.#path)
+      this.#path = undefined
+    }
   }
 }
 
@@ -298,14 +320,7 @@ export let liveDb = () => `${Deno.env.get('HOME')}/.tasks/tasks.db`
 // does not. Service-plane guards use this so a symlink cannot disguise owner
 // data as a disposable parity copy.
 export let sameGraphFile = (a: string, b: string) => {
-  let canonical = (path: string) => {
-    try {
-      return Deno.realPathSync(path)
-    } catch {
-      return resolve(path)
-    }
-  }
-  return canonical(a) == canonical(b)
+  return canonicalFile(a) == canonicalFile(b)
 }
 
 // The db lives outside the repo (this is open source): a home-dir dotpath by
@@ -324,7 +339,8 @@ let exists = (p: string) => {
   try {
     Deno.statSync(p)
     return true
-  } catch {
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e
     return false
   }
 }

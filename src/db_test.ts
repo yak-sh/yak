@@ -5275,14 +5275,17 @@ let walWreck = (dir: string) => {
   raw.exec('pragma wal_checkpoint(TRUNCATE)')
   raw.close()
   let t1 = Deno.readFileSync(path)
-  raw = new DatabaseSync(path)
-  fill(raw, 'y'.repeat(150), 2000)
-  raw.exec('pragma wal_checkpoint(FULL)')
-  fill(raw, 'z'.repeat(200), 800)
-  let wal = Deno.readFileSync(`${path}-wal`)
-  raw.close()
+  new Deno.Command(Deno.execPath(), {
+    args: [
+      'run',
+      '-A',
+      '--config',
+      new URL('../deno.json', import.meta.url).pathname,
+      new URL('./testing/wal_wreck.ts', import.meta.url).pathname,
+      path,
+    ],
+  }).outputSync()
   Deno.writeFileSync(path, t1)
-  Deno.writeFileSync(`${path}-wal`, wal)
   try {
     Deno.removeSync(`${path}-shm`)
   } catch { /* already gone */ }

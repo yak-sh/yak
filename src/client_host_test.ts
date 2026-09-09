@@ -2,6 +2,7 @@
 // grammar, tested against a filesystem and fake pipes.
 import { assertEquals, assertThrows } from '@std/assert'
 import { inflate, separated, unreadPipe, worktreeRoot } from './client_host.ts'
+import { DatabaseSync } from './store/sqlite.ts'
 
 Deno.test('worktreeRoot: a linked worktree resolves, a main checkout does not', async () => {
   let base = await Deno.makeTempDir()
@@ -39,6 +40,17 @@ Deno.test('inflate: @ reads the file loudly, @@ is a literal, plain rides', () =
   assertEquals(inflate(p('plain')).value, 'plain')
   assertThrows(() => inflate(p('@/no/such/file')), Error, 'no such file')
   Deno.removeSync(f)
+})
+
+Deno.test('inflate: @ cannot open the graph beside a local connection', () => {
+  let root = Deno.makeTempDirSync(), path = `${root}/graph.db`
+  let db = new DatabaseSync(path)
+  try {
+    assertThrows(() => inflate(p(`@${path}`)), Error, 'open SQLite')
+  } finally {
+    db.close()
+    Deno.removeSync(root, { recursive: true })
+  }
 })
 
 Deno.test('inflate: @- is the pipe — the same door as @file, trimmed', () => {
