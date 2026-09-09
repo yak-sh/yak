@@ -1,20 +1,22 @@
-// A deploy as a git commit: the objects it makes, and where the app's branch
-// stands afterwards. The shape is D-34943; git.ts is the plugin that runs it.
+// A deploy as a git commit — the ADAPTER, and only the adapter. @yaks/git owns
+// the objects, the branch and the landing (`commitOnto`, refs.ts); what is left
+// here is the four things that are yaks.app's and could not be anyone else's:
 //
-// ONE GLOBAL OBJECT GRAPH. A git object is named by the digest of its own
-// bytes, so the same file deployed by two apps in two spaces is one row — which
-// a per-app graph could not say. The objects therefore live in a store of their
-// own (`yak/git`, door.ts), reached over its door like any other store. REFS
-// are the exception and stay in the directory, on the app: a ref is the one
-// part of a repository that belongs to one app, and access to an app is decided
-// in the directory.
+//   which stores    the objects' own (`GIT_STORE`, door.ts) and the directory
+//   which bytes     `git/<sha>` for a body we minted, `pins()` for app files
+//   what a deploy is  its manifest, its clock, and who signed it
+//   what to record  the `commit{target}` row joining a commit to its release
+//
+// TWO STORES, AND WHICH IS WHICH. A git object is named by the digest of its
+// own bytes, so the same file deployed by two apps in two spaces is one row —
+// which a per-app graph could not say — and the objects live in a store of
+// their own, reached over its door like any other. A REF belongs to one app,
+// and access to an app is decided in the directory, so that is where it stays.
 //
 // A DEPLOY ALREADY SAYS EVERYTHING A COMMIT NEEDS. Its manifest is `path →
 // sha256` over bytes the platform pinned (versions.ts), its `created` is the
 // moment and the actor, and the version before it is the parent. So nothing
-// here computes: it reads a deploy, hands @yaks/git the manifest, and writes
-// down the two facts the directory did not have — the `commit` beside the
-// deploy, and where `refs/heads/main` now points.
+// here computes: it reads a deploy and hands @yaks/git a landing.
 //
 // IDENTITY. The author is the actor who deployed, at a pseudonym —
 // `<actor>@users.yaks.app` — until somebody opts into their own address
@@ -27,10 +29,17 @@
 // by @yaks/effects — so a bucket that will not answer costs the release its
 // commit and nothing else, and the daily sweep mints whatever was missed.
 import type { Blobs as Bytes } from '@yaks/blob'
-import { index, type Oids, type Writes } from '@yaks/git'
+import {
+  commitOnto,
+  MAIN,
+  refAt as branchAt,
+  refEid,
+  type Released,
+  type Releases,
+  type Repo,
+  type Writes,
+} from '@yaks/git'
 import type { Bundle, Eid } from '@yaks/graph'
-import { derivedEid } from '@yaks/graph'
-import { valueOf } from '@yaks/key'
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import type { Blobs } from '../../src/store/blobs.ts'
 import { GIT_STORE, type Namespace, storeOf } from './door.ts'
@@ -38,9 +47,7 @@ import { spaceHost } from './host.ts'
 import { KERNEL, type Meta, metaOf } from './meta.ts'
 import { pins } from './versions.ts'
 
-/** The branch a yaks.app repository answers with, and the only one it has
- * (D-34943). Git's own default, so `git clone` needs no `-b`. */
-export let MAIN = 'refs/heads/main'
+export { MAIN, refEid }
 
 /**
  * Where a body we MINTED is kept — a tree's or a commit's — in its own key
@@ -78,7 +85,7 @@ export type Bound = {
  */
 export type Held = {
   read: (line: string) => Promise<Bundle[]>
-  write: (bundles: Bundle[]) => Promise<unknown>
+  write: (bundles: Bundle[]) => Promise<Bundle[]>
 }
 
 /** The directory as one of those, over its door. */
@@ -87,19 +94,18 @@ export let held = (m: Meta): Held => ({
   write: (bundles) => m.apply(bundles, KERNEL),
 })
 
-/**
- * The object store, as the two calls @yaks/git makes of a graph. A store
- * answers `/query` and `/apply` whoever asks, so an index over a door is the
- * same index as one over a graph in this process — which is the whole reason
- * `index()` asks for {@link Writes} and not a `Graph`.
- */
-export let graphOf = (ns: Namespace): Writes => {
-  let door = metaOf(storeOf(ns, GIT_STORE))
-  return {
-    read: (query) => door.query(String(query)),
-    apply: (change) => door.apply(change, KERNEL),
-  }
-}
+// The same pair said the way @yaks/git asks for a graph. A store answers
+// `/query` and `/apply` whoever asks, so an index over a door is the same
+// index as one over a graph in this process — which is the whole reason the
+// package asks for {@link Writes} and not a `Graph`.
+let writes = (dir: Held): Writes => ({
+  read: (query) => dir.read(String(query)),
+  apply: (change) => dir.write(change as Bundle[]),
+})
+
+/** The git object store, as one of those, over its own door. */
+export let graphOf = (ns: Namespace): Writes =>
+  writes(held(metaOf(storeOf(ns, GIT_STORE))))
 
 /**
  * Bytes by their sha, in @yaks/blob's terms — every body a git object could
@@ -121,8 +127,8 @@ export let bodies = (blobs: Blobs, prefix: string): Bytes => {
   }
 }
 
-/** A deploy, as everything below reads one. */
-export type Deploy = {
+// A deploy, as everything below reads one.
+type Deploy = {
   eid: Eid
   app: Eid
   version: number
@@ -144,7 +150,7 @@ let id = (v: unknown): string =>
 /** A directory row as a deploy, or nothing where it is not one. A manifest
  * that will not parse is a version nothing can restore and therefore nothing
  * can commit (directory.ts `deployOf` reads it the same way). */
-export let deployOf = (b: Bundle): Deploy | null => {
+let deployOf = (b: Bundle): Deploy | null => {
   let d = b.deploy as Record<string, unknown> | undefined
   let made = b.created as Record<string, unknown> | undefined
   if (!d || !id(d.app)) return null
@@ -162,12 +168,6 @@ export let deployOf = (b: Bundle): Deploy | null => {
   }
 }
 
-/** The entity a ref IS: one row per app and branch name, so moving a branch is
- * a patch of the row that was already there rather than a second row somebody
- * has to notice is stale. @yaks/git names a tree's entries the same way. */
-export let refEid = (app: Eid, name: string): Eid =>
-  derivedEid(`ref|${app}|${name}`)
-
 /** Where an app's files are in the bucket, and what its repository is called
  * on the web. Both are ADDRESSES — they move when a slug does — which is why
  * they are read at mint time and not kept. */
@@ -175,8 +175,8 @@ let placed = async (dir: Held, env: Bound, app: Eid) => {
   let [row] = await dir.read(`.eid=${app}`)
   let a = row?.app as Record<string, unknown> | undefined
   if (!a) return null
-  let [held] = await dir.read(`.eid=${id(a.space)}`)
-  let s = held?.space as Record<string, unknown> | undefined
+  let [space] = await dir.read(`.eid=${id(a.space)}`)
+  let s = space?.space as Record<string, unknown> | undefined
   if (!s) return null
   return {
     prefix: `${str(s.slug)}/${str(a.slug)}/`,
@@ -197,79 +197,71 @@ let author = async (dir: Held, deploy: Deploy) => {
   }
 }
 
-/** An object already written, named both ways: its SHA-1 id is the row's own
- * eid, and its SHA-256 id is the @yaks/key beside it (@yaks/git `compat`). */
-let named = async (g: Writes, oid: string): Promise<Oids | null> => {
-  let [key] = await g.read(`.compat!&.key.of=${oid}`)
-  let value = key && valueOf(key)
-  return value ? { oid, oid256: value } : null
-}
-
 /**
  * Where an app's branch stands: the commit its ref names, or `null` before its
  * first deploy. This is the whole of `ls-refs` on our side, so the serving
- * half (T-34946) reads a branch through this and not by spelling the row.
+ * half reads a branch through this and not by spelling the row.
  */
-export let refAt = async (
-  dir: Held,
-  app: Eid,
-  name = MAIN,
-): Promise<string | null> => {
-  let [row] = await dir.read(`.eid=${refEid(app, name)}`)
-  return id((row?.ref as Record<string, unknown> | undefined)?.commit) || null
-}
-
-/** That commit named both ways, which is what a new one follows. */
-let head = async (dir: Held, g: Writes, app: Eid) => {
-  let at = await refAt(dir, app)
-  return at ? await named(g, at) : null
-}
+export let refAt = (dir: Held, app: Eid, name = MAIN): Promise<string | null> =>
+  branchAt(writes(dir), app, name)
 
 /**
- * One deploy as a commit, and the app's branch moved onto it — or `null` where
- * there is already a commit about that deploy, which is what makes running this
- * over a whole history twice cost one pass of reads and no writes.
- *
- * The parent is read from the REF rather than carried by the caller, so a
- * commit minted by a deploy and one minted by the sweep are made the same way.
+ * One deploy as a landing, or `null` where there is nothing to land — no
+ * bindings, no app to place it under, or a commit about that deploy already.
+ * That last read is what makes running this over a whole history twice cost
+ * one pass of reads and no writes.
  */
-export let minted = async (
+let landing = async (
   env: Bound,
   dir: Held,
   deploy: Deploy,
-): Promise<string | null> => {
+): Promise<Released | null> => {
   if (!env.BLOBS || !env.STORE) return null
   if ((await dir.read(`.commit.target=${deploy.eid}`)).length) return null
   let at = await placed(dir, env, deploy.app)
   if (!at) return null
-  let g = graphOf(env.STORE)
-  let git = index(g, bodies(r2Blobs(env.BLOBS), at.prefix))
-  let parent = await head(dir, g, deploy.app)
   let message = `deploy ${deploy.version}\n`
-  let commit = await git.commit({
-    tree: await git.files(deploy.files),
-    parents: parent ? [parent] : [],
+  let repo: Repo = {
+    refs: writes(dir),
+    objects: graphOf(env.STORE),
+    bytes: bodies(r2Blobs(env.BLOBS), at.prefix),
+  }
+  return {
+    repo,
+    app: deploy.app,
+    files: deploy.files,
     author: await author(dir, deploy),
     committer: { ...COMMITTER, at: deploy.at },
     message,
-  })
-  await dir.write([
-    {
-      entity: { eid: commit.oid },
+    // The word the DIRECTORY gains about a release, written with the moved ref
+    // (git.ts): `target` is what the commit is about, so a history joins to the
+    // releases people already look at.
+    beside: (oids) => [{
+      entity: { eid: oids.oid },
       commit: {
-        sha: commit.oid,
+        sha: oids.oid,
         repo: at.repo,
         message,
         target: deploy.eid,
       },
-    },
-    {
-      entity: { eid: refEid(deploy.app, MAIN) },
-      ref: { app: deploy.app, name: MAIN, commit: commit.oid },
-    },
-  ])
-  return commit.oid
+    }],
+  }
 }
+
+/**
+ * yaks.app's releases, as @yaks/git's plugin reads them (git.ts): a `deploy`
+ * row is one, and the whole entity is what a landing is read from — a commit's
+ * clock and author are the `created` stamp beside the component, not columns
+ * of it.
+ */
+export let releases = (env: Bound, dir: Held): Releases => ({
+  comp: 'deploy',
+  of: async (b) => {
+    let [row] = await dir.read(`.eid=${b.entity.eid}`)
+    let deploy = row && deployOf(row)
+    return deploy ? await landing(env, dir, deploy) : null
+  },
+})
 
 /**
  * Every deploy of every app that has no commit yet, oldest first — the one
@@ -290,7 +282,10 @@ export let backfilled = async (env: Bound, dir: Held): Promise<number> => {
   for (let all of apps.values()) {
     for (let d of all.sort((a, b) => a.version - b.version)) {
       try {
-        if (await minted(env, dir, d)) made++
+        let l = await landing(env, dir, d)
+        if (!l) continue
+        await commitOnto(l.repo, l)
+        made++
       } catch (e) {
         console.log(`yak-git: ${d.eid} — ${(e as Error).message}`)
         break

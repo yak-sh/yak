@@ -1,15 +1,17 @@
 // Every app's deploy history AS A GIT REPOSITORY, contributed as data
 // (plugin.ts): the two words the directory gains, the effect that mints a
 // commit when a version is deployed, and the daily sweep that mints the ones
-// that were missed. D-34943 is the shape; gitobj.ts does the work.
+// that were missed. D-34943 is the shape; @yaks/git does the work, and
+// gitobj.ts is the adapter that tells it what a yaks.app deploy is.
 //
-// The words are the DIRECTORY's, and only these two. `commit` is the fleet's
-// own component (src/vocab/manifests/kernel.json), spelled here at the same
-// meaning — `target` is what the commit is about, which for a yaks.app commit
-// is the deploy it was minted from, so a history joins to the releases people
-// already look at. `ref` is where a branch stands. Both live here rather than
-// in the object store because access to an app is decided in the directory: a
-// ref is the one part of a repository that belongs to one app.
+// The two words the directory gains are `commit` and `ref`, and only one of
+// them is declared here. `commit` is the fleet's own component
+// (src/vocab/manifests/kernel.json), spelled here at the same meaning —
+// `target` is what the commit is about, which for a yaks.app commit is the
+// deploy it was minted from, so a history joins to the releases people already
+// look at. `ref` is @yaks/git's own word (`refDoc`), loaded here rather than in
+// the object store because access to an app is decided in the directory: a ref
+// is the one part of a repository that belongs to one app.
 //
 // The OBJECTS do not live here at all. They are one global graph in a store of
 // their own (door.ts `GIT_STORE`), because a git object is named by the digest
@@ -20,21 +22,17 @@
 // reach the bucket leave exactly the same hole, and minting is repeatable — the
 // author, the clock and the tree all come from the deploy — so a pass over a
 // history that is already complete is reads and no writes.
-import { CORE_URI, type PropSchema, type VocabDoc } from '@yaks/vocab'
+import { minting, refDoc } from '@yaks/git'
+import type { Bundle } from '@yaks/graph'
+import { CORE_URI, type VocabDoc } from '@yaks/vocab'
 import type { Env } from './env.ts'
 import { meta } from './meta.ts'
 import type { Plugin } from './plugin.ts'
 import { reporting } from './wake.ts'
 
-/** The component a deploy wears once it has been committed, and the row saying
- * where a branch stands. `target` dies with the deploy: a commit is ABOUT that
- * release, and a release nobody kept is a commit about nothing. */
-let ref = (death: string): PropSchema => ({
-  type: 'string',
-  ref: 'entity',
-  death,
-})
-
+/** The component a deploy wears once it has been committed. `target` dies with
+ * the deploy: a commit is ABOUT that release, and a release nobody kept is a
+ * commit about nothing. */
 export let gitDirectoryDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
   title: 'git',
@@ -51,17 +49,7 @@ export let gitDirectoryDoc: VocabDoc = {
         sha: { type: 'string' },
         repo: { type: 'string' },
         message: { type: 'string' },
-        target: ref('cascade'),
-      },
-    },
-    // One row per app and branch name (gitobj.ts `refEid`), so moving a branch
-    // patches the row that was there instead of leaving a second one behind.
-    ref: {
-      type: 'object',
-      properties: {
-        app: ref('cascade'),
-        name: { type: 'string' },
-        commit: ref('detach'),
+        target: { type: 'string', ref: 'entity', death: 'cascade' },
       },
     },
   },
@@ -73,7 +61,7 @@ export let DAILY = '50 4 * * *'
 
 export let gitPlugin: Plugin = {
   name: 'yak/git',
-  vocab: [gitDirectoryDoc],
+  vocab: [gitDirectoryDoc, refDoc],
   // `<app>.git` on a space's hostname, ahead of the apps (git_door.ts,
   // T-34946). Loaded when it RUNS, for seo_door.ts's reason: the door reaches
   // directory.ts and apps.ts's neighbours, and plugins.ts is what those are
@@ -96,17 +84,22 @@ export let gitPlugin: Plugin = {
     // Deploys are the DIRECTORY's rows; an app's own store has none, so this
     // registration would never fire there.
     if (!at.meta) return
+    // @yaks/git's own step (`minting`), mounted on this Worker's post-commit
+    // registry rather than on the graph's `effect` phase, for the one thing
+    // the registry has that the phase does not: a write door that goes back
+    // through `apply()`, so the commit is journaled and cast like any other.
     on.created('deploy', async (e, tx, write) => {
-      let { deployOf, minted } = await import('./gitobj.ts')
-      // The whole entity, because a commit's clock and author are the
-      // `created` stamp beside the component, not columns of it.
-      let [row] = await tx.read(`.eid=${e.entity.eid}`)
-      let deploy = row && deployOf(row)
-      if (!deploy) return
-      await minted(at.env, {
-        read: async (line) => await tx.read(line),
-        write: (bundles) => Promise.resolve(write(bundles)),
-      }, deploy)
+      let { releases } = await import('./gitobj.ts')
+      let dir = {
+        read: async (line: string) => await tx.read(line),
+        write: (bundles: Bundle[]) => Promise.resolve(write(bundles)),
+      }
+      // The event as the bundle the step reads: what a registry says happened
+      // to one component, said the way a batch says it.
+      await minting(releases(at.env, dir))(
+        [{ entity: e.entity, [e.name]: e.comp ?? {} }],
+        tx,
+      )
     })
   }],
   rules: [{

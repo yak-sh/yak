@@ -793,7 +793,12 @@ export let platformVocab = (): Vocab => loadVocab(platformDocs, appKeywords)
  * where an object's bytes are — one name, two meanings, so the two vocabularies
  * cannot be loaded together and this store loads only the one it needs. Nothing
  * is lost: this object holds git objects, and a git object has no title, no
- * mailbox and no members. */
+ * mailbox and no members.
+ *
+ * `gitDoc` carries the package's `ref` word too, and this store keeps no refs:
+ * a branch belongs to one app, so its row is the DIRECTORY's (git.ts loads
+ * @yaks/git's `refDoc` there). A word a store holds no rows under costs it
+ * nothing. */
 export let gitDocs: VocabDoc[] = [coreDoc, edgeDoc, keyDoc, aliasDoc, gitDoc]
 
 /** The git object store's whole vocabulary (graph.ts, {@link gitDocs}). */

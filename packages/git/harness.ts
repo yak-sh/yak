@@ -9,7 +9,7 @@
 import { Database } from '@db/sqlite'
 import { address, type Blobs, encode } from '@yaks/blob'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
-import { type Graph, graph } from '@yaks/graph'
+import { type Graph, graph, type Plugin } from '@yaks/graph'
 import { keyDoc, keyKeywords, keys } from '@yaks/key'
 import { type Driver, storage } from '@yaks/sqlite'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
@@ -59,15 +59,33 @@ export let store = (): Blobs & { reads: () => number } => {
   }
 }
 
-/** The whole stack: a graph, a byte store, and the index over both. */
-export let fixture = (): {
+/**
+ * The whole stack: a graph, a byte store, and the index over both.
+ *
+ * A caller testing the PLUGIN brings the words its own releases are said in,
+ * and the plugin that watches for them — a host's two contributions, which is
+ * the only thing a fixture cannot guess.
+ */
+export let fixture = (
+  more: { docs?: VocabDoc[]; plugins?: Plugin[] } = {},
+): {
   g: Graph
   bytes: ReturnType<typeof store>
   git: Index
 } => {
-  let db = storage(mem(), git)
+  let vocab = more.docs?.length
+    ? loadVocab([entity, edgeDoc, keyDoc, gitDoc, ...more.docs], [
+      edgeKeywords,
+      keyKeywords,
+    ])
+    : git
+  let db = storage(mem(), vocab)
   db.install()
-  let g = graph({ storage: db, vocab: git, plugins: [edges(git), keys(git)] })
+  let g = graph({
+    storage: db,
+    vocab,
+    plugins: [edges(vocab), keys(vocab), ...more.plugins ?? []],
+  })
   let bytes = store()
   return { g, bytes, git: index(g, bytes) }
 }

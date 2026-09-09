@@ -20,10 +20,10 @@
 // is there. Naming a manifest's file twice, or across versions, costs one query
 // and no read at all.
 //
-// This module writes objects; it never reads a pack or speaks HTTP (T-34948,
-// T-34946), and it writes no `commit{target}` row — joining a commit to the
-// deploy it was minted from is the backfill's business (T-34950), on the same
-// entity.
+// This module writes objects and nothing else: it never reads a pack, speaks
+// HTTP, or touches a branch. Landing a manifest on one is ./refs.ts, and the
+// row joining a commit to whatever it was minted from is the host's own word,
+// written there beside the moved ref.
 
 import type { Blobs } from '@yaks/blob'
 import { EDGE, link } from '@yaks/edge'

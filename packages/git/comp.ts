@@ -6,6 +6,7 @@
 //   entry{name, mode}    an @yaks/edge relation: a tree holds a child
 //   parent               an @yaks/edge relation: a commit follows a commit
 //   compat               an @yaks/key kind: the same object's SHA-256 name
+//   ref{app, name, commit}  where one branch of one repository stands
 //
 // The document itself is `./vocab.json` — plain JSON Schema, readable by
 // anything that reads JSON. This file re-exports it under the name callers say
@@ -23,6 +24,14 @@
 // names the object was taken — a column for the author or the message would be
 // a second copy nothing keeps honest.
 //
+// A `ref` IS A ROW, one per repository and branch name ({@link refEid}), and
+// the only word here that is not about an OBJECT. Objects are one global graph
+// — an object is named by the digest of its own bytes, so the same file in two
+// repositories is one row — while a branch belongs to exactly one repository,
+// which is why {@link refDoc} is the same vocabulary said on its own: a host
+// that keeps its refs where it decides access and its objects in a store of
+// their own loads one document in each.
+//
 // `compat` IS A KEY, not a column on `gitobj`, so the reverse lookup — a
 // SHA-256 `want` arriving at a SHA-1 graph — is a `get` on a derived id rather
 // than an index somebody has to remember to declare. Same mechanism as
@@ -31,7 +40,7 @@
 // query grammar is LETTERS (@yaks/query `SEG`): a comp nobody can say in a
 // query is a comp nobody can read back.
 
-import type { VocabDoc } from '@yaks/vocab'
+import { CORE_URI, type VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 
 /** The component naming a git object: what it is, and how long its body is. */
@@ -50,9 +59,23 @@ export let PARENT = 'parent'
  * the name in the other hash function is the compat oid. */
 export let COMPAT = 'compat'
 
+/** The component saying where one branch of one repository stands. */
+export let REF = 'ref'
+
 /**
  * This package's components as a vocabulary document, to load beside
  * @yaks/edge's and @yaks/key's:
  * `loadVocab([edgeDoc, keyDoc, gitDoc], [edgeKeywords, keyKeywords])`.
  */
 export let gitDoc: VocabDoc = doc
+
+/**
+ * The `ref` word ALONE, for the graph that keeps a repository's branches when
+ * that is not the graph its objects are in — the same declaration, so one
+ * spelling means one thing in both.
+ */
+export let refDoc: VocabDoc = {
+  $vocabulary: { [CORE_URI]: true },
+  title: doc.title,
+  $defs: { ref: doc.$defs.ref },
+}

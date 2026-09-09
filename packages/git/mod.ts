@@ -37,6 +37,10 @@
  * - **A clone is those walks, packed.** {@link objects} names every object
  *   reachable from a set of wants, minus what the client has, and
  *   {@link pack} streams them as a v2 packfile — whole objects, no deltas.
+ * - **A branch is a row.** {@link refEid} names it, {@link refAt} reads it, and
+ *   {@link commitOnto} lands one manifest on it — objects written, branch
+ *   moved, in the order that makes running it twice cost reads and no writes.
+ *   {@link commits} is that step as a plugin, mounted on the `effect` phase.
  * - **And a clone is HTTP.** {@link advertise} and {@link uploadPack} are
  *   git's smart HTTP, protocol v2, read only — `Request` in, `Response` out,
  *   over a {@link Refs} and an {@link Objects} somebody else mounts.
@@ -59,3 +63,5 @@ export * from './pack.ts'
 export * from './objects.ts'
 export * from './pkt.ts'
 export * from './http.ts'
+export * from './refs.ts'
+export * from './plugin.ts'

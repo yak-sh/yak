@@ -67,6 +67,28 @@
       "type": "object",
       "key": true,
       "description": "git's compat oid: the same object's SHA-256 name, keyed off its SHA-1 one, so either id resolves (git's own hash-function transition, as key rows)"
+    },
+    "ref": {
+      "type": "object",
+      "description": "where one branch of one repository stands — one row per repository and branch name, so moving a branch patches the row that was there",
+      "properties": {
+        "app": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "description": "the entity the repository belongs to; its branches die with it"
+        },
+        "name": {
+          "type": "string",
+          "description": "the branch's full name — `refs/heads/main`, never `main`"
+        },
+        "commit": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach",
+          "description": "the commit object the branch points at"
+        }
+      }
     }
   }
 }

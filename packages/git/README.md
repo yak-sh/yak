@@ -56,11 +56,12 @@ object is stored once however many versions, apps or runs mention it.
 ## The vocabulary
 
 ```
-gitobj{type, size}   one git object — eid = its SHA-1 object id
-blob{sha}            where its bytes are, in the @yaks/blob store
-entry{name, mode}    @yaks/edge relation: a tree holds a child under a name
-parent               @yaks/edge relation: a commit follows a commit
-compat               @yaks/key kind: the same object's SHA-256 name
+gitobj{type, size}      one git object — eid = its SHA-1 object id
+blob{sha}               where its bytes are, in the @yaks/blob store
+entry{name, mode}       @yaks/edge relation: a tree holds a child under a name
+parent                  @yaks/edge relation: a commit follows a commit
+compat                  @yaks/key kind: the same object's SHA-256 name
+ref{app, name, commit}  where one branch of one repository stands
 ```
 
 Load it beside the two carriers it uses:
@@ -77,7 +78,57 @@ let g = graph({ storage, vocab, plugins: [edges(vocab), keys(vocab)] })
 
 An `entry` is named `sha256("entry|<tree>|<name>")` rather than by @yaks/edge's
 own sentence, because two names in one tree may point at one blob — within a
-tree the NAME is what is unique.
+tree the NAME is what is unique. A `ref` is named `sha256("ref|<app>|<name>")`,
+so moving a branch patches the row that was already there.
+
+Objects are global — an object is the digest of its own bytes, so the same file
+in two repositories is one row — while a branch belongs to exactly one
+repository. A host that decides access per repository therefore keeps its refs
+where that decision is made and its objects in a store of their own, and loads
+`refDoc` in the one and `gitDoc` in the other.
+
+## A branch, and landing a release on it
+
+```ts
+import { commitOnto, refAt } from '@yaks/git'
+
+let repo = { refs: g, objects: objectGraph, bytes: store }
+
+let head = await commitOnto(repo, {
+  app,
+  files: { 'index.html': sha },
+  author,
+  committer,
+  message: 'deploy 7\n',
+  beside: (oids) => [{ entity: { eid: oids.oid }, made: { release } }],
+})
+
+await refAt(repo.refs, app) // head.oid
+```
+
+Every object written, the branch patched onto the new commit, and whatever the
+caller records ABOUT that commit written in the same batch — this package spells
+no such word itself, because joining a commit to what it was minted from is the
+host's sentence, not git's. The PARENT is read from the ref rather than carried,
+so a commit minted the moment a release landed and one minted by a repair pass
+follow the same chain.
+
+And that step as a plugin, mounted on the `effect` phase:
+
+```ts
+import { commits } from '@yaks/git'
+
+let plugin = commits({
+  comp: 'deploy',
+  of: async (b, tx) => alreadyCommitted(b) ? null : landingFor(b),
+})
+```
+
+Everything about a release this package cannot know — what one is called, where
+its manifest is, who authored it, which stores its objects and branches are in,
+and whether it has been committed already — is that one `of`. A host with its
+own post-commit registry registers `minting(…)` on it directly instead; the
+plugin is the same step and the phase it sits on.
 
 ## A clone is a pack
 
@@ -168,11 +219,11 @@ and the username beside it is ignored — `git clone https://x:<token>@…`.
 
 ## What is not here
 
-No push, no ref storage, no delta compression, no shallow clone, and no
-negotiation — a `have` is subtraction, so a client still exchanging them is
-answered `NAK` and gets its pack when it says `done`. This package also writes
-no `commit{target}` row: joining a commit to the deploy it was minted from
-belongs to whoever mints it, on the same entity.
+No push, no delta compression, no shallow clone, and no negotiation — a `have`
+is subtraction, so a client still exchanging them is answered `NAK` and gets its
+pack when it says `done`. It keeps one branch per `ref` row and nothing that
+walks a reflog. And it writes no row joining a commit to what it was minted
+from: that word is the host's, written `beside` the moved ref.
 
 `crypto.subtle` and `CompressionStream` are the platform APIs, so the same code
 runs on a server, in a worker and in a browser tab — and because they are async,
