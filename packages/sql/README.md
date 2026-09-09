@@ -189,6 +189,29 @@ declines there declines the whole hop; a child predicate naming the spine
 declines too, since inside the subquery that name is the correlation to the
 outer row.
 
+## The walk
+
+`.fork.from->S-7` follows a reference column transitively: one recursive CTE
+(`walk.ts`), seeded at the target and stepped along the arrow, capped by the
+depth the grammar carries. What the binder supplies is only the **step** — a
+relation of `"from"`/`"to"` owner ids, one hop.
+
+A path may be a **chain** of reference columns, and then the step is the
+composed relation: each hop joined on the one before, `from` the first
+component's owner and `to` the last hop's referent. `.fork.from.session->S-1` —
+the sessions whose fork lineage reaches session 1 — steps
+
+```sql
+select "fork"."entity" as "from", "__w1"."session" as "to"
+from "fork" join "entry" as "__w1" on "__w1"."entity" = "fork"."from"
+```
+
+so one rung of the CTE crosses the whole chain. Every hop must be a reference
+column; a hop that is not (and a path naming a relation, which is
+`@yaks/edge`'s) declines with `Unsupported`, never an empty answer.
+`@yaks/match` composes the same chain in memory, and `parity_test.ts` pins the
+agreement.
+
 ## The death cascade
 
 One thing here is not a query. A reference column's `death` word says what

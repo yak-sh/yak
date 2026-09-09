@@ -204,8 +204,10 @@ let refs = (ctx: Ctx, r: Refs): Test => {
 // target through at most `depth` hops of one step; `<-` the bundles the target
 // reaches. A step is one (from, to) pair a bundle states — an edge bundle
 // wearing the relation's tag (`edge{from,to}` beside `cites{}`), or an entity's
-// own reference column (`fork.from` reads as this entity → the entry) — read
-// off the same vocabulary @yaks/edge and @yaks/sql read. The closure is one
+// own reference column (`fork.from` reads as this entity → the entry), or a
+// CHAIN of them composed into one pair (`fork.from.session` reads as this
+// entity → the session of the entry it forked from) — read off the same
+// vocabulary @yaks/edge and @yaks/sql read. The closure is one
 // breadth-first fixpoint per bundle set, capped like the CTE, then a set lookup
 // per candidate; the target itself belongs only when a cycle leads back to it.
 let relation = (v: Vocab, name: string): string | undefined =>
@@ -215,7 +217,7 @@ let relation = (v: Vocab, name: string): string | undefined =>
     return said === true ? tag == name : said === name
   })
 
-type Step = (b: Bundle) => [string, string] | undefined
+type Step = (b: Bundle, among: Index) => [string, string] | undefined
 let stepOf = (ctx: Ctx, w: Walk): Step => {
   let spelled = `.${w.path.join('.')}`
   let tag = w.path.length == 1 ? relation(ctx.v, w.path[0]) : undefined
@@ -231,17 +233,24 @@ let stepOf = (ctx: Ctx, w: Walk): Step => {
   try {
     hops = ctx.v.aim(w.path.join('.'))
   } catch { /* an unknown word: refused below */ }
-  let h = hops[0]
-  if (hops.length != 1 || !h.prop || !isRef(ctx.v, h)) {
+  if (!hops.length || !hops.every((h) => h.prop && isRef(ctx.v, h))) {
     throw new Unsupported(
       'a walk',
-      `${spelled} is neither a relation nor a reference column`,
+      `${spelled} is neither a relation nor a chain of reference columns`,
       BY,
     )
   }
-  return (b) => {
-    let v = comp(b, h.comp)?.[h.prop]
-    return typeof v == 'string' ? [b.entity.eid, v] : undefined
+  // A chain follows one reference to the next, each link read off the bundle
+  // the one before named: a link the set does not hold states no pair, exactly
+  // as a missing join row drops it from the step relation.
+  return (b, among) => {
+    let eid = comp(b, hops[0].comp)?.[hops[0].prop]
+    for (let h of hops.slice(1)) {
+      if (typeof eid != 'string') return undefined
+      let next = among.of(eid)
+      eid = next && comp(next, h.comp)?.[h.prop]
+    }
+    return typeof eid == 'string' ? [b.entity.eid, eid] : undefined
   }
 }
 
@@ -258,7 +267,7 @@ let walk = (ctx: Ctx, w: Walk): Test => {
       )
     if (!t) return out
     let pairs = among.list.flatMap((b) => {
-      let p = step(b)
+      let p = step(b, among)
       return p ? [p] : []
     })
     let frontier = new Set([t.entity.eid])

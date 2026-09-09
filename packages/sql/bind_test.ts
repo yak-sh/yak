@@ -116,6 +116,47 @@ Deno.test('a reverse hop compiles to a correlated EXISTS', () => {
   assert(compile(parse('.notes='), v).sql.includes('not exists'), 'absence')
 })
 
+// The step relation a chained walk composes: the hops joined on each other, so
+// one rung of the CTE crosses the whole chain. `.fork.from.session` is the
+// session a session forked out of.
+Deno.test('a walk over a chain of references composes one step', () => {
+  let vocab = loadVocab({
+    $defs: {
+      entity: {
+        type: 'object',
+        wire: false,
+        properties: { num: { type: 'number', stamped: true } },
+      },
+      fork: {
+        type: 'object',
+        properties: {
+          from: { type: 'string', ref: 'entity', death: 'detach' },
+        },
+      },
+      entry: {
+        type: 'object',
+        properties: {
+          session: { type: 'string', ref: 'entity', death: 'cascade' },
+        },
+      },
+    },
+  })
+  let { sql, params } = compile(parse('.fork.from.session[<=3]->S-1'), vocab)
+  assert(
+    sql.includes(
+      'select "fork"."entity" as "from", "__w1"."session" as "to" from "fork"' +
+        ' join "entry" as "__w1" on "__w1"."entity" = "fork"."from"',
+    ),
+    sql,
+  )
+  assertEquals(params, [1, 3])
+  // a hop that is no reference is refused, never answered empty
+  assertThrows(
+    () => compile(parse('.entry.session.num->S-1'), vocab),
+    Unsupported,
+  )
+})
+
 Deno.test('a reverse cardinality binds its count', () => {
   let { sql, params } = compile(parse('.notes>=5'), v)
   assert(sql.includes('count(*) from "note"'), sql)

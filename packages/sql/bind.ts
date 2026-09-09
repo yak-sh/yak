@@ -26,14 +26,15 @@
 // registration, DECLINES — the binder never invents a value it cannot read.
 //
 // The WALK (`.fork.from->S-7`) compiles here when its path is a reference
-// column — one recursive CTE over that column (./walk.ts). A path naming a
-// RELATION is @yaks/edge's: the extension seam is consulted first, and that
-// package owns the edge table and the tags an edge wears, which this vocabulary
-// does not carry.
+// column, or a chain of them (`.fork.from.session->S-1`, one step across the
+// composed relation) — one recursive CTE over that step (./walk.ts). A path
+// naming a RELATION is @yaks/edge's: the extension seam is consulted first,
+// and that package owns the edge table and the tags an edge wears, which this
+// vocabulary does not carry.
 //
 // What is NOT here declines LOUDLY (an `Unsupported` throw, never a silent
 // wrong answer): the `.edges` rider (edge-typed, so @yaks/edge's), a walk over
-// neither a relation nor a reference column, and the `.near` KNN, which needs
+// neither a relation nor reference columns, and the `.near` KNN, which needs
 // vectors this package does not hold — `@yaks/embedding` registers as an
 // extension and answers it, ordering included.
 
@@ -501,23 +502,35 @@ let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Cond => {
 
 // The column-shaped walk: `.fork.from->S-7` follows one reference column of one
 // component, so the step is that component's own rows read as (owner, referent)
-// pairs. A path that is a relation name was an extension's to claim first; one
-// that is neither is refused, never answered empty.
+// pairs. A path of SEVERAL references composes into one step — the hops joined
+// on each other (`.fork.from.session` is `fork` joined to the `entry` its
+// `from` names), so `from` is the first component's owner and `to` the last
+// hop's referent, and one rung of the CTE crosses the whole chain. A path that
+// is a relation name was an extension's to claim first; one with a hop that is
+// no reference is refused, never answered empty.
 let walk = (ctx: Ctx, c: Walk): Cond => {
   let spelled = `.${c.path.join('.')}`
   let hops: Hop[] = []
   try {
     hops = ctx.v.aim(c.path.join('.'))
   } catch { /* an unknown word: refused below */ }
-  let h = hops[0]
-  if (hops.length != 1 || !h.prop || !isRef(ctx.v, h.comp, h.prop)) {
+  let ref = (h: Hop) => h.prop && isRef(ctx.v, h.comp, h.prop)
+  if (!hops.length || !hops.every(ref)) {
     throw new Unsupported(
       'a walk',
-      `${spelled} is neither a relation nor a reference column`,
+      `${spelled} is neither a relation nor a chain of reference columns`,
     )
   }
-  let step = `select "${h.comp}"."entity" as "from", "${h.comp}"."${h.prop}"` +
-    ` as "to" from ${ctx.d.table(h.comp)}`
+  let root = hops[0]
+  let from = ctx.d.table(root.comp)
+  let to = `"${root.comp}"."${root.prop}"`
+  hops.slice(1).forEach((h, i) => {
+    let a = `__w${i + 1}`
+    from += ` join ${source(h.comp)} as "${a}" on "${a}"."entity" = ${to}`
+    to = `"${a}"."${h.prop}"`
+  })
+  let step = `select "${root.comp}"."entity" as "from", ${to} as "to"` +
+    ` from ${from}`
   return walkSql(ctx.d.ownerKey('entity'), c, step)
 }
 

@@ -300,6 +300,90 @@ Deno.test('a walk over nothing declares is declined by both', () => {
   }
 })
 
+// ---- the walk over a CHAIN of reference columns, both evaluators ------------
+//
+// `.fork.from.session->S-1` is ONE step over a composed relation: a session's
+// `fork` names the entry it forked from, and that entry names the session it
+// was written in — so the pair is (session, the session it forked out of), and
+// the walk over it is the fork lineage. Three levels of it, both directions,
+// the cap, and a hop that is no reference.
+
+let forked: Vocab = loadVocab([{
+  $defs: {
+    entity: {
+      type: 'object',
+      wire: false,
+      properties: { num: { type: 'number', stamped: true } },
+    },
+    session: {
+      type: 'object',
+      kind: true,
+      properties: { title: { type: 'string' } },
+    },
+    fork: {
+      type: 'object',
+      properties: {
+        from: { type: 'string', ref: 'entity', death: 'detach' },
+      },
+    },
+    entry: {
+      type: 'object',
+      kind: true,
+      properties: {
+        session: { type: 'string', ref: 'entity', death: 'cascade' },
+        text: { type: 'string' },
+      },
+    },
+  },
+}])
+
+// s1 → e1 forked into s2 → e2 forked into s3 → e3 forked into s4.
+let lineage: Bundle[] = [1, 2, 3, 4].flatMap((n) => [
+  {
+    entity: { eid: `s${n}`, num: n },
+    session: { title: `s${n}` },
+    ...(n > 1 ? { fork: { from: `e${n - 1}` } } : {}),
+  },
+  {
+    entity: { eid: `e${n}`, num: n + 4 },
+    entry: { session: `s${n}`, text: `entry ${n}` },
+  },
+])
+
+let CHAINS = [
+  '.fork.from.session->S-1',
+  '.fork.from.session[<=1]->S-1',
+  '.fork.from.session[<=2]->S-1',
+  '.fork.from.session->s1',
+  '.fork.from.session<-s4',
+  '.fork.from.session[<=1]<-s4',
+  '.fork.from.session->s4',
+  // beside an ordinary filter, the way a board reads
+  '.fork.from.session->s1&.session.title=s3',
+]
+
+Deno.test('a walk over a chain of references selects the same entities', () => {
+  let s = loaded(forked, lineage)
+  for (let q of CHAINS) {
+    let mine = eids(matcher(q, forked, { now: NOW })(lineage)).sort()
+    assertEquals(mine, eids(fromSql(s, q)).sort(), `query: ${q}`)
+  }
+  // and the agreement is not vacuous: the lineage above s1, capped and whole
+  let sel = (q: string) =>
+    eids(matcher(q, forked, { now: NOW })(lineage)).sort()
+  assertEquals(sel('.fork.from.session->S-1'), ['s2', 's3', 's4'])
+  assertEquals(sel('.fork.from.session[<=2]->S-1'), ['s2', 's3'])
+  assertEquals(sel('.fork.from.session<-s4'), ['s1', 's2', 's3'])
+})
+
+Deno.test('a chain with a hop that is no reference is declined by both', () => {
+  let s = loaded(forked, lineage)
+  for (let q of ['.fork.from.text->s1', '.entry.session.title->s1']) {
+    assertThrows(() => s.read(q), Error, 'cannot compile', q)
+    assertThrows(() => matcher(q, forked), Error, 'cannot compile', q)
+  }
+})
+
 // ---- a computed column, one rule, both evaluators ---------------------------
 //
 // `task.status` (@yaks/task) is declared `persist: false`: no row holds it, and

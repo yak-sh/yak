@@ -154,8 +154,9 @@ query is compiled, before a bundle is read:
 
 - **`.near`** — nearest-neighbour needs vectors; **`.edges!`** asks for links to
   be delivered beside an answer. Neither rides in a bundle. (The walk,
-  `.cites[<=3]->p1` or `.fork.from->S-7`, IS answered: a fixpoint over the
-  bundle set, the edge bundles or the reference column being the steps.)
+  `.cites[<=3]->p1`, `.fork.from->S-7` or `.fork.from.session->S-1`, IS
+  answered: a fixpoint over the bundle set, the edge bundles or a reference
+  column — or a chain of them followed through the set — being the steps.)
 - **`.count!`, `.distinct=`, `.tally=`** — an aggregate is a row shape, not a
   selection of entities. Count what comes back instead.
 - **A computed column** (`persist: false` in the vocabulary) **nobody
