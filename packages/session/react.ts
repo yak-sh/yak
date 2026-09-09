@@ -52,9 +52,22 @@ import {
   usingBefore,
 } from './status.ts'
 
+/** The caller, supplied by react rather than by model arguments. */
+export type ToolContext = { session: Eid; call: Bundle; entries: Bundle[] }
+
+/** A refused tool invocation: expected, recorded as an error and a result. */
+export class ToolError extends Error {
+  constructor(public code: string, message: string) {
+    super(message)
+  }
+}
+
 /** A tool the model may call: its declaration, and how to run it. */
 export type Tool = Declared & {
-  run: (args: Record<string, unknown>) => Promise<string> | string
+  run: (
+    args: Record<string, unknown>,
+    ctx?: ToolContext,
+  ) => Promise<string> | string
 }
 
 /** What `react` is handed beside the graph. */
@@ -103,6 +116,7 @@ export let project = (
   anchor?: Eid,
 ): Item[] => {
   let out: Item[] = []
+  let byId = new Map(entries.map((b) => [b.entity.eid, b]))
   for (let b of entries) {
     let kind = kindOf(b)
     let c = comp(b, CALL)
@@ -116,7 +130,7 @@ export let project = (
         args: String(c!.args ?? '{}'),
       })
     } else if (kind == 'result') {
-      let call = entries.find((e) => e.entity.eid == comp(b, RESULT)?.call)
+      let call = byId.get(String(comp(b, RESULT)?.call))
       out.push({
         kind: 'result',
         id: String(comp(call!, CALL)?.id ?? ''),
@@ -186,11 +200,18 @@ export let react = async (
       let out: string
       try {
         out = tool
-          ? String(await tool.run(args))
+          ? String(await tool.run(args, { session, call: pending, entries }))
           : `no such tool: ${String(c.to)}`
       } catch (e) {
         out = `tool failed: ${String(e)}`
-        added.push(line({ [EXCEPTION]: {} }, String(e)))
+        added.push(
+          line(
+            e instanceof ToolError
+              ? { [ERROR]: { code: e.code } }
+              : { [EXCEPTION]: {} },
+            String(e),
+          ),
+        )
       }
       added.push(line({ [RESULT]: { call: pending.entity.eid } }, out))
     }
@@ -223,7 +244,9 @@ export let react = async (
   let req: Request = {
     model: modelName,
     effort: effort == null ? undefined : String(effort),
-    instructions: deps.instructions,
+    instructions: using?.instructions == null
+      ? deps.instructions
+      : String(using.instructions),
     items: project(
       window,
       toolEntities,

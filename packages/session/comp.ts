@@ -1,11 +1,12 @@
 // The vocabulary this package ships, as one document to load beside your own
 // (./vocab.json — plain JSON Schema). A session is a TRANSCRIPT: nothing is
-// spawned, started or stopped — entries appear, and a daemon reacts to the
+// launched as a host process — entries appear, and a daemon reacts to the
 // newest one. The comps are the session's identity, its lock, and the kinds of
 // entry; the words a run's PROCESS needs (pid, pane, a log to tail) belong to
 // the application that runs processes, never here.
 //
 //   session{id, status}      identity only; `status` is computed, never stored
+//   spawned{parent, call}    delegated by a parent, from a tool call
 //   fork{from}               continues another transcript from one entry
 //   claim{session}           the session's lock on the entity it rides
 //   conflict{target, loser, holder, at}
@@ -16,7 +17,7 @@
 //                            instruction (the first one is the request). With
 //                            a source, an OUTPUT: what a model said, from that
 //                            ask. Beside a result, error or exception, theirs
-//     + using{provider, model, effort}
+//     + using{provider, model, effort, instructions}
 //                            set or switch on an input; served on an ask
 //     + ask{to, through}     the model was asked, from the prefix at `through`
 //     + call{to, id, args, source}

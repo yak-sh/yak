@@ -19,6 +19,9 @@ import type { Bundle, Comp, Eid } from '@yaks/graph'
 import { MODEL, type Model, PROVIDER, TOOL } from '@yaks/model'
 import { credential, responses } from '@yaks/openai'
 import {
+  admit,
+  type ChildLimits,
+  children,
   CONTENT,
   type Daemon,
   daemon,
@@ -66,7 +69,7 @@ export let seed = (
 
 /** How a harness is started: what it stores in, what serves it, and what the
  * agent may do. */
-export type Opts = {
+export type Opts = ChildLimits & {
   /** the graph to run over (default: the one at `HARNESS_DB`) */
   h?: Harness
   /** what serves an ask (default: @yaks/openai over the found credential) */
@@ -98,6 +101,8 @@ export type Agent = {
   sessions: () => Promise<Bundle[]>
   /** the open work in this graph, oldest first */
   tasks: () => Promise<Bundle[]>
+  /** direct delegated sessions, including forks */
+  children: (session: Eid) => Promise<Bundle[]>
   /** one transcript's entries, in order */
   transcript: (session: Eid) => Promise<Bundle[]>
   /** wake every transcript a restart left mid-step */
@@ -133,7 +138,7 @@ export let agent = (opts: Opts = {}): Agent => {
     responses({
       credential: credential(Deno.env.get, (p) => Deno.readTextFile(p)),
     })
-  let tools = opts.tools ?? harnessTools(h.g)
+  let tools = opts.tools ?? harnessTools(h.g, opts)
   h.g.apply(seed({ model: name, tools }), { trusted: true })
   let d = daemon(h.g, h.fx, {
     model,
@@ -159,33 +164,44 @@ export let agent = (opts: Opts = {}): Agent => {
     tools,
     names,
     model: idOf(MODEL, name),
-    start: async (prompt, o = {}) => {
-      let session = crypto.randomUUID() as Eid
-      await h.g.apply([
-        { entity: { eid: session }, session: { id: session.slice(0, 8) } },
-        {
-          entity: { eid: crypto.randomUUID() as Eid },
-          [ENTRY]: { session, seq: 1 },
-          [CONTENT]: { body: prompt },
-          using: { ...using, ...o.effort ? { effort: o.effort } : {} },
-        },
-      ])
-      return session
-    },
-    send: async (session, text) => {
-      let eid = crypto.randomUUID() as Eid
-      await h.g.apply([{
-        entity: { eid },
-        [ENTRY]: { session, seq: await next(session) },
-        [CONTENT]: { body: text },
-      }])
-      return eid
-    },
+    start: (prompt, o = {}) =>
+      admit(h.g, undefined, opts, async () => {
+        let session = crypto.randomUUID() as Eid
+        await h.g.apply([
+          { entity: { eid: session }, session: { id: session.slice(0, 8) } },
+          {
+            entity: { eid: crypto.randomUUID() as Eid },
+            [ENTRY]: { session, seq: 1 },
+            [CONTENT]: { body: prompt },
+            using: { ...using, ...o.effort ? { effort: o.effort } : {} },
+          },
+        ])
+        return session
+      }),
+    send: (session, text) =>
+      d.enqueue(session, async () => {
+        let eid = crypto.randomUUID() as Eid
+        await h.g.apply([{
+          entity: { eid },
+          [ENTRY]: { session, seq: await next(session) },
+          [CONTENT]: { body: text },
+        }])
+        return eid
+      }),
     sessions: async () => (await h.g.read('.session')).toSorted(byNum),
+    children: (session) => children(h.g, session),
     tasks: async () => (await h.g.read('.task.status=open')).toSorted(byNum),
     transcript: entries,
     resume: async () => {
       let live = await h.g.read('.session.status=pending,running')
+      // Reconcile receipts lost between a child commit and its effect.
+      for (
+        let b of await h.g.read(
+          '.spawned .session.status=settled,failed,stopped',
+        )
+      ) {
+        d.wake(b.entity.eid)
+      }
       let woken = live.map((b) => b.entity.eid)
       for (let s of woken) d.wake(s)
       return woken

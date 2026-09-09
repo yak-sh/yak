@@ -3,7 +3,7 @@
  * it holds, and the daemon that reacts to its newest line. The session
  * component domain for a {@link https://jsr.io/@yaks/graph | @yaks/graph}.
  *
- * Nothing is spawned, started or stopped. A `session` is identity only; what it
+ * No host process is implied. A `session` is identity only; what it
  * is doing is read off its entries ({@link statusOf}, and the same rule as a
  * derived SQL column, {@link sessionDerived}) and never stored. An `entry` is
  * one line, `{session, seq}`, and the comp beside it says what kind:
@@ -24,6 +24,9 @@
  *
  * `fork{from}` on a session continues another transcript from one of its
  * entries: the parent's entries up to it are the fork's prefix.
+ * `spawned{parent, call}` records delegation independently of that prefix.
+ * {@link sessionTools} exposes fork/spawn/wait; the daemon delivers a child's
+ * terminal output to its parent's queue, idempotently.
  *
  * ## The daemon
  * {@link react} is one step: read the newest entry, do the one thing it asks
@@ -67,3 +70,5 @@ export * from './rules.ts'
 export * from './react.ts'
 export * from './daemon.ts'
 export * from './views.ts'
+
+export * from './children.ts'

@@ -8,7 +8,7 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "the runner’s own name for it"
+          "description": "the runner\u2019s own name for it"
         },
         "status": {
           "enum": [
@@ -39,20 +39,20 @@
     "claim": {
       "type": "object",
       "kind": true,
-      "description": "a session’s lock on the entity carrying it",
+      "description": "a session\u2019s lock on the entity carrying it",
       "properties": {
         "session": {
           "type": "string",
           "ref": "session",
           "death": "release",
           "bare": false,
-          "description": "the session holding it — when that session’s entity dies the lock goes and the entity lives"
+          "description": "the session holding it \u2014 when that session\u2019s entity dies the lock goes and the entity lives"
         },
         "claimed_at": {
           "type": "string",
           "format": "date-time",
           "stamped": true,
-          "description": "when it was taken — stamped when the lock is new"
+          "description": "when it was taken \u2014 stamped when the lock is new"
         }
       }
     },
@@ -108,7 +108,13 @@
           "type": "number",
           "description": "its place in the transcript"
         }
-      }
+      },
+      "index": [
+        [
+          "session",
+          "seq"
+        ]
+      ]
     },
     "content": {
       "type": "object",
@@ -121,7 +127,7 @@
           "type": "string",
           "ref": "entity",
           "death": "keep",
-          "description": "what said it — the ask, for a model's own words, or the stream it came off (@yaks/process); absent on prose a person or a system wrote"
+          "description": "what said it \u2014 the ask, for a model's own words, or the stream it came off (@yaks/process); absent on prose a person or a system wrote"
         }
       }
     },
@@ -141,6 +147,10 @@
         },
         "effort": {
           "type": "string"
+        },
+        "instructions": {
+          "type": "string",
+          "description": "system instructions in force for this transcript"
         }
       }
     },
@@ -218,6 +228,24 @@
       "type": "object",
       "description": "an outcome the code did not expect, whoever caused it: a defect report, not a stop",
       "properties": {}
+    },
+    "spawned": {
+      "type": "object",
+      "description": "a child session delegated by a parent; fork independently selects an inherited prefix",
+      "properties": {
+        "parent": {
+          "type": "string",
+          "ref": "session",
+          "death": "keep",
+          "bare": false
+        },
+        "call": {
+          "type": "string",
+          "ref": "entry",
+          "death": "keep",
+          "bare": false
+        }
+      }
     }
   }
 }

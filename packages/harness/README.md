@@ -61,3 +61,50 @@ daemon is woken again by `resume()` instead.
 
 Deno. It makes a file, reads the environment and starts child processes, and its
 SQLite is `jsr:@db/sqlite`.
+
+## Forks and subagents
+
+The default tool table includes `fork`, `spawn`, and `wait`:
+
+- `fork({prompt, instructions?, model?, effort?})` continues the caller's
+  transcript prefix **before the current tool turn**, then adds the prompt.
+  Unanswered calls are not inherited. It returns a concurrent child session id.
+- `spawn({prompt, instructions?, model?, effort?})` returns a fresh child
+  session id. It inherits the serving configuration, not the transcript. `model`
+  accepts a model name (served by the inherited provider) or an existing model
+  entity id.
+- `wait({children: [id, ...], timeout?: milliseconds})` waits on direct children
+  and returns their statuses and output. The default timeout is 60 seconds;
+  timing out leaves the children running. `wait({process, timeout?})` still
+  waits on a shell process. Use one target shape, not both.
+
+A child carries `spawned{parent, call}`; a fork additionally has `fork{from}`.
+`a.children(session)` reads that structure. When a child settles, the daemon
+queues a completion receipt behind any active parent step: a result if the
+originating call is still open, otherwise an input that wakes another parent
+turn. Failed/stopped children also report their terminal outcome. A stopped
+parent is not revived. Receipt ids are derived from the child's final entry, so
+`resume()` can reconcile a missed completion without repeating one already
+received. Fork/spawn calls themselves are idempotent by call id.
+
+`agent({maxChildren: 4, maxSessions: 16})` sets the defaults explicitly.
+Admission is serialized per graph across parents; concurrent roots count against
+the same live-session limit. A refused tool call writes an error and a tool
+result, and creates no child. Settled, failed, and stopped sessions free their
+slots. These are harness tool/start limits, not a security boundary against
+arbitrary graph writes or a distributed lock across multiple daemons.
+
+`tools` replaces the default table when supplied. `sessionTools(graph, limits)`
+from `@yaks/session` is the standalone delegation table (its admission queries
+use the registered `session.status` derived column).
+
+## Performance probe
+
+```sh
+DENO_SQLITE_PATH=libsqlite3.so.0 deno run -A packages/harness/perf.ts
+```
+
+This reports warmed median/p95 fresh-entry apply time and the subsequent react
+step's model-dispatch overhead with a fixed 1,000-entry SQLite transcript. It
+uses a fake model and measures no network time. The SQLite/daemon integration
+suite lives under `packages/`, outside the repository's fast test tier.

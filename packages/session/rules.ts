@@ -39,6 +39,10 @@ let checks = (b: Bundle): Check[] => {
   let out: Check[] = []
   let from = ref(b, FORK, 'from')
   if (from) out.push([FORK, 'from', from, ENTRY])
+  let parent = ref(b, 'spawned', 'parent')
+  if (parent) out.push(['spawned', 'parent', parent, 'session'])
+  let call = ref(b, 'spawned', 'call')
+  if (call) out.push(['spawned', 'call', call, ENTRY])
   let provider = ref(b, USING, PROVIDER)
   if (provider) out.push([USING, PROVIDER, provider, PROVIDER])
   let model = ref(b, USING, MODEL)

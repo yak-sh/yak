@@ -19,7 +19,12 @@ import type { Entity, Graph, Tool as GraphTool, ToolCtx } from '@yaks/graph'
 import { shapeOf } from '@yaks/mcp'
 import { core, type Depth } from '@yaks/mcp'
 import { shellTools } from '@yaks/process'
-import type { Tool } from '@yaks/session'
+import {
+  type ChildLimits,
+  sessionTools,
+  type Tool,
+  ToolError,
+} from '@yaks/session'
 import { z } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 
@@ -65,8 +70,37 @@ export let graphTools = (
 /** Everything the harness gives an agent: the shell, and the graph. */
 export let harnessTools = (
   g: Graph,
-  opts: { cwd?: string; depth?: Depth } = {},
-): Tool[] => [
-  ...shellTools(g, { cwd: opts.cwd }),
-  ...graphTools(g, { depth: opts.depth }),
-]
+  opts: { cwd?: string; depth?: Depth } & ChildLimits = {},
+): Tool[] => {
+  let shell = shellTools(g, { cwd: opts.cwd })
+  let session = sessionTools(g, opts)
+  let processWait = shell.find((t) => t.name == 'wait')!
+  let childWait = session.find((t) => t.name == 'wait')!
+  let wait: Tool = {
+    name: 'wait',
+    description:
+      'Wait for a process OR named child sessions, with a timeout in milliseconds.',
+    parameters: {
+      type: 'object',
+      properties: {
+        process: { type: 'string' },
+        children: { type: 'array', items: { type: 'string' }, minItems: 1 },
+        timeout: { type: 'number' },
+      },
+      oneOf: [{ required: ['process'] }, { required: ['children'] }],
+    },
+    run: (args, ctx) => {
+      if ((args.children == null) == (args.process == null)) {
+        throw new ToolError('wait', 'name either a process or child sessions')
+      }
+      return args.children == null
+        ? processWait.run(args, ctx)
+        : childWait.run(args, ctx)
+    },
+  }
+  return [
+    ...shell.map((t) => t.name == 'wait' ? wait : t),
+    ...session.filter((t) => t.name != 'wait'),
+    ...graphTools(g, { depth: opts.depth }),
+  ]
+}
