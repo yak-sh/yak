@@ -131,7 +131,7 @@ Deno.test('tool-driven vision reaches the next model request and survives databa
     let entries = await a.transcript(session)
     assertEquals(entries.filter((e) => e.attachment).length, 2)
     assertEquals(entries.filter((e) => e.exception).length, 0)
-    a.close()
+    await a.close()
     h = open(dir + '/test.db')
     let restored = await imageContext(h.g, entries, entries, {
       directory: dir + '/blobs',
@@ -139,7 +139,7 @@ Deno.test('tool-driven vision reaches the next model request and survives databa
     assertEquals(restored.length, 1)
     h.close()
   } finally {
-    a.close()
+    await a.close()
     await Deno.remove(dir, { recursive: true })
   }
 })
