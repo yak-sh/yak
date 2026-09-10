@@ -50,7 +50,7 @@ Deno.test('human reads the spine and worn names, not one table per kind', () => 
   let db = freshDb()
   let eid = crypto.randomUUID()
   apply(db, [
-    { eid, name: 'doc', comp: { title: 'named' } },
+    { eid, name: 'doc', comp: { title: 'named' }, $num: true },
     { eid, name: 'task', comp: {} },
     { eid, name: 'filed', comp: { priority: 'P2' } },
   ])
