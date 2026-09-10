@@ -16,6 +16,16 @@ export let frontendVocab = loadVocab([{
         expanded: { type: 'string' },
       },
     },
+    visual: {
+      persist: 'none',
+      properties: {
+        surface: { type: 'string' },
+        text: { type: 'string' },
+        anchor: { type: 'number' },
+        at: { type: 'number' },
+        yank: { type: 'string' },
+      },
+    },
     composer: {
       persist: 'none',
       properties: { mode: { enum: ['message', 'task'] } },
@@ -39,6 +49,10 @@ export let frontendVocab = loadVocab([{
 export let frontend = () => {
   // Deliberately no URL, socket or vault: drafts never leave this frontend.
   let c = client(frontendVocab, [], { vault: false, signal })
+  c.mutate([{
+    entity: { eid: 'visual' },
+    visual: { surface: '', text: '', anchor: 0, at: 0, yank: '' },
+  }])
   c.mutate([
     {
       entity: { eid: 'view' },
@@ -57,6 +71,9 @@ export let frontend = () => {
   let feedback = c.watch('.feedback')
   return {
     client: c,
+    visual: c.watch('.visual'),
+    select: (state: import('@yaks/tui').VisualState) =>
+      c.mutate([{ entity: { eid: 'visual' }, visual: state }]),
     view,
     draft,
     composer,

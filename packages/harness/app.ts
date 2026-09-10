@@ -1,3 +1,4 @@
+import { useVisualController, type VisualState } from '@yaks/tui'
 import { parentId, rootOf, sessionTree } from './tree.ts'
 import { ToolError } from '@yaks/session'
 import { diagnostics } from './diagnostics.ts'
@@ -304,6 +305,7 @@ export let App = (
   return h(
     'div',
     { col: '1' },
+    h(Visual, { ui }),
     h(
       'div',
       { grow: '1' },
@@ -332,6 +334,22 @@ export let App = (
     h(Feedback, { ui }),
     h(Composer, { ui, submit }),
   )
+}
+
+let Visual = ({ ui }: { ui: Frontend }) => {
+  useVisualController(
+    () => ui.client.ent('visual')!.visual as VisualState,
+    ui.select,
+  )
+  let value = ui.visual.value[0].visual as VisualState
+  return value.surface
+    ? h(
+      'div',
+      { class: 'Good' },
+      'VISUAL · ' + value.surface +
+        ' · Tab region · [/] item · hjkl move · y yank · Esc cancel',
+    )
+    : null
 }
 
 let Feedback = ({ ui }: { ui: Frontend }) => {
@@ -379,6 +397,8 @@ let Transcript = ({ ui, id, items, agent }: {
       },
     },
     onViewportChange: viewport.set,
+    textOf: (item: { bundle: Bundle }) =>
+      String((item.bundle.content as Comp | undefined)?.body ?? ''),
     renderItem: (item: { id: string; bundle: Bundle }) =>
       agent.entry(item.bundle),
   })

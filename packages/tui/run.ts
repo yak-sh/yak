@@ -1,3 +1,4 @@
+import { setClipboard } from './visual.ts'
 /**
  * The entry point: take the terminal, mount the app, and give the terminal
  * back. Raw mode and the alt screen go up, the fake document is installed, a
@@ -52,6 +53,7 @@ export let run = async (
     try {
       Deno.removeSignalListener('SIGWINCH', resize)
     } catch { /* never added */ }
+    setClipboard(() => {})
     backend.stop()
     try {
       Deno.stdin.setRaw(false)
@@ -61,6 +63,7 @@ export let run = async (
   try {
     Deno.stdin.setRaw(true)
     backend.start()
+    setClipboard((text) => backend.copy?.(text))
     size.value = backend.size()
     Deno.addSignalListener('SIGWINCH', resize)
     onPaint(() => {

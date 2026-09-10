@@ -1,3 +1,5 @@
+import { visualRows, visualSpot } from './textRows.ts'
+export { type VisualRow, visualRows, visualSpot } from './textRows.ts'
 /**
  * The multi-line input box. `edit()` is the whole editor as one pure function
  * — a `{text, at}` and a key in, the next `{text, at}` out, null when the key
@@ -10,6 +12,7 @@
  * @module
  */
 
+import { useTextSurface } from './visual.ts'
 import { h, type JSX } from 'preact'
 import { useRef, useState } from 'preact/hooks'
 import type { Key } from './input.ts'
@@ -106,37 +109,6 @@ export let edit = (s: Edit, k: Key): Edit | null => {
 }
 
 /** Visual rows retain source offsets; whitespace and submitted text are never rewritten. */
-export type VisualRow = { start: number; end: number }
-export let visualRows = (text: string, width: number): VisualRow[] => {
-  width = Math.max(1, Math.floor(width))
-  let rows: VisualRow[] = []
-  let start = 0
-  for (let line of text.split('\n')) {
-    let end = start + line.length
-    while (end - start >= width) {
-      let stop = start + width
-      // Prefer a word boundary, retaining its whitespace on the preceding row.
-      let space = text.slice(start, stop).search(/\s+\S*$/)
-      if (end - start > width && space >= 0) {
-        let after = start + space
-        while (after < stop && /\s/.test(text[after])) after++
-        if (after > start) stop = after
-      }
-      rows.push({ start, end: stop })
-      start = stop
-    }
-    rows.push({ start, end })
-    start = end + 1
-  }
-  return rows
-}
-
-export let visualSpot = (rows: VisualRow[], offset: number) => {
-  let row = rows.findLastIndex((r) => r.start <= offset)
-  row = Math.max(0, row)
-  return { row, col: offset - rows[row].start }
-}
-
 /** Vertical arrows and Home/End address displayed rows, not just hard lines. */
 export let visualEdit = (s: Edit, k: Key, width: number): Edit | null => {
   let rows = visualRows(s.text, width)
@@ -205,6 +177,7 @@ export let Textarea = (
     take(next)
     return true
   })
+  useTextSurface({ id, snapshot: () => live.current, width: () => width })
   let rows = visualRows(s.text, width)
   let lines = rows.map((r) => s.text.slice(r.start, r.end))
   let { row, col } = visualSpot(rows, s.at)

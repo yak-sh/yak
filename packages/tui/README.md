@@ -172,3 +172,38 @@ Virtual-list thumb positions estimate unvisited heights from the bounded
 measurement cache. Estimates may adjust as items are visited, but never move the
 item-relative anchor or cause offscreen layout. Empty and short content still
 show the thumb; an end-following list places it at the bottom.
+
+### Characterwise VISUAL selection
+
+A host supplies `useVisualController(get, set)`; application state stays outside
+TUI widgets. `useTextSurface({id, snapshot, width, adjacent?})` opts in any text
+region. Textarea registers its draft; VirtualList registers only when given
+`textOf(item)`. That callback reads one anchored item, not rendered history.
+
+Alt+v enters VISUAL (or cycles regions), Tab cycles opt-in regions, hjkl/arrows
+extend an inclusive selection, Home/End select to row boundaries, `y` yanks and
+exits, Escape cancels. Plain keys remain editing keys outside VISUAL. `[` / `]`
+choose the previous/next item where supplied, resetting the selection.
+
+This first implementation is **source selection**: the chosen region temporarily
+shows its exact source in a plain wrapped view, with an inverse selection. This
+avoids copying ANSI, borders or rendered metadata, and retains Markdown source
+and explicit newlines without inventing soft-wrap newlines. Selection is bounded
+to one surface/item; cross-item ranges and rendered-Markdown selection are not
+implemented. Navigating within the source view scrolls locally and leaves the
+normal virtual-list anchor unchanged. Unmounting a surface does not read its
+data.
+
+The ANSI backend requests OSC52 clipboard writes only on `y`. A terminal may
+deny or truncate those writes: success is not acknowledged. iTerm2 clipboard
+permission and tmux `set-clipboard`/OSC52 support must be enabled as
+appropriate; no shell clipboard program or tmux passthrough bypass is used.
+Hosts may supply their own clipboard backend. The harness retains the last yank
+in its private ephemeral `visual.yank` field regardless of terminal clipboard
+support.
+
+Limitations: one active visual controller per terminal (like the existing
+keyboard stack), no mouse selection yet, and display geometry uses the editor's
+existing UTF-16 column model rather than grapheme/wcwidth-aware geometry. The
+controller must return current state synchronously so burst input can advance
+selection.

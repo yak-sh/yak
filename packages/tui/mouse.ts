@@ -1,3 +1,4 @@
+import { visualState } from './visual.ts'
 import { TElement } from './dom.ts'
 import type { Mouse } from './input.ts'
 import type { Line } from './paint.ts'
@@ -28,6 +29,8 @@ export let hit = (
 
 /** Return true when consumed. A missed report never falls into keyboard focus. */
 export let routeMouse = (report: Mouse, lines: Line[]): boolean => {
+  // Freeze normal navigation while reading a selection snapshot.
+  if (visualState()?.surface) return true
   let target = hit(lines, report.x, report.y)
   if (!target) return false
   let event: MouseEvent = {

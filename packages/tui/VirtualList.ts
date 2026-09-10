@@ -1,3 +1,4 @@
+import { useTextSurface } from './visual.ts'
 import { scrollbar as drawScrollbar, type ScrollPosition } from './scrollbar.ts'
 import type { MouseEvent } from './mouse.ts'
 /** An identity-anchored, lazily measured viewport. No total-height pass. */
@@ -198,6 +199,7 @@ export let VirtualList = <T extends VirtualItem>(
   {
     items,
     renderItem,
+    textOf,
     version = JSON.stringify,
     follow = false,
     value,
@@ -205,6 +207,7 @@ export let VirtualList = <T extends VirtualItem>(
     ...attrs
   }: {
     items: readonly T[]
+    textOf?: (item: T) => string
     renderItem: (item: T) => ComponentChildren
     version?: (item: T) => string
     scrollbar?: boolean
@@ -218,6 +221,8 @@ export let VirtualList = <T extends VirtualItem>(
 ) => {
   let props = useRef({ renderItem, version })
   props.current = { renderItem, version }
+  let selectionWidth = useRef(80)
+  let selectedIndex = useRef<number>()
   let env = useRef<{ style: Style; sheet: Sheet }>()
   let state = useRef<VirtualWindow<T>>()
   let trees = useRef(new Map<string, { version: string; root: TElement }>())
@@ -281,6 +286,27 @@ export let VirtualList = <T extends VirtualItem>(
     ) onViewportChange?.(next)
   }
   state.current.update(items)
+  useTextSurface({
+    id: attrs.id ?? 'list',
+    enabled: Boolean(textOf),
+    snapshot: () => {
+      selectedIndex.current = items.findIndex((i) =>
+        i.id == state.current!.anchor?.id
+      )
+      let item = items[selectedIndex.current] ?? items.at(-1)
+      return { text: item && textOf ? textOf(item) : '' }
+    },
+    width: () => selectionWidth.current,
+    adjacent: (delta) => {
+      let index = Math.max(
+        0,
+        Math.min(items.length - 1, (selectedIndex.current ?? 0) + delta),
+      )
+      selectedIndex.current = index
+      let item = items[index]
+      return { text: item && textOf ? textOf(item) : '' }
+    },
+  })
   useKeys((key) => {
     if (!state.current!.key(key)) return false
     touch()
@@ -305,6 +331,7 @@ export let VirtualList = <T extends VirtualItem>(
     ref: (el: unknown) => {
       if (!el) return
       ;(el as TElement).viewport = (width, height, style, sheet) => {
+        selectionWidth.current = width
         env.current = { style, sheet }
         let inner = attrs.scrollbar && width >= 2 ? width - 1 : width
         let lines = state.current!.layout(

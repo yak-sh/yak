@@ -10,6 +10,7 @@
  * @module
  */
 
+import { visualKey } from './visual.ts'
 import { signal } from '@preact/signals'
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import type { Key } from './input.ts'
@@ -28,6 +29,7 @@ let stack: Keys[] = []
 
 /** Offer a key to the focus stack, topmost first. */
 export let press = (key: Key): boolean => {
+  if (visualKey(key)) return true
   for (let i = stack.length - 1; i >= 0; i--) if (stack[i](key)) return true
   return false
 }

@@ -1,3 +1,4 @@
+import { visualLines } from './visual.ts'
 import { scrollbar } from './scrollbar.ts'
 /**
  * The ANSI backend: a tree of fake-DOM nodes becomes lines, and lines become
@@ -54,6 +55,8 @@ export type Backend = {
   ) => { written: number; metrics: Metrics; lines?: Line[] }
   /** Forget what is on screen, so the next draw repaints every line. */
   reset: () => void
+  /** Request clipboard write; terminals may deny it. */
+  copy?: (text: string) => void
   /** Give the screen back exactly as it was found. */
   stop: () => void
 }
@@ -274,6 +277,8 @@ let layout = (
   h: number | null,
   c: Ctx,
 ): Line[] => {
+  let selected = visualLines(el.attr('id') ?? '', w, h ?? 6)
+  if (selected) return selected
   if (el.viewport) return el.viewport(w, h ?? 0, st, c.sheet)
   let o = own(el, c.sheet)
   let s = inherit(st, o)
@@ -486,6 +491,7 @@ export let ansiBackend = (opts: {
   let last: string[] = []
   return {
     size,
+    copy: (text) => write(osc52(text)),
     // Alt screen, hidden cursor, bracketed paste, alternate scroll (the wheel
     // arrives as arrow keys), and the kitty disambiguate flag — without it the
     // terminal collapses Shift+Enter to a bare CR.
@@ -519,4 +525,12 @@ export let ansiBackend = (opts: {
       }
     },
   }
+}
+
+/** Clipboard bytes are base64, never interpolated as terminal controls. */
+export let osc52 = (text: string): string => {
+  let bytes = new TextEncoder().encode(text)
+  let binary = ''
+  for (let b of bytes) binary += String.fromCharCode(b)
+  return '\x1b]52;c;' + btoa(binary) + '\x07'
 }

@@ -59,3 +59,10 @@ export {
 
 export { hit, type MouseEvent, routeMouse } from './mouse.ts'
 export type { Input, Mouse } from './input.ts'
+
+export {
+  emptyVisual,
+  useTextSurface,
+  useVisualController,
+  type VisualState,
+} from './visual.ts'

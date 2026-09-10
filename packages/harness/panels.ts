@@ -180,6 +180,7 @@ export let panels: Panel[] = [
         ...[
           '^N / ^P  next/previous root',
           'Alt+↑/↓   next/previous root',
+          'Alt+v     VISUAL; Tab region; y yank',
           'Alt+j/k   next/previous tree row',
           'Alt+h/l   collapse/parent; expand/child',
           'Alt+a     archive/unarchive root',

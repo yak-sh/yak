@@ -123,3 +123,22 @@ Deno.test('external frontend writes drive controlled input and selection', async
     state.close()
   }
 })
+
+Deno.test('VISUAL state and local yank belong only to their frontend graph', () => {
+  let a = frontend(), b = frontend()
+  try {
+    a.select({ surface: 'input', text: 'draft', anchor: 0, at: 2, yank: 'dra' })
+    assertEquals(
+      (a.visual.value[0].visual as Record<string, unknown>).yank,
+      'dra',
+    )
+    assertEquals(
+      (b.visual.value[0].visual as Record<string, unknown>).surface,
+      '',
+    )
+    assertEquals((b.visual.value[0].visual as Record<string, unknown>).yank, '')
+  } finally {
+    a.close()
+    b.close()
+  }
+})

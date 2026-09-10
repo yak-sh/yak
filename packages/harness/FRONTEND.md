@@ -70,3 +70,19 @@ A deterministic test mounts 10,000 transcript entries, selects the session, then
 types. It asserts fewer than 100 entries were rendered initially and **zero
 additional entry renders or domain queries while typing**. Existing
 virtualization/anchoring/mouse/scrollbar tests remain part of validation.
+
+## VISUAL source selection pilot
+
+Selection mode, source snapshot, anchor/cursor and local yank live in a private
+`visual` component. Only its indicator subscribes; generic TUI surface callbacks
+read editor state or one virtual item. Keys update that component and request a
+paint; they do not refresh domain projections. `useVisualController` is the host
+adapter, not a graph dependency in TUI components.
+
+This first slice uses a temporary plain **source view**, preserving
+draft/Markdown bytes rather than attempting to reverse-map styled terminal
+cells. It supports one item at a time (`[`/`]` choose neighbors), not cross-item
+ranges. This exposes a remaining package seam: rendered-cell selection needs
+source-span metadata in portable Markdown renderers, plus
+grapheme/display-column mapping. Do not infer source offsets from ANSI or
+eagerly render history to paper over that gap.
