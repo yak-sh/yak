@@ -12,10 +12,10 @@ deno add jsr:@yaks/process
 
 `service{command, cwd, restart, attempts}` is a program that SHOULD be running.
 Effects are data, so this row is the whole request — there is no start route and
-no stop call. It rides the same entity its process lands on: one row is one
-supervised thing, and reading it tells you what is wanted, what is running, how
-the last attempt ended and how often it has flapped. `restart` is systemd's
-three words, `never | on-failure | always`, and absent means never.
+no stop call. It is stored on the same entity as the process: one entity
+represents one supervised thing, and reading it tells you what is wanted, what
+is running, how the last attempt ended and how often it has flapped. `restart`
+is systemd's three words, `never | on-failure | always`, and absent means never.
 
 `process{pid, command, cwd}` is a program on a host. `pid` is the only column an
 adopted process has, because a pid is the only handle a process nobody launched

@@ -58,10 +58,10 @@ type Embedder = {
 }
 ```
 
-Any local model or hosted API satisfies it. The `model` name rides every stored
-row, screens every search, and folds into the content hash — so changing models
-invalidates the corpus, the sweep rebuilds it, and no query ever compares two
-spaces.
+Any local model or hosted API satisfies it. The `model` name is recorded on
+every stored row, screens every search, and folds into the content hash — so
+changing models invalidates the corpus, the sweep rebuilds it, and no query ever
+compares two spaces.
 
 `hashEmbedder(dim)` is the one embedder shipped here: every word is hashed into
 a bucket and the counts are normalized. It is deterministic, instant, and

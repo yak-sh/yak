@@ -148,7 +148,7 @@ both has one decline contract and one `catch`. Every decline happens when the
 query is compiled, before a bundle is read:
 
 - **`.near`** — nearest-neighbour needs vectors; **`.edges!`** asks for links to
-  be delivered beside an answer. Neither rides in a bundle. (The walk,
+  be delivered beside an answer. Neither is stored in a bundle. (The walk,
   `.cites[<=3]->p1`, `.fork.from->S-7` or `.fork.from.session->S-1`, IS
   answered: a fixpoint over the bundle set, the edge bundles or a reference
   column — or a chain of them followed through the set — being the steps.)

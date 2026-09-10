@@ -161,7 +161,7 @@ release id, so it moves when either does; `rosterLine` is the sentence:
 > The tool list changed since you connected (new: mail_list, mail_send; gone:
 > vocab). Reconnect to see them, or ask `about`.
 
-What it answers rides as a trailing content block, so a JSON answer stays JSON.
+Its result is included as a trailing content block, so a JSON answer stays JSON.
 Say it once per changed set — record the new roster when you say it.
 
 **New capability = new component, not a new tool.** The generic tier already
@@ -251,7 +251,8 @@ import { Say } from '@yaks/mcp'
 ```
 
 The text is what a client without schemas reads; the data goes to one that
-renders the answer, unwrapped — a plain value rides under `result` instead.
+renders the answer, unwrapped — a plain value is returned under `result`
+instead.
 
 ## When a host serves more than tools
 

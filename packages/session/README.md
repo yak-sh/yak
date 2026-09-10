@@ -87,9 +87,9 @@ transcript through the package's `Line` and `Status` renderers.
 
 ## A lock is a lease, not a patch
 
-A `claim{session}` is a session's lock, and it rides the thing it locks — one
-lock per entity by construction, and "who has this?" is answered by the entity
-itself. Writing one over somebody else's fails the whole batch loudly:
+A `claim{session}` is a session's lock, and it is stored on the entity it locks
+— one lock per entity by construction, and "who has this?" is answered by the
+entity itself. Writing one over somebody else's fails the whole batch loudly:
 
 ```ts
 g.apply([{ entity: { eid: page }, claim: { session: ada } }])

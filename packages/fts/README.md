@@ -75,9 +75,9 @@ a query without ever calling `find`.
 The storage layout `@yaks/sql`'s SQLite dialect reads and
 [@yaks/sqlite](https://jsr.io/@yaks/sqlite) builds: an `entity` table of integer
 ids, one table per component keyed by an `entity` owner, and a `tombstone` table
-naming the dead. Index rowids line up with spine ids, so a match needs no join.
-`@yaks/sqlite` already ships this index for a `doc` component and spells it the
-same way, so installing both is idempotent.
+naming the dead. Index rowids line up with entity row IDs, so a match needs no
+join. `@yaks/sqlite` already ships this index for a `doc` component and spells
+it the same way, so installing both is idempotent.
 
 Ranking is relevance alone. Blending in recency or popularity is an
 application's policy, applied to what comes back.

@@ -27,7 +27,7 @@ vocabulary (declared via JSON Schema's own `$vocabulary` mechanism,
 | `identity` | both   | the entity's id is DERIVED from this. comp: `["space","slug"]`    |
 | `kind`     | comp   | this component names a display kind                               |
 | `before`   | comp   | kinds this kind sorts before (feeds the derived kindOrder)        |
-| `wire`     | comp   | `false` = readable-not-writable component (the spine)             |
+| `wire`     | comp   | `false` = readable-not-writable component (entity metadata)       |
 
 Every stored `ref` column is indexed automatically, including stamped refs and
 refs with `death: "keep"`. No `index: true` is needed, and `index: false` does
@@ -134,7 +134,7 @@ v.column('task', 'project')
 // { category: 'ref', ref: 'project', death: 'detach',
 //   affinity: 'integer', fk: true, stamped: false, persist: true, … }
 v.route('title') // { comp: 'doc', prop: 'title' }   bare prop → its home
-v.route('eid') // { comp: 'entity', prop: 'eid' }  the spine's own identity
+v.route('eid') // { comp: 'entity', prop: 'eid' }  the entity identity
 v.aim('comment.target.doc.title') // [{comment,target}, {doc,title}]  path → hops
 v.aim('project', true) // [{project,''}]  the bare-bang form: `.project!` is the
 // component's facet even where task.project claims the bare spelling

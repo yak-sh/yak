@@ -136,7 +136,7 @@ operator is part of the value (`.title~=x[1]`).
   `.edges[watches,author.team]!`.
 - Quotes glue a value across whitespace; the empty query selects nothing
   (`{ kind: 'never' }`).
-- `.after=<num>` is the window's cursor: the spine number of the entity to
+- `.after=<num>` is the window's cursor: the entity number of the entity to
   continue past, and the ONLY cursor spelling. It is order-agnostic on purpose —
   an evaluator derives the anchor's place in whatever order the query asked for,
   so a caller pages without ever learning the order key. This parser only says

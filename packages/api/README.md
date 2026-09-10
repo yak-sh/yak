@@ -1,16 +1,16 @@
 # @yaks/api
 
-The transport in front of a [@yaks/graph](https://jsr.io/@yaks/graph), as a
-plain request handler that runs in any JavaScript environment.
-
-Three routes, no framework, no environment: a `Request` goes in and a `Response`
-comes out. Point it at a graph and you have a server.
+HTTP and WebSocket access to [@yaks/graph](../graph/README.md). Use it to expose
+an existing graph through a fetch-style request handler. The application
+supplies authentication, storage, and a server runtime. WebSocket upgrade
+behavior is host-specific; other routes use standard Request/Response APIs.
 
 - **`POST /apply`** — a batch of bundles in, the batch as applied out, one
   bundle per entity (@yaks/graph `composed`). Add `?check=1` to rehearse it:
   every phase runs and the transaction rolls back, so nothing is written and no
-  effect observes it, while a refusal is still a refusal. That is how one batch
-  is spread over several graphs — ask them all, then commit.
+  effect observes it, while a refusal is still a refusal. A check does not
+  reserve state or provide a transaction across multiple graphs; a subsequent
+  write can still fail.
 - **`GET /query?q=…`** (or `POST /query`) — a query line in, bundles out.
 - **`/ws`** — subscriptions: a saved query whose answer is pushed again whenever
   a committed batch changes it.
@@ -49,14 +49,14 @@ curl 'localhost:8000/query?q=.status=shelved%26.price<20'
 ```
 
 A **bundle** is one entity, whole: its identity under `entity`, every component
-it wears under that component's name. `/apply` takes a JSON array of them (a
+it contains under that component's name. `/apply` takes a JSON array of them (a
 `Change`) and answers with the array `apply()` returned — one bundle per entity,
 the patches as they landed plus everything the graph synthesized: the `num` it
 minted, the `created` stamp it wrote, a tombstone for anything that died.
 
 ## A load, a line at a time
 
-A 10 MB import is the same door with a different content-type. Send
+A 10 MB import is the same endpoint with a different content-type. Send
 `application/x-ndjson` and the body is read as a stream, one bundle per line
 (blank lines skipped), applied **50 at a time** through the same `apply()` — so
 nothing is ever one parse or one transaction, at either end:
@@ -94,7 +94,7 @@ because that run is the whole batch the graph is ever shown. Order a file so
 each entity is minted beside the ones that point at it, or send the pointers as
 a second load once the eids are known.
 
-## The door is where trust lives
+## Authentication and write attribution
 
 A bundle can say anything, including whose name is on it. So the handler throws
 away the `$actor` a client sent and replaces it with the identity your
@@ -108,8 +108,9 @@ let authenticate = (request: Request) => {
 ```
 
 It runs on **every** request — a read, a write and a socket upgrade alike — so a
-door that gates reads gates them here. Return `null` and the batch lands
-unattributed; throw `Unauthorized` and the request is answered with a 401.
+authentication callback used for reads also applies here. Return `null` and the
+batch lands unattributed; throw `Unauthorized` and the request is answered with
+a 401.
 
 Nothing else about a request is trusted either: which columns a caller may
 write, whether a precondition still holds, and what a delete takes with it are
@@ -147,8 +148,8 @@ asks for the raw feed instead: every committed batch, exactly as `/apply`
 returned it, with no membership of its own.
 
 **No write crosses the socket.** A batch is applied with `POST /apply`, and the
-socket is how everyone — including the writer — hears about it. That is one door
-for writes, and it is the door that knows who is writing.
+socket is how everyone — including the writer — hears about it. Writes therefore
+use the authenticated HTTP endpoint, not the socket.
 
 Subscriptions are re-evaluated on the graph's own `effect` phase, so a batch a
 host applies directly reaches subscribers just like one that arrived over HTTP.
@@ -166,10 +167,10 @@ Which mode a subscription is in is decided once, when it opens.
 
 ## Refusals
 
-Every door answers a thrown error with the same body: the error's own name, its
-message, and whatever fields it carried. A precondition that lost a race still
-names the column and what the graph holds now, so a client can merge onto it
-instead of guessing.
+Every endpoint answers a thrown error with the same body: the error's own name,
+its message, and whatever fields it carried. A precondition that lost a race
+still names the column and what the graph holds now, so a client can merge onto
+it instead of guessing.
 
 ```json
 {
@@ -243,7 +244,7 @@ vocabulary is described with [@yaks/vocab](https://jsr.io/@yaks/vocab);
 `@yaks/durable-object`) owns the bytes; and
 [@yaks/match](https://jsr.io/@yaks/match) answers the same query grammar over
 bundles in memory, which is what makes a subscription cheap. This package is the
-door in front of all of it.
+API endpoint for these operations.
 
 ## License
 

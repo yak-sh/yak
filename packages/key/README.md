@@ -13,14 +13,11 @@ deno add jsr:@yaks/key
 
 ## The idea
 
-This package is to a has-many **value** exactly what
-[@yaks/edge](https://jsr.io/@yaks/edge) is to a **link**: one generic carrier
-component, tagged by the application's own words, with the entity's id derived
-from what it says. An edge is `edge{from, to}` plus a tag (`cites`); a key is
-`key{of, value}` plus a tag (`isbn`, `email`, `alias`). Because the id is
-derived, stating the same thing twice writes one row in both packages — and
-because the carrier is its own entity, one book has as many isbns, one person as
-many addresses, as you write.
+A key is an entity containing `key{of, value}` and an application-defined tag
+such as `isbn`. Its identity is derived from the tag and value. Repeating the
+same claim addresses the same key entity, while `of` identifies its owner. One
+owner can therefore have several keys. This follows the same tagged-relationship
+pattern used by [@yaks/edge](../edge/README.md).
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -60,8 +57,8 @@ That writes one entity:
   `death: release`: the row goes when the entity dies and the value is free
   again. (A cascade would tombstone an id derived from the value, and the value
   could never be used again.)
-- **Half a sentence is refused**, by name: a key with no kind, no value or no
-  `of` never reaches storage.
+- **Incomplete keys are rejected:** a key with no kind, no value or no `of`
+  never reaches storage.
 - **Stating a held value lands on its holder.** A batch that mints an entity
   under a `$alias` and claims a value somebody already holds patches that entity
   instead of writing a second one — which is what makes a seed, a chunked
@@ -75,10 +72,9 @@ That writes one entity:
 | `key{of, value}` | this entity answers to this value                |
 | your tag         | which kind of value it is (`key: true` declares) |
 
-A tag says the **carrier's** name: `key: true` on a key's tag, `edge: true` on
-an edge's. One rule — this tag rides that component — reads them all. Declaring
-a string instead names the reading (`key: 'mailbox'` on an `email` component),
-the way `@yaks/edge` reads a `references` tag as `referenced`.
+A tag declares the component it qualifies: `key: true` marks a key tag and
+`edge: true` marks an edge tag. A string value names its query relationship, for
+example `key: 'mailbox'` on an `email` component.
 
 ## Retiring a value
 
@@ -87,8 +83,8 @@ import { unkeyed } from '@yaks/key'
 g.apply([unkeyed('isbn', '9780441013593')])
 ```
 
-The components go; the identity stays, so the same value can be claimed again
-tomorrow — by this entity or another.
+The operation removes the components but retains the identity. The value can
+then be claimed by the same owner or a different owner.
 
 ## Composed with
 

@@ -119,12 +119,12 @@ ranking, and `"entity"."num" desc` breaks its ties, so the order is total.
 
 A `.limit`/`.after` window pages **within** that order — a window says how much
 of a sequence to answer with, never which sequence. With no `.order=` the
-sequence is newest-first by spine num, as it always was.
+sequence is newest-first by entity num, as it always was.
 
 `.after=<num>` names the entity to continue past, the same spelling however the
 answer is ordered. It compiles to a **keyset** on the anchor's own place in the
 order: the anchor's value is read back through a correlated subselect and
-compared against each row's, with the spine num breaking ties. Three fallbacks
+compared against each row's, with the entity num breaking ties. Three fallbacks
 fall out of that shape rather than being cased — an anchor that no longer
 matches the query still has an order value to page from, one with no value pages
 by its num alone, and one that no entity has leaves the guard true, which is the
@@ -155,9 +155,10 @@ exact list).
 ## Naming entities
 
 `.eid=` and `.num=` NAME entities rather than filter them, so their operand list
-is a set and compiles to one lookup on the spine. A human id is an operand too —
-`@yaks/id` reads `B-7` as the entity numbered 7, the letter being display and
-the number identity — so one grammar fetches a named set and filters it.
+is a set and compiles to one lookup on the entity table. A human id is an
+operand too — `@yaks/id` reads `B-7` as the entity numbered 7, the letter being
+display and the number identity — so one grammar fetches a named set and filters
+it.
 
 ```
 .eid=a3f1               "entity"."eid" in (?)
@@ -183,8 +184,8 @@ over that column — an index search per candidate, never a widening join.
 .reviews.stars=5   a review of five stars exists
 ```
 
-A child filter rides the same compiler over the child row, so a clause that
-declines there declines the whole hop; a child predicate naming the spine
+A child filter uses the same compiler over the child row, so a clause that
+declines there declines the whole hop; a child predicate naming entity metadata
 declines too, since inside the subquery that name is the correlation to the
 outer row.
 

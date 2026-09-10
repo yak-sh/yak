@@ -60,7 +60,7 @@ RAM or SQLite without a client or transport.
 | [graph](README.md)                                   | Apply changes, validate them, manage references, and run plugins. |
 | [id](../id/README.md)                                | Identity-generation utilities.                                    |
 | [key](../key/README.md), [alias](../alias/README.md) | Derived key entities and persistent names for entities.           |
-| [names](../names/README.md)                          | Name/abbreviation resolution utilities.                           |
+| [names](../names/README.md)                          | Schema-driven choices of entity name fields.                      |
 
 ### Storage and transport
 
@@ -95,7 +95,7 @@ explicit compatibility planning.
 | [doc](../doc/README.md)                                      | Document title/body components.                                        |
 | [task](../task/README.md)                                    | Tasks, projects, dependencies, and completion/cancellation facts.      |
 | [member](../member/README.md)                                | Membership and assignment-related domain vocabulary.                   |
-| [mail](../mail/README.md)                                    | Addressed work and delivery-related graph operations.                  |
+| [mail](../mail/README.md)                                    | Email composition and delivery-related graph operations.               |
 | [memory](../memory/README.md)                                | Stored reusable guidance and recall data.                              |
 | [canvas](../canvas/README.md)                                | Spatial UI/domain data and operations.                                 |
 | [effects](../effects/README.md)                              | Observe committed changes and run side effects.                        |
