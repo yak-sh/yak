@@ -4,6 +4,7 @@
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { Unsupported } from '@yaks/sql'
+import { loadVocab } from '@yaks/vocab'
 import type { Bundle, Comp } from './bundle.ts'
 import { mem, seed, shop as vocab, store } from './harness.ts'
 
@@ -121,4 +122,40 @@ Deno.test('whole-set gathers are bounded by vocabulary, not the 1000 entities; g
   let dead = s.tx((tx) => tx.get([all[0].entity.eid]))[0]
   assertEquals(dead.tombstone, {})
   assertEquals(dead.product, undefined)
+})
+
+Deno.test('wide sparse gathers cross owner and vocabulary chunks without stale occupancy', () => {
+  let driver = mem()
+  let vocab = loadVocab({
+    $defs: {
+      entity: { type: 'object', properties: { num: { type: 'number' } } },
+      ...Object.fromEntries(
+        Array.from({ length: 405 }, (_, i) => [`facet${i}`, {
+          type: 'object',
+          properties: { value: { type: 'string' } },
+        }]),
+      ),
+    },
+  })
+  let s = storage(driver, vocab)
+  s.install()
+  // Raw setup keeps this test about reads, not 4101 write pipelines. Most
+  // tables stay empty, one has a row beyond the first 4096-owner chunk.
+  driver.exec(`with recursive n(x) as
+    (values(1) union all select x+1 from n where x<4101)
+    insert into entity(id,eid,num) select x, 'owner-'||x, x from n;
+    insert into facet404(entity,value) values(4101,'last chunk')`)
+  let ids = Array.from({ length: 4101 }, (_, i) => `owner-${i + 1}`)
+  let fetched = s.tx((tx) => tx.get([...ids, 'absent', ids[0]]))
+  assertEquals(fetched.map((b) => b.entity.eid), [...ids, ids[0]])
+  assertEquals(fetched[0], { entity: { eid: ids[0], num: 1 } })
+  assertEquals(fetched[4100].facet404, { value: 'last chunk' })
+  // Another writer can fill or clear a table between reads. The empty-table
+  // shortcut must be a live query, never a vocabulary/connection-wide cache.
+  driver.exec("insert into facet0(entity,value) values(1,'newly populated')")
+  assertEquals(s.tx((tx) => tx.get(ids.slice(0, 2)))[0].facet0, {
+    value: 'newly populated',
+  })
+  driver.exec('delete from facet0')
+  assertEquals(s.tx((tx) => tx.get(ids.slice(0, 2)))[0].facet0, undefined)
 })

@@ -190,7 +190,12 @@ export let get = (
     params = [JSON.stringify(owners)]
     // A wide vocabulary is usually sparse. Ask which tables have rows in
     // this set before projecting their columns; empty facets need no joins
-    // or driver round trip. Every probe uses the same bound owner set.
+    // or driver round trip. Short-circuit globally empty tables before walking
+    // the owners: otherwise each empty facet costs 4096 fruitless index probes
+    // per chunk in a wide read. This is a live existence check, not a cached
+    // census that could miss a newly populated table on this or another handle.
+    // One owner already costs only one lookup; it needs no extra table probe.
+    // Every membership probe uses the same bound owner set.
     let names = vocab.all.filter((c) => c != 'entity')
     let present: string[] = []
     // Stay below SQLite's compound-select limit even for very wide vocabularies.
@@ -199,7 +204,9 @@ export let get = (
         ...driver.query(
           `with owners as materialized (select value from json_each(?)) ` +
             names.slice(j, j + 400).map((c) =>
-              `select '${c}' as name where exists (select 1 from owners
+              `select '${c}' as name where ${
+                owners.length > 1 ? `exists (select 1 from "${c}") and ` : ''
+              }exists (select 1 from owners
             cross join "${c}" where "${c}".entity = owners.value)`
             ).join(' union all '),
           params,
