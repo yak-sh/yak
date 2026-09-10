@@ -1,3 +1,4 @@
+import { interceptKey } from './keymap.ts'
 /**
  * What a widget knows about the screen it is on, and how a key reaches it.
  * Three signals in one place: the terminal's size (a widget that collapses
@@ -29,16 +30,26 @@ export let metrics: Signal<Metrics> = signal<Metrics>({})
 export type Keys = (key: Key) => boolean | void
 
 let stack: Keys[] = []
+let targets = new Map<string, Keys>()
+
+/** Deliver a command to a named widget without changing keyboard focus. */
+export let pressTo = (id: string, key: Key): boolean => !!targets.get(id)?.(key)
 
 /** Offer a key to the focus stack, topmost first. */
 export let press = (key: Key): boolean => {
+  if (interceptKey(key)) return true
   if (visualKey(key)) return true
+  return pressFocused(key)
+}
+
+/** Forward an already-routed key to the focused widget stack. */
+export let pressFocused = (key: Key): boolean => {
   for (let i = stack.length - 1; i >= 0; i--) if (stack[i](key)) return true
   return false
 }
 
 /** Take keys while this component is mounted; the newest mount has focus. */
-export let useKeys = (fn: Keys): void => {
+export let useKeys = (fn: Keys, id?: string): void => {
   // The handler closes over this render's state, so the stack holds a stable
   // shim and the shim reads the newest closure — registering the closure
   // itself would reorder focus on every render.
@@ -50,8 +61,16 @@ export let useKeys = (fn: Keys): void => {
   useLayoutEffect(() => {
     let shim: Keys = (k) => ref.current(k)
     stack.push(shim)
-    return () => void stack.splice(stack.indexOf(shim), 1)
+    return () => {
+      stack.splice(stack.indexOf(shim), 1)
+    }
   }, [])
+  useLayoutEffect(() => {
+    if (!id) return
+    let shim: Keys = (k) => ref.current(k)
+    targets.set(id, shim)
+    return () => { if (targets.get(id) === shim) targets.delete(id) }
+  }, [id])
 }
 
 /** What the painter measured for an element id on the last paint. */

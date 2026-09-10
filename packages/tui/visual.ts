@@ -74,6 +74,22 @@ export let useTextSurface = (surface: TextSurface): void => {
     }
   }, [surface.id, surface.enabled])
 }
+/** Start selection on a named text surface without depending on mount order. */
+export let beginVisual = (id: string): boolean => {
+  let target = surfaces.get(id)
+  if (!controller || !target) return false
+  let snap = target.snapshot()
+  let at = snap.at ?? 0
+  controller.set({
+    ...controller.get(),
+    surface: id,
+    text: snap.text,
+    anchor: at,
+    at,
+  })
+  touch()
+  return true
+}
 export let selectedText = (s: VisualState) =>
   s.text.slice(
     Math.min(s.anchor, s.at),

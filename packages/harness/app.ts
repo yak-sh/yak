@@ -1,3 +1,4 @@
+import { Keyboard } from './keyboard.ts'
 import { useVisualController, type VisualState } from '@yaks/tui'
 import { parentId, rootOf, sessionTree } from './tree.ts'
 import { ToolError } from '@yaks/session'
@@ -197,7 +198,7 @@ export let App = (
   }, [a, sidebar, subscribe, ui])
 
   // Event handlers read the committed graph, so a stdin burst sees each write.
-  useKeys((k) => {
+  let action = (k: import('@yaks/tui').Key) => {
     if (k.name == 'tab' && !k.ctrl && !k.alt) {
       ui.patch({ mode: current().mode == 'message' ? 'task' : 'message' })
       return true
@@ -277,7 +278,8 @@ export let App = (
     let at = ids.indexOf(rootOf(rows, state.id))
     choose({ id: ids[(at + delta + ids.length) % ids.length] })
     return true
-  })
+  }
+  useKeys(action)
 
   let submit = (text: string) => {
     let s = current()
@@ -360,6 +362,7 @@ export let App = (
         }),
       ),
     ),
+    h(Keyboard, { ui, action }),
     h(Feedback, { ui }),
     h(Composer, { ui, submit }),
   )
@@ -397,7 +400,7 @@ let Composer = (
       'div',
       null,
       h('span', { class: mode == 'message' ? 'Good' : 'Task' }, mode),
-      h('span', { class: 'Entry_Hint' }, ' · Tab toggles message / task'),
+      h('span', { class: 'Entry_Hint' }, ' · Esc NORMAL'),
     ),
     h(Draft, { ui, submit }),
   )

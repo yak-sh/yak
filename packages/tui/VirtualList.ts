@@ -321,7 +321,7 @@ export let VirtualList = <T extends VirtualItem>(
     if (!state.current!.key(key)) return false
     touch()
     return true
-  })
+  }, String(attrs.id))
   useLayoutEffect(() => {
     touch()
   }, [items, renderItem])

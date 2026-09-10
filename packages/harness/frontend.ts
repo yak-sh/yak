@@ -6,6 +6,15 @@ import { signal } from '@preact/signals'
 export let frontendVocab = loadVocab([{
   $defs: {
     entity: { properties: { eid: { type: 'string' } } },
+    keyboard: {
+      persist: 'none',
+      properties: {
+        mode: { type: 'string' },
+        focus: { type: 'string' },
+        help: { type: 'boolean' },
+        pending: { type: 'string' },
+      },
+    },
     frontend: {
       persist: 'none',
       properties: {
@@ -60,6 +69,15 @@ export let frontend = (): Frontend => {
         generation: 0,
       },
     },
+    {
+      entity: { eid: 'keyboard' },
+      keyboard: {
+        mode: 'INSERT',
+        focus: 'transcript',
+        help: false,
+        pending: '',
+      },
+    },
     { entity: { eid: 'composer' }, composer: { mode: 'message' } },
     { entity: { eid: 'feedback' }, feedback: { error: '' } },
     { entity: { eid: 'draft' }, draft: { text: '', at: 0 } },
@@ -70,6 +88,9 @@ export let frontend = (): Frontend => {
   let feedback = c.watch('.feedback')
   return {
     client: c,
+    keyboard: c.watch('.keyboard'),
+    keys: (fields: Record<string, string | boolean>) =>
+      c.mutate([{ entity: { eid: 'keyboard' }, keyboard: fields }]),
     visual: c.watch('.visual'),
     select: (state: import('@yaks/tui').VisualState) =>
       c.mutate([{ entity: { eid: 'visual' }, visual: state }]),
@@ -121,6 +142,10 @@ export let frontend = (): Frontend => {
   }
 }
 export type Frontend = {
+  keyboard: Watch
+  keys: (
+    fields: Record<string, string | boolean>,
+  ) => ReturnType<Client['mutate']>
   client: Client
   visual: Watch
   select: (

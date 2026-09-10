@@ -148,33 +148,6 @@ export let panels: Panel[] = [
       }, 'No open tasks'),
   },
   {
-    title: 'Keys',
-    fit: true,
-    read: () => [],
-    Render: ({ showSettled, showArchived }) =>
-      h(
-        'div',
-        null,
-        ...[
-          `^S        Show settled: ${showSettled ? 'on' : 'off'}`,
-          'Ctrl+End  follow transcript end',
-          '^N / ^P  next/previous root',
-          'Alt+↑/↓   next/previous root',
-          'Alt+v     VISUAL; Tab region; y yank',
-          'Ctrl+j/k  next/previous sibling',
-          'Ctrl+h/l  parent/child',
-          'Alt+a     archive/unarchive root',
-          `Alt+z     Show archived: ${showArchived ? 'on' : 'off'}`,
-          '^O        new session',
-          'Tab       message / task',
-          'Enter     submit',
-          'Shift+Enter newline',
-          'PgUp/PgDn scroll',
-          '^C        quit',
-        ].map((s) => h('div', null, s)),
-      ),
-  },
-  {
     title: 'Context usage',
     fit: true,
     read: (c) => c.session ? c.agent.transcript(c.session) : [],

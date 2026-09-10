@@ -149,7 +149,7 @@ Deno.test('graph effects paint a model reply without a keypress; sends are input
     await a.idle(s.entity.eid)
     await settle() // deliberately no ui.send()
     assert(ui.text().includes('pong'))
-    assert(ui.text().includes('settled'))
+    assert(ui.text().includes('pong'))
     await a.h.g.apply([{
       entity: { eid: 't1' },
       task: {},
@@ -293,7 +293,7 @@ Deno.test('Tab preserves editing and captures message/task mode for each queued 
     40,
   )
   try {
-    assert(ui.text().includes('message · Tab'))
+    assert(ui.text().includes('message · Esc NORMAL'))
     await ui.send('\tno parent\r')
     await settle()
     assert(ui.text().includes('Select a session'))
@@ -307,7 +307,7 @@ Deno.test('Tab preserves editing and captures message/task mode for each queued 
       'message parent: message',
       'message parent: tail',
     ])
-    assert(ui.text().includes('message · Tab'))
+    assert(ui.text().includes('message · Esc NORMAL'))
     assert(ui.text().includes('Harness — parent')) // do not select the child
   } finally {
     ui.free()
@@ -413,11 +413,11 @@ Deno.test('composer spans the bottom below transcript and responsive sidebar', a
       let lines = ui.text().split('\n')
       assertEquals(lines.length, 12)
       assert(lines[10].includes(draft), ui.text())
-      assert(lines[9].includes('message · Tab'), ui.text())
+      assert(lines[9].includes('message · Esc NORMAL'), ui.text())
       assertEquals(ui.text().includes('Sidebar'), width >= 90)
       await ui.send('\x1b[13;2usecond line')
       lines = ui.text().split('\n')
-      assert(lines[8].includes('message · Tab'), ui.text())
+      assert(lines[8].includes('message · Esc NORMAL'), ui.text())
       assert(lines[9].includes(draft), ui.text())
       assert(lines[10].includes('second line'), ui.text())
       assert(lines[11].startsWith('╰'), ui.text())
@@ -470,7 +470,7 @@ Deno.test('settled subagents are hidden, toggled and retained while selected', a
     assert(ui.text().includes('ROOT'))
     assert(ui.text().includes('ACTIVE_CHILD'))
     assert(!ui.text().includes('DONE_CHILD'))
-    assert(ui.text().includes('Show settled: off'))
+    assert(!ui.text().includes('Keys'))
     await ui.send('\x0e')
     await settle()
     assert(ui.text().includes('parent retains child result'))
@@ -479,7 +479,7 @@ Deno.test('settled subagents are hidden, toggled and retained while selected', a
     await settle()
     assert(ui.text().includes('● ACTIVE_CHILD'))
     await ui.send('\x13')
-    assert(ui.text().includes('Show settled: on'))
+    assert(ui.text().includes('DONE_CHILD'))
     assert(ui.text().includes('DONE_CHILD'))
     await ui.send('\x1b[107;5u') // now the settled child is selectable
     await settle()

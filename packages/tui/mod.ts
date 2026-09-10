@@ -68,3 +68,7 @@ export {
 } from './visual.ts'
 
 export { Image, type ImageSource } from './Image.ts'
+
+export { useKeymap } from './keymap.ts'
+export { pressFocused, pressTo } from './screen.ts'
+export { beginVisual, visualKey } from './visual.ts'
