@@ -173,3 +173,22 @@ Deno.test('a delete reads backwards once per rung, not once per column', () => {
   // paid a read per column per casualty per death word.
   assertEquals(n.read, 2)
 })
+
+Deno.test('a named-only gather never enumerates reverse reference columns', () => {
+  let scans = 0
+  let vocab = {
+    ...books,
+    refCols: () => {
+      scans++
+      return books.refCols()
+    },
+  }
+  let storage = memory()
+  let g = graph({ storage, vocab })
+  g.apply([{ entity: { eid: 'book' }, book: { pages: 10 } }])
+  g.apply([{ entity: { eid: 'book' }, book: { pages: 11 } }])
+  assertEquals(scans, 0)
+  // A real backwards ask still enumerates references and reads its neighbors.
+  storage.tx((tx) => about(tx, vocab, ['book']))
+  assertEquals(scans, 1)
+})

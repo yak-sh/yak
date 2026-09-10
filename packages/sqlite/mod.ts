@@ -41,7 +41,8 @@ import type { Bundle, Doom, Entity, ReadOpts } from '@yaks/graph'
 import type { Driver, Row } from './driver.ts'
 import type { Query } from './read.ts'
 import { grown, indexed, schema, tabled, type Text } from './ddl.ts'
-import { doom, get, read, rows } from './read.ts'
+import { doom, read, rows } from './read.ts'
+import { keyed } from './keyed.ts'
 import { patch, remove } from './write.ts'
 
 export * from './driver.ts'
@@ -184,7 +185,7 @@ export let storage = (
 ): Store => {
   let tx: Tx = {
     read: (query, opts) => read(driver, vocab, query, { ...base, ...opts }),
-    get: (eids) => get(driver, vocab, eids, base),
+    get: keyed(driver, vocab, base),
     doom: (eids) => doom(driver, vocab, eids),
     patch: (bundles) => patch(driver, vocab, bundles, base.number),
     remove: (entities) => remove(driver, vocab, entities),

@@ -87,9 +87,11 @@ let want = (
   eids: Eid[],
   names?: string[],
 ): [string, string, Eid][] =>
-  cols(vocab, names).flatMap(([c, p]) =>
-    eids.map((e) => [c, p, e] as [string, string, Eid])
-  )
+  eids.length
+    ? cols(vocab, names).flatMap(([c, p]) =>
+      eids.map((e) => [c, p, e] as [string, string, Eid])
+    )
+    : []
 
 /**
  * The query that finds everything whose reference columns point at one of these
