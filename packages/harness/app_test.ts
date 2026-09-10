@@ -698,7 +698,15 @@ Deno.test('transcript publishes before slow sidebar reads and despite ongoing ch
       () => ui.text().includes('visible before response'),
       'input paint while panel and model pending',
     )
-    await a.send(id, 'second committed input')
+    let existing = await a.transcript(id)
+    await a.h.g.apply([{
+      entity: { eid: 'second-input' },
+      entry: {
+        session: id,
+        seq: Number((existing.at(-1)!.entry as Comp).seq) + 1,
+      },
+      content: { body: 'second committed input' },
+    }])
     await until(
       () => ui.text().includes('second committed input'),
       'subsequent input paint while panel pending',
