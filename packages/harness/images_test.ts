@@ -109,3 +109,24 @@ Deno.test('image options cross the worker boundary without serializing callbacks
     await Deno.remove(dir, { recursive: true })
   }
 })
+
+Deno.test('image configuration defaults to automatic with explicit disable and override', async () => {
+  let { configuredImages } = await import('./images.ts')
+  assertEquals(configuredImages(undefined, '')?.auto, true)
+  assertEquals(configuredImages(undefined, '1')?.auto, false)
+  assertEquals(configuredImages(undefined, '0'), undefined)
+  assertEquals(configuredImages(false, '1'), undefined)
+  assertEquals(configuredImages({}, '0')?.auto, undefined)
+})
+
+Deno.test('image disable crosses the worker boundary', async () => {
+  let dir = await Deno.makeTempDir()
+  let r = await remote({ db: ':memory:', cwd: dir, fake: true, images: false })
+  try {
+    let id = await r.agent.start('disabled')
+    await r.idle(id)
+  } finally {
+    await r.close()
+    await Deno.remove(dir, { recursive: true })
+  }
+})

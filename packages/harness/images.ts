@@ -23,3 +23,17 @@ export let images = (options: ImageOptions): Images => {
     },
   }
 }
+
+/** Explicit options override the environment; otherwise supported models opt in. */
+export let configuredImages = (
+  options: ImageOptions | false | undefined,
+  setting = Deno.env.get('HARNESS_IMAGES'),
+): Images | undefined => {
+  if (options === false) return undefined
+  if (options) return images(options)
+  if (setting == '0') return undefined
+  if (setting != null && setting != '' && setting != '1') {
+    throw new Error('HARNESS_IMAGES must be 0 (disabled) or 1 (force enabled)')
+  }
+  return { ...images({}), auto: setting != '1' }
+}

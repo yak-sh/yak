@@ -346,11 +346,22 @@ subscription/backpressure issues.
 
 ## Generated images
 
-Native OpenAI image generation is disabled by default. Set `HARNESS_IMAGES=1` to
-enable it with the configured OpenAI model; that model and API endpoint must
-support the Responses `image_generation` tool. This also works in worker mode.
-The default model/credential combination is not assumed to support image tools;
-use a supported Responses model and API key.
+Native image generation is offered automatically for documented supported models
+at the public OpenAI Responses endpoint, including dated snapshots. This applies
+per request (including model changes) and in worker mode. The documented list is
+`gpt-5.5`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.2`, `gpt-5`, `gpt-5-nano`,
+`o3`, `gpt-4.1`, `gpt-4.1-mini`, `gpt-4.1-nano`, `gpt-4o`, and `gpt-4o-mini`.
+See
+[OpenAI's tool documentation](https://developers.openai.com/api/docs/guides/tools-image-generation).
+
+Set `HARNESS_IMAGES=0` or pass `images: false` to disable it. Unknown models,
+custom endpoints, and the Codex OAuth endpoint omit the tool by default because
+there is no reliable capability discovery API. `HARNESS_IMAGES=1` or an explicit
+`images: {...}` configuration forces enablement for a compatible endpoint not in
+the list. Programmatic settings override the environment. A forced unsupported
+configuration returns the provider's error; it is not retried with the tool
+removed. No capability probe or paid generation is made at startup. Account
+permissions may still prevent a documented model from using the tool.
 
 Binary bytes use `@yaks/blob`'s external file backend under `~/.harness/images`,
 or `HARNESS_IMAGE_DIR`. This directory is made private. Keep it with database
@@ -375,7 +386,7 @@ provider-side conversation storage is unavailable.
 For example, with `OPENAI_API_KEY` configured:
 
 ```sh
-HARNESS_IMAGES=1 deno task harness new --model gpt-4.1 'Generate an image of a small garden'
+deno task harness new --model gpt-4.1 'Generate an image of a small garden'
 ```
 
 This is a paid provider operation, not a test command. No live generation is

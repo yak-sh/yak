@@ -15,7 +15,7 @@ export let remote = async (
   options: {
     db?: string
     cwd?: string
-    images?: ImageOptions
+    images?: ImageOptions | false
     instructions?: string
     fake?: boolean
   } = {},

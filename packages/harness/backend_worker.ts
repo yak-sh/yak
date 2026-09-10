@@ -31,7 +31,7 @@ async function handle(method: string, value: unknown): Promise<unknown> {
     let options = args[0] as {
       db?: string
       cwd?: string
-      images?: ImageOptions
+      images?: ImageOptions | false
       instructions?: string
       fake?: boolean
     }

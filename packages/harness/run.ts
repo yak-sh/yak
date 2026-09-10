@@ -1,4 +1,4 @@
-import { type ImageOptions, images } from './images.ts'
+import { configuredImages, type ImageOptions } from './images.ts'
 import { outputView } from '@yaks/context'
 import { rootOf } from './tree.ts'
 import { diagnostics } from './diagnostics.ts'
@@ -94,7 +94,7 @@ export type Opts = ChildLimits & NotHarness & {
   /** the model to ask for by name (default `gpt-6-astra`) */
   name?: string
   /** Enable native OpenAI image generation with durable external blobs. */
-  images?: ImageOptions
+  images?: ImageOptions | false
   /** what the agent may call (default: the shell and the graph) */
   tools?: Tool[]
   /** the system prompt every ask carries */
@@ -174,11 +174,7 @@ export let agent = (opts: Opts = {}): Agent => {
   let model = opts.model ??
     responses({
       credential: credential(Deno.env.get, (p) => Deno.readTextFile(p)),
-      ...opts.images
-        ? { images: images(opts.images) }
-        : Deno.env.get('HARNESS_IMAGES') == '1'
-        ? { images: images({}) }
-        : {},
+      images: configuredImages(opts.images),
     })
   let tools = opts.tools ?? harnessTools(h.g, opts)
   h.g.apply(seed({ model: name, tools }), { trusted: true })

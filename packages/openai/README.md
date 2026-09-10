@@ -147,3 +147,14 @@ not inferred. A storage error fails the response rather than claiming an image
 was saved. Failed graph admission after a successful external write can leave an
 unreferenced blob; cleanup is not automatic. No live-provider generation was
 used in the automated tests.
+
+With `images: {auto: true, store}`, the tool is offered only for documented
+supported models on the public OpenAI endpoint. Model selection is checked on
+each request, including dated snapshots. Unknown models and custom or Codex
+endpoints omit the tool in automatic mode; the list is maintained in `images.ts`
+from the
+[provider documentation](https://developers.openai.com/api/docs/guides/tools-image-generation).
+Omitting `auto` explicitly enables the tool, allowing compatible custom
+endpoints and newly supported models. Omitting `images` disables it. Automatic
+selection uses no network capability probe; provider account permissions still
+apply.

@@ -143,3 +143,44 @@ Deno.test('JPEG and WebP output honor format settings and mixed output stays sep
     assertEquals(output[0].size, bytes.length)
   }
 })
+
+Deno.test('automatic image tools follow model and endpoint capabilities per ask', async () => {
+  for (
+    let [name, endpoint, auto, expected] of [
+      ['gpt-4.1', 'https://api.openai.com/v1', true, true],
+      ['gpt-4.1-2025-04-14', 'https://api.openai.com/v1', true, true],
+      ['gpt-5.5', 'https://api.openai.com/v1/', true, true],
+      ['gpt-6-astra', 'https://api.openai.com/v1', true, false],
+      ['gpt-4.1', 'https://chatgpt.com/backend-api/codex', true, false],
+      ['gpt-4.1', 'https://proxy.example/v1', true, false],
+      ['custom', 'https://proxy.example/v1', false, true],
+    ] as const
+  ) {
+    let sent: Record<string, unknown>[] = []
+    let model = responses({
+      credential: () => ({ token: 'test', base: endpoint }),
+      images: { auto, store: artifactStore(memory().blobs) },
+      fetch: ((_url, init) => {
+        sent.push(JSON.parse(String(init?.body)))
+        return Promise.resolve(
+          new Response(
+            'data: ' + JSON.stringify({
+              type: 'response.completed',
+              response: {
+                id: 'r',
+                model: name,
+                status: 'completed',
+                output: [],
+              },
+            }) + '\n\n',
+            { headers: { 'content-type': 'text/event-stream' } },
+          ),
+        )
+      }) as typeof fetch,
+    })
+    await model({ model: name, items: [], tools: [] })
+    assertEquals(sent[0].tools, expected ? [{ type: 'image_generation' }] : [])
+    await model({ model: 'unknown', items: [], tools: [] })
+    assertEquals(sent[1].tools, auto ? [] : [{ type: 'image_generation' }])
+  }
+})
