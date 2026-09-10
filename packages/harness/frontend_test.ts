@@ -79,6 +79,10 @@ Deno.test('typing in frontend does not reread domain or render history (10,000 e
     await ui.send('typing some words')
     assertEquals(reads, beforeReads)
     assertEquals(renders, beforeRenders)
+    await ui.send('\x1bvlll')
+    await ui.send('y')
+    assertEquals(reads, beforeReads)
+    assertEquals(renders, beforeRenders)
   } finally {
     ui.free()
   }
