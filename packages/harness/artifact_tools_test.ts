@@ -143,3 +143,49 @@ Deno.test('tool-driven vision reaches the next model request and survives databa
     await Deno.remove(dir, { recursive: true })
   }
 })
+
+Deno.test('vision admission rejects unsupported files and changed artifact revisions', async () => {
+  const { images } = await import('./images.ts')
+  let dir = await Deno.makeTempDir()
+  let h = open(':memory:')
+  try {
+    let store = images({ directory: dir }).store
+    let record = await store(png, 'image/png')
+    let call: Bundle = {
+      entity: { eid: 'inspect' },
+      entry: { session: 's', seq: 1 },
+      call: { id: 'ig' },
+    }
+    await h.g.apply([{ entity: { eid: 's' }, session: {} }, call, {
+      entity: { eid: 'a' },
+      artifact: record,
+    }, {
+      entity: { eid: 'svg' },
+      artifact: await store(
+        new TextEncoder().encode('<svg/>'),
+        'image/svg+xml',
+      ),
+    }])
+    let view = artifactTools(h.g, { images: { directory: dir } }).find((t) =>
+      t.name == 'image_view'
+    )!
+    let ctx = { session: 's', call, entries: [call] }
+    await assertRejects(async () => await view.run({ artifact: 'svg' }, ctx))
+    await view.run({ artifact: 'a' }, ctx)
+    let rows = await h.g.read('.entry')
+    // Authorized graph mutation cannot silently substitute pixels for an admitted image.
+    let changed = await store(new Uint8Array([...png, 1]), 'image/png')
+    await h.g.apply([{ entity: { eid: 'a' }, artifact: changed }])
+    await assertRejects(() =>
+      imageContext(
+        h.g,
+        [{ entity: { eid: 'r' }, result: { call: 'inspect' } }],
+        rows,
+        { directory: dir },
+      )
+    )
+  } finally {
+    h.close()
+    await Deno.remove(dir, { recursive: true })
+  }
+})
