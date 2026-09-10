@@ -1,0 +1,23 @@
+{
+  "title": "context",
+  "$defs": {
+    "prompt": {
+      "type": "object",
+      "description": "Explicitly admitted instruction snapshot; never inferred from file reads or tool output. Content carries the exact text.",
+      "properties": {
+        "scope": {
+          "type": "string",
+          "description": "shared instructions copied to fresh children, or local instructions for this transcript"
+        },
+        "source": {
+          "type": "string",
+          "description": "Source label or canonical file path; descriptive, not reread at delivery"
+        },
+        "revision": {
+          "type": "string",
+          "description": "SHA-256 of the admitted text when loaded from a file"
+        }
+      }
+    }
+  }
+}

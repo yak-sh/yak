@@ -86,7 +86,8 @@
     "./packages/memory",
     "./packages/yaml",
     "./packages/harness",
-    "./packages/tui"
+    "./packages/tui",
+    "./packages/context"
   ],
   "exclude": [
     "src/vendor",

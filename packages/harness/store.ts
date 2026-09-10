@@ -1,3 +1,4 @@
+import { address, encode, bodies, blobKeywords, blobRead, blobs, blobSchema, sqliteBlobs } from '@yaks/blob'
 // The harness's own graph: one SQLite file, the vocabulary it speaks, and the
 // plugins that decide what a batch means. Nothing here reaches a server — the
 // harness holds its whole world in `~/.harness/harness.db` (or wherever
@@ -75,7 +76,7 @@ export let vocab: Vocab = loadVocab([
   openaiDoc,
   processDoc,
   taskDoc,
-], [edgeKeywords])
+], [edgeKeywords, blobKeywords])
 
 /** The computed columns, said in SQL: a transcript's status and a task's. */
 export let derived = { ...sessionDerived, ...taskDerived(taskMarks) }
@@ -147,8 +148,35 @@ export let open = (path = dbPath()): Harness => {
     db.exec('pragma synchronous = normal')
     db.exec('pragma busy_timeout = 5000')
   }
-  let store = storage(driver(db), vocab, { derived })
+  let sql = driver(db)
+  let bytes = sqliteBlobs(sql)
+  let store = storage(sql, vocab, { derived: { ...derived, ...blobRead(vocab) } })
   store.install()
+  // One explicit transactional migration: never guess whether legacy prose
+  // happens to look like a hash. The marker and all replacements commit together.
+  let quote = (name: string) => '"' + name.replaceAll('"', '""') + '"'
+  sql.exec('begin immediate')
+  try {
+    for (let statement of blobSchema()) sql.exec(statement)
+    sql.exec('create table if not exists harness_upgrade (name text primary key)')
+    if (!sql.query("select name from harness_upgrade where name = 'blob-v1'", []).length) {
+      for (let { comp, prop } of bodies(vocab)) {
+        let rows = sql.query('select entity, ' + quote(prop) + ' as body from ' + quote(comp) + ' where ' + quote(prop) + ' is not null', [])
+        for (let row of rows) {
+          let body = String(row.body)
+          let sha = address(body)
+          bytes.put(sha, encode(body))
+          sql.query('update ' + quote(comp) + ' set ' + quote(prop) + ' = ? where entity = ?', [sha, Number(row.entity)])
+        }
+      }
+      sql.exec("insert into harness_upgrade values ('blob-v1')")
+    }
+    sql.exec('commit')
+  } catch (error) {
+    sql.exec('rollback')
+    db.close()
+    throw error
+  }
   // The effects registry writes through the graph's own door, trusted: what an
   // effect writes is the harness's own word, never a client's.
   let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
@@ -156,6 +184,7 @@ export let open = (path = dbPath()): Harness => {
     storage: store,
     vocab,
     plugins: [
+      blobs(vocab, bytes),
       sessions(),
       edges(vocab),
       tasks(vocab, taskMarks),

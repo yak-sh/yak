@@ -1,7 +1,10 @@
 {
-  "_": "The browser gate: @yaks/session must type-check with only the web platform in scope — no Deno namespace, no Node types. `deno check --config packages/session/browser.json packages/session/mod.ts` is the check; it is part of `deno task check`.",
+  "_": "The browser gate: @yaks/session must type-check with only the web platform in scope \u2014 no Deno namespace, no Node types. `deno check --config packages/session/browser.json packages/session/mod.ts` is the check; it is part of `deno task check`.",
   "compilerOptions": {
-    "lib": ["dom", "esnext"],
+    "lib": [
+      "dom",
+      "esnext"
+    ],
     "strict": true
   },
   "imports": {
@@ -14,6 +17,7 @@
     "@yaks/effects": "../effects/mod.ts",
     "@yaks/task": "../task/mod.ts",
     "@yaks/edge": "../edge/mod.ts",
-    "@yaks/sql": "../sql/mod.ts"
+    "@yaks/sql": "../sql/mod.ts",
+    "@yaks/context": "../context/mod.ts"
   }
 }

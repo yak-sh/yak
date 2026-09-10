@@ -121,7 +121,8 @@
       "description": "the prose of an entry, when it has any. On its own it is an input, an instruction from a person or a system (the first one is the request that starts the session); with a `source` it is what a model said; beside a result, error or exception it is theirs",
       "properties": {
         "body": {
-          "type": "string"
+          "type": "string",
+          "store": "blob"
         },
         "source": {
           "type": "string",
@@ -261,24 +262,10 @@
           "description": "the task that prompted this notice"
         }
       }
-    },
-    "prompt": {
-      "type": "object",
-      "description": "Explicitly admitted instruction snapshot; never inferred from file reads or tool output. Content carries the exact text.",
-      "properties": {
-        "scope": {
-          "type": "string",
-          "description": "shared instructions copied to fresh children, or local instructions for this transcript"
-        },
-        "source": {
-          "type": "string",
-          "description": "Source label or canonical file path; descriptive, not reread at delivery"
-        },
-        "revision": {
-          "type": "string",
-          "description": "SHA-256 of the admitted text when loaded from a file"
-        }
-      }
     }
+  },
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/blob": true
   }
 }

@@ -1,0 +1,9 @@
+{
+  "name": "@yaks/context",
+  "version": "0.0.0",
+  "exports": {
+    ".": "./mod.ts",
+    "./host": "./host.ts"
+  },
+  "license": "Apache-2.0"
+}
