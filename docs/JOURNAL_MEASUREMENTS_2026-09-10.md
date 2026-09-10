@@ -785,3 +785,16 @@ Durable Object integration probe, then failed during sign-in in
 ignored in that test group). Thus the standard gates are green, but the full
 slow integration gate is **not** claimed green. No product-code changes were
 made to work around either failure.
+
+### Rebase gate result
+
+The first landing attempt rebased this report onto newer main commits. On that
+rebased tree, `deno task check` stops at an existing formatting difference in
+`packages/harness/README.md`; `deno task test` fails the inherited
+`src/store/yaks_task_parity_test.ts:115` comparison because the packaged
+`completed` DDL now has an `actor` column while fleet DDL does not. `test:all`
+reproduces that parity failure and the Durable Object sign-in failure. The
+report is the only file changed by this task, so these are reported upstream
+rather than repaired in a measurement-only change. The pre-rebase green standard
+gates above describe the measured revision, **not** a green final integration
+tree. The corpus validation and byte results are unaffected.
