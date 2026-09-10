@@ -111,10 +111,11 @@ let run = async (serving: ReturnType<typeof open>, repo: string) => {
   })
 
   await dispatchSweep(() => {}, ready)
+  // Sessions need not have public numbers; the local entity key orders births.
   let born = (db.prepare(
     `select e.eid as eid from session s join entity e on e.id = s.entity
      where s.requested_task = (select id from entity where eid = ?)
-     order by e.num desc limit 1`,
+     order by e.id desc limit 1`,
   ).get(task) as { eid: string } | undefined)?.eid
   assert(born, 'the actual dispatcher minted a Session')
   assert(
