@@ -45,7 +45,7 @@ export let daemon = (
   fx: Effects,
   deps: Deps,
   each: (step: Step) => void = () => {},
-  report: (err: unknown) => void = (err) => console.error(err),
+  report: (err: unknown, session?: Eid) => void = (err) => console.error(err),
 ): Daemon => {
   let busy = new Map<Eid, Promise<unknown>>()
   let queued = new Map<Eid, Promise<Step>>()
@@ -78,7 +78,7 @@ export let daemon = (
         }
         return step
       } catch (err) {
-        report(err)
+        report(err, session)
         return { did: 'nothing', status: 'failed', added: [] } as Step
       }
     })

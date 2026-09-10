@@ -1,4 +1,5 @@
 import { rootOf } from './tree.ts'
+import { diagnostics } from './diagnostics.ts'
 import { promptEntry } from '@yaks/context'
 import { instructionFiles } from '@yaks/context/host'
 import { homeAt, workspace } from './workspace.ts'
@@ -149,6 +150,7 @@ let byNum = (a: Bundle, b: Bundle) =>
  */
 export let agent = (opts: Opts = {}): Agent => {
   let h = opts.h ?? open()
+  let detachDiagnostics = diagnostics().attach(h.g)
   let name = opts.name ?? ASTRA
   let model = opts.model ??
     responses({
@@ -156,11 +158,20 @@ export let agent = (opts: Opts = {}): Agent => {
     })
   let tools = opts.tools ?? harnessTools(h.g, opts)
   h.g.apply(seed({ model: name, tools }), { trusted: true })
-  let d = daemon(h.g, h.fx, {
-    model,
-    tools,
-    instructions: opts.instructions,
-  }, opts.each)
+  let d = daemon(
+    h.g,
+    h.fx,
+    {
+      model,
+      tools,
+      instructions: opts.instructions,
+      report: (error, session, phase) =>
+        diagnostics().report(error, { session, phase }),
+    },
+    opts.each,
+    (error, session) =>
+      diagnostics().report(error, { phase: 'daemon', session }),
+  )
 
   let names: Record<string, string> = {
     [idOf(MODEL, name)]: name,
@@ -294,7 +305,10 @@ export let agent = (opts: Opts = {}): Agent => {
         await h.g.apply([entry])
         return entry.entity.eid
       }),
-    close: h.close,
+    close: () => {
+      detachDiagnostics()
+      h.close()
+    },
   }
   return a
 }

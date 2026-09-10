@@ -284,3 +284,33 @@ The session title projection reads original local input, excluding inherited
 fork history and instruction/notice entries. This currently adds transcript
 reads to domain refreshes (not keystrokes); the existing coarse async domain
 projection adapter remains a performance seam, documented in `FRONTEND.md`.
+
+### Defect diagnostics
+
+Unexpected failures at the executable boundary (including global errors and
+unhandled rejections), daemon steps, effects, and frontend
+projections/submissions are journaled **before** attempting a graph write.
+Inspect `.exception` through the graph tools. These diagnostic entities have no
+`entry`: they neither enter a conversation nor wake a model. Their
+`content.body` contains JSON with the stack, recursive cause chain, timestamp,
+process ID, phase, and session when known. Expected tool refusals retain the
+existing `error` semantics.
+
+The independent append-only fallback is `~/.harness/exceptions.jsonl`,
+overridden by `HARNESS_ERROR_LOG`. It is synchronously appended and fsynced so a
+broken SQLite connection or fatal event cannot erase the original failure. Files
+are created mode 0600. If writing the journal itself fails, stderr receives the
+original failure and journal error; graph persistence failures do not recurse.
+Graph writes drain for at most 250ms at executable shutdown. Late graph failures
+remain in the journal; automatic journal replay is not implemented.
+
+Global handlers observe rather than suppress fatal runtime defaults, restoring
+the terminal on the fatal path. Embedded users of `agent()` get daemon
+diagnostics; the global hooks belong only to the executable lifetime. Known
+API-key values, Bearer credentials and recognizable OpenAI keys are redacted;
+arbitrary secrets embedded in third-party exception messages cannot be
+exhaustively identified. No environment dumps or transcript snapshots are
+captured. Treat logs as private. This cannot capture SIGKILL, power loss, or
+errors before the executable loads, and OOM may prevent capture. Existing
+model/tool exception entries remain governed by session execution; the reporter
+does not reinterpret ordinary tool results.

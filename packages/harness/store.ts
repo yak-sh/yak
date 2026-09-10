@@ -1,3 +1,4 @@
+import { diagnostics } from './diagnostics.ts'
 // The harness's own graph: one SQLite file, the vocabulary it speaks, and the
 // plugins that decide what a batch means. Nothing here reaches a server — the
 // harness holds its whole world in `~/.harness/harness.db` (or wherever
@@ -235,7 +236,10 @@ export let open = (path = dbPath()): Harness => {
   }
   // The effects registry writes through the graph's own door, trusted: what an
   // effect writes is the harness's own word, never a client's.
-  let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
+  let fx = effects(vocab, {
+    write: (b) => g.apply(b, { trusted: true }),
+    report: (error) => diagnostics().report(error, { phase: 'effect' }),
+  })
   let g = graph({
     storage: store,
     vocab,

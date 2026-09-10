@@ -83,6 +83,8 @@ export type Deps = {
   model: Model
   tools: Tool[]
   instructions?: string
+  /** Unexpected model/tool defects, separate from expected refusals. */
+  report?: (error: unknown, session: Eid, phase: string) => void
   mint?: () => Eid
 }
 
@@ -213,6 +215,7 @@ export let react = async (
           ? String(await tool.run(args, { session, call: pending, entries }))
           : `no such tool: ${String(c.to)}`
       } catch (e) {
+        if (!(e instanceof ToolError)) deps.report?.(e, session, 'tool')
         out = `tool failed: ${String(e)}`
         added.push(
           line(
@@ -273,6 +276,7 @@ export let react = async (
   try {
     reply = await deps.model(req)
   } catch (e) {
+    if (!(e instanceof ModelError)) deps.report?.(e, session, 'model')
     // The bound is the status rule's: RETRIES consecutive errors read `failed`,
     // and a failed transcript is left alone at the top of the next step.
     return append([

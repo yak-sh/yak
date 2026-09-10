@@ -1,4 +1,6 @@
 import { parentId, rootOf, sessionTree } from './tree.ts'
+import { ToolError } from '@yaks/session'
+import { diagnostics } from './diagnostics.ts'
 /** The harness on @yaks/tui: local editing, graph-backed content. */
 import { h, type JSX } from 'preact'
 import { useLayoutEffect, useMemo, useRef } from 'preact/hooks'
@@ -120,6 +122,10 @@ export let App = (
           }
         }
       } catch (e) {
+        diagnostics().report(e, {
+          phase: 'frontend-projection',
+          session: current().id,
+        })
         if (alive) setError(String(e))
       } finally {
         busy = false
@@ -273,7 +279,12 @@ export let App = (
         ui.patch({ selected: id })
       }
       refresh.current()
-    }, (e) => setError('Not sent: ' + text + '\n' + String(e))).finally(() => {
+    }, (e) => {
+      if (!(e instanceof ToolError)) {
+        diagnostics().report(e, { phase: 'frontend-submit', session: s.id })
+      }
+      setError('Not sent: ' + text + '\n' + String(e))
+    }).finally(() => {
       if (pending.get(key) == write) pending.delete(key)
     })
   }
@@ -405,6 +416,7 @@ export let tui = async (): Promise<void> => {
     await a.resume()
     await run(() => h(App, { agent: a, subscribe }))
   } finally {
+    await diagnostics().drain()
     a.close()
   }
 }

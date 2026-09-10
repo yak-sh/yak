@@ -286,3 +286,27 @@ Deno.test('usage is persisted once on its ask, not on output entries', async () 
   assertEquals(entries[1].usage, usage)
   assertEquals(kindOf(entries[1]), 'ask')
 })
+
+Deno.test('unexpected model failures reach diagnostics, expected model errors do not', async () => {
+  let reported: unknown[] = []
+  for (
+    let error of [
+      new Error('defect', { cause: new Error('root') }),
+      new ModelError('busy', 'retry'),
+    ]
+  ) {
+    let g = world()
+    await react(g, ids.s, {
+      model: () => Promise.reject(error),
+      tools: [],
+      mint,
+      report: (e, session, phase) => {
+        assertEquals(session, ids.s)
+        assertEquals(phase, 'model')
+        reported.push(e)
+      },
+    })
+  }
+  assertEquals(reported.length, 1)
+  assertEquals((reported[0] as Error).message, 'defect')
+})
