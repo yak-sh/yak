@@ -12,7 +12,8 @@
 // `num` is the server-minted human number (T-7 in the UI, one global counter).
 import type { SchemaOp, Sql, SqlValue, Statement } from './store/sql.ts'
 import { SEED } from './catalog.ts'
-import { composedChanges } from './store/wire.ts'
+import { asBundle, asChanges } from './store/wire.ts'
+import type { FleetWrite } from './store/fleet_stamps.ts'
 export type { SchemaOp } from './store/sql.ts'
 import { initVector } from './vector.ts'
 import { dirname, resolve } from 'node:path'
@@ -23,7 +24,6 @@ import {
   capabilities,
   type Change,
   comps,
-  deaths,
   type Dep,
   EID,
   governed,
@@ -75,19 +75,12 @@ import { Stale as CoreStale } from '@yaks/graph'
 import { Bounced as LeaseBounced } from '@yaks/session'
 import {
   auditFleetBounce,
-  checkFleetChange,
-  fleetGuardTx,
   type GuardHost,
+  sync,
 } from './store/fleet_preconditions.ts'
-import {
-  lifecycleAfter,
-  lifecycleBefore,
-  type LifecycleHost,
-  priorClaimsOf,
-  syncFacetAliases,
-} from './store/fleet_lifecycle.ts'
+import { type LifecycleHost } from './store/fleet_lifecycle.ts'
 import { type FleetGraph, fleetGraph } from './store/fleet_graph.ts'
-import { fleetNormalizers, normalizeFleet } from './store/fleet_normalize.ts'
+import { fleetNormalizers } from './store/fleet_normalize.ts'
 import {
   cameraEid,
   cursorEid,
@@ -3797,34 +3790,20 @@ let cmps: Record<string, string[]> = {
   ),
 }
 
-// Every column a server writer may name: the wire-writable ones plus the
-// stamped, server-owned ones. apply()'s `server` mode (below) admits these —
-// the way a hosted kernel mints an exception entity through the same door a
-// client uses, with a flag the client can never set.
-let owned: Record<string, string[]> = Object.fromEntries(
-  Object.keys(cmps).map((name) => [name, [
-    ...cmps[name],
-    ...Object.keys(stamped[name] ?? {}),
-  ]]),
-)
-
-// The @yaks vocabulary handle, held beside the SQL connection and warmed by
-// live_db.ts at boot. Other handles (including test clones) build it on first
-// request. This is the fleet schema only, distinct from an app's ownVocab
-// below; only the shared normalize hooks route through the package graph yet.
+// Vocabulary and composed graph handles live beside each Sql connection.
+// App-authored components join the fleet schema through vocabOf(db).
 let fleetVocabs = new WeakMap<Sql, FleetVocab>()
 
 export let fleetVocabOf = (db: Sql): FleetVocab => {
   let vocab = fleetVocabs.get(db)
   if (!vocab) {
-    vocab = fleetVocab()
+    vocab = fleetVocab(vocabOf(db))
     fleetVocabs.set(db, vocab)
   }
   return vocab
 }
 
-// Bound once per Sql handle: storage/CAS and composed fleet policy. Live
-// mutation remains below until the final admission/entry/effect-door switch.
+// Bound once per Sql handle: the sole storage/CAS and fleet policy writer.
 let fleetGraphs = new WeakMap<Sql, FleetGraph>()
 export let fleetGraphOf = (db: Sql): FleetGraph => {
   let held = fleetGraphs.get(db)
@@ -3834,6 +3813,7 @@ export let fleetGraphOf = (db: Sql): FleetGraph => {
       vocab: fleetVocabOf(db),
       driver: {
         query: (sql, params) => prep(db, sql).all(...params),
+        run: (sql, params) => prep(db, sql).run(...params).changes,
         exec: (sql) => db.exec(sql),
         tx: (fn) => db.transaction(fn, true),
       },
@@ -3846,9 +3826,12 @@ export let fleetGraphOf = (db: Sql): FleetGraph => {
           comps[name]?.[col] == 'text' || comps[name]?.[col] == 'body',
         name: (eid) => human(db, eid),
       }),
+      input: (changes) => fleetInput(db, changes),
+      project: (changes, context) => projectFleet(db, changes, context),
       guards: fleetGuardHost(db),
       lifecycle: {
         ...fleetLifecycleHost(db),
+        afterCommit: (run) => db.afterCommit(run),
         actor: (writer) => writerActor(db, writer),
         via: (writer) => writerVia(db, writer),
         person: (actor) => isPerson(db, actor),
@@ -3857,6 +3840,15 @@ export let fleetGraphOf = (db: Sql): FleetGraph => {
           [...Object.keys(cmps), ...Object.keys(vocabOf(db))].toReversed(),
         journal: (now, actor, via, trace, changes) =>
           journalWrite(db, now, actor, via, trace, changes),
+      },
+      patchRefusal: (b, err) => {
+        for (let c of asChanges(b)) {
+          if (c.comp) {
+            let why = refused(db, c.name, c.eid, c.comp, err)
+            if (why) return why
+          }
+        }
+        return err
       },
       refusal: (err) =>
         err instanceof CoreStale
@@ -3867,7 +3859,7 @@ export let fleetGraphOf = (db: Sql): FleetGraph => {
             err.current,
             human(db, err.eid),
           )
-          : err,
+          : fleetRefusal(db, err),
       number: (eid) => mintNum(db, eid),
       component: (eid, name) => readComp(db, eid, name),
     })
@@ -3902,6 +3894,8 @@ export let plantVocab = (db: Sql, vocab: Vocab): void => {
   let ops = vocabOps(vocab)
   if (ops.length) graft(db, ops)
   ownVocab.set(db, vocab)
+  fleetVocabs.delete(db)
+  fleetGraphs.delete(db)
   learnKinds(Object.keys(vocab))
   teaches(FILTERS)
 }
@@ -3945,88 +3939,41 @@ let columnsOf = (db: Sql, table: string): Set<string> => {
   )
 }
 
-// The effective batch says what landed. An unknown COMPONENT stays a
-// compatible no-op on purpose — that is the seam a plugin or a newer
-// client writes through, and the effective batch reports what was
-// dropped. But inside a component we DO know, a column naming nothing is
-// a typo, not a version:
-//
-//   writable             → kept.
-//   stored, not writable → dropped in silence. Server-owned (a client
-//     that read a row and patched it back must not be punished for
-//     echoing created.at, and stripping mail.from here is the boundary
-//     holding T-9511's forged-sender fix) or dormant (retired from comps,
-//     column still standing — the deprecation path).
-//   stored nowhere       → THROWS. `task.statuss` has no compatibility
-//     story: the wire used to take it, write the DEFAULT status, and
-//     answer 200, so a caller asking for `done` got `open` and success.
-// The throw names what IS known — the component's columns and their types
-// (types.ts shapeOf) — so one refusal teaches the shape. Naming only the
-// unknown word cost the seventh user test five probes per component and still
-// left `blob.bytes` read as the bytes (C-32675 items 2 and 3).
-// Components the wire may not create, patch, or DELETE, whoever the caller —
-// their whole data lives in `stamped` and is written ONLY by trusted server
-// code that writes the row by direct SQL and BROADCASTS the change, never
-// crossing apply()'s wire path: the runner's `lease`/`usage`, the
-// interrupted-work `resume` stack, the ingest `imported` coordinate (D-16704),
-// and the deliver outcome/health facets `delivered`/`error`/`exception`
-// (D-14945/D-17077 — deliver.ts, entries.ts, managed_codex.ts). Their empty
-// writable declarations keep them in the generic read/delete machinery; this
-// door is what denies the wire the AUTHORITY to mint a false fleet-health
-// `error` or ERASE an effect-stamped diagnosis with a bare component-delete
-// (T-15457). Refused BEFORE the comp==null branch, so a delete is refused too.
-//
-// A curated list on purpose, not a vocabulary derivation: the boundary is the
-// write PATH, which `comps`/`stamped` cannot express — `hook` and the
-// notification stamps have the same empty-writable shape yet legitimately
-// write their presence THROUGH apply(), so a shape rule would wrongly refuse
-// them. The lease/usage pair this grew from was already such a list.
-let serverOwned = new Set([
-  'lease',
-  'usage',
-  'imported',
-  'resume',
-  'delivered',
-  'error',
-  'exception',
-  'redaction',
-])
-
-let admitted = (
-  db: Sql,
-  change: Change,
-  server = false,
-): Change | undefined => {
-  let table = change.name
-  let cols = server ? owned[table] ?? colsOf(db, table) : colsOf(db, table)
-  if (!cols) return
-  if (serverOwned.has(table) && !server) return
-  if (change.comp == null) return change
-  // `eid` is the entity's identity, projected into every snapshot row by
-  // select(); it is never a writable column (the owner key is the int `entity`
-  // now), so ignore it here rather than reading it as an unknown column when a
-  // snapshot is replayed back through apply().
-  let sent = Object.entries(change.comp).filter(([n]) => n != 'eid')
-  let real = columnsOf(db, table)
-  let alien = sent.filter(([n]) => !cols.includes(n) && !real.has(n))
-  if (alien.length) {
-    throw new Error(
-      `unknown column${alien.length > 1 ? 's' : ''}: ${
-        alien.map(([n]) => `${table}.${n}`).join(', ')
-      } — ${
-        shapeOf(
-          table,
-          cols,
-          (col) => typeAt(db, table, col) ?? stamped[table]?.[col],
-        )
-      }`,
-    )
+// Preserve the fleet's addressed diagnostic while core owns the validation.
+let fleetRefusal = (db: Sql, err: unknown) => {
+  if (!(err instanceof Error)) return err
+  err.message = err.message.replace(
+    'unknown column in $was:',
+    'unknown column:',
+  )
+  let match = err.message.match(/^(unknown columns?: .*?) — (\w+) declares /)
+  if (match) {
+    let [, prefix, name] = match
+    err.message = `${prefix} — ${
+      shapeOf(name, colsOf(db, name) ?? [], (col) =>
+        typeAt(db, name, col) ?? stamped[name]?.[col])
+    }`
   }
-  let kept = sent.filter(([name]) => cols.includes(name))
-  if (sent.length && !kept.length) return
-  let comp = Object.fromEntries(kept)
-  return { ...change, comp }
+  return err
 }
+
+// Historical stored columns and projected row identities are readable echoes,
+// not new vocabulary. Core owns admission; this removes only fleet SQL aliases.
+let fleetInput = (db: Sql, changes: Change[]) =>
+  normalizeChanges(canonEmail(mintAddresses(db, changes)), {
+    now: Date.now(),
+    resolve: (id) => ident(db, id),
+  }).flatMap((c) => {
+    if (!c.comp) return [c]
+    let sent = Object.entries(c.comp).filter(([col]) => col != 'eid')
+    let kept = sent.filter(([col]) =>
+      !(columnsOf(db, c.name).has(col) &&
+        !fleetVocabOf(db).column(c.name, col))
+    )
+    return sent.length && !kept.length
+      ? []
+      : [{ ...c, comp: Object.fromEntries(kept) }]
+  })
 
 let spawnCols = Object.keys(comps.spawn)
 let spawnSpec = (comp: Record<string, unknown>) =>
@@ -4414,8 +4361,8 @@ let settled = (
   name: string,
   eid: string,
   comp: Record<string, unknown>,
+  row = reads(db, name, 'where eid = ?').get(eid),
 ): Record<string, unknown> | null => {
-  let row = reads(db, name, 'where eid = ?').get(eid)
   if (!row) return comp
   let same = (col: string) => {
     if (!(col in row)) return false
@@ -4550,14 +4497,6 @@ let clocked = Object.keys(comps).filter((c) =>
   Object.keys(stamped[c] ?? {}).length == 1 && stamped[c]?.at
 )
 
-// The reaper's worklists, derived from the death word each reference
-// declares in the vocabulary (types.ts Death says what each word means).
-// No hand-kept list: a new reference picks its word where it's declared,
-// and the cascade below already honors it.
-let AIMED = deaths('cascade')
-let DETACHED = deaths('detach')
-let RELEASED = deaths('release')
-
 // An FK bounce (errcode 787, SQLITE_CONSTRAINT_FOREIGNKEY) names nothing,
 // so enrich it: walk the table's declared refs and point at each sent
 // value whose referent is missing. The caller rejects every SQL failure;
@@ -4625,18 +4564,23 @@ let refs = Object.entries(comps).flatMap(([name, props]) =>
       : []
   )
 )
+// Keep vocabulary declaration order within each component, including the
+// reverse target index used when a kind is removed. Ordinary scalar writes
+// need neither a vocabulary-wide reference scan nor a tombstone lookup.
+let refsFrom = Map.groupBy(refs, (ref) => ref.name)
+let refsTo = Map.groupBy(refs, (ref) => ref.target)
 
 // Every eid-valued column, by component — the FULL set (refs above excludes
 // any-entity targets, but graduation must notice a comment or claim AIMED at an
 // ephemeral entity just as much as a typed reference). An edge's own ends are
 // ordinary {eid} columns on `edge`, so they are already here.
-let eidCols: [string, string][] = Object.entries(comps).flatMap(
-  ([name, props]) =>
+let eidCols = new Map(
+  Object.entries(comps).map(([name, props]) => [
+    name,
     Object.entries(props).flatMap(([col, type]) =>
-      typeof type == 'object' && 'eid' in type
-        ? [[name, col] as [string, string]]
-        : []
+      typeof type == 'object' && 'eid' in type ? [col] : []
     ),
+  ]),
 )
 
 // The SPAWN-REQUEST references the created(session) effect validates by failing
@@ -4683,8 +4627,8 @@ let graduate = (
     if (name == 'entity' && comp == null) continue // a delete never graduates
     engaged.add(eid)
     if (!comp) continue
-    for (let [n, col] of eidCols) {
-      if (n == name && comp[col] != null) engaged.add(String(comp[col]))
+    for (let col of eidCols.get(name) ?? []) {
+      if (comp[col] != null) engaged.add(String(comp[col]))
     }
   }
   let live = prep(db, 'select 1 from entity where eid = ?')
@@ -5075,40 +5019,6 @@ export let settingEid = (
     eid?: string
   } | undefined)?.eid ?? undefined
 
-// A doc write speaks text but stores a blob reference. Materialize the blob as
-// an ordinary graph change before the doc so lifecycle, journal, and caches all
-// see a newly-created content entity; repeated values collapse by hash.
-let casBodies = (db: Sql, changes: Change[]): Change[] => {
-  let spoken = new Set(
-    changes.filter((c) => c.name == 'blob').map((c) => c.eid),
-  )
-  let blobs: Change[] = []
-  for (let change of changes) {
-    if (change.name != 'doc' || !change.comp) continue
-    let body = typeof change.comp.body == 'string' ? change.comp.body : !prep(
-        db,
-        'select 1 from doc where entity = (select id from entity where eid = ?)',
-      ).get(change.eid)
-      ? ''
-      : undefined
-    if (body == null) continue
-    let eid = sha(body)
-    if (
-      spoken.has(eid) || prep(
-        db,
-        'select 1 from blob where entity = (select id from entity where eid = ?)',
-      ).get(eid)
-    ) continue
-    spoken.add(eid)
-    blobs.push({
-      eid,
-      name: 'blob',
-      comp: { bytes: utf8.encode(body).byteLength },
-    })
-  }
-  return [...blobs, ...changes]
-}
-
 // The writer's readiness guard: the predicate discovery uses, minus
 // authorization. The approval pipeline is suspended (M-31946), so a filed task
 // is claimable; an explicit proposal awaiting judgment or a declined verdict
@@ -5224,10 +5134,10 @@ let fleetGuardHost = (
       err.holder,
     )
   },
-  settle: (c) => {
+  settle: (c, row) => {
     if (c.name == 'entity') return c
-    if (c.comp == null) return readComp(db, c.eid, c.name) ? c : null
-    let comp = settled(db, c.name, c.eid, c.comp)
+    if (c.comp == null) return (row ?? readComp(db, c.eid, c.name)) ? c : null
+    let comp = settled(db, c.name, c.eid, c.comp, row)
     return comp ? { ...c, comp } : null
   },
   before: (changes) => {
@@ -5294,15 +5204,16 @@ let fleetGuardHost = (
   },
   // The package store can mint referenced spines; the fleet may not invent
   // dangling identities (except its deliberate spawn-request placeholder).
-  // Judge these against FOUND + the batch's explicit births, before rehearsal.
+  // Judge these against FOUND + the batch's explicit births, before mutation.
   references: (changes) => {
     let births = new Set(
       changes.filter((c) => c.comp != null).map((c) => c.eid),
     )
     for (let { eid, name, comp } of changes) {
-      if (!comp || graveOf(db).get(eid)) continue
-      for (let [n, col] of eidCols) {
-        if (n != name || comp[col] == null) continue
+      if (!comp) continue
+      let cols = (eidCols.get(name) ?? []).filter((col) => comp[col] != null)
+      if (!cols.length || graveOf(db).get(eid)) continue
+      for (let col of cols) {
         let target = String(comp[col])
         if (
           !graveOf(db).get(target) && (
@@ -5318,10 +5229,10 @@ let fleetGuardHost = (
     // Typed references are judged against the final state: adding a target
     // kind later in the batch is legal; leaving a ref to a removed kind is not.
     for (let { eid, name, comp } of changes) {
-      for (let ref of refs) {
-        let refusal = ref.name == name && comp?.[ref.col] != null
+      for (let ref of (comp == null ? refsTo : refsFrom).get(name) ?? []) {
+        let refusal = comp?.[ref.col] != null
           ? refRefused(db, ref, eid)
-          : ref.target == name && comp == null
+          : comp == null
           ? refRefused(db, ref, undefined, eid)
           : null
         if (refusal) throw refusal
@@ -5365,11 +5276,11 @@ let fleetGuardHost = (
   },
   check: (change, changes, target, actor) => {
     let { eid, name, comp } = change
-    // A target can have died earlier in this batch, after the preflight's
+    // A target can have died earlier in this batch, after the precondition's
     // FOUND identity check. Tombstones never accept a fresh reference.
-    for (let [n, col] of eidCols) {
+    for (let col of eidCols.get(name) ?? []) {
       if (
-        n == name && comp?.[col] != null && graveOf(db).get(String(comp[col]))
+        comp?.[col] != null && graveOf(db).get(String(comp[col]))
       ) {
         refToId(db, name, eid, col, comp[col])
       }
@@ -5557,625 +5468,78 @@ export let apply = (
   // nothing; the Store object sets it from a kernel-only flag.
   server = false,
 ): Change[] => {
-  // A raw @-address in `deliver.to` names no eid the parser could resolve —
-  // fold it into its address-book entity (find-or-mint) before normalize.
-  changes = mintAddresses(db, changes)
-  // The address book stores only the deliverable spelling of a fleet address —
-  // an illegal local-part is canonicalized before it can land (also covers the
-  // email entities mintAddresses just prepended).
-  changes = canonEmail(changes)
-  changes = normalizeChanges(changes, {
-    now: Date.now(),
-    resolve: (id) => ident(db, id),
-  }).flatMap((change) => {
-    let kept = admitted(db, change, server)
-    return kept ? [kept] : []
-  })
-  let dead = graveOf(db)
-  let extra: Change[] = []
-  let touched = new Set<string>()
-  // Changes that turned out to write nothing (settled()) — left out of the
-  // journal and the returned batch, since nothing happened.
-  let dropped = new Set<Change>()
-  let minted = new Set<string>()
-  let createdComps = new Set<string>()
-  // Whether this batch's writer is a human — asked lazily, once, by the
-  // rules that keep agents from programming the next agent's prompt.
-  let personKnown: boolean | undefined
-  let person = () => personKnown ??= isPerson(db, writerActor(db, writer))
-  // Whose provenance `by` the WIRE named this batch — the server keeps it
-  // and only defaults the gap (created.by at birth, updated.by on a touch).
-  let saidCreator = new Set<string>()
-  let saidEditor = new Set<string>()
-  // Removals are logged locally (the journal's trace column serializes them
-  // for a fed trace); `t`, when brought, mirrors the same rows.
-  let removedLog = new Map<string, string[]>()
-  let took = (eid: string, name: string) => {
-    removedLog.set(eid, [...(removedLog.get(eid) ?? []), name])
-    t?.removed.set(eid, [...(t.removed.get(eid) ?? []), name])
-  }
-  // This is a write transaction from birth: the run takes the write lock
-  // before its validation reads (a file store's `begin immediate`), so a
-  // waiting peer serializes at the door instead of failing on a deferred
-  // upgrade. Under claimWork() the run nests inside the transaction that
-  // resolved and synthesized the batch, and commits or rolls back with it.
   let run = () => {
-    // Another process may have migrated while this writer waited for the
-    // lock. An open-time or CLI preflight check cannot cover that interval.
     writableVersion(db)
-    // Claim release is the interruption event. Capture the holder before the
-    // row can vanish — including through a session cascade — then derive the
-    // durable actor stack from the transaction's final state below.
-    let lifecycle = fleetLifecycleHost(db)
-    let priorClaims = priorClaimsOf(lifecycle)
-    changes = normalizeFleet(db, fleetGraphOf(db), changes)
-    changes = dualSpawn(db, changes)
-    changes = dualFacet(db, changes, 'worktree')
-    changes = dualFacet(db, changes, 'runtime')
-    // Client hooks and old claim clients cannot relocate a managed tree.
-    // Check under the writer lock, after alias projection, so neither cwd
-    // spelling (nor a worktree delete) bypasses ownership. Server regrow is
-    // still allowed. A null branch is a swept tree we own, as in owns().
-    if (!server) {
-      let owned = new Set<string>()
-      for (let c of changes) {
-        if (c.name != 'session' && c.name != 'worktree') continue
-        if (
-          prep(
-            db,
-            `select 1 from session s
+    return sync(
+      fleetGraphOf(db).write(
+        changes.flatMap((c) => {
+          // Flat Change components are not pipeline metadata. Identity data
+          // in a read-back row is storage-owned, not a caller's mint request.
+          if (c.name.startsWith('$')) return []
+          if (c.name == 'entity' && c.comp) {
+            return Object.keys(c.comp).some((k) => k != 'eid')
+              ? []
+              : [{ entity: { eid: c.eid } }]
+          }
+          return [asBundle(c)]
+        }),
+        { writer, trace: t, imports, workClaim, server, resolve: true },
+        { trusted: server },
+      ),
+    ).flatMap(asChanges)
+  }
+  try {
+    return db.transaction(run, true)
+  } catch (err) {
+    auditBounce(db, err)
+    throw err
+  }
+}
+
+// Fleet-only projection, after core admission and the edit/wake/settings
+// normalizers. The context belongs to the authenticated door, never metadata.
+let projectFleet = (db: Sql, changes: Change[], context: FleetWrite) => {
+  changes = dualSpawn(db, changes)
+  changes = dualFacet(db, changes, 'worktree')
+  changes = dualFacet(db, changes, 'runtime')
+  // Client hooks and old claim clients cannot relocate a managed tree.
+  // Check under the writer lock, after alias projection, so neither cwd
+  // spelling (nor a worktree delete) bypasses ownership. Server regrow is
+  // still allowed. A null branch is a swept tree we own, as in owns().
+  if (!context.server) {
+    let owned = new Set<string>()
+    for (let c of changes) {
+      if (c.name != 'session' && c.name != 'worktree') continue
+      if (
+        prep(
+          db,
+          `select 1 from session s
            join entity e on e.id = s.entity
            join worktree w on w.entity = s.entity
            where e.eid = ? and s.origin = 'managed'
              and (w.branch is null or w.branch = ''
                or w.branch = 'session/S-' || e.num)`,
-          ).get(c.eid)
-        ) owned.add(c.eid)
-      }
-      changes = changes.flatMap((c) => {
-        if (!owned.has(c.eid)) return [c]
-        if (c.name == 'worktree' && c.comp == null) return []
-        if ((c.name != 'session' && c.name != 'worktree') || !c.comp) return [c]
-        let { cwd: _cwd, ...comp } = c.comp
-        return Object.keys(comp).length ? [{ ...c, comp }] : []
-      })
+        ).get(c.eid)
+      ) owned.add(c.eid)
     }
-    changes = mirrorLineage(db, changes)
-    // A write that engages a source-materialized entity graduates it — hydrates
-    // its source comps into this batch (D-17790). After the dual* transforms so
-    // a hydrated session.provider is never promoted to a spawn request; a
-    // historical session must not launch an agent.
-    if (hasSources()) changes = graduate(db, changes, workClaim?.source)
-    // After graduation, so a claim on a just-hydrated session finds its
-    // `worked` endpoint in the batch.
-    changes = edgeWrites(db, changes)
-    changes = casBodies(db, changes)
-    let guards = fleetGuardHost(db, person)
-    let guardTx = fleetGuardTx(fleetGraphOf(db))
-    guards.before(changes)
-    // Mint spines in first-touch order before writing components. A typed
-    // reference may then precede its target component without pre-minting that
-    // target out of order. An entity-null still voids every later touch.
-    let killed = new Set<string>()
-    for (let { eid, name, comp } of changes) {
-      if (name == 'entity' && comp == null) {
-        killed.add(eid)
-        continue
-      }
-      if (
-        comp == null || !colsOf(db, name) || killed.has(eid) || dead.get(eid)
-      ) continue
-      if (spine(db, eid).changes) minted.add(eid)
-    }
-    // A trusted spawn-request reference (trustedRefs) may name a target this
-    // batch neither writes nor has on file — a requested_task naming a task that
-    // never existed, which the created(session) effect reports rather than a
-    // 400. Its stored value is an int id (D-18866), so mint a bare placeholder
-    // spine for the target now, keeping the eid answerable through the ref. A
-    // tombstoned target is left for refToId to refuse — a new reference must not
-    // point at a grave — and a killed-in-batch one is already void.
-    for (let { name, comp } of changes) {
-      if (!comp) continue
-      for (let [n, col] of trustedRefs) {
-        if (n != name || comp[col] == null) continue
-        let t = String(comp[col])
-        if (killed.has(t) || dead.get(t)) continue
-        if (spine(db, t).changes) minted.add(t)
-      }
-    }
-    // What a precondition is checked against: the state this batch FOUND,
-    // read once here, before the first write. A guard read inside the write
-    // loop sees whatever an earlier change in the same batch just wrote —
-    // which refuses a batch for a value it moved itself, and prints an
-    // intermediate the rollback then throws away, so the caller merges into a
-    // value nobody will ever find (T-33556). The batch is atomic: no one
-    // observes between its changes, and it never needs guarding from itself.
-    let found = new Map<string, Record<string, unknown> | undefined>()
-    for (let { eid, name, was } of changes) {
-      if (!was || !readOf(db, name) || found.has(`${name}\0${eid}`)) continue
-      found.set(`${name}\0${eid}`, reads(db, name, 'where eid = ?').get(eid))
-    }
-    for (let change of changes) {
-      let { eid, name, was } = change
-      let comp = change.comp
-      let cols = server ? owned[name] ?? colsOf(db, name) : colsOf(db, name)
-      if (!cols) continue
-      // Whether THIS change is what first touched the eid — a no-op change
-      // un-touches it below, so a batch of pure no-ops stamps nothing.
-      let fresh = !touched.has(eid)
-      touched.add(eid)
-      // A moved edge is news at BOTH its ends, not just on the sentence's own
-      // entity: what changed for a reader is the task that gained a child. An
-      // unlink names only the eid, so the stored ends answer — the row is still
-      // there, this iteration is what takes it away.
-      if (name == 'edge') {
-        let ends = comp ? comp : storedEnds(db, eid)
-        if (ends?.from != null) touched.add(String(ends.from))
-        if (ends?.to != null) touched.add(String(ends.to))
-      }
-      // The wire naming an author/editor (created.by / updated.by) — noted
-      // so the server-default below leaves that value alone.
-      if (comp && 'by' in comp) {
-        if (name == 'created') saidCreator.add(eid)
-        if (name == 'updated') saidEditor.add(eid)
-      }
-      // A deleted entity stays deleted: the tombstone voids every late or
-      // replayed change for its eid — an edit racing a delete loses
-      // deterministically, and nothing can resurrect the id.
-      if (dead.get(eid)) {
-        dropped.add(change)
-        continue
-      }
-      // A precondition is the graph's --ff-only: the caller names the value
-      // it READ, and a value that has moved since refuses the whole batch
-      // rather than clobbering the writer it never saw. Checked here with
-      // the other rules so it holds for every entry path by construction —
-      // in memory_save it would be reintroduced as a bug by the next door
-      // that replaces a body. A batch guarding two columns and losing one
-      // keeps NEITHER: partial application is how you end up with a body
-      // from one writer and a title from another.
-      if (was) {
-        // Read through the PROJECTION (select()), so a reference column reads
-        // back as the eid the caller named in `was` — not the int id it is
-        // stored as. The guard columns are readable names (`eid`, refs, scalars).
-        // Taken from `found` above: the state as the batch found it.
-        let row = found.get(`${name}\0${eid}`)
-        let real = new Set(readOf(db, name))
-        for (let [col, want] of Object.entries(was)) {
-          // A guard on a column that doesn't exist would read undefined,
-          // compare equal to null, and protect nothing — the precondition
-          // failing OPEN, which is the original bug wearing a safety label.
-          // A typo is refused here, the way `admitted` refuses one in comp.
-          if (!real.has(col)) throw new Error(`unknown column: ${name}.${col}`)
-          let cur = row?.[col] ?? null
-          if ((cur == null ? null : sha(cur)) == want) continue
-          throw new Stale(eid, name, col, cur, human(db, eid))
-        }
-      }
-      checkFleetChange(
-        guards,
-        guardTx,
-        change,
-        changes,
-        workClaim?.target,
-      )
-      if (comp == null) {
-        if (name != 'entity') {
-          if (
-            prep(
-              db,
-              `delete from ${sqlName(name)}
-               where entity = (select id from entity where eid = ?)`,
-            ).run(eid).changes
-          ) {
-            took(eid, name)
-          } else {
-            // Removing what isn't there changes nothing.
-            dropped.add(change)
-            if (fresh) touched.delete(eid)
-          }
-          continue
-        }
-        // Death spreads to entities that exist ABOUT the dead one — cards
-        // viewing it, comments aimed at it, pins and cameras on a dead
-        // canvas or client. The worklist walks that closure first; then
-        // soft references let go (claims by a dead session, tasks of a
-        // dead project); then every component row goes in reverse
-        // declaration order (dependents before their referents), and only
-        // then the spines are TOMBSTONED — the identity row is retained
-        // forever (D-18866) so its integer id can never recycle into a new
-        // entity (C-19754#2), it just leaves the wire. Reference columns are
-        // int ids, so every cascade walk resolves the doomed eid to its id
-        // first and projects the owner eid back out.
-        let doomed = [eid]
-        for (let i = 0; i < doomed.length; i++) {
-          let did = toId(db, doomed[i])
-          if (did == null) continue
-          for (let [t, col] of AIMED) {
-            let rows = prep(
-              db,
-              `select o.eid as eid from ${sqlName(t)} r
-               join entity o on o.id = r.entity
-               where r.${sqlName(col)} = ?`,
-            ).all(did) as { eid: string }[]
-            for (let r of rows) {
-              if (!doomed.includes(r.eid)) doomed.push(r.eid)
-            }
-          }
-        }
-        for (let d of doomed) {
-          let did = toId(db, d)
-          if (did == null) continue
-          // Soft references let go — and the wire HEARS them let go, or
-          // every client cache keeps a ghost (a lease whose holder died,
-          // a task pointing at a gone project or assignee) until reload.
-          // 'release' rows die whole (the claim vanishes, the claimed
-          // entity survives) — each one synthesized into the returned
-          // batch and the Trace, so removed(claim) hooks fire like any
-          // deliberate release. 'detach' columns just null. A casualty's
-          // own entity-null already says everything, so only SURVIVORS
-          // get a change.
-          for (let [t, col] of RELEASED) {
-            let freed = prep(
-              db,
-              `select o.eid as eid from ${sqlName(t)} r
-               join entity o on o.id = r.entity
-               where r.${sqlName(col)} = ?`,
-            ).all(did) as { eid: string }[]
-            prep(db, `delete from ${sqlName(t)} where ${sqlName(col)} = ?`)
-              .run(did)
-            for (let { eid: held } of freed) {
-              if (doomed.includes(held)) continue
-              took(held, t)
-              touched.add(held)
-              extra.push({ eid: held, name: t, comp: null })
-            }
-          }
-          for (let [t, col] of DETACHED) {
-            let homed = prep(
-              db,
-              `select o.eid as eid from ${sqlName(t)} r
-               join entity o on o.id = r.entity
-               where r.${sqlName(col)} = ?`,
-            ).all(did) as { eid: string }[]
-            prep(
-              db,
-              `update ${sqlName(t)} set ${sqlName(col)} = null
-                      where ${sqlName(col)} = ?`,
-            ).run(did)
-            for (let { eid: orphan } of homed) {
-              if (doomed.includes(orphan)) continue
-              touched.add(orphan)
-              extra.push({ eid: orphan, name: t, comp: { [col]: null } })
-            }
-          }
-          for (
-            let c of [...Object.keys(cmps), ...Object.keys(vocabOf(db))]
-              .toReversed()
-          ) {
-            if (c != 'entity') {
-              if (
-                prep(db, `delete from ${sqlName(c)} where entity = ?`).run(did)
-                  .changes
-              ) {
-                took(d, c)
-              }
-            }
-          }
-        }
-        for (let d of doomed) {
-          // The num rides into the grave: a dead entity keeps its name
-          // answerable, and the allocator's high-water mark survives it. The
-          // spine row is RETAINED (never `delete from entity`) so its id is
-          // never reissued; the tombstone is the liveness marker every read
-          // excludes on.
-          prep(
-            db,
-            `insert or ignore into tombstone (entity, deleted_at)
-             values ((select id from entity where eid = ?), ?)`,
-          ).run(d, new Date().toISOString())
-          if (d != eid) extra.push({ eid: d, name: 'entity', comp: null })
-        }
-        continue
-      }
-      if (name == 'entity') {
-        // a bare touch mints the spine; nothing to patch
-        if (spine(db, eid).changes) minted.add(eid)
-        continue
-      }
-      // Every rule above has had its say; what reaches SQL is only what
-      // differs from the stored row. A change with no difference left is
-      // dropped whole — after the precondition, so a stale read is refused
-      // even when what it writes happens to match.
-      let left = settled(db, name, eid, comp)
-      if (!left) {
-        dropped.add(change)
-        if (fresh) touched.delete(eid)
-        continue
-      }
-      comp = change.comp = left
-      let sent = cols.filter((c) => c in comp)
-      // A reference column stores the target's int id; resolve the sent eid to
-      // it (null passes through). refToId REFUSES a non-null eid that names no
-      // live entity — the pre-mint pass above already minted every in-batch
-      // referent's spine, so an unresolved eid is a genuine ghost (or a
-      // tombstone), exactly what the old entity(eid) FK bounced. Plain scalars
-      // keep their bound value.
-      let vals = sent.map((c) =>
-        name == 'doc' && c == 'body' && comp[c] != null
-          ? textBlob(db, String(comp[c]))
-          : isRef(name, c)
-          ? refToId(db, name, eid, c, comp[c])
-          : bound(name, c, comp[c], typeAt(db, name, c))
-      )
-      // Update first (a patch can't re-satisfy not-null columns an insert
-      // would demand). An existing row implies an existing spine. An FK
-      // bounce here fails the batch with its offender named — the outer
-      // catch rolls everything back, like the claim lease.
-      let hit: number | bigint = 0
-      if (sent.length) {
-        try {
-          hit = prep(
-            db,
-            `update ${sqlName(name)} set ${
-              sent.map((c) => `${sqlName(c)} = ?`).join(', ')
-            }
-             where entity = (select id from entity where eid = ?)`,
-          ).run(...vals, eid).changes
-        } catch (e) {
-          throw refused(db, name, eid, comp, e) ?? e
-        }
-      }
-      if (hit) continue
-      // Both doc values are wire-defaulted at the sole writer. Storage cannot
-      // express a dynamic default for body (the empty string's blob id), so a
-      // title-only create lands that reference here. This runs only after the
-      // update missed; a patch never clobbers the other value.
-      if (name == 'doc' && comp) {
-        if (!('title' in comp)) {
-          sent = ['title', ...sent]
-          vals = ['', ...vals]
-        }
-        if (!('body' in comp)) {
-          sent.push('body')
-          vals.push(textBlob(db, ''))
-        }
-      }
-      // No row: this change CREATES — spine + comp together, in a savepoint.
-      // A known component that reaches SQL must land or fail its whole
-      // batch: "applied N change(s)" means every accepted row landed.
-      // Semantic no-ops (unknown comps, invalid edges, dead eids) were
-      // decided above, before SQL.
-      db.transaction(() => {
-        try {
-          if (spine(db, eid).changes) minted.add(eid)
-          if (name == 'entry' && sent.length) {
-            let session = String(comp.session)
-            let sid = toId(db, session)
-            let { seq } = prep(
-              db,
-              `select coalesce(max(seq), 0) + 1 as seq from entry
-             where session = ?`,
-            ).get(sid) as { seq: number }
-            // entry owner and session are int ids; the owner spine was minted
-            // above, the session must already exist for the entry to append.
-            prep(
-              db,
-              'insert into entry (entity, session, seq) values (?, ?, ?)',
-            )
-              .run(toId(db, eid), sid, seq)
-            // A graph-native session has no log FILE to tail, so its summary
-            // is advanced here at the single door that assigns seq — same
-            // transaction, so entry.seq and session.latest_seq cannot drift.
-            // Not cast (like the JSONL tail, T-7063): it rides the snapshot's
-            // whole-row select, not a per-entry broadcast.
-            prep(db, 'update session set latest_seq = ? where entity = ?')
-              .run(seq, sid)
-            createdComps.add(`${name} ${eid}`)
-            t?.created.add(`${name} ${eid}`)
-            extra.push({ eid, name: 'entry', comp: { eid, seq } })
-          } else if (sent.length) {
-            prep(
-              db,
-              `insert into ${sqlName(name)} (entity${
-                sent.map((c) => `, ${sqlName(c)}`).join('')
-              })
-             values ((select id from entity where eid = ?)${
-                ', ?'.repeat(sent.length)
-              })`,
-            ).run(eid, ...vals)
-            createdComps.add(`${name} ${eid}`)
-            t?.created.add(`${name} ${eid}`)
-          } else {
-            // A bare {} touch: create with defaults if possible, else no-op.
-            let made = prep(
-              db,
-              `insert or ignore into ${sqlName(name)} (entity)
-               values ((select id from entity where eid = ?))`,
-            )
-              .run(eid).changes
-            if (made) {
-              createdComps.add(`${name} ${eid}`)
-              t?.created.add(`${name} ${eid}`)
-            }
-          }
-        } catch (e) {
-          // Decode BEFORE the rollback: FK diagnostics need the freshly
-          // minted spine so the entity's eid can't read as a false offender.
-          throw refused(db, name, eid, comp, e) ?? e // the batch rolls back
-        }
-      })
-    }
-    if (dropped.size) changes = changes.filter((c) => !dropped.has(c))
-    // Canonical session facets are the read truth. Mirror their final state
-    // after every component patch, including a deletion, so a rollback server
-    // and an old client see the same values without gaining stamp authority.
-    syncFacetAliases(lifecycle, changes, extra)
-    // Components have landed, so each new spine's KIND is finally knowable —
-    // assign the human number spine() no longer mints at birth (T-3684). Only
-    // the spines born in THIS batch, still inside the transaction, so every
-    // downstream reader here (the proposed-not-decided check, effects, the
-    // journal) and the births echo below all see the num rather than a NULL.
-    for (let eid of minted) mintNum(db, eid)
-    guards.after(changes, [...createdComps])
-    // One clock for the whole batch: every provenance stamp below reads it,
-    // so a birth and the edits beside it agree instead of drifting by the
-    // milliseconds between two `new Date()` calls (T-6670).
-    let now = new Date().toISOString()
-    let lifecycleBatch = () => ({
-      changes,
-      extra,
-      touched,
-      minted,
-      createdComps,
-      now,
-      actor: null as string | null,
-      via: null as string | null,
-      person,
-      writer,
-      imports,
-      took,
+    changes = changes.flatMap((c) => {
+      if (!owned.has(c.eid)) return [c]
+      if (c.name == 'worktree' && c.comp == null) return []
+      if ((c.name != 'session' && c.name != 'worktree') || !c.comp) return [c]
+      let { cwd: _cwd, ...comp } = c.comp
+      return Object.keys(comp).length ? [{ ...c, comp }] : []
     })
-    lifecycleBefore(lifecycle, lifecycleBatch(), priorClaims)
-    // Provenance components (T-6670): who + when, paired. `created` is set
-    // once at birth — `by` the author (the wire's, else the writing actor);
-    // `updated` is the LAST edit, absent until the first touch after birth.
-    // `at` is server-frozen; the wire's `by` (saidCreator/saidEditor) is
-    // kept, the gap defaulted to the actor. Both ride the return so caches
-    // hear them, like the session fill above.
-    let actor = writerActor(db, writer)
-    let via = writerVia(db, writer)
-    // An entity minted then deleted in the same batch (or rolled back by its
-    // savepoint) has no LIVE spine — a tombstoned entity keeps its row but is
-    // dead, so the guard is presence AND not tombstoned. `by`/`via` are int
-    // ids now; resolve them on write and re-read through the projection
-    // (readComp) so the echoed change carries eids.
-    let actorId = refId(db, actor)
-    let viaId = refId(db, via)
-    let alive = prep(
-      db,
-      `select 1 from entity e where e.eid = ?
-       and not exists (select 1 from tombstone t where t.entity = e.id)`,
-    )
-    let cNew = prep(
-      db,
-      `insert or ignore into created (entity, at, "by", via)
-       values ((select id from entity where eid = ?), ?, ?, ?)`,
-    )
-    let cVia = prep(
-      db,
-      'update created set at = ?, via = ? where entity = (select id from entity where eid = ?)',
-    )
-    for (let eid of minted) {
-      if (!alive.get(eid)) continue
-      if (saidCreator.has(eid)) cVia.run(now, viaId, eid)
-      else cNew.run(eid, now, actorId, viaId)
-      let row = readComp(db, eid, 'created')
-      if (row) extra.push({ eid, name: 'created', comp: row })
-    }
-    let uSet = prep(
-      db,
-      `insert into updated (entity, at, "by", via)
-       values ((select id from entity where eid = ?), ?, ?, ?)
-       on conflict(entity) do update set at = excluded.at, "by" = excluded."by",
-       via = excluded.via`,
-    )
-    let uAt = prep(
-      db,
-      'update updated set at = ?, via = ? where entity = (select id from entity where eid = ?)',
-    )
-    for (let eid of touched) {
-      if (minted.has(eid) || !alive.get(eid)) continue // birth writes created
-      if (saidEditor.has(eid)) uAt.run(now, viaId, eid)
-      else uSet.run(eid, now, actorId, viaId)
-      let row = readComp(db, eid, 'updated')
-      if (row) extra.push({ eid, name: 'updated', comp: row })
-    }
-    lifecycleAfter(lifecycle, { ...lifecycleBatch(), actor, via })
-    // A create may omit columns that SQLite defaults. The persisted row is
-    // complete, so make the last write for that new component complete too:
-    // a live cache then sees the same writable shape as a fresh snapshot in
-    // this one atomic batch. Read only `cmps` — server-owned columns still
-    // ride through their explicit stamped echoes, never as client-writable
-    // data.
-    for (let key of createdComps) {
-      let cut = key.indexOf(' ')
-      let name = key.slice(0, cut)
-      let eid = key.slice(cut + 1)
-      let cols = colsOf(db, name) ?? []
-      if (!cols.length) continue
-      // Project through select() so reference columns read back as eids, then
-      // keep only the wire-writable cmps columns (server-owned stamped columns
-      // ride their own explicit echoes, never this client-writable shape).
-      let full = readComp(db, eid, name)
-      let row = full &&
-        Object.fromEntries(
-          cols.filter((c) => c in full).map((c) => [c, full[c]]),
-        ) as Change['comp']
-      if (!row) continue
-      let i = changes.findLastIndex((change) =>
-        change.eid == eid && change.name == name && change.comp != null
-      )
-      if (i >= 0) changes[i] = { ...changes[i], comp: row }
-    }
-    // Births ride the return AFTER stamping, so the spine arrives final.
-    // A mint rolled back by its savepoint (or deleted later in the batch)
-    // has no row — the select is the guard. entity === eid: only identity
-    // rides now (T-6670), the timestamps travel as their components above.
-    let born = prep(
-      db,
-      `select eid, num from entity e where e.eid = ?
-       and not exists (select 1 from tombstone t where t.entity = e.id)`,
-    )
-    for (let eid of minted) {
-      let row = born.get(eid) as Change['comp'] | undefined
-      if (row) extra.push({ eid, name: 'entity', comp: row })
-    }
-    // The wire's record: one row per batch, inside the transaction — the
-    // batch as APPLIED (reasons rewritten into comments, cascades and
-    // births synthesized), so the record includes what the rules did, not
-    // just what was asked. The server-stamped echoes are LEFT OUT: created/
-    // updated and the notification stamps repeat the journal's provenance
-    // envelope. The journal is part of the write: a failure rolls the whole
-    // transaction back so subscribers and history cannot miss graph state.
-    {
-      // Only the server-STAMPED provenance echoes (extra) are dropped —
-      // created/updated and the notification stamps (stampedPresence) just
-      // repeat the ts + actor + via the journal row keeps. The wire's own
-      // write (the bare presence, an authorship `by`) rides in `changes` and
-      // stays audited.
-      let echoed = new Set(['created', 'updated', ...stamps, ...clocked])
-      let logged = [...changes, ...extra.filter((c) => !echoed.has(c.name))]
-      if (logged.length) {
-        // The Trace, journaled — but only when the caller DEFERRED its
-        // dispatch to the journal feed (a fed() trace). A plain trace()
-        // means the call site dispatches itself, and an absent trace
-        // means no effects at all (the runner's deliberate effect-free
-        // applies and ordinary direct stamps) — either way the feed must not
-        // fire them again. Effect-bearing direct stamps pass a fed trace.
-        let trace = t?.fed
-          ? JSON.stringify({
-            created: [...createdComps],
-            removed: [...removedLog],
-          })
-          : null
-        // actor is the resolved writing actor (T-6669), same as the by-default.
-        journalWrite(db, now, actor, via, trace, logged)
-      }
-    }
-    // The journal keeps ordered operations (including create-then-drop); the
-    // answer is final state, not an operation log. Compose before lowering so
-    // every casualty answers ONLY entity-null, even if an earlier patch or a
-    // later synthesized echo also named it. Whole creation rows above retain
-    // their defaults; pipeline-only guards never escape to a client.
-    return composedChanges([...changes, ...extra])
   }
-  try {
-    return db.transaction(run, true)
-  } catch (e) {
-    auditBounce(db, e)
-    throw e
-  }
+  changes = mirrorLineage(db, changes)
+  // A write that engages a source-materialized entity graduates it — hydrates
+  // its source comps into this batch (D-17790). After the dual* transforms so
+  // a hydrated session.provider is never promoted to a spawn request; a
+  // historical session must not launch an agent.
+  if (hasSources()) changes = graduate(db, changes, context.workClaim?.source)
+  // After graduation, so a claim on a just-hydrated session finds its
+  // `worked` endpoint in the batch.
+  changes = edgeWrites(db, changes)
+  return fleetInput(db, changes)
 }
 
 // A bounced claim is worth remembering: the refusal carries the sides as

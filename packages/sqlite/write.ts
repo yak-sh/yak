@@ -55,7 +55,8 @@ let OWNER = '(select id from entity where eid = ?)'
 
 // Run a built statement for effect, discarding any rows.
 let run = (driver: Driver, s: Sql): void => {
-  driver.query(s.sql, s.params)
+  if (driver.run) driver.run(s.sql, s.params)
+  else driver.query(s.sql, s.params)
 }
 
 // The value a column stores, coerced to what SQLite holds: a boolean becomes
@@ -144,12 +145,17 @@ export let upsertSql = (
   eid: string,
   comp: string,
   patch: Comp,
+  absent = false,
 ): Sql => {
   let cols = Object.keys(patch).filter((c) => v.column(comp, c)?.persist)
   if (!cols.length) {
     return {
-      sql: `insert or ignore into "${comp}" (entity)
-              select id from entity where eid = ?`,
+      sql: `insert ${absent ? '' : 'or ignore '}into "${comp}" (entity)
+              select id from entity e where eid = ?${
+        absent
+          ? ` and not exists (select 1 from "${comp}" where entity = e.id)`
+          : ''
+      }`,
       params: [eid],
     }
   }
@@ -170,7 +176,11 @@ export let upsertSql = (
   return {
     sql: `insert into "${comp}" (entity, ${names})
             select e.id, ${items.join(', ')} from entity e where e.eid = ?
-            on conflict(entity) do update set ${sets}`,
+            ${
+      absent
+        ? `and not exists (select 1 from "${comp}" where entity = e.id)`
+        : `on conflict(entity) do update set ${sets}`
+    }`,
     params: [...params, eid],
   }
 }
@@ -183,16 +193,47 @@ export let dropSql = (eid: string, comp: string): Sql => ({
 })
 
 /**
- * The statements that patch one bundle in: one per component it names, a drop
+ * The statements that patch one bundle in: a plan per component it names, a drop
  * for each `null` one. Identity is minted separately (see {@link mintSql}),
  * because a batch mints every eid it touches or points at before it writes
  * anything.
  */
-export let patchSql = (v: Vocab, b: Bundle): Sql[] => {
-  let eid = b.entity.eid
-  return comps(b).map(([name, comp]) =>
-    comp == null ? dropSql(eid, name) : upsertSql(v, eid, name, comp)
-  )
+export let patchSql = (v: Vocab, b: Bundle): Sql[] =>
+  comps(b).flatMap(([name, comp]) => {
+    let { first, fallback } = patchOne(v, b.entity.eid, name, comp)
+    return fallback ? [first, fallback()] : [first]
+  })
+
+// One component's plan: a drop, a bare insert, or UPDATE then absent INSERT.
+// An interactive driver uses the UPDATE's affected-row count to omit its
+// fallback. A batched driver sends both; INSERT's WHERE is the same no-op.
+let patchOne = (
+  v: Vocab,
+  eid: string,
+  name: string,
+  comp: Comp | null,
+): { first: Sql; fallback?: () => Sql } => {
+  if (comp == null) return { first: dropSql(eid, name) }
+  // INSERT checks NOT NULL before ON CONFLICT. Update existing rows first,
+  // then insert only absent ones: partial patches need no invented defaults
+  // or read/merge, and the same ordered statements work in a D1 batch.
+  let cols = Object.keys(comp).filter((c) => v.column(name, c)?.persist)
+  let params: Param[] = []
+  let sets = cols.map((c) => {
+    let ref = comp[c] != null && isRef(v, name, c)
+    params.push(ref ? String(comp[c]) : scalar(comp[c]))
+    return `"${c}" = ${ref ? OWNER : '?'}`
+  })
+  let fallback = () => upsertSql(v, eid, name, comp, true)
+  return cols.length
+    ? {
+      first: {
+        sql: `update "${name}" set ${sets.join(', ')} where entity = ${OWNER}`,
+        params: [...params, eid],
+      },
+      fallback,
+    }
+    : { first: fallback() }
 }
 
 /**
@@ -253,7 +294,23 @@ export let patch = (
     if (e) born.push(e)
   }
 
-  for (let b of alive) for (let s of patchSql(vocab, b)) run(driver, s)
+  for (let b of alive) {
+    for (let [name, comp] of comps(b)) {
+      let { first, fallback } = patchOne(vocab, b.entity.eid, name, comp)
+      let changes = driver.run?.(first.sql, first.params)
+      if (changes === undefined) {
+        changes = driver.query(
+          first.sql + (fallback ? ' returning entity' : ''),
+          first.params,
+        ).length
+      }
+      // A write's own result avoids the absent INSERT when UPDATE hit. D1
+      // still sends the complete plan atomically via patchSql; no read/merge.
+      if (fallback && !changes) {
+        run(driver, fallback())
+      }
+    }
+  }
 
   return born
 }

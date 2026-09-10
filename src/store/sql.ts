@@ -68,6 +68,9 @@ export type Sql = {
   // a hosted SQLite refuses the statements (workerd routes every transaction
   // through transactionSync), so the statements live in the file adapter only.
   transaction<T>(fn: () => T, immediate?: boolean): T
+  // Deliver after the outermost Sql.transaction commits; discard on rollback.
+  // Outside a transaction, run immediately. Observers own their error handling.
+  afterCommit(fn: () => void): void
   // True while a transaction is open (autocommit off).
   readonly inTransaction: boolean
   readonly lastInsertRowId: number | bigint

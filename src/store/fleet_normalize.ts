@@ -1,20 +1,10 @@
-// Fleet normalization policy. Both live apply() and the staged graph run these
-// SAME normalize hooks under the existing outer immediate transaction. Core's
+// Fleet normalization policy, registered on the composed graph and run under
+// the existing outer immediate transaction. Core's
 // normalize phase precedes its own transaction; detached reads alone are unsafe.
-import {
-  type Bundle,
-  type Comp,
-  detached,
-  type EditHost,
-  edits,
-  type Graph,
-  isPromise,
-  type Plugin,
-} from '@yaks/graph'
+import { type Comp, type EditHost, edits, type Plugin } from '@yaks/graph'
 import { Invalid, spec, validate } from '../config.ts'
-import { type Change, shortId } from '../types.ts'
+import { shortId } from '../types.ts'
 import type { Sql, Statement } from './sql.ts'
-import { asBundle, asChanges } from './wire.ts'
 
 type Host = EditHost & { db: Sql; prepare: (sql: string) => Statement }
 
@@ -116,46 +106,4 @@ export let fleetNormalizers = (host: Host): Plugin[] => {
     return normalize(bundles, tx)
   }
   return [edit, wakes, settings]
-}
-
-// Transitional live path: run the registered core hooks, not a second copy of
-// policy, without turning on core mutation. Preserve input spines and guards;
-// asChanges is deliberately an ANSWER converter and strips pipeline metadata.
-export let normalizeFleet = (
-  db: Sql,
-  graph: Graph,
-  changes: Change[],
-): Change[] => {
-  if (!db.inTransaction) {
-    throw new Error('fleet normalize requires the outer write transaction')
-  }
-  let bundles = changes.map((c) => ({
-    ...asBundle(c),
-    ...(c.name == 'entity' && c.comp != null
-      ? { entity: { eid: c.eid, ...c.comp } }
-      : {}),
-    ...(c.name == 'entity' && c.comp != null ? { $fleetSpine: c.comp } : {}),
-  })) as Bundle[]
-  let tx = detached(graph.storage)
-  for (let plugin of graph.plugins) {
-    let hook = plugin.hooks?.normalize
-    if (!hook) continue
-    let next = hook(bundles, tx)
-    if (isPromise(next)) throw new Error('fleet normalize must be synchronous')
-    bundles = next
-  }
-  return bundles.flatMap((b) => {
-    let out = asChanges(b)
-    if (b.$fleetSpine && !out.some((c) => c.name == 'entity')) {
-      out.unshift({
-        eid: b.entity.eid,
-        name: 'entity',
-        comp: b.$fleetSpine as Comp,
-      })
-    }
-    return out.map((c) => ({
-      ...c,
-      ...(b.$was?.[c.name] ? { was: b.$was[c.name] } : {}),
-    }))
-  })
 }

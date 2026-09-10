@@ -167,6 +167,7 @@ let backend = (can: Can): Sql => {
     },
     transaction: (fn, immediate) => db.transaction(fn, immediate),
     can,
+    afterCommit: (fn) => db.afterCommit(fn),
     close: () => db.close(),
   }
 }

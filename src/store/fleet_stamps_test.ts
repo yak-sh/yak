@@ -1,7 +1,7 @@
 // Fixed expectations, not a comparison against another invocation of apply.
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { ApplyOpts, Bundle } from '@yaks/graph'
-import { fleetGraphOf, journalSince, readComp } from '../db.ts'
+import { apply, fleetGraphOf, journalSince, readComp } from '../db.ts'
 import { fed, trace } from '../effects.ts'
 import { bareDb } from '../testdb.ts'
 import { sha } from '../sha.ts'
@@ -162,6 +162,49 @@ Deno.test('fleet provenance: edges touch both endpoints, reassertion touches not
   for (let eid of ['a', 'b']) {
     assertEquals(row(db, eid, 'updated'), stamp('persona', 'run'))
   }
+})
+
+Deno.test('fleet lifecycle: a mixed touch batch heals only blank sessions, in touch order', () => {
+  let db = fixture()
+  write(db, [
+    ...['a', 'b'].map((eid) => ({
+      entity: { eid },
+      session: { id: eid, cwd: '/tmp/fleet-stamp-golden/tree' },
+    })),
+    { entity: { eid: 'abstract' }, session: { id: 'abstract' } },
+    {
+      entity: { eid: 'named' },
+      session: {
+        id: 'named',
+        cwd: '/tmp/fleet-stamp-golden/tree',
+        actor: 'human',
+      },
+    },
+  ])
+  // Historical rows can have a cwd but no actor. A title-only touch heals
+  // them from their current cwd, even when no session patch was submitted.
+  db.prepare(`update session set actor = null where id in ('a', 'b')`).run()
+  let cursor = journalSince(db, 0).at(-1)!.rowid
+  write(
+    db,
+    ['b', 'plain', 'named', 'abstract', 'a'].map((eid) => ({
+      entity: { eid },
+      doc: { title: eid },
+    })),
+  )
+  assertEquals(row(db, 'a', 'session')?.actor, 'project')
+  assertEquals(row(db, 'b', 'session')?.actor, 'project')
+  assertEquals(row(db, 'named', 'session')?.actor, 'human')
+  assertEquals(row(db, 'abstract', 'session')?.actor, null)
+  assertEquals(row(db, 'plain', 'session'), undefined)
+  assertEquals(
+    journalSince(db, cursor)[0].batch.filter((c) => c.name == 'session'),
+    ['b', 'a'].map((eid) => ({
+      eid,
+      name: 'session',
+      comp: { actor: 'project' },
+    })),
+  )
 })
 
 Deno.test('fleet memory: birth proposal and existing acceptance have distinct person rules', () => {
@@ -402,4 +445,43 @@ Deno.test('fleet trace: casualties answer only death; rollback leaves journal an
   )
   assertEquals(journalSince(db, cursor), [])
   assertEquals(dry, fed())
+})
+
+Deno.test('live apply observers and Trace publish only after the outer commit', () => {
+  let kept = crypto.randomUUID(), rolledBack = crypto.randomUUID()
+  let db = bareDb(), t = fed(), seen: string[] = [], calls = 0
+  let g = fleetGraphOf(db)
+  g.use({
+    name: 'outer-commit-golden',
+    hooks: {
+      effect: (bs) => {
+        assertEquals(db.inTransaction, false)
+        calls++
+        seen.push(...new Set(bs.filter((b) => b.task).map((b) => b.entity.eid)))
+        return bs
+      },
+    },
+  })
+  let put = (eid: string) => apply(db, [{ eid, name: 'task', comp: {} }], t)
+  assertThrows(() =>
+    db.transaction(() => {
+      put(rolledBack)
+      assertEquals(t, fed())
+      assertEquals(seen, [])
+      throw new Error('outer rollback')
+    })
+  )
+  assertEquals(readComp(db, rolledBack, 'task'), undefined)
+  assertEquals(t, fed())
+  assertEquals(seen, [])
+  assertEquals(journalSince(db, 0), [])
+  db.transaction(() => {
+    put(kept)
+    assertEquals(t, fed())
+    assertEquals(seen, [])
+  })
+  assert(t.created.has(`task ${kept}`))
+  assertEquals(seen, [kept])
+  assertEquals(calls, 1)
+  assertEquals(journalSince(db, 0).length, 1)
 })

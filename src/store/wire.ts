@@ -12,6 +12,11 @@ import type { Change } from '../types.ts'
 export let asBundle = (c: Change): Bundle =>
   c.name == 'entity' && c.comp == null
     ? { entity: { eid: c.eid }, $delete: true }
+    : c.name == 'entity'
+    ? {
+      entity: { eid: c.eid, ...c.comp },
+      ...(c.was ? { $was: { entity: c.was } } : {}),
+    }
     : {
       entity: { eid: c.eid },
       [c.name]: c.comp,
@@ -50,4 +55,14 @@ export let composedChanges = (changes: Change[]): Change[] => {
     }
     return out
   })
+}
+
+// Input conversion, unlike the answer, retains guards and explicit bare births.
+export let inputChanges = (b: Bundle): Change[] => {
+  let out = asChanges(b)
+  if (!out.length) out.push({ eid: b.entity.eid, name: 'entity', comp: {} })
+  return out.map((c) => ({
+    ...c,
+    ...(b.$was?.[c.name] ? { was: b.$was[c.name] } : {}),
+  }))
 }

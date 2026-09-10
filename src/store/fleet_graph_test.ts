@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, token } from '@yaks/graph'
-import { fleetGraphOf, fleetVocabOf, readComp } from '../db.ts'
+import { apply, fleetGraphOf, fleetVocabOf, readComp } from '../db.ts'
 import { bareDb } from '../testdb.ts'
 import { sha } from '../sha.ts'
 import { asChanges } from './wire.ts'
@@ -202,6 +202,7 @@ Deno.test('fleet uses Sql transactions and holds a write lock before normalize',
     set version(v) {
       db.version = v
     },
+    afterCommit: (fn) => db.afterCommit(fn),
     close: () => db.close(),
   }
   let g = fleetGraphOf(proxy)
@@ -215,7 +216,7 @@ Deno.test('fleet uses Sql transactions and holds a write lock before normalize',
     },
   })
   write(proxy, [{ entity: { eid: 'p' }, doc: { body: 'nested' } }])
-  assertEquals(calls, [true, true, true])
+  assertEquals(calls, [true, true]) // no rollback-only mutation rehearsal
 })
 
 Deno.test('fleet CAS dry run returns exact defaults and numbers but keeps nothing', () => {
@@ -261,17 +262,55 @@ Deno.test('fleet CAS a SQL refusal rolls back materialized blobs as well as docu
 
 Deno.test('fleet births carrying entry stay unnumbered after their reference spines mint', () => {
   let db = bareDb()
-  // seq is the log policy's stamped value, supplied here rather than pretending
-  // this storage/CAS phase has already composed the future lifecycle plugin.
   let out = fleetGraphOf(db).apply([
     { entity: { eid: 's' }, session: { id: 'test' } },
     {
       entity: { eid: 'e' },
-      entry: { session: 's', seq: 1 },
+      entry: { session: 's' },
       content: { body: 'line' },
     },
     { entity: { eid: 'p' }, doc: { title: 'after entry' } },
   ], { trusted: true }) as Bundle[]
   assertEquals(out.find((b) => b.entity.eid == 'e')?.entity.num, null)
   assertEquals(out.find((b) => b.entity.eid == 'p')?.entity.num, 2)
+})
+
+Deno.test('live append numbers entries per session and rolls back sequence plus imports', () => {
+  let db = bareDb()
+  let ids = Object.fromEntries(
+    ['s', 'a', 'b', 'c', 'fail', 'bad'].map((k) => [k, crypto.randomUUID()]),
+  )
+  apply(db, [{ eid: ids.s, name: 'session', comp: { id: 'append-test' } }])
+  let append = (eid: string) => [
+    { eid, name: 'entry', comp: { session: ids.s } },
+    { eid, name: 'content', comp: { body: eid } },
+  ]
+  let imports = new Map([[ids.a, { source: '/tmp/fixture.jsonl', line: 1 }]])
+  let out = apply(
+    db,
+    [...append(ids.a), ...append(ids.b)],
+    undefined,
+    undefined,
+    imports,
+  )
+  assertEquals(out.filter((c) => c.name == 'entry').map((c) => c.comp?.seq), [
+    1,
+    2,
+  ])
+  assertEquals(readComp(db, ids.s, 'session')?.latest_seq, 2)
+  assertEquals(readComp(db, ids.a, 'imported')?.line, 1)
+  assertEquals(
+    raw(db, `select num from entity where eid in ('${ids.a}', '${ids.b}')`),
+    [{ num: null }, { num: null }],
+  )
+  assertThrows(() =>
+    apply(db, [
+      ...append(ids.fail),
+      { eid: ids.bad, name: 'doc', comp: { title: null } },
+    ])
+  )
+  assertEquals(readComp(db, ids.s, 'session')?.latest_seq, 2)
+  assertEquals(readComp(db, ids.fail, 'entry'), undefined)
+  apply(db, append(ids.c))
+  assertEquals(readComp(db, ids.c, 'entry')?.seq, 3)
 })

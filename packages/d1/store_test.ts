@@ -124,3 +124,35 @@ Deno.test('a number a refused batch reserved is handed out again', async () => {
   await g.apply([{ entity: { eid: 'z' }, doc: { title: 'Dune' } }])
   assertEquals((await s.read('.kind=doc'))[0].entity.num, 1)
 })
+
+Deno.test('partial updates over D1 keep required columns and roll back late failures', async () => {
+  let db = d1(), s = storage(db, shop)
+  await s.install()
+  await db.prepare(`drop table doc`).all()
+  await db.prepare(
+    `create table doc (entity integer primary key references entity(id),
+    title text not null default 'untitled', body text not null)`,
+  ).all()
+  await s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'a' }, doc: { body: 'body' } }])
+  )
+  await s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'a' }, doc: { title: 'changed' } }])
+  )
+  await s.tx((tx) => tx.patch([{ entity: { eid: 'a' }, doc: {} }]))
+  let get = async () => (await s.tx((tx) => tx.get(['a'])))[0]
+  assertEquals((await get()).doc, { title: 'changed', body: 'body' })
+  await assertRejects(
+    () =>
+      s.tx((tx) =>
+        tx.patch([
+          { entity: { eid: 'a' }, doc: { title: 'rolled back' } },
+          { entity: { eid: 'bad' }, doc: { title: 'missing body' } },
+        ])
+      ),
+    Error,
+    'NOT NULL',
+  )
+  assertEquals((await get()).doc, { title: 'changed', body: 'body' })
+  assertEquals(await s.tx((tx) => tx.get(['bad'])), [])
+})

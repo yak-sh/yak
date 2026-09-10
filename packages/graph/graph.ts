@@ -52,6 +52,7 @@ import { composed } from './compose.ts'
 import { type Ask, gather, holding, reached } from './gather.ts'
 import { guard } from './guard.ts'
 import { mutate } from './mutate.ts'
+import { ordered } from './ordered.ts'
 import { cascade } from './cascade.ts'
 import { actorOf, births, provenance, type StampPolicy } from './stamp.ts'
 import { fire, registry, type Resource, type Rule, stands } from './rules.ts'
@@ -105,6 +106,13 @@ export type Options = {
   plugins?: Plugin[]
   /** Per-entity provenance policy; core retains the stamp mechanism. */
   provenance?: StampPolicy
+  /** A host's provenance clock, sampled once when a rule first asks #Now.
+   * `ApplyOpts.now` wins. Default remains the apply's start time. */
+  clock?: () => string
+  /** A host with an enclosing transaction may queue observers until THAT
+   * commit. Discard the queue on rollback. Deferred observers do not change
+   * this apply's answer; any writes they make are separate operations. */
+  deferEffects?: (run: () => void | Promise<void>) => void
   /** where a failing effect is reported (default: `console.warn`) */
   report?: (err: unknown, at: { phase: Phase; plugin: string }) => void
   /** what names an entity a batch minted under an alias, when no component
@@ -194,12 +202,12 @@ export let graph = (opts: Options): Graph => {
   // The singletons a rule may bind with `#Name`: each plugin's, then this
   // graph's own three, which have the last word — nothing a plugin registers
   // can move the batch's instant or its actor out from under the stamps.
-  let resourced = (now: string): Record<string, Resource> =>
+  let resourced = (now: () => string): Record<string, Resource> =>
     registry([
       ...plugins.map((p) => p.resources),
       {
         Vocab: () => vocab,
-        Now: () => stands({ at: now }),
+        Now: () => stands({ at: now() }),
         // A copy: the batch's own `$actor` is not this tick's to dress.
         Actor: (tick) => {
           let who = actorOf(tick.bundles)
@@ -215,10 +223,11 @@ export let graph = (opts: Options): Graph => {
     > => {
     let st = state()
     let now = o.now ?? new Date().toISOString()
+    let instant: string | undefined
     let outside = detached(storage)
     // One registry for the whole apply, so `#Now` is one instant however many
     // phases and rules read it.
-    let resources = resourced(now)
+    let resources = resourced(() => instant ??= o.now ?? opts.clock?.() ?? now)
 
     // A phase: the core's own work first (it is what the rules and hooks are
     // extending), then the rules as one tick, then each hook, each seeing what
@@ -355,20 +364,31 @@ export let graph = (opts: Options): Graph => {
           // What the graph holds for one entity, every patch this batch made
           // already folded in — what a rule is judged against (./rules.ts).
           let holds = (eid: Eid) => snap.got.get(eid) ?? undefined
+          let checks: Hook[] | undefined
           return then(
             each(
               [
                 phase('precondition', held, (b) => guard(b, held, vocab)),
-                phase('mutate', held, (b) => mutate(b, held, st)),
-                phase('cascade', tx, (b) => cascade(b, tx, vocab, st)),
+                phase('mutate', held, (b) => {
+                  checks = plugins.flatMap((p) =>
+                    p.beforeWrite ? [p.beforeWrite(b)] : []
+                  )
+                  return checks.length
+                    ? ordered(b, tx, vocab, snap, st, checks)
+                    : mutate(b, held, st)
+                }),
+                phase('cascade', tx, (b) =>
+                  checks?.length ? b : cascade(b, tx, vocab, st)),
                 // The stamps are rules now, and they ask what the graph holds
                 // for an entity: a birth is an entity with no `created`.
-                phase('stamp', tx, (b) => births(b, st), holds),
+                phase('stamp', tx, (b) =>
+                  births(b, st), holds),
                 phase('journal', tx),
                 phase('commit', tx),
               ],
               bundles,
-              (b, step) => step(b),
+              (b, step) =>
+                step(b),
             ),
             (b) => {
               if (o.check) throw new Checked(b)
@@ -389,9 +409,16 @@ export let graph = (opts: Options): Graph => {
       } catch (e) {
         return fell(e)
       }
+      let observe = (b: Bundle[]) => {
+        if (!opts.deferEffects) return effects(b)
+        // Freeze a host clock while its transaction-scoped context exists.
+        instant ??= o.now ?? opts.clock?.() ?? now
+        opts.deferEffects(() => then(effects(b), () => {}))
+        return b
+      }
       return isPromise(committed)
-        ? committed.then(effects, fell)
-        : effects(committed)
+        ? committed.then(observe, fell)
+        : observe(committed)
     }
 
     // The run, end to end: the phases before the transaction, the transaction,

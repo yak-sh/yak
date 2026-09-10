@@ -1,8 +1,8 @@
 // The package graph bound to the fleet's existing SQL layout. This is storage
-// composition plus registered fleet policy; live mutation stays on its old
-// path until the remaining admission/entry/effect doors switch. Hooks on this
+// composition plus registered fleet policy, shared by every write door. Hooks on this
 // Sql-backed handle must be synchronous (the driver transaction contract).
 import {
+  admit,
   type ApplyOpts,
   type Bundle,
   Checked,
@@ -16,16 +16,19 @@ import {
   then,
 } from '@yaks/graph'
 import { blobRead, blobs, decode, encode } from '@yaks/blob'
-import { type Driver, storage, touched } from '@yaks/sqlite'
+import { type Driver, storage } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
 import { fleetStamps, type FleetWrite, type StampHost } from './fleet_stamps.ts'
 import { derived } from '../sql_derived.ts'
 import { sha } from '../sha.ts'
 import type { Sql } from './sql.ts'
+import type { Change } from '../types.ts'
+import { asBundle, inputChanges } from './wire.ts'
 import {
   auditFleetBounce,
   fleetPreconditions,
   type GuardHost,
+  sync,
 } from './fleet_preconditions.ts'
 
 // db.ts owns prepared statements, the fleet's kind-based number allocator,
@@ -34,10 +37,13 @@ export type FleetGraphHost = {
   db: Sql
   driver: Driver
   vocab: Vocab
+  input: (changes: Change[]) => Change[]
+  project: (changes: Change[], context: FleetWrite) => Change[]
   normalizers: Plugin[]
   guards: GuardHost
   lifecycle: StampHost
   refusal: (err: unknown) => unknown
+  patchRefusal: (b: Bundle, err: unknown) => unknown
   number: (eid: string) => void
   component: (eid: string, name: string) => Comp | undefined
 }
@@ -85,6 +91,22 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
         try {
           let out = body({
             ...tx,
+            // The fleet wire reads bools, whereas SQLite's shared adapter
+            // exposes integers. $was must hash the public read shape.
+            get: (eids) =>
+              tx.get(eids).map((b) => {
+                for (let [name, comp] of comps(b)) {
+                  for (let [prop, value] of Object.entries(comp ?? {})) {
+                    if (
+                      value != null &&
+                      vocab.column(name, prop)?.scalar == 'bool'
+                    ) {
+                      comp![prop] = !!value
+                    }
+                  }
+                }
+                return b
+              }),
             remove: (entities) => {
               for (let e of entities) {
                 let held = tx.get([e.eid])
@@ -99,48 +121,46 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
               return tx.remove(entities)
             },
             patch: (bundles) => {
-              // SQLite checks INSERT's NOT NULL constraints before its UPSERT
-              // conflict arm. Existing doc/setting/alias/session patches must supply omitted
-              // required values for that check, without echoing them as caller writes.
-              // Work in order: two patches for one doc see each other's rows.
-              // Mint all references first through the package, then patch each
-              // bundle with current required values as insert defaults.
-              let identities = tx.patch(
-                [...new Set(touched(vocab, bundles))].map((eid) => ({
-                  entity: { eid },
-                })),
-              )
-              born.push(...identities)
-              lifecycle.born(identities.map((e) => e.eid))
-              for (let b of bundles) {
-                lifecycle.patch(b)
-                let doc = b.doc as Comp | null | undefined
-                let held = doc && row(
-                  `select title, body from doc where entity = ${owner}`,
-                  b.entity.eid,
-                )
-                let setting = b.setting as Comp | null | undefined
-                let key = setting && row(
-                  `select key from setting where entity = ${owner}`,
-                  b.entity.eid,
-                )
-                let alias = b.alias as Comp | null | undefined
-                let slug = alias && row(
-                  `select slug from alias where entity = ${owner}`,
-                  b.entity.eid,
-                )
-                let session = b.session as Comp | null | undefined
-                let id = session && row(
-                  `select id from session where entity = ${owner}`,
-                  b.entity.eid,
-                )
-                tx.patch([{
-                  ...b,
-                  ...(doc ? { doc: { ...held, ...doc } } : {}),
-                  ...(setting ? { setting: { ...key, ...setting } } : {}),
-                  ...(alias ? { alias: { ...slug, ...alias } } : {}),
-                  ...(session ? { session: { ...id, ...session } } : {}),
-                }])
+              let identities: Entity[] = []
+              let groups = bundles.some((b) => b.entry)
+                ? bundles.map((b) => [b])
+                : [bundles]
+              for (let group of groups) {
+                for (let b of group) {
+                  lifecycle.patch(b)
+                  let entry = b.entry as Comp | null | undefined
+                  if (
+                    entry &&
+                    !row(
+                      `select 1 from entry where entity = ${owner}`,
+                      b.entity.eid,
+                    )
+                  ) {
+                    let seq = Number(
+                      row(
+                        `select coalesce(max(seq), 0) + 1 as seq from entry where session = ${owner}`,
+                        String(entry.session),
+                      )!.seq,
+                    )
+                    b.entry = { ...entry, seq }
+                    driver.query(
+                      `update session set latest_seq = ? where entity = ${owner}`,
+                      [seq, String(entry.session)],
+                    )
+                  }
+                }
+                try {
+                  let made = tx.patch(group)
+                  identities.push(...made)
+                  born.push(...made)
+                  lifecycle.born(made.map((e) => e.eid))
+                } catch (err) {
+                  for (let b of group) {
+                    let why = host.patchRefusal(b, err)
+                    if (why !== err) throw why
+                  }
+                  throw err
+                }
               }
               return identities
             },
@@ -165,6 +185,7 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
         then(
           tx.get([...new Set(bundles.map((b) => b.entity.eid))]),
           (found) => {
+            lifecycle.found(bundles.map((b) => b.entity.eid), found)
             let state = new Map(found.map((b) => [b.entity.eid, b]))
             let made = new Map<string, Bundle>()
             let out = bundles.flatMap((b) => {
@@ -271,12 +292,49 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
     storage: bound,
     vocab,
     provenance: lifecycle.policy,
+    clock: lifecycle.now,
+    deferEffects: (run) => db.afterCommit(() => sync(run())),
     plugins: [
+      {
+        name: 'fleet/input',
+        hooks: {
+          normalize: (bundles) => {
+            if (!lifecycle.input().resolve) return bundles
+            return host.input(bundles.flatMap(inputChanges)).map(asBundle)
+          },
+        },
+      },
       ...host.normalizers,
+      {
+        name: 'fleet/projection',
+        hooks: {
+          admit: (bundles) => {
+            if (!lifecycle.input().resolve) return bundles
+            return admit(
+              host.project(
+                bundles.flatMap(inputChanges),
+                lifecycle.input(),
+              )
+                .map((c) => ({
+                  ...asBundle(c),
+                  ...(lifecycle.input().workClaim
+                    ? {
+                      $workClaim: {
+                        target: lifecycle.input().workClaim!.target,
+                      },
+                    }
+                    : {}),
+                })),
+              vocab,
+              lifecycle.input().server,
+            )
+          },
+        },
+      },
       lifecycle.capture,
       prepare,
       cas,
-      fleetPreconditions(host.guards, bound, vocab),
+      fleetPreconditions(host.guards),
       // Lifecycle commit needs the restored bodies and full creation rows.
       echoes,
       lifecycle.plugin,
@@ -286,8 +344,7 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
   // Keep the OUTER write lock: fleet normalizers read committed state before
   // core opens its own transaction. Replacing this with only Driver.tx would
   // reopen the read/upgrade race when the remaining policy plugins join.
-  // No effect observers are registered in this phase: at the live-write flip,
-  // effects must run AFTER this outer transaction, not just core's nested one.
+  // Sql owns observer delivery through every enclosing savepoint.
   let write: FleetGraph['write'] = (changes, context, opts) => {
     try {
       return db.transaction(

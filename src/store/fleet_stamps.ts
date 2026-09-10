@@ -19,17 +19,22 @@ import {
   type LifecycleBatch,
   lifecycleBefore,
   type LifecycleHost,
+  type PriorClaim,
   priorClaimsOf,
   syncFacetAliases,
 } from './fleet_lifecycle.ts'
 import { asBundle, asChanges } from './wire.ts'
 
 export type FleetWrite = {
+  resolve?: boolean
+  server?: boolean
+  workClaim?: { target: string; source?: Change[] }
   writer?: string | null
   trace?: Trace
   imports?: Map<string, { source: string; line: number }>
 }
 export type StampHost = LifecycleHost & {
+  afterCommit: (run: () => void) => void
   actor: (writer?: string | null) => string | null
   via: (writer?: string | null) => string | null
   number: (eid: string) => void
@@ -46,21 +51,30 @@ export type StampHost = LifecycleHost & {
 
 export let fleetStamps = (host: StampHost) => {
   let stack: ReturnType<typeof state>[] = []
-  let state = (input: FleetWrite, now: string) => ({
+  let state = (input: FleetWrite, now: string, fixed: boolean) => ({
     input,
     now,
+    fixed,
     active: false,
     actor: {} as Actor,
-    prior: priorClaimsOf(host),
+    prior: [] as PriorClaim[],
+    found: new Map<string, Bundle | null>(),
     minted: new Set<string>(),
     touched: new Set<string>(),
     created: new Set<string>(),
     removed: new Map<string, string[]>(),
     authors: new Map<string, Comp>(),
     operations: [] as Change[],
+    owners: [] as string[],
     extra: [] as Change[],
   })
   let current = () => stack.at(-1)!
+  let gone = (eid: string) => {
+    let s = current()
+    return s.found.has(eid)
+      ? !!s.found.get(eid)?.tombstone
+      : !!host.component(eid, 'tombstone')
+  }
   let took = (eid: string, name: string) => {
     let s = current()
     s.removed.set(eid, [...(s.removed.get(eid) ?? []), name])
@@ -96,14 +110,16 @@ export let fleetStamps = (host: StampHost) => {
   let plugin: Plugin = {
     name: 'fleet/lifecycle',
     hooks: {
-      // Registered after the rollback-only rehearsal. From here on adapter
-      // writes are real mutation/cascade operations, not guard simulations.
+      // From here on adapter writes are mutation/cascade operations.
       precondition: (bundles) => {
         current().active = true
         return resolve(bundles)
       },
       cascade: (bundles) => {
         let s = current()
+        // SQL insertion defaults (notably claim.claimed_at) precede the
+        // batch's provenance clock, as they did at the live writer door.
+        if (!s.fixed) s.now = new Date().toISOString()
         s.active = false
         s.operations = bundles.flatMap((b) =>
           asChanges(b).filter((c) => c.name != 'entity' || c.comp == null).map(
@@ -117,13 +133,18 @@ export let fleetStamps = (host: StampHost) => {
             },
           )
         )
-        for (let eid of s.minted) host.number(eid)
+        // Explicit owners precede referenced placeholders, regardless of the
+        // order in which the adapter had to mint foreign-key spines.
+        for (let eid of new Set([...s.owners, ...s.minted])) {
+          if (s.minted.has(eid)) host.number(eid)
+        }
         syncFacetAliases(host, s.operations, s.extra)
         lifecycleBefore(host, batch(), s.prior)
         let out = resolve(bundles)
         // Edge endpoints can be news without a component patch of their own.
+        let present = new Set(out.map((b) => b.entity.eid))
         for (let eid of new Set([...s.minted, ...s.touched])) {
-          if (!out.some((b) => b.entity.eid == eid)) {
+          if (!present.has(eid)) {
             out.push({ entity: { eid }, $actor: s.actor })
           }
         }
@@ -136,7 +157,7 @@ export let fleetStamps = (host: StampHost) => {
         // when this batch has no actor or instrument.
         let provenance: Change[] = []
         for (let eid of new Set([...s.minted, ...s.touched])) {
-          if (host.component(eid, 'tombstone')) continue
+          if (gone(eid)) continue
           let name = s.minted.has(eid) ? 'created' : 'updated'
           let comp = host.component(eid, name)
           if (comp) provenance.push({ eid, name, comp })
@@ -146,7 +167,7 @@ export let fleetStamps = (host: StampHost) => {
           ...s.extra.map(asBundle),
           ...provenance.map(asBundle),
           ...[...s.minted].flatMap((eid) => {
-            if (host.component(eid, 'tombstone')) return []
+            if (gone(eid)) return []
             let row = host.component(eid, 'entity')
             return row
               ? [{ entity: { eid, num: row.num as number | null } }]
@@ -162,17 +183,19 @@ export let fleetStamps = (host: StampHost) => {
         s.operations.forEach((c, i) => {
           if (c.comp) last.set(`${c.name} ${c.eid}`, i)
         })
+        let whole = new Map(
+          bundles.filter((b) => b.$fleetWhole)
+            .map((b) => [`${b.$fleetWhole} ${b.entity.eid}`, b]),
+        )
         let changes = s.operations.map((c, i) => {
           let key = `${c.name} ${c.eid}`
           if (!c.comp || !s.created.has(key) || last.get(key) != i) return c
           // The final creation echo is writable-only (provided by fleetGraph).
-          let full = bundles.findLast((b) =>
-            b.entity.eid == c.eid && b.$fleetWhole == c.name
-          )
+          let full = whole.get(key)
           return full ? { ...c, comp: full[c.name] as Comp } : c
         })
         let births = [...s.minted].flatMap((eid) => {
-          if (host.component(eid, 'tombstone')) return []
+          if (gone(eid)) return []
           let comp = host.component(eid, 'entity')
           return comp ? [{ eid, name: 'entity', comp }] : []
         })
@@ -201,7 +224,7 @@ export let fleetStamps = (host: StampHost) => {
   }
   let policy: StampPolicy = (b) => {
     let s = current(), eid = b.entity.eid
-    if (dead(b) || host.component(eid, 'tombstone')) return null
+    if (dead(b) || gone(eid)) return null
     let kind: 'created' | 'updated' | null = s.minted.has(eid)
       ? 'created'
       : s.touched.has(eid)
@@ -218,10 +241,19 @@ export let fleetStamps = (host: StampHost) => {
   return {
     plugin,
     policy,
+    input: () => current().input,
+    now: () => current().now,
     capture: {
       name: 'fleet/authorship',
       hooks: {
         precondition: (bundles: Bundle[]) => {
+          current().owners = bundles.map((b) => b.entity.eid)
+          // Only death or a claim operation can release a prior holder. Take
+          // its ordered history before any write, including session retargets
+          // earlier in the same batch, but do not scan claims on document edits.
+          if (bundles.some((b) => dead(b) || b.claim !== undefined)) {
+            current().prior = priorClaimsOf(host)
+          }
           for (let b of bundles) {
             for (let name of ['created', 'updated']) {
               let comp = b[name] as Comp | undefined
@@ -240,18 +272,21 @@ export let fleetStamps = (host: StampHost) => {
       fn: (opts: ApplyOpts) => T,
     ): T => {
       let now = opts?.now ?? new Date().toISOString()
-      let s = state(input, now)
+      let s = state(input, now, opts?.now !== undefined)
       stack.push(s)
       try {
-        let out = fn({ ...opts, now })
+        let out = fn({ ...opts })
         if (!opts?.check && input.trace) {
-          for (let c of s.created) input.trace.created.add(c)
-          for (let [eid, names] of s.removed) {
-            input.trace.removed.set(eid, [
-              ...(input.trace.removed.get(eid) ?? []),
-              ...names,
-            ])
-          }
+          let trace = input.trace
+          host.afterCommit(() => {
+            for (let c of s.created) trace.created.add(c)
+            for (let [eid, names] of s.removed) {
+              trace.removed.set(eid, [
+                ...(trace.removed.get(eid) ?? []),
+                ...names,
+              ])
+            }
+          })
         }
         return out
       } finally {
@@ -269,13 +304,20 @@ export let fleetStamps = (host: StampHost) => {
         }
       }
     },
+    found: (eids: string[], bundles: Bundle[]) => {
+      let found = current().found
+      for (let eid of eids) found.set(eid, null)
+      for (let b of bundles) found.set(b.entity.eid, b)
+    },
     patch: (b: Bundle) => {
       let s = current()
       if (!s?.active) return
       let eid = b.entity.eid
       s.touched.add(eid)
       for (let [name, comp] of comps(b)) {
-        let held = host.component(eid, name)
+        let held = s.found.has(eid)
+          ? s.found.get(eid)?.[name] as Comp | undefined
+          : host.component(eid, name)
         if (comp == null) { if (held) took(eid, name) }
         else if (!held) s.created.add(`${name} ${eid}`)
         if ((name == 'created' || name == 'updated') && comp && 'by' in comp) {
@@ -287,10 +329,20 @@ export let fleetStamps = (host: StampHost) => {
             if (ends?.[col]) s.touched.add(String(ends[col]))
           }
         }
+        // Presence and edge endpoints only: SQL defaults remain storage's
+        // truth and whole creation echoes still read them after mutation.
+        if (s.found.has(eid)) {
+          s.found.set(eid, {
+            ...s.found.get(eid),
+            entity: b.entity,
+            [name]: comp == null ? null : { ...held, ...comp },
+          })
+        }
       }
     },
     remove: (eid: string, names: string[]) => {
       if (current()?.active) {
+        current().found.set(eid, { entity: { eid }, tombstone: {} })
         for (let name of host.removalOrder()) {
           if (names.includes(name)) took(eid, name)
         }

@@ -185,6 +185,23 @@ export let fleetDocs = (): VocabDoc[] => {
       }
     }
   }
+  // App-owned outcomes are readable but only the trusted server door may
+  // create, patch OR clear them. Bare presence alone grants no authority.
+  for (
+    let name of [
+      'lease',
+      'usage',
+      'imported',
+      'resume',
+      'delivered',
+      'error',
+      'exception',
+      'redaction',
+    ]
+  ) {
+    let def = docs.map((d) => d.$defs?.[name]).find((x) => x)
+    if (def) def.wire = false
+  }
   // The fleet's derived columns (types.ts derivedProps) are hand-written fleet
   // logic, not manifest data: declared computed (persist: false) — readable,
   // routable, never writable, value computed downstream.
@@ -201,4 +218,21 @@ export let fleetDocs = (): VocabDoc[] => {
 }
 
 // The whole fleet vocabulary, loaded through @yaks/vocab.
-export let fleetVocab = (): Vocab => loadVocab(fleetDocs(), fleetKeywords)
+export let fleetVocab = (
+  own: Record<string, Record<string, PropType>> = {},
+): Vocab =>
+  loadVocab([
+    ...fleetDocs(),
+    {
+      $defs: Object.fromEntries(
+        Object.entries(own).map(([name, props]) => [name, {
+          type: 'object',
+          properties: Object.fromEntries(
+            Object.entries(props).map((
+              [col, type],
+            ) => [col, propOf(type as ManifestType)]),
+          ),
+        }]),
+      ),
+    },
+  ], fleetKeywords)

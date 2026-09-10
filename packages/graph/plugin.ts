@@ -168,6 +168,12 @@ export type Tool = {
  * machinery is plugins, not privileged code.
  */
 export type Plugin = {
+  /** Ordered write policy. The factory sees the storage-ready batch once;
+   * its hook checks/rewrites each live operation against its already-written
+   * prefix. Opting in makes mutate/cascade run per operation, in the SAME
+   * transaction. $was remains a pre-write FOUND-state guard. No external
+   * side effects: any later refusal rolls the entire prefix back. */
+  beforeWrite?: (bundles: Bundle[]) => Hook
   /** the plugin's name, for diagnostics */
   name: string
   /** the components this plugin contributes, as @yaks/vocab documents */

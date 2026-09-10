@@ -3,7 +3,7 @@
 // @yaks/graph asks for. WHICH entities a delete takes with it is the graph's
 // decision, held in ./graph_test.ts.
 
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Comp } from './bundle.ts'
 import type { Driver } from './driver.ts'
 import { mem, shop, store } from './harness.ts'
@@ -233,4 +233,28 @@ Deno.test('number:false reports explicit unnumbered births without consuming num
     numbered.tx((tx) => tx.patch([{ entity: { eid: 'n' }, doc: {} }])),
     [{ eid: 'n', num: 1 }],
   )
+})
+
+Deno.test('partial updates and bare tags respect required columns and SQL defaults', () => {
+  let d = mem(), s = storage(d, shop)
+  s.install()
+  d.exec(`drop table doc;
+    create table doc (entity integer primary key references entity(id),
+      title text not null default 'untitled', body text not null)`)
+  write(s, [{ entity: { eid: 'a' }, doc: { body: 'body' } }])
+  write(s, [{ entity: { eid: 'a' }, doc: { title: 'changed' } }])
+  write(s, [{ entity: { eid: 'a' }, doc: {} }])
+  let get = () => s.tx((tx) => tx.get(['a']))[0]
+  assertEquals(get().doc, { title: 'changed', body: 'body' })
+  assertThrows(
+    () =>
+      write(s, [
+        { entity: { eid: 'a' }, doc: { title: 'rolled back' } },
+        { entity: { eid: 'bad' }, doc: { title: 'missing body' } },
+      ]),
+    Error,
+    'NOT NULL',
+  )
+  assertEquals(get().doc, { title: 'changed', body: 'body' })
+  assertEquals(s.tx((tx) => tx.get(['bad'])), [])
 })

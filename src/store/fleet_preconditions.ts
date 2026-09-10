@@ -1,20 +1,17 @@
 // Fleet refusal policy composed over package hooks. Ordered checks share the
-// live writer's SQL truths; the staged graph supplies a rollback-only prefix.
+// live writer's SQL truths over the same transaction's already-written prefix.
 import {
   actorOf,
   type Bundle,
+  type Comp,
   dead,
   detached,
-  doomed,
   type Graph,
   isPromise,
   type Plugin,
-  preflight,
-  type Storage,
   type Tx,
 } from '@yaks/graph'
 import { Bounced as LeaseBounced, sessions } from '@yaks/session'
-import type { Vocab } from '@yaks/vocab'
 import { type Change, slugsOf } from '../types.ts'
 import type { Sql, Statement } from './sql.ts'
 import { asBundle, asChanges } from './wire.ts'
@@ -31,7 +28,7 @@ export type GuardHost = {
   prepare: (sql: string) => Statement
   name: (eid: string) => string
   bounce: (err: LeaseBounced) => Error
-  settle: (change: Change) => Change | null
+  settle: (change: Change, row?: Comp) => Change | null
   before: (changes: Change[]) => void
   references: (changes: Change[]) => void
   after: (changes: Change[], created: string[]) => void
@@ -101,21 +98,89 @@ export let checkFleetChange = (
 
 export let fleetPreconditions = (
   host: GuardHost,
-  storage: Storage,
-  vocab: Vocab,
 ): Plugin => ({
   name: 'fleet/preconditions',
+  beforeWrite: (bundles) => {
+    let changes = bundles.flatMap(asChanges)
+    // A gathered existing component stays complete as patches fold into it.
+    // A new/recreated row may acquire SQL defaults the gather cannot invent;
+    // those keys must still settle against storage, not a partial echo.
+    let fresh = new Set(
+      bundles.flatMap((b) =>
+        Object.keys(b.$fleetCreated ?? {}).map((name) =>
+          `${name} ${b.entity.eid}`
+        )
+      ),
+    )
+    let actor = bundles.some((b) => b.$actor)
+      ? actorOf(bundles).by ?? null
+      : undefined
+    return (bs, tx) => {
+      let out: Bundle[] = []
+      for (let b of bs) {
+        let held = sync(tx.get([b.entity.eid]))[0]
+        let cs = asChanges(b)
+        for (let c of cs) {
+          checkFleetChange(
+            host,
+            tx,
+            c,
+            changes,
+            (b.$workClaim as { target?: string } | undefined)?.target,
+            actor,
+          )
+        }
+        if (!dead(b)) {
+          let keep = { ...b }
+          let changed = false
+          for (let c of cs) {
+            if (c.name == 'entity') continue
+            // CAS has swapped the storage value; settle against hydrated
+            // text, then retain only the storage columns that differ.
+            let body = (b.$blob as Record<string, unknown> | undefined)
+              ?.['doc.body']
+            let logical = c.name == 'doc' && c.comp && body !== undefined
+              ? { ...c, comp: { ...c.comp, body } }
+              : c
+            let row = held?.[c.name] as Comp | undefined
+            // CAS mutation folds a storage reference into the prefix. Its
+            // body comparison, unlike title-only edits, needs hydrated SQL.
+            if (
+              fresh.has(`${c.name} ${c.eid}`) ||
+              (c.name == 'doc' && c.comp && 'body' in c.comp &&
+                typeof row?.body != 'string')
+            ) row = undefined
+            let left = b.$fleetMaterialized
+              ? logical
+              : host.settle(logical, row)
+            if (!left) {
+              delete keep[c.name]
+              continue
+            }
+            changed = true
+            keep[c.name] = left.comp && c.comp
+              ? Object.fromEntries(
+                Object.keys(left.comp).map((col) => [col, c.comp![col]]),
+              )
+              : left.comp
+            if (c.name == 'doc' && (!left.comp || !('body' in left.comp))) {
+              delete keep.$blob
+            }
+          }
+          if (changed || !cs.length) out.push(keep)
+        } else out.push(b)
+      }
+      return out
+    }
+  },
   hooks: {
     precondition: (bundles) => {
       let changes = bundles.flatMap(asChanges)
       host.before(changes)
       host.references(changes)
-      let actor = bundles.some((b) => b.$actor)
-        ? actorOf(bundles).by ?? null
-        : undefined
       // Keep component order too: doc+comment is a create shape, while the
       // SQL prefix must still see decided before claim on the same bundle.
-      let ordered = bundles.flatMap((b) => {
+      return bundles.flatMap((b) => {
         let cs = asChanges(b).filter((c) =>
           c.name != 'entity' || c.comp == null
         )
@@ -130,61 +195,6 @@ export let fleetPreconditions = (
           })) as Bundle[]
           : [b]
       })
-      return preflight(storage, vocab, (bs, tx) => {
-        let out: Bundle[] = []
-        for (let b of bs) {
-          for (let c of asChanges(b)) {
-            checkFleetChange(
-              host,
-              tx,
-              c,
-              changes,
-              (b.$workClaim as { target?: string } | undefined)?.target,
-              actor,
-            )
-          }
-          if (dead(b)) {
-            // Core cascades after mutation; legacy deletes release aliases
-            // immediately. Carry those releases into the real mutation batch
-            // as well as the rehearsal, so SQLite's unique primary index sees
-            // the same prefix as the membership guard (including casualties).
-            let gone = sync(doomed(tx, vocab, [b.entity.eid]))
-            for (let held of sync(tx.get(gone))) {
-              if (held.alias) out.push({ entity: held.entity, alias: null })
-            }
-          }
-          if (!dead(b)) {
-            let keep = { ...b }
-            let changed = false
-            for (let c of asChanges(b)) {
-              if (c.name == 'entity') continue
-              // CAS has swapped the storage value; settle against hydrated
-              // text, then retain only the storage columns that differ.
-              let body = (b.$blob as Record<string, unknown> | undefined)
-                ?.['doc.body']
-              let logical = c.name == 'doc' && c.comp && body !== undefined
-                ? { ...c, comp: { ...c.comp, body } }
-                : c
-              let left = b.$fleetMaterialized ? logical : host.settle(logical)
-              if (!left) {
-                delete keep[c.name]
-                continue
-              }
-              changed = true
-              keep[c.name] = left.comp && c.comp
-                ? Object.fromEntries(
-                  Object.keys(left.comp).map((col) => [col, c.comp![col]]),
-                )
-                : left.comp
-              if (c.name == 'doc' && (!left.comp || !('body' in left.comp))) {
-                delete keep.$blob
-              }
-            }
-            if (changed || !asChanges(b).length) out.push(keep)
-          } else out.push(b)
-        }
-        return out
-      })(ordered, detached(storage))
     },
     commit: (bundles) => {
       host.after(

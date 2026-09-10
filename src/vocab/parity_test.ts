@@ -60,7 +60,23 @@ let canonCol = (c: Column): string =>
 // ---- parity ----------------------------------------------------------------
 
 Deno.test('parity: the writable component list', () => {
-  assertEquals(v.comps, Object.keys(comps).sort())
+  // The fleet's old generated map includes empty declarations for outcomes
+  // whose row exists but whose presence is not writable. The composed graph
+  // now expresses that existing app boundary as wire:false.
+  let server = [
+    'lease',
+    'usage',
+    'imported',
+    'resume',
+    'delivered',
+    'error',
+    'exception',
+    'redaction',
+  ]
+  assertEquals(
+    v.comps,
+    Object.keys(comps).filter((c) => !server.includes(c)).sort(),
+  )
 })
 
 Deno.test('parity: kindOrder, exactly', () => {

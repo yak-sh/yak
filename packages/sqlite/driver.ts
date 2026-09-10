@@ -22,6 +22,9 @@ export type Param = string | number | bigint | boolean | null | Uint8Array
 //   tx     optional: the engine's own transaction, when SQL cannot open one
 export type Driver = {
   query: (sql: string, params: Param[]) => Row[]
+  /** Run a write without materializing rows and return its affected-row count
+   * (excluding triggers). Optional for query-only drivers. */
+  run?: (sql: string, params: Param[]) => number
   exec: (sql: string) => void
   /**
    * Run `body` as one all-or-nothing unit — commit when it returns, roll back

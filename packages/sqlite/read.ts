@@ -173,22 +173,51 @@ export let get = (
     let ids = eids.slice(i, i + 4096)
     let params = [JSON.stringify(ids)]
     let sub = 'select value from json_each(?)'
+    let owners: number[] = []
     for (
       let row of driver.query(
-        `select e.eid, e.num, t.entity as dead from entity e
+        `select e.id, e.eid, e.num, t.entity as dead from entity e
        left join tombstone t on t.entity = e.id where e.eid in (${sub})`,
         params,
       )
     ) {
       let eid = String(row.eid)
+      owners.push(Number(row.id))
       let entity = { eid, ...row.num == null ? {} : { num: Number(row.num) } }
       found.set(eid, row.dead == null ? { entity } : tombstoned(entity))
     }
-    if (!ids.some((id) => found.has(id))) continue
-    for (let comp of vocab.all) {
-      if (comp == 'entity') continue
+    if (!owners.length) continue
+    params = [JSON.stringify(owners)]
+    // A wide vocabulary is usually sparse. Ask which tables have rows in
+    // this set before projecting their columns; empty facets need no joins
+    // or driver round trip. Every probe uses the same bound owner set.
+    let names = vocab.all.filter((c) => c != 'entity')
+    let present: string[] = []
+    // Stay below SQLite's compound-select limit even for very wide vocabularies.
+    for (let j = 0; j < names.length; j += 400) {
+      present.push(
+        ...driver.query(
+          `with owners as materialized (select value from json_each(?)) ` +
+            names.slice(j, j + 400).map((c) =>
+              `select '${c}' as name where exists (select 1 from owners
+            cross join "${c}" where "${c}".entity = owners.value)`
+            ).join(' union all '),
+          params,
+        ).map((r) => String(r.name)),
+      )
+    }
+    for (let comp of present) {
       for (
-        let row of driver.query(setSql(vocab, comp, sub, opts.derived), params)
+        let row of driver.query(
+          selectComp(
+            vocab,
+            comp,
+            opts.derived ?? {},
+            [`o.eid as "${OWNER}"`],
+            `"${comp}".entity in (${sub})`,
+          ),
+          params,
+        )
       ) {
         let b = found.get(String(row[OWNER]))!
         if ('tombstone' in b) continue

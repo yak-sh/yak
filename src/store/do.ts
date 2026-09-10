@@ -9,6 +9,7 @@
 // Each choice below was checked against workerd itself (1.20251008 under
 // wrangler 4.42.2), not the docs alone; the probe's answers are recorded at
 // the member that depends on them.
+import { Commits } from './commit.ts'
 import {
   type Can,
   type RunResult,
@@ -123,6 +124,7 @@ export class DoStatement implements Statement {
 export class DoSql implements Sql {
   #storage: DoStorage
   #depth = 0
+  #commits = new Commits()
   // FTS5 is compiled in (unicode61 and trigram tokenizers both answered), so
   // the FTS DDL plants and search() serves. `create temp table` is refused by
   // workerd's authorizer ("not authorized: SQLITE_AUTH"), so db.ts keeps its
@@ -170,12 +172,18 @@ export class DoSql implements Sql {
   // object is its store's only writer, and a write outside any transaction is
   // coalesced into workerd's implicit one for the event-loop turn.
   transaction<T>(fn: () => T, _immediate = false): T {
-    this.#depth++
-    try {
-      return this.#storage.transactionSync(fn)
-    } finally {
-      this.#depth--
-    }
+    return this.#commits.run(() => {
+      this.#depth++
+      try {
+        return this.#storage.transactionSync(fn)
+      } finally {
+        this.#depth--
+      }
+    })
+  }
+
+  afterCommit(fn: () => void): void {
+    this.#commits.after(fn)
   }
 
   get inTransaction() {

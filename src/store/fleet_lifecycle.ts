@@ -1,4 +1,4 @@
-// Fleet lifecycle policy, shared by live apply and the composed phase hooks.
+// Fleet lifecycle policy, called by the composed graph's phase hooks.
 // SQL stays behind the host's cached statements; no graph apply or effects run
 // here. The caller owns the write lock, batch clock and ordered operation log.
 import type { Change } from '../types.ts'
@@ -67,21 +67,6 @@ export let lifecycleBefore = (
   // unsettled task pushes it for the holder's actor. A wrap releases several
   // claims in one batch, so claimed_at supplies their nested order and rank
   // preserves it after those lease rows are gone.
-  let finalClaims = new Set(
-    (host.prepare(
-      'select o.eid as eid from claim c join entity o on o.id = c.entity',
-    ).all() as { eid: string }[])
-      .map((r) => r.eid),
-  )
-  // Status is derived (D-24102): settled = wears completed or cancelled. A
-  // non-task eid returns no row, exactly as the old `select status` did.
-  let settledRow = host.prepare(
-    `select (
-         exists(select 1 from cancelled x where x.entity = t.entity)
-         or exists(select 1 from completed x where x.entity = t.entity)
-       ) as settled
-       from task t where t.entity = (select id from entity where eid = ?)`,
-  )
   let clear = new Set(
     changes.filter((c) =>
       c.name == 'claim' || c.name == 'task' || c.name == 'completed' ||
@@ -89,48 +74,65 @@ export let lifecycleBefore = (
     )
       .map((c) => c.eid),
   )
-  for (let eid of clear) {
-    let task = settledRow.get(eid) as { settled: number } | undefined
-    if (!finalClaims.has(eid) && task && !task.settled) continue
-    if (
-      host.prepare(
-        'delete from resume where entity = (select id from entity where eid = ?)',
-      ).run(eid).changes
-    ) {
-      took(eid, 'resume')
-      extra.push({ eid, name: 'resume', comp: null })
-    }
-  }
-  let released = priorClaims
-    .filter((c) => !finalClaims.has(c.eid))
-    .filter((c) => {
-      let task = settledRow.get(c.eid) as { settled: number } | undefined
-      return task && !task.settled
-    })
-    .map((c) => ({ ...c, actor: c.actor ?? host.venture(c.cwd) }))
-    .filter((c) => c.actor)
-    .sort((a, b) =>
-      a.claimed_at.localeCompare(b.claimed_at) ||
-      a.claim_order - b.claim_order
+  if (priorClaims.length || clear.size) {
+    let finalClaims = new Set(
+      (host.prepare(
+        'select o.eid as eid from claim c join entity o on o.id = c.entity',
+      ).all() as { eid: string }[])
+        .map((r) => r.eid),
     )
-  let top = Number(
-    (host.prepare('select coalesce(max(rank), 0) as rank from resume')
-      .get() as {
-        rank: number
-      }).rank,
-  )
-  let push = host.prepare(
-    `
+    // Status is derived (D-24102): settled = wears completed or cancelled. A
+    // non-task eid returns no row, exactly as the old `select status` did.
+    let settledRow = host.prepare(
+      `select (
+         exists(select 1 from cancelled x where x.entity = t.entity)
+         or exists(select 1 from completed x where x.entity = t.entity)
+       ) as settled
+       from task t where t.entity = (select id from entity where eid = ?)`,
+    )
+    for (let eid of clear) {
+      let task = settledRow.get(eid) as { settled: number } | undefined
+      if (!finalClaims.has(eid) && task && !task.settled) continue
+      if (
+        host.prepare(
+          'delete from resume where entity = (select id from entity where eid = ?)',
+        ).run(eid).changes
+      ) {
+        took(eid, 'resume')
+        extra.push({ eid, name: 'resume', comp: null })
+      }
+    }
+    let released = priorClaims
+      .filter((c) => !finalClaims.has(c.eid))
+      .filter((c) => {
+        let task = settledRow.get(c.eid) as { settled: number } | undefined
+        return task && !task.settled
+      })
+      .map((c) => ({ ...c, actor: c.actor ?? host.venture(c.cwd) }))
+      .filter((c) => c.actor)
+      .sort((a, b) =>
+        a.claimed_at.localeCompare(b.claimed_at) ||
+        a.claim_order - b.claim_order
+      )
+    let top = Number(
+      (host.prepare('select coalesce(max(rank), 0) as rank from resume')
+        .get() as {
+          rank: number
+        }).rank,
+    )
+    let push = host.prepare(
+      `
       insert into resume (entity, actor, at, rank)
       values ((select id from entity where eid = ?), ?, ?, ?)
       on conflict(entity) do update set actor = excluded.actor,
         at = excluded.at, rank = excluded.rank
     `,
-  )
-  for (let item of released) {
-    let comp = { actor: String(item.actor), at: now, rank: ++top }
-    push.run(item.eid, host.id(comp.actor), comp.at, comp.rank)
-    extra.push({ eid: item.eid, name: 'resume', comp })
+    )
+    for (let item of released) {
+      let comp = { actor: String(item.actor), at: now, rank: ++top }
+      push.run(item.eid, host.id(comp.actor), comp.at, comp.rank)
+      extra.push({ eid: item.eid, name: 'resume', comp })
+    }
   }
   // A session that RAN somewhere but names no actor gets one from where
   // it stands — the writing identity is never blank (T-6669). Resolved
@@ -144,16 +146,21 @@ export let lifecycleBefore = (
   let fill = host.prepare(
     'update session set actor = ? where entity = (select id from entity where eid = ?)',
   )
-  let has = host.prepare(
-    `select s.cwd as cwd, act.eid as actor from session s
+  // One set read, not one query per touched document. Keep touch order for
+  // the synthesized writes, and read AFTER facet mirroring above.
+  let sessions = touched.size
+    ? host.prepare(
+      `select o.eid, s.cwd as cwd, act.eid as actor from session s
        join entity o on o.id = s.entity
        left join entity act on act.id = s.actor
-       where o.eid = ?`,
-  )
+       where o.eid in (select value from json_each(?))`,
+    ).all<{ eid: string; cwd: string | null; actor: string | null }>(
+      JSON.stringify([...touched]),
+    )
+    : []
+  let has = new Map(sessions.map((s) => [s.eid, s]))
   for (let eid of touched) {
-    let s = has.get(eid) as
-      | { cwd: string | null; actor: string | null }
-      | undefined
+    let s = has.get(eid)
     if (!s || s.actor || !s.cwd) continue
     let a = host.venture(s.cwd)
     if (a) {

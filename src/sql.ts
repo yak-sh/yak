@@ -15,11 +15,11 @@ import {
   Unsupported,
   walkRows,
 } from '@yaks/sql'
-import { loadVocab, Unknown, type Vocab, type VocabDoc } from '@yaks/vocab'
+import { Unknown, type Vocab } from '@yaks/vocab'
 import { blobRead } from '@yaks/blob'
 import { fields, search } from '@yaks/fts'
 import { traverse } from '@yaks/edge'
-import { fleetVocabOf, vocabOf } from './db.ts'
+import { fleetVocabOf } from './db.ts'
 import type { Sql } from './store/sql.ts'
 import { derived } from './sql_derived.ts'
 import { sentences } from './edge.ts'
@@ -41,39 +41,14 @@ import {
 } from './query.ts'
 import { fromPackage, type Rel, toPackage } from './relation.ts'
 
-// Dynamic store vocabulary is additive, per handle, never a global routing
-// mutation. Its scalar bodies are inline; only doc.body is a CAS read override.
-let EMPTY: ReturnType<typeof vocabOf> = Object.freeze({})
-let held = new WeakMap<Sql, { own: object; v: Vocab; opts: BindOpts }>()
+// Reads and writes share the handle's complete vocabulary. Replanting the
+// store's own words replaces that handle and invalidates these read options.
+// Its scalar bodies are inline; only doc.body is a CAS read override.
+let held = new WeakMap<Sql, { v: Vocab; opts: BindOpts }>()
 let context = (db: Sql) => {
-  let planted = vocabOf(db)
-  let own = Object.keys(planted).length ? planted : EMPTY
-  let previous = held.get(db)
-  if (previous?.own === own) return previous
   let v = fleetVocabOf(db)
-  if (Object.keys(own).length) {
-    let doc: VocabDoc = {
-      $id: 'urn:fleet:store-read',
-      $defs: Object.fromEntries(
-        Object.entries(own).map(([name, cols]) => [name, {
-          type: 'object',
-          properties: Object.fromEntries(
-            Object.entries(cols).map(([prop, type]) => [
-              prop,
-              type == 'number'
-                ? { type: 'number' }
-                : type == 'bool'
-                ? { type: 'boolean' }
-                : type == 'time'
-                ? { type: 'string', format: 'date-time' }
-                : { type: 'string' },
-            ]),
-          ),
-        }]),
-      ),
-    }
-    v = loadVocab([...v.docs, doc], v.keywords)
-  }
+  let previous = held.get(db)
+  if (previous?.v === v) return previous
   let docs = search(fields(v).filter((f) => f.comp == 'doc'))
   // Entries are a separate lazy partition with their own FTS index. Compose
   // its search explicitly; never register every fleet text/body column.
@@ -91,7 +66,7 @@ let context = (db: Sql) => {
       },
     }],
   }
-  let entry = { own, v, opts }
+  let entry = { v, opts }
   held.set(db, entry)
   return entry
 }

@@ -12,6 +12,7 @@
 // initializes. Static + fully qualified (same pin as deno.json) because a
 // worker's module graph resolves no bare specifiers and a dynamic import
 // under --frozen wedges silently inside a worker.
+import { Commits } from './commit.ts'
 import { sqlitePath as path } from './sqlitepath.ts'
 import * as sqlite from 'jsr:@db/sqlite@0.13.0'
 import { dirname, resolve } from 'node:path'
@@ -116,6 +117,7 @@ export class StatementSync implements Statement {
 
 export class DatabaseSync implements Sql {
   #db: InstanceType<typeof DriverDatabase>
+  #commits = new Commits()
   #ftsWorker?: Worker
   #guard?: ReturnType<typeof registerGraphFile>
   can: Can = { fts: true, temp: true }
@@ -165,7 +167,15 @@ export class DatabaseSync implements Sql {
   // Roll back only what began: a `begin immediate` that fails on SQLITE_BUSY
   // opens no transaction, and an unconditional `rollback` there throws "no
   // transaction is active" and MASKS the BUSY (T-19044).
+  afterCommit(fn: () => void): void {
+    this.#commits.after(fn)
+  }
+
   transaction<T>(fn: () => T, immediate = false): T {
+    return this.#commits.run(() => this.#transaction(fn, immediate))
+  }
+
+  #transaction<T>(fn: () => T, immediate: boolean): T {
     let nested = this.inTransaction
     let name = `tx_${++depth}`
     this.exec(

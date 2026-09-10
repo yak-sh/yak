@@ -44,7 +44,7 @@
 // (that is @yaks/logic's unification, v2). A rule that writes one is refused
 // where it would otherwise have compared against the literal text.
 
-import { type Filter, filter } from '@yaks/match'
+import { matcher, type Select } from '@yaks/match'
 import {
   type And,
   declared,
@@ -216,7 +216,7 @@ export type Rule = {
 // A rule's match, compiled: the test, and the names its sigils named. A `test`
 // of null is a rule this graph has no vocabulary for — inert, not wrong.
 type Ready = {
-  test: Filter | null
+  test: Select | null
   ensures: string[]
   gates: string[]
   resources: string[]
@@ -270,7 +270,15 @@ let compile = (r: Rule, v: Vocab): Ready => {
     checked: d.writes.length > 0,
   }
   try {
-    ready.test = filter(d.filter, v)
+    // A phase selects from one frozen set. Building its reference index once
+    // per rule (not once per entity) keeps a batch linear in its size. Rules
+    // are predicates: ordering and windows do not limit which entities fire.
+    ready.test = matcher({
+      ...d.filter,
+      clauses: d.filter.clauses.filter((c) =>
+        !['order', 'limit', 'after'].includes(c.kind)
+      ),
+    }, v)
   } catch (e) {
     // A rule about a component this graph does not have is INERT, not an
     // error: the stamp rules ship with the core, and a vocabulary need not
@@ -341,6 +349,7 @@ export let fire = (
     written.set(eid, names)
   }
   let views = [...seen.values()]
+  let positions = new Map(views.map((v, i) => [v.entity.eid, i]))
   // Made once, however many rules name it: `#Now` is one instant for the whole
   // tick because it is one call for the whole tick.
   let held = new Map<string, unknown>()
@@ -374,12 +383,12 @@ export let fire = (
     }
     let test = ready.test
     if (!test) continue
-    views.forEach((v, i) => {
+    test(views).forEach((v) => {
       if (
         tick.phase == 'effect' && ready.checked &&
         !ready.writes.some((name) => written.get(v.entity.eid)?.has(name))
       ) return
-      if (test(v, views)) hits.push([r, ready, i])
+      hits.push([r, ready, positions.get(v.entity.eid)!])
     })
   }
   if (!hits.length) return bundles
