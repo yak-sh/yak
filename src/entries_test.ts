@@ -203,7 +203,7 @@ Deno.test('lease and usage facets are server-owned and one runner wins', () => {
   db.close()
 })
 
-Deno.test('only expired generation and read-only call leases can be reclaimed', () => {
+Deno.test('expired safe work and reattachable shells can be reclaimed', () => {
   let db = freshDb()
   let sid = session(db), old = uuid(), next = uuid()
   apply(db, [
@@ -290,7 +290,7 @@ Deno.test('only expired generation and read-only call leases can be reclaimed', 
   append(db, sid, [{
     output: { source: generation },
     call: { key: 'side-effect' },
-    bash: { command: 'echo once' },
+    apply: { changes: '[]' },
   }])
   let call = readEntries(db, sid).at(-1)!.eid
   let sideEffect = takeEntry(

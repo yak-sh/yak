@@ -773,15 +773,28 @@ export let executeCall = async (
   row: EntryRow,
   tools: ToolHost,
   signal?: AbortSignal,
+  resume = false,
 ) => {
   let call = requestOf(row)
   let outcome: ToolOutcome
   try {
-    outcome = await tools.call(call.name, call.args, { signal })
+    if (resume && !tools.resume) {
+      throw new Error(
+        'runner restarted mid-call; operation outcome is ambiguous; inspect state before retrying',
+      )
+    }
+    outcome = await (resume ? tools.resume! : tools.call)(
+      call.name,
+      call.args,
+      { signal, entry: row.eid },
+    )
   } catch (error) {
     outcome = {
       output: `tool failed: ${(error as Error).message}`,
       failed: true,
+      ...(resume
+        ? { facets: { error: { message: String((error as Error).message) } } }
+        : {}),
     }
   }
   return resultEntry(row.eid, outcome)

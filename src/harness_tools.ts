@@ -5,6 +5,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js'
 import { resolve } from 'node:path'
+import { hostedShell } from './hosted_shell.ts'
 import { childEnv } from './agent_env.ts'
 import { type IO, mcpServer } from './mcp.ts'
 
@@ -22,7 +23,14 @@ export type ToolOutcome = {
   facets?: Record<string, Record<string, unknown>>
 }
 
-export type ToolContext = { signal?: AbortSignal }
+export type ToolContext = { signal?: AbortSignal; entry?: string }
+
+// Reattachment is a separate door: a host without it must NEVER replay a shell.
+export type ResumeTool = (
+  name: string,
+  args: Record<string, unknown>,
+  context: ToolContext,
+) => Promise<ToolOutcome>
 
 export type ToolHost = {
   tools: ToolDefinition[]
@@ -31,6 +39,7 @@ export type ToolHost = {
     args: Record<string, unknown>,
     context?: ToolContext,
   ) => Promise<ToolOutcome>
+  resume?: ResumeTool
   close?: () => Promise<void>
 }
 
@@ -180,6 +189,7 @@ export type LocalToolOptions = {
   session?: string
   codex?: string
   outputLimit?: number
+  processDir?: string
 }
 
 export let localTools = async (
@@ -275,10 +285,40 @@ export let localTools = async (
     }
   }
 
+  let shell = async (
+    args: Record<string, unknown>,
+    context: ToolContext,
+    resume = false,
+  ) => {
+    if (!context.entry) throw new Error('shell recovery needs a call entry')
+    words(args, ['command', 'cwd', 'timeout_ms'])
+    if (typeof args.command != 'string') throw new Error('command is required')
+    if (args.cwd != null && typeof args.cwd != 'string') {
+      throw new Error('tool cwd must be text')
+    }
+    let cwd = await Deno.realPath(resolve(tree, args.cwd ?? '.'))
+    return hostedShell({
+      entry: context.entry,
+      command: args.command,
+      cwd,
+      env: childEnv(options.session, tree),
+      timeout: bounded(args.timeout_ms),
+      limit,
+      dir: options.processDir,
+      signal: context.signal,
+      resume,
+    })
+  }
+
   return {
     tools: localDefinitions,
+    resume: (name, args, context) => {
+      if (name != 'shell') throw new Error(`cannot reattach tool: ${name}`)
+      return shell(args, context, true)
+    },
     call: async (name, args, context = {}) => {
       if (name == 'shell') {
+        if (context.entry) return shell(args, context)
         words(args, ['command', 'cwd', 'timeout_ms'])
         if (typeof args.command != 'string') {
           throw new Error('command is required')
@@ -430,6 +470,15 @@ export let combineTools = (...hosts: ToolHost[]): ToolHost => {
       let host = owners.get(name)
       if (!host) throw new Error(`unknown tool: ${name}`)
       return await host.call(name, args, context)
+    },
+    resume: async (name, args, context) => {
+      let host = owners.get(name)
+      if (!host?.resume) {
+        throw new Error(
+          'runner restarted mid-call; operation outcome is ambiguous; inspect state before retrying',
+        )
+      }
+      return await host.resume(name, args, context)
     },
     close: async () => {
       for (let host of hosts.toReversed()) await host.close?.()

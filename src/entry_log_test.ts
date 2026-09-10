@@ -460,3 +460,28 @@ Deno.test('stop consumes queued input without losing the interrupted turn', () =
   equiv([...rows, row('resume', 7, { attention: {} })], 'idle')
   equiv([...rows, row('resume', 7, { message: { role: 'user' } })], 'idle')
 })
+
+Deno.test('runner death on a call never flashes failed before the next generation', () => {
+  let rows = [
+    row('input', 1, { message: { role: 'user' } }),
+    row('gen', 2, { generation: { through: 'input' }, delivered: {} }),
+    row('call', 3, {
+      output: { source: 'gen' },
+      call: { key: 'shell' },
+      bash: { command: 'work' },
+      error: { message: 'runner disappeared' },
+    }),
+  ]
+  assertEquals(sessionStateOf(rows), { standing: 'idle' })
+  // A reattached shell may have an explicit result; a legacy call only has
+  // its error and gets a synthetic provider result. Both await the next turn.
+  rows.push(
+    row('result', 4, {
+      result: { call: 'call' },
+      content: { body: 'interrupted' },
+    }),
+  )
+  assertEquals(sessionStateOf(rows), { standing: 'idle' })
+  rows.push(row('next', 5, { generation: { through: 'result' } }))
+  assertEquals(sessionStateOf(rows), { standing: 'busy' })
+})

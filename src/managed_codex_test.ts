@@ -597,7 +597,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'a reclaimed generation rejects its former lease observations',
   async () => {
     let db = freshDb()
@@ -609,13 +609,17 @@ slow(
     let newStarted = Promise.withResolvers<void>()
     let stale: ((event: ResponseEvent) => void) | undefined
     let observed: ({ source: string } & Observation)[] = []
+    let requests: unknown[] = []
+    let cast = () =>
+      assert(sessionStateOf(readEntries(db, sid)).end != 'failed')
     let old = managedCodex({
       db,
-      cast: () => {},
+      cast,
       clock: () => new Date('2026-08-10T12:00:00Z'),
       leaseMs: 100,
       transport: {
-        run: (_request, options) => {
+        run: (request, options) => {
+          requests.push(request)
           stale = options?.event
           oldStarted.resolve()
           return oldResult.promise
@@ -630,11 +634,12 @@ slow(
 
     let replacement = managedCodex({
       db,
-      cast: () => {},
+      cast,
       clock: () => new Date('2026-08-10T12:00:01Z'),
       leaseMs: 100,
       transport: {
-        run: (_request, options) => {
+        run: (request, options) => {
+          requests.push(request)
           options?.event?.({
             type: 'response.output_text.delta',
             delta: 'winner progress',
@@ -668,6 +673,17 @@ slow(
       content: [{ type: 'output_text', text: 'winner result' }],
     }]))
     await second
+    await replacement.sweep()
+    assertEquals(requests.length, 2)
+    assertEquals(requests[1], requests[0])
+    assertEquals(
+      readEntries(db, sid).filter((row) => row.comps.generation).length,
+      1,
+    )
+    assertEquals(
+      readEntries(db, sid).filter((row) => row.comps.output).length,
+      1,
+    )
     assertEquals(observed.at(-1), {
       source: 'new',
       session: sid,
@@ -1638,7 +1654,7 @@ slow('deleting a Session aborts its flight after entry cascades', async () => {
   db.close()
 })
 
-slow('restart reclaims a lost generation without minting another', async () => {
+Deno.test('restart reclaims a lost generation without minting another', async () => {
   let db = freshDb()
   let tree = Deno.makeTempDirSync()
   let sid = session(db, tree), old = uuid(), calls = 0
@@ -1812,7 +1828,7 @@ slow('restart reclaims task_context on the same call entry', async () => {
   db.close()
 })
 
-slow('restart leaves an uncertain side-effecting call ambiguous', async () => {
+Deno.test('restart leaves an uncertain side-effecting call recoverable', async () => {
   let db = freshDb()
   let tree = Deno.makeTempDirSync()
   let sid = session(db, tree), old = uuid(), calls = 0
@@ -1840,7 +1856,10 @@ slow('restart leaves an uncertain side-effecting call ambiguous', async () => {
   )
   let service = managedCodex({
     db,
-    cast: (changes) => casts.push(...changes),
+    cast: (changes) => {
+      casts.push(...changes)
+      assert(sessionStateOf(readEntries(db, sid)).end != 'failed')
+    },
     clock: () => new Date('2026-08-10T12:00:01Z'),
     transport: {
       run: () =>
@@ -1860,9 +1879,96 @@ slow('restart leaves an uncertain side-effecting call ambiguous', async () => {
     prepare: () => Promise.resolve(),
   })
   await service.sweep()
-  let row = readEntries(db, sid).find((row) => row.eid == call)!
-  assertMatch(String(row.comps.error.message), /outcome is ambiguous/)
-  assertEquals(row.comps.lease, undefined)
+  let rows = readEntries(db, sid)
+  let row = rows.find((row) => row.eid == call)!
+  assertMatch(String(row.comps.error.message), /restarted mid-call/)
+  assertEquals(rows.find((row) => row.eid == call)?.comps.lease, undefined)
+  assertEquals(calls, 0)
+  // Ambiguity is a known state on the interrupted call. It must not flash a
+  // Session exception on the live change stream: self-healing and settlement
+  // react before the successful recovery generation can clear that facet.
+  assertEquals(
+    casts.some((change) => change.eid == sid && change.name == 'exception'),
+    false,
+  )
+  db.close()
+})
+
+Deno.test('restart reattaches a shell on its original call and feeds its exit to the next turn', async () => {
+  let db = freshDb()
+  let tree = Deno.makeTempDirSync()
+  let sid = session(db, tree), old = uuid(), calls = 0
+  let casts: Change[] = []
+  let resumed: string[] = []
+  let inputs: unknown[] = []
+  writeSession(db, sid, { base_revision: 'base' })
+  apply(db, [{ eid: old, name: 'runner', comp: { name: 'old' } }])
+  let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
+  let generation = append(db, sid, [{
+    generation: { through: input, provider: 'codex', model: 'gpt-requested' },
+  }]).eids[0]
+  let lease = takeEntry(db, generation, old)!
+  append(db, sid, [{
+    output: { source: generation },
+    call: { key: 'uncertain-shell' },
+    bash: { command: 'do-not-repeat' },
+  }], old)
+  settleGeneration(db, lease.token)
+  let call = readEntries(db, sid).at(-1)!.eid
+  takeEntry(
+    db,
+    call,
+    old,
+    100,
+    () => new Date('2026-08-10T12:00:00Z'),
+  )
+  let service = managedCodex({
+    db,
+    cast: (changes) => {
+      casts.push(...changes)
+      assert(sessionStateOf(readEntries(db, sid)).end != 'failed')
+    },
+    clock: () => new Date('2026-08-10T12:00:01Z'),
+    transport: {
+      run: (request) => {
+        inputs.push(request.input)
+        return Promise.resolve(result([{
+          type: 'message',
+          content: [{ type: 'output_text', text: 'continued safely' }],
+        }]))
+      },
+    },
+    tools: () =>
+      Promise.resolve({
+        ...tools([]),
+        resume: (_name, _args, context) => {
+          resumed.push(context.entry!)
+          return Promise.resolve({
+            output: 'kept shell stdout',
+            facets: { exit: { code: 7 }, stderr: { text: 'kept stderr' } },
+          })
+        },
+        call: () => {
+          calls++
+          return Promise.resolve({ output: 'repeated' })
+        },
+      }),
+    prepare: () => Promise.resolve(),
+  })
+  await service.sweep()
+  let rows = readEntries(db, sid)
+  let row = rows.find((row) => row.eid == call)!
+  assertEquals(row.comps.error, undefined)
+  assertEquals(resumed, [call])
+  let results = rows.filter((row) => row.comps.result?.call == call)
+  assertEquals(results.length, 1)
+  assertEquals(results[0].comps.exit.code, 7)
+  assertMatch(JSON.stringify(inputs), /kept shell stdout/)
+  assertMatch(JSON.stringify(inputs), /kept stderr/)
+  assertEquals(rows.at(-1)?.comps.content?.body, 'continued safely')
+  await service.sweep()
+  assertEquals(resumed, [call])
+  assertEquals(rows.find((row) => row.eid == call)?.comps.lease, undefined)
   assertEquals(calls, 0)
   // Ambiguity is a known state on the interrupted call. It must not flash a
   // Session exception on the live change stream: self-healing and settlement
@@ -1971,10 +2077,10 @@ slow(
     await service.sweep()
 
     let rows = readEntries(db, sid)
-    // Reconciliation happened: the orphaned call is errored, no fabricated result.
+    // Reconciliation happened: an interrupted result closes the orphaned call.
     let callRow = rows.find((row) => row.eid == call)!
     assertMatch(String(callRow.comps.error.message), /outcome is ambiguous/)
-    assertEquals(rows.some((row) => row.comps.result?.call == call), false)
+    assertEquals(rows.filter((row) => row.comps.result?.call == call).length, 1)
     // The provider saw a valid input: the orphaned call paired with an output.
     let replay = inputs.at(-1)! as { type?: string; call_id?: string }[]
     assertEquals(replay.some((item) => item.type == 'function_call'), true)

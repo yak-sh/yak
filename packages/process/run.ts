@@ -61,6 +61,9 @@ export type Spec = {
 
 /** How the supervisor works, all optional. */
 export type Opts = {
+  /** import stream lines into the graph (default true); false keeps only the
+   * files for a caller that publishes its own bounded result */
+  stream?: boolean
   /** where pidfiles and stream files live (default `$PROCESS_DIR`, else
    * `~/.tasks/processes`) */
   dir?: string
@@ -368,7 +371,7 @@ export let launch = async (
   // one starts: the streams are picked up where they stand, and the pidfile
   // and code file GO — read as this attempt's, they would report the previous
   // process alive and already finished.
-  let tails = [tail(f.out), tail(f.err)]
+  let tails = o.stream === false ? [] : [tail(f.out), tail(f.err)]
   clear(f.pid)
   clear(f.code)
   spawn(eid, argv, cwd, spec.env ?? {}, dir)

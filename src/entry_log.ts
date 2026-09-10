@@ -251,7 +251,13 @@ export let sessionStateOf = (
         turnEids.has(String(row.comps.cancel.target)))
     )
   ) return { standing: 'terminal', end: 'interrupted' }
-  if (turn.some((row) => row.comps.error)) {
+  // Tool errors (including a vanished runner) are answers for the next model
+  // turn, not terminal failures. Between reconciliation and advance there may
+  // be no lease at all: publishing failed here lets settlement release claims
+  // before the scheduler has even issued that next generation.
+  if (
+    turn.some((row) => row.comps.error && !row.comps.call && !row.comps.result)
+  ) {
     return { standing: 'terminal', end: 'failed' }
   }
   return { standing: 'idle' }

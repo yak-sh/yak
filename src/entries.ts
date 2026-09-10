@@ -331,7 +331,8 @@ export let takeEntry = (
 // Generations and read-only graph calls only observe external state. Replaying
 // them may repeat provider work, billing, or serve bookkeeping, but cannot
 // repeat the caller's side effect. Reclaim only those classes under the
-// expired lease's full CAS; every other call remains ambiguous.
+// expired lease's full CAS. Shells may also be reclaimed, but ONLY through
+// the host's reattachment door, never by executing the command again.
 export let reclaimEntry = (
   db: Sql,
   stale: LeaseToken,
@@ -370,6 +371,7 @@ export let reclaimEntry = (
              and (
                exists (select 1 from graph_query q where q.entity = l.entity)
                or exists (select 1 from task_context t where t.entity = l.entity)
+               or exists (select 1 from bash b where b.entity = l.entity)
              )
              and not exists (select 1 from result r where r.call = l.entity))
          )`,

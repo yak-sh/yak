@@ -456,7 +456,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     }
   }
 
-  let call = async (token: LeaseToken, session: string) => {
+  let call = async (token: LeaseToken, session: string, resume = false) => {
     let control = new AbortController()
     flights.set(token.eid, { session, control })
     let stop = beat(token)
@@ -467,10 +467,20 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       tools = await options.tools(tree, session)
       let entry = readEntry(db, token.eid)
       if (!entry) throw new Error('no call entry')
-      let spec = await executeCall(entry, tools, control.signal)
+      let spec = await executeCall(
+        entry,
+        tools,
+        control.signal,
+        resume && !!entry.comps.bash,
+      )
       if (!valid(db, token)) return
-      cast(append(db, session, [spec], runner).changes)
-      cast(settleCall(db, token))
+      let { error, ...result } = spec
+      cast(append(db, session, [result], runner).changes)
+      cast(
+        error
+          ? failEntry(db, token, String(error.message), clock)
+          : settleCall(db, token),
+      )
     } catch (error) {
       if (!valid(db, token)) return
       let message = String((error as Error).message).slice(0, 2000)
@@ -615,7 +625,9 @@ export let managedCodex = (options: ManagedCodexOptions) => {
         : readyEntries(db, session).map((entry) => ({ session, ...entry }))
     )
     let jobs = recovered.map(({ session, token, kind }) =>
-      kind == 'generation' ? generation(token, session) : call(token, session)
+      kind == 'generation'
+        ? generation(token, session)
+        : call(token, session, true)
     )
     jobs.push(...ready.flatMap(({ session, eid }) => {
       let won = takeEntry(db, eid, runner, leaseMs, clock)
