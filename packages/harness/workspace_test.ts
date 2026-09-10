@@ -1,3 +1,4 @@
+import { daemon } from '@yaks/session'
 import { agent } from './run.ts'
 import { harnessTools } from './tools.ts'
 import { assert, assertEquals, assertRejects } from '@std/assert'
@@ -185,8 +186,9 @@ Deno.test('host preparation separates home and cwd, defaults to sharing, and ref
   }
 })
 
-Deno.test('spawn persists home before input, replay creates nothing, shell defaults are session-local', async () => {
+Deno.test('spawn prepares admitted home, replay creates nothing, shell defaults are session-local', async () => {
   let f = await fixture()
+  let d: ReturnType<typeof daemon> | undefined
   try {
     await f.h.g.apply([{
       entity: { eid: 'parent' },
@@ -199,7 +201,8 @@ Deno.test('spawn persists home before input, replay creates nothing, shell defau
       entry: { session: 'parent', seq: 1 },
     }, {
       entity: { eid: 'bad-spawn' },
-      call: {},
+      entry: { session: 'parent' },
+      call: { id: 'bad-spawn' },
     }])
     let tools = harnessTools(f.h.g, { cwd: f.repo })
     let spawn = tools.find((t) => t.name == 'spawn')!
@@ -213,6 +216,17 @@ Deno.test('spawn persists home before input, replay creates nothing, shell defau
     assertEquals(await spawn.run(args, ctx), child)
     let entries = await f.h.g.read('.entry.session=' + child)
     assertEquals(entries.length, 1)
+    d = daemon(
+      f.h.g,
+      f.h.fx,
+      {
+        tools: [],
+        model: () => Promise.resolve({ id: 'r', model: 'fake', items: [] }),
+      },
+      undefined,
+      () => {},
+    )
+    await d.idle(child)
     assertEquals(await sessionCwd(f.h.g, child, '/wrong'), f.dir + '/child')
     let shell = tools.find((t) => t.name == 'shell')!
     let out = await shell.run({ command: 'pwd' }, { ...ctx, session: child })
@@ -223,15 +237,15 @@ Deno.test('spawn persists home before input, replay creates nothing, shell defau
     })
     assert(explicit.includes(f.repo))
     assertEquals(await sessionCwd(f.h.g, child, '/wrong'), f.dir + '/child')
-    await assertRejects(async () =>
-      await spawn.run({
-        prompt: 'no',
-        worktree: { path: f.dir + '/fail', branch: 'main' },
-      }, { ...ctx, call: { entity: { eid: 'bad-spawn' } } })
-    )
-    assertEquals(await f.h.g.read('.session.id=child:bad-spawn'), [])
+    let failed = await spawn.run({
+      prompt: 'no',
+      worktree: { path: f.dir + '/fail', branch: 'main' },
+    }, { ...ctx, call: { entity: { eid: 'bad-spawn' } } })
+    await d.idle(failed)
+    assertEquals((await f.h.g.read('.session.id=child:bad-spawn')).length, 1)
     assertEquals((await f.h.g.read('.checkout.state=failed')).length, 1)
   } finally {
+    await d?.stop()
     await f.free()
   }
 })
@@ -266,8 +280,9 @@ Deno.test('root sessions discover and share the existing default worktree', asyn
   }
 })
 
-Deno.test('fork prepares its checkout before publishing the child input', async () => {
+Deno.test('queued fork preserves anchor and prepares checkout on admission', async () => {
   let f = await fixture()
+  let d: ReturnType<typeof daemon> | undefined
   try {
     let root = 'parent'
     let entries = [
@@ -300,9 +315,21 @@ Deno.test('fork prepares its checkout before publishing the child input', async 
       prompt: 'fork work',
       worktree: { path: f.dir + '/forked' },
     }, { session: root, call, entries })
+    d = daemon(
+      f.h.g,
+      f.h.fx,
+      {
+        tools: [],
+        model: () => Promise.resolve({ id: 'r', model: 'fake', items: [] }),
+      },
+      undefined,
+      () => {},
+    )
+    await d.idle(child)
     assertEquals(await sessionCwd(f.h.g, child, '/wrong'), f.dir + '/forked')
     assertEquals((await f.h.g.read('.worktree')).length, 2)
   } finally {
+    await d?.stop()
     await f.free()
   }
 })

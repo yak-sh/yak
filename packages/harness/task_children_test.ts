@@ -241,6 +241,7 @@ for (let finish of ['complete', 'unlink']) {
     assert(receipt)
     assert(textOf(receipt).endsWith('\nFinished my part'))
     assertEquals(errors, [])
+    await d.stop()
     h.close()
   })
 }
@@ -408,6 +409,7 @@ for (let writer of ['p', 'child', 'other', 'external']) {
       await d.idle('p')
       assertEquals((await transcript(h.g, 'p')).length, after)
       assertEquals(errors, [])
+      await d.stop()
       h.close()
     },
   )

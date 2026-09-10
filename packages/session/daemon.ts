@@ -15,7 +15,7 @@ import type { Comp, Eid, Graph } from '@yaks/graph'
 import type { Effects, Event } from '@yaks/effects'
 import { deliverChild } from './children.ts'
 import { transcript } from './react.ts'
-import { seqOf, statusOf } from './status.ts'
+import { statusOf } from './status.ts'
 import { ENTRY } from './native.ts'
 import { type Deps, react, type Step } from './react.ts'
 
@@ -117,7 +117,7 @@ export let daemon = (
               if (cancelled && statusOf(entries) != 'stopped') {
                 await g.apply([{
                   entity: { eid: id + ':cancelled' },
-                  entry: { session: id, seq: seqOf(entries.at(-1)!) + 1 },
+                  entry: { session: id },
                   stop: {},
                 }], { trusted: true })
               }
@@ -149,18 +149,17 @@ export let daemon = (
               return true
             } catch (err) {
               report(err, id)
-              let entries = await transcript(g, id)
               await g.apply([{
                 entity: { eid: id },
                 dispatch: { state: 'settled' },
               }, {
                 entity: { eid: id + ':preparation-error' },
-                entry: { session: id, seq: seqOf(entries.at(-1)!) + 1 },
+                entry: { session: id },
                 exception: {},
                 content: { body: String(err) },
               }, {
                 entity: { eid: id + ':preparation-stop' },
-                entry: { session: id, seq: seqOf(entries.at(-1)!) + 2 },
+                entry: { session: id },
                 stop: {},
               }], { trusted: true })
               return true

@@ -1,3 +1,4 @@
+import { appendEntry } from './append.ts'
 import { configurePool, pool } from './pool.ts'
 // Delegation is transcript structure, not a process handle. A spawned session
 // names its parent and originating call; a fork additionally names a prefix.
