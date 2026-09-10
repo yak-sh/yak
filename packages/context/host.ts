@@ -3,8 +3,8 @@ import { type Snapshot, snapshot } from './mod.ts'
  * permission/read errors are not. No mtimes affect instruction precedence. */
 export let instructionFiles = async (
   cwd: string,
-  home = Deno.env.get('HOME'),
-) => {
+  home: string | undefined = Deno.env.get('HOME'),
+): Promise<Snapshot[]> => {
   let directory = await Deno.realPath(cwd)
   let paths = home ? [home + '/.agents/AGENTS.md'] : []
   let ancestors: string[] = []

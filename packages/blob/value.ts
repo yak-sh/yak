@@ -14,10 +14,18 @@ const integer = (v: unknown, fallback: number, max: number) => {
   return n
 }
 
+/** A provider-neutral tool: JSON Schema arguments in, text back. */
+export type ValueTool = {
+  name: string
+  description: string
+  parameters: Record<string, unknown>
+  run: (args: Record<string, unknown>) => Promise<string>
+}
+
 /** Use the same authorized reader as the application's other graph tools. */
 export const valueTools = (
   read: (entity: string) => Promise<Bundle | undefined>,
-) => {
+): ValueTool[] => {
   const properties = {
     entity: { type: 'string' },
     component: { type: 'string' },

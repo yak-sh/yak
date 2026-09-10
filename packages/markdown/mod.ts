@@ -2,7 +2,7 @@
  * Uses the same GFM parser/version as the older canvas markdown renderer.
  */
 import { Lexer, type Token, type Tokens } from 'marked'
-import { type ComponentChildren, h } from 'preact'
+import { type ComponentChildren, h, type VNode } from 'preact'
 import type { Child, H } from '@yaks/render'
 
 export { type Token } from 'marked'
@@ -22,14 +22,16 @@ export let safeHref = (href: string): string | undefined => {
 
 /** The same semantic elements can be used outside a Markdown document. */
 type Props = { children?: ComponentChildren }
-export let Bold = ({ children }: Props) => h('strong', null, children)
-export let Italic = ({ children }: Props) => h('em', null, children)
-export let Heading = ({ level = 1, children }: Props & { level?: number }) =>
-  h('h' + Math.max(1, Math.min(6, Math.trunc(level))), null, children)
-export let Code = ({ children }: Props) => h('code', null, children)
+export let Bold = ({ children }: Props): VNode => h('strong', null, children)
+export let Italic = ({ children }: Props): VNode => h('em', null, children)
+export let Heading = (
+  { level = 1, children }: Props & { level?: number },
+): VNode =>
+  h<object>('h' + Math.max(1, Math.min(6, Math.trunc(level))), null, children)
+export let Code = ({ children }: Props): VNode => h('code', null, children)
 export let CodeBlock = (
   { children, language }: Props & { language?: string },
-) =>
+): VNode =>
   h(
     'pre',
     null,
@@ -39,8 +41,10 @@ export let CodeBlock = (
       children,
     ),
   )
-export let Link = ({ href, children }: Props & { href: string }) =>
-  h('a', { href: safeHref(href) }, children)
+export let Link = (
+  { href, children }: Props & { href: string },
+): VNode<{ href: string | undefined }> =>
+  h<{ href: string | undefined }>('a', { href: safeHref(href) }, children)
 
 /** Render the parsed tree through any @yaks/render host (including Preact).
  * HTML tokens remain text. Images are descriptive links, never remote fetches.
@@ -179,5 +183,5 @@ export let render = <Node>(tokens: Token[], host: H<Node>): Node => {
 }
 
 /** Preact component shared by browser DOM and the terminal's Preact DOM. */
-export let Markdown = ({ source }: { source: string }) =>
+export let Markdown = ({ source }: { source: string }): VNode =>
   render(parse(source), h as H<ReturnType<typeof h>>)

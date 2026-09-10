@@ -7,5 +7,10 @@
     "marked": "npm:marked@18.0.6",
     "preact": "npm:preact@^10.29.1",
     "@std/assert": "jsr:@std/assert@^1.0.0"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts"
+    ]
   }
 }

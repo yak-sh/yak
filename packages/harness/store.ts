@@ -1,3 +1,4 @@
+import type { Derived } from '@yaks/sql'
 import { diagnostics } from './diagnostics.ts'
 // The harness's own graph: one SQLite file, the vocabulary it speaks, and the
 // plugins that decide what a batch means. Nothing here reaches a server — the
@@ -42,7 +43,7 @@ import { vocab } from './vocab.ts'
 export { harnessDoc, vocab } from './vocab.ts'
 
 /** The computed columns, said in SQL: a transcript's status and a task's. */
-export let derived = { ...sessionDerived, ...taskDerived(taskMarks) }
+export let derived: Derived = { ...sessionDerived, ...taskDerived(taskMarks) }
 
 /** Where the graph lives when nobody says: `$HARNESS_DB`, else
  * `~/.harness/harness.db`. */
@@ -159,7 +160,7 @@ let toBlobs = (sql: Driver, bytes: Blobs) => {
   }
 }
 
-export let open = (path = dbPath()): Harness => {
+export let open = (path: string = dbPath()): Harness => {
   if (path != ':memory:') {
     let dir = path.slice(0, path.lastIndexOf('/'))
     if (dir) Deno.mkdirSync(dir, { recursive: true })

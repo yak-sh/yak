@@ -41,7 +41,7 @@ export let emptyVisual = (): VisualState => ({
 export let useVisualController = (
   get: () => VisualState,
   set: (s: VisualState) => void,
-) => {
+): void => {
   let ref = useRef({ get, set })
   ref.current = { get, set }
   useLayoutEffect(() => {
@@ -55,7 +55,7 @@ export let useVisualController = (
     }
   }, [])
 }
-export let useTextSurface = (surface: TextSurface) => {
+export let useTextSurface = (surface: TextSurface): void => {
   let ref = useRef(surface)
   ref.current = surface
   useLayoutEffect(() => {

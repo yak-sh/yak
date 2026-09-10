@@ -86,7 +86,7 @@ export class TElement extends TNode {
   /** Present because Preact writes to it; the painter reads none of it. */
   style: Record<string, unknown> = {}
   private attrs = new Map<string, string>()
-  handlers = new Map<string, unknown>()
+  handlers: Map<string, unknown> = new Map()
   constructor(public localName: string) {
     super()
   }
@@ -146,9 +146,9 @@ export class TElement extends TNode {
 
 /** The document Preact reaches for globally, over these node types. */
 export let doc = {
-  createElement: (t: string) => new TElement(t),
-  createElementNS: (_ns: string, t: string) => new TElement(t),
-  createTextNode: (d: string) => new TText(d),
+  createElement: (t: string): TElement => new TElement(t),
+  createElementNS: (_ns: string, t: string): TElement => new TElement(t),
+  createTextNode: (d: string): TText => new TText(d),
   activeElement: null,
 }
 

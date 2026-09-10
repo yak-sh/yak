@@ -1,5 +1,5 @@
 /** Private, non-persistent application state. Each mounted frontend owns one client. */
-import { client } from '@yaks/client'
+import { type Client, client, type Watch } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
 import { signal } from '@preact/signals'
 
@@ -46,7 +46,7 @@ export let frontendVocab = loadVocab([{
   },
 }])
 
-export let frontend = () => {
+export let frontend = (): Frontend => {
   // Deliberately no URL, socket or vault: drafts never leave this frontend.
   let c = client(frontendVocab, [], { vault: false, signal })
   c.mutate([{
@@ -121,4 +121,25 @@ export let frontend = () => {
     close: () => c.close(),
   }
 }
-export type Frontend = ReturnType<typeof frontend>
+export type Frontend = {
+  client: Client
+  visual: Watch
+  select: (
+    state: import('@yaks/tui').VisualState,
+  ) => ReturnType<Client['mutate']>
+  view: Watch
+  draft: Watch
+  composer: Watch
+  feedback: Watch
+  patch: (
+    fields: Record<string, string | number | boolean | null>,
+  ) => ReturnType<Client['mutate']>
+  edit: (value: { text: string; at: number }) => ReturnType<Client['mutate']>
+  viewport: (id: string) => {
+    watch: Watch
+    set: (
+      value: { anchor?: { id: string; offset: number }; follow: boolean },
+    ) => void
+  }
+  close: () => void
+}

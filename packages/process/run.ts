@@ -111,7 +111,7 @@ let BEAT = 20
 let beat = (o: Opts) => Math.min(o.poll ?? 1000, BEAT)
 
 /** Where this supervisor keeps its files. */
-export let dirOf = (o: Opts = {}) =>
+export let dirOf = (o: Opts = {}): string =>
   o.dir ?? Deno.env.get('PROCESS_DIR') ??
     `${Deno.env.get('HOME')}/.tasks/processes`
 
@@ -535,7 +535,7 @@ let mine = () => {
  * The pass answers with the runs it started, so a caller that wants to wait
  * one out — a test, mostly — has the handle.
  */
-export let supervise = (store: Store, o: Care = {}) => {
+export let supervise = (store: Store, o: Care = {}): () => Promise<Run[]> => {
   let waits = new Map<string, Wait>()
   let own = mine()
   let dir = dirOf(o)

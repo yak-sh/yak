@@ -11,16 +11,19 @@
  */
 
 import { visualKey } from './visual.ts'
-import { signal } from '@preact/signals'
+import { type Signal, signal } from '@preact/signals'
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import type { Key } from './input.ts'
 import type { Metrics } from './paint.ts'
 
 /** The terminal's size in cells, kept current by `run`. */
-export let size = signal({ columns: 80, rows: 24 })
+export let size: Signal<{ columns: number; rows: number }> = signal({
+  columns: 80,
+  rows: 24,
+})
 
 /** What the last paint measured, per element id. */
-export let metrics = signal<Metrics>({})
+export let metrics: Signal<Metrics> = signal<Metrics>({})
 
 /** What a key handler answers: true when it consumed the key. */
 export type Keys = (key: Key) => boolean | void

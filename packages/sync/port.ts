@@ -14,6 +14,13 @@ type Packet = {
   error?: string
   frame?: Frame
 }
+/** One end of a link: what it has carried, and the three things it can do. */
+export type PortLink = {
+  stats: { sent: number; received: number; frames: number }
+  request: (method: string, value?: unknown) => Promise<unknown>
+  frame: (frame: Frame) => void
+  close: (reason?: Error) => void
+}
 export let portLink = (port: Port, opts: {
   receive?: (method: string, value: unknown) => unknown | Promise<unknown>
   frame?: (frame: Frame) => void
@@ -21,7 +28,7 @@ export let portLink = (port: Port, opts: {
   timeout?: number
   /** Maximum outstanding requests before callers must wait. */
   maxPending?: number
-} = {}) => {
+} = {}): PortLink => {
   let next = 0, closed = false
   let stats = { sent: 0, received: 0, frames: 0 }
   let held = new Map<

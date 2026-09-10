@@ -6,9 +6,9 @@ import { refEid } from './refs.ts'
 
 export { checkoutDoc } from './checkout_vocab.ts'
 
-export let repositoryEid = (common: string) =>
+export let repositoryEid = (common: string): string =>
   derivedEid('repository|' + common)
-export let worktreeEid = (repository: string, path: string) =>
+export let worktreeEid = (repository: string, path: string): string =>
   derivedEid('worktree|' + repository + '|' + path)
 
 let git = async (cwd: string, args: string[], optional = false) => {
@@ -251,7 +251,10 @@ let create = async (g: Graph, source: string, request: CheckoutRequest) => {
 }
 
 /** Outside Git is an ordinary workspace. Explicit creation always uses strict discovery. */
-export let checkoutAt = async (g: Graph, cwd: string) => {
+export let checkoutAt = async (
+  g: Graph,
+  cwd: string,
+): Promise<Bundle | undefined> => {
   if (await git(cwd, ['rev-parse', '--is-inside-work-tree'], true) != 'true') {
     return undefined
   }
