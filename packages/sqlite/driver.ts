@@ -36,4 +36,15 @@ export type Driver = {
    * returns, not when the promise settles.
    */
   tx?: <R>(body: () => R) => R
+  /**
+   * How many terms one compound SELECT may carry on this engine. Workerd — the
+   * SQLite under a Durable Object — is built with SQLITE_MAX_COMPOUND_SELECT =
+   * 5 and answers a sixth term with `too many terms in compound SELECT`, where
+   * an embedded SQLite carries the stock 500. The adapter cuts its
+   * vocabulary-wide probes to this, and the DEFAULT is workerd's (@yaks/sql
+   * `ARMS`), so a driver that says nothing asks in more statements rather than
+   * asking one the engine refuses. A driver over an embedded SQLite says
+   * @yaks/sql `STOCK` and gets its whole vocabulary in one probe.
+   */
+  arms?: number
 }

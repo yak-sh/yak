@@ -2,7 +2,7 @@
 // materialized once per component. Keep the set gather for batches, and share
 // its column projection so refs, derived values and bodies have one SQL truth.
 import type { Vocab } from '@yaks/vocab'
-import type { BindOpts } from '@yaks/sql'
+import { ARMS, type BindOpts } from '@yaks/sql'
 import { type Bundle, tombstoned } from '@yaks/graph'
 import type { Driver } from './driver.ts'
 import { compSql, get } from './read.ts'
@@ -10,9 +10,13 @@ import { compSql, get } from './read.ts'
 export let keyed = (driver: Driver, vocab: Vocab, opts: BindOpts) => {
   let names = vocab.all.filter((c) => c != 'entity')
   let probes: string[] = []
-  for (let i = 0; i < names.length; i += 400) {
+  // Cut to what THIS engine's compound SELECT carries (`Driver.arms`): workerd
+  // refuses a sixth term where an embedded SQLite takes hundreds, so a probe
+  // sized for the latter is a broken read on a Durable Object, not a slow one.
+  let wide = driver.arms ?? ARMS
+  for (let i = 0; i < names.length; i += wide) {
     probes.push(
-      names.slice(i, i + 400).map((c) =>
+      names.slice(i, i + wide).map((c) =>
         `select '${c}' as name from "${c}" where entity = ?1`
       ).join(' union all '),
     )

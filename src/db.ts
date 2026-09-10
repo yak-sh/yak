@@ -72,7 +72,7 @@ import { FILTERS, type Vocab, vocabOps } from './store/vocab.ts'
 import type { Vocab as FleetVocab } from '@yaks/vocab'
 import { type Bundle, type Driver, read as sqliteRead } from '@yaks/sqlite'
 import { and as queryAnd, every, order } from '@yaks/query'
-import { type Derived, raw } from '@yaks/sql'
+import { type Derived, raw, STOCK } from '@yaks/sql'
 import { blobRead } from '@yaks/blob'
 import { fleetVocab } from './vocab/fleet_vocab.ts'
 import { Stale as CoreStale } from '@yaks/graph'
@@ -171,6 +171,7 @@ export let readDriver = (db: Sql): Driver => ({
   exec: () => {
     throw new Error('a storage read cannot execute writes')
   },
+  arms: STOCK,
 })
 
 // Every transaction goes through the seam's one door, db.transaction(): the
@@ -3829,6 +3830,7 @@ export let fleetGraphOf = (db: Sql): FleetGraph => {
         run: (sql, params) => prep(db, sql).run(...params).changes,
         exec: (sql) => db.exec(sql),
         tx: (fn) => db.transaction(fn, true),
+        arms: STOCK,
       },
       normalizers: fleetNormalizers({
         db,

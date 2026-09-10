@@ -13,6 +13,7 @@
 import { type And, parse } from '@yaks/query'
 import type { Column, Vocab } from '@yaks/vocab'
 import {
+  ARMS,
   type BindOpts,
   compile,
   DEEP,
@@ -209,12 +210,16 @@ export let get = (
     // Every membership probe uses the same bound owner set.
     let names = vocab.all.filter((c) => c != 'entity')
     let present: string[] = []
-    // Stay below SQLite's compound-select limit even for very wide vocabularies.
-    for (let j = 0; j < names.length; j += 400) {
+    // One arm per table, cut to what THIS engine's compound SELECT carries
+    // (`Driver.arms`): workerd refuses a sixth term where an embedded SQLite
+    // takes hundreds, so a probe sized for the latter is a broken read on a
+    // Durable Object rather than a slow one.
+    let wide = driver.arms ?? ARMS
+    for (let j = 0; j < names.length; j += wide) {
       present.push(
         ...driver.query(
           `with owners as materialized (select value from json_each(?)) ` +
-            names.slice(j, j + 400).map((c) =>
+            names.slice(j, j + wide).map((c) =>
               `select '${c}' as name where ${
                 owners.length > 1 ? `exists (select 1 from "${c}") and ` : ''
               }exists (select 1 from owners

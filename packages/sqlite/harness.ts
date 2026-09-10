@@ -10,6 +10,7 @@
 import { Database } from './db.ts'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
+import { STOCK } from '@yaks/sql'
 import type { Driver } from './driver.ts'
 import { storage, type Store } from './mod.ts'
 
@@ -21,6 +22,7 @@ export let mem = (): Driver => {
   return {
     query: (sql, params) => db.prepare(sql).all(...params),
     exec: (sql) => db.exec(sql),
+    arms: STOCK,
   }
 }
 

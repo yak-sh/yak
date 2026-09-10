@@ -3,9 +3,10 @@
 // and an aggregate comes back as raw rows.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import { Unsupported } from '@yaks/sql'
+import { ARMS, Unsupported } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import type { Bundle, Comp } from './bundle.ts'
+import type { Driver } from './driver.ts'
 import { mem, seed, shop as vocab, store } from './harness.ts'
 
 import { storage } from './mod.ts'
@@ -182,4 +183,57 @@ Deno.test('numeric gather ownership stays internal; present is an ordinary colum
     marker: {},
     sample: { present: 'stored' },
   }])
+})
+
+Deno.test("a driver that declares no compound width is probed within workerd's", () => {
+  // Workerd — the SQLite under a Durable Object — carries five terms in a
+  // compound SELECT and answers a sixth with `too many terms in compound
+  // SELECT`, which is what stopped every yaks.app space. A driver says what its
+  // engine carries (`Driver.arms`); one that says nothing is cut to ARMS, so a
+  // vocabulary wider than the cap is more statements and never a refused one.
+  let raw = mem()
+  let asked: string[] = []
+  let driver: Driver = {
+    query: (sql, params) => (asked.push(sql), raw.query(sql, params)),
+    exec: (sql) => raw.exec(sql),
+  }
+  let vocab = loadVocab({
+    $defs: {
+      entity: { type: 'object', wire: false },
+      ...Object.fromEntries(
+        Array.from({ length: 20 }, (_, i) => [`facet${i}`, {
+          type: 'object',
+          properties: { value: { type: 'string' } },
+        }]),
+      ),
+    },
+  })
+  let s = storage(driver, vocab)
+  s.install()
+  seed(s, [
+    {
+      entity: { eid: 'a' },
+      facet0: { value: 'first' },
+      facet19: { value: 'last' },
+    },
+    { entity: { eid: 'b' }, facet7: { value: 'middle' } },
+  ])
+  asked.length = 0
+  // One eid takes the keyed probe (keyed.ts), several take the set gather
+  // (read.ts `get`). Both walk the whole vocabulary, and both must fit.
+  assertEquals(s.tx((tx) => tx.get(['a'])), [{
+    entity: { eid: 'a', num: 1 },
+    facet0: { value: 'first' },
+    facet19: { value: 'last' },
+  }])
+  assertEquals(s.tx((tx) => tx.get(['a', 'b'])).map((b) => b.entity.eid), [
+    'a',
+    'b',
+  ])
+  assertEquals(s.tx((tx) => tx.get(['a', 'b']))[1].facet7, { value: 'middle' })
+  assert(asked.length > 1, 'a wide vocabulary is probed in several statements')
+  for (let sql of asked) {
+    let terms = sql.split(/\bunion\b/i).length
+    assert(terms <= ARMS, `${terms} terms in a compound SELECT:\n${sql}`)
+  }
 })

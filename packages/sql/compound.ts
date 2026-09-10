@@ -14,8 +14,17 @@
 // the answers; the refs predicate ORs them into one WHERE.
 
 /** How many terms one compound SELECT may carry. Workerd allows five and a
- * seeded recursion spends one of them on the seed. */
+ * seeded recursion spends one of them on the seed. It is the FLOOR, and so the
+ * default everywhere: an engine that carries more says so, and an engine that
+ * forgets to say is slow rather than broken. */
 export let ARMS = 4
+
+/** What an engine carries when it is NOT workerd — an embedded SQLite is built
+ * with the stock SQLITE_MAX_COMPOUND_SELECT of 500, and a driver over one says
+ * this (@yaks/sqlite `Driver.arms`) so that a vocabulary-wide probe stays one
+ * statement instead of one per four components. Under the stock limit, not at
+ * it: a probe is not the only compound a statement may carry. */
+export let STOCK = 400
 
 /** One arm: a component table, and every column of it wearing this word. */
 export type Arm = [comp: string, props: string[]]
