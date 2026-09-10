@@ -144,7 +144,7 @@ done still reports its outcome, using a receipt id derived from its final entry.
 `resume()` reconciles missed receipts without repeating ones already received.
 Fork/spawn calls themselves are idempotent by call id.
 
-`agent({maxChildren: 4, maxSessions: 16})` sets the defaults explicitly.
+`agent({maxChildren: 32, maxSessions: 64})` sets the defaults explicitly.
 Admission is serialized per graph across parents; concurrent roots count against
 the same live-session limit. A refused tool call writes an error and a tool
 result, and creates no child. Settled, failed, and stopped sessions free their

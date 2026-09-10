@@ -60,8 +60,8 @@ export let admit = <T>(
 ): Promise<T> => {
   let go = (locks.get(g) ?? Promise.resolve()).catch(() => {}).then(
     async () => {
-      let maxChildren = limits.maxChildren ?? 4
-      let maxSessions = limits.maxSessions ?? 16
+      let maxChildren = limits.maxChildren ?? 32
+      let maxSessions = limits.maxSessions ?? 64
       for (let n of [maxChildren, maxSessions]) {
         if (!Number.isInteger(n) || n < 0) {
           throw new Error('invalid session cap')
