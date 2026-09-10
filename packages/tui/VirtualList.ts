@@ -202,6 +202,7 @@ export let VirtualList = <T extends VirtualItem>(
     textOf,
     version = JSON.stringify,
     follow = false,
+    pending = false,
     value,
     onViewportChange,
     ...attrs
@@ -212,6 +213,8 @@ export let VirtualList = <T extends VirtualItem>(
     version?: (item: T) => string
     scrollbar?: boolean
     follow?: boolean
+    /** Loading is not an authoritative empty item collection. */
+    pending?: boolean
     /** Controlled logical position; measurements and caches remain internal. */
     value?: ViewportState
     onViewportChange?: (value: ViewportState) => void
@@ -279,13 +282,14 @@ export let VirtualList = <T extends VirtualItem>(
     state.current.follow = value.follow
   }
   let publish = () => {
+    if (pending) return
     let next = { anchor: state.current!.anchor, follow: state.current!.follow }
     if (
       next.follow != value?.follow || next.anchor?.id != value?.anchor?.id ||
       next.anchor?.offset != value?.anchor?.offset
     ) onViewportChange?.(next)
   }
-  state.current.update(items)
+  if (!pending) state.current.update(items)
   useTextSurface({
     id: attrs.id ?? 'list',
     enabled: Boolean(textOf),
@@ -334,6 +338,7 @@ export let VirtualList = <T extends VirtualItem>(
         selectionWidth.current = width
         env.current = { style, sheet }
         let inner = attrs.scrollbar && width >= 2 ? width - 1 : width
+        if (pending) return []
         let lines = state.current!.layout(
           inner,
           height,

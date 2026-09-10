@@ -297,7 +297,13 @@ let layout = (
     ? row(el, s, contentWidth, box, c)
     : el.attr('col') != null
     ? col(el, s, contentWidth, box, c)
-    : flow(el, s, contentWidth, el.attr('wrap') != null ? null : box, c)
+    : flow(
+      el,
+      s,
+      contentWidth,
+      el.attr('wrap') != null || el.attr('scroll') != null ? null : box,
+      c,
+    )
   if (el.localName == 'li') {
     let marker = safe(el.attr('data-marker') ?? '• ')
     lines = lines.map((

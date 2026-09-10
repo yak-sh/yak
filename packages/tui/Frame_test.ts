@@ -33,3 +33,43 @@ Deno.test('a narrow terminal folds the sidebar away', async () => {
   assertEquals(ui.text().split('\n'), ['body', '', ''])
   ui.free()
 })
+
+Deno.test('bounded panels share height rather than pushing sibling headings offscreen', async () => {
+  let ui = await mount(
+    () =>
+      h(Frame, {
+        min: 20,
+        width: 12,
+        sidebar: [
+          {
+            title: 'Many',
+            bounded: true,
+            Render: () =>
+              h(
+                'div',
+                null,
+                ...Array.from(
+                  { length: 100 },
+                  (_, i) => h('div', null, 'row ' + i),
+                ),
+              ),
+          },
+          {
+            title: 'Other',
+            bounded: true,
+            Render: () => h('div', null, 'visible'),
+          },
+        ],
+      }),
+    40,
+    12,
+  )
+  try {
+    assertEquals(ui.text().includes('Other'), true)
+    assertEquals(ui.text().includes('visible'), true)
+    await ui.resize(40, 6)
+    assertEquals(ui.text().includes('Other'), true)
+  } finally {
+    ui.free()
+  }
+})

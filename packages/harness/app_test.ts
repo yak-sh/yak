@@ -80,8 +80,8 @@ Deno.test('fake agent: panels, burst selector keys, editing and stale reads', as
     assert(ui.out.join('').includes('38;2;230;152;117mtask'))
     await ui.send('\t')
     let before = reads
-    // Composer growth also moves the scrollbar thumb.
-    assertEquals(await ui.send('ab\x1b[13;2ucd\x1b[D!'), 5)
+    // Composer growth reallocates bounded sidebar panels as well as the thumb.
+    assert((await ui.send('ab\x1b[13;2ucd\x1b[D!')) <= 40)
     assertEquals(reads, before) // typing does not query the graph
     assert(ui.text().includes('c!d'))
     await ui.send('\x0e') // begin a slow s1 read
@@ -553,5 +553,114 @@ Deno.test('tree navigation skips children between roots and archive toggles stay
   } finally {
     ui.free()
     state.close()
+  }
+})
+
+Deno.test('session return preserves detached anchors through loading; Ctrl+End follows again', async () => {
+  let f = frontend()
+  let sessions = ['a', 'b'].map((id) => ({
+    entity: { eid: id },
+    session: { id, status: 'settled' },
+  }))
+  let entries = (id: string) =>
+    Array.from(
+      { length: 100 },
+      (_, i) => ({
+        entity: { eid: id + i },
+        content: { body: id + '-line-' + i },
+      }),
+    )
+  let waiting: ReturnType<typeof deferred<Bundle[]>> | undefined
+  let a: UIAgent = {
+    taskEntry: () => Promise.resolve({ task: 't', child: 'c' }),
+    sessions: () => Promise.resolve(sessions),
+    tasks: () => Promise.resolve([]),
+    children: () => Promise.resolve([]),
+    transcript: (id) =>
+      waiting && id == 'a' ? waiting.promise : Promise.resolve(entries(id)),
+    entry: (b) => h('div', null, String((b.content as Comp).body)),
+    line: (b) => String((b.content as Comp).body),
+    start: () => Promise.resolve('a'),
+    send: () => Promise.resolve('input'),
+  }
+  let ui = await mount(
+    () => h(App, { agent: a, frontend: f, subscribe: () => () => {} }),
+    70,
+    14,
+  )
+  try {
+    await ui.send('\x0e')
+    await settle()
+    assert(ui.text().includes('a-line-99'), ui.text())
+    await ui.send('\x1b[5~')
+    let saved = { ...f.client.ent('viewport-a')!.viewport as Comp }
+    assertEquals(saved.follow, false)
+    await ui.send('\x0e')
+    waiting = deferred<Bundle[]>()
+    await ui.send('\x10')
+    await settle()
+    assertEquals(f.client.ent('viewport-a')!.viewport, saved)
+    waiting.resolve(entries('a'))
+    await settle()
+    assertEquals(f.client.ent('viewport-a')!.viewport, saved)
+    await ui.send('draft\x1b[1;5F')
+    assertEquals((f.client.ent('viewport-a')!.viewport as Comp).follow, true)
+    assert(ui.text().includes('a-line-99'), ui.text())
+    assertEquals((f.client.ent('draft')!.draft as Comp).text, 'draft')
+    waiting = undefined
+    await ui.send('\x0e\x10')
+    await settle()
+    assertEquals((f.client.ent('viewport-a')!.viewport as Comp).follow, true)
+    assert(ui.text().includes('a-line-99'), ui.text())
+  } finally {
+    ui.free()
+    f.close()
+  }
+})
+
+Deno.test('large expanded tree reserves room for all sidebar headings and reveals selected rows', async () => {
+  let f = frontend()
+  let sessions: Bundle[] = [
+    { entity: { eid: 'root' }, session: { status: 'settled', title: 'ROOT' } },
+    ...Array.from(
+      { length: 80 },
+      (_, i) => ({
+        entity: { eid: 'child-' + i },
+        session: { status: 'pending', title: 'Worker-' + i },
+        spawned: { parent: 'root' },
+      }),
+    ),
+  ]
+  f.patch({ selected: 'root' })
+  f.client.mutate([{
+    entity: { eid: 'view' },
+    frontend: { expanded: JSON.stringify(['root']) },
+  }])
+  let a: UIAgent = {
+    taskEntry: () => Promise.resolve({ task: 't', child: 'c' }),
+    sessions: () => Promise.resolve(sessions),
+    tasks: () => Promise.resolve([]),
+    children: () => Promise.resolve([]),
+    transcript: () => Promise.resolve([]),
+    entry: () => null,
+    line: () => '',
+    start: () => Promise.resolve('root'),
+    send: () => Promise.resolve('input'),
+  }
+  let ui = await mount(
+    () => h(App, { agent: a, frontend: f, subscribe: () => () => {} }),
+    120,
+    32,
+  )
+  try {
+    await settle()
+    for (let p of panels) assert(ui.text().includes(p.title), ui.text())
+    f.patch({ selected: 'child-79' })
+    await settle()
+    assert(ui.text().includes('Worker-79'), ui.text())
+    for (let p of panels) assert(ui.text().includes(p.title), ui.text())
+  } finally {
+    ui.free()
+    f.close()
   }
 })

@@ -1,3 +1,4 @@
+import { Scroll } from '@yaks/tui'
 import { sessionTree } from './tree.ts'
 /** Sidebar contributions: one graph read and one renderer, added as one row. */
 import { type ComponentType, h } from 'preact'
@@ -34,6 +35,7 @@ export type Context = {
 export type Panel = {
   title: string
   titleClass?: string
+  scrollable?: boolean
   read: (ctx: Context) => Bundle[] | Promise<Bundle[]>
   Render: ComponentType<Context & { rows: Bundle[] }>
 }
@@ -79,38 +81,54 @@ let list = (
 export let panels: Panel[] = [
   {
     title: 'Sessions',
+    scrollable: true,
     read: (c) => c.sessions,
-    Render: ({ rows, session, showSettled, showArchived, expanded }) =>
-      h(
-        'div',
-        null,
+    Render: ({ rows, session, showSettled, showArchived, expanded }) => {
+      let tree = sessionTree(rows, {
+        selected: session,
+        showSettled,
+        showArchived,
+        expanded,
+      })
+      return h(
+        Scroll,
+        {
+          id: 'session-tree',
+          grow: '1',
+          follow: false,
+          keyboard: false,
+          scrollbar: true,
+          reveal: Math.max(
+            0,
+            tree.findIndex((r) => r.bundle.entity.eid == session) + 1,
+          ),
+        },
         h(
           'div',
-          { class: session ? 'Muted' : 'Title' },
-          `${session ? '  ' : '> '}New session`,
-        ),
-        ...sessionTree(rows, {
-          selected: session,
-          showSettled,
-          showArchived,
-          expanded,
-        }).map(({ bundle: b, depth, children, expanded: open }) =>
+          null,
           h(
             'div',
-            {
-              key: b.entity.eid,
-              class: session == b.entity.eid ? 'Title' : '',
-              wrap: '1',
-            },
-            session == b.entity.eid ? '> ' : '  ',
-            '  '.repeat(depth),
-            children ? (open ? '▾ ' : '▸ ') : '  ',
-            indicator(b),
-            ' ',
-            sessionLine(b),
-          )
+            { class: session ? 'Muted' : 'Title' },
+            `${session ? '  ' : '> '}New session`,
+          ),
+          ...tree.map(({ bundle: b, depth, children, expanded: open }) =>
+            h(
+              'div',
+              {
+                key: b.entity.eid,
+                class: session == b.entity.eid ? 'Title' : '',
+              },
+              session == b.entity.eid ? '> ' : '  ',
+              '  '.repeat(depth),
+              children ? (open ? '▾ ' : '▸ ') : '  ',
+              indicator(b),
+              ' ',
+              sessionLine(b),
+            )
+          ),
         ),
-      ),
+      )
+    },
   },
   {
     title: 'Context usage',
@@ -178,6 +196,8 @@ export let panels: Panel[] = [
         'div',
         null,
         ...[
+          `^S        Show settled: ${showSettled ? 'on' : 'off'}`,
+          'Ctrl+End  follow transcript end',
           '^N / ^P  next/previous root',
           'Alt+↑/↓   next/previous root',
           'Alt+v     VISUAL; Tab region; y yank',
@@ -186,7 +206,6 @@ export let panels: Panel[] = [
           'Alt+a     archive/unarchive root',
           `Alt+z     Show archived: ${showArchived ? 'on' : 'off'}`,
           '^O        new session',
-          `^S        Show settled: ${showSettled ? 'on' : 'off'}`,
           'Tab       message / task',
           'Enter     submit',
           'Shift+Enter newline',

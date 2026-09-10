@@ -313,10 +313,17 @@ exhaustively identified. No environment dumps or transcript snapshots are
 captured. Treat logs as private. This cannot capture SIGKILL, power loss, or
 errors before the executable loads, and OOM may prevent capture. Existing
 model/tool exception entries remain governed by session execution; the reporter
-does not reinterpret ordinary tool results.
-Transcript entries use `eid` and session-local `entry.seq`, not human
-`entity.num`. Opening a database clears historical entry numbers without
-renumbering tasks or other entities. The SQLite allocator retains its
-pre-migration high-water mark, so old task/other human identifiers cannot be
-reassigned. This is an idempotent storage upgrade; candidate tests use temporary
-databases, never the live store.
+does not reinterpret ordinary tool results. Transcript entries use `eid` and
+session-local `entry.seq`, not human `entity.num`. Opening a database clears
+historical entry numbers without renumbering tasks or other entities. The SQLite
+allocator retains its pre-migration high-water mark, so old task/other human
+identifiers cannot be reassigned. This is an idempotent storage upgrade;
+candidate tests use temporary databases, never the live store.
+
+Transcript positions are retained per session, including detached item anchors,
+while asynchronous session reads are pending. **Ctrl+End** jumps to the
+transcript end and resumes following; plain End still moves the input cursor.
+Sidebar panels share the available height instead of letting a large session
+tree hide Tasks, Context usage, or Keys. Wheel over a panel to scroll its
+contents; tree keyboard selection is automatically revealed. Long tree labels
+are clipped to one row.

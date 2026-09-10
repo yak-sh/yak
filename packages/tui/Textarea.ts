@@ -166,6 +166,8 @@ export let Textarea = (
   let hint = prompt.slice(0, Math.max(0, columns - 1))
   let width = Math.max(1, columns - hint.length)
   useKeys((k) => {
+    // Transcript navigation: plain End still edits the input.
+    if (k.ctrl && (k.name == 'end' || k.name == 'home')) return false
     let now = live.current
     if (k.name == 'enter' && !k.shift && !k.alt) {
       if (now.text) onSubmit?.(now.text)

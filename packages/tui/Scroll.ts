@@ -47,9 +47,20 @@ export let scrolled = (top: number, key: Key, v: View): number | null => {
 
 /** A scrolling window over its children. `id` is how the painter reports it. */
 export let Scroll = (
-  { id, follow = true, scrollbar = false, children, ...rest }: {
+  {
+    id,
+    follow = true,
+    scrollbar = false,
+    keyboard = true,
+    reveal,
+    children,
+    ...rest
+  }: {
     id: string
     scrollbar?: boolean
+    keyboard?: boolean
+    /** Reveal a logical row when keyboard selection changes. */
+    reveal?: number
     follow?: boolean
     children?: ComponentChildren
     [attr: string]: unknown
@@ -64,6 +75,7 @@ export let Scroll = (
   let live = useRef(top)
   live.current = top
   useKeys((key) => {
+    if (!keyboard) return false
     let to = scrolled(live.current, key, v)
     if (to == null) return false
     live.current = to
@@ -78,6 +90,23 @@ export let Scroll = (
     setTop(0)
     setStick(follow)
   }, [id, follow])
+  useLayoutEffect(() => {
+    if (reveal == null || v.height < 1) return
+    let next = Math.max(
+      0,
+      Math.min(
+        max,
+        reveal < live.current
+          ? reveal
+          : reveal >= live.current + v.height
+          ? reveal - v.height + 1
+          : live.current,
+      ),
+    )
+    live.current = next
+    setTop(next)
+    setStick(false)
+  }, [reveal, v.height, max])
   // Content grew while pinned to the bottom: follow it there. Setting the same
   // offset renders nothing, so this settles after one paint.
   useLayoutEffect(() => {

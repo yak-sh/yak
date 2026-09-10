@@ -10,11 +10,16 @@
 
 import { type ComponentChildren, type ComponentType, h, type JSX } from 'preact'
 import { size } from './screen.ts'
+import { Scroll } from './Scroll.ts'
 
 /** One sidebar panel: a heading and whatever draws under it. */
 export type Panel = {
   title: string
   titleClass?: string
+  /** Share remaining sidebar height instead of measuring unbounded content. */
+  bounded?: boolean
+  /** Content already owns a scrolling viewport. */
+  scrollable?: boolean
   Render: ComponentType
 }
 
@@ -39,11 +44,24 @@ export let Frame = (
         ...sidebar.map((p) =>
           h(
             'div',
-            { class: 'Panel', key: p.title },
+            {
+              class: 'Panel',
+              key: p.title,
+              ...(p.bounded ? { grow: '1', col: '1' } : {}),
+            },
             h('div', {
               class: ['Panel_Title', p.titleClass].filter(Boolean).join(' '),
             }, p.title),
-            h(p.Render, {}),
+            p.bounded
+              ? p.scrollable
+                ? h('div', { grow: '1' }, h(p.Render, {}))
+                : h(Scroll, {
+                  id: 'panel-' + p.title,
+                  grow: '1',
+                  follow: false,
+                  keyboard: false,
+                }, h(p.Render, {}))
+              : h(p.Render, {}),
           )
         ),
       )

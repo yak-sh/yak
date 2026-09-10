@@ -50,7 +50,12 @@ export let changes = (a: Agent): Opts['subscribe'] => {
 }
 
 type Selection = { id?: Eid }
-type Snapshot = { sessions: Bundle[]; entries: Bundle[]; rows: Bundle[][] }
+type Snapshot = {
+  loadedFor?: string
+  sessions: Bundle[]
+  entries: Bundle[]
+  rows: Bundle[][]
+}
 
 /** A session selector, a scrollable transcript and a multi-line prompt. */
 export let App = (
@@ -95,7 +100,7 @@ export let App = (
   let refresh = useRef(() => {})
   let choose = (s: Selection) => {
     ui.patch({ selected: s.id ?? null, generation: current().generation + 1 })
-    setData((d) => ({ ...d, entries: [] }))
+    setData((d) => ({ ...d, entries: [], loadedFor: undefined }))
   }
 
   useLayoutEffect(() => {
@@ -119,7 +124,7 @@ export let App = (
             alive && s.id == current().id &&
             s.generation == current().generation && !dirty
           ) {
-            setData({ sessions, entries, rows })
+            setData({ sessions, entries, rows, loadedFor: s.id })
           }
         }
       } catch (e) {
@@ -315,6 +320,8 @@ export let App = (
           sidebar: sidebar.map((p, i) => ({
             title: p.title,
             titleClass: p.titleClass,
+            bounded: true,
+            scrollable: p.scrollable,
             Render: () => h(p.Render, { ...ctx, rows: data.rows[i] ?? [] }),
           })),
         },
@@ -326,6 +333,7 @@ export let App = (
         h(Transcript, {
           ui,
           id: selection.id ?? 'new',
+          pending: data.loadedFor !== selection.id,
           items: transcriptItems,
           agent: a,
         }),
@@ -375,7 +383,8 @@ let Composer = (
 }
 
 /** Position is per transcript, but its rendering cache remains in VirtualList. */
-let Transcript = ({ ui, id, items, agent }: {
+let Transcript = ({ ui, id, items, agent, pending }: {
+  pending: boolean
   ui: Frontend
   id: string
   items: { id: string; bundle: Bundle }[]
@@ -383,14 +392,16 @@ let Transcript = ({ ui, id, items, agent }: {
 }) => {
   let viewport = useMemo(() => ui.viewport('viewport-' + id), [ui, id])
   useLayoutEffect(() => () => viewport.watch.close(), [viewport])
-  let position = viewport.watch.value[0]?.viewport as Comp | undefined
+  let position = (viewport.watch.value[0] ?? ui.client.ent('viewport-' + id))
+    ?.viewport as Comp | undefined
   return h(VirtualList<{ id: string; bundle: Bundle }>, {
     id: 'transcript-' + id,
     grow: '1',
     scrollbar: true,
+    pending,
     items,
     value: {
-      follow: Boolean(position?.follow),
+      follow: position?.follow == null ? true : Boolean(position.follow),
       anchor: position?.item == null ? undefined : {
         id: String(position.item),
         offset: Number(position.offset),
