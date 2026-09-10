@@ -191,6 +191,11 @@ export let decode = (s: string): Input[] => {
       i = end < 0 ? s.length : end + PASTE_OFF.length
       continue
     }
+    if (s.startsWith('\x1b_', i) || s.startsWith('\x1bP', i)) {
+      let end = s.indexOf('\x1b\\', i + 2)
+      i = end < 0 ? s.length : end + 2
+      continue
+    }
     if (c == '\x1b') {
       let [key, n] = escape(s, i)
       if (key) out.push(key)
@@ -219,25 +224,87 @@ export let decode = (s: string): Input[] => {
 }
 
 /**
- * A decoder that survives chunk boundaries: an unterminated bracketed paste is
- * held until the terminator arrives rather than arriving as two edits.
+ * Incremental keyboard decoder. Holds partial paste/control replies and routes
+ * APC/DCS replies away from keyboard handlers. Call flush after a short idle
+ * interval to dispatch a standalone Escape key.
  */
-export let feed = (): (chunk: string) => Input[] => {
+export let feed = (onControl: (body: string) => void = () => {}) => {
   let held = ''
-  return (chunk) => {
+  let dropping = false
+  let read = (chunk: string): Input[] => {
     let s = held + chunk
-    let open = s.lastIndexOf(PASTE_ON)
-    if (open >= 0 && s.indexOf(PASTE_OFF, open) < 0) {
-      held = s.slice(open)
-      s = s.slice(0, open)
-    } else held = ''
-    // Keep a fragmented SGR report, but preserve bare Escape key behavior.
-    // deno-lint-ignore no-control-regex -- fragmented terminal protocol
-    let partial = s.match(/\x1b\[<(?:\d+(?:;\d*)?(?:;\d*)?)?$/)
-    if (partial) {
-      held = partial[0] + held
-      s = s.slice(0, partial.index)
+    held = ''
+    let plain = ''
+    for (let i = 0; i < s.length;) {
+      if (dropping) {
+        let end = s.indexOf('\x1b\\', i)
+        if (end < 0) {
+          held = s.endsWith('\x1b') ? '\x1b' : ''
+          break
+        }
+        dropping = false
+        i = end + 2
+        continue
+      }
+      if (s.startsWith(PASTE_ON, i)) {
+        let end = s.indexOf(PASTE_OFF, i + PASTE_ON.length)
+        if (end < 0) {
+          held = s.slice(i)
+          break
+        }
+        plain += s.slice(i, end + PASTE_OFF.length)
+        i = end + PASTE_OFF.length
+        continue
+      }
+      if (s.startsWith('\x1b_', i) || s.startsWith('\x1bP', i)) {
+        let end = i + 2
+        // tmux doubles embedded ESC; only an unescaped ST ends its wrapper.
+        for (; end < s.length; end++) {
+          if (s[end] != '\x1b') continue
+          if (s[end + 1] == '\x1b') {
+            end++
+            continue
+          }
+          if (s[end + 1] == '\\') break
+        }
+        if (end >= s.length) {
+          if (s.length - i > 8192) {
+            dropping = true
+            held = s.endsWith('\x1b') ? '\x1b' : ''
+          } else held = s.slice(i)
+          break
+        }
+        let body = s.slice(i + 2, end)
+        if (s[i + 1] == 'P' && body.startsWith('tmux;')) {
+          body = body.slice(5).replaceAll('\x1b\x1b', '\x1b')
+          if (body.startsWith('\x1b_') && body.endsWith('\x1b\\')) {
+            body = body.slice(2, -2)
+          }
+        }
+        if (body.length <= 8192) onControl(body)
+        i = end + 2
+        continue
+      }
+      let tail = s.slice(i)
+      if (tail == '\x1b' || PASTE_ON.startsWith(tail) || tail == '\x1b[') {
+        held = tail
+        break
+      }
+      // deno-lint-ignore no-control-regex -- fragmented SGR mouse report
+      if (/^\x1b\[<(?:\d+(?:;\d*)?(?:;\d*)?)?$/.test(tail)) {
+        held = tail
+        break
+      }
+      plain += s[i++]
     }
-    return decode(s)
+    return decode(plain)
   }
+  // A bare Escape needs a short timeout; incomplete control strings never become keys.
+  return Object.assign(read, {
+    flush: (): Input[] => {
+      if (dropping || held != '\x1b') return []
+      held = ''
+      return [{ name: 'escape' }]
+    },
+  })
 }

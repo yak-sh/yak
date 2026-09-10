@@ -58,6 +58,41 @@ export let graphics = (options: {
     return picture
   }
   return {
+    reply: (body: string) => {
+      let match = /^G([^;]*);(.*)$/s.exec(body)
+      if (!match || match[2] == 'OK') return
+      let id = /(?:^|,)i=(\d+)(?:,|$)/.exec(match[1])?.[1]
+      for (let picture of cache.values()) {
+        if (id && picture.id == Number(id)) {
+          picture.failed = true
+          picture.bytes = undefined
+        }
+      }
+      options.changed()
+    },
+    annotate: (lines: Line[]): Line[] =>
+      lines.map((line) =>
+        line.map((seg) => {
+          if (!seg.image || seg.image.row != 0) return seg
+          let p = cache.get(seg.image.source.key)
+          let label = !options.enabled
+            ? 'graphics disabled'
+            : p?.failed
+            ? 'image unavailable or terminal rejected image'
+            : p?.bytes
+            ? 'Kitty image sent; check terminal graphics support'
+            : p
+            ? 'loading image'
+            : 'scroll to show full image'
+          return {
+            ...seg,
+            text: ('[' + label + '] ' + seg.image.source.alt).slice(
+              0,
+              seg.image.width,
+            ).padEnd(seg.image.width),
+          }
+        })
+      ),
     reset: () => {
       placements = ''
     },
@@ -138,7 +173,7 @@ export let graphics = (options: {
           for (let i = 0; i < encoded.length; i += 4096) {
             let more = i + 4096 < encoded.length ? 1 : 0
             out += control(
-              (i == 0 ? 'a=t,f=100,t=d,i=' + p.id + ',q=2,' : '') + 'm=' + more,
+              (i == 0 ? 'a=t,f=100,t=d,i=' + p.id + ',' : '') + 'q=2,m=' + more,
               encoded.slice(i, i + 4096),
             )
           }

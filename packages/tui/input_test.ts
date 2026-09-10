@@ -63,3 +63,53 @@ Deno.test('a paste split across reads arrives as one key', () => {
     { name: 'char', text: 'x' },
   ])
 })
+
+Deno.test('Kitty replies are protocol data, never text, at every chunk boundary', () => {
+  for (
+    let response of [
+      '\x1b_Gi=0;OK\x1b\\',
+      '\x1b_Gi=17;EINVAL: unsupported image\x1b\\',
+      '\x1bPtmux;\x1b\x1b_Gi=0;OK\x1b\x1b\\\x1b\\',
+    ]
+  ) {
+    for (let split = 0; split <= response.length; split++) {
+      let replies: string[] = []
+      let read = feed((body) => replies.push(body))
+      assertEquals(
+        [
+          ...read('before' + response.slice(0, split)),
+          ...read(response.slice(split) + 'after'),
+        ].map((key) => key.name == 'char' ? key.text : key.name).join(''),
+        'beforeafter',
+      )
+      assertEquals(replies.length, 1)
+      assertEquals(replies[0].startsWith('Gi='), true)
+    }
+  }
+  assertEquals(decode('\x1b_Gi=0;OK\x1b\\'), [])
+})
+
+Deno.test('bare Escape flushes separately and paste remains literal', () => {
+  let read = feed()
+  assertEquals(read('\x1b'), [])
+  assertEquals(read.flush(), [{ name: 'escape' }])
+  assertEquals(read.flush(), [])
+  assertEquals(read('\x1b_Gi=0;'), [])
+  assertEquals(read.flush(), [])
+  assertEquals(read('OK\x1b\\'), [])
+  let text = '\x1b_Gi=0;OK\x1b\\'
+  assertEquals(read('\x1b[200~' + text + '\x1b[201~'), [{
+    name: 'paste',
+    text,
+  }])
+})
+
+Deno.test('oversized terminal control replies are discarded with bounded buffering', () => {
+  let replies: string[] = []
+  let read = feed((body) => replies.push(body))
+  assertEquals(read('\x1b_G' + 'x'.repeat(9000)), [])
+  assertEquals(read('y'.repeat(9000)), [])
+  assertEquals(read('\x1b'), [])
+  assertEquals(read('\\safe'), [{ name: 'char', text: 'safe' }])
+  assertEquals(replies, [])
+})

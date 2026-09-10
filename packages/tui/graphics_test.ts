@@ -122,3 +122,102 @@ Deno.test('pure Image layout reserves rows and backend never resends bytes on wa
     screen.free()
   }
 })
+
+Deno.test('each Kitty upload chunk suppresses replies and errors produce a diagnostic fallback', async () => {
+  let source = {
+    key: 'chunked',
+    rows: 3,
+    alt: 'a picture',
+    load: () => {
+      let bytes = new Uint8Array(10000)
+      bytes.set(png())
+      return Promise.resolve(bytes)
+    },
+  }
+  let g = graphics({ enabled: true, changed: () => {} })
+  assert(g.annotate(lines(source))[0][0].text.startsWith('[scr'))
+  g.draw(lines(source))
+  assert(g.annotate(lines(source))[0][0].text.startsWith('[loa'))
+  await settle()
+  let wire = g.draw(lines(source))
+  // deno-lint-ignore no-control-regex -- inspect Kitty protocol packets
+  let packets = [...wire.matchAll(/\x1b_G([^;]*);([^\x1b]*)\x1b\\/g)]
+  assert(packets.length > 1)
+  for (let packet of packets) assert(packet[1].includes('q=2'))
+  g.reply('Gi=1;EINVAL: unsupported')
+  assert(g.annotate(lines(source))[0][0].text.startsWith('[ima'))
+  assert(!g.draw(lines(source)).includes('a=p'))
+  g.close()
+})
+
+Deno.test('virtual cached image repaints after asynchronous load without re-upload on typing', async () => {
+  let { h, render } = await import('preact')
+  let { VirtualList } = await import('./VirtualList.ts')
+  let { Image } = await import('./Image.ts')
+  let { Textarea } = await import('./Textarea.ts')
+  let { install, onPaint } = await import('./dom.ts')
+  let { ansiBackend } = await import('./paint.ts')
+  let { feed } = await import('./input.ts')
+  let { press } = await import('./screen.ts')
+  let resolve!: (bytes: Uint8Array) => void
+  let pending = new Promise<Uint8Array>((yes) => resolve = yes)
+  let output: string[] = [], loads = 0
+  let backend = ansiBackend({
+    graphics: 'kitty',
+    size: () => ({ columns: 80, rows: 14 }),
+    write: (s) => output.push(s),
+  })
+  let screen = install()
+  onPaint(() => {
+    backend.draw(screen.root)
+  })
+  try {
+    render(
+      h(
+        'div',
+        { col: '1' },
+        h(VirtualList, {
+          id: 'pictures',
+          grow: '1',
+          items: [{ id: 'one' }],
+          version: () => '1',
+          renderItem: () =>
+            h(Image, {
+              source: {
+                key: 'one',
+                rows: 8,
+                alt: 'picture',
+                load: () => {
+                  loads++
+                  return pending
+                },
+              },
+            }),
+        }),
+        h(Textarea, { onSubmit: () => {} }),
+      ),
+      screen.root as unknown as Element,
+    )
+    await settle()
+    assertEquals(loads, 1)
+    assert(!output.join('').includes('a=t,f=100'))
+    resolve(png())
+    await settle()
+    await settle()
+    assert(output.join('').includes('a=t,f=100'))
+    output.length = 0
+    let read = feed(backend.control)
+    for (let input of read('\x1b_Gi=0;OK\x1b\\hello')) {
+      if (input.name != 'mouse') press(input)
+    }
+    await settle()
+    assert(!output.join('').includes('a=t,f=100'))
+    assert(!output.join('').includes('Gi=0;OK'))
+    assertEquals(loads, 1)
+  } finally {
+    render(null, screen.root as unknown as Element)
+    onPaint(() => {})
+    backend.stop()
+    screen.free()
+  }
+})

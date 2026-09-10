@@ -45,6 +45,7 @@ export let run = async (
   let screen = install()
   let host = screen.root as unknown as Parameters<typeof render>[1]
   let done = false
+  let escapeTimer: ReturnType<typeof setTimeout> | undefined
   stop.fn = () => done = true
 
   let resize = () => {
@@ -55,6 +56,7 @@ export let run = async (
   }
   let painted: Line[] = []
   let bye = () => {
+    clearTimeout(escapeTimer)
     painted = []
     render(null, host)
     onPaint(() => {})
@@ -83,13 +85,9 @@ export let run = async (
     })
     render(h(App, {}), host)
 
-    let keys = feed()
-    let buf = new Uint8Array(4096)
-    let dec = new TextDecoder()
-    while (!done) {
-      let n = await Deno.stdin.read(buf)
-      if (n == null) break
-      for (let key of keys(dec.decode(buf.subarray(0, n)))) {
+    let keys = feed((body) => backend.control?.(body))
+    let dispatch = (events: ReturnType<typeof keys>) => {
+      for (let key of events) {
         if (key.name == 'mouse') {
           routeMouse(key, painted)
           continue
@@ -98,6 +96,16 @@ export let run = async (
         if (key.ctrl && key.text == 'c') done = true
       }
     }
+    let buf = new Uint8Array(4096)
+    let dec = new TextDecoder()
+    while (!done) {
+      let n = await Deno.stdin.read(buf)
+      if (n == null) break
+      clearTimeout(escapeTimer)
+      dispatch(keys(dec.decode(buf.subarray(0, n), { stream: true })))
+      escapeTimer = setTimeout(() => dispatch(keys.flush()), 25)
+    }
+    clearTimeout(escapeTimer)
   } finally {
     bye()
   }

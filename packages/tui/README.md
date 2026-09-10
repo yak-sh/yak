@@ -236,3 +236,15 @@ Kitty-capable terminal support must be configured by the application. In tmux,
 but visual behavior depends on terminal/tmux versions and has not been verified
 on a live iTerm2 installation. iTerm2's separate OSC 1337 protocol is not
 implemented.
+
+Kitty replies are terminal protocol data, not keystrokes. APC replies (including
+fragmented replies and tmux-wrapped replies) are consumed before keyboard
+handling. A bare Escape is distinguished from a fragmented reply with a short 25
+ms delay. Every image upload chunk requests quiet operation. Error replies with
+a known image ID leave a diagnostic fallback instead of inserting text into the
+input box.
+
+Image fallback labels distinguish loading, clipped/unvisited images, and failed
+loads or rejected images. A “Kitty image sent” label means the backend sent its
+commands, not that the terminal confirmed a visible placement. If that label
+remains visible, verify terminal support and tmux passthrough configuration.

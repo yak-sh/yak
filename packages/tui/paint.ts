@@ -56,6 +56,8 @@ export type Metrics = Record<
 
 /** The five calls `run()` makes of whatever draws the screen. */
 export type Backend = {
+  /** Receive an APC/DCS terminal protocol response, never keyboard text. */
+  control?: (body: string) => void
   /** The terminal's size, in cells. */
   size: () => { columns: number; rows: number }
   /** Take the screen (alt screen, raw mode's escapes, hidden cursor). */
@@ -527,6 +529,7 @@ export let ansiBackend = (opts: {
   return {
     size,
     copy: (text) => write(osc52(text)),
+    control: pictures.reply,
     // Alt screen, hidden cursor, bracketed paste, alternate scroll (the wheel
     // arrives as arrow keys), and the kitty disambiguate flag — without it the
     // terminal collapses Shift+Enter to a bare CR.
@@ -546,10 +549,11 @@ export let ansiBackend = (opts: {
     draw: (root) => {
       let { columns, rows } = size()
       let { lines, metrics } = screenful(root, columns, rows, sheet)
+      let annotated = pictures.annotate(lines)
       let out = ''
       let written = 0
       for (let y = 0; y < rows; y++) {
-        let s = ansi(clip(lines[y] ?? [], columns))
+        let s = ansi(clip(annotated[y] ?? [], columns))
         if (s === last[y]) continue
         last[y] = s
         out += `\x1b[${y + 1};1H${s}\x1b[K`
