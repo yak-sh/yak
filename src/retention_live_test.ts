@@ -74,6 +74,33 @@ Deno.test('retained tombstones never resurrect through reads', () => {
   }
 })
 
+Deno.test('bounded confirmation does not invalidate retained rows outside its page', () => {
+  let route = useRoute(() => {})
+  try {
+    cache.value = {}
+    landSub({
+      sub: 'card-comments',
+      replace: true,
+      changes: changes('comment'),
+    })
+    unsubscribe('card-comments')
+    subscribe('board:hot', '.order=hot')
+    landSub({
+      sub: 'board:hot',
+      replace: true,
+      window: { limit: 400 },
+      changes: changes('other'),
+    })
+    assertEquals(cache.peek().comment, undefined)
+    assertEquals(ent('comment').doc?.title, 'comment')
+    unsubscribe('board:hot')
+  } finally {
+    useRoute(route)
+    cache.value = {}
+    restore({}, {})
+  }
+})
+
 Deno.test('full confirmation drops removed components without blanking retained rows', () => {
   let route = useRoute(() => {})
   try {

@@ -2024,7 +2024,8 @@ export let landSub = (f: Sub) => {
   // frame: the local `shadows` set only knows what THIS client asked for,
   // and the two must not be able to disagree about who owns the cache.
   if (f.shadow) shadows.add(f.sub)
-  let old = subMembers.get(f.sub) ?? subPrimes.get(f.sub) ?? new Set<string>()
+  let confirmed = subMembers.get(f.sub)
+  let old = confirmed ?? subPrimes.get(f.sub) ?? new Set<string>()
   subPrimes.delete(f.sub)
   // A queryEids sub (T-17126) republishes its per-sub signal on MEMBERSHIP change
   // only — a standing-match content frame leaves the set alone, and the member's
@@ -2037,7 +2038,13 @@ export let landSub = (f: Sub) => {
   if (set) set.live = true
   let mine = f.replace ? new Set<string>() : old
   subMembers.set(f.sub, mine)
-  let leaving: string[] = f.replace ? [...old] : [...(f.drop ?? [])]
+  // A provisional local match is not proof of membership in a bounded server
+  // page. Its omission says only "outside this page", not "no longer exists".
+  // Still reconcile previously confirmed members and unbounded provisional
+  // answers, whose replacement really does establish absence from the set.
+  let leaving: string[] = f.replace
+    ? f.window && !confirmed ? [] : [...old]
+    : [...(f.drop ?? [])]
   for (let c of f.changes) {
     if (c.name == 'entity' && c.comp == null) {
       mine.delete(c.eid)
