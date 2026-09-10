@@ -2,10 +2,9 @@
 // after the old process has drained and exited: one serving process and one
 // server connection set per owner database. Direct SQLite clients continue
 // through the brief HTTP downtime.
-import { devFile, serverFile } from './reload.ts'
+import { devFile, processFile, processRoots } from './reload.ts'
 import { peer } from './bind.ts'
 
-let src = new URL('.', import.meta.url).pathname
 let deno = Deno.execPath()
 // The public address this supervisor answers for — read the same way server.ts
 // reads it. Used only to tell a genuine lost race (another live supervisor
@@ -497,11 +496,12 @@ let supervise = async () => {
       return await swap()
     })
   )
-  for await (let event of Deno.watchFs(src)) {
+  for await (let event of Deno.watchFs(processRoots)) {
     if (event.paths.some(devFile)) {
       return relaunch()
     }
-    if (event.paths.some(serverFile)) reload()
+    // Either owner's graph uses the same debounced, serialized handoff.
+    if (event.paths.some(processFile)) reload()
   }
 }
 

@@ -7,7 +7,16 @@
 // this claim but sampled eight paths that all happened to be present, which is
 // how eight modules went missing beneath a green suite.)
 import { assert, assertEquals } from '@std/assert'
-import { devFile, imports, serverClassifier, serverFile } from './reload.ts'
+import {
+  devFile,
+  effectsGraph,
+  graph,
+  imports,
+  processFile,
+  processRoots,
+  serverClassifier,
+  serverFile,
+} from './reload.ts'
 import { slow } from './testing.ts'
 
 // A second, independent copy of the walk — the oracle. If reload.ts's graph()
@@ -79,6 +88,94 @@ let walk = async (entry: string, root: URL): Promise<Set<string>> => {
   }
   return paths
 }
+
+// Read the real trees once; the fast-tier assertions below pin the two distinct
+// boundaries without repeatedly walking hundreds of files for each path.
+let src = new URL('.', import.meta.url)
+let effects = effectsGraph()
+let server = graph()
+let originalServer = await walk('server.ts', src)
+Deno.test('effectsd graph reaches workspace transport; server graph is unchanged', () => {
+  assert(effects.has('src/effectsd.ts'))
+  assert(effects.has('packages/openai/transport.ts'))
+  assert(effects.has('packages/session/mod.ts'))
+  assertEquals(
+    new Set([...server].map((name) => new URL(name, src).pathname)),
+    originalServer,
+  )
+  assertEquals(server.has('packages/openai/transport.ts'), false)
+})
+
+slow(
+  'process edits include watched packages without widening browser server edits',
+  () => {
+    let transport = new URL('../packages/openai/transport.ts', src).pathname
+    assert(processRoots.some((root) => transport.startsWith(`${root}/`)))
+    assert(processFile(transport))
+    assertEquals(serverFile(transport), false)
+    assertEquals(processFile(`${transport}.old`), false)
+    assertEquals(
+      processFile(new URL('components/Card.tsx', src).pathname),
+      false,
+    )
+  },
+)
+
+slow(
+  'workspace walk follows new barrel exports, not type exports or outside files',
+  () => {
+    let dir = Deno.makeTempDirSync({ prefix: 'tasks-effects-reload-' })
+    let root = new URL(`file://${dir}/`)
+    try {
+      Deno.mkdirSync(`${dir}/src`)
+      Deno.mkdirSync(`${dir}/packages`)
+      Deno.writeTextFileSync(
+        `${dir}/src/effectsd.ts`,
+        "import '../packages/mod.ts'",
+      )
+      Deno.writeTextFileSync(
+        `${dir}/packages/mod.ts`,
+        "export * from './first.ts'",
+      )
+      Deno.writeTextFileSync(`${dir}/packages/first.ts`, "import './mod.ts'")
+      let read = () => graph('src/effectsd.ts', root, true)
+      assertEquals(
+        read(),
+        new Set([
+          'src/effectsd.ts',
+          'packages/mod.ts',
+          'packages/first.ts',
+        ]),
+      )
+      Deno.writeTextFileSync(
+        `${dir}/packages/mod.ts`,
+        [
+          "export * as first from './first.ts'",
+          "export { later } from './later.ts'",
+          "export type { T } from './types.ts'",
+          "export * from './missing.ts'",
+          "export * from '../../outside.ts'",
+        ].join('\n'),
+      )
+      Deno.writeTextFileSync(`${dir}/packages/later.ts`, 'export let later = 1')
+      Deno.writeTextFileSync(
+        `${dir}/packages/types.ts`,
+        'export type T = string',
+      )
+      assertEquals(
+        read(),
+        new Set([
+          'src/effectsd.ts',
+          'packages/mod.ts',
+          'packages/first.ts',
+          'packages/later.ts',
+        ]),
+      )
+    } finally {
+      Deno.removeSync(dir, { recursive: true })
+    }
+  },
+)
 
 slow('serverFile: covers every module server.ts imports', async () => {
   let root = new URL('.', import.meta.url)

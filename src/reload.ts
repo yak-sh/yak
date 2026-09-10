@@ -38,14 +38,20 @@ export let imports = (source: string): string[] => {
 
 let isRelative = (s: string) => s.startsWith('./') || s.startsWith('../')
 
-// Every module `entry` statically imports, transitively, as basenames within
-// src/ — the server's one static root, which the walk never leaves. Value
+// Package barrels carry runtime dependencies via re-exports, too. Keep this
+// extension on the supervisor's walk: the browser's src-only graph is unchanged.
+let reexports =
+  /\bexport\s+(?!type\b)(?:\*\s*(?:as\s+\w+\s*)?|\{[^}]*\}\s*)from\s*(["'])([^"']+)\1/g
+
+// Every module `entry` statically imports, transitively, relative to `root`.
+// By default this is src/, preserving the browser's server-edit boundary. Value
 // imports only; an `import type` is gone before anything runs. This reads
 // source files, so it is server/dev-only — nothing the browser reaches may
 // import this module.
 export let graph = (
   entry = 'server.ts',
   root = new URL('.', import.meta.url),
+  workspace = false,
 ): Set<string> => {
   let queue = [new URL(entry, root)]
   let seen = new Set<string>()
@@ -64,9 +70,21 @@ export let graph = (
     // string (imports() is a text scanner, not a parser) points at no file and
     // must never join the graph, or serverFile would claim a phantom module.
     names.add(file.pathname.slice(root.pathname.length))
-    for (let spec of imports(source)) {
-      if (!isRelative(spec)) continue
-      let child = new URL(spec, file)
+    let specs = imports(source)
+    if (workspace) {
+      for (let match of source.matchAll(reexports)) specs.push(match[2])
+    }
+    for (let spec of specs) {
+      let child: URL
+      if (isRelative(spec)) child = new URL(spec, file)
+      else {
+        if (!workspace) continue
+        try {
+          child = new URL(import.meta.resolve(spec))
+        } catch {
+          continue // not a workspace module known to this supervisor
+        }
+      }
       child.search = ''
       if (!child.href.startsWith(root.href)) continue
       if (!/\.[jt]sx?$/.test(child.pathname)) continue
@@ -89,6 +107,20 @@ export let serverClassifier = (
 }
 
 export let serverFile = serverClassifier()
+
+// The doing owner reaches outside src/ through workspace package imports.
+// Re-walk on every event just like serverFile: a newly imported dependency
+// must be reloadable without restarting the supervisor first.
+export let effectsGraph = () =>
+  graph('src/effectsd.ts', new URL('../', import.meta.url), true)
+
+export let processFile = (path: string) =>
+  serverFile(path) || named(effectsGraph())(path)
+
+// Watch only source trees, not .git, databases, or node_modules at repo root.
+export let processRoots = ['.', '../packages'].map((path) =>
+  new URL(path, import.meta.url).pathname
+)
 
 // The supervisor's OWN module graph — the files dev.ts imports. These need a
 // supervisor relaunch (dev.ts, exit 42), not a handoff, because a process
