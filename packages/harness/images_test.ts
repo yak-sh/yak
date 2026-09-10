@@ -57,7 +57,7 @@ Deno.test('generated artifacts survive database reopen and keep payloads out of 
     await a.idle(id)
     assert(!requests.some((r) => r.includes(png)))
     assertEquals(Array.from(Deno.readDirSync(directory)).length, 1)
-    a.close()
+    await a.close()
     let h = open(db)
     try {
       assertEquals((await h.g.read('.artifact')).length, 1)
@@ -66,7 +66,7 @@ Deno.test('generated artifacts survive database reopen and keep payloads out of 
     }
   } finally {
     // close is idempotent at the driver boundary; all model turns are idle.
-    a.close()
+    await a.close()
     await Deno.remove(dir, { recursive: true })
   }
 })

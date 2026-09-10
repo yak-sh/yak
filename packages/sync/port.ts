@@ -13,6 +13,7 @@ type Packet = {
   value?: unknown
   error?: string
   frame?: Frame
+  closed?: boolean
 }
 /** One end of a link: what it has carried, and the three things it can do. */
 export type PortLink = {
@@ -40,12 +41,17 @@ export let portLink = (port: Port, opts: {
     }
   >()
   let send = (packet: Omit<Packet, 'channel'>) => {
+    if (closed) return
     stats.sent++
     port.postMessage({ channel: 'yaks', ...packet })
   }
   let onMessage = (event: Event) => {
     let packet = (event as MessageEvent<Packet>).data
     if (packet?.channel != 'yaks' || closed) return
+    if (packet.closed) {
+      close(new Error('Peer disconnected'), false)
+      return
+    }
     stats.received++
     if (packet.frame) {
       stats.frames++
@@ -77,6 +83,29 @@ export let portLink = (port: Port, opts: {
     if (packet.error) pending.reject(new Error(packet.error))
     else pending.resolve(packet.value)
   }
+  let close = (reason = new Error('Message link closed'), notify = true) => {
+    if (closed) return
+    if (notify) {
+      try {
+        send({ closed: true })
+      } catch { /* disconnected */ }
+    }
+    closed = true
+    port.removeEventListener('message', onMessage)
+    port.removeEventListener('messageerror', disconnected)
+    port.removeEventListener('error', disconnected)
+    port.removeEventListener('close', disconnected)
+    for (let pending of held.values()) {
+      clearTimeout(pending.timer)
+      pending.reject(reason)
+    }
+    held.clear()
+  }
+  let disconnected = () =>
+    close(new Error('Message transport disconnected'), false)
+  port.addEventListener('messageerror', disconnected)
+  port.addEventListener('error', disconnected)
+  port.addEventListener('close', disconnected)
   port.addEventListener('message', onMessage)
   if ('start' in port) (port as MessagePort).start()
   return {
@@ -103,14 +132,6 @@ export let portLink = (port: Port, opts: {
       })
     },
     frame: (frame: Frame) => send({ frame }),
-    close: (reason = new Error('Message link closed')) => {
-      closed = true
-      port.removeEventListener('message', onMessage)
-      for (let pending of held.values()) {
-        clearTimeout(pending.timer)
-        pending.reject(reason)
-      }
-      held.clear()
-    },
+    close,
   }
 }

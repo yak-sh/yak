@@ -103,7 +103,7 @@ for (let kind of ['fork', 'spawn']) {
     await a.resume()
     await finish(a, parent)
     assertEquals((await a.transcript(parent)).length, entries.length)
-    a.close()
+    await a.close()
   })
 }
 
@@ -144,7 +144,7 @@ Deno.test('wait resolves while child completion waits behind the parent tool', a
   let entries = await a.transcript(parent)
   assert(entries.some((b) => b.result && textOf(b).includes('waited final')))
   assertEquals(statusOf(entries), 'settled')
-  a.close()
+  await a.close()
 })
 
 Deno.test('caps refuse with error entries, spawn nothing, and serialize across parents', async () => {
@@ -176,7 +176,7 @@ Deno.test('caps refuse with error entries, spawn nothing, and serialize across p
   )
   pending.resolve(reply('done'))
   await finish(a, parent)
-  a.close()
+  await a.close()
 
   h = open(':memory:')
   pending = deferred<Reply>()
@@ -190,7 +190,7 @@ Deno.test('caps refuse with error entries, spawn nothing, and serialize across p
       string
     >).value,
   )
-  a.close()
+  await a.close()
 })
 
 Deno.test('completion answers an open delegation call; wait rejects foreign children and times out', async () => {
@@ -327,5 +327,5 @@ Deno.test('child completion is queued behind an in-flight parent ask without col
     entries.filter((b) => textOf(b).includes('child final')).length,
     1,
   )
-  a.close()
+  await a.close()
 })

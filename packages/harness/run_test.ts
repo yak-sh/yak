@@ -40,7 +40,7 @@ Deno.test('a started transcript runs to settled and reads back', async () => {
   assertEquals(statusOf(entries), 'settled')
   assertEquals(titleOf(entries), 'ping')
   assertEquals((entries.at(-1)!.content as Comp).body, 'heard: ping')
-  a.close()
+  await a.close()
 })
 
 Deno.test('send appends to a transcript and the daemon answers it', async () => {
@@ -53,7 +53,7 @@ Deno.test('send appends to a transcript and the daemon answers it', async () => 
     .filter((b) => !b.prompt)
     .map((b) => (b.content as Comp)?.body).filter(Boolean)
   assertEquals(said, ['one', 'heard: one', 'two', 'heard: two'])
-  a.close()
+  await a.close()
 })
 
 Deno.test('a session lists with its derived status, and renders as a line', async () => {
@@ -66,7 +66,7 @@ Deno.test('a session lists with its derived status, and renders as a line', asyn
   let entries = await a.transcript(s)
   assert(a.line(entries.find((b) => !b.prompt && b.content)!).includes('ping'))
   assert(a.line(row, 'Status', { entries }).includes('settled'))
-  a.close()
+  await a.close()
 })
 
 Deno.test('the agent reads bare and filed open work, including claims and blocked facets', async () => {
@@ -108,7 +108,7 @@ Deno.test('the agent reads bare and filed open work, including claims and blocke
     'open',
   ])
   assertEquals(work.slice(0, 2).map((b) => b.filed), [undefined, undefined])
-  a.close()
+  await a.close()
 })
 
 Deno.test('resume wakes what a restart left owed a turn', async () => {
@@ -165,7 +165,7 @@ Deno.test('transcript doors refuse unknown sessions before doing work', async ()
       { did: 'nothing', status: 'empty', added: [] },
     )
   } finally {
-    a.close()
+    await a.close()
   }
 })
 
@@ -208,7 +208,7 @@ Deno.test('archiving is a persistent visibility mark, not an execution transitio
       false,
     )
   } finally {
-    a.close()
+    await a.close()
   }
 })
 
@@ -262,6 +262,36 @@ Deno.test('session titles use local assignment, not inherited parent context', a
       undefined,
     )
   } finally {
-    a.close()
+    await a.close()
   }
+})
+
+Deno.test('Agent close stops admission and drains an active model before SQLite closes', async () => {
+  let entered = Promise.withResolvers<void>()
+  let release = Promise.withResolvers<void>()
+  let a = started(async (req) => {
+    entered.resolve()
+    await release.promise
+    return echo(req)
+  })
+  await a.start('active')
+  await entered.promise
+  let closed = false
+  let shutdown = a.close()
+  shutdown.then(() => closed = true)
+  assertEquals(a.close(), shutdown)
+  await new Promise((r) => setTimeout(r, 20))
+  assertEquals(closed, false)
+  // The native connection is still usable under the admitted callback.
+  assertEquals((await a.h.g.read('.session')).length, 1)
+  let refused = false
+  try {
+    await a.start('too late')
+  } catch {
+    refused = true
+  }
+  assertEquals(refused, true)
+  release.resolve()
+  await shutdown
+  assertEquals(closed, true)
 })

@@ -42,3 +42,30 @@ Deno.test('MessagePort request limits and timeout bound abandoned operations', a
     port2.close()
   }
 })
+
+Deno.test('peer disconnect rejects outstanding port requests immediately', async () => {
+  let { port1, port2 } = new MessageChannel()
+  let a = portLink(port1)
+  let b = portLink(port2, { receive: () => new Promise(() => {}) })
+  let pending = a.request('stuck')
+  b.close()
+  await assertRejects(() => pending, Error, 'disconnected')
+  a.close()
+  port1.close()
+  port2.close()
+})
+
+Deno.test('real worker crash rejects pending requests', async () => {
+  let worker = new Worker(
+    'data:application/javascript,onmessage=()=>{throw new Error("crash")}',
+    { type: 'module' },
+  )
+  worker.addEventListener('error', (e) => e.preventDefault())
+  let link = portLink(worker)
+  try {
+    await assertRejects(() => link.request('crash'), Error, 'disconnected')
+  } finally {
+    link.close()
+    worker.terminate()
+  }
+})

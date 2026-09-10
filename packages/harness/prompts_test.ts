@@ -89,7 +89,7 @@ Deno.test('root admission is snapshotted and explicit later context is an instru
       ['shared rule', 'additional rule'],
     )
   } finally {
-    a.close()
+    await a.close()
     await Deno.remove(dir, { recursive: true })
   }
 })

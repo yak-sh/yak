@@ -158,7 +158,7 @@ Deno.test('graph effects paint a model reply without a keypress; sends are input
     )
   } finally {
     ui.free()
-    a.close()
+    await a.close()
   }
 })
 
@@ -361,7 +361,7 @@ Deno.test('task mode paints claimed work and subagent, then its delivered result
     assert(ui.text().includes('done'), ui.text())
   } finally {
     ui.free()
-    a.close()
+    await a.close()
   }
 })
 

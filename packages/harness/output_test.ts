@@ -139,7 +139,7 @@ Deno.test('model receives bounded tool result, UI keeps original and prompt/user
       text,
     )
   } finally {
-    a.close()
+    await a.close()
   }
 })
 

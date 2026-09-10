@@ -261,7 +261,7 @@ Deno.test('root sessions discover and share the existing default worktree', asyn
       (roots[1].home as Comp).worktree,
     )
   } finally {
-    a.close()
+    await a.close()
     await Deno.remove(f.dir, { recursive: true })
   }
 })

@@ -13,7 +13,7 @@ import { type Frontend, frontend } from './frontend.ts'
 import type { Bundle, Comp, Eid } from '@yaks/graph'
 import { Frame, run, Textarea, useKeys, VirtualList } from '@yaks/tui'
 import { type Context, type Panel, panels, type UIAgent } from './panels.ts'
-import { type Agent, agent } from './run.ts'
+import type { Agent } from './run.ts'
 import { INSTRUCTIONS } from './cli.ts'
 
 /** UI contributions and an event door, independent of the terminal backend. */
@@ -439,44 +439,17 @@ let Draft = (
     submit,
   })
 
-/** No-verb entry. The daemon runs in this process while the terminal is open. */
+/** No-verb entry. The worker owns SQLite while the terminal is open. */
 export let tui = async (): Promise<void> => {
-  if (Deno.env.get('HARNESS_WORKER') == '1') {
-    const { remote } = await import('./remote.ts')
-    const backend = await remote({
-      instructions: INSTRUCTIONS,
-      cwd: Deno.cwd(),
-    })
-    try {
-      await backend.resume()
-      await run(
-        () => h(App, { agent: backend.agent, subscribe: backend.subscribe }),
-        {
-          graphics: Deno.env.get('HARNESS_GRAPHICS') == 'kitty'
-            ? 'kitty'
-            : 'none',
-          tmux: !!Deno.env.get('TMUX'),
-        },
-      )
-    } finally {
-      await backend.close()
-    }
-    return
-  }
-
-  let a = agent({ instructions: INSTRUCTIONS })
-  let subscribe = changes(a)
+  const { remote } = await import('./remote.ts')
+  const backend = await remote({ instructions: INSTRUCTIONS, cwd: Deno.cwd() })
   try {
-    await a.resume()
-    await run(() => h(App, { agent: a, subscribe }), {
+    await backend.resume()
+    await run(() => h(App, { agent: backend.agent, subscribe: backend.subscribe }), {
       graphics: Deno.env.get('HARNESS_GRAPHICS') == 'kitty' ? 'kitty' : 'none',
       tmux: !!Deno.env.get('TMUX'),
     })
-  } catch (error) {
-    diagnostics().report(error, { phase: 'tui' })
-    throw error
   } finally {
-    await diagnostics().drain()
-    a.close()
+    await backend.close()
   }
 }

@@ -139,7 +139,7 @@ export type Agent = {
   line: (b: Bundle, view?: string, ctx?: Record<string, unknown>) => string
   /** Explicit instruction admission; appends a snapshot, never a user turn. */
   instruct: (session: Eid, text: string, source?: string) => Promise<Eid>
-  close: () => void
+  close: () => Promise<void>
 }
 
 // A handle can be minted long after birth; it is not a clock. Stable ties
@@ -211,6 +211,9 @@ export let agent = (opts: Opts = {}): Agent => {
   let next = async (session: Eid) =>
     Math.max(0, ...(await entries(session)).map(seqOf)) + 1
 
+  let closing = false
+  let shutdown: Promise<void> | undefined
+  let operations = new Set<Promise<unknown>>()
   let a: Agent = {
     h,
     d,
@@ -323,7 +326,7 @@ export let agent = (opts: Opts = {}): Agent => {
       }, 'plain'),
     instruct: (session, text, source = 'explicit') =>
       d.enqueue(session, async () => {
-        let entries = await a.transcript(session)
+        let entries = await transcript(h.g, session)
         let entry = promptEntry(
           session,
           entries.length ? Number((entries.at(-1)!.entry as Comp).seq) + 1 : 1,
@@ -334,10 +337,46 @@ export let agent = (opts: Opts = {}): Agent => {
         await h.g.apply([entry])
         return entry.entity.eid
       }),
-    close: () => {
-      detachDiagnostics()
-      h.close()
-    },
+    close: () =>
+      shutdown ??= (async () => {
+        closing = true
+        let drained = d.stop()
+        await Promise.allSettled([...operations])
+        await drained
+        await diagnostics().drain()
+        detachDiagnostics()
+        h.close()
+      })(),
+  }
+  // Lifecycle bookkeeping only; all application state remains in the graph.
+  for (
+    let key of [
+      'start',
+      'send',
+      'taskEntry',
+      'archive',
+      'resume',
+      'idle',
+      'sessions',
+      'tasks',
+      'children',
+      'transcript',
+      'instruct',
+    ] as const
+  ) {
+    let method = a[key] as (...args: unknown[]) => Promise<unknown>
+    Object.assign(a, {
+      [key]: (...args: unknown[]) => {
+        if (closing) return Promise.reject(new Error('Agent is closing'))
+        let pending = method(...args)
+        operations.add(pending)
+        pending.then(
+          () => operations.delete(pending),
+          () => operations.delete(pending),
+        )
+        return pending
+      },
+    })
   }
   return a
 }

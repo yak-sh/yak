@@ -302,7 +302,7 @@ Deno.test('child marks task done through a tool before its final answer: one fin
   )
   assertEquals(receipts.length, 1)
   assert(textOf(receipts[0]).endsWith('\nThe final answer'))
-  a.close()
+  await a.close()
 })
 
 Deno.test('cancelled task returns cancelled; stopped parents do not receive deliveries', async () => {

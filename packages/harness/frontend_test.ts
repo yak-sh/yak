@@ -5,7 +5,7 @@ import { App } from './app.ts'
 import type { UIAgent } from './panels.ts'
 import { mount } from '../tui/harness.ts'
 
-Deno.test('frontend graph is private, transient and query granular', () => {
+Deno.test('frontend graph is private, transient and query granular', async () => {
   let a = frontend(), b = frontend()
   let viewChanges = 0, draftChanges = 0
   a.view.subscribe(() => viewChanges++)
@@ -30,7 +30,7 @@ Deno.test('frontend graph is private, transient and query granular', () => {
     })
     viewport.watch.close()
   } finally {
-    a.close()
+    await a.close()
     b.close()
   }
 })
@@ -128,7 +128,7 @@ Deno.test('external frontend writes drive controlled input and selection', async
   }
 })
 
-Deno.test('VISUAL state and local yank belong only to their frontend graph', () => {
+Deno.test('VISUAL state and local yank belong only to their frontend graph', async () => {
   let a = frontend(), b = frontend()
   try {
     a.select({ surface: 'input', text: 'draft', anchor: 0, at: 2, yank: 'dra' })
@@ -142,7 +142,7 @@ Deno.test('VISUAL state and local yank belong only to their frontend graph', () 
     )
     assertEquals((b.visual.value[0].visual as Record<string, unknown>).yank, '')
   } finally {
-    a.close()
+    await a.close()
     b.close()
   }
 })

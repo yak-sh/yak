@@ -67,7 +67,7 @@ let start = async (c: Ctx): Promise<number> => {
     await a.idle(s)
     return 0
   } finally {
-    a.close()
+    await a.close()
   }
 }
 
@@ -85,7 +85,7 @@ let send = async (c: Ctx): Promise<number> => {
     await a.idle(s)
     return 0
   } finally {
-    a.close()
+    await a.close()
   }
 }
 
@@ -100,7 +100,7 @@ let ls = async (c: Ctx): Promise<number> => {
     if (!rows.length) c.note(`no sessions in ${a.h.path}`)
     return 0
   } finally {
-    a.close()
+    await a.close()
   }
 }
 
@@ -119,7 +119,7 @@ let show = async (c: Ctx): Promise<number> => {
     for (let b of entries) c.out('  ' + a.line(b))
     return 0
   } finally {
-    a.close()
+    await a.close()
   }
 }
 
@@ -137,7 +137,7 @@ let tasks = async (c: Ctx): Promise<number> => {
     }
     return 0
   } finally {
-    a.close()
+    await a.close()
   }
 }
 

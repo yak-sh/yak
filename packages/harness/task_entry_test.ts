@@ -101,7 +101,7 @@ Deno.test('Agent.taskEntry honors agent limits', async () => {
     await assertRejects(() => a.taskEntry(parent, 'work'), Error, 'child cap')
     assertEquals(await a.tasks(), [])
   } finally {
-    a.close()
+    await a.close()
   }
 })
 
@@ -188,6 +188,6 @@ Deno.test('auto-task notice is lazy, reaches next ask, and contextual completion
     )
   } finally {
     release()
-    a.close()
+    await a.close()
   }
 })

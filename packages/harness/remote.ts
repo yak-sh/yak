@@ -17,7 +17,7 @@ export let remote = async (
     cwd?: string
     images?: ImageOptions | false
     instructions?: string
-    fake?: boolean
+    fake?: boolean | 'stuck'
   } = {},
 ) => {
   let worker = new Worker(
@@ -56,7 +56,10 @@ export let remote = async (
   }
   worker.addEventListener('error', fatal)
   worker.addEventListener('messageerror', fatal)
+  let closing = false
+  let shutdown: Promise<{ drained: boolean }> | undefined
   let request = async (method: string, args: unknown[] = []) => {
+    if (closing && method != 'close') throw new Error('Worker is shutting down')
     if (failure) throw failure
     return await link.request(method, args)
   }
@@ -161,25 +164,30 @@ export let remote = async (
     },
     resume: () => request('resume'),
     idle: (session: string) => request('idle', [session]),
-    close: async () => {
-      let timer: ReturnType<typeof setTimeout> | undefined
-      try {
-        await Promise.race([
-          request('close'),
-          new Promise((_, reject) => {
-            timer = setTimeout(
-              () => reject(new Error('Worker shutdown timeout')),
-              2000,
-            )
-          }),
-        ])
-      } finally {
-        clearTimeout(timer)
-        link.close()
-        worker.terminate()
-        replica.close()
-        listeners.clear()
-      }
-    },
+    close: () =>
+      shutdown ??= (async () => {
+        closing = true
+        let timer: ReturnType<typeof setTimeout> | undefined
+        try {
+          return await Promise.race([
+            request('close').then(() => ({ drained: true })),
+            new Promise<{ drained: boolean }>((resolve) => {
+              timer = setTimeout(
+                () => resolve({ drained: false }),
+                2000,
+              )
+            }),
+          ])
+        } finally {
+          clearTimeout(timer)
+          link.close()
+          worker.removeEventListener('error', fatal)
+          worker.removeEventListener('messageerror', fatal)
+          worker.terminate()
+          await queued
+          replica.close()
+          listeners.clear()
+        }
+      })(),
   }
 }

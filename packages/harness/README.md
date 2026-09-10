@@ -337,10 +337,10 @@ See [`@yaks/blob`](../blob/README.md#bounded-graph-value-inspection) for range
 units and [`@yaks/context`](../context/README.md#large-tool-results) for policy
 limits.
 
-## Optional worker pilot
+## Worker runtime
 
-`HARNESS_WORKER=1` runs the backend in a Web Worker and communicates using
-`postMessage`. It remains opt-in. See [the worker pilot](WORKER.md) for
+The TUI runs the backend in a Web Worker and communicates using
+`postMessage` by default. See [the worker runtime](WORKER.md) for
 ownership, measurements, shutdown behavior, and unresolved
 subscription/backpressure issues.
 

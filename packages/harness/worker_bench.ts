@@ -55,7 +55,7 @@ try {
       traffic: worker?.traffic,
     })
     if (worker) await worker.close()
-    inline?.close()
+    await inline?.close()
   }
   console.log(JSON.stringify(results, null, 2))
 } finally {

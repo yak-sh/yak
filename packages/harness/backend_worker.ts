@@ -33,7 +33,7 @@ async function handle(method: string, value: unknown): Promise<unknown> {
       cwd?: string
       images?: ImageOptions | false
       instructions?: string
-      fake?: boolean
+      fake?: boolean | 'stuck'
     }
     a = agent({
       h: open(options.db),
@@ -44,7 +44,7 @@ async function handle(method: string, value: unknown): Promise<unknown> {
         ? {
           name: 'fake',
           model: () =>
-            Promise.resolve({
+            options.fake == 'stuck' ? new Promise(() => {}) : Promise.resolve({
               id: 'test',
               model: 'fake',
               items: [{ kind: 'assistant' as const, text: 'ok' }],
@@ -70,12 +70,12 @@ async function handle(method: string, value: unknown): Promise<unknown> {
   }
   if (method == 'close') {
     closing = true
+    let drained = a.d.stop()
     await Promise.allSettled([...active])
     subs.drop(link.frame)
     // Do not finalize native SQLite statements while a model turn still owns them.
-    await Promise.all((await a.sessions()).map((s) => a!.idle(s.entity.eid)))
-    await diagnostics().drain()
-    a.close()
+    await drained
+    await a.close()
     a = undefined
     removeErrors()
     return true

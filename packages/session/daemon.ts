@@ -18,6 +18,8 @@ import { type Deps, react, type Step } from './react.ts'
 
 /** A running daemon: wake a transcript by hand, or wait until one is quiet. */
 export type Daemon = {
+  /** Stop admission, then wait for every admitted callback. Never closes storage. */
+  stop: () => Promise<void>
   /** Serialize a write with this session’s model/tool steps. */
   enqueue: <T>(session: Eid, work: () => Promise<T>) => Promise<T>
   /** queue one step over this transcript; answers when that step is done */
@@ -47,9 +49,13 @@ export let daemon = (
   each: (step: Step) => void = () => {},
   report: (err: unknown, session?: Eid) => void = (err) => console.error(err),
 ): Daemon => {
+  let stopping = false
+  let stopped: Promise<void> | undefined
+  let effects = new Set<Promise<unknown>>()
   let busy = new Map<Eid, Promise<unknown>>()
   let queued = new Map<Eid, Promise<Step>>()
   let enqueue = <T>(session: Eid, work: () => Promise<T>): Promise<T> => {
+    if (stopping) return Promise.reject(new Error('Daemon is stopping'))
     let job = (busy.get(session) ?? Promise.resolve()).catch(report).then(work)
     busy.set(session, job)
     let clear = () => {
@@ -59,17 +65,23 @@ export let daemon = (
     return job
   }
   let wake = (session: Eid): Promise<Step> => {
+    if (stopping) {
+      return Promise.resolve({ did: 'nothing', status: 'stopped', added: [] })
+    }
     let pending = queued.get(session)
     if (pending) return pending
     let step = enqueue(session, async () => {
       queued.delete(session)
+      if (stopping) {
+        return { did: 'nothing', status: 'stopped', added: [] } as Step
+      }
       try {
         let step = await react(g, session, deps)
         each(step)
         if (['settled', 'failed', 'stopped'].includes(step.status)) {
           let [self] = await g.storage.tx((tx) => tx.get([session]))
           let parent = (self?.spawned as Comp | undefined)?.parent
-          if (parent) {
+          if (parent && !stopping) {
             // Do not wait on the parent: it may itself be waiting on this child.
             enqueue(String(parent), () => deliverChild(g, session)).catch(
               report,
@@ -86,6 +98,7 @@ export let daemon = (
     return step
   }
   fx.created(ENTRY, (e) => {
+    if (stopping) return
     let session = String(e.comp?.session)
     enqueue(session, async () => {
       let [entry] = await g.storage.tx((tx) => tx.get([e.entity.eid]))
@@ -96,7 +109,14 @@ export let daemon = (
   // required task settles, or an edge is removed. Recheck only the changed
   // task and its direct dependents, matching done()/openDeps() semantics.
   if (g.vocab.comps.includes('task')) {
-    let taskChanged = async (e: Event) => {
+    let taskChanged = (e: Event) => {
+      if (stopping) return
+      let pending = taskChange(e)
+      effects.add(pending)
+      pending.then(() => effects.delete(pending), () => effects.delete(pending))
+      return pending
+    }
+    let taskChange = async (e: Event) => {
       let ids = new Set<Eid>([e.entity.eid])
       let [changed] = await g.storage.tx((tx) => tx.get([e.entity.eid]))
       for (let part of [e.comp, changed?.edge as Comp | undefined]) {
@@ -119,7 +139,7 @@ export let daemon = (
         if (!task.task || typeof child != 'string') continue
         let [self] = await g.storage.tx((tx) => tx.get([child]))
         let parent = (self?.spawned as Comp | undefined)?.parent
-        if (typeof parent == 'string') {
+        if (typeof parent == 'string' && !stopping) {
           enqueue(parent, () => deliverChild(g, child)).catch(report)
         }
       }
@@ -148,5 +168,14 @@ export let daemon = (
       await seen
     }
   }
-  return { wake, idle, enqueue }
+  let stop = () => {
+    stopping = true
+    return stopped ??= (async () => {
+      // Includes effects already reading storage, not just session queues.
+      while (busy.size || effects.size) {
+        await Promise.allSettled([...busy.values(), ...effects])
+      }
+    })()
+  }
+  return { wake, idle, enqueue, stop }
 }

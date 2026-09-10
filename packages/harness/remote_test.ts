@@ -137,3 +137,38 @@ Deno.test('worker subscribes only to selected fork ancestry, respecting each bou
     await Deno.remove(dir, { recursive: true })
   }
 })
+
+Deno.test('worker exit drains a burst and is idempotent', async () => {
+  let dir = await Deno.makeTempDir()
+  let r = await remote({ db: ':memory:', cwd: dir, fake: true })
+  try {
+    let id = await r.agent.start('burst')
+    let writes = Array.from(
+      { length: 25 },
+      (_, i) => r.agent.send(id, 'x'.repeat(10000) + i),
+    )
+    let closing = r.close()
+    assertEquals(r.close(), closing)
+    await Promise.all(writes)
+    assertEquals(await closing, { drained: true })
+  } finally {
+    await r.close()
+    await Deno.remove(dir, { recursive: true })
+  }
+})
+
+Deno.test('stuck model deadline is an expected bounded exit, not a crash', async () => {
+  let dir = await Deno.makeTempDir()
+  let r = await remote({ db: ':memory:', cwd: dir, fake: 'stuck' })
+  try {
+    await r.agent.start('stuck')
+    // Let the admitted turn enter the model callback.
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    let start = performance.now()
+    assertEquals(await r.close(), { drained: false })
+    assert(performance.now() - start < 4000)
+  } finally {
+    await r.close()
+    await Deno.remove(dir, { recursive: true })
+  }
+})
