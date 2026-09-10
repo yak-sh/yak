@@ -22,6 +22,16 @@ attention.
 
 ## Keyboard modes
 
+**Ctrl+U cuts the entire draft in any mode:** it saves the exact source
+(including newlines) in the frontend's private `visual.yank`, requests an OSC52
+clipboard write, then clears the draft and resets its cursor. It does not send a
+message. Empty drafts leave the clipboard alone. If the clipboard writer throws,
+the draft is retained. If no writer is available, the draft is cut to the local
+yank only. The status line reports the outcome; terminal clipboard permissions
+can prevent OSC52 delivery, which cannot be acknowledged. The local yank remains
+recoverable until replaced or this frontend closes. The standalone textarea's
+Ctrl+U editing behavior is unchanged.
+
 The composer starts in **INSERT** mode. Escape enters **NORMAL**, and `i`
 returns to editing without changing the draft or cursor. NORMAL commands never
 submit or type into the composer. `?` opens help; `?` or Escape dismisses it.

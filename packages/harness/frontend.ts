@@ -13,6 +13,7 @@ export let frontendVocab = loadVocab([{
         focus: { type: 'string' },
         help: { type: 'boolean' },
         pending: { type: 'string' },
+        clipboard: { type: 'string' },
       },
     },
     frontend: {

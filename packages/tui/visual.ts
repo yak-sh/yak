@@ -26,9 +26,15 @@ let widths = new Map<string, number>()
 let controller:
   | { get: () => VisualState; set: (s: VisualState) => void }
   | undefined
-let clipboard: (text: string) => void = () => {}
-export let setClipboard = (write: (text: string) => void) => {
+let clipboard: ((text: string) => void) | undefined
+export let setClipboard = (write?: (text: string) => void) => {
   clipboard = write
+}
+/** Request a clipboard write; true means dispatched, not acknowledged by the terminal. */
+export let copyText = (text: string): boolean => {
+  if (!clipboard) return false
+  clipboard(text)
+  return true
 }
 export let visualState = () => controller?.get()
 export let emptyVisual = (): VisualState => ({
@@ -134,7 +140,7 @@ export let visualKey = (k: Key): boolean => {
     s = { ...s, surface: '', yank: text }
     controller.set(s)
     touch()
-    clipboard(text)
+    copyText(text)
     return true
   } else {
     let direction = k.name == 'char'

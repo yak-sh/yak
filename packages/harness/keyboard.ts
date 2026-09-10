@@ -3,6 +3,7 @@ import { h } from 'preact'
 import type { Comp } from '@yaks/graph'
 import {
   beginVisual,
+  copyText,
   type Key,
   pressFocused,
   pressTo,
@@ -24,6 +25,7 @@ export const shortcuts = [
   ['t', 'toggle message / task'],
   ['a / z / s', 'archive root / show archived / show settled'],
   ['? / Esc', 'show / dismiss help'],
+  ['Ctrl+U', 'cut entire draft: copy then clear (all modes)'],
   ['Ctrl+C', 'quit'],
 ] as const
 
@@ -34,6 +36,27 @@ export let Keyboard = ({ ui, action }: {
   let state = ui.keyboard.value[0].keyboard as Comp
   useKeymap((key) => {
     if (key.ctrl && key.text == 'c') return false
+    if (key.ctrl && key.text == 'u') {
+      let text = String((ui.client.ent('draft')!.draft as Comp).text ?? '')
+      if (!text) return true
+      let visual = ui.client.ent('visual')!.visual as VisualState
+      ui.select({ ...visual, yank: text })
+      // Persist the recovery copy before requesting the clipboard or clearing input.
+      try {
+        let copied = copyText(text)
+        ui.edit({ text: '', at: 0 })
+        ui.keys({
+          clipboard: copied
+            ? 'Draft cut; clipboard copy requested; local yank saved'
+            : 'Draft cut to local yank; clipboard unavailable',
+        })
+      } catch {
+        ui.keys({
+          clipboard: 'Clipboard write failed; draft retained; local yank saved',
+        })
+      }
+      return true
+    }
     let current = () => ui.client.ent('keyboard')!.keyboard as Comp
     let s = current()
     let visual = ui.client.ent('visual')!.visual as VisualState
@@ -156,6 +179,9 @@ export let Keyboard = ({ ui, action }: {
           ? ' · ' + state.focus + ' · ? help'
           : ' · Esc NORMAL'),
     ),
+    state.clipboard
+      ? h('div', { class: 'Entry_Hint' }, String(state.clipboard))
+      : null,
     state.help
       ? h(
         'div',

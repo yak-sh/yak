@@ -292,3 +292,11 @@ the keyboard stack. `pressFocused(key)` forwards an already-routed key without
 running interceptors again. `beginVisual(id)` begins source selection on a
 specific registered text surface. A controlled `Textarea` can set `active` false
 to hide its cursor while another mode owns input.
+
+### Clipboard requests
+
+`copyText(text)` requests a clipboard write through the backend installed by
+`run`. It returns whether a writer was available, not whether the terminal
+accepted the clipboard contents. The terminal backend uses OSC52 with UTF-8
+base64 encoding. Callers own any local recovery buffer and should keep it before
+clearing editable text. This API does not modify a textarea or VISUAL selection.

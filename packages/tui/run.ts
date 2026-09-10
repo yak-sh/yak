@@ -65,7 +65,7 @@ export let run = async (
     try {
       Deno.removeSignalListener('SIGWINCH', resize)
     } catch { /* never added */ }
-    setClipboard(() => {})
+    setClipboard()
     backend.stop()
     try {
       Deno.stdin.setRaw(false)
@@ -75,7 +75,7 @@ export let run = async (
   try {
     Deno.stdin.setRaw(true)
     backend.start()
-    setClipboard((text) => backend.copy?.(text))
+    setClipboard(backend.copy ? (text) => backend.copy!(text) : undefined)
     size.value = backend.size()
     Deno.addSignalListener('SIGWINCH', resize)
     onPaint(() => {

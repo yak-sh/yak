@@ -155,3 +155,68 @@ Deno.test('NORMAL sidebar commands use the same session actions and INSERT remai
     f.close()
   }
 })
+
+Deno.test('Ctrl+U cuts the complete draft in every mode, preserving a private recovery yank', async () => {
+  let { setClipboard } = await import('../tui/visual.ts')
+  let { osc52 } = await import('../tui/paint.ts')
+  let f = frontend()
+  let sent: string[] = [], writes: string[] = []
+  let source = 'first line\n雪 and café\nlast line'
+  let ui = await mount(
+    () =>
+      h(
+        'div',
+        null,
+        h(Keyboard, { ui: f, action: () => false }),
+        h(Textarea, {
+          value: f.draft.value[0].draft as unknown as {
+            text: string
+            at: number
+          },
+          onEdit: f.edit,
+          onSubmit: (s: string) => sent.push(s),
+        }),
+      ),
+    30,
+    12,
+  )
+  try {
+    setClipboard((text) => {
+      assertEquals((f.client.ent('draft')!.draft as Comp).text, source)
+      assertEquals((f.client.ent('visual')!.visual as Comp).yank, source)
+      writes.push(osc52(text))
+    })
+    for (let mode of ['INSERT', 'NORMAL', 'VISUAL']) {
+      f.keys({ mode, focus: 'sidebar', help: false })
+      f.edit({ text: source, at: 5 })
+      await ui.send('\x15')
+      assertEquals(f.client.ent('draft')!.draft, { text: '', at: 0 })
+      assertEquals((f.client.ent('visual')!.visual as Comp).yank, source)
+      assertEquals((f.client.ent('keyboard')!.keyboard as Comp).mode, mode)
+      assertEquals(
+        (f.client.ent('keyboard')!.keyboard as Comp).focus,
+        'sidebar',
+      )
+    }
+    assertEquals(writes, [osc52(source), osc52(source), osc52(source)])
+    await ui.send('\x15')
+    assertEquals(writes.length, 3) // Empty drafts do not overwrite the clipboard.
+    setClipboard()
+    f.edit({ text: source, at: 0 })
+    await ui.send('\x15')
+    assertEquals((f.client.ent('visual')!.visual as Comp).yank, source)
+    assertEquals((f.client.ent('draft')!.draft as Comp).text, '')
+    assert(ui.text().includes('clipboard unavailable'))
+    setClipboard(() => {
+      throw new Error('unavailable')
+    })
+    f.edit({ text: source, at: 2 })
+    await ui.send('\x15')
+    assertEquals(f.client.ent('draft')!.draft, { text: source, at: 2 })
+    assertEquals(sent, [])
+  } finally {
+    setClipboard()
+    ui.free()
+    f.close()
+  }
+})
