@@ -6,7 +6,7 @@ import type { Agent } from './run.ts'
 /** The doors used by the UI; a test can supply just these. */
 export type UIAgent = Pick<
   Agent,
-  'start' | 'send' | 'sessions' | 'tasks' | 'transcript' | 'line'
+  'start' | 'send' | 'sessions' | 'children' | 'tasks' | 'transcript' | 'line'
 >
 
 /** The selection and graph doors handed to every panel. */
@@ -56,10 +56,7 @@ export let panels: Panel[] = [
   },
   {
     title: 'Subagents',
-    read: (c) =>
-      c.session
-        ? c.sessions.filter((b) => (b.session as Comp).parent == c.session)
-        : [],
+    read: (c) => c.session ? c.agent.children(c.session) : [],
     Render: ({ rows }) => list(rows, sessionLine, 'No subagents'),
   },
   {

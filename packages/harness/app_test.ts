@@ -28,6 +28,8 @@ Deno.test('fake agent: panels, burst selector keys, editing and stale reads', as
     session: { id, status: 'settled', parent: id == 's3' ? 's2' : undefined },
   }))
   let a: UIAgent = {
+    children: (parent) =>
+      Promise.resolve(sessions.filter((b) => b.session.parent == parent)),
     sessions: () => {
       reads++
       return Promise.resolve(sessions)
@@ -145,6 +147,7 @@ Deno.test('two submissions before start resolves stay ordered in one new session
   let started = deferred<string>()
   let starts: string[] = [], sends: string[] = []
   let a: UIAgent = {
+    children: () => Promise.resolve([]),
     sessions: () => Promise.resolve([]),
     tasks: () => Promise.resolve([]),
     transcript: () => Promise.resolve([]),
@@ -179,6 +182,7 @@ Deno.test('two submissions before start resolves stay ordered in one new session
 
 Deno.test('a failed send is visible and contributed panels read and render bundles', async () => {
   let a: UIAgent = {
+    children: () => Promise.resolve([]),
     sessions: () => Promise.resolve([]),
     tasks: () => Promise.resolve([]),
     transcript: () => Promise.resolve([]),
