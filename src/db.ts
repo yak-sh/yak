@@ -52,7 +52,6 @@ import {
 import { type Trace } from './effects.ts'
 import { ancestorAt, normalizeLiterals } from './client.ts'
 import { env } from './http.ts'
-import { editHunks, isEditOp, isFieldOp, patchText } from './edit.ts'
 import { homeReads } from './persona.ts'
 import {
   type EdgeSelector,
@@ -69,17 +68,13 @@ import {
 } from './query.ts'
 import { reachRows, where } from './sql.ts'
 import { type Frag, toSql } from './relation.ts'
-import {
-  Invalid,
-  spec as configSpec,
-  validate as validateSetting,
-} from './config.ts'
 import { derivedCols, indexDdlOne, tableDdl } from './ddl.ts'
 import { FILTERS, type Vocab, vocabOps } from './store/vocab.ts'
 import type { Vocab as FleetVocab } from '@yaks/vocab'
 import { fleetVocab } from './vocab/fleet_vocab.ts'
 import type { Graph } from '@yaks/graph'
 import { fleetGraph } from './store/fleet_graph.ts'
+import { fleetNormalizers, normalizeFleet } from './store/fleet_normalize.ts'
 import {
   cameraEid,
   cursorEid,
@@ -3781,7 +3776,7 @@ let owned: Record<string, string[]> = Object.fromEntries(
 // The @yaks vocabulary handle, held beside the SQL connection and warmed by
 // live_db.ts at boot. Other handles (including test clones) build it on first
 // request. This is the fleet schema only, distinct from an app's ownVocab
-// below; no reads or writes route through the package graph yet.
+// below; only the shared normalize hooks route through the package graph yet.
 let fleetVocabs = new WeakMap<Sql, FleetVocab>()
 
 export let fleetVocabOf = (db: Sql): FleetVocab => {
@@ -3793,8 +3788,8 @@ export let fleetVocabOf = (db: Sql): FleetVocab => {
   return vocab
 }
 
-// Bound once per Sql handle. This phase composes storage/CAS only: live
-// apply() remains below until fleet admission, guards and stamps are registered.
+// Bound once per Sql handle: storage/CAS plus shared normalize hooks. Live
+// mutation remains below until fleet admission, guards and stamps are composed.
 let fleetGraphs = new WeakMap<Sql, Graph>()
 export let fleetGraphOf = (db: Sql): Graph => {
   let held = fleetGraphs.get(db)
@@ -3807,6 +3802,15 @@ export let fleetGraphOf = (db: Sql): Graph => {
         exec: (sql) => db.exec(sql),
         tx: (fn) => db.transaction(fn, true),
       },
+      normalizers: fleetNormalizers({
+        db,
+        prepare: (sql) => prep(db, sql),
+        component: (eid, name) => readComp(db, eid, name),
+        known: (name) => !!readOf(db, name),
+        text: (name, col) =>
+          comps[name]?.[col] == 'text' || comps[name]?.[col] == 'body',
+        name: (eid) => human(db, eid),
+      }),
       number: (eid) => mintNum(db, eid),
       component: (eid, name) => readComp(db, eid, name),
     })
@@ -5021,166 +5025,6 @@ export class Stale extends Error {
   }
 }
 
-// The `$edit` field operator (T-23829): a comp value carrying `{ $edit }`
-// instead of a literal is a surgical patch on that column's CURRENT stored
-// value. Resolve it here, under the write lock, into the literal result plus a
-// per-column `was` guard — comp-agnostic (any text column of any comp), the
-// Claude-family door onto the same shared core as `graph_patch`. A guard on a
-// value read under this same lock cannot race, so `was` is belt-and-suspenders
-// here; the real no-clobber property is that a surgical patch merges rather
-// than replacing, and `old` must still match (or the whole batch refuses).
-// Any OTHER `$`-keyed operator is a typo/unknown op — refused legibly here at
-// the operator layer, before it reaches storage as a non-scalar (bound()).
-//
-// "Current" means current IN THIS BATCH: a patch lands on the value it would
-// land on when written, so two patches to one column apply in order, the
-// second onto the first one's result (T-33556). The `was` guard still names
-// the COMMITTED value — what the batch found — since that is what apply()
-// checks it against, and a batch never has to be guarded from itself.
-let editOps = (db: Sql, changes: Change[]): Change[] => {
-  let pending = new Map<string, unknown>()
-  let key = (c: Change, col: string) => `${c.eid}\0${c.name}\0${col}`
-  return changes.map((change) => {
-    // A component (or entity) removed mid-batch takes its pending values with
-    // it: a later patch falls back to the stored row rather than to text this
-    // batch already deleted.
-    if (!change.comp) {
-      for (let k of pending.keys()) {
-        if (k.startsWith(`${change.eid}\0`)) pending.delete(k)
-      }
-      return change
-    }
-    // Every literal this batch writes is what a later patch on that column
-    // lands on — a `$edit` after a whole-value write patches the new value.
-    let noted = (c: Change) => {
-      for (let [col, v] of Object.entries(c.comp!)) pending.set(key(c, col), v)
-      return c
-    }
-    let ops = Object.entries(change.comp).filter(([, v]) => isFieldOp(v))
-    if (!ops.length) return noted(change)
-    if (!readOf(db, change.name)) return noted(change)
-    let row = reads(db, change.name, 'where eid = ?').get(change.eid)
-    let comp = { ...change.comp }
-    let was = { ...(change.was ?? {}) }
-    for (let [col, op] of ops) {
-      let where = `${human(db, change.eid)}.${change.name}.${col}`
-      // A `$`-keyed value that isn't `$edit` is an unknown operator — a typo
-      // like `{$edt:…}`. Name it here, rather than letting bound() reject the
-      // stray object with its generic "expects a scalar".
-      if (!isEditOp(op)) {
-        let key = Object.keys(op as Record<string, unknown>).find((k) =>
-          k.startsWith('$')
-        )
-        throw new Error(`${where}: unknown operator ${JSON.stringify(key)}`)
-      }
-      // $edit is a string surgery — refuse it on an enum/number/ref/bool
-      // column, whose value editOps would otherwise write UNVALIDATED
-      // (normalizeChanges already ran, before the operator was a literal).
-      let type = comps[change.name]?.[col]
-      if (type != 'text' && type != 'body') {
-        throw new Error(`$edit: ${where} is not a wire-writable text column`)
-      }
-      let k = key(change, col)
-      let stored = row?.[col]
-      let cur = pending.has(k) ? pending.get(k) : stored
-      if (typeof cur != 'string') {
-        throw new Error(`$edit: ${where} has no text value to edit`)
-      }
-      comp[col] = patchText(cur, editHunks(op.$edit), where)
-      was[col] = stored == null ? null : sha(stored)
-    }
-    return noted({ ...change, comp, was })
-  })
-}
-
-// An actor has one cadence clock: minting its next untargeted wake removes
-// every pending predecessor in the same transaction. A target makes a wake a
-// reminder about that entity, so those stay independent of the cadence and of
-// one another. The rule lives at apply(), where concurrent doors serialize;
-// command-side replacement would let two stale snapshots both survive.
-let replaceWakes = (db: Sql, changes: Change[]): Change[] => {
-  let exists = prep(
-    db,
-    'select 1 from wake where entity = (select id from entity where eid = ?)',
-  )
-  // Unacted = neither outcome component present (D-14945); the wake's own
-  // receipt columns moved to the shared delivered/error tables. The recipient
-  // moved too — to the `deliver {to}` facet, joined here and named in the same
-  // batch, since a fresh self-wake always mints its deliver alongside. Owner
-  // and `to` are int ids; the projected owner eid rides back out.
-  let pending = prep(
-    db,
-    `
-    select o.eid as eid from wake w
-    join entity o on o.id = w.entity
-    join deliver dl on dl.entity = w.entity
-    where dl."to" = (select id from entity where eid = ?)
-      and w.target is null and o.eid != ?
-      and not exists (select 1 from delivered d where d.entity = w.entity)
-      and not exists (select 1 from error e where e.entity = w.entity)
-  `,
-  )
-  let toOf = new Map<string, string>()
-  for (let c of changes) {
-    if (c.name == 'deliver' && c.comp && typeof c.comp.to == 'string') {
-      toOf.set(c.eid, c.comp.to)
-    }
-  }
-  return changes.flatMap((change) => {
-    let to = toOf.get(change.eid)
-    if (
-      change.name != 'wake' || !change.comp ||
-      change.comp.target != null || !to ||
-      exists.get(change.eid)
-    ) return [change]
-    let drops = pending.all(to, change.eid) as { eid: string }[]
-    return [
-      ...drops.map(({ eid }) => ({ eid, name: 'entity', comp: null })),
-      change,
-    ]
-  })
-}
-
-// The setting boundary (D-18092): a `setting` write must name a KNOWN catalog
-// key, and its value is validated + normalized against that key before it lands
-// — the URL constraint, the secret refusal, the unknown-key refusal, all in the
-// same transaction so every door (CLI, MCP, web) is guarded, and a bad write
-// bounces the whole batch the way a claim does rather than storing garbage a
-// consumer would later read. A value-only patch resolves its key from the
-// existing row; a key-only or bare touch is refused unless the key is catalogued.
-// The value is normalized IN PLACE so storage and the echoed batch are canonical.
-let guardSettings = (db: Sql, changes: Change[]): Change[] => {
-  let keyOf = prep(
-    db,
-    'select key from setting where entity = (select id from entity where eid = ?)',
-  )
-  for (let c of changes) {
-    if (c.name != 'setting' || !c.comp) continue
-    let comp = c.comp
-    let setsKey = 'key' in comp && comp.key != null
-    let setsValue = 'value' in comp && comp.value != null
-    if (!setsKey && !setsValue) continue
-    let key = setsKey
-      ? String(comp.key)
-      : (keyOf.get(c.eid) as { key?: string } | undefined)?.key
-    if (!key) {
-      throw new Invalid(`setting ${shortId(c.eid)} names no catalog key`)
-    }
-    if (setsValue) {
-      // validate() checks the key is known + non-secret and normalizes the value.
-      comp.value = validateSetting(key, String(comp.value))
-    } else if (!configSpec(key) || configSpec(key)!.sensitive) {
-      // A key-only create still must be a known, non-secret catalog key.
-      throw new Invalid(
-        configSpec(key)
-          ? `${key} is a secret and cannot be stored in the graph`
-          : `unknown setting ${JSON.stringify(key)}`,
-      )
-    }
-  }
-  return changes
-}
-
 // The current non-secret override for a catalog key, or undefined. The graph
 // plane of config.resolve() — server code passes this as the reader so a value
 // is read at the operation boundary, current as of the last committed write.
@@ -5424,9 +5268,7 @@ export let apply = (
       actor: string | null
       cwd: string | null
     }[]
-    changes = editOps(db, changes)
-    changes = replaceWakes(db, changes)
-    changes = guardSettings(db, changes)
+    changes = normalizeFleet(db, fleetGraphOf(db), changes)
     changes = dualSpawn(db, changes)
     changes = dualFacet(db, changes, 'worktree')
     changes = dualFacet(db, changes, 'runtime')

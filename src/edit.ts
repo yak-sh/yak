@@ -1,53 +1,20 @@
-// The graph's Edit primitive (T-16357), made comp-agnostic (T-23829): a
-// surgical old→new replacement on the CURRENT value of ANY text column of ANY
-// comp — not just doc.body — guarded by the value the caller read (Change.was,
-// the wire's compare-and-swap) so a concurrent edit is refused rather than
-// clobbered. One patch core, reached through two doors that funnel here: the
-// `$edit` field operator in apply() (the one Claude-facing edit surface,
-// T-23843) and `graph_patch` (Codex's V4A format, prop-addressed).
-//
-// It lives here, not in client.ts, because it needs sha() and sha.ts pulls
-// node:crypto — server-only. client.ts is in the browser module graph
-// (browser_test guards that), so the one builder that hashes stays out of it.
+// Fleet patch-format doors. @yaks/graph owns operator recognition and the one
+// portable patchText implementation shared by $edit and graph_patch. This
+// adapter retains prop addressing, Row → guarded Change, and the rewrite hint.
+// The guarded builder uses the fleet sha() and stays out of client.ts's
+// browser module graph.
 import { type Change, idOf } from './types.ts'
 import { type Row } from './client.ts'
 import { bodyCols } from './props.ts'
 import { sha } from './sha.ts'
-
-// One surgical hunk: replace `old` with `new`, unique-or-`all` — the file Edit
-// tool's contract. A `$edit` field carries one of these or a list; a V4A
-// section parses into a list of them.
-export type EditHunk = { old: string; new: string; all?: boolean }
-
-// THE core: apply a sequence of surgical replacements to `value`, each match
-// unique unless `all`, refusing rather than clobbering. `where` names the
-// column for the error. A net-unchanged result refuses — an edit that writes
-// nothing is a mistake, not a no-op. Pure: no db, no sha, just the string.
-export let patchText = (
-  value: string,
-  hunks: EditHunk[],
-  where: string,
-): string => {
-  let out = value
-  for (let { old, new: replacement, all } of hunks) {
-    if (!old) throw new Error('edit: the text to replace is empty')
-    let hits = out.split(old).length - 1
-    if (hits == 0) {
-      throw new Error(`edit: not found in ${where}: ${JSON.stringify(old)}`)
-    }
-    if (hits > 1 && !all) {
-      throw new Error(
-        `edit: ${hits} matches in ${where} — pass replace_all/all, or ` +
-          `include surrounding text to make the match unique`,
-      )
-    }
-    out = all ? out.split(old).join(replacement) : out.replace(old, replacement)
-  }
-  if (out == value) {
-    throw new Error('edit: the replacement leaves the value unchanged')
-  }
-  return out
-}
+import { type EditHunk, patchText } from '@yaks/graph'
+export {
+  type EditHunk,
+  editHunks,
+  isEditOp,
+  isFieldOp,
+  patchText,
+} from '@yaks/graph'
 
 // A comp-agnostic guarded patch: read the CURRENT value of `comp.column` off the
 // row, apply the hunks, and emit a Change carrying `was: {column: sha(current)}`
@@ -76,37 +43,6 @@ export let editChange = (
     was: { [column]: sha(cur) },
   }
 }
-
-// A `$edit` field-operator payload → hunks. `{ old, new, all? }`, or a list of
-// them for a multi-hunk patch. This is Claude's own Edit idiom, riding a comp
-// value in the bundle/change format instead of a bespoke tool.
-export let editHunks = (op: unknown): EditHunk[] => {
-  let one = (h: unknown): EditHunk => {
-    if (!h || typeof h != 'object' || Array.isArray(h)) {
-      throw new Error('$edit: each hunk is { old, new, all? }')
-    }
-    let { old, new: fresh, all } = h as Record<string, unknown>
-    if (typeof old != 'string' || typeof fresh != 'string') {
-      throw new Error('$edit: old and new must both be text')
-    }
-    return { old, new: fresh, ...(all === true ? { all: true } : {}) }
-  }
-  return Array.isArray(op) ? op.map(one) : [one(op)]
-}
-
-// Is this comp value a `$edit` field operator (rather than a literal)? A column
-// value that is a plain object carrying `$edit`. apply() detects it, reads the
-// current column, and lands the patched result with the was-guard.
-export let isEditOp = (v: unknown): v is { $edit: unknown } =>
-  v != null && typeof v == 'object' && !Array.isArray(v) && '$edit' in v
-
-// Is this comp value ANY field operator — a plain object with a `$`-sigil key?
-// Every real scalar is a literal, so a `$`-keyed object is an operator: a known
-// one apply() resolves, or a typo apply() must refuse legibly rather than pass
-// to storage as a non-scalar.
-export let isFieldOp = (v: unknown): v is Record<string, unknown> =>
-  v != null && typeof v == 'object' && !Array.isArray(v) &&
-  Object.keys(v as object).some((k) => k.startsWith('$'))
 
 // ── graph_patch: Codex's V4A patch, adapted to address a PROP not a file ──
 //

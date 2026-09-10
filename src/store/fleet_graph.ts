@@ -1,7 +1,7 @@
 // The package graph bound to the fleet's existing SQL layout. This is storage
-// composition, not fleet admission/lifecycle policy; live apply() stays on its
-// old path until those plugins are composed too. Hooks on this Sql-backed
-// handle must be synchronous (the driver transaction contract).
+// composition plus registered normalize policy; live mutation stays on its
+// old path until admission/lifecycle plugins are composed too. Hooks on this
+// Sql-backed handle must be synchronous (the driver transaction contract).
 import {
   type Bundle,
   Checked,
@@ -27,6 +27,7 @@ export type FleetGraphHost = {
   db: Sql
   driver: Driver
   vocab: Vocab
+  normalizers: Plugin[]
   number: (eid: string) => void
   component: (eid: string, name: string) => Comp | undefined
 }
@@ -67,11 +68,11 @@ export let fleetGraph = (host: FleetGraphHost): Graph => {
             ...tx,
             patch: (bundles) => {
               // SQLite checks INSERT's NOT NULL constraints before its UPSERT
-              // conflict arm. An existing doc patch must supply the omitted
-              // values for that check, without echoing them as caller writes.
+              // conflict arm. Existing doc/setting patches must supply omitted
+              // required values for that check, without echoing them as caller writes.
               // Work in order: two patches for one doc see each other's rows.
               // Mint all references first through the package, then patch each
-              // bundle with the doc's current stored values as insert defaults.
+              // bundle with current required values as insert defaults.
               let identities = tx.patch(
                 [...new Set(touched(vocab, bundles))].map((eid) => ({
                   entity: { eid },
@@ -84,9 +85,15 @@ export let fleetGraph = (host: FleetGraphHost): Graph => {
                   `select title, body from doc where entity = ${owner}`,
                   b.entity.eid,
                 )
+                let setting = b.setting as Comp | null | undefined
+                let key = setting && row(
+                  `select key from setting where entity = ${owner}`,
+                  b.entity.eid,
+                )
                 tx.patch([{
                   ...b,
                   ...(doc ? { doc: { ...held, ...doc } } : {}),
+                  ...(setting ? { setting: { ...key, ...setting } } : {}),
                 }])
               }
               return identities
@@ -213,7 +220,11 @@ export let fleetGraph = (host: FleetGraphHost): Graph => {
       },
     },
   }
-  let g = graph({ storage: bound, vocab, plugins: [prepare, cas, echoes] })
+  let g = graph({
+    storage: bound,
+    vocab,
+    plugins: [...host.normalizers, prepare, cas, echoes],
+  })
   let apply = g.apply
   // Keep the OUTER write lock: fleet normalizers read committed state before
   // core opens its own transaction. Replacing this with only Driver.tx would
