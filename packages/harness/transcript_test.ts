@@ -144,7 +144,7 @@ Deno.test('user inputs share composer borders, machine entries do not', async ()
       [{ content: { body: 'hello', source: 'ask' } }, false],
       [{ notice: {} }, false],
       [{ result: { call: 'c' } }, false],
-      [{ using: { model: 'm' } }, false],
+      [{ using: { model: 'm' } }, true],
       [{ entity: { eid: 'delivery:child:last' } }, false],
     ] as [Partial<Bundle>, boolean][]
   ) {
@@ -201,5 +201,27 @@ Deno.test('attachment renderer reserves lazy image cells only with explicit grap
     } finally {
       ui.free()
     }
+  }
+})
+
+Deno.test('ask entries carrying served using metadata are not empty inputs', async () => {
+  let entry: Bundle = {
+    entity: { eid: 'ask-with-using' },
+    entry: { session: 's', seq: 3 },
+    ask: { to: 'm', through: 'input' },
+    using: { model: 'm' },
+    usage: { input_tokens: 42 },
+  }
+  let ui = await mount(
+    () => render(transcriptViews, entry, 'Transcript', vocab),
+    80,
+    8,
+  )
+  try {
+    assert(ui.text().includes('ask'), ui.text())
+    assert(!ui.text().includes('input'), ui.text())
+    assert(!ui.text().includes('╭'), ui.text())
+  } finally {
+    ui.free()
   }
 })

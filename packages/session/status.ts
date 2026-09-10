@@ -135,7 +135,20 @@ export let statusOf = (entries: Bundle[]): TranscriptStatus => {
   }
   if (openCalls(all).length) return 'running'
   if (kind == 'ask' || kind == 'call') return 'running'
-  return kind == 'output' ? 'settled' : 'pending'
+  // Inputs can be admitted while a provider request is in flight. Its reply
+  // does not acknowledge messages after that request's recorded boundary.
+  if (kind == 'output') {
+    let ask = newestAsk(all)
+    let through = all.find((b) => b.entity.eid == (ask?.ask as Comp)?.through)
+    if (
+      through && all.some((b) =>
+        seqOf(b) > seqOf(through) &&
+        kindOf(b) == 'input'
+      )
+    ) return 'pending'
+    return 'settled'
+  }
+  return 'pending'
 }
 
 /** The `using` in force at an entry: the newest one at or before it. */
@@ -177,6 +190,19 @@ export let sessionStatus = {
       where e."session" = ${owner} and c."source" = ${ask}
         and not exists (
           select 1 from "${RESULT}" r where r."call" = c.entity))`
+    let unread = `exists (select 1 from "entry" u
+      join "content" uc on uc.entity = u.entity
+      where u."session" = ${owner} and uc."source" is null
+        and u.seq > (select boundary.seq from "ask" a
+          join "entry" boundary on boundary.entity = a."through"
+          where a.entity = ${ask})
+        and not exists (select 1 from "notice" n where n.entity = u.entity)
+        and not exists (select 1 from "result" r where r.entity = u.entity)
+        and not exists (select 1 from "error" r where r.entity = u.entity)
+        and not exists (select 1 from "exception" r where r.entity = u.entity)
+        and not exists (select 1 from "ask" r where r.entity = u.entity)
+        and not exists (select 1 from "call" r where r.entity = u.entity)
+        and not exists (select 1 from "stop" r where r.entity = u.entity))`
     return `case
       when ${newest} is null then 'empty'
       when ${wears(STOP_ENTRY)} then 'stopped'
@@ -187,7 +213,8 @@ export let sessionStatus = {
       when ${open} then 'running'
       when ${wears(ASK)} or ${wears(CALL)} then 'running'
       when ${wears(RESULT)} then 'pending'
-      when ${wears(CONTENT, ' and k."source" is not null')} then 'settled'
+      when ${wears(CONTENT, ' and k."source" is not null')} then
+        case when ${unread} then 'pending' else 'settled' end
       else 'pending' end`
   },
 }

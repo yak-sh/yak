@@ -664,3 +664,57 @@ Deno.test('large expanded tree reserves room for all sidebar headings and reveal
     f.close()
   }
 })
+
+Deno.test('transcript publishes before slow sidebar reads and despite ongoing changes', async () => {
+  let reply = deferred<Awaited<ReturnType<Model>>>()
+  let sidebar = deferred<Bundle[]>()
+  let dir = await Deno.makeTempDir()
+  let a = agent({
+    h: open(':memory:'),
+    cwd: dir,
+    model: () => reply.promise,
+    tools: [],
+  })
+  let state = frontend()
+  let id = await a.start('visible before response')
+  state.patch({ selected: id })
+  let ui = await mount(
+    () =>
+      h(App, {
+        agent: a,
+        frontend: state,
+        subscribe: changes(a),
+        panels: [{
+          title: 'Slow',
+          read: () => sidebar.promise,
+          Render: () => h('span', null, 'sidebar'),
+        }],
+      }),
+    100,
+    30,
+  )
+  try {
+    await until(
+      () => ui.text().includes('visible before response'),
+      'input paint while panel and model pending',
+    )
+    await a.send(id, 'second committed input')
+    await until(
+      () => ui.text().includes('second committed input'),
+      'subsequent input paint while panel pending',
+    )
+    assert(!ui.text().includes('pong'))
+  } finally {
+    sidebar.resolve([])
+    reply.resolve({
+      id: 'r',
+      model: 'fake',
+      items: [{ kind: 'assistant', text: 'pong' }],
+    })
+    await a.idle(id)
+    ui.free()
+    state.close()
+    a.close()
+    await Deno.remove(dir, { recursive: true })
+  }
+})

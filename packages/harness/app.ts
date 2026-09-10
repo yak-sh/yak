@@ -105,6 +105,34 @@ export let App = (
 
   useLayoutEffect(() => {
     let alive = true, dirty = false, busy = false
+    // Transcript publication must not wait for sidebar projections or a quiet
+    // database. Other sessions can keep producing changes indefinitely.
+    let transcriptDirty = false, transcriptBusy = false
+    let readTranscript = async () => {
+      if (transcriptBusy || !alive) return
+      transcriptBusy = true
+      try {
+        while (alive && transcriptDirty) {
+          transcriptDirty = false
+          let s = current()
+          let entries = s.id ? await a.transcript(s.id) : []
+          if (
+            alive && s.id == current().id &&
+            s.generation == current().generation
+          ) {
+            setData((d) => ({ ...d, entries, loadedFor: s.id }))
+          }
+        }
+      } catch (e) {
+        diagnostics().report(e, {
+          phase: 'frontend-transcript',
+          session: current().id,
+        })
+        if (alive) setError(String(e))
+      } finally {
+        transcriptBusy = false
+      }
+    }
     // At most one query batch in flight. A write during a read causes another
     // read, never an out-of-order snapshot; no timer or polling loop.
     let read = async () => {
@@ -116,15 +144,12 @@ export let App = (
           let s = current()
           let sessions = await a.sessions()
           let ctx: Context = { agent: a, session: s.id, sessions }
-          let [entries, rows] = await Promise.all([
-            s.id ? a.transcript(s.id) : Promise.resolve([]),
-            Promise.all(sidebar.map((p) => p.read(ctx))),
-          ])
+          let rows = await Promise.all(sidebar.map((p) => p.read(ctx)))
           if (
             alive && s.id == current().id &&
-            s.generation == current().generation && !dirty
+            s.generation == current().generation
           ) {
-            setData({ sessions, entries, rows, loadedFor: s.id })
+            setData((d) => ({ ...d, sessions, rows }))
           }
         }
       } catch (e) {
@@ -144,9 +169,13 @@ export let App = (
     }
     let changed = () => {
       dirty = true
+      transcriptDirty = true
       // Return synchronously to the writer, and coalesce the batch's effects.
       queueMicrotask(() => {
-        if (alive) void read()
+        if (alive) {
+          void readTranscript()
+          void read()
+        }
       })
     }
     refresh.current = changed
