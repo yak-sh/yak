@@ -1,7 +1,8 @@
 # @yaks/process
 
-A running program as an entity, so whatever needs one can point at it instead of
-keeping a pid of its own.
+Host process launching, observation, and supervision using graph records. The
+graph stores process IDs, desired service configuration, output references, and
+exit results; host code performs operating-system operations.
 
 ```sh
 deno add jsr:@yaks/process

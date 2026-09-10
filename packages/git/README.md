@@ -1,7 +1,8 @@
 # @yaks/git
 
-Git objects as entities, for a [@yaks/graph](https://jsr.io/@yaks/graph) — so a
-deploy history is a repository anybody can clone.
+Git objects and repository operations backed by graph entities and a blob store.
+The package also provides host-checkout integration; these APIs have different
+storage and runtime requirements, described below.
 
 ## Install
 
@@ -12,10 +13,10 @@ deno add jsr:@yaks/git
 
 ## The idea
 
-A version of a yaks.app app is a manifest: `path → sha256`, over bytes already
-in a [@yaks/blob](https://jsr.io/@yaks/blob) store. Git wants the same thing
-said its way — blobs, trees, a commit — and every one of those is named by the
-digest of its own bytes. So the object IS its id, and the id is the entity:
+A file manifest maps `path → sha256`, over bytes already in a
+[@yaks/blob](https://jsr.io/@yaks/blob) store. Git wants the same thing said its
+way — blobs, trees, a commit — and every one of those is named by the digest of
+its own bytes. So the object IS its id, and the id is the entity:
 
 ```ts
 import { index } from '@yaks/git'
@@ -25,8 +26,12 @@ let git = index(g, store)
 let tree = await git.files({ 'index.html': sha, 'lib/app.js': other })
 let head = await git.commit({
   tree,
-  author: { name: 'ada', email: 'ada@users.yaks.app', at: deployedAt },
-  committer: { name: 'yaks.app', email: 'git@yaks.app', at: deployedAt },
+  author: { name: 'Example User', email: 'user@example.com', at: deployedAt },
+  committer: {
+    name: 'Build Service',
+    email: 'build@example.com',
+    at: deployedAt,
+  },
   message: 'deploy 7',
 })
 
@@ -213,9 +218,9 @@ The query is what tells a clone from a page: `?service=git-upload-pack` is
 something no browser asks for, and git follows that first redirect and fetches
 from where it landed.
 
-A PRIVATE app answers `401 WWW-Authenticate: Basic` instead, because git sends
-no credential unprompted; the password git then sends is a `yak login` grant,
-and the username beside it is ignored — `git clone https://x:<token>@…`.
+For private repositories, the host must authenticate requests and enforce access
+before serving Git data. HTTP Basic authentication can be used to prompt Git
+clients for credentials; token validation belongs to the host.
 
 ## What is not here
 

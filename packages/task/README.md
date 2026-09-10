@@ -1,7 +1,8 @@
 # @yaks/task
 
-A to-do list as a component domain for a
-[@yaks/graph](https://jsr.io/@yaks/graph).
+Task vocabulary, derived status, dependency checks, and write validation for
+graph entities. A task can also contain document text and application-specific
+components; filing under a project is optional.
 
 ## Install
 
@@ -22,11 +23,11 @@ making it stop being what it was. Optional
 `filed{project, priority, domain, assignee}` places it in a portfolio; a
 microtask needs only `doc` and `task`, with no filing.
 
-**Where does it stand?** Nowhere in a column. A task wearing `completed` is
-done, one wearing `cancelled` is cancelled, and one wearing neither is open.
-`status` is computed from those marks, so finishing something records _when_ and
-_by whom_, and un-finishing it is dropping a component rather than guessing what
-the status used to say.
+**Where does it stand?** Nowhere in a column. A task with `completed` is done,
+one with `cancelled` is cancelled, and one with neither is open. `status` is
+computed from those marks, so finishing something records _when_ and _by whom_,
+and un-finishing it is dropping a component rather than guessing what the status
+used to say.
 
 **How do you look at the list?** A `board{query}` is a saved filter. Membership
 is never stored — nothing anywhere says "this task is on that board" — so a
@@ -82,8 +83,8 @@ g.apply([{
 ## The status rule is said once
 
 `task.status` is declared `persist: false` — no column holds it. Its value is
-the first mark the task wears, and that one ordered list is what all three
-readers are built from:
+the first mark the task has, and that one ordered list is what all three readers
+are built from:
 
 ```ts
 import { compute, derived, statusOf } from '@yaks/task'
@@ -147,7 +148,7 @@ The refusal happens inside the transaction, so the whole batch rolls back.
 Writing `task.status` needs no refusal: `@yaks/graph`'s `admit` phase drops a
 computed column before the hook ever sees it.
 
-## Where it sits
+## Integration
 
 One of the domain plugins over [@yaks/graph](https://jsr.io/@yaks/graph),
 alongside [@yaks/member](https://jsr.io/@yaks/member) and others. It composes

@@ -1,7 +1,8 @@
 # @yaks/member
 
-**Who belongs, and what they may touch** — the membership component domain for a
-[@yaks/graph](https://jsr.io/@yaks/graph).
+Membership and access grants for graph entities. The vocabulary represents
+membership in a space and permissions on an application; enforcement requires
+the authorization helpers and host integration described below.
 
 ## Install
 
@@ -10,7 +11,7 @@ deno add jsr:@yaks/member
 # or: npx jsr add @yaks/member
 ```
 
-## The book club
+## Example: membership and messages
 
 A book club keeps three things in one place: a reading list anyone may see, a
 potluck sign-up sheet anyone may add a line to, and the committee's private
@@ -66,8 +67,8 @@ read    the mode is not `private`, OR the asker holds any level
 write   the mode is `open`,        OR the asker holds owner or editor
 ```
 
-A `viewer` never writes, under any mode. Both rules live in one file, so the
-door and `apply()` cannot drift apart.
+A `viewer` never writes, under any mode. Both rules live in one file, so the API
+boundary and `apply()` cannot drift apart.
 
 ## Two places they are enforced
 
@@ -95,13 +96,13 @@ g.apply([{
 // Denied: mo may not write list — editor is the least that may
 ```
 
-The actor is whatever `$actor` the batch carries, which a door has already
-replaced with the identity it authenticated
+The actor is whatever `$actor` the batch carries, which a API boundary has
+already replaced with the identity it authenticated
 ([@yaks/api](https://jsr.io/@yaks/api) `signed`). A batch with **no** actor is
 nobody — permitted on an `open` thing, refused everywhere else, which is exactly
 what an anonymous visitor is.
 
-A **read** never reaches `apply()`, so the door asks first:
+A **read** never reaches `apply()`, so the API boundary asks first:
 
 ```ts
 import { policy } from '@yaks/member'
@@ -142,9 +143,9 @@ A grant may name a `token` instead of a person:
 { entity: { eid: 'share' }, grant: { app: notes, token: 'x7v2…', access: 'viewer' } }
 ```
 
-Whoever opens that link acts **as** the grant — the door signs their writes with
-the grant's own entity — so everything above works unchanged. No account, no
-seat, one revocable row, good for that one thing.
+Whoever opens that link acts **as** the grant — the API boundary signs their
+writes with the grant's own entity — so everything above works unchanged. No
+account, no seat, one revocable row, good for that one thing.
 
 ## Invitations are somebody else's job
 
@@ -159,7 +160,7 @@ fx.created('member', (e, tx) => invite(e.comp?.person, e.comp?.space))
 
 This package ships no such handler. `@yaks/mail` fills the slot.
 
-## The surface
+## Exports
 
 | export                                     | is                                              |
 | ------------------------------------------ | ----------------------------------------------- |
@@ -176,8 +177,8 @@ This package ships no such handler. `@yaks/mail` fills the slot.
 
 ## What is deliberately not here
 
-**Authentication.** Establishing who someone _is_ belongs to the door; this
-decides what that identity may do.
+**Authentication.** Establishing who someone _is_ belongs to the API boundary;
+this decides what that identity may do.
 
 **Per-grant filters.** A grant good for only part of the data is not a level,
 and one level per thing is what fits in a person's head.
@@ -185,7 +186,7 @@ and one level per thing is what fits in a person's head.
 **A fourth tier.** The three levels mirror what the platform this was drawn from
 already distinguishes. Adding one is a design decision, not a default.
 
-## Where it sits
+## Integration
 
 A component domain over [@yaks/graph](https://jsr.io/@yaks/graph), the same
 shape an application's own plugin has — like
@@ -197,4 +198,4 @@ with a 403.
 ## Compatibility
 
 Pure TypeScript, no platform API — reads go through @yaks/graph's `Storage`
-seam. Runs on **Deno**, **Node**, and in the **browser**.
+interface. Runs on **Deno**, **Node**, and in the **browser**.

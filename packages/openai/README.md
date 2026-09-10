@@ -1,6 +1,8 @@
 # @yaks/openai
 
-**OpenAI's Responses API as a [@yaks/model](../model) `Model`.**
+An OpenAI Responses API client and an adapter for `@yaks/model`. The client
+handles streamed responses, credentials, retries, and errors; the session
+package handles transcript persistence.
 
 ## Install
 
@@ -17,7 +19,7 @@ let model = responses({
   credential: credential(Deno.env.get, Deno.readTextFile),
 })
 let reply = await model({
-  model: 'gpt-6-astra',
+  model: 'your-model-id',
   items: [{ kind: 'user', text: 'hi' }],
   tools: [],
 })
@@ -57,7 +59,7 @@ let client = transport({
   stallMs: 60_000,
   redact: true,
 })
-let result = await client.run({ model: 'gpt-6-astra', input: [] }, {
+let result = await client.run({ model: 'your-model-id', input: [] }, {
   // signal: controller.signal,
   event: (frame) => {
     if (frame.type == 'response.output_text.delta') {
@@ -76,8 +78,7 @@ reads through EOF and requires a completed response naming its serving model.
 Redaction is opt-in: it scrubs credential token/account values from provider
 frames and HTTP error reasons, remembers old credentials across refresh and
 later runs, and hides credential-loader exception messages. It is not a general
-PII filter. Tasks enables it in its adapter. Observation vocabulary is not part
-of this package.
+PII filter. Observation vocabulary is not part of this package.
 
 The native transport defaults to two bounded retries for credential loading and
 for every transient wire failure — a connection that never landed, a body that
@@ -104,7 +105,5 @@ persisted by the session on the ask entry's `usage` component. Counts include
 input, output, total, cached input, and reasoning output tokens when reported.
 Cached tokens are part of input, and reasoning tokens are part of output;
 neither should be added again. Missing counts remain unknown, not zero. The
-sidebar uses the latest reported request's input count as context length, not a
-cumulative session total or an estimate of unsent messages. The provider does
-not report a cache expiration timestamp here; a cache hit records past reuse,
-not a promise that the next request will hit the cache.
+provider does not report a cache expiration timestamp here; a cache hit records
+past reuse, not a promise that the next request will hit the cache.

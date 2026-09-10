@@ -1,13 +1,8 @@
 # @yaks/embedding
 
-Semantic search for a [@yaks/graph](https://jsr.io/@yaks/graph): the entities
-nearest in **meaning**, beside the literal matches full-text gives.
-
-Search finds the word you typed. This finds the book you meant. A vector is
-stored for every entity that has text, and `.near=<entity>` ranks the graph by
-how close each one is to that entity's vector — which is how "more like this",
-"related reading", and "you may already have written this" turn out to be one
-query.
+Derived text embeddings and similarity ranking for a SQLite-backed graph. A
+scheduled sweep reads text columns, computes vectors with a caller-supplied
+embedder, and stores them for query-time ranking.
 
 ## Install
 
@@ -38,7 +33,7 @@ let { sql, params } = compile(
   shop,
   { extend: [near] },
 )
-let hits = near.rank(readBundles(sql, params)) // each wearing `rank.score`
+let hits = near.rank(readBundles(sql, params)) // each with `rank.score`
 ```
 
 ## Which text is embedded
@@ -48,11 +43,11 @@ columns hold prose, and `fields(vocab)` returns every text-shaped stored column
 — a book's title, its blurb, a review's own paragraph. Pass a `Pick` to narrow
 it.
 
-An entity gets **one** vector, joined from every field it wears, because a
-vector is a point in meaning-space and an entity is one thing. (A search index
-is the other way around — [@yaks/fts](https://jsr.io/@yaks/fts) keeps one index
-per component. The two packages make the same choice by the same rule and then
-do different things with it, and neither depends on the other.)
+An entity gets **one** vector, joined from every field it has, because a vector
+is a point in meaning-space and an entity is one thing. (A search index is the
+other way around — [@yaks/fts](https://jsr.io/@yaks/fts) keeps one index per
+component. The two packages make the same choice by the same rule and then do
+different things with it, and neither depends on the other.)
 
 ## The embedder is yours
 
@@ -79,11 +74,11 @@ do.
 
 `sweep(db, fields, embedder, limit?)` reconciles; it is the only asynchronous
 thing here. It drops the vectors of entities that no longer have text (deleted,
-emptied, or no longer wearing an embedded component) and re-embeds the ones
-whose text or model moved, deciding "moved" by the content hash stored beside
-each vector — so an unchanged corpus costs one query and no embedder calls. It
-runs on a schedule, never on the write path: embedding is slow and remote, a
-write is neither.
+emptied, or no longer with an embedded component) and re-embeds the ones whose
+text or model moved, deciding "moved" by the content hash stored beside each
+vector — so an unchanged corpus costs one query and no embedder calls. It runs
+on a schedule, never on the write path: embedding is slow and remote, a write is
+neither.
 
 `stale()`, `prune()` and `sources()` are the halves underneath, each usable and
 testable on its own.
@@ -115,9 +110,9 @@ a similarity. An `.after` naming an entity outside the neighbourhood sorts with
 the `else` arm, past every neighbour, so the page is empty rather than wrong.
 
 The similarity comes back as a **query-only component**: `near.rank(bundles)`
-returns them nearest-first, each wearing `rank: { score }`. Nothing stores it —
-a component is a shape for carrying data about an entity, and it does not have
-to be a table.
+returns them nearest-first, each with `rank: { score }`. Nothing stores it — a
+component is a shape for carrying data about an entity, and it does not have to
+be a table.
 
 One `semantic()` value serves one query: it remembers the neighbourhood the
 `.near` clause resolved so the ordering can rank by it and you can read the
@@ -154,13 +149,9 @@ The entity's own integer id is the key, so a vector joins to the graph the way
 every component table does; the blob is the vector's raw bytes, so its dimension
 is the byte length over four and no column has to carry it.
 
-This is the same layout the fleet's own application arrived at, and it serves
-unchanged — with one thing deliberately absent. That deployment also carries a
-persisted ANN index maintained by a native SQLite vector extension, which puts
-the KNN in SQL and makes the write that maintains it a second writer to reason
-about. This package holds the ranking in TypeScript instead: nothing native, no
-shadow tables, no per-connection extension state, and a `Rank` seam for anyone
-who needs the indexed version back.
+Ranking runs in TypeScript rather than a native SQLite vector extension. There
+is no persisted approximate-nearest-neighbor index. Supply a `Rank`
+implementation if your application needs indexed vector search.
 
 The whole table is **derived**. Drop it and the next sweep rebuilds it from the
 text it was made from — which is why it has no history, no journal and no
@@ -168,7 +159,7 @@ presence on the wire, and why a graph with no embedder is a graph that simply
 has no vectors rather than a broken one.
 
 It assumes the layout `@yaks/sql`'s SQLite dialect reads and
-[@yaks/sqlite](https://jsr.io/@yaks/sqlite) builds: an `entity` spine of integer
+[@yaks/sqlite](https://jsr.io/@yaks/sqlite) builds: an `entity` table of integer
 ids, one table per component keyed by an `entity` owner, and a `tombstone` table
 naming the dead.
 

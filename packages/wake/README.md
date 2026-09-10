@@ -1,7 +1,8 @@
 # @yaks/wake
 
-Schedules as graph rows for Deno, Cloudflare Workers and browsers. The component
-stays `wake`; cron is one spelling of its recurrence.
+Scheduled work represented as graph components, with recurrence calculation and
+host adapters. The host decides what each due wake does and when to run the
+scheduling loop.
 
 ```sh
 deno add jsr:@yaks/wake
@@ -125,7 +126,7 @@ import { tick } from '@yaks/wake'
 whether this wake needs an alarm. Absent or later dates leave it alone. The host
 owns its one alarm, including cancelling it when its schedules change.
 
-A Deno box or tasks server can run the loop until shutdown:
+A Deno host can run the loop until shutdown:
 
 ```ts
 import { loop } from '@yaks/wake/deno'

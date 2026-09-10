@@ -1,7 +1,8 @@
 # @yaks/doc
 
-**The words a person reads** — the `doc{title, body}` component domain for a
-[@yaks/graph](https://jsr.io/@yaks/graph).
+A shared `doc{title, body}` component for graph entities. Applications can use
+the same text fields for editing, display, and search while keeping
+domain-specific data in separate components.
 
 ## Install
 
@@ -10,22 +11,20 @@ deno add jsr:@yaks/doc
 # or: npx jsr add @yaks/doc
 ```
 
-## The book club
+## Example
 
-A book club keeps three things in one graph: a reading list, a potluck sign-up,
-and the minutes of last Tuesday. Three different things — and every one of them
-has a name and some prose.
-
+```ts
+const document = {
+  entity: { eid: 'meeting-1' },
+  doc: {
+    title: 'Meeting notes',
+    body: 'The next release is scheduled for Friday.',
+  },
+}
 ```
-{ entity: { eid: '…' },
-  doc: { title: 'Minutes, 3 March', body: 'Ana chaired…' },
-  minutes: { chaired_by: ana } }
-```
 
-That is the whole package. `doc` is a **facet**, not a record: adding it to
-something makes it readable without making it stop being what it was. One search
-index, one editor and one card renderer are written against `doc` instead of
-against twenty tables that each grew a `title` column.
+Compose `docDoc` with your domain vocabulary to add shared text fields without
+repeating their definitions in each component.
 
 ## Two columns
 
@@ -80,7 +79,7 @@ the loaded vocabulary declares, so a base package cannot order itself against
 words it does not ship. Your own document says which wins:
 
 ```ts
-// an entity wearing both is a recipe, not the doc it also wears
+// recipe takes display-kind precedence over doc
 { recipe: { type: 'object', kind: true, before: ['doc'], properties: { … } } }
 ```
 

@@ -1,6 +1,8 @@
 # @yaks/names
 
-Resolve an entity **by name** — the name a person actually types.
+Vocabulary-based display names and fuzzy name matching. The caller supplies
+candidate entities; this package does not query storage or enforce name
+uniqueness.
 
 ## Install
 
@@ -9,12 +11,11 @@ deno add jsr:@yaks/names
 # or: npx jsr add @yaks/names
 ```
 
-## Not everything has a name
+## Selecting name fields
 
-An author is reached as `Ursula Le Guin`. A review is not reached by the
-sentence it opens with, even though it has a title too: a word deep inside a
-store's prose matches by coincidence, and in a large store there is always one.
-So a component says which it is.
+Only fields explicitly declared with `by_name` participate in name resolution. A
+text field such as a review body should not become an entity name merely because
+it contains matching words.
 
 ## The `by_name` keyword
 
@@ -75,7 +76,7 @@ else (a did-you-mean, say). Two gates keep containment off coincidence: a short
 word must cover most of the longer name, and a prefix beats a word merely
 spelled inside it, because a prefix is how a name gets shortened.
 
-## The surface
+## Exports
 
 | export                                   | is                                                    |
 | ---------------------------------------- | ----------------------------------------------------- |
@@ -85,12 +86,12 @@ spelled inside it, because a prefix is how a name gets shortened.
 | `resolve(v)`                             | a typed name + candidates → the entity meant          |
 | `score`, `closeness`, `nearest`, `CLOSE` | the matching, on its own                              |
 
-## Where it sits
+## Integration
 
-A splinter of [@yaks/vocab](https://jsr.io/@yaks/vocab): the meta-model carries
-the `by_name` keyword without knowing what it means, and this package is what it
-means. It sits beside [@yaks/id](https://jsr.io/@yaks/id), which owns the other
-way an entity is addressed — the human id (`B-7`) a person types.
+An extension of [@yaks/vocab](https://jsr.io/@yaks/vocab): the meta-model
+carries the `by_name` keyword without knowing what it means, and this package is
+what it means. It sits beside [@yaks/id](https://jsr.io/@yaks/id), which owns
+the other way an entity is addressed — the human id (`B-7`) a person types.
 
 ## Compatibility
 

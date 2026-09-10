@@ -1,9 +1,8 @@
 # @yaks/session
 
-**A session is a transcript** — the entries that make it, the daemon that reacts
-to its newest line, the lock it holds, and what happened when two of them wanted
-the same thing. The session component domain for a
-[@yaks/graph](https://jsr.io/@yaks/graph).
+Graph transcripts and a model/tool execution loop. Sessions identify
+conversations; ordered entries record inputs, model requests, outputs, tool
+calls, and results.
 
 ## Install
 
@@ -51,8 +50,8 @@ word to keep in sync.
 What a provider keeps about an ask is the provider's own comp on the ask entry:
 [@yaks/openai](../openai) declares `openai{response_id}` and stamps it through
 the model's `mark`; its `anchor` reads it back so the next ask continues from
-the reply with only what followed. The seam carries the question, never the
-answer.
+the reply with only what followed. Provider-specific continuation data remains
+in the provider component.
 
 `fork{from}` on a session continues another transcript from one of its entries:
 the parent's entries up to `from` are the fork's prefix, and where the provider
@@ -114,7 +113,7 @@ its lock mid-edit.
 while the documents live. That is declared in `sessionDoc` and executed by
 @yaks/graph's cascade — no code for it here.
 
-## The surface
+## Exports
 
 | export                                           | is                                                       |
 | ------------------------------------------------ | -------------------------------------------------------- |

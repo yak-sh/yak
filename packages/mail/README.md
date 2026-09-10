@@ -1,7 +1,8 @@
 # @yaks/mail
 
-Letters, in the graph: the **mail** component domain for a
-[@yaks/graph](https://jsr.io/@yaks/graph).
+Email vocabulary, inbound-message normalization, and outbound delivery helpers
+for a graph. The host supplies transport and scheduling; messages, recipients,
+and delivery attempts are stored as graph data.
 
 ## Install
 
@@ -10,7 +11,7 @@ deno add jsr:@yaks/mail
 # or: npx jsr add @yaks/mail
 ```
 
-## The book club
+## Example: membership and messages
 
 A book club keeps its people, its reading list and its potluck sign-up in one
 graph. Sooner or later it has to write to somebody. A letter here is an entity
@@ -33,7 +34,7 @@ Three things are worth naming in that:
 - **`mail` is the ENVELOPE** — from, to, when, what it is about, what it
   answers. The subject and the body are `doc{title, body}`, from
   [@yaks/doc](https://jsr.io/@yaks/doc), because the words a person reads live
-  in the one component every readable thing wears — so a letter is searched,
+  in the one component every readable thing has — so a letter is searched,
   rendered and edited by whatever already handles a `doc`.
 - **`target` is what it is about**, and it is any entity at all. The potluck's
   page can therefore show the letters about the potluck, without anybody
@@ -60,7 +61,7 @@ import { docDoc, docs } from '@yaks/doc'
 import { mailbox, mailDoc, stash } from '@yaks/mail'
 
 let vocab = loadVocab([docDoc, mailDoc, club])
-// The write door the outcome is settled through — trusted, because `delivered`
+// The write API boundary the outcome is settled through — trusted, because `delivered`
 // and `bounced` are the sender's word and therefore server-owned.
 let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
 let post = stash()
@@ -180,7 +181,7 @@ The renderer is deliberately small (paragraphs, headings, bullets, links, bold,
 italic, code). Hand `Message.html` in yourself if you have a renderer you
 prefer.
 
-## The surface
+## Exports
 
 | export                                             | is                                             |
 | -------------------------------------------------- | ---------------------------------------------- |
@@ -189,7 +190,7 @@ prefer.
 | `mailbox(opts)`                                    | the @yaks/graph plugin — vocab, canon, sending |
 | `sending({ sender, now })`                         | the `created(mail)` handler                    |
 | `message(letter, to, replyTo?)`                    | a letter composed, purely                      |
-| `Sender`, `Message`, `Receipt`                     | the transport seam                             |
+| `Sender`, `Message`, `Receipt`                     | the transport interface                        |
 | `cloudflare({ account, token })`, `payload`        | Cloudflare Email Sending, and its payload      |
 | `stash()`                                          | the sender that keeps them in a list           |
 | `inbound(message, arrival)`, `author`, `messageId` | an arrival → bundles                           |
@@ -208,7 +209,7 @@ replaces.
 **A `to` on `deliver`.** Where a letter goes is one question with one answer:
 the recipient entity's address, read when it leaves.
 
-## Where it sits
+## Integration
 
 A component domain over [@yaks/graph](https://jsr.io/@yaks/graph), the same
 shape an application's own plugin has. It sends through

@@ -1,7 +1,8 @@
 # @yaks/key
 
-The values an entity answers to — as entities — for a
-[@yaks/graph](https://jsr.io/@yaks/graph).
+Unique typed values that identify graph entities. Key entities contain
+`key{of, value}` and a type tag; plugins validate claims and resolve repeated
+imports to existing owners.
 
 ## Install
 

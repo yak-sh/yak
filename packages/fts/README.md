@@ -1,7 +1,8 @@
 # @yaks/fts
 
-Full-text search over a [@yaks/graph](https://jsr.io/@yaks/graph), on **any**
-text property.
+SQLite FTS5 indexing and ranked text search over graph component columns. The
+package generates index maintenance SQL and integrates text filters with
+`@yaks/sql`.
 
 ## Install
 
@@ -72,7 +73,7 @@ a query without ever calling `find`.
 ## What it assumes
 
 The storage layout `@yaks/sql`'s SQLite dialect reads and
-[@yaks/sqlite](https://jsr.io/@yaks/sqlite) builds: an `entity` spine of integer
+[@yaks/sqlite](https://jsr.io/@yaks/sqlite) builds: an `entity` table of integer
 ids, one table per component keyed by an `entity` owner, and a `tombstone` table
 naming the dead. Index rowids line up with spine ids, so a match needs no join.
 `@yaks/sqlite` already ships this index for a `doc` component and spells it the

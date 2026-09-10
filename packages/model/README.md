@@ -1,7 +1,8 @@
 # @yaks/model
 
-**The seam between a conversation and the model that serves it** — for a
-[@yaks/graph](https://jsr.io/@yaks/graph).
+Provider-neutral request and reply types for model calls, plus vocabulary for
+providers, models, and tools. This package defines the interface; it does not
+make network requests.
 
 ## Install
 
@@ -20,7 +21,7 @@ Three things, and no transport:
   model that served, and the items it produced. A provider that keeps replies
   adds `mark` (what to stamp on the record of a reply, as its own comp),
   `anchor` (reads an anchor back off that record, or nothing) and `vocab` (the
-  comp `mark` writes) — the seam asks, the provider answers.
+  comp `mark` writes).
 - **`provider`, `model`, `tool`** — the entities a graph keeps about serving, as
   one vocabulary document (`modelDoc`), so which models exist is data.
 
@@ -31,3 +32,26 @@ and asks. Neither imports the other.
 
 A model that throws `ModelError` said something the caller expects — a refusal,
 a rate limit, no credential. Anything else it throws is a defect.
+
+## Minimal implementation
+
+```ts
+import type { Model } from '@yaks/model'
+
+const model: Model = async (request) => ({
+  id: 'reply-1',
+  model: request.model,
+  items: [{ kind: 'assistant', text: 'Example response' }],
+})
+
+const reply = await model({
+  model: 'example',
+  items: [{ kind: 'user', text: 'Hello' }],
+  tools: [],
+})
+```
+
+The caller supplies tool descriptions and executes returned calls. This
+interface neither executes tools nor stores conversation history. Optional
+provider anchors only work when the provider retains the corresponding response;
+without an anchor, the caller supplies the required conversation items again.

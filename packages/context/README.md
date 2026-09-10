@@ -1,51 +1,38 @@
 # @yaks/context
 
-Explicit instruction snapshots, independent of their source and of a model's
-execution lifecycle. Ordinary file reads are **not** instructions.
+Explicit instruction snapshots for graph transcripts. This package constructs
+prompt entries and hashes source text; the caller decides which sources to admit
+and persists the entries.
 
-- `contextDoc` declares `prompt{scope,source,revision}`. Its content lives in
-  the entry's ordinary `content.body`; no second body or private CAS is
-  introduced.
-- `snapshot(body, source)` records exact text and its SHA-256 revision. A source
-  identity can resolve to new text later without changing an admitted snapshot.
-- `SourceResolver` is the portable asynchronous source-resolution boundary.
-- `promptEntry(...)` constructs an admission; the caller allocates transcript
-  order and writes it through its graph. Admission never silently edits history.
-- `@yaks/context/host` exports `instructionFiles(cwd, home?)`: global guidance,
-  then ancestor `AGENTS.md` files in root-to-leaf order. Canonical paths dedupe
-  aliases; missing files are skipped, other errors fail admission. No mtimes
-  reorder instruction precedence.
+## Storage and limitations
 
-The harness composes admission policy. Sessions retain transcript order and fork
-boundaries; forks reuse the parent's exact snapshots without rereading files.
-Fresh children inherit shared snapshots, with child guidance added afterward.
-Provider adapters map explicitly admitted prompts to their instruction roles.
-For compatibility, `sessionDoc` includes `contextDoc`; applications composing
-session vocabulary do not need to change existing loaders.
+The package returns bundles; it does not persist them. Compose session
+vocabulary for `entry` and `content`, and optionally `@yaks/blob` for
+content-addressed storage of text. The host decides when to load files and admit
+their snapshots.
 
-## Storage and future sources
+The file loader records disk provenance. It does not resolve graph references
+from generated file headers. `revision` hashes one text snapshot, not an entire
+provider request, and does not imply provider cache validity.
 
-`@yaks/blob` alone handles transparent CAS storage. The harness registers
-`content.body` and `doc.body`, uses the SQLite blob backend/read overrides, and
-migrates old inline prose transactionally with a migration marker. Hash-shaped
-legacy prose is text, never guessed to be an already-stored address. Back up the
-SQLite database before upgrading; older harness builds without blob reads are
-not compatible with the upgraded database.
+The host loader is POSIX-oriented. The core has no filesystem dependency.
+Snapshot immutability is an admission convention, not a graph write guard:
+callers with graph write access can still edit historical entries.
 
-The current loader deliberately records disk provenance even when a generated
-AGENTS header mentions a graph entity. It does **not** pretend to have resolved
-that graph. A future resolver can verify an explicit generated-source marker,
-resolve the graph source, and deduplicate by source identity; if unavailable it
-must record a disk fallback. Unmarked repositories continue to use files.
+## Construct an entry
 
-`revision` hashes an individual text, not the aggregate provider prefix. Cache
-scope, prefix identities, provider observations, and refresh policy are future
-composition points; no five-minute TTL or guaranteed cache warmth is inferred.
+```ts
+import { promptEntry, snapshot } from '@yaks/context'
 
-## Pilot seams
-
-Admission currently takes positional arguments for compatibility; a richer
-source descriptor can replace this once graph resolution has a real consumer.
-The host loader is POSIX-oriented. Browser core has no filesystem dependency.
-Snapshots are immutable by convention of the session admission API, not a graph
-write prohibition: explicit historical edits remain possible through the graph.
+const source = await snapshot('Answer in English.', 'application:instructions')
+const entry = promptEntry(
+  'session-1',
+  1,
+  source.body,
+  source.source,
+  'shared',
+  source.revision,
+)
+// Persist entry using your graph. The session must exist, and seq must be allocated
+// by the caller to preserve transcript order.
+```
