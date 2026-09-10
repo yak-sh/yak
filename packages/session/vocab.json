@@ -121,7 +121,8 @@
       "description": "the prose of an entry, when it has any. On its own it is an input, an instruction from a person or a system (the first one is the request that starts the session); with a `source` it is what a model said; beside a result, error or exception it is theirs",
       "properties": {
         "body": {
-          "type": "string"
+          "type": "string",
+          "store": "blob"
         },
         "source": {
           "type": "string",

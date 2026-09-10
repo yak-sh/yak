@@ -17,6 +17,17 @@
 // STEP leaves is reconciled a rung up, by run.ts `resume()`, because waking a
 // transcript needs a model and this file has none.
 
+import {
+  address,
+  blobKeywords,
+  blobRead,
+  type Blobs,
+  blobs,
+  blobSchema,
+  bodies,
+  encode,
+  sqliteBlobs,
+} from '@yaks/blob'
 import { checkoutDoc } from '@yaks/git/host'
 import { workspaceDoc } from './workspace.ts'
 import { Database } from '@yaks/sqlite/db'
@@ -75,7 +86,7 @@ export let vocab: Vocab = loadVocab([
   openaiDoc,
   processDoc,
   taskDoc,
-], [edgeKeywords])
+], [edgeKeywords, blobKeywords])
 
 /** The computed columns, said in SQL: a transcript's status and a task's. */
 export let derived = { ...sessionDerived, ...taskDerived(taskMarks) }
@@ -132,6 +143,50 @@ export type Harness = {
  * h.close()
  * ```
  */
+/** Move every body column this vocabulary marks `store: blob` into the blob
+ * table, once. A marker row decides, never the shape of the text: a body that
+ * happens to read like a hash is prose like any other, and re-running the sweep
+ * over already-addressed rows would address the addresses. The marker and the
+ * rows it speaks for commit together, so a half-moved database cannot exist. */
+let toBlobs = (sql: Driver, bytes: Blobs) => {
+  let quote = (name: string) => '"' + name.replaceAll('"', '""') + '"'
+  sql.exec('begin immediate')
+  try {
+    for (let statement of blobSchema()) sql.exec(statement)
+    sql.exec(
+      'create table if not exists harness_upgrade (name text primary key)',
+    )
+    let done = sql.query(
+      "select name from harness_upgrade where name = 'blob-v1'",
+      [],
+    ).length
+    if (!done) {
+      for (let { comp, prop } of bodies(vocab)) {
+        let rows = sql.query(
+          'select entity, ' + quote(prop) + ' as body from ' + quote(comp) +
+            ' where ' + quote(prop) + ' is not null',
+          [],
+        )
+        for (let row of rows) {
+          let body = String(row.body)
+          let sha = address(body)
+          bytes.put(sha, encode(body))
+          sql.query(
+            'update ' + quote(comp) + ' set ' + quote(prop) +
+              ' = ? where entity = ?',
+            [sha, Number(row.entity)],
+          )
+        }
+      }
+      sql.exec("insert into harness_upgrade values ('blob-v1')")
+    }
+    sql.exec('commit')
+  } catch (error) {
+    sql.exec('rollback')
+    throw error
+  }
+}
+
 export let open = (path = dbPath()): Harness => {
   if (path != ':memory:') {
     let dir = path.slice(0, path.lastIndexOf('/'))
@@ -147,8 +202,18 @@ export let open = (path = dbPath()): Harness => {
     db.exec('pragma synchronous = normal')
     db.exec('pragma busy_timeout = 5000')
   }
-  let store = storage(driver(db), vocab, { derived })
+  let sql = driver(db)
+  let bytes = sqliteBlobs(sql)
+  let store = storage(sql, vocab, {
+    derived: { ...derived, ...blobRead(vocab) },
+  })
   store.install()
+  try {
+    toBlobs(sql, bytes)
+  } catch (error) {
+    db.close()
+    throw error
+  }
   // The effects registry writes through the graph's own door, trusted: what an
   // effect writes is the harness's own word, never a client's.
   let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
@@ -156,6 +221,7 @@ export let open = (path = dbPath()): Harness => {
     storage: store,
     vocab,
     plugins: [
+      blobs(vocab, bytes),
       sessions(),
       edges(vocab),
       tasks(vocab, taskMarks),
