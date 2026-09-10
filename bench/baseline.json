@@ -1,51 +1,301 @@
 {
-  "version": 4,
-  "control": "control: fixed reference (LCG)",
-  "controlFloorNs": 37735848,
-  "ratios": {
-    "ansi: one painted line to terminal bytes": 0.000006551303097588743,
-    "apply: mint one task (2 comps)": 0.012450874780611715,
-    "apply: patch one column": 0.002937718536479351,
-    "applyLocal: fold a working-set seed into the cache": 0.018316478603400035,
-    "askRows: an addressed /query read": 0.014486610030531404,
-    "componentCounts: census over all tables": 0.0027620804392787714,
-    "contextDigest: 2k graph, actor path": 0.04864689646798124,
-    "contextDigest: 2k-task graph": 0.03120309545269239,
-    "delta: catch-up from a 200-row-old cursor": 0.19794265543632328,
-    "eager: one entity by eid (keyed read)": 0.0078501328272153,
-    "evalAgg: a derived status tally over a project": 0.026262602763011206,
-    "evalGraph: an FTS text query, hits hydrated": 0.1163492859825793,
-    "evalGraph: an indexed filter over the corpus": 0.09771973934946158,
-    "evalSub: a board window over the corpus": 0.1428149163230445,
-    "freshDb: clone migrated image": 0.0020354385569922796,
-    "journalOf: seek one entity's history": 0.0015619386790660119,
-    "matching: hydrate the whole selection": 0.16584808979342394,
-    "md: render one task body": 0.001590147962622073,
-    "mdInline: render one title": 0.00015450518468230432,
-    "mdMentions: scan one body for references": 0.0008778786080093557,
-    "notices: comms bus over 2k graph": 0.03894382813032419,
-    "pane: walk a 200-row TUI tree into lines": 0.002690017299459216,
-    "propAt: comp.prop -> Prop": 3.8996832562538904e-7,
-    "propOwners: prop -> owning comps": 2.2955468488711e-7,
-    "query: filter 2k rows (a board render)": 0.012210827106046962,
-    "recallFrom: kind-aware selection over a small graph": 0.002045392118545043,
-    "render: native SessionDot (O(1) standing)": 0.001783811985545947,
-    "render: task Meta row": 0.0028649177123923376,
-    "render: task Tile": 0.0016609647273818562,
-    "resetSignals: rebuild every index from the cache": 0.009614310597435382,
-    "resolveId: num -> eid": 0.000035989400827772175,
-    "rows: 2k-task snapshot": 0.010066926035050468,
-    "rowsFor: 50 ids located and shaped": 0.02849694781298654,
-    "rowsOf: 50 ids in one pass": 0.024857512250047398,
-    "scan: session mentions over a 60-row thread": 0.00923382628373402,
-    "search: the ranked FTS read alone": 0.08285170198093393,
-    "similar: ANN KNN over 800 vectors": 0.002555862020298283,
-    "subserve: a board sub answers its first frame": 0.163436899661825,
-    "subserve: a route sub on a hub answers its bounded rider": 0.08247912782194511,
-    "subserve: a small sub first-frames while a large one is in flight": 0.029673878712813406,
-    "subserve: a status tally sub answers without members": 0.024705510466615857,
-    "subserve: age a moving-window sub on a tick": 0.000021290581037164886,
-    "subserve: fold one commit across five open subs": 0.17099599961125572,
-    "workingSet: the boot seed": 0.10369043147487803
+  "version": 1,
+  "metric": "median-of-3-deno-avg-ns",
+  "workload": 1,
+  "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+  "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+  "measuredAt": "2026-09-10T01:24:52.523Z",
+  "revision": "fde16edae288d6e2a838586a8e12629e817508f7",
+  "ns": {
+    "sqlite/memory/point": 382441,
+    "sqlite/memory/status-open": 15042361,
+    "sqlite/memory/fts": 982411,
+    "sqlite/memory/walk-16": 583999,
+    "sqlite/memory/walk-unbounded": 1080449,
+    "sqlite/memory/apply-100": 6046596,
+    "sqlite/file/point": 418728,
+    "sqlite/file/status-open": 16333968,
+    "sqlite/file/fts": 1050489,
+    "sqlite/file/walk-16": 625310,
+    "sqlite/file/walk-unbounded": 1131055,
+    "sqlite/file/apply-100": 6691690,
+    "sql/memory/point": 377339,
+    "sql/memory/status-open": 16044103,
+    "sql/memory/fts": 1026644,
+    "sql/memory/walk-16": 648722,
+    "sql/memory/walk-unbounded": 1121463,
+    "sql/memory/apply-100": 6009728,
+    "sql/file/point": 432993,
+    "sql/file/status-open": 16784382,
+    "sql/file/fts": 1106945,
+    "sql/file/walk-16": 658156,
+    "sql/file/walk-unbounded": 1154459,
+    "sql/file/apply-100": 6872965,
+    "query/memory/point": 379164,
+    "query/memory/status-open": 14804987,
+    "query/memory/fts": 978181,
+    "query/memory/walk-16": 595958,
+    "query/memory/walk-unbounded": 1016926,
+    "query/memory/apply-100": 5595165,
+    "query/file/point": 447938,
+    "query/file/status-open": 15544973,
+    "query/file/fts": 1076930,
+    "query/file/walk-16": 671513,
+    "query/file/walk-unbounded": 1147041,
+    "query/file/apply-100": 6970566,
+    "fleet/memory/point": 886127,
+    "fleet/memory/status-open": 14583780,
+    "fleet/memory/fts": 1092890,
+    "fleet/memory/walk-16": 680962,
+    "fleet/memory/walk-unbounded": 1205272,
+    "fleet/memory/apply-100": 16238208,
+    "fleet/file/point": 969230,
+    "fleet/file/status-open": 17599270,
+    "fleet/file/fts": 1269476,
+    "fleet/file/walk-16": 762704,
+    "fleet/file/walk-unbounded": 1379322,
+    "fleet/file/apply-100": 21203272
+  },
+  "samples": {
+    "sqlite/memory/point": [
+      382441,
+      364225,
+      491060
+    ],
+    "sqlite/memory/status-open": [
+      14824165,
+      15042361,
+      21127482
+    ],
+    "sqlite/memory/fts": [
+      906853,
+      982411,
+      1279129
+    ],
+    "sqlite/memory/walk-16": [
+      530724,
+      583999,
+      722357
+    ],
+    "sqlite/memory/walk-unbounded": [
+      979964,
+      1080449,
+      1636021
+    ],
+    "sqlite/memory/apply-100": [
+      5498593,
+      6046596,
+      7955331
+    ],
+    "sqlite/file/point": [
+      416439,
+      418728,
+      484430
+    ],
+    "sqlite/file/status-open": [
+      15359443,
+      16333968,
+      19961425
+    ],
+    "sqlite/file/fts": [
+      1009164,
+      1050489,
+      1841479
+    ],
+    "sqlite/file/walk-16": [
+      588686,
+      625310,
+      722977
+    ],
+    "sqlite/file/walk-unbounded": [
+      1073320,
+      1131055,
+      1755737
+    ],
+    "sqlite/file/apply-100": [
+      6256577,
+      6691690,
+      11628959
+    ],
+    "sql/memory/point": [
+      377339,
+      366691,
+      547663
+    ],
+    "sql/memory/status-open": [
+      14744956,
+      16044103,
+      36042574
+    ],
+    "sql/memory/fts": [
+      956744,
+      1026644,
+      1849178
+    ],
+    "sql/memory/walk-16": [
+      571025,
+      648722,
+      875435
+    ],
+    "sql/memory/walk-unbounded": [
+      1010592,
+      1121463,
+      1494041
+    ],
+    "sql/memory/apply-100": [
+      5635407,
+      6009728,
+      6465423
+    ],
+    "sql/file/point": [
+      418854,
+      432993,
+      500186
+    ],
+    "sql/file/status-open": [
+      14721294,
+      16784382,
+      21055737
+    ],
+    "sql/file/fts": [
+      1084233,
+      1106945,
+      1902227
+    ],
+    "sql/file/walk-16": [
+      631710,
+      658156,
+      1091464
+    ],
+    "sql/file/walk-unbounded": [
+      1057786,
+      1154459,
+      1454727
+    ],
+    "sql/file/apply-100": [
+      6204188,
+      6872965,
+      7239848
+    ],
+    "query/memory/point": [
+      379164,
+      369378,
+      451378
+    ],
+    "query/memory/status-open": [
+      14804987,
+      13930739,
+      29291804
+    ],
+    "query/memory/fts": [
+      978181,
+      938114,
+      1588334
+    ],
+    "query/memory/walk-16": [
+      589554,
+      595958,
+      669255
+    ],
+    "query/memory/walk-unbounded": [
+      1016926,
+      1015591,
+      1351736
+    ],
+    "query/memory/apply-100": [
+      5595165,
+      5480469,
+      11486065
+    ],
+    "query/file/point": [
+      447938,
+      445539,
+      593032
+    ],
+    "query/file/status-open": [
+      15544973,
+      15396967,
+      27245753
+    ],
+    "query/file/fts": [
+      1028785,
+      1076930,
+      2253488
+    ],
+    "query/file/walk-16": [
+      610320,
+      671513,
+      983839
+    ],
+    "query/file/walk-unbounded": [
+      1107923,
+      1147041,
+      2321565
+    ],
+    "query/file/apply-100": [
+      6557677,
+      6970566,
+      10906660
+    ],
+    "fleet/memory/point": [
+      886127,
+      861727,
+      1635159
+    ],
+    "fleet/memory/status-open": [
+      14533710,
+      14583780,
+      23259631
+    ],
+    "fleet/memory/fts": [
+      1043008,
+      1092890,
+      1481877
+    ],
+    "fleet/memory/walk-16": [
+      651037,
+      680962,
+      861878
+    ],
+    "fleet/memory/walk-unbounded": [
+      1174362,
+      1205272,
+      1388420
+    ],
+    "fleet/memory/apply-100": [
+      15071669,
+      16238208,
+      22297222
+    ],
+    "fleet/file/point": [
+      836173,
+      1925121,
+      969230
+    ],
+    "fleet/file/status-open": [
+      14095410,
+      21366686,
+      17599270
+    ],
+    "fleet/file/fts": [
+      1099066,
+      1277415,
+      1269476
+    ],
+    "fleet/file/walk-16": [
+      660243,
+      812456,
+      762704
+    ],
+    "fleet/file/walk-unbounded": [
+      1180453,
+      1533031,
+      1379322
+    ],
+    "fleet/file/apply-100": [
+      16176199,
+      27334642,
+      21203272
+    ]
   }
 }

@@ -58,7 +58,7 @@ let RUNS = +(Deno.env.get('BENCH_RUNS') ?? '3') // suite runs; per bench we take
 let LOAD_TOL = +(Deno.env.get('BENCH_LOAD_TOL') ?? '1.5') // control this-far over its
 //   idle floor => box is loaded => compare, but don't ratchet/bank (see below)
 let ACCEPT = !!Deno.env.get('BENCH_ACCEPT')
-let BASELINE = 'bench/baseline.json'
+let BASELINE = 'bench/hotpath.baseline.json'
 let FILES = [
   'src/control_bench.ts', // the yardstick — must run alongside the rest
   'src/db_bench.ts',

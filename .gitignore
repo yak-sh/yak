@@ -28,3 +28,7 @@ node_modules.lock/
 
 # wrangler dev secrets beside a Worker (workers/*)
 .dev.vars
+
+# Fresh throughput measurements are local; only the accepted baseline is versioned.
+/bench/results.json
+/bench/*.json.tmp
