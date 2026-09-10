@@ -88,6 +88,11 @@ export let App = (
         if (alive) setError(String(e))
       } finally {
         busy = false
+        if (alive && dirty) {
+          queueMicrotask(() => {
+            void read()
+          })
+        }
       }
     }
     let changed = () => {
