@@ -298,7 +298,7 @@ export let Board = ({ e }: { e: Ent }) => {
         priority: (list[0]?.filed?.priority ?? 1) - 1,
         ...grouped.filed,
       },
-    }))
+    }, true))
     return true
   }
 

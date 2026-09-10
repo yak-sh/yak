@@ -1259,6 +1259,7 @@ export type Change = {
   eid: string
   name: string
   comp: Record<string, unknown> | null
+  $num?: boolean
   was?: Record<string, string | null>
 }
 

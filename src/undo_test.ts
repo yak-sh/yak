@@ -158,7 +158,12 @@ Deno.test('a bundle mints at the eid its author chose', () => {
   // and the spine + num appear on that first touch, as for any other write.
   let out = mutate(db, {
     entities: [
-      { entity: { eid: mine }, doc: { title: 'chosen', body: '' }, task: {} },
+      {
+        entity: { eid: mine },
+        $num: true,
+        doc: { title: 'chosen', body: '' },
+        task: {},
+      },
       { doc: { title: 'about it', body: '' }, comment: { target: mine } },
     ],
   })

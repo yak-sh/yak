@@ -85,3 +85,5 @@ export * from './graph.ts'
 export * from './edit.ts'
 
 export * from './preflight.ts'
+
+export { numbers } from './number.ts'

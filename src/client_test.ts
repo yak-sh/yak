@@ -840,6 +840,7 @@ Deno.test('taskTreePlan: one rooted batch covers new and existing nodes', async 
     ],
   }, q)
   let made = plan.nodes.find((n) => n.key == 'build')!
+  assertEquals(plan.changes.filter((c) => c.$num).map((c) => c.eid), [made.eid])
   assertEquals(
     plan.changes.filter((c) => c.name == 'edge' || typeOf[c.name]),
     [

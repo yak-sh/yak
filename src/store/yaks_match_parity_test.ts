@@ -1,3 +1,4 @@
+import { applyNumbered } from '../testdb.ts'
 // Fleet parity for @yaks/match (T-33576, goal V-33493): does the in-memory
 // evaluator answer the REAL fleet graph the way the database does? One graph is
 // seeded through the app's own apply(), gathered into whole bundles through
@@ -32,7 +33,6 @@ import { compute, type Mark, MARKS } from '@yaks/task'
 import { fleetVocab } from '../vocab/fleet_vocab.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply } = await import('../db.ts')
 let { bareDb } = await import('../testdb.ts')
 let { uuid } = await import('../types.ts')
 let { derived: fleetDerived } = await import('../sql_derived.ts')
@@ -46,7 +46,7 @@ let db = bareDb()
 let P = uuid(), S = uuid(), T1 = uuid(), T2 = uuid(), T3 = uuid()
 let C1 = uuid(), CV = uuid()
 
-apply(db, [
+applyNumbered(db, [
   { eid: CV, name: 'doc', comp: { title: 'A Canvas' } },
   { eid: CV, name: 'canvas', comp: {} },
   { eid: S, name: 'session', comp: { id: 'match-parity' } },

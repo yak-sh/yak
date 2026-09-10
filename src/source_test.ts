@@ -202,7 +202,7 @@ Deno.test('graduation: a write to an ephemeral entity persists it, eid stable', 
     let e = db.prepare('select num from entity where eid = ?').get(gid) as
       | { num: number | null }
       | undefined
-    assertEquals(typeof e?.num, 'number')
+    assertEquals(e?.num, null)
     assertEquals(
       (db.prepare(`select id, provider from session where ${OWNED}`).get(
         gid,

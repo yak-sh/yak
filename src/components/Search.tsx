@@ -149,7 +149,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
     let eid = uuid()
     mutate(
       { eid, name: 'doc', comp: { title: q.trim(), body: '' } },
-      { eid, name: 'board', comp: { query: q.trim() } },
+      { eid, name: 'board', $num: true, comp: { query: q.trim() } },
     )
     close()
     navigate(`/${eid}`)

@@ -1,5 +1,6 @@
 // apply()/snapshot() semantics against an in-memory db — the wire's
 // contract: patches, creates, deletes, tombstones, and the claim lease.
+import { applyNumbered } from './testdb.ts'
 import type { Dep } from './types.ts'
 Deno.env.set('DB_PATH', ':memory:')
 let { link, moves, typeOf, unlink } = await import('./edge.ts')
@@ -36,7 +37,6 @@ let {
   migrateTombstone,
   mintEpoch,
   mutate,
-  numbered,
   projectReachability,
   readComp,
   refsOf,
@@ -63,7 +63,6 @@ let { assertEquals, assertMatch, assertNotEquals, assertThrows } = await import(
 )
 let {
   comps,
-  kindOrder,
   lazy,
   partition,
   sessionOf,
@@ -880,7 +879,7 @@ Deno.test('a declared bool rides the wire as a boolean', () => {
 
 Deno.test('apply canonicalizes every scalar and reference spelling', () => {
   let target = uid(), subject = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: target, name: 'doc', comp: { title: 'Target' } },
     { eid: target, name: 'person', comp: {} },
     { eid: target, name: 'alias', comp: { slug: 'typed-target' } },
@@ -954,7 +953,7 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
   // canonicalizes to the eid the store keeps.
   let num = Number(comp(target, 'entity')?.num)
   let said = edgeEid(subject, 'about', target)
-  let edge = apply(db, [{
+  let edge = applyNumbered(db, [{
     eid: said,
     name: 'edge',
     comp: { from: 'typed-subject', to: String(num) },
@@ -1792,10 +1791,14 @@ Deno.test('an FK refusal fails the whole batch loudly, naming the column', () =>
 
 Deno.test('task project requires a project and fails atomically', () => {
   let bare = uid(), task = uid(), rider = uid()
-  apply(db, [{ eid: bare, name: 'doc', comp: { title: 'not a project' } }])
+  applyNumbered(db, [{
+    eid: bare,
+    name: 'doc',
+    comp: { title: 'not a project' },
+  }])
   let err = assertThrows(
     () =>
-      apply(db, [
+      applyNumbered(db, [
         { eid: rider, name: 'doc', comp: { title: 'rides along' } },
         { eid: task, name: 'task', comp: {} },
         { eid: task, name: 'filed', comp: { project: bare } },
@@ -1815,13 +1818,13 @@ Deno.test('task project requires a project and fails atomically', () => {
   assertEquals(comp(rider, 'doc'), undefined)
 
   let project = uid(), existing = uid(), patchRider = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: project, name: 'project', comp: {} },
     { eid: existing, name: 'task', comp: {} },
     { eid: existing, name: 'filed', comp: { project: project } },
   ])
   assertThrows(() =>
-    apply(db, [
+    applyNumbered(db, [
       { eid: patchRider, name: 'doc', comp: { title: 'also rides' } },
       { eid: existing, name: 'task', comp: {} },
       { eid: existing, name: 'filed', comp: { project: bare } },
@@ -1833,7 +1836,7 @@ Deno.test('task project requires a project and fails atomically', () => {
   let ghost = uid()
   assertThrows(
     () =>
-      apply(db, [{ eid: uid(), name: 'task', comp: {} }, {
+      applyNumbered(db, [{ eid: uid(), name: 'task', comp: {} }, {
         eid: uid(),
         name: 'filed',
         comp: { project: ghost },
@@ -1845,7 +1848,7 @@ Deno.test('task project requires a project and fails atomically', () => {
 
 Deno.test('a later project does not reorder unrelated births', () => {
   let first = uid(), later = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: first, name: 'doc', comp: { title: 'first' } },
     { eid: later, name: 'project', comp: {} },
   ])
@@ -1918,7 +1921,7 @@ slow('every typed eid rejects a target missing its component', () => {
 Deno.test('typed refs may precede their targets without reordering births', () => {
   let local = fresh()
   let memory = uid(), middle = uid(), project = uid()
-  apply(local, [
+  applyNumbered(local, [
     {
       eid: memory,
       name: 'memory',
@@ -2032,26 +2035,34 @@ Deno.test('an FK refusal on the patch path bounces too', () => {
 
 Deno.test('spine mints once, num is monotonic', () => {
   let x = uid(), y = uid()
-  apply(db, [{ eid: x, name: 'entity', comp: {} }])
-  apply(db, [{ eid: y, name: 'entity', comp: {} }])
+  applyNumbered(db, [{ eid: x, name: 'entity', comp: {} }])
+  applyNumbered(db, [{ eid: y, name: 'entity', comp: {} }])
   let num = (eid: string) => Number(comp(eid, 'entity')?.num)
   assertEquals(num(y), num(x) + 1)
-  apply(db, [{ eid: x, name: 'doc', comp: { title: 't' } }])
+  applyNumbered(db, [{ eid: x, name: 'doc', comp: { title: 't' } }])
   assertEquals(Number(comp(x, 'entity')?.num), num(x)) // touch ≠ re-mint
 })
 
 Deno.test('a birth rides the return: the minted spine, once', () => {
   let t = uid()
-  let born = apply(db, [{ eid: t, name: 'doc', comp: { title: 'newborn' } }])
+  let born = applyNumbered(db, [{
+    eid: t,
+    name: 'doc',
+    comp: { title: 'newborn' },
+  }])
     .filter((c) => c.eid == t && c.name == 'entity')
   assertEquals(born.length, 1)
   assertEquals(Number(born[0].comp?.num) > 0, true)
   // a patch touches an EXISTING spine — no re-announcement
-  let patched = apply(db, [{ eid: t, name: 'doc', comp: { title: 'named' } }])
+  let patched = applyNumbered(db, [{
+    eid: t,
+    name: 'doc',
+    comp: { title: 'named' },
+  }])
   assertEquals(patched.some((c) => c.name == 'entity'), false)
   // create-then-delete in one batch: the spine is gone, nothing rides
   let x = uid()
-  let brief = apply(db, [
+  let brief = applyNumbered(db, [
     { eid: x, name: 'doc', comp: { title: 'mayfly' } },
     { eid: x, name: 'entity', comp: null },
   ])
@@ -3856,7 +3867,7 @@ Deno.test('search: component filters select before limiting', () => {
 
 Deno.test('search: references and paths screen the hits', () => {
   let u = uid(), other = uid(), t = uid(), t2 = uid(), instrument = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: u, name: 'doc', comp: { title: 'Jeff Peterson' } },
     { eid: u, name: 'person', comp: {} },
     { eid: u, name: 'alias', comp: { slug: 'jeffp' } },
@@ -4437,16 +4448,20 @@ slow('open keys a text-eid journal by spine id once', () => {
 
 Deno.test('num is monotonic: a grave keeps its number off the market', () => {
   let a = uid(), b = uid()
-  apply(db, [{ eid: a, name: 'doc', comp: { title: 'first' } }])
-  apply(db, [{ eid: b, name: 'doc', comp: { title: 'last' } }])
+  applyNumbered(db, [{ eid: a, name: 'doc', comp: { title: 'first' } }])
+  applyNumbered(db, [{ eid: b, name: 'doc', comp: { title: 'last' } }])
   let num = (eid: string) =>
     (db.prepare('select num from entity where eid = ?').get(eid) as {
       num: number
     })?.num
   let high = num(b)
-  apply(db, [{ eid: b, name: 'entity', comp: null }])
+  applyNumbered(db, [{ eid: b, name: 'entity', comp: null }])
   let c = uid()
-  apply(db, [{ eid: c, name: 'doc', comp: { title: 'after the grave' } }])
+  applyNumbered(db, [{
+    eid: c,
+    name: 'doc',
+    comp: { title: 'after the grave' },
+  }])
   assertEquals(num(c) > high, true)
   // and the tombstone remembers who it buried
   let grave = db.prepare(
@@ -5023,16 +5038,11 @@ slow(
 
 Deno.test('num moved off first-touch: a new task still mints the next number', () => {
   let a = uid(), b = uid()
-  apply(db, [{ eid: a, name: 'doc', comp: { title: 'first' } }])
-  apply(db, [{ eid: b, name: 'doc', comp: { title: 'second' } }])
+  apply(db, [{ eid: a, name: 'doc', comp: { title: 'first' }, $num: true }])
+  apply(db, [{ eid: b, name: 'doc', comp: { title: 'second' }, $num: true }])
   let na = Number(comp(a, 'entity')?.num)
   let nb = Number(comp(b, 'entity')?.num)
   assertEquals(na > 0 && nb == na + 1, true) // consecutive, minted after comps landed
-})
-
-Deno.test('entry, wake and edge are the num-less kinds', () => {
-  let numless = new Set(['entry', 'wake', 'edge'])
-  for (let k of kindOrder) assertEquals(numbered(k), !numless.has(k))
 })
 
 Deno.test('the wire cannot set num — it stays server-owned', () => {
@@ -5118,7 +5128,7 @@ Deno.test('vectors key on the spine; a legacy eid-keyed table is rebuilt', () =>
 Deno.test('a conflict names its sides on the spine; legacy labels resolve', () => {
   let d = open(':memory:')
   let t = uid(), a = uid(), b = uid()
-  apply(d, [
+  applyNumbered(d, [
     { eid: t, name: 'doc', comp: { title: 'contested' } },
     { eid: a, name: 'session', comp: { id: 'sess-a' } },
     { eid: b, name: 'session', comp: { id: 'sess-b' } },
@@ -5165,11 +5175,11 @@ Deno.test('a conflict names its sides on the spine; legacy labels resolve', () =
 
 Deno.test('a deleted number is never reused — remint is strictly higher', () => {
   let a = uid()
-  apply(db, [{ eid: a, name: 'doc', comp: { title: 'high' } }])
+  applyNumbered(db, [{ eid: a, name: 'doc', comp: { title: 'high' } }])
   let n1 = Number(comp(a, 'entity')?.num)
-  apply(db, [{ eid: a, name: 'entity', comp: null }]) // delete the highest
+  applyNumbered(db, [{ eid: a, name: 'entity', comp: null }]) // delete the highest
   let b = uid()
-  apply(db, [{ eid: b, name: 'doc', comp: { title: 'next' } }])
+  applyNumbered(db, [{ eid: b, name: 'doc', comp: { title: 'next' } }])
   assertEquals(Number(comp(b, 'entity')?.num) > n1, true) // tombstone.num holds the high-water
 })
 
@@ -5201,7 +5211,7 @@ Deno.test('an ambiguous short-eid prefix is refused, naming the collision', () =
 
 Deno.test('num order is preserved: T-3 and a bare num still resolve', () => {
   let t = uid()
-  apply(db, [{ eid: t, name: 'doc', comp: { title: 'addressed' } }])
+  applyNumbered(db, [{ eid: t, name: 'doc', comp: { title: 'addressed' } }])
   let n = Number(comp(t, 'entity')?.num)
   assertEquals(resolveId(db, `T-${n}`), t) // prefixed num
   assertEquals(resolveId(db, String(n)), t) // bare num, never shadowed by hex
@@ -5216,17 +5226,17 @@ slow(
   () => {
     let d = fresh()
     let project = uid()
-    apply(d, [
+    applyNumbered(d, [
       { eid: project, name: 'doc', comp: { title: 'Widgets', body: '' } },
       { eid: project, name: 'project', comp: {} },
     ])
     let board = uid()
-    apply(d, [
+    applyNumbered(d, [
       { eid: board, name: 'doc', comp: { title: 'widgets', body: '' } },
       { eid: board, name: 'board', comp: { query: `.project=${project}` } },
     ])
     let card = uid()
-    apply(d, [
+    applyNumbered(d, [
       { eid: card, name: 'card', comp: { target: board, view: 'Board' } },
     ])
 
@@ -5257,13 +5267,13 @@ slow(
 slow('migrateBoardsToProjects: a filtered board is left alone', () => {
   let d = fresh()
   let project = uid()
-  apply(d, [
+  applyNumbered(d, [
     { eid: project, name: 'doc', comp: { title: 'Widgets', body: '' } },
     { eid: project, name: 'project', comp: {} },
   ])
   // a real filtered view: project AND a status — not a whole-project mirror
   let filtered = uid()
-  apply(d, [
+  applyNumbered(d, [
     { eid: filtered, name: 'doc', comp: { title: 'open widgets', body: '' } },
     {
       eid: filtered,
@@ -5273,7 +5283,7 @@ slow('migrateBoardsToProjects: a filtered board is left alone', () => {
   ])
   // a whole-project board whose target isn't a live project: also left alone
   let orphan = uid()
-  apply(d, [
+  applyNumbered(d, [
     { eid: orphan, name: 'doc', comp: { title: 'ghost', body: '' } },
     { eid: orphan, name: 'board', comp: { query: `.project=${uid()}` } },
   ])

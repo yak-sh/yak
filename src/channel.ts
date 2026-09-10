@@ -102,6 +102,7 @@ export let cleanAttr = (s: string) =>
 // mint casts its doc a frame earlier; an echo's doc landed with the original
 // send or the boot snapshot), so a letter's words must come from memory.
 export type Row = {
+  at?: string
   num: number
   comps: Set<string>
   doc?: { title: string; body: string }
@@ -177,6 +178,7 @@ export let learn = (index: Index, changes: Change[]) => {
     let row = index.get(c.eid) ?? { num: 0, comps: new Set<string>() }
     if (c.comp == null) row.comps.delete(c.name)
     else row.comps.add(c.name)
+    if (c.name == 'created') row.at = c.comp ? str(c.comp.at) : undefined
     if (c.name == 'session') {
       if (c.comp == null) row.sess = undefined
       else remember(row, c.comp)
@@ -252,7 +254,13 @@ export let findSession = (
   let hinted: ({ eid: string } & Sess) | undefined
   for (let [eid, row] of index) {
     if (!row.sess) continue
-    seats.push({ eid, num: row.num, pid: row.sess.pid, id: row.sess.id })
+    seats.push({
+      eid,
+      num: row.num,
+      at: row.at,
+      pid: row.sess.pid,
+      id: row.sess.id,
+    })
     if (by.id && row.sess.id == by.id) hinted = { eid, ...row.sess }
   }
   let seat = served(seats, by.pid)

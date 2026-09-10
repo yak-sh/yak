@@ -298,6 +298,11 @@ export let manuals = declare({
     args: [arg('filters', text, true, false)],
     opts: [flag('--all'), json],
   },
+  num: {
+    about: 'mint a human number on demand (idempotent)',
+    root: true,
+    args: [arg('id', id)],
+  },
   new: {
     dots: 'params',
     about: 'create a task (bare words become the title)',

@@ -1,6 +1,7 @@
 // Work-lane readiness and candidate envelopes: managed dispatch and external
 // workers share membership, while each keeps its own ordering. The db-backed
 // cases also hold the lane reads to indexed, bounded graph queries.
+import { applyNumbered } from './testdb.ts'
 import {
   assert,
   assertEquals,
@@ -36,7 +37,7 @@ import {
 import { verificationPending } from './verification.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, depsOf } = await import('./db.ts')
+let { depsOf } = await import('./db.ts')
 let { bareDb } = await import('./testdb.ts')
 let { localQuery } = await import('./graph_query.ts')
 let { backlog } = await import('./dispatch.ts')
@@ -67,7 +68,7 @@ let completedTask = (
   accept = 'exercise the shipped door',
 ) => {
   let builder = uuid(), eid = uuid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: builder, name: 'session', comp: { id: uuid() } },
     ...task(
       eid,
@@ -77,7 +78,12 @@ let completedTask = (
       accept ? [{ eid, name: 'accept', comp: { body: accept } }] : [],
     ),
   ])
-  apply(db, [{ eid, name: 'completed', comp: { at } }], undefined, builder)
+  applyNumbered(
+    db,
+    [{ eid, name: 'completed', comp: { at } }],
+    undefined,
+    builder,
+  )
   db.prepare(
     `update completed set at = ?
       where entity = (select id from entity where eid = ?)`,
@@ -94,7 +100,7 @@ let workReview = (
   body = 'Ran the acceptance recipe.',
   eid = uuid(),
 ) => {
-  apply(
+  applyNumbered(
     db,
     [
       { eid, name: 'doc', comp: { title: '', body } },
@@ -118,7 +124,7 @@ let workVerifier = (
   status: string | null,
 ) => {
   let eid = uuid()
-  apply(db, [
+  applyNumbered(db, [
     {
       eid,
       name: 'session',
@@ -144,7 +150,7 @@ let world = () => {
   let gated = uuid(), blocker = uuid(), pending = uuid(), declined = uuid()
   let done = uuid(), held = uuid(), stuck = uuid()
   let root = uuid(), child = uuid(), heldGate = uuid(), grandchild = uuid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: P, name: 'doc', comp: { title: 'Task Graph', body: '' } },
     { eid: P, name: 'project', comp: {} },
     {
@@ -316,7 +322,7 @@ Deno.test('build selection is exact beyond a recent declined window', async () =
       { eid, name: 'decided', comp: { verdict: 'declined' } },
     ]))
   }
-  apply(db, changes)
+  applyNumbered(db, changes)
   let candidates = await workCandidates(readFor(db), 'build', { limit: 1 })
   assertEquals(candidates.map((c) => c.id), [idOf(rowsFor(db, [old])[0])])
 })
@@ -359,7 +365,7 @@ Deno.test('recursive DB selection stops beyond a high-fanout pending boundary', 
     ...link(root, 'requires', boundary),
     ...link(boundary, 'requires', target),
   )
-  apply(db, changes)
+  applyNumbered(db, changes)
   let ids = (await workCandidates(readFor(db), 'build', {
     recursive: true,
     limit: 100,
@@ -388,7 +394,7 @@ Deno.test('evaluate bounds high-fanout blockers and emits only human ids', async
   for (let child of blockers) {
     changes.push(...link(candidate, 'requires', child))
   }
-  apply(db, changes)
+  applyNumbered(db, changes)
   let [found] = await workCandidates(readFor(db), 'evaluate', { limit: 1 })
   assertEquals(found.blockers.items.length, 20)
   assertEquals(found.blockers.truncated, true)
@@ -426,7 +432,7 @@ Deno.test('work filters reject unsupported query riders explicitly', async () =>
 Deno.test('recursive authorization traverses non-task intermediates', async () => {
   let db = bareDb()
   let P = uuid(), root = uuid(), design = uuid(), leaf = uuid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: P, name: 'doc', comp: { title: 'Mixed tree', body: '' } },
     { eid: P, name: 'project', comp: {} },
     ...task(root, 'Approved root', 1, P, [{
@@ -456,7 +462,7 @@ Deno.test('managed dispatch shares the complete recursive DB membership', async 
   let db = bareDb()
   let P = uuid(), root = uuid(), a = uuid(), b = uuid(), leaf = uuid()
   let direct = uuid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: P, name: 'doc', comp: { title: 'Dispatch closure', body: '' } },
     { eid: P, name: 'project', comp: {} },
     ...task(root, 'Approved root', 0, P, [
@@ -540,7 +546,7 @@ Deno.test('managed dispatch shares the complete recursive DB membership', async 
 Deno.test('work lanes reject direct and dotted quarantine reveal filters', async () => {
   let db = bareDb()
   let hidden = uuid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: hidden, name: 'doc', comp: { title: 'Moderated', body: '' } },
     { eid: hidden, name: 'quarantined', comp: {} },
   ])
@@ -584,7 +590,7 @@ Deno.test('managed dispatch does not window its eligible feed', () => {
       }]),
     )
   }
-  apply(db, changes)
+  applyNumbered(db, changes)
   assertEquals(
     evalDispatchWork(db, workFilters('build').join('&')).length,
     125,
@@ -596,7 +602,7 @@ Deno.test('quarantine is private in blocker and authorization projections', asyn
   let P = uuid(), hidden = uuid(), visible = uuid()
   let proposed = uuid(), approved = uuid(), hiddenRoot = uuid(), leaf = uuid()
   let hiddenSession = uuid(), hiddenPersona = uuid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: P, name: 'doc', comp: { title: 'Private', body: '' } },
     { eid: P, name: 'project', comp: {} },
     ...task(hidden, 'SECRET BLOCKER', 1, P),
@@ -684,7 +690,7 @@ Deno.test('deep authorization is one bounded query projection', async () => {
     parent = eid
   }
   changes.push(...link(parent, 'requires', leaf))
-  apply(db, changes)
+  applyNumbered(db, changes)
   let local = readFor(db)
   let queries = 0, gets = 0
   let read: WorkRead = {
@@ -725,7 +731,7 @@ Deno.test('authorization sources are capped and say when truncated', async () =>
       ...link(root, 'requires', leaf),
     )
   }
-  apply(db, changes)
+  applyNumbered(db, changes)
   let candidates = await workCandidates(readFor(db), 'build', {
     recursive: true,
     limit: 100,
@@ -739,7 +745,7 @@ Deno.test('authorization sources are capped and say when truncated', async () =>
 Deno.test('verify lane has exact VERIFY_PENDING membership across review and verifier states', () => {
   let db = bareDb()
   let P = uuid(), reviewer = uuid(), muted = uuid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: P, name: 'doc', comp: { title: 'Verification', body: '' } },
     { eid: P, name: 'project', comp: {} },
     { eid: reviewer, name: 'session', comp: { id: uuid() } },
@@ -814,7 +820,7 @@ Deno.test('verify lane has exact VERIFY_PENDING membership across review and ver
   )
   let missing = add('Missing criteria', '2026-01-11T00:00:00.000Z', P, '')
   let cancelled = add('Cancelled', '2026-01-12T00:00:00.000Z')
-  apply(db, [{
+  applyNumbered(db, [{
     eid: cancelled.eid,
     name: 'cancelled',
     comp: { at: '2026-01-12T01:00:00.000Z' },
@@ -838,7 +844,7 @@ Deno.test('verify lane has exact VERIFY_PENDING membership across review and ver
 Deno.test('verify lane orders before LIMIT and projects bounded human evidence', async () => {
   let db = bareDb()
   let P = uuid(), reviewer = uuid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: P, name: 'doc', comp: { title: 'Verify order', body: '' } },
     { eid: P, name: 'project', comp: {} },
     { eid: reviewer, name: 'session', comp: { id: uuid() } },
@@ -918,7 +924,7 @@ Deno.test('verify lane orders before LIMIT and projects bounded human evidence',
 Deno.test('verify filters reuse the driving completed row exactly', async () => {
   let db = bareDb()
   let P = uuid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: P, name: 'doc', comp: { title: 'Completed filters', body: '' } },
     { eid: P, name: 'project', comp: {} },
   ])
@@ -941,7 +947,7 @@ Deno.test('verify filters reuse the driving completed row exactly', async () => 
 Deno.test('verify evidence never reveals quarantined candidates or references', async () => {
   let db = bareDb()
   let P = uuid(), reviewer = uuid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: P, name: 'doc', comp: { title: 'SECRET PROJECT', body: '' } },
     { eid: P, name: 'project', comp: {} },
     { eid: P, name: 'quarantined', comp: {} },
@@ -954,7 +960,7 @@ Deno.test('verify evidence never reveals quarantined candidates or references', 
     'Visible candidate',
     '2026-01-01T00:00:00.000Z',
   )
-  apply(db, [{ eid: visible.builder, name: 'quarantined', comp: {} }])
+  applyNumbered(db, [{ eid: visible.builder, name: 'quarantined', comp: {} }])
   let hiddenReview = workReview(
     db,
     visible.eid,
@@ -963,14 +969,14 @@ Deno.test('verify evidence never reveals quarantined candidates or references', 
     '2026-01-01T01:00:00.000Z',
     'SECRET REVIEW',
   )
-  apply(db, [{ eid: hiddenReview, name: 'quarantined', comp: {} }])
+  applyNumbered(db, [{ eid: hiddenReview, name: 'quarantined', comp: {} }])
   let hidden = completedTask(
     db,
     P,
     'SECRET CANDIDATE',
     '2026-01-02T00:00:00.000Z',
   )
-  apply(db, [{ eid: hidden.eid, name: 'quarantined', comp: {} }])
+  applyNumbered(db, [{ eid: hidden.eid, name: 'quarantined', comp: {} }])
 
   let candidates = await workCandidates(readFor(db), 'verify', { limit: 20 })
   assertEquals(candidates.length, 1)
@@ -984,7 +990,7 @@ Deno.test('verify evidence never reveals quarantined candidates or references', 
 Deno.test('verify lane and evidence plans stay on their keyed walks', () => {
   let db = bareDb()
   let P = uuid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: P, name: 'doc', comp: { title: 'Plan', body: '' } },
     { eid: P, name: 'project', comp: {} },
   ])

@@ -159,7 +159,7 @@ Deno.test('session source: a write graduates the session; the log stays file-bac
     let e = db.prepare('select num from entity where eid = ?').get(eid) as
       | { num: number | null }
       | undefined
-    assertEquals(typeof e?.num, 'number')
+    assertEquals(e?.num, null)
     assertEquals(
       (db.prepare(`select id from session where ${OWNED}`).get(eid) as {
         id: string

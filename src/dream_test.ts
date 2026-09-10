@@ -90,7 +90,7 @@ let knock = (to: string) => {
 let task = (title: string, status: string) => {
   let eid = uid()
   apply(db, [
-    { eid, name: 'doc', comp: { title, body: '' } },
+    { eid, name: 'doc', comp: { title, body: '' }, $num: true },
     { eid, name: 'task', comp: {} },
   ])
   if (status == 'done') apply(db, [{ eid, name: 'completed', comp: {} }])

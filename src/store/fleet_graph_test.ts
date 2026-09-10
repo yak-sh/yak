@@ -148,10 +148,10 @@ Deno.test('fleet CAS ordered patches and drop/recreate return final defaults', (
   assertEquals(readComp(db, 'p', 'doc')?.title, '')
 })
 
-Deno.test('fleet number allocation waits for kinds, inline bodies are not CAS', () => {
+Deno.test('fleet number allocation is requested, inline bodies are not CAS', () => {
   let db = bareDb()
   let out = write(db, [
-    { entity: { eid: 'a' }, doc: { title: 'numbered' } },
+    { entity: { eid: 'a' }, $num: true, doc: { title: 'numbered' } },
     { entity: { eid: 'edge' }, edge: { from: 'a', to: 'b' }, requires: {} },
     {
       entity: { eid: 'wake' },
@@ -165,7 +165,7 @@ Deno.test('fleet number allocation waits for kinds, inline bodies are not CAS', 
   assertEquals(out.find((b) => b.entity.eid == 'edge')?.entity.num, null)
   assertEquals(out.find((b) => b.entity.eid == 'wake')?.entity.num, null)
   assertEquals(out.find((b) => b.entity.eid == 'a')?.entity.num, 1)
-  assertEquals(out.find((b) => b.entity.eid == 'b')?.entity.num, 2)
+  assertEquals(out.find((b) => b.entity.eid == 'b')?.entity.num, null)
   let got = fleetGraphOf(db).read('.brief!') as Bundle[]
   assertEquals(component(got, 'b', 'brief'), {
     text: 'inline text',
@@ -272,7 +272,7 @@ Deno.test('fleet births carrying entry stay unnumbered after their reference spi
     { entity: { eid: 'p' }, doc: { title: 'after entry' } },
   ], { trusted: true }) as Bundle[]
   assertEquals(out.find((b) => b.entity.eid == 'e')?.entity.num, null)
-  assertEquals(out.find((b) => b.entity.eid == 'p')?.entity.num, 2)
+  assertEquals(out.find((b) => b.entity.eid == 'p')?.entity.num, null)
 })
 
 Deno.test('live append numbers entries per session and rolls back sequence plus imports', () => {

@@ -22,7 +22,7 @@ import { graphLog, standingOf } from './entry_log.ts'
 import { slow } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, cursorOf, delta, numbered, readComp, snapshot } = await import(
+let { apply, cursorOf, delta, readComp, snapshot } = await import(
   './db.ts'
 )
 let { open } = await import('./store/sqlite.ts')
@@ -94,7 +94,6 @@ Deno.test('entries append in partition order and stay out of the root graph', ()
   assertEquals(readEntries(db, b).map((e) => e.seq), [1])
   assertEquals(readEntries(db, a)[0].comps.content.body, 'one')
   assertEquals(readEntries(db, a)[0].comps.entity.num, null)
-  assertEquals(numbered('entry'), false)
   let hidden = new Set([...first.eids, ...other.eids])
   assertEquals(
     snapshot(db).changes.some((c) => hidden.has(c.eid)),

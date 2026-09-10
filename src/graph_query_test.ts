@@ -24,7 +24,7 @@ let { bareDb, freshDb } = await import('./testdb.ts')
 
 let session = (db: ReturnType<typeof open>) => {
   let eid = uuid()
-  apply(db, [{ eid, name: 'session', comp: { id: uuid() } }])
+  apply(db, [{ eid, name: 'session', comp: { id: uuid() }, $num: true }])
   return eid
 }
 
@@ -442,7 +442,12 @@ Deno.test('evalCapped answers a declining query newest-first, bounded', () => {
   let db = freshDb()
   // 'zap' is a bare-word text pred — the index declines it, whereSome scans.
   for (let i = 0; i < 6; i++) {
-    apply(db, [{ eid: uuid(), name: 'doc', comp: { title: `zap ${i}` } }])
+    apply(db, [{
+      eid: uuid(),
+      name: 'doc',
+      $num: true,
+      comp: { title: `zap ${i}` },
+    }])
   }
   apply(db, [{ eid: uuid(), name: 'doc', comp: { title: 'unrelated' } }])
   let { hits } = evalCappedDoor(db, 'zap', 3)
@@ -461,7 +466,7 @@ Deno.test('a ranking window pages within the ranking, not down the spine', () =>
   for (let i = 0; i < 4; i++) {
     let eid = uuid()
     apply(db, [
-      { eid, name: 'doc', comp: { title: `zephyr ${i}` } },
+      { eid, name: 'doc', $num: true, comp: { title: `zephyr ${i}` } },
       { eid, name: 'task', comp: {} },
       { eid, name: 'filed', comp: { priority: i } },
     ])

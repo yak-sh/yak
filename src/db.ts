@@ -30,7 +30,6 @@ import {
   type Hit,
   idOf,
   kindOf,
-  kindOrder,
   lazy,
   learnKinds,
   type PropType,
@@ -1229,53 +1228,22 @@ export let derived = [
 ]
 
 // Insert a bare entity spine — the eid, and nothing else. num is NOT minted
-// here (T-3684): it is a kind-driven UI label, and this fires at FIRST-TOUCH,
-// before any component says what KIND the entity is. mintNum() assigns it
-// once the components land (apply()'s late pass, seed(), addressEntity()), or
-// leaves it NULL for a numberless kind. No kind column: an entity is what its
+// here: it is an optional human handle. Only a per-entity $num request
+// assigns one; components and kind never trigger allocation. No kind column: an entity is what its
 // components make it. Birth time is the `created` component's business
 // (T-6670), stamped by apply() from the batch's one clock — not taken here.
 let spine = (db: Sql, eid: string) =>
   prep(db, 'insert or ignore into entity (eid) values (?)').run(eid)
 
-// The kinds that get a human number. Cheap/bulk/ephemeral kinds stay out:
-// `entry` (log lines) and `wake` (one per pace cycle, read only by kind=wake and
-// self-replaced per actor) are never typed by a human, so a num is pure overload.
-// Their spines carry a NULL num; every other kind is numbered (T-3684). An
-// `edge` (D-23820) is bulk the same way — tens of thousands, named by what
-// they join, never typed — so it stays out too.
-let unnumbered = new Set(['entry', 'wake', 'edge'])
-export let numbered = (kind: string) => !unnumbered.has(kind)
-
-// Assign the next human number to a newly-created entity — the allocator
-// spine() used to run at first-touch, moved here where the entity's KIND is
-// finally knowable (its component rows exist). Same max+1 over the living AND
-// the graves (tombstone.num keeps a dead entity's number), so a number is
-// never reused and ids stay monotonic. A no-op if the entity is already
-// numbered, is gone (deleted later in the same batch), or wears an unnumbered
-// kind — the kind is derived only when the exclusion is non-empty, so part 1
-// pays nothing for the lookup.
+// Explicit requests only. Called under the writer lock; concurrent asks see
+// the same existing number. The graves retain nums, so handles are never reused.
 let mintNum = (db: Sql, eid: string) => {
-  // A content hash is already the blob's durable human identity. Numbering
-  // every deduplicated body/file would create a second, meaningless name.
   if (
     prep(
       db,
-      `select 1 from blob where entity = (select id from entity where eid = ?)`,
+      `select 1 from tombstone where entity = (select id from entity where eid = ?)`,
     ).get(eid)
   ) return
-  if (unnumbered.size) {
-    let kind = kindOrder.find((k) =>
-      prep(
-        db,
-        `select 1 from ${sqlName(k)}
-         where entity = (select id from entity where eid = ?)`,
-      ).get(eid)
-    ) ?? 'entity'
-    if (!numbered(kind)) {
-      return
-    }
-  }
   // The graves count too: a dead entity's spine row is retained with its num.
   let { n } = prep(
     db,
@@ -1406,7 +1374,6 @@ let seedCatalog = (db: Sql) => {
     doc(db, eid, title)
     prep(db, `insert into ${table} (entity, name) values (${ID}, ?)`)
       .run(eid, name)
-    mintNum(db, eid)
     return key(table, name)!
   }
   let fill = (table: string, id: number, cols: Record<string, SqlValue>) => {
@@ -1490,9 +1457,8 @@ let seed = (db: Sql) => {
   prep(db, `insert into canvas (entity) values (${ID})`).run(canvas)
   pin(db, canvas, addCard(db, board, 'Board'), 0, 0, 640, 0)
   pin(db, canvas, addCard(db, view, 'Full'), 664, 0, 320, 0)
-  // These direct inserts bypass apply()'s late mint pass, so number the demo
-  // entities now their components exist — in creation (rowid) order, so the
-  // ids read 1, 2, 3… exactly as spine() used to hand them out (T-3684).
+  // Explicitly retain the historical handles of the demo fixture. This is
+  // seed data, not a numbering policy for live writes.
   for (
     let { eid } of prep(
       db,
@@ -2522,13 +2488,16 @@ let addressed = (db: Sql, addr: string): string | undefined => {
   )
     .get(a) as { eid: string } | undefined)?.eid
   if (worn) return worn
-  let m = /^([A-Za-z]+-(\d+))$/i.exec(fleetLocal(a) ?? '')
-  if (!m) return undefined
-  let row = prep(db, 'select eid from entity where num = ?')
-    .get(Number(m[2])) as { eid: string } | undefined
-  return row && human(db, row.eid).toLowerCase() == m[1].toLowerCase()
-    ? row.eid
-    : undefined
+  return namedAddress(db, addr) ?? undefined
+}
+
+// Derived fleet addresses bind to the displayed human id, including a short
+// eid for an unnumbered session. Ambiguity must never silently misdeliver.
+export let namedAddress = (db: Sql, addr: string): string | null => {
+  let local = fleetLocal(addr)
+  if (!local || !/^(?:[A-Za-z]+-\d+|[0-9a-f]{8,64})$/i.test(local)) return null
+  let eid = resolveId(db, local)
+  return eid && human(db, eid).toLowerCase() == local.toLowerCase() ? eid : null
 }
 
 // Find-or-mint the address-book entity wearing `addr` (D-14945): an external
@@ -2553,7 +2522,6 @@ export let addressEntity = (db: Sql, addr: string): string => {
     db,
     'insert into email (entity, address) values ((select id from entity where eid = ?), ?)',
   ).run(eid, a)
-  mintNum(db, eid) // spine no longer numbers at birth (T-3684); email is numbered
   return eid
 }
 
@@ -3850,7 +3818,6 @@ export let fleetGraphOf = (db: Sql): FleetGraph => {
         actor: (writer) => writerActor(db, writer),
         via: (writer) => writerVia(db, writer),
         person: (actor) => isPerson(db, actor),
-        number: (eid) => mintNum(db, eid),
         removalOrder: () =>
           [...Object.keys(cmps), ...Object.keys(vocabOf(db))].toReversed(),
         journal: (now, actor, via, trace, changes) =>
@@ -5494,7 +5461,7 @@ export let apply = (
           if (c.name == 'entity' && c.comp) {
             return Object.keys(c.comp).some((k) => k != 'eid')
               ? []
-              : [{ entity: { eid: c.eid } }]
+              : [asBundle(c)]
           }
           return [asBundle(c)]
         }),
@@ -5533,7 +5500,8 @@ let projectFleet = (db: Sql, changes: Change[], context: FleetWrite) => {
            join worktree w on w.entity = s.entity
            where e.eid = ? and s.origin = 'managed'
              and (w.branch is null or w.branch = ''
-               or w.branch = 'session/S-' || e.num)`,
+               or w.branch = 'session/S-' || e.num
+               or w.branch = 'session/' || e.eid)`,
         ).get(c.eid)
       ) owned.add(c.eid)
     }
@@ -5989,7 +5957,6 @@ export let redact = (
       `insert into redaction (entity, target, "column", hash)
        values ((select id from entity where eid = ?), ?, ?, ?)`,
     ).run(audit, targetId, column, digest)
-    mintNum(db, audit)
     prep(
       db,
       `insert into created (entity, at, "by", via)
@@ -6636,6 +6603,7 @@ export type JournalRow = {
   actor: string | null
   via: string | null
   batch: Change[]
+  numbered?: string[]
   trace: Trace | null
 }
 
@@ -6654,8 +6622,9 @@ export let journalSince = (db: Sql, since: number): JournalRow[] =>
   }[]).map((r) => {
     let t = r.trace
       ? JSON.parse(r.trace) as {
-        created: string[]
-        removed: [string, string[]][]
+        created?: string[]
+        removed?: [string, string[]][]
+        numbered?: string[]
       }
       : null
     return {
@@ -6664,7 +6633,8 @@ export let journalSince = (db: Sql, since: number): JournalRow[] =>
       actor: r.actor,
       via: r.via,
       batch: normalizedBatch(db, r.id),
-      trace: t
+      ...(t?.numbered?.length ? { numbered: t.numbered } : {}),
+      trace: t?.created
         ? { created: new Set(t.created), removed: new Map(t.removed) }
         : null,
     }
@@ -6687,8 +6657,10 @@ export let rowChanges = (r: JournalRow): Change[] => {
   let saidCreated = new Set<string>()
   let saidUpdated = new Set<string>()
   for (let c of r.batch) {
-    if (c.name == 'entity') (c.comp ? born : dead).add(c.eid)
-    else {
+    if (c.name == 'entity') {
+      if (!c.comp) dead.add(c.eid)
+      else if (!r.numbered?.includes(c.eid)) born.add(c.eid)
+    } else {
       touched.add(c.eid)
       // An edge is news at both its ends, as apply() has it.
       if (c.name == 'edge' && c.comp) {

@@ -12,6 +12,7 @@ import {
   type Entity,
   type Graph,
   graph,
+  numbers,
   pick,
   type Plugin,
   then,
@@ -32,7 +33,7 @@ import {
   sync,
 } from './fleet_preconditions.ts'
 
-// db.ts owns prepared statements, the fleet's kind-based number allocator,
+// db.ts owns prepared statements, the fleet's explicit-request number allocator,
 // and its canonical hydrated component read. Keep those truths single-owned.
 export type FleetGraphHost = {
   db: Sql
@@ -72,8 +73,8 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
   let owner = '(select id from entity where eid = ?)'
 
   // The driver owns transactions (including Durable Object transactionSync).
-  // Number births only once ALL their components have landed: an edge/blob/
-  // entry must never consume a human number just because its spine came first.
+  // Storage never numbers implicitly. The numbers plugin handles explicit
+  // per-entity requests under this same write transaction.
   let booleans = (rows: Bundle[]) =>
     rows.map((b) => {
       for (let [name, comp] of comps(b)) {
@@ -98,7 +99,6 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
             if (
               row(`select 1 from tombstone where entity = ${owner}`, entity.eid)
             ) continue
-            host.number(entity.eid)
             let held = row('select num from entity where eid = ?', entity.eid)
             entity.num = held?.num == null ? null : Number(held.num)
           }
@@ -343,6 +343,11 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
       fleetPreconditions(host.guards),
       // Lifecycle commit needs the restored bodies and full creation rows.
       echoes,
+      numbers((eid) => {
+        host.number(eid)
+        let held = row('select num from entity where eid = ?', eid)
+        return { eid, num: held?.num == null ? null : Number(held.num) }
+      }),
       lifecycle.plugin,
     ],
   })

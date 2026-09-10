@@ -15,11 +15,12 @@
 // subserve is db-parameterized, so this drives the serving half directly
 // against an in-memory graph — no server boot, no socket, same frames.
 
+import { applyNumbered } from './testdb.ts'
 import { assertEquals } from '@std/assert'
 import { uuid } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply } = await import('./db.ts')
+
 let { freshDb } = await import('./testdb.ts')
 let { evalGraph, evalSub } = await import('./graph_query.ts')
 let { subserve } = await import('./subserve.ts')
@@ -34,7 +35,7 @@ let ids: string[] = []
 for (let i = 0; i < 30; i++) {
   let eid = uuid()
   ids.push(eid)
-  apply(db, [
+  applyNumbered(db, [
     { eid, name: 'doc', comp: { title: `task ${i}`, body: '' } },
     { eid, name: 'task', comp: {} },
     { eid, name: 'filed', comp: { priority: 1, domain: 'win' } },
@@ -215,7 +216,7 @@ Deno.test('window: a birth inside the bound pushes the oldest member out', () =>
     { eid: born, name: 'task', comp: {} },
     { eid: born, name: 'filed', comp: { priority: 1, domain: 'win' } },
   ]
-  apply(db, batch)
+  applyNumbered(db, batch)
   seen.length = 0
   s.maintain(batch as never)
 
@@ -245,7 +246,7 @@ Deno.test('window: a departure pulls the next-newest member in', () => {
     name: 'filed',
     comp: { domain: 'out' },
   }]
-  apply(db, batch)
+  applyNumbered(db, batch)
   seen.length = 0
   s.maintain(batch as never)
 
@@ -269,7 +270,7 @@ Deno.test('window: an unrelated write leaves a windowed sub silent', () => {
   seen.length = 0
   let other = uuid()
   let batch = [{ eid: other, name: 'memory', comp: { scope: null } }]
-  apply(db, batch)
+  applyNumbered(db, batch)
   s.maintain(batch as never)
   // The dirty test is component overlap, the same one the aggregates use: a
   // write touching nothing the line reads costs a Set lookup and no frame.

@@ -9,7 +9,7 @@ import type { Change } from '../types.ts'
 
 // A change is the app's wire shape; a bundle is @yaks/graph's. One bundle per
 // change keeps the order identical, which is what a batch's semantics rest on.
-export let asBundle = (c: Change): Bundle =>
+let lifted = (c: Change): Bundle =>
   c.name == 'entity' && c.comp == null
     ? { entity: { eid: c.eid }, $delete: true }
     : c.name == 'entity'
@@ -22,6 +22,11 @@ export let asBundle = (c: Change): Bundle =>
       [c.name]: c.comp,
       ...(c.was ? { $was: { [c.name]: c.was } } : {}),
     }
+
+export let asBundle = (c: Change): Bundle => ({
+  ...lifted(c),
+  ...(c.$num !== undefined ? { $num: c.$num } : {}),
+})
 
 // A bundle lowered back to the flat spelling, so the two returns compare.
 export let asChanges = (b: Bundle): Change[] => {
@@ -63,6 +68,7 @@ export let inputChanges = (b: Bundle): Change[] => {
   if (!out.length) out.push({ eid: b.entity.eid, name: 'entity', comp: {} })
   return out.map((c) => ({
     ...c,
+    ...(b.$num !== undefined ? { $num: b.$num } : {}),
     ...(b.$was?.[c.name] ? { was: b.$was[c.name] } : {}),
   }))
 }

@@ -2,12 +2,13 @@
 // address routing, and the sweep's idempotency — against an in-memory
 // db and a fixture FleetApi (no network, no live spool, no stamps
 // anywhere but here).
+import { applyNumbered } from './testdb.ts'
 import type { Change } from './types.ts'
 import type { FleetMsg, SpoolReq } from './inbound.ts'
 import { moves, sentences } from './edge.ts'
 Deno.env.set('DB_PATH', ':memory:')
 Deno.env.set('TASKS_MAIL_DOMAIN', 'bot.test')
-let { apply } = await import('./db.ts')
+
 let { open } = await import('./store/sqlite.ts')
 let { db } = await import('./live_db.ts')
 let {
@@ -58,7 +59,7 @@ let deliveredRow = (eid: string) =>
 // The triage fallback: a project renumbered to P-20, the holdco slot.
 let holdco = (() => {
   let eid = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid, name: 'doc', comp: { title: 'Holdco' } },
     { eid, name: 'project', comp: {} },
   ])
@@ -73,7 +74,7 @@ let holdco = (() => {
 // An addressed operator to route at.
 let operator = (() => {
   let eid = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid, name: 'doc', comp: { title: 'Venture' } },
     { eid, name: 'project', comp: {} },
     { eid, name: 'email', comp: { address: 'venture@bot.test' } },
@@ -83,7 +84,7 @@ let operator = (() => {
 
 let venture = (title: string, address: string) => {
   let eid = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid, name: 'doc', comp: { title } },
     { eid, name: 'project', comp: {} },
     { eid, name: 'email', comp: { address } },
@@ -121,7 +122,7 @@ Deno.test('routeTo: the address book reversed, case-blind, P-20 the rest', () =>
 // one address answers differently depending on which side it arrived from.
 Deno.test('routeTo: an id names its entity; a wrong prefix names nobody', () => {
   let s = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: s, name: 'doc', comp: { title: 'a session' } },
     { eid: s, name: 'session', comp: { id: 'sess-route' } },
   ])
@@ -149,7 +150,7 @@ Deno.test('wearer: the same book, strict — a stranger is nobody', () => {
 
 Deno.test('hookTo: the venture path routes, variants converge, misses fall back', () => {
   let observer = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: observer, name: 'doc', comp: { title: 'Observer' } },
     { eid: observer, name: 'email', comp: { address: 'observer@bot.test' } },
   ])
@@ -266,7 +267,7 @@ Deno.test('mailChanges: the kept headers ride the stamp, land readable', () => {
   // a letter with no forwarded headers stamps null, never invents a header
   assertEquals(mailChanges(msg(), operator).stamp.headers, null)
   // and it lands in the mail row's readable column
-  apply(db, wire)
+  applyNumbered(db, wire)
   db.prepare(`update mail set headers = ? where ${OWNED}`).run(
     stamp.headers,
     eid,
@@ -466,7 +467,7 @@ Deno.test('the sweep: a letter from the fleet itself is not an echo', async () =
 
 Deno.test('the sweep: an echo arrives on the sent entity, once', async () => {
   let letter = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: letter, name: 'doc', comp: { title: 'to the fleet' } },
     { eid: letter, name: 'mail', comp: {} },
     { eid: letter, name: 'deliver', comp: { to: 'venture@bot.test' } },
@@ -510,7 +511,7 @@ Deno.test('the sweep: an echo arrives on the sent entity, once', async () => {
 
 Deno.test('the echo keeps an aimed target and a stamped from', async () => {
   let letter = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: letter, name: 'doc', comp: { title: 'relay' } },
     {
       eid: letter,
@@ -643,6 +644,7 @@ Deno.test('mailIdOf: E-num, bare num, and eid all land; the misses differ', () =
     `select o.eid as eid from mail m join entity o on o.id = m.entity
      where m.message_id is not null`,
   ).get() as { eid: string }
+  applyNumbered(db, [{ eid, name: 'entity', comp: {}, $num: true }])
   let { num } = db.prepare('select num from entity where eid = ?').get(eid) as {
     num: number
   }
@@ -651,7 +653,7 @@ Deno.test('mailIdOf: E-num, bare num, and eid all land; the misses differ', () =
   assertEquals(mailIdOf(String(num))?.message_id, 'msg:1752000000000:abc')
   assertEquals(mailIdOf('nope-not-here'), null) // no mail at all
   let out = uid() // an outbound row: mail, but no spool provenance
-  apply(db, [
+  applyNumbered(db, [
     { eid: out, name: 'doc', comp: { title: 'sent' } },
     { eid: out, name: 'mail', comp: {} },
     { eid: out, name: 'deliver', comp: { to: 'x@y.test' } },
@@ -667,7 +669,7 @@ Deno.test('fleetRaw: dormant without config — the token never has a default', 
 
 Deno.test('the sweep preserves In-Reply-To and links its graph mail', async () => {
   let orig = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: orig, name: 'doc', comp: { title: 'opener' } },
     { eid: orig, name: 'mail', comp: {} },
     { eid: orig, name: 'deliver', comp: { to: 'sender@x.test' } },
@@ -691,7 +693,7 @@ Deno.test('the sweep preserves In-Reply-To and links its graph mail', async () =
 
 Deno.test('mailChanges links an earlier inbound RFC id when present', () => {
   let orig = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: orig, name: 'doc', comp: { title: 'first arrival' } },
     { eid: orig, name: 'mail', comp: {} },
     { eid: orig, name: 'deliver', comp: { to: 'venture@bot.test' } },

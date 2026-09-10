@@ -2,8 +2,9 @@
 // urls), the change builder's resolution rules (live rows only, the human-echo
 // guard, per-entry idempotence), and the effect's skips (recall floaters,
 // empty content). Module db like recall_test — referencedEntry closes over it.
+import { applyNumbered } from './testdb.ts'
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, selectedDeps } = await import('./db.ts')
+let { selectedDeps } = await import('./db.ts')
 let { db } = await import('./live_db.ts')
 let {
   cites,
@@ -51,7 +52,7 @@ Deno.test('cites: an id-shaped path on a foreign host is not a citation', () => 
 // Graph parts through apply() (the real writer mints the spine and num).
 let task = (title: string) => {
   let e = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: e, name: 'doc', comp: { title, body: '' } },
     { eid: e, name: 'task', comp: {} },
   ])
@@ -62,7 +63,7 @@ let task = (title: string) => {
 }
 let page = (url: string) => {
   let e = uid()
-  apply(db, [{ eid: e, name: 'web', comp: { url } }])
+  applyNumbered(db, [{ eid: e, name: 'web', comp: { url } }])
   return e
 }
 let sess = () => {
@@ -79,7 +80,7 @@ let sess = () => {
 }
 let entry = (session: string, text: string, comps: Change[] = []) => {
   let eid = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid, name: 'entry', comp: { session } },
     { eid, name: 'content', comp: { body: text } },
     ...comps.map((c) => ({ ...c, eid })),
@@ -100,7 +101,7 @@ Deno.test('referencedChanges: a cited entity becomes an edge, once', () => {
   assertEquals(out, [
     ...link(e, 'referenced', t.eid),
   ])
-  apply(db, out)
+  applyNumbered(db, out)
   assertEquals(children(e), [t.eid])
   // idempotent: what the entry already wears is diffed away
   assertEquals(referencedChanges(db, e, `working ${t.id} now`), [])
@@ -111,7 +112,7 @@ Deno.test('selectedDeps projects entry endpoints to their session and dedupes', 
   let session = sess()
   let first = entry(session, target.id)
   let second = entry(session, target.id)
-  apply(db, [
+  applyNumbered(db, [
     ...referencedChanges(db, first, target.id),
     ...referencedChanges(db, second, target.id),
   ])
@@ -169,7 +170,7 @@ Deno.test('referencedEntry: a recall floater is skipped — those are recalled, 
 
 Deno.test('referencedEntry: no content, no edges', () => {
   let e = uid()
-  apply(db, [{ eid: e, name: 'entry', comp: { session: sess() } }])
+  applyNumbered(db, [{ eid: e, name: 'entry', comp: { session: sess() } }])
   referencedEntry(() => {})(e)
   assertEquals(children(e), [])
 })
@@ -180,7 +181,7 @@ Deno.test('historicalReferenced: the sweep finds what the effect would have', ()
   let mine = moves(historicalReferenced(db))
     .filter((m) => m.dep.parent == e)
   assertEquals(mine.map((m) => m.dep.child), [t.eid])
-  apply(db, historicalReferenced(db))
+  applyNumbered(db, historicalReferenced(db))
   // resumable: a rerun finds only what the last run missed — here, nothing
   assertEquals(
     moves(historicalReferenced(db)).filter((m) => m.dep.parent == e),

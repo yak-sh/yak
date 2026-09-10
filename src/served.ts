@@ -1,7 +1,7 @@
 // Who a claude process serves: the ONE session its channel plugin delivers
 // to. A pid names a PROCESS, not a conversation — /clear reifies a NEW
 // session entity under the same one, so a pid can wear several rows, and
-// the newest (highest num) is the live conversation; the rest are ghosts
+// the newest (latest creation stamp) is the live conversation; the rest are ghosts
 // nothing renders for. A subagent is a tool call INSIDE its operator's
 // process and reifies wearing no pid at all (cli.ts) — a child has no
 // process of its own to claim.
@@ -16,7 +16,8 @@
 
 export type Seat = {
   eid: string
-  num: number
+  num?: number
+  at?: string
   pid?: number | null
   id?: string | null
 }
@@ -32,6 +33,10 @@ export type Seat = {
 // rows at all falls back to bare recency.
 export let served = (seats: Seat[], pid?: number | null): Seat | undefined => {
   if (pid == null) return undefined
-  let worn = seats.filter((s) => s.pid == pid).sort((a, b) => b.num - a.num)
+  let worn = seats.filter((s) => s.pid == pid).sort((a, b) =>
+    (b.at ?? '').localeCompare(a.at ?? '') ||
+    (!a.at && !b.at ? (b.num ?? 0) - (a.num ?? 0) : 0) ||
+    b.eid.localeCompare(a.eid)
+  )
   return worn.find((s) => s.id) ?? worn[0]
 }

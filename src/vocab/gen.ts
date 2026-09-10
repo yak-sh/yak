@@ -332,7 +332,8 @@ export let emit = (a: ReturnType<typeof assemble>): string => {
     '',
   )
   out.push(
-    '// The human id prefixes: curated for the kinds people type daily.',
+    '// Display prefixes only: kindOf() chooses one when a num exists.',
+    '// Numbers are requested per apply, never triggered by a component.',
     'export let prefix: Record<string, string> = {',
   )
   for (let name of a.compOrder) {

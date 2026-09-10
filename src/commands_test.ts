@@ -209,6 +209,7 @@ Deno.test('fix: a bare id spawns, words file a task first', () => {
   // context, the sole repo-bearing project routes it (the spawn needs
   // a checkout)
   let f = run('fix the toolbar clips', ctx())
+  assertEquals(f.changes!.some((c) => c.$num), false)
   assertEquals(f.spawn, f.changes![0].eid)
   assertEquals(
     Object.fromEntries(f.changes!.map((c) => [c.name, c.comp])).filed,
@@ -319,6 +320,7 @@ Deno.test('chat starts a taskless model with an optional multiline prompt', () =
 
 Deno.test('comment writes on the focus and reads the shell body convention', () => {
   let inline = run('comment please include the migration', ctx(T, 'sess-x'))
+  assertEquals(inline.changes!.filter((c) => c.$num).length, 1)
   assertEquals(
     inline.changes!.find((c) => c.name == 'comment')!.comp,
     { target: T },
@@ -821,4 +823,16 @@ Deno.test('new adopts each board equality through its routed component', () => {
   assertEquals(made.filed, { domain: 'Ops' })
   assertEquals(made.review, { verdict: 'approved' })
   assertEquals(made.task, {})
+})
+
+Deno.test('human new-task gestures request handles', () => {
+  for (
+    let command of [
+      'new Human task',
+      'task Human task',
+    ]
+  ) {
+    let out = run(command, ctx())
+    assertEquals(out.changes!.filter((c) => c.$num).length, 1, command)
+  }
 })

@@ -2,8 +2,9 @@
 // comment relay's mint/guards, and the sweep predicate — against an
 // in-memory db and a capture-script mailer (no network, no real mail).
 // The native path runs against a captured fetch; creds here are dummies.
+import { applyNumbered } from './testdb.ts'
 Deno.env.set('DB_PATH', ':memory:')
-let { apply } = await import('./db.ts')
+
 let { open } = await import('./store/sqlite.ts')
 let { db } = await import('./live_db.ts')
 let { sentences } = await import('./edge.ts')
@@ -72,7 +73,7 @@ let erow = (eid: string) =>
 // A person with an alias and an address, minted through the wire.
 let somebody = (slug: string, address?: string) => {
   let eid = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid, name: 'doc', comp: { title: slug } },
     { eid, name: 'person', comp: {} },
     { eid, name: 'alias', comp: { slug } },
@@ -129,7 +130,7 @@ Deno.test('mailed: delivers, stamps the receipt, sweep replay is a no-op', async
   Deno.env.set('TASKS_MAIL_CMD', mailer(dir))
   let to = somebody('op', 'op@x.test')
   let m = uid()
-  apply(
+  applyNumbered(
     db,
     [
       { eid: m, name: 'doc', comp: { title: 'hello', body: 'the body' } },
@@ -150,7 +151,11 @@ Deno.test('mailed: delivers, stamps the receipt, sweep replay is a no-op', async
     /--to op@x.test --from sender@bot.test hello :: the body/,
   )
   // the audit is denormalized: a later address edit rewrites nothing
-  apply(db, [{ eid: to, name: 'email', comp: { address: 'moved@x.test' } }])
+  applyNumbered(db, [{
+    eid: to,
+    name: 'email',
+    comp: { address: 'moved@x.test' },
+  }])
   assertEquals(row(m).to_addr, 'op@x.test')
   // a sweep replaying an acted row must not deliver twice
   await mailed(cast)(m, {})
@@ -161,7 +166,7 @@ Deno.test('mailed: failure and misconfiguration stamp errors, visibly', async ()
   let dir = Deno.makeTempDirSync()
   Deno.env.set('TASKS_MAIL_CMD', mailer(dir, true))
   let m = uid()
-  apply(
+  applyNumbered(
     db,
     [
       { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
@@ -175,7 +180,7 @@ Deno.test('mailed: failure and misconfiguration stamp errors, visibly', async ()
   assertMatch(String(erow(m)?.message), /exit 1: boom/)
   assertMatch(String(erow(m)?.at), /T/) // ran, failed — no retry storm
   let noAddr = uid()
-  apply(
+  applyNumbered(
     db,
     [
       { eid: noAddr, name: 'doc', comp: { title: 's', body: 'b' } },
@@ -190,7 +195,7 @@ Deno.test('mailed: failure and misconfiguration stamp errors, visibly', async ()
   assertEquals(row(noAddr).to_addr, null) // nothing resolved, nothing claimed
   Deno.env.delete('TASKS_MAIL_CMD')
   let bare = uid()
-  apply(
+  applyNumbered(
     db,
     [
       { eid: bare, name: 'doc', comp: { title: 's', body: 'b' } },
@@ -206,7 +211,7 @@ Deno.test('mailed: failure and misconfiguration stamp errors, visibly', async ()
 
 Deno.test('the envelope data never rides the wire', () => {
   let m = uid()
-  apply(
+  applyNumbered(
     db,
     [
       { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
@@ -238,7 +243,7 @@ Deno.test('the envelope data never rides the wire', () => {
 // The relay fixture: an addressed project, its task, and a commenter.
 let fixture = () => {
   let proj = uid(), task = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: proj, name: 'doc', comp: { title: 'Venture' } },
     { eid: proj, name: 'project', comp: {} },
     { eid: proj, name: 'email', comp: { address: 'venture@x.test' } },
@@ -257,7 +262,7 @@ let fixture = () => {
 }
 let comment = (target: string, writer?: string) => {
   let c = uid()
-  apply(
+  applyNumbered(
     db,
     [
       { eid: c, name: 'doc', comp: { title: '', body: 'a note' } },
@@ -303,7 +308,7 @@ Deno.test('fanout: mints to the project REFERENCE, once, with the receipt', () =
 Deno.test('fanout: self-echo and the unaddressed stay home', () => {
   let { proj, task } = fixture()
   let sess = uid()
-  apply(db, [{
+  applyNumbered(db, [{
     eid: sess,
     name: 'session',
     comp: { id: `op-${sess}`, actor: proj },
@@ -312,7 +317,7 @@ Deno.test('fanout: self-echo and the unaddressed stay home', () => {
   fanout(cast)(mine, { target: task })
   assertEquals(mintedFor(mine).length, 0) // the operator's own words
   let bare = uid(), t2 = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: bare, name: 'doc', comp: { title: 'NoMail' } },
     { eid: bare, name: 'project', comp: {} },
     { eid: t2, name: 'doc', comp: { title: 'quiet work' } },
@@ -327,7 +332,7 @@ Deno.test('fanout: self-echo and the unaddressed stay home', () => {
 Deno.test('fanout: commentary born with a task stays in its filing event', () => {
   let { proj } = fixture()
   let filed = uid(), c = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: filed, name: 'doc', comp: { title: 'the filed work' } },
     { eid: filed, name: 'task', comp: {} },
     { eid: filed, name: 'filed', comp: { project: proj } },
@@ -351,7 +356,7 @@ Deno.test('fanout: commentary born with a task stays in its filing event', () =>
     where ${OWNED}
   `).run(filed)
   let later = uid(), sess = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: sess, name: 'session', comp: { id: 'S-fanout' } },
     { eid: filed, name: 'claim', comp: { session: sess } },
     { eid: later, name: 'doc', comp: { title: '', body: 'new words' } },
@@ -367,7 +372,7 @@ Deno.test('fanout: commentary born with a task stays in its filing event', () =>
 Deno.test('fanout: the birth window is one second, either side of it', () => {
   let { proj } = fixture()
   let target = uid(), inside = uid(), outside = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: target, name: 'doc', comp: { title: 'the work' } },
     { eid: target, name: 'task', comp: {} },
     { eid: target, name: 'filed', comp: { project: proj } },
@@ -425,7 +430,7 @@ Deno.test('mailed: reply_to resolves to --in-reply-to at delivery', async () => 
   let dir = Deno.makeTempDirSync()
   Deno.env.set('TASKS_MAIL_CMD', mailer(dir))
   let orig = uid()
-  apply(
+  applyNumbered(
     db,
     [
       { eid: orig, name: 'doc', comp: { title: 'question', body: 'asked' } },
@@ -443,7 +448,7 @@ Deno.test('mailed: reply_to resolves to --in-reply-to at delivery', async () => 
   db.prepare(`update mail set message_id = ? where ${OWNED}`)
     .run('msg:123:<orig-id@y.test>', orig)
   let reply = uid()
-  apply(
+  applyNumbered(
     db,
     [
       { eid: reply, name: 'doc', comp: { title: 'Re: question', body: 'a' } },
@@ -464,7 +469,7 @@ Deno.test('mailed: reply_to resolves to --in-reply-to at delivery', async () => 
   )
   // replying to our OWN sent mail threads through sent_id
   let sent = uid()
-  apply(
+  applyNumbered(
     db,
     [
       { eid: sent, name: 'doc', comp: { title: 'opener', body: 'b' } },
@@ -478,7 +483,7 @@ Deno.test('mailed: reply_to resolves to --in-reply-to at delivery', async () => 
   db.prepare(`update mail set sent_id = ? where ${OWNED}`)
     .run('cf-abc@sender', sent)
   let follow = uid()
-  apply(
+  applyNumbered(
     db,
     [
       { eid: follow, name: 'doc', comp: { title: 'Re: opener', body: 'c' } },
@@ -496,7 +501,7 @@ Deno.test('mailed: reply_to resolves to --in-reply-to at delivery', async () => 
   assertMatch(mails(dir).at(-1)!, /--in-reply-to cf-abc@sender Re: opener/)
   // no id resolvable: delivered unthreaded, never an error
   let dark = uid()
-  apply(
+  applyNumbered(
     db,
     [
       { eid: dark, name: 'doc', comp: { title: 'unthreadable', body: 'd' } },
@@ -532,7 +537,7 @@ Deno.test('apply stores only the deliverable fleet address (T-5958)', () => {
   let vendor = somebody('vendor', 'a_b@vendor.test')
   assertEquals(addressOf(vendor), 'a_b@vendor.test')
   // A later patch of the same entity's address is canonicalized too.
-  apply(db, [{
+  applyNumbered(db, [{
     eid: cafe,
     name: 'email',
     comp: { address: 'CafE_Car@Bot.Test' },
@@ -629,7 +634,7 @@ Deno.test('mailed: native send stamps sent_id, threads, logs dir=out', async () 
   )
   try {
     let orig = uid()
-    apply(
+    applyNumbered(
       db,
       [
         { eid: orig, name: 'doc', comp: { title: 'q', body: 'asked' } },
@@ -642,7 +647,7 @@ Deno.test('mailed: native send stamps sent_id, threads, logs dir=out', async () 
     db.prepare(`update mail set message_id = ? where ${OWNED}`)
       .run('msg:9:<orig@y.test>', orig)
     let m = uid()
-    apply(
+    applyNumbered(
       db,
       [
         { eid: m, name: 'doc', comp: { title: 'Re: q', body: 'answered' } },
@@ -694,7 +699,7 @@ Deno.test('mailed: native failure and a missing from stamp errors', async () => 
   let { restore } = netStub(() => ({ success: false, errors: ['nope'] }))
   try {
     let m = uid()
-    apply(
+    applyNumbered(
       db,
       [
         { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
@@ -711,7 +716,7 @@ Deno.test('mailed: native failure and a missing from stamp errors', async () => 
     // An author with no address cannot borrow one: refused and stamped,
     // where it used to go out signed by the fleet default (T-9489).
     let bare = uid()
-    apply(
+    applyNumbered(
       db,
       [
         { eid: bare, name: 'doc', comp: { title: 's', body: 'b' } },
@@ -740,7 +745,7 @@ Deno.test('mailed: $TASKS_MAIL_CMD wins over the native env', async () => {
   let { hits, restore } = netStub(() => ({ success: true }))
   try {
     let m = uid()
-    apply(
+    applyNumbered(
       db,
       [
         { eid: m, name: 'doc', comp: { title: 'seam', body: 'held' } },
@@ -774,7 +779,7 @@ Deno.test('mailed: a fleet recipient delivers locally — no send, no out-log', 
   try {
     let ops = somebody('ops', 'ops@bot.test')
     let m = uid()
-    apply(
+    applyNumbered(
       db,
       [
         { eid: m, name: 'doc', comp: { title: 'ping', body: 'hi there' } },
@@ -792,7 +797,7 @@ Deno.test('mailed: a fleet recipient delivers locally — no send, no out-log', 
     assertMatch(String(r.message_id), /^local:\d+:/) // the never-send mark
     assertMatch(String(r.received_at), /T/) // arrived
     assertMatch(String(drow(m)?.at), /T/) // delivered, and when
-    assertEquals(Number(r.verified), 1) // apply() authenticated the author
+    assertEquals(Number(r.verified), 1) // applyNumbered() authenticated the author
     assertEquals(r.target, ops) // aimed at the recipient's inbox
     // The author signs it, even though TASKS_MAIL_FROM is set — the env
     // default no longer speaks for anyone (T-9489).
@@ -824,7 +829,7 @@ Deno.test('mailed: a fleet recipient delivers locally — no send, no out-log', 
 
 Deno.test('named: an id names its entity, and only under its own prefix', () => {
   let s = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: s, name: 'doc', comp: { title: 'a session' } },
     { eid: s, name: 'session', comp: { id: 'sess-named' } },
   ])
@@ -848,7 +853,7 @@ Deno.test('mailed: a letter to S-<n> delivers to that session, in-graph', async 
   let { hits, restore } = netStub(() => ({ success: true }))
   try {
     let s = uid()
-    apply(db, [
+    applyNumbered(db, [
       { eid: s, name: 'doc', comp: { title: 'the session' } },
       { eid: s, name: 'session', comp: { id: 'sess-deliver' } },
     ])
@@ -856,7 +861,7 @@ Deno.test('mailed: a letter to S-<n> delivers to that session, in-graph', async 
       num: number
     }).num
     let m = uid()
-    apply(
+    applyNumbered(
       db,
       [
         { eid: m, name: 'doc', comp: { title: 'ping', body: 'you there?' } },
@@ -895,7 +900,7 @@ Deno.test('named: the address book outranks the derivation', async () => {
   let { restore } = netStub(() => ({ success: true }))
   try {
     let s = uid()
-    apply(db, [
+    applyNumbered(db, [
       { eid: s, name: 'doc', comp: { title: 'shadowed' } },
       { eid: s, name: 'session', comp: { id: 'sess-shadowed' } },
     ])
@@ -905,7 +910,7 @@ Deno.test('named: the address book outranks the derivation', async () => {
     // Somebody books the id-shaped address for themselves.
     let squatter = somebody('squatter', `S-${n}@bot.test`)
     let m = uid()
-    apply(
+    applyNumbered(
       db,
       [
         { eid: m, name: 'doc', comp: { title: 'to whom', body: 'x' } },
@@ -929,7 +934,7 @@ Deno.test('mailed: a book entry Cloudflare would bounce still lands at home', as
   try {
     let p = somebody('under_bot', 'under_score@bot.test')
     let m = uid()
-    apply(
+    applyNumbered(
       db,
       [
         { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
@@ -958,12 +963,12 @@ Deno.test('mailed: a book entry Cloudflare would bounce still lands at home', as
 Deno.test('mailed: local delivery keeps a relay mail aimed at its task', async () => {
   let t = uid()
   somebody('relayed', 'relayed@bot.test')
-  apply(db, [
+  applyNumbered(db, [
     { eid: t, name: 'doc', comp: { title: 'the work' } },
     { eid: t, name: 'task', comp: {} },
   ])
   let m = uid()
-  apply(
+  applyNumbered(
     db,
     [
       { eid: m, name: 'doc', comp: { title: '[T] the work', body: 'a note' } },
@@ -983,7 +988,7 @@ Deno.test('mailed: an external address in the book still rides the boundary', as
   Deno.env.set('TASKS_MAIL_CMD', mailer(dir))
   somebody('owner', 'owner@ext.test')
   let m = uid()
-  apply(
+  applyNumbered(
     db,
     [
       { eid: m, name: 'doc', comp: { title: 'to the owner', body: 'words' } },
@@ -1003,7 +1008,7 @@ Deno.test('mailed: concurrent fires deliver once (the boot-sweep race)', async (
   let dir = Deno.makeTempDirSync()
   Deno.env.set('TASKS_MAIL_CMD', mailer(dir))
   let m = uid()
-  apply(
+  applyNumbered(
     db,
     [
       { eid: m, name: 'doc', comp: { title: 'once', body: 'only' } },
@@ -1029,7 +1034,7 @@ Deno.test('the sender is the author, in both directions and unborrowable', () =>
 
   // alpha writes to beta, and tries to sign the letter as beta
   let out = uid()
-  apply(
+  applyNumbered(
     db,
     [
       { eid: out, name: 'doc', comp: { title: 'hello', body: 'b' } },
@@ -1047,7 +1052,7 @@ Deno.test('the sender is the author, in both directions and unborrowable', () =>
 
   // beta answers — signed by beta, not by the address it is answering
   let back = uid()
-  apply(
+  applyNumbered(
     db,
     [
       { eid: back, name: 'doc', comp: { title: 'Re: hello', body: 'b' } },
@@ -1083,7 +1088,7 @@ Deno.test('nothing signs by fallback: the relay, and the unattributed write', as
   // An unattributed write signs nothing at all, and delivery refuses it
   // rather than letting it speak as the owner.
   let m = uid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
     { eid: m, name: 'mail', comp: {} },
     { eid: m, name: 'deliver', comp: { to: 'x@y.test' } },
@@ -1100,4 +1105,16 @@ Deno.test('nothing signs by fallback: the relay, and the unattributed write', as
   )
   await mailed(cast)(m, {})
   assertMatch(String(erow(m)?.message), /no sender.*no author/)
+})
+
+Deno.test('a num-less session address round trips without minting an address-book shadow', async () => {
+  let { apply, addressEntity, human, readComp } = await import('./db.ts')
+  let eid = crypto.randomUUID()
+  apply(db, [{ eid, name: 'session', comp: { id: eid } }])
+  let addr = `${human(db, eid)}@bot.test`
+  assertEquals(addressOf(eid), addr)
+  assertEquals(addressOf(human(db, eid)), addr)
+  assertEquals(named(addr), eid)
+  assertEquals(addressEntity(db, addr), eid)
+  assertEquals(readComp(db, eid, 'entity')?.num, null)
 })

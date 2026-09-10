@@ -568,13 +568,10 @@ let report = (
   }
   if (!targets.size) return []
 
-  let { num } = db.prepare('select num from entity where eid = ?').get(
-    eid,
-  ) as { num: number }
   let gist = gistOf(row.final_text)
   let commits = commitShas(row)
   let body = [
-    `S-${num} ${status}${
+    `${human(db, eid)} ${status}${
       row.exit_code == null ? '' : ` · exit ${row.exit_code}`
     }`,
     ...(commits.length ? [`commits: ${commits.join(' ')}`] : []),
@@ -731,21 +728,19 @@ export let projectRepo = (
   }
 }
 
-let sidOf = (row: Row) => {
-  let e = db.prepare('select num from entity where eid = ?')
-    .get(String(row.eid)) as { num: number } | undefined
-  return e ? `S-${e.num}` : undefined
-}
+// A checkout's identity never changes when a human later requests a num.
+let sidOf = (row: Row) => String(row.eid)
 
 // A session owns the tree it CUT, and says so in its branch: spawn and regrow
-// both name it `session/S-N`. Any other branch on the row is the caller's own
+// both name it `session/<eid>` (legacy trees used `session/S-N`). Any other branch on the row is the caller's own
 // (`task spawn --worktree <path>`) — a tree we neither remove nor recreate,
 // because attaching borrows a checkout, it does not adopt one. A swept row has
 // shed its branch (null), and is ours to regrow.
 let owns = (row: Row) => {
   let branch = row.branch ? String(row.branch) : ''
   let sid = sidOf(row)
-  return !branch || (!!sid && branch == `session/${sid}`)
+  return !branch || branch == `session/${sid}` ||
+    branch == `session/${human(db, String(row.eid))}`
 }
 
 // The caller's tree, judged once at the spawn door so a bad `--worktree` is a
@@ -781,13 +776,10 @@ let commitShas = (row: Row): string[] => {
     let branch = String(row.branch ?? '')
     let base = String(row.base_revision ?? '')
     if (!cwd || !branch || !base) return []
-    let num = (db.prepare('select num from entity where eid = ?')
-      .get(String(row.eid)) as { num: number } | undefined)?.num
-    if (num == null) return []
     let out = gitSync(cwd, [
       'log',
       '--format=%h',
-      `--grep=Tasks-Session: S-${num} `,
+      `--grep=Tasks-Session: .* ${String(row.eid)}$`,
       `${base}..${branch}`,
     ])
     if (out.code) return []
@@ -909,9 +901,7 @@ let regrow = async (row: Row) => {
   if (!owns(row)) throw new Error(`attached worktree is gone: ${row.cwd}`)
   let repo = repoOf(row)
   if (!repo) throw new Error("the task's project has no repo")
-  let { num } = db.prepare('select num from entity where eid = ?')
-    .get(String(row.eid)) as { num: number }
-  let sid = `S-${num}`
+  let sid = row.cwd ? basename(String(row.cwd)) : human(db, String(row.eid))
   // Rows cleaned before the visible-root migration shed cwd. They were born
   // under the old convention, so deriving that path is the only way to keep
   // their provider thread resumable. New rows retain the path they were born
@@ -2036,7 +2026,9 @@ export let spawned =
     let repo = found
     if (!project && !nativeRun) {
       return fail(
-        `T-${task!.num} has no project; ${row.spawn_provider} requires a ` +
+        `${
+          human(db, String(row.requested_task))
+        } has no project; ${row.spawn_provider} requires a ` +
           'repo-backed project',
       )
     }
@@ -2087,9 +2079,7 @@ export let spawned =
       `Acting as ${voice.comps.doc?.title ?? human(db, voice.eid)} (${
         human(db, voice.eid)
       })${project ? ` for ${human(db, String(project))}` : ''}.`
-    let { num } = db.prepare('select num from entity where eid = ?')
-      .get(eid) as { num: number }
-    let sid = `S-${num}`
+    let sid = eid
     // `task spawn --worktree <path>`: the request already names a tree, riding
     // in as worktree.cwd. The session ATTACHES to it — on the branch it stands
     // on, with nothing created here and nothing swept later (owns()) — because
@@ -2116,7 +2106,7 @@ export let spawned =
           | { body: string }
           | undefined)?.body
         : undefined,
-      task && `T-${task.num}: ${task.title}`,
+      task && `${human(db, String(row.requested_task))}: ${task.title}`,
       task?.body,
       // A task gated by open `requires` blockers arms the D-21448 park loop: do
       // the unblocked part now, else `task park` and end the turn — the claim is
@@ -2124,14 +2114,14 @@ export let spawned =
       // blocker lands (the blockers are listed with status in the boot digest).
       // Reaches EVERY gated-task spawn, not just the sweep's parked parents.
       task && gatedTask(String(row.requested_task)) && PARK_DIRECTIVE,
-      task && ending(`T-${task.num}`, !!workspace),
+      task && ending(human(db, String(row.requested_task)), !!workspace),
     ].filter(Boolean).join('\n\n')
     let job: Launch = {
       persona: worn,
       prompt,
       instruction: [worn, prompt].filter(Boolean).join('\n\n'),
       session_id: String(row.id),
-      task: task ? `T-${task.num}` : undefined,
+      task: task ? human(db, String(row.requested_task)) : undefined,
       ...workspace,
       model,
       effort: row.spawn_effort ? String(row.spawn_effort) : undefined,
@@ -2253,8 +2243,6 @@ let installTrailer = async (tree: string, eid: string) => {
       tree,
       await git(tree, ['rev-parse', '--git-path', 'hooks']),
     )
-    let { num } = db.prepare('select num from entity where eid = ?')
-      .get(eid) as { num: number }
     Deno.mkdirSync(dir, { recursive: true })
     // Preserve the repo's other hooks (pre-commit, pre-push, …) beside ours.
     try {
@@ -2272,7 +2260,7 @@ let installTrailer = async (tree: string, eid: string) => {
       hook,
       `#!/bin/sh\n` +
         `grep -q '^Tasks-Session: ' "$1" || ` +
-        `printf '\\nTasks-Session: S-${num} ${eid}\\n' >> "$1"\n` +
+        `printf '\\nTasks-Session: ${human(db, eid)} ${eid}\\n' >> "$1"\n` +
         `[ -x '${orig}/prepare-commit-msg' ] && ` +
         `exec '${orig}/prepare-commit-msg' "$@"\n:\n`,
     )

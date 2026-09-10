@@ -1,18 +1,19 @@
 // Ranked storage contracts over the fleet's real layout. The native KNN is
 // injected; anchor hash validation and all package SQL/gathering are real.
+import { applyNumbered } from './testdb.ts'
 import { assert, assertEquals } from '@std/assert'
 import { askOf, askRows, evalGraph, setRanker } from './graph_query.ts'
 import { parseQuery } from './query.ts'
 import { type Similarity, similarRows } from './ranked.ts'
 import { hash, MODEL, stored, textOf } from './embed.ts'
-import { apply, eager, rowsOf, search, searchRead } from './db.ts'
+import { eager, rowsOf, search, searchRead } from './db.ts'
 import { bareDb } from './testdb.ts'
 import { uuid } from './types.ts'
 
 let fixture = () => {
   let db = bareDb()
   let ids = Array.from({ length: 5 }, uuid)
-  apply(
+  applyNumbered(
     db,
     ids.flatMap((eid, i) => [
       {
@@ -82,7 +83,7 @@ Deno.test('ranked read: semantic owns order and self exclusion, storage owns hyd
 
 Deno.test('ranked read: stale anchor is not reused; fresh text is a read-only vector view', async () => {
   let { db, ids, provider, calls, embedded } = fixture()
-  apply(db, [{ eid: ids[0], name: 'doc', comp: { body: 'changed' } }])
+  applyNumbered(db, [{ eid: ids[0], name: 'doc', comp: { body: 'changed' } }])
   let asked = parseQuery(`.near=${ids[0]} .order=similar`)
   assertEquals(await similarRows(db, asked, 2, provider), [])
   assertEquals(embedded, ['rankproof 0\nchanged'])
@@ -125,7 +126,7 @@ Deno.test('ranked read: actual semantic door pages by entity num, not owner or s
 Deno.test('ranked FTS: cursors cross the stable retirement boundary before hydration', () => {
   let { db, ids } = fixture()
   let project = uuid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: project, name: 'project', comp: {} },
     { eid: project, name: 'archived', comp: {} },
     { eid: ids[0], name: 'filed', comp: { project } },
@@ -155,7 +156,7 @@ Deno.test('ranked FTS: cursors cross the stable retirement boundary before hydra
 Deno.test('ranked FTS: doc wins over content; comments carry target title and snippets', () => {
   let { db, ids } = fixture()
   let comment = uuid(), session = uuid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: session, name: 'session', comp: { id: uuid() } },
     { eid: ids[1], name: 'entry', comp: { session, seq: 1 } },
     {
@@ -192,7 +193,7 @@ slow(
     let db = vectorDb()
     let [anchor, live, unsafe, spoke] = Array.from({ length: 4 }, uuid)
     let vec = axes(1, 0)
-    apply(
+    applyNumbered(
       db,
       [anchor, live, unsafe, spoke].map((eid) => ({
         eid,
@@ -206,7 +207,7 @@ slow(
         .run(eid, MODEL, hash('nativeproof'), new Uint8Array(vec.buffer))
     }
     refreshVector(db)
-    apply(db, [
+    applyNumbered(db, [
       { eid: unsafe, name: 'quarantined', comp: {} },
       { eid: spoke, name: 'comment', comp: { target: anchor } },
     ])

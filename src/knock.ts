@@ -48,7 +48,7 @@ let wordsFor = (target: string): string => {
 // a preference — with no operator reachable the ladder must descend
 // to mail, never settle for a stamp nobody hears. Newest first
 // among the eligible, because that is the order the doors close in: a
-// /clear leaves the old row behind and the higher num is the live one.
+// /clear leaves the old row behind and the latest creation is the live one.
 let awake = (to: string): { eid: string; num: number } | undefined =>
   (db.prepare(
     `select e.eid as eid, e.num, s.operator,
@@ -56,7 +56,7 @@ let awake = (to: string): { eid: string; num: number } | undefined =>
             ${refEid('s.role')} as role
      from session s join entity e on e.id = s.entity
      where e.eid = ? or s.actor = ${idOf}
-     order by e.num desc`,
+     order by e.id desc`,
   ).all(to, to) as ({ eid: string; num: number } & Record<string, unknown>)[])
     .filter((s) => s.eid == to || isOperator(s))
     .find((s) => reachable(s.eid))
@@ -88,7 +88,7 @@ export let knocked =
       // 1: someone with that identity is reachable — the cast already
       // delivered (channel plugin / comms bus); the stamp names them.
       let up = awake(to)
-      if (up) return done(`cast S-${up.num}`)
+      if (up) return done(`cast ${human(db, up.eid)}`)
       // 1b: a settled managed session still owns a compatibility door:
       // commented() can wake it from a direct comment. A knock takes that
       // existing door rather than growing a second mechanism, exactly as rung

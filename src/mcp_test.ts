@@ -1,5 +1,6 @@
 // The MCP registry's contracts: schemas, protocol errors, truthful write
 // results, command dereferencing, and bounded list rendering.
+import { applyNumbered } from './testdb.ts'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import {
@@ -38,7 +39,7 @@ import { DatabaseSync } from './store/sqlite.ts'
 import { workCandidates } from './work.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, depsOf, journalOf, mutate: applyMutation, snapshot, touch } =
+let { depsOf, journalOf, mutate: applyMutation, snapshot, touch } =
   await import('./db.ts')
 let { open } = await import('./store/sqlite.ts')
 let { freshDb } = await import('./testdb.ts')
@@ -123,7 +124,7 @@ Deno.test('command: set resolves a human reference before the write', () => {
 Deno.test('task_update adds and removes empty writable facets', async () => {
   let { db, io } = graph()
   let verifier = crypto.randomUUID(), muted = crypto.randomUUID()
-  apply(db, [
+  applyNumbered(db, [
     { eid: verifier, name: 'session', comp: { id: 'verifier' } },
     { eid: muted, name: 'project', comp: {} },
   ])
@@ -163,7 +164,7 @@ Deno.test("a session-named tool call is not attributed to a client's person", as
   let { db, io } = graph()
   let jeff = crypto.randomUUID(), browser = crypto.randomUUID()
   let project = crypto.randomUUID(), session = crypto.randomUUID()
-  apply(db, [
+  applyNumbered(db, [
     { eid: jeff, name: 'person', comp: {} },
     { eid: browser, name: 'client', comp: { actor: jeff } },
     { eid: project, name: 'project', comp: {} },
@@ -194,7 +195,7 @@ Deno.test('task_update expands derived lifecycle status with attribution', async
   let { db, io } = graph()
   let task = crypto.randomUUID(), session = crypto.randomUUID()
   let actor = crypto.randomUUID()
-  apply(db, [
+  applyNumbered(db, [
     { eid: task, name: 'doc', comp: { title: 'lifecycle', body: '' } },
     { eid: task, name: 'task', comp: {} },
     { eid: task, name: 'filed', comp: { priority: 1 } },
@@ -256,7 +257,7 @@ Deno.test('task_update lifecycle refusals leave the target untouched', async () 
   let { db, io } = graph()
   let task = crypto.randomUUID(), hidden = crypto.randomUUID()
   let writer = crypto.randomUUID(), holder = crypto.randomUUID()
-  apply(db, [
+  applyNumbered(db, [
     { eid: task, name: 'doc', comp: { title: 'contested', body: 'before' } },
     { eid: task, name: 'task', comp: {} },
     { eid: writer, name: 'session', comp: { id: 'writer' } },
@@ -268,7 +269,7 @@ Deno.test('task_update lifecycle refusals leave the target untouched', async () 
   let current = () => rows(snapshot(db)).find((r) => r.eid == task)!
   let taskId = idOf(current())
   let hiddenId = idOf(rows(snapshot(db)).find((r) => r.eid == hidden)!)
-  apply(db, [{ eid: hidden, name: 'quarantined', comp: {} }])
+  applyNumbered(db, [{ eid: hidden, name: 'quarantined', comp: {} }])
 
   await protocol(io, async (client) => {
     for (
@@ -371,7 +372,7 @@ Deno.test('command: setting a wake returns every pending wake for its session', 
   let session = crypto.randomUUID()
   let target = crypto.randomUUID()
   let existing = crypto.randomUUID()
-  apply(db, [
+  applyNumbered(db, [
     { eid: session, name: 'session', comp: { id: 'wake-reader' } },
     { eid: target, name: 'doc', comp: { title: 'Return here' } },
     { eid: target, name: 'task', comp: {} },
@@ -410,7 +411,7 @@ Deno.test('task_context surfaces agent input without human read-state', async ()
   let s = crypto.randomUUID()
   let t = crypto.randomUUID()
   let c = crypto.randomUUID()
-  apply(db, [
+  applyNumbered(db, [
     { eid: s, name: 'session', comp: { id: 'inbox-reader' } },
     { eid: t, name: 'doc', comp: { title: 'claimed work', body: '' } },
     { eid: t, name: 'task', comp: {} },
@@ -458,12 +459,12 @@ Deno.test('work_start bootstraps without a session id and resumes it', async () 
     assertEquals(started.isError, undefined)
     assertMatch(
       said(started),
-      /^session: S-\d+\nsid: [0-9a-f-]+\nstate: created/m,
+      /^session: [0-9a-f]{8}\nsid: [0-9a-f-]+\nstate: created/m,
     )
     assertEquals(said(started).includes(WORKER_PROTOCOL), true)
     assertEquals(said(started).split(WORKER_PROTOCOL).length, 2)
     assertMatch(said(started), /# Context\n# tasks · session/)
-    session = said(started).match(/^session: (S-\d+)$/m)![1]
+    session = said(started).match(/^session: ([0-9a-f]{8})$/m)![1]
     sid = said(started).match(/^sid: ([^\n]+)$/m)![1]
     assertEquals(
       db.prepare('select id from session').all(),
@@ -492,7 +493,7 @@ Deno.test('work_list exposes bounded human-addressed evaluate, build, and verify
   let { db, io } = graph()
   let project = uuid(), old = uuid(), fresh = uuid(), pending = uuid()
   let builder = uuid(), verify = uuid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: project, name: 'doc', comp: { title: 'Work project', body: '' } },
     { eid: project, name: 'project', comp: {} },
     { eid: old, name: 'doc', comp: { title: 'Old ready', body: '' } },
@@ -512,7 +513,7 @@ Deno.test('work_list exposes bounded human-addressed evaluate, build, and verify
     { eid: verify, name: 'filed', comp: { priority: 1, project } },
     { eid: verify, name: 'accept', comp: { body: 'Run the public door.' } },
   ])
-  apply(
+  applyNumbered(
     db,
     [{
       eid: verify,
@@ -591,7 +592,7 @@ Deno.test('work_list exposes bounded human-addressed evaluate, build, and verify
 Deno.test('task_claim uses the guarded writer mutation and can approve atomically', async () => {
   let { db, io } = graph()
   let project = uuid(), target = uuid()
-  apply(db, [
+  applyNumbered(db, [
     { eid: project, name: 'doc', comp: { title: 'Work', body: '' } },
     { eid: project, name: 'project', comp: {} },
     { eid: target, name: 'doc', comp: { title: 'Candidate', body: '' } },
@@ -711,7 +712,7 @@ Deno.test('concurrent work_start calls converge on one stable identity', async (
         arguments: { session: 'desktop-worker-1' },
       }) as Promise<ToolResult>
     let [a, b] = await Promise.all([call(), call()])
-    let session = said(a).match(/^session: (S-\d+)$/m)![1]
+    let session = said(a).match(/^session: ([0-9a-f]{8})$/m)![1]
     assertMatch(said(b), new RegExp(`^session: ${session}$`, 'm'))
     assertEquals(
       [said(a), said(b)].filter((s) => /state: created/.test(s)).length,
@@ -737,7 +738,7 @@ Deno.test('concurrent anonymous work_start calls mint separate identities', asyn
       >
     let [a, b] = await Promise.all([call(), call()])
     let sessions = [a, b].map((out) =>
-      said(out).match(/^session: (S-\d+)$/m)![1]
+      said(out).match(/^session: ([0-9a-f]{8})$/m)![1]
     )
     let sids = [a, b].map((out) => said(out).match(/^sid: ([^\n]+)$/m)![1])
     assertEquals(new Set(sessions).size, 2)
@@ -769,7 +770,7 @@ Deno.test('work_start preserves its durable identity when context fails', async 
       arguments: {},
     }) as ToolResult
     assertEquals(out.isError, true)
-    assertMatch(said(out), /^worker S-\d+ is durable/)
+    assertMatch(said(out), /^worker [0-9a-f]{8} is durable/)
     assertMatch(said(out), /context index unavailable/)
     assertMatch(said(out), /Its sid is [0-9a-f-]+/)
     let sid = said(out).match(/Its sid is ([0-9a-f-]+)/)![1]
@@ -786,7 +787,7 @@ Deno.test('work_start preserves its durable identity when context fails', async 
       assertEquals(resumed.isError, undefined)
       assertMatch(
         said(resumed),
-        /^session: S-\d+\nsid: [^\n]+\nstate: resumed/m,
+        /^session: [0-9a-f]{8}\nsid: [^\n]+\nstate: resumed/m,
       )
     })
     assertEquals(
@@ -856,7 +857,7 @@ Deno.test('work_start returns a stable retry sid when creation fails', async () 
 Deno.test('graph_query reads the lazy entry partition, ordered and by human id', async () => {
   let { db, io } = graph()
   let s = crypto.randomUUID()
-  apply(db, [{ eid: s, name: 'session', comp: { id: 'runner-1' } }])
+  applyNumbered(db, [{ eid: s, name: 'session', comp: { id: 'runner-1' } }])
   let { eids: [e1] } = append(db, s, [
     { message: { role: 'user' }, content: { body: 'go' } },
   ])
@@ -878,7 +879,11 @@ Deno.test('graph_query reads the lazy entry partition, ordered and by human id',
     assertEquals(hits.every((h) => h.entry.session == s), true)
     // An empty session is empty, not a dropped partition.
     let empty = crypto.randomUUID()
-    apply(db, [{ eid: empty, name: 'session', comp: { id: 'runner-2' } }])
+    applyNumbered(db, [{
+      eid: empty,
+      name: 'session',
+      comp: { id: 'runner-2' },
+    }])
     let none = await client.callTool({
       name: 'graph_query',
       arguments: { query: `.entry.session=${empty}` },
@@ -894,7 +899,7 @@ Deno.test('graph_query reads the lazy entry partition, ordered and by human id',
 Deno.test('the transcript tool renders the graph entry partition', async () => {
   let { db, io } = graph()
   let s = crypto.randomUUID()
-  apply(db, [{
+  applyNumbered(db, [{
     eid: s,
     name: 'session',
     comp: { id: 'runner-1', provider: 'codex', model: 'gpt-x' },
@@ -923,7 +928,7 @@ Deno.test('the transcript tool renders the graph entry partition', async () => {
 Deno.test('task_spawn refuses an undecided proposal without minting a session', async () => {
   let { db, io } = graph()
   let task = crypto.randomUUID()
-  apply(db, [
+  applyNumbered(db, [
     { eid: task, name: 'doc', comp: { title: 'fleet idea' } },
     { eid: task, name: 'task', comp: {} },
     { eid: task, name: 'proposed', comp: {} },
@@ -1088,7 +1093,7 @@ slow(
     let eid = crypto.randomUUID(), verify = crypto.randomUUID()
     let builder = crypto.randomUUID()
     let writer = open(path)
-    apply(writer, [
+    applyNumbered(writer, [
       {
         eid,
         name: 'doc',
@@ -1101,7 +1106,7 @@ slow(
       { eid: verify, name: 'task', comp: {} },
       { eid: verify, name: 'accept', comp: { body: 'Use stdio.' } },
     ])
-    apply(
+    applyNumbered(
       writer,
       [{
         eid: verify,
@@ -1687,7 +1692,7 @@ Deno.test('MCP tools declare and return their text output', async () => {
 Deno.test('graph_query answers a bool as a boolean, not SQLite 0/1', async () => {
   let { db, io } = graph()
   let eid = crypto.randomUUID()
-  apply(db, [
+  applyNumbered(db, [
     { eid, name: 'doc', comp: { title: 'Task Graph' } },
     { eid, name: 'project', comp: {} },
     { eid, name: 'repo', comp: { path: '/home/yaks/code/tasks', push: true } },
@@ -1906,7 +1911,7 @@ slow('MCP modes apply every accepted field and reject conflicts', async () => {
 
       let project = '20000000-0000-4000-8000-000000000001'
       let memory = '20000000-0000-4000-8000-000000000002'
-      apply(g.db, [
+      applyNumbered(g.db, [
         { eid: project, name: 'doc', comp: { title: 'Project' } },
         { eid: project, name: 'project', comp: {} },
         { eid: memory, name: 'doc', comp: { title: 'Memory', body: 'Fact' } },
@@ -2154,7 +2159,7 @@ Deno.test('task_list and graph_query refuse a handle that names nothing', async 
 // a `was` beside comp reaches apply() only because the schema stops stripping
 // it. A stale hash is refused with the newer value intact; a matching hash
 // lands; and no `was` writes unguarded, as every caller does today.
-Deno.test('graph_apply carries a Change.was precondition to apply()', async () => {
+Deno.test('graph_apply carries a Change.was precondition to applyNumbered()', async () => {
   let g = graph()
   let eid = '52000000-0000-4000-8000-000000000001'
   let body = () =>
@@ -2207,12 +2212,12 @@ Deno.test("undo tool reverses an entity's latest batch by human id", async () =>
       ) => [c.name, c.comp]),
     ))
   try {
-    apply(g.db, [
+    applyNumbered(g.db, [
       { eid, name: 'doc', comp: { title: 'undo me', body: '' } },
       { eid, name: 'task', comp: {} },
     ])
     // `done` is the `completed` mark now — the latest batch undo will reverse.
-    apply(g.db, [{ eid, name: 'completed', comp: {} }])
+    applyNumbered(g.db, [{ eid, name: 'completed', comp: {} }])
     let num =
       (g.db.prepare('select num from entity where eid = ?').get(eid) as {
         num: number
@@ -2242,7 +2247,7 @@ Deno.test('MCP lists hide quarantine and task_show requires an opt-in', async ()
   let g = graph()
   try {
     let eid = '51000000-0000-4000-8000-000000000001'
-    apply(g.db, [
+    applyNumbered(g.db, [
       {
         eid,
         name: 'doc',
@@ -2397,7 +2402,7 @@ slow('code_run throws and rejected batches are MCP errors', async () => {
       let rejected = await client.callTool({
         name: 'code_run',
         arguments: {
-          js: `apply({
+          js: `applyNumbered({
             eid: '40000000-0000-4000-8000-000000000001',
             name: 'task',
             comp: {
@@ -2425,8 +2430,8 @@ slow(
     try {
       let a = uuid()
       let b = uuid() // stays empty — the genuinely-empty scope
-      apply(g.db, [{ eid: a, name: 'session', comp: { id: uuid() } }])
-      apply(g.db, [{ eid: b, name: 'session', comp: { id: uuid() } }])
+      applyNumbered(g.db, [{ eid: a, name: 'session', comp: { id: uuid() } }])
+      applyNumbered(g.db, [{ eid: b, name: 'session', comp: { id: uuid() } }])
       let { eids: [e1] } = append(g.db, a, [
         { message: { role: 'user' }, content: { body: 'go' } },
       ])
@@ -2490,7 +2495,7 @@ Deno.test('memory_save guards the body it replaces', async () => {
   let token = (out: ToolResult) => said(out).match(/was: (\w{64})/)?.[1]
   try {
     await protocol(g.io, async (client) => {
-      apply(g.db, [
+      applyNumbered(g.db, [
         { eid: M, name: 'doc', comp: { title: 'Memory', body: 'ONE' } },
         { eid: M, name: 'memory', comp: { scope: null } },
       ])
@@ -2539,7 +2544,7 @@ Deno.test('memory_save guards the body it replaces', async () => {
 
       // An unwritten body reads as '' — not null — so sha('') is its guard.
       // A null-shaped guard here would refuse every time.
-      apply(g.db, [{ eid: M, name: 'doc', comp: { body: '' } }])
+      applyNumbered(g.db, [{ eid: M, name: 'doc', comp: { body: '' } }])
       assertEquals(token(await recall()), sha(''))
       let filled = await save({ body: 'FROM EMPTY', was: sha('') })
       assertEquals(filled.isError, undefined)
@@ -2569,7 +2574,7 @@ Deno.test('$edit through graph_apply: surgical replace, refusals, replace_all', 
   let body = () => rows(snapshot(g.db)).find((r) => r.eid == E)?.comps.doc?.body
   try {
     await protocol(g.io, async (client) => {
-      apply(g.db, [
+      applyNumbered(g.db, [
         { eid: E, name: 'entity', comp: { eid: E, num: 42 } },
         { eid: E, name: 'doc', comp: { title: 'Doc', body: 'fix teh plan' } },
         { eid: E, name: 'task', comp: {} },
@@ -2592,7 +2597,7 @@ Deno.test('$edit through graph_apply: surgical replace, refusals, replace_all', 
       let miss = await edit({ old: 'nope', new: 'x' })
       assertEquals(miss.isError, true)
       assertMatch(said(miss), /not found/)
-      apply(g.db, [{ eid: E, name: 'doc', comp: { body: 'a a' } }])
+      applyNumbered(g.db, [{ eid: E, name: 'doc', comp: { body: 'a a' } }])
       let many = await edit({ old: 'a', new: 'b' })
       assertEquals(many.isError, true)
       assertMatch(said(many), /2 matches/)
@@ -2616,7 +2621,7 @@ Deno.test('$edit through task_update: patches in place, never stored raw', async
   let body = () => rows(snapshot(g.db)).find((r) => r.eid == E)?.comps.doc?.body
   try {
     await protocol(g.io, async (client) => {
-      apply(g.db, [
+      applyNumbered(g.db, [
         { eid: E, name: 'entity', comp: { eid: E, num: 43 } },
         { eid: E, name: 'doc', comp: { title: 'Doc', body: long } },
         { eid: E, name: 'task', comp: {} },
@@ -2671,7 +2676,7 @@ Deno.test('graph_patch: multi-prop V4A across two entities, resolved by id', asy
       ?.comps[name as 'doc']?.[col as 'body']
   try {
     await protocol(g.io, async (client) => {
-      apply(g.db, [
+      applyNumbered(g.db, [
         { eid: A, name: 'entity', comp: { eid: A, num: 71 } },
         {
           eid: A,
@@ -2732,7 +2737,7 @@ Deno.test('task_new defaults the project to the caller (T-16496)', async () => {
   try {
     let P = crypto.randomUUID()
     let S = crypto.randomUUID()
-    apply(g.db, [
+    applyNumbered(g.db, [
       { eid: P, name: 'entity', comp: { eid: P, num: 30 } },
       { eid: P, name: 'doc', comp: { title: 'Bindery', body: '' } },
       { eid: P, name: 'project', comp: {} },
@@ -2760,7 +2765,7 @@ Deno.test('task_new honors an explicit project over the caller (T-16496)', async
     let P = crypto.randomUUID()
     let P2 = crypto.randomUUID()
     let S = crypto.randomUUID()
-    apply(g.db, [
+    applyNumbered(g.db, [
       { eid: P, name: 'entity', comp: { eid: P, num: 30 } },
       { eid: P, name: 'doc', comp: { title: 'Bindery', body: '' } },
       { eid: P, name: 'project', comp: {} },
@@ -2830,7 +2835,7 @@ Deno.test('task_new with a parent creates a bare microtask unless explicitly fil
     let project = crypto.randomUUID(),
       parent = crypto.randomUUID(),
       session = crypto.randomUUID()
-    apply(g.db, [
+    applyNumbered(g.db, [
       { eid: project, name: 'project', comp: {} },
       { eid: parent, name: 'task', comp: {} },
       {
@@ -2859,6 +2864,11 @@ Deno.test('task_new with a parent creates a bare microtask unless explicitly fil
           r.comps.doc?.title == title
         )!
         assert(made.comps.task)
+        assertEquals(
+          made.num > 0,
+          explicit,
+          'only a filed MCP task asks for a handle',
+        )
         if (explicit) {
           assertEquals(made.comps.filed?.project, project)
           assertEquals(made.comps.filed?.priority, 2)

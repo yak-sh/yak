@@ -298,7 +298,7 @@ Deno.test('claim_work: an operator cannot move an existing session cwd or pid', 
     if (managed) {
       writeSession(db, session, {
         origin: 'managed',
-        branch: `session/${human(db, session)}`,
+        branch: `session/${session}`,
       })
     }
     take(db, target, human(db, session))
@@ -332,7 +332,7 @@ Deno.test('client writes cannot relocate an owned managed tree; server regrow ca
   let { db } = world()
   let session = uuid()
   apply(db, [{ eid: session, name: 'session', comp: { id: uuid() } }])
-  for (let branch of [`session/${human(db, session)}`, null, 'borrowed']) {
+  for (let branch of [`session/${session}`, null, 'borrowed']) {
     writeSession(db, session, { origin: 'managed', cwd: '/tree', branch })
     let owned = branch != 'borrowed'
     for (let name of ['session', 'worktree']) {
@@ -449,7 +449,7 @@ Deno.test('claim_work atomically graduates a source Session at its existing iden
       sourceEid,
     ) as { num: number; id: string }
     assertEquals(identity.id, sid)
-    assertEquals(typeof identity.num, 'number')
+    assertEquals(identity.num, null)
     assertEquals(
       cell(
         db,

@@ -345,7 +345,12 @@ let NewForm = ({ kind }: { kind: string }) => {
       ...(doc.title || doc.body
         ? [{ eid, name: 'doc', comp: { ...doc } }]
         : []),
-      { eid, name: kind, comp },
+      {
+        eid,
+        name: kind,
+        comp,
+        $num: ['task', 'board', 'project', 'comment'].includes(kind),
+      },
     )
     navigate(`/${eid}`)
   }

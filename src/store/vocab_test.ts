@@ -194,6 +194,7 @@ Deno.test('a store lists its own word in creation order', async () => {
     mutate(db, {
       entities: [{
         entity: { eid: crypto.randomUUID() },
+        $num: true,
         doc: { title },
         recipe: { title, serves: 2 },
       }],

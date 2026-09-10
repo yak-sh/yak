@@ -4,7 +4,7 @@
 import { type Change } from './types.ts'
 import { fakeClaude } from './door_fake.ts'
 Deno.env.set('DB_PATH', ':memory:')
-let { apply } = await import('./db.ts')
+let { apply, human } = await import('./db.ts')
 let { open } = await import('./store/sqlite.ts')
 let { db } = await import('./live_db.ts')
 let { knocked } = await import('./knock.ts')
@@ -79,7 +79,7 @@ Deno.test('awake operator actor: the cast is the delivery', () => {
     `update session set origin = 'managed', status = 'running' where ${OWNED}`,
   ).run(s)
   let k = knock(task, project)
-  assertMatch(String(drow(k)?.via), /^cast S-\d+$/)
+  assertMatch(String(drow(k)?.via), /^cast [0-9a-f]{8}$/)
   assertEquals(erow(k), undefined)
   db.prepare(`update session set status = 'completed' where ${OWNED}`).run(s)
 })
@@ -130,11 +130,11 @@ Deno.test('an addressed person: the knock rides mail, words and all', () => {
     { eid: c, name: 'comment', comp: { target: task } },
   ])
   let k = knock(task, jeff)
-  assertMatch(String(drow(k)?.via), /^mailed U-\d+$/)
+  assertMatch(String(drow(k)?.via), /^mailed [0-9a-f]{8}$/)
   let m = db.prepare(
     'select d.title, d.body from mail m join doc_value d on d.entity = m.entity',
   ).get() as { title: string; body: string }
-  assertMatch(m.title, /^knock: T-\d+/)
+  assertMatch(m.title, /^knock: [0-9a-f]{8}/)
   assertEquals(m.body, 'need this today')
 })
 
@@ -169,10 +169,7 @@ Deno.test('an operator is a door: external claude hears it, its child does not',
      requested_task = ${idOf} where ${OWNED}`,
   ).run(task, spawn)
   let k = knock(task, project)
-  let { num } = db.prepare('select num from entity where eid = ?').get(op) as {
-    num: number
-  }
-  assertEquals(drow(k)?.via, `cast S-${num}`)
+  assertEquals(drow(k)?.via, `cast ${human(db, op)}`)
   assertEquals(erow(k), undefined)
   c.kill('SIGKILL')
   await c.status
@@ -205,10 +202,7 @@ Deno.test('an actor knock prefers the operator over a newer worktree agent', asy
     comp: { id: 'agent-op', actor: project, pid: agentProc.pid },
   }])
   let k = knock(task, project)
-  let { num } = db.prepare('select num from entity where eid = ?').get(op) as {
-    num: number
-  }
-  assertEquals(drow(k)?.via, `cast S-${num}`)
+  assertEquals(drow(k)?.via, `cast ${human(db, op)}`)
   assertEquals(erow(k), undefined)
   opProc.kill('SIGKILL')
   agentProc.kill('SIGKILL')
@@ -238,13 +232,13 @@ Deno.test('a settled managed session: the knock rides its input door', () => {
 
   let k = knock(task, sess)
   assertEquals(erow(k), undefined)
-  assertMatch(String(drow(k)?.via), /^commented S-/)
+  assertMatch(String(drow(k)?.via), /^commented [0-9a-f]{8}$/)
   // The comment landed ON the session — that IS the input.
   let input = db.prepare(
     `select d.body from comment c join doc_value d on d.entity = c.entity
      where c.target = ${idOf} order by c.rowid desc limit 1`,
   ).get(sess) as { body: string }
-  assertMatch(input.body, /^knock: T-\d+ — the key expires today$/)
+  assertMatch(input.body, /^knock: [0-9a-f]{8} — the key expires today$/)
 })
 
 // An EXTERNAL session that has gone quiet has no run to continue, so it

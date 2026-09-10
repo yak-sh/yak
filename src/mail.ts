@@ -12,13 +12,13 @@
 // native send was assigned). The comment relay mints mails for comments on
 // an addressed project's tasks — the graph's replacement for holdco's
 // delivery.js. SERVER-ONLY (imports db).
-import { apply, human, readComp } from './db.ts'
+import { apply, human, namedAddress, readComp, resolveId } from './db.ts'
 import { link, sentences } from './edge.ts'
 import { db } from './live_db.ts'
 import { delivered, errored, settled, toOf } from './deliver.ts'
 import { commitEffects } from './effects.ts'
 import { type Letter, logOut, native, send } from './mailer.ts'
-import { atFleet, canon, fleetAddress, fleetLocal } from './mailaddr.ts'
+import { atFleet, canon, fleetAddress } from './mailaddr.ts'
 import { type Change } from './types.ts'
 import { isRef } from './props.ts'
 import { entityUrl } from './url.ts'
@@ -69,31 +69,12 @@ let settle = (
   else delivered(eid, outcome.via ?? '', cast)
 }
 
-let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-// A reference the address book can hold: an eid, a human id (U-1, P-26),
-// or an alias slug — the same shapes every reference door takes.
-let eidOf = (ref: string): string | undefined => {
-  let hit = (sql: string, v: string | number) =>
-    (db.prepare(sql).get(v) as { eid: string } | undefined)?.eid
-  if (UUID.test(ref)) return hit('select eid from entity where eid = ?', ref)
-  let m = ref.match(/^[A-Za-z]+-(\d+)$/)
-  if (m) return hit('select eid from entity where num = ?', Number(m[1]))
-  // Any of the entity's handles resolve, not just the primary — a whole-token
-  // membership over the space-delimited `slugs` set (db.ts resolveId).
-  return (db.prepare(
-    `select o.eid as eid from alias join entity o on o.id = alias.entity
-     where slug = ?
-       or instr(' ' || coalesce(slugs, '') || ' ', ' ' || ? || ' ') > 0`,
-  ).get(ref, ref) as { eid: string } | undefined)?.eid
-}
-
 // The address book is one rule: a raw address (it has an @) passes
 // through; anything else must resolve to an entity wearing an email
 // comp. No address on file is an ERROR the caller stamps — never a guess.
 export let addressOf = (to: string): string => {
   if (to.includes('@')) return to
-  let eid = eidOf(to)
+  let eid = resolveId(db, to)
   if (!eid) throw new Error(`no entity: ${to}`)
   let e = db.prepare(`select address from email where ${OWNED}`).get(eid) as
     | { address: string }
@@ -116,16 +97,7 @@ export let addressOf = (to: string): string => {
 // decides an entity's id, so round-tripping through it is what makes the
 // PREFIX binding rather than decorative: T-31@ resolves to nothing when
 // 31 is a session, even though the two share a num.
-export let named = (to: string): string | null => {
-  let local = /^([A-Za-z]+-(\d+))$/i.exec(fleetLocal(to) ?? '')
-  if (!local) return null
-  let row = db.prepare('select eid from entity where num = ?')
-    .get(Number(local[2])) as { eid: string } | undefined
-  if (!row) return null
-  return human(db, row.eid).toLowerCase() == local[1].toLowerCase()
-    ? row.eid
-    : null
-}
+export let named = (to: string): string | null => namedAddress(db, to)
 
 // The address book, reversed and strict — which fleet entity wears this
 // address? Only fleet-domain addresses count as fleet: an external
@@ -405,9 +377,7 @@ export let fanout =
       where d.child = ${idOf}
     `).get(eid)
     ) return
-    let num = (db.prepare('select num from entity where eid = ?').get(
-      target,
-    ) as { num: number } | undefined)?.num
+    let handle = human(db, target)
     let title = (db.prepare(`select title from doc_value where ${OWNED}`).get(
       target,
     ) as { title: string } | undefined)?.title ?? ''
@@ -426,8 +396,8 @@ export let fanout =
                 eid: sid,
                 name: 'doc',
                 comp: {
-                  title: `[T-${num}] ${title}`,
-                  body: `${said}\n\n${entityUrl(`T-${num}`)}`,
+                  title: `[${handle}] ${title}`,
+                  body: `${said}\n\n${entityUrl(handle)}`,
                 },
               },
               { eid: sid, name: 'mail', comp: { target: target } },

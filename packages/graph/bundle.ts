@@ -9,9 +9,10 @@
 // a `null` column is cleared, a `null` component is dropped — so a bundle says
 // what changes and nothing else.
 //
-// Three keys are reserved and never stored as columns. `$delete` and the
+// Wire-only keys are reserved and never stored as columns. `$delete` and the
 // `tombstone` component both mean "this entity dies"; `$was` carries a
-// per-column precondition; `$actor` names who is writing. They are components
+// per-column precondition; `$actor` names who is writing; `$num` requests a
+// human handle from the numbers plugin. They are components
 // in every sense that matters — data associated with an entity — they just
 // live on the wire and inside `apply()` rather than in a table. And that is
 // where they stop: `apply()`'s answer is composed (./compose.ts) with every `$`
@@ -24,8 +25,7 @@
 export type Eid = string
 
 /**
- * An entity's identity: a client-minted `eid`, and the `num` storage mints on
- * first touch. An explicit `null` reports an unnumbered spine; absence makes
+ * An entity's identity: a client-minted `eid`, and an optional human-facing `num`. An explicit `null` reports an unnumbered spine; absence makes
  * no claim about numbering. `num` is optional — it is storage's to hand out,
  * and an adapter that has no use for a small human-facing number never mints one.
  */
@@ -59,7 +59,7 @@ export type Actor = { by?: Eid; via?: Eid }
 /**
  * A patch for one entity. Its identity rides under the `entity` key; every
  * other key names a component mapping to its columns, or `null` to drop that
- * component. The reserved keys `$delete`, `$was` and `$actor` are components
+ * component. The reserved keys `$delete`, `$was`, `$num` and `$actor` are components
  * `apply()` reads rather than columns it writes.
  */
 export type Bundle =
@@ -70,6 +70,8 @@ export type Bundle =
     $delete?: boolean
     /** a per-column precondition that must still hold */
     $was?: Was
+    /** ask storage for a human handle, now or on an existing entity */
+    $num?: boolean
     /** who is writing this batch */
     $actor?: Actor
     /** the alias this bundle was named by, when the graph picked its id */

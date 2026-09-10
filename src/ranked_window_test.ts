@@ -1,16 +1,17 @@
 // The asynchronous ranking door pages by entity NUMBER, not spine id or rank
 // position. Keep the provider out of this contract: it receives a neighbourhood
 // bound, and askRows takes the requested page within that ranking.
+import { applyNumbered } from './testdb.ts'
 import { assertEquals } from '@std/assert'
 import { askOf, askRows, NEIGHBOURS, rowed, setRanker } from './graph_query.ts'
 import { uuid } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, rowsOf } = await import('./db.ts')
+let { rowsOf } = await import('./db.ts')
 let { bareDb } = await import('./testdb.ts')
 let db = bareDb()
 let eids = Array.from({ length: 4 }, () => uuid())
-apply(
+applyNumbered(
   db,
   eids.map((eid, i) => ({
     eid,

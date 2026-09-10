@@ -443,7 +443,7 @@ export let latestMessage = async (session: string) => {
 // so a create fails LOUDLY rather than fabricating an id.
 export let mintedIn = (applied: Change[], eid: string): string => {
   let r = rows({ changes: applied }).find((r) => r.eid == eid)
-  if (!r || !r.num) {
+  if (!r || !r.comps.entity) {
     throw new Error(
       `create not confirmed: /apply echoed no spine for ${shortId(eid)} — ` +
         `the entity was not minted (a server restart can drop a write). ` +
@@ -1561,8 +1561,14 @@ export let spec = (text: string, read: (p: Param) => Param = (p) => p) => {
 export let taskChanges = (
   eid: string,
   grouped: ComponentPatches,
+  number = false,
 ): Change[] => [
-  { eid, name: 'doc', comp: { body: '', ...(grouped.doc ?? {}) } },
+  {
+    eid,
+    name: 'doc',
+    comp: { body: '', ...(grouped.doc ?? {}) },
+    ...(number ? { $num: true } : {}),
+  },
   // A new task is born open — no mark (D-24102). status is derived, not
   // writable, so drop any that rode in on the spec (`.status=` on new).
   {
@@ -1603,6 +1609,7 @@ type LiteralNode = {
   was: Record<string, Record<string, string | null>>
   dead?: boolean
   minted?: boolean
+  $num?: boolean
 }
 
 let object = (v: unknown): v is Record<string, unknown> =>
@@ -1621,7 +1628,7 @@ let LEGACY = ['key', 'id', 'comps', 'deps']
 let PROJECTED = new Set(['kind', 'refs', 'backrefs', 'comments'])
 let lowered = (literal: EntityLiteral): EntityLiteral => {
   if (LEGACY.some((field) => owns(literal, field))) return literal
-  let { entity, edges: said, was, tombstone, ...rest } = literal
+  let { entity, edges: said, was, tombstone, $num, ...rest } = literal
   if (entity != null && !object(entity)) {
     throw new Error('entity must be an object')
   }
@@ -1651,6 +1658,7 @@ let lowered = (literal: EntityLiteral): EntityLiteral => {
     ...(eid?.startsWith('$') ? { key: eid } : eid ? { id: eid } : {}),
     ...(owns(literal, 'tombstone') ? { tombstone } : {}),
     comps: flat,
+    ...($num !== undefined ? { $num } : {}),
     deps,
     ...(was != null ? { was } : {}),
   }
@@ -1706,7 +1714,7 @@ export let normalizeLiterals = (
     active.add(given)
     let literal = lowered(given)
     let alien = Object.keys(literal).find((name) =>
-      !['key', 'id', 'comps', 'deps', 'was', 'tombstone'].includes(name)
+      !['key', 'id', 'comps', 'deps', 'was', 'tombstone', '$num'].includes(name)
     )
     if (alien) throw new Error(`unknown entity literal field: ${alien}`)
 
@@ -1743,7 +1751,18 @@ export let normalizeLiterals = (
         Object.values(guard).some((v) => v != null && typeof v != 'string')
       ) throw new Error(`${name} was must map columns to hashes or null`)
     }
-    let node: LiteralNode = { key, id, eid: '', comps: {}, deps: [], was }
+    if (literal.$num !== undefined && typeof literal.$num != 'boolean') {
+      throw new Error('$num must be a boolean')
+    }
+    let node: LiteralNode = {
+      key,
+      id,
+      eid: '',
+      comps: {},
+      deps: [],
+      was,
+      $num: literal.$num,
+    }
     nodes.push(node)
     if (key) keys.set(key, node)
     for (let [name, comp] of Object.entries(declared)) {
@@ -1939,6 +1958,9 @@ export let normalizeLiterals = (
     if (written.has(node)) return
     written.add(node)
     for (let target of needs.get(node) ?? []) write(target)
+    if (node.$num) {
+      changes.push({ eid: node.eid, name: 'entity', comp: {}, $num: true })
+    }
     if (node.dead) changes.push({ eid: node.eid, name: 'entity', comp: null })
     for (let [name, comp] of patches.get(node)!) {
       changes.push({
@@ -2149,7 +2171,7 @@ export let taskTreePlan = async (
     if (node.status == 'done') grouped.completed = {}
     else if (node.status == 'cancelled') grouped.cancelled = {}
     // A tree key is the batch-local $alias the bundle shape spells.
-    let literal = { entity: { eid: `$${key}` }, ...grouped }
+    let literal = { entity: { eid: `$${key}` }, $num: true, ...grouped }
     literals.push(literal)
     literalByKey.set(key, literal)
     minted.push(eid)
@@ -2358,7 +2380,8 @@ export let sessionFor = (
   // may refresh a provider pid, but never relocate a tree the server cut.
   let tree = s?.comps.worktree
   let owned = s?.comps.session.origin == 'managed' && tree &&
-    (!tree.branch || tree.branch == `session/S-${s.num}`)
+    (!tree.branch || tree.branch == `session/${s.eid}` ||
+      tree.branch == `session/S-${s.num}`)
   if (cwd && !owned && s?.comps.session.cwd != cwd) comp.cwd = cwd
   if (pid && s?.comps.session.pid != pid) comp.pid = pid
   for (let k of ['agent_type', 'source', 'transcript', 'turn'] as const) {
@@ -4805,6 +4828,7 @@ export let designChanges = (
     ...s.changes,
     {
       eid,
+      $num: true,
       name: 'doc',
       comp: { title: d.title, body: d.body ?? '', ...(props.doc ?? {}) },
     },

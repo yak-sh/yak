@@ -971,7 +971,8 @@ export let byName = new Set([
   'persona',
 ])
 
-// The human id prefixes: curated for the kinds people type daily.
+// Display prefixes only: kindOf() chooses one when a num exists.
+// Numbers are requested per apply, never triggered by a component.
 export let prefix: Record<string, string> = {
   board: 'B',
   commit: 'G',
@@ -2293,6 +2294,7 @@ export type Change = {
   eid: string
   name: string
   comp: Record<string, unknown> | null
+  $num?: boolean
   was?: Record<string, string | null>
 }
 

@@ -20,6 +20,7 @@ import type { Change, Edge } from './types.ts'
 export type LiteralRef = string | number | EntityLiteral
 export type EdgeLiteral = { type: Edge; child: LiteralRef }
 export type EntityLiteral = {
+  $num?: boolean
   entity?: { eid?: string; num?: number }
   tombstone?: Record<string, never>
   edges?: EdgeLiteral | EdgeLiteral[]

@@ -93,7 +93,7 @@ export let Relate = ({ e }: { e: Ent }) => {
           project: e.filed?.project ?? null,
           domain: e.filed?.domain ?? null,
         },
-      }),
+      }, true),
       ...edge(verb, id),
     )
     spend()

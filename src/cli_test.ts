@@ -3261,3 +3261,61 @@ Deno.test('isolationWarning fires only for a shared-checkout cwd', () => {
   assertEquals(isolationWarning('/x', () => false), '')
   assertEquals(isolationWarning(undefined), '')
 })
+
+slow(
+  'task num late-mints idempotently; human new and comment doors ask explicitly',
+  async () => {
+    let { apply, readComp, snapshot } = await import('./db.ts')
+    let { bareDb } = await import('./testdb.ts')
+    let db = bareDb(), eid = crypto.randomUUID()
+    apply(db, [{ eid, name: 'task', comp: {} }, {
+      eid,
+      name: 'doc',
+      comp: { title: 'microtask' },
+    }])
+    let asked: Change[] = []
+    let server = Deno.serve({
+      hostname: '127.0.0.1',
+      port: 0,
+      onListen: () => {},
+    }, async (req) => {
+      let url = new URL(req.url)
+      if (url.pathname == '/apply') {
+        let changes = await req.json() as Change[]
+        asked.push(...changes)
+        return Response.json({ ok: true, changes: apply(db, changes) })
+      }
+      return Response.json(
+        answers(snapshot(db))(decodeURIComponent(url.search.slice(1))),
+      )
+    })
+    let host = `127.0.0.1:${(server.addr as Deno.NetAddr).port}`
+    let call = async (...args: string[]) => {
+      let out = await new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          new URL('./cli.ts', import.meta.url).pathname,
+          ...args,
+        ],
+        clearEnv: true,
+        env: { TASKS_HOST: host },
+      }).output()
+      assertEquals(out.code, 0, text(out.stderr))
+      return text(out.stdout).trim()
+    }
+    try {
+      assertEquals(await call('num', eid), 'T-1')
+      assertEquals(await call('num', 'T-1'), 'T-1')
+      assertEquals(readComp(db, eid, 'entity')?.num, 1)
+      assertEquals(asked.filter((c) => c.$num).length, 2)
+      assertMatch(await call('new', 'Human task'), /T-2 created/)
+      await call('comment', 'T-1', 'Human comment')
+      assertEquals(asked.find((c) => c.name == 'comment')?.$num, true)
+      assertEquals(asked.filter((c) => c.$num).length, 4)
+    } finally {
+      await server.shutdown()
+      db.close()
+    }
+  },
+)

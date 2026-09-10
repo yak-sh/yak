@@ -12,6 +12,7 @@
 // discipline — set DB_PATH before importing it. testing.ts (slow/tick/until)
 // stays db-free so the ~40 files that want only those primitives never trip it.
 
+import { apply } from './db.ts'
 import { DatabaseSync, open } from './store/sqlite.ts'
 import type { Sql } from './store/sql.ts'
 import { initVector, loadVector, ownVector } from './vector.ts'
@@ -108,4 +109,28 @@ export let rejectJournal = (db: Sql) => {
   db.exec(`create temp trigger reject_journal before insert on journal_field
     begin select raise(abort, 'journal unavailable'); end`)
   return () => db.exec('drop trigger reject_journal')
+}
+
+// Historical human-handle fixtures opt in at creation. This is deliberately a
+// test door, not a storage option: raw apply and production agent doors remain
+// num-less. Existing entities are only patched (no synthetic remint echo).
+export let applyNumbered: typeof apply = (db, changes, ...rest) => {
+  let existing = new Set(
+    changes.filter((c) =>
+      db.prepare('select 1 from entity where eid = ?').get(c.eid)
+    ).map((c) => c.eid),
+  )
+  let hidden = new Set(
+    changes.filter((c) => ['entry', 'edge', 'blob'].includes(c.name))
+      .map((c) => c.eid),
+  )
+  return apply(
+    db,
+    changes.map((c) =>
+      c.comp && !existing.has(c.eid) && !hidden.has(c.eid)
+        ? { ...c, $num: true }
+        : c
+    ),
+    ...rest,
+  )
 }

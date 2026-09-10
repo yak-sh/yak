@@ -37,7 +37,6 @@ export type StampHost = LifecycleHost & {
   afterCommit: (run: () => void) => void
   actor: (writer?: string | null) => string | null
   via: (writer?: string | null) => string | null
-  number: (eid: string) => void
   removalOrder: () => string[]
   person: (actor: string | null) => boolean
   journal: (
@@ -65,7 +64,7 @@ export let fleetStamps = (host: StampHost) => {
     removed: new Map<string, string[]>(),
     authors: new Map<string, Comp>(),
     operations: [] as Change[],
-    owners: [] as string[],
+    numbered: new Set<string>(),
     extra: [] as Change[],
   })
   let current = () => stack.at(-1)!
@@ -133,11 +132,6 @@ export let fleetStamps = (host: StampHost) => {
             },
           )
         )
-        // Explicit owners precede referenced placeholders, regardless of the
-        // order in which the adapter had to mint foreign-key spines.
-        for (let eid of new Set([...s.owners, ...s.minted])) {
-          if (s.minted.has(eid)) host.number(eid)
-        }
         syncFacetAliases(host, s.operations, s.extra)
         lifecycleBefore(host, batch(), s.prior)
         let out = resolve(bundles)
@@ -194,11 +188,19 @@ export let fleetStamps = (host: StampHost) => {
           let full = whole.get(key)
           return full ? { ...c, comp: full[c.name] as Comp } : c
         })
-        let births = [...s.minted].flatMap((eid) => {
-          if (gone(eid)) return []
-          let comp = host.component(eid, 'entity')
-          return comp ? [{ eid, name: 'entity', comp }] : []
-        })
+        let births = [...new Set([...s.minted, ...s.numbered])].flatMap(
+          (eid) => {
+            if (gone(eid)) return []
+            let comp = host.component(eid, 'entity')
+            return comp
+              ? [{
+                eid,
+                name: 'entity',
+                comp: s.minted.has(eid) ? comp : { num: comp.num },
+              }]
+              : []
+          },
+        )
         let logged = [
           ...changes,
           ...s.extra.filter((c) => !echoed.has(c.name)),
@@ -209,10 +211,13 @@ export let fleetStamps = (host: StampHost) => {
             s.now,
             s.actor.by ?? null,
             s.actor.via ?? null,
-            s.input.trace?.fed
+            s.input.trace?.fed ||
+              [...s.numbered].some((eid) => !s.minted.has(eid))
               ? JSON.stringify({
-                created: [...s.created],
-                removed: [...s.removed],
+                ...(s.input.trace?.fed
+                  ? { created: [...s.created], removed: [...s.removed] }
+                  : {}),
+                numbered: [...s.numbered].filter((eid) => !s.minted.has(eid)),
               })
               : null,
             logged,
@@ -247,7 +252,9 @@ export let fleetStamps = (host: StampHost) => {
       name: 'fleet/authorship',
       hooks: {
         precondition: (bundles: Bundle[]) => {
-          current().owners = bundles.map((b) => b.entity.eid)
+          current().numbered = new Set(
+            bundles.filter((b) => b.$num === true).map((b) => b.entity.eid),
+          )
           // Only death or a claim operation can release a prior holder. Take
           // its ordered history before any write, including session retargets
           // earlier in the same batch, but do not scan claims on document edits.

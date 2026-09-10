@@ -21,7 +21,7 @@
 import { type Change, type Dep, idOf, uuid } from './types.ts'
 import {
   cascade,
-  commentChanges,
+  commentChanges as agentCommentChanges,
   derefChanges,
   derefWith,
   DESK,
@@ -443,9 +443,17 @@ let card = (kind: typeof cardCommands[number]): Command => ({
           comp: { scope: null, ...grouped.memory },
         }]),
       ]
+    if (kind == 'task') {
+      changes[0].$num = true
+    }
     return { changes, card: eid, msg: `new ${kind}` }
   },
 })
+
+let commentChanges = (...args: Parameters<typeof agentCommentChanges>) =>
+  agentCommentChanges(...args).map((c) =>
+    c.name == 'comment' ? { ...c, $num: true } : c
+  )
 
 export let commands: Record<string, Command> = {
   // :new speaks the spec grammar (client.ts): 'P1 .domain=Eng Ship it'
@@ -465,7 +473,7 @@ export let commands: Record<string, Command> = {
         changes: taskChanges(uuid(), {
           ...grouped,
           doc: { title, body, ...grouped.doc },
-        }),
+        }, true),
         msg: `new: ${title}`,
       }
     },

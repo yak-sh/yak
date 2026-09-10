@@ -21,8 +21,13 @@ constraints. Graph edges are entities too: applications can declare `edge` with
 core does not require an application-specific entity class hierarchy.
 
 `entity.num`, when allocated by storage, is a human-facing number, not identity.
-Do not use it as a substitute for an EID. Storage can exclude entities from
-numbering; transcript entries, for example, can use their own sequence field.
+Do not use it as a substitute for an EID. The fleet disables implicit storage
+numbering with `number: false` and registers `numbers(allocate)`. A creating
+door asks per entity with `{ entity: { eid }, $num: true, task: {} }`. The same
+request later assigns a handle to an existing entity. The allocator runs inside
+the graph write transaction and must return the existing number on repeated
+requests. Components and display prefixes do not request numbers; `$num` is
+wire-only metadata and never rides the answer.
 
 ## Install
 

@@ -965,7 +965,7 @@ Reference param values accept human ids
         })
         let eid = crypto.randomUUID()
         minted.push(eid)
-        changes.push(...taskChanges(eid, grouped))
+        changes.push(...taskChanges(eid, grouped, grouped.filed != null))
         if (parentRow) changes.push(...link(parentRow.eid, 'contains', eid))
       }
       await io.write(changes, session)
@@ -2062,6 +2062,7 @@ empty. ${GRAMMAR} ${FILTERS}`,
     edgeLiterals[type] = z.union([literalRef, z.array(literalRef)]).optional()
   }
   let entityLiteral = z.object({
+    $num: z.boolean().optional(),
     entity: z.object({
       eid: z.string().optional(),
       num: z.number().optional(),
@@ -2091,7 +2092,9 @@ returns — {entity: {eid}, doc: {...}, task: {...}} — components flat beside
 entity, each a PATCH (omitted columns untouched, prop: null clears a column,
 comp: null deletes the component). entity.eid names an existing entity (uuid
 or a human id such as T-3) or, as a $alias ({entity: {eid: '$goal'}}), one
-this batch mints; the result's aliases map $alias → eid. Wherever an eid goes
+this batch mints; the result's aliases map $alias → eid. Numbers default off;
+a top-level $num:true beside entity requests a human handle, including on an
+existing entity. Repeated requests return its same number. Wherever an eid goes
 — entity.eid, a ref column such as filed.project or comment.target, an
 edge's child — a $alias, a human id, or a nested bundle stands in
 ({entity: {eid: 'T-3'}} alone references; with components it defines).
@@ -2135,6 +2138,7 @@ ${GRAMMAR}`,
           // refuses alien keys INSIDE it. Per column: SHA-256 of the value
           // read, or null for "absent". Omit it and the write is unguarded,
           // which is every caller's behavior today.
+          $num: z.boolean().optional(),
           was: z.record(z.string().nullable()).optional(),
         }).strict(),
       ).min(1).optional(),

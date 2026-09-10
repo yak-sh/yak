@@ -142,7 +142,7 @@ export let composerChanges = (
     ]
     : [
       { eid: id, name: 'doc', comp: { title: '', body } },
-      { eid: id, name: 'comment', comp: { target: eid } },
+      { eid: id, name: 'comment', $num: true, comp: { target: eid } },
     ]
 
 export let Composer = (

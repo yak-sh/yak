@@ -18,7 +18,7 @@ import {
   byBoard,
   byList,
   checkedRefs,
-  commentChanges,
+  commentChanges as agentCommentChanges,
   commitChanges,
   contextDigest,
   contextSnapshot,
@@ -712,6 +712,25 @@ export let strayFlag = (
 export let strayFile = (words: string[]) =>
   words.find((w) => /^@[^@\s]\S*$/.test(w) && isFile(w.slice(1)))
 
+// Human commentary asks for a handle; the session-tool builder stays num-less.
+let commentChanges = (...args: Parameters<typeof agentCommentChanges>) =>
+  agentCommentChanges(...args).map((c) =>
+    c.name == 'comment' ? { ...c, $num: true } : c
+  )
+
+let num = async (input: Got) => {
+  let row = await needed(input.args.id)
+  let applied = await send([{
+    eid: row.eid,
+    name: 'entity',
+    comp: {},
+    $num: true,
+  }])
+  let spine = applied.find((c) => c.eid == row.eid && c.name == 'entity')
+  if (!spine?.comp?.num) throw new Error(`number not confirmed: ${row.eid}`)
+  print(idOf({ ...row, num: Number(spine.comp.num) }))
+}
+
 let create = async (got: Got) => {
   let { params, words } = got
   let at = strayFile(words)
@@ -750,7 +769,7 @@ let create = async (got: Got) => {
     if (scope) grouped.filed = { ...grouped.filed, project: scope }
   }
   let eid = crypto.randomUUID()
-  let applied = await send(taskChanges(eid, grouped))
+  let applied = await send(taskChanges(eid, grouped, true))
   print(`${mintedIn(applied, eid)} created`)
   let hint = await similarHint(
     `${grouped.doc.title}\n${grouped.doc.body ?? ''}`,
@@ -3582,6 +3601,7 @@ export let verbs = bind({
   docs,
   stale,
   new: create,
+  num,
   tree,
   set,
   patch,
