@@ -1,4 +1,4 @@
-import { snapshot, type Snapshot } from './mod.ts'
+import { type Snapshot, snapshot } from './mod.ts'
 /** Global first, then root-to-leaf directory guidance. Missing files are fine;
  * permission/read errors are not. No mtimes affect instruction precedence. */
 export let instructionFiles = async (

@@ -1,4 +1,5 @@
-import { instructionFiles, promptEntry } from './prompts.ts'
+import { promptEntry } from '@yaks/context'
+import { instructionFiles } from '@yaks/context/host'
 import { homeAt, workspace } from './workspace.ts'
 import { render as tree } from '@yaks/preact'
 import type { VNode } from 'preact'

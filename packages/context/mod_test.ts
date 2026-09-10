@@ -8,5 +8,9 @@ Deno.test('snapshots retain immutable text and source identity separately', asyn
   assertEquals(a, await snapshot('old', a.source))
   let entry = promptEntry('s', 1, a.body, a.source, 'shared', a.revision)
   assertEquals(entry.content, { body: 'old' })
-  assertEquals(entry.prompt, { source: a.source, scope: 'shared', revision: a.revision })
+  assertEquals(entry.prompt, {
+    source: a.source,
+    scope: 'shared',
+    revision: a.revision,
+  })
 })

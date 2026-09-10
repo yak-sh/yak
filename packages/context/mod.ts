@@ -18,14 +18,22 @@ export let promptEntry = (
   content: { body },
 })
 
-
 /** Resolver results are text snapshots, not privileged until explicitly admitted. */
 export type Snapshot = { body: string; source: string; revision: string }
 export type SourceResolver = (source: string) => Promise<Snapshot | undefined>
 
 /** Freeze a source revision without coupling context to a storage backend. */
-export let snapshot = async (body: string, source: string): Promise<Snapshot> => {
-  let digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body))
-  let revision = Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, '0')).join('')
+export let snapshot = async (
+  body: string,
+  source: string,
+): Promise<Snapshot> => {
+  let digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(body),
+  )
+  let revision = Array.from(
+    new Uint8Array(digest),
+    (n) => n.toString(16).padStart(2, '0'),
+  ).join('')
   return { body, source, revision }
 }
