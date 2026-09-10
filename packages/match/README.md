@@ -1,16 +1,11 @@
 # @yaks/match
 
-Evaluate a [@yaks/query](https://jsr.io/@yaks/query) AST as a predicate over
-entity **bundles held in memory**. No database, no SQL: the same query line a
-server answers from storage, answered from an array.
-
-A query is one grammar with two evaluators. Where the data lives in a database,
-[@yaks/sql](https://jsr.io/@yaks/sql) compiles the query into a statement. Where
-the data is already in hand — a page's local state, a cache, a worker's working
-set, a test fixture — there is nothing to compile against, so this package
-evaluates the same AST directly. A filter written once selects the same entities
-on both sides; that agreement is tested query by query against a real SQLite
-database (`parity_test.ts`).
+Evaluate [@yaks/query](../query/README.md) queries over entity bundles in
+memory. `filter()` tests an individual bundle; `matcher()` selects from a
+collection, including ordering and paging. Both use a
+[@yaks/vocab](../vocab/README.md) vocabulary to resolve columns and types.
+Supported queries are checked against SQLite in `parity_test.ts`; backend
+differences and unsupported operations are listed below.
 
 ## Install
 
@@ -29,7 +24,7 @@ live(bundles) // the matching bundles, dearest first
 ```
 
 A **bundle** is one entity, whole: its identity under `entity`, every component
-it wears under that component's name — the shape
+it has under that component's name — the shape
 [@yaks/graph](https://jsr.io/@yaks/graph) writes and
 [@yaks/sqlite](https://jsr.io/@yaks/sqlite) reads back. This package declares
 that shape structurally rather than importing it: a graph compiles its rules
@@ -86,7 +81,7 @@ says how to read it — and ordering by a computed column works the same way. A
 registration also serves as a plain read override for a stored column. A
 computed column nobody registered still declines (below).
 
-## The grammar it answers
+## Supported queries
 
 Everything on @yaks/sql's common path:
 
@@ -100,12 +95,12 @@ Everything on @yaks/sql's common path:
   names a span and the operator picks its edge (`=` within, `>=` from the start,
   `<=` until the end, `>` and `<` strictly outside) — and falls back to the
   plain rules when the operand is no phrase.
-- **Kinds**: `.kind=book` — the entity wears that kind and every kind sorting
+- **Kinds**: `.kind=book` — the entity has that kind and every kind sorting
   before it is absent.
-- **Facets**: `.review!` wears the component, `.review=` does not — including a
-  TAG, a component with no columns at all, where wearing it is the whole fact. A
-  bare bang completes a component sentence, so it wins over a column of the same
-  name (`.book!` is the books; `.book=b1` is still review's reference, and
+- **Facets**: `.review!` requires the component, `.review=` does not — including
+  a tag, a component with no columns at all, whose presence is the stored fact.
+  A bare bang completes a component sentence, so it wins over a column of the
+  same name (`.book!` is the books; `.book=b1` is still review's reference, and
   `.review.book!` reaches that column).
 - **References**: `.author=a1`, and dereference paths through them,
   `.book.author.doc.title~=vale`.
@@ -144,7 +139,7 @@ database leaves that order to its query plan, so **membership** is what the two
 evaluators promise there, and order is promised for the queries that ask for
 one.
 
-## Declines
+## Unsupported queries
 
 A question this package cannot answer **exactly** throws
 [`Unsupported`](https://jsr.io/@yaks/sql/doc/~/Unsupported) — the same error

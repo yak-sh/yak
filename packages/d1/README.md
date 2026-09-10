@@ -1,7 +1,11 @@
 # @yaks/d1
 
-A [@yaks/graph](https://jsr.io/@yaks/graph) **storage adapter** backed by
-Cloudflare **D1**.
+A Cloudflare D1 storage adapter for [@yaks/graph](../graph/README.md). It uses
+the SQLite schema and write planning from [@yaks/sqlite](../sqlite/README.md),
+and implements asynchronous reads and batched writes through a D1 binding.
+
+For bundle structure, write phases, and adapter responsibilities, see the
+[graph architecture](../graph/ARCHITECTURE.md).
 
 ## Install
 
@@ -15,7 +19,7 @@ deno add jsr:@yaks/d1
 D1 is a serverless SQLite reachable only over an async API, so this adapter is
 **async end to end**: every read and every write returns a promise. It composes
 the yaks query → vocabulary → SQL stack over a D1 binding to satisfy the
-`Storage` seam:
+`Storage` interface:
 
 - **read** — a query in, matching entities out as whole bundles;
 - **write** — a change patched into rows, with the death cascade a delete
@@ -26,7 +30,7 @@ import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/d1'
 
-// A bookstore: an entity is whatever components it wears. A book is a `doc`
+// A bookstore: an entity is whatever components it has. A book is a `doc`
 // plus a `book`; a review is a `doc` plus a `review` pointing at the book.
 let shelf = loadVocab({
   $defs: {
@@ -81,11 +85,10 @@ awaits a promise and passes a plain value straight through. So the **same**
 synchronous over [@yaks/sqlite](https://jsr.io/@yaks/sqlite) and asynchronous
 here, and nothing in between has to know which.
 
-That is not a claim, it is a test: `parity_test.ts` runs the conformance script
-that ships beside the reference adapter through a graph over D1 and a graph over
-in-process SQLite, and asserts they never disagree — same bundles returned, same
-batches refused, same entities read back — while asserting that this side did in
-fact go async.
+`parity_test.ts` runs the conformance script that ships beside the reference
+adapter through a graph over D1 and a graph over in-process SQLite, and asserts
+they never disagree — same bundles returned, same batches refused, same entities
+read back — while asserting that this side did in fact go async.
 
 ## The transaction
 
@@ -155,7 +158,7 @@ database does.
 The failure D1 cannot prevent is a lost update nobody noticed. The failure it
 _does_ prevent — a half-written batch — is prevented completely.
 
-### Ordering, in one corner
+### Ordering within a transaction
 
 A read inside a transaction returns the committed matches in the database's
 order, then the transaction's own pending matches after them. A `.order=` over a
@@ -163,9 +166,9 @@ set the batch itself changed is therefore ordered within each part rather than
 across both. Nothing in `apply()` orders a read; this matters only if your own
 hook does.
 
-## Where it sits
+## Composition
 
-One of three interchangeable adapters behind the same `Storage` seam:
+One of three interchangeable adapters behind the same `Storage` interface:
 
 - **@yaks/d1** — Cloudflare D1, async (this package);
 - **[@yaks/durable-object](https://jsr.io/@yaks/durable-object)** — a Durable
@@ -187,7 +190,7 @@ Shipped source names only the Workers runtime API and standard web APIs; the D1
 surface is declared structurally (`D1Like`, `Stmt`) so nothing here depends on
 Cloudflare at runtime. `conform.ts` checks those declarations against
 `@cloudflare/workers-types` itself, under its own `deno check` (the runtime's
-types are globals, so one file wears them and the rest of the repo does not).
+types are globals, so one file includes them and the rest of the repo does not).
 
 A prepared statement is a **type parameter** rather than a narrowed slice,
 because it is both what `prepare` returns and what `batch` takes — a slice would

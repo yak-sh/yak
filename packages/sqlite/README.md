@@ -1,28 +1,23 @@
 # @yaks/sqlite
 
-A **storage adapter** that turns the yaks query/vocabulary/SQL stack into a
-working SQLite-backed store. It composes three sibling packages —
+SQLite storage for [@yaks/graph](../graph/README.md). It derives tables from a
+component vocabulary, compiles queries, gathers entity bundles, and implements
+transactional patches and deletion cascades. The application supplies a `Driver`
+for its SQLite runtime and initializes the schema.
 
-- [`@yaks/query`](https://jsr.io/@yaks/query) parses a query string into an AST,
-- [`@yaks/vocab`](https://jsr.io/@yaks/vocab) describes a component vocabulary,
-- [`@yaks/sql`](https://jsr.io/@yaks/sql) compiles an AST + a vocabulary into
-  SQL,
-
-— and adds the two halves those packages leave to a backend: the **schema** a
-vocabulary implies, and the **writes** that patch data into it. Reads come for
-free: it runs `@yaks/sql`'s compiled statement and gathers the rows into whole
-entities.
+For bundle structure, write phases, and adapter responsibilities, see the
+[graph architecture](../graph/ARCHITECTURE.md).
 
 ## The model
 
-Everything is an **entity** — a string id — that wears **components**, a row per
-component in its own table. An entity _is_ what its components make it: a blog
-post is a `doc` plus a `post`; a product is a `doc` plus a `price`. A component
-adds one facet, and any component can be added to any entity, so two
-vocabularies compose by sharing ids.
+Each **entity** has a string id and **components**, with a row per component in
+its own table. An entity _is_ what its components make it: a blog post is a
+`doc` plus a `post`; a product is a `doc` plus a `price`. A component adds one
+facet, and any component can be added to any entity, so two vocabularies compose
+by sharing ids.
 
-The adapter speaks **bundles**. A bundle gathers an entity's components under
-one roof — the identity is the `entity` component, never a bare root `eid`:
+The adapter reads and writes **bundles**: objects containing an entity’s
+components. Identity is in the `entity` component, not a root-level `eid`:
 
 ```ts
 { entity: { eid: 'cake-01' }, doc: { title: 'Lemon cake' }, recipe: { serves: 8 } }
@@ -160,7 +155,7 @@ returns a `Store` — @yaks/graph's `Storage`, answered synchronously:
   all-or-nothing unit. The transaction offers:
   - `read(query, opts?): Bundle[]` — as above, through the transaction.
   - `get(eids): Bundle[]` — identity, not search: these entities, whole. A
-    tombstoned one comes back wearing `tombstone`.
+    tombstoned one comes back with a `tombstone` component.
   - `patch(bundles): Entity[]` — patch a batch in → the entities it MINTED, each
     with the `num` it was given.
   - `remove(entities): void` — drop their component rows and tombstone their

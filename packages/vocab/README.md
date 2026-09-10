@@ -1,11 +1,9 @@
 # @yaks/vocab
 
-The vocabulary **meta-model**: a way to _describe_ a component vocabulary as
-JSON Schema (2020-12) plus a small custom keyword vocabulary, and the runtime
-that loads and **interrogates** any such description. It ships **zero**
-components — your components are an instance it loads. A large application and a
-small app are the same format at different sizes; an app just composes fewer
-vocabularies.
+Describe component vocabularies with JSON Schema 2020-12 and yaks extension
+keywords. `loadVocab()` loads these documents into a runtime model used for
+validation, query resolution, and storage schema generation. This package
+defines the vocabulary format, not application components.
 
 ## The format
 
@@ -153,8 +151,8 @@ lower), **reserved** names a base vocabulary already owns, and **grow** — the
 additive-forever rule: a column never drops or retypes, because its rows were
 written under the old word.
 
-`fleet/slice.schema.json` (not published) is a hand-authored example vocabulary
-in this format; the package's tests load it to exercise the runtime end to end.
+See `vocab_test.ts` and `validate_test.ts` for vocabulary loading and validation
+examples.
 
 ## Compatibility
 

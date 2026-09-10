@@ -1,7 +1,12 @@
 # @yaks/edge
 
-**Links between entities**, as a component: a post that cites a post, a book
-that cites a book, a page that links to a page.
+Relations represented as entities. Each link has an `edge` component containing
+its endpoints and optional order, plus a relation component such as `cites`.
+Links can have additional components and use the same write, deletion, and sync
+APIs as other entities.
+
+For bundle structure, write phases, and adapter responsibilities, see the
+[graph architecture](../graph/ARCHITECTURE.md).
 
 ## Install
 
@@ -12,24 +17,19 @@ deno add jsr:@yaks/edge
 
 ## A link is an entity
 
-Not a column, not a join table: an **entity of its own**, carrying
-`edge{from, to, ord}` and a **relation tag** saying what kind of link it is.
+A link is a separate entity with an `edge` component and a relation tag:
 
-```
-{ entity: { eid: '…' }, edge: { from: 'p1', to: 'p2' }, cites: {} }
-                                                        ^^^^^ the relation
+```ts
+{ entity: { eid: "link-1" }, edge: { from: "p1", to: "p2" }, cites: {} }
 ```
 
-That buys three things a foreign key does not. A link can be stated about
-_anything_, because neither end is a typed column on some particular table. A
-link can carry its own facts — an order, a date, a note — by wearing another
-component. And a link is patched, deleted and synced by exactly the machinery
-every other entity already uses.
+The endpoints are entity references. Add other components to record metadata
+such as a date or note. Link entities are patched, deleted, and synchronized
+through the graph API.
 
 ## The `relation` keyword
 
-Which relations exist is **yours**, not this package's. A relation is an
-ordinary component that declares itself one:
+Applications declare relations as components with the `relation` keyword:
 
 ```json
 {
@@ -74,7 +74,7 @@ Both ends are references with `death: cascade`, which is the whole lifecycle: a
 link exists only while both of its ends do. Delete a post and its links go with
 it — there is no orphan sweep to run and no half-sentence for a reader to meet.
 
-And half a sentence is refused at the door, by name:
+An edge without a relation tag is rejected:
 
 ```
 Refused: edge d91e2b12-… states no relation — an edge wears a relation tag
@@ -93,8 +93,7 @@ w.reach('p1', 'cites', 3, 'in') // everything citing it within three hops
 ```
 
 Each is a query, not a new mechanism, and each answers synchronously over a
-synchronous storage. The depth is required: a walk with no cap is a graph scan
-wearing a friendly name.
+synchronous storage. The depth is required to bound traversal work.
 
 ## In a query line
 
@@ -121,7 +120,7 @@ compile(parse('.cites[<=3]->p1'), vocab, { extend: [traverse(vocab)] })
 A relation the vocabulary does not declare is refused rather than answered — a
 clause naming nothing is a typo, not a query that matches everything.
 
-## The surface
+## Exports
 
 | export                       | is                                                |
 | ---------------------------- | ------------------------------------------------- |
@@ -135,18 +134,18 @@ clause naming nothing is a typo, not a query that matches everything.
 | `walk(storage, v)`           | `out`, `in`, and a bounded `reach`                |
 | `traverse(v)`                | the @yaks/sql extension for the walk and `.edges` |
 
-## Where it sits
+## Composition
 
 A component domain over [@yaks/graph](https://jsr.io/@yaks/graph), the same
 shape an application's own plugin has. It reads its declarations through
-[@yaks/vocab](https://jsr.io/@yaks/vocab)'s keyword seam, the way
+[@yaks/vocab](https://jsr.io/@yaks/vocab)'s keyword extension API, the way
 [@yaks/id](https://jsr.io/@yaks/id) and
 [@yaks/names](https://jsr.io/@yaks/names) do, and teaches
 [@yaks/sql](https://jsr.io/@yaks/sql) two clauses through the same extension
-seam [@yaks/fts](https://jsr.io/@yaks/fts) uses for search.
+extension API [@yaks/fts](https://jsr.io/@yaks/fts) uses for search.
 
 ## Compatibility
 
 Pure TypeScript, no platform API — the traversal goes through @yaks/graph's
-`Storage` seam and the SQL through @yaks/sql's IR. Runs on **Deno**, **Node**,
-and in the **browser**.
+`Storage` interface and the SQL through @yaks/sql's IR. Runs on **Deno**,
+**Node**, and in the **browser**.

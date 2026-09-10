@@ -1,8 +1,11 @@
 # @yaks/journal
 
-Who wrote what, when — attribution and history for a
-[@yaks/graph](https://jsr.io/@yaks/graph), with undo and a delta feed falling
-out of the same record.
+A graph plugin that records committed changes as queryable `batch` and `delta`
+components. It supports entity history, cursor-based change feeds, and undo.
+Records are written in the graph transaction using its storage adapter.
+
+For bundle structure, write phases, and adapter responsibilities, see the
+[graph architecture](../graph/ARCHITECTURE.md).
 
 ## Install
 
@@ -11,13 +14,11 @@ deno add jsr:@yaks/journal
 # or: npx jsr add @yaks/journal
 ```
 
-## Why
+## Use cases
 
-Take a page several people edit. Somebody renames it, somebody else rewrites a
-paragraph, somebody deletes a note attached to it. Afterwards the page holds
-only where it ENDED UP — which is exactly the question a graph answers well and
-exactly the question nobody is asking. Who changed the title? What did it say
-before? Put that back.
+Use the journal to inspect who changed an entity and its previous values,
+reverse a supported batch, or consume changes incrementally. History starts when
+the plugin is enabled; it does not reconstruct earlier changes.
 
 ## What it records
 
@@ -26,10 +27,10 @@ state the batch is about to change; at `journal`, inside the same transaction,
 it replays the batch as applied against that reading and writes down what moved
 — as two components of its own:
 
-| component                                              | one per                                  |
-| ------------------------------------------------------ | ---------------------------------------- |
-| `batch{seq, at, by, via}`                              | committed batch                          |
-| `delta{seq, ord, target, comp, column, before, after}` | column that moved, component that didn't |
+| component                                              | one per                              |
+| ------------------------------------------------------ | ------------------------------------ |
+| `batch{seq, at, by, via}`                              | committed batch                      |
+| `delta{seq, ord, target, comp, column, before, after}` | changed column or component presence |
 
 They are ordinary components, so the log is queried with the same grammar as
 everything else and stored by whatever adapter the graph is bound to — SQLite, a
@@ -80,21 +81,22 @@ since(g)({ seq: 0 }) // { batches, cursor }
   deleted entity is tombstoned, never erased, and its id can never be reused.
 - **`since(src)(cursor)`** — the batches after a cursor and the cursor that
   follows them. `applied(batch)` turns one back into the bundles it committed,
-  which is what a server recasts to its subscribers; a consumer that stores the
-  cursor BEFORE it does the work drives effects at most once.
+  which a server can send to its subscribers; a consumer that stores the cursor
+  BEFORE it does the work drives effects at most once.
 
 `src` is anything that answers a query with bundles — a `Graph`, a `Storage`, a
 client cache — so the reading half needs no privileged access to the writing
 half.
 
-## The choices worth knowing
+## Limitations and recording rules
 
 - **The provenance stamps are not recorded twice.** `created` and `updated`
   repeat, column for column, what the batch row already holds, so they are
   skipped by default (`skip` says otherwise).
 - **A death is recorded whole**: every component the entity carried, with what
-  it held, and then the `tombstone` it now wears. History outlives the entity —
-  `delta.target` keeps its reference past the target's death.
+  it held, and then the `tombstone` component added on deletion. History
+  outlives the entity — `delta.target` keeps its reference past the target's
+  death.
 - **It is not a backup.** It records what moved, not the whole entity, so a
   graph journaled from its first write can answer anything and one that started
   journaling later answers from there on.

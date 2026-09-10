@@ -1,12 +1,13 @@
 # @yaks/sync
 
-The **wire tier** for a client [@yaks/graph](https://jsr.io/@yaks/graph): a
-plugin that carries a local graph's writes to a server, and the server's writes
-back.
+Synchronize a local [@yaks/graph](../graph/README.md) with a server. The plugin
+sends wire-tier writes and subscriptions to the server and applies incoming
+bundles locally. Component persistence settings distinguish server-synchronized
+state from local and transient state; this package does not persist the local
+tier itself.
 
-A graph in a page over [@yaks/ram](https://jsr.io/@yaks/ram) is a complete graph
-— the same `apply()`, the same query grammar, the same bundles — it just has
-nobody else in it. This package is the nobody else.
+For bundle structure, write phases, and adapter responsibilities, see the
+[graph architecture](../graph/ARCHITECTURE.md).
 
 ## Install
 
@@ -183,7 +184,7 @@ sync(g, {
 `fetch` takes a `Request` and answers with a `Response`, which an
 [@yaks/api](https://jsr.io/@yaks/api) handler does directly — so this package's
 own tests run a client graph and a server graph in one process, with no network
-and no sleeps, and so can yours.
+and no sleeps.
 
 ## API
 
@@ -216,16 +217,16 @@ platform API: `fetch` and `WebSocket` are looked up through the injected options
 (the globals are only a default), and it type-checks under
 `lib: ["dom", "esnext"]` with no `Deno` types in the compile at all. Its
 dependencies are the sibling packages: `@yaks/graph` for the bundle wire and the
-plugin seam, and `@yaks/vocab` for the tier keyword.
+plugin API, and `@yaks/vocab` for the tier keyword.
 
-## The family
+## Related packages
 
 [@yaks/graph](https://jsr.io/@yaks/graph) owns the bundles and `apply()`;
 [@yaks/ram](https://jsr.io/@yaks/ram) is the map the client keeps them in;
-[@yaks/api](https://jsr.io/@yaks/api) is the door at the other end, and owns the
-subscription model this package talks to;
-[@yaks/query](https://jsr.io/@yaks/query) is the grammar a subscription is
-written in. This package is the string between the two ends.
+[@yaks/api](https://jsr.io/@yaks/api) implements the server-side subscription
+model this package talks to; [@yaks/query](https://jsr.io/@yaks/query) is the
+grammar a subscription is written in. This package is the string between the two
+ends.
 
 ## License
 

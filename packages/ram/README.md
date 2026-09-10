@@ -1,19 +1,12 @@
 # @yaks/ram
 
-The **in-memory storage adapter**: [@yaks/graph](https://jsr.io/@yaks/graph)'s
-`Storage` over a plain `Map` of bundles, fully synchronous, with no database
-underneath it.
+An in-memory [@yaks/graph](../graph/README.md) storage adapter backed by a Map.
+It evaluates queries with [@yaks/match](../match/README.md) and requires no
+database. State is lost when the store is discarded; use a persistent adapter or
+client persistence when data must survive a restart.
 
-A graph needs somewhere to keep its entities. A server keeps them in SQLite; a
-browser tab, a worker, or a test has nowhere to put a database and nothing to
-install — so this package keeps them in a Map, answers queries with
-[@yaks/match](https://jsr.io/@yaks/match), and implements the same five members
-every other adapter does. Same `apply()`, same query grammar, same bundles.
-
-That agreement is tested rather than asserted: `parity_test.ts` runs one script
-of batches over this adapter and over a real SQLite database through
-[@yaks/sqlite](https://jsr.io/@yaks/sqlite), and every batch must return the
-same bundles and leave both stores reading back the same entities.
+For bundle structure, write phases, and adapter responsibilities, see the
+[graph architecture](../graph/ARCHITECTURE.md).
 
 ## Install
 
@@ -99,7 +92,8 @@ returns a `Store` — @yaks/graph's `Storage`, answered synchronously:
   transaction offers:
   - `read(query, opts?): Bundle[]` — as above.
   - `get(eids): Bundle[]` — identity, not search: these entities, whole. A
-    deleted one comes back wearing `tombstone`; an unknown one is absent.
+    deleted one comes back with a `tombstone` component; an unknown one is
+    absent.
   - `patch(bundles): Entity[]` — patch a batch in → the entities it MINTED, each
     with the `num` it was given.
   - `remove(entities): void` — drop their components and tombstone them.
@@ -128,8 +122,8 @@ carries a `num` keeps it, and an entity this store numbered on its own takes the
 correction when one arrives. That is what a store MIRRORING another graph needs
 — a page holding [@yaks/sync](https://jsr.io/@yaks/sync) is being told the
 identity by the server, not asking for one — so a recipe has the same number in
-the browser as it has in the database. Off by default: a store nobody mirrors
-owns its own numbering.
+the browser as it has in the database. Off by default: a store without
+synchronization owns its own numbering.
 
 ### Rollback
 
@@ -166,8 +160,8 @@ ranking.
 Pure TypeScript. It imports no platform API — no `Deno`, no Node built-in, no
 DOM global — and type-checks under `lib: ["dom", "esnext"]`, so it runs
 unchanged in a **browser**, on **Deno**, and on **Node** (via JSR / npm). Its
-only dependencies are the sibling packages: `@yaks/graph`'s `Storage` seam and
-bundle types, `@yaks/match` for the reads, and a `@yaks/vocab` schema.
+only dependencies are the sibling packages: `@yaks/graph`'s `Storage` interface
+and bundle types, `@yaks/match` for the reads, and a `@yaks/vocab` schema.
 
 ## License
 

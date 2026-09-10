@@ -1,19 +1,12 @@
 # @yaks/workers
 
-The Cloudflare adapter for [@yaks/api](https://jsr.io/@yaks/api): the three
-things about serving a graph that belong to the Workers runtime, and nothing
-else.
+Cloudflare Workers integration for [@yaks/api](../api/README.md). It provides a
+Worker fetch entrypoint, WebSocket upgrades through `WebSocketPair`, request
+authentication helpers, and forwarding to Durable Objects. Applications provide
+the graph, storage, and authorization policy.
 
-`@yaks/api` is a plain `Request` → `Response` handler. It has no idea where it
-runs. This package is what makes it a Worker:
-
-- **the socket** — `/ws` needs an upgrade, and no web standard covers one.
-  Cloudflare's is a `WebSocketPair`.
-- **the entrypoint** — a Worker exports `{ fetch }`, and its bindings arrive
-  with the request rather than as an environment a module can read at import
-  time.
-- **the door** — who is writing, read off a Worker request: a session cookie, or
-  a bearer token.
+For bundle structure, write phases, and adapter responsibilities, see the
+[graph architecture](../graph/ARCHITECTURE.md).
 
 ## Install
 
@@ -22,7 +15,7 @@ deno add jsr:@yaks/workers
 # or: npx jsr add @yaks/workers
 ```
 
-## A Worker in nine lines
+## Worker entrypoint
 
 The examples are a bookshop: books with a price and a status, reviews about
 them, members who buy them.
@@ -43,13 +36,13 @@ export default worker({
 ```
 
 That serves `POST /apply`, `GET|POST /query` and `/ws` — the routes and the
-refusals are [@yaks/api](https://jsr.io/@yaks/api)'s, unchanged.
+errors are [@yaks/api](https://jsr.io/@yaks/api)'s, unchanged.
 
 `api` is called with the Worker's bindings and its answer is kept for the life
 of the isolate, not rebuilt per request: an api built twice would mint a second
 subscription registry, and the sockets already open would be listening to a
 registry nobody applies through. Give it a graph and, if you want writes
-attributed, a door.
+attributed, an authentication callback.
 
 ```toml
 # wrangler.toml
@@ -63,7 +56,7 @@ database_name = "shop"
 database_id = "…"
 ```
 
-## The door
+## Request authentication
 
 `door` reads the credential a request carries — the named cookie first, then an
 `authorization: Bearer …` header — and hands it to your `verify`, which is the
@@ -82,14 +75,14 @@ let authenticate = door({
 
 Without `required`, a request with no credential still reads and writes — its
 batch simply lands with no actor on it. With it, an unnamed request is refused
-before the graph sees it. Either way the door runs on **every** request, reads
-and socket upgrades included, and the identity it returns is what signs the
-batch: whatever `$actor` a client sent is thrown away.
+before the graph sees it. The authentication callback runs on **every** request,
+reads and socket upgrades included, and the identity it returns is what signs
+the batch: whatever `$actor` a client sent is thrown away.
 
-`cookies(request)` and `bearer(request)` are exported on their own, for a door
-that wants to decide differently.
+`cookies(request)` and `bearer(request)` are exported on their own, for an
+authentication callback that wants to decide differently.
 
-## The socket
+## WebSocket upgrades
 
 `worker()` wires `workerUpgrade` for you. Reach for it directly when you are
 building the api yourself — inside a Durable Object, say:
@@ -162,14 +155,14 @@ the runtime they describe.
 
 Its dependencies are the sibling packages: `@yaks/api` and `@yaks/graph`.
 
-## The family
+## Related packages
 
-[@yaks/api](https://jsr.io/@yaks/api) owns the routes, the refusals and the
+[@yaks/api](https://jsr.io/@yaks/api) owns the routes, the errors and the
 subscription model; [@yaks/graph](https://jsr.io/@yaks/graph) owns the bundle
 wire and `apply()`; the bytes belong to a storage adapter —
 [@yaks/durable-object](https://jsr.io/@yaks/durable-object) inside a Durable
-Object, `@yaks/d1` over D1, [@yaks/ram](https://jsr.io/@yaks/ram) with nothing
-underneath. This package is only the seam between them and Cloudflare.
+Object, `@yaks/d1` over D1, [@yaks/ram](https://jsr.io/@yaks/ram) in memory.
+This package is only the integration between them and Cloudflare.
 
 ## License
 

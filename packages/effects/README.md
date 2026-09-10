@@ -1,11 +1,12 @@
 # @yaks/effects
 
-**What a graph does about the data it commits** — kept out of the write path.
+Post-commit handlers for graph changes, such as notifications or external API
+calls. Handlers run outside the storage transaction, so a handler failure does
+not roll back the committed data. Applications supply the handlers and component
+vocabulary.
 
-When a post is published, notify its subscribers. When an order is paid, print
-the receipt. When an account is deleted, close its sessions. None of that
-belongs inside the transaction that stored the post: it is slow, it can fail,
-and failing must not un-store the post.
+For bundle structure, write phases, and adapter responsibilities, see the
+[graph architecture](../graph/ARCHITECTURE.md).
 
 ## Install
 
@@ -14,7 +15,7 @@ deno add jsr:@yaks/effects
 # or: npx jsr add @yaks/effects
 ```
 
-## The mechanism, not the effects
+## Register handlers
 
 This package ships **no effect and no component**. It is the registry, the
 phase, and the rules for running a handler safely. The components are your
@@ -93,7 +94,7 @@ caller starts its own work and returns nothing.
 
 ## Writing back
 
-An effect that writes gets one door, and it is the graph's own `apply()`.
+Effects write through the graph’s `apply()` method.
 
 ```ts
 let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
@@ -113,11 +114,10 @@ what effects write.
 The `tx` a handler also receives stays the detached transaction it always was:
 each call its own unit of work, for **reading** the settled state.
 
-**The loop is stopped by the door, not by each handler.** A write from an effect
-can of course wake an effect. Every batch carries its generation under `$effect`
-— `0` at the door, `1` for an effect's write, one more each hop — and a batch
-past `depth` (default `1`) commits, journals and casts like any other while
-waking nobody.
+Effect writes can trigger more effects. Each batch carries a generation under
+`$effect`: `0` for an initial write, `1` for an effect’s write, incrementing for
+each subsequent handler write. Batches beyond `depth` (default `1`) still
+commit, are journaled, and are broadcast, but do not trigger handlers.
 
 ```ts
 let fx = effects(vocab, { write, depth: 0 }) // an effect's write wakes no one
@@ -157,14 +157,11 @@ skips one whose claim is somebody else's and has not expired.
 An application that wants none of this loads no `effect` component and stores
 nothing; the in-memory tier needs no component at all.
 
-## Where it sits
+## Composition
 
-Below it, [@yaks/graph](https://jsr.io/@yaks/graph) owns the phases and hands
-this one the committed batch. Beside it, any storage adapter —
-[@yaks/ram](https://jsr.io/@yaks/ram) in a page or a test, a database adapter on
-a server. Above it, the plugins that have something to do: this is the seam a
-component domain uses to act on its own components without touching the write
-path.
+[@yaks/graph](../graph/README.md) supplies the write phases and committed
+batches. Effects can run with [@yaks/ram](../ram/README.md) or a database
+adapter. Application plugins register handlers for their components.
 
 ## External journals and split processes
 
@@ -173,7 +170,7 @@ without installing the graph plugin or adopting the package journal layout. The
 consumer owns its cursor and process lease; dispatch does not persist or replay
 anything. Handlers start eagerly and failures stay telemetry. Omit `tx` for
 event-only handlers; trying to read through it then is a reported error, never a
-made-up empty result. The configured `write` door remains available.
+made-up empty result. The configured `write` callback remains available.
 
 ```ts
 let fx = effects(vocab, { want: (where) => where == 'do', write })

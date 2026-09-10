@@ -1,8 +1,11 @@
 # @yaks/blob
 
-**Content-addressed storage for a text column**, applied without anybody
-noticing. A blog post's body, a product description, a page of notes: values
-that are long, often repeated, and awkward in a row.
+Content-addressed storage for text columns. The graph plugin replaces marked
+column values with SHA-256 addresses before storage; read helpers resolve those
+addresses back to text. Repeated values share one stored copy.
+
+For bundle structure, write phases, and adapter responsibilities, see the
+[graph architecture](../graph/ARCHITECTURE.md).
 
 ## Install
 
@@ -36,7 +39,7 @@ deno add jsr:@yaks/blob
 That is the entire declaration. To everything else — validation, routing,
 queries, the wire — `body` is a plain string column and stays one.
 
-## Then forget about it
+## Configure storage and the plugin
 
 ```ts
 import { loadVocab } from '@yaks/vocab'
@@ -61,26 +64,18 @@ g.apply([{ entity: { eid: 'p1' }, post: { body: 'a long essay…' } }])
 db.read('.post!')[0].post.body // 'a long essay…'
 ```
 
-Nothing between those two lines says `blob`. The write went in as text and came
-back as text; in between, the row kept the SHA-256 of the essay and the essay
-itself went to the store — **once**, however many posts quote it.
+The caller writes and reads text. The component table stores an address, and
+`sqliteBlobs` stores the text in a separate table, deduplicated by address.
 
-```sql
-select body from post;              -- 'e3b0c442…'  the address
-select value from blob_text …;      -- 'a long essay…'  the bytes
-```
+## Write ordering and transactions
 
-## Where the swap happens, and why there
+The plugin replaces text with addresses in `precondition`, after the `$was`
+guard checks the caller-visible text, and restores text in returned bundles at
+`commit`. A `mutate` hook would run after the core has already written rows.
 
-Inside the batch's transaction, on the last phase before the rows go in
-(`precondition`), and undone on the last phase before the commit (`commit`).
-
-That is not a preference, it is the only place it works. The bytes and the row
-that addresses them must land together, so the swap cannot happen before the
-transaction opens. And `mutate` is already too late: within a phase the core
-runs first, so by the time a `mutate` hook is called the text is in the row. It
-also lands on the right side of the `$was` precondition — the guard hashes the
-value a caller **read**, and what a caller reads is the text.
+With `sqliteBlobs` on the same driver, blob inserts and component writes share a
+transaction. File and object stores do not participate in that transaction; a
+failed graph write can leave an unreferenced blob.
 
 ## Backends
 
@@ -116,7 +111,7 @@ different problems:
   store is.
 
 Every name in `Layout` is configurable, because the table is often one you
-already have — point it at yours and the existing rows read where they lie.
+already have — configure it to read an existing table.
 
 ## Searching a body
 
@@ -148,7 +143,7 @@ deciding when one is truly unreachable is an application's call, not a default.
 Dropping the plugin does not strand your data either way: a body column is a
 text column holding a hash, and the store is a table of hashes and text.
 
-## The surface
+## Exports
 
 | export                                | is                                          |
 | ------------------------------------- | ------------------------------------------- |
@@ -163,14 +158,14 @@ text column holding a hash, and the store is a table of hashes and text.
 | `fileBlobs(dir)`                      | the directory backend                       |
 | `objectBlobs(bucket, prefix?)`        | the bucket backend                          |
 
-## Where it sits
+## Composition
 
 A plugin over [@yaks/graph](https://jsr.io/@yaks/graph), reading its one
-declaration through [@yaks/vocab](https://jsr.io/@yaks/vocab)'s keyword seam the
-way [@yaks/id](https://jsr.io/@yaks/id) and
+declaration through [@yaks/vocab](https://jsr.io/@yaks/vocab)'s keyword
+extension API the way [@yaks/id](https://jsr.io/@yaks/id) and
 [@yaks/names](https://jsr.io/@yaks/names) do, and teaching
 [@yaks/sql](https://jsr.io/@yaks/sql) how to read a body column through its
-derived-column seam.
+derived-column API.
 
 ## Compatibility
 

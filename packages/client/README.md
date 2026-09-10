@@ -1,15 +1,12 @@
 # @yaks/client
 
-The **frontend tier** for a client [@yaks/graph](https://jsr.io/@yaks/graph):
-one call assembles it, a query is a value that changes, and what belongs to this
-browser is kept in IndexedDB.
+A client-side graph with in-memory storage, reactive queries, optional server
+synchronization, and local persistence. `client()` composes the graph, RAM,
+match, and sync packages; applications use one client API to write bundles and
+watch query results.
 
-The pieces already exist — a map to hold entities
-([@yaks/ram](https://jsr.io/@yaks/ram)), a wire to a server
-([@yaks/sync](https://jsr.io/@yaks/sync)), a query evaluator with no database
-under it ([@yaks/match](https://jsr.io/@yaks/match)). This package is the three
-things a page still has to add: the assembly, the reactivity, and somewhere
-durable to put the state the server will never send back.
+For bundle structure, write phases, and adapter responsibilities, see the
+[graph architecture](../graph/ARCHITECTURE.md).
 
 ## Install
 
@@ -28,6 +25,15 @@ import { client } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
 import { syncKeywords } from '@yaks/sync'
 
+let recipeBox = {
+  $defs: {
+    doc: { type: 'object', properties: { title: { type: 'string' } } },
+    recipe: {
+      type: 'object',
+      properties: { serves: { type: 'number' }, course: { type: 'string' } },
+    },
+  },
+}
 let vocab = loadVocab(recipeBox, [syncKeywords])
 let box = client(vocab, [], { url: 'https://recipes.example' })
 
@@ -38,9 +44,9 @@ box.mutate([{
 }])
 ```
 
-That is the whole setup. `client(vocab, plugins, opts)` takes the vocabulary you
-share with the server, whatever plugins are yours, and the options below — and
-gives back the graph, the wire, the watches and four calls a page makes all day:
+`client(vocab, plugins, opts)` accepts a vocabulary, application plugins, and
+options. It exposes the graph, synchronization client, watches, and these
+convenience methods:
 
 ```ts
 box.watch('.course=dinner') // a live answer (below)
@@ -76,7 +82,7 @@ it answers depends on the query:
   orders, windows or counts — is **read again** and compared. `.order=title`
   therefore both defines the order and puts the watch in this mode.
 
-Either way the watch fires only when its own answer moved. An unrelated write
+Either way the watch fires only when its own result changed. An unrelated write
 does not wake it.
 
 ### With a server
@@ -115,8 +121,8 @@ let useWatch = (query: string) => {
 }
 ```
 
-The snapshot is a new array only when the answer moved, so React re-renders when
-the answer changes and not otherwise.
+The snapshot is a new array only when the result changed, so React re-renders
+when the result changes and not otherwise.
 
 ## Three tiers, one apply()
 
@@ -139,11 +145,11 @@ dies with the tab. Which is which is declared on the component, as
 - **`wire`** (the default) is the server's. @yaks/sync posts it and applies what
   comes back.
 - **`local`** is this browser's. It is written through to IndexedDB after each
-  commit and loaded back at boot — a draft survives a reload, and no server ever
-  hears about it.
+  commit and loaded back at boot — a draft survives a reload, and it is not sent
+  to the server.
 - **`none`** dies with the tab: held in the graph, written down nowhere.
 
-All three ride the same `apply()`. The local tier is back in the graph by the
+All three use the same `apply()`. The local tier is back in the graph by the
 time `ready` resolves:
 
 ```ts
@@ -204,7 +210,7 @@ dependencies are the sibling packages listed below.
 Outside a browser the interesting part is the assembly and the watches: a
 worker, a test, or a CLI holding a working set gets the same live queries.
 
-## The family
+## Related packages
 
 [@yaks/graph](https://jsr.io/@yaks/graph) owns the bundles and `apply()`;
 [@yaks/ram](https://jsr.io/@yaks/ram) is the map this keeps them in;

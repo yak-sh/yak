@@ -1,14 +1,11 @@
 # @yaks/query
 
-A generic, **schema-agnostic** parser and builder for the yaks query format. It
-turns a query string into a plain, serializable AST, and builds the _same_ AST
-from code. It knows the format — operators, any-of lists, ranges, time literals,
-the reserved directives, how tokens separate — and nothing about any particular
-schema. Deciding whether `status` is a real column, a reference, or an enum, and
-how a field maps to storage, is a downstream job — see
-[@yaks/vocab](https://jsr.io/@yaks/vocab), which describes a schema, and
-[@yaks/sql](https://jsr.io/@yaks/sql), which takes this AST plus a `@yaks/vocab`
-schema and compiles SQL.
+A schema-independent parser and builder for the yaks query format. `parse()`
+turns a query string into a serializable abstract syntax tree (AST); the builder
+creates the same structure from code. The parser handles syntax, not whether a
+column exists or whether a backend supports a query. Use
+[@yaks/sql](../sql/README.md) to compile it or [@yaks/match](../match/README.md)
+to evaluate it over bundles in memory.
 
 ## Install
 
@@ -72,13 +69,13 @@ count distinct tally fields every limit after edges`.
 ## The format
 
 A token is one of three things **by its own shape**: a component clause (it
-wears a sigil, or it carries an operator), a quoted text term, or a bare word,
-which is a text term. Nothing is read by trying and failing — a malformed clause
-throws where it is read rather than falling back to text.
+starts with a sigil, or it carries an operator), a quoted text term, or a bare
+word, which is a text term. Nothing is read by trying and failing — a malformed
+clause throws where it is read rather than falling back to text.
 
 A clause is `path [qualifiers]? operator value`. The bracket binds to the
-**path** and is read before any operator, so `.requires[<=3]->T-42` is the path
-`requires` qualified by a cap, then the walk operator; a bracket after the
+**path** and is read before any operator, so `.requires[<=3]->item-42` is the
+path `requires` qualified by a cap, then the walk operator; a bracket after the
 operator is part of the value (`.title~=x[1]`).
 
 - **Sigils** mark a component word: `.comp` present · `!comp` absent · `+comp`
@@ -96,27 +93,27 @@ operator is part of the value (`.title~=x[1]`).
   (inclusive), `1...5` exclusive end · `.p!=v` not · `.p~=v` contains (literal)
   · `.p<v .p<=v .p>v .p>=v` comparisons · `.p?` want the field alongside the
   filter.
-- **The walk**: `.requires->T-42` selects what reaches `T-42` through `requires`
-  hops; `.requires<-T-42` walks the other way (what `T-42` reaches);
-  `.requires[<=3]->T-42` caps the depth. The path is a relation name, a
-  reference column (`.fork.from->S-7`), or a chain of reference columns
+- **The walk**: `.requires->item-42` selects what reaches `item-42` through
+  `requires` hops; `.requires<-item-42` walks the other way (what `item-42`
+  reaches); `.requires[<=3]->item-42` caps the depth. The path is a relation
+  name, a reference column (`.fork.from->S-7`), or a chain of reference columns
   (`.fork.from.session->S-1` — one step composed of the hops, so a walk over it
   is the fork lineage) — which is schema — and the target is one entity, by eid
   or human id. Without a bracket, the walk has no hop cap and returns at most
   10,000 nearest non-seed nodes; only an explicit `[<=N]` adds a hop cap. Parses
   to a `walk` node (`walk(field, dir,
   target, depth?)`).
-- **Qualifiers**: a path may wear a bracket of comma-separated arguments — `<=3`
-  (an operator and a value), `key=value`, or a bare `word`. Each clause says
-  which it accepts: the walk takes exactly one depth cap, `.edges[type,
-  via]`
-  two bare words, and every other clause none — an unknown qualifier is refused
-  by name (`.status[<=3]=open` throws), never dropped.
+- **Qualifiers**: a path may include brackets of comma-separated arguments —
+  `<=3` (an operator and a value), `key=value`, or a bare `word`. Each clause
+  says which it accepts: the walk takes exactly one depth cap,
+  `.edges[type,
+  via]` two bare words, and every other clause none — an unknown
+  qualifier is refused by name (`.status[<=3]=open` throws), never dropped.
 - The leading `.` is **accepted everywhere and required nowhere**: it keeps a
   URL query string's filters apart from its `page` and `per`, and a rule that
   never travels in a URL may drop it — `comp.prop=1` is the same clause as
   `.comp.prop=1`, and `"comp.prop=1"` in quotes is the text term. It IS what
-  tells the opless `.env` (wears `env`) from `env` (search for it).
+  tells the opless `.env` (has `env`) from `env` (search for it).
 - `.p!` (present) and `.p=` (absent) are the older spellings of `.p` and `!p`,
   still parsed to the same nodes; saved queries keep working.
 - **Separators**: between terms, whitespace, `&` and `,` are aliases for AND
@@ -164,7 +161,7 @@ timeInstant('in 5m') // one moment (a forward phrase reads its end)
 The `time(raw)` builder makes the explicit node a promoted AST or a hand-written
 query carries.
 
-## What is downstream
+## Query consumers
 
 This package deliberately stops at structure. Everything that needs a schema is
 left as raw tokens for a schema-aware compiler such as `@yaks/sql`:

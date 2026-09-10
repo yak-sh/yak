@@ -1,11 +1,12 @@
 # @yaks/durable-object
 
-A yaks graph inside a Cloudflare **Durable Object**: its embedded SQLite is the
-storage, and its hibernatable WebSockets are the live-sync fan-out.
+Storage and hibernatable WebSocket support for a yaks graph in a Cloudflare
+Durable Object. The storage adapter uses the object’s embedded SQLite database;
+the socket adapter manages live subscriptions across hibernation. The
+application provides the vocabulary, graph plugins, and request authorization.
 
-One object is a single, strongly-consistent home for one graph — a shop, a
-project, a customer's whole app — with no database to run and nothing to connect
-to.
+For bundle structure, write phases, and adapter responsibilities, see the
+[graph architecture](../graph/ARCHITECTURE.md).
 
 ## Install
 
@@ -14,22 +15,17 @@ deno add jsr:@yaks/durable-object
 # or: npx jsr add @yaks/durable-object
 ```
 
-## Two halves
+## Storage and sockets
 
-**Storage.** `storage(ctx.storage, vocab)` is
-[@yaks/graph](https://jsr.io/@yaks/graph)'s `Storage`, and it is one line of
-composition: the object's SQLite becomes a
-[@yaks/sqlite](https://jsr.io/@yaks/sqlite) `Driver`, and that package owns the
-schema, the compiled reads, the patches and the death cascade. No SQL is written
-twice, and a graph reads the same in an object as it does on a server.
+**Storage.** `storage(ctx.storage, vocab)` implements the graph `Storage`
+interface by adapting the object’s SQLite API to an
+[@yaks/sqlite](../sqlite/README.md) `Driver`. That package implements schema
+creation, reads, patches, and deletion cascades. The storage API is synchronous;
+asynchronous graph plugins can still make `apply()` return a promise.
 
-Because `ctx.storage.sql` is synchronous, so is everything above it: `apply()`
-returns bundles, not a promise.
-
-**Sockets.** `sockets(subs, ctx)` carries frames between the object's WebSockets
-and [@yaks/api](https://jsr.io/@yaks/api)'s subscriptions. What a subscription
-MEANS — a saved query whose answer is pushed again when a committed batch
-changes it — lives in @yaks/api; only the wire is here.
+**Sockets.** `sockets(subs, ctx)` sends frames between WebSockets and
+[@yaks/api](../api/README.md) subscriptions. The API package evaluates saved
+queries after committed changes; this adapter handles Cloudflare sockets.
 
 ## The whole object
 
@@ -154,8 +150,8 @@ there:
   one key.
 
 `message` and `close` are the object's `webSocketMessage` and `webSocketClose`
-handlers — hibernated sockets deliver no events, which is why @yaks/api's
-`attach()` (which listens) is not the door here.
+handlers — hibernated sockets deliver no events, which is why @yaks/api's Use
+the hibernation callbacks rather than `attach()`, which installs listeners.
 
 ## What the runtime is strict about
 
@@ -167,7 +163,7 @@ of the code.
   driver converts both, and a blob comes back as bytes like every other adapter.
 - **Transactions are not SQL.** `begin` and `savepoint` are refused as
   statements; `ctx.storage.transactionSync` is the transaction, and it nests.
-  That is what @yaks/sqlite's `Driver.tx` seam exists for.
+  The adapter implements this through `Driver.tx`.
 
 Foreign keys are turned on when the store is bound — the enforcement the
 schema's references are written for, which the runtime leaves off per
@@ -185,16 +181,16 @@ sockets(subs, ctx) //                → { accept, message, close, wake }
 `read()`, `rows()`, `tx()`. `base` options — a derived-column registry, a fixed
 `now` for time phrases — ride every read.
 
-The other socket door is a plain Worker's: a `WebSocketPair` accepted in the
-isolate, for [@yaks/api](https://jsr.io/@yaks/api)'s own `/ws` route. That one
-is [@yaks/workers](https://jsr.io/@yaks/workers)' `workerUpgrade`, and it holds
-its subscriptions only as long as the isolate lives — inside a Durable Object,
-`sockets` hands them to the runtime instead.
+A regular Worker uses a different WebSocket lifecycle: a `WebSocketPair`
+accepted in the isolate, for [@yaks/api](https://jsr.io/@yaks/api)'s own `/ws`
+route. That one is [@yaks/workers](https://jsr.io/@yaks/workers)'
+`workerUpgrade`, and it holds its subscriptions only as long as the isolate
+lives — inside a Durable Object, `sockets` hands them to the runtime instead.
 
-## Where it sits
+## Composition
 
 One of three interchangeable storage adapters, all implementing the same
-`Storage` seam:
+`Storage` interface:
 
 - **@yaks/durable-object** — a Durable Object's embedded SQLite (this package);
 - **[@yaks/sqlite](https://jsr.io/@yaks/sqlite)** — an in-process SQLite, and
@@ -218,13 +214,13 @@ taken on trust: `workers_check.ts` asserts it against
 because those types arrive as globals that would redefine `Response` and
 `WebSocket` for every file sharing a type-check with them.
 
-## The family
+## Related packages
 
 A query string is parsed by [@yaks/query](https://jsr.io/@yaks/query); a
 vocabulary is described with [@yaks/vocab](https://jsr.io/@yaks/vocab);
 [@yaks/graph](https://jsr.io/@yaks/graph) owns the bundle wire and `apply()`;
 [@yaks/sqlite](https://jsr.io/@yaks/sqlite) owns the SQL this package runs; and
-[@yaks/api](https://jsr.io/@yaks/api) is the door in front of all of it.
+[@yaks/api](https://jsr.io/@yaks/api) provides the HTTP and subscription API.
 
 ## License
 

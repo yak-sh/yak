@@ -1,12 +1,10 @@
 # @yaks/sql
 
-Compile a [`@yaks/query`](../query) AST against a [`@yaks/vocab`](../vocab)
-schema into a **SQL string and bound params**, through a dialect-agnostic
-relational IR. A SQLite dialect ships with the package.
-
-`@yaks/query` parses a query string to an AST; `@yaks/vocab` describes a
-component vocabulary; this package binds the two and lowers them to SQL for a
-dialect. A value is **always a bound param**, never a concatenated literal.
+Compile a [@yaks/query](../query/README.md) AST and a
+[@yaks/vocab](../vocab/README.md) vocabulary into parameterized SQL. Binding
+resolves schema paths and types into a relational intermediate representation
+(IR); rendering produces SQL text and parameters. This package does not open a
+database or execute statements.
 
 ## The pipeline
 
@@ -31,7 +29,7 @@ Two passes over a dialect-agnostic relational IR:
 
 `compile` is their composition.
 
-## The IR is the seam
+## Intermediate representation
 
 The IR (`ir.ts`) is Arel-shaped and carries the statement as data, so a new
 backend (D1, Postgres) is another **renderer over the same value** — the
@@ -60,7 +58,7 @@ let derived: Derived = {
 compile(ast, vocab, { derived })
 ```
 
-## The extension seam
+## SQL extensions
 
 Some clauses need machinery this package does not own — a full-text term needs a
 search index, `.near` needs vectors, `.edges` needs a link table. Each of those
@@ -111,7 +109,8 @@ The contract, whole:
   ranking lowers to an expression over values it can spell safely — the integer
   ids it already resolved, or a joined column. `site.owner` names the row the
   expression speaks about: a `.after` cursor asks the same hook a second time
-  with the ANCHOR's owner id, so a ranking is pageable without a second seam.
+  with the ANCHOR's owner id, so a ranking is pageable without another extension
+  API.
 
 ## Ordering and paging
 
