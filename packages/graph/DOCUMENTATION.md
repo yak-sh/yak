@@ -31,7 +31,10 @@ were executed against the workspace packages.
   storage/client passing tests. These check package behavior, not every README
   snippet. Some examples intentionally require a host, provider, or configured
   graph and are integration fragments rather than standalone programs.
-- All 46 READMEs and the architecture guide were formatted.
+- After integration with the test-isolation fix, 234 graph/API/alias/harness
+  tests passed with a temporary `HOME` and `HARNESS_DB`.
+- All 46 READMEs, the architecture guide, and this coverage record were
+  formatted.
 - Relative Markdown file links were checked against the checkout. Remote links
   and fragment anchors were not fetched or exhaustively validated.
 - No package source/API changes are part of this documentation review.
