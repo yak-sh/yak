@@ -23,9 +23,9 @@ Deno.test('shared FIFO pool admits IDs before preparation and never over-admits 
   let replies = Array.from({ length: 3 }, () => Promise.withResolvers<Reply>())
   let tools = sessionTools(h.g, {
     maxChildren: 1,
-    prepareChild: async ({ child }) => {
+    prepareChild: ({ child }) => {
       prepared.push(child)
-      return {}
+      return Promise.resolve({})
     },
   })
   let a = agent({
@@ -163,9 +163,9 @@ Deno.test('queued cancellation skips expensive prep; prep failure has one termin
   let prepared: string[] = []
   let tools = sessionTools(h.g, {
     maxChildren: 0,
-    prepareChild: async ({ child }) => {
+    prepareChild: ({ child }) => {
       prepared.push(child)
-      throw new Error('checkout failed')
+      return Promise.reject(new Error('checkout failed'))
     },
   })
   let a = agent({ h, tools, model: () => Promise.resolve(reply('parent')) })
@@ -239,9 +239,9 @@ Deno.test('queued submissions and fork anchors survive file reopen without dupli
     let prep = 0
     tools = sessionTools(h.g, {
       maxChildren: 1,
-      prepareChild: async () => {
+      prepareChild: () => {
         prep++
-        return {}
+        return Promise.resolve({})
       },
     })
     a = agent({ h, tools, model: () => Promise.resolve(reply('done')) })
