@@ -17,8 +17,8 @@ let mount = (
   view: 'rows' | 'links' | false = 'rows',
 ) => {
   let { document } = parseHTML(`<html><body>
-<p data-disconnected${initial.length ? ' hidden' : ''}>Connect your chatbot</p>
-<p data-connected${initial.length ? '' : ' hidden'}>Your chatbots</p>
+<p data-disconnected${initial.length ? ' hidden' : ''}>Connect your agent</p>
+<p data-connected${initial.length ? '' : ' hidden'}>Your agents</p>
 <details data-connection-setup${
     initial.length ? '' : ' open'
   }><input value="draft"></details>
@@ -62,7 +62,7 @@ ${view ? connectionList(initial, view) : ''}${
   }
 }
 
-Deno.test('connection rows show names and only known web chatbot destinations', () => {
+Deno.test('connection rows show names and only known web agent destinations', () => {
   let hostile = '<img src=x onerror=alert(1)>'
   let m = mount([
     chatgpt,
@@ -84,7 +84,7 @@ Deno.test('connection rows show names and only known web chatbot destinations', 
     ],
   )
   assert(m.list.querySelector('a')!.textContent!.includes('Open ChatGPT'))
-  assertEquals(m.list.getAttribute('aria-label'), 'Connected chatbots')
+  assertEquals(m.list.getAttribute('aria-label'), 'Connected agents')
 })
 
 Deno.test('compact connections render launch links and refresh without replacing drafts or stable links', async () => {
@@ -206,7 +206,7 @@ Deno.test('connection refresh coalesces events and preserves state on failures',
   assertEquals(m.calls.length, count)
 })
 
-Deno.test('connection state refreshes without a chatbot list or row template', async () => {
+Deno.test('connection state refreshes without an agent list or row template', async () => {
   for (let initial of [[], [chatgpt]]) {
     let m = mount(initial, false)
     let prompt = m.document.querySelector<HTMLElement>('[data-disconnected]')!

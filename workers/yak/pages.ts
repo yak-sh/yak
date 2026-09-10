@@ -711,7 +711,7 @@ ${icon(navIcons[key])}${label}${
     url(env, '/yaks-app.png')
   }" width="36" height="36" alt="">yaks.app</a>
 <nav class="SideNav" aria-label="Manage your apps">
-${link('apps', 'Apps')}${link('connect', 'Chatbots')}<hr>
+${link('apps', 'Apps')}${link('connect', 'Agents')}<hr>
 ${link('visits', 'Visits')}${at.sell ? link('selling', 'Selling') : ''}
 ${link('settings', 'Settings')}${link('trash', 'Trash')}
 </nav>
@@ -728,8 +728,8 @@ let state = (connected: boolean, show: boolean) =>
 
 let connectCard = (at: SpacePage) =>
   `<section class="Desk_Connect" ${state(false, !at.connections?.length)}>
-<div><h2>Connect your chatbot</h2><p>Build and improve your apps in the conversations you already have with Claude or ChatGPT.</p></div>
-<a class="Button" href="${managePath('connect')}">Connect chatbot</a></section>`
+<div><h2>Connect your agent</h2><p>Build and improve your apps in the conversations you already have with Claude or ChatGPT.</p></div>
+<a class="Button" href="${managePath('connect')}">Connect agent</a></section>`
 
 let library = (at: SpacePage) =>
   `${connectCard(at)}${
@@ -738,7 +738,7 @@ let library = (at: SpacePage) =>
       : `<section class="Desk_Empty"><h2>Your apps will live here</h2>
 <div ${
         state(true, !!at.connections?.length)
-      }><p>Ask your chatbot for your first app. Try this:</p>${
+      }><p>Ask your agent for your first app. Try this:</p>${
         copyable(
           'Use yaks.app to build me a recipe box.',
           'a first app request',
@@ -863,7 +863,7 @@ let desk = (at: SpacePage, env: Host) => {
   let view = at.view ?? 'apps'
   let titles = {
     apps: 'Your apps',
-    connect: 'Your chatbots',
+    connect: 'Your agents',
     new: 'New app',
     visits: 'Visits',
     selling: 'Selling',
@@ -879,7 +879,7 @@ let desk = (at: SpacePage, env: Host) => {
     body = `<section class="Desk_Start" ${
       state(true, !!at.connections?.length)
     }>
-<h2>Ask your chatbot for a new yaks.app</h2>${
+<h2>Ask your agent for a new yaks.app</h2>${
       connectionList(at.connections ?? [], 'links')
     }</section>${connectCard(at)}
 <div class="Desk_Options">${chat()}
@@ -1532,7 +1532,7 @@ let connectionSetup = (connections: Connection[], env: Host) =>
 <details class="Connect_Setup" data-connection-setup${
     connections.length ? '' : ' open'
   }>
-<summary ${state(true, !!connections.length)}>Connect another chatbot</summary>
+<summary ${state(true, !!connections.length)}>Connect another agent</summary>
 ${doors(env)}</details>`
 
 // The only script a tab needs, and it is not what switches one: the radios do

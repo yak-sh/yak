@@ -64,7 +64,7 @@ let b64u = (b: ArrayBuffer) =>
     .replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
 
 slow(
-  'chatbot connections identify existing grants and belong to the signed-in browser',
+  'agent connections identify existing grants and belong to the signed-in browser',
   async () => {
     let k = await kernel()
     try {
@@ -192,7 +192,7 @@ slow(
       assertEquals(await own.json(), { connections: [] })
 
       // Revoking one installation leaves another; removing its last grant
-      // removes the chatbot on the next read, with no connection cache.
+      // removes the agent on the next read, with no connection cache.
       for (
         let [client, remaining] of [
           [chatgpt, ['chatgpt', 'claude']],

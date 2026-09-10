@@ -1,4 +1,4 @@
-// Connected chatbots render as status rows or compact launch links. Each
+// Connected agents render as status rows or compact launch links. Each
 // shape shares its server markup with the browser's refresh template; pages
 // without a list still refresh prompts without touching surrounding inputs.
 import type { Connection, Provider } from './connections.ts'
@@ -38,7 +38,7 @@ export let connectionList = (
   } aria-live="polite">
 <ul class="Connections${
     view == 'links' ? ' Connections-links' : ''
-  }" aria-label="Connected chatbots" data-connected${
+  }" aria-label="Connected agents" data-connected${
     connections.length ? '' : ' hidden'
   }>${connections.map((c) => row(c, view == 'links')).join('')}</ul>
 <template data-connection-row>${

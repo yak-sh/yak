@@ -1,6 +1,6 @@
-// Connected chatbots are a view of the OAuth provider's surviving grants.
+// Connected agents are a view of the OAuth provider's surviving grants.
 // Callback hosts identify web clients; local and older clients use their
-// registered names. Multiple installations of one chatbot share one entry.
+// registered names. Multiple installations of one agent share one entry.
 import type {
   ClientInfo,
   GrantSummary,
@@ -58,7 +58,7 @@ let callback = (uri: string | undefined) => {
         return { provider: 'claude' as Provider }
       }
     }
-  } catch { /* An invalid callback cannot identify a chatbot. */ }
+  } catch { /* An invalid callback cannot identify an agent. */ }
   return {}
 }
 
@@ -89,7 +89,7 @@ export let connectionsOf = async (
       id,
       name: provider
         ? names[provider]
-        : client?.clientName?.trim() || 'Other chatbot',
+        : client?.clientName?.trim() || 'Other agent',
       ...(provider ? { provider } : {}),
       connectedAt: Math.min(grant.createdAt, previous?.connectedAt ?? Infinity),
     })

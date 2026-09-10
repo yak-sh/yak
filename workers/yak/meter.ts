@@ -117,7 +117,7 @@ export let LETTERS: Record<Tier, number> = { free: 100, plus: 1_000 }
 export let letters = (tier: Tier | null): number => LETTERS[tier ?? 'free']
 
 // Monthly allowances for the optional built-in builder. Making and changing
-// apps through a connected chatbot (app_new, app_files) is not metered here.
+// apps through a connected agent (app_new, app_files) is not metered here.
 export let BUILDS: Record<Tier, number> = { free: 5, plus: 30 }
 
 export let builds = (tier: Tier | null): number => BUILDS[tier ?? 'free']
@@ -291,7 +291,7 @@ export let atCeiling = (
       `${space.slug} has used its ${
         count(builds(space.tier))
       } built-in builds this month — it can build again on the 1st, ` +
-      `or keep building with a connected chatbot`,
+      `or keep building with a connected agent`,
   }[what]()
   return `${said}. ${
     tier == 'plus' ? `What the plans hold` : `Plus lifts it`

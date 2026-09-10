@@ -113,7 +113,7 @@ slow('a space with no front page lists what you may open', async () => {
 
 // Builder and setup are separate destinations, and the live script is served
 // on the same origin as the optional builder.
-slow('management separates app creation from assistant setup', async () => {
+slow('management separates app creation from agent setup', async () => {
   let k = await kernel()
   try {
     let { cookie } = await seed(k, [{ slug: 'bare', apps: [] }])
@@ -129,6 +129,8 @@ slow('management separates app creation from assistant setup', async () => {
     assert(!fresh.includes('name="agent"'), fresh)
     assertEquals((await k.at('bare.yaks.app', '/api/build.js')).status, 200)
     let setup = await (await at('connect')).text()
+    assertStringIncludes(setup, 'Your agents')
+    assertStringIncludes(setup, 'Connect another agent')
     assertStringIncludes(setup, 'name="agent"')
     assert(!setup.includes('<textarea'), setup)
   } finally {
@@ -165,6 +167,13 @@ Deno.test('the app library has navigation, not account forms', async () => {
   for (let view of ['connect', 'new', 'settings', 'visits', 'trash'] as const) {
     assertStringIncludes(page, `href="${managePath(view)}"`)
   }
+  let { document } = parseHTML(page)
+  assertEquals(
+    document.querySelector(`nav a[href="${managePath('connect')}"]`)
+      ?.textContent?.trim(),
+    'Agents',
+  )
+  assertStringIncludes(page, 'Connect your agent')
   assert(!page.includes('<form'), page)
   assert(!page.includes('name="agent"'), page)
   assert(!page.includes('src="/api/build.js"'), page)
@@ -184,7 +193,7 @@ Deno.test('profile and address save independently in settings', async () => {
   }
 })
 
-Deno.test('new app exposes separate build and upload forms below the chatbot route', async () => {
+Deno.test('new app exposes separate build and upload forms below the agent route', async () => {
   let page = await block({ view: 'new' })
   let { document } = parseHTML(page)
   let build = document.querySelector('textarea')!

@@ -67,11 +67,11 @@ Deno.test('connections: all pages, earliest active installation, stable order', 
       grant('old-chatgpt', { redirectUri: 'https://chat.openai.com/a' }),
       grant('custom', { createdAt: 40 }),
     ],
-  ], { custom: 'My chatbot', expired: 'Gone' })
+  ], { custom: 'My agent', expired: 'Gone' })
   assertEquals(await connectionsOf(p.oauth, 'person', 100), [
     { id: 'chatgpt', provider: 'chatgpt', name: 'ChatGPT', connectedAt: 10 },
     { id: 'claude', provider: 'claude', name: 'Claude', connectedAt: 10 },
-    { id: 'custom', name: 'My chatbot', connectedAt: 40 },
+    { id: 'custom', name: 'My agent', connectedAt: 40 },
   ])
   assertEquals(p.users, ['person', 'person'])
   assertEquals(p.looked, ['custom'])
@@ -120,15 +120,15 @@ Deno.test('connections: unknown registered clients stay visible; missing clients
     grant('custom', { redirectUri: 'https://other.test/callback' }),
     grant('deleted'),
     grant('known', { redirectUri: 'https://claude.com/callback' }),
-  ]], { unnamed: '', custom: 'Unlisted chatbot' })
+  ]], { unnamed: '', custom: 'Unlisted agent' })
   assertEquals(await connectionsOf(p.oauth, 'person'), [
     { id: 'claude', provider: 'claude', name: 'Claude', connectedAt: 10 },
-    { id: 'unnamed', name: 'Other chatbot', connectedAt: 10 },
-    { id: 'custom', name: 'Unlisted chatbot', connectedAt: 10 },
+    { id: 'unnamed', name: 'Other agent', connectedAt: 10 },
+    { id: 'custom', name: 'Unlisted agent', connectedAt: 10 },
   ])
 })
 
-Deno.test('connections: unavailable metadata retains its grant without hiding other chatbots', async () => {
+Deno.test('connections: unavailable metadata retains its grant without hiding other agents', async () => {
   let p = provider([[
     grant('https://unavailable.test/client.json'),
     grant('https://unavailable.test/client.json', { createdAt: 20 }),
@@ -144,7 +144,7 @@ Deno.test('connections: unavailable metadata retains its grant without hiding ot
       { id: 'chatgpt', provider: 'chatgpt', name: 'ChatGPT', connectedAt: 10 },
       {
         id: 'https://unavailable.test/client.json',
-        name: 'Other chatbot',
+        name: 'Other agent',
         connectedAt: 10,
       },
     ],
