@@ -56,6 +56,10 @@ export type Tx = {
   /** identity, not search: these entities as they stand, whole. A dead one
    * comes back wearing `tombstone`; an unknown one is simply absent. */
   get: (eids: Eid[]) => Bundle[] | Promise<Bundle[]>
+  /** Identity and tombstone state plus the named components. May return a
+   * superset; callers needing a whole entity still use `get`. An adapter
+   * without a cheaper projection leaves this out. */
+  pick?: (eids: Eid[], names: string[]) => Bundle[] | Promise<Bundle[]>
   /** the other direction: the entities whose reference columns point AT one of
    * these, narrowed to the components named. Present only on the transaction
    * `apply()` hands its hooks, where the gather has already read it (./gather.ts
@@ -116,3 +120,10 @@ export let detached = (storage: Storage): Tx => ({
   patch: (bundles) => storage.tx((tx) => tx.patch(bundles)),
   remove: (entities) => storage.tx((tx) => tx.remove(entities)),
 })
+
+/** Read only the facets a check needs, or the whole entity on other adapters. */
+export let pick = (
+  tx: Tx,
+  eids: Eid[],
+  names: string[],
+): Bundle[] | Promise<Bundle[]> => tx.pick ? tx.pick(eids, names) : tx.get(eids)

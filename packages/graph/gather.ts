@@ -50,6 +50,9 @@ import { then } from './pipe.ts'
 export type Ask = {
   /** these entities, whole */
   eids?: Eid[]
+  /** Named facets sufficient until a whole read or the first write. Omit
+   * for a whole snapshot; a whole ask always wins over a narrow one. */
+  select?: string[]
   /** the entities whose reference columns point AT these */
   about?: Eid[]
   /** which components an `about` looks through (default: every one that
@@ -70,6 +73,8 @@ export type Snap = {
   near: Map<string, Bundle[]>
   /** the (column, target) triples `near` is keyed by */
   pairs: [string, string, Eid][]
+  /** Named snapshots whose unselected facets have not yet been read. */
+  only?: Map<Eid, Set<string>>
 }
 
 /** One backwards read, as the snapshot files it. */
@@ -190,15 +195,48 @@ export let gather = (
   let snap: Snap = { got: new Map(), near: new Map(), pairs: [] }
   let named = [...eids]
   let back = [...pairs.values()]
-  return then(named.length ? tx.get(named) : [], (found) => {
+  // Set gathers and backwards asks already amortize their full read. Only
+  // the singleton path benefits from deferring unrelated components.
+  let narrow = tx.pick && named.length == 1 && !back.length &&
+    asks.every((a) => !a.eids?.length || a.select != null)
+  let selected = new Set(['tombstone', ...asks.flatMap((a) => a.select ?? [])])
+  let rows = !named.length
+    ? []
+    : narrow
+    ? tx.pick!(named, [...selected])
+    : tx.get(named)
+  return then(rows, (found) => {
     for (let e of named) snap.got.set(e, null)
     for (let b of found) snap.got.set(b.entity.eid, b)
+    if (narrow) snap.only = new Map(found.map((b) => [b.entity.eid, selected]))
     let q = pointing(back)
     if (!q) return snap
     return then(seek(tx, q), (rows) => {
       file(snap, back, rows)
       return snap
     })
+  })
+}
+
+/** Finish the FOUND snapshot before any mutation or phase needing whole
+ * rule context. Only SQL shapes are cached across applies, never row values. */
+export let complete = (tx: Tx, snap: Snap): void | Promise<void> => {
+  if (!snap.only?.size) return
+  return then(tx.get([...snap.only.keys()]), (rows) => {
+    let found = new Map(rows.map((b) => [b.entity.eid, b]))
+    for (let [eid, selected] of snap.only!) {
+      let b = found.get(eid)
+      let held = snap.got.get(eid)
+      // A host may have retained this very bundle for its lifecycle policy.
+      // Fill it in place before the first write can consult that policy,
+      // preserving the already-observed values (and absence) of selected facets.
+      if (b && held) {
+        for (let [name, comp] of comps(b)) {
+          if (!selected.has(name)) held[name] = comp
+        }
+      } else snap.got.set(eid, b ?? null)
+    }
+    snap.only!.clear()
   })
 }
 
@@ -226,24 +264,43 @@ export let holding = (tx: Tx, vocab: Vocab, snap: Snap): Tx => ({
   // walks (./cascade.ts `doomed`).
   doom: undefined,
   patch: (bundles) =>
-    then(tx.patch(bundles), (born) => {
-      for (let b of bundles) {
-        let eid = b.entity.eid
-        let held = merged(snap.got.get(eid) ?? null, b)
-        if (snap.got.has(eid)) snap.got.set(eid, held)
-        // Where it points now, and where it no longer does.
-        for (let [c, p, e] of snap.pairs) {
-          let rows = snap.near.get(key(c, p, e))!
-          let was = rows.findIndex((r) => r.entity.eid == eid)
-          let hit = at(held, c, p) === e
-          if (hit && was < 0) rows.push(held)
-          else if (hit) rows[was] = held
-          else if (was >= 0) rows.splice(was, 1)
-        }
-      }
-      return born
-    }),
+    then(
+      bundles.length ? complete(tx, snap) : undefined,
+      () =>
+        then(tx.patch(bundles), (born) => {
+          for (let b of bundles) {
+            let eid = b.entity.eid
+            let held = merged(snap.got.get(eid) ?? null, b)
+            if (snap.got.has(eid)) snap.got.set(eid, held)
+            // Where it points now, and where it no longer does.
+            for (let [c, p, e] of snap.pairs) {
+              let rows = snap.near.get(key(c, p, e))!
+              let was = rows.findIndex((r) => r.entity.eid == eid)
+              let hit = at(held, c, p) === e
+              if (hit && was < 0) rows.push(held)
+              else if (hit) rows[was] = held
+              else if (was >= 0) rows.splice(was, 1)
+            }
+          }
+          return born
+        }),
+    ),
+  remove: (entities) => then(complete(tx, snap), () => tx.remove(entities)),
+  pick: (eids, names) => {
+    if (
+      eids.every((e) =>
+        snap.got.has(e) &&
+        (!snap.only?.has(e) || names.every((n) => snap.only!.get(e)!.has(n)))
+      )
+    ) {
+      return eids.flatMap((e) => snap.got.get(e) ?? [])
+    }
+    return holding(tx, vocab, snap).get(eids)
+  },
   get: (eids) => {
+    if (eids.some((e) => snap.only?.has(e))) {
+      return then(complete(tx, snap), () => holding(tx, vocab, snap).get(eids))
+    }
     let mine = () => eids.flatMap((e) => snap.got.get(e) ?? [])
     let miss = eids.filter((e) => !snap.got.has(e))
     if (!miss.length) return mine()

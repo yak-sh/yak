@@ -4,10 +4,12 @@ import {
   actorOf,
   type Bundle,
   type Comp,
+  comps,
   dead,
   detached,
   type Graph,
   isPromise,
+  pick,
   type Plugin,
   type Tx,
   type WriteHook,
@@ -119,7 +121,12 @@ export let fleetPreconditions = (
     let check: WriteHook = (bs, tx) => {
       let out: Bundle[] = []
       for (let b of bs) {
-        let held = sync(tx.get([b.entity.eid]))[0]
+        let held = sync(
+          pick(tx, [b.entity.eid], [
+            'tombstone',
+            ...comps(b).map(([name]) => name),
+          ]),
+        )[0]
         let cs = asChanges(b)
         for (let c of cs) {
           checkFleetChange(

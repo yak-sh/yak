@@ -18,7 +18,7 @@ export let keyed = (driver: Driver, vocab: Vocab, opts: BindOpts) => {
     )
   }
   let columns = new Map<string, string>()
-  return (eids: string[]): Bundle[] => {
+  return (eids: string[], selected?: string[]): Bundle[] => {
     if (eids.length != 1) return get(driver, vocab, eids, opts)
     let eid = eids[0]
     let row = driver.query(
@@ -30,19 +30,20 @@ export let keyed = (driver: Driver, vocab: Vocab, opts: BindOpts) => {
     let entity = { eid, ...row.num == null ? {} : { num: Number(row.num) } }
     if (row.dead != null) return [tombstoned(entity)]
     let b: Bundle = { entity }
-    for (let probe of probes) {
-      for (let { name } of driver.query(probe, [Number(row.id)])) {
-        let comp = String(name)
-        let sql = columns.get(comp)
-        if (!sql) columns.set(comp, sql = compSql(vocab, comp, opts.derived))
-        let held = driver.query(sql, [eid])[0]
-        if (held) {
-          let present = vocab.column(comp, 'present')
-          if (!present?.persist && !opts.derived?.[`${comp}.present`]) {
-            delete held.present
-          }
-          b[comp] = held
+    let found = selected
+      ? selected.filter((c) => names.includes(c)).map((name) => ({ name }))
+      : probes.flatMap((probe) => driver.query(probe, [Number(row.id)]))
+    for (let { name } of found) {
+      let comp = String(name)
+      let sql = columns.get(comp)
+      if (!sql) columns.set(comp, sql = compSql(vocab, comp, opts.derived))
+      let held = driver.query(sql, [eid])[0]
+      if (held) {
+        let present = vocab.column(comp, 'present')
+        if (!present?.persist && !opts.derived?.[`${comp}.present`]) {
+          delete held.present
         }
+        b[comp] = held
       }
     }
     return [b]

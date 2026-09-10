@@ -4,7 +4,7 @@
 import type { Bundle } from './bundle.ts'
 import { dead } from './bundle.ts'
 import type { WriteHook } from './plugin.ts'
-import type { Tx } from './storage.ts'
+import { pick, type Tx } from './storage.ts'
 import type { Vocab } from '@yaks/vocab'
 import { each, then } from './pipe.ts'
 import { mutate } from './mutate.ts'
@@ -27,33 +27,37 @@ export let ordered = (
       : bundles.map((b) => [b]),
     [] as Bundle[],
     (out, batch) =>
-      then(held.get(batch.map((b) => b.entity.eid)), (found) => {
-        let gone = new Set(found.filter(dead).map((b) => b.entity.eid))
-        let live = batch.filter((b) => !gone.has(b.entity.eid))
-        if (!live.length) return out
-        return then(
-          each(checks, live, (bs, check) => check(bs, held)),
-          (bs) => {
-            let step = state()
-            return then(mutate(bs, held, step), (written) =>
-              then(cascade(written, tx, vocab, step), (expanded) => {
-                st.born.push(...step.born)
-                st.killed.push(...step.killed)
-                for (let eid of step.touched) {
-                  st.touched.add(eid)
-                }
-                // Cascades write outside the gathered view. Re-read after death
-                // so the next check sees releases, detached refs and casualties.
-                if (step.killed.length) {
-                  snap.got.clear()
-                  snap.near.clear()
-                  snap.pairs.length = 0
-                }
-                out.push(...expanded)
-                return out
-              }))
-          },
-        )
-      }),
+      then(
+        pick(held, batch.map((b) => b.entity.eid), ['tombstone']),
+        (found) => {
+          let gone = new Set(found.filter(dead).map((b) => b.entity.eid))
+          let live = batch.filter((b) => !gone.has(b.entity.eid))
+          if (!live.length) return out
+          return then(
+            each(checks, live, (bs, check) => check(bs, held)),
+            (bs) => {
+              let step = state()
+              return then(mutate(bs, held, step), (written) =>
+                then(cascade(written, tx, vocab, step), (expanded) => {
+                  st.born.push(...step.born)
+                  st.killed.push(...step.killed)
+                  for (let eid of step.touched) {
+                    st.touched.add(eid)
+                  }
+                  // Cascades write outside the gathered view. Re-read after death
+                  // so the next check sees releases, detached refs and casualties.
+                  if (step.killed.length) {
+                    snap.got.clear()
+                    snap.only?.clear()
+                    snap.near.clear()
+                    snap.pairs.length = 0
+                  }
+                  out.push(...expanded)
+                  return out
+                }))
+            },
+          )
+        },
+      ),
   )
 }

@@ -86,6 +86,8 @@ export type Tx = {
   read: (query: Query, opts?: ReadOpts) => Bundle[]
   /** identity, not search: these entities as they stand, whole */
   get: (eids: string[]) => Bundle[]
+  /** identity/tombstone state and selected facets (may return a superset) */
+  pick: (eids: string[], names: string[]) => Bundle[]
   /** who dies with these entities, and what has to let go of them — the death
    * cascade's question as one recursive statement rather than a read per rung */
   doom: (eids: string[]) => Doom
@@ -183,9 +185,11 @@ export let storage = (
   vocab: Vocab,
   base: Opts = {},
 ): Store => {
+  let identity = keyed(driver, vocab, base)
   let tx: Tx = {
     read: (query, opts) => read(driver, vocab, query, { ...base, ...opts }),
-    get: keyed(driver, vocab, base),
+    get: (eids) => identity(eids),
+    pick: identity,
     doom: (eids) => doom(driver, vocab, eids),
     patch: (bundles) => patch(driver, vocab, bundles, base.number),
     remove: (entities) => remove(driver, vocab, entities),

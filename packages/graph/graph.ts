@@ -41,7 +41,7 @@
 // inside the transaction is never left believing its rows are still there.
 
 import type { Vocab } from '@yaks/vocab'
-import type { Bundle, Change, Eid } from './bundle.ts'
+import { type Bundle, type Change, comps, type Eid } from './bundle.ts'
 import type { Row, Storage, Tx } from './storage.ts'
 import { detached, type Query, type ReadOpts } from './storage.ts'
 import type { Hook, Phase, Plugin, WriteHook } from './plugin.ts'
@@ -49,7 +49,7 @@ import { type Derive, resolve } from './alias.ts'
 import { identified, identities } from './identity.ts'
 import { admit } from './admit.ts'
 import { composed } from './compose.ts'
-import { type Ask, gather, holding, reached } from './gather.ts'
+import { type Ask, complete, gather, holding, reached } from './gather.ts'
 import { guard } from './guard.ts'
 import { mutate } from './mutate.ts'
 import { ordered } from './ordered.ts'
@@ -181,7 +181,13 @@ export let graph = (opts: Options): Graph => {
   // batch names or points at, which is what the `$was` guard, `mutate` and the
   // storage's own minting all ask about — plus whatever each plugin declares.
   let asking = (bundles: Bundle[]): Ask[] => [
-    { eids: reached(bundles, vocab) },
+    {
+      eids: reached(bundles, vocab),
+      select: [
+        'tombstone',
+        ...bundles.flatMap((b) => comps(b).map(([name]) => name)),
+      ],
+    },
     ...plugins.flatMap((p) => p.wants?.(bundles) ?? []),
   ]
 
@@ -378,7 +384,8 @@ export let graph = (opts: Options): Graph => {
                     : mutate(b, held, st)
                 }),
                 phase('cascade', tx, (b) =>
-                  checks?.length ? b : cascade(b, tx, vocab, st)),
+                  then(b.length ? complete(tx, snap) : undefined, () =>
+                    checks?.length ? b : cascade(b, tx, vocab, st))),
                 // The stamps are rules now, and they ask what the graph holds
                 // for an entity: a birth is an entity with no `created`.
                 phase('stamp', tx, (b) =>
@@ -391,7 +398,9 @@ export let graph = (opts: Options): Graph => {
                 step(b),
             ),
             (b) => {
-              if (o.check) throw new Checked(b)
+              if (o.check) {
+                throw new Checked(b)
+              }
               return b
             },
           )

@@ -12,6 +12,7 @@ import {
   type Entity,
   type Graph,
   graph,
+  pick,
   type Plugin,
   then,
 } from '@yaks/graph'
@@ -73,6 +74,20 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
   // The driver owns transactions (including Durable Object transactionSync).
   // Number births only once ALL their components have landed: an edge/blob/
   // entry must never consume a human number just because its spine came first.
+  let booleans = (rows: Bundle[]) =>
+    rows.map((b) => {
+      for (let [name, comp] of comps(b)) {
+        for (let [prop, value] of Object.entries(comp ?? {})) {
+          if (
+            value != null &&
+            vocab.column(name, prop)?.scalar == 'bool'
+          ) {
+            comp![prop] = !!value
+          }
+        }
+      }
+      return b
+    })
   let bound: typeof store = {
     ...store,
     tx: (body) =>
@@ -93,20 +108,8 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
             ...tx,
             // The fleet wire reads bools, whereas SQLite's shared adapter
             // exposes integers. $was must hash the public read shape.
-            get: (eids) =>
-              tx.get(eids).map((b) => {
-                for (let [name, comp] of comps(b)) {
-                  for (let [prop, value] of Object.entries(comp ?? {})) {
-                    if (
-                      value != null &&
-                      vocab.column(name, prop)?.scalar == 'bool'
-                    ) {
-                      comp![prop] = !!value
-                    }
-                  }
-                }
-                return b
-              }),
+            get: (eids) => booleans(tx.get(eids)),
+            pick: (eids, names) => booleans(tx.pick(eids, names)),
             remove: (entities) => {
               for (let e of entities) {
                 let held = tx.get([e.eid])
@@ -183,7 +186,10 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
       // materialization belong here, not normalize (which runs before $was).
       precondition: (bundles, tx) =>
         then(
-          tx.get([...new Set(bundles.map((b) => b.entity.eid))]),
+          pick(tx, [...new Set(bundles.map((b) => b.entity.eid))], [
+            'tombstone',
+            ...bundles.flatMap((b) => comps(b).map(([name]) => name)),
+          ]),
           (found) => {
             lifecycle.found(bundles.map((b) => b.entity.eid), found)
             let state = new Map(found.map((b) => [b.entity.eid, b]))
