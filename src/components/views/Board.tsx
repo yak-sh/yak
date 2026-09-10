@@ -6,6 +6,7 @@ import {
   byPriority,
   byWarmth,
   clientId,
+  clientSubscription,
   ent,
   foldFor,
   mutate,
@@ -196,7 +197,18 @@ export let Board = ({ e }: { e: Ent }) => {
       return null
     }
   })()
+  let screen = me ? clientSubscription(me) : undefined
   let row = me ? foldFor(me, e.eid) : null
+  if (screen?.state.status == 'failed') {
+    return (
+      <Frame>
+        <SubscriptionFailure read={screen} />
+      </Frame>
+    )
+  }
+  if (screen?.state.status == 'loading') {
+    return <Frame>Loading board preferences…</Frame>
+  }
   let folded = new Set(
     String(row?.statuses ?? '').split(',').filter(Boolean),
   )

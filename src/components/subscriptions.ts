@@ -1,14 +1,18 @@
 // View lifecycles for live query subscriptions. The board hook opens the
 // shadow set beside the complete cache and closes it with the last view; the
 // entity hooks hold ONE row (and its edges) for as long as a view paints it.
-import { useEffect } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import {
   boardQuery,
   boardSub,
   boardTallyLine,
   boardTallyName,
   dropAgg,
+  ent,
+  entityRead,
   holdAgg,
+  repoTrace,
+  routeName,
   routeSub,
   type SubscriptionRead,
   subscriptionState,
@@ -46,8 +50,9 @@ export let useBoardTally = (e?: Ent) => {
 // a row to render; that hop is gone, so whatever paints another entity by eid
 // SAYS so, and the row — with the `.edges!` rider's edges and their far
 // endpoints — streams in on mount and is evicted with the last view of it.
-export let useEntity = (eid?: string) => {
-  useEffect(() => eid ? routeSub(eid) : undefined, [eid])
+export let useEntity = (eid?: string | null, fields?: string) => {
+  useEffect(() => eid ? routeSub(eid, fields) : undefined, [eid, fields])
+  return eid ? entityRead(eid, fields) : undefined
 }
 
 // The same hold for a LIST of pins. The canvas List face and the tray's shelf
@@ -61,4 +66,46 @@ export let usePinTargets = (ps: { target: string }[]) => {
       for (let off of offs) off()
     }
   }, [key])
+}
+
+// Ref columns are not edge peers. Ask for the small face, not its document,
+// transcript or incident edges; several visible chips share this query.
+export let useReference = (eid?: string | null) => {
+  let read = useEntity(eid, 'doc.title,client.user_agent,session.id')
+  return {
+    ...read,
+    value: eid && read?.loaded(eid, 'doc', 'title') ? read.value : undefined,
+  }
+}
+
+// Ownership is a changing path, not a cache assumption. Keep common hops
+// held while discovering the next ones, and release only hops no longer used.
+// Replacing the whole hold on each discovery would repeatedly unload its root.
+let repoFields =
+  'repo.url,filed.project,comment.target,session.requested_task,' +
+  'session.actor,role.scope,memory.scope,entry.session'
+export let useRepoUrl = (e: Ent): string | undefined => {
+  let trace = repoTrace(ent(e.eid))
+  let held = useRef(new Map<string, () => void>())
+  let key = trace.eids.toSorted().join(',')
+  for (let eid of trace.eids) {
+    subscriptionState(routeName(eid, repoFields))
+  }
+  useEffect(() => {
+    let want = new Set(key.split(','))
+    for (let [eid, off] of held.current) {
+      if (want.has(eid)) continue
+      off()
+      held.current.delete(eid)
+    }
+    for (let eid of want) {
+      if (held.current.has(eid)) continue
+      held.current.set(eid, routeSub(eid, repoFields))
+    }
+  }, [key])
+  useEffect(() => () => {
+    for (let off of held.current.values()) off()
+    held.current.clear()
+  }, [])
+  return trace.url
 }

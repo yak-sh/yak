@@ -1,3 +1,4 @@
+import { useReference, useRepoUrl } from '../subscriptions.ts'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { type ComponentChildren } from 'preact'
 import { type Ent, statusOf } from '../../types.ts'
@@ -14,7 +15,6 @@ import {
   mutate,
   parents,
   pending,
-  repoUrl,
   settled,
   statuses,
 } from '../../live.ts'
@@ -289,6 +289,7 @@ export let Mail = ({ e }: { e: Ent }) => {
 // An empty body keeps a line of height to give the double-click
 // somewhere to land.
 export let Body = ({ e, mod }: { e: Ent; mod?: string }) => {
+  let repo = useRepoUrl(e)
   let [src, setSrc] = useState(false)
   if (!e.doc) return null
   // A body this client was never shipped is not an empty one: paint the
@@ -313,7 +314,7 @@ export let Body = ({ e, mod }: { e: Ent; mod?: string }) => {
         mod={mod}
         onDblClick={() => setSrc(true)}
         text={e.doc?.body ?? ''}
-        repo={repoUrl(e)}
+        repo={repo}
       />
     )
 }
@@ -322,6 +323,7 @@ export let Body = ({ e, mod }: { e: Ent; mod?: string }) => {
 // task narrative. Whole-entity views carry bodies, so the same Markdown/source
 // editing seam as doc.body keeps the criteria legible and editable.
 export let Acceptance = ({ e }: { e: Ent }) => {
+  let repo = useRepoUrl(e)
   let [src, setSrc] = useState(false)
   if (!e.accept) return null
   return (
@@ -345,7 +347,7 @@ export let Acceptance = ({ e }: { e: Ent }) => {
             as={AcceptanceBody}
             onDblClick={() => setSrc(true)}
             text={e.accept.body ?? ''}
-            repo={repoUrl(e)}
+            repo={repo}
           />
         )}
     </AcceptanceEl>
@@ -597,6 +599,7 @@ export let Meta = (
     children?: ComponentChildren
   },
 ) => {
+  let claimant = useReference(e.claim?.session)
   let talk = commentCount(e.eid).value
   let edges = tallies(e)
   let hasEdges = edges.some(([, open, done]) => open > 0 || done > 0)
@@ -669,8 +672,14 @@ export let Meta = (
       )}
       {e.task && <Plate e={e} />}
       {e.claim && (
-        <Claim {...linkProps(ent(e.claim.session))}>
-          ⚑ {viaName(e.claim.session)}
+        <Claim {...(claimant.value ? linkProps(claimant.value) : {})}>
+          ⚑ {claimant.value
+            ? viaName(e.claim.session)
+            : claimant.state?.status == 'failed'
+            ? 'could not load'
+            : claimant.ready
+            ? 'unavailable'
+            : 'Loading…'}
         </Claim>
       )}
       <Stamp e={e} by={(comp) => <By e={e} comp={comp} />} />

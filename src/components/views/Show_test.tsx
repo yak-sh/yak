@@ -479,3 +479,44 @@ Deno.test('comment dependencies lead with the entity commented on', () => {
   free()
   cache.value = {}
 })
+
+Deno.test('claim chip loads its referenced session instead of painting a blank', async () => {
+  let { landSub, routeName, unsubscribe } = await import('../../live.ts')
+  let { tick } = await import('../../testing.ts')
+  cache.value = {
+    claimed: {
+      entity: { eid: 'claimed', num: 900 },
+      claim: { eid: 'claimed', session: 'cold-claimant' },
+    },
+  }
+  let sub = routeName('cold-claimant', 'doc.title,client.user_agent,session.id')
+  let e = ent('claimed')
+  let mounted = mount(h(resolve(e, 'Meta').Render, { e }))
+  try {
+    assertEquals(
+      mounted.root.querySelector('.Show_Claim')?.textContent,
+      '⚑ Loading…',
+    )
+    landSub({
+      sub,
+      replace: true,
+      fields: [
+        { comp: 'doc', prop: 'title', wake: true },
+        { comp: 'session', prop: 'id', wake: true },
+      ],
+      changes: [
+        { eid: 'cold-claimant', name: 'entity', comp: { num: 901 } },
+        { eid: 'cold-claimant', name: 'session', comp: { id: 'native' } },
+      ],
+    })
+    await tick()
+    assertEquals(
+      mounted.root.querySelector('.Show_Claim')?.textContent,
+      '⚑ S-901',
+    )
+  } finally {
+    mounted.free()
+    unsubscribe(sub)
+    cache.value = {}
+  }
+})

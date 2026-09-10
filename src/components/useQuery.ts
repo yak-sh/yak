@@ -18,6 +18,7 @@ import {
   findEid,
   holdQuery,
   linksVia,
+  loaded,
   queryEids,
   querySubscription,
   type References,
@@ -31,20 +32,29 @@ import type { Ent } from '../types.ts'
 
 let resolve = (query: string) => resolveRefs(parseQuery(query), findEid)
 
-export type QueryResult = { eids: string[]; subscription?: SubscriptionRead }
+export type QueryResult = {
+  eids: string[]
+  subscription?: SubscriptionRead
+  ready: boolean
+  loaded: typeof loaded
+}
 
 // The result and addressed read state of one direct query. Most callers need
 // only eids; query-driven UI also consumes a refusal so it never paints a
 // local partial set as the server's answer.
-export let useQueryResult = (query: string): QueryResult => {
+export let useQueryResult = (query: string, enabled = true): QueryResult => {
   let preds = useMemo(() => resolve(query), [query])
   useEffect(() => {
+    if (!enabled) return
     holdQuery(preds)
     return () => dropQuery(preds)
-  }, [preds])
+  }, [preds, enabled])
+  let subscription = enabled ? querySubscription(preds) : undefined
   return {
-    eids: queryEids(preds).value,
-    subscription: querySubscription(preds),
+    eids: enabled ? queryEids(preds).value : [],
+    subscription,
+    ready: !subscription || subscription.state.status == 'ready',
+    loaded,
   }
 }
 

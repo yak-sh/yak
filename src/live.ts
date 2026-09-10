@@ -42,6 +42,7 @@ import {
   fieldsOf,
   matchQuery,
   namesLazy,
+  ORDER,
   parseQuery,
   type Pred,
   PROJECT,
@@ -339,7 +340,13 @@ let predLine = (p: Pred): string | undefined => {
       }`
       : '.fields=eid'
   }
-  if (p.at || p.rev) return undefined
+  if (p.rev) return undefined
+  if (p.at) {
+    if (p.op != '' && p.op != '~') return undefined
+    let path = [p, ...p.at].map((h) => `${h.comp}.${h.prop}`).join('.')
+    return `.${path}${p.op}=${p.value}`
+  }
+  if (p.op == ORDER) return `.order=${p.value}`
   // A shared-ref equality (`.client=X` — query.ts sharedRef routes comp '')
   // is one read concept across every owning component; the grammar already
   // speaks it, and the round-trip proof below still gates the wire.
@@ -402,7 +409,11 @@ let refreshServerSets = (eids: Set<string>) => {
   if (!queryUses.size) return
   let read = (t: string) => paint.peek()[t]
   for (let s of queryUses.values()) {
-    let serverOwned = textual(s.preds)
+    // A path's far rows need not be in this cache. Re-screening a server hit
+    // locally would drop it merely because its requested task is unloaded.
+    // Ranked/windowed sets likewise belong to the server, not a local scan.
+    let serverOwned = textual(s.preds) ||
+      s.preds.some((p) => p.at || p.rev || p.win || p.op == ORDER)
     let ids = s.ids.peek()
     let next = ids
     // A waking projected field of a STANDING member moved. Membership is
@@ -1769,6 +1780,8 @@ let subFields = new Map<string, Field[]>()
 // false. Erring toward "unloaded" costs a needless re-subscribe; erring the
 // other way is the masquerade this exists to prevent.
 export let loaded = (eid: string, comp: string, prop: string): boolean => {
+  subVersion.value
+  if (!row(eid).value) return false
   let projectedOnly = false
   let member = false
   for (let [sub, members] of subMembers) {
@@ -2447,6 +2460,8 @@ export let retrySubscription = (sub: string) => {
   let q = boardUses.get(sub)?.q ?? (direct && serverLine(direct.preds)) ??
     (sub.startsWith('entries:')
       ? `.entry.session=${sub.slice('entries:'.length)}`
+      : sub.startsWith('route:')
+      ? routeLine(...sub.slice(6).split(':') as [string, string?])
       : undefined)
   if (!q) return false
   subscribe(sub, q)
@@ -2464,14 +2479,35 @@ export let retryEntrySub = (session: string) =>
 // several views of one entity share a sub; a no-op under a whole-graph cache,
 // where the entity is already loaded. Same ownership path as entrySub.
 let routeUses = new Map<string, number>()
-export let routeSub = (eid: string) => {
-  let sub = `route:${eid}`
+export let routeName = (eid: string, fields?: string) =>
+  `route:${eid}${fields ? `:${fields}` : ''}`
+let routeLine = (eid: string, fields?: string) =>
+  `id=${eid}&${fields ? `.fields=${fields}` : ROUTE_EDGES}`
+
+export let entityRead = (eid: string, fields?: string) => {
+  let sub = routeName(eid, fields)
+  let state = subscriptionState(sub)
+  return {
+    sub,
+    state,
+    ready: state.status == 'ready',
+    loaded,
+    value: state.status == 'ready' && !state.eids.has(eid)
+      ? undefined
+      : row(eid).value
+      ? ent(eid)
+      : undefined,
+  }
+}
+
+export let routeSub = (eid: string, fields?: string) => {
+  let sub = routeName(eid, fields)
   let n = routeUses.get(sub) ?? 0
   routeUses.set(sub, n + 1)
   // The scope rides in the name (the server answers that one entity), but the
   // query says it explicitly too — an empty q is refused server-side, never a
   // silent match-all.
-  if (!n) ownBoard(sub, `id=${eid}&${ROUTE_EDGES}`)
+  if (!n) ownBoard(sub, routeLine(eid, fields))
   return () => {
     let held = (routeUses.get(sub) ?? 1) - 1
     if (held > 0) return void routeUses.set(sub, held)
@@ -2916,14 +2952,14 @@ export let ent = (eid: string): Ent => {
 // graph's explicit ownership/reference columns: task/memory/role → project,
 // comment → target, session → requested task or its actor, entry → its
 // session. A seen set makes malformed cycles inert.
-export let repoUrl = (start: Ent): string | undefined => {
+export let repoTrace = (start: Ent): { eids: string[]; url?: string } => {
   let seen = new Set<string>()
   let todo = [start]
   while (todo.length) {
     let e = todo.shift()!
     if (seen.has(e.eid)) continue
     seen.add(e.eid)
-    if (e.repo?.url) return e.repo.url
+    if (e.repo?.url) return { eids: [...seen], url: e.repo.url }
     let next = [
       e.filed?.project,
       e.comment?.target,
@@ -2935,7 +2971,9 @@ export let repoUrl = (start: Ent): string | undefined => {
     ].filter((eid): eid is string => !!eid)
     todo.push(...next.map(ent))
   }
+  return { eids: [...seen] }
 }
+export let repoUrl = (start: Ent): string | undefined => repoTrace(start).url
 
 export let findEid = (id: string): string | undefined => {
   syncIds()
@@ -3275,6 +3313,15 @@ export let shelfFor = (client: string): string | undefined => {
 // the singleton readers stay LOCAL lookups over the rows the sub streams in. A
 // per-shape wire sub here would accumulate (a fold sub per board visited);
 // resolving locally without the sub would under-report on a partial cache.
+export let clientSubscription = (
+  client: string,
+): SubscriptionRead | undefined => {
+  ensureClientRows(client)
+  return querySubscription(
+    resolveRefs(parseQuery(`.client=${client}`), findEid),
+  )
+}
+
 let clientSubs = new Set<string>()
 export let ensureClientRows = (client: string) => {
   if (!client || clientSubs.has(client)) return

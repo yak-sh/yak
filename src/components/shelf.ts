@@ -2,6 +2,7 @@
 // seam that opens one shelved card. The Tray renders it; any surface may put
 // an entity there without depending on the Tray component.
 
+import { shelfEid } from '../edge.ts'
 import { signal } from '@preact/signals'
 import { cache, clientId, mutate, shelfFor, topZ, uuid } from '../live.ts'
 import type { Change } from '../types.ts'
@@ -17,7 +18,7 @@ export let shelfChanges = (
   z = 1,
   userAgent?: string,
 ): Change[] => {
-  let canvas = shelf ?? uuid()
+  let canvas = shelf ?? shelfEid(client)
   let clientBirth: Change[] = !shelf && userAgent != null
     ? [{ eid: client, name: 'client', comp: { user_agent: userAgent } }]
     : []
@@ -42,7 +43,7 @@ export let shelfChanges = (
 export let shelve = (target: string, view: string, pin?: string) => {
   let canvas = shelfFor(clientId())
   if (pin && cache.peek()[pin]?.pin) {
-    let shelf = canvas ?? uuid()
+    let shelf = canvas ?? shelfEid(clientId())
     mutate(
       ...(!canvas
         ? [

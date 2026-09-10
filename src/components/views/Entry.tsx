@@ -1,8 +1,9 @@
+import { useRepoUrl } from '../subscriptions.ts'
 // Session entries as a small renderer vocabulary. Summary and Full faces
 // share this kit; component-specific registrations choose what each face says.
 import { useState } from 'preact/hooks'
 import { type Ent, friendly, kilo, type LogRow } from '../../types.ts'
-import { backlinks, ent, repoUrl } from '../../live.ts'
+import { backlinks, ent } from '../../live.ts'
 import { block, el } from '../ui.tsx'
 import { Entity } from '../Entity.tsx'
 import { resolve } from '../registry.ts'
@@ -320,11 +321,14 @@ export let ResultSummary = (
   )
 }
 
-export let MessageSummary = ({ e }: { e: Ent }) => (
-  <Frame mod={e.message?.role}>
-    <Markdown text={body(e)} repo={repoUrl(e)} />
-  </Frame>
-)
+export let MessageSummary = ({ e }: { e: Ent }) => {
+  let repo = useRepoUrl(e)
+  return (
+    <Frame mod={e.message?.role}>
+      <Markdown text={body(e)} repo={repo} />
+    </Frame>
+  )
+}
 
 export let PromptSummary = ({ e }: { e: Ent }) => {
   let n = lines(body(e)).length
@@ -367,11 +371,14 @@ export let ResultFull = ({ e }: { e: Ent }) => (
   </Frame>
 )
 
-export let MessageFull = ({ e }: { e: Ent }) => (
-  <Frame mod={e.message?.role}>
-    <Markdown text={body(e)} repo={repoUrl(e)} />
-  </Frame>
-)
+export let MessageFull = ({ e }: { e: Ent }) => {
+  let repo = useRepoUrl(e)
+  return (
+    <Frame mod={e.message?.role}>
+      <Markdown text={body(e)} repo={repo} />
+    </Frame>
+  )
+}
 
 let icon = (view: string) =>
   view == 'Full'

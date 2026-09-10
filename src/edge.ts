@@ -29,6 +29,8 @@ export let edgeEid = (from: string, nature: string, to: string): string =>
 // row. JSON tuples domain-separate these from edges and from one another.
 export let cameraEid = (client: string, canvas: string): string =>
   sentenceEid(JSON.stringify(['camera', client, canvas]))
+export let shelfEid = (client: string): string =>
+  sentenceEid(JSON.stringify(['shelf', client]))
 export let cursorEid = (client: string): string =>
   sentenceEid(JSON.stringify(['cursor', client]))
 

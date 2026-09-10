@@ -1,7 +1,8 @@
+import { useRepoUrl } from './subscriptions.ts'
 import { useRef, useState } from 'preact/hooks'
 import { commands, orderIn, suggest } from '../commands.ts'
 import { slotsOf } from '../verb.ts'
-import { ent, mutate, pending, repoUrl, uuid } from '../live.ts'
+import { ent, mutate, pending, uuid } from '../live.ts'
 import { useCommentsOn, useCommitsOn } from './useQuery.ts'
 import { subject } from '../client.ts'
 import { ago, block, pretty } from './ui.tsx'
@@ -64,6 +65,7 @@ export let byline = (c: Ent) => {
 // inline. The stamp names actor and instrument directly; the actor leads
 // and the instrument dims behind a "via" — both still links.
 export let Note = ({ c }: { c: Ent }) => {
+  let repo = useRepoUrl(c)
   let actor = c.created?.by ? ent(String(c.created.by)) : undefined
   let instrument = c.created?.via ? ent(String(c.created.via)) : undefined
   let who = actor ?? instrument
@@ -98,7 +100,7 @@ export let Note = ({ c }: { c: Ent }) => {
       }
       {pending(c)
         ? <Body>…</Body>
-        : <Markdown as={Body} text={c.doc?.body ?? ''} repo={repoUrl(c)} />}
+        : <Markdown as={Body} text={c.doc?.body ?? ''} repo={repo} />}
     </Item>
   )
 }

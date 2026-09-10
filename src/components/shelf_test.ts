@@ -38,3 +38,12 @@ Deno.test('shelfChanges reuses an existing shelf', () => {
     },
   ])
 })
+
+Deno.test('two cold shelf writes derive one canvas, isolated per client', () => {
+  let a = shelfChanges('cold-client', 'a', 'Full', undefined, 'a-pin')
+  let b = shelfChanges('cold-client', 'b', 'Full', undefined, 'b-pin')
+  let c = shelfChanges('other-client', 'b', 'Full', undefined, 'c-pin')
+  assertEquals(a[0].eid, b[0].eid)
+  assertEquals(a[0].eid == c[0].eid, false)
+  assertEquals(a.at(-1)?.comp?.canvas, b.at(-1)?.comp?.canvas)
+})

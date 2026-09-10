@@ -1,3 +1,4 @@
+import { useReference, useRepoUrl } from '../subscriptions.ts'
 import {
   useEffect,
   useLayoutEffect,
@@ -19,7 +20,6 @@ import {
   findEid,
   mutate,
   observation,
-  repoUrl,
   retryEntrySub,
   uuid,
 } from '../../live.ts'
@@ -597,7 +597,7 @@ let useTranscript = (
 
 export let Session = ({ e }: { e: Ent }) => {
   let s = e.session!
-  let repo = repoUrl(e)
+  let repo = useRepoUrl(e)
   // One predicate for every surface (types.ts): a session we spawned says
   // it's going in its status, one that only announced itself is going while
   // its door is open. `standing` is that answer as a word, so an external
@@ -827,9 +827,8 @@ export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
   let s = e.session!
   let tasks = e.refs.filter((r) => r.type == 'worked').map((r) => ent(r.child))
     .filter((x) => x.task)
-  let persona = s.persona ? ent(s.persona) : undefined
-  let actor = s.actor ? ent(s.actor) : undefined
-  let identity = persona ?? actor
+  let face = useReference(s.persona ?? s.actor)
+  let identity = face.value
   let model = s.serving_model || s.model
   return (
     <RowLine>
@@ -838,9 +837,15 @@ export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
         <SessionDot e={e} />
         {slots?.title != null ? <RowLine.Model {...tileTitle(slots, '')} /> : (
           <>
-            {identity && (
+            {(s.persona || s.actor) && (
               <RowLine.Identity>
-                {identity.doc?.title || idOf(identity)}
+                {identity
+                  ? identity.doc?.title || idOf(identity)
+                  : face.state?.status == 'failed'
+                  ? 'could not load'
+                  : face.ready
+                  ? 'unavailable'
+                  : 'Loading…'}
               </RowLine.Identity>
             )}
             {model && <RowLine.Model>{friendly(model)}</RowLine.Model>}

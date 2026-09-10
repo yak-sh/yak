@@ -694,3 +694,47 @@ Deno.test('sessionMentions == resolveMentions(threadMentions)', () => {
   }]
   assertEquals(sessionMentions(thread), resolveMentions(threadMentions(thread)))
 })
+
+Deno.test('SessionRow loads its actor face when no peer delivered it', async () => {
+  let { SessionRow } = await import('./Session.tsx')
+  let { routeName, unsubscribe } = await import('../../live.ts')
+  let { tick } = await import('../../testing.ts')
+  let prior = useRoute(() => {})
+  cache.value = {
+    'actor-row-session': {
+      entity: { eid: 'actor-row-session', num: 910 },
+      session: { eid: 'actor-row-session', id: 'native', actor: 'cold-actor' },
+    },
+  }
+  let sub = routeName('cold-actor', 'doc.title,client.user_agent,session.id')
+  let mounted = mount(<SessionRow e={ent('actor-row-session')} />)
+  try {
+    assertEquals(
+      mounted.root.querySelector('.SessionRow_Identity')?.textContent,
+      'Loading…',
+    )
+    landSub({
+      sub,
+      replace: true,
+      fields: [{ comp: 'doc', prop: 'title', wake: true }],
+      changes: [
+        { eid: 'cold-actor', name: 'entity', comp: { num: 911 } },
+        {
+          eid: 'cold-actor',
+          name: 'doc',
+          comp: { title: 'Actor outside the cache' },
+        },
+      ],
+    })
+    await tick()
+    assertEquals(
+      mounted.root.querySelector('.SessionRow_Identity')?.textContent,
+      'Actor outside the cache',
+    )
+  } finally {
+    mounted.free()
+    unsubscribe(sub)
+    useRoute(prior)
+    cache.value = {}
+  }
+})

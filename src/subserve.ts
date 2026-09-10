@@ -666,7 +666,7 @@ export let subserve = (db: Sql, send: (frame: Frame) => void) => {
       // its hits are that entity's current comps (empty if it isn't minted
       // yet, so a later create ADDs it). A query sub evaluates its filter.
       let route = f.sub.startsWith('route:')
-        ? f.sub.slice('route:'.length)
+        ? f.sub.slice('route:'.length).split(':')[0]
         : null
       let line = f.q ?? ''
       let parts = line.split('&').filter(Boolean)
@@ -690,7 +690,7 @@ export let subserve = (db: Sql, send: (frame: Frame) => void) => {
       // it to [] the way /query does: the addressed row must flow through
       // matchQuery (vacuously true on []), never be filtered out as if the
       // never-pred screened it (T-23811).
-      let asked = route != null || !queryLine.trim()
+      let asked = !queryLine.trim()
         ? []
         : resolveRefs(parseQuery(queryLine, vocabOf(db)), (id) =>
           locate(db, id))
@@ -745,9 +745,9 @@ export let subserve = (db: Sql, send: (frame: Frame) => void) => {
         }
       }
       let window = 'window' in answer ? answer.window : undefined
-      // The declared projection, compiled once. A route sub never has one: it
-      // exists to load ONE entity whole, which is the opposite ask.
-      let fields = route != null ? undefined : fieldsOf(preds)
+      // Address and projection are independent: a reference chip asks for one
+      // entity's face, not its document or transcript. Compile its cut once.
+      let fields = fieldsOf(preds)
       // A route sub's SCOPE rides in its name, but its query line may still
       // carry riders (`id=<eid>&.edges!`). `id=` is an ADDRESS, not a filter —
       // the same split localQuery makes — so strip it and parse whatever
