@@ -120,3 +120,39 @@ stuck-worker test also reopens its private file-backed database, resumes, and
 gets a reply. An admitted storage-callback test verifies an independently
 spawned process is still alive after Agent close. This is not a
 live-provider/subagent load test.
+
+## Session-switch measurements
+
+`deno run -A packages/harness/switch_bench.ts 1000 1000` creates an isolated
+SQLite database with 1,000 sessions, two 1,000-entry transcripts and ten entries
+in each remaining session. Bodies contain about 1,000 characters. It mounts the
+frontend at 120×32 cells and measures frontend selection through the first paint
+containing the selected transcript. The first sample is cold; eleven subsequent
+samples alternate between the two transcripts. No provider requests are made.
+
+One before/after run on the same host measured:
+
+| Measurement                    |   Before |  After |
+| ------------------------------ | -------: | -----: |
+| Cold selection to paint        | 1,459 ms | 657 ms |
+| Warm median                    | 1,036 ms | 152 ms |
+| Warm p95 (11 samples; maximum) | 1,537 ms | 190 ms |
+| Outbound worker messages       |       88 |     40 |
+| Maximum 2 ms timer delay       |    97 ms | 185 ms |
+
+The change bounds title reads to the first eligible local entry instead of
+materializing every transcript. The remote adapter reuses asynchronous session
+and task projection results until their authoritative subscription changes.
+Initial transcript frames satisfy the waiting read without triggering a second
+application refresh. Each concurrent transcript request returns its own selected
+snapshot, not a later request's selection.
+
+These are synthetic measurements, not production latency guarantees. The larger
+maximum timer delay in this run remains a concern: initial replica application,
+text extraction in the test terminal, and full transcript transfers still do
+synchronous work. The change reduces elapsed switching latency, not every
+main-thread stall. There is no pagination or retained offscreen transcript
+cache; revisiting a session still transfers its full selected transcript. Under
+active writes, summary subscriptions still invalidate broadly. First-class
+incremental summary projections and bounded transfer/application remain
+follow-up work.

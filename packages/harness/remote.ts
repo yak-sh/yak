@@ -27,18 +27,27 @@ export let remote = async (
   let replica = client(vocab, [], { vault: false })
   let listeners = new Set<() => void>()
   let members = new Map<string, string[]>()
+  // Memoize the asynchronous projection until its authoritative subscription
+  // changes. Selection changes do not change session titles or task summaries.
+  let summaries = new Map<string, Promise<Bundle[]>>()
+  // Initial subscription data is returned to its awaiting caller. Publishing it
+  // as a new change would invalidate that same read and force a second refresh.
+  let initializing = new Set<string>()
   let failure: Error | undefined
   let queued = Promise.resolve()
   let link = portLink(worker, {
     frame: (frame: Frame) => {
       queued = queued.then(async () => {
         if (frame.refused) throw new Error(frame.refused.message)
+        summaries.delete(frame.id)
         await land(replica.graph, frame)
         let ids = new Set(members.get(frame.id) ?? [])
         for (let b of frame.bundles ?? []) ids.add(b.entity.eid)
         for (let id of frame.gone ?? []) ids.delete(id)
         members.set(frame.id, [...ids])
-        for (let notify of listeners) notify()
+        if (!initializing.has(frame.id)) {
+          for (let notify of listeners) notify()
+        }
       }).catch((error) => {
         failure = error
         diagnostics().report(error, { phase: 'worker-sync' })
@@ -78,8 +87,13 @@ export let remote = async (
       return b ? [b] : []
     })
   let listen = async (id: string, query: string) => {
-    await request('subscribe', [id, query])
-    await queued
+    initializing.add(id)
+    try {
+      await request('subscribe', [id, query])
+      await queued
+    } finally {
+      initializing.delete(id)
+    }
   }
   // Only summaries and tasks are global. Entry subscriptions follow selection.
   try {
@@ -93,21 +107,26 @@ export let remote = async (
   }
   let selected: string | undefined,
     plans: string[] = [],
-    serial = Promise.resolve()
+    serial: Promise<unknown> = Promise.resolve()
+  let snapshot = () =>
+    plans.flatMap((key) =>
+      rows(key).sort((a, b) =>
+        Number((a.entry as Comp).seq) - Number((b.entry as Comp).seq)
+      )
+    )
   let select = (session: string) => {
-    serial = serial.catch(() => {}).then(async () => {
-      if (selected == session) return
+    let result = serial.catch(() => {}).then(async () => {
+      if (selected == session) {
+        await queued
+        return snapshot()
+      }
       for (let id of plans) {
         await request('unsubscribe', [id])
         await queued
         let old = members.get(id) ?? []
         members.delete(id)
-        await strip(
-          replica.graph,
-          old.filter((eid) =>
-            ![...members.values()].some((ids) => ids.includes(eid))
-          ),
-        )
+        let retained = new Set([...members.values()].flat())
+        await strip(replica.graph, old.filter((eid) => !retained.has(eid)))
       }
       plans = []
       selected = undefined
@@ -118,11 +137,23 @@ export let remote = async (
         plans.push(id)
       }
       selected = session
+      return snapshot()
     })
-    return serial
+    serial = result
+    return result
   }
   // Summaries still use the existing authoritative projection because session
   // status and local titles are derived. This is a measured pilot limitation.
+  let summary = (method: string) => {
+    let found = summaries.get(method)
+    if (found) return found
+    let pending = request(method).then((rows) => rows as Bundle[])
+    summaries.set(method, pending)
+    pending.catch(() => {
+      if (summaries.get(method) === pending) summaries.delete(method)
+    })
+    return pending
+  }
   let agent: UIAgent = {
     start: async (text) => await request('start', [text]) as string,
     send: async (id, text) => await request('send', [id, text]) as string,
@@ -131,18 +162,10 @@ export let remote = async (
     archive: async (id, value) => {
       await request('archive', [id, value])
     },
-    sessions: async () => await request('sessions') as Bundle[],
-    tasks: async () => await request('tasks') as Bundle[],
+    sessions: () => summary('sessions'),
+    tasks: () => summary('tasks'),
     children: async (id) => await request('children', [id]) as Bundle[],
-    transcript: async (id) => {
-      await select(id)
-      await queued
-      return plans.flatMap((key) =>
-        rows(key).sort((a, b) =>
-          Number((a.entry as Comp).seq) - Number((b.entry as Comp).seq)
-        )
-      )
-    },
+    transcript: (id) => select(id),
     entry: (b) =>
       tree(transcriptViews, b, 'Transcript', vocab, {
         names: init.names,

@@ -227,3 +227,49 @@ Deno.test('stuck model deadline is an expected bounded exit, not a crash', async
     await Deno.remove(dir, { recursive: true })
   }
 })
+
+Deno.test('selection subscription does not invalidate its own awaiting projection', async () => {
+  let dir = await Deno.makeTempDir()
+  let r = await remote({ db: ':memory:', cwd: dir, fake: true })
+  try {
+    let first = await r.agent.start('first')
+    let second = await r.agent.start('second')
+    await r.idle(first)
+    await r.idle(second)
+    await r.agent.sessions()
+    let notifications = 0
+    let free = r.subscribe(() => notifications++)
+    await r.agent.transcript(first)
+    await r.agent.transcript(second)
+    await r.agent.transcript(first)
+    assertEquals(
+      notifications,
+      0,
+      'initial frames satisfy the caller, not a second refresh',
+    )
+    let switched = await Promise.all([
+      r.agent.transcript(second),
+      r.agent.transcript(first),
+      r.agent.transcript(second),
+    ])
+    assertEquals(
+      switched.map((rows) =>
+        (rows.find((b) => b.content && !b.prompt)?.content as { body: string })
+          .body
+      ),
+      ['second', 'first', 'second'],
+    )
+    let before = r.traffic.sent
+    await r.agent.sessions()
+    await r.agent.sessions()
+    assertEquals(r.traffic.sent, before, 'unchanged summary query is reused')
+    free()
+    await r.agent.archive!(first, true)
+    assert(
+      (await r.agent.sessions()).find((b) => b.entity.eid == first)?.archived,
+    )
+  } finally {
+    await r.close()
+    await Deno.remove(dir, { recursive: true })
+  }
+})

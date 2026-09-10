@@ -382,3 +382,28 @@ Deno.test('send commits during a provider turn and unserved input reaches the ne
     a.close()
   }
 })
+
+Deno.test('session titles read only the first eligible local entry', async () => {
+  let a = started()
+  try {
+    let id = await a.start('bounded title')
+    await a.idle(id)
+    let read = a.h.g.read.bind(a.h.g)
+    let queries: string[] = []
+    a.h.g.read = ((query: string, ...rest: unknown[]) => {
+      queries.push(query)
+      return read(query, ...rest as [])
+    }) as typeof a.h.g.read
+    let rows = await a.sessions()
+    assertEquals(
+      (rows.find((b) => b.entity.eid == id)!.session as Comp).title,
+      'bounded title',
+    )
+    let titles = queries.filter((q) => q.includes('.entry.session='))
+    assertEquals(titles.length, 1)
+    assertEquals(titles[0].includes('.limit=1'), true)
+    assertEquals(titles[0].includes('.order=entry.seq'), true)
+  } finally {
+    await a.close()
+  }
+})

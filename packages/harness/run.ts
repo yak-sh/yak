@@ -282,11 +282,9 @@ export let agent = (opts: Opts = {}): Agent => {
           session: {
             ...b.session as Comp,
             title: titleOf(
-              (await h.g.read('.entry.session=' + b.entity.eid)).toSorted((
-                a,
-                b,
-              ) =>
-                Number((a.entry as Comp).seq) - Number((b.entry as Comp).seq)
+              await h.g.read(
+                '.entry.session=' + b.entity.eid +
+                  '&.content&.prompt=&.notice=&.order=entry.seq&.limit=1',
               ),
             ),
           },
