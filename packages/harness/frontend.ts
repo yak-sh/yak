@@ -13,7 +13,6 @@ export let frontendVocab = loadVocab([{
         generation: { type: 'number' },
         showSettled: { type: 'boolean' },
         showArchived: { type: 'boolean' },
-        expanded: { type: 'string' },
       },
     },
     visual: {

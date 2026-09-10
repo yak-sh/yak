@@ -136,7 +136,16 @@ export let spot = (s: Edit): { row: number; col: number } => {
 
 /** The editing box: `onSubmit` gets the text on Enter, and it clears. */
 export let Textarea = (
-  { id = 'input', max = 8, prompt = '> ', onSubmit, onChange, value, onEdit }: {
+  {
+    id = 'input',
+    max = 8,
+    prompt = '> ',
+    onSubmit,
+    onChange,
+    value,
+    onEdit,
+    passKey,
+  }: {
     id?: string
     max?: number
     prompt?: string
@@ -145,6 +154,8 @@ export let Textarea = (
     /** Controlled editor state; onEdit receives cursor-only changes too. */
     value?: Edit
     onEdit?: (next: Edit) => void
+    /** Let a host reserve shortcuts without changing standalone editor bindings. */
+    passKey?: (key: Key) => boolean
   },
 ): JSX.Element => {
   let [local, set] = useState<Edit>({ text: '', at: 0 })
@@ -166,6 +177,7 @@ export let Textarea = (
   let hint = prompt.slice(0, Math.max(0, columns - 1))
   let width = Math.max(1, columns - hint.length)
   useKeys((k) => {
+    if (passKey?.(k)) return false
     // Transcript navigation: plain End still edits the input.
     if (k.ctrl && (k.name == 'end' || k.name == 'home')) return false
     let now = live.current

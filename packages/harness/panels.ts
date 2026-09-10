@@ -29,13 +29,13 @@ export type Context = {
   sessions: Bundle[]
   showSettled?: boolean
   showArchived?: boolean
-  expanded?: string[]
 }
 /** A panel's data stays in bundles, not in a second model of the graph. */
 export type Panel = {
   title: string
   titleClass?: string
   scrollable?: boolean
+  fit?: boolean
   read: (ctx: Context) => Bundle[] | Promise<Bundle[]>
   Render: ComponentType<Context & { rows: Bundle[] }>
 }
@@ -83,12 +83,11 @@ export let panels: Panel[] = [
     title: 'Sessions',
     scrollable: true,
     read: (c) => c.sessions,
-    Render: ({ rows, session, showSettled, showArchived, expanded }) => {
+    Render: ({ rows, session, showSettled, showArchived }) => {
       let tree = sessionTree(rows, {
         selected: session,
         showSettled,
         showArchived,
-        expanded,
       })
       return h(
         Scroll,
@@ -108,19 +107,18 @@ export let panels: Panel[] = [
           null,
           h(
             'div',
-            { class: session ? 'Muted' : 'Title' },
-            `${session ? '  ' : '> '}New session`,
+            { class: session ? 'Muted' : 'Session_Selected', fill: '1' },
+            'New session',
           ),
-          ...tree.map(({ bundle: b, depth, children, expanded: open }) =>
+          ...tree.map(({ bundle: b, prefix }) =>
             h(
               'div',
               {
                 key: b.entity.eid,
-                class: session == b.entity.eid ? 'Title' : '',
+                fill: '1',
+                class: session == b.entity.eid ? 'Session_Selected' : '',
               },
-              session == b.entity.eid ? '> ' : '  ',
-              '  '.repeat(depth),
-              children ? (open ? '▾ ' : '▸ ') : '  ',
+              h('span', { class: 'Muted' }, prefix),
               indicator(b),
               ' ',
               sessionLine(b),
@@ -131,7 +129,54 @@ export let panels: Panel[] = [
     },
   },
   {
+    title: 'Tasks',
+    fit: true,
+    titleClass: 'Task',
+    read: (c) => c.agent.tasks(),
+    Render: ({ rows, sessions }) =>
+      list(rows, (b) => {
+        let held = (b.claim as Comp | undefined)?.session
+        return h(
+          'span',
+          null,
+          indicator(b, sessions),
+          ' ',
+          `${b.entity.num ?? b.entity.eid.slice(0, 8)} ${
+            (b.doc as Comp | undefined)?.title ?? b.entity.eid
+          }${held ? ` [${shortSessionId(String(held))}]` : ''}`,
+        )
+      }, 'No open tasks'),
+  },
+  {
+    title: 'Keys',
+    fit: true,
+    read: () => [],
+    Render: ({ showSettled, showArchived }) =>
+      h(
+        'div',
+        null,
+        ...[
+          `^S        Show settled: ${showSettled ? 'on' : 'off'}`,
+          'Ctrl+End  follow transcript end',
+          '^N / ^P  next/previous root',
+          'Alt+↑/↓   next/previous root',
+          'Alt+v     VISUAL; Tab region; y yank',
+          'Ctrl+j/k  next/previous sibling',
+          'Ctrl+h/l  parent/child',
+          'Alt+a     archive/unarchive root',
+          `Alt+z     Show archived: ${showArchived ? 'on' : 'off'}`,
+          '^O        new session',
+          'Tab       message / task',
+          'Enter     submit',
+          'Shift+Enter newline',
+          'PgUp/PgDn scroll',
+          '^C        quit',
+        ].map((s) => h('div', null, s)),
+      ),
+  },
+  {
     title: 'Context usage',
+    fit: true,
     read: (c) => c.session ? c.agent.transcript(c.session) : [],
     Render: ({ rows }) => {
       // Transcript order includes a fork's inherited prefix. Sequence numbers
@@ -169,49 +214,5 @@ export let panels: Panel[] = [
           : h('div', null, 'Cached: ' + cached + ' tokens'),
       )
     },
-  },
-  {
-    title: 'Tasks',
-    titleClass: 'Task',
-    read: (c) => c.agent.tasks(),
-    Render: ({ rows, sessions }) =>
-      list(rows, (b) => {
-        let held = (b.claim as Comp | undefined)?.session
-        return h(
-          'span',
-          null,
-          indicator(b, sessions),
-          ' ',
-          `${b.entity.num ?? b.entity.eid.slice(0, 8)} ${
-            (b.doc as Comp | undefined)?.title ?? b.entity.eid
-          }${held ? ` [${shortSessionId(String(held))}]` : ''}`,
-        )
-      }, 'No open tasks'),
-  },
-  {
-    title: 'Keys',
-    read: () => [],
-    Render: ({ showSettled, showArchived }) =>
-      h(
-        'div',
-        null,
-        ...[
-          `^S        Show settled: ${showSettled ? 'on' : 'off'}`,
-          'Ctrl+End  follow transcript end',
-          '^N / ^P  next/previous root',
-          'Alt+↑/↓   next/previous root',
-          'Alt+v     VISUAL; Tab region; y yank',
-          'Alt+j/k   next/previous tree row',
-          'Alt+h/l   collapse/parent; expand/child',
-          'Alt+a     archive/unarchive root',
-          `Alt+z     Show archived: ${showArchived ? 'on' : 'off'}`,
-          '^O        new session',
-          'Tab       message / task',
-          'Enter     submit',
-          'Shift+Enter newline',
-          'PgUp/PgDn scroll',
-          '^C        quit',
-        ].map((s) => h('div', null, s)),
-      ),
   },
 ]

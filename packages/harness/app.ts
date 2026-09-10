@@ -81,7 +81,6 @@ export let App = (
       mode: String((ui.client.ent('composer')!.composer as Comp).mode),
       showSettled: Boolean(value.showSettled),
       showArchived: Boolean(value.showArchived),
-      expanded: JSON.parse(String(value.expanded ?? '[]')) as string[],
     }
   }
   let setError = (error: string) => ui.patch({ error })
@@ -213,22 +212,14 @@ export let App = (
     }
     // Ordinary typing must never build the session tree.
     if (
-      !(k.ctrl && (k.text == 'n' || k.text == 'p') ||
-        k.alt && (['a', 'z', 'h', 'j', 'k', 'l'].includes(k.text ?? '') ||
+      !(k.ctrl && ['n', 'p', 'h', 'j', 'k', 'l'].includes(k.text ?? '') ||
+        k.alt && (['a', 'z'].includes(k.text ?? '') ||
             k.name == 'up' || k.name == 'down'))
     ) return false
     let state = current()
     let rows = projection.peek().sessions
     let tree = sessionTree(rows, { ...state, selected: state.id })
     let selected = tree.find((r) => r.bundle.entity.eid == state.id)
-    let expand = (id: string, open: boolean) =>
-      ui.patch({
-        expanded: JSON.stringify(
-          open
-            ? [...new Set([...state.expanded, id])]
-            : state.expanded.filter((v) => v != id),
-        ),
-      })
     if (k.alt && k.text == 'z') {
       ui.patch({ showArchived: !state.showArchived })
       return true
@@ -247,42 +238,43 @@ export let App = (
       }
       return true
     }
-    if (k.alt && k.text == 'l') {
-      if (selected?.children) {
-        if (!selected.expanded) expand(selected.bundle.entity.eid, true)
-        else {
-          let next = tree[tree.indexOf(selected) + 1]
-          if (next && next.depth > selected.depth) {
-            choose({ id: next.bundle.entity.eid })
-          }
-        }
+    if (k.ctrl && k.text == 'l') {
+      let child = selected && tree.find((r) => parentId(r.bundle) == state.id)
+      if (child) choose({ id: child.bundle.entity.eid })
+      return true
+    }
+    if (k.ctrl && k.text == 'h') {
+      let parent = selected && parentId(selected.bundle)
+      if (parent && tree.some((r) => r.bundle.entity.eid == parent)) {
+        choose({ id: parent })
       }
       return true
     }
-    if (k.alt && k.text == 'h') {
-      if (selected?.expanded) expand(selected.bundle.entity.eid, false)
-      else if (selected) {
-        let parent = parentId(selected.bundle)
-        if (rows.some((b) => b.entity.eid == parent)) choose({ id: parent })
-      }
+    if (k.ctrl && (k.text == 'j' || k.text == 'k')) {
+      let siblings = tree.filter((r) =>
+        selected
+          ? (selected.depth == 0
+            ? r.depth == 0
+            : parentId(r.bundle) == parentId(selected.bundle))
+          : r.depth == 0
+      )
+      let at = siblings.findIndex((r) => r.bundle.entity.eid == state.id)
+      let delta = k.text == 'j' ? 1 : -1
+      let next = siblings[(at + delta + siblings.length) % siblings.length]
+      if (next) choose({ id: next.bundle.entity.eid })
       return true
     }
-    let within = k.alt && (k.text == 'j' || k.text == 'k')
-    let delta = k.ctrl && k.text == 'n' || k.alt && k.name == 'down' ||
-        k.alt && k.text == 'j'
+    let delta = k.ctrl && k.text == 'n' || k.alt && k.name == 'down'
       ? 1
-      : k.ctrl && k.text == 'p' || k.alt && k.name == 'up' ||
-          k.alt && k.text == 'k'
+      : k.ctrl && k.text == 'p' || k.alt && k.name == 'up'
       ? -1
       : 0
     if (!delta) return false
     let ids: (string | undefined)[] = [
       undefined,
-      ...tree.filter((r) => within || r.depth == 0).map((r) =>
-        r.bundle.entity.eid
-      ),
+      ...tree.filter((r) => r.depth == 0).map((r) => r.bundle.entity.eid),
     ]
-    let at = ids.indexOf(within ? state.id : rootOf(rows, state.id))
+    let at = ids.indexOf(rootOf(rows, state.id))
     choose({ id: ids[(at + delta + ids.length) % ids.length] })
     return true
   })
@@ -330,7 +322,6 @@ export let App = (
     sessions: data.sessions,
     showSettled,
     showArchived: Boolean(state.showArchived),
-    expanded: JSON.parse(String(state.expanded ?? '[]')),
   }
   let transcriptItems = useMemo(
     () => data.entries.map((b) => ({ id: b.entity.eid, bundle: b })),
@@ -350,6 +341,7 @@ export let App = (
             title: p.title,
             titleClass: p.titleClass,
             bounded: true,
+            fit: p.fit,
             scrollable: p.scrollable,
             Render: () => h(p.Render, { ...ctx, rows: data.rows[i] ?? [] }),
           })),
@@ -454,6 +446,8 @@ let frontendViews = define<ComponentRenderer>([{
       max: 6,
       value: { text: String(draft.text), at: Number(draft.at) },
       onEdit: edit as Frontend['edit'],
+      passKey: (k: import('@yaks/tui').Key) =>
+        !!k.ctrl && ['h', 'j', 'k', 'l'].includes(k.text ?? ''),
       onSubmit: submit as (text: string) => void,
     })
   },

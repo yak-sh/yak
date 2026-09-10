@@ -135,7 +135,7 @@ Deno.test('sidebar labels keep names and indicators without redundant status tex
       } else {
         assert(shown.includes('● abcdef01'), shown)
         assert(shown.includes('Meaningful name'), shown)
-        if (title == 'Sessions') assert(shown.includes('>   ● abcdef01'), shown)
+        if (title == 'Sessions') assert(shown.includes('● abcdef01'), shown)
       }
     } finally {
       ui.free()

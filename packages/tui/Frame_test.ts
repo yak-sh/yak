@@ -18,11 +18,11 @@ let App = () =>
 Deno.test('the sidebar sits beside the main column, panel by panel', async () => {
   let ui = await mount(App, 30, 6)
   assertEquals(ui.text().split('\n'), [
-    'body                  One', // the sidebar keeps a 2-column gutter
-    '                      first',
+    'body                One', // no blanket sidebar gutter
+    '                    first',
     '',
-    '                      Two',
-    '                      second',
+    '                    Two',
+    '                    second',
     '',
   ])
   ui.free()
@@ -69,6 +69,56 @@ Deno.test('bounded panels share height rather than pushing sibling headings offs
     assertEquals(ui.text().includes('visible'), true)
     await ui.resize(40, 6)
     assertEquals(ui.text().includes('Other'), true)
+  } finally {
+    ui.free()
+  }
+})
+
+Deno.test('fit panels shrink and return their unused height to the expanding tree', async () => {
+  let ui = await mount(
+    () =>
+      h(Frame, {
+        min: 10,
+        width: 20,
+        sidebar: [
+          {
+            title: 'Sessions',
+            bounded: true,
+            Render: () =>
+              h(
+                'div',
+                null,
+                ...Array.from(
+                  { length: 50 },
+                  (_, i) => h('div', null, 'session ' + i),
+                ),
+              ),
+          },
+          {
+            title: 'Tasks',
+            bounded: true,
+            fit: true,
+            Render: () => h('div', null, 'one task'),
+          },
+          {
+            title: 'Context',
+            bounded: true,
+            fit: true,
+            Render: () => h('div', null, '100 tokens'),
+          },
+        ],
+      }),
+    40,
+    20,
+  )
+  try {
+    let lines = ui.text().split('\n')
+    assertEquals(lines.findIndex((l) => l.includes('Tasks')) > 10, true)
+    assertEquals(lines.findIndex((l) => l.includes('Context')), 17)
+    await ui.resize(40, 9)
+    assertEquals(ui.text().includes('Sessions'), true)
+    assertEquals(ui.text().includes('Tasks'), true)
+    assertEquals(ui.text().includes('Context'), true)
   } finally {
     ui.free()
   }

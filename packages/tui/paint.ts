@@ -235,15 +235,24 @@ let col = (el: TElement, s: Style, w: number, h: number | null, c: Ctx) => {
   let growers = all.filter((k) => k.attr('grow') != null)
   let left = h == null ? null : Math.max(0, h - used)
   let out: Line[] = []
-  let taken = 0
-  growers.forEach((k, i) => {
-    if (left == null) return
-    let share = i == growers.length - 1
-      ? left - taken
-      : Math.floor(left / growers.length)
-    taken += share
-    fixed.set(k, lay(k, s, w, share, c))
-  })
+  if (left != null) {
+    let shares = new Map<TElement, number>()
+    let fitters = growers.filter((k) => k.attr('grow-fit') != null)
+    let fair = Math.floor(left / Math.max(1, growers.length))
+    for (let k of fitters) {
+      let natural = lay(k, s, w, null, c).length
+      let share = Math.min(natural, fair)
+      shares.set(k, share)
+      left -= share
+    }
+    let expanding = growers.filter((k) => !shares.has(k))
+    expanding.forEach((k, i) => {
+      let share = Math.floor(left! / (expanding.length - i))
+      shares.set(k, share)
+      left! -= share
+    })
+    for (let k of growers) fixed.set(k, lay(k, s, w, shares.get(k)!, c))
+  }
   for (let k of all) out.push(...(fixed.get(k) ?? lay(k, s, w, null, c)))
   return out
 }
@@ -382,6 +391,16 @@ let layout = (
       ]),
       rule('╰', '╯'),
     ]
+  }
+  if (el.attr('fill') != null) {
+    lines = lines.map((line) => {
+      let clipped = clip(line, w)
+      let remaining = Math.max(
+        0,
+        w - clipped.reduce((n, part) => n + part.text.length, 0),
+      )
+      return [...clipped, { text: ' '.repeat(remaining), style: s }]
+    })
   }
   return outer == null ? lines : fit(lines, outer)
 }

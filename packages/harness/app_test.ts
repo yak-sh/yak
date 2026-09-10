@@ -468,28 +468,27 @@ Deno.test('settled subagents are hidden, toggled and retained while selected', a
   try {
     await settle()
     assert(ui.text().includes('ROOT'))
-    assert(!ui.text().includes('ACTIVE_CHILD'))
+    assert(ui.text().includes('ACTIVE_CHILD'))
     assert(!ui.text().includes('DONE_CHILD'))
     assert(ui.text().includes('Show settled: off'))
     await ui.send('\x0e')
     await settle()
     assert(ui.text().includes('parent retains child result'))
     assert(!ui.text().includes('DONE_CHILD'))
-    await ui.send('\x1bl') // expand root
-    await ui.send('\x1bj') // first visible child
+    await ui.send('\x1b[108;5u') // enter child
     await settle()
     assert(ui.text().includes('● ACTIVE_CHILD'))
     await ui.send('\x13')
     assert(ui.text().includes('Show settled: on'))
     assert(ui.text().includes('DONE_CHILD'))
-    await ui.send('\x1bk') // now the settled child is selectable
+    await ui.send('\x1b[107;5u') // now the settled child is selectable
     await settle()
     assert(ui.text().includes('● DONE_CHILD'))
     assert(ui.text().includes('child transcript intact'))
     await ui.send('\x13') // selected child remains even with filter on
     assert(ui.text().includes('● DONE_CHILD'))
-    await ui.send('\x1bh')
-    await ui.send('\x1bh') // collapse root
+    await ui.send('\x1b[104;5u')
+    await ui.send('\x1b[104;5u') // root has no parent
     await settle()
     assert(ui.text().includes('parent retains child result'))
     assert(!ui.text().includes('DONE_CHILD'))
@@ -538,9 +537,8 @@ Deno.test('tree navigation skips children between roots and archive toggles stay
     await ui.send('\x0e')
     await settle()
     assertEquals(selected(), 'a')
-    await ui.send('\x1bl')
+    await ui.send('\x1b[108;5u')
     assert(ui.text().includes('Research widgets'), ui.text())
-    await ui.send('\x1bj')
     await settle()
     assertEquals(selected(), 'child')
     await ui.send('\x0e')
@@ -631,7 +629,7 @@ Deno.test('session return preserves detached anchors through loading; Ctrl+End f
   }
 })
 
-Deno.test('large expanded tree reserves room for all sidebar headings and reveals selected rows', async () => {
+Deno.test('large open tree reserves room for all sidebar headings and reveals selected rows', async () => {
   let f = frontend()
   let sessions: Bundle[] = [
     { entity: { eid: 'root' }, session: { status: 'settled', title: 'ROOT' } },
@@ -645,10 +643,6 @@ Deno.test('large expanded tree reserves room for all sidebar headings and reveal
     ),
   ]
   f.patch({ selected: 'root' })
-  f.client.mutate([{
-    entity: { eid: 'view' },
-    frontend: { expanded: JSON.stringify(['root']) },
-  }])
   let a: UIAgent = {
     taskEntry: () => Promise.resolve({ task: 't', child: 'c' }),
     sessions: () => Promise.resolve(sessions),
@@ -737,5 +731,93 @@ Deno.test('transcript publishes before slow sidebar reads and despite ongoing ch
     state.close()
     a.close()
     await Deno.remove(dir, { recursive: true })
+  }
+})
+
+Deno.test('Ctrl directions navigate siblings and parents; legacy Enter and Backspace edit', async () => {
+  let rows: Bundle[] = [
+    { entity: { eid: 'root' }, session: { id: 'Root', status: 'running' } },
+    {
+      entity: { eid: 'a' },
+      session: { id: 'First', status: 'running' },
+      spawned: { parent: 'root' },
+    },
+    {
+      entity: { eid: 'aa' },
+      session: { id: 'Grandchild', status: 'running' },
+      spawned: { parent: 'a' },
+    },
+    {
+      entity: { eid: 'b' },
+      session: { id: 'Second', status: 'running' },
+      spawned: { parent: 'root' },
+    },
+    {
+      entity: { eid: 'other' },
+      session: { id: 'OtherRoot', status: 'running' },
+    },
+  ]
+  let f = frontend(), sent: string[] = []
+  let a: UIAgent = {
+    sessions: () => Promise.resolve(rows),
+    tasks: () => Promise.resolve([]),
+    children: () => Promise.resolve([]),
+    transcript: () => Promise.resolve([]),
+    entry: () => null,
+    line: () => '',
+    start: () => Promise.resolve('root'),
+    send: (_id, text) => {
+      sent.push(text)
+      return Promise.resolve('input')
+    },
+    taskEntry: () => Promise.resolve({ task: 'task', child: 'child' }),
+  }
+  let ui = await mount(
+    () => h(App, { agent: a, frontend: f, subscribe: () => () => {} }),
+    120,
+    40,
+  )
+  let selected = () => (f.client.ent('view')!.frontend as Comp).selected
+  let key = async (code: number) => {
+    await ui.send('\x1b[' + code + ';5u')
+    await settle()
+  }
+  try {
+    await settle()
+    f.patch({ selected: 'root' })
+    await settle()
+    assert(ui.text().includes('Grandchild'))
+    assert(!ui.text().includes('▸'))
+    assert(!ui.text().includes('▾'))
+    await key(108)
+    assertEquals(selected(), 'a')
+    await key(106)
+    assertEquals(selected(), 'b') // skips a's grandchild
+    await key(107)
+    assertEquals(selected(), 'a')
+    await key(108)
+    assertEquals(selected(), 'aa')
+    await key(104)
+    assertEquals(selected(), 'a')
+    await key(104)
+    assertEquals(selected(), 'root')
+    await key(106)
+    assertEquals(selected(), 'other')
+    await ui.send('xy\x08')
+    assertEquals((f.client.ent('draft')!.draft as Comp).text, 'x')
+    await ui.send('\n')
+    await settle()
+    assertEquals(sent, ['x'])
+    assertEquals(selected(), 'other')
+    await ui.send('preserve')
+    await key(107)
+    assertEquals((f.client.ent('draft')!.draft as Comp).text, 'preserve')
+    assert(
+      ui.out.join('').includes('48;2;52;63;68'),
+      'selected background reaches ANSI',
+    )
+  } finally {
+    ui.free()
+    f.close()
   }
 })

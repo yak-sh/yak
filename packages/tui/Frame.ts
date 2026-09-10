@@ -18,6 +18,8 @@ export type Panel = {
   titleClass?: string
   /** Share remaining sidebar height instead of measuring unbounded content. */
   bounded?: boolean
+  /** Shrink to content within a fair share; expanding panels receive unused rows. */
+  fit?: boolean
   /** Content already owns a scrolling viewport. */
   scrollable?: boolean
   Render: ComponentType
@@ -47,7 +49,9 @@ export let Frame = (
             {
               class: 'Panel',
               key: p.title,
-              ...(p.bounded ? { grow: '1', col: '1' } : {}),
+              ...(p.bounded
+                ? { grow: '1', col: '1', ...(p.fit ? { 'grow-fit': '1' } : {}) }
+                : {}),
             },
             h('div', {
               class: ['Panel_Title', p.titleClass].filter(Boolean).join(' '),

@@ -268,17 +268,26 @@ editing an existing mark preserves its original author.
 ### Session tree
 
 Sessions are grouped beneath their root, with assignment titles and compact IDs.
-`Ctrl+N/P` (also Alt+Down/Up) switch **roots**, skipping descendants. `Alt+j/k`
-moves through visible tree rows; `Alt+l` expands or enters a child, and `Alt+h`
-collapses or selects its parent. Plain hjkl still types in the composer. The
-selected child's ancestors stay open. `Ctrl+S` reveals settled children; roots
-remain visible until archived.
+Branches are always open. `Ctrl+j/k` select the next/previous sibling, `Ctrl+h`
+selects the parent, and `Ctrl+l` enters its first visible child. `Ctrl+N/P`
+(also Alt+Down/Up) switch roots, skipping descendants. The selected row has a
+subtle background; tree connectors show relationships without selection or
+expansion arrows. `Ctrl+S` reveals settled children.
+
+Ctrl+h and Ctrl+j require extended keyboard reporting to distinguish them from
+Backspace and Enter. Legacy Backspace/Enter continue editing/submitting; they
+are never reinterpreted as navigation. Ctrl+k is reserved for navigation in the
+harness (the standalone textarea retains its kill-to-end binding). Plain hjkl
+still types; VISUAL mode retains priority.
+
+Tasks and Keys shrink to their content within bounded shares. Context usage is
+last at the bottom; the session tree receives remaining height and scrolls.
 
 `Alt+a` archives/unarchives the selected root, even when invoked on a
 descendant. `Alt+z` shows archived roots so they can be selected and restored.
 Archival is a persistent `archived` facet: it neither stops execution nor
 removes history. Descendants inherit visibility from their root; they receive no
-archive marks. Expansion and visibility preferences live only in the frontend
+archive marks. Selection and visibility preferences live only in the frontend
 graph. Trees are keyboard-controlled for now; no coordinate-specific mouse hacks
 were added.
 

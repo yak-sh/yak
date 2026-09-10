@@ -18,14 +18,12 @@ export let rootOf = (rows: Bundle[], id?: string): string | undefined => {
 export type TreeRow = {
   bundle: Bundle
   depth: number
-  children: boolean
-  expanded: boolean
+  prefix: string
 }
 export type TreeOptions = {
   selected?: string
   showSettled?: boolean
   showArchived?: boolean
-  expanded?: readonly string[]
 }
 export let sessionTree = (
   rows: Bundle[],
@@ -58,11 +56,8 @@ export let sessionTree = (
       depth > 0 && !opts.showSettled && !path.has(id) &&
       (b.session as Comp)?.status == 'settled'
     ) return
-    let kids = children.get(id) ?? []
-    let expanded = !!opts.expanded?.includes(id) ||
-      (path.has(id) && opts.selected != id)
-    out.push({ bundle: b, depth, children: kids.length > 0, expanded })
-    if (expanded) { for (let child of kids) visit(child, depth + 1) }
+    out.push({ bundle: b, depth, prefix: '' })
+    for (let child of children.get(id) ?? []) visit(child, depth + 1)
   }
   for (let root of roots) visit(root, 0)
   // Components disconnected from every root are corrupt cycles, not collapsed
@@ -79,6 +74,24 @@ export let sessionTree = (
       mark(b.entity.eid)
       visit(b, 0)
     }
+  }
+  // Connect only visible rows, so filtered siblings do not leave dangling lines.
+  let more = new Array<boolean>(out.length)
+  let next: number[] = []
+  for (let i = out.length - 1; i >= 0; i--) {
+    let depth = out[i].depth
+    while (next.length && out[next.at(-1)!].depth > depth) next.pop()
+    more[i] = !!next.length && out[next.at(-1)!].depth == depth
+    next.push(i)
+  }
+  let continuation: boolean[] = []
+  for (let i = 0; i < out.length; i++) {
+    let row = out[i]
+    row.prefix = row.depth == 0
+      ? ''
+      : continuation.slice(1, row.depth).map((v) => v ? '│ ' : '  ').join('') +
+        (more[i] ? '├─' : '└─')
+    continuation[row.depth] = more[i]
   }
   return out
 }
