@@ -252,10 +252,35 @@ export let daemon = (
         turn(session).catch(report)
         return { did: 'nothing', status: 'pending', added: [] } as Step
       }
+      if (
+        !active.has(session) &&
+        statusOf(await transcript(g, session)) == 'stopped'
+      ) {
+        await g.apply(
+          [{ entity: self.entity, dispatch: { state: 'settled' } }],
+          { trusted: true },
+        )
+        let parent = (self.spawned as Comp | undefined)?.parent
+        if (parent && !stopping) {
+          enqueue(String(parent), () => deliverChild(g, session)).catch(report)
+        }
+        return { did: 'nothing', status: 'stopped', added: [] } as Step
+      }
       if (!active.has(session) || dispatch(self)?.state != 'settled') {
+        // A new turn rejoins the tail; a duplicate wake of queued intent
+        // retains its position. Hot children cannot starve later submissions.
+        let order = dispatch(self)?.order
+        if (dispatch(self)?.state != 'queued') {
+          order = Math.max(
+            0,
+            ...(await g.read('.dispatch')).map((b) =>
+              Number(dispatch(b)?.order ?? 0)
+            ),
+          ) + 1
+        }
         await g.apply([{
           entity: { eid: session },
-          dispatch: { state: 'queued' },
+          dispatch: { state: 'queued', order },
         }], { trusted: true })
       }
       schedule()
@@ -306,6 +331,15 @@ export let daemon = (
         if (!task.task || typeof child != 'string') continue
         let [self] = await g.storage.tx((tx) => tx.get([child]))
         let parent = (self?.spawned as Comp | undefined)?.parent
+        if (
+          task.cancelled && self?.dispatch && !active.has(child) && !stopping
+        ) {
+          await g.apply([{
+            entity: { eid: child + ':cancelled' },
+            entry: { session: child },
+            stop: {},
+          }], { trusted: true })
+        }
         if (typeof parent == 'string' && !stopping) {
           enqueue(parent, () => deliverChild(g, child)).catch(report)
         }

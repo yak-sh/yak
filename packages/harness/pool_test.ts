@@ -207,3 +207,61 @@ Deno.test('queued cancellation skips expensive prep; prep failure has one termin
   )
   await a.close()
 })
+Deno.test('queued submissions and fork anchors survive file reopen without duplicate preparation', async () => {
+  let dir = await Deno.makeTempDir({ prefix: 'pool-reopen-' })
+  let path = dir + '/graph.sqlite'
+  let h = open(path)
+  let tools = sessionTools(h.g, { maxChildren: 0 })
+  let a = agent({ h, tools, model: () => Promise.resolve(reply('done')) })
+  try {
+    await h.g.apply([{ entity: { eid: 'p' }, session: {} }, {
+      entity: { eid: 'input' },
+      entry: { session: 'p' },
+      content: { body: 'original' },
+    }, {
+      entity: { eid: 'ask' },
+      entry: { session: 'p' },
+      ask: { through: 'input' },
+    }, {
+      entity: { eid: 'call' },
+      entry: { session: 'p' },
+      call: { id: 'call' },
+    }])
+    let entries = await a.transcript('p')
+    let id = String(
+      await tools.find((t) => t.name == 'fork')!.run({
+        prompt: 'child',
+        model: 'fake',
+      }, { session: 'p', call: { entity: { eid: 'call' } }, entries }),
+    )
+    await a.close()
+    h = open(path)
+    let prep = 0
+    tools = sessionTools(h.g, {
+      maxChildren: 1,
+      prepareChild: async () => {
+        prep++
+        return {}
+      },
+    })
+    a = agent({ h, tools, model: () => Promise.resolve(reply('done')) })
+    await until(async () =>
+      (await h.g.read('.dispatch.state=settled')).length == 1
+    )
+    assertEquals(((await a.children('p'))[0].fork as Comp).from, 'input')
+    assertEquals(
+      String(
+        await tools.find((t) => t.name == 'fork')!.run({ prompt: 'ignored' }, {
+          session: 'p',
+          call: { entity: { eid: 'call' } },
+          entries,
+        }),
+      ),
+      id,
+    )
+    assertEquals(prep, 1)
+  } finally {
+    await a.close()
+    await Deno.remove(dir, { recursive: true })
+  }
+})
