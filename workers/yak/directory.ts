@@ -1153,7 +1153,10 @@ export let directory = (via: Fetcher, now = false) => {
     // platform, so it does not answer that question: two rows are proof
     // somebody else is here, one row has to be looked at.
     memberless: async (space: Space) => {
-      let seats = await query(`.member.space=${space.eid}&.limit=2`)
+      // Admission cannot use a cached vacancy: sign-in writes the first seat
+      // directly to meta, and another isolate's cache would not hear even a
+      // directory write. A later sign-in must not mint a second owner seat.
+      let seats = await query(`.member.space=${space.eid}&.limit=2`, true)
       if (seats.length != 1) return !seats.length
       let seat = seats[0].member
       return !!seat && idOf(seat.person) == await self.personAt(ADMIN)

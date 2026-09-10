@@ -148,6 +148,9 @@ import {
   aims,
   type Bucket,
   carry,
+  FILED,
+  filed,
+  filings,
   FORMER,
   HANDLED,
   handled,
@@ -172,6 +175,7 @@ import {
   stale,
   type Taken,
   taken,
+  unfiled,
   unhandled,
 } from './migrate.ts'
 import {
@@ -442,9 +446,10 @@ export class Store {
     // that stopped at an older marker because it had nothing to move for it
     // still has to be asked about the ones added since.
     this.#behind = this.#pending ||
-      (this.#get('migrated') != HANDLED &&
+      (this.#get('migrated') != FILED &&
         (housed(ctx.storage) || slugged(ctx.storage) ||
-          aimedOld(ctx.storage) || unhandled(ctx.storage)))
+          aimedOld(ctx.storage) || unhandled(ctx.storage) ||
+          unfiled(ctx.storage)))
   }
 
   // Waking on whatever this object holds. Everything above the storage is
@@ -529,7 +534,8 @@ export class Store {
         ctx.storage,
         vocab,
         blobText(vocab),
-        meta && this.#get('migrated') != HANDLED,
+        meta &&
+          MARKS.indexOf(this.#get('migrated') ?? '') < MARKS.indexOf(HANDLED),
       )
       if (held) rebuild(drive)
       this.#put('schema', stamp)
@@ -1005,6 +1011,9 @@ export class Store {
     // address it was born at. Only the directory has an app row to name.
     if (!this.#refused) {
       await this.#after(request, HANDLED, unhandled, handles, handled)
+    }
+    if (!this.#refused) {
+      await this.#after(request, FILED, unfiled, filings, filed)
     }
     this.#behind = false
   }

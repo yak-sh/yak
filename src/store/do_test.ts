@@ -1,101 +1,100 @@
-// The store seam's contract, held in workerd itself: the kernel Worker boots
-// under `wrangler dev` (workers/yak/probe.ts), a space and app are born in
-// the directory, and that app's Store object is driven through the graph API
-// the way a headless client drives the Deno server. Slow tier only — a real
-// runtime boots.
+// The app store's contract in workerd itself: the kernel Worker boots under
+// wrangler dev, and a headless client drives its HTTP and live doors. The
+// T-33810 package store takes bundles and subscriptions. The public HTTP
+// door still wraps its replies as {ok, changes, aliases}, but fleet claim
+// leases and cursor/epoch catchup no longer belong to this app store.
 import { assert, assertEquals, assertMatch } from '@std/assert'
-import { link } from '../edge.ts'
+import type { Frame } from '@yaks/api'
+import { edgeEid, link } from '@yaks/edge'
 import { slow, until } from '../testing.ts'
 import { client, kernel, relay, seed } from '../../workers/yak/probe.ts'
 
 slow('the store on Durable Object SQLite serves the wire', async () => {
   let k = await kernel()
   try {
-    let { cookie } = await seed(k, [{ slug: 'lab', apps: ['graph'] }])
-    let host = 'lab.yaks.app'
-    let { get, post, applied } = client(k, host, 'graph', cookie)
-    // Planted on first touch: the identity door answers with an epoch.
-    let serving = await (await k.at(host, '/graph/api/graph')).json()
-    assertMatch(serving.epoch, /^[0-9a-f-]{36}$/)
-    assertEquals(serving.db, 'do:lab/graph')
+    let { cookie, eids } = await seed(k, [{ slug: 'lab', apps: ['graph'] }])
+    let { get, post, applied } = client(k, 'lab.yaks.app', 'graph', cookie)
+    // Identity and storage size, not the retired fleet epoch.
+    let serving = await (await k.at('lab.yaks.app', '/graph/api/graph')).json()
+    assertEquals(serving.db, `do:lab/graph.${eids['lab/graph'].slice(-6)}`)
+    assert(serving.bytes > 0)
 
-    // A batch: a task, a second task it requires, a comment on it.
     let task = crypto.randomUUID(), dep = crypto.randomUUID()
     let note = crypto.randomUUID()
+    let edge = edgeEid(task, 'requires', dep)
     let batch = await applied([
-      { eid: task, name: 'doc', comp: { title: 'planted', body: 'in a DO' } },
-      { eid: task, name: 'task', comp: {} },
-      { eid: task, name: 'filed', comp: { priority: 1 } },
-      { eid: dep, name: 'doc', comp: { title: 'needed' } },
-      { eid: dep, name: 'task', comp: {} },
-      ...link(task, 'requires', dep),
-      { eid: note, name: 'doc', comp: { title: 'a comment', body: 'hi' } },
-      { eid: note, name: 'comment', comp: { target: task } },
+      {
+        entity: { eid: task },
+        doc: { title: 'planted', body: 'in a DO' },
+        task: {},
+        filed: { priority: 1 },
+      },
+      { entity: { eid: dep }, doc: { title: 'needed' }, task: {} },
+      link(task, 'requires', dep),
+      {
+        entity: { eid: note },
+        doc: { title: 'a comment', body: 'hi' },
+        comment: { target: task },
+      },
     ])
     assert(batch.ok)
-    assert(batch.changes.some((c) => c.eid == task && c.name == 'entity'))
+    assert(batch.changes.some((c) => c.eid == task && c.name == 'doc'))
 
-    // Read back: the filter grammar, edges, and FTS search all serve.
-    let [hit] = await get(`id=${task}&deps=1`)
+    // Fresh HTTP reads recover the committed rows, blob body, references,
+    // derived status, and full-text index from the object's SQLite.
+    let [hit] = await get(`.eid=${task}`)
     assertEquals(hit.entity.eid, task)
-    assertEquals((hit.doc as { title: string }).title, 'planted')
+    assert(hit.entity.num! > 0)
+    assertEquals(hit.doc, { title: 'planted', body: 'in a DO' })
     assertEquals((hit.task as { status: string }).status, 'open')
-    assertEquals(hit.deps, [{ parent: task, type: 'requires', child: dep }])
-    assertEquals((await get('.kind=task')).length, 2)
+    let [relation] = await get(`.edge.from=${task}&.requires!`)
+    assertEquals(relation.entity.eid, edge)
+    assertEquals((relation.edge as { to: string }).to, dep)
+    assertEquals((await get('.task!')).length, 2)
     assertEquals((await get('planted')).map((r) => r.entity.eid), [task])
+    assertEquals((await get('"in a DO"')).map((r) => r.entity.eid), [task])
     let [about] = await get(`.comment.target=${task}`)
     assertEquals(about.entity.eid, note)
 
-    // A claim lease bounces a second session and audits the conflict.
-    let a = crypto.randomUUID(), b = crypto.randomUUID()
-    await applied([
-      { eid: a, name: 'session', comp: { id: 'session-a' } },
-      { eid: b, name: 'session', comp: { id: 'session-b' } },
-      { eid: task, name: 'claim', comp: { session: a } },
-    ])
-    let bounce = await post([{
-      eid: task,
-      name: 'claim',
-      comp: { session: b },
-    }])
-    assertEquals(bounce.status, 400)
-    assertMatch(await bounce.text(), /already claimed by session-a/)
-    assertEquals((await get('.kind=conflict')).length, 1)
-
-    // A bad batch leaves no partial write: the rename before the refusal is
-    // rolled back with it.
+    // A refusal names the bad value and leaves the whole batch untouched.
+    let fresh = crypto.randomUUID()
     let bad = await post([
-      { eid: task, name: 'doc', comp: { title: 'renamed' } },
-      ...link(task, 'requires', 'x'),
-      { eid: task, name: 'task', comp: {} },
-      { eid: task, name: 'filed', comp: { priority: 'not a number' } },
+      { entity: { eid: task }, doc: { title: 'renamed' } },
+      { entity: { eid: fresh }, doc: { title: 'never committed' } },
+      { entity: { eid: dep }, filed: { priority: 'not a number' } },
     ])
     assertEquals(bad.status, 400)
-    assertEquals(
-      ((await get(`id=${task}`))[0].doc as { title: string }).title,
-      'planted',
-    )
+    assertMatch(await bad.text(), /priority/)
+    assertEquals((await get(`.eid=${task}`))[0].doc, hit.doc)
+    assertEquals(await get(`.eid=${fresh}`), [])
 
-    // Deleting the task tombstones it and takes the comment about it along;
-    // the reply names the casualty so a client cache drops it too.
-    let death = await applied([{ eid: task, name: 'entity', comp: null }])
-    assert(death.changes.some((c) => c.eid == note && c.name == 'entity'))
-    assertEquals(await get(`id=${task},${note}`), [])
-    assertEquals((await get('.kind=task')).map((r) => r.entity.eid), [dep])
-    // A late patch for the dead eid is void: accepted, and nothing rises.
-    await applied([{ eid: task, name: 'doc', comp: { title: 'ghost' } }])
-    assertEquals(await get(`id=${task}`), [])
+    // A public app is readable by a stranger, but not writable by one.
+    let stranger = client(k, 'lab.yaks.app', 'graph')
+    let no = await stranger.post([
+      { entity: { eid: task }, doc: { title: 'not yours' } },
+    ])
+    assertEquals(no.status, 401)
+    assertEquals((await no.json()).error.code, 'not_a_writer')
+    assertEquals((await stranger.get(`.eid=${task}`))[0].doc, hit.doc)
+
+    // Deleting an endpoint tombstones both its comment and its edge; the
+    // reply carries the casualties for caches, and the other task survives.
+    let death = await applied([{ entity: { eid: task }, tombstone: {} }])
+    for (let eid of [task, note, edge]) {
+      assert(death.changes.some((c) => c.eid == eid && c.name == 'tombstone'))
+    }
+    assertEquals(await get(`.eid=${task},${note},${edge}`), [])
+    assertEquals((await get('.task!')).map((r) => r.entity.eid), [dep])
+    await applied([{ entity: { eid: task }, doc: { title: 'ghost' } }])
+    assertEquals(await get(`.eid=${task}`), [])
   } finally {
     await k.stop()
   }
 })
 
-// deno-lint-ignore no-explicit-any
-type Frame = Record<string, any>
-
-// One socket on an app's live door, and everything it has heard.
-let socket = async (origin: string, path: string) => {
-  let ws = new WebSocket(`${origin.replace(/^http/, 'ws')}${path}`)
+// One real socket and the subscription frames it has heard.
+let socket = async (origin: string) => {
+  let ws = new WebSocket(`${origin.replace(/^http/, 'ws')}/graph/api/ws`)
   let heard: Frame[] = []
   ws.onmessage = (e) => heard.push(JSON.parse(String(e.data)))
   await until(() => ws.readyState == WebSocket.OPEN, {
@@ -103,14 +102,13 @@ let socket = async (origin: string, path: string) => {
     label: 'the socket to open',
   })
   let told = (frame: unknown) => ws.send(JSON.stringify(frame))
-  // A frame this socket has heard, or the first one it hears that fits;
-  // until() throws rather than answering nothing.
   let hears = async (fits: (f: Frame) => boolean): Promise<Frame> =>
     (await until(() => heard.find(fits), {
       timeout: 15_000,
-      label: 'a frame',
+      label: () => `a subscription frame; heard ${JSON.stringify(heard)}`,
     }))!
   let close = async () => {
+    if (ws.readyState == WebSocket.CLOSED) return
     ws.close()
     await until(() => ws.readyState == WebSocket.CLOSED, { timeout: 15_000 })
   }
@@ -119,75 +117,76 @@ let socket = async (origin: string, path: string) => {
 
 slow('the store on Durable Object SQLite serves the live wire', async () => {
   let k = await kernel()
-  let { cookie } = await seed(k, [{ slug: 'lab', apps: ['graph'] }])
-  // Two devices on one app: one signed in as the owner, one just looking.
-  let device = relay(k, 'lab.yaks.app', cookie)
-  let onlooker = relay(k, 'lab.yaks.app')
+  let onlooker: ReturnType<typeof relay> | undefined
   let sockets: { close(): Promise<void> }[] = []
   try {
+    let { cookie } = await seed(k, [{ slug: 'lab', apps: ['graph'] }])
     let { applied } = client(k, 'lab.yaks.app', 'graph', cookie)
+    onlooker = relay(k, 'lab.yaks.app')
+    let b = await socket(onlooker.origin)
+    sockets.push(b)
 
-    let a = await socket(device.origin, '/graph/api/ws')
-    let b = await socket(onlooker.origin, '/graph/api/ws')
-    sockets.push(a, b)
-
-    // The second socket subscribes to a filter; the empty app answers empty.
-    // A subscription is the /query door that keeps answering (query.ts
-    // `answered`), so its frames carry ROWS, never the wire's raw changes.
-    b.told({ sub: 'notes', q: '.doc!' })
-    let first = await b.hears((f) => f.sub == 'notes')
-    assertEquals(first.replace, true)
-    assertEquals(first.rows, [])
-
-    // A write on the FIRST socket arrives on the second, unasked — as the row
-    // that write made, in the shape the filter would have answered with.
-    let note = crypto.randomUUID()
-    a.told([{ eid: note, name: 'doc', comp: { title: 'from the kitchen' } }])
-    let live = await b.hears((f) =>
-      f.sub == 'notes' && f.rows?.some((r: Frame) => r.entity.eid == note)
-    )
-    assert(
-      live.rows.some((r: Frame) => r.doc?.title == 'from the kitchen'),
-    )
-
-    // A batch wearing a delivery id is acked; a socket the kernel never
-    // vouched for as a writer is refused in the store's own words.
-    a.told({ apply: [{ eid: note, name: 'task', comp: {} }], id: '7' })
-    await a.hears((f) => f.ack == '7')
-    b.told([{ eid: crypto.randomUUID(), name: 'doc', comp: { title: 'no' } }])
-    await b.hears((f) => f.error == 'not_a_writer')
-
-    // A cold socket is seeded with the working set — cursor, epoch and vocab
-    // included, which is how it asks for a delta the next time.
-    let c = await socket(onlooker.origin, '/graph/api/ws')
-    sockets.push(c)
-    c.told({ since: 0 })
-    let held = (await c.hears((f) => f.reset)).snapshot
-    await c.close()
-
-    // While it was away another device wrote — over HTTP this time, the way an
-    // agent does. The socket that stayed hears it live; the one that returns
-    // asks from the cursor it held and is replayed exactly what it missed.
-    let missed = crypto.randomUUID()
-    await applied([{ eid: missed, name: 'doc', comp: { title: 'while away' } }])
-    await b.hears((f) =>
-      f.sub == 'notes' && f.rows?.some((r: Frame) => r.entity.eid == missed)
-    )
-    let d = await socket(onlooker.origin, '/graph/api/ws')
-    sockets.push(d)
-    d.told({
-      since: held.cursor,
-      epoch: held.epoch,
-      vocab: held.vocabHash,
-      live: 1,
+    // The subscription answers its query immediately, then pushes bundles
+    // after HTTP commits. The owner identity itself may carry a doc, so the
+    // working set names tasks, with their docs explicitly requested.
+    b.told({ subscribe: '.task!&.doc?', id: 'notes' })
+    assertEquals(await b.hears((f) => f.id == 'notes'), {
+      id: 'notes',
+      bundles: [],
     })
-    let back = await d.hears((f) => f.catchup)
-    assert(back.catchup.some((c: Frame) => c.eid == missed))
-    assert(!back.catchup.some((c: Frame) => c.eid == note))
+    let note = crypto.randomUUID()
+    await applied([{
+      entity: { eid: note },
+      task: {},
+      doc: { title: 'from the kitchen' },
+    }])
+    let live = await b.hears((f) =>
+      f.id == 'notes' && !!f.bundles?.some((r) => r.entity.eid == note)
+    )
+    assertEquals(live.bundles![0].doc, {
+      title: 'from the kitchen',
+      body: null,
+    })
+
+    // A second reader gets the current set, disconnects, and returns after
+    // another commit. Re-subscribing recovers the WHOLE working set, not the
+    // retired epoch/cursor catchup delta.
+    let c = await socket(onlooker.origin)
+    sockets.push(c)
+    c.told({ subscribe: '.task!&.doc?', id: 'cold' })
+    assertEquals(
+      (await c.hears((f) => f.id == 'cold')).bundles!.map((r) => r.entity.eid),
+      [note],
+    )
+    await c.close()
+    let missed = crypto.randomUUID()
+    await applied([{
+      entity: { eid: missed },
+      task: {},
+      doc: { title: 'while away' },
+    }])
+    await b.hears((f) =>
+      f.id == 'notes' && !!f.bundles?.some((r) => r.entity.eid == missed)
+    )
+    let d = await socket(onlooker.origin)
+    sockets.push(d)
+    d.told({ subscribe: '.task!&.doc?', id: 'back' })
+    assertEquals(
+      (await d.hears((f) => f.id == 'back')).bundles!.map((r) => r.entity.eid)
+        .sort(),
+      [note, missed].sort(),
+    )
+
+    // Live caches learn deletions too, including the reader that reconnected.
+    await applied([{ entity: { eid: note }, tombstone: {} }])
+    for (let [s, id] of [[b, 'notes'], [d, 'back']] as const) {
+      let gone = await s.hears((f) => f.id == id && !!f.gone?.includes(note))
+      assertEquals(gone.gone, [note])
+      assertEquals(gone.bundles, [])
+    }
   } finally {
     for (let s of sockets) await s.close()
-    await device.stop()
-    await onlooker.stop()
+    await onlooker?.stop()
     await k.stop()
   }
 })

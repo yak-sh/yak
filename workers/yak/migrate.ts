@@ -127,13 +127,16 @@ export let SERVES = 'yak/store/serves/4'
  * was born at. The directory's alone; no other object has an app row. */
 export let HANDLED = 'yak/store/handle/5'
 
+/** The sixth pass: portfolio fields move off task into optional filed. */
+export let FILED = 'yak/store/filed/6'
+
 /** Every marker in order, so "is this object caught up" is one comparison and
  * a new pass is one line here. */
-export let MARKS = [MARK, HOMED, FORMER, SERVES, HANDLED]
+export let MARKS = [MARK, HOMED, FORMER, SERVES, HANDLED, FILED]
 
 /** Passes that change stored shape, read per commit by `yak deploys`.
  * A refused pass leaves stored data and its marker unchanged, so adds no boundary. */
-export let BOUNDARIES = [MARK, HOMED, FORMER, SERVES, HANDLED]
+export let BOUNDARIES = [MARK, HOMED, FORMER, SERVES, HANDLED, FILED]
 
 /** The two tables the two layouts spell identically, and so never move. */
 let SPINE = ['entity', 'tombstone']
@@ -435,6 +438,108 @@ let idOf = (d: Drive, eid: string, minted: { n: number }): number => {
   )
   minted.n++
   return Number(d.query('select id from entity where eid = ?', [eid])[0].id)
+}
+
+// The fleet and the app store have separate schemas. Carry both deployed
+// shapes: an already-package-shaped app and an old fleet-shaped task table.
+let FILING = ['priority', 'project', 'assignee', 'domain']
+let filingCols = (d: Drive, from: string) =>
+  FILING.filter((c) => columns(d, from).includes(c))
+
+export let unfiled = (storage: DurableStorage): boolean => {
+  let d = driver(storage)
+  return stands(d, 'task') && stands(d, 'filed') &&
+    filingCols(d, 'task').length > 0
+}
+
+export let filings = (storage: DurableStorage): Taken => {
+  let d = driver(storage)
+  return {
+    store: '',
+    at: new Date().toISOString(),
+    slots: {},
+    tables: ['task', 'filed'].map((name) => ({
+      name,
+      rows: d.query(`select * from ${q(name)}`, []),
+    })),
+  }
+}
+
+// Refuse conflicting facts rather than pick a winner. Reconcile values, not
+// only counts, before the caller can remove the old place or advance a marker.
+let fileward = (d: Drive, from: string): number => {
+  let cols = filingCols(d, from)
+  if (!cols.length) return 0
+  let rows = d.query(
+    `select entity, ${cols.map(q).join(', ')} from ${q(from)}`,
+    [],
+  )
+  for (let row of rows) {
+    let [held] = d.query('select * from filed where entity = ?', [
+      Number(row.entity),
+    ])
+    for (let col of cols) {
+      if (held?.[col] != null && row[col] != null && held[col] !== row[col]) {
+        throw new Error(
+          `task.${col} conflicts with filed.${col} for entity ${row.entity}`,
+        )
+      }
+    }
+    let names = ['entity', ...cols]
+    ins(
+      d,
+      `insert into filed (${names.map(q).join(', ')}) values (${
+        names.map(() => '?').join(', ')
+      }) ` +
+        `on conflict(entity) do update set ${
+          cols.map((c) => `${q(c)} = coalesce(filed.${q(c)}, excluded.${q(c)})`)
+            .join(', ')
+        }`,
+      names.map((c) => row[c] as string | number | null),
+    )
+    let [landed] = d.query('select * from filed where entity = ?', [
+      Number(row.entity),
+    ])
+    if (!landed || cols.some((c) => row[c] != null && landed[c] !== row[c])) {
+      throw new Error(`task filing did not reconcile for entity ${row.entity}`)
+    }
+  }
+  return rows.length
+}
+
+/** Run inside transactionSync, after the export, like every numbered pass. */
+export let filed = (
+  storage: DurableStorage,
+  o: { store: string; app: string | null; export: string },
+): Report => {
+  let d = driver(storage)
+  let moved = fileward(d, 'task')
+  let notes: string[] = []
+  // Dead columns are tidying, not the move (the same rule as homed). A
+  // platform SQLite version that cannot drop one must not lose its data or
+  // rerun this pass; the marker and copied rows commit together.
+  for (let col of filingCols(d, 'task')) {
+    try {
+      d.exec(`alter table task drop column ${q(col)}`)
+    } catch (e) {
+      notes.push(`${col} remains dead: ${String(e)}`)
+    }
+  }
+  return {
+    ...o,
+    at: new Date().toISOString(),
+    ok: true,
+    mark: FILED,
+    moved: [{
+      table: 'filed',
+      from: moved,
+      to: moved,
+      note: `task filing preserved${
+        notes.length ? '; ' + notes.join('; ') : ''
+      }`,
+    }],
+    dropped: [],
+  }
 }
 
 // ---- `space.home` → `home{}` (T-34227) -------------------------------------
@@ -1107,6 +1212,15 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
       to: count(d, comp),
       ...(lost.length ? { note: `dropped columns: ${lost.join(', ')}` } : {}),
     })
+  }
+
+  // Old fleet-shaped stores may still carry filing on task, while a newer
+  // fleet already has filed. Preserve either, refusing disagreeing values.
+  if (there('task') && stands(d, 'filed')) {
+    let n = fileward(d, aside('task'))
+    if (n) {
+      moved.push({ table: 'filed', from: n, to: n, note: 'carried from task' })
+    }
   }
 
   // `doc.body`: the text out of the old blob backend, addressed by its own

@@ -4,6 +4,19 @@
 Deno.env.set('DB_PATH', ':memory:')
 let { apply } = await import('./db.ts')
 let { db } = await import('./live_db.ts')
+let { bareDb } = await import('./testdb.ts')
+let { initVector, loadVector, ownVector, refreshVector } = await import(
+  './vector.ts'
+)
+// This process owns its singleton (isolated by bin/test.ts). The corpus is
+// wholly fixture-authored, including P-19: demo/catalog rows must not consume
+// that identity first. Copy the migrated empty schema through SQLite, keeping
+// the live connection and its vector extension for hygiene's production reads.
+let empty = bareDb()
+loadVector(empty)
+initVector(empty)
+empty.backup(db)
+empty.close()
 let { link } = await import('./edge.ts')
 let {
   candidates,
@@ -13,10 +26,10 @@ let {
 } = await import('./hygiene.ts')
 let { hash, MODEL, textOf } = await import('./embed.ts')
 let { record } = await import('./telemetry.ts')
-let { ownVector, refreshVector } = await import('./vector.ts')
 // This test process is the sole writer of its own :memory: graph, so it owns
 // the quantize the way the embed sweep's process does (T-22622).
 ownVector()
+initVector(db)
 let { axes } = await import('./testvec.ts')
 let { slow } = await import('./testing.ts')
 let { assertEquals, assertStringIncludes } = await import('@std/assert')

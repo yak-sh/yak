@@ -134,6 +134,7 @@ import { entityUrl } from './url.ts'
 import { wakeList } from './title.ts'
 import {
   backfillChanges,
+  backfillCount,
   type BackfillKind,
   backfillKinds,
   landBackfill,
@@ -1617,7 +1618,9 @@ kind is idempotent: rerunning it finds only work not already landed.`,
         async (batch) => (await io.write(batch, session)).changes,
       )
       return bus(
-        `${kind}: ${out.landed}/${out.found} historical edges landed`,
+        `${kind}: ${out.landed}/${backfillCount(pending)} historical ${
+          kind == 'prompt' ? 'tags' : 'edges'
+        } landed`,
         session,
       )
     },

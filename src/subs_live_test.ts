@@ -443,8 +443,8 @@ let task = (comp: Record<string, unknown>) => {
     session,
     born: [
       { eid, name: 'doc', comp: { title: `probe ${eid.slice(0, 8)}` } },
-      { eid, name: 'task', comp: { ...stored } },
-      { eid, name: 'filed', comp: { priority: 3 } },
+      { eid, name: 'task', comp: {} },
+      { eid, name: 'filed', comp: { priority: 3, ...stored } },
       { eid: session, name: 'session', comp: { id: `sub-${session}` } },
       ...(status == 'done'
         ? [{ eid, name: 'completed', comp: {} }]
@@ -1119,7 +1119,7 @@ slow(
         comp: { title: 'HTTP candidate', body: secretTaskBody },
       },
       { eid: target, name: 'task', comp: {} },
-      { eid: target, name: 'filed', comp: { project } },
+      { eid: target, name: 'filed', comp: { project, priority: 0 } },
       {
         eid: target,
         name: 'accept',

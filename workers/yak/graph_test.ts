@@ -411,6 +411,7 @@ Deno.test('the object plants core + member + edge + the app, and nothing else', 
       'attachment',
       // and the words the guide gives an app to reach for rather than invent
       'task',
+      'filed',
       'completed',
       'cancelled',
       'project',

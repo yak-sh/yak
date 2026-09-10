@@ -272,6 +272,23 @@ Deno.test('the admin’s seat does not make the meta space somebody’s', async 
   assertEquals(await dir.memberless(yak), false)
 })
 
+Deno.test('first-member admission sees a seat written around the directory cache', async () => {
+  let { at, yak } = await planted([])
+  let dir = directory({ fetch: over(at) })
+  assertEquals(await dir.memberless(yak), true)
+  // Sign-in writes the first owner's seat straight to the meta store. That
+  // does not invalidate the directory cache, but the next sign-in must see it.
+  let person = crypto.randomUUID()
+  await at.apply([
+    { entity: { eid: person }, person: {} },
+    {
+      entity: { eid: '$seat' },
+      member: { space: yak.eid, person, role: 'owner' },
+    },
+  ], KERNEL)
+  assertEquals(await dir.memberless(yak), false)
+})
+
 Deno.test("a break the platform noted about itself is the meta store's", async () => {
   let { at } = platform()
   await noted((bundles) => at.apply(bundles, KERNEL), {

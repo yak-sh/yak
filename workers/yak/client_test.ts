@@ -99,10 +99,13 @@ slow('the served client: a page saves, lists and watches', async () => {
     // A second component on the same entity, and the filter that reads it.
     await store.apply({
       entity: { eid: cake },
-      task: { status: 'open' },
+      task: {},
       filed: { priority: 1 },
     })
-    assertEquals((await store.query('.task.status=open'))[0].filed.priority, 1)
+    assertEquals(
+      (await store.query('.task.status=open&.filed?'))[0].filed.priority,
+      1,
+    )
 
     // A search that names no component answers the WHOLE bundle, the way an
     // `id=` fetch does: a bare word names nothing to leave out, and a page
@@ -112,7 +115,7 @@ slow('the served client: a page saves, lists and watches', async () => {
     assertEquals(hit.doc.title, 'Lemon cake')
     assertEquals(hit.filed.priority, 1)
     assert(hit.rank.score > 0)
-    let [narrow] = await store.search('lemon', '.task!')
+    let [narrow] = await store.search('lemon', '.task!&.filed?')
     assertEquals(narrow.filed.priority, 1)
     assertEquals(narrow.doc, undefined)
     assert(narrow.rank.score > 0)
@@ -199,7 +202,7 @@ slow('the served client: a page saves, lists and watches', async () => {
       task: {},
       filed: { assignee: entry.created.by },
     })
-    let [reread] = await store.query('.doc.title~=Fig&.created!&.task?')
+    let [reread] = await store.query('.doc.title~=Fig&.created!&.task?&.filed?')
     assertEquals(reread.filed.assignee, entry.created.by)
     let people = await store.query('.person!&.doc?')
     assertEquals(people.map((p: Row) => p.doc.title), [them.name])

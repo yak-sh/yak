@@ -1,7 +1,7 @@
 // The regression behind T-24455: the real approved-task sweep runs in the
-// doing owner, but its graph-native Session consequence belongs to serving.
-// Two SQLite connections and two feeds model the production split; no boot
-// relay or process restart is involved.
+// doing owner. Since T-35018 its graph-native Session consequence belongs to
+// that same owner, not serving. Two SQLite connections and two feeds model
+// the production split; no serving catchup, boot relay or restart is needed.
 import { assert, assertEquals } from '@std/assert'
 
 let graph = Deno.env.get('DB_PATH')!
@@ -34,7 +34,7 @@ let run = async (serving: ReturnType<typeof open>, repo: string) => {
     { eid: project, name: 'doc', comp: { title: 'Split project' } },
     { eid: project, name: 'project', comp: {} },
     { eid: project, name: 'repo', comp: { path: repo } },
-    { eid: task, name: 'doc', comp: { title: 'Launch through serving' } },
+    { eid: task, name: 'doc', comp: { title: 'Launch through doing' } },
     { eid: task, name: 'task', comp: {} },
     { eid: task, name: 'filed', comp: { priority: 0, project } },
     { eid: task, name: 'decided', comp: { at: new Date().toISOString() } },
@@ -150,7 +150,11 @@ let run = async (serving: ReturnType<typeof open>, repo: string) => {
     r.batch.some((c) => c.eid == born && c.name == 'session')
   )
   assert(birth?.trace, 'the Session birth carries a fed journal trace')
-  assertEquals(starts, 0, 'the doing owner cannot call native.start')
+  assertEquals(
+    starts,
+    1,
+    'doing launches without waiting for serving or restart',
+  )
 
   restore()
   restore = configureEffects({
@@ -161,7 +165,7 @@ let run = async (serving: ReturnType<typeof open>, repo: string) => {
   servingFeed.settle()
   servingFeed.settle()
   await Promise.resolve()
-  assertEquals(starts, 1, 'serving launches before any restart or boot relay')
+  assertEquals(starts, 1, 'serving cannot replay the daemon-owned launch')
   assertEquals(
     !!db.prepare(
       `select 1 from session where entity =

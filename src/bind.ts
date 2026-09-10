@@ -101,11 +101,24 @@ export let guard = async (
         `that boot or set PORT to a free port`,
     )
   }
+  // flock follows the open file description. A concurrently spawned child can
+  // briefly retain it across fork until exec, so close alone need not release
+  // the claim immediately. Unlock explicitly before dropping our descriptor.
+  let closed = false
+  let close = () => {
+    if (closed) return
+    closed = true
+    try {
+      file.unlockSync()
+    } finally {
+      file.close()
+    }
+  }
   try {
     await alone(port, mine, find)
-    return file
+    return { close, [Symbol.dispose]: close }
   } catch (e) {
-    file.close()
+    close()
     throw e
   }
 }

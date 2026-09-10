@@ -122,7 +122,12 @@ import {
 } from './types.ts'
 import { cost, type Dim, group, report, roll, type Use, use } from './usage.ts'
 import { armLocal, localReadPath } from './localread.ts'
-import { type BackfillKind, landBackfill, readBackfill } from './backfill.ts'
+import {
+  backfillCount,
+  type BackfillKind,
+  landBackfill,
+  readBackfill,
+} from './backfill.ts'
 import type { JournalEntry } from './client.ts'
 import { local } from './time.ts'
 import { wakeList } from './title.ts'
@@ -3559,7 +3564,7 @@ let backfillRun = (kind: BackfillKind) => async () => {
     }
   })
   console.log(
-    `${kind}: ${out.landed}/${out.found} historical ${
+    `${kind}: ${out.landed}/${backfillCount(pending)} historical ${
       kind == 'prompt' ? 'tags' : 'edges'
     } landed`,
   )

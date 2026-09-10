@@ -16,6 +16,11 @@ let isolated = new Set([
   // between its creation and ingestion.
   'src/ingest_drain_test.ts',
   'src/ingest_native_test.ts',
+  // Owns a blank live_db singleton, its P-19 identity and vector quantization.
+  'src/hygiene_test.ts',
+  // Owns the local-read arm and file DBs, and spawns a real server (the import
+  // scan below only recognizes servers imported in-process).
+  'src/localwrite_test.ts',
   // This one deliberately tests a real debounce interval.
   'src/components/Search_test.tsx',
   // These launch nested Deno/provider processes and own their cache/HOME.
@@ -294,11 +299,13 @@ if (import.meta.main) {
       args: [...common, '--parallel', ...tests.filter((f) => !isolated.has(f))],
       env,
     },
-    {
+    // Deno's sequential test modules still share process environment. A file
+    // that owns HOME must not redirect the next file's nested tools or cache.
+    ...tests.filter((f) => isolated.has(f)).map((file) => ({
       command: Deno.execPath(),
-      args: [...common, ...tests.filter((f) => isolated.has(f))],
+      args: [...common, file],
       env,
-    },
+    })),
   ], { terminateOnSignal: true })
   Deno.exit(result.code)
 }

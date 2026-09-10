@@ -25,6 +25,7 @@ import { schema } from '@yaks/sqlite'
 import { Store } from './graph.ts'
 import {
   carry,
+  FILED,
   FORMER,
   HANDLED,
   handled,
@@ -505,7 +506,7 @@ slow(
       },
     )
     // Every pass in the same breath, so none of them has anything to do.
-    assertEquals(marker(ctx), HANDLED)
+    assertEquals(marker(ctx), FILED)
   },
 )
 
@@ -655,7 +656,7 @@ slow('a store carrying now arrives with the addresses moved', async () => {
   // so nothing was copied into it on the way past.
   assertEquals(count(ctx, 'alias'), 0)
   // Every pass in the same breath, so none of the later ones has anything left.
-  assertEquals(marker(ctx), HANDLED)
+  assertEquals(marker(ctx), FILED)
 })
 
 slow('a directory that already carried moves them on next touch', async () => {
@@ -840,7 +841,7 @@ slow('an app named by its birth address is named by a handle', async () => {
   let third = bucket()
   newer(ctx, PLATFORM_STORE, { EXPORTS: third.r2 })
   assertEquals(third.held.size, 0)
-  assertEquals(marker(ctx), HANDLED)
+  assertEquals(marker(ctx), FILED)
 })
 
 slow('two apps may hold one address, and be two stores', async () => {
@@ -929,7 +930,7 @@ for (let source of ['former', 'fallback']) {
       let report = reportIn(files.held)
       assert(report.ok, report.message)
       disambiguated(report)
-      assertEquals(marker(ctx), HANDLED)
+      assertEquals(marker(ctx), FILED)
       assertEquals(rowsIn(files.held).app.length, 3)
       let next = bucket()
       assertEquals(
@@ -1129,7 +1130,7 @@ Deno.test('boot leaves a populated table constraint for its preparing pass', asy
   assertEquals(created, false)
   assertEquals((await now.door('/query?q=.app!')).status, 200)
   assertEquals(created, true)
-  assertEquals(marker(ctx), HANDLED)
+  assertEquals(marker(ctx), FILED)
   assertThrows(() => exec("update app set store = 'same'"), Error, 'UNIQUE')
 })
 
@@ -1476,3 +1477,124 @@ Deno.test('a doc_value-backed legacy index upgrades to the composed FTS schema',
   assertEquals((await upgraded.query('limes', APP)).length, 1)
   assertEquals((await newer(ctx, 'ada/cookbook').query('limes', APP)).length, 1)
 })
+
+// An already-package-shaped app deployed before the task/filed split. Plant
+// current tables, then restore the exact former task columns through SQLite.
+let beforeFiling = async (ctx: State) => {
+  let now = newer(ctx, 'ada/cookbook')
+  let r = await now.door('/apply', {
+    method: 'POST',
+    headers: { 'x-yak-kernel': '1' },
+    body: JSON.stringify([
+      { entity: { eid: ADA }, person: {} },
+      { entity: { eid: SPACE }, project: {} },
+      { entity: { eid: ONE }, task: {}, doc: { title: 'Water plants' } },
+    ]),
+  })
+  assert(r.ok, await r.text())
+  let sql = ctx.storage.sql
+  for (
+    let [col, type] of [['priority', 'real'], ['project', 'integer'], [
+      'assignee',
+      'integer',
+    ], ['domain', 'text']]
+  ) {
+    sql.exec(`alter table task add column ${col} ${type}`)
+  }
+  sql.exec(
+    'update task set priority = 2, project = (select id from entity where eid = ?), assignee = (select id from entity where eid = ?), domain = ?',
+    SPACE,
+    ADA,
+    'Garden',
+  )
+  sql.exec(
+    "insert into yak_kv (k, v) values ('migrated', ?) on conflict(k) do update set v = excluded.v",
+    HANDLED,
+  )
+}
+
+Deno.test('app filing exports, preserves every value and never resurrects a cleared filing', async () => {
+  let ctx = state()
+  await beforeFiling(ctx)
+  let files = bucket()
+  let now = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
+  let [row] = await now.query('.task!&.filed?')
+  assertEquals(row.task, { status: 'open' })
+  let filing = row.filed as Record<string, unknown>
+  assertEquals(filing.priority, 2)
+  assertEquals(filing.domain, 'Garden')
+  // The Store returns canonical reference identities (the app decorates them).
+  assertEquals(filing.project, SPACE)
+  assertEquals(filing.assignee, ADA)
+  assertEquals(rowsIn(files.held).task.length, 1)
+  assertEquals(reportIn(files.held).mark, FILED)
+  assertEquals(marker(ctx), FILED)
+  let r = await now.door('/apply', {
+    method: 'POST',
+    headers: { 'x-yak-kernel': '1' },
+    body: JSON.stringify([{ entity: { eid: ONE }, filed: null }]),
+  })
+  assert(r.ok, await r.text())
+  let again = bucket()
+  assertEquals(
+    await newer(ctx, 'ada/cookbook', { EXPORTS: again.r2 }).query('.filed!'),
+    [],
+  )
+  assertEquals(again.held.size, 0)
+})
+
+Deno.test('app filing refuses without export and rolls back a conflicting destination', async () => {
+  let ctx = state()
+  await beforeFiling(ctx)
+  await refused(newer(ctx, 'ada/cookbook'), 'no export bucket')
+  assertEquals(marker(ctx), HANDLED)
+  assertEquals(count(ctx, 'filed'), 0)
+  // The first row is copied before the second conflicts; both changes must
+  // roll back, not just the offending row.
+  ctx.storage.sql.exec('insert into entity(eid, num) values (?, 99)', TWO)
+  ctx.storage.sql.exec(
+    'insert into task(entity, priority) select id, 2 from entity where eid = ?',
+    TWO,
+  )
+  ctx.storage.sql.exec(
+    'insert into filed(entity, priority) select id, 9 from entity where eid = ?',
+    TWO,
+  )
+  let files = bucket()
+  await refused(
+    newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 }),
+    'conflicts with filed.priority',
+  )
+  assertEquals(marker(ctx), HANDLED)
+  assertEquals(ctx.storage.sql.exec('select priority from task').toArray(), [{
+    priority: 2,
+  }, { priority: 2 }])
+  assertEquals(ctx.storage.sql.exec('select priority from filed').toArray(), [{
+    priority: 9,
+  }])
+  assertEquals(rowsIn(files.held).task.length, 2)
+})
+
+slow(
+  'a fleet-shaped app carries filing from the former task columns',
+  async () => {
+    let ctx = state()
+    let was = older(ctx, 'ada/cookbook')
+    was.apply([
+      { eid: ONE, name: 'doc', comp: { title: 'Old chore' } },
+      { eid: ONE, name: 'task', comp: {} },
+    ])
+    // Restore the layout that deployed before the fleet split; no filed row
+    // exists. The carry must read these values before dropping the old table.
+    ctx.storage.sql.exec('alter table task add column priority real')
+    ctx.storage.sql.exec('alter table task add column domain text')
+    ctx.storage.sql.exec("update task set priority = 2, domain = 'Garden'")
+    let files = bucket()
+    let now = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
+    let [row] = await now.query('.task!&.filed?')
+    assertEquals((row.filed as { priority: number }).priority, 2)
+    assertEquals((row.filed as { domain: string }).domain, 'Garden')
+    assertEquals(rowsIn(files.held).task.length, 1)
+    assertEquals(marker(ctx), FILED)
+  },
+)

@@ -253,10 +253,6 @@ export let appsDoc: VocabDoc = {
       kind: true,
       before: ['doc'],
       properties: {
-        priority: num,
-        project: ref('detach'),
-        assignee: ref('detach'),
-        domain: text,
         // READ, never written: what the entity WEARS says its state, so a
         // task is done because it wears `completed`, not because a column was
         // set to a word. `persist: false` says there is no column at all;
@@ -265,6 +261,15 @@ export let appsDoc: VocabDoc = {
           enum: ['open', 'wip', 'done', 'cancelled'],
           persist: false,
         },
+      },
+    },
+    filed: {
+      type: 'object',
+      properties: {
+        priority: num,
+        project: ref('detach'),
+        assignee: ref('detach'),
+        domain: text,
       },
     },
     // The two marks that end a task. Both are the store's to fill — the clock

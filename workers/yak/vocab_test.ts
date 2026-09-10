@@ -236,6 +236,7 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
       'attachment',
       // and the words the guide gives an app to reach for rather than invent
       'task',
+      'filed',
       'completed',
       'cancelled',
       'project',

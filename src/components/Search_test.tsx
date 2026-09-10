@@ -4,6 +4,7 @@ import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { group, hitSlots, Search, searchOpen } from './Search.tsx'
+import { config } from '../live.ts'
 import { slow, until } from '../testing.ts'
 
 let hit = (num: number, kind: string, title: string) => ({
@@ -48,6 +49,10 @@ Deno.test('search fills tile titles and bodies with marked matches', () => {
 // Polls a real debounce window to prove only the settled query is sent — the
 // settle is the point, so it cannot be sub-ms; slow().
 slow('search sends only the settled query while typing', async () => {
+  let host = config.host
+  // A location-less process no longer guesses a server. This test owns its
+  // fetch below, so name that test endpoint rather than the operator's host.
+  config.host = 'tasks.test'
   let prior = Object.entries({
     document: Object.getOwnPropertyDescriptor(globalThis, 'document'),
     fetch: Object.getOwnPropertyDescriptor(globalThis, 'fetch'),
@@ -87,6 +92,7 @@ slow('search sends only the settled query while typing', async () => {
     })
     assertEquals(asked, ['type'])
   } finally {
+    config.host = host
     searchOpen.value = false
     render(null, root)
     for (let [name, d] of prior) {

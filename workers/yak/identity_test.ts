@@ -299,12 +299,13 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     // row the address has — the DELETE path the sign-in door takes, which a
     // store raised from an older schema refused for everyone who had ever asked
     // (T-32826).
+    let received = letters(k, email).length
     let anew = await form(k, '/login', { email })
     assertEquals(anew.status, 200)
     await anew.body?.cancel()
     let opened = await form(k, '/login/code', {
       email,
-      code: await mailed(k, email),
+      code: await mailed(k, email, received),
     })
     assertEquals(opened.status, 303)
     await opened.body?.cancel()
@@ -882,12 +883,13 @@ slow(
       )
 
       // The code again, and it sends them where it always sends them.
+      let received = letters(k, them.email).length
       let asked = await form(k, '/login', { email: them.email })
       assertEquals(asked.status, 200)
       await asked.body?.cancel()
       let inn = await form(k, '/login/code', {
         email: them.email,
-        code: await mailed(k, them.email),
+        code: await mailed(k, them.email, received),
       })
       assertEquals(inn.status, 303)
       assertEquals(

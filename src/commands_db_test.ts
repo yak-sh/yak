@@ -77,7 +77,7 @@ let same = (
 slow('db reader == rows: id resolution (:set derefs an alias)', () => {
   let { db, T, P } = world()
   let out = same(db, ':set .project=home', T, 'sess-1')
-  assertEquals(out.changes, [{ eid: T, name: 'task', comp: {} }, {
+  assertEquals(out.changes, [{
     eid: T,
     name: 'filed',
     comp: { project: P },

@@ -3748,7 +3748,7 @@ slow('open heals canonical stored values once and preserves failures', () => {
     `select quote(priority) as priority, typeof(priority) as priority_type,
             quote(project) as project,
             typeof(project) as project_type
-     from task where ${OWNED}`,
+     from filed where ${OWNED}`,
   ).get(task)
   legacy.close()
 
@@ -3775,7 +3775,7 @@ slow('open heals canonical stored values once and preserves failures', () => {
                 typeof(priority) as priority_type,
                 quote(project) as project,
                 typeof(project) as project_type
-         from task where ${OWNED}`,
+         from filed where ${OWNED}`,
       ).get(task),
       stable,
     )
@@ -3791,7 +3791,7 @@ slow('open heals canonical stored values once and preserves failures', () => {
     assertEquals(
       second.prepare(
         `select priority, ${refEid('project')} as project
-         from task where ${OWNED}`,
+         from filed where ${OWNED}`,
       ).get(task),
       { priority: 2, project: project },
     )

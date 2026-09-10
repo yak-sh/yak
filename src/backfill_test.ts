@@ -6,9 +6,10 @@ import { type Change } from './types.ts'
 Deno.env.set('DB_PATH', ':memory:')
 let { apply } = await import('./db.ts')
 let { open } = await import('./store/sqlite.ts')
-let { historicalPrompts, landBackfill, readBackfill } = await import(
-  './backfill.ts'
-)
+let { backfillCount, historicalPrompts, landBackfill, readBackfill } =
+  await import(
+    './backfill.ts'
+  )
 let { append } = await import('./entries.ts')
 let { graph } = await import('./reload.ts')
 let { edgeEid, link } = await import('./edge.ts')
@@ -53,6 +54,7 @@ Deno.test('readBackfill scans SQLite while landBackfill owns no write path', asy
   )
   // One sentence, two changes: the edge's ends and its nature tag.
   assertEquals(out, { found: 2, submitted: 2, landed: 1 })
+  assertEquals(backfillCount(pending), 1)
   writer.close()
   assertEquals(readBackfill(path, 'worked'), [])
   await Deno.remove(path)

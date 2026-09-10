@@ -938,7 +938,7 @@ let proxyWriteDoor = async (req: Request, path: string): Promise<Response> => {
     headers: { 'content-type': r.type },
   })
 }
-let portOwnership: Deno.FsFile
+let portOwnership: Awaited<ReturnType<typeof guard>>
 try {
   portOwnership = await guard(port, graph)
 } catch (e) {

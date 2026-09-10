@@ -1958,10 +1958,10 @@ Deno.test('the CLI has no whole-graph read path', () => {
 })
 
 slow(
-  'task backfill reads local SQLite and writes only through /apply',
+  'task backfill uses the local mutation arm and journals the repaired edge',
   async () => {
     let path = await Deno.makeTempFile({ suffix: '.db' })
-    let { apply } = await import('./db.ts')
+    let { apply, eager, journalOf } = await import('./db.ts')
     let { open } = await import('./store/sqlite.ts')
     let db = open(path)
     let session = crypto.randomUUID(), task = crypto.randomUUID()
@@ -1998,8 +1998,24 @@ slow(
       }).output()
       assertEquals(out.code, 0, text(out.stderr))
       assertEquals(text(out.stdout), 'worked: 1/1 historical edges landed\n')
-      assertEquals(fake.seen, ['/apply'])
-      assertEquals(fake.acked, [...link(session, 'worked', task)])
+      // Since the local-write arm, send() commits through the same generic
+      // mutation kernel without an HTTP round trip; it must still journal.
+      assertEquals(fake.seen, [])
+      assertEquals(fake.acked, [])
+      let check = open(path)
+      try {
+        assertEquals(eager(check, sentence).edge, {
+          eid: sentence,
+          from: session,
+          to: task,
+          ord: null,
+        })
+        assert(
+          journalOf(check, sentence)[0].changes.some((c) => c.name == 'edge'),
+        )
+      } finally {
+        check.close()
+      }
     } finally {
       await fake.server.shutdown()
       await Deno.remove(path)
@@ -2376,41 +2392,51 @@ slow('list strips terminal controls from graph text', async () => {
   }
 })
 
-slow('list shows the wake title derived by the UI', async () => {
-  let wake = 'bbbbbbbb-0000-4000-8000-000000000061'
-  let recipient = 'bbbbbbbb-0000-4000-8000-000000000062'
-  let at = new Date(Date.now() + 7_200_000).toISOString()
-  let snap: Snapshot = {
-    changes: [
-      { eid: wake, name: 'entity', comp: { eid: wake, num: 61 } },
-      { eid: wake, name: 'wake', comp: { at } },
-      { eid: wake, name: 'deliver', comp: { to: recipient } },
-      { eid: recipient, name: 'entity', comp: { eid: recipient, num: 62 } },
-      { eid: recipient, name: 'project', comp: {} },
-    ],
-    deps: [],
-  }
-  let { server, seen, host } = graphServer(snap)
-  try {
-    let out = await new Deno.Command(Deno.execPath(), {
-      args: [
-        'run',
-        '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
-        'list',
-        '.kind=wake',
-        '.wake.at>=now',
+slow(
+  'list preserves the wake schedule and recipient',
+  async () => {
+    let wake = 'bbbbbbbb-0000-4000-8000-000000000061'
+    let recipient = 'bbbbbbbb-0000-4000-8000-000000000062'
+    let at = new Date(Date.now() + 7_200_000).toISOString()
+    let snap: Snapshot = {
+      changes: [
+        { eid: wake, name: 'entity', comp: { eid: wake, num: 61 } },
+        { eid: wake, name: 'wake', comp: { at } },
+        { eid: wake, name: 'deliver', comp: { to: recipient } },
+        { eid: recipient, name: 'entity', comp: { eid: recipient, num: 62 } },
+        { eid: recipient, name: 'project', comp: {} },
       ],
-      clearEnv: true,
-      env: { TASKS_HOST: host },
-    }).output()
-    assertEquals(out.code, 0, text(out.stderr))
-    assertMatch(text(out.stdout), /^W-61\s+wake P-62 · in 2 hours$/m)
-    assertEquals(seen.some((path) => path.startsWith('/snapshot')), false)
-  } finally {
-    await server.shutdown()
-  }
-})
+      deps: [],
+    }
+    let { server, seen, host } = graphServer(snap)
+    try {
+      let out = await new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          new URL('./cli.ts', import.meta.url).pathname,
+          'list',
+          '.kind=wake',
+          '.wake.at>=now',
+        ],
+        clearEnv: true,
+        env: { TASKS_HOST: host },
+      }).output()
+      assertEquals(out.code, 0, text(out.stderr))
+      assertMatch(text(out.stdout), /^id: W-61$/m)
+      assertMatch(text(out.stdout), /^deliver:\n {2}to: P-62$/m)
+      assertMatch(text(out.stdout), /^wake:\n {2}at: /m)
+      let printed = text(out.stdout).match(/^ {2}at: (.+)$/m)![1]
+      assertEquals(
+        new Date(printed).getTime(),
+        Math.floor(new Date(at).getTime() / 1000) * 1000,
+      )
+      assertEquals(seen.some((path) => path.startsWith('/snapshot')), false)
+    } finally {
+      await server.shutdown()
+    }
+  },
+)
 
 // A bare `task list` is the working set — open+wip in board order, never the
 // whole graph (T-22643). Widening is explicit: --all shows every status.
@@ -2457,14 +2483,14 @@ slow(
     try {
       let bare = await run('list')
       assertEquals(bare.code, 0, text(bare.stderr))
-      let ids = text(bare.stdout).trim().split('\n').map((l) =>
-        l.split(/\s+/)[0]
+      let ids = [...text(bare.stdout).matchAll(/^id: (T-\d+)$/gm)].map((m) =>
+        m[1]
       )
       assertEquals(ids.sort(), ['T-91', 'T-92']) // done/cancelled excluded
       let all = await run('list', '--all')
       assertEquals(all.code, 0, text(all.stderr))
-      let allIds = text(all.stdout).trim().split('\n').map((l) =>
-        l.split(/\s+/)[0]
+      let allIds = [...text(all.stdout).matchAll(/^id: (T-\d+)$/gm)].map((m) =>
+        m[1]
       )
       assertEquals(allIds.sort(), ['T-91', 'T-92', 'T-93', 'T-94'])
     } finally {

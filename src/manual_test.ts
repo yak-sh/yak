@@ -43,6 +43,15 @@ Deno.test('task tree help takes its dry-run command from adoption metadata', () 
   assertMatch(help(['new']), new RegExp(TASK_TREE_ADOPTION.cli))
 })
 
+Deno.test('explicit help resolves nested routes without an executable family root', () => {
+  for (let name of ['mail show', 'inbox archive']) {
+    assertEquals(
+      requestedHelp([...name.split(' '), '--help']),
+      help(name.split(' ')),
+    )
+  }
+})
+
 Deno.test('every verb usage is rendered from its declaration', () => {
   assertEquals(
     Object.fromEntries(

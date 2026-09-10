@@ -2,7 +2,6 @@
 // policy tests own each predicate and race; this file composes one happy path
 // through the same stateless JSON-RPC door a Desktop host uses.
 import { assert, assertEquals, assertMatch } from '@std/assert'
-import { link } from './edge.ts'
 import { slow, until } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -232,9 +231,16 @@ slow(
       session: builder.sid,
     })
     await ok('graph_apply', {
-      changes: [
-        ...link(targetId, 'requires', prerequisiteId),
-        ...link(targetId, 'reads', designId),
+      // Human ids resolve at the bundle door before an edge eid is derived.
+      // A raw link() needs canonical eids, not display addresses to hash.
+      entities: [
+        {
+          entity: { eid: targetId },
+          edges: [
+            { type: 'requires', child: prerequisiteId },
+            { type: 'reads', child: designId },
+          ],
+        },
       ],
       session: builder.sid,
     })

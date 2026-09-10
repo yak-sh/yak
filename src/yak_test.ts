@@ -371,6 +371,7 @@ Deno.test('every current data pass is visible to deploy history as a boundary', 
     'yak/store/former/3',
     'yak/store/serves/4',
     'yak/store/handle/5',
+    'yak/store/filed/6',
   ])
   assertEquals(
     declared,

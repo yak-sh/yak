@@ -1511,13 +1511,13 @@ let helpAt = (args: string[]) => {
   if (plurals.has(args[0])) return render('list', manuals.list)
   let colon = args.find((a) => a.startsWith(':'))
   if (colon) return commandHelp(colon.slice(1))
+  // Families such as mail have nested routes but no executable root. Resolve
+  // the same longest route as dispatch before considering palette commands.
+  let nestedName = `${args[0]} ${args[1]}`
+  let nested = manuals[nestedName]
+  if (nested) return render(nestedName, nested)
   let root = manuals[args[0]]
-  if (root) {
-    let nested = manuals[`${args[0]} ${args[1]}`]
-    return nested
-      ? render(`${args[0]} ${args[1]}`, nested)
-      : render(args[0], root)
-  }
+  if (root) return render(args[0], root)
   if (commands[args[0]]) return commandHelp(args[0])
   if (args[0].startsWith('-')) {
     throw new UsageError(`no such verb: ${args[0]} (task --help lists them)`)

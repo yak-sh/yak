@@ -428,9 +428,10 @@ slow(
       assertEquals(ok.failed, false)
       let landed = rows(snapshot(db)).find((row) => row.eid == eid)
       assertEquals(landed?.comps.doc?.title, 'batched')
-      // status is derived, never stored (D-24102): the task comp shows as its
-      // schema default, and the bare row reads open.
-      assertEquals(landed?.comps.filed?.priority, 0)
+      // Status is derived, never stored (D-24102). A bare task has no filing
+      // since the task/filed split; the presence alone still reads open.
+      assertEquals(landed?.comps.task != null, true)
+      assertEquals(landed?.comps.filed, undefined)
       assertEquals(statusOf(landed!.comps), 'open')
 
       let nested = await tasks.call('graph_apply', {

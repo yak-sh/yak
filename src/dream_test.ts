@@ -495,8 +495,9 @@ slow(
     await dreamComb(noop, says(JSON.stringify(f)) as never)(knock(d))
     let row = db.prepare(
       `select fd.hits as hits,
-              case when t.entity is null then null else t.priority end as prio
+              case when t.entity is null then null else f.priority end as prio
          from finding fd left join task t on t.entity = fd.entity
+         left join filed f on f.entity = fd.entity
         where fd.key = ?`,
     ).get(key) as { hits: number; prio: number | null }
     assertEquals(row.hits, 6) // crossed the threshold

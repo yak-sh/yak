@@ -2,6 +2,7 @@
 // that booted happily. The race test pauses the first empty-address probe so
 // a second boot reaches the exact check-then-bind window.
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
+import { stub } from '@std/testing/mock'
 import { alone, guard, peer, same } from './bind.ts'
 import { slow } from './testing.ts'
 
@@ -112,3 +113,25 @@ slow(
     using _after = await guard(port, '/t/tasks.db', finding(null))
   },
 )
+
+Deno.test('guard releases the lock explicitly before closing, once', async () => {
+  let calls: string[] = []
+  using _open = stub(Deno, 'openSync', () =>
+    ({
+      tryLockSync: () => true,
+      unlockSync: () => calls.push('unlock'),
+      close: () => calls.push('close'),
+    }) as unknown as Deno.FsFile)
+  let held = await guard(12345, '/probe/tasks.db', finding(null))
+  held.close()
+  held[Symbol.dispose]()
+  assertEquals(calls, ['unlock', 'close'])
+
+  calls.length = 0
+  await assertRejects(() =>
+    guard(12345, '/probe/tasks.db', () => {
+      throw new Error('peer failed')
+    })
+  )
+  assertEquals(calls, ['unlock', 'close'])
+})

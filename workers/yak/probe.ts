@@ -13,11 +13,10 @@
 // not the kernel at all — the modules an app's own script is made of, run in
 // the runtime that would run them.
 //
-// TWO ports, both free ones: the server's, and the devtools inspector's.
-// Wrangler binds the inspector on a FIXED 9229 unless told otherwise, so a
-// second `wrangler dev` anywhere on the box dies with "Address already in
-// use" — and the test suite runs its files in parallel (bin/test.ts), so
-// every kernel here would be a second one for somebody.
+// TWO ports, both allocated by the runtime: the server's and the inspector's.
+// Wrangler binds the inspector on a FIXED 9229 unless told otherwise, so both
+// ask for port zero. Parallel probes neither share that default nor race over
+// a port selected and released before their child can bind it.
 import { apex } from './host.ts'
 import { until } from '../../src/testing.ts'
 import { COOKIE, sign, verify } from '../../src/token.ts'
@@ -27,12 +26,18 @@ import type { Custom } from './domains.ts'
 let root = new URL('./', import.meta.url).pathname
 let wrangler = (Deno.env.get('WRANGLER') ?? WRANGLER.join(' ')).split(' ')
 
-let freePort = () => {
-  let l = Deno.listen({ hostname: '127.0.0.1', port: 0 })
-  let { port } = l.addr as Deno.NetAddr
-  l.close()
-  return port
-}
+// Let workerd bind its own ephemeral port. Selecting a free port and closing
+// it before spawning leaves a race with every other parallel probe. A TCP/HTTP
+// answer alone also accepts Wrangler's startup proxy before its worker is ready.
+export let readyAddress = (log: string) =>
+  /Ready on (http:\/\/127\.0\.0\.1:\d+)/.exec(log)?.[1] ?? ''
+
+let started = (log: string) =>
+  until(() => readyAddress(Deno.readTextFileSync(log)), {
+    timeout: 60_000,
+    poll: 250,
+    label: () => Deno.readTextFileSync(log),
+  })
 
 let listening = async (port: number) => {
   try {
@@ -48,8 +53,6 @@ export type Kernel = Awaited<ReturnType<typeof kernel>>
 export let kernel = async (vars: Record<string, string> = {}) => {
   await ready()
   let host = apex(vars)
-  let port = freePort()
-  let inspector = freePort()
   let secret = crypto.randomUUID()
   let state = Deno.makeTempDirSync({ prefix: 'tasks-yak-' })
   let log = Deno.makeTempFileSync({ prefix: 'tasks-yak-', suffix: '.log' })
@@ -65,12 +68,16 @@ export let kernel = async (vars: Record<string, string> = {}) => {
       log,
       ...wrangler,
       'dev',
+      // AI (and any future remote binding) must not open a Cloudflare proxy:
+      // these probes exercise local workerd/SQLite, never account resources.
+      // Merely omitting --remote still enables remote bindings by default.
+      '--local',
       '--config',
       'wrangler.toml',
       '--port',
-      String(port),
+      '0',
       '--inspector-port',
-      String(inspector),
+      '0',
       '--ip',
       '127.0.0.1',
       '--persist-to',
@@ -100,7 +107,7 @@ export let kernel = async (vars: Record<string, string> = {}) => {
     stdout: 'null',
     stderr: 'null',
   }).spawn()
-  let base = `http://127.0.0.1:${port}`
+  let base = ''
   // One request, at one hostname.
   let at = (host: string, path: string, init: RequestInit = {}) =>
     fetch(`${base}${path}`, {
@@ -115,16 +122,20 @@ export let kernel = async (vars: Record<string, string> = {}) => {
       await new Deno.Command('kill', { args: ['-TERM', `-${child.pid}`] })
         .output()
     } catch { /* already gone */ }
-    await until(async () => !(await listening(port)), {
-      timeout: 15_000,
-      poll: 100,
-      label: 'the probe port to close',
-    })
+    await until(
+      async () => !base || !(await listening(Number(new URL(base).port))),
+      {
+        timeout: 15_000,
+        poll: 100,
+        label: 'the probe port to close',
+      },
+    )
     await child.status
     Deno.removeSync(state, { recursive: true })
     Deno.removeSync(log)
   }
   try {
+    base = await started(log)
     await until(async () => {
       try {
         return (await at(host, '/')).ok
@@ -141,7 +152,7 @@ export let kernel = async (vars: Record<string, string> = {}) => {
 
 /**
  * A THROWAWAY Worker under workerd — not the kernel: a directory of files, a
- * wrangler.toml naming the entry, `wrangler dev` on two free ports of its
+ * wrangler.toml naming the entry, `wrangler dev` on two runtime-allocated ports of its
  * own, and one `at(path)`.
  *
  * It is how a test runs code the platform would UPLOAD rather than serve. A
@@ -165,8 +176,6 @@ export let script = async (
     `${dir}/wrangler.toml`,
     `name = "probe"\nmain = "${main}"\ncompatibility_date = "2025-05-08"\n`,
   )
-  let port = freePort()
-  let inspector = freePort()
   let log = Deno.makeTempFileSync({ prefix: 'yak-script-', suffix: '.log' })
   let child = new Deno.Command('setsid', {
     args: [
@@ -177,9 +186,9 @@ export let script = async (
       ...wrangler,
       'dev',
       '--port',
-      String(port),
+      '0',
       '--inspector-port',
-      String(inspector),
+      '0',
       '--ip',
       '127.0.0.1',
       '--show-interactive-dev-session=false',
@@ -189,25 +198,28 @@ export let script = async (
     stdout: 'null',
     stderr: 'null',
   }).spawn()
-  let at = (path: string, init?: RequestInit) =>
-    fetch(`http://127.0.0.1:${port}${path}`, init)
+  let base = ''
+  let at = (path: string, init?: RequestInit) => fetch(`${base}${path}`, init)
   let stop = async () => {
     try {
       await new Deno.Command('kill', { args: ['-TERM', `-${child.pid}`] })
         .output()
     } catch { /* already gone */ }
-    await until(async () => !(await listening(port)), {
-      timeout: 15_000,
-      poll: 100,
-      label: 'the script port to close',
-    })
+    await until(
+      async () => !base || !(await listening(Number(new URL(base).port))),
+      {
+        timeout: 15_000,
+        poll: 100,
+        label: 'the script port to close',
+      },
+    )
     await child.status
     Deno.removeSync(dir, { recursive: true })
     Deno.removeSync(log)
   }
   try {
-    // Any answer at all means workerd linked the modules and is running them;
-    // a script that does not link never listens, and the log says why.
+    // Its own ready announcement names the port and confirms module startup.
+    base = await started(log)
     await until(async () => {
       try {
         await (await at('/')).body?.cancel()
@@ -402,7 +414,7 @@ export let connector = (k: Kernel, cookie?: string, bearer?: string) => {
 // "to this address" is membership, not equality.
 export type Letter = { to: string | string[]; subject: string; body: string }
 
-export let letters = (k: Kernel, to: string): Letter[] =>
+export let letters = (k: Pick<Kernel, 'log'>, to: string): Letter[] =>
   [...Deno.readTextFileSync(k.log).matchAll(/yak-mail (\{.*\})/g)]
     .map((m) => JSON.parse(m[1]) as Letter)
     .filter((l) => [l.to].flat().includes(to))
@@ -422,10 +434,13 @@ export let letter = async (k: Kernel, to: string, saying: string) =>
     },
   ))!
 
-// The sign-in code out of the newest one.
-export let mailed = (k: Kernel, to: string) =>
+// Wait past the letters already received before requesting another sign-in.
+// The HTTP response can precede workerd flushing the new letter to its log.
+export let mailed = (k: Pick<Kernel, 'log'>, to: string, after = 0) =>
   until(
-    () => /\b(\d{6})\b/.exec(letters(k, to).at(-1)?.subject ?? '')?.[1] ?? '',
+    () =>
+      /\b(\d{6})\b/.exec(letters(k, to).slice(after).at(-1)?.subject ?? '')
+        ?.[1] ?? '',
     { timeout: 20_000, poll: 100, label: `a letter for ${to}` },
   )
 
@@ -481,10 +496,11 @@ export let signIn = async (
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams(fields).toString(),
     })
+  let received = letters(k, email).length
   let asked = await form('/login', { email })
   if (asked.status != 200) throw new Error(`login: ${await asked.text()}`)
   await asked.body?.cancel()
-  let code = await mailed(k, email)
+  let code = await mailed(k, email, received)
   let inn = await form('/login/code', { email, code })
   if (inn.status != 303) throw new Error(`code: ${await inn.text()}`)
   await inn.body?.cancel()

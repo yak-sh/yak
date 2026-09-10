@@ -138,6 +138,11 @@ export type BackfillProgress = {
   landed: number
 }
 
+// Progress counts submitted changes; the result line counts materializations.
+// An edge has two changes (ends and nature), but is only one historical edge.
+export let backfillCount = (changes: Change[]) =>
+  changes.filter((c) => c.name == 'edge' || c.name == 'prompt').length
+
 export let landBackfill = async (
   pending: Change[],
   write: (changes: Change[]) => Promise<Change[]>,
@@ -151,8 +156,7 @@ export let landBackfill = async (
     state = {
       ...state,
       submitted: state.submitted + batch.length,
-      landed: state.landed +
-        out.filter((c) => c.name == 'edge' || c.name == 'prompt').length,
+      landed: state.landed + backfillCount(out),
     }
     progress(state)
     // The old server route yielded between chunks so a large historical sweep
