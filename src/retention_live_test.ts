@@ -2,6 +2,7 @@ import { assertEquals } from '@std/assert'
 import {
   applyLocal,
   cache,
+  census,
   dropQuery,
   ent,
   holdQuery,
@@ -29,7 +30,9 @@ Deno.test('reopen paints retained rows before sending; confirmation removes stal
   let sub = `q:${JSON.stringify(preds)}`
   try {
     landSub({ sub, replace: true, changes: [...changes('a'), ...changes('b')] })
+    let before = census.peek()
     unsubscribe(sub)
+    assertEquals(census.peek() === before, true)
     assertEquals(cache.peek().a, undefined)
     assertEquals(ent('a').doc?.title, 'a')
     let sent = false
@@ -71,6 +74,27 @@ Deno.test('retained tombstones never resurrect through reads', () => {
     assertEquals(ent('dead').doc, undefined)
   } finally {
     useRoute(route)
+  }
+})
+
+Deno.test('ownership-only retention does not expand a confirmed bounded query', () => {
+  let route = useRoute(() => {})
+  let preds = parseQuery('.comment.target=card')
+  let sub = `q:${JSON.stringify(preds)}`
+  try {
+    cache.value = {}
+    landSub({ sub: 'other-holder', replace: true, changes: changes('a') })
+    let ids = holdQuery(preds)
+    landSub({ sub, replace: true, window: { limit: 1 }, changes: changes('b') })
+    assertEquals(ids.peek(), ['b'])
+    unsubscribe('other-holder')
+    assertEquals(ent('a').doc?.title, 'a')
+    assertEquals(ids.peek(), ['b'])
+    dropQuery(preds)
+  } finally {
+    useRoute(route)
+    cache.value = {}
+    restore({}, {})
   }
 })
 

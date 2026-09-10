@@ -2129,6 +2129,10 @@ let evict = (eids: string[], keep = false) => {
     retentionVersion.value = retentionVersion.peek() + 1
     setCache(next)
     let all = paint.peek()
+    // Ownership-only moves leave the read view unchanged. In particular, do
+    // not feed these rows back into bounded server query sets as local edits,
+    // or wake every census reader when a card merely unmounts.
+    touched = new Set([...touched].filter((eid) => graph[eid] !== all[eid]))
     for (let eid of touched) {
       unindexId(eid, graph[eid])
       indexId(eid, all[eid])
@@ -2136,6 +2140,7 @@ let evict = (eids: string[], keep = false) => {
       if (!all[eid]) pinZs.delete(eid)
     }
     idGraph = ixGraph = all
+    if (!touched.size) return
     census.value = Object.keys(all)
     if ([...touched].some((e) => graph[e]?.canvas)) canvasVersion.value++
     publish(touched, new Set(), new Set())
