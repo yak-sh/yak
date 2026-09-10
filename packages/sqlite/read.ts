@@ -174,6 +174,7 @@ export let get = (
     let params = [JSON.stringify(ids)]
     let sub = 'select value from json_each(?)'
     let owners: number[] = []
+    let byId = new Map<number, Bundle>()
     for (
       let row of driver.query(
         `select e.id, e.eid, e.num, t.entity as dead from entity e
@@ -184,7 +185,9 @@ export let get = (
       let eid = String(row.eid)
       owners.push(Number(row.id))
       let entity = { eid, ...row.num == null ? {} : { num: Number(row.num) } }
-      found.set(eid, row.dead == null ? { entity } : tombstoned(entity))
+      let bundle = row.dead == null ? { entity } : tombstoned(entity)
+      found.set(eid, bundle)
+      byId.set(Number(row.id), bundle)
     }
     if (!owners.length) continue
     params = [JSON.stringify(owners)]
@@ -214,23 +217,22 @@ export let get = (
       )
     }
     for (let comp of present) {
+      // The spine pass already resolved every owner's storage id. Do not join
+      // it again for each component just to recover the eid we already hold.
+      // References still use project()'s joins; only ownership stays numeric.
+      let { sel, joins } = project(vocab, comp, opts.derived ?? {})
       for (
         let row of driver.query(
-          selectComp(
-            vocab,
-            comp,
-            opts.derived ?? {},
-            [`o.eid as "${OWNER}"`],
-            `"${comp}".entity in (${sub})`,
-          ),
+          `select ${[`"${comp}".entity as "@id"`, ...sel].join(', ')} ` +
+            `from "${comp}" ${joins.join(' ')} ` +
+            `where "${comp}".entity in (${sub})`,
           params,
         )
       ) {
-        let b = found.get(String(row[OWNER]))!
+        let { '@id': owner, ...value } = row
+        let b = byId.get(Number(owner))!
         if ('tombstone' in b) continue
-        delete row[OWNER]
-        delete row.present
-        b[comp] = row as Comp
+        b[comp] = value as Comp
       }
     }
   }

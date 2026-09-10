@@ -159,3 +159,27 @@ Deno.test('wide sparse gathers cross owner and vocabulary chunks without stale o
   driver.exec('delete from facet0')
   assertEquals(s.tx((tx) => tx.get(ids.slice(0, 2)))[0].facet0, undefined)
 })
+
+Deno.test('numeric gather ownership stays internal; present is an ordinary column', () => {
+  let driver = mem()
+  let vocab = loadVocab({
+    $defs: {
+      entity: { type: 'object', properties: { num: { type: 'number' } } },
+      sample: {
+        type: 'object',
+        properties: { present: { type: 'string' } },
+      },
+      marker: { type: 'object', properties: {} },
+    },
+  })
+  let s = storage(driver, vocab)
+  s.install()
+  driver.exec(`insert into entity(id,eid,num) values(47,'not-a-storage-id',9);
+    insert into sample(entity,present) values(47,'stored');
+    insert into marker(entity) values(47)`)
+  assertEquals(s.read('.sample'), [{
+    entity: { eid: 'not-a-storage-id', num: 9 },
+    marker: {},
+    sample: { present: 'stored' },
+  }])
+})
