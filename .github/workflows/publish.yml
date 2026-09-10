@@ -28,8 +28,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Every package, checked the way JSR will check it. Cheap, and it is the only
-  # thing that catches a slow-type or a missing export before a tag is cut.
+  # Every package, checked the way JSR will check it. Also part of the local
+  # check gate, so slow types and missing exports are caught before landing.
   dry-run:
     if: startsWith(github.ref, 'refs/tags/v') == false
     runs-on: [self-hosted, yak]
@@ -42,7 +42,7 @@ jobs:
       # refused. `--allow-dirty` because a dry run publishes nothing, and a
       # stray file on the runner must not turn this red.
       - name: deno publish --dry-run
-        run: deno publish --dry-run --allow-dirty
+        run: deno task check:publish
 
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
