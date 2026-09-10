@@ -3,6 +3,7 @@
 // sub-1ms bar the gate holds (a batch bench measures N ops at once — split into
 // the single-op cost instead). `deno task bench`.
 Deno.env.set('DB_PATH', ':memory:')
+let { benchTask: task, dbBenchFixture } = await import('./db_bench_fixture.ts')
 let { apply, componentCounts, eager, journalOf, resolveId } = await import(
   './db.ts'
 )
@@ -10,15 +11,9 @@ let { db } = await import('./live_db.ts')
 let { freshDb } = await import('./testdb.ts')
 
 let uid = () => crypto.randomUUID()
-let task = (eid: string, i: number) => [
-  { eid, name: 'doc', comp: { title: `Task ${i}`, body: 'b'.repeat(200) } },
-  { eid, name: 'task', comp: {} },
-  { eid, name: 'filed', comp: { priority: i % 3 } },
-]
 
 // A resident graph of 2k tasks for the read benches.
-let eids = Array.from({ length: 2000 }, uid)
-eids.forEach((eid, i) => apply(db, task(eid, i)))
+let { eids, lookupId } = dbBenchFixture(db)
 
 Deno.bench('apply: mint one task (3 comps)', () => {
   apply(db, task(uid(), 0))
@@ -40,7 +35,7 @@ Deno.bench('eager: one entity by eid (keyed read)', () => {
 })
 
 Deno.bench('resolveId: num -> eid', () => {
-  resolveId(db, '500')
+  resolveId(db, lookupId)
 })
 
 // One entity's history: a journal_change (eid, component) index seek, flat as
