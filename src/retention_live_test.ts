@@ -90,6 +90,10 @@ Deno.test('ownership-only retention does not expand a confirmed bounded query', 
     unsubscribe('other-holder')
     assertEquals(ent('a').doc?.title, 'a')
     assertEquals(ids.peek(), ['b'])
+    let before = census.peek()
+    applyLocal(changes('a'))
+    assertEquals(census.peek() === before, true)
+    assertEquals(ids.peek(), ['b'])
     dropQuery(preds)
   } finally {
     useRoute(route)

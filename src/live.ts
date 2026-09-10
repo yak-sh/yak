@@ -986,8 +986,8 @@ export let applyLocal = (changes: Change[], complete?: Set<string>) => {
       next[eid] = retained.rows.get(eid)!
       retained.rows.delete(eid)
       changed = true
-      changedCensus = true
-      changedRows.add(eid)
+      // Re-confirming an identical retained row changes ownership only. The
+      // loop below publishes actual component changes, not the promotion.
     }
     if (name == 'entity' && comp == null) {
       let before = next[eid]
