@@ -1,8 +1,8 @@
 import { assertEquals, assertRejects } from '@std/assert'
 import { appendEntry, repairSequences } from './append.ts'
-import { locked, seed, store } from './harness.ts'
+import { locked, pages, seed, store } from './harness.ts'
 import { transcript } from './react.ts'
-import type { Bundle, Comp } from '@yaks/graph'
+import { type Bundle, type Comp, graph, type Storage } from '@yaks/graph'
 
 let positions = (rows: Bundle[]) => rows.map((b) => (b.entry as Comp).seq)
 
@@ -137,17 +137,45 @@ Deno.test('notice tool admits passive context without callers supplying sequence
   assertEquals(rows[0].notice, {})
 })
 
-Deno.test('repair refuses ambiguous historical ties instead of changing fork boundaries', async () => {
+/** Seed one entry wearing the stamp of a chosen instant. */
+let stamped = (s: Storage, at: string, eid: string, seq?: number) =>
+  graph({ storage: s, vocab: pages }).apply([{
+    entity: { eid },
+    entry: { session: 's', ...seq == null ? {} : { seq } },
+  }], { trusted: true, now: at })
+
+let order = async (s: Storage) =>
+  (await transcript(locked(s), 's')).map((b) => b.entity.eid)
+
+Deno.test('repair settles tied historical positions by when the entry was stamped', async () => {
   let s = store()
-  seed(s, { entity: { eid: 's' }, session: {} }, {
-    entity: { eid: 'a' },
-    entry: { session: 's', seq: 1.5 },
-  }, { entity: { eid: 'b' }, entry: { session: 's', seq: 1.5 } })
-  await assertRejects(
-    async () => {
-      await s.tx(repairSequences)
-    },
-    Error,
-    'ambiguous duplicate',
-  )
+  seed(s, { entity: { eid: 's' }, session: {} })
+  stamped(s, '2026-01-01T00:02:00.000Z', 'late', 1.5)
+  stamped(s, '2026-01-01T00:01:00.000Z', 'early', 1.5)
+  stamped(s, '2026-01-01T00:03:00.000Z', 'after', 2)
+  assertEquals(await s.tx(repairSequences), 3)
+  assertEquals(await order(s), ['early', 'late', 'after'])
+  assertEquals(positions(await transcript(locked(s), 's')), [1, 2, 3])
+})
+
+Deno.test('a tie at the same instant falls back to the order the rows arrived', async () => {
+  let s = store()
+  seed(s, { entity: { eid: 's' }, session: {} })
+  // Seeded second-to-first alphabetically, so arrival — not the eid — decides.
+  stamped(s, '2026-01-01T00:01:00.000Z', 'b', 1.5)
+  stamped(s, '2026-01-01T00:01:00.000Z', 'a', 1.5)
+  assertEquals(await s.tx(repairSequences), 2)
+  assertEquals(await order(s), ['b', 'a'])
+})
+
+Deno.test('an entry the old writer never positioned lands by its stamp', async () => {
+  let s = store()
+  seed(s, { entity: { eid: 's' }, session: {} })
+  stamped(s, '2026-01-01T00:01:00.000Z', 'one', 1)
+  stamped(s, '2026-01-01T00:03:00.000Z', 'three', 2)
+  stamped(s, '2026-01-01T00:02:00.000Z', 'between')
+  stamped(s, '2026-01-01T00:00:00.000Z', 'before')
+  assertEquals(await s.tx(repairSequences), 4)
+  assertEquals(await order(s), ['before', 'one', 'between', 'three'])
+  assertEquals(positions(await transcript(locked(s), 's')), [1, 2, 3, 4])
 })

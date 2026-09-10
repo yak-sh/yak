@@ -174,6 +174,8 @@ processes parent sessions before forks and retains entry EIDs, including
 older concurrent writers that still explicitly calculate positions may now
 receive a collision error and must be upgraded.
 
-Historical ties are not guessed: repair refuses duplicate positions because
-assigning an arbitrary order could change the inherited prefix of a fork. Those
-databases require an explicit ordering decision before startup.
+Historical ties are settled, not refused: entries sharing a position are ordered
+by when they were stamped, then by the order storage handed the rows back, then
+by eid. An entry left unpositioned takes the slot of the last entry stamped
+before it and is settled there by the same tiebreak. Every boot repairs a
+database the same way.

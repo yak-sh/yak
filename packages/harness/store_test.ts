@@ -264,3 +264,38 @@ Deno.test('SQLite commits simultaneous append batches with distinct positions', 
     h.close()
   }
 })
+
+Deno.test('boot opens the store even when a transcript cannot be repaired', async () => {
+  let dir = Deno.makeTempDirSync()
+  let path = dir + '/tangled.db'
+  let warned: string[] = [], warn = console.warn
+  try {
+    let one = open(path)
+    one.g.apply([
+      { entity: { eid: 'a' }, session: { id: 'a' } },
+      { entity: { eid: 'b' }, session: { id: 'b' } },
+    ])
+    one.g.apply([{ entity: { eid: 'ea' }, entry: { session: 'a' } }])
+    one.g.apply([{ entity: { eid: 'eb' }, entry: { session: 'b' } }])
+    // A fork ring: each session anchors in the other, so no order exists.
+    // Re-arm the upgrade so the next boot meets it.
+    one.g.apply([
+      { entity: { eid: 'a' }, fork: { from: 'eb' } },
+      { entity: { eid: 'b' }, fork: { from: 'ea' } },
+    ])
+    one.db.exec('delete from harness_upgrade')
+    one.close()
+    console.warn = (...args) => warned.push(args.join(' '))
+    let two = open(path)
+    console.warn = warn
+    assertEquals(
+      (await two.g.read('.session')).map((b) => b.entity.eid).sort(),
+      ['a', 'b'],
+    )
+    two.close()
+    assert(warned.some((line) => line.includes('transcript repair skipped')))
+  } finally {
+    console.warn = warn
+    Deno.removeSync(dir, { recursive: true })
+  }
+})

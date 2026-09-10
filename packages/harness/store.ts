@@ -224,10 +224,26 @@ export let open = (path: string = dbPath()): Harness => {
       [],
     ).length
   ) {
-    store.tx((tx) => {
-      repairSequences(tx)
-      sql.exec("insert into harness_upgrade values ('entry-seq-v1')")
-    })
+    try {
+      store.tx((tx) => {
+        repairSequences(tx)
+        sql.exec("insert into harness_upgrade values ('entry-seq-v1')")
+      })
+    } catch (error) {
+      // A transcript this pass cannot straighten is a warning, never a locked
+      // door: the harness must always open. The upgrade stays unrecorded, so
+      // the next boot tries again with whatever the repair has learned.
+      let ties = sql.query(
+        'select count(*) as n from (select "session", "seq" from entry' +
+          ' group by "session", "seq" having count(*) > 1)',
+        [],
+      )
+      console.warn(
+        'harness: transcript repair skipped:',
+        error instanceof Error ? error.message : String(error),
+        '(' + Number(ties[0]?.n ?? 0) + ' tied positions)',
+      )
+    }
   }
   // The effects registry writes through the graph's own door, trusted: what an
   // effect writes is the harness's own word, never a client's.

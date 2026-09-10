@@ -13,6 +13,10 @@ import { UnknownSession } from './unknown.ts'
 
 let entry = (b: Bundle | undefined) => b?.entry as Comp | undefined
 
+/** When the entry was stamped, '' when nothing stamped it. ISO-8601 sorts as
+ * text, so this is a plain comparison. */
+let stamp = (b: Bundle) => String((b.created as Comp | undefined)?.at ?? '')
+
 export let sequencing: Hook = (bundles, tx) =>
   then(
     tx.get(bundles.filter((b) => b.entry).map((b) => b.entity.eid)),
@@ -210,20 +214,32 @@ export let repairSequences = (tx: Tx): number | Promise<number> =>
           let anchor = byId.get(from.get(id) ?? '')
           if (anchor) visit(String(entry(anchor)!.session))
           let first = Number(anchor ? entry(anchor)!.seq : 0)
-          let own = [...groups.get(id) ?? []].sort((a, b) =>
-            Number(entry(a)!.seq) - Number(entry(b)!.seq) ||
+          let rows = groups.get(id) ?? []
+          // Storage hands the rows back in insertion order; remember it, since
+          // it is the only record of arrival an untimed entry has left.
+          let arrived = new Map(rows.map((b, i) => [b.entity.eid, i]))
+          let placed = rows.filter((b) => entry(b)!.seq != null)
+          // Where an entry sits before the renumber. An entry the old writer
+          // left unpositioned has only its stamp to go on, so it takes the
+          // position of the last entry stamped before it and the tiebreak
+          // below settles it into that slot.
+          let slot = (b: Bundle) =>
+            entry(b)!.seq != null ? Number(entry(b)!.seq) : Math.max(
+              0,
+              ...placed.filter((p) => stamp(p) <= stamp(b)).map((p) =>
+                Number(entry(p)!.seq)
+              ),
+            )
+          // Tied positions are ordered, never refused: a repair nobody can
+          // supply an "explicit order" to is not a repair. A tie falls to when
+          // the entry was stamped, then to the order the rows arrived in —
+          // insertion order — then to the eid, so every boot repairs alike.
+          let own = [...rows].sort((a, b) =>
+            slot(a) - slot(b) ||
+            stamp(a).localeCompare(stamp(b)) ||
+            arrived.get(a.entity.eid)! - arrived.get(b.entity.eid)! ||
             a.entity.eid.localeCompare(b.entity.eid)
           )
-          // Equal historical positions cannot be ordered without inventing a
-          // fork boundary: the old transcript included every tied entry.
-          for (let i = 1; i < own.length; i++) {
-            if (entry(own[i - 1])!.seq == entry(own[i])!.seq) {
-              throw new Error(
-                'ambiguous duplicate historical entry.seq in ' + id +
-                  '; repair requires an explicit order',
-              )
-            }
-          }
           own.forEach((b, i) => {
             let seq = first + i + 1
             if (entry(b)!.seq != seq) {
