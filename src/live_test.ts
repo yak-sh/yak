@@ -14,6 +14,7 @@ import {
   byWarmth,
   cache,
   census,
+  chatFor,
   clearResolved,
   commentCount,
   commentsOn,
@@ -80,7 +81,7 @@ import {
   assertStrictEquals,
   assertThrows,
 } from '@std/assert'
-import { until } from './testing.ts'
+import { slow, until } from './testing.ts'
 
 // Status is DERIVED (D-24102): to make a cache Ent read as done/wip/cancelled,
 // give it the mark/claim comp statusOf keys off, not a stored status column.
@@ -2890,3 +2891,32 @@ Deno.test('client singletons: one tab sub, local reads, isolation (T-21490)', ()
     ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
   }
 })
+
+// An unheld local door must never resurrect a released view's subscription.
+slow(
+  'local reverse reads never dial, including one read per entry (T-37033)',
+  () => {
+    let frames: unknown[] = []
+    let restore = useRoute((frame) => frames.push(frame))
+    let target = 'dddd3703-0000-4000-8000-000000000011'
+    let actor = 'dddd3703-0000-4000-8000-000000000012'
+    cache.value = {
+      board: { board: { eid: 'board', query: `.filed.project=${target}` } },
+      chat: { chat: { eid: 'chat', actor, target } },
+      result: { result: { eid: 'result', call: target } },
+    }
+    try {
+      assertEquals(boardsOver(target), ['board'])
+      assertEquals(chatFor(actor, target)?.eid, 'chat')
+      assertEquals(backlinks(target).some((b) => b.via == 'result.call'), true)
+      for (let i = 0; i < 200; i++) {
+        backlinks(`dddd3703-0000-4000-8000-${String(i).padStart(12, '0')}`)
+      }
+      assertEquals(frames, [])
+    } finally {
+      useRoute(restore)
+      cache.value = {}
+      resetSignals()
+    }
+  },
+)

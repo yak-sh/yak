@@ -80,6 +80,8 @@ let body = (e: Ent) => e.content?.body ?? ''
 let failed = (e: Ent) =>
   (e.exit?.code != null && e.exit.code != 0) || !!e.error || !!e.exception ||
   (e.response?.status != null && e.response.status >= 400)
+// Local-only: Session holds its entry partition and one root reverse list.
+// An entry rendered alone is best-effort, like other per-row badges.
 let result = (e: Ent) => {
   let eid = backlinks(e.eid).find((x) => x.via == 'result.call')?.from
   return eid ? ent(eid) : undefined

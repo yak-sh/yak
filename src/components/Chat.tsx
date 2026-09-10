@@ -3,15 +3,7 @@
 // session, so a reload or another browser finds the same transcript.
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { sessionFrames } from '../client.ts'
-import {
-  capable,
-  chatFor,
-  ent,
-  mutate,
-  myActor,
-  routeSub,
-  uuid,
-} from '../live.ts'
+import { capable, ent, mutate, myActor, routeSub, uuid } from '../live.ts'
 import { catalog, type Provider } from '../providers.ts'
 import type { Change, Ent } from '../types.ts'
 import { block } from './ui.tsx'
@@ -19,7 +11,7 @@ import { ComposerInput } from './Comments.tsx'
 import { Entity } from './Entity.tsx'
 import { ListFrame } from './ListFrame.tsx'
 import { liveBlocked, load, providers } from './Run.tsx'
-import { useReferences } from './useQuery.ts'
+import { useChatFor, useReferences } from './useQuery.ts'
 
 let Frame = block('aside', 'Chat', {
   References: 'section',
@@ -160,7 +152,7 @@ export let Starter = (
 export let Chat = ({ e }: { e: Ent }) => {
   let actor = myActor()
   let cited = useReferences(e.eid)
-  let selected = actor ? chatFor(actor, e.eid) : undefined
+  let selected = useChatFor(actor, e.eid)
   let [fresh, setFresh] = useState(false)
   return (
     <Frame>

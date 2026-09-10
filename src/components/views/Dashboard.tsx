@@ -1,5 +1,5 @@
 import { awake, type Ent } from '../../types.ts'
-import { boardsOver, ent, sessionDetail } from '../../live.ts'
+import { ent, sessionDetail } from '../../live.ts'
 import { block } from '../ui.tsx'
 import { Entity } from '../Entity.tsx'
 import { useQueryResult } from '../useQuery.ts'
@@ -106,6 +106,7 @@ export let Dashboard = ({ e }: { e: Ent }) => {
   // project, then renders them as rows — so it asks for the row columns and
   // none of the history behind them (live.ts sessionDetail; unprojected this
   // one query was 6.22 MB).
+  let boards = useQueryResult(`.board.query~=${e.eid}`)
   let sessions = useQueryResult(sessionDetail)
   let claims = useQueryResult(
     '.claim!&.fields=task.status,claim.session,claim.claimed_at,filed.project',
@@ -125,7 +126,7 @@ export let Dashboard = ({ e }: { e: Ent }) => {
   let unread = useInbox(e.eid).filter(isUnread).length
   return (
     <Frame>
-      <Facet name='boards' ids={boardsOver(e.eid)} />
+      <Facet name='boards' ids={boards.eids} reads={[boards]} />
       <Cell>
         <Name>
           inbox

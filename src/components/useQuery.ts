@@ -72,8 +72,8 @@ export let useQuery = (query: string): Ent[] => useQueryEids(query).map(ent)
 // the set is complete even when the cache is partial (a referrer outside the
 // working set still counts, T-18094), opened on mount and torn down with the
 // last unmount: cards accumulate no subs as they open and close. The plain
-// live.ts doors (commentsOn/backlinks) resolve the same queries for tests and
-// for imperative reads that reuse a set a mounted view already holds.
+// live.ts backlinks door reads locally from the rows a mounted view holds;
+// it never opens an unowned server subscription.
 export let useCommentsOn = (target: string): Ent[] =>
   useQueryEids(`.comment.target=${target}`)
     .map(ent)
@@ -90,6 +90,17 @@ export let useCommitsOn = (target: string): Ent[] =>
 // (linksVia), so a retarget wakes the face without a membership change.
 export let useBacklinks = (target: string): Backlink[] =>
   useQueryEids(`.refs=${target}`).flatMap((from) => linksVia(from, target))
+
+// EID-keyed lookups belong to the mounted view, never an unheld render read.
+export let useBoardsOver = (target: string): string[] =>
+  useQueryEids(`.board.query~=${target}`)
+
+export let useChatFor = (
+  actor: string | undefined,
+  target: string,
+): Ent | undefined =>
+  useQueryResult(`.chat.actor=${actor ?? ''}&.chat.target=${target}`, !!actor)
+    .eids.map(ent)[0]
 
 let REFERENCED = '.edges[referenced,entry.session]!'
 

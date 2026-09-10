@@ -3345,9 +3345,10 @@ export let commentsOn = (target: string): Ent[] =>
 
 // One actor's selected chat for one entity. chat(actor,target) is unique in
 // SQLite and both columns are indexed in every cache backend, so this is a
-// bounded lookup whose result alone wakes the aside.
+// local lookup whose result alone wakes the aside. Rendered conversations
+// use useChatFor to hold the complete server answer for their lifetime.
 export let chatFor = (actor: string, target: string): Ent | undefined =>
-  queryEids([eq('chat', 'actor', actor), eq('chat', 'target', target)]).value
+  localEids([eq('chat', 'actor', actor), eq('chat', 'target', target)]).value
     .map(ent)[0]
 // A per-tile badge on every rendered entity — ONE aggregate sub for the whole
 // client, never a per-entity server sub (T-21283: a page of per-row subs
@@ -3548,20 +3549,11 @@ export let pinned = (canvas: string): Pinned[] =>
     }))
     .sort((a, b) => (a.z - b.z) || (a.eid < b.eid ? -1 : 1))
 
-// Who points HERE, and via what: `.refs=target` is the multi-column reverse-
-// union the vocabulary implies (refsTo above) — every entity referencing this
-// eid through SOME {eid} column, resolved through the one query door. So a
-// referrer OUTSIDE the working set still counts (T-18094), where the old
-// whole-cache scan silently under-reported, and the face wakes only when its
-// referrer set changes — never on an unrelated patch. The `via` label — WHICH
-// column points here — is read per referrer off its OWN row signal (linksVia
-// over the same refCols the union spans), so a referrer retargeting a pointer
-// wakes the face too. A new association shows up with no second edit: this is
-// how a task finds its sessions and Debug lists whatever holds a reference to
-// the entity on screen. A RENDERED view must come through useBacklinks
-// (components/useQuery.ts) — the hook holds the eid-keyed server sub for the
-// card's life and releases it on unmount (T-21489); this plain door stays for
-// tests and for imperative reads that reuse a set the view already holds.
+// Who points HERE, and via what, over the LOCAL working set. This door must
+// never dial from an imperative read or a per-entry render (T-37033). Open
+// cards and transcript roots hold useBacklinks for completeness; the session
+// entry sub supplies call/result rows. Layout gestures read their held rows.
+// linksVia rides each referrer's row so retargeting wakes the face too.
 export type Backlink = { from: string; via: string }
 export let linksVia = (from: string, target: string): Backlink[] => {
   let r = row(from).value
@@ -3572,7 +3564,7 @@ export let linksVia = (from: string, target: string): Backlink[] => {
     .map(([c, p]) => ({ from, via: `${c}.${p}` }))
 }
 export let backlinks = (target: string): Backlink[] =>
-  queryEids([refsTo(target)]).value.flatMap((from) => linksVia(from, target))
+  localEids([refsTo(target)]).value.flatMap((from) => linksVia(from, target))
 
 // The task a session is ON: the newest task it holds a claim over, else its
 // managed request. The claims aimed at a session are an eid EQUALITY the refs
@@ -3599,9 +3591,10 @@ export let parents = (eid: string) => childRelations(eid).value
 // CONTAINS over `board.query` names every board mentioning this target. The pred
 // anchors on the boards (byComp) and screens by substring — the same `.includes`
 // the scan used, now through the one query door, so the target face watches only
-// board rows that gain or lose its eid.
+// board rows that gain or lose its eid. Local-only: rendered board lists
+// hold useBoardsOver (or the equivalent useQueryResult for read state).
 export let boardsOver = (target: string): string[] =>
-  queryEids([contains('board', 'query', target)]).value
+  localEids([contains('board', 'query', target)]).value
 
 // The highest stacking order on a canvas — a raised card gets topZ + 1. The
 // members come from the one canvas-scoped query (asleep on z-bumps), and each

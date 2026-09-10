@@ -15,7 +15,6 @@ import {
   type LogRow,
 } from '../../types.ts'
 import {
-  commentsOn,
   ent,
   findEid,
   mutate,
@@ -33,7 +32,7 @@ import { Composer, Note } from '../Comments.tsx'
 import { Entity, resolve } from '../Entity.tsx'
 import { Markdown } from '../Markdown.tsx'
 import { mdMentions, type Mention } from '../../md.ts'
-import { useReferences } from '../useQuery.ts'
+import { useBacklinks, useCommentsOn, useReferences } from '../useQuery.ts'
 import { UrlVal } from '../editors.tsx'
 import { Ansi } from '../Ansi.tsx'
 import { SessionDot, useSessionStanding } from '../session_status.tsx'
@@ -603,6 +602,10 @@ export let Session = ({ e }: { e: Ent }) => {
   // its door is open. `standing` is that answer as a word, so an external
   // run's pip and label read `running` instead of a blank lifecycle.
   let state = useSessionStanding(e)
+  // One held reverse list at the transcript root. Per-entry result lookups
+  // stay local: the entry partition above supplies every call/result row,
+  // including results whose call is outside the rendered window (T-37033).
+  useBacklinks(e.eid)
   let entries = state.entries
   let ready = entries.status == 'ready' ? entries.log : undefined
   let [retried, setRetried] = useState(false)
@@ -651,7 +654,7 @@ export let Session = ({ e }: { e: Ent }) => {
     ),
   )
   let cited = new Set(useReferences(e.eid).out.map((r) => r.eid))
-  let cs = commentsOn(e.eid).filter((c) => {
+  let cs = useCommentsOn(e.eid).filter((c) => {
     let body = c.doc?.body ?? ''
     return !inputs.has(body) && !inputs.has(`${idOf(c)}: ${body}`)
   })

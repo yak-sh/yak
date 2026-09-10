@@ -34,7 +34,7 @@ let { Pane, Gutter: GutterEl, Acts, Act, Fill: FillEl, Row, Empty } = Frame
 // inside itself — the Pinned precedent), so eid is restamped here.
 // Imperative on purpose — handlers call it mid-gesture — so the Layout
 // component HOLDS the `.refs=<layout>` sub (useBacklinks at its root) and
-// every read here reuses that held set; alone this would leak the sub.
+// every read here is local over those held rows; handlers never open a sub.
 let panesOf = (layout: string) =>
   backlinks(layout)
     .filter((b) => b.via == 'pane.layout')

@@ -6,7 +6,6 @@ import { statusChanges } from '../../client.ts'
 import { FLOOR, textOf } from '../../twin.ts'
 import {
   base,
-  boardsOver,
   commentCount,
   crewed,
   edgeWindow,
@@ -19,7 +18,7 @@ import {
   statuses,
 } from '../../live.ts'
 import { actionsAt, linkProps } from '../nav.tsx'
-import { useBacklinks } from '../useQuery.ts'
+import { useBacklinks, useBoardsOver } from '../useQuery.ts'
 import { block, Stamp } from '../ui.tsx'
 import { Comments, viaName } from '../Comments.tsx'
 import { Dot } from '../Dot.tsx'
@@ -433,7 +432,7 @@ export let Runs = ({ e }: { e: Ent }) => {
 // boardsOver's query scan, since a query string is where a board names
 // its subject.
 export let Boards = ({ e }: { e: Ent }) => {
-  let ids = boardsOver(e.eid)
+  let ids = useBoardsOver(e.eid)
   if (!ids.length) return null
   return (
     <BoardsEl>
