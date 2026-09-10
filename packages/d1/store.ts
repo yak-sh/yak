@@ -109,7 +109,7 @@ export type Store = {
 
 // The identity of an eid as the database holds it, or `null` for an eid no
 // entity wears. Cached per transaction so one gather answers every question.
-type Spine = { num?: number; dead: boolean } | null
+type Spine = { num?: number | null; dead: boolean } | null
 
 // A patch merged onto the bundle it patches: a null component drops the row,
 // anything else merges in, so an omitted column keeps what it held and a null

@@ -23,7 +23,7 @@ export let asChanges = (b: Bundle): Change[] => {
   let eid = b.entity.eid
   if (b.$delete || b.tombstone) return [{ eid, name: 'entity', comp: null }]
   let out: Change[] = []
-  if (b.entity.num != null) {
+  if (b.entity.num !== undefined) {
     out.push({ eid, name: 'entity', comp: { eid, num: b.entity.num } })
   }
   for (let [name, comp] of Object.entries(b)) {
@@ -35,8 +35,8 @@ export let asChanges = (b: Bundle): Change[] => {
 
 // The fleet answer uses the core's final-state composition, but retains an
 // explicit spine for unnumbered births (blobs, entries, etc.). In this store
-// num:null is meaningful; the core's optional number omits it. Keep that app
-// spelling here rather than teaching the generic identity about fleet kinds.
+// num:null is meaningful; an omitted number makes no claim about it. Keep
+// explicit spines even when a flat caller did not name a number.
 export let composedChanges = (changes: Change[]): Change[] => {
   let identities = new Map(
     changes.filter((c) => c.name == 'entity' && c.comp != null)
@@ -45,7 +45,7 @@ export let composedChanges = (changes: Change[]): Change[] => {
   return composed(changes.map(asBundle)).flatMap((b) => {
     let out = asChanges(b)
     let identity = identities.get(b.entity.eid)
-    if (!dead(b) && b.entity.num == null && identity) {
+    if (!dead(b) && b.entity.num === undefined && identity) {
       out.unshift({ eid: b.entity.eid, name: 'entity', comp: identity })
     }
     return out

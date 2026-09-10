@@ -55,6 +55,7 @@ let swap = (
   b: Bundle,
   store: Blobs,
   cols: Body[],
+  reference: Reference,
 ): Bundle | Promise<Bundle> => {
   let mine = written(b, cols)
   if (!mine.length) return b
@@ -64,11 +65,17 @@ let swap = (
     each(mine, null, (_, [{ comp, prop }, value]) => {
       let sha = address(value)
       stash[`${comp}.${prop}`] = value
-      out[comp] = { ...patch(out, comp)!, [prop]: sha }
       return then(
         store.has(sha),
         (held) =>
-          then(held ? undefined : store.put(sha, encode(value)), () => null),
+          then(
+            held ? undefined : store.put(sha, encode(value)),
+            () =>
+              then(reference(sha), (ref) => {
+                out[comp] = { ...patch(out, comp)!, [prop]: ref }
+                return null
+              }),
+          ),
       )
     }),
     () => {
@@ -90,6 +97,20 @@ let restore = (b: Bundle): Bundle => {
     if (held) out[comp] = { ...held, [prop]: value }
   }
   return out
+}
+
+/** How a backend addresses an object from a component row. Usually its hash;
+ * an existing SQL layout may instead keep an integer foreign key. Called
+ * after `put`, inside the transaction, so the referenced object exists. */
+export type Reference = (
+  sha: string,
+) => string | number | Promise<string | number>
+
+export type BlobOpts = {
+  /** Narrow the vocabulary's blob columns for a partially migrated store. */
+  columns?: Body[]
+  /** Translate the content hash to the backend's row reference. */
+  reference?: Reference
 }
 
 /**
@@ -114,8 +135,13 @@ let restore = (b: Bundle): Bundle => {
  * A vocabulary loaded without {@link blobKeywords} declares no body columns, so
  * this plugin is a no-op on it rather than a surprise.
  */
-export let blobs = (vocab: Vocab, store: Blobs): Plugin => {
-  let cols = bodies(vocab)
+export let blobs = (
+  vocab: Vocab,
+  store: Blobs,
+  opts: BlobOpts = {},
+): Plugin => {
+  let cols = opts.columns ?? bodies(vocab)
+  let reference = opts.reference ?? ((sha: string) => sha)
   return {
     name: '@yaks/blob',
     hooks: {
@@ -123,7 +149,8 @@ export let blobs = (vocab: Vocab, store: Blobs): Plugin => {
         each(
           bundles,
           [] as Bundle[],
-          (out, b) => then(swap(b, store, cols), (one) => [...out, one]),
+          (out, b) =>
+            then(swap(b, store, cols, reference), (one) => [...out, one]),
         ),
       commit: (bundles) => bundles.map(restore),
     },

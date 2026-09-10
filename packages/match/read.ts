@@ -30,7 +30,7 @@ export type Eid = string
  */
 export type Bundle = {
   /** the identity component: the entity this bundle is about */
-  entity: { eid: Eid; num?: number }
+  entity: { eid: Eid; num?: number | null }
   /** a component's columns, `null` where it is being dropped, or a piece of
    * the wire's own sugar */
   [comp: string]:

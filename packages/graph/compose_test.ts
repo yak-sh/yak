@@ -23,3 +23,26 @@ Deno.test('composed merges phase patches by column and preserves clears', () => 
     status: 'sold',
   })
 })
+
+Deno.test('composed retains explicit unnumbered spines without inventing them on patches', () => {
+  assertEquals(
+    composed([
+      { entity: { eid: 'p' }, book: {} },
+      { entity: { eid: 'p', num: null } },
+      { entity: { eid: 'p' }, book: { pages: 1 } },
+    ]),
+    [{ entity: { eid: 'p', num: null }, book: { pages: 1 } }],
+  )
+  assertEquals(composed([{ entity: { eid: 'p' }, book: {} }]), [{
+    entity: { eid: 'p' },
+    book: {},
+  }])
+  assertEquals(
+    composed([
+      { entity: { eid: 'p', num: null } },
+      { entity: { eid: 'p', num: 2 } },
+      { entity: { eid: 'p', num: null } },
+    ]),
+    [{ entity: { eid: 'p', num: 2 } }],
+  )
+})

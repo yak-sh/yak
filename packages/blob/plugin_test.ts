@@ -103,3 +103,39 @@ Deno.test('clearing a body clears the column, not the store', () => {
     n: 1,
   }])
 })
+
+Deno.test('a backend may address bodies by integer keys while echoing text', async () => {
+  let { blobs } = await import('./plugin.ts')
+  let { blog } = await import('./harness.ts')
+  let { g, driver, blobs: store } = fixture()
+  g.plugins.splice(
+    0,
+    g.plugins.length,
+    blobs(blog, store, { reference: () => 42 }),
+  )
+  let out = g.apply([{
+    entity: { eid: 'p' },
+    post: { body: 'text' },
+  }]) as Bundle[]
+  assertEquals(post(out[0]).body, 'text')
+  assertEquals(driver.query('select body from post', []), [{ body: '42' }])
+  assertEquals(driver.query('select value from blob_text', []), [{
+    value: 'text',
+  }])
+})
+
+Deno.test('column selection leaves inline body columns alone', async () => {
+  let { blobs } = await import('./plugin.ts')
+  let { blog } = await import('./harness.ts')
+  let { g, driver, blobs: store } = fixture()
+  g.plugins.splice(0, g.plugins.length, blobs(blog, store, { columns: [] }))
+  let out = g.apply([{
+    entity: { eid: 'p' },
+    post: { body: 'inline' },
+  }]) as Bundle[]
+  assertEquals(post(out[0]).body, 'inline')
+  assertEquals(driver.query('select body from post', []), [{ body: 'inline' }])
+  assertEquals(driver.query('select count(*) as n from blob_text', []), [{
+    n: 0,
+  }])
+})

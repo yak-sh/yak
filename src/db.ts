@@ -78,6 +78,8 @@ import { derivedCols, indexDdlOne, tableDdl } from './ddl.ts'
 import { FILTERS, type Vocab, vocabOps } from './store/vocab.ts'
 import type { Vocab as FleetVocab } from '@yaks/vocab'
 import { fleetVocab } from './vocab/fleet_vocab.ts'
+import type { Graph } from '@yaks/graph'
+import { fleetGraph } from './store/fleet_graph.ts'
 import {
   edgeEid,
   link,
@@ -3749,6 +3751,28 @@ export let fleetVocabOf = (db: Sql): FleetVocab => {
     fleetVocabs.set(db, vocab)
   }
   return vocab
+}
+
+// Bound once per Sql handle. This phase composes storage/CAS only: live
+// apply() remains below until fleet admission, guards and stamps are registered.
+let fleetGraphs = new WeakMap<Sql, Graph>()
+export let fleetGraphOf = (db: Sql): Graph => {
+  let held = fleetGraphs.get(db)
+  if (!held) {
+    held = fleetGraph({
+      db,
+      vocab: fleetVocabOf(db),
+      driver: {
+        query: (sql, params) => prep(db, sql).all(...params),
+        exec: (sql) => db.exec(sql),
+        tx: (fn) => db.transaction(fn, true),
+      },
+      number: (eid) => mintNum(db, eid),
+      component: (eid, name) => readComp(db, eid, name),
+    })
+    fleetGraphs.set(db, held)
+  }
+  return held
 }
 
 // An APP's own components, declared by its vocab.json and planted in its own

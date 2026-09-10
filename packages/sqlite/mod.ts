@@ -165,7 +165,12 @@ let unit = <R>(driver: Driver, body: () => R): R => {
  * (`blobText(vocab)` from @yaks/blob is one). The read options ride every read;
  * `text` rides the schema.
  */
-export type Opts = BindOpts & { text?: Text }
+export type Opts = BindOpts & {
+  text?: Text
+  /** Mint unnumbered spines when false; the host may number them after their
+   * components land. Identity and birth reporting still belong to storage. */
+  number?: boolean
+}
 
 /**
  * Bind a store to a driver and a vocabulary — a {@link Storage} @yaks/graph
@@ -181,7 +186,7 @@ export let storage = (
     read: (query, opts) => read(driver, vocab, query, { ...base, ...opts }),
     get: (eids) => get(driver, vocab, eids, base),
     doom: (eids) => doom(driver, vocab, eids),
-    patch: (bundles) => patch(driver, vocab, bundles),
+    patch: (bundles) => patch(driver, vocab, bundles, base.number),
     remove: (entities) => remove(driver, vocab, entities),
   }
   return {

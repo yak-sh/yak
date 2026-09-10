@@ -210,3 +210,27 @@ Deno.test('a transaction rolls back on a throw, and nests', () => {
   assertEquals(s.tx((tx) => tx.get(['p2', 'p3'])), [])
   assertEquals((s.tx((tx) => tx.get(['p1'])) as Bundle[]).length, 1)
 })
+
+Deno.test('number:false reports explicit unnumbered births without consuming numbers', () => {
+  let driver = mem()
+  let s = storage(driver, shop, { number: false })
+  s.install()
+  assertEquals(
+    s.tx((tx) =>
+      tx.patch([{
+        entity: { eid: 'p' },
+        product: { maker: 'm' },
+      }])
+    ),
+    [{ eid: 'p', num: null }, { eid: 'm', num: null }],
+  )
+  assertEquals(
+    s.tx((tx) => tx.patch([{ entity: { eid: 'p' }, product: { price: 3 } }])),
+    [],
+  )
+  let numbered = storage(driver, shop)
+  assertEquals(
+    numbered.tx((tx) => tx.patch([{ entity: { eid: 'n' }, doc: {} }])),
+    [{ eid: 'n', num: 1 }],
+  )
+})

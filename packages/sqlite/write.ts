@@ -107,11 +107,14 @@ export let buried = (driver: Driver, eids: string[]): Set<string> =>
  * statement runs in, so it is exact under a concurrent writer — and RETURNING
  * hands it straight back. `do nothing` on an eid that already has an identity,
  * so minting twice is not an error; RETURNING then emits NO row, which is also
- * the answer to "was this one new".
+ * the answer to "was this one new". `number = false` leaves a NULL number for
+ * a host that allocates human numbers later, or not at all.
  */
-export let mintSql = (eid: string): Sql => ({
+export let mintSql = (eid: string, number = true): Sql => ({
   sql: `insert into entity (eid, num)
-          values (?, (select coalesce(max(num), 0) + 1 from entity))
+          values (?, ${
+    number ? '(select coalesce(max(num), 0) + 1 from entity)' : 'null'
+  })
           on conflict(eid) do nothing returning eid, num`,
   params: [eid],
 })
@@ -119,7 +122,12 @@ export let mintSql = (eid: string): Sql => ({
 /** The identity a {@link mintSql} statement reported — the rows it returned —
  * or `undefined` when the eid already wore one and nothing was minted. */
 export let minted = (rows: Row[]): Entity | undefined =>
-  rows[0] ? { eid: String(rows[0].eid), num: Number(rows[0].num) } : undefined
+  rows[0]
+    ? {
+      eid: String(rows[0].eid),
+      num: rows[0].num == null ? null : Number(rows[0].num),
+    }
+    : undefined
 
 /**
  * The statement that patches one component onto one entity: insert the sent
@@ -227,6 +235,7 @@ export let patch = (
   driver: Driver,
   vocab: Vocab,
   bundles: Bundle[],
+  number = true,
 ): Entity[] => {
   let known = spines(driver, [...new Set(touched(vocab, bundles))])
   let alive = bundles.filter((b) => !known.get(b.entity.eid)?.dead)
@@ -239,7 +248,7 @@ export let patch = (
   for (let eid of touched(vocab, alive)) {
     if (seen.has(eid)) continue
     seen.add(eid)
-    let s = mintSql(eid)
+    let s = mintSql(eid, number)
     let e = minted(driver.query(s.sql, s.params))
     if (e) born.push(e)
   }

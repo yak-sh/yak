@@ -119,8 +119,9 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
 
   // The number an identity gets: the one it arrived with when this store
   // mirrors another graph, else the next one this store has to give.
-  let numberFor = (num?: number) => {
-    if (!base.adopt || num == null) return next++
+  let numberFor = (num?: number | null) => {
+    if (!base.adopt || num === undefined) return next++
+    if (num === null) return null
     if (num >= next) next = num + 1 // a locally minted one must not collide
     return num
   }
@@ -129,12 +130,12 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     let born: Entity[] = []
     // Mint a record for every eid this batch touches or points at, so a
     // reference may name a target created in the same batch, in any order.
-    let birth = (eid: Eid, num?: number) => {
+    let birth = (eid: Eid, num?: number | null) => {
       let rec = rows.get(eid)
       if (rec) {
         // A mirror adopts a correction: this store guessed a number for an
         // entity it created optimistically, and is now being told the real one.
-        if (base.adopt && num != null && rec.entity.num != num) {
+        if (base.adopt && num !== undefined && rec.entity.num !== num) {
           save(eid)
           rows.set(eid, { ...rec, entity: { eid, num: numberFor(num) } })
         }

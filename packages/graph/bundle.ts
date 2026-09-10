@@ -25,10 +25,11 @@ export type Eid = string
 
 /**
  * An entity's identity: a client-minted `eid`, and the `num` storage mints on
- * first touch. `num` is optional — it is storage's to hand out, and an adapter
- * that has no use for a small human-facing number never mints one.
+ * first touch. An explicit `null` reports an unnumbered spine; absence makes
+ * no claim about numbering. `num` is optional — it is storage's to hand out,
+ * and an adapter that has no use for a small human-facing number never mints one.
  */
-export type Entity = { eid: Eid; num?: number }
+export type Entity = { eid: Eid; num?: number | null }
 
 /** A component's columns — a flat bag of scalar values, never nested. */
 export type Comp = Record<string, unknown>

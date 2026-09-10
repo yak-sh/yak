@@ -31,7 +31,7 @@ export type Saved = {
   /** the entity's id */
   eid: Eid
   /** the number storage gave it, so a reload keeps the ids a page displays */
-  num?: number
+  num?: number | null
   /** its local-tier components, by name */
   comps: Record<string, Comp>
 }
@@ -129,7 +129,11 @@ export let keep = (graph: Graph, vault: Vault): Kept => {
       for (let b of now) {
         let held = dead(b) ? {} : localComps(b, vocab)
         if (Object.keys(held).length) {
-          save.push({ eid: b.entity.eid, num: b.entity.num, comps: held })
+          save.push({
+            eid: b.entity.eid,
+            num: b.entity.num,
+            comps: held,
+          })
         } else gone.push(b.entity.eid)
       }
       // An entity the store no longer holds at all is gone from here too.

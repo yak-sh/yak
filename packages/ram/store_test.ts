@@ -162,3 +162,14 @@ Deno.test('a map has no schema: ddl is empty and install does nothing', () => {
   assertEquals(s.ddl(), [])
   assertEquals(s.install(), undefined)
 })
+
+Deno.test('a mirror adopts an explicit unnumbered spine and corrects optimistic numbers', () => {
+  let s = ram(shop, { adopt: true })
+  put(s, { entity: { eid: 'blob', num: null }, doc: {} })
+  assertEquals(at(s, 'blob').entity, { eid: 'blob', num: null })
+  put(s, { entity: { eid: 'optimistic' }, doc: {} })
+  assertEquals(at(s, 'optimistic').entity.num, 1)
+  put(s, { entity: { eid: 'optimistic', num: null } })
+  put(s, { entity: { eid: 'optimistic' }, doc: { title: 'still unnumbered' } })
+  assertEquals(at(s, 'optimistic').entity.num, null)
+})

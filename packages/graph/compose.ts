@@ -60,7 +60,7 @@ export let composed = (bundles: Bundle[]): Bundle[] => {
     // The FIRST number wins, so a batch stitched from several stores reads the
     // way a query over them does — a num is one store's own counter, and the
     // eid is what the entity is called everywhere.
-    if (b.entity.num != null && one.entity.num == null) {
+    if (b.entity.num !== undefined && one.entity.num == null) {
       one.entity = { ...one.entity, num: b.entity.num }
     }
     if (typeof b.$alias == 'string') one.$alias = b.$alias
