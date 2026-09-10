@@ -195,9 +195,10 @@ export let App = (
     if (k.alt && k.text == 'a') {
       let root = rows.find((b) => b.entity.eid == rootOf(rows, state.id))
       if (root && a.archive) {
-        void a.archive(root.entity.eid, !root.archived).then(() => {
+        let archiving = !root.archived
+        void a.archive(root.entity.eid, archiving).then(() => {
           if (
-            !root.archived && !current().showArchived &&
+            archiving && !current().showArchived &&
             rootOf(rows, current().id) == root.entity.eid
           ) choose({})
           refresh.current()
