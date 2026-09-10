@@ -62,6 +62,14 @@ export class ToolError extends Error {
   }
 }
 
+/** A transcript door was given an eid that does not name a session. */
+export class UnknownSession extends Error {
+  constructor(public session: Eid) {
+    super(`unknown session ${session}`)
+    this.name = 'UnknownSession'
+  }
+}
+
 /** A tool the model may call: its declaration, and how to run it. */
 export type Tool = Declared & {
   run: (
@@ -91,12 +99,13 @@ let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 /** A transcript's entries: a fork's prefix from its parent up to the anchor,
  * then its own, in order. */
 export let transcript = async (g: Graph, session: Eid): Promise<Bundle[]> => {
-  let own = await g.read(`.${ENTRY}.session=${session}`)
   let [self] = await g.storage.tx((tx) => tx.get([session]))
+  if (!self?.session) throw new UnknownSession(session)
+  let own = await g.read(`.${ENTRY}.session=${session}`)
   let from = comp(self, FORK)?.from
   if (!from) return ordered(own)
   let [anchor] = await g.storage.tx((tx) => tx.get([String(from)]))
-  let parent = comp(anchor, ENTRY)
+  let parent = anchor && comp(anchor, ENTRY)
   if (!parent) return ordered(own)
   let inherited = await transcript(g, String(parent.session))
   return [

@@ -1,7 +1,7 @@
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Comp } from '@yaks/graph'
 import type { Model } from '@yaks/model'
-import { statusOf } from '@yaks/session'
+import { react, statusOf, transcript, UnknownSession } from '@yaks/session'
 import { agent, idOf, seed, titleOf } from './run.ts'
 import { open } from './store.ts'
 
@@ -106,4 +106,40 @@ Deno.test('resume wakes what a restart left owed a turn', async () => {
   await quiet.idle(s)
   assertEquals(statusOf(await quiet.transcript(s)), 'settled')
   quiet.close()
+})
+
+Deno.test('transcript doors refuse unknown sessions before doing work', async () => {
+  let asked = 0
+  let model: Model = (req) => {
+    asked++
+    return echo(req)
+  }
+  let a = started(model)
+  try {
+    for (let session of ['unknown-prefix', a.model]) {
+      for (
+        let read of [
+          () => transcript(a.h.g, session),
+          () => react(a.h.g, session, { model, tools: [] }),
+          () => a.transcript(session),
+          () => a.send(session, 'no orphan input'),
+        ]
+      ) {
+        let err = await assertRejects(read, UnknownSession)
+        assertEquals(err.name, 'UnknownSession')
+        assertEquals(err.message, `unknown session ${session}`)
+        assertEquals(err.session, session)
+      }
+    }
+    assertEquals(asked, 0)
+    assertEquals(await a.h.g.read('.entry'), [])
+    await a.h.g.apply([{ entity: { eid: 'empty' }, session: {} }])
+    assertEquals(await a.transcript('empty'), [])
+    assertEquals(
+      await react(a.h.g, 'empty', { model, tools: [] }),
+      { did: 'nothing', status: 'empty', added: [] },
+    )
+  } finally {
+    a.close()
+  }
 })
