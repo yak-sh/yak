@@ -53,3 +53,17 @@ Deno.test('a bodiless GET retries once; a second eviction and other errors throw
   await assertRejects(() => storeOf(other, 'jeff')('/query'), Error, 'boot')
   assertEquals(other.seen.length, 1)
 })
+
+Deno.test('Store does not retry a streamed init or a Request with a body', async () => {
+  for (let request of [false, true]) {
+    let init = { method: 'POST', body: new Blob(['body']).stream() }
+    let n = ns([flagged(), 'unexpected retry'])
+    await assertRejects(() =>
+      storeOf(n, 'jeff')(
+        '/apply',
+        request ? new Request('http://store/apply', init) : init,
+      )
+    )
+    assertEquals(n.seen, ['body'])
+  }
+})

@@ -67,6 +67,7 @@ import type { DurableSql, Hibernation, Wire } from '@yaks/durable-object'
 import { type Level, level, writes } from '@yaks/member'
 import { type Beat, build, type Line } from './builder.ts'
 import { directory, type Space } from './directory.ts'
+import { fetchOf } from './door.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { building } from './pages.ts'
@@ -444,8 +445,7 @@ declare let WebSocketPair: { new (): { 0: unknown; 1: Wire } }
 
 /** This space's object. The name is the space's eid, which never moves — a
  * slug does. */
-export let builderOf = (env: Env, space: string) =>
-  env.BUILDER.get(env.BUILDER.idFromName(space))
+export let builderOf = (env: Env, space: string) => fetchOf(env.BUILDER, space)
 
 /**
  * The handshake, carried to the object with the kernel's own vouch on it and
@@ -453,16 +453,17 @@ export let builderOf = (env: Env, space: string) =>
  * space's hostname. The upgrade request IS the init, which is how the
  * `Upgrade` header reaches the object (door.ts, same reason).
  */
-export let joining = (env: Env, space: string, req: Request, who: Who) => {
-  let out = new Request('http://builder/ws', req)
-  for (let h of [SPACE, 'x-yak-person', 'x-yak-role', 'x-yak-kernel']) {
-    out.headers.delete(h)
-  }
-  out.headers.set(SPACE, space)
-  if (who.person) out.headers.set('x-yak-person', who.person)
-  if (who.role) out.headers.set('x-yak-role', who.role)
-  return builderOf(env, space).fetch(out)
-}
+export let joining = (env: Env, space: string, req: Request, who: Who) =>
+  builderOf(env, space)(() => {
+    let out = new Request('http://builder/ws', req)
+    for (let h of [SPACE, 'x-yak-person', 'x-yak-role', 'x-yak-kernel']) {
+      out.headers.delete(h)
+    }
+    out.headers.set(SPACE, space)
+    if (who.person) out.headers.set('x-yak-person', who.person)
+    if (who.role) out.headers.set('x-yak-role', who.role)
+    return out
+  })
 
 /**
  * A space's conversation, buried (T-34371). erase.ts is the only caller, and
@@ -475,11 +476,12 @@ export let joining = (env: Env, space: string, req: Request, who: Who) => {
  * has to have taken the conversation with it.
  */
 export let wiped = async (env: Env, space: string) => {
-  let r = await builderOf(env, space).fetch(
-    new Request('http://builder/wipe', {
-      method: 'POST',
-      headers: { 'x-yak-kernel': '1' },
-    }),
+  let r = await builderOf(env, space)(
+    () =>
+      new Request('http://builder/wipe', {
+        method: 'POST',
+        headers: { 'x-yak-kernel': '1' },
+      }),
   )
   if (!r.ok) throw new Error(await r.text())
   await r.body?.cancel()
@@ -503,17 +505,18 @@ export let posting = async (
   if (!text) {
     return building({ space: space.slug, why: 'Say what you want built.' }, env)
   }
-  let asked = await builderOf(env, space.eid).fetch(
-    new Request('http://builder/say', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        [SPACE]: space.eid,
-        'x-yak-person': who.person ?? '',
-        'x-yak-role': who.role ?? '',
-      },
-      body: JSON.stringify({ say: text }),
-    }),
+  let asked = await builderOf(env, space.eid)(
+    () =>
+      new Request('http://builder/say', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          [SPACE]: space.eid,
+          'x-yak-person': who.person ?? '',
+          'x-yak-role': who.role ?? '',
+        },
+        body: JSON.stringify({ say: text }),
+      }),
   )
   if (!asked.ok) {
     let said = await asked.json() as { message?: string }

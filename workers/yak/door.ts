@@ -132,6 +132,25 @@ export let evicted = (e: unknown): boolean =>
     /Durable Object instance is no longer active|Durable Object reset because/
       .test(e.message))
 
+/** Retry one evicted call, rebuilding its request and taking a fresh stub in
+ * `send`. A second failure propagates unchanged. */
+export let retryOnce = async <T>(
+  send: () => T | Promise<T>,
+  replayable = true,
+): Promise<T> => {
+  try {
+    return await send()
+  } catch (e) {
+    if (!evicted(e) || !replayable) throw e
+    return send()
+  }
+}
+
+/** A request factory, not a spent Request: both attempts get their own body. */
+export let fetchOf =
+  (ns: Namespace, name: string) => (make: () => Request): Promise<Response> =>
+    retryOnce(() => ns.get(ns.idFromName(name)).fetch(make()))
+
 // A request can be built twice from its init only while the body is a value:
 // a stream, or a Request whose body the first build took, is spent.
 let rebuildable = (init: RequestInit | Request) =>
@@ -150,12 +169,6 @@ export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
     name,
     app,
   )
-  return async (path, init = {}, headers = {}) => {
-    try {
-      return await door(path, init, headers)
-    } catch (e) {
-      if (!evicted(e) || !rebuildable(init)) throw e
-      return door(path, init, headers)
-    }
-  }
+  return (path, init = {}, headers = {}) =>
+    retryOnce(() => door(path, init, headers), rebuildable(init))
 }

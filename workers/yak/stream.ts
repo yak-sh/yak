@@ -42,7 +42,7 @@
 import { rosterLine } from '@yaks/mcp'
 import { VERSION } from '../../src/version.ts'
 import type { Env } from './env.ts'
-import type { Namespace, Stub } from './door.ts'
+import { fetchOf, type Namespace } from './door.ts'
 
 // The slice of the Durable Object runtime this object touches, structurally,
 // so `deno check` reads it without @cloudflare/workers-types.
@@ -337,20 +337,20 @@ export class Wire {
 // eid, never anything a client says: who is asking was settled by identity.ts
 // before anything here is reached, and a session id only picks a stream
 // WITHIN the person it already belongs to.
-let wireOf = (ns: Namespace, person: string): Stub =>
-  ns.get(ns.idFromName(person))
+let wireOf = (ns: Namespace, person: string) => fetchOf(ns, person)
 
 // The GET's answer: this person's stream, resumed where the client says it
 // left off.
 export let listen = (env: Env, person: string, req: Request) =>
-  wireOf(env.WIRE, person).fetch(
-    new Request('http://wire/open', {
-      headers: Object.fromEntries(
-        ['mcp-session-id', 'last-event-id']
-          .map((h) => [h, req.headers.get(h)])
-          .filter(([, v]) => v) as [string, string][],
-      ),
-    }),
+  wireOf(env.WIRE, person)(
+    () =>
+      new Request('http://wire/open', {
+        headers: Object.fromEntries(
+          ['mcp-session-id', 'last-event-id']
+            .map((h) => [h, req.headers.get(h)])
+            .filter(([, v]) => v) as [string, string][],
+        ),
+      }),
   )
 
 // The roster a session is holding, against the one this door lists now: the
@@ -364,11 +364,12 @@ export let rostered = async (
   person: string,
   said: Asked,
 ): Promise<string | undefined> => {
-  let r = await wireOf(env.WIRE, person).fetch(
-    new Request('http://wire/roster', {
-      method: 'POST',
-      body: JSON.stringify(said),
-    }),
+  let r = await wireOf(env.WIRE, person)(
+    () =>
+      new Request('http://wire/roster', {
+        method: 'POST',
+        body: JSON.stringify(said),
+      }),
   )
   return ((await r.json()) as { line?: string }).line
 }
@@ -380,11 +381,12 @@ export let told = async (
   method: string,
   params?: unknown,
 ) => {
-  let r = await wireOf(env.WIRE, person).fetch(
-    new Request('http://wire/tell', {
-      method: 'POST',
-      body: JSON.stringify({ method, params }),
-    }),
+  let r = await wireOf(env.WIRE, person)(
+    () =>
+      new Request('http://wire/tell', {
+        method: 'POST',
+        body: JSON.stringify({ method, params }),
+      }),
   )
   await r.body?.cancel()
 }

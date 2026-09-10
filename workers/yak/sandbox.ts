@@ -52,6 +52,7 @@
 // ({@link destroyed}). It rides the SDK's per-invocation env and is never
 // exported into a shell, so nothing puts it in the builder's transcript.
 import type { Space } from './directory.ts'
+import { retryOnce } from './door.ts'
 import { type Grant, ledger, mint, tokenOf } from './grants.ts'
 import { type Host, url } from './host.ts'
 
@@ -164,7 +165,18 @@ export let named = (space: Space) => `build-${space.eid}`
 // The object holding it. This is @cloudflare/containers `getContainer`, which
 // is all `getSandbox` does to reach one — the rest of it is preview URLs,
 // sessions and the code interpreter, none of which anything here asks for.
-let stub = (ns: Sandboxes, space: Space) => ns.get(ns.idFromName(named(space)))
+let stub = (ns: Sandboxes, space: Space): Box => {
+  let call = <T>(send: (box: Box) => T | Promise<T>) =>
+    retryOnce(() => send(ns.get(ns.idFromName(named(space)))))
+  return {
+    exec: (cmd, opts) => call((box) => box.exec(cmd, opts)),
+    writeFile: (path, content, opts) =>
+      call((box) => box.writeFile(path, content, opts)),
+    readFile: (path, opts) => call((box) => box.readFile(path, opts)),
+    destroy: () => call((box) => box.destroy()),
+    setSleepAfter: (after) => call((box) => box.setSleepAfter?.(after)),
+  }
+}
 
 /** What a grant is made and unmade with: the secret it is sealed under and
  * the ledger it is written in (grants.ts). */
