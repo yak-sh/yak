@@ -72,9 +72,6 @@ let time = (): PropSchema => ({ type: 'string', format: 'date-time' })
 // A deep-enough copy to add columns to without touching the package's export.
 let doc: VocabDoc = JSON.parse(JSON.stringify(taskDoc))
 let defs = doc.$defs!
-// Completion's durable actor is package-owned; the fleet still uses its own
-// audit shape. Compare their shared schema without claiming fleet adoption.
-delete defs.completed.properties!.actor
 let add = (comp: string, props: Record<string, PropSchema>) => {
   defs[comp].properties = { ...defs[comp].properties, ...props }
 }
