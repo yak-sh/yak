@@ -278,3 +278,17 @@ useful for background selection without adding a marker column.
 `Textarea` accepts an optional `passKey(key)` predicate. Returning true leaves
 that key to another mounted handler, allowing an application to reserve
 navigation shortcuts without changing the standalone editor's bindings.
+
+## Controlled keyboard routing
+
+`useKeymap(handler)` registers a mounted interceptor before widget focus and
+VISUAL handling. Returning true consumes an event. This supports application
+modes without coupling widgets to an application store. Keep mode state in the
+host; unregistering on unmount restores ordinary key handling.
+
+`useKeys(handler, id)` optionally names a target. `pressTo(id, key)` sends a
+command to that target without moving focus; changing its ID does not reorder
+the keyboard stack. `pressFocused(key)` forwards an already-routed key without
+running interceptors again. `beginVisual(id)` begins source selection on a
+specific registered text surface. A controlled `Textarea` can set `active` false
+to hide its cursor while another mode owns input.

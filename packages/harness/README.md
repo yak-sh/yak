@@ -14,13 +14,48 @@ host and are not sandboxed.
 ## Use
 
 Settled subagents are hidden from Sessions and Subagents by default. **Ctrl+S**
-toggles **Show settled** (shown in Keys). Root sessions and the selected child
-stay visible. This is only a display/navigation filter: parent completion
-messages and child transcripts are retained; enable the toggle to revisit a
-settled child. Failed and stopped children remain visible for attention.
+toggles **Show settled**; NORMAL mode also provides `s`. Root sessions and the
+selected child stay visible. This is only a display/navigation filter: parent
+completion messages and child transcripts are retained; enable the toggle to
+revisit a settled child. Failed and stopped children remain visible for
+attention.
+
+## Keyboard modes
+
+The composer starts in **INSERT** mode. Escape enters **NORMAL**, and `i`
+returns to editing without changing the draft or cursor. NORMAL commands never
+submit or type into the composer. `?` opens help; `?` or Escape dismisses it.
+There is no permanent shortcut panel.
+
+| NORMAL key                | Action                                                         |
+| ------------------------- | -------------------------------------------------------------- |
+| `j` / `k`                 | Scroll transcript one row down / up                            |
+| `h` / `l`                 | Previous / next transcript page (not horizontal text movement) |
+| `gg` / `G`                | Transcript start / end; `G` resumes bottom-follow              |
+| Tab                       | Switch transcript / sidebar focus                              |
+| `hjkl` with sidebar focus | Parent / next sibling / previous sibling / child               |
+| `n` / `p`                 | Next / previous root                                           |
+| `o`                       | New session                                                    |
+| `t`                       | Toggle message / task composer                                 |
+| `a` / `z` / `s`           | Archive root / show archived / show settled                    |
+| `v`                       | VISUAL selection of the transcript's anchored item source      |
+| `i`                       | Return to INSERT                                               |
+
+In VISUAL, `hjkl` extend selection, `y` copies and returns to NORMAL, and Escape
+cancels to NORMAL. Tab cycles selectable surfaces. In INSERT, Alt+v starts draft
+selection. Selection remains source-based and within one item; this is not a
+full Vim editor. Normal `gg` is a two-key sequence, canceled by any intervening
+command or leaving the mode, with no timing requirement. Bracketed paste in
+NORMAL is ignored rather than interpreted as commands.
+
+Existing modified navigation shortcuts remain available for compatibility.
+Ctrl+C always quits; Ctrl+End follows the transcript end. Plain `?`, `hjkl`, and
+`y` still type normally in INSERT. Mode/focus/help state belongs to the
+frontend's private graph, while the TUI key-routing and text-surface APIs are
+graph-independent.
 
 `deno task harness` with no verb opens the terminal UI. The transcript scrolls
-and word-wraps beside the Sessions, Subagents, Tasks and Keys panels. Enter
+and word-wraps beside the Sessions, Tasks, and Context usage panels. Enter
 starts a session (or sends to the selected one); Shift+Enter inserts a newline.
 Ctrl+N / Ctrl+P or Alt+Down / Alt+Up select sessions, Ctrl+O selects a new one,
 PgUp / PgDn scroll, and Ctrl+C quits. Shift+Enter needs a terminal supporting
@@ -282,8 +317,8 @@ are never reinterpreted as navigation. Ctrl+k is reserved for navigation in the
 harness (the standalone textarea retains its kill-to-end binding). Plain hjkl
 still types; VISUAL mode retains priority.
 
-Tasks and Keys shrink to their content within bounded shares. Context usage is
-last at the bottom; the session tree receives remaining height and scrolls.
+Tasks shrinks to their content within bounded shares. Context usage is last at
+the bottom; the session tree receives remaining height and scrolls.
 
 `Alt+a` archives/unarchives the selected root, even when invoked on a
 descendant. `Alt+z` shows archived roots so they can be selected and restored.
@@ -337,9 +372,9 @@ Transcript positions are retained per session, including detached item anchors,
 while asynchronous session reads are pending. **Ctrl+End** jumps to the
 transcript end and resumes following; plain End still moves the input cursor.
 Sidebar panels share the available height instead of letting a large session
-tree hide Tasks, Context usage, or Keys. Wheel over a panel to scroll its
-contents; tree keyboard selection is automatically revealed. Long tree labels
-are clipped to one row.
+tree hide Tasks or Context usage. Wheel over a panel to scroll its contents;
+tree keyboard selection is automatically revealed. Long tree labels are clipped
+to one row.
 
 ### Inspecting large tool results
 

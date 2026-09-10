@@ -443,10 +443,11 @@ let Transcript = ({ ui, id, items, agent, pending }: {
 let frontendViews = define<ComponentRenderer>([{
   view: 'Editor',
   match: parse('.draft'),
-  Render: ({ e, edit, submit }) => {
+  Render: ({ e, edit, submit, active }) => {
     let draft = e.draft as Comp
     return h(Textarea, {
       max: 6,
+      active: Boolean(active),
       value: { text: String(draft.text), at: Number(draft.at) },
       onEdit: edit as Frontend['edit'],
       passKey: (k: import('@yaks/tui').Key) =>
@@ -462,6 +463,7 @@ let Draft = (
 ) =>
   renderView(frontendViews, ui.draft.value[0], 'Editor', ui.client.vocab, {
     edit: ui.edit,
+    active: (ui.keyboard.value[0].keyboard as Comp).mode == 'INSERT',
     submit,
   })
 

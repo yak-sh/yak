@@ -138,6 +138,7 @@ export let spot = (s: Edit): { row: number; col: number } => {
 export let Textarea = (
   {
     id = 'input',
+    active = true,
     max = 8,
     prompt = '> ',
     onSubmit,
@@ -146,6 +147,7 @@ export let Textarea = (
     onEdit,
     passKey,
   }: {
+    active?: boolean
     id?: string
     max?: number
     prompt?: string
@@ -210,7 +212,7 @@ export let Textarea = (
         'div',
         { key: i },
         gutter(i),
-        i == row
+        active && i == row
           ? [
             h('span', {}, line.slice(0, col)),
             h('span', { class: 'Cursor' }, line[col] ?? ' '),

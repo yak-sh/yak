@@ -108,3 +108,19 @@ The domain subscription remains coarse: all graph changes can trigger transcript
 reads. This change removes the sidebar/quiet-period publication barrier, not the
 need for dependency-aware projections. Worker startup and initial subscription
 transfer latency still apply to the first selection.
+
+### Keyboard modes
+
+The `keyboard` entity stores mode, focused region, help visibility, and pending
+`g` in the private frontend graph. The draft view observes mode only to hide its
+cursor outside INSERT; normal input still changes only the draft query.
+`useKeymap` is a graph-free interception layer, and named `useKeys` targets let
+NORMAL commands address the transcript without reordering the editor's focus. A
+regression found during this work demonstrated why target registration and focus
+registration must have separate lifetimes when the selected session changes.
+
+NORMAL uses row scrolling (`j/k`) and page scrolling (`h/l`), not a persistent
+rendered-text cursor. `v` selects the anchored item's source, so it retains the
+same source-mapping and cross-item limits as the previous VISUAL implementation.
+Sidebar focus uses sibling/parent/child navigation. Help is mounted only while
+requested with `?`. Modified legacy actions remain aliases, not a second mode.

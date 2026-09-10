@@ -95,3 +95,63 @@ Deno.test('controlled NORMAL routing preserves draft, selects sources, and hides
     f.close()
   }
 })
+
+Deno.test('NORMAL sidebar commands use the same session actions and INSERT remains literal', async () => {
+  const { App } = await import('./app.ts')
+  let f = frontend(), sent: string[] = []
+  let sessions = [
+    { entity: { eid: 'root' }, session: { id: 'Root', status: 'pending' } },
+    {
+      entity: { eid: 'child' },
+      session: { id: 'Child', status: 'pending' },
+      spawned: { parent: 'root' },
+    },
+    { entity: { eid: 'other' }, session: { id: 'Other', status: 'pending' } },
+  ]
+  let a: import('./panels.ts').UIAgent = {
+    sessions: () => Promise.resolve(sessions),
+    tasks: () => Promise.resolve([]),
+    children: () => Promise.resolve([]),
+    transcript: (id) =>
+      Promise.resolve([{
+        entity: { eid: id + '-entry' },
+        entry: { session: id, seq: 1 },
+        content: { body: 'history ' + id },
+      }]),
+    line: () => '',
+    entry: () => h('div', null, 'history'),
+    send: (_id, text) => {
+      sent.push(text)
+      return Promise.resolve('input')
+    },
+    start: () => Promise.resolve('root'),
+    taskEntry: () => Promise.resolve({ task: 'task', child: 'child' }),
+  }
+  let ui = await mount(
+    () => h(App, { frontend: f, agent: a, subscribe: () => () => {} }),
+    100,
+    30,
+  )
+  let selected = () => (f.client.ent('view')!.frontend as Comp).selected
+  try {
+    await ui.send('draft')
+    await ui.send('\x1b')
+    await ui.send('n')
+    assertEquals(selected(), 'root')
+    await ui.send('\tl')
+    assertEquals(selected(), 'child')
+    await ui.send('h')
+    assertEquals(selected(), 'root')
+    await ui.send('j')
+    assertEquals(selected(), 'other')
+    await ui.send('?')
+    assert(ui.text().includes('next / previous root'))
+    await ui.send('\x1b')
+    await ui.send('i?hjkl')
+    assertEquals((f.client.ent('draft')!.draft as Comp).text, 'draft?hjkl')
+    assertEquals(sent, [])
+  } finally {
+    ui.free()
+    f.close()
+  }
+})

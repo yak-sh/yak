@@ -69,7 +69,9 @@ export let useKeys = (fn: Keys, id?: string): void => {
     if (!id) return
     let shim: Keys = (k) => ref.current(k)
     targets.set(id, shim)
-    return () => { if (targets.get(id) === shim) targets.delete(id) }
+    return () => {
+      if (targets.get(id) === shim) targets.delete(id)
+    }
   }, [id])
 }
 

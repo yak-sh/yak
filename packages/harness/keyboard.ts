@@ -51,7 +51,7 @@ export let Keyboard = ({ ui, action }: {
     if (s.mode == 'INSERT') {
       // Preserve the previous explicit selection shortcut.
       if (key.alt && key.text == 'v') {
-        visualKey(key)
+        beginVisual('input')
         if ((ui.client.ent('visual')!.visual as VisualState).surface) {
           ui.keys({ mode: 'VISUAL' })
         }
