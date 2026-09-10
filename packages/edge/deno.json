@@ -1,6 +1,6 @@
 {
   "name": "@yaks/edge",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Links between entities as a component: the edge, the id it derives from its own sentence, and traversal over it.",

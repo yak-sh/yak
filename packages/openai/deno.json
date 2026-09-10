@@ -1,6 +1,6 @@
 {
   "name": "@yaks/openai",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "OpenAI's Responses API as a @yaks/model Model: one streamed exchange over fetch, a bearer from the environment or the Codex sign-in.",

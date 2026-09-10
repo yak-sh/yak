@@ -1,6 +1,6 @@
 {
   "name": "@yaks/durable-object",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "A yaks storage adapter over a Cloudflare Durable Object's embedded SQLite, plus the socket plumbing behind @yaks/api's subscriptions.",

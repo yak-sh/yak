@@ -1,6 +1,6 @@
 {
   "name": "@yaks/doc",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "The words a person reads: the doc{title, body} component domain for a yaks graph — one title and one body, worn by whatever else an entity is.",

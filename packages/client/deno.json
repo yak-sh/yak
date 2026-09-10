@@ -1,6 +1,6 @@
 {
   "name": "@yaks/client",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "The frontend tier for a client @yaks/graph: one call assembles the graph, a query is a reactive value, and IndexedDB keeps what belongs to this browser.",

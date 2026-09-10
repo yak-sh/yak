@@ -1,6 +1,6 @@
 {
   "name": "@yaks/canvas",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "The spatial UI as data: canvases, cards, pins, cameras and cursors as graph components, plus the framework-free geometry a renderer needs.",

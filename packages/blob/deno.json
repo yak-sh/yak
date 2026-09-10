@@ -1,6 +1,6 @@
 {
   "name": "@yaks/blob",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Transparent content-addressed storage for a text column: the value is swapped for its hash on the way in and resolved back on the way out.",

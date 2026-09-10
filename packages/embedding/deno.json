@@ -1,6 +1,6 @@
 {
   "name": "@yaks/embedding",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Semantic vector search and .near ranking over any text property of a yaks graph.",

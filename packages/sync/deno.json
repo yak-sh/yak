@@ -1,6 +1,6 @@
 {
   "name": "@yaks/sync",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "The wire tier for a client @yaks/graph: committed batches forwarded to a server, pushed batches applied back, optimistic writes reconciled or reverted.",

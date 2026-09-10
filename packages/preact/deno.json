@@ -1,6 +1,6 @@
 {
   "name": "@yaks/preact",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "The Preact host for portable renderers, with a subscribed Entity component over an injected bundle store.",

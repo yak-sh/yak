@@ -1,6 +1,6 @@
 {
   "name": "@yaks/tui",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "A Preact terminal host: a fake DOM, a swappable backend, a diffing ANSI painter, and the scroll, input and frame widgets over them.",

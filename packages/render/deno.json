@@ -1,6 +1,6 @@
 {
   "name": "@yaks/render",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Host-independent renderer selection by query, role-rightmost views, and actions contributed per component.",

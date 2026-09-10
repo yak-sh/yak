@@ -1,6 +1,6 @@
 {
   "name": "@yaks/effects",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "The post-commit effect registry for a yaks graph — created/changed/removed handlers, isolated runs, and an optional durable ledger. The mechanism, not any concrete effect.",

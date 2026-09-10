@@ -1,6 +1,6 @@
 {
   "name": "@yaks/member",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Who belongs and what they may touch: a space roster, per-app grants, an access mode, and the graph hook that enforces them.",

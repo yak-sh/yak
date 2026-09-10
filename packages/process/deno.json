@@ -1,6 +1,6 @@
 {
   "name": "@yaks/process",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "A running program as an entity: its pid, what it says, and how it ended — launched detached, adopted by pid, or picked back up at boot.",

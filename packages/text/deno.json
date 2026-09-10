@@ -1,6 +1,6 @@
 {
   "name": "@yaks/text",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Markdown and plain-text hosts for portable renderer trees, with a strict text and href control-byte boundary.",
