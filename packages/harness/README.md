@@ -336,6 +336,7 @@ not only tool results. They don't open files or grant access through a raw hash.
 See [`@yaks/blob`](../blob/README.md#bounded-graph-value-inspection) for range
 units and [`@yaks/context`](../context/README.md#large-tool-results) for policy
 limits.
+
 ## Optional worker pilot
 
 `HARNESS_WORKER=1` runs the backend in a Web Worker and communicates using
