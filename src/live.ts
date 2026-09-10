@@ -1,6 +1,12 @@
 // The browser half: one graph cache, narrow render signals, one socket,
-// one identity, one camera. A snapshot fills the cache; patches publish
-// only the rows and relationships their renderers hold.
+// one identity, one camera. Boots are cold and subscription-shaped (T-21491):
+// ~3.4 MB for the root canvas, formerly ~3.4 GB; patches publish only the rows
+// and relationships their renderers hold. The path (T-37031..T-37035) is a
+// bounded 20,000-row retention floor, ready in read doors, leak-free subs,
+// a trimmed boot working set, then @yaks/client with retention, ready and dedupe
+// upstream. Retention lets reopens paint; ready separates loading from absent.
+// Then db.ts snapshot() dissolves into @yaks/api subscriptions and @yaks/sync,
+// not a new package primitive. Never restore whole-db sync or an unbounded cache.
 import {
   batch,
   computed,

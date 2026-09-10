@@ -7343,6 +7343,13 @@ let fillOmit = (db: Sql) => {
   }
 }
 
+// The bundle gatherer over @yaks/sqlite read() (T-36851), never the database.
+// Browser boots are cold and subscription-shaped (T-21491; ~3.4 MB root canvas,
+// formerly ~3.4 GB), not whole-db sync. Do not promote snapshot() into @yaks/*:
+// read() owns the generic gather; handshake seeds, lazy paging and invalidation
+// belong to @yaks/api subscriptions and @yaks/sync. The T-37031..T-37035 path
+// (bounded retention floor, ready, leak-free subs, trimmed working set, then
+// @yaks/client) makes this adapter dissolve, not an unbounded client cache.
 export let snapshot = (db: Sql): Snapshot => {
   let cursor = cursorOf(db)
   let key = snapKey(db)
