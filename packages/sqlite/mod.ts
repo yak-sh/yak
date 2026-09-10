@@ -43,11 +43,13 @@ import type { Query } from './read.ts'
 import { grown, indexed, schema, tabled, type Text } from './ddl.ts'
 import { doom, read, rows } from './read.ts'
 import { keyed } from './keyed.ts'
+import { unit } from './unit.ts'
 import { backfill } from './archetype.ts'
 import { patch, remove } from './write.ts'
 
 export * from './driver.ts'
 export * from './archetype.ts'
+export { catalog } from './catalog.ts'
 export * from './bundle.ts'
 export { grown, indexed, schema, tabled, type Text } from './ddl.ts'
 export {
@@ -128,38 +130,6 @@ export type Store = {
   rows: (query: Query, opts?: BindOpts) => Row[]
   /** run `body` in a transaction: commit on return, roll back on throw */
   tx: <R>(body: (tx: Tx) => R) => R
-}
-
-// SQLite has one transaction per connection, so nesting is done with
-// SAVEPOINTs: a store used inside a transaction the host already opened (an
-// application's own, or another store's) still gets its own all-or-nothing
-// unit. The counter names each one uniquely — it only ever goes up, so an
-// outer savepoint can never be released by an inner one's name.
-let seq = 0
-
-// One all-or-nothing unit of work. A driver that owns its own transactions
-// (see `Driver.tx`) is asked for one; otherwise it is a SAVEPOINT in plain
-// SQL. An async body is settled before the savepoint closes, so a batch that
-// went async is still rolled back by a rejection.
-let unit = <R>(driver: Driver, body: () => R): R => {
-  if (driver.tx) return driver.tx(body)
-  let name = `yaks_tx_${seq++}`
-  driver.exec(`savepoint ${name}`)
-  let undo = (e: unknown): never => {
-    driver.exec(`rollback to ${name}`)
-    driver.exec(`release ${name}`)
-    throw e
-  }
-  let done = <T>(out: T): T => {
-    driver.exec(`release ${name}`)
-    return out
-  }
-  try {
-    let out = body()
-    return (out instanceof Promise ? out.then(done, undo) : done(out)) as R
-  } catch (e) {
-    return undo(e)
-  }
 }
 
 /**

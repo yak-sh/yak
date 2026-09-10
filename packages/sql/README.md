@@ -29,6 +29,22 @@ Two passes over a dialect-agnostic relational IR:
 
 `compile` is their composition.
 
+## Archetype presence
+
+`opts.archetypes` resolves a table-presence predicate to the current file's
+integer archetype ids. `archetypeSet(cache, ids)` binds an `Archetypes` content
+cache from `@yaks/archetype` to a snapshot mapping descriptor eids to those ids.
+With this option, `.task`, `.doc!`, `!.claim`, and kind precedence compile to
+`entity.archetype in (…)`, not component joins. Boolean composition, reference
+targets and reverse-child facets use the same matching. Value predicates still
+join their own tables; a component row with all-null columns remains present.
+
+The caller must supply a **current, complete** catalog for each plan. Returning
+`undefined` declines an incomplete catalog; returning `[]` means nothing
+matches. Without this option (or a dialect's `archetype` expression), existing
+join-based lowering is unchanged. `@yaks/sqlite` supplies a lazy catalog for
+archetype-enabled vocabularies automatically.
+
 ## Intermediate representation
 
 The IR (`ir.ts`) is Arel-shaped and carries the statement as data, so a new

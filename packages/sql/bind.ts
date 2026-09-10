@@ -79,6 +79,8 @@ import type { Derived } from './derived.ts'
 import type { Extension, Site } from './extend.ts'
 import { type Identity, identity } from './ident.ts'
 import { walkSql } from './walk.ts'
+import type { Presence } from '@yaks/archetype'
+import type { ArchetypeSet } from './archetype.ts'
 
 // Thrown for a clause the binder cannot express EXACTLY. A caller catches it to
 // fall back to another evaluator, or to report the gap. `by` names the package
@@ -101,6 +103,8 @@ export type BindOpts = {
   derived?: Derived
   extend?: Extension[]
   now?: number
+  /** Plan-time matching against a current snapshot of the file's archetypes. */
+  archetypes?: ArchetypeSet
 }
 
 // The mutable knot a single bind threads: the schema, the dialect, the derived
@@ -115,6 +119,26 @@ type Ctx = {
   now: number
   tables: Set<string>
   owner?: string
+  archetypes?: ArchetypeSet
+}
+
+// Presence is ROW existence, never a non-null component value. Matching a
+// descriptor needs no join to any of the component tables it names.
+let byArchetype = (
+  ctx: Ctx,
+  predicate: Presence,
+  owner = ctx.owner,
+  missing = false,
+): Cond | null => {
+  if (!ctx.archetypes || !ctx.d.archetype) return null
+  let ids = ctx.archetypes(predicate)
+  if (!ids) return null
+  let key = ctx.d.archetype(owner)
+  let sql = ids.length ? `${key} in (${ids.map(() => '?').join(', ')})` : '0'
+  // An absent dereference target wears nothing, so its negative facet test
+  // succeeds. Ordinary spine/child owners always exist.
+  if (missing) sql = `(${key} is null or ${sql})`
+  return raw({ sql, params: [...ids] })
 }
 
 // The extension seam, both halves. `claims` answers whether any registered
@@ -260,9 +284,14 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     // the word is simply not in this vocabulary, and the sentence is the
     // vocabulary's own — the same line `route()` prints, at every door.
     if (!ctx.v.comp(hop.comp)) throw new Unknown(hop.comp)
+    let present = op == '~' || op == EXISTS
+    let shape = hop.comp == 'entity' ? null : byArchetype(
+      ctx,
+      present ? { all: [hop.comp] } : { none: [hop.comp] },
+    )
+    if (shape) return shape
     ctx.tables.add(hop.comp)
     let eid = ctx.d.col(hop.comp, 'eid', ctx.v)!
-    let present = op == '~' || op == EXISTS
     return raw({ sql: `${eid} is ${present ? 'not ' : ''}null`, params: [] })
   }
   if (hop.comp != 'entity') ctx.tables.add(hop.comp)
@@ -339,10 +368,17 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
   }
   // A leaf facet: does the target wear this component?
   if (!leaf.prop) {
+    let present = op == '~' || op == EXISTS
+    let shape = leaf.comp == 'entity' ? null : byArchetype(
+      ctx,
+      present ? { all: [leaf.comp] } : { none: [leaf.comp] },
+      target,
+      !present,
+    )
+    if (shape) return shape
     let owner = leaf.comp == 'entity' ? `"__pl"."id"` : `"__pl"."entity"`
     let hit = `(select ${owner} from ${source(leaf.comp)} as "__pl"` +
       ` where ${owner} = ${target})`
-    let present = op == '~' || op == EXISTS
     return raw({ sql: `${hit} is ${present ? 'not ' : ''}null`, params: [] })
   }
   // The leaf column, read from the target owner. Derived reads (status,
@@ -412,6 +448,8 @@ let kindScope = (ctx: Ctx, value: string): Cond => {
     : null
   if (!k) throw new Unsupported('.kind', `${value} names no kind`)
   let i = kinds.indexOf(k)
+  let shape = byArchetype(ctx, { all: [k], none: kinds.slice(0, i) })
+  if (shape) return shape
   ctx.tables.add(k)
   let parts: Cond[] = [raw(ctx.d.presence(k))]
   for (let earlier of kinds.slice(0, i)) {
@@ -668,6 +706,7 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
     ext: opts.extend ?? [],
     now: opts.now ?? Date.now(),
     tables: new Set(),
+    archetypes: opts.archetypes,
   }
   let cs = ast.clauses
   for (let c of cs) {

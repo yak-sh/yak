@@ -26,6 +26,8 @@ import type { Driver, Row } from './driver.ts'
 import type { Bundle, Comp } from './bundle.ts'
 import type { Doom, Gone } from '@yaks/graph'
 import { tombstoned } from '@yaks/graph'
+import { catalog, descriptor } from './catalog.ts'
+import { unit } from './unit.ts'
 
 // A query, as text or as an already-built AST. Text is parsed; an AST passes
 // through, so a caller may hand-build one with @yaks/query's builders.
@@ -41,8 +43,17 @@ export let rows = (
   query: Query,
   opts: BindOpts = {},
 ): Row[] => {
-  let { sql, params } = compile(ast(query), vocab, opts)
-  return driver.query(sql, params as (string | number)[])
+  let indexed = !!vocab.comp('archetype')
+  let ask = () => {
+    let { sql, params } = compile(ast(query), vocab, {
+      ...opts,
+      archetypes: opts.archetypes ?? (indexed ? catalog(driver) : undefined),
+    })
+    return driver.query(sql, params as (string | number)[])
+  }
+  // The catalog and entity statement must see the same commit. Otherwise a
+  // concurrent writer could introduce a new matching set between the two.
+  return indexed || opts.archetypes ? unit(driver, ask) : ask()
 }
 
 // The columns a gather READS: the stored ones, plus any computed column the
@@ -176,19 +187,23 @@ export let get = (
     let sub = 'select value from json_each(?)'
     let owners: number[] = []
     let byId = new Map<number, Bundle>()
+    let groups = new Map<string, number[]>()
     for (
       let row of driver.query(
         `select e.id, e.eid, e.num, t.entity as dead${
           vocab.comp('archetype')
-            ? ', (select a.eid from entity a where a.id = e.archetype) as archetype'
+            ? ', a.eid as archetype, shape.tables as "@tables"'
             : ''
-        } from entity e
+        } from entity e${
+          vocab.comp('archetype')
+            ? ' left join entity a on a.id = e.archetype left join archetype shape on shape.entity = e.archetype'
+            : ''
+        }
        left join tombstone t on t.entity = e.id where e.eid in (${sub})`,
         params,
       )
     ) {
       let eid = String(row.eid)
-      owners.push(Number(row.id))
       let entity = {
         eid,
         ...row.num == null ? {} : { num: Number(row.num) },
@@ -197,10 +212,32 @@ export let get = (
       let bundle = row.dead == null ? { entity } : tombstoned(entity)
       found.set(eid, bundle)
       byId.set(Number(row.id), bundle)
+      if (row.dead != null) continue
+      if (row['@tables'] == null) {
+        owners.push(Number(row.id))
+      } else {
+        let key = String(row['@tables'])
+        let group = groups.get(key)
+        if (!group) groups.set(key, group = [])
+        group.push(Number(row.id))
+      }
     }
-    if (!owners.length) continue
-    params = [JSON.stringify(owners)]
-    // A wide vocabulary is usually sparse. Ask which tables have rows in
+    let compOwners = new Map<string, number[]>()
+    // Group once per archetype, then read each present table once across all
+    // its owner groups. No component-table census on classified entities.
+    for (let [text, group] of groups) {
+      for (let comp of descriptor(driver, text).tables) {
+        if (comp == 'entity' || !vocab.comp(comp)) continue
+        let held = compOwners.get(comp)
+        if (held) held.push(...group)
+        else compOwners.set(comp, [...group])
+      }
+    }
+    let unclassifiedParams = [JSON.stringify(owners)]
+    params = unclassifiedParams
+    // Compatibility only: non-opt-in stores and raw, not-yet-backfilled rows
+    // have no descriptor. A wide vocabulary is usually sparse. Ask which tables
+    // have rows in
     // this set before projecting their columns; empty facets need no joins
     // or driver round trip. Short-circuit globally empty tables before walking
     // the owners: otherwise each empty facet costs 4096 fruitless index probes
@@ -215,7 +252,7 @@ export let get = (
     // takes hundreds, so a probe sized for the latter is a broken read on a
     // Durable Object rather than a slow one.
     let wide = driver.arms ?? ARMS
-    for (let j = 0; j < names.length; j += wide) {
+    for (let j = 0; owners.length && j < names.length; j += wide) {
       present.push(
         ...driver.query(
           `with owners as materialized (select value from json_each(?)) ` +
@@ -230,6 +267,12 @@ export let get = (
       )
     }
     for (let comp of present) {
+      let held = compOwners.get(comp)
+      if (held) held.push(...owners)
+      else compOwners.set(comp, owners)
+    }
+    for (let [comp, ids] of compOwners) {
+      params = ids == owners ? unclassifiedParams : [JSON.stringify(ids)]
       // The spine pass already resolved every owner's storage id. Do not join
       // it again for each component just to recover the eid we already hold.
       // References still use project()'s joins; only ownership stays numeric.

@@ -47,6 +47,9 @@ export type Dialect = {
   // look up the operand once and compare this indexed integer column.
   refCol?: (comp: string, prop: string) => string
   presence: (comp: string) => Frag
+  // The owner's archetype key; omitted by layouts without archetypes. An
+  // explicit owner is a correlated child/target, not the selected spine row.
+  archetype?: (owner?: string) => string
   // Value lowerings. Each returns a Frag or null when it cannot be expressed
   // with the matcher's exact semantics (the caller then declines the whole
   // compile — exactness or nothing).
@@ -225,6 +228,10 @@ export let sqlite: Dialect = {
   joinOn: (comp, base) => `"${comp}"."entity" = ${ownerKey(base)}`,
   col,
   presence: (comp) => ({ sql: `"${comp}"."entity" is not null`, params: [] }),
+  archetype: (owner) =>
+    owner == null
+      ? '"entity"."archetype"'
+      : `(select "__a"."archetype" from entity "__a" where "__a".id = ${owner})`,
   eq,
   ne,
   cmp,

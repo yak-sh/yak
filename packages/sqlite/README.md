@@ -218,6 +218,30 @@ SQLite 3.38; JSON1 on older builds). Selected identities are fixed before the
 component gathers, so a concurrent writer cannot change the membership of a
 window halfway through reading its components.
 
+### Archetype reads
+
+Load `archetypeDoc` and use the `archetypes()` graph plugin from
+`@yaks/archetype` to maintain the spine's archetype pointer. `install()`
+backfills existing rows. Presence and kind predicates automatically use a lazy
+plan-time catalog; ordinary value-only queries do not load it. `catalog(driver)`
+exposes the same per-plan resolver to hosts compiling SQL themselves; those
+hosts must compile and execute in one read transaction. The built-in query door
+does this automatically.
+
+Whole gathers group owners by their descriptor's physical table set and select
+each known present component once, binding only owners wearing it. Singleton
+`get`/`pick` use that set too: even a requested-but-absent facet needs no probe.
+Readers with a smaller vocabulary ignore unknown tables without changing the
+descriptor. Table-set content is cached, never component values or database id
+assignments, so rollback, another writer, and boot retirement remain visible.
+
+Stores without the archetype vocabulary, and unclassified rows written through
+the low-level `patch()` API before backfill, retain the existing census
+fallback. A partial catalog declines presence optimization rather than hide such
+rows. The classified path never runs that census. Golden tests compare it to the
+frozen old gather; `deno bench -A packages/sqlite/fixtures/read-bench.ts` runs a
+same-driver A/B snapshot, singleton, and graph single-cell/no-op comparison.
+
 ### Selective human numbering
 
 `storage(driver, vocab, { number: { except: ['entry'] } })` omits human numbers
