@@ -75,7 +75,8 @@ slow(
       `${child.pid} ${child.pid}`,
     )
     let result = await hostedShell({ ...o, resume: true })
-    assertMatch(String(result.facets?.error.message), /restarted mid-call/)
+    assertMatch(result.output, /restarted mid-call/)
+    assertEquals(result.failed, true)
     assertEquals(result.facets?.exit, undefined)
     assertEquals(
       [...Deno.readDirSync(o.dir!)].some((f) => f.name.endsWith('.out')),

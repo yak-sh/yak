@@ -597,7 +597,7 @@ slow(
   },
 )
 
-Deno.test(
+slow(
   'a reclaimed generation rejects its former lease observations',
   async () => {
     let db = freshDb()
@@ -1881,8 +1881,12 @@ Deno.test('restart leaves an uncertain side-effecting call recoverable', async (
   await service.sweep()
   let rows = readEntries(db, sid)
   let row = rows.find((row) => row.eid == call)!
-  assertMatch(String(row.comps.error.message), /restarted mid-call/)
-  assertEquals(rows.find((row) => row.eid == call)?.comps.lease, undefined)
+  // The ambiguity is the call's RESULT, not an error on the entry: an error
+  // there would end the Session, and the model never gets to recover.
+  assertEquals(row.comps.error, undefined)
+  assertEquals(row.comps.lease, undefined)
+  let answer = rows.find((row) => row.comps.result?.call == call)!
+  assertMatch(String(answer.comps.content.body), /restarted mid-call/)
   assertEquals(calls, 0)
   // Ambiguity is a known state on the interrupted call. It must not flash a
   // Session exception on the live change stream: self-healing and settlement
@@ -2079,8 +2083,10 @@ slow(
     let rows = readEntries(db, sid)
     // Reconciliation happened: an interrupted result closes the orphaned call.
     let callRow = rows.find((row) => row.eid == call)!
-    assertMatch(String(callRow.comps.error.message), /outcome is ambiguous/)
-    assertEquals(rows.filter((row) => row.comps.result?.call == call).length, 1)
+    assertEquals(callRow.comps.error, undefined)
+    let answers = rows.filter((row) => row.comps.result?.call == call)
+    assertEquals(answers.length, 1)
+    assertMatch(String(answers[0].comps.content.body), /restarted mid-call/)
     // The provider saw a valid input: the orphaned call paired with an output.
     let replay = inputs.at(-1)! as { type?: string; call_id?: string }[]
     assertEquals(replay.some((item) => item.type == 'function_call'), true)

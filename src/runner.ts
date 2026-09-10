@@ -18,6 +18,7 @@ import {
   type ToolHost,
   type ToolOutcome,
 } from './harness_tools.ts'
+import { interrupted } from './hosted_shell.ts'
 import {
   checkpointValid,
   type EntryRow,
@@ -776,25 +777,18 @@ export let executeCall = async (
   resume = false,
 ) => {
   let call = requestOf(row)
+  // The entry id is what a hosted call is found again by after a restart, so
+  // every call carries it; `resume` picks the reattachment door, which never
+  // performs the operation a second time.
+  let run = resume ? tools.resume : tools.call
   let outcome: ToolOutcome
   try {
-    if (resume && !tools.resume) {
-      throw new Error(
-        'runner restarted mid-call; operation outcome is ambiguous; inspect state before retrying',
-      )
-    }
-    outcome = await (resume ? tools.resume! : tools.call)(
-      call.name,
-      call.args,
-      { signal, entry: row.eid },
-    )
+    if (!run) throw new Error(interrupted)
+    outcome = await run(call.name, call.args, { signal, entry: row.eid })
   } catch (error) {
     outcome = {
       output: `tool failed: ${(error as Error).message}`,
       failed: true,
-      ...(resume
-        ? { facets: { error: { message: String((error as Error).message) } } }
-        : {}),
     }
   }
   return resultEntry(row.eid, outcome)

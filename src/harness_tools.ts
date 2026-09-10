@@ -5,7 +5,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js'
 import { resolve } from 'node:path'
-import { hostedShell } from './hosted_shell.ts'
+import { hostedShell, interrupted } from './hosted_shell.ts'
 import { childEnv } from './agent_env.ts'
 import { type IO, mcpServer } from './mcp.ts'
 
@@ -290,9 +290,21 @@ export let localTools = async (
     context: ToolContext,
     resume = false,
   ) => {
-    if (!context.entry) throw new Error('shell recovery needs a call entry')
     words(args, ['command', 'cwd', 'timeout_ms'])
     if (typeof args.command != 'string') throw new Error('command is required')
+    // Without a call entry there is nothing to find the process again by, so
+    // the shell stays in-process as it always was — and is unreattachable.
+    if (!context.entry) {
+      if (resume) throw new Error(interrupted)
+      return await run(
+        '/bin/bash',
+        ['-c', args.command],
+        args.cwd,
+        args.timeout_ms,
+        '',
+        context,
+      )
+    }
     if (args.cwd != null && typeof args.cwd != 'string') {
       throw new Error('tool cwd must be text')
     }
@@ -317,21 +329,7 @@ export let localTools = async (
       return shell(args, context, true)
     },
     call: async (name, args, context = {}) => {
-      if (name == 'shell') {
-        if (context.entry) return shell(args, context)
-        words(args, ['command', 'cwd', 'timeout_ms'])
-        if (typeof args.command != 'string') {
-          throw new Error('command is required')
-        }
-        return await run(
-          '/bin/bash',
-          ['-c', args.command],
-          args.cwd,
-          args.timeout_ms,
-          '',
-          context,
-        )
-      }
+      if (name == 'shell') return await shell(args, context)
       if (name == 'apply_patch') {
         words(args, ['diff', 'cwd', 'timeout_ms'])
         if (typeof args.diff != 'string') throw new Error('diff is required')
@@ -473,11 +471,7 @@ export let combineTools = (...hosts: ToolHost[]): ToolHost => {
     },
     resume: async (name, args, context) => {
       let host = owners.get(name)
-      if (!host?.resume) {
-        throw new Error(
-          'runner restarted mid-call; operation outcome is ambiguous; inspect state before retrying',
-        )
-      }
+      if (!host?.resume) throw new Error(interrupted)
       return await host.resume(name, args, context)
     },
     close: async () => {

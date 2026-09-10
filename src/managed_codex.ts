@@ -31,10 +31,12 @@ import {
   type GenerationFault,
   type GenerationRunner,
   type ResponseTransport,
+  resultEntry,
 } from './runner.ts'
 import { claudeGeneration } from './claude_print.ts'
 import { CREDENTIAL_FAULT } from './responses.ts'
 import { type ToolHost } from './harness_tools.ts'
+import { interrupted } from './hosted_shell.ts'
 import { type Observation } from './observations.ts'
 import { sessionRow } from './session_store.ts'
 import { type Change, uuid } from './types.ts'
@@ -474,13 +476,8 @@ export let managedCodex = (options: ManagedCodexOptions) => {
         resume && !!entry.comps.bash,
       )
       if (!valid(db, token)) return
-      let { error, ...result } = spec
-      cast(append(db, session, [result], runner).changes)
-      cast(
-        error
-          ? failEntry(db, token, String(error.message), clock)
-          : settleCall(db, token),
-      )
+      cast(append(db, session, [spec], runner).changes)
+      cast(settleCall(db, token))
     } catch (error) {
       if (!valid(db, token)) return
       let message = String((error as Error).message).slice(0, 2000)
@@ -543,15 +540,24 @@ export let managedCodex = (options: ManagedCodexOptions) => {
         })
         continue
       }
+      // A call we can neither settle nor reattach to is answered, not failed:
+      // replaying it could repeat a side effect, while stamping `error` would
+      // end the Session mid-turn (entry_log.ts) and release its claims over
+      // work that may well have landed. The model reads the ambiguity as its
+      // tool result and inspects the world before it goes on. `exception` is
+      // deliberately not stamped either: live self-healing watches that edge
+      // and would file a false incident for an ordinary restart.
+      if (db.prepare(`select 1 from call where ${OWNED}`).get(lease.eid)) {
+        cast(
+          append(db, lease.session, [
+            resultEntry(lease.eid, { output: interrupted, failed: true }),
+          ], runner).changes,
+        )
+        cast(settleCall(db, lease))
+        continue
+      }
       let message = 'runner disappeared; operation outcome is ambiguous'
       cast(failEntry(db, lease, message, clock))
-      // This is a known outcome of crash reconciliation, not a broken Session.
-      // The call's durable error keeps us from replaying a possible side
-      // effect, and advance() gives the model a synthetic interrupted result
-      // so it can inspect the world and continue. Stamping `exception` here is
-      // both transient (a successful next generation clears it) and harmful:
-      // live self-healing observes that edge, files a false incident, and
-      // session settlement may release the task claim while recovery proceeds.
     }
     return retries
   }

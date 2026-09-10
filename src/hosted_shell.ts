@@ -17,9 +17,14 @@ export type HostedShell = {
   resume?: boolean
 }
 
-let interrupted =
+// What a call reports when the runner died while it was in flight. It is a
+// tool RESULT, never a session failure: the model reads it, inspects the world
+// and decides whether the work already happened.
+export let interrupted =
   'runner restarted mid-call; operation outcome is ambiguous; ' +
-  'the process is gone without an exit record; inspect state before retrying'
+  'inspect state before retrying'
+
+let vanished = `${interrupted} (the process is gone without an exit record)`
 
 let read = (path: string, limit: number) => {
   let file
@@ -95,13 +100,12 @@ export let hostedShell = async (o: HostedShell): Promise<ToolOutcome> => {
     let output = read(`${path}.out`, o.limit)
     let stderr = read(`${path}.err`, o.limit)
     if (code == null) {
+      // No `error` facet: an error component on an entry is what fails a
+      // Session (entry_log.ts). This is an answer the model gets to act on.
       return {
-        output: `${interrupted}${output ? `\n${output}` : ''}`,
+        output: `${vanished}${output ? `\n${output}` : ''}`,
         failed: true,
-        facets: {
-          error: { message: interrupted },
-          ...stderr ? { stderr: { text: stderr } } : {},
-        },
+        facets: { ...stderr ? { stderr: { text: stderr } } : {} },
       }
     }
     if (code == 124 || code == 137) {
