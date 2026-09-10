@@ -83,11 +83,12 @@ VIEWS_DATASET = "yak_views"
 # is on. Not a secret either: a zone id names a zone, it does not open one.
 CF_ZONE = "3b2518c3647029d687bb4f40bebf0f77"
 
-# The recurring price a Plus subscription is for (billing.ts, D-32751): $4 a
-# month, live mode. Not a secret — a price id names a price, it does not open
+# The recurring price a Plus subscription is for (billing.ts, T-37141): $9 a
+# month, tax-inclusive, live mode. A price id names a price, it does not open
 # an account, and it belongs beside the account and zone above rather than in a
 # secret store where nobody can read what the site is selling.
-STRIPE_PRICE = "price_1UBe7mITlUS6lUlgJqKpCFiV"
+# Existing subscriptions stay on their old price unless migrated in Stripe.
+STRIPE_PRICE = "price_1UEDP0ITlUS6lUlggbJ9klVH"
 
 # The per-deploy version id (stream.ts, T-33013): Cloudflare mints a fresh id on
 # every `wrangler deploy`, so it is the marker a resumed MCP stream compares to

@@ -123,14 +123,15 @@ export let BUILDS: Record<Tier, number> = { free: 5, plus: 30 }
 export let builds = (tier: Tier | null): number => BUILDS[tier ?? 'free']
 
 // What a tier COSTS a month, in whole dollars (D-32751). The number is
-// tax-inclusive: $4 is what a customer pays anywhere, so this is the whole
+// tax-inclusive: $9 is what a customer pays anywhere, so this is the whole
 // price rather than a subtotal something is added to. Stripe holds the same
 // number as a price id (wrangler.toml STRIPE_PRICE) and that is what a card is
 // charged against; this is the number the SITE says out loud — the pricing
 // copy, and the `Offer`s in the home page's JSON-LD, which is what a search
-// engine shows beside the result. site_test.ts holds the pages to it, so a
-// price change is this line plus the Stripe price and nothing else.
-export let PRICE: Record<Tier, number> = { free: 0, plus: 4 }
+// engine shows beside the result. A price change also updates the static HTML
+// in public/index.html and public/pricing.html, billing_workerd_test.ts, and
+// bin/verify-deploy{,_test}.ts. site_test.ts holds the pages to this number.
+export let PRICE: Record<Tier, number> = { free: 0, plus: 9 }
 
 export let CURRENCY = 'USD'
 

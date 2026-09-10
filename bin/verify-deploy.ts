@@ -43,7 +43,7 @@ export let DOORS = [
 
 // The pricing page's live contract (billing_workerd_test.ts): the price is on
 // the page, and the page does not leak the checkout door to a stranger.
-export let PRICING = { has: '$4', hasnt: 'checkout.stripe.com' }
+export let PRICING = { has: '$9', hasnt: 'checkout.stripe.com' }
 
 export type Fetch = typeof fetch
 

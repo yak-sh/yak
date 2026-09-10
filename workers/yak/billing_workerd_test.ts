@@ -250,7 +250,7 @@ slow('the billing doors say no before they say anything else', async () => {
     let page = await k.at('yaks.app', '/pricing')
     assertEquals(page.status, 200)
     let html = await page.text()
-    assert(html.includes('$4'), 'the price is on the page')
+    assert(html.includes('$9'), 'the price is on the page')
     assert(
       !/api\/billing|checkout\.stripe\.com/.test(html),
       'and no way to start a purchase is',
