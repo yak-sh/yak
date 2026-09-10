@@ -4,7 +4,7 @@
 
 import { assert, assertEquals, assertFalse, assertThrows } from '@std/assert'
 import { Unsupported } from '@yaks/sql'
-import { and, pred } from '@yaks/query'
+import { absent, and, eq, pred, present } from '@yaks/query'
 import { filter, matcher } from './match.ts'
 import { bundles, NOW, shop } from './harness.ts'
 
@@ -162,4 +162,20 @@ Deno.test('what it cannot answer exactly, it declines', () => {
   assertThrows(() => matcher('.price.title=x', shop), Unsupported)
   // and a column the vocabulary does not declare is a routing error, as ever
   assertThrows(() => matcher('.nonesuch=1', shop), Error, 'unknown prop')
+})
+
+Deno.test('reverse NONE and a builder child conjunction keep quantifier semantics', () => {
+  assertEquals(sel('.reviews!.stars=5').includes('b1'), false)
+  assertEquals(sel('.reviews!.stars=5').includes('b4'), true)
+  let ast = and({
+    ...present('reviews'),
+    where: and(eq('review.stars', 5), present('review')),
+  })
+  assertEquals(matcher(ast, shop)(bundles).map((b) => b.entity.eid), ['b1'])
+  assertEquals(
+    matcher(and({ ...absent('book'), facet: true }), shop)(bundles).some((b) =>
+      b.entity.eid == 'b1'
+    ),
+    false,
+  )
 })

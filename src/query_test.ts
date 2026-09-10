@@ -291,7 +291,7 @@ Deno.test('query: bad tokens are loud, bare words are terms', () => {
   assertThrows(
     () => parseQuery('.doc!.created!'),
     Error,
-    'presence filters end at !: .doc! — join filters with &: .doc!&.created!',
+    '.doc is not a reverse association',
   )
 })
 
@@ -368,9 +368,13 @@ Deno.test('query: quotes hold a value that carries the separator', () => {
     parseQuery('.web.url="https://X.test/p/?utm_source=n#top"')[0].value,
     'https://x.test/p',
   )
-  assertEquals(parseQuery('.web.url=https://x.test/p?a=1&b=2').length, 2)
-  // An unbalanced quote is not a value form — it splits exactly as before.
-  assertEquals(parseQuery('.title~="half&.status=open').length, 2)
+  assertThrows(
+    () => parseQuery('.web.url=https://x.test/p?a=1&b=2'),
+    Error,
+    'unknown prop',
+  )
+  // Unbalanced quoting is a malformed query, never silently split.
+  assertThrows(() => parseQuery('.title~="half&.status=open'), Error)
 })
 
 Deno.test('query: adopt pins down scalar equalities only', () => {
@@ -981,14 +985,24 @@ Deno.test('text: indexed membership composes with ordinary filters', () => {
   assertEquals(hit('"the flux"'), true) // quotes glue a phrase
   assertEquals(hit('"flux the"'), false)
 })
-Deno.test('mixed line: & segments keep their spaces, space-dot splits', () => {
-  assertEquals(hit('.title~=the flux'), true) // the old grammar survives
+Deno.test('mixed line: whitespace is AND; quotes protect a multiword value', () => {
+  assertEquals(hit('.title~="the flux"'), true)
+  assertEquals(parseQuery('.title~=the flux').map((p) => p.value), [
+    'the',
+    'flux',
+  ])
+  assertEquals(parseQuery(".title~='the flux'")[0].value, 'the flux')
+  assertEquals(
+    parseQuery(String.raw`.title~="the \"flux\""`)[0].value,
+    'the "flux"',
+  )
   assertEquals(parseQuery('a .status=done b').length, 3)
   assertEquals(
     parseQuery('.updated.at>="1 hour ago"')[0].value,
     '1 hour ago', // quotes shield the phrase from the whitespace split
   )
-  assertEquals(parseQuery('.env')[0].op, 'text') // opless dot-word = a term
+  assertEquals(parseQuery('.doc')[0].op, EXISTS) // package presence shorthand
+  assertEquals(parseQuery("'.env'")[0].op, 'text') // quote literal dot words
 })
 
 // ---- hot: the decay rank behind '.order=hot' ----
@@ -1765,4 +1779,13 @@ Deno.test('adopt groups routed equalities, never a reference path or comparison'
   for (let col of ['project', 'priority', 'assignee', 'domain']) {
     assertThrows(() => parseQuery(`.task.${col}=x`), Error, 'no such prop')
   }
+})
+
+Deno.test('nested reverse bangs bind to their own association', () => {
+  let [p] = parseQuery('.comments!.comments!.doc.title~=hello')
+  assertEquals(p.rev?.not, true)
+  assertEquals(p.rev?.preds[0].rev?.not, true)
+  let [outer] = parseQuery('.comments.comments!.doc.title~=hello')
+  assertEquals(outer.rev?.not, false)
+  assertEquals(outer.rev?.preds[0].rev?.not, true)
 })

@@ -116,7 +116,12 @@ Deno.test('.fields= with no columns is still refused', () => {
 
 Deno.test('select: the eids-only projection asks SQL what where() asks', () => {
   let ps = parseQuery('.session!&.fields=eid')
-  assertEquals(select(ps), where(ps))
+  let db = open(':memory:')
+  try {
+    assertEquals(select(db, ps), where(db, ps))
+  } finally {
+    db.close()
+  }
 })
 
 // ── the sub ────────────────────────────────────────────────────────────────

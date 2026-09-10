@@ -114,6 +114,7 @@ type Ctx = {
   ext: Extension[]
   now: number
   tables: Set<string>
+  owner?: string
 }
 
 // The extension seam, both halves. `claims` answers whether any registered
@@ -127,7 +128,7 @@ let claims = (ctx: Ctx, kind: Clause['kind']): boolean =>
 // an extension that spells an ordering spells the anchor's place in it through
 // the same hook — a ranking is a pure function of the owner, and a cursor into
 // one needs no second seam.
-let site = (ctx: Ctx, owner = ctx.d.ownerKey('entity')): Site => ({
+let site = (ctx: Ctx, owner = ctx.owner ?? ctx.d.ownerKey('entity')): Site => ({
   vocab: ctx.v,
   dialect: ctx.d,
   now: ctx.now,
@@ -471,11 +472,12 @@ let COUNT_OPS: Record<string, string> = {
 // inside the subquery `entity` is the correlation to the OUTER row, so binding
 // it there would silently ask a different question.
 let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Cond => {
+  if (ctx.owner) throw new Unsupported('a nested reverse association')
   let child = ctx.d.table(a.comp)
   let corr = `"${a.comp}"."${a.prop}" = "entity"."id"`
   let rest = p.path.slice(1)
   let value = flat(p.value)
-  if (!rest.length) {
+  if (!rest.length && !p.where) {
     if (p.op == '!' || (p.op == '~=' && !value)) {
       return raw({
         sql: `exists (select 1 from ${child} where ${corr})`,
@@ -500,16 +502,23 @@ let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Cond => {
       params: [Number(value)],
     })
   }
-  if (ctx.v.aim(rest.join('.')).some((h) => h.comp == 'entity')) {
+  if (
+    rest.length && ctx.v.aim(rest.join('.')).some((h) => h.comp == 'entity')
+  ) {
     throw new Unsupported(
       'a reverse hop through the spine',
       `.${name}.${rest.join('.')}`,
     )
   }
-  let sub: Ctx = { ...ctx, tables: new Set() }
-  let inner = renderCond(clause(sub, { ...p, path: rest }))
+  let sub: Ctx = { ...ctx, tables: new Set(), owner: ctx.d.ownerKey(a.comp) }
+  let inner = renderCond(
+    clause(sub, p.where ?? { ...p, path: rest, not: undefined }),
+  )
   return raw({
-    sql: `exists (select 1 from ${child}${joined(joinsOf(sub, a.comp))}` +
+    sql:
+      `${p.not ? 'not ' : ''}exists (select 1 from ${child}${
+        joined(joinsOf(sub, a.comp))
+      }` +
       ` where ${corr}${inner.sql == '1' ? '' : ` and ${inner.sql}`})`,
     params: inner.params,
   })
@@ -551,6 +560,12 @@ let walk = (ctx: Ctx, c: Walk): Cond => {
 
 // One filter clause to a condition. Directives are stripped before this runs.
 let clause = (ctx: Ctx, c: Clause): Cond => {
+  if (
+    ctx.owner && (c.kind == 'refs' || c.kind == 'walk' ||
+      c.kind == 'pred' && c.path[0] == 'kind')
+  ) {
+    throw new Unsupported('a reverse child clause through the spine')
+  }
   let ext = extended(ctx, c)
   if (ext) return ext
   if (c.kind == 'never') return FALSE
@@ -576,12 +591,23 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
     // side; anything else routes forward through the vocab.
     let assoc = ctx.v.assoc(c.path[0])
     if (assoc) return reverse(ctx, c.path[0], assoc, c)
+    if (c.not || c.where) throw new Unsupported('a reverse hop', c.path[0])
     let hops: Hop[]
     try {
-      hops = ctx.v.aim(c.path.join('.'), bare(c))
+      hops = c.facet
+        ? [
+          ...(c.path.length > 1
+            ? ctx.v.aim(c.path.slice(0, -1).join('.'))
+            : []),
+          { comp: c.path.at(-1)!, prop: '' },
+        ]
+        : ctx.v.aim(c.path.join('.'), bare(c))
     } catch (e) {
       if (!unplanted) throw e
       return TRUE
+    }
+    if (ctx.owner && hops.some((h) => h.comp == 'entity')) {
+      throw new Unsupported('a reverse hop through the spine')
     }
     return hops.length == 1 ? single(ctx, hops[0], c) : path(ctx, hops, c)
   }

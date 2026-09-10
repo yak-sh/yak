@@ -111,7 +111,7 @@ Deno.bench('evalAgg: a derived status tally over a project', () => {
 
 // The hydration workhorse under every membership query: one statement per
 // component table for a whole hit set, never one per row.
-let boardSql = toSql(where(parseQuery(`.project=${PROJ}`))!)
+let boardSql = toSql(where(db, parseQuery(`.project=${PROJ}`))!)
 Deno.bench('matching: hydrate the whole selection', () => {
   matching(db, boardSql)
 })

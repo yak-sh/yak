@@ -26,8 +26,8 @@
 // Bare words are TEXT preds — FTS5 terms over the doc (title or body), with a
 // trailing `*` for token-prefix matching; "quoted words" stay one phrase pred.
 // Separators are '&' and
-// whitespace both: an &-segment that is one dot-param keeps its spaces
-// (.title~=two words survives), a segment with embedded ` .` splits.
+// whitespace both: every term stands alone; quote multiword values
+// (.title~="two words"). Single/double quotes and escaping are shared grammar.
 //
 // When the ROW value is an ISO timestamp, the filter value may be a time
 // PHRASE (see span): today, yesterday, tomorrow, now, this|last|next
@@ -74,6 +74,7 @@ import {
 import { type Span, span } from './time.ts'
 import type { Vocab } from './store/vocab.ts'
 import { term as ftsTerm } from '@yaks/fts'
+import { type Clause, parse, parseDot, type Value } from '@yaks/query'
 export { ftsTerm }
 export { WALK_DEPTH, WALK_LIMIT } from '@yaks/query'
 
@@ -933,355 +934,182 @@ let groupsOf = (segs: string[], vocab: Vocab): Hop[] => {
   return out
 }
 
-// A reverse hop: `.comments…`, where the FIRST segment names a reverse
-// association (reverseAssocs). `.comments.created.by=P-19` keeps every parent
-// with a child comment matching the sub-filter — ANY, the default. A `!` right
-// after the association (before its `.`) negates the existence: `.comments!.author=jeff`
-// is NONE by jeff, `.comments!.status!=done` is ALL done (De Morgan). A bare
-// association is presence (`.comments!`, ≥1), absence (`.comments=`, 0), or a
-// cardinality test (`.comments>=5`). null when the first segment is not a reverse
-// association, so preds() falls through to the ordinary column/path grammar.
-// The bang only binds when a `.` follows, so `.comments!=5` reads as a count.
-let REV =
-  /^\.([A-Za-z_]+)(!(?=\.))?((?:\.[A-Za-z_-]+)*)(!=|~=|<=|>=|<|>|=|!)(.*)$/s
-let revHop = (token: string): Pred | null => {
-  let m = token.match(REV)
-  if (!m) return null
-  let [, name, bang, sub, op, value] = m
-  let assoc = reverseAssocs.get(name)
-  if (!assoc) return null
-  value = value.replace(/^"(.*)"$/s, '$1')
-  let mk = (inner: Pred[], not: boolean, count?: boolean): Pred => ({
-    comp: assoc!.comp,
-    prop: assoc!.prop,
-    op: count ? OPS[op] : EXISTS,
-    value: count ? value : '',
-    rev: {
-      comp: assoc!.comp,
-      prop: assoc!.prop,
-      preds: inner,
-      not,
-      ...(count ? { count } : {}),
-    },
-  })
-  if (sub) {
-    // Existential with a sub-filter: op/value ride the sub-pred's leaf, which
-    // preds() parses — recursively, so a nested hop composes off the child.
-    let inner = preds('.' + sub.slice(1) + op + value)
-    if (!inner) {
-      throw new Error(`reverse filter needs a predicate: .${name}${sub}`)
-    }
-    return mk(inner, bang == '!')
-  }
-  if (op == '!' || (op == '~=' && !value)) return mk([], false) // present ≥1
-  if (op == '=' && !value) return mk([], true) // none (0)
-  if (!/^\d+$/.test(value)) {
-    throw new Error(
-      `.${name} needs a sub-path (.${name}.<prop>) or a count (.${name}>=N)`,
-    )
-  }
-  return mk([], false, true) // cardinality: count <op> value
+// Grammar belongs to @yaks/query. This pass binds its schema-free clauses to
+// the fleet's routed predicates (also consumed by browser matching, reference
+// resolution and partition screens). Never stringify a clause to parse it again.
+let flatValue = (v: Value | null): string => {
+  if (!v) return ''
+  if (v.kind == 'scalar' || v.kind == 'time') return v.raw
+  if (v.kind == 'list') return v.items.map(flatValue).join(',')
+  return `${flatValue(v.lo)}..${v.exclusiveEnd ? '.' : ''}${flatValue(v.hi)}`
 }
 
-// One filter token to the preds it contributes. A scalar filter is one pred; a
-// SCOPE (`.kind=memory`) expands to the Pred[] it splices into the AND-list —
-// the wrinkle that once made kind a bespoke parameter, resolved here so a
-// virtual prop reads exactly like a column. A reverse hop (`.comments…`) resolves
-// first, above the column grammar. null: the token is no dot-param at all (a bare
-// word, an opless `.env`) — a text term to whoever parses the line.
-//
-// A hyphen is admitted into the NAME so a hyphenated spelling reaches route()
-// and earns the same refusal writes give it (client.ts param()). No column is
-// hyphenated, so nothing new routes — but before this, '.blocked-by=T-1' failed
-// the pattern and fell through to a bare TEXT term, silently searching for the
-// filter the caller thought they wrote.
-// `.requires[<=3]->T-42` — the walk: a path, the bracket that caps it, an arrow
-// and one entity. Matched before the dot-param pattern, which would read the
-// arrow's `-` as part of the name and its `>` as a comparison.
-let WALK = /^\.([A-Za-z_]+(?:\.[A-Za-z_]+)*)(\[[^\]]*\])?(->|<-)(.*)$/s
-let CAP = /^\[\s*<=\s*(\d+)\s*\]$/
-let EDGE_SELECT =
-  /^\.edges\[([A-Za-z_]+)(?:\s*,\s*([A-Za-z_-]+(?:\.[A-Za-z_-]+)*))?\]!$/s
+let columnOf = (path: string[], vocab: Vocab, directive: string): Hop => {
+  let groups = groupsOf(path, vocab)
+  let at = groups[groups.length - 1]
+  if (groups.length != 1 || !at.prop) {
+    throw new Error(
+      `${directive} names one column, not a path: ${path.join('.')}`,
+    )
+  }
+  return at
+}
 
-export let preds = (token: string, vocab: Vocab = NONE): Pred[] | null => {
-  // Prefix component selectors share the existing presence/optional grammar.
-  let sigil = token.match(/^([?!])\.?([A-Za-z_][A-Za-z_0-9]*)$/)
-  if (sigil) token = `.${sigil[2]}${sigil[1] == '?' ? '?' : '='}`
-  // Any arrow spelling answers HERE, right or wrong: a malformed walk that fell
-  // through would be read as a hyphenated name and a comparison, or end up a
-  // bare TEXT term silently searching for the walk the caller thought they wrote
-  // (the hyphen lesson below, same trap). `.priority<-1` is the one exception:
-  // less than a negative number, never a walk to the entity `1`.
-  let walked = token.match(WALK)
-  if (walked && !(walked[3] == '<-' && /^\d+(\.\d+)?$/.test(walked[4]))) {
-    let [, path, bracket, dir, value] = walked
-    let cap = bracket?.match(CAP)
-    if ((bracket && !cap) || !value || value.includes(',')) {
-      throw new Error(
-        'a walk names a path, an optional depth cap and one entity: ' +
-          '.requires[<=3]->T-42',
-      )
-    }
-    let depth = cap ? Number(cap[1]) : undefined
-    if (depth != null && depth < 1) {
-      throw new Error(`a walk needs at least one hop: <=${cap![1]}`)
-    }
-    let reach: Reach = { type: path, depth, dir: dir as Reach['dir'] }
-    if (!(edges as readonly string[]).includes(path)) {
-      let groups = groupsOf(path.split('.'), vocab)
-      let via = groups[groups.length - 1]
-      if (groups.length > 1 || !via.prop || !isRef(via.comp, via.prop)) {
-        throw new Error(
-          `a walk follows an edge type (${edges.join(', ')}) or a reference ` +
-            `column — not ${path}`,
-        )
+export let bindClause = (c: Clause, vocab: Vocab = NONE): Pred[] => {
+  let rider = (extra: Partial<Pred>): Pred[] => [{
+    comp: '',
+    prop: '',
+    op: EDGES,
+    value: '',
+    peers: [],
+    ...extra,
+  }]
+  switch (c.kind) {
+    case 'and':
+      return c.clauses.flatMap((c) => bindClause(c, vocab))
+    case 'never':
+      return [never()]
+    case 'text':
+      return [text(c.value)]
+    case 'every':
+      return [] // full rows are the fleet's default projection
+    case 'order':
+      return [{ comp: '', prop: 'order', op: ORDER, value: c.value }]
+    case 'near':
+      return [{ comp: '', prop: 'near', op: NEAR, value: c.value }]
+    case 'refs':
+      return [{
+        comp: '',
+        prop: '',
+        op: c.op == '!' ? EXISTS : '',
+        value: c.value,
+        refs: true,
+      }]
+    case 'count':
+      return [{ comp: '', prop: '', op: AGG, value: '', agg: 'count' }]
+    case 'distinct':
+    case 'tally':
+      return [{
+        ...columnOf(c.path, vocab, `.${c.kind}`),
+        op: AGG,
+        value: '',
+        agg: c.kind,
+      }]
+    case 'fields':
+      return [{
+        comp: '',
+        prop: '',
+        op: PROJECT,
+        value: '',
+        fields: c.fields.filter((f) => f.path.join('.') != 'eid').map((f) => ({
+          ...columnOf(f.path, vocab, '.fields'),
+          wake: f.wake,
+        })),
+      }]
+    case 'limit':
+    case 'after':
+      return [{
+        comp: '',
+        prop: '',
+        op: WINDOW,
+        value: String(c.n),
+        win: { [c.kind]: c.n },
+      }]
+    case 'edges': {
+      let edge: EdgeSelector | undefined
+      if (c.select) {
+        let { type, via: path } = c.select
+        if (!(edges as readonly string[]).includes(type)) {
+          throw new Error(`.edges selects one edge type (${edges.join(', ')})`)
+        }
+        let via = path && columnOf(path, vocab, '.edges endpoint projection')
+        if (via && !isRef(via.comp, via.prop)) {
+          throw new Error('.edges endpoint projection must be one {eid} column')
+        }
+        edge = { type, ...(via ? { via } : {}) }
       }
-      reach.via = via
+      return rider({
+        peers: c.peers.map((p) => columnOf(p, vocab, '.edges.peers')),
+        ...(edge ? { edge } : {}),
+        ...(c.limit != null ? { limit: c.limit } : {}),
+      })
     }
-    return [{ comp: '', prop: '', op: REACHES, value, reach }]
-  }
-  // `.edges[referenced,entry.session]!` — select one STORED edge type
-  // and optionally project either endpoint through one `{eid}` column. The
-  // member set is tested after projection, so a Session selects the referenced
-  // edges owned by its entries without selecting or enumerating those entries.
-  if (token.startsWith('.edges[') && !owned('edges')) {
-    let selected = token.match(EDGE_SELECT)
-    let [, type, raw] = selected ?? []
-    if (!selected || !(edges as readonly string[]).includes(type)) {
-      throw new Error(
-        `.edges selects one edge type (${edges.join(', ')}) and an optional ` +
-          'endpoint reference: .edges[referenced,entry.session]!',
-      )
-    }
-    let via: Hop | undefined
-    if (raw) {
-      let groups = groupsOf(raw.split('.'), vocab)
-      via = groups[groups.length - 1]
-      if (groups.length > 1 || !via.prop || !isRef(via.comp, via.prop)) {
-        throw new Error(
-          `.edges endpoint projection must be one {eid} column: ${raw}`,
-        )
-      }
-    }
-    return [{
-      comp: '',
-      prop: '',
-      op: EDGES,
-      value: '',
-      peers: [],
-      edge: { type, ...(via ? { via } : {}) },
-    }]
-  }
-  let r = revHop(token)
-  if (r) return [r]
-  let m = token.match(
-    /^\.([A-Za-z_-]+(?:\.[A-Za-z_-]+)*)(!=|~=|<=|>=|<|>|=|!|\?)(.*)$/s,
-  )
-  if (!m) return null
-  let [, path, op, value] = m
-  let segs = path.split('.')
-  if (op == '!' && value) {
-    // Two presence filters run together is the way to ask for both said
-    // wrong, so the refusal spells the way to say it: `&` joins filters, and
-    // echoing only the good half taught nothing (C-32624 item 6).
-    throw new Error(
-      `presence filters end at !: .${path}!` +
-        (value.startsWith('.')
-          ? ` — join filters with &: .${path}!&${value}`
-          : ''),
-    )
-  }
-  // a quoted value is the escape hatch for spaces where whitespace splits
-  value = value.replace(/^"(.*)"$/s, '$1')
-  if (path == 'order' && op == '=') {
-    return [{ comp: '', prop: 'order', op: ORDER, value }]
-  }
-  if (path == 'near' && op == '=') {
-    return [{ comp: '', prop: 'near', op: NEAR, value }]
-  }
-  // `.refs=T-3` — the multi-column reverse-union (this entity's backlinks of
-  // T-3). Presence/absence read like a reverse association: `.refs!` references
-  // something, `.refs=` references nothing. The value resolves like any id at
-  // delivery (resolveRefs). Guarded so a future `refs` column would win.
-  if (path == 'refs' && !owned('refs')) {
-    if (op == '=') return [{ comp: '', prop: '', op: '', value, refs: true }]
-    if (op == '!') {
-      return [{ comp: '', prop: '', op: EXISTS, value: '', refs: true }]
-    }
-    throw new Error(
-      '.refs takes an id (.refs=T-3), presence (.refs!) or absence (.refs=)',
-    )
-  }
-  // `.count!` — the plainest aggregate: how many entities the REST of the line
-  // selects, a number rather than a row set. It names no column, which is the
-  // whole difference from `.tally=`, so PRESENCE is the only spelling it takes.
-  //
-  // The vocabulary already owns a bare `count` (recall.count), so this claims
-  // exactly one spelling and leaves the rest: `.count>3` still filters that
-  // column, and `.recall.count!` still says the presence test this bare form
-  // used to mean. A directive winning a bare spelling outright would silently
-  // change what a saved board asks.
-  if (path == 'count' && op == '!') {
-    return [{ comp: '', prop: '', op: AGG, value: '', agg: 'count' }]
-  }
-  // `.distinct=domain` / `.tally=domain` — an aggregate PROJECTION over one
-  // column, not a filter. Its column routes like any bare prop (or the explicit
-  // `.distinct=filed.domain`); a path is refused — the census aggregates a single
-  // column. aggOf()/aggregateSql() read the AGG pred; matchQuery lets it through.
-  if ((path == 'distinct' || path == 'tally') && !owned(path)) {
-    if (op != '=' || !value) {
-      throw new Error(`.${path} names a column: .${path}=domain`)
-    }
-    let groups = groupsOf(value.split('.'), vocab)
-    let at = groups[groups.length - 1]
-    if (groups.length > 1 || !at.prop) {
-      throw new Error(
-        `.${path} aggregates one column, not a path: .${path}=${value}`,
-      )
-    }
-    return [{ comp: at.comp, prop: at.prop, op: AGG, value: '', agg: path }]
-  }
-  // `.fields=pin.x,pin.y,pin.z~` — a PROJECTION, not a filter: the columns each
-  // result row carries beyond its eid, so a partial-cache subscription reads live
-  // values without holding the whole graph. A trailing `~` marks a column
-  // VOLATILE — projected but EXCLUDED from the change-signal, so a churny field (a
-  // pin's z, bumped on every toFront) delivers its value yet never re-fires the
-  // query. Each column routes like a bare prop (or its explicit `pin.x`); a path
-  // is refused — a projection reads one entity's own columns. Guarded so a future
-  // `fields` column would win. fieldsOf()/select() read the PROJECT pred.
-  //
-  // `.fields=eid` is the EIDS-ONLY form: an empty projection, so a result row
-  // carries its spine and nothing else. It is spelled as a column because that
-  // is what it is — every row already carries `eid`, so naming it and nothing
-  // beside it says "the ids, no columns". An empty `.fields=` stays a refusal:
-  // a caller who wrote no columns meant to write some.
-  if (path == 'fields' && !owned('fields')) {
-    if (op != '=' || !value) {
-      throw new Error('.fields names columns: .fields=pin.x,pin.y')
-    }
-    if (value == 'eid') {
-      return [{ comp: '', prop: '', op: PROJECT, value: '', fields: [] }]
-    }
-    let fields = value.split(',').map((seg): Field => {
-      let wake = !seg.endsWith('~')
-      let groups = groupsOf((wake ? seg : seg.slice(0, -1)).split('.'), vocab)
-      let at = groups[groups.length - 1]
-      if (groups.length > 1 || !at.prop) {
-        throw new Error(`.fields projects columns, not paths: .fields=${seg}`)
-      }
-      return { comp: at.comp, prop: at.prop, wake }
-    })
-    return [{ comp: '', prop: '', op: PROJECT, value: '', fields }]
-  }
-  // `.limit=200` / `.after=13882` — the WINDOW, a bound on the answer rather
-  // than a filter on its members. `limit` is how many matches to answer with;
-  // `after` names the ENTITY to continue past, by its spine num, so paging a
-  // board is `.limit=200` then `.limit=200&.after=<the last num you got>`. The
-  // cursor is order-agnostic on purpose: it says which entity, never which
-  // place, so the same spelling pages a num order and a ranking alike.
-  // Both take a non-negative integer and nothing else: a window whose bound is
-  // a guess is worse than none, so a bad one is refused rather than dropped.
-  // Guarded so a future `limit`/`after` column would win the spelling.
-  if ((path == 'limit' || path == 'after') && !owned(path)) {
-    if (op != '=' || !/^\d+$/.test(value)) {
-      throw new Error(`.${path} takes a whole number: .${path}=200`)
-    }
-    let win: Win = path == 'limit'
-      ? { limit: Number(value) }
-      : { after: Number(value) }
-    return [{ comp: '', prop: '', op: WINDOW, value, win }]
-  }
-  // `.edges!` / `.edges.peers=status,title` — the RIDER, not a filter: deliver the
-  // dep triples incident to whatever the other preds select, and optionally the
-  // far endpoint's named columns beside them. This is what replaces shipping every
-  // edge in the graph at boot: edges arrive scoped to a result set, like rows.
-  // Each peer column routes like a bare prop (or its explicit `task.status`); a
-  // path is refused — a peer projection reads one entity's own columns. Guarded so
-  // a future `edges` column would win. edgeRider() reads the directive.
-  if (segs[0] == 'edges' && !owned('edges')) {
-    if (segs.length == 1 && op == '!' && !value) {
-      return [{ comp: '', prop: '', op: EDGES, value: '', peers: [] }]
-    }
-    // `.edges.limit=200` bounds the RIDER the way `.limit=` bounds the rows: a
-    // hub's incident set is not what a card renders, and shipping it costs the
-    // peer projection a row apiece. Same Win the row window speaks, so a reply
-    // that carries one states the total it is a prefix of.
-    if (segs.length == 2 && segs[1] == 'limit' && op == '=') {
-      if (!/^\d+$/.test(value)) {
-        throw new Error('.edges.limit takes a whole number: .edges.limit=200')
-      }
-      return [
-        {
-          comp: '',
-          prop: '',
-          op: EDGES,
-          value: '',
-          peers: [],
-          limit: Number(value),
-        },
-      ]
-    }
-    if (segs.length == 2 && segs[1] == 'peers' && op == '=' && value) {
-      let peers = value.split(',').map((seg): Hop => {
-        let groups = groupsOf(seg.split('.'), vocab)
-        let at = groups[groups.length - 1]
-        if (groups.length > 1 || !at.prop) {
+    case 'walk': {
+      let path = c.path.join('.')
+      let reach: Reach = { type: path, depth: c.depth, dir: c.dir }
+      if (!(edges as readonly string[]).includes(path)) {
+        let via = columnOf(c.path, vocab, 'a walk')
+        if (!isRef(via.comp, via.prop)) {
           throw new Error(
-            `.edges.peers projects columns, not paths: .edges.peers=${seg}`,
+            `a walk follows an edge type (${
+              edges.join(', ')
+            }) or a reference column — not ${path}`,
           )
         }
-        return at
-      })
-      return [{ comp: '', prop: '', op: EDGES, value: '', peers }]
+        reach.via = via
+      }
+      return [{ comp: '', prop: '', op: REACHES, value: c.target, reach }]
     }
-    throw new Error(
-      '.edges rides a query (.edges!), may project the far endpoint ' +
-        '(.edges.peers=status,title) and may bound itself (.edges.limit=200)',
-    )
+    case 'pred':
+      break
+    default:
+      throw new Error(`a fleet read cannot evaluate ${c.kind}`)
   }
-  // A SCOPE resolves a virtual prop to the Pred[] it splices into the AND-list.
-  // Real props win: `owned` names a prop a column/component already routes, so
-  // only an unowned single-segment scope name reaches here and `.status` keeps
-  // its spelling. The resolver reads the value and returns null for one it
-  // cannot name (`.kind=typo`), refused like any bad filter.
+  let segs = c.path, op = c.op, value = flatValue(c.value)
+  let assoc = reverseAssocs.get(segs[0])
+  if (assoc) {
+    let inner = c.where
+      ? bindClause(c.where, vocab)
+      : segs.length > 1
+      ? bindClause({ ...c, path: segs.slice(1), not: undefined }, vocab)
+      : []
+    let count = !inner.length &&
+      !(op == '!' || (op == '~=' && !value) || (op == '=' && !value))
+    if (count && !/^\d+$/.test(value)) {
+      throw new Error(
+        `.${segs[0]} needs a sub-path (.${segs[0]}.<prop>) or a count (.${
+          segs[0]
+        }>=N)`,
+      )
+    }
+    return [{
+      ...assoc,
+      op: count ? OPS[op] : EXISTS,
+      value: count ? value : '',
+      rev: {
+        ...assoc,
+        preds: inner,
+        not: inner.length ? !!c.not : op == '=' && !value,
+        ...(count ? { count: true } : {}),
+      },
+    }]
+  }
+  if (c.not || c.where) {
+    throw new Error(`.${segs[0]} is not a reverse association`)
+  }
   if (segs.length == 1 && segs[0] in scopes && !owned(segs[0])) {
     let out = scopes[segs[0]](value)
     if (!out) throw new Error(`no such ${segs[0]}: ${value || '(empty)'}`)
     return out
   }
-  // A trailing QUESTION asks for a component beside the filter, never about
-  // it: one component name, no value, and nothing narrows.
-  //
-  // The word need not be one this graph plants. A request is not an
-  // assertion: `.loan!` over a word nobody planted must refuse, because an
-  // empty answer would lie about what is there, but `.loan?` only asks — a
-  // store that never planted it has none to give and says so by leaving the
-  // component off the row. That is what makes the SAME line askable of every
-  // store in reach (workers/yak/reach.ts): `.book!&.loan?` reached the
-  // reading list's own store as a refusal while the fan-out answered it.
-  // What is still refused is a shape that is not a request: a path, a value,
-  // or a COLUMN's name, where the person meant the component holding it.
   if (op == '?') {
     if (
       segs.length != 1 || value || (owned(segs[0]) && !routed(segs[0], vocab))
     ) {
       throw new Error(
-        `.${segs.join('.')}? asks for a whole component beside the filter: ` +
-          '.book!&.loan?',
+        `.${
+          segs.join('.')
+        }? asks for a whole component beside the filter: .book!&.loan?`,
       )
     }
     return [{ comp: segs[0], prop: '', op: WANT, value: '' }]
   }
   let p: Pred
-  // A trailing bang completes a component sentence. This must win over a
-  // same-named column (`persona` is both a facet and a session reference);
-  // the column's explicit spelling remains `.session.persona!`.
   if (segs.length == 1 && !value && op == '!' && routed(segs[0], vocab)) {
     p = { comp: segs[0], prop: '', op: OPS[op], value }
   } else {
     let groups = groupsOf(segs, vocab)
-    let leaf = groups[groups.length - 1]
-    let derefs = groups.slice(0, -1)
+    let leaf = groups[groups.length - 1], derefs = groups.slice(0, -1)
     for (let d of derefs) {
       if (!isRef(d.comp, d.prop)) {
         throw new Error(
@@ -1292,32 +1120,34 @@ export let preds = (token: string, vocab: Vocab = NONE): Pred[] | null => {
       }
     }
     p = derefs.length
-      ? {
-        comp: derefs[0].comp,
-        prop: derefs[0].prop,
-        op: OPS[op],
-        value,
-        at: [...derefs.slice(1), leaf],
-      }
-      : { comp: leaf.comp, prop: leaf.prop, op: OPS[op], value }
+      ? { ...derefs[0], op: OPS[op], value, at: [...derefs.slice(1), leaf] }
+      : { ...leaf, op: OPS[op], value }
   }
   if (!p.prop) {
     if (p.value || (p.op != '' && p.op != '~' && p.op != EXISTS)) {
       throw new Error(
-        `component filters are presence tests: .${p.comp}= is absent, ` +
-          `.${p.comp}! is present`,
+        `component filters are presence tests: .${p.comp}= is absent, .${p.comp}! is present`,
       )
     }
     return [p]
   }
-  // Contains is deliberately literal. Absence has no scalar atom. Every
-  // other form parses each scalar/list/range atom against the leaf
-  // property's type before a row is scanned.
-  let type = typed(leafOf(p).comp, leafOf(p).prop)
-  if (type && p.op != '~' && p.value != '') {
-    p.value = typedValue(type, p.value)
-  }
+  let leaf = leafOf(p)
+  let type = typed(leaf.comp, leaf.prop) ??
+    // Dynamic scalar columns are inline and type against THIS store too.
+    (typeAt(leaf.comp, leaf.prop, vocab) && {
+      ...leaf,
+      name: leaf.prop,
+      type: typeAt(leaf.comp, leaf.prop, vocab)!,
+    })
+  if (type && p.op != '~' && p.value != '') p.value = typedValue(type, p.value)
   return [p]
+}
+
+export let preds = (token: string, vocab: Vocab = NONE): Pred[] | null => {
+  // Strict filter/write doors still require the dotted or presence spelling.
+  if (!/^[.?!]/.test(token)) return null
+  let clauses = parseDot(token)
+  return clauses && clauses.flatMap((c) => bindClause(c, vocab))
 }
 
 // One scalar pred, or null — the door for writes' param check and unit
@@ -1365,44 +1195,12 @@ export let textual = (preds: Pred[]): boolean =>
 // until an indexed answer arrives rather than inventing a wider membership.
 export type Fts = (eid: string, pred: Pred) => boolean
 
-// The '&' split, quote-aware: a quoted run is ONE value even when it
-// carries the separator. Quotes already glue a value across whitespace;
-// they glue it across '&' for the same reason, and the case that forced
-// it is the one a page address makes ordinary — `.web.url="https://x/p
-// ?a=1&b=2"` is a single predicate, where unquoted it silently became a
-// url pred plus a stray text term that matched nothing. An unbalanced
-// quote never matches the quoted branch, so it splits exactly as before.
-let segments = (q: string) => q.match(/(?:"[^"]*"|[^&])+/g) ?? []
-
-// A query string to preds. '&' separates first (an &-segment that IS one
-// dot-param keeps its spaces — the old grammar); a segment holding ` .`
-// or bare words splits on whitespace, quotes glue: that's how a search
-// box mixes terms and filters in one line.
-//
-// Empty: matches NOTHING. An empty query has selected nothing, so there is
-// nothing to return — the never-pred below compiles to a false SQL condition
-// and fails matchQuery, so every door (subs, boards, /query, MCP, CLI)
-// answers the empty set cheaply. The old empty-means-everything default was
-// how one blank board query staged the whole graph onto a socket. A caller
-// that means "all of a kind" states it: `.task!`, `.memory!`.
+// Empty reads select nothing. Whitespace, & and comma separation, quoting,
+// escaping and malformed-clause refusals are all owned by the package parser.
 export let NEVER = 'never'
 export let never = (): Pred => ({ comp: '', prop: '', op: NEVER, value: '' })
-export let parseQuery = (q: string, vocab: Vocab = NONE): Pred[] => {
-  let out = segments(q).map((t) => t.trim()).filter(Boolean).flatMap((seg) => {
-    if (seg.startsWith('.') && !/\s[.?!]/.test(seg)) {
-      let p = preds(seg, vocab) // null = an opless dot-word (.env) — a term
-      if (p) return p
-    }
-    return (seg.match(/[^\s"]+"[^"]*"|"[^"]*"|\S+/g) ?? []).flatMap((tok) => {
-      if (/^[.?!]/.test(tok)) {
-        let p = preds(tok, vocab)
-        if (p) return p
-      }
-      return [text(tok.replace(/^"(.*)"$/s, '$1'))]
-    })
-  })
-  return out.length ? out : [never()]
-}
+export let parseQuery = (q: string, vocab: Vocab = NONE): Pred[] =>
+  bindClause(parse(q), vocab)
 
 let asNum = (v: unknown) =>
   typeof v == 'number'

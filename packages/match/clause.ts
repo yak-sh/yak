@@ -342,7 +342,7 @@ let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Test => {
     among.list.filter((k) => comp(k, a.comp)?.[a.prop] === b.entity.eid)
   let rest = p.path.slice(1)
   let value = flat(p.value)
-  if (!rest.length) {
+  if (!rest.length && !p.where) {
     if (p.op == '!' || (p.op == '~=' && !value)) {
       return (b, among) => kids(b, among).length > 0
     }
@@ -360,15 +360,17 @@ let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Test => {
   }
   // Inside the hop the spine names the CHILD, not the entity being tested, so a
   // child predicate that reaches it would silently ask a different question.
-  if (ctx.v.aim(rest.join('.')).some((h) => h.comp == 'entity')) {
+  if (
+    rest.length && ctx.v.aim(rest.join('.')).some((h) => h.comp == 'entity')
+  ) {
     throw new Unsupported(
       'a reverse hop through the spine',
       `.${name}.${rest.join('.')}`,
       BY,
     )
   }
-  let inner = clause(ctx, { ...p, path: rest })
-  return (b, among) => kids(b, among).some((k) => inner(k, among))
+  let inner = clause(ctx, p.where ?? { ...p, path: rest, not: undefined })
+  return (b, among) => kids(b, among).some((k) => inner(k, among)) != !!p.not
 }
 
 // A bare word: the entity's text, searched. Every stored text-shaped column of
@@ -418,7 +420,15 @@ export let clause = (ctx: Ctx, c: Clause): Test => {
     // side; anything else routes forward through the vocabulary.
     let assoc = ctx.v.assoc(c.path[0])
     if (assoc) return reverse(ctx, c.path[0], assoc, c)
-    let hops = ctx.v.aim(c.path.join('.'), bare(c))
+    if (c.not || c.where) {
+      throw new Unsupported('a reverse association', c.path.join('.'), BY)
+    }
+    let hops = c.facet
+      ? [
+        ...(c.path.length > 1 ? ctx.v.aim(c.path.slice(0, -1).join('.')) : []),
+        { comp: c.path.at(-1)!, prop: '' },
+      ]
+      : ctx.v.aim(c.path.join('.'), bare(c))
     return hops.length == 1 ? single(ctx, hops[0], c) : path(ctx, hops, c)
   }
   throw new Unsupported(`the ${(c as Clause).kind} directive`, '', BY)

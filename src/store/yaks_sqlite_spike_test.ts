@@ -131,7 +131,7 @@ let mine = (q: string): string[] =>
 // The app's own membership answer, as a sorted eid set — null when the app's
 // compiler declined (not a compiled-parity case).
 let ref = (q: string): string[] | null => {
-  let rel = where(parseQuery(q), NOW)
+  let rel = where(db, parseQuery(q), NOW)
   return rel ? run<{ eid: string }>(db, rel).map((r) => r.eid).sort() : null
 }
 
@@ -196,7 +196,7 @@ Deno.test('spike: the newest-first window pages identically', () => {
   let ordered = store.rows('.status=open&.limit=3').map((r) => r.eid)
   let refList = run<{ eid: string }>(
     db,
-    windowed(where(parseQuery('.status=open'), NOW)!, { limit: 3 }),
+    windowed(where(db, parseQuery('.status=open'), NOW)!, { limit: 3 }),
   ).map((r) => r.eid)
   assertEquals(ordered, refList)
 })
@@ -204,7 +204,8 @@ Deno.test('spike: the newest-first window pages identically', () => {
 Deno.test('spike: an aggregate count matches through rows()', () => {
   let mineN = Number(store.rows('.status=open&.count!')[0].n)
   let refN =
-    run<{ n: number }>(db, countSql(parseQuery('.status=open&.count!'))!)[0].n
+    run<{ n: number }>(db, countSql(db, parseQuery('.status=open&.count!'))!)[0]
+      .n
   assertEquals(mineN, Number(refN))
 })
 

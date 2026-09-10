@@ -304,8 +304,11 @@ Deno.test('refusals', () => {
   assertThrows(() => parse('.limit=abc'), Error, 'whole number')
   assertThrows(() => parse('.distinct='), Error, 'names a column')
   assertThrows(() => parse('.refs<3'), Error, '.refs')
-  // Two presence filters mashed together — a forgotten space.
-  assertThrows(() => parse('.assignee!.status=done'), Error, 'separate filters')
+  // Mid-path bang is reverse negation; the vocabulary validates the name.
+  assertEquals(
+    parse('.comments!.status=done'),
+    and({ ...eq('comments.status', 'done'), not: true }),
+  )
   // the removed spelling of the walk: its bracket is an unknown qualifier
   assertThrows(
     () => parse('.reaches[requires,<=3]=T-42'),
@@ -320,4 +323,32 @@ Deno.test('refusals', () => {
 // is schema. `.reaches=X` is an ordinary predicate, not a traversal.
 Deno.test('bracketless reserved word is a plain predicate', () => {
   assertEquals(parse('.reaches=X'), and(eq('reaches', 'X')))
+})
+
+Deno.test('the edges rider has a nonnegative integer limit', () => {
+  assertEquals(
+    parse('.edges.limit=12'),
+    and({ kind: 'edges', peers: [], limit: 12 }),
+  )
+  assertThrows(() => parse('.edges.limit=-1'))
+  assertThrows(() => parse('.edges.limit=1.2'))
+})
+
+Deno.test('nested reverse negations preserve each quantifier', () => {
+  let one = parse('.reviews!.stars=5').clauses[0]
+  assertEquals(
+    parse('.comments!.reviews!.stars=5'),
+    and({
+      kind: 'pred',
+      path: ['comments'],
+      op: '!',
+      value: null,
+      not: true,
+      where: one,
+    }),
+  )
+  assertEquals(
+    parse('.comments.reviews!.stars=5'),
+    and({ kind: 'pred', path: ['comments'], op: '!', value: null, where: one }),
+  )
 })

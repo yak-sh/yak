@@ -7503,7 +7503,7 @@ export let search = (db: Sql, q: string, limit = 20): Hit[] => {
   if (!reveal) {
     filters.unshift({ comp: 'quarantined', prop: '', op: '', value: '' })
   }
-  let built = where(filters)
+  let built = where(db, filters)
   let narrow = built && toSql(built)
   // A sparse facet may sit outside any fixed candidate window. Compile the
   // filter into the selection when possible; an exactness decline reads every

@@ -252,7 +252,7 @@ let whole = (eid: string): Bundle =>
   store.read(`.eid=${eid}`)[0] ?? { entity: { eid } }
 
 let app = (q: string): string[] | null => {
-  let rel = where(parseQuery(q), NOW)
+  let rel = where(db, parseQuery(q), NOW)
   return rel ? run<{ eid: string }>(db, rel).map((r) => r.eid).sort() : null
 }
 

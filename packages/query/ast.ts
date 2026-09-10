@@ -34,7 +34,19 @@ export type Value = Scalar | List | Range | Time
 
 // A PREDICATE: the dotted path as raw segments (never routed to a component),
 // an operator, and a value — null for the value-less `!` and `?` forms.
-export type Pred = { kind: 'pred'; path: string[]; op: Op; value: Value | null }
+export type Pred = {
+  kind: 'pred'
+  path: string[]
+  op: Op
+  value: Value | null
+  /** Negate a reverse association child test (NONE rather than ANY). */
+  not?: boolean
+  /** Builder-only: the last path segment names a component, not a column. */
+  facet?: boolean
+  /** Child condition; path names the reverse association. Builders compose
+   * conjunctions here; parsing uses it to preserve nested quantifiers. */
+  where?: Clause
+}
 
 // A bare word: a full-text term over the document. `never` is the empty query,
 // which selects nothing (an empty string, or a query with no clauses).
@@ -71,7 +83,12 @@ export type After = { kind: 'after'; n: number }
 // endpoint through a reference column (`via`, raw segments); `peers` names the
 // far-endpoint columns (each a raw path) to carry back.
 export type EdgeSelect = { type: string; via?: string[] }
-export type Edges = { kind: 'edges'; select?: EdgeSelect; peers: string[][] }
+export type Edges = {
+  kind: 'edges'
+  select?: EdgeSelect
+  peers: string[][]
+  limit?: number
+}
 // A QUALIFIER: one argument of the bracket a path may wear (`.p[<=3]`,
 // `.p[key=v]`, `.p[word]`). The bracket binds to the path and is read before
 // any operator, so a clause kind declares which qualifiers it accepts and

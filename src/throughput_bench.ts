@@ -45,7 +45,7 @@ let data = workload()
 apply(db, changes(data.bundles))
 for (let q of data.queries) {
   let read = () => {
-    let rel = where(parseQuery(q.query))
+    let rel = where(db, parseQuery(q.query))
     if (!rel) throw new Error(`Fleet declined ${q.query}`)
     return matching(db, toSql(rel))
   }

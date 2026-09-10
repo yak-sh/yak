@@ -179,9 +179,11 @@ left as raw tokens for a schema-aware compiler such as `@yaks/sql`:
 - **Reverse associations** — `.reviews`, its cardinality (`.reviews>=5`), and a
   mid-bang all/none form (`.reviews!.rating!=5`) are named by pluralizing a
   record type that references this one, which is schema. Non-bang reverse forms
-  parse as ordinary path predicates for the compiler to restructure; the
-  mid-bang form is refused at this layer (it is indistinguishable from a
-  forgotten space without the schema).
+  parse as ordinary path predicates for the compiler to restructure. The
+  mid-bang form carries `not: true`; nested quantifiers retain a child `where`
+  clause. The binder refuses names that are not reverse associations. Builders
+  may also put a conjunction in `where`. A builder-set `facet: true` preserves a
+  terminal component name when a same-named column would otherwise win.
 - **Scopes** — `.kind=book` parses as an ordinary predicate; expanding it to the
   presence/absence clauses a kind implies needs the schema's kind order.
 - **Directive validation** — whether a walk's path names a relation or a chain

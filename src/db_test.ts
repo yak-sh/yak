@@ -1156,9 +1156,12 @@ Deno.test('a board query the grammar cannot parse is refused', () => {
   assertThrows(() => save('.zzz=1'), Error, 'board query refused')
   assertThrows(() => save('.status=nonsens'), Error, 'board query refused')
   assertEquals(comp(b, 'board'), undefined) // refused whole, doc included
-  // every legitimate shape still saves: a filter, empty (= every task),
-  // bare words (text preds), an opless dot-word (a term, not a filter)
-  for (let q of ['.project=P-19&.status=open,wip', '', 'bare words', '.env']) {
+  // Every legitimate shape still saves: filters, empty (no matches), bare
+  // terms and a quoted literal dot-word. Unquoted .env is presence grammar.
+  assertThrows(() => save('.env'), Error, 'board query refused')
+  for (
+    let q of ['.project=P-19&.status=open,wip', '', 'bare words', "'.env'"]
+  ) {
     save(q)
     assertEquals(comp(b, 'board')?.query, q)
   }
@@ -2714,7 +2717,7 @@ Deno.test('fts: search finds, follows edits, forgets the dead', () => {
   apply(db, [{ eid: t, name: 'entity', comp: null }])
   assertEquals(search(db, 'glockenspiel').length, 0) // tombstoned = unfindable
   assertEquals(search(db, 'quincunx').length, 0) // the comment died with it
-  assertEquals(search(db, '"broken (syntax'), []) // user words, not operators
+  assertThrows(() => search(db, '"broken (syntax'), Error, 'unclosed quote')
 })
 
 Deno.test('fts: a letter is found by the address it was sent to', () => {

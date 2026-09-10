@@ -31,6 +31,7 @@
 // that already exists.
 import { pipe, push, set, update } from './fp.ts'
 import type { Sql } from './store/sql.ts'
+import { and, raw, renderCond } from '@yaks/sql'
 
 // Bound values are only ever text or numbers — the filter grammar has no other
 // literal, and saying so keeps every caller off a cast.
@@ -158,3 +159,27 @@ export let run = <T extends object = Record<string, unknown>>(
   let { sql, params } = toSql(rel)
   return db.prepare(sql).all<T>(...params)
 }
+
+// Explicit seam with @yaks/sql's condition-tree IR. Existing hand-built fleet
+// relations keep their shape; package lowering crosses here without a second
+// SQL compiler or an opaque subquery that would hide its driving indexes.
+export let fromPackage = (r: import('@yaks/sql').Rel): Rel => ({
+  from: r.from,
+  cols: r.cols,
+  uniq: r.uniq,
+  joins: r.joins,
+  conds: [renderCond(r.where)],
+  by: r.group,
+  sort: r.order,
+  bound: r.limit,
+})
+export let toPackage = (r: Rel): import('@yaks/sql').Rel => ({
+  from: r.from,
+  cols: r.cols,
+  uniq: r.uniq,
+  joins: r.joins,
+  where: and(...r.conds.map(raw)),
+  group: r.by,
+  order: r.sort,
+  limit: r.bound,
+})

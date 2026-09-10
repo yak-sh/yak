@@ -347,7 +347,7 @@ Deno.test('accept.body filters tasks through the ordinary query door', () => {
       { eid, name: 'accept', comp: { body } },
     ])
   }
-  let hits = evalGraph(db, '.task!&.accept.body~=exits zero').hits
+  let hits = evalGraph(db, '.task!&.accept.body~="exits zero"').hits
   assertEquals(hits.map((r) => r.eid), [matching])
   assertEquals(hits[0].comps.accept?.body, 'the command exits zero')
   db.close()

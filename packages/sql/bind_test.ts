@@ -4,10 +4,10 @@
 // inlined, and that a gap declines loudly.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import { parse } from '@yaks/query'
+import { absent, and, eq, parse, present, text } from '@yaks/query'
 import { loadVocab, Unknown } from '@yaks/vocab'
 import type { VocabDoc } from '@yaks/vocab'
-import { ARMS, compile, type Derived, Unsupported } from './mod.ts'
+import { ARMS, compile, type Derived, raw, Unsupported } from './mod.ts'
 
 // The spine, a doc, and a task with a stored priority and a COMPUTED status
 // (persist: false) — the smallest vocab that exercises routing, a scalar, and
@@ -383,4 +383,43 @@ Deno.test('reference equality compares indexed keys, not projected eids', () => 
     derived: { 'note.about': { tag: 'eid', expr: () => "'override'" } },
   })
   assert(sql.includes("cast('override' as text) = ?"), sql)
+})
+
+Deno.test('reverse NONE and compound child conditions bind without outer-owner leakage', () => {
+  let none = compile(parse('.notes!.stars=5'), v)
+  assert(none.sql.includes('not exists (select 1 from "note"'))
+  assertEquals(none.params, [5])
+  let ast = and({
+    ...present('notes'),
+    where: and(eq('note.stars', 5), text('hi')),
+  })
+  let child = compile(ast, v, {
+    extend: [{
+      name: 'test/text',
+      compile: {
+        text: (_, site) => raw({ sql: `${site.owner} > ?`, params: [0] }),
+      },
+    }],
+  })
+  assert(child.sql.includes('"note"."entity" > ?'), child.sql)
+  assertEquals(child.params, [5, 0])
+  assertThrows(
+    () => compile(and({ ...present('notes'), where: eq('num', 3) }), v),
+    Unsupported,
+  )
+})
+
+Deno.test('a builder can preserve a terminal component facet across name collisions', () => {
+  let vocab = loadVocab({
+    $defs: {
+      book: { type: 'object' },
+      loan: {
+        type: 'object',
+        properties: { book: { type: 'string', ref: 'entity' } },
+      },
+    },
+  })
+  let c = compile(and({ ...absent('book'), facet: true }), vocab)
+  assert(c.sql.includes('"book"."entity" is null'), c.sql)
+  assert(!c.sql.includes('join "loan"'), c.sql)
 })

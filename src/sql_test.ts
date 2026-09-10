@@ -10,7 +10,7 @@
 // a numeric column matched as text, a text column holding digits, an empty
 // string beside an absent column, a needle containing LIKE's wildcards.
 
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertThrows } from '@std/assert'
 import {
   aggOf,
   distinctValues,
@@ -26,7 +26,7 @@ import {
 } from './query.ts'
 import { aggregateSql, countSql, select, where, windowed } from './sql.ts'
 import { run, toSql } from './relation.ts'
-import { reaching, textBlob, textMatches } from './db.ts'
+import { plantVocab, reaching, textBlob, textMatches } from './db.ts'
 import { kindOf, kindOrder } from './types.ts'
 import { edgeEid, natureOf } from './edge.ts'
 import { isRef } from './props.ts'
@@ -344,7 +344,7 @@ let byJs = (q: string) => {
 }
 
 let bySql = (q: string) => {
-  let rel = where(parseQuery(q), NOW)
+  let rel = where(db, parseQuery(q), NOW)
   if (!rel) return null
   return run<{ eid: string }>(db, rel).map((r) => r.eid).sort()
 }
@@ -424,7 +424,7 @@ let COMPILES = [
   '.filed.project=p1,nope',
   '.filed.project=nope',
   '.filed.project!=p1',
-  '.filed.project=p1,',
+
   '.comment.target=e1',
   '.comment.target=e1,e2',
   '.comment.target!=e1',
@@ -582,21 +582,26 @@ for (let q of COMPILES) {
 // whose SQL would be a GUESS, and the caller's fallback is what keeps the
 // answer right. If one of these ever starts compiling, it must arrive with its
 // own agreement case rather than by accident.
+
+for (
+  let q of [
+    '.doc.body=',
+    '.doc.body~=a',
+    '.doc.body~=ab',
+    '.doc.body~=a%b',
+    '.filed.project.doc.body~=project',
+  ]
+) {
+  Deno.test(`CAS body lowering agrees with matcher: ${q}`, () =>
+    assertEquals(bySql(q), byJs(q)))
+}
+
 let DECLINES = [
-  '.doc.body=', // a body is only ever narrowed by the index, never scanned
   '.filed.domain>=1', // text column against a numeric operand
-  // explicit substring filters shorter than a trigram still decline
-  '.doc.body~=a',
-  '.doc.body~=ab',
-  '.doc.body~=a%b', // wildcards leave no run of three
   // a non-ASCII needle: SQLite's lower() folds A-Z and no more, so the two
   // matchers do not mean the same thing by `~=café`
   '.doc.body~=café',
   '.doc.title~=café',
-  // A path body has a different owner from the outer row, so doc_gram's
-  // outer-doc narrowing cannot be reused. It declines instead of emitting a
-  // dangling `doc.rowid` reference.
-  '.filed.project.doc.body~=project',
   // the reverse-union's presence/absence admit rows in no reverse map, so SQL
   // declines them (as the anchor does) and the matcher answers
   '.refs!',
@@ -616,7 +621,9 @@ for (let q of DECLINES) {
 Deno.test('aggregate: distinct SQL is the matcher census over a column', () => {
   let ps = parseQuery('.distinct=domain')
   let at = aggOf(ps)!.at
-  let sql = run<{ value: string }>(db, aggregateSql(ps)!).map((r) => r.value)
+  let sql = run<{ value: string }>(db, aggregateSql(db, ps)!).map((r) =>
+    r.value
+  )
   assertEquals(sql, distinctValues(Object.values(world), at))
 })
 
@@ -624,14 +631,14 @@ Deno.test('aggregate: tally SQL is the matcher tally over a column', () => {
   let ps = parseQuery('.tally=domain')
   let at = aggOf(ps)!.at
   let sql = new Map(
-    run<{ value: string; n: number }>(db, aggregateSql(ps)!)
+    run<{ value: string; n: number }>(db, aggregateSql(db, ps)!)
       .map((r) => [r.value, r.n] as [string, number]),
   )
   assertEquals(sql, tally(Object.values(world), at))
 })
 
 Deno.test('aggregate: a numeric column declines rather than mis-cast', () => {
-  assertEquals(aggregateSql(parseQuery('.distinct=priority')), null)
+  assertEquals(aggregateSql(db, parseQuery('.distinct=priority')), null)
 })
 
 // A DERIVED column has no table to read, but it has the expression readCol()
@@ -645,7 +652,7 @@ for (let q of ['.tally=task.status', '.distinct=task.status']) {
   Deno.test(`aggregate: derived ${q} SQL is the matcher's own answer`, () => {
     let ps = parseQuery(q)
     let at = aggOf(ps)!.at
-    let rel = aggregateSql(ps)
+    let rel = aggregateSql(db, ps)
     assertEquals(!!rel, true, `${q} should compile`)
     let world_ = Object.values(world)
     if (q.startsWith('.tally')) {
@@ -710,12 +717,13 @@ Deno.test('projection: select carries the named columns beside the eid', () => {
     pin: { canvas: 'other', x: 0, y: 0, w: 1, h: 1, z: 1 },
   })
   let q = '.pin.canvas=cv&.card!&.fields=pin.x,pin.y,pin.w,pin.h,pin.z~'
-  let rows = run(pdb, select(parseQuery(q))!)
+  let rows = run(pdb, select(pdb, parseQuery(q))!)
   // membership: the two cards pinned to canvas cv, and only those
   assertEquals(rows.map((r) => r.eid).sort(), ['pinA', 'pinB'])
   // and it is EXACTLY the eid-only membership where() gives the same filter
   assertEquals(
-    run<{ eid: string }>(pdb, where(parseQuery(q))!).map((r) => r.eid).sort(),
+    run<{ eid: string }>(pdb, where(pdb, parseQuery(q))!).map((r) => r.eid)
+      .sort(),
     rows.map((r) => r.eid).sort(),
   )
   // each projected column rides in aliased comp.prop; z is present though volatile
@@ -731,14 +739,14 @@ Deno.test('projection: select carries the named columns beside the eid', () => {
 // route every membership query through the one door without a special case.
 Deno.test('projection: no .fields makes select the plain membership where', () => {
   let ps = parseQuery('.task.status=open')
-  assertEquals(select(ps), where(ps))
+  assertEquals(select(db, ps), where(db, ps))
 })
 
 // Exactness across the projection: an unknown projected column still declines.
 // A forward path is now exact SQL, so it composes with a projection too.
 Deno.test('projection: unknown columns decline and paths compose', () => {
   assertEquals(
-    select([{
+    select(db, [{
       comp: '',
       prop: '',
       op: PROJECT,
@@ -747,9 +755,9 @@ Deno.test('projection: unknown columns decline and paths compose', () => {
     }]),
     null,
   )
-  let path = select(parseQuery('.assignee.title~=j&.fields=pin.x'))
+  let path = select(db, parseQuery('.assignee.title~=j&.fields=pin.x'))
   assertEquals(
-    !!path && toSql(path).sql.includes('select "__path_leaf"."title"'),
+    !!path && toSql(path).sql.includes('select "__pl"."title"'),
     true,
   )
 })
@@ -766,7 +774,7 @@ let kindOfSet = (kind: string) =>
   Object.entries(world).filter(([, c]) => kindOf(c) == kind)
     .map(([eid]) => eid).sort()
 let bySqlKind = (kind: string) => {
-  let rel = where(kindPreds(kind)!)
+  let rel = where(db, kindPreds(kind)!)
   if (!rel) return null
   return run<{ eid: string }>(db, rel).map((r) => r.eid).sort()
 }
@@ -790,16 +798,16 @@ Deno.test('kind= for a non-kind word has no preds to compile', () => {
   assertEquals(kindPreds('nonsense'), null)
 })
 
-// doc_gram indexes doc and nothing else, so a substring over any OTHER body
-// column would narrow by the wrong table's rowid and lose rows. No dot-param
-// reaches those columns today (they are server-stamped), so this is the only
-// door the invariant can be tested through — and the day one of them becomes
-// wire-writable, it must not start compiling by accident.
-Deno.test('a body column the index does not cover declines', () => {
-  assertEquals(
-    where([{ comp: 'session', prop: 'final_text', op: '~', value: 'hello' }]),
-    null,
-  )
+// Other body columns are inline, not CAS pointers or doc_gram fields.
+Deno.test('a non-doc body compiles an inline read', () => {
+  let rel = where(db, [{
+    comp: 'session',
+    prop: 'final_text',
+    op: '~',
+    value: 'hello',
+  }])!
+  assertEquals(toSql(rel).sql.includes('"session"."final_text"'), true)
+  assertEquals(run(db, rel), [])
 })
 
 // A request (`.loan?`) names a component to CARRY, not one to test: its
@@ -810,8 +818,8 @@ Deno.test('a body column the index does not cover declines', () => {
 // `.book!&.loan?` (C-32800 item 2). Membership is unmoved: a request selects
 // exactly what the filter beside it selects.
 Deno.test('a request joins no table, and narrows nothing', () => {
-  let asked = toSql(where(parseQuery('.doc!&.loan?'))!)
-  let plain = toSql(where(parseQuery('.doc!'))!)
+  let asked = toSql(where(db, parseQuery('.doc!&.loan?'))!)
+  let plain = toSql(where(db, parseQuery('.doc!'))!)
   assertEquals(asked.sql.includes('"loan"'), false)
   // All the request leaves behind is its constant: no table, no condition.
   assertEquals(asked.sql.replace(' and 1 ', ' '), plain.sql)
@@ -827,27 +835,27 @@ Deno.test('a request joins no table, and narrows nothing', () => {
 // server answers, so it is spelled here rather than derived.
 let SKELETON = 'select "entity"."eid" as eid from "entity"' +
   ' left join "filed" on "filed"."entity" = "entity"."id"' +
-  ' where cast("filed"."domain" as text) = ?' +
-  ' and not exists (select 1 from tombstone "t" where "t"."entity" = "entity"."id")'
+  ' where (cast("filed"."domain" as text) = ?' +
+  ' and not exists (select 1 from tombstone "t" where "t"."entity" = "entity"."id"))'
 
 Deno.test('the compiled skeleton is unchanged, clause for clause', () => {
   let ps = parseQuery('.filed.domain=Eng')
-  assertEquals(toSql(where(ps)!), { sql: SKELETON, params: ['Eng'] })
-  assertEquals(toSql(countSql(ps)!), {
+  assertEquals(toSql(where(db, ps)!), { sql: SKELETON, params: ['Eng'] })
+  assertEquals(toSql(countSql(db, ps)!), {
     sql: SKELETON.replace(
       'select "entity"."eid" as eid',
       "select '' as value, count(*) as n",
     ),
     params: ['Eng'],
   })
-  assertEquals(toSql(windowed(where(ps)!, { limit: 20, after: 9 })), {
-    sql: SKELETON + ' and "entity"."num" < ?' +
+  assertEquals(toSql(windowed(where(db, ps)!, { limit: 20, after: 9 })), {
+    sql: SKELETON.replace(' where ', ' where (') + ' and "entity"."num" < ?)' +
       ' order by "entity"."num" desc limit ?',
     params: ['Eng', 9, 20],
   })
   // No window is no clause: the same statement, untouched.
   assertEquals(
-    toSql(windowed(where(ps)!, {})).sql,
+    toSql(windowed(where(db, ps)!, {})).sql,
     SKELETON + ' order by "entity"."num" desc',
   )
 })
@@ -855,7 +863,7 @@ Deno.test('the compiled skeleton is unchanged, clause for clause', () => {
 Deno.test('a reverse child TEXT predicate tests the child, not the outer spine', () => {
   let [pred] = parseQuery('.comments.doc.title~=first')
   pred.rev!.preds = parseQuery('first')
-  assertEquals(run<{ eid: string }>(db, where([pred])!).map((r) => r.eid), [
+  assertEquals(run<{ eid: string }>(db, where(db, [pred])!).map((r) => r.eid), [
     'e1',
   ])
 })
@@ -869,4 +877,52 @@ Deno.test('fallback walk reader shares the depth-free and capped closure', () =>
     'e2',
     'e3',
   ])
+})
+
+Deno.test('store vocab is connection-local, typed and refreshed when planted', () => {
+  let a = open(':memory:'), b = open(':memory:')
+  try {
+    // Warm both before planting: the binder must not retain the old schema.
+    where(a, parseQuery('.doc!'))
+    where(b, parseQuery('.doc!'))
+    let av = { recipe: { serves: 'number' as const, body: 'text' as const } }
+    let bv = { book: { pages: 'number' as const } }
+    plantVocab(a, av)
+    plantVocab(b, bv)
+    a.prepare("insert into entity(eid, num) values('dish', 999999)").run()
+    a.prepare(
+      "insert into recipe(entity, serves, body) values((select id from entity where eid='dish'), 4, 'inline broth')",
+    ).run()
+    let ps = parseQuery(".recipe.serves>=3 .recipe.body~='inline broth'", av)
+    assertEquals(run<{ eid: string }>(a, where(a, ps)!).map((r) => r.eid), [
+      'dish',
+    ])
+    assertThrows(() => parseQuery('.recipe.serves>=3', bv))
+    assertEquals(where(b, parseQuery('.recipe!', av)), null)
+    assertEquals(run(b, where(b, parseQuery('.book.pages>=3', bv))!), [])
+    assertThrows(() => parseQuery('.recipe.serves=oops', av))
+  } finally {
+    a.close()
+    b.close()
+  }
+})
+
+Deno.test('reverse children compose conjunction and NONE with the same matcher', () => {
+  for (let not of [false, true]) {
+    let [p] = parseQuery('.comments.doc.title~=first')
+    p.rev!.preds = parseQuery('.doc.title~=first .comment!')
+    p.rev!.not = not
+    let ps = [p]
+    let expected = Object.entries(world).filter(([, c]) =>
+      matchQuery(c, ps, (id) => world[id], NOW, kids)
+    ).map(([id]) => id).sort()
+    assertEquals(
+      run<{ eid: string }>(db, where(db, ps)!).map((r) => r.eid).sort(),
+      expected,
+    )
+  }
+})
+
+Deno.test('the package grammar refuses an empty list member', () => {
+  assertThrows(() => parseQuery('.filed.project=p1,'), Error, 'empty member')
 })

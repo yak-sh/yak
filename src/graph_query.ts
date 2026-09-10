@@ -268,6 +268,7 @@ export let entryUniverse = (
       after,
       limit,
       toSql(whereSome(
+        db,
         screened(
           [...preds, { comp: 'entry', prop: '', op: EXISTS, value: '' }],
           true,
@@ -319,7 +320,7 @@ let heard = (db: Sql, q: string): Pred[] =>
 // are invisible to a count. A total nobody can vouch for is not stated.
 let countOf = (db: Sql, preds: Pred[]): number | undefined => {
   if (hasSources()) return undefined
-  let rel = countSql(preds)
+  let rel = countSql(db, preds)
   if (!rel) return undefined
   return Number(run<{ n?: number }>(db, rel)[0]?.n ?? 0)
 }
@@ -349,7 +350,7 @@ export let evalFast = (
   // AFTER it (query.ts screened) — which is the whole reason a LIMIT may ride
   // it: a filter that runs after the limit under-fills the page. The JS filters
   // stay for the rows matching() unions in from a SOURCE, which no statement saw.
-  let built = where(screened(inputs, entries))
+  let built = where(db, screened(inputs, entries))
   if (!built) return null
   let win = merged(windowOf(preds), w)
   // Entries page by their own seq (orderedEntries), never by spine num, so a
@@ -413,7 +414,7 @@ export let evalQuery = (
   // boundary, for every lazy predicate — not a query-string special case.
   let all = entries
     ? entryUniverse(db, preds, after, limit, doors)
-    : doors.matching(db, toSql(whereSome(inputs))).map(rowed)
+    : doors.matching(db, toSql(whereSome(db, inputs))).map(rowed)
       // matching() may union source rows wearing entry; eager queries do not
       // opt into that partition.
       .filter((r) => inputs.some((p) => p.op == TEXT) || !r.comps.entry)
@@ -453,7 +454,7 @@ export let evalCapped = (
   // (query.ts screened), so the candidate window is spent on rows that can
   // actually match rather than on entry spines the JS pass drops afterwards.
   let room = cap * 2
-  let base = windowed(whereSome(screened(inputs, false)), {
+  let base = windowed(whereSome(db, screened(inputs, false)), {
     limit: room,
     after,
   })
@@ -570,7 +571,7 @@ export let evalAgg = (
   let preds = heard(db, q)
   let agg = aggOf(preds)
   if (!agg) return null
-  let rel = aggregateSql(preds)
+  let rel = aggregateSql(db, preds)
   if (rel) {
     let rows = run<{ value: string; n?: number }>(db, rel)
     return {
@@ -619,7 +620,7 @@ let workBase = (db: Sql, q: string) => {
   // Unlike an ordinary graph query, work has no reveal mode. These outer
   // screens are unconditional even if a future predicate classifier changes:
   // candidates are visible eager entities before readiness or LIMIT runs.
-  let base = where(workInputs(db, q))
+  let base = where(db, workInputs(db, q))
   if (!base) {
     throw new Error(
       'work filter cannot be answered exactly by indexed SQL; use a scalar ' +
@@ -722,7 +723,7 @@ export let verifyWorkSql = (
   q: string,
   opts: { limit?: number } = {},
 ) => {
-  let screen = screenSql(workInputs(db, q), ['task', 'completed'])
+  let screen = screenSql(db, workInputs(db, q), ['task', 'completed'])
   if (!screen) {
     throw new Error(
       'work filter cannot be answered exactly by indexed SQL; use a scalar ' +

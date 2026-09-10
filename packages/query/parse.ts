@@ -217,6 +217,31 @@ let edgeSelect = (quals: Qual[]): Clause => {
 // at all (a bare word) — a text term to whoever called. A directive is one
 // clause; an ordinary predicate is one clause too.
 export let parseDot = (token: string): Clause[] | null => {
+  // A bang before a child path negates the reverse existential, not its leaf.
+  // Whether the leading word names an association remains a binding question.
+  let reverse = token.match(/^\.?([A-Za-z_]+(?:\.[A-Za-z_]+)*)!\.(.+)$/s)
+  if (reverse) {
+    let inner = parseDot(`.${reverse[2]}`)
+    if (inner?.length == 1 && inner[0].kind == 'pred') {
+      let names = reverse[1].split('.')
+      let child = inner[0]
+      let c: Clause = child.not || child.where
+        ? {
+          kind: 'pred',
+          path: [names.pop()!],
+          op: '!',
+          value: null,
+          where: child,
+          not: true,
+        }
+        : { ...child, path: [names.pop()!, ...child.path], not: true }
+      for (let name of names.reverse()) {
+        c = { kind: 'pred', path: [name], op: '!', value: null, where: c }
+      }
+      return [c]
+    }
+    throw new Error(`a reverse filter needs a child predicate: ${token}`)
+  }
   let marked = sigil(token)
   if (marked) return marked
   // A bracket rides a path, and a sigil marks a whole word: `?doc[x]` is a
@@ -326,6 +351,12 @@ export let parseDot = (token: string): Clause[] | null => {
     if (segs.length == 1 && op == '!' && !val) {
       return [{ kind: 'edges', peers: [] }]
     }
+    if (segs.length == 2 && segs[1] == 'limit' && op == '=') {
+      if (!/^\d+$/.test(val)) {
+        throw new Error('.edges.limit takes a whole number: .edges.limit=200')
+      }
+      return [{ kind: 'edges', peers: [], limit: Number(val) }]
+    }
     if (segs.length == 2 && segs[1] == 'peers' && op == '=' && val) {
       return [{ kind: 'edges', peers: val.split(',').map(path) }]
     }
@@ -335,10 +366,8 @@ export let parseDot = (token: string): Clause[] | null => {
     )
   }
 
-  // Two presence filters run together is a forgotten space; the mid-bang
-  // reverse reading (`.comments!.author=alice`) is a schema concern (see
-  // README), so at this generic layer a bang before more path is that same
-  // mistake.
+  // A mid-path bang was parsed above as a reverse child test. Any other
+  // operand on a presence filter is malformed.
   if (op == '!' && val) {
     throw new Error(
       `presence filters end at !: .${pathStr}!` +
@@ -351,6 +380,7 @@ export let parseDot = (token: string): Clause[] | null => {
   // An ordinary predicate. Presence (`!`) and want (`?`) carry no value;
   // contains (`~=`) is deliberately literal, so its value is one raw scalar;
   // every other form parses list/range structure.
+  if (op == '?' && val) throw new Error(`a request ends at ?: .${pathStr}?`)
   if (op == '!' || op == '?') {
     return [{ kind: 'pred', path: segs, op, value: null }]
   }
