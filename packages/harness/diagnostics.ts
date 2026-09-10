@@ -112,7 +112,7 @@ export let createDiagnostics = (opts: {
       }
     },
     drain: async (timeout = 250) => {
-      let timer: number | undefined
+      let timer: ReturnType<typeof setTimeout> | undefined
       await Promise.race([
         Promise.all([...pending]),
         new Promise<void>((done) => timer = setTimeout(done, timeout)),
