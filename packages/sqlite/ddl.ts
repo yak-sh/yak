@@ -39,6 +39,13 @@ let SPINE = [
     eid  text not null unique,
     num  integer unique
   )`,
+  `create table if not exists entity_sequence (singleton integer primary key check(singleton = 1), high integer not null)`,
+  `insert into entity_sequence (singleton, high) select 1, coalesce(max(num), 0) from entity where true
+    on conflict(singleton) do update set high = max(high, excluded.high)`,
+  `create trigger if not exists entity_number_insert after insert on entity when new.num is not null
+    begin update entity_sequence set high = max(high, new.num) where singleton = 1; end`,
+  `create trigger if not exists entity_number_update after update of num on entity when new.num is not null
+    begin update entity_sequence set high = max(high, new.num) where singleton = 1; end`,
   `create table if not exists tombstone (
     entity     integer primary key references entity(id),
     deleted_at text not null

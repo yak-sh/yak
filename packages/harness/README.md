@@ -314,3 +314,9 @@ captured. Treat logs as private. This cannot capture SIGKILL, power loss, or
 errors before the executable loads, and OOM may prevent capture. Existing
 model/tool exception entries remain governed by session execution; the reporter
 does not reinterpret ordinary tool results.
+Transcript entries use `eid` and session-local `entry.seq`, not human
+`entity.num`. Opening a database clears historical entry numbers without
+renumbering tasks or other entities. The SQLite allocator retains its
+pre-migration high-water mark, so old task/other human identifiers cannot be
+reassigned. This is an idempotent storage upgrade; candidate tests use temporary
+databases, never the live store.

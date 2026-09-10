@@ -172,7 +172,7 @@ export type Opts = BindOpts & {
   text?: Text
   /** Mint unnumbered spines when false; the host may number them after their
    * components land. Identity and birth reporting still belong to storage. */
-  number?: boolean
+  number?: boolean | { except: readonly string[] }
 }
 
 /**

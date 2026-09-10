@@ -115,3 +115,30 @@ Deno.test('a file-backed harness uses WAL with NORMAL sync and a busy timeout', 
     Deno.removeSync(dir, { recursive: true })
   }
 })
+
+Deno.test('entries omit human numbers, including migrated entries after reopen', async () => {
+  let dir = Deno.makeTempDirSync()
+  let path = dir + '/numbering.db'
+  try {
+    let h = open(path)
+    await h.g.apply([
+      { entity: { eid: 's' }, session: {} },
+      {
+        entity: { eid: 'e' },
+        entry: { session: 's', seq: 1 },
+        content: { body: 'hello' },
+      },
+    ])
+    assertEquals((await h.g.read('.entry'))[0].entity.num, undefined)
+    // Simulate a legacy entry number; this is an isolated test database.
+    h.db.exec("update entity set num = 99999 where eid = 'e'")
+    h.close()
+    h = open(path)
+    assertEquals((await h.g.read('.entry'))[0].entity.num, undefined)
+    await h.g.apply([{ entity: { eid: 't' }, task: {} }])
+    assertEquals((await h.g.read('.task'))[0].entity.num, 100000)
+    h.close()
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})

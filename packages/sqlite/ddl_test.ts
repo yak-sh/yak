@@ -54,7 +54,7 @@ Deno.test('a boolean column takes integer affinity, a text column text', () => {
 Deno.test('a doc vocabulary gets a read view but no implicit search index', () => {
   assert(all.includes('create view if not exists doc_value'), all)
   assert(!all.includes('fts5'), all)
-  assert(!all.includes('create trigger'), all)
+  assert(!all.includes('create trigger if not exists doc'), all)
 })
 
 Deno.test('a resolved doc column is read as text by the view', () => {

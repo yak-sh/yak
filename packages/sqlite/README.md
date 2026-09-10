@@ -222,3 +222,25 @@ shape per batch size. This requires SQLite's JSON functions (built in since
 SQLite 3.38; JSON1 on older builds). Selected identities are fixed before the
 component gathers, so a concurrent writer cannot change the membership of a
 window halfway through reading its components.
+
+### Selective human numbering
+
+`storage(driver, vocab, { number: { except: ['entry'] } })` omits human numbers
+for entities carrying any listed facet. The policy sees all bundles in an
+admitted patch, even when a reference precedes the target's bundle. Exclusion
+wins over other facets (an entry that also carries `task` remains unnumbered).
+The engine does not know what `entry` means; applications choose the facets.
+`@yaks/ram` accepts the same option. Default numbering and `number: false`
+remain available.
+
+Attaching an excluded facet to an already numbered entity clears its number.
+Removing that facet does not allocate a replacement number: identity is minted
+once. Applications enabling this policy on existing data must clear historical
+numbers for their excluded facets; the harness does this for `entry` on open.
+
+SQLite maintains a transactional `entity_sequence` high-water mark, initialized
+from existing numbers on install and advanced by insert/update triggers.
+Clearing numbers never recycles an old human identifier, even after reopening
+the store. RAM retains its existing transactional high-water counter. An
+identity minted as a bare reference in an _earlier_ transaction may already have
+consumed a number; classification cannot anticipate future facets.

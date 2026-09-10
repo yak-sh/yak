@@ -114,7 +114,9 @@ export let buried = (driver: Driver, eids: string[]): Set<string> =>
 export let mintSql = (eid: string, number = true): Sql => ({
   sql: `insert into entity (eid, num)
           values (?, ${
-    number ? '(select coalesce(max(num), 0) + 1 from entity)' : 'null'
+    number
+      ? '(select high + 1 from entity_sequence where singleton = 1)'
+      : 'null'
   })
           on conflict(eid) do nothing returning eid, num`,
   params: [eid],
@@ -276,7 +278,7 @@ export let patch = (
   driver: Driver,
   vocab: Vocab,
   bundles: Bundle[],
-  number = true,
+  number: boolean | { except: readonly string[] } = true,
 ): Entity[] => {
   let known = spines(driver, [...new Set(touched(vocab, bundles))])
   let alive = bundles.filter((b) => !known.get(b.entity.eid)?.dead)
@@ -284,12 +286,38 @@ export let patch = (
   // Mint a spine for every eid the live bundles touch or point at, so a
   // reference can name a target created in the same batch, in any order. An
   // eid the store already knows is skipped here and would be a no-op anyway.
+  // Classification sees the whole admitted batch, including targets referenced
+  // before their own bundle. Existing excluded facets remain unnumbered.
+  let excluded = new Set<string>()
+  if (typeof number == 'object') {
+    for (let name of number.except) {
+      let table = '"' + name.replaceAll('"', '""') + '"'
+      for (let b of alive) {
+        if (!known.has(b.entity.eid)) continue
+        if (
+          driver.query(
+            'select 1 from ' + table +
+              ' c join entity e on e.id = c.entity where e.eid = ?',
+            [b.entity.eid],
+          ).length
+        ) excluded.add(b.entity.eid)
+      }
+      for (let b of alive) if (b[name] != null) excluded.add(b.entity.eid)
+    }
+    for (let eid of excluded) {
+      if (!known.has(eid)) continue
+      driver.query(
+        'update entity set num = null where eid = ? and num is not null',
+        [eid],
+      )
+    }
+  }
   let born: Entity[] = []
   let seen = new Set(known.keys())
   for (let eid of touched(vocab, alive)) {
     if (seen.has(eid)) continue
     seen.add(eid)
-    let s = mintSql(eid, number)
+    let s = mintSql(eid, number !== false && !excluded.has(eid))
     let e = minted(driver.query(s.sql, s.params))
     if (e) born.push(e)
   }

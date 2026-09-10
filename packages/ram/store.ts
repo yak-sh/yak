@@ -35,6 +35,8 @@ export type RamOpts = {
    * answered with is being told the identity, not asking for one. Off by
    * default: a store nobody mirrors owns its own numbering. */
   adopt?: boolean
+  /** Facets whose entities do not receive human numbers. */
+  number?: boolean | { except: readonly string[] }
 }
 
 /**
@@ -128,6 +130,24 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
 
   let patch = (bundles: Bundle[]): Entity[] => {
     let born: Entity[] = []
+    let excluded = new Set<string>()
+    if (typeof base.number == 'object') {
+      for (let name of base.number.except) {
+        for (let b of bundles) {
+          if (rows.get(b.entity.eid)?.comps[name] != null) {
+            excluded.add(b.entity.eid)
+          }
+        }
+        for (let b of bundles) if (b[name] != null) excluded.add(b.entity.eid)
+      }
+      for (let eid of excluded) {
+        let rec = rows.get(eid)
+        if (rec && rec.entity.num != null) {
+          save(eid)
+          rows.set(eid, { ...rec, entity: { eid } })
+        }
+      }
+    }
     // Mint a record for every eid this batch touches or points at, so a
     // reference may name a target created in the same batch, in any order.
     let birth = (eid: Eid, num?: number | null) => {
@@ -135,14 +155,22 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       if (rec) {
         // A mirror adopts a correction: this store guessed a number for an
         // entity it created optimistically, and is now being told the real one.
-        if (base.adopt && num !== undefined && rec.entity.num !== num) {
+        if (
+          base.adopt && !excluded.has(eid) && num !== undefined &&
+          rec.entity.num !== num
+        ) {
           save(eid)
           rows.set(eid, { ...rec, entity: { eid, num: numberFor(num) } })
         }
         return
       }
       save(eid)
-      let entity = { eid, num: numberFor(num) }
+      let entity = {
+        eid,
+        ...base.number === false || excluded.has(eid)
+          ? {}
+          : { num: numberFor(num) },
+      }
       rows.set(eid, { entity, comps: {} })
       born.push(entity)
     }

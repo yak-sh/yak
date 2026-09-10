@@ -225,9 +225,15 @@ export let open = (path = dbPath()): Harness => {
   let sql = driver(db)
   let bytes = sqliteBlobs(sql)
   let store = storage(sql, vocab, {
+    number: { except: ['entry'] },
     derived: { ...derived, ...blobRead(vocab) },
   })
   store.install()
+  // Sequence high-water was captured by install before clearing historical
+  // entry numbers. No remaining human identifier is renumbered or reused.
+  sql.exec(
+    'update entity set num = null where num is not null and id in (select entity from entry)',
+  )
   try {
     toBlobs(sql, bytes)
   } catch (error) {
