@@ -56,7 +56,7 @@ import type {
   Walk,
 } from '@yaks/query'
 import { bare } from '@yaks/query'
-import type { Assoc, Hop, Vocab } from '@yaks/vocab'
+import type { Assoc, Hop, Presence, Vocab } from '@yaks/vocab'
 import { Unknown } from '@yaks/vocab'
 import {
   and,
@@ -79,7 +79,6 @@ import type { Derived } from './derived.ts'
 import type { Extension, Site } from './extend.ts'
 import { type Identity, identity } from './ident.ts'
 import { walkSql } from './walk.ts'
-import type { Presence } from '@yaks/archetype'
 import type { ArchetypeSet } from './archetype.ts'
 
 // Thrown for a clause the binder cannot express EXACTLY. A caller catches it to

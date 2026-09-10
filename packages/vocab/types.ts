@@ -93,6 +93,11 @@ export type Hop = { comp: string; prop: string }
 // it, so the association is that (comp, prop) pair under a plural name.
 export type Assoc = { comp: string; prop: string }
 
+// Which components an entity WEARS, and no column value: all of these present,
+// none of those. The word both a binder (@yaks/sql) and a table-set cache
+// (@yaks/archetype) speak, so it lives under neither of them.
+export type Presence = { all?: readonly string[]; none?: readonly string[] }
+
 // A vocab document, as authored: a JSON Schema whose `$defs` are the components.
 // Loose on purpose — the meta-schema and loadVocab() are what validate it; this
 // is just enough shape for the reader.

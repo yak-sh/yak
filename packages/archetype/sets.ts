@@ -1,5 +1,5 @@
 import { sha256 } from '@yaks/graph'
-import type { VocabDoc } from '@yaks/vocab'
+import type { Presence, VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 
 /** The archetype and retired components, loaded beside a host's vocabulary. */
@@ -10,9 +10,6 @@ export type Archetype = {
   readonly eid: string
   readonly tables: readonly string[]
 }
-
-/** Table presence only: all required tables and none of the excluded ones. */
-export type Presence = { all?: readonly string[]; none?: readonly string[] }
 
 /** UTF-8 bytewise order, independent of locale and JavaScript's UTF-16 sort. */
 export function canonical(tables: Iterable<string>): string[] {
