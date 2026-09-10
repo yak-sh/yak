@@ -1,12 +1,70 @@
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { graph } from './graph.ts'
 import { token } from './guard.ts'
-import { detached } from './storage.ts'
+import { detached, type Storage } from './storage.ts'
 import { then } from './pipe.ts'
 import { books, comp, memory, slow } from './harness.ts'
 import type { Bundle } from './bundle.ts'
 
 for (let async of [false, true]) {
+  for (let veto of [false, true]) {
+    Deno.test(`beforeWrite: independent batches require unanimous guards (${async}, ${veto})`, async () => {
+      let base = memory()
+      let writes: number[] = [], seen: number[] = [], journal: Bundle[] = []
+      let counted: Storage = {
+        ...base,
+        tx: (body) =>
+          base.tx((tx) =>
+            body({
+              ...tx,
+              patch: (bs) => {
+                let docs = bs.filter((b) => b.doc)
+                if (docs.length) writes.push(docs.length)
+                return tx.patch(bs)
+              },
+            })
+          ),
+      }
+      let g = graph({ storage: async ? slow(counted) : counted, vocab: books })
+      await g.apply([{ entity: { eid: 'dead' }, doc: { title: 'gone' } }])
+      await g.apply([{ entity: { eid: 'dead' }, tombstone: {} }])
+      writes.length = 0
+      g.use({
+        name: 'independent',
+        beforeWrite: () =>
+          Object.assign((bs: Bundle[]) => {
+            seen.push(bs.length)
+            return bs.map((b) => ({ ...b, doc: { title: 'rewritten' } }))
+          }, { independent: true }),
+        hooks: {
+          journal: (bs) => {
+            journal = bs
+            return bs
+          },
+        },
+      })
+      if (veto) g.use({ name: 'ordered', beforeWrite: () => (bs) => bs })
+      let out = g.apply(['a', 'dead', 'b'].map((eid) => ({
+        entity: { eid },
+        doc: { title: 'input' },
+      })))
+      assertEquals(out instanceof Promise, async)
+      let answer = await out
+      assertEquals(seen, veto ? [1, 1] : [2])
+      assertEquals(writes, veto ? [1, 1] : [2])
+      assertEquals(journal.filter((b) => b.doc).map((b) => b.entity.eid), [
+        'a',
+        'b',
+      ])
+      for (let eid of ['a', 'b']) {
+        assertEquals(
+          comp(answer.find((b) => b.entity.eid == eid), 'doc').title,
+          'rewritten',
+        )
+      }
+    })
+  }
+
   Deno.test(`beforeWrite: one ordered mutation, FOUND guards, final answer (${async})`, async () => {
     let storage = async ? slow(memory()) : memory()
     let seen: unknown[] = [], journal: unknown[] = []

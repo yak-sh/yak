@@ -668,3 +668,37 @@ Deno.test('handle $was translates core Stale to human value/hash fields and FOUN
     'two',
   )
 })
+
+Deno.test('fleet guards: only distinct document patches certify independence', () => {
+  let db = bareDb()
+  seed(db)
+  let g = fleetGraphOf(db)
+  let factory = g.plugins.find((p) => p.name == 'fleet/preconditions')!
+    .beforeWrite!
+  let a: Bundle = { entity: { eid: t }, doc: { title: 'next' } }
+  let b: Bundle = { entity: { eid: p }, doc: { title: 'project' } }
+  assertEquals(factory([a, b]).independent, true)
+  for (
+    let batch of [
+      [a, a],
+      [a, { ...b, doc: null }],
+      [a, { ...b, tombstone: {} }],
+      [a, { ...b, claim: { session: s } }],
+      [a, { entity: b.entity, blob: { bytes: new Uint8Array() } }],
+    ]
+  ) assertEquals(factory(batch).independent, false)
+  // No-op settling, FOUND guards and journal/effect output survive batching.
+  let out = sync(g.apply([
+    { ...a, doc: { title: 'Work' } }, // no-op
+    { ...b, $was: { doc: { title: null } } },
+  ]))
+  assert(!out.some((b) => b.entity.eid == t && b.updated))
+  assertEquals(readComp(db, p, 'doc')?.title, 'project')
+  assertThrows(() =>
+    sync(g.apply([
+      a,
+      { ...b, doc: { title: 'refused' }, $was: { doc: { title: null } } },
+    ])), Stale)
+  assertEquals(readComp(db, t, 'doc')?.title, 'Work')
+  assertEquals(readComp(db, p, 'doc')?.title, 'project')
+})

@@ -92,6 +92,15 @@ export type Hook = (
 ) => Bundle[] | Promise<Bundle[]>
 
 /**
+ * An ordered guard may certify that THIS batch's checks and writes are
+ * independent: checking all operations before mutating/cascading them together
+ * has exactly the same result as checking and writing each prefix. This includes
+ * its rewrites and any cascades, not just its reads. Default is ordered; batching
+ * is used only when every beforeWrite guard certifies the batch.
+ */
+export type WriteHook = Hook & { independent?: boolean }
+
+/**
  * A schema for a tool's arguments or its result. What counts as one is the
  * TRANSPORT's business — {@link https://jsr.io/@yaks/mcp | @yaks/mcp} takes Zod
  * schemas, because the MCP SDK does — so the core leaves it opaque rather than
@@ -173,7 +182,7 @@ export type Plugin = {
    * prefix. Opting in makes mutate/cascade run per operation, in the SAME
    * transaction. $was remains a pre-write FOUND-state guard. No external
    * side effects: any later refusal rolls the entire prefix back. */
-  beforeWrite?: (bundles: Bundle[]) => Hook
+  beforeWrite?: (bundles: Bundle[]) => WriteHook
   /** the plugin's name, for diagnostics */
   name: string
   /** the components this plugin contributes, as @yaks/vocab documents */

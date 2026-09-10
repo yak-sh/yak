@@ -10,6 +10,7 @@ import {
   isPromise,
   type Plugin,
   type Tx,
+  type WriteHook,
 } from '@yaks/graph'
 import { Bounced as LeaseBounced, sessions } from '@yaks/session'
 import { type Change, slugsOf } from '../types.ts'
@@ -115,7 +116,7 @@ export let fleetPreconditions = (
     let actor = bundles.some((b) => b.$actor)
       ? actorOf(bundles).by ?? null
       : undefined
-    return (bs, tx) => {
+    let check: WriteHook = (bs, tx) => {
       let out: Bundle[] = []
       for (let b of bs) {
         let held = sync(tx.get([b.entity.eid]))[0]
@@ -172,6 +173,16 @@ export let fleetPreconditions = (
       }
       return out
     }
+    // Distinct document patches have no cross-entity refusal policy or death
+    // cascade. Repeated owners, deletes and all other components keep their
+    // prefix semantics (including blobs materialized alongside body edits).
+    check.independent = bundles.every((b) =>
+      b.doc &&
+      Object.keys(b).every((k) =>
+        k == 'entity' || k == 'doc' || k.startsWith('$')
+      )
+    ) && new Set(bundles.map((b) => b.entity.eid)).size == bundles.length
+    return check
   },
   hooks: {
     precondition: (bundles) => {

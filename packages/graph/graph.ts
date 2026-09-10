@@ -44,7 +44,7 @@ import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Change, Eid } from './bundle.ts'
 import type { Row, Storage, Tx } from './storage.ts'
 import { detached, type Query, type ReadOpts } from './storage.ts'
-import type { Hook, Phase, Plugin } from './plugin.ts'
+import type { Hook, Phase, Plugin, WriteHook } from './plugin.ts'
 import { type Derive, resolve } from './alias.ts'
 import { identified, identities } from './identity.ts'
 import { admit } from './admit.ts'
@@ -364,7 +364,7 @@ export let graph = (opts: Options): Graph => {
           // What the graph holds for one entity, every patch this batch made
           // already folded in — what a rule is judged against (./rules.ts).
           let holds = (eid: Eid) => snap.got.get(eid) ?? undefined
-          let checks: Hook[] | undefined
+          let checks: WriteHook[] | undefined
           return then(
             each(
               [
