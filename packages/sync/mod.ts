@@ -95,4 +95,4 @@ export {
   echoed,
   SENT,
 } from './mark.ts'
-export { portLink, type Port } from './port.ts'
+export { type Port, portLink } from './port.ts'
