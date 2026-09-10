@@ -138,3 +138,14 @@ Deno.test('a rebuild that cannot fix the fault throws, naming both faults', () =
   db.exec(`drop table review`)
   assertThrows(() => heal(db, fields(shop)))
 })
+
+Deno.test('an owner-only read override cannot silently index the stored address', () => {
+  assertThrows(
+    () =>
+      schema(fields(shop), {
+        'book.blurb': { tag: 'text', expr: () => "'resolved'" },
+      }),
+    Error,
+    'read override needs a stored-value text expression',
+  )
+})

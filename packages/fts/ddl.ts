@@ -44,6 +44,7 @@ import {
   textName,
 } from './fields.ts'
 import type { Driver } from './driver.ts'
+import type { Derived } from '@yaks/sql'
 
 let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
 
@@ -107,9 +108,22 @@ let index = (comp: string, props: string[], text: Text): string[] => {
 // triggers. Run them after the component tables exist — an external-content
 // index names the table it mirrors. `text` says which columns are not their own
 // text (`blobText(vocab)` from @yaks/blob is one); with none, every column
-// indexes as it stands.
-export let schema = (fields: Field[], text: Text = {}): string[] =>
-  indexes(fields).flatMap(({ comp, props }) => index(comp, props, text))
+// indexes as it stands. The shared @yaks/sql Derived registry is also accepted:
+// its `text` expression resolves old/new values without re-reading the owner.
+export let schema = (fields: Field[], reads: Text | Derived = {}): string[] => {
+  let text: Text = {}
+  for (let { comp, prop } of fields) {
+    let key = `${comp}.${prop}`
+    let read = reads[key]
+    if (!read) continue
+    if (typeof read == 'function') text[key] = read
+    else if (read.text) text[key] = read.text
+    else {throw new Error(
+        `FTS ${key}: read override needs a stored-value text expression`,
+      )}
+  }
+  return indexes(fields).flatMap(({ comp, props }) => index(comp, props, text))
+}
 
 // Is this index still telling the truth about its table? Two questions, cheap
 // then thorough: does it hold a row per row of the component, and does FTS5's

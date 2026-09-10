@@ -35,6 +35,10 @@ export type DerivedCol = {
   values?: string[]
   deps?: string[]
   expr: (owner: string) => string
+  // A swapped stored value resolved without looking up its owner. FTS triggers
+  // must read old/new values (the owner may already be changed or deleted),
+  // so an owner-based expression alone cannot safely maintain their index.
+  text?: (stored: string) => string
 }
 
 // The registry a caller supplies to `compile`, keyed `comp.prop`. `compile`

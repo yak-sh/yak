@@ -11,14 +11,14 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { fields, find, schema } from '@yaks/fts'
-import { blobText } from './sqlite.ts'
+import { blobRead, blobText } from './sqlite.ts'
 import { blog, fixture } from './harness.ts'
 
 let text = fields(blog)
 
 let shelf = () => {
   let f = fixture()
-  for (let stmt of schema(text, blobText(blog))) f.driver.exec(stmt)
+  for (let stmt of schema(text, blobRead(blog))) f.driver.exec(stmt)
   return f
 }
 
@@ -72,4 +72,8 @@ Deno.test('the words are indexed on every write path, not just the plugin', () =
   ])
   driver.query(`insert into post (entity, body) values (1, 'k1')`, [])
   assertEquals(find(driver, text, 'nights').map((h) => h.entity), ['p1'])
+})
+
+Deno.test('the shared read registry and address-only resolver imply the same FTS schema', () => {
+  assertEquals(schema(text, blobRead(blog)), schema(text, blobText(blog)))
 })

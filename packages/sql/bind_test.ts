@@ -170,7 +170,7 @@ Deno.test('a reverse child filter screens the child row', () => {
   let joinSql = compile(parse('.notes.title~=hi'), v).sql
   assert(
     joinSql.includes(
-      'left join "doc_value" as "doc" on "doc"."entity" = ' +
+      'left join "doc" on "doc"."entity" = ' +
         '"note"."entity"',
     ),
     joinSql,
@@ -202,7 +202,7 @@ Deno.test('a rule sigil throws Unsupported rather than compiling', () => {
 
 Deno.test('ordering by an unfiltered column still joins its table', () => {
   let { sql } = compile(parse('.priority=1&.order=title'), v)
-  assert(sql.includes('left join "doc_value" as "doc"'), sql)
+  assert(sql.includes('left join "doc"'), sql)
   // the spine num breaks ties, so the order a query asks for is TOTAL and a
   // page of it is the same page wherever it is cut
   assert(sql.endsWith('order by "doc"."title", "entity"."num" desc'), sql)

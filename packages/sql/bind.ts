@@ -301,7 +301,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
 // columns, ending in a leaf column tested against op/value. Nested correlated
 // scalar subqueries walk the chain without widening the candidate set. Every
 // non-final hop must be a reference.
-let source = (comp: string) => comp == 'doc' ? '"doc_value"' : `"${comp}"`
+let source = (comp: string) => `"${comp}"`
 let isRef = (v: Vocab, comp: string, prop: string) =>
   v.column(comp, prop)?.category == 'ref'
 

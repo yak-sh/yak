@@ -178,3 +178,11 @@ The keyword, the plugin, the interface and the SQLite backend import no platform
 API. `fileBlobs` looks its runtime's filesystem up rather than importing one,
 and throws where there is none. Runs on **Deno**, **Node**, and in the
 **browser**.
+
+`blobRead(vocab, layout)` is also accepted by `@yaks/fts`'s
+`schema(fields,
+reads)`: the same registry resolves query predicates, bundle
+reads, and the indexed words. Each override carries a `text(stored)` expression
+as well as `expr(owner)`, because an FTS delete trigger must resolve `old.body`,
+not look up the owner after its row has changed or disappeared. `blobText()`
+remains the address-only form for callers that already hold a stored value.

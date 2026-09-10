@@ -167,7 +167,11 @@ export let blobRead = (vocab: Vocab, layout: Layout = {}): Derived => {
   return Object.fromEntries(
     bodies(vocab).map(({ comp, prop }) => [
       `${comp}.${prop}`,
-      { tag: 'text' as const, expr: readExpr(l, comp, prop) },
+      {
+        tag: 'text' as const,
+        expr: readExpr(l, comp, prop),
+        text: textExpr(l),
+      },
     ]),
   )
 }

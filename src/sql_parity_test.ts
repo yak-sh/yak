@@ -18,6 +18,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { parse } from '@yaks/query'
+import { blobRead } from '@yaks/blob'
 import { compile, Unsupported } from '@yaks/sql'
 import { fields, search } from '@yaks/fts'
 import { derived as fleetDerived } from './sql_derived.ts'
@@ -34,6 +35,10 @@ import { open } from './store/sqlite.ts'
 let db = open(':memory:')
 // The same per-connection package vocabulary warmed by the server at boot.
 let V = fleetVocabOf(db)
+let derived = {
+  ...fleetDerived,
+  'doc.body': blobRead(V, { key: 'entity' })['doc.body'],
+}
 // Match the fleet's doc-only search policy against its existing index.
 let extend = [search(fields(V).filter((f) => f.comp == 'doc'))]
 
@@ -120,10 +125,10 @@ put('pt', { task: {}, filed: { priority: 1, domain: '' }, project: {} })
 
 let mine = (q: string): string[] =>
   (db.prepare(
-    compile(parse(q), V, { derived: fleetDerived, now: NOW, extend }).sql,
+    compile(parse(q), V, { derived, now: NOW, extend }).sql,
   )
     .all(
-      ...compile(parse(q), V, { derived: fleetDerived, now: NOW, extend })
+      ...compile(parse(q), V, { derived, now: NOW, extend })
         .params,
     ) as {
       eid: string
@@ -225,9 +230,9 @@ Deno.test('identity names the entity it says', () => {
 // `.after` must keep meaning the same entity-by-num cursor on both sides.
 let paged = (q: string): string[] =>
   (db.prepare(
-    compile(parse(q), V, { derived: fleetDerived, now: NOW, extend }).sql,
+    compile(parse(q), V, { derived, now: NOW, extend }).sql,
   ).all(
-    ...compile(parse(q), V, { derived: fleetDerived, now: NOW, extend }).params,
+    ...compile(parse(q), V, { derived, now: NOW, extend }).params,
   ) as { eid: string }[]).map((r) => r.eid)
 
 Deno.test('parity: .limit window pages identically', () => {
@@ -264,7 +269,7 @@ let rows = (rel: unknown) =>
   run<{ value: string; n?: number }>(db, rel as never)
     .map((r) => `${r.value}:${r.n ?? ''}`).sort()
 let compiled = (q: string) => {
-  let c = compile(parse(q), V, { derived: fleetDerived, now: NOW, extend })
+  let c = compile(parse(q), V, { derived, now: NOW, extend })
   return db.prepare(c.sql).all(...c.params) as { value: string; n?: number }[]
 }
 
@@ -319,7 +324,7 @@ Deno.test('gaps: advanced directives throw Unsupported', () => {
   ) {
     let threw: unknown
     try {
-      compile(parse(q), V, { derived: fleetDerived, now: NOW, extend })
+      compile(parse(q), V, { derived, now: NOW, extend })
     } catch (e) {
       threw = e
     }

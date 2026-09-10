@@ -11,7 +11,7 @@
 //
 // The layout, in one paragraph: every component is a TABLE named for it, keyed
 // by an integer `entity` owner column that points at the spine `entity(id)`;
-// `doc` is read through the `doc_value` view; a reference column stores the
+// a reference column stores the
 // referent's integer id, so reading it back as an eid is a correlated spine
 // lookup, and comparing an eid to it is an integer compare after one spine
 // lookup of the operand. A tombstoned entity keeps its spine row (its int id
@@ -36,7 +36,7 @@ export type Dialect = {
   membership: string
   // The tombstone guard every membership ANDs in.
   live: () => Frag
-  // The join source for a component (doc → its view) and the ON key.
+  // The join source for a component and the ON key.
   table: (comp: string) => string
   ownerKey: (base: string) => string
   joinOn: (comp: string, base: string) => string
@@ -61,8 +61,7 @@ export type Dialect = {
 
 let q = (name: string) => `"${name}"`
 
-let table = (comp: string): string =>
-  comp == 'doc' ? '"doc_value" as "doc"' : q(comp)
+let table = (comp: string): string => q(comp)
 
 let ownerKey = (base: string): string =>
   base == 'entity' ? '"entity"."id"' : `"${base}"."entity"`
