@@ -401,6 +401,9 @@ export let checkout = async (env: Env, req: Request, at?: Space) => {
     // assumed: the space rides `client_reference_id` for the session and
     // `subscription_data[metadata]` for the subscription, which is what every
     // later `customer.subscription.*` event is attributed by.
+    // `allow_promotion_codes` is not on the unsupported list either, and it is
+    // what puts the code box on Stripe's page — the only place one belongs,
+    // since Stripe is the seller and owns the price it charges.
     let made = await ask(env, '/v1/checkout/sessions', {
       mode: 'subscription',
       customer,
@@ -411,6 +414,7 @@ export let checkout = async (env: Env, req: Request, at?: Space) => {
       metadata: { space: space.eid, slug: space.slug },
       subscription_data: { metadata: { space: space.eid, slug: space.slug } },
       managed_payments: { enabled: true },
+      allow_promotion_codes: true,
     })
     let url = String(made.url ?? '')
     if (!url) throw new Error('stripe made a checkout session with no url')

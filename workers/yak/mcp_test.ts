@@ -7293,6 +7293,7 @@ slow('space_sell connects an account and hands back one link', async () => {
     assertEquals(purchase.sent.get('metadata[space]'), eids.ada)
     assertEquals(purchase.sent.get('line_items[0][price]'), 'price_probe')
     assertEquals(purchase.sent.get('managed_payments[enabled]'), 'true')
+    assertEquals(purchase.sent.get('allow_promotion_codes'), 'true')
     assertEquals(
       purchase.sent.get('success_url'),
       'https://yaks.app/connect?paid=1',
