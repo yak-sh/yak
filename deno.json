@@ -8,6 +8,7 @@
     "codegen": "deno run --allow-read --allow-write --allow-run=deno src/vocab/gen.ts",
     "content": "deno run --allow-read --allow-write --allow-run=deno workers/yak/gen.ts",
     "test:packages": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno test -A packages/",
+    "test:workerd": "TASKS_SLOW=1 deno test -A --unstable-net --unstable-worker-options workers/yak/ workers/yak-tail/",
     "test:workers": "deno test -A workers/yak/ workers/yak-tail/",
     "gate": "deno task check && deno task test && deno task bench:gate && deno task bench:gate:web && deno run -A src/cli.ts sync --check",
     "dev": "sh -c 'while :; do deno run -A --unstable-net --unstable-worker-options src/dev.ts && break; [ $? -eq 42 ] || break; done'",

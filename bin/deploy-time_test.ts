@@ -1,8 +1,9 @@
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertThrows } from '@std/assert'
 import {
   append,
   built,
   probe,
+  promotionTime,
   pushTime,
   summary,
   versionFor,
@@ -197,4 +198,16 @@ Deno.test('deploy record: concurrent append is idempotent, and a failed probe ca
   } finally {
     await Deno.remove(dir, { recursive: true })
   }
+})
+
+Deno.test('deploy time: promotion excludes gate duration and names its source', () => {
+  assertEquals(promotionTime(PUSHED), {
+    pushed: '2026-09-07T19:00:00.000Z',
+    pushSource: 'github:deploy-promotion',
+  })
+  assertThrows(
+    () => promotionTime('not a date'),
+    Error,
+    'invalid DEPLOY_PUSHED_AT',
+  )
 })

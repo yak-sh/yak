@@ -16,38 +16,55 @@ fresh worktree has none and a bare `wrangler deploy` dies at `mcp.ts`
 `import { z } from 'zod'`. `probe.ts` installs through the same door before it
 boots a `wrangler dev`.
 
-Correct a deployed regression with `yak revert <sha> --admin`: main is always
-deployed. `yak rollback [version] --admin` is for a broken build path and
-refuses to cross a data migration boundary. A Durable Object already migrated
-keeps its data, even when older code is deployed.
+Correct a deployed regression with `yak revert <sha> --admin`: the revert passes
+the gate before deployment. `yak rollback [version] --admin` is for a broken
+build path and refuses to cross a data migration boundary. A Durable Object
+already migrated keeps its data, even when older code is deployed.
 
 ## Workers Builds
 
-A push to `main` deploys, through Cloudflare Workers Builds — not through a
-GitHub Actions workflow. Builds clones the repo itself and mints its own API
-token, so no Cloudflare credential exists in this repo, on the Actions runner,
-or in a GitHub secret.
+A push to `main` runs `.github/workflows/gate.yml` on the self-hosted runner.
+For changes under `workers/` or `packages/`, it runs `deno task test:workerd`
+(the complete `TASKS_SLOW=1` kernel and tail suite), in addition to the check,
+fast tests and benchmarks. Only a green push may fast-forward `deploy`. PRs
+never promote; an older gate cannot rewind that branch. Pushes with no pending
+changes in those paths run the ordinary gate but neither workerd nor production
+deploy. Comparing against `deploy` includes worker changes from a cancelled or
+failed earlier push, even when the newest commit only edits documentation.
+
+**Production configuration required:** switch Workers Builds' Production branch
+from `main` to `deploy` in the dashboard. Wrangler has no supported Builds
+settings command. Until that switch is made, this is not an active automatic
+production pipeline: `bin/build-yak` fails closed unless HEAD equals the remote
+`deploy` ref, in both build and deploy modes. Do not remove that guard or use a
+bare `wrangler deploy` dashboard command.
+
+We chose the gated branch rather than Actions deploying directly: Builds keeps
+its own deployment token and container engine; the runner only pushes Git.
+Builds clones the repo and mints its own API token; no new Cloudflare secret is
+needed on the Actions runner or in GitHub.
 
 The dashboard settings, in full (Workers & Pages → `yak` → Settings → Builds):
 
 | setting                 | value                                                                        |
 | ----------------------- | ---------------------------------------------------------------------------- |
 | Repository              | `yak-sh/yak` (Cloudflare GitHub App)                                         |
-| Production branch       | `main`                                                                       |
+| Production branch       | `deploy`                                                                     |
 | Root directory          | `workers/yak`                                                                |
 | Build command           | `../../bin/build-yak`                                                        |
 | Deploy command          | `../../bin/build-yak deploy`                                                 |
-| Build watch paths       | `workers/yak/*`, `packages/*`                                                |
+| Build watch paths       | `workers/*`, `packages/*`                                                    |
 | Non-production branches | build only, no deploy — preview URLs do not apply to a Durable Object Worker |
 
-A push outside the watch paths deploys nothing: no build check, no version, and
-so nothing for the gate's `deploy time` step to measure — it says so and the
-deploy gate judges the rows already recorded (`bench/deploys.md`).
+The dashboard build and deploy commands must both use `bin/build-yak` as shown
+above. That wrapper checks the approved ref before doing anything else, then
+runs the check and fast worker tests as a second defense. The full workerd tier
+already ran on the self-hosted runner before promotion.
 
-Everything the build actually does is in `bin/build-yak`, so the dashboard holds
-one line: install Deno (not on the Ubuntu 24.04 image), `deno task check` from
-the repo root, `deno task test:workers` (kernel and tail). A red build deploys
-nothing.
+The gate starts `deploy:time` immediately after promotion and passes the
+promotion timestamp as `DEPLOY_PUSHED_AT`: deployment latency excludes the
+preceding tests. A promoted commit that never uploads fails rather than being
+reported as an unwatched-path skip.
 
 `yak-tail` pages on kernel exceptions and Store/default console errors. Its
 incident KV is also the source for `yak errors`; `bin/yak-watch` probes the live
@@ -99,8 +116,9 @@ inspection. Neither a rollback nor a revert undoes migrated data.
 
 Push-to-upload observations, the version-confirmed live timer, the deploy
 ratchet, and the build profile are in [deploy timing](../../bench/deploys.md).
-Run `deno task deploy:time <sha>` on the box alongside each push; Actions reads
-the committed record through `deno task deploy:gate` after worker tests.
+Actions records each promotion and runs `deno task deploy:gate` after
+deployment. For manual timing, set `DEPLOY_PUSHED_AT` to the deployment-branch
+push time; without it, the recorder falls back to the main push history.
 
 ## Everything set by hand
 

@@ -61,6 +61,18 @@ export let pushTime = (
     : null
 }
 
+// The gate records when it advances deploy. Testing main is not deployment
+// latency; manual/backfill runs still recover their timestamp from GitHub.
+export let promotionTime = (at: string): Push => {
+  if (!Number.isFinite(Date.parse(at))) {
+    throw new Error('invalid DEPLOY_PUSHED_AT')
+  }
+  return {
+    pushed: new Date(at).toISOString(),
+    pushSource: 'github:deploy-promotion',
+  }
+}
+
 export let versionFor = (sha: string, pushed: string, versions: Version[]) => {
   let later = versions.filter((v) =>
     Date.parse(v.metadata.created_on) >= Date.parse(pushed)
@@ -138,9 +150,9 @@ let versions = (): Promise<Version[]> =>
   )
 let pause = () => new Promise((ok) => setTimeout(ok, 1000))
 
-// In the gate the recorder measures the commit under test, and the row lives
-// only in that run's checkout: no workflow here pushes, and a bench-row commit
-// on main would start another Workers Build and another gate. So the row rides
+// In the gate the recorder measures the promoted commit, and the row lives
+// only in that run's checkout: the workflow pushes deploy, never timing rows
+// onto main. So the row rides
 // the job summary the way bench-gate's baseline rides its log — copy it into
 // bench/deploys.jsonl with the next change and the floor keeps ratcheting.
 export let summary = (rows: Deploy[]) =>
@@ -230,7 +242,9 @@ export let main = async (args = Deno.args) => {
     let suites = await api(`commits/${sha}/check-suites`).catch(() => ({
       check_suites: [],
     }))
-    let push = pushTime(sha, events, suites.check_suites, runs)
+    let push = !backfill && Deno.env.get('DEPLOY_PUSHED_AT')
+      ? promotionTime(Deno.env.get('DEPLOY_PUSHED_AT')!)
+      : pushTime(sha, events, suites.check_suites, runs)
     if (!push) {
       throw new Error(
         `no GitHub push time for ${sha}; commit dates are not push times`,
@@ -247,7 +261,7 @@ export let main = async (args = Deno.args) => {
         let checks = await api(`commits/${sha}/check-runs`).catch(() => ({
           check_runs: [],
         }))
-        if (!built(checks.check_runs)) {
+        if (!Deno.env.get('DEPLOY_PUSHED_AT') && !built(checks.check_runs)) {
           console.log(`${sha.slice(0, 8)}: no Workers Build — nothing to time`)
           skipped = true
           continue

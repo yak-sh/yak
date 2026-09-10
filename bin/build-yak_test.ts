@@ -8,6 +8,17 @@ Deno.test('build-yak: production precedes staging, and either failure fails Buil
   })
   try {
     await Deno.writeTextFile(
+      `${dir}/git`,
+      `#!/bin/sh
+case "$1" in
+  ls-remote) printf '%s\\trefs/heads/deploy\\n' "$YAK_BUILD_APPROVED" ;;
+  rev-parse) printf '%s\\n' tested ;;
+  *) exit 99 ;;
+esac
+`,
+      { mode: 0o755 },
+    )
+    await Deno.writeTextFile(
       `${dir}/npm`,
       '#!/bin/sh\nprintf "%s\\n" "$YAK_BUILD_CACHE"\n',
       { mode: 0o755 },
@@ -27,7 +38,13 @@ esac
       { mode: 0o755 },
     )
     for (
-      let [production, staging, want] of [[0, 0, 0], [17, 0, 17], [0, 23, 23]]
+      let [approved, production, staging, want] of [
+        ['tested', 0, 0, 0],
+        ['tested', 17, 0, 17],
+        ['tested', 0, 23, 23],
+        ['old', 0, 0, 1],
+        ['', 0, 0, 1],
+      ]
     ) {
       let log = `${dir}/calls`
       let guards = `${dir}/guards`
@@ -43,6 +60,7 @@ esac
         env: {
           PATH: `${dir}:${Deno.env.get('PATH')}`,
           YAK_BUILD_CACHE: dir,
+          YAK_BUILD_APPROVED: String(approved),
           YAK_BUILD_LOG: log,
           YAK_BUILD_GUARDS: guards,
           WRANGLER_CI_OVERRIDE_NAME: 'yak',
@@ -54,14 +72,20 @@ esac
         stderr: 'piped',
       }).output()
       assertEquals(out.code, want)
-      assertEquals((await Deno.readTextFile(log)).trim().split('\n'), [
-        'task deploy:yak --dry-run',
-        ...(production ? [] : ['task deploy:yak-staging --dry-run']),
-      ])
-      assertEquals((await Deno.readTextFile(guards)).trim().split('\n'), [
-        'yak|production-tag',
-        ...(production ? [] : ['|']),
-      ])
+      assertEquals(
+        (await Deno.readTextFile(log)).trim().split('\n').filter(Boolean),
+        approved != 'tested' ? [] : [
+          'task deploy:yak --dry-run',
+          ...(production ? [] : ['task deploy:yak-staging --dry-run']),
+        ],
+      )
+      assertEquals(
+        (await Deno.readTextFile(guards)).trim().split('\n').filter(Boolean),
+        approved != 'tested' ? [] : [
+          'yak|production-tag',
+          ...(production ? [] : ['|']),
+        ],
+      )
     }
   } finally {
     await Deno.remove(dir, { recursive: true })
