@@ -11,7 +11,7 @@
 // reacts to it, and a slow model never holds a writer.
 
 import type { Comp, Eid, Graph } from '@yaks/graph'
-import type { Effects } from '@yaks/effects'
+import type { Effects, Event } from '@yaks/effects'
 import { deliverChild } from './children.ts'
 import { ENTRY } from './native.ts'
 import { type Deps, react, type Step } from './react.ts'
@@ -88,6 +88,55 @@ export let daemon = (
   fx.created(ENTRY, (e) => {
     wake(String(e.comp?.session))
   })
+  // A task may become done after its worker has gone quiet: a contained or
+  // required task settles, or an edge is removed. Recheck only the changed
+  // task and its direct dependents, matching done()/openDeps() semantics.
+  if (g.vocab.comps.includes('task')) {
+    let taskChanged = async (e: Event) => {
+      let ids = new Set<Eid>([e.entity.eid])
+      let [changed] = await g.storage.tx((tx) => tx.get([e.entity.eid]))
+      for (let part of [e.comp, changed?.edge as Comp | undefined]) {
+        if (typeof part?.from == 'string') ids.add(part.from)
+      }
+      for (let rel of ['contains', 'requires']) {
+        for (let b of await g.read(`.${rel} .edge.to=${e.entity.eid}`)) {
+          let from = (b.edge as Comp)?.from
+          if (typeof from == 'string') ids.add(from)
+        }
+      }
+      // Removed edges have no before-image in effects. Reconcile active
+      // task claims in that case, rather than miss a newly unblocked task.
+      let candidates =
+        e.kind == 'removed' && ['edge', 'contains', 'requires'].includes(e.name)
+          ? await g.read('.task .claim.session!')
+          : await g.storage.tx((tx) => tx.get([...ids]))
+      for (let task of candidates) {
+        let child = (task.claim as Comp | undefined)?.session
+        if (!task.task || typeof child != 'string') continue
+        let [self] = await g.storage.tx((tx) => tx.get([child]))
+        let parent = (self?.spawned as Comp | undefined)?.parent
+        if (typeof parent == 'string') {
+          enqueue(parent, () => deliverChild(g, child)).catch(report)
+        }
+      }
+    }
+    for (
+      let name of [
+        'task',
+        'completed',
+        'cancelled',
+        'claim',
+        'edge',
+        'contains',
+        'requires',
+      ]
+    ) {
+      fx.created(name, taskChanged).changed(name, taskChanged).removed(
+        name,
+        taskChanged,
+      )
+    }
+  }
   let idle = async (session: Eid) => {
     let seen: Promise<unknown> | undefined
     while (busy.get(session) != seen) {

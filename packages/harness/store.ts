@@ -25,7 +25,13 @@ import { type Graph, graph } from '@yaks/graph'
 import { modelDoc } from '@yaks/model'
 import { openaiDoc } from '@yaks/openai'
 import { processDoc, processes } from '@yaks/process'
-import { reapLeases, sessionDerived, sessionDoc, sessions } from '@yaks/session'
+import {
+  reapLeases,
+  sessionDerived,
+  sessionDoc,
+  sessions,
+  taskMarks,
+} from '@yaks/session'
 import { type Driver, storage, type Store } from '@yaks/sqlite'
 import { derived as taskDerived, taskDoc, tasks } from '@yaks/task'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
@@ -68,7 +74,7 @@ export let vocab: Vocab = loadVocab([
 ], [edgeKeywords])
 
 /** The computed columns, said in SQL: a transcript's status and a task's. */
-export let derived = { ...sessionDerived, ...taskDerived() }
+export let derived = { ...sessionDerived, ...taskDerived(taskMarks) }
 
 /** Where the graph lives when nobody says: `$HARNESS_DB`, else
  * `~/.harness/harness.db`. */
@@ -140,7 +146,13 @@ export let open = (path = dbPath()): Harness => {
   let g = graph({
     storage: store,
     vocab,
-    plugins: [sessions(), edges(vocab), tasks(vocab), processes(), fx],
+    plugins: [
+      sessions(),
+      edges(vocab),
+      tasks(vocab, taskMarks),
+      processes(),
+      fx,
+    ],
   })
   reapLeases(store)
   return { path, db, store, g, fx, vocab, close: () => db.close() }

@@ -4,6 +4,7 @@
 // counts read from the graph inside that critical section. No reserved slots
 // survive a failed write, and replaying a call finds the same child.
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { MARKS, openDeps, settled, statusOf as taskStatus } from '@yaks/task'
 import { type Tool, type ToolContext, ToolError, transcript } from './react.ts'
 import {
   newestAsk,
@@ -21,6 +22,26 @@ let comp = (b: Bundle | undefined, name: string) =>
 let row = async (g: Graph, eid: Eid) =>
   (await g.storage.tx((tx) => tx.get([eid])))[0]
 let live = 'empty,pending,running'
+
+/** The lease rung for a task held by a session; terminal task marks win. */
+export let taskMarks = [...MARKS, {
+  status: 'wip',
+  comp: 'claim',
+  settled: false,
+}]
+
+let taskRow = async (g: Graph, id: string): Promise<Bundle> => {
+  let b = await row(g, id)
+  let num = /^T-(\d+)$/i.exec(id)?.[1]
+  if (!b && num) [b] = await g.read(`.task .num=${Number(num)}`)
+  if (!b?.task) throw new ToolError('task', `not a task: ${id}`)
+  return b
+}
+
+// Replaced by @yaks/task's shared done() when the vocabulary split lands.
+let done = async (g: Graph, b: Bundle) =>
+  settled(taskStatus(b, taskMarks)!, taskMarks) &&
+  await openDeps(g.storage, b.entity.eid) == 0
 
 /** Direct children, including forks created by the session tools. */
 export let children = (g: Graph, session: Eid): Promise<Bundle[]> =>
@@ -79,11 +100,14 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
     name: fork ? 'fork' : 'spawn',
     description: fork
       ? 'Fork your transcript before this tool turn, with a new prompt. Returns the concurrent child session id; completion is delivered automatically.'
-      : 'Start a fresh subagent. Returns the concurrent child session id; completion is delivered automatically.',
+      : 'Start a fresh subagent with a prompt OR a task id. A task is claimed atomically and its title/body become the input. Independent subtasks may run in parallel, subject to caps. Returns the child session id; completion is delivered automatically.',
     parameters: {
       type: 'object',
       properties: {
         prompt: { type: 'string' },
+        ...fork
+          ? {}
+          : { task: { type: 'string', description: 'task entity id or T-id' } },
         instructions: { type: 'string' },
         model: {
           type: 'string',
@@ -91,16 +115,43 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
         },
         effort: { type: 'string' },
       },
-      required: ['prompt'],
+      ...fork ? { required: ['prompt'] } : {
+        oneOf: [{ required: ['prompt'] }, { required: ['task'] }],
+      },
     },
     run: async (args, context) => {
       let ctx = caller(context)
-      if (typeof args.prompt != 'string' || !args.prompt.trim()) {
+      if (
+        fork ? args.task != null : (args.task != null) == (args.prompt != null)
+      ) {
+        throw new ToolError(
+          'spawn',
+          'name exactly one prompt or task (fork requires prompt)',
+        )
+      }
+      if (
+        args.task != null && (typeof args.task != 'string' || !args.task.trim())
+      ) {
+        throw new ToolError('task', 'a nonempty task id is required')
+      }
+      if (
+        args.task == null &&
+        (typeof args.prompt != 'string' || !args.prompt.trim())
+      ) {
         throw new ToolError('prompt', 'a nonempty prompt is required')
       }
       let eid = `child:${ctx.call.entity.eid}`
       if (await row(g, eid)) return eid
       return admit(g, ctx.session, limits, async () => {
+        // A concurrent replay may have waited behind the original admission.
+        if (await row(g, eid)) return eid
+        let task = args.task == null
+          ? undefined
+          : await taskRow(g, String(args.task))
+        let doc = comp(task, 'doc')
+        let prompt = task
+          ? [doc?.title, doc?.body].filter(Boolean).join('\n\n')
+          : args.prompt
         let using = { ...usingBefore(ctx.entries) }
         let models: Bundle[] = []
         if (args.model != null) {
@@ -127,6 +178,7 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
         if (fork && !anchor) throw new ToolError('fork', 'no prefix to fork')
         await g.apply([
           ...models,
+          ...task ? [{ entity: task.entity, claim: { session: eid } }] : [],
           {
             entity: { eid },
             session: { id: eid },
@@ -136,7 +188,7 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
           {
             entity: { eid: `${eid}:input` },
             entry: { session: eid, seq: fork ? seqOf(anchor!) + 1 : 1 },
-            content: { body: args.prompt },
+            content: { body: prompt },
             using,
           },
         ], { trusted: true })
@@ -147,28 +199,38 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
   return [start(true), start(false), {
     name: 'wait',
     description:
-      'Wait on named direct children. Returns their status and final output, or still-running status when the timeout passes.',
+      'Wait on direct children or tasks. Tasks wait until settled with no open dependencies; returns status when complete or the timeout passes.',
     parameters: {
       type: 'object',
       properties: {
         children: { type: 'array', items: { type: 'string' }, minItems: 1 },
+        tasks: { type: 'array', items: { type: 'string' }, minItems: 1 },
         timeout: {
           type: 'number',
           description: 'milliseconds (default 60000)',
         },
       },
-      required: ['children'],
+      oneOf: [{ required: ['children'] }, { required: ['tasks'] }],
     },
     run: async (args, context) => {
       let ctx = caller(context)
-      if (
-        !Array.isArray(args.children) || !args.children.length ||
-        args.children.some((s) => typeof s != 'string')
-      ) {
-        throw new ToolError('children', 'name at least one child session')
+      if ((args.tasks == null) == (args.children == null)) {
+        throw new ToolError('wait', 'name either tasks or child sessions')
       }
-      let ids = [...new Set(args.children as string[])]
-      for (let id of ids) {
+      let named = args.tasks ?? args.children
+      if (
+        !Array.isArray(named) || !named.length ||
+        named.some((s) => typeof s != 'string')
+      ) {
+        throw new ToolError('wait', 'name at least one task or child session')
+      }
+      let ids = [...new Set(named as string[])]
+      if (args.tasks != null) {
+        ids = await Promise.all(
+          ids.map(async (id) => (await taskRow(g, id)).entity.eid),
+        )
+      }
+      for (let id of args.tasks == null ? ids : []) {
         if (comp(await row(g, id), 'spawned')?.parent != ctx.session) {
           throw new ToolError('children', `not your child: ${id}`)
         }
@@ -179,21 +241,35 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
       }
       let end = Date.now() + ms
       for (;;) {
-        let results = await Promise.all(ids.map(async (session) => {
-          let entries = await transcript(g, session)
-          let status = statusOf(entries)
-          return {
-            session,
-            status,
-            output: entries.length ? textOf(entries.at(-1)!) : '',
+        if (args.tasks != null) {
+          let results = await Promise.all(ids.map(async (id) => {
+            let b = await taskRow(g, id)
+            return {
+              task: id,
+              status: taskStatus(b, taskMarks),
+              done: await done(g, b),
+            }
+          }))
+          if (results.every((r) => r.done) || Date.now() >= end) {
+            return JSON.stringify(results)
           }
-        }))
-        if (
-          results.every((r) =>
-            ['settled', 'failed', 'stopped'].includes(r.status)
-          ) || Date.now() >= end
-        ) {
-          return JSON.stringify(results)
+        } else {
+          let results = await Promise.all(ids.map(async (session) => {
+            let entries = await transcript(g, session)
+            let status = statusOf(entries)
+            return {
+              session,
+              status,
+              output: entries.length ? textOf(entries.at(-1)!) : '',
+            }
+          }))
+          if (
+            results.every((r) =>
+              ['settled', 'failed', 'stopped'].includes(r.status)
+            ) || Date.now() >= end
+          ) {
+            return JSON.stringify(results)
+          }
         }
         await new Promise((go) =>
           setTimeout(go, Math.min(25, end - Date.now()))
@@ -210,9 +286,27 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
   if (!link?.parent || !await row(g, String(link.parent))) return
   let entries = await transcript(g, child)
   let status = statusOf(entries)
+  // Do not consume the receipt id on an intermediate tool turn: the final
+  // message is known only once the child has stopped asking for work. A later
+  // dependency change still triggers this path after the child is quiet.
   if (!['settled', 'failed', 'stopped'].includes(status)) return
-  let last = entries.at(-1)!
-  let eid = `delivery:${child}:${last.entity.eid}`
+  let tasks = g.vocab.comps.includes('task')
+    ? await g.read(`.task .claim.session=${child}`)
+    : []
+  let task = tasks.find((b) => b.task)
+  let ready = task && await done(g, task)
+  let last = entries.at(-1)
+  if (!last) return
+  let eid = ready
+    ? `delivery:${child}:task:${task!.entity.eid}:${
+      taskStatus(task!, taskMarks)
+    }`
+    : `delivery:${child}:${last.entity.eid}`
+  let message = ready
+    ? `task ${
+      task!.entity.num != null ? `T-${task!.entity.num}` : task!.entity.eid
+    } ${taskStatus(task!, taskMarks)}`
+    : `child ${child} ${status}`
   if (await row(g, eid)) return
   let parent = String(link.parent)
   let prefix = await transcript(g, parent)
@@ -225,7 +319,7 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
       session: parent,
       seq: (prefix.length ? seqOf(prefix.at(-1)!) : 0) + 1,
     },
-    content: { body: `child ${child} ${status}\n${textOf(last)}` },
+    content: { body: `${message}\n${textOf(last)}` },
     ...open ? { result: { call: link.call } } : {},
   }], { trusted: true })
 }

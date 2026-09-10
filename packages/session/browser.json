@@ -11,6 +11,9 @@
     "@yaks/match": "../match/mod.ts",
     "@yaks/render": "../render/mod.ts",
     "@yaks/model": "../model/mod.ts",
-    "@yaks/effects": "../effects/mod.ts"
+    "@yaks/effects": "../effects/mod.ts",
+    "@yaks/task": "../task/mod.ts",
+    "@yaks/edge": "../edge/mod.ts",
+    "@yaks/sql": "../sql/mod.ts"
   }
 }

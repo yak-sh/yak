@@ -79,21 +79,30 @@ export let harnessTools = (
   let wait: Tool = {
     name: 'wait',
     description:
-      'Wait for a process OR named child sessions, with a timeout in milliseconds.',
+      'Wait for a process OR named child sessions OR tasks, with a timeout in milliseconds.',
     parameters: {
       type: 'object',
       properties: {
         process: { type: 'string' },
         children: { type: 'array', items: { type: 'string' }, minItems: 1 },
+        tasks: { type: 'array', items: { type: 'string' }, minItems: 1 },
         timeout: { type: 'number' },
       },
-      oneOf: [{ required: ['process'] }, { required: ['children'] }],
+      oneOf: [{ required: ['process'] }, { required: ['children'] }, {
+        required: ['tasks'],
+      }],
     },
     run: (args, ctx) => {
-      if ((args.children == null) == (args.process == null)) {
-        throw new ToolError('wait', 'name either a process or child sessions')
+      if (
+        [args.children, args.process, args.tasks].filter((v) => v != null)
+          .length != 1
+      ) {
+        throw new ToolError(
+          'wait',
+          'name exactly one of process, children, or tasks',
+        )
       }
-      return args.children == null
+      return args.process != null
         ? processWait.run(args, ctx)
         : childWait.run(args, ctx)
     },
