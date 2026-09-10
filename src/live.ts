@@ -2789,7 +2789,7 @@ export let boot = async () => {
     await once()
     await attachStore()
     connect()
-    return openCommentTally()
+    return
   }
   let nav = (globalThis as { navigator: Navigator }).navigator
   let bus = new BroadcastChannel('tasks-sync')
@@ -2833,9 +2833,6 @@ export let boot = async () => {
   )
   addEventListener('pagehide', owner.leave)
   await owner.start()
-  // The tally rides the transport, so it opens once the topology exists: a
-  // follower asks through its leader, never a socket of its own.
-  openCommentTally()
 }
 ;(globalThis as {
   __sync?: () => {
@@ -3261,6 +3258,9 @@ let dotFields: Field[] = [
   'session.provider',
   'spawn.provider',
   'runtime.pid',
+  'run.started_at',
+  'settled.status',
+  'settled.at',
   'error.at',
   'exception.at',
 ].map((f) => {
@@ -3294,6 +3294,22 @@ export let sessionDetail = '.session!&.fields=' + [
   'created.at',
   'doc.title',
 ].join(',')
+
+// The strip shows active or recent sessions, not the first 1,000 historical
+// sessions. Separate indexed selections express that union without asking the
+// browser to infer it from a capped all-history result.
+export let traySessionQueries = [
+  '.session.status=starting,running,stopping',
+  '.session.pid!&.session.finished_at=&.settled=',
+  '.runtime.pid!&.session.finished_at=&.settled=',
+  '.session.started_at>=6-hours-ago',
+  '.run.started_at>=6-hours-ago',
+  '.session.finished_at>=6-hours-ago',
+  '.settled.at>=6-hours-ago',
+].map((q) =>
+  `.session!&${q}&.fields=` +
+  dotFields.map((f) => `${f.comp}.${f.prop}`).join(',')
+)
 
 export let sessionRows = (): [string, Session][] =>
   queryEids(sessionDots).value.flatMap((eid) => {
@@ -3350,13 +3366,8 @@ export let commentsOn = (target: string): Ent[] =>
 export let chatFor = (actor: string, target: string): Ent | undefined =>
   localEids([eq('chat', 'actor', actor), eq('chat', 'target', target)]).value
     .map(ent)[0]
-// A per-tile badge on every rendered entity — ONE aggregate sub for the whole
-// client, never a per-entity server sub (T-21283: a page of per-row subs
-// floods, 1363 measured). The server answers `.tally=comment.target` whole
-// once, then speaks deltas as comments arrive, die, or retarget; every tile
-// reads its key out of the shared map. Until the server has answered (and on
-// the no-socket paths — the TUI, a test), the local working-set count serves,
-// exactly the badge this replaces.
+// Badges share one tally, restricted to the mounted targets. A graph-wide
+// tally is smaller than comment rows but still grows with history, not the UI.
 type AggSet = {
   live: Signal<boolean>
   map: Signal<Record<string, number>>
@@ -3392,13 +3403,42 @@ let aggQuery = (name: string, line: string): AggSet => {
   }
   return found
 }
-// boot() OPENS the tally, beside the socket it rides; a tile only READS the
-// shared map. A read must not open it (T-33921): the read is a computed, so
-// dialling the wire from inside it subscribes mid-diff — and in a process that
-// named no server (a bench, a test) reaches for one it was never given.
 let COMMENTS = 'agg:comments'
 let COMMENT_TALLY = '.comment!&.tally=comment.target'
-let openCommentTally = () => void aggQuery(COMMENTS, COMMENT_TALLY)
+let commentTargets = new Map<string, number>()
+let commentScheduled = false
+let scheduleCommentTally = () => {
+  if (commentScheduled) return
+  commentScheduled = true
+  queueMicrotask(() => {
+    commentScheduled = false
+    let targets = [...commentTargets.keys()].sort()
+    if (!targets.length) {
+      aggSets.delete(COMMENTS)
+      dropBoard(COMMENTS)
+    } else {
+      aggQuery(
+        COMMENTS,
+        `${COMMENT_TALLY}&.comment.target=${targets.join(',')}`,
+      )
+    }
+  })
+}
+// Effects hold badges; reads never dial during render. Batch adjacent mounts
+// into one subscription replacement rather than one round trip per row.
+export let holdCommentCount = (target: string) => {
+  let n = commentTargets.get(target) ?? 0
+  commentTargets.set(target, n + 1)
+  if (!n) scheduleCommentTally()
+  return () => {
+    let n = (commentTargets.get(target) ?? 1) - 1
+    if (n) commentTargets.set(target, n)
+    else {
+      commentTargets.delete(target)
+      scheduleCommentTally()
+    }
+  }
+}
 export let commentCount = (target: string): Signal<number> =>
   computed(() => {
     let t = aggSet(COMMENTS, COMMENT_TALLY)

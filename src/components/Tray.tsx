@@ -6,8 +6,8 @@ import {
   mode,
   pinned,
   sessionDetail,
-  sessionRows,
   shelfFor,
+  traySessionQueries,
 } from '../live.ts'
 import { awake, type Session } from '../types.ts'
 import { block } from './ui.tsx'
@@ -79,8 +79,14 @@ let started = (s: Session) => Date.parse(s.started_at ?? '') || 0
 export let traySessions = (rows: [string, Session][]) =>
   rows.toSorted(([, a], [, b]) => started(b) - started(a))
 
-let live = () =>
-  traySessions(sessionRows().filter(([eid, session]) => shown(eid, session)))
+let useLive = () => {
+  // Fixed query list: hooks and ownership stay stable across renders.
+  let ids = traySessionQueries.flatMap((q) => useQueryEids(q))
+  return traySessions([...new Set(ids)].flatMap((eid) => {
+    let s = ent(eid).session
+    return s && shown(eid, s) ? [[eid, s] as [string, Session]] : []
+  }))
+}
 
 let Frame = block('div', 'Tray', {
   Strip: 'div',
@@ -135,7 +141,10 @@ let drop = (e: DragEvent) => {
 // part of sub identity, D-22567 §3), and gives it back when it closes. A
 // collapsed tray — the default — never asks for those columns at all.
 let LiveRows = ({ ls }: { ls: [string, Session][] }) => {
-  useQueryEids(sessionDetail)
+  useQueryEids(
+    `.num=${ls.map(([eid]) => ent(eid).num).join(',') || 0}&` +
+      sessionDetail.split('&')[1],
+  )
   return (
     <Group>
       <Label>live</Label>
@@ -188,7 +197,7 @@ export let Tray = () => {
     }
   }, [])
 
-  let ls = live()
+  let ls = useLive()
   let shelf = shelfFor(clientId())
   let ps = shelf ? pinned(shelf).toSorted((a, b) => b.z - a.z) : []
   // Shelved cards are painted as chips, not Cards, so the tray holds their

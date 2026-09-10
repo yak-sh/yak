@@ -586,6 +586,7 @@ export let predComps = (preds: Pred[]): Set<string> | null => {
   let out = new Set<string>()
   for (let p of preds) {
     if (p.refs || p.at || p.rev) return null
+    if (p.op == ORDER && p.value == 'priority') out.add('filed')
     if (
       p.op == NEVER || p.op == ORDER || p.op == NEAR || p.op == PROJECT
     ) continue

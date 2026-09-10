@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { type Ent, statusOf } from '../../types.ts'
 import {
   boardTally,
-  boardTasks,
   byPriority,
   byWarmth,
   clientId,
@@ -11,12 +10,13 @@ import {
   foldFor,
   mutate,
   statuses,
+  subWindow,
   uuid,
 } from '../../live.ts'
 import { spec, taskChanges } from '../../client.ts'
-import { adopt, orderOf, parseQuery } from '../../query.ts'
+import { adopt, fieldsOf, orderOf, parseQuery, windowOf } from '../../query.ts'
 import { peek, useDraft } from '../drafts.ts'
-import { useBoardSub, useBoardTally } from '../subscriptions.ts'
+import { useBoardTally } from '../subscriptions.ts'
 import { SubscriptionFailure } from '../SubscriptionFailure.tsx'
 import { block } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
@@ -24,6 +24,7 @@ import { Prio } from '../Prio.tsx'
 import { filterLine, usePassOf } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
 import { Entity } from '../Entity.tsx'
+import { useQueryResult } from '../useQuery.ts'
 
 let Frame = block('div', 'Board', {
   Col: 'div',
@@ -39,14 +40,36 @@ let Frame = block('div', 'Board', {
 })
 let { Col, ColName, Count, Scroll, Item, Add, More, New, Chips, Chip } = Frame
 
-// Bound the initial DOM, not the board: every task remains one explicit click
-// away. A large project otherwise builds tens of thousands of nodes before the
-// operator can interact with its first card.
-export let CAP = 100
-export let visible = <T,>(rows: T[], expanded: boolean) => ({
-  rows: expanded ? rows : rows.slice(0, CAP),
-  more: expanded ? 0 : Math.max(0, rows.length - CAP),
-})
+// A column asks for a screenful, not a 400-row page sorted after delivery.
+// Priority ordering belongs before the server window; explicit saved bounds
+// are ceilings, so scrolling never widens a deliberately limited board.
+export let columnLine = (q: string, status: string, limit: number): string => {
+  if (!q.trim()) return ''
+  let preds = parseQuery(q)
+  let bound = windowOf(preds).limit
+  let fields = fieldsOf(preds) ? '' : '&.fields=' + [
+    'doc.title',
+    'task.status',
+    'filed.priority',
+    'filed.project',
+    'filed.domain',
+    'filed.assignee',
+    'claim.session',
+    'completed.at',
+    'cancelled.at',
+    'blocked.on',
+    'created.at',
+    'created.by',
+    'updated.at',
+    'updated.by',
+    'proposed.at',
+    'decided.verdict',
+  ].join(',')
+  return q + '&.task!&.status=' + status +
+    (orderOf(preds) ? '' : '&.order=priority') +
+    '&.limit=' + Math.min(bound ?? Infinity, limit) + fields +
+    '&.edges.peers=task.status,doc.title&.edges.limit=' + limit * 4
+}
 
 // A board as kanban over its saved QUERY (board.query, query.ts grammar):
 // membership is never stored, a task is here because it matches. Columns
@@ -129,7 +152,37 @@ export let QuickAdd = (
 let addKey = (eid: string, status: string) => `new:${eid}:${status}`
 
 export let Board = ({ e }: { e: Ent }) => {
-  let boardRead = useBoardSub(e)
+  let root = useRef<HTMLDivElement>(null)
+  let [pageSize, setPageSize] = useState(0)
+  let [limits, setLimits] = useState<Record<string, number>>({})
+  let query = String(e.board?.query ?? '')
+  useLayoutEffect(() => {
+    let node = root.current
+    let measure = () =>
+      setPageSize(Math.max(4, Math.ceil((node?.clientHeight || 480) / 64) + 2))
+    measure()
+    if (!node || !globalThis.ResizeObserver) return
+    let observer = new ResizeObserver(measure)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+  useEffect(() => setLimits({}), [e.eid, query])
+  let invalid = ''
+  try {
+    parseQuery(query)
+  } catch (err) {
+    invalid = String(err)
+  }
+  // Statuses is a fixed vocabulary: one held page per column. No member
+  // outside those pages is needed to paint or count the board.
+  let pages = statuses.map((s) =>
+    useQueryResult(
+      invalid ? '' : columnLine(query, s, Math.max(pageSize, limits[s] ?? 0)),
+      pageSize > 0 && !invalid,
+    )
+  )
+  let boardRead = pages.find((p) => p.subscription?.state.status == 'failed')
+    ?.subscription
   // The member sub is a WINDOW now (live.ts boardLine), so the rows a column
   // holds are a page of it — while the COUNT a column names is the whole
   // truth, and it comes from the same aggregate the tile reads (T-22509): one
@@ -148,7 +201,6 @@ export let Board = ({ e }: { e: Ent }) => {
   let [adding, setAdding] = useState(() =>
     statuses.find((s) => peek(addKey(e.eid, s))) ?? ''
   )
-  let [expanded, setExpanded] = useState<Record<string, boolean>>({})
   // A board that says .order=hot ranks its columns by warmth, not
   // priority — the Front page: attention IS the ordering. Drag-drop
   // still writes priorities (adopt semantics unchanged); the ranking is
@@ -171,17 +223,20 @@ export let Board = ({ e }: { e: Ent }) => {
     : undefined
   if (failed) {
     return (
-      <Frame>
+      <Frame elRef={root}>
         <SubscriptionFailure read={failed} />
       </Frame>
     )
   }
+  if (invalid) return <Frame elRef={root}>bad query: {invalid}</Frame>
   let tasks: Ent[]
   try {
-    tasks = boardTasks(e).filter((k) => pass(k.eid))
+    tasks = [...new Set(pages.flatMap((p) => p.eids))].map(ent).filter((k) =>
+      pass(k.eid)
+    )
   } catch (err) {
     return (
-      <Frame>
+      <Frame elRef={root}>
         bad query: {String(err instanceof Error ? err.message : err)}
       </Frame>
     )
@@ -201,13 +256,13 @@ export let Board = ({ e }: { e: Ent }) => {
   let row = me ? foldFor(me, e.eid) : null
   if (screen?.state.status == 'failed') {
     return (
-      <Frame>
+      <Frame elRef={root}>
         <SubscriptionFailure read={screen} />
       </Frame>
     )
   }
   if (screen?.state.status == 'loading') {
-    return <Frame>Loading board preferences…</Frame>
+    return <Frame elRef={root}>Loading board preferences…</Frame>
   }
   let folded = new Set(
     String(row?.statuses ?? '').split(',').filter(Boolean),
@@ -303,11 +358,23 @@ export let Board = ({ e }: { e: Ent }) => {
   }
 
   return (
-    <Frame>
-      {statuses.map((s) => {
+    <Frame elRef={root}>
+      {statuses.map((s, i) => {
         let list = tasks.filter((k) => k.task && statusOf(k) == s).sort(order)
-        let pageKey = `${e.eid}:${s}`
-        let page = visible(list, !!expanded[pageKey])
+        let read = pages[i]
+        let win = read.subscription
+          ? subWindow(read.subscription.sub)
+          : undefined
+        let total = counts?.[s] ?? win?.total ?? list.length
+        let bound = windowOf(parseQuery(query)).limit
+        let more = Math.max(0, Math.min(total, bound ?? Infinity) - list.length)
+        let grow = () => {
+          if (!read.ready || !more) return
+          setLimits((ls) => ({
+            ...ls,
+            [s]: Math.max(pageSize, ls[s] ?? 0) + pageSize,
+          }))
+        }
         return (
           <Col
             key={s}
@@ -336,8 +403,15 @@ export let Board = ({ e }: { e: Ent }) => {
               />
             )}
             {!folded.has(s) && (
-              <Scroll>
-                {page.rows.map((k) => (
+              <Scroll
+                onScroll={(ev: Event) => {
+                  let node = ev.currentTarget as HTMLElement
+                  if (
+                    node.scrollHeight - node.scrollTop - node.clientHeight < 160
+                  ) grow()
+                }}
+              >
+                {list.map((k) => (
                   <Item
                     key={k.eid}
                     draggable
@@ -347,13 +421,12 @@ export let Board = ({ e }: { e: Ent }) => {
                     <Entity eid={k.eid} view='Board.List.Tile' />
                   </Item>
                 ))}
-                {page.more > 0 && (
+                {more > 0 && (
                   <More
                     type='button'
-                    onClick={() =>
-                      setExpanded((seen) => ({ ...seen, [pageKey]: true }))}
+                    onClick={grow}
                   >
-                    +{page.more} more
+                    +{more} more
                   </More>
                 )}
               </Scroll>

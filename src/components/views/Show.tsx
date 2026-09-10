@@ -11,6 +11,7 @@ import {
   edgeWindow,
   ent,
   gated,
+  holdCommentCount,
   mutate,
   parents,
   pending,
@@ -599,6 +600,7 @@ export let Meta = (
   },
 ) => {
   let claimant = useReference(e.claim?.session)
+  useEffect(() => holdCommentCount(e.eid), [e.eid])
   let talk = commentCount(e.eid).value
   let edges = tallies(e)
   let hasEdges = edges.some(([, open, done]) => open > 0 || done > 0)

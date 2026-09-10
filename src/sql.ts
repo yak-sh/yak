@@ -231,6 +231,30 @@ export let windowed = (base: Rel, w: Win): Rel => {
   })
 }
 
+// Board columns sort priority first, then creation order. Apply that order
+// BEFORE the limit; fetching a num page and sorting it in the browser loses
+// the high-priority rows outside that page. The cursor still names an entity.
+export let priorityWindow = (base: Rel, w: Win): Rel => {
+  let ir = toPackage(base)
+  let priority =
+    'coalesce((select priority from filed where filed.entity = entity.eid), 0)'
+  let anchor =
+    'coalesce((select priority from filed join entity a on a.eid = filed.entity where a.num = ?), 0)'
+  return fromPackage({
+    ...ir,
+    where: w.after == null ? ir.where : and(
+      ir.where,
+      raw({
+        sql:
+          `(${priority} > ${anchor} or (${priority} = ${anchor} and entity.num > ?))`,
+        params: [w.after, w.after, w.after],
+      }),
+    ),
+    order: [priority, 'entity.num'],
+    limit: w.limit ?? null,
+  })
+}
+
 // The fleet supplies the step relation; the package owns the closure/row valve.
 export let reachRows = (r: Reach, target: string): Frag =>
   walkRows(

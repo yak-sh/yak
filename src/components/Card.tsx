@@ -105,7 +105,14 @@ export let Card = (
   // rows a client might not even be showing. A route sub is the scoped form:
   // the entity streams in with the card, stays live, carries its edges (the
   // `.edges!` rider), and is evicted when the last card on it closes.
-  useEntity(p.target)
+  // Collection faces render the board header, not its incident history.
+  // Switching to Full/Debug acquires the ordinary route (and its edges).
+  let collection = p.view == 'Board' ||
+    (p.view == 'List' && !!ent(p.target).board)
+  useEntity(
+    p.target,
+    collection ? 'doc.title,board.query,project.color' : undefined,
+  )
   // Plain props do not invalidate a computed signal. Mirror the latest pin
   // into one so moves update the style while z-only raises still bind
   // straight to the attribute without rerendering the card body.

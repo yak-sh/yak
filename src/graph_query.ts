@@ -60,6 +60,7 @@ import {
 import {
   aggregateSql,
   countSql,
+  priorityWindow,
   screenSql,
   where,
   whereSome,
@@ -331,6 +332,10 @@ let countOf = (db: Sql, preds: Pred[]): number | undefined => {
 // the only question is whether they belong in THIS answer: yes when the query
 // names the lazy partition, or a subscription forces it. Otherwise the eager
 // partition is the complete scope and entries stay out.
+let priorityOrder = (a: Row, b: Row) =>
+  (Number(a.comps.filed?.priority ?? 0) -
+    Number(b.comps.filed?.priority ?? 0)) || a.num - b.num
+
 export let evalFast = (
   db: Sql,
   q: string,
@@ -357,7 +362,12 @@ export let evalFast = (
   // Entries page by their own seq (orderedEntries), never by spine num, so a
   // lazy answer stays whole here and is windowed downstream.
   let bounded = !entries && (win.limit != null || win.after != null)
-  let hits = matching(db, toSql(bounded ? windowed(built, win) : built))
+  let plan = orderOf(preds) == 'priority'
+    ? priorityWindow(built, win)
+    : bounded
+    ? windowed(built, win)
+    : built
+  let hits = matching(db, toSql(plan))
     .map(rowed)
     .filter((r) =>
       entries || inputs.some((p) => p.op == TEXT) || !r.comps.entry
@@ -524,7 +534,11 @@ export let evalSub = (
   // prefix without paying a count for every subscription in the fleet.
   let fast = evalFast(db, q, false, { limit: limit + 1, after: win.after })
   if (fast) {
-    let hits = fast.hits.sort((a, b) => b.num - a.num)
+    let hits = fast.hits.sort(
+      orderOf(fast.preds) == 'priority'
+        ? priorityOrder
+        : (a, b) => b.num - a.num,
+    )
     // Whole, and nobody asked for a window: the frame says nothing about bounds
     // because there is nothing to say.
     if (hits.length <= limit && win.limit == null) {
@@ -547,6 +561,16 @@ export let evalSub = (
   // refined and no statement can total. Saying the bound and leaving the total
   // unstated is the honest frame: the client knows it holds a window, and knows
   // nobody counted the rest.
+  if (orderOf(asked) == 'priority') {
+    let { hits } = evalQuery(db, q)
+    let page = pageRanked(hits.sort(priorityOrder), { ...win, limit })
+    return {
+      preds: asked,
+      hits: page,
+      exact: true,
+      window: { limit, total: hits.length },
+    }
+  }
   let capped = evalCapped(db, q, limit, win.after)
   return capped.whole && win.limit == null
     ? { preds: capped.preds, hits: capped.hits }
@@ -1217,6 +1241,8 @@ export let evalGraph = (
       preds: fast.preds,
       hits: fast.entries
         ? orderedEntries(fast.hits, after, limit)
+        : orderOf(fast.preds) == 'priority'
+        ? fast.hits.sort(priorityOrder)
         : cut(fast.hits),
     }
   }
@@ -1227,6 +1253,8 @@ export let evalGraph = (
       hits.sort((a, b) => warm(b.comps, now, ent) - warm(a.comps, now, ent)),
       win,
     )
+  } else if (orderOf(preds) == 'priority') {
+    hits = pageRanked(hits.sort(priorityOrder), win)
   } else if (namesLazy(preds)) hits = orderedEntries(hits, after, limit)
   else hits = cut(hits)
   return { preds, hits }
