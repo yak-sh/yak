@@ -1,10 +1,8 @@
-// Both walk compilers against the same indexed graph. Small correctness cases
-// stay fast; the merge-DAG regression and the 10k row valve live under slow().
+// The fleet adapter to the shared package walk against an indexed graph.
+// Small cases stay fast; the merge-DAG regression and 10k row valve use slow().
 import { assert, assertEquals } from '@std/assert'
 import './store/sqlitepath.ts'
 import { Database } from '@db/sqlite'
-import { walk, WALK_LIMIT as PACKAGE_LIMIT } from '@yaks/query'
-import { walkSql } from '../packages/sql/walk.ts'
 import { type Reach, WALK_LIMIT } from './query.ts'
 import { reachRows } from './sql.ts'
 import { type Bundle, matcher } from '@yaks/match'
@@ -58,98 +56,74 @@ let fixture = (
   return db
 }
 
-let compilers = {
-  fleet: (r: Reach, target: string) => reachRows(r, target),
-  package: (r: Reach, target: string) => {
-    let c = walkSql(
-      'entity.id',
-      walk(r.type, r.dir, target, r.depth),
-      r.via
-        ? 'select entity as "from", target as "to" from comment'
-        : 'select e."from", e."to" from edge e join requires n on n.entity = e.entity',
-    )
-    if (c.t != 'raw') throw new Error('walk must lower to raw SQL')
-    return {
-      sql: `select id from entity where ${c.frag.sql}`,
-      params: c.frag.params,
-    }
-  },
-}
+let compile = reachRows
 let chain = fixture(24)
 let ring = fixture(24, true)
-for (let [name, compile] of Object.entries(compilers)) {
-  for (let ref of [false, true]) {
-    let r: Reach = {
-      type: ref ? 'comment.target' : 'requires',
-      dir: '->',
-      ...(ref ? { via: { comp: 'comment', prop: 'target' } } : {}),
-    }
-    let rows = (db: Database, target: string, reach = r) => {
-      let q = compile(reach, target)
-      return db.prepare(q.sql).all<{ id: number }>(...q.params).map((r) => r.id)
-        .sort((a, b) => a - b)
-    }
-    for (let dir of ['->', '<-'] as const) {
-      let q = compile({ ...r, dir }, dir == '->' ? 'n1' : 'n24')
-      let stmt = chain.prepare(q.sql)
-      let expected = Array.from(
-        { length: 23 },
-        (_, i) => i + (dir == '->' ? 2 : 1),
-      )
-      Deno.test(`${name} ${r.type}: default ${dir} chain passes 16 hops`, () => {
-        let ids = stmt.all<{ id: number }>(...q.params).map((r) => r.id)
-        assertEquals(ids.sort((a, b) => a - b), expected)
-      })
-    }
-    Deno.test(`${name} ${r.type}: missing seed reaches nothing`, () => {
-      assertEquals(rows(chain, 'missing'), [])
-    })
-    Deno.test(`${name} ${r.type}: cycle terminates and excludes the seed`, () => {
-      assertEquals(
-        rows(ring, 'n1'),
-        Array.from({ length: 23 }, (_, i) => i + 2),
-      )
-    })
-    Deno.test(`${name} ${r.type}: only an explicit cap bounds hops`, () => {
-      assertEquals(rows(chain, 'n1', { ...r, depth: 2 }), [2, 3])
-      assertEquals(
-        rows(chain, 'n1', { ...r, depth: 16 }),
-        Array.from({ length: 16 }, (_, i) => i + 2),
-      )
-      // Retain explicit-cap semantics: a nonzero path can reach the seed.
-      assertEquals(rows(ring, 'n1', { ...r, depth: 24 }).length, 24)
-      assert(!compile(r, 'n1').sql.includes('depth'))
-      assert(compile({ ...r, depth: 2 }, 'n1').sql.includes('depth'))
+for (let ref of [false, true]) {
+  let r: Reach = {
+    type: ref ? 'comment.target' : 'requires',
+    dir: '->',
+    ...(ref ? { via: { comp: 'comment', prop: 'target' } } : {}),
+  }
+  let rows = (db: Database, target: string, reach = r) => {
+    let q = compile(reach, target)
+    return db.prepare(q.sql).all<{ id: number }>(...q.params).map((r) => r.id)
+      .sort((a, b) => a - b)
+  }
+  for (let dir of ['->', '<-'] as const) {
+    let q = compile({ ...r, dir }, dir == '->' ? 'n1' : 'n24')
+    let stmt = chain.prepare(q.sql)
+    let expected = Array.from(
+      { length: 23 },
+      (_, i) => i + (dir == '->' ? 2 : 1),
+    )
+    Deno.test(`fleet ${r.type}: default ${dir} chain passes 16 hops`, () => {
+      let ids = stmt.all<{ id: number }>(...q.params).map((r) => r.id)
+      assertEquals(ids.sort((a, b) => a - b), expected)
     })
   }
+  Deno.test(`fleet ${r.type}: missing seed reaches nothing`, () => {
+    assertEquals(rows(chain, 'missing'), [])
+  })
+  Deno.test(`fleet ${r.type}: cycle terminates and excludes the seed`, () => {
+    assertEquals(
+      rows(ring, 'n1'),
+      Array.from({ length: 23 }, (_, i) => i + 2),
+    )
+  })
+  Deno.test(`fleet ${r.type}: only an explicit cap bounds hops`, () => {
+    assertEquals(rows(chain, 'n1', { ...r, depth: 2 }), [2, 3])
+    assertEquals(
+      rows(chain, 'n1', { ...r, depth: 16 }),
+      Array.from({ length: 16 }, (_, i) => i + 2),
+    )
+    // Retain explicit-cap semantics: a nonzero path can reach the seed.
+    assertEquals(rows(ring, 'n1', { ...r, depth: 24 }).length, 24)
+    assert(!compile(r, 'n1').sql.includes('depth'))
+    assert(compile({ ...r, depth: 2 }, 'n1').sql.includes('depth'))
+  })
 }
 
-Deno.test('walk row limit is the same in both query implementations', () => {
-  assertEquals(PACKAGE_LIMIT, WALK_LIMIT)
-})
-
 slow(
-  'walk merge DAG: 2,000 commits, 5% merges, each compiler under 50ms',
+  'walk merge DAG: 2,000 commits, 5% merges, shared compiler under 50ms',
   () => {
     let path = Deno.makeTempFileSync({ suffix: '.sqlite' })
     let db = fixture(2000, false, true, path)
     try {
-      for (let [name, compile] of Object.entries(compilers)) {
-        let q = compile({ type: 'requires', dir: '->' }, 'n1')
-        let stmt = db.prepare(q.sql)
-        let times: number[] = []
-        for (let i = 0; i < 5; i++) {
-          let start = performance.now()
-          let rows = stmt.all(...q.params)
-          times.push(performance.now() - start)
-          assertEquals(rows.length, 1999)
-        }
-        let ms = times.sort((a, b) => a - b)[2]
-        console.log(
-          `${name}: 2,000-node 5%-merge DAG median ${ms.toFixed(2)}ms`,
-        )
-        assert(ms < 50, `${name}: ${ms}ms`)
+      let q = compile({ type: 'requires', dir: '->' }, 'n1')
+      let stmt = db.prepare(q.sql)
+      let times: number[] = []
+      for (let i = 0; i < 5; i++) {
+        let start = performance.now()
+        let rows = stmt.all(...q.params)
+        times.push(performance.now() - start)
+        assertEquals(rows.length, 1999)
       }
+      let ms = times.sort((a, b) => a - b)[2]
+      console.log(
+        `fleet: 2,000-node 5%-merge DAG median ${ms.toFixed(2)}ms`,
+      )
+      assert(ms < 50, `fleet: ${ms}ms`)
     } finally {
       db.close()
       Deno.removeSync(path)
@@ -162,7 +136,7 @@ slow(
   () => {
     let db = fixture(WALK_LIMIT * 2)
     try {
-      for (let compile of Object.values(compilers)) {
+      {
         for (let dir of ['->', '<-'] as const) {
           let q = compile(
             { type: 'requires', dir },
@@ -187,7 +161,7 @@ slow(
       }
       // A wide one-hop graph proves this is a ROW valve, not a hop cap.
       db.exec('update edge set "to" = 1')
-      for (let compile of Object.values(compilers)) {
+      {
         let q = compile({ type: 'requires', dir: '->' }, 'n1')
         assertEquals(db.prepare(q.sql).all(...q.params).length, WALK_LIMIT)
         q = compile({ type: 'requires', dir: '->', depth: 1 }, 'n1')

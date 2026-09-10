@@ -73,6 +73,9 @@ import {
 } from './types.ts'
 import { type Span, span } from './time.ts'
 import type { Vocab } from './store/vocab.ts'
+import { term as ftsTerm } from '@yaks/fts'
+export { ftsTerm }
+export { WALK_DEPTH, WALK_LIMIT } from '@yaks/query'
 
 // One rung of a path predicate: a component's column read on the entity this
 // hop lands on. Every hop but the last is an `{eid}` deref; the last is the
@@ -675,9 +678,6 @@ export type Reach = {
   dir: '->' | '<-'
   via?: Hop
 }
-export let WALK_DEPTH = 16
-// Default closure: no hop cap, at most this many non-seed nodes (nearest first).
-export const WALK_LIMIT = 10_000
 
 // The traversal closures a pred list asks for, deduped — what a door precomputes
 // before matching so the walk happens once, not per candidate row.
@@ -1350,12 +1350,6 @@ let text = (value: string): Pred => ({
 // The safe MATCH spelling shared by ranked retrieval and the membership SQL.
 // User text is always a quoted phrase, never FTS operator syntax; only a
 // trailing `*` has grammar meaning and prefix-matches the phrase's final token.
-export let ftsTerm = (value: string): string => {
-  let prefix = /\*+$/.test(value)
-  let phrase = value.replace(/\*+$/, '').replaceAll('"', '').trim()
-  return phrase ? `"${phrase}"${prefix ? '*' : ''}` : ''
-}
-
 export let ftsQuery = (preds: Pred[]): string =>
   preds.filter((p) => p.op == TEXT).map((p) => ftsTerm(p.value))
     .filter(Boolean).join(' ')

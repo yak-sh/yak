@@ -33,17 +33,17 @@ let seed = (target: string): Frag => {
 }
 
 /**
- * The membership condition a walk compiles to: `owner in (<closure>)`, where
- * `owner` is the SQL naming the candidate row's integer id and `step` is a SQL
- * relation with `"from"` and `"to"` columns — one hop, as integer ids.
+ * The closure as a one-column (`id`) relation. Storage readers that need the
+ * reached ids and membership predicates share this statement, including seed
+ * resolution, cycle handling, explicit hop caps and the default row valve.
+ * `step` projects `"from"`/`"to"` integer owner ids.
  */
-export let walkSql = (owner: string, c: Walk, step: string): Cond => {
+export let walkRows = (c: Walk, step: string): Frag => {
   let [here, there] = c.dir == '->' ? ['to', 'from'] : ['from', 'to']
   let s = seed(c.target)
   let bounded = c.depth != null
-  return raw({
-    sql:
-      `${owner} in (with recursive __walk(id${bounded ? ', depth' : ''}) as (` +
+  return {
+    sql: `with recursive __walk(id${bounded ? ', depth' : ''}) as (` +
       ` select id${bounded ? ', 0' : ''} from entity where ${s.sql}` +
       ` union select d."${there}"${bounded ? ', __walk.depth + 1' : ''}` +
       ` from (${step}) d` +
@@ -51,10 +51,19 @@ export let walkSql = (owner: string, c: Walk, step: string): Cond => {
       (bounded ? ` where __walk.depth < ?` : '') +
       `) select id from __walk where ` +
       (bounded
-        ? `depth > 0)`
-        : `id != (select id from entity where ${s.sql}) limit ?)`),
+        ? `depth > 0`
+        : `id != (select id from entity where ${s.sql}) limit ?`),
     params: c.depth != null
       ? [...s.params, c.depth]
       : [...s.params, ...s.params, WALK_LIMIT],
-  })
+  }
+}
+
+/**
+ * The membership condition a walk compiles to: `owner in (<closure>)`, where
+ * `owner` names the candidate row's integer id.
+ */
+export let walkSql = (owner: string, c: Walk, step: string): Cond => {
+  let rows = walkRows(c, step)
+  return raw({ sql: `${owner} in (${rows.sql})`, params: rows.params })
 }

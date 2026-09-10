@@ -18,6 +18,8 @@
 // spelling (`comp: ''`, which reads whichever component happens to carry the
 // column), and a substring too short for a useful index narrowing (see `grams`).
 import { isRef, propAt } from './props.ts'
+import { walk } from '@yaks/query'
+import { walkRows } from '@yaks/sql'
 import { sentences } from './edge.ts'
 import {
   AGG,
@@ -33,7 +35,6 @@ import {
   REACHES,
   refCols,
   TEXT,
-  WALK_LIMIT,
   WANT,
   type Win,
   WINDOW,
@@ -763,44 +764,16 @@ let revSql = (p: Pred, now: number): Frag | null => {
   }
 }
 
-// The walk compiled: `.requires[<=3]->T-42` is a recursive CTE seeded at the
-// target and stepped along the arrow — `->` reads `d.child = <current>` and
-// collects parents, which is `edge_to` (the reverse endpoint's own index), so
-// the closure is a sequence of index SEARCHES and never a scan; `<-` reads the
-// parent and collects children. Without a hop cap UNION dedupes on id alone:
-// cycles terminate and DAG merges never re-expand a node at different depths.
-// The outer LIMIT stops the FIFO queue at the nearest WALK_LIMIT non-seed nodes.
-// Only an explicit cap adds depth; its arithmetic bounds the recursion.
-//
-// One nature, one branch (edge.ts sentences), so the type is no longer a term
-// the planner can prefer over the endpoint — which is what the old `+d.type`
-// existed to prevent, back when a stale ANALYZE made the type index look
-// cheaper than a seek. A reference column is the same (parent, child) shape:
-// the owner and what it points at.
-export let stepSql = (r: Reach): string =>
-  r.via
-    ? `select t.entity as parent, t."${r.via.prop}" as child` +
-      ` from "${r.via.comp}" t`
-    : sentences(r.type)
-export let reachCte = (r: Reach): string => {
-  let [here, there] = r.dir == '<-' ? ['parent', 'child'] : ['child', 'parent']
-  let bounded = r.depth != null
-  return `with recursive __reach(id${bounded ? ', depth' : ''}) as (` +
-    ` select id${bounded ? ', 0' : ''} from entity where eid = ?` +
-    ` union select d.${there}${bounded ? ', __reach.depth + 1' : ''}` +
-    ` from (${stepSql(r)}) d` +
-    ` join __reach on d.${here} = __reach.id` +
-    (bounded ? ` where __reach.depth < ?` : '') +
-    `)`
-}
-// Shared by SQL membership and the fallback reader, including the row valve.
-export let reachRows = (r: Reach, target: string): Frag => ({
-  sql: reachCte(r) + ` select id from __reach where ` +
-    (r.depth != null
-      ? `depth > 0`
-      : `id != (select id from entity where eid = ?) limit ?`),
-  params: r.depth != null ? [target, r.depth] : [target, target, WALK_LIMIT],
-})
+// The fleet only supplies the step relation; @yaks/sql owns the closure for
+// both compiled membership and db.ts reaching(). No second recursion/row valve.
+export let reachRows = (r: Reach, target: string): Frag =>
+  walkRows(
+    walk(r.type, r.dir, target, r.depth),
+    r.via
+      ? `select t.entity as "from", t."${r.via.prop}" as "to"` +
+        ` from "${r.via.comp}" t`
+      : `select parent as "from", child as "to" from (${sentences(r.type)})`,
+  )
 let reachSql = (p: Pred): Frag | null => {
   let r = p.reach
   if (!r || !p.value) return null
