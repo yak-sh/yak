@@ -44,12 +44,9 @@ Deno.test('fleet CAS creates default both doc columns and echo whole writable ro
       body: readComp(db, eid, 'doc')?.body,
     })
   }
-  assertEquals(component(out, 'title', 'task'), {
-    priority: 0,
-    project: null,
-    assignee: null,
-    domain: null,
-  })
+  assertEquals(component(out, 'title', 'task'), {})
+  assertEquals(component(out, 'title', 'filed'), undefined)
+  assertEquals(readComp(db, 'title', 'filed'), undefined)
   assertEquals(raw(db, 'select count(*) as n from blob_text'), [{ n: 2 }])
   assertEquals(raw(db, `select typeof(body) as type from doc`), [
     { type: 'integer' },

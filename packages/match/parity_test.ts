@@ -407,21 +407,24 @@ let spine: VocabDoc = {
 let todo: Vocab = loadVocab([taskDoc, spine])
 
 let ROWS: Bundle[] = [
-  { entity: { eid: 't1' }, task: { priority: 1 } },
+  { entity: { eid: 't1' }, task: {}, filed: { priority: 1 } },
   {
     entity: { eid: 't2' },
-    task: { priority: 2 },
+    task: {},
+    filed: { priority: 2 },
     completed: { at: '2024-06-14T08:00:00.000Z' },
   },
   {
     entity: { eid: 't3' },
-    task: { priority: 3 },
+    task: {},
+    filed: { priority: 3 },
     cancelled: { at: '2024-06-13T08:00:00.000Z', reason: 'moved on' },
   },
   // both marks: cancelled outranks done, in the ladder's order
   {
     entity: { eid: 't4' },
-    task: { priority: 4 },
+    task: {},
+    filed: { priority: 4 },
     completed: { at: '2024-06-12T08:00:00.000Z' },
     cancelled: { at: '2024-06-15T08:00:00.000Z' },
   },

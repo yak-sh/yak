@@ -134,7 +134,7 @@ name the ones the page will draw. `.task.status=open` alone answers no titles;
 
     { kind: 'task', entity: { eid: '4f3c...', num: 12 },
       doc: { title: 'Lemon cake', body: '3 lemons, 200g butter...' },
-      task: { status: 'open', priority: 1 } }
+      task: { status: 'open' } }
 
 To change one, send its eid with just the fields you are changing; omitted
 fields are left alone, and `null` clears one. `{entity: {eid}, tombstone: {}}`
