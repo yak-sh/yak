@@ -115,7 +115,26 @@ export let driver = (db: Database): Driver => {
         statement = db.prepare(sql)
         cache.set(sql, statement)
       }
-      return statement.all(...params)
+      try {
+        return statement.all(...params)
+      } catch (error) {
+        // @db/sqlite resets all() on success, but an exception while decoding
+        // a row can leave a RETURNING statement at SQLITE_ROW. Retaining it
+        // then prevents every later SAVEPOINT on this connection. Evict only
+        // the failed statement; never retry SQL with possible side effects.
+        cache.delete(sql)
+        try {
+          statement.finalize()
+        } catch (cleanup) {
+          throw new AggregateError(
+            [error, cleanup],
+            String(error) +
+              '; SQLite statement finalization also reported an error',
+            { cause: error },
+          )
+        }
+        throw error
+      }
     },
     exec: (sql) => db.exec(sql),
   }
