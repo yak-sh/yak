@@ -606,6 +606,10 @@ let DECLINES = [
   // declines them (as the anchor does) and the matcher answers
   '.refs!',
   '.refs=',
+  // a path leaf several reference columns share (`actor` — session's and
+  // subscription's): comp '' names no table, so the whole statement was
+  // `no such table:` until it declined here (S-37088)
+  '.claim.session.actor=p1',
 ]
 
 for (let q of DECLINES) {

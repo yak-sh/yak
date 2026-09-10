@@ -122,7 +122,7 @@ let world = () => {
     },
     // t2: wip/P1, assigned priya, project P — status is DERIVED (D-24102):
     // wip = a live claim, so seed a session and claim it.
-    { eid: sw, name: 'session', comp: { id: uuid() } },
+    { eid: sw, name: 'session', comp: { id: uuid(), actor: jeff } },
     {
       eid: t2,
       name: 'doc',
@@ -248,7 +248,21 @@ battery('path predicates (deref joins, refined in JS)', [
   '.filed.project.doc.title~=platform',
   '.project.color=green',
   '.comment.target.doc.title~=widget', // deep: comment → target task → title
+  // a leaf several reference columns share (session.actor, subscription.actor)
+  // routes to no component, so the index declines it and the matcher answers.
+  // Lowered anyway it spelled the table `""` and the whole read died with
+  // `no such table:`, taking `task context` with it (S-37088).
+  `.claim.session.actor=${W.jeff}`,
 ])
+
+// The shared leaf is not merely agreed-empty: t2's claim is held by the
+// session jeff acts as, and both readers must NAME it.
+Deno.test('a shared reference leaf answers through the matcher', () => {
+  assertEquals(
+    evalGraph(db, `.claim.session.actor=${W.jeff}`).hits.map((h) => h.eid),
+    [W.t2],
+  )
+})
 
 battery('reverse hops and the backlink union', [
   '.comments!',

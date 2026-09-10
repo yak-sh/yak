@@ -328,6 +328,15 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
       ` where "__p${i}"."entity" = ${target})`
   }
   let leaf = hops[hops.length - 1]
+  // A leaf that several reference columns share answers to no one component
+  // (`route()`'s comp '' — the leaf of `.claim.session.actor`), so there is no
+  // table to read it from. Decline, as the same word declines on a single hop,
+  // and the matcher — which reads every owner — answers instead. Lowered
+  // anyway, `source('')` spelled the table `""` and SQLite refused the whole
+  // statement with `no such table:` (S-37088).
+  if (!leaf.comp) {
+    throw new Unsupported('a shared reference leaf', `.${leaf.prop}`)
+  }
   // A leaf facet: does the target wear this component?
   if (!leaf.prop) {
     let owner = leaf.comp == 'entity' ? `"__pl"."id"` : `"__pl"."entity"`

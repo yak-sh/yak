@@ -423,3 +423,30 @@ Deno.test('a builder can preserve a terminal component facet across name collisi
   assert(c.sql.includes('"book"."entity" is null'), c.sql)
   assert(!c.sql.includes('join "loan"'), c.sql)
 })
+
+// A bare prop several reference columns share routes to comp '' — one read
+// concept with no one table behind it. Lowered, its path leaf named the table
+// `""` and SQLite refused the statement; the contract is to decline (S-37088).
+Deno.test('a path leaf shared by several reference columns declines', () => {
+  let vocab = loadVocab({
+    $defs: {
+      claim: {
+        type: 'object',
+        properties: { session: { type: 'string', ref: 'entity' } },
+      },
+      session: {
+        type: 'object',
+        properties: { actor: { type: 'string', ref: 'entity' } },
+      },
+      crew: {
+        type: 'object',
+        properties: { actor: { type: 'string', ref: 'entity' } },
+      },
+    },
+  })
+  let e = assertThrows(
+    () => compile(parse('.claim.session.actor=p1'), vocab),
+    Unsupported,
+  ) as Unsupported
+  assertEquals(e.feature, 'a shared reference leaf')
+})
