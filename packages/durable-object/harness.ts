@@ -17,7 +17,7 @@
 // so a bug this stand-in cannot see is a bug the runtime would not have shown
 // either.
 
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/db'
 import type { Vocab } from '@yaks/vocab'
 import { shop } from '../sqlite/harness.ts'
 import { type DurableStorage, prohibited, type SqlValue } from './sql.ts'

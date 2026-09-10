@@ -146,7 +146,7 @@ use the registered `session.status` derived column).
 ## Performance probe
 
 ```sh
-DENO_SQLITE_PATH=libsqlite3.so.0 deno run -A packages/harness/perf.ts
+deno run -A packages/harness/perf.ts
 ```
 
 This reports warmed median/p95 fresh-entry apply time and the subsequent react

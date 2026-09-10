@@ -1,7 +1,10 @@
 {
   "name": "@yaks/sqlite",
   "version": "0.0.0",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./db": "./db.ts"
+  },
   "license": "Apache-2.0",
   "description": "A SQLite storage adapter for @yaks/graph: a vocabulary's schema, queries answered as bundles, and transactional writes.",
   "imports": {

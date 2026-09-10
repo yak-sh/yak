@@ -8,7 +8,7 @@
 // promise: a filter written once means one thing wherever the data lives.
 
 import { assertEquals, assertThrows } from '@std/assert'
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/db'
 import type { Bundle } from './read.ts'
 import { storage } from '@yaks/sqlite'
 import { fields, schema as ftsSchema, search } from '@yaks/fts'

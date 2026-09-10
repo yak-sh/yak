@@ -7,13 +7,12 @@
 // because @db/sqlite's bundled x86_64 library crashes during
 // sqlite3_initialize on Deno 2.9.
 //
-// TODO(T-34183): only src/ comes through here. The eight test harnesses in
-// packages/ import '@db/sqlite' directly, so on Linux they load the bundled
-// library and segfault — which nobody saw, because an interactive shell on
-// this box happens to carry DENO_SQLITE_PATH and every run inherited it. The
-// `test:packages` task exports it instead, which is a second copy of the table
-// below; the fix is for those harnesses to take their Database from one
-// prelude the way store/sqlite.ts does, and then that export comes out again.
+// packages/ has the same prelude of its own (@yaks/sqlite/db, T-34183) rather
+// than importing this one: a worker's module graph resolves no bare specifier,
+// so store/sqlite.ts — which a worker may pull in — can reach only relative
+// files and fully qualified ones. Two small copies of the table below, one per
+// side of that seam; packages/sqlite/sqlitepath_test.ts holds the rule that
+// makes either of them worth anything.
 let paths: Record<string, string> = {
   linux: 'libsqlite3.so.0',
   darwin: '/usr/lib/libsqlite3.dylib',

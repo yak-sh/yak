@@ -17,7 +17,7 @@
 // STEP leaves is reconciled a rung up, by run.ts `resume()`, because waking a
 // transcript needs a model and this file has none.
 
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/db'
 import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { type Effects, effects } from '@yaks/effects'

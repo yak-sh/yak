@@ -1,7 +1,7 @@
 // Shared benchmark plumbing; importing fleet.ts alone never registers a bench.
 import type { Comp } from '@yaks/graph'
 import { assertEquals } from '@std/assert'
-import { Database } from '@db/sqlite'
+import { Database } from '../db.ts'
 import { compile } from '@yaks/sql'
 import { parse } from '@yaks/query'
 import { schema as ftsSchema } from '@yaks/fts'

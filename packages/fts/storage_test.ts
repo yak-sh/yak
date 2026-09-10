@@ -3,7 +3,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { type Driver, storage } from '@yaks/sqlite'
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/db'
 import { fields, schema, search } from './mod.ts'
 
 Deno.test('storage composes FTS explicitly for document and non-document prose', () => {

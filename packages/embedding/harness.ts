@@ -5,7 +5,7 @@
 // text at all — so the tests can prove that a vector is made of EVERY text
 // property and no others.
 
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/db'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import type { Driver } from './driver.ts'
 import { fields, schema, sweep } from './mod.ts'

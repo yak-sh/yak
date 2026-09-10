@@ -6,7 +6,7 @@
 // application composes this package: the adapter owns the bytes, the graph owns
 // the rules, @yaks/key brings the carrier, and this package brings the name.
 
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/db'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Graph, graph, type Storage } from '@yaks/graph'
 import { keyDoc, keyKeywords, keys } from '@yaks/key'

@@ -1,5 +1,5 @@
 // Reproducible hot-path probe, outside the fast test tier:
-// DENO_SQLITE_PATH=libsqlite3.so.0 deno run -A packages/harness/perf.ts
+// deno run -A packages/harness/perf.ts
 import type { Bundle } from '@yaks/graph'
 import { daemon } from '@yaks/session'
 import { open } from './store.ts'

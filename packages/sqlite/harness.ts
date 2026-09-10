@@ -7,7 +7,7 @@
 // product's unique sku, a shelf's composite slot) without any knowledge outside
 // this file.
 
-import { Database } from '@db/sqlite'
+import { Database } from './db.ts'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import type { Driver } from './driver.ts'

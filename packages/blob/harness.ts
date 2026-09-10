@@ -7,7 +7,7 @@
 // application composes this package: the adapter owns the rows, the graph owns
 // the rules, this package moves the long values out of the way.
 
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/db'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Graph, graph } from '@yaks/graph'
 import { storage, type Store } from '@yaks/sqlite'

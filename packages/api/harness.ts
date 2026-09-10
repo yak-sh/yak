@@ -4,7 +4,7 @@
 // and a status, reviews about them, members who joined — so nothing here needs
 // knowledge from outside this file.
 
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/db'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { storage } from '@yaks/sqlite'

@@ -6,7 +6,7 @@
 // tree body is BINARY — raw ids, not text — and that backend holds text. A
 // deployment uses the file or object backend for the same reason.
 
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/db'
 import { address, type Blobs, encode } from '@yaks/blob'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { type Graph, graph, type Plugin } from '@yaks/graph'

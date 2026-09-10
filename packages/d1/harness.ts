@@ -25,7 +25,7 @@
 // a number that quietly grows. hops_test.ts holds each shape of batch to a
 // pinned count.
 
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/db'
 import type { Vocab } from '@yaks/vocab'
 import { shop } from '../sqlite/harness.ts'
 import type { D1Like, D1Result, D1Value, Row } from './d1.ts'

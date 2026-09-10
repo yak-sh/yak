@@ -71,12 +71,12 @@ jobs:
       # since T-34159 the probe fills them itself (workers/yak/wrangler.ts
       # `ready()`, called from probe.ts) before workerd reads them.
       #
-      # Through the TASK, not a bare `deno test`: @db/sqlite ships a prebuilt
-      # libsqlite3.so that segfaults on this box the moment it is opened, so
-      # `test:workers` points DENO_SQLITE_PATH at the system sqlite the way
-      # `test:packages` does (T-34641). A bare `deno test -A workers/yak/` only
-      # survived because every login shell here exports that var and a systemd
-      # unit inherits none of it.
+      # @db/sqlite ships a prebuilt libsqlite3.so that segfaults on this box the
+      # moment it is opened. Nothing here has to say so any more: since T-34183
+      # every importer takes `Database` from @yaks/sqlite/db, whose prelude names
+      # the system library first (packages/sqlite/sqlitepath_test.ts holds that
+      # line). Before that, these runs only survived because every login shell
+      # here exports DENO_SQLITE_PATH and a systemd unit inherits none of it.
       - name: worker tests
         run: deno task test:workers
 
