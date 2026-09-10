@@ -1,3 +1,4 @@
+import { h } from 'preact'
 import { define, resolve } from '@yaks/render'
 import { assert, assertEquals } from '@std/assert'
 import { render } from '@yaks/preact'
@@ -249,6 +250,70 @@ Deno.test('boxed user Markdown preserves explicit newlines and paragraph separat
     assertEquals(third, second + 2, ui.text())
     assertEquals(fourth, third + 1, ui.text())
     assertEquals(entry.content, { body: source })
+  } finally {
+    ui.free()
+  }
+})
+
+Deno.test('instruction snapshots display one clipped provenance row without changing source', async () => {
+  let source = 'PRIVATE instruction\n\n'.repeat(10000)
+  for (let scope of ['shared', 'local']) {
+    for (let width of [80, 18, 1]) {
+      let entry: Bundle = {
+        entity: { eid: 'instruction' },
+        entry: { seq: 12 },
+        prompt: { scope, source: '/private/repository/AGENTS.md' },
+        content: { body: source },
+      }
+      let ui = await mount(
+        () =>
+          h(
+            'div',
+            null,
+            render(transcriptViews, entry, 'Transcript', vocab),
+            h('div', null, 'next entry'),
+          ),
+        width,
+        4,
+      )
+      try {
+        let lines = ui.text().split('\n')
+        assertEquals(lines[1], 'next entry')
+        assertEquals(lines.slice(2), ['', ''])
+        assert(!ui.out.join('').includes('PRIVATE'))
+        assert(!ui.out.join('').includes('/private/'))
+        if (width == 80) {
+          assert(lines[0].includes('prompt    ' + scope + ' · AGENTS.md'))
+        }
+        assertEquals(entry.content, { body: source })
+      } finally {
+        ui.free()
+      }
+    }
+  }
+})
+
+Deno.test('prompt source metadata cannot insert extra transcript rows', async () => {
+  let entry: Bundle = {
+    entity: { eid: 'instruction' },
+    entry: { seq: 2 },
+    prompt: { scope: 'local\nextra', source: 'graph:source\nname' },
+    content: { body: 'not displayed' },
+  }
+  let ui = await mount(
+    () =>
+      h(
+        'div',
+        null,
+        render(transcriptViews, entry, 'Transcript', vocab),
+        h('div', null, 'next'),
+      ),
+    40,
+    3,
+  )
+  try {
+    assertEquals(ui.text().split('\n')[1], 'next')
+    assert(!ui.text().includes('not displayed'))
   } finally {
     ui.free()
   }

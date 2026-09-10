@@ -65,7 +65,32 @@ export let transcriptViews = define([
       })
     },
   },
-  row('.entry&.prompt&.content', 'prompt', 'Muted'),
+  {
+    view: 'Transcript',
+    match: parse('.entry&.prompt'),
+    render: (b, h) => {
+      let prompt = b.prompt as Comp
+      // Display provenance, not instruction text. A fixed row also prevents
+      // long source names from changing the virtual list's measured height.
+      let source = String(prompt.source ?? '').replaceAll('\\', '/')
+        .split('/').filter(Boolean).at(-1) ?? ''
+      let summary = [prompt.scope, source].filter(Boolean).join(' · ')
+        .replace(/\s+/g, ' ')
+      return h(
+        'div',
+        { height: '1' },
+        h(
+          'span',
+          { class: 'Dim' },
+          String((b.entry as Comp)?.seq ?? '').padStart(3),
+        ),
+        ' ',
+        h('span', { class: 'Muted' }, 'prompt'.padEnd(9)),
+        ' ',
+        h('span', { class: 'Muted' }, summary),
+      )
+    },
+  },
   row('.entry&.content&.entity.eid~=delivery:', 'notice', 'Muted', true),
   row('.entry&.error', 'error', 'Bad'),
   row('.entry&.exception', 'exception', 'Bad'),

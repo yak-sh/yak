@@ -243,8 +243,10 @@ inherit the parent's file snapshots even when assigned a different home;
 admitting that new home's guidance is explicit. A renamed/deleted source doesn't
 alter history. This pilot is host/POSIX-oriented; it doesn't yet provide UI
 admission controls, or prompt supersession. Prompt entries have a query-matched
-transcript renderer. Fork notes are guidance, not a prohibition on useful
-delegation. Provider cache hits are not guaranteed.
+transcript renderer that shows one clipped line with sequence, scope, and source
+name. Instruction text remains stored and is sent to the provider unchanged;
+compact display does not remove it from context. Fork notes are guidance, not a
+prohibition on useful delegation. Provider cache hits are not guaranteed.
 
 #### Prompt history and cache limits
 
