@@ -28,6 +28,7 @@ Deno.test('fake agent: panels, burst selector keys, editing and stale reads', as
     session: { id, status: 'settled', parent: id == 's3' ? 's2' : undefined },
   }))
   let a: UIAgent = {
+    taskEntry: () => Promise.resolve({ task: 'task', child: 'child' }),
     children: (parent) =>
       Promise.resolve(sessions.filter((b) => b.session.parent == parent)),
     sessions: () => {
@@ -68,7 +69,7 @@ Deno.test('fake agent: panels, burst selector keys, editing and stale reads', as
     for (let p of panels) assert(ui.text().includes(p.title), p.title)
     assert(ui.text().includes('test task'))
     let before = reads
-    assertEquals(await ui.send('ab\x1b[13;2ucd\x1b[D!'), 2)
+    assertEquals(await ui.send('ab\x1b[13;2ucd\x1b[D!'), 3)
     assertEquals(reads, before) // typing does not query the graph
     assert(ui.text().includes('c!d'))
     await ui.send('\x0e') // begin a slow s1 read
@@ -147,6 +148,7 @@ Deno.test('two submissions before start resolves stay ordered in one new session
   let started = deferred<string>()
   let starts: string[] = [], sends: string[] = []
   let a: UIAgent = {
+    taskEntry: () => Promise.resolve({ task: 'task', child: 'child' }),
     children: () => Promise.resolve([]),
     sessions: () => Promise.resolve([]),
     tasks: () => Promise.resolve([]),
@@ -182,6 +184,7 @@ Deno.test('two submissions before start resolves stay ordered in one new session
 
 Deno.test('a failed send is visible and contributed panels read and render bundles', async () => {
   let a: UIAgent = {
+    taskEntry: () => Promise.resolve({ task: 'task', child: 'child' }),
     children: () => Promise.resolve([]),
     sessions: () => Promise.resolve([]),
     tasks: () => Promise.resolve([]),
@@ -222,5 +225,112 @@ Deno.test('a failed send is visible and contributed panels read and render bundl
     assert(ui.text().includes('offline'))
   } finally {
     ui.free()
+  }
+})
+
+Deno.test('Tab preserves editing and captures message/task mode for each queued submit', async () => {
+  let started = deferred<string>()
+  let writes: string[] = []
+  let a: UIAgent = {
+    children: () => Promise.resolve([]),
+    sessions: () => Promise.resolve([]),
+    tasks: () => Promise.resolve([]),
+    transcript: () => Promise.resolve([]),
+    line: () => '',
+    start: (text) => {
+      writes.push(`start: ${text}`)
+      return started.promise
+    },
+    send: (id, text) => {
+      writes.push(`message ${id}: ${text}`)
+      return Promise.resolve('input')
+    },
+    taskEntry: (id, text) => {
+      writes.push(`task ${id}: ${text}`)
+      return Promise.resolve({ task: 'task', child: 'child' })
+    },
+  }
+  let ui = await mount(
+    () => h(App, { agent: a, subscribe: () => () => {} }),
+    120,
+    40,
+  )
+  try {
+    assert(ui.text().includes('message · Tab'))
+    await ui.send('\tno parent\r')
+    await settle()
+    assert(ui.text().includes('Select a session'))
+    assertEquals(writes, [])
+    await ui.send('\tstart\rfirst\t\x1b[13;2usecond\r\tmessage\r\t\ttail\r')
+    started.resolve('parent')
+    await settle()
+    assertEquals(writes, [
+      'start: start',
+      'task parent: first\nsecond',
+      'message parent: message',
+      'message parent: tail',
+    ])
+    assert(ui.text().includes('message · Tab'))
+    assert(ui.text().includes('Harness — parent')) // do not select the child
+  } finally {
+    ui.free()
+  }
+})
+
+Deno.test('task mode paints claimed work and subagent, then its delivered result without keys', async () => {
+  let childReply = deferred<Awaited<ReturnType<Model>>>()
+  let childAsked = deferred<void>()
+  let a = agent({
+    h: open(':memory:'),
+    tools: [],
+    model: (req) => {
+      if (
+        req.items.some((i) =>
+          i.kind == 'user' && i.text.startsWith('microtask')
+        )
+      ) {
+        childAsked.resolve()
+        return childReply.promise
+      }
+      return Promise.resolve({
+        id: 'r',
+        model: 'fake',
+        items: [{ kind: 'assistant', text: 'parent ready' }],
+      })
+    },
+  })
+  let ui = await mount(
+    () => h(App, { agent: a, subscribe: changes(a) }),
+    120,
+    40,
+  )
+  try {
+    await ui.send('parent\r')
+    await settle()
+    let [parent] = await a.sessions()
+    await a.idle(parent.entity.eid)
+    await ui.send('\tmicrotask\x1b[13;2udetails\r')
+    await childAsked.promise
+    await settle()
+    let [task] = await a.tasks()
+    let [child] = await a.children(parent.entity.eid)
+    assertEquals((task.claim as Comp).session, child.entity.eid)
+    assert(ui.text().includes('wip microtask'), ui.text())
+    assert(ui.text().includes('child:'), ui.text())
+    assert(ui.text().includes(`Harness — ${parent.entity.eid.slice(0, 8)}`))
+    await a.h.g.apply([{ entity: task.entity, completed: {} }])
+    childReply.resolve({
+      id: 'r',
+      model: 'fake',
+      items: [{ kind: 'assistant', text: 'microtask final' }],
+    })
+    await a.idle(child.entity.eid)
+    await a.idle(parent.entity.eid)
+    await settle() // no keys after the submit
+    assert(ui.text().includes('microtask final'), ui.text())
+    assert(ui.text().includes('done'), ui.text())
+  } finally {
+    ui.free()
+    a.close()
   }
 })

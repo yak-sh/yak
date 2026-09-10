@@ -54,6 +54,8 @@ export let App = (
   })
   let latest = useRef(data)
   latest.current = data
+  let [mode, setMode] = useState<'message' | 'task'>('message')
+  let liveMode = useRef(mode)
   let [error, setError] = useState('')
   let refresh = useRef(() => {})
   let choose = (s: Selection) => {
@@ -114,6 +116,11 @@ export let App = (
 
   // Refs make several keys in one stdin read move several rows.
   useKeys((k) => {
+    if (k.name == 'tab' && !k.ctrl && !k.alt) {
+      liveMode.current = liveMode.current == 'message' ? 'task' : 'message'
+      setMode(liveMode.current)
+      return true
+    }
     if (k.ctrl && k.text == 'o') {
       choose({})
       return true
@@ -133,15 +140,22 @@ export let App = (
   let submit = (text: string) => {
     let s = selected.current
     setError('')
+    let mode = liveMode.current
+    if (mode == 'task' && !s.id && !s.pending) {
+      setError(`Not sent: ${text}\nSelect a session before submitting a task.`)
+      return
+    }
+    let send = async (id: Eid) => {
+      if (mode == 'task') await a.taskEntry(id, text)
+      else await a.send(id, text)
+      return id
+    }
     // Serialize submissions per selection, including two Enters in the same
     // stdin read before start() has supplied the new session id.
     let write = s.pending
-      ? s.pending.then(async (id) => {
-        await a.send(id, text)
-        return id
-      })
+      ? s.pending.then(send)
       : s.id
-      ? a.send(s.id, text).then(() => s.id!)
+      ? send(s.id)
       : a.start(text)
     s.pending = write
     void write.then((id) => {
@@ -184,6 +198,7 @@ export let App = (
       ),
     ),
     error ? h('div', { wrap: '1' }, error) : null,
+    h('div', { class: 'Entry_Hint' }, `${mode} · Tab toggles message / task`),
     h(Textarea, { max: 6, onSubmit: submit }),
   )
 }

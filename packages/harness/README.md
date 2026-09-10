@@ -21,6 +21,18 @@ Ctrl+N / Ctrl+P or Alt+Down / Alt+Up select sessions, Ctrl+O selects a new one,
 PgUp / PgDn scroll, and Ctrl+C quits. Shift+Enter needs a terminal supporting
 kitty keyboard sequences (Alt+Enter also inserts a newline).
 
+Tab toggles the visible composer mode between **message** (the default) and
+**task**, without changing the draft. Task mode requires a selected session;
+Enter calls `a.taskEntry(session, text)` to mint a `doc` and bare `task{}` (no
+filing metadata), contain it under the session's claimed tasks, and spawn a
+child that claims it. With no claimed tasks, containment is under the session
+itself. The first line (up to 120 characters) is the title; the entire text is
+the body. Admission, task, edges, child and claim are one atomic write through
+`taskEntry(graph, session, text, limits?)` from `@yaks/session`. A cap refusal
+creates nothing and appears by the composer. The parent stays selected and
+available for messages; the child and its open/wip task appear in the sidebar,
+and completion arrives in the parent transcript without a keypress.
+
 Typing only touches the editor. Post-commit graph effects refresh the content,
 including model replies arriving while stdin is idle; there is no polling loop.
 The sidebar is `Opts.panels` in `app.ts`: each contribution in `panels.ts` is

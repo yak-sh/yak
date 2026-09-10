@@ -6,7 +6,14 @@ import type { Agent } from './run.ts'
 /** The doors used by the UI; a test can supply just these. */
 export type UIAgent = Pick<
   Agent,
-  'start' | 'send' | 'sessions' | 'children' | 'tasks' | 'transcript' | 'line'
+  | 'start'
+  | 'send'
+  | 'taskEntry'
+  | 'sessions'
+  | 'children'
+  | 'tasks'
+  | 'transcript'
+  | 'line'
 >
 
 /** The selection and graph doors handed to every panel. */
@@ -81,7 +88,8 @@ export let panels: Panel[] = [
           '^N / ^P  select session',
           'Alt+↑/↓   select session',
           '^O        new session',
-          'Enter     send',
+          'Tab       message / task',
+          'Enter     submit',
           'Shift+Enter newline',
           'PgUp/PgDn scroll',
           '^C        quit',

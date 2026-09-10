@@ -4,6 +4,7 @@
 // counts read from the graph inside that critical section. No reserved slots
 // survive a failed write, and replaying a call finds the same child.
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { link } from '@yaks/edge'
 import { MARKS, openDeps, settled, statusOf as taskStatus } from '@yaks/task'
 import { type Tool, type ToolContext, ToolError, transcript } from './react.ts'
 import {
@@ -93,110 +94,160 @@ let caller = (ctx?: ToolContext): ToolContext => {
   return ctx
 }
 
-/** Fork and spawn return immediately with a child id. Wait has the process
- * tool's timeout convention, but names an array of direct child sessions. */
-export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
-  let start = (fork: boolean): Tool => ({
-    name: fork ? 'fork' : 'spawn',
-    description: fork
-      ? 'Fork your transcript before this tool turn, with a new prompt. Returns the concurrent child session id; completion is delivered automatically.'
-      : 'Start a fresh subagent with a prompt OR a task id. A task is claimed atomically and its title/body become the input. Independent subtasks may run in parallel, subject to caps. Returns the child session id; completion is delivered automatically.',
-    parameters: {
-      type: 'object',
-      properties: {
-        prompt: { type: 'string' },
-        ...fork
-          ? {}
-          : { task: { type: 'string', description: 'task entity id or T-id' } },
-        instructions: { type: 'string' },
-        model: {
-          type: 'string',
-          description: 'model name or existing model entity id',
-        },
-        effort: { type: 'string' },
+/** One admission/write path for model delegation and user-created tasks. */
+let delegation = (
+  g: Graph,
+  limits: ChildLimits,
+  fork: boolean,
+  minted?: Bundle,
+): Tool => ({
+  name: fork ? 'fork' : 'spawn',
+  description: fork
+    ? 'Fork your transcript before this tool turn, with a new prompt. Returns the concurrent child session id; completion is delivered automatically.'
+    : 'Start a fresh subagent with a prompt OR a task id. A task is claimed atomically and its title/body become the input. Independent subtasks may run in parallel, subject to caps. Returns the child session id; completion is delivered automatically.',
+  parameters: {
+    type: 'object',
+    properties: {
+      prompt: { type: 'string' },
+      ...fork
+        ? {}
+        : { task: { type: 'string', description: 'task entity id or T-id' } },
+      instructions: { type: 'string' },
+      model: {
+        type: 'string',
+        description: 'model name or existing model entity id',
       },
-      ...fork ? { required: ['prompt'] } : {
-        oneOf: [{ required: ['prompt'] }, { required: ['task'] }],
-      },
+      effort: { type: 'string' },
     },
-    run: async (args, context) => {
-      let ctx = caller(context)
-      if (
-        fork ? args.task != null : (args.task != null) == (args.prompt != null)
-      ) {
-        throw new ToolError(
-          'spawn',
-          'name exactly one prompt or task (fork requires prompt)',
-        )
-      }
-      if (
-        args.task != null && (typeof args.task != 'string' || !args.task.trim())
-      ) {
-        throw new ToolError('task', 'a nonempty task id is required')
-      }
-      if (
-        args.task == null &&
-        (typeof args.prompt != 'string' || !args.prompt.trim())
-      ) {
-        throw new ToolError('prompt', 'a nonempty prompt is required')
-      }
-      let eid = `child:${ctx.call.entity.eid}`
+    ...fork ? { required: ['prompt'] } : {
+      oneOf: [{ required: ['prompt'] }, { required: ['task'] }],
+    },
+  },
+  run: async (args, context) => {
+    let ctx = caller(context)
+    if (
+      fork ? args.task != null : (args.task != null) == (args.prompt != null)
+    ) {
+      throw new ToolError(
+        'spawn',
+        'name exactly one prompt or task (fork requires prompt)',
+      )
+    }
+    if (
+      args.task != null && (typeof args.task != 'string' || !args.task.trim())
+    ) {
+      throw new ToolError('task', 'a nonempty task id is required')
+    }
+    if (
+      args.task == null &&
+      (typeof args.prompt != 'string' || !args.prompt.trim())
+    ) {
+      throw new ToolError('prompt', 'a nonempty prompt is required')
+    }
+    let eid = `child:${ctx.call.entity.eid}`
+    if (await row(g, eid)) return eid
+    return admit(g, ctx.session, limits, async () => {
+      // A concurrent replay may have waited behind the original admission.
       if (await row(g, eid)) return eid
-      return admit(g, ctx.session, limits, async () => {
-        // A concurrent replay may have waited behind the original admission.
-        if (await row(g, eid)) return eid
-        let task = args.task == null
-          ? undefined
-          : await taskRow(g, String(args.task))
-        let doc = comp(task, 'doc')
-        let prompt = task
-          ? [doc?.title, doc?.body].filter(Boolean).join('\n\n')
-          : args.prompt
-        let using = { ...usingBefore(ctx.entries) }
-        let models: Bundle[] = []
-        if (args.model != null) {
-          let name = String(args.model)
-          let existing = await row(g, name)
-          if (existing?.model) using.model = existing.entity.eid
-          else {
-            using.model = `model:${name}`
-            models.push({
-              entity: { eid: String(using.model) },
-              model: {
-                name,
-                ...using.provider ? { provider: using.provider } : {},
-              },
-            })
-          }
+      let task = minted ??
+        (args.task == null ? undefined : await taskRow(g, String(args.task)))
+      let work = minted
+        ? await g.read(`.task .claim.session=${ctx.session}`)
+        : []
+      let parents = work.length ? work.map((b) => b.entity.eid) : [ctx.session]
+      let doc = comp(task, 'doc')
+      let prompt = task
+        ? [doc?.title, doc?.body].filter(Boolean).join('\n\n')
+        : args.prompt
+      let using = { ...usingBefore(ctx.entries) }
+      let models: Bundle[] = []
+      if (args.model != null) {
+        let name = String(args.model)
+        let existing = await row(g, name)
+        if (existing?.model) using.model = existing.entity.eid
+        else {
+          using.model = `model:${name}`
+          models.push({
+            entity: { eid: String(using.model) },
+            model: {
+              name,
+              ...using.provider ? { provider: using.provider } : {},
+            },
+          })
         }
-        for (let key of ['effort', 'instructions']) {
-          if (args[key] != null) using[key] = String(args[key])
-        }
-        // Never inherit the unanswered delegation call (or any sibling calls).
-        let anchorId = comp(newestAsk(ctx.entries), 'ask')?.through
-        let anchor = ctx.entries.find((b) => b.entity.eid == anchorId)
-        if (fork && !anchor) throw new ToolError('fork', 'no prefix to fork')
-        await g.apply([
-          ...models,
-          ...task ? [{ entity: task.entity, claim: { session: eid } }] : [],
-          {
-            entity: { eid },
-            session: { id: eid },
-            spawned: { parent: ctx.session, call: ctx.call.entity.eid },
-            ...fork ? { fork: { from: anchor!.entity.eid } } : {},
+      }
+      for (let key of ['effort', 'instructions']) {
+        if (args[key] != null) using[key] = String(args[key])
+      }
+      // Never inherit the unanswered delegation call (or any sibling calls).
+      let anchorId = comp(newestAsk(ctx.entries), 'ask')?.through
+      let anchor = ctx.entries.find((b) => b.entity.eid == anchorId)
+      if (fork && !anchor) throw new ToolError('fork', 'no prefix to fork')
+      await g.apply([
+        ...models,
+        ...minted
+          ? [
+            minted,
+            ...parents.map((parent) =>
+              link(parent, 'contains', minted.entity.eid)
+            ),
+          ]
+          : [],
+        ...task ? [{ entity: task.entity, claim: { session: eid } }] : [],
+        {
+          entity: { eid },
+          session: { id: eid },
+          spawned: {
+            parent: ctx.session,
+            ...minted ? {} : { call: ctx.call.entity.eid },
           },
-          {
-            entity: { eid: `${eid}:input` },
-            entry: { session: eid, seq: fork ? seqOf(anchor!) + 1 : 1 },
-            content: { body: prompt },
-            using,
-          },
-        ], { trusted: true })
-        return eid
-      })
-    },
+          ...fork ? { fork: { from: anchor!.entity.eid } } : {},
+        },
+        {
+          entity: { eid: `${eid}:input` },
+          entry: { session: eid, seq: fork ? seqOf(anchor!) + 1 : 1 },
+          content: { body: prompt },
+          using,
+        },
+      ], { trusted: true })
+      return eid
+    })
+  },
+})
+
+/** Submit a microtask under the session's claimed work (or the session when
+ * it holds no task). The task, containment, child and claim commit together:
+ * a cap refusal leaves no orphan work. No filing metadata is inherited.
+ * The first line is the title; the complete submitted text is kept as body.
+ * This is a user door, not a model call, so delivery is an ordinary input. */
+export let taskEntry = async (
+  g: Graph,
+  session: Eid,
+  text: string,
+  limits: ChildLimits = {},
+): Promise<{ task: Eid; child: Eid }> => {
+  if (!text.trim()) throw new ToolError('task', 'a nonempty task is required')
+  if (!(await row(g, session))?.session) {
+    throw new ToolError('session', `not a session: ${session}`)
+  }
+  let task = crypto.randomUUID()
+  let minted: Bundle = {
+    entity: { eid: task },
+    doc: { title: text.trim().split('\n')[0].slice(0, 120), body: text },
+    task: {},
+  }
+  let child = await delegation(g, limits, false, minted).run({ task }, {
+    session,
+    // Identity only; no fabricated tool call is written into the transcript.
+    call: { entity: { eid: task } },
+    entries: await transcript(g, session),
   })
-  return [start(true), start(false), {
+  return { task, child: String(child) }
+}
+
+/** The model doors use the same admission and spawn write as taskEntry. */
+export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
+  return [delegation(g, limits, true), delegation(g, limits, false), {
     name: 'wait',
     description:
       'Wait on direct children or tasks. Tasks wait until settled with no open dependencies; returns status when complete or the timeout passes.',

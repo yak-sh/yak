@@ -28,6 +28,7 @@ import {
   ENTRY,
   seqOf,
   type Step,
+  taskEntry,
   type Tool,
   transcript,
   views,
@@ -97,6 +98,8 @@ export type Agent = {
   start: (prompt: string, o?: { effort?: string }) => Promise<Eid>
   /** say something more to a transcript that is already going */
   send: (session: Eid, text: string) => Promise<Eid>
+  /** mint and delegate unfiled work under an existing session */
+  taskEntry: (session: Eid, text: string) => Promise<{ task: Eid; child: Eid }>
   /** every session, oldest first, each carrying its derived status */
   sessions: () => Promise<Bundle[]>
   /** the open work in this graph, oldest first */
@@ -188,9 +191,11 @@ export let agent = (opts: Opts = {}): Agent => {
         }])
         return eid
       }),
+    taskEntry: (session, text) => taskEntry(h.g, session, text, opts),
     sessions: async () => (await h.g.read('.session')).toSorted(byNum),
     children: (session) => children(h.g, session),
-    tasks: async () => (await h.g.read('.task.status=open')).toSorted(byNum),
+    tasks: async () =>
+      (await h.g.read('.task.status=open,wip')).toSorted(byNum),
     transcript: entries,
     resume: async () => {
       let live = await h.g.read('.session.status=pending,running')
