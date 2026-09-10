@@ -225,3 +225,32 @@ Deno.test('ask entries carrying served using metadata are not empty inputs', asy
     ui.free()
   }
 })
+
+Deno.test('boxed user Markdown preserves explicit newlines and paragraph separation', async () => {
+  let source = 'first\n**second**\n\nthird\n*fourth*'
+  let entry: Bundle = {
+    entity: { eid: 'multiline-user' },
+    entry: { session: 's', seq: 1 },
+    content: { body: source },
+  }
+  let ui = await mount(
+    () => render(transcriptViews, entry, 'Transcript', vocab),
+    60,
+    12,
+  )
+  try {
+    let rows = ui.text().split('\n')
+    let first = rows.findIndex((line) => line.includes('first'))
+    let second = rows.findIndex((line) => line.includes('second'))
+    let third = rows.findIndex((line) => line.includes('third'))
+    let fourth = rows.findIndex((line) => line.includes('fourth'))
+    assert(first >= 0, ui.text())
+    assertEquals(second, first + 1, ui.text())
+    assertEquals(third, second + 2, ui.text())
+    assertEquals(fourth, third + 1, ui.text())
+    assertEquals(entry.content, { body: source })
+
+  } finally {
+    ui.free()
+  }
+})

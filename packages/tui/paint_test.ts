@@ -248,3 +248,22 @@ Deno.test('quotes use a muted surface with normal text and preserve nested inlin
   )
   assertEquals(words(custom.lines)[0], '  custom')
 })
+
+Deno.test('br preserves explicit breaks inside styled inline content and blank rows', () => {
+  assertEquals(
+    seen(
+      el(
+        'div',
+        {},
+        'first',
+        el('span', {}, el('br'), el('strong', {}, 'second')),
+        el('br'),
+        el('br'),
+        'third',
+      ),
+      30,
+      4,
+    ),
+    ['first', 'second', '', 'third'],
+  )
+})

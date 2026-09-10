@@ -117,7 +117,9 @@ Deno.test('graph effects paint a model reply without a keypress; sends are input
   let subscribe = changes(a)
   let ui = await mount(() => h(App, { agent: a, subscribe }), 120, 40)
   try {
-    await ui.send('ping\x1b[13;2usecond line\r')
+    await ui.send(
+      'ping\x1b[13;2u**second line**\x1b[13;2u\x1b[13;2uthird paragraph\r',
+    )
     await settle()
     let s = await until(
       async () => (await a.sessions())[0],
@@ -126,9 +128,15 @@ Deno.test('graph effects paint a model reply without a keypress; sends are input
     let entries = await a.transcript(s.entity.eid)
     assertEquals(
       (entries.find((b) => !b.prompt && b.content)!.content as Comp).body,
-      'ping\nsecond line',
+      'ping\n**second line**\n\nthird paragraph',
     )
-    assert(ui.text().includes('second line'), ui.text())
+    let rows = ui.text().split('\n')
+    let first = rows.findIndex((row) => row.includes('ping'))
+    let second = rows.findIndex((row) => row.includes('second line'))
+    let third = rows.findIndex((row) => row.includes('third paragraph'))
+    assert(first >= 0, ui.text())
+    assertEquals(second, first + 1, ui.text())
+    assertEquals(third, second + 2, ui.text())
     reply.resolve({
       id: 'r1',
       model: 'fake',

@@ -114,6 +114,7 @@ let inherit = (parent: Style, node: Style): Style => ({
 
 let INLINE = new Set([
   'span',
+  'br',
   'b',
   'i',
   'strong',
@@ -133,6 +134,7 @@ let inline = (n: TNode, st: Style, c: Ctx): Seg[] => {
     return text ? [{ text, style: st, owner: n.parentNode ?? undefined }] : []
   }
   let el = n as TElement
+  if (el.localName == 'br') return [{ text: '\n', style: st, owner: el }]
   let o = own(el, c.sheet)
   // An href is content too, and it rides inside an OSC 8 where a single BEL
   // ends the sequence and lets the rest of the URL run as its own.
@@ -192,10 +194,12 @@ let flow = (
     for (let l of text(el).split('\n')) lines.push([{ text: l, style: s }])
     return lines
   }
+  let previousParagraph = false
   for (let n of el.childNodes) {
     if (n instanceof TText || INLINE.has((n as TElement).localName)) {
       let segs = inline(n, s, c)
       if (!segs.length) continue
+      previousParagraph = false
       for (let seg of segs) {
         // Newlines inside a text node are line breaks.
         seg.text.split('\n').forEach((part, i) => {
@@ -208,6 +212,11 @@ let flow = (
       }
     } else {
       flush()
+      // HTML paragraphs have a visual boundary even without literal newlines.
+      // Keep it between paragraphs, not after every paragraph/list item.
+      let paragraph = (n as TElement).localName == 'p'
+      if (paragraph && previousParagraph) lines.push([])
+      previousParagraph = paragraph
       lines.push(...lay(n as TElement, s, w, wrapper ? h : null, c))
     }
   }

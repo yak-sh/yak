@@ -93,3 +93,12 @@ Deno.test('Markdown mounts as safe semantic browser DOM', () => {
     ui.free()
   }
 })
+
+Deno.test('explicit source newlines become structural breaks before terminal rendering', () => {
+  let tokens = parse('first\n**second**\n\nthird')
+  assertEquals(tokens.map((t) => t.type), ['paragraph', 'space', 'paragraph'])
+  let first = render([tokens[0]], tree)
+  let json = JSON.stringify(first)
+  assert(json.includes('"tag":"br"'), json)
+  assert(json.includes('"tag":"strong"'), json)
+})
