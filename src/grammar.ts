@@ -27,7 +27,7 @@ vocabulary (${
     ).join('; ')
   }). A prop unique to one component routes bare ('.title=x' → doc); for the
 few collisions (pin/camera x,y,w,h) use '.comp.prop=x'. References go
-by their property names: '.assignee=jeff' routes to task.assignee, and any reference
+by their property names: '.assignee=jeff' routes to filed.assignee, and any reference
 value may be an alias, a human id (T-3, P-19), or an eid. Numeric-looking
 text stays text; typed scalars parse by their grammar ('.pin.x=01',
 '.verified=yes', '.priority=p02'). Empty writable tags use Boolean presence

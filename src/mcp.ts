@@ -9,6 +9,7 @@
 // The dot-param grammar is shared with the CLI: '.title=Hello' routes by
 // prop through the component vocabulary; '.pin.x=12' is the explicit
 // spelling for the few collisions. The tool descriptions teach it.
+import { link } from './edge.ts'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type {
@@ -705,13 +706,13 @@ covered). ${FILTERS}`,
       let taskRows = refs.filter((r) => r.comps.task)
       let projs = await io.get([
         ...new Set(
-          taskRows.map((r) => String(r.comps.task?.project ?? '')).filter(
+          taskRows.map((r) => String(r.comps.filed?.project ?? '')).filter(
             Boolean,
           ),
         ),
       ])
       let taskProj = new Map(
-        taskRows.map((r) => [r.eid, String(r.comps.task?.project ?? '')]),
+        taskRows.map((r) => [r.eid, String(r.comps.filed?.project ?? '')]),
       )
       let name = new Map([...refs, ...projs].map((r) => [r.eid, idOf(r)]))
       for (let u of uses) {
@@ -736,7 +737,7 @@ review, and verifier-attempt evidence. blocker and authorization references are 
 their truncated flag says more exist. Read task_show before claiming. Optional
 filters support indexed scalar equality, lists, ranges, comparisons, presence,
 absence, literal contains, time phrases, and forward reference paths such as
-'.task.project.doc.title~=graph'. Text terms, reverse associations, traversals,
+'.filed.project.doc.title~=graph'. Text terms, reverse associations, traversals,
 rankings, aggregates, projections, and query windows are not work filters.`,
     {
       lane: z.enum(['evaluate', 'build', 'verify']).describe(
@@ -812,7 +813,8 @@ filters must ALL match. ${FILTERS} ${BUS}`,
 params?, key?, parent?, relation?}]. The single-task fields and tasks mode are exclusive. A
 task's dedicated title/body/status wins over the same property in its
 params; params carries every other writable property. The whole batch
-lands in one atomic apply. In a structured batch, parent names another
+lands in one atomic apply. For a single task, parent names an existing task: it contains the new child,
+with no caller-project default (explicit filing still wins). In a structured batch, parent names another
 item's key and relation names the semantic edge; project roots the plan.
 For ${TASK_TREE_ADOPTION.steps}+ steps use task_tree; exact dry run: ${
       taskTreeExample('mcp')
@@ -824,6 +826,9 @@ Reference param values accept human ids
       body: body().optional(),
       status: z.enum(statuses).optional(),
       params: z.array(z.string()).optional(),
+      parent: z.string().optional().describe(
+        'Existing parent task; omits the caller project default.',
+      ),
       project: z.string().optional().describe(
         'Project root for a tasks[] batch carrying parent/relation.',
       ),
@@ -841,12 +846,13 @@ Reference param values accept human ids
       session: z.string().optional(),
     },
     async (
-      { title, body, status, params, project, tasks, session }: {
+      { title, body, status, params, project, parent, tasks, session }: {
         title?: string
         body?: string
         status?: string
         params?: string[]
         project?: string
+        parent?: string
         tasks?: {
           key?: string
           title: string
@@ -861,7 +867,7 @@ Reference param values accept human ids
     ) => {
       if (
         tasks &&
-        [title, body, status, params].some((value) => value != null)
+        [title, body, status, params, parent].some((value) => value != null)
       ) {
         return err('tasks cannot be combined with single-task fields')
       }
@@ -869,10 +875,14 @@ Reference param values accept human ids
       if (!want.length || want.some((t) => !t.title)) {
         return err('every task needs a title (pass title or tasks[])')
       }
+      let parentRow = parent ? await got(parent) : undefined
+      if (parent && !parentRow?.comps.task) {
+        return err(`no parent task: ${parent}`)
+      }
       // Default the project to the CALLER'S — the session (MCP has no cwd)
       // resolves to its persona's home or its actor-when-a-project. A task
-      // with no project is orphaned: off every board and unlandable, silent
-      // until a land fails (T-16496). An explicit .project= in params still
+      // without a parent defaults to that project (T-16496). A child is
+      // intentionally bare unless explicitly filed. An explicit .project= still
       // wins. scopeFor is undefined only when nothing places the caller — it
       // reads only the session, the persona it wears, that persona's home,
       // and the actor, so that small set stands in for the corpus.
@@ -924,7 +934,7 @@ Reference param values accept human ids
       for (let t of want) {
         let ps = parseAll(t.params ?? [])
         if (
-          project && !ps.some((p) => p.comp == 'task' && p.prop == 'project')
+          project && !ps.some((p) => p.comp == 'filed' && p.prop == 'project')
         ) {
           ps.push(param(`.project=${project}`)!)
         }
@@ -945,8 +955,8 @@ Reference param values accept human ids
           }
           grouped.claim = { session: sess.eid }
         }
-        if (!grouped.task?.project && scope) {
-          grouped.task = { ...grouped.task, project: scope }
+        if (!grouped.filed?.project && scope && !parentRow) {
+          grouped.filed = { ...grouped.filed, project: scope }
         }
         written.push({
           title: String(grouped.doc.title ?? ''),
@@ -955,6 +965,7 @@ Reference param values accept human ids
         let eid = crypto.randomUUID()
         minted.push(eid)
         changes.push(...taskChanges(eid, grouped))
+        if (parentRow) changes.push(...link(parentRow.eid, 'contains', eid))
       }
       await io.write(changes, session)
       let after = await io.get(minted)
@@ -2078,7 +2089,7 @@ entity, each a PATCH (omitted columns untouched, prop: null clears a column,
 comp: null deletes the component). entity.eid names an existing entity (uuid
 or a human id such as T-3) or, as a $alias ({entity: {eid: '$goal'}}), one
 this batch mints; the result's aliases map $alias → eid. Wherever an eid goes
-— entity.eid, a ref column such as task.project or comment.target, an
+— entity.eid, a ref column such as filed.project or comment.target, an
 edge's child — a $alias, a human id, or a nested bundle stands in
 ({entity: {eid: 'T-3'}} alone references; with components it defines).
 Edges ride the bundle's edges field: {type: ${

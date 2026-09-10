@@ -81,27 +81,32 @@ put('w5', { doc: { title: 'no stamps at all' } })
 put('sc', { session: { id: 'sc' } })
 put('e1', {
   doc: { title: 'alpha widget', body: 'the first one' },
-  task: { priority: 1, domain: 'Eng', project: 'p1' },
+  task: {},
+  filed: { priority: 1, domain: 'Eng', project: 'p1' },
   proposed: { at: '2026-08-01T00:00:00.000Z', by: null, via: null },
 })
 put('e2', {
   doc: { title: 'beta WIDGET', body: '100% sure' },
-  task: { priority: 2, domain: 'Ops', project: 'p1' },
+  task: {},
+  filed: { priority: 2, domain: 'Ops', project: 'p1' },
   claim: { session: 'sc' },
 })
 put('e3', {
   doc: { title: 'gamma', body: 'under_score' },
-  task: { priority: 0, domain: '', project: null },
+  task: {},
+  filed: { priority: 0, domain: '', project: null },
   completed: { at: '2026-08-02T00:00:00.000Z', by: null },
 })
 put('e4', { doc: { title: 'delta', body: '' } })
 put('e5', {
   doc: { title: '10', body: 'digits in a text column' },
-  task: { priority: 10, domain: '9' },
+  task: {},
+  filed: { priority: 10, domain: '9' },
 })
 put('e9', {
   doc: { title: 'cancelled task' },
-  task: { priority: 3 },
+  task: {},
+  filed: { priority: 3 },
   claim: { session: 'sc' },
   completed: { at: '2026-08-02T00:00:00.000Z', by: null },
   cancelled: { at: '2026-08-03T00:00:00.000Z', by: null, reason: 'superseded' },
@@ -109,7 +114,7 @@ put('e9', {
 put('e8', { proposed: { at: '', by: null, via: null } })
 put('c1', { doc: { title: 'a note on alpha' }, comment: { target: 'e1' } })
 put('c2', { doc: { title: 'a second note' }, comment: { target: 'e1' } })
-put('pt', { task: { priority: 1, domain: '' }, project: {} })
+put('pt', { task: {}, filed: { priority: 1, domain: '' }, project: {} })
 
 // ---- the two compilers, one graph ------------------------------------------
 
@@ -156,15 +161,15 @@ let CORPUS = [
   '.domain=Eng,Ops',
   '.domain~=n',
   // presence / absence, over a component facet and a reference column. The
-  // reference presence/absence is spelled EXPLICITLY (`.task.project!`): a BARE
+  // reference presence/absence is spelled EXPLICITLY (`.filed.project!`): a BARE
   // `.project!` is a documented @yaks/vocab-vs-fleet-parser divergence — the
-  // vocab's `route` returns the `task.project` column, while the fleet parser
+  // vocab's `route` returns the `filed.project` column, while the fleet parser
   // sends a value-less op to the `project` COMPONENT facet ("is a project" vs
   // "has a project"). @yaks/sql routes through the vocab, as instructed.
   '.task!',
   '.task=',
-  '.task.project!',
-  '.task.project=',
+  '.filed.project!',
+  '.filed.project=',
   '.project=p1',
   // identity: `.eid=` names entities instead of filtering them, one or many,
   // and a name nothing wears selects nothing on both sides
@@ -172,9 +177,9 @@ let CORPUS = [
   '.eid=e1,e2',
   '.eid=nosuchentity',
   '.entity.eid=e1',
-  // reference-deref path (task.project → doc.title)
-  '.task.project.doc.title~=project',
-  '.task.project.doc.title~=nothing',
+  // reference-deref path (filed.project → doc.title)
+  '.filed.project.doc.title~=project',
+  '.filed.project.doc.title~=nothing',
   // reverse hop (comment.target seen from the far side): presence, absence,
   // cardinality, and a filter over the child row
   '.comments!',

@@ -54,7 +54,8 @@ let task = (
   extra: Change[] = [],
 ): Change[] => [
   { eid, name: 'doc', comp: { title, body: '' } },
-  { eid, name: 'task', comp: { priority, project, domain: 'Eng' } },
+  { eid, name: 'task', comp: {} },
+  { eid, name: 'filed', comp: { priority, project, domain: 'Eng' } },
   ...extra,
 ]
 
@@ -406,7 +407,7 @@ Deno.test('evaluate is newest-first, filtered, bounded, and human-addressed', as
   })
   assertEquals(filtered.map((c) => c.id), [idOf(rowsFor(w.db, [w.pending])[0])])
   let byProject = await workCandidates(w.read, 'evaluate', {
-    filters: ['.task.project.doc.title=Task Graph'],
+    filters: ['.filed.project.doc.title=Task Graph'],
   })
   assertEquals(byProject.length, 2)
 })
@@ -545,7 +546,7 @@ Deno.test('work lanes reject direct and dotted quarantine reveal filters', async
   ])
   assertEquals(evalGraph(db, '.quarantined!').hits.map((r) => r.eid), [hidden])
   for (let lane of ['evaluate', 'build', 'verify'] as const) {
-    for (let filter of ['.quarantined!', '.task.project.quarantined!']) {
+    for (let filter of ['.quarantined!', '.filed.project.quarantined!']) {
       let filters = [...workFilters(lane), filter]
       assertThrows(
         () => evalWork(db, filters.join('&'), { work: lane }),
@@ -1058,7 +1059,7 @@ Deno.test('lane membership queries compile to indexed component scans', () => {
   assert(plan.some((row) => row.detail.includes('edge_to')))
   let path = buildWorkSql(
     w.db,
-    `${workFilters('build').join('&')}&.task.project.doc.title=Task Graph`,
+    `${workFilters('build').join('&')}&.filed.project.doc.title=Task Graph`,
   )
   let pathPlan = w.db.prepare(`explain query plan ${path.sql}`).all(
     ...path.params,

@@ -915,7 +915,7 @@ let legacySessionProp = (name: string) =>
 
 // '.title=Hello' | '.doc.title=Hello' → {comp, prop, value}; null if the
 // argument isn't a dot-param at all (a bare word). Bare props ride
-// query.ts route(), so '.assignee=jeff' patches task.assignee and
+// query.ts route(), so '.assignee=jeff' patches filed.assignee and
 // derefParams turns the value into an eid at the door.
 // A hyphen is admitted into the NAME so a hyphenated spelling reaches
 // route() and earns the same `unknown prop` error as any other unknown.
@@ -2124,7 +2124,7 @@ export let taskTreePlan = async (
     let grouped = patches(
       await derefedParams(treeParams(node.params ?? []), q),
     )
-    let asked = String(grouped.task?.project ?? '')
+    let asked = String(grouped.filed?.project ?? '')
     if (asked && asked != project.eid) {
       throw new Error(
         `${key} belongs to ${asked}, not tree project ${idOf(project)}`,
@@ -2136,10 +2136,11 @@ export let taskTreePlan = async (
       title: node.title!.trim(),
       ...(node.body != null ? { body: node.body } : {}),
     }
-    grouped.task = {
-      ...grouped.task,
+    grouped.filed = {
+      ...grouped.filed,
       project: project.eid,
     }
+    grouped.task ??= {}
     delete grouped.task.status // status is DERIVED (D-24102), never stored
     // A node born done/cancelled wears the mark; open/wip need none (a tree
     // can't hold a live claim, so a wip node is just open until claimed).
@@ -2239,7 +2240,8 @@ export let WORKING_SET = 50
 export let byBoard = (a: Row, b: Row) =>
   (statuses.findIndex((s) => s == taskStatus(a)) -
     statuses.findIndex((s) => s == taskStatus(b))) ||
-  (Number(a.comps.task?.priority ?? 0) - Number(b.comps.task?.priority ?? 0)) ||
+  (Number(a.comps.filed?.priority ?? 0) -
+    Number(b.comps.filed?.priority ?? 0)) ||
   (a.num - b.num)
 
 // List sorting is deliberately a small display vocabulary, not another query
@@ -2249,7 +2251,7 @@ export let byList = (sort: string) => {
   let desc = sort.startsWith('-')
   let name = desc ? sort.slice(1) : sort
   let value = (r: Row): string | number | undefined => {
-    let priority = r.comps.task?.priority
+    let priority = r.comps.filed?.priority
     return name == 'priority'
       ? typeof priority == 'number' ? priority : undefined
       : name == 'created'
@@ -2390,7 +2392,7 @@ export let sessionFor = (
 }
 
 let taskActor = (all: Row[], target: string) =>
-  String(all.find((r) => r.eid == target)?.comps.task?.project ?? '') ||
+  String(all.find((r) => r.eid == target)?.comps.filed?.project ?? '') ||
   undefined
 
 // The claim pointing at a session entity — one batch, atomic on the server.
@@ -2606,7 +2608,7 @@ export let spawnChanges = (
   let caller = s.by
     ? all.find((r) => String(r.comps.session?.id) == s.by)?.comps.session
     : undefined
-  let actor = owner?.eid ?? task?.comps.task.project ?? caller?.actor
+  let actor = owner?.eid ?? task?.comps.filed?.project ?? caller?.actor
   let eid = uuid()
   let changes = sessionFrames(eid, {
     id: uuid(),
@@ -3172,7 +3174,7 @@ let snip = (s: string, n = 72) => s.length > n ? `${s.slice(0, n)}…` : s
 // answer.
 export let belongs = (r: Scoped, scope?: string) => {
   if (!scope) return true
-  if (r.comps.task) return r.comps.task.project == scope
+  if (r.comps.task) return r.comps.filed?.project == scope
   if (r.comps.memory) {
     return !r.comps.memory.scope || r.comps.memory.scope == scope
   }
@@ -3187,7 +3189,7 @@ export let belongs = (r: Scoped, scope?: string) => {
 let briefOf = (r: Row) =>
   String(r.comps.brief?.text ?? '') || String(r.comps.session?.final_text ?? '')
 // PROJECT layer — the pulse: tasks that MOVED in the scope you stand in,
-// newest touch first, selected by task.project so no foreign entity
+// newest touch first, selected by filed.project so no foreign entity
 // rides in on a catch-all. This reads the same with or without a session,
 // which is what lets a bare `task context` in a repo show exactly what that
 // project's operator sees. Empty scope means an unplaceable caller: a small
@@ -3202,7 +3204,7 @@ let pulse = (tasks: Row[], now: number, budget: number, scope?: string) => {
   let cutoff = new Date(now - 7 * DAY).toISOString()
   let fresh = (r: Row) => editedAt(r) > cutoff
   let mine = scope
-    ? tasks.filter((r) => String(r.comps.task?.project) == scope && fresh(r))
+    ? tasks.filter((r) => String(r.comps.filed?.project) == scope && fresh(r))
     : tasks.filter((r) => !settled(taskStatus(r))).filter(fresh)
   let hits = mine
     .sort((a, b) => editedAt(b).localeCompare(editedAt(a)))
@@ -3664,7 +3666,7 @@ let wordsOf = (r: Row) => {
 let whereOf = (r: Row, byEid: Map<string, Row>) => {
   let ref = String(
     r.comps.entry?.session ?? r.comps.comment?.target ??
-      r.comps.deliver?.to ?? r.comps.mail?.target ?? r.comps.task?.project ??
+      r.comps.deliver?.to ?? r.comps.mail?.target ?? r.comps.filed?.project ??
       r.comps.memory?.scope ?? '',
   )
   if (!ref) return ''
@@ -3787,7 +3789,7 @@ let whereRefs = (rows: Row[]) =>
       r.comps.comment?.target,
       r.comps.deliver?.to,
       r.comps.mail?.target,
-      r.comps.task?.project,
+      r.comps.filed?.project,
       r.comps.memory?.scope,
     ].filter(Boolean).map(String)
   )
@@ -4261,7 +4263,7 @@ export let contextSnapshot = async (
   // one thread — four sessions starting together queued each other into
   // minutes. `.limit` is the newest N by num; `.order=hot` ranks by warmth
   // and its window is a prefix of that ranking.
-  let here = scope ? [`.task.project=${scope}`] : []
+  let here = scope ? [`.filed.project=${scope}`] : []
   let [
     tasks,
     touched,
@@ -4283,20 +4285,20 @@ export let contextSnapshot = async (
         '.kind=task',
         `.task.status=${open}`,
         ...here,
-        '.task.priority=P0,P1',
+        '.filed.priority=P0,P1',
       ]),
     ]).then((sets) => sets.flat()),
     scope
       ? Promise.all([
         q([
           '.kind=task',
-          `.task.project=${scope}`,
+          `.filed.project=${scope}`,
           `.updated.at>=${since}`,
           '.limit=60',
         ]),
         q([
           '.kind=task',
-          `.task.project=${scope}`,
+          `.filed.project=${scope}`,
           `.created.at>=${since}`,
           '.limit=60',
         ]),

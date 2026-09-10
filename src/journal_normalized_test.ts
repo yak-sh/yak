@@ -87,7 +87,8 @@ Deno.test('journal: rows retain every applied value independently of answer orde
   let t = uid()
   let out = apply(d, [
     { eid: t, name: 'doc', comp: { title: 'a', body: '' } },
-    { eid: t, name: 'task', comp: { priority: 'P2' } },
+    { eid: t, name: 'task', comp: {} },
+    { eid: t, name: 'filed', comp: { priority: 'P2' } },
   ])
   // This create has one operation per component: the values agree exactly,
   // even though the answer now groups each entity's identity before its comps.
@@ -114,7 +115,8 @@ Deno.test('journal: within-batch ordinals reproduce applied order', () => {
   let t = uid()
   apply(d, [
     { eid: t, name: 'doc', comp: { title: 'a', body: '' } },
-    { eid: t, name: 'task', comp: { priority: 'P2' } },
+    { eid: t, name: 'task', comp: {} },
+    { eid: t, name: 'filed', comp: { priority: 'P2' } },
   ])
   let tx = (d.prepare('select max(id) as id from journal_tx').get() as {
     id: number
@@ -123,11 +125,12 @@ Deno.test('journal: within-batch ordinals reproduce applied order', () => {
     'select ordinal, component from journal_change where tx = ? order by ordinal',
   ).all(tx) as { ordinal: number; component: string }[]
   // (tx, ordinal) is a dense 0..n-1 sequence matching the batch positions.
-  assertEquals(rows.map((r) => r.ordinal), [0, 1, 2, 3, 4])
+  assertEquals(rows.map((r) => r.ordinal), [0, 1, 2, 3, 4, 5])
   assertEquals(rows.map((r) => r.component), [
     'blob',
     'doc',
     'task',
+    'filed',
     'entity',
     'entity',
   ])
@@ -137,9 +140,17 @@ Deno.test('journal: a present null field is distinct from a tombstone', () => {
   let d = fresh()
   let t = uid()
   apply(d, [{ eid: t, name: 'doc', comp: { title: 'a', body: '' } }])
-  apply(d, [{ eid: t, name: 'task', comp: { priority: 'P2' } }])
+  apply(d, [{
+    eid: t,
+    name: 'filed',
+    comp: { priority: 'P2' },
+  }])
   // Clear a nullable column: the after-image is a PRESENT null, not a tombstone.
-  apply(d, [{ eid: t, name: 'task', comp: { assignee: null } }])
+  apply(d, [{
+    eid: t,
+    name: 'filed',
+    comp: { assignee: null },
+  }])
   let field = fieldsAt(d, 0).find((f) => f.field == 'assignee')!
   assertEquals(field.present, 1)
   assertEquals(field.value, 'null')
@@ -173,15 +184,16 @@ Deno.test('journal: removing a component tombstones its then-present fields', ()
   let t = uid()
   apply(d, [
     { eid: t, name: 'doc', comp: { title: 'a', body: '' } },
-    { eid: t, name: 'task', comp: { priority: 'P2' } },
+    { eid: t, name: 'task', comp: {} },
+    { eid: t, name: 'filed', comp: { priority: 'P2' } },
   ])
   // Remove the whole task component.
-  apply(d, [{ eid: t, name: 'task', comp: null }])
+  apply(d, [{ eid: t, name: 'filed', comp: null }])
   let tx = (d.prepare('select max(id) as id from journal_tx').get() as {
     id: number
   }).id
   let change = d.prepare(
-    `select id, operation from journal_change where tx = ? and component = 'task'`,
+    `select id, operation from journal_change where tx = ? and component = 'filed'`,
   ).get(tx) as { id: number; operation: string }
   assertEquals(change.operation, 'remove')
   let fields = d.prepare(
@@ -200,14 +212,15 @@ Deno.test('journal: create-then-remove in one batch tombstones the fields', () =
   // same batch (uncommitted, same connection) — else it tombstones nothing.
   apply(d, [
     { eid: t, name: 'doc', comp: { title: 'a', body: '' } },
-    { eid: t, name: 'task', comp: { priority: 'P2' } },
-    { eid: t, name: 'task', comp: null },
+    { eid: t, name: 'task', comp: {} },
+    { eid: t, name: 'filed', comp: { priority: 'P2' } },
+    { eid: t, name: 'filed', comp: null },
   ])
   let tx = (d.prepare('select max(id) as id from journal_tx').get() as {
     id: number
   }).id
   let change = d.prepare(
-    `select id from journal_change where tx = ? and component = 'task'
+    `select id from journal_change where tx = ? and component = 'filed'
      and operation = 'remove'`,
   ).get(tx) as { id: number }
   let n = (d.prepare(

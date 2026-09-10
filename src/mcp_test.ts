@@ -116,7 +116,7 @@ Deno.test('elide: long text cuts with a marker naming the whole-doc door', () =>
 Deno.test('command: set resolves a human reference before the write', () => {
   let out = commandOut(all, ':set .project=P-19', T)
   assertEquals(out.changes, [
-    { eid: T, name: 'task', comp: { project: P } },
+    { eid: T, name: 'filed', comp: { project: P } },
   ])
 })
 
@@ -196,7 +196,8 @@ Deno.test('task_update expands derived lifecycle status with attribution', async
   let actor = crypto.randomUUID()
   apply(db, [
     { eid: task, name: 'doc', comp: { title: 'lifecycle', body: '' } },
-    { eid: task, name: 'task', comp: { priority: 1 } },
+    { eid: task, name: 'task', comp: {} },
+    { eid: task, name: 'filed', comp: { priority: 1 } },
     { eid: actor, name: 'project', comp: {} },
     {
       eid: session,
@@ -336,7 +337,7 @@ Deno.test('task_update lifecycle refusals leave the target untouched', async () 
 
 Deno.test('command: generated references resolve aliases and reject misses', () => {
   let out = commandOut(all, ':new .project=home Ship it', T)
-  let task = out.changes!.find((c) => c.name == 'task')
+  let task = out.changes!.find((c) => c.name == 'filed')
   assertEquals(task?.comp?.project, P)
   assertThrows(
     () => commandOut(all, ':set .project=missing', T),
@@ -495,17 +496,20 @@ Deno.test('work_list exposes bounded human-addressed evaluate, build, and verify
     { eid: project, name: 'doc', comp: { title: 'Work project', body: '' } },
     { eid: project, name: 'project', comp: {} },
     { eid: old, name: 'doc', comp: { title: 'Old ready', body: '' } },
-    { eid: old, name: 'task', comp: { priority: 1, project } },
+    { eid: old, name: 'task', comp: {} },
+    { eid: old, name: 'filed', comp: { priority: 1, project } },
     { eid: old, name: 'decided', comp: {} },
     { eid: fresh, name: 'doc', comp: { title: 'Fresh ready', body: '' } },
-    { eid: fresh, name: 'task', comp: { priority: 1, project } },
+    { eid: fresh, name: 'task', comp: {} },
+    { eid: fresh, name: 'filed', comp: { priority: 1, project } },
     { eid: fresh, name: 'decided', comp: {} },
     { eid: pending, name: 'doc', comp: { title: 'Newest proposal', body: '' } },
     { eid: pending, name: 'design', comp: {} },
     { eid: pending, name: 'proposed', comp: {} },
     { eid: builder, name: 'session', comp: { id: uuid() } },
     { eid: verify, name: 'doc', comp: { title: 'Verify this', body: '' } },
-    { eid: verify, name: 'task', comp: { priority: 1, project } },
+    { eid: verify, name: 'task', comp: {} },
+    { eid: verify, name: 'filed', comp: { priority: 1, project } },
     { eid: verify, name: 'accept', comp: { body: 'Run the public door.' } },
   ])
   apply(
@@ -591,7 +595,8 @@ Deno.test('task_claim uses the guarded writer mutation and can approve atomicall
     { eid: project, name: 'doc', comp: { title: 'Work', body: '' } },
     { eid: project, name: 'project', comp: {} },
     { eid: target, name: 'doc', comp: { title: 'Candidate', body: '' } },
-    { eid: target, name: 'task', comp: { project } },
+    { eid: target, name: 'task', comp: {} },
+    { eid: target, name: 'filed', comp: { project } },
     { eid: target, name: 'proposed', comp: {} },
   ])
   let seen: Mutation | undefined
@@ -672,7 +677,7 @@ Deno.test('work_list refuses quarantine reveal filters', async () => {
   let { io } = graph()
   await protocol(io, async (client) => {
     for (let lane of ['evaluate', 'build', 'verify']) {
-      for (let filter of ['.quarantined!', '.task.project.quarantined!']) {
+      for (let filter of ['.quarantined!', '.filed.project.quarantined!']) {
         let result = await client.callTool({
           name: 'work_list',
           arguments: { lane, filters: [filter] },
@@ -1288,11 +1293,8 @@ Deno.test('MCP entity JSON shares the component-shaped contract', async () => {
       name: 'doc',
       comp: { eid: task, title: 'Structured', body: 'One shape' },
     },
-    {
-      eid: task,
-      name: 'task',
-      comp: { eid: task, status: 'done', priority: 2 },
-    },
+    { eid: task, name: 'task', comp: { eid: task, status: 'done' } },
+    { eid: task, name: 'filed', comp: { priority: 2 } },
     { eid: comment, name: 'entity', comp: { eid: comment, num: 42 } },
     {
       eid: comment,
@@ -1324,7 +1326,8 @@ Deno.test('MCP entity JSON shares the component-shaped contract', async () => {
     kind: 'task',
     entity: { eid: task, num: 41 },
     doc: { title: 'Structured', body: 'One shape' },
-    task: { status: 'done', priority: 2 },
+    task: { status: 'done' },
+    filed: { priority: 2 },
   }
   await protocol(io, async (client) => {
     let listed = await client.callTool({
@@ -1748,7 +1751,8 @@ Deno.test('structuredContent validates against the schema the tool published', a
       arguments: {
         changes: [
           { eid, name: 'doc', comp: { title: 'schema proof', body: 'b' } },
-          { eid, name: 'task', comp: { priority: 1 } },
+          { eid, name: 'task', comp: {} },
+          { eid, name: 'filed', comp: { priority: 1 } },
         ],
       },
     })
@@ -1954,8 +1958,8 @@ slow('MCP modes apply every accepted field and reject conflicts', async () => {
       )
       let root = treeRows.find((r) => r.comps.doc?.title == 'Tree root')!
       let leaf = treeRows.find((r) => r.comps.doc?.title == 'Tree leaf')!
-      assertEquals(root.comps.task?.project, project)
-      assertEquals(leaf.comps.task?.project, project)
+      assertEquals(root.comps.filed?.project, project)
+      assertEquals(leaf.comps.filed?.project, project)
       // deps come out ordered by the parent's uuid, so the pair is a set
       assertEquals(
         snapshot(g.db).deps
@@ -2743,7 +2747,7 @@ Deno.test('task_new defaults the project to the caller (T-16496)', async () => {
     })
     let made = rows(snapshot(g.db))
       .find((r) => r.comps.task && r.comps.doc?.title == 'Ship it')
-    assertEquals(String(made?.comps.task?.project), P)
+    assertEquals(String(made?.comps.filed?.project), P)
   } finally {
     g.db.close()
   }
@@ -2780,7 +2784,7 @@ Deno.test('task_new honors an explicit project over the caller (T-16496)', async
     })
     let made = rows(snapshot(g.db))
       .find((r) => r.comps.doc?.title == 'Cross-project')
-    assertEquals(String(made?.comps.task?.project), P2)
+    assertEquals(String(made?.comps.filed?.project), P2)
   } finally {
     g.db.close()
   }
@@ -2812,9 +2816,74 @@ Deno.test('task_new without a placeable caller still creates the task', async ()
       'warning never invents prerequisite edges',
     )
     assert(
-      !made[0].comps.task?.project,
+      !made[0].comps.filed?.project,
       'no project when the caller is unplaceable',
     )
+  } finally {
+    g.db.close()
+  }
+})
+
+Deno.test('task_new with a parent creates a bare microtask unless explicitly filed', async () => {
+  let g = graph()
+  try {
+    let project = crypto.randomUUID(),
+      parent = crypto.randomUUID(),
+      session = crypto.randomUUID()
+    apply(g.db, [
+      { eid: project, name: 'project', comp: {} },
+      { eid: parent, name: 'task', comp: {} },
+      {
+        eid: session,
+        name: 'session',
+        comp: { id: 'micro-caller', actor: project },
+      },
+    ])
+    let parentId = `T-${rows(snapshot(g.db)).find((r) => r.eid == parent)!.num}`
+    await protocol(g.io, async (client) => {
+      for (let explicit of [false, true]) {
+        let title = explicit ? 'Filed child' : 'Bare child'
+        let out = await client.callTool({
+          name: 'task_new',
+          arguments: {
+            title,
+            parent: parentId,
+            session: 'micro-caller',
+            ...(explicit
+              ? { params: [`.project=${project}`, '.priority=P2'] }
+              : {}),
+          },
+        }) as ToolResult
+        assert(!out.isError, said(out))
+        let made = rows(snapshot(g.db)).find((r) =>
+          r.comps.doc?.title == title
+        )!
+        assert(made.comps.task)
+        if (explicit) {
+          assertEquals(made.comps.filed?.project, project)
+          assertEquals(made.comps.filed?.priority, 2)
+        } else assertEquals(made.comps.filed, undefined)
+        assert(
+          depsOf(g.db, [parent]).some((d) =>
+            d.parent == parent && d.child == made.eid && d.type == 'contains'
+          ),
+        )
+      }
+      let out = await client.callTool({
+        name: 'task_new',
+        arguments: {
+          title: 'Must not land',
+          parent: project,
+          session: 'micro-caller',
+        },
+      }) as ToolResult
+      assertEquals(out.isError, true)
+      assert(
+        !rows(snapshot(g.db)).some((r) =>
+          r.comps.doc?.title == 'Must not land'
+        ),
+      )
+    })
   } finally {
     g.db.close()
   }

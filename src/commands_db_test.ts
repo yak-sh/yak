@@ -30,7 +30,8 @@ let world = () => {
     { eid: R, name: 'project', comp: {} },
     { eid: R, name: 'repo', comp: { path: '/tmp/repo' } },
     { eid: T, name: 'doc', comp: { title: 'A task', body: '' } },
-    { eid: T, name: 'task', comp: { project: P } },
+    { eid: T, name: 'task', comp: {} },
+    { eid: T, name: 'filed', comp: { project: P } },
     { eid: S, name: 'session', comp: { id: 'sess-1' } },
     // a comment aimed at T — the collateral a cascade delete of T takes
     { eid: C, name: 'doc', comp: { title: '', body: 'a note' } },
@@ -76,7 +77,11 @@ let same = (
 slow('db reader == rows: id resolution (:set derefs an alias)', () => {
   let { db, T, P } = world()
   let out = same(db, ':set .project=home', T, 'sess-1')
-  assertEquals(out.changes, [{ eid: T, name: 'task', comp: { project: P } }])
+  assertEquals(out.changes, [{ eid: T, name: 'task', comp: {} }, {
+    eid: T,
+    name: 'filed',
+    comp: { project: P },
+  }])
 })
 
 slow('db reader == rows: :open navigates to a resolved id', () => {

@@ -206,6 +206,7 @@ export let workAuthorizationSql = (recursive: boolean) =>
 
 export let workReadyJoinsSql = `
          join task on task.entity = entity.id
+         left join filed on filed.entity = entity.id
          left join proposed on proposed.entity = entity.id
          left join decided choice on choice.entity = entity.id
          left join completed on completed.entity = entity.id
@@ -355,7 +356,7 @@ export let workCandidates = async (
     recursive: !!opts.recursive,
   })
   let first = await read.get([
-    ...hits.map((r) => String(r.comps.task?.project ?? '')).filter(Boolean),
+    ...hits.map((r) => String(r.comps.filed?.project ?? '')).filter(Boolean),
     ...hits.map((r) => String(r.comps.claim?.session ?? '')).filter(Boolean),
     ...hits.map((r) => String(r.comps.spawn?.persona ?? '')).filter(Boolean),
   ])
@@ -371,7 +372,7 @@ export let workCandidates = async (
     all.filter((r) => !r.comps.quarantined).map((r) => [r.eid, r]),
   )
   return hits.slice(0, limit).map((r) => {
-    let project = by.get(String(r.comps.task?.project ?? ''))
+    let project = by.get(String(r.comps.filed?.project ?? ''))
     let projection = r.comps.work as unknown as WorkProjection | undefined
     let holder = by.get(String(r.comps.claim?.session ?? ''))
     return {
@@ -386,11 +387,11 @@ export let workCandidates = async (
           },
         }
         : {}),
-      ...(text(r.comps.task?.domain)
-        ? { domain: text(r.comps.task?.domain) }
+      ...(text(r.comps.filed?.domain)
+        ? { domain: text(r.comps.filed?.domain) }
         : {}),
-      ...(num(r.comps.task?.priority) != null
-        ? { priority: num(r.comps.task?.priority) }
+      ...(num(r.comps.filed?.priority) != null
+        ? { priority: num(r.comps.filed?.priority) }
         : {}),
       proposed: !!r.comps.proposed,
       decision: decision(r),

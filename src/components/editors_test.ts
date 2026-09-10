@@ -36,7 +36,7 @@ let vn = (x: unknown) => x as any
 Deno.test('the type picks its face', () => {
   // text is its own words (a fragment face)
   assertEquals(vn(show('doc', 'title', 'hi')).props.children, 'hi')
-  assertEquals(vn(show('task', 'priority', 3)).props.children, 'P3')
+  assertEquals(vn(show('filed', 'priority', 3)).props.children, 'P3')
   // a url face is an anchor whose href IS the value
   let a = vn(show('web', 'url', 'https://x.dev/'))
   assertEquals(a.type, 'a')
@@ -70,10 +70,10 @@ Deno.test('an eid face prefers its target title and falls back to id', () => {
       doc: { eid, title: 'Hello', body: '' },
     },
   }
-  assertEquals(vn(show('task', 'assignee', eid)).props.children, 'Hello')
+  assertEquals(vn(show('filed', 'assignee', eid)).props.children, 'Hello')
   cache.value[eid]!.doc = undefined
-  assertEquals(vn(show('task', 'assignee', eid)).props.children, 'E-5')
-  assertEquals(show('task', 'assignee', null), null)
+  assertEquals(vn(show('filed', 'assignee', eid)).props.children, 'E-5')
+  assertEquals(show('filed', 'assignee', null), null)
   cache.value = {}
 })
 
@@ -89,7 +89,8 @@ Deno.test('a linked prop keeps a separate edit press', () => {
   cache.value = {
     [task]: {
       entity: { eid: task, num: 1 },
-      task: {
+      task: { eid: task },
+      filed: {
         eid: task,
         priority: 0,
         project: null,
@@ -108,7 +109,7 @@ Deno.test('a linked prop keeps a separate edit press', () => {
     render(
       h(Prop, {
         eid: task,
-        comp: 'task',
+        comp: 'filed',
         prop: 'assignee',
         editable: true,
         handle: true,
@@ -142,10 +143,10 @@ Deno.test('column overlays use the entity registry and retain its view walk', ()
   for (
     let [comp, col] of [
       ['doc', 'title'],
-      ['task', 'priority'],
-      ['task', 'domain'],
+      ['filed', 'priority'],
+      ['filed', 'domain'],
       ['task', 'status'],
-      ['task', 'assignee'],
+      ['filed', 'assignee'],
       ['created', 'at'],
       ['board', 'query'],
     ]
@@ -198,20 +199,20 @@ Deno.test('column overlays use the entity registry and retain its view walk', ()
 
 Deno.test('column actions keep fleet parsing and reject derived writes', () => {
   let e = ent('editing')
-  assertEquals(editColumn(e, { comp: 'task', col: 'priority' }, 'p02'), {
-    task: { priority: 2 },
+  assertEquals(editColumn(e, { comp: 'filed', col: 'priority' }, 'p02'), {
+    filed: { priority: 2 },
   })
-  assertEquals(editColumn(e, { comp: 'task', col: 'assignee' }, null), {
-    task: { assignee: null },
+  assertEquals(editColumn(e, { comp: 'filed', col: 'assignee' }, null), {
+    filed: { assignee: null },
   })
-  assertThrows(() => editColumn(e, { comp: 'task', col: 'priority' }, 'nope'))
+  assertThrows(() => editColumn(e, { comp: 'filed', col: 'priority' }, 'nope'))
   assertThrows(() => editColumn(e, { comp: 'task', col: 'status' }, 'done'))
 })
 
 Deno.test('native number and query editors retain their existing elements', () => {
   for (
     let [comp, prop, value, selector] of [
-      ['task', 'priority', 2, 'input.Prop_Num'],
+      ['filed', 'priority', 2, 'input.Prop_Num'],
       ['board', 'query', '.task!', '.Prop_Query input.Prop_Find'],
     ] as const
   ) {
@@ -285,7 +286,7 @@ Deno.test('enum, reference and domain controls retain their shared popouts', () 
       render(
         h(ColumnEdit, {
           eid: 'popouts',
-          comp: 'task',
+          comp: 'filed',
           prop,
           done: () => {},
           anchor: { current: null },

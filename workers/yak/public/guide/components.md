@@ -61,17 +61,20 @@ the text itself is kept once, however many rows quote it. None of that is a row
 of the graph — there is no second entity beside your doc — so `.doc!` answers
 your docs and a body reads back as the text you wrote.
 
-**`task`** — `priority` (number), `project` (eid), `assignee` (eid), `domain`
-(text). Anything with a state: a chore, a to-do, a suggestion waiting on
-someone. Reach for it rather than inventing a `status` column of your own, and
-the platform's own status grammar works on your rows.
+**`filed`** — `priority` (number), `project` (eid), `assignee` (eid), `domain`
+(text). Optional portfolio filing, separate from task presence. A microtask
+needs no filing; add it when work belongs on a project board.
+
+**`task`** — no stored columns. Anything with a state: a chore, a to-do, a
+suggestion waiting on someone. Reach for it rather than inventing a `status`
+column of your own, and the platform's own status grammar works on your rows.
 
 `status` is READ, never written — `open`, `wip`, `done` or `cancelled`, derived
 from what the entity wears: `cancelled` if it wears `cancelled`, else `done` if
 it wears `completed`, else `wip` if it wears a live `claim`, else `open`.
 
     await apply({ entity: { eid: '$t' },
-      doc: { title: 'Water the plants' }, task: { priority: 1 } })
+      doc: { title: 'Water the plants' }, task: {}, filed: { priority: 1 } })
 
     let todo = await query('.task.status=open&.doc?')
 
@@ -89,16 +92,16 @@ carries a server-set `via`.
 
     await apply({ entity: { eid }, cancelled: { reason: 'moved house' } })
 
-**`project`** — `color` (text). A thing other rows belong to, by `task.project`.
-Reach for it when your app has lists that own work — a household, a course, a
-trip. The reference detaches when the project dies: the tasks live on with a
-null `project`.
+**`project`** — `color` (text). A thing other rows belong to, by
+`filed.project`. Reach for it when your app has lists that own work — a
+household, a course, a trip. The reference detaches when the project dies: the
+tasks live on with a null `project`.
 
     let { aliases } = await apply({
       entity: { eid: '$p' }, doc: { title: 'Kitchen' },
       project: { color: '#a7c080' },
     })
-    await apply({ entity: { eid }, task: { project: aliases.$p } })
+    await apply({ entity: { eid }, task: {}, filed: { project: aliases.$p } })
 
 **`comment`** — `target` (eid). A note aimed at ANY entity — a recipe, a photo,
 another comment. The note's own words go in its `doc`. The comment dies with its
@@ -318,7 +321,7 @@ platform has no word for:
     await apply({ entity: { eid: '$c' },
       doc: { title: 'Descale the kettle' },
       chore: { room: 'kitchen', every_days: 90 },
-      task: { priority: 2 } })
+      task: {}, filed: { priority: 2 } })
 
     await apply({ entity: { eid }, completed: {} })
     let left = await query('.chore!&.task.status=open&.doc?')
@@ -424,7 +427,7 @@ These are the names, all of them:
     canvas card chat checkpoint claim client comment commit completed
     conflict contains content created cursor decided delegates deliver
     delivered deploy design doc dream edge effect email entity entry error
-    exception exit favorite feedback fetch finding fixer fold fork
+    exception exit favorite feedback fetch filed finding fixer fold fork
     generation goal graph_query headers hook hostname image imported
     installed knock layout lease mail member memory message meta meter model
     nofix notice notified noverify opaque opened output pane patch person
@@ -460,7 +463,7 @@ want to filter on a key inside it, that key wants to be a column.
 
 Do not put in a column what the graph already holds. Who wrote it is
 `created.by`; whether it is done is `completed`; whether it is hidden is
-`archived`; what it belongs to is `task.project` or a `contains` edge. A second
+`archived`; what it belongs to is `filed.project` or a `contains` edge. A second
 copy in a column of your own only drifts.
 
 The exception is a DATE the row itself has. `created.at` is when the store saw

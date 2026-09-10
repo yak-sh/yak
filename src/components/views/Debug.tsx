@@ -29,7 +29,7 @@ import { Json } from './Json.tsx'
 // Deno is the seam: undefined in the browser bundle, set in the TUI's Deno
 // process.
 let browser = typeof Deno == 'undefined'
-let priority = propAt('task', 'priority')!
+let priority = propAt('filed', 'priority')!
 
 // The Debug view: one full inspector for the entity itself — EVERY prop,
 // nothing hidden — with contained children as one linked Debug.Tile row
@@ -397,7 +397,7 @@ export let DebugTaskItem = ({ e }: { e: Ent }) => (
     <Kind>{e.kind}</Kind>
     <Title {...title(e.doc?.title ?? '')} />
     {e.claim && <Claim>⚑ {viaName(e.claim.session)}</Claim>}
-    <Prio>{formatProp(priority, e.task!.priority)}</Prio>
+    <Prio>{formatProp(priority, e.filed?.priority ?? 0)}</Prio>
     <Status mod={statusOf(e)}>{statusOf(e)}</Status>
   </Item>
 )

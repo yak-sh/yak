@@ -97,7 +97,8 @@ let native = (on = branch) => {
     { eid: project, name: 'project', comp: {} },
     { eid: project, name: 'repo', comp: { path: repo, base_branch: 'main' } },
     { eid: task, name: 'doc', comp: { title: 'Stranded work', body: '' } },
-    { eid: task, name: 'task', comp: { project, priority: 'P2' } },
+    { eid: task, name: 'task', comp: {} },
+    { eid: task, name: 'filed', comp: { project, priority: 'P2' } },
     {
       eid,
       name: 'session',

@@ -430,7 +430,7 @@ slow(
       assertEquals(landed?.comps.doc?.title, 'batched')
       // status is derived, never stored (D-24102): the task comp shows as its
       // schema default, and the bare row reads open.
-      assertEquals(landed?.comps.task?.priority, 0)
+      assertEquals(landed?.comps.filed?.priority, 0)
       assertEquals(statusOf(landed!.comps), 'open')
 
       let nested = await tasks.call('graph_apply', {

@@ -173,7 +173,8 @@ let seed = (body = '', repo: string | null = scratch) => {
     { eid: p, name: 'project', comp: {} },
     ...(repo ? [{ eid: p, name: 'repo', comp: { path: repo } }] : []),
     { eid: t, name: 'doc', comp: { title: 'Do the thing', body } },
-    { eid: t, name: 'task', comp: { project: p } },
+    { eid: t, name: 'task', comp: {} },
+    { eid: t, name: 'filed', comp: { project: p } },
   ])
   return { p, t }
 }

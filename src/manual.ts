@@ -1272,7 +1272,7 @@ export let manuals = declare({
     args: [arg('title', text, true, false)],
     passthrough: true,
   },
-  // `assign` is the plain-language warm path to task.assignee. Keep the
+  // `assign` is the plain-language warm path to filed.assignee. Keep the
   // general graph patch under `set`; this alias makes the common act
   // discoverable without creating a second assignment model (T-19540).
   assign: {

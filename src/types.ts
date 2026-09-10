@@ -322,6 +322,12 @@ export let comps: Record<string, Record<string, PropType>> = {
     url: 'url',
     method: { enum: httpMethods },
   },
+  filed: {
+    priority: 'priority',
+    project: { eid: 'project', death: 'detach' },
+    assignee: { eid: 'entity', death: 'detach' },
+    domain: { text: 'domains' },
+  },
   finding: {
     key: 'text',
     hits: 'number',
@@ -607,12 +613,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   },
   supersedes: {},
   supervises: {},
-  task: {
-    priority: 'priority',
-    project: { eid: 'project', death: 'detach' },
-    assignee: { eid: 'entity', death: 'detach' },
-    domain: { text: 'domains' },
-  },
+  task: {},
   task_context: {},
   timeout: {
     ms: 'number',
@@ -1378,7 +1379,12 @@ export type Task = {
   // cancelled/claim comps, and rowed() materializes it onto a read shape. Present
   // on a row that has been through statusOf; absent on a bare write literal.
   status?: string
-  priority: number // board order within a status column; lower sorts first
+}
+
+// Optional portfolio filing; a microtask carries none of these columns.
+export type Filed = {
+  eid: string
+  priority?: number | null // board order within a status column; lower sorts first
   project?: string | null // the project (venture) this task belongs to
   assignee?: string | null // whose plate — durable; claim is who's on it now
   // Cross-project facet (Eng, Legal, Ops, …), free text by convention; a
@@ -2139,6 +2145,7 @@ export type EntCore = {
   goal?: Goal
   architecture?: { eid: string }
   task?: Task
+  filed?: Filed
   accept?: Accept
   project?: ProjectTag
   venture?: Venture

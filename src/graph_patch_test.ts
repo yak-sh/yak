@@ -320,9 +320,9 @@ Deno.test('bound() refuses a non-scalar for a scalar column — the storage guar
     'doc.body expects a scalar value, got object',
   )
   assertThrows(
-    () => bound('task', 'priority', [1, 2]),
+    () => bound('filed', 'priority', [1, 2]),
     Error,
-    'task.priority expects a scalar value, got array',
+    'filed.priority expects a scalar value, got array',
   )
 })
 

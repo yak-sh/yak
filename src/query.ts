@@ -1126,7 +1126,7 @@ export let preds = (token: string, vocab: Vocab = NONE): Pred[] | null => {
   }
   // `.distinct=domain` / `.tally=domain` — an aggregate PROJECTION over one
   // column, not a filter. Its column routes like any bare prop (or the explicit
-  // `.distinct=task.domain`); a path is refused — the census aggregates a single
+  // `.distinct=filed.domain`); a path is refused — the census aggregates a single
   // column. aggOf()/aggregateSql() read the AGG pred; matchQuery lets it through.
   if ((path == 'distinct' || path == 'tally') && !owned(path)) {
     if (op != '=' || !value) {
@@ -1573,7 +1573,7 @@ export let resolveRefs = (
 // hand the matcher a later moment (see the subscription sweep).
 // A bare component name (empty prop) is a presence test: `!`/`~=` hold when the
 // bag wears the component, `=` when it does not — the same rule at depth 0 and
-// at a path leaf (`.blocked!` and `.task.project.archived!` mean the same thing
+// at a path leaf (`.blocked!` and `.filed.project.archived!` mean the same thing
 // one hop apart). A broken link hands in an undefined bag, which reads as absent.
 let present = (bag: Comps | undefined, comp: string, op: string): boolean =>
   op == '~' || op == EXISTS ? !!bag?.[comp] : !bag?.[comp]
@@ -1801,7 +1801,7 @@ export let SUNK = 0.1
 // grammar. `.archived.at` is the canonical presence spelling: the column is
 // not-null, and db.ts rewrites `.retired_at` to it. The self arm (this row IS
 // an archived project) has no ref to deref, so it stays a direct test.
-let SUNK_PROJECT = parseQuery('.task.project.archived.at!')
+let SUNK_PROJECT = parseQuery('.filed.project.archived.at!')
 export let sunk = (
   c: Comps,
   ent?: (eid: string) => Comps | undefined,
@@ -1815,10 +1815,27 @@ export let warm = (
 // The values a row must carry to satisfy the query's scalar equalities on
 // one component — what a board drop patches, so a dropped task JOINS the
 // board it landed on. Lists, ranges and comparisons pin nothing down.
-export let adopt = (preds: Pred[], comp: string) => {
+export function adopt(
+  preds: Pred[],
+): Record<string, Record<string, string | number>>
+export function adopt(
+  preds: Pred[],
+  comp: string,
+): Record<string, string | number>
+export function adopt(preds: Pred[], comp?: string) {
+  if (comp == null) {
+    let grouped: Record<string, Record<string, string | number>> = {}
+    for (let name of new Set(preds.map((p) => p.comp).filter(Boolean))) {
+      let values = adopt(preds, name)
+      if (Object.keys(values).length) grouped[name] = values
+    }
+    return grouped
+  }
   let out: Record<string, string | number> = {}
   for (let p of preds) {
-    if (p.comp != comp || p.op != '' || p.value == '') continue
+    if (
+      p.comp != comp || !p.prop || p.at?.length || p.op != '' || p.value == ''
+    ) continue
     if (p.value.includes(',') || /\.\./.test(p.value)) continue
     out[p.prop] = /^-?\d+(\.\d+)?$/.test(p.value) ? Number(p.value) : p.value
   }

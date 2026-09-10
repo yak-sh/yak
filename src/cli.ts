@@ -505,7 +505,7 @@ let verify = async (got: Got) => {
 // there is no one place in it to stand.
 export let place = (preds: Pred[]) =>
   preds.find((p) =>
-    p.comp == 'task' && p.prop == 'project' && p.op == '' && p.value &&
+    p.comp == 'filed' && p.prop == 'project' && p.op == '' && p.value &&
     !p.value.includes(',')
   )
 
@@ -734,15 +734,15 @@ let create = async (got: Got) => {
   // A leading P<n> sets priority (the documented shorthand); an explicit
   // .priority= wins the value, but the leading token still leaves the title.
   let { words: title, priority } = leadPrio(words)
-  if (priority != null) grouped.task = { priority, ...grouped.task }
+  if (priority != null) grouped.filed = { priority, ...grouped.filed }
   grouped.doc = { title: title.join(' '), ...grouped.doc }
   if (!grouped.doc.title) throw new Error('a task needs a .title')
   // Default the project to the one this cwd/session stands in — an orphaned
   // task is off every board and can't land (T-16496). An explicit .project=
   // wins; scopeOf is undefined only when nothing places the caller.
-  if (!grouped.task?.project) {
+  if (!grouped.filed?.project) {
     let scope = await scopeOf()
-    if (scope) grouped.task = { ...grouped.task, project: scope }
+    if (scope) grouped.filed = { ...grouped.filed, project: scope }
   }
   let eid = crypto.randomUUID()
   let applied = await send(taskChanges(eid, grouped))
@@ -2963,7 +2963,7 @@ let telemetryStats = async (
 let usageDims: Dim[] = ['model', 'project', 'persona', 'task', 'provider']
 
 // Project every settled session's usage, attach the project one edge out
-// (session → requested_task → task.project), and collect human labels for the
+// (session → requested_task → filed.project), and collect human labels for the
 // eids we group by. Shared by the CLI verb and, in spirit, the MCP tool.
 let usesFrom = async (hits: Row[]) => {
   let uses: Use[] = []
@@ -2978,11 +2978,11 @@ let usesFrom = async (hits: Row[]) => {
   let taskRows = refs.filter((r) => r.comps.task)
   let projs = await fetched([
     ...new Set(
-      taskRows.map((r) => String(r.comps.task?.project ?? '')).filter(Boolean),
+      taskRows.map((r) => String(r.comps.filed?.project ?? '')).filter(Boolean),
     ),
   ])
   let taskProj = new Map(
-    taskRows.map((r) => [r.eid, String(r.comps.task?.project ?? '')]),
+    taskRows.map((r) => [r.eid, String(r.comps.filed?.project ?? '')]),
   )
   let name = new Map([...refs, ...projs].map((r) => [r.eid, idOf(r)]))
   for (let u of uses) if (u.task) u.project = taskProj.get(u.task) || undefined

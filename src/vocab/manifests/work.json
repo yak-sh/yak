@@ -175,21 +175,7 @@
         "notice",
         "role"
       ],
-      "prefix": "T",
-      "cols": {
-        "priority": "priority",
-        "project": {
-          "eid": "project",
-          "death": "detach"
-        },
-        "assignee": {
-          "eid": "entity",
-          "death": "detach"
-        },
-        "domain": {
-          "well": "domains"
-        }
-      }
+      "prefix": "T"
     },
     "venture": {
       "cols": {
@@ -209,6 +195,22 @@
         "operated_by": "text",
         "tagline": "text",
         "site": "url"
+      }
+    },
+    "filed": {
+      "cols": {
+        "priority": "priority",
+        "project": {
+          "eid": "project",
+          "death": "detach"
+        },
+        "assignee": {
+          "eid": "entity",
+          "death": "detach"
+        },
+        "domain": {
+          "well": "domains"
+        }
       }
     }
   }

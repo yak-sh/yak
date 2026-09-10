@@ -305,8 +305,7 @@ let schema = `
     from doc d join blob_text b on b.entity = d.body
     left join mail m on m.entity = d.entity;
   create table if not exists task (
-    entity    integer primary key references entity(id),
-    priority real not null default 0
+    entity    integer primary key references entity(id)
   );
   create table if not exists repo (
     entity  integer primary key references entity(id),
@@ -1099,6 +1098,7 @@ export let fillContentFts = (db: Sql, limit = 64): boolean => {
 // comp equals its vocabulary columns exactly, and every OTHER comp still carries
 // every column it declares.
 export let derived = [
+  'filed',
   'project',
   'accept',
   'venture',
@@ -1302,6 +1302,7 @@ let addTask = (db: Sql, title: string, status: string, body = '') => {
   let eid = ent(db)
   doc(db, eid, title, body)
   prep(db, `insert into task (entity) values (${ID})`).run(eid)
+  prep(db, `insert into filed (entity, priority) values (${ID}, 0)`).run(eid)
   // Status is derived (D-24102): a demo task wears the mark its status names.
   // 'wip'/'open' get no mark — a seed has no live claim, so wip reads open.
   let now = `strftime('%Y-%m-%dT%H:%M:%fZ','now')`
@@ -1463,7 +1464,7 @@ let seed = (db: Sql) => {
   }
 
   let proj = addProject(db, 'Demo project')
-  prep(db, `update task set project = ${ID}`).run(proj)
+  prep(db, `update filed set project = ${ID}`).run(proj)
 
   let canvas = ent(db)
   prep(db, `insert into canvas (entity) values (${ID})`).run(canvas)
@@ -2637,7 +2638,7 @@ export let migrateBoardsToProjects = (db: Sql) => {
       let p = preds[0]
       // op '' is equality (query.ts OPS['=']); a list/range value or a deref
       // path is not a single whole-project mirror.
-      if (p.comp != 'task' || p.prop != 'project' || p.op != '' || !p.value) {
+      if (p.comp != 'filed' || p.prop != 'project' || p.op != '' || !p.value) {
         continue
       }
       if (p.at || p.value.includes(',')) continue
@@ -3012,6 +3013,29 @@ let writableVersion = (db: Sql) => {
   return stored
 }
 
+// Move portfolio filing without changing task identity or touching owner data.
+// The old column is the one-time marker; open() owns the surrounding transaction.
+export let migrateFiled = (db: Sql) => {
+  if (!hasCol(db, 'task', 'priority')) return
+  db.exec(tableDdl('filed'))
+  let cols = ['priority', 'project', 'assignee', 'domain']
+  let select = cols.map((c) => hasCol(db, 'task', c) ? c : 'null')
+  db.exec(`insert into filed (entity, ${cols.join(', ')})
+    select entity, ${select.join(', ')} from task`)
+  // The old reference indexes must go before SQLite will drop their columns.
+  for (
+    let { name } of prep(
+      db,
+      "select name from pragma_index_list('task') where origin = 'c'",
+    ).all() as { name: string }[]
+  ) {
+    db.exec(`drop index ${sqlName(name)}`)
+  }
+  for (let c of cols) {
+    if (hasCol(db, 'task', c)) db.exec(`alter table task drop column ${c}`)
+  }
+}
+
 // Migrate a connected handle in place: the hand + derived schema, the additive
 // column/index fills, and the vector index.
 // The schema work runs under one BEGIN IMMEDIATE and is idempotent: concurrent
@@ -3128,9 +3152,7 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       // Retired by per-item human notification state; agents derive attention
       // from claims and transcript references instead of this session cursor.
       dropCol('session', 'acked_at')
-      addCol('task', 'project', 'project integer references entity(id)')
-      addCol('task', 'assignee', 'assignee integer references entity(id)')
-      addCol('task', 'domain', 'domain text')
+      migrateFiled(db)
       addCol('repo', 'url', 'url text')
       // Off for every checkout the graph already knows: the permission to push
       // is the owner's to grant per venture, never something a migration hands
@@ -3478,7 +3500,7 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       // memory). indexDdl is the one vocabulary's index set (index.ts indexesFor),
       // so this is the SQL realization the design always anticipated. Placed after
       // every addCol/rebuild above: a ref column may be added by migration
-      // (task.project, role.checkout, mail.reply_to) and a table rebuild (mendMail,
+      // (filed.project, role.checkout, mail.reply_to) and a table rebuild (mendMail,
       // migrateDelivery) drops and recreates its rows without indexes. Guarded by
       // hasIdx — a bare `create index if not exists` still opens an empty write
       // transaction that bumps the file change counter (breaking open()'s byte-
@@ -4790,7 +4812,7 @@ let workProject = (db: Sql, sid: number): string | null => {
   let c = prep(
     db,
     `select ${refEid('t.project')} as eid
-     from claim c join task t on t.entity = c.entity
+     from claim c join filed t on t.entity = c.entity
      where c.session = ? and t.project is not null
      order by c.rowid desc limit 1`,
   ).get(sid) as { eid: string } | undefined
@@ -4798,7 +4820,7 @@ let workProject = (db: Sql, sid: number): string | null => {
   let r = prep(
     db,
     `select ${refEid('t.project')} as eid
-     from session s join task t on t.entity = s.requested_task
+     from session s join filed t on t.entity = s.requested_task
      where s.entity = ? and t.project is not null`,
   ).get(sid) as { eid: string } | undefined
   return r?.eid ?? null
@@ -7117,6 +7139,19 @@ export let inverseBatch = (db: Sql, id: number): Change[] => {
       if (prior) inverse.push({ eid: c.eid, name: c.name, comp: prior })
       continue
     }
+    // Empty writable markers carry intent in their presence, not columns.
+    if (
+      c.comp && Object.keys(c.comp).every((k) => k == 'eid') &&
+      c.name == 'task' && !priorOf(c.eid)[c.name]
+    ) {
+      if (touchedSince.get(c.eid, id)) {
+        throw new Error(
+          `${human(db, c.eid)} was modified after #${id} — undo refused`,
+        )
+      }
+      inverse.push({ eid: c.eid, name: c.name, comp: null })
+      continue
+    }
     // server-owned / derived
     if (!colsOf(db, c.name)?.length || !c.comp) continue
     let keys = Object.keys(c.comp).filter((k) => k != 'eid')
@@ -7254,9 +7289,9 @@ let claimWork = (
       if (session && held?.session == session.eid) return []
       let actor = prep(
         db,
-        `select project.eid as eid from task
-       left join entity project on project.id = task.project
-       where task.entity = (select id from entity where eid = ?)`,
+        `select project.eid as eid from filed
+       left join entity project on project.id = filed.project
+       where filed.entity = (select id from entity where eid = ?)`,
       ).get(target) as { eid: string | null } | undefined
       let seid = session?.eid ?? uuid()
       let comp: Record<string, unknown> = session ? {} : { id: ask.session }
@@ -7847,7 +7882,7 @@ export let search = (db: Sql, q: string, limit = 20): Hit[] => {
     `
     select 1 from project p
     join archived a on a.entity = p.entity
-    left join task t on t.entity = (select id from entity where eid = ?1)
+    left join filed t on t.entity = (select id from entity where eid = ?1)
     where p.entity in ((select id from entity where eid = ?1), t.project)
   `,
   )

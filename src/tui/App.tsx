@@ -89,7 +89,7 @@ let configEdit = signal<
 >(null)
 export let navigationOpen = signal(false)
 export let navigationPick = signal(0)
-let priority = propAt('task', 'priority')!
+let priority = propAt('filed', 'priority')!
 
 // The first board is the one we browse — v0 has exactly one. Membership reads
 // the query door (T-17064); the num sort peeks rows without re-subscribing.
@@ -326,7 +326,9 @@ let TuiTask = ({ e }: { e: Ent }) => (
     <div class='Task_Head'>
       <Dot status={statusOf(e)} gated={gated(e)} live={crewed(e)} />
       <span class='Task_Title'>{e.doc?.title}</span>
-      <span class='Task_Prio'>{formatProp(priority, e.task!.priority)}</span>
+      <span class='Task_Prio'>
+        {formatProp(priority, e.filed?.priority ?? 0)}
+      </span>
       {e.claim && (
         <span class='Task_Claim'>
           ⚑ {viaName(e.claim.session)}

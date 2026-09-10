@@ -55,7 +55,8 @@ Deno.test('the index is a typed grid and grid mode is bare tiles', async () => {
     [task]: {
       entity: { eid: task, num: 2 },
       doc: { eid: task, title: 'Ship it', body: '' },
-      task: {
+      task: { eid: task },
+      filed: {
         eid: task,
         priority: 1,
         project: project,
@@ -74,7 +75,7 @@ Deno.test('the index is a typed grid and grid mode is bare tiles', async () => {
     assertEquals(table.tagName, 'DIV')
     assertEquals(
       [...root.querySelectorAll('.Admin_Cell')].map((x) => x.textContent),
-      ['T-2', 'Ship it', 'P1', 'Task Graph', '—', '—', ''],
+      ['T-2', 'Ship it', ''],
     )
 
     let grid = [...root.querySelectorAll<HTMLButtonElement>('.Admin_Tool')]
@@ -115,7 +116,8 @@ Deno.test('facet pages list their carriers without widening task', async () => {
     [task]: {
       entity: { eid: task, num: 20 },
       doc: { eid: task, title: 'Ship it', body: '' },
-      task: { eid: task, priority: 1, project },
+      task: { eid: task },
+      filed: { eid: task, priority: 1, project },
     },
   }
   let root = document.querySelector('main')!
@@ -139,7 +141,7 @@ Deno.test('facet pages list their carriers without widening task', async () => {
       'P-19Task Graphtask@bot.yak.sh',
     ])
     assertEquals(await texts('alias', 'P-19'), ['P-19Task Graphtasks—'])
-    assertEquals(await texts('task', 'T-20'), ['T-20Ship itP1Task Graph——'])
+    assertEquals(await texts('task', 'T-20'), ['T-20Ship it'])
   } finally {
     render(null, root)
     restore()
@@ -175,15 +177,17 @@ Deno.test('an admin query deep link filters the index', async () => {
     [mine]: {
       entity: { eid: mine, num: 21 },
       doc: { eid: mine, title: 'Mine', body: '' },
-      task: { eid: mine, priority: 1, project: home },
+      task: { eid: mine },
+      filed: { eid: mine, priority: 1, project: home },
     },
     [other]: {
       entity: { eid: other, num: 22 },
       doc: { eid: other, title: 'Other', body: '' },
-      task: { eid: other, priority: 1, project: away },
+      task: { eid: other },
+      filed: { eid: other, priority: 1, project: away },
     },
   }
-  route.value = '/admin/task?q=.task.project%3DP-19'
+  route.value = '/admin/task?q=.filed.project%3DP-19'
   let root = document.querySelector('main')!
   let restore = stubFetch()
   try {
@@ -213,7 +217,8 @@ Deno.test('a refused direct query replaces partial rows with retry', async () =>
     [task]: {
       entity: { eid: task, num: 2 },
       doc: { eid: task, title: 'Partial row', body: '' },
-      task: { eid: task, priority: 1, project: null },
+      task: { eid: task },
+      filed: { eid: task, priority: 1, project: null },
     },
   }
   let query = '.entry.session=a,b'

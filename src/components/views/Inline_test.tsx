@@ -26,7 +26,8 @@ Deno.test('Inline renderers say the title without the id', () => {
     task: {
       entity: { eid: 'task', num: 2 },
       doc: { eid: 'task', title: 'A task', body: '' },
-      task: { eid: 'task', status: 'open', priority: 1 },
+      task: { eid: 'task', status: 'open' },
+      filed: { eid: 'task', priority: 1 },
     },
   }
 

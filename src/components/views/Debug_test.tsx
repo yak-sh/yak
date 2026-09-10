@@ -127,7 +127,8 @@ slow('a reference reads as one association row, eid and all', async () => {
     [job]: {
       entity: { eid: job, num: 8 },
       doc: { eid: job, title: 'Job', body: '' },
-      task: { eid: job, status: 'open', priority: 1, assignee: owner },
+      task: { eid: job, status: 'open' },
+      filed: { eid: job, priority: 1, assignee: owner },
     },
   }
   let root = document.querySelector('main')!
@@ -139,7 +140,7 @@ slow('a reference reads as one association row, eid and all', async () => {
     act(() => render(h(Debug, { e: ent(job) }), root))
     let keys = [...root.querySelectorAll('.Debug_Props .Debug_Key')]
       .map((k) => k.textContent)
-    assertEquals(keys.filter((k) => k == 'task.assignee').length, 1)
+    assertEquals(keys.filter((k) => k == 'filed.assignee').length, 1)
     // The row carries the target and the eid it stored.
     let ids = [...root.querySelectorAll('.Debug_Val-id')].map((v) =>
       v.textContent
@@ -179,7 +180,8 @@ slow('project backlinks omit attribution and cap associations', async () => {
       [eid]: {
         entity: { eid, num: n },
         doc: { eid, title: `Task ${n}`, body: '' },
-        task: { eid, status: 'open', priority: n, project: project },
+        task: { eid, status: 'open' },
+        filed: { eid, priority: n, project: project },
       },
     }
   }
@@ -226,7 +228,7 @@ slow('project backlinks omit attribution and cap associations', async () => {
           '/admin/session?q=.session.actor%3DP-19',
           '← session.actor+1 more sessions',
         ],
-        ['/admin/task?q=.task.project%3DP-19', '← task.project+2 more tasks'],
+        ['/admin/task?q=.filed.project%3DP-19', '← filed.project+2 more tasks'],
       ],
     )
   } finally {

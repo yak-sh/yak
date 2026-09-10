@@ -15,7 +15,8 @@ Deno.test('task tile delegates its dense meta row to the registry', () => {
     num: 1,
     kind: 'task',
     doc: { eid: 'task', title: 'One row', body: '' },
-    task: { eid: 'task', status: 'open', priority: 0 },
+    task: { eid: 'task', status: 'open' },
+    filed: { eid: 'task', priority: 0 },
     refs: [],
     kids: [],
   }

@@ -169,8 +169,8 @@ Deno.test('formatProp: every semantic type has one face', () => {
 })
 
 Deno.test('propAt: types and unambiguous error names come from schema', () => {
-  assertEquals(propAt('task', 'priority'), {
-    comp: 'task',
+  assertEquals(propAt('filed', 'priority'), {
+    comp: 'filed',
     prop: 'priority',
     name: 'priority',
     type: 'priority',
@@ -189,7 +189,7 @@ Deno.test('refOf: an any-entity ref answers entity, kind-constrained its kind', 
   assertEquals(refOf('card', 'target'), 'entity')
   assertEquals(isRef('card', 'target'), true)
   // A kind-constrained ref answers its kind; a bare non-suffixed ref counts.
-  assertEquals(refOf('task', 'project'), 'project')
+  assertEquals(refOf('filed', 'project'), 'project')
   assertEquals(isRef('deliver', 'to'), true)
   // A scalar and an unknown column are not references.
   assertEquals(isRef('task', 'status'), false)
@@ -203,9 +203,10 @@ Deno.test('normalizeChanges: component values, ids, and edges canonicalize', () 
   let resolve = (id: string) => ids[id]
   assertEquals(
     normalizeChanges([
+      { eid: 'parent', name: 'task', comp: {} },
       {
         eid: 'parent',
-        name: 'task',
+        name: 'filed',
         comp: { priority: 'P02', assignee: '2' },
       },
       {
@@ -215,11 +216,8 @@ Deno.test('normalizeChanges: component values, ids, and edges canonicalize', () 
       },
     ], { resolve }),
     [
-      {
-        eid: parent,
-        name: 'task',
-        comp: { priority: 2, assignee: child },
-      },
+      { eid: parent, name: 'task', comp: {} },
+      { eid: parent, name: 'filed', comp: { priority: 2, assignee: child } },
       {
         eid: parent,
         name: 'edge',

@@ -107,8 +107,8 @@ Deno.test('death words: every reference declares, the sets hold', () => {
   assertEquals(
     words('detach'),
     new Set([
-      'task.project',
-      'task.assignee',
+      'filed.project',
+      'filed.assignee',
       'client.actor',
       // A selected chat remains session history if either side disappears;
       // only its selection coordinates detach.

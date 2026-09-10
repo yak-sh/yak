@@ -78,14 +78,14 @@ export let QuickAdd = (
   let { sync, spend } = useDraft(dkey, box, setText)
   useEffect(() => void box.current?.focus(), [])
   let { body, grouped } = spec(text)
-  let p = grouped.task?.priority
+  let p = grouped.filed?.priority
   let chips = Object.entries(grouped).flatMap(([comp, props]) =>
     props == null
       ? [`${comp}=false`]
       : Object.keys(props).length == 0
       ? [`${comp}=true`]
       : Object.entries(props)
-        .filter(([prop]) => comp != 'task' || prop != 'priority')
+        .filter(([prop]) => comp != 'filed' || prop != 'priority')
         .map(([prop, v]) => `${prop}=${v}`)
   )
   return (
@@ -235,8 +235,8 @@ export let Board = ({ e }: { e: Ent }) => {
       return ev.clientY < box.top + box.height / 2
     })
     if (i < 0) i = list.length
-    let prev = list[i - 1]?.task?.priority
-    let next = list[i]?.task?.priority
+    let prev = list[i - 1]?.filed?.priority
+    let next = list[i]?.filed?.priority
     let priority = prev == null && next == null
       ? 0
       : prev == null
@@ -244,15 +244,22 @@ export let Board = ({ e }: { e: Ent }) => {
       : next == null
       ? prev + 1
       : (prev + next) / 2
-    mutate({
-      eid: target,
-      name: 'task',
-      comp: {
-        ...adopt(parseQuery(String(e.board?.query ?? '')), 'task'),
-        status,
-        priority,
+    let grouped = adopt(parseQuery(String(e.board?.query ?? '')))
+    mutate(
+      ...Object.entries(grouped).filter(([name]) =>
+        name != 'task' && name != 'filed'
+      )
+        .map(([name, comp]) => ({ eid: target, name, comp })),
+      { eid: target, name: 'task', comp: { ...grouped.task, status } },
+      {
+        eid: target,
+        name: 'filed',
+        comp: {
+          ...grouped.filed,
+          priority,
+        },
       },
-    })
+    )
   }
 
   // Quick-create: a task born INTO the column it was typed in. The line
@@ -264,14 +271,20 @@ export let Board = ({ e }: { e: Ent }) => {
   let create = (status: string, list: Ent[], text: string) => {
     let { title, body, grouped } = spec(text)
     if (!title) return false
+    for (
+      let [comp, values] of Object.entries(
+        adopt(parseQuery(String(e.board?.query ?? ''))),
+      )
+    ) {
+      grouped[comp] = { ...values, ...grouped[comp] }
+    }
     mutate(...taskChanges(uuid(), {
       ...grouped,
       doc: { title, body, ...grouped.doc },
-      task: {
-        ...adopt(parseQuery(String(e.board?.query ?? '')), 'task'),
-        priority: (list[0]?.task?.priority ?? 1) - 1,
-        ...grouped.task,
-        status,
+      task: { ...grouped.task, status },
+      filed: {
+        priority: (list[0]?.filed?.priority ?? 1) - 1,
+        ...grouped.filed,
       },
     }))
     return true

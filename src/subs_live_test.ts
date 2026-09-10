@@ -443,7 +443,8 @@ let task = (comp: Record<string, unknown>) => {
     session,
     born: [
       { eid, name: 'doc', comp: { title: `probe ${eid.slice(0, 8)}` } },
-      { eid, name: 'task', comp: { priority: 3, ...stored } },
+      { eid, name: 'task', comp: { ...stored } },
+      { eid, name: 'filed', comp: { priority: 3 } },
       { eid: session, name: 'session', comp: { id: `sub-${session}` } },
       ...(status == 'done'
         ? [{ eid, name: 'completed', comp: {} }]
@@ -465,7 +466,11 @@ slow(
     await walk(q, [
       a.born, // exists, does not match
       [{ eid: a.eid, name: 'completed', comp: null }], // add
-      [{ eid: a.eid, name: 'task', comp: { priority: 0 } }], // update, still in
+      [{ eid: a.eid, name: 'task', comp: {} }, {
+        eid: a.eid,
+        name: 'filed',
+        comp: { priority: 0 },
+      }], // update, still in
       [{ eid: a.eid, name: 'completed', comp: {} }], // remove
       [{ eid: a.eid, name: 'completed', comp: null }], // add again
       [{ eid: a.eid, name: 'entity', comp: null }], // dead
@@ -493,7 +498,7 @@ slow(
   alone,
   async () => {
     let source = uid(), assignee = uid(), mark = `path-${uid().slice(0, 8)}`
-    let q = `.task.assignee.doc.title~=${mark}&.doc.title~=${
+    let q = `.filed.assignee.doc.title~=${mark}&.doc.title~=${
       source.slice(0, 8)
     }`
     await walk(q, [
@@ -505,11 +510,8 @@ slow(
           name: 'doc',
           comp: { title: `source ${source.slice(0, 8)}` },
         },
-        {
-          eid: source,
-          name: 'task',
-          comp: { priority: 1, assignee },
-        },
+        { eid: source, name: 'task', comp: {} },
+        { eid: source, name: 'filed', comp: { priority: 1, assignee } },
       ],
       [{ eid: assignee, name: 'doc', comp: { title: mark } }], // add
       [{ eid: assignee, name: 'doc', comp: { title: 'elsewhere' } }], // drop
@@ -525,7 +527,7 @@ slow(
   async () => {
     let source = uid(), target = uid(), left = uid(), right = uid()
     let mark = `path-${uid().slice(0, 8)}`
-    let q = `.comment.target.task.project.doc.title~=${mark}&.doc.title~=${
+    let q = `.comment.target.filed.project.doc.title~=${mark}&.doc.title~=${
       source.slice(0, 8)
     }`
     await walk(q, [
@@ -535,11 +537,8 @@ slow(
         { eid: right, name: 'doc', comp: { title: 'right' } },
         { eid: right, name: 'project', comp: {} },
         { eid: target, name: 'doc', comp: { title: 'target' } },
-        {
-          eid: target,
-          name: 'task',
-          comp: { priority: 1, project: left },
-        },
+        { eid: target, name: 'task', comp: {} },
+        { eid: target, name: 'filed', comp: { priority: 1, project: left } },
         {
           eid: source,
           name: 'doc',
@@ -548,10 +547,22 @@ slow(
         { eid: source, name: 'comment', comp: { target } },
       ],
       [{ eid: left, name: 'doc', comp: { title: mark } }], // add from leaf
-      [{ eid: target, name: 'task', comp: { project: right } }], // retarget + drop
+      [{ eid: target, name: 'task', comp: {} }, {
+        eid: target,
+        name: 'filed',
+        comp: { project: right },
+      }], // retarget + drop
       [{ eid: right, name: 'doc', comp: { title: mark } }], // add from new leaf
-      [{ eid: target, name: 'task', comp: { project: null } }], // clear + drop
-      [{ eid: target, name: 'task', comp: { project: right } }], // restore + add
+      [{ eid: target, name: 'task', comp: {} }, {
+        eid: target,
+        name: 'filed',
+        comp: { project: null },
+      }], // clear + drop
+      [{ eid: target, name: 'task', comp: {} }, {
+        eid: target,
+        name: 'filed',
+        comp: { project: right },
+      }], // restore + add
       [{ eid: right, name: 'entity', comp: null }], // detach + drop
     ])
   },
@@ -560,15 +571,35 @@ slow(
 slow('subscription: range and comparison preds', alone, async () => {
   let a = task({})
   let tag = a.eid.slice(0, 8)
-  await walk(`.task.priority=0..1&.doc.title~=${tag}`, [
+  await walk(`.filed.priority=0..1&.doc.title~=${tag}`, [
     a.born,
-    [{ eid: a.eid, name: 'task', comp: { priority: 1 } }], // in
-    [{ eid: a.eid, name: 'task', comp: { priority: 2 } }], // out
-    [{ eid: a.eid, name: 'task', comp: { priority: 0 } }], // in
+    [{ eid: a.eid, name: 'task', comp: {} }, {
+      eid: a.eid,
+      name: 'filed',
+      comp: { priority: 1 },
+    }], // in
+    [{ eid: a.eid, name: 'task', comp: {} }, {
+      eid: a.eid,
+      name: 'filed',
+      comp: { priority: 2 },
+    }], // out
+    [{ eid: a.eid, name: 'task', comp: {} }, {
+      eid: a.eid,
+      name: 'filed',
+      comp: { priority: 0 },
+    }], // in
   ])
-  await walk(`.task.priority<=1&.doc.title~=${tag}`, [
-    [{ eid: a.eid, name: 'task', comp: { priority: 3 } }], // out
-    [{ eid: a.eid, name: 'task', comp: { priority: 1 } }], // in
+  await walk(`.filed.priority<=1&.doc.title~=${tag}`, [
+    [{ eid: a.eid, name: 'task', comp: {} }, {
+      eid: a.eid,
+      name: 'filed',
+      comp: { priority: 3 },
+    }], // out
+    [{ eid: a.eid, name: 'task', comp: {} }, {
+      eid: a.eid,
+      name: 'filed',
+      comp: { priority: 1 },
+    }], // in
   ])
 })
 
@@ -598,11 +629,23 @@ slow(
     let tag = a.eid.slice(0, 8)
     await post([{ eid: home, name: 'doc', comp: { title: 'probe home' } }])
     await post([{ eid: home, name: 'project', comp: {} }])
-    await walk(`.task.project=&.doc.title~=${tag}`, [
+    await walk(`.filed.project=&.doc.title~=${tag}`, [
       a.born, // no project — in
-      [{ eid: a.eid, name: 'task', comp: { project: home } }], // out
-      [{ eid: a.eid, name: 'task', comp: { priority: 1 } }], // untouched — still out
-      [{ eid: a.eid, name: 'task', comp: { project: null } }], // in
+      [{ eid: a.eid, name: 'task', comp: {} }, {
+        eid: a.eid,
+        name: 'filed',
+        comp: { project: home },
+      }], // out
+      [{ eid: a.eid, name: 'task', comp: {} }, {
+        eid: a.eid,
+        name: 'filed',
+        comp: { priority: 1 },
+      }], // untouched — still out
+      [{ eid: a.eid, name: 'task', comp: {} }, {
+        eid: a.eid,
+        name: 'filed',
+        comp: { project: null },
+      }], // in
     ])
   },
 )
@@ -616,7 +659,11 @@ slow(
     await walk(`.proposed.at!&.doc.title~=${tag}`, [
       a.born, // no proposal — out
       [{ eid: a.eid, name: 'proposed', comp: {} }], // stamped at — in
-      [{ eid: a.eid, name: 'task', comp: { priority: 1 } }], // untouched — still in
+      [{ eid: a.eid, name: 'task', comp: {} }, {
+        eid: a.eid,
+        name: 'filed',
+        comp: { priority: 1 },
+      }], // untouched — still in
       [{ eid: a.eid, name: 'proposed', comp: null }], // absent — out
     ])
   },
@@ -1005,8 +1052,8 @@ slow(
     for (
       let q of [
         '.task.status=open',
-        '.task.priority=1',
-        '.task.status=open&.task.priority=2',
+        '.filed.priority=1',
+        '.task.status=open&.filed.priority=2',
         '.task.status!=done',
         `.doc.title~=${a.eid.slice(0, 8)}`,
         // the spine, which is the from table rather than a joined one
@@ -1036,7 +1083,7 @@ slow(
 
 slow('query: work lanes refuse quarantine reveal filters', alone, async () => {
   for (let lane of ['evaluate', 'build', 'verify']) {
-    for (let filter of ['.quarantined!', '.task.project.quarantined!']) {
+    for (let filter of ['.quarantined!', '.filed.project.quarantined!']) {
       let res = await fetch(
         `http://${U}/query?work=${lane}&${encodeURIComponent(filter)}`,
       )
@@ -1071,7 +1118,8 @@ slow(
         name: 'doc',
         comp: { title: 'HTTP candidate', body: secretTaskBody },
       },
-      { eid: target, name: 'task', comp: { project } },
+      { eid: target, name: 'task', comp: {} },
+      { eid: target, name: 'filed', comp: { project } },
       {
         eid: target,
         name: 'accept',
@@ -1364,7 +1412,8 @@ slow(
         name: 'doc',
         comp: { title: 'route target', body: 'the whole body' },
       },
-      { eid, name: 'task', comp: { priority: 1 } },
+      { eid, name: 'task', comp: {} },
+      { eid, name: 'filed', comp: { priority: 1 } },
     ])
     let s = await subscriber()
     try {

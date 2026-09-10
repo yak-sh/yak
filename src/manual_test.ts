@@ -690,7 +690,7 @@ Deno.test('parse preserves filter tokens and routes write params', () => {
   assertEquals(made.words, ['P1', 'ship', 'it'])
   assertEquals(made.args.title, 'P1 ship it')
   assertEquals(made.params[0], {
-    comp: 'task',
+    comp: 'filed',
     prop: 'project',
     value: 'P-19',
   })

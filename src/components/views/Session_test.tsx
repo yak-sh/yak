@@ -181,12 +181,14 @@ Deno.test('session Tile omits its chip and lists every worked task', () => {
     one: {
       entity: { eid: 'one', num: 3 },
       doc: { eid: 'one', title: 'First task', body: '' },
-      task: { eid: 'one', status: 'done', priority: 1 },
+      task: { eid: 'one', status: 'done' },
+      filed: { eid: 'one', priority: 1 },
     },
     two: {
       entity: { eid: 'two', num: 4 },
       doc: { eid: 'two', title: 'Second task', body: '' },
-      task: { eid: 'two', status: 'wip', priority: 1 },
+      task: { eid: 'two', status: 'wip' },
+      filed: { eid: 'two', priority: 1 },
     },
   }
   deps.value = [
@@ -391,7 +393,8 @@ Deno.test('session references dedupe entities and links in mention order', () =>
     task: {
       entity: { eid: 'task', num: 2 },
       doc: { eid: 'task', title: 'The task', body: '' },
-      task: { eid: 'task', status: 'open', priority: 1 },
+      task: { eid: 'task', status: 'open' },
+      filed: { eid: 'task', priority: 1 },
     },
   }
   assertEquals(
@@ -514,7 +517,8 @@ Deno.test('session references use the usual entity and URL faces', () => {
     task: {
       entity: { eid: 'task', num: 2 },
       doc: { eid: 'task', title: 'The task', body: '' },
-      task: { eid: 'task', status: 'open', priority: 1 },
+      task: { eid: 'task', status: 'open' },
+      filed: { eid: 'task', priority: 1 },
     },
   }
   let root = document.querySelector('main')!
@@ -603,7 +607,8 @@ Deno.test('session lifecycle shares the task summary lane', () => {
     task: {
       entity: { eid: 'task', num: 1 },
       doc: { eid: 'task', title: 'The task', body: '' },
-      task: { eid: 'task', status: 'wip', priority: 1 },
+      task: { eid: 'task', status: 'wip' },
+      filed: { eid: 'task', priority: 1 },
     },
     session: {
       entity: { eid: 'session', num: 2 },

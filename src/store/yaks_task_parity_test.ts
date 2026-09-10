@@ -76,10 +76,6 @@ let add = (comp: string, props: Record<string, PropSchema>) => {
   defs[comp].properties = { ...defs[comp].properties, ...props }
 }
 
-add('task', {
-  assignee: ref('entity', 'detach'),
-  domain: { type: 'string' },
-})
 add('project', { color: { type: 'string' } })
 add('completed', { via: { ...ref('entity', 'keep'), stamped: true } })
 add('cancelled', { via: { ...ref('entity', 'keep'), stamped: true } })
@@ -106,6 +102,7 @@ let tableOf = (stmts: string[], comp: string): string | undefined =>
 
 let SHIPPED = [
   'task',
+  'filed',
   'project',
   'board',
   'completed',
@@ -164,8 +161,8 @@ Deno.test('parity: status is computed and unwritable on both sides', () => {
 })
 
 Deno.test('parity: a task is filed under a project and never onto a board', () => {
-  assertEquals(MINE.column('task', 'project')!.ref, 'project')
-  assertEquals(MINE.column('task', 'project')!.death, 'detach')
+  assertEquals(MINE.column('filed', 'project')!.ref, 'project')
+  assertEquals(MINE.column('filed', 'project')!.death, 'detach')
   // Membership is never stored: no column of `task` points at a board, on
   // either side. (The fleet DOES reference boards elsewhere — `fold.board` is
   // one viewer's collapse state for a board's view, and `card.target` is what a
@@ -210,19 +207,23 @@ apply(db, [
   { eid: P, name: 'doc', comp: { title: 'Task Parity Project' } },
   { eid: P, name: 'project', comp: {} },
   { eid: T1, name: 'doc', comp: { title: 'alpha widget' } },
-  { eid: T1, name: 'task', comp: { priority: 1, domain: 'Eng', project: P } },
+  { eid: T1, name: 'task', comp: {} },
+  { eid: T1, name: 'filed', comp: { priority: 1, domain: 'Eng', project: P } },
   { eid: T2, name: 'doc', comp: { title: 'beta widget' } },
-  { eid: T2, name: 'task', comp: { priority: 2, domain: 'Ops', project: P } },
+  { eid: T2, name: 'task', comp: {} },
+  { eid: T2, name: 'filed', comp: { priority: 2, domain: 'Ops', project: P } },
   { eid: T2, name: 'claim', comp: { session: S } },
   { eid: T3, name: 'doc', comp: { title: 'gamma' } },
-  { eid: T3, name: 'task', comp: { priority: 0, domain: 'Eng' } },
+  { eid: T3, name: 'task', comp: {} },
+  { eid: T3, name: 'filed', comp: { priority: 0, domain: 'Eng' } },
   {
     eid: T3,
     name: 'completed',
     comp: { at: '2026-08-02T00:00:00.000Z', by: null },
   },
   { eid: T4, name: 'doc', comp: { title: 'delta' } },
-  { eid: T4, name: 'task', comp: { priority: 3, domain: 'Ops' } },
+  { eid: T4, name: 'task', comp: {} },
+  { eid: T4, name: 'filed', comp: { priority: 3, domain: 'Ops' } },
   {
     eid: T4,
     name: 'cancelled',
@@ -274,7 +275,7 @@ Deno.test('parity: board queries agree with the app over the seeded graph', () =
       // status beside the ordinary columns, the way a board actually reads
       '.status=open&.domain=Eng',
       '.status=open&.priority<2',
-      '.status=open&.task.project=' + P,
+      '.status=open&.filed.project=' + P,
       '.kind=task&.status!=cancelled',
     ]
   ) agree(q)

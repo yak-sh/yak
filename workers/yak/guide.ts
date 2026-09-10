@@ -370,7 +370,7 @@ let COVERS: Record<string, string[]> = {
   entities: ['edge'],
   errors: ['exception', 'error', 'archived'],
   files: ['blob', 'image', 'attachment'],
-  components: ['doc', 'task', 'project', 'comment', 'favorite', 'web'],
+  components: ['doc', 'task', 'filed', 'project', 'comment', 'favorite', 'web'],
 }
 
 let PAGE_OF: Record<string, string> = Object.fromEntries(

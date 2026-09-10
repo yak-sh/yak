@@ -229,7 +229,8 @@ slow('plant() from schemaDdl() serves the wire without a migration', () => {
   let eid = crypto.randomUUID()
   apply(db, [
     { eid, name: 'doc', comp: { title: 'planted' } },
-    { eid, name: 'task', comp: { priority: 1 } },
+    { eid, name: 'task', comp: {} },
+    { eid, name: 'filed', comp: { priority: 1 } },
   ])
   let doc = snapshot(db).changes.find((c) => c.eid == eid && c.name == 'doc')
   assertEquals((doc?.comp as { title?: string })?.title, 'planted')

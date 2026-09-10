@@ -371,11 +371,14 @@ let fileFinding = async (
           comp: { hits, last: iso(Date.now()) },
         },
         ...(promote
-          ? [{
-            eid: seen.eid,
-            name: 'task',
-            comp: { priority: f.priority, project },
-          } as Change]
+          ? [
+            { eid: seen.eid, name: 'task', comp: {} },
+            {
+              eid: seen.eid,
+              name: 'filed',
+              comp: { priority: f.priority, project },
+            } as Change,
+          ]
           : []),
       ],
       cast,

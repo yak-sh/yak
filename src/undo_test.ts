@@ -107,7 +107,11 @@ Deno.test('a read sent back through the bundle door writes nothing', () => {
     { eid: p, name: 'project', comp: {} },
   ])
   born(db, t)
-  apply(db, [{ eid: t, name: 'task', comp: { project: p } }])
+  apply(db, [{
+    eid: t,
+    name: 'filed',
+    comp: { project: p },
+  }])
   let read: Record<string, unknown> = {
     ...jsonOf(rowed({ eid: t, comps: eager(db, t) })),
     refs: [],
@@ -137,13 +141,14 @@ Deno.test('a $alias in a column lands before the entity that names it', () => {
       {
         entity: { eid: '$t' },
         doc: { title: 't', body: '' },
-        task: { project: '$p' },
+        task: {},
+        filed: { project: '$p' },
         edges: { type: 'requires', child: { doc: { title: 'gate' } } },
       },
       { entity: { eid: '$p' }, doc: { title: 'p', body: '' }, project: {} },
     ],
   })
-  assertEquals(compOf(db, out.aliases.$t, 'task')?.project, out.aliases.$p)
+  assertEquals(compOf(db, out.aliases.$t, 'filed')?.project, out.aliases.$p)
   assertEquals(depsOf(db, [out.aliases.$t]).map((d) => d.type), ['requires'])
 })
 
@@ -250,29 +255,45 @@ Deno.test('undo of an entity creation deletes the entity', () => {
 Deno.test('undo refuses when a guarded column moved since', () => {
   let db = freshDb(), t = uid()
   born(db, t)
-  apply(db, [{ eid: t, name: 'task', comp: { priority: 1 } }])
+  apply(db, [{
+    eid: t,
+    name: 'filed',
+    comp: { priority: 1 },
+  }])
   let batch = lastBatch(db, t)
-  apply(db, [{ eid: t, name: 'task', comp: { priority: 2 } }]) // moves it
+  apply(db, [{
+    eid: t,
+    name: 'filed',
+    comp: { priority: 2 },
+  }]) // moves it
   assertThrows(
     () => apply(db, inverseBatch(db, batch)),
     Error,
     'has moved since',
   )
-  assertEquals(compOf(db, t, 'task')?.priority, 2) // untouched by the refusal
+  assertEquals(compOf(db, t, 'filed')?.priority, 2) // untouched by the refusal
 })
 
 Deno.test('the mutation capability preserves guarded undo refusal', () => {
   let db = freshDb(), t = uid()
   born(db, t)
-  mutate(db, [{ eid: t, name: 'task', comp: { priority: 1 } }])
+  mutate(db, [{
+    eid: t,
+    name: 'filed',
+    comp: { priority: 1 },
+  }])
   let batch = lastBatch(db, t)
-  mutate(db, [{ eid: t, name: 'task', comp: { priority: 2 } }])
+  mutate(db, [{
+    eid: t,
+    name: 'filed',
+    comp: { priority: 2 },
+  }])
   assertThrows(
     () => mutate(db, { mutation: 'undo', id: batch }),
     Error,
     'has moved since',
   )
-  assertEquals(compOf(db, t, 'task')?.priority, 2)
+  assertEquals(compOf(db, t, 'filed')?.priority, 2)
 })
 
 Deno.test('undo of a creation refuses when the entity was touched since', () => {
@@ -335,25 +356,34 @@ Deno.test('undo restores a bool column, whichever way the wire spelled it', () =
 Deno.test('undoing an undo is a redo', () => {
   let db = freshDb(), t = uid()
   born(db, t)
-  apply(db, [{ eid: t, name: 'task', comp: { priority: 5 } }])
+  apply(db, [{ eid: t, name: 'filed', comp: { priority: 0 } }])
+  apply(db, [{
+    eid: t,
+    name: 'filed',
+    comp: { priority: 5 },
+  }])
   undoLast(db, t)
-  assertEquals(compOf(db, t, 'task')?.priority, 0) // undone to birth default
+  assertEquals(compOf(db, t, 'filed')?.priority, 0) // undone to birth default
   undoLast(db, t) // undo the undo
-  assertEquals(compOf(db, t, 'task')?.priority, 5) // redone
+  assertEquals(compOf(db, t, 'filed')?.priority, 5) // redone
 })
 
 Deno.test('undo by explicit batch id reverses that batch, not the latest', () => {
   let db = freshDb(), t = uid()
   born(db, t)
-  let priorPriority = compOf(db, t, 'task')?.priority // its birth default
-  apply(db, [{ eid: t, name: 'task', comp: { priority: 1 } }])
+  let priorPriority = compOf(db, t, 'filed')?.priority // its birth default
+  apply(db, [{
+    eid: t,
+    name: 'filed',
+    comp: { priority: 1 },
+  }])
   let setPriority = lastBatch(db, t)
   apply(db, [{ eid: t, name: 'completed', comp: {} }]) // → done
   // Undo the older priority batch by id while the newer completed mark stands —
   // the was-guard on `priority` still holds because `completed` is a different
   // comp. Undo restores the EXACT prior value (the birth default), not a null.
   apply(db, inverseBatch(db, setPriority))
-  assertEquals(compOf(db, t, 'task')?.priority, priorPriority)
+  assertEquals(compOf(db, t, 'filed')?.priority, priorPriority)
   assertEquals(statusAt(db, t), 'done') // status untouched
 })
 

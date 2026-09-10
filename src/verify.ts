@@ -80,8 +80,9 @@ export let verifierTuning = (): VerifierGates => {
 type Cycle = { project: string | null; at: string }
 let cycleOf = (task: string): Cycle | undefined =>
   db.prepare(
-    `select ${refEid('task.project')} as project, completed.at
+    `select ${refEid('filed.project')} as project, completed.at
        from task join completed on completed.entity = task.entity
+       left join filed on filed.entity = task.entity
       where task.${OWNED}`,
   ).get(task) as Cycle | undefined
 
@@ -353,11 +354,12 @@ export let verifierRun = (
     `select owner.eid as eid
        from completed indexed by completed_at
        join task on task.entity = completed.entity
+       left join filed on filed.entity = task.entity
        join entity owner on owner.id = task.entity
       where completed.at <= ?
         and ${VERIFY_PENDING}
         and not exists (
-          select 1 from noverify where noverify.entity = task.project
+          select 1 from noverify where noverify.entity = filed.project
         )
         and not exists (
           select 1 from session _ry

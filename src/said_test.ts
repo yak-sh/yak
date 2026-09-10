@@ -38,7 +38,8 @@ let base: Snapshot = {
     { eid: S, name: 'session', comp: { id: 'sess-x', cwd: '/w', pane: '%1' } },
     { eid: T, name: 'entity', comp: { eid: T, num: 2, created_at: '' } },
     { eid: T, name: 'doc', comp: { title: 'First', body: '' } },
-    { eid: T, name: 'task', comp: { status: 'wip', priority: 0 } },
+    { eid: T, name: 'task', comp: { status: 'wip' } },
+    { eid: T, name: 'filed', comp: { priority: 0 } },
     { eid: CRON, name: 'entity', comp: { eid: CRON, num: 8, created_at: '' } },
     {
       eid: CRON,
@@ -96,7 +97,8 @@ let spoke: Snapshot = {
       name: 'doc',
       comp: { title: 'Fix the TUI', body: 'it is slow' },
     },
-    { eid: 't-9', name: 'task', comp: { priority: 1, project: T } },
+    { eid: 't-9', name: 'task', comp: {} },
+    { eid: 't-9', name: 'filed', comp: { priority: 1, project: T } },
     {
       eid: 't-9',
       name: 'created',
@@ -138,7 +140,8 @@ let spoke: Snapshot = {
       comp: { eid: 't-8', num: 8, created_at: '' },
     },
     { eid: 't-8', name: 'doc', comp: { title: 'Agent task', body: '' } },
-    { eid: 't-8', name: 'task', comp: { priority: 2 } },
+    { eid: 't-8', name: 'task', comp: {} },
+    { eid: 't-8', name: 'filed', comp: { priority: 2 } },
     {
       eid: 't-8',
       name: 'created',

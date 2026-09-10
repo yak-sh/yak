@@ -402,7 +402,8 @@ Deno.test('evalAgg answers .distinct/.tally, filtered and null-for-membership', 
   let mk = (domain: string, status: string) => {
     let eid = uuid()
     apply(db, [
-      { eid, name: 'task', comp: { domain } },
+      { eid, name: 'task', comp: {} },
+      { eid, name: 'filed', comp: { domain } },
       { eid, name: 'doc', comp: { title: 't', body: '' } },
       // status is DERIVED (D-24102): the mark makes the derived value
       ...(status == 'done'
@@ -427,11 +428,11 @@ Deno.test('evalAgg answers .distinct/.tally, filtered and null-for-membership', 
   // `.count!` counts the SELECTION, under the empty key no tally can collide
   // with — one shape for every aggregate.
   let count = (q: string) => evalAgg(db, q)!.values.get('')
-  assertEquals(count('.task.domain=Ops&.count!'), 2)
-  assertEquals(count('.task.domain=Eng&.count!'), 1)
-  assertEquals(count('.task.domain=Ops&.task.status=open&.count!'), 1)
+  assertEquals(count('.filed.domain=Ops&.count!'), 2)
+  assertEquals(count('.filed.domain=Eng&.count!'), 1)
+  assertEquals(count('.filed.domain=Ops&.task.status=open&.count!'), 1)
   // A pred the compiler declines still counts EXACTLY, through the matcher.
-  assertEquals(count('.task.domain=Ops&.title~=t&.count!'), 2)
+  assertEquals(count('.filed.domain=Ops&.title~=t&.count!'), 2)
   // no AGG projection → null, the door falls through to membership
   assertEquals(evalAgg(db, '.status=open'), null)
   db.close()
@@ -461,7 +462,8 @@ Deno.test('a ranking window pages within the ranking, not down the spine', () =>
     let eid = uuid()
     apply(db, [
       { eid, name: 'doc', comp: { title: `zephyr ${i}` } },
-      { eid, name: 'task', comp: { priority: i } },
+      { eid, name: 'task', comp: {} },
+      { eid, name: 'filed', comp: { priority: i } },
     ])
   }
   let hot = (win = '') =>
@@ -519,11 +521,14 @@ Deno.test('search ordering is explicit query rank, recent first and retired last
     { eid: retired, name: 'project', comp: {} },
     { eid: retired, name: 'doc', comp: { title: 'retired', body: '' } },
     { eid: retired, name: 'archived', comp: {} },
-    { eid: older, name: 'task', comp: { project: live } },
+    { eid: older, name: 'task', comp: {} },
+    { eid: older, name: 'filed', comp: { project: live } },
     { eid: older, name: 'doc', comp: { title: 'older', body: '' } },
-    { eid: newer, name: 'task', comp: { project: live } },
+    { eid: newer, name: 'task', comp: {} },
+    { eid: newer, name: 'filed', comp: { project: live } },
     { eid: newer, name: 'doc', comp: { title: 'newer', body: '' } },
-    { eid: sunk, name: 'task', comp: { project: retired } },
+    { eid: sunk, name: 'task', comp: {} },
+    { eid: sunk, name: 'filed', comp: { project: retired } },
     { eid: sunk, name: 'doc', comp: { title: 'sunk', body: '' } },
   ])
   let at = (eid: string, value: string) =>

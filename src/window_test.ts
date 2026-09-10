@@ -29,14 +29,15 @@ let { adopt, matchQuery, parseQuery, windowOf } = await import('./query.ts')
 // seeds a starter graph, so everything below is scoped by a domain of its own —
 // agreement has to hold beside rows this file never wrote.
 let db = freshDb()
-let MINE = '.task.domain=win'
+let MINE = '.filed.domain=win'
 let ids: string[] = []
 for (let i = 0; i < 30; i++) {
   let eid = uuid()
   ids.push(eid)
   apply(db, [
     { eid, name: 'doc', comp: { title: `task ${i}`, body: '' } },
-    { eid, name: 'task', comp: { priority: 1, domain: 'win' } },
+    { eid, name: 'task', comp: {} },
+    { eid, name: 'filed', comp: { priority: 1, domain: 'win' } },
   ])
 }
 // The stamps are server-owned, so they are aged by hand here — stored bytes are
@@ -116,9 +117,9 @@ Deno.test('window: a bound selects nothing and writes nothing', () => {
   // through), and a board DROP must never try to write `.limit` onto the task
   // it adopted (adopt reads scalar equalities, and a bound is not one).
   let preds = parseQuery(`${MINE}&.limit=5`)
-  let row = { task: { domain: 'win' } }
+  let row = { task: {}, filed: { domain: 'win' } }
   assertEquals(matchQuery(row, preds), true)
-  assertEquals(adopt(preds, 'task'), { domain: 'win' })
+  assertEquals(adopt(preds, 'filed'), { domain: 'win' })
 })
 
 // ---- the answer ----
@@ -211,11 +212,8 @@ Deno.test('window: a birth inside the bound pushes the oldest member out', () =>
   let born = uuid()
   let batch = [
     { eid: born, name: 'doc', comp: { title: 'newborn', body: '' } },
-    {
-      eid: born,
-      name: 'task',
-      comp: { priority: 1, domain: 'win' },
-    },
+    { eid: born, name: 'task', comp: {} },
+    { eid: born, name: 'filed', comp: { priority: 1, domain: 'win' } },
   ]
   apply(db, batch)
   seen.length = 0
@@ -242,7 +240,11 @@ Deno.test('window: a departure pulls the next-newest member in', () => {
 
   // Move it out of the domain the window screens on — it leaves the query
   // exactly as a status flip once did, and nothing in the batch names its refill.
-  let batch = [{ eid: inside, name: 'task', comp: { domain: 'out' } }]
+  let batch = [{ eid: inside, name: 'task', comp: {} }, {
+    eid: inside,
+    name: 'filed',
+    comp: { domain: 'out' },
+  }]
   apply(db, batch)
   seen.length = 0
   s.maintain(batch as never)

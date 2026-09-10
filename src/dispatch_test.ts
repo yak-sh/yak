@@ -47,17 +47,20 @@ let graph = (extra: Snapshot['changes'] = []): Snapshot => ({
     ...mk(P, 1, ago(9999), { doc: { title: 'Task Graph' }, project: {} }),
     ...mk(T1, 2, ago(500), {
       doc: { title: 'approved and ready' },
-      task: { priority: 1, project: P },
+      task: {},
+      filed: { priority: 1, project: P },
       decided: { at: ago(10) },
     }),
     ...mk(T2, 3, ago(100), {
       doc: { title: 'approved, lower priority' },
-      task: { priority: 2, project: P },
+      task: {},
+      filed: { priority: 2, project: P },
       decided: { at: ago(10) },
     }),
     ...mk(T3, 4, ago(300), {
       doc: { title: 'open but never approved' },
-      task: { priority: 0, project: P },
+      task: {},
+      filed: { priority: 0, project: P },
     }),
     ...extra,
   ],
@@ -72,14 +75,16 @@ Deno.test('approved: decided passes unless declined; absent verdict reads approv
   assertEquals(approved(all.find((r) => r.eid == T3)!), false)
   let verdicts = rows(graph([
     ...mk(T4, 5, ago(50), {
-      task: { project: P },
+      task: {},
+      filed: { project: P },
       decided: { at: ago(5), verdict: 'declined' },
     }),
   ]))
   assertEquals(approved(verdicts.find((r) => r.eid == T4)!), false)
   let yes = rows(graph([
     ...mk(T4, 5, ago(50), {
-      task: { project: P },
+      task: {},
+      filed: { project: P },
       decided: { at: ago(5), verdict: 'approved' },
     }),
   ]))
@@ -99,7 +104,8 @@ Deno.test('ready: open + unclaimed + approved + unblocked, urgent first', () => 
   let all = rows(graph([
     ...mk(T4, 5, ago(50), {
       doc: { title: 'approved twin of T1' },
-      task: { priority: 1, project: P },
+      task: {},
+      filed: { priority: 1, project: P },
       decided: { at: ago(5) },
     }),
   ]))
@@ -148,7 +154,7 @@ Deno.test('ready: an open requires edge gates; a settled one does not', () => {
   ]
   assertEquals(ready(all, dep(T3)).map((r) => r.eid), [T2]) // T3 open → gated
   let done = rows(graph([
-    ...mk(T4, 5, ago(50), { task: { project: P }, completed: {} }),
+    ...mk(T4, 5, ago(50), { task: {}, filed: { project: P }, completed: {} }),
   ]))
   assertEquals(ready(done, dep(T4)).map((r) => r.eid), [T1, T2])
   // a blocker the caller never fetched counts as open — spend on yes only
@@ -368,12 +374,14 @@ Deno.test('dispatchSpawn: a selected feed still obeys asks, providers, and slots
   let T5 = id(8)
   let all = rows(graph([
     ...mk(T4, 5, ago(50), {
-      task: { priority: 1, project: P },
+      task: {},
+      filed: { priority: 1, project: P },
       decided: { at: ago(5) },
       spawn: { provider: 'codex', model: 'gpt-5.6-sol' },
     }),
     ...mk(T5, 8, ago(40), {
-      task: { priority: 1, project: P },
+      task: {},
+      filed: { priority: 1, project: P },
       decided: { at: ago(5) },
     }),
     ...mk(S1, 6, ago(60), {
@@ -413,20 +421,24 @@ let tree = (approvedRoot = true) =>
       ...mk(P, 1, ago(9999), { doc: { title: 'Task Graph' }, project: {} }),
       ...mk(U, 10, ago(100), {
         doc: { title: 'umbrella' },
-        task: { priority: 1, project: P },
+        task: {},
+        filed: { priority: 1, project: P },
         ...(approvedRoot ? { decided: { at: ago(5) } } : {}),
       }),
       ...mk(B1, 11, ago(90), {
         doc: { title: 'unblocked blocker' },
-        task: { priority: 1, project: P },
+        task: {},
+        filed: { priority: 1, project: P },
       }),
       ...mk(B2, 12, ago(90), {
         doc: { title: 'gated blocker' },
-        task: { priority: 3, project: P },
+        task: {},
+        filed: { priority: 3, project: P },
       }),
       ...mk(B3, 13, ago(90), {
         doc: { title: 'deep blocker' },
-        task: { priority: 2, project: P },
+        task: {},
+        filed: { priority: 2, project: P },
       }),
     ],
   })
@@ -568,14 +580,17 @@ Deno.test('dispatchSpawn: recursive descent leaves a claimed or asked blocker al
       changes: [
         ...mk(P, 1, ago(9999), { doc: { title: 'g' }, project: {} }),
         ...mk(U, 10, ago(100), {
-          task: { priority: 1, project: P },
+          task: {},
+          filed: { priority: 1, project: P },
           decided: { at: ago(5) },
         }),
         ...mk(B1, 11, ago(90), {
-          task: { priority: 1, project: P },
+          task: {},
+          filed: { priority: 1, project: P },
         }),
         ...mk(B3, 13, ago(90), {
-          task: { priority: 2, project: P },
+          task: {},
+          filed: { priority: 2, project: P },
         }),
         ...extra,
       ],

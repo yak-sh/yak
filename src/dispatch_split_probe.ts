@@ -35,7 +35,8 @@ let run = async (serving: ReturnType<typeof open>, repo: string) => {
     { eid: project, name: 'project', comp: {} },
     { eid: project, name: 'repo', comp: { path: repo } },
     { eid: task, name: 'doc', comp: { title: 'Launch through serving' } },
-    { eid: task, name: 'task', comp: { priority: 0, project } },
+    { eid: task, name: 'task', comp: {} },
+    { eid: task, name: 'filed', comp: { priority: 0, project } },
     { eid: task, name: 'decided', comp: { at: new Date().toISOString() } },
     {
       eid: setting,

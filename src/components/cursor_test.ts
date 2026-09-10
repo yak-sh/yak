@@ -85,7 +85,8 @@ let graph = () => {
     },
     [TASK]: {
       entity: { eid: TASK, num: 7 },
-      task: { eid: TASK, priority: 0 },
+      task: { eid: TASK },
+      filed: { eid: TASK, priority: 0 },
       doc: { eid: TASK, title: 'a task' },
     },
   }

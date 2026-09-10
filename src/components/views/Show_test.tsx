@@ -19,7 +19,8 @@ Deno.test('task acceptance is a distinct Markdown section', () => {
     task: {
       entity: { eid: 'task', num: 1 },
       doc: { eid: 'task', title: 'Ship it', body: 'Implementation notes' },
-      task: { eid: 'task', priority: 1 },
+      task: { eid: 'task' },
+      filed: { eid: 'task', priority: 1 },
       accept: { eid: 'task', body: '- exits zero' },
     },
   }
@@ -93,7 +94,8 @@ Deno.test('the meta row renders its tally without reaching live', () => {
     task: {
       entity: { eid: 'task', num: 1 },
       doc: { eid: 'task', title: 'Talked about', body: '' },
-      task: { eid: 'task', priority: 1 },
+      task: { eid: 'task' },
+      filed: { eid: 'task', priority: 1 },
     },
     c1: {
       entity: { eid: 'c1', num: 2 },
@@ -147,7 +149,8 @@ Deno.test('proposal meta distinguishes pending, cancelled, and approved', () => 
   cache.value = {
     proposal: {
       ...proposal,
-      task: { eid: 'proposal', priority: 1 },
+      task: { eid: 'proposal' },
+      filed: { eid: 'proposal', priority: 1 },
       cancelled: { eid: 'proposal' },
     },
   }
@@ -221,7 +224,8 @@ Deno.test('task meta carries both full facts and compact edge tallies', () => {
     task: {
       entity: { eid: 'task', num: 1 },
       doc: { eid: 'task', title: 'Everything', body: '' },
-      task: {
+      task: { eid: 'task' },
+      filed: {
         eid: 'task',
         priority: 1,
         project: project,
@@ -247,11 +251,13 @@ Deno.test('task meta carries both full facts and compact edge tallies', () => {
     },
     open: {
       entity: { eid: 'open', num: 5 },
-      task: { eid: 'open', priority: 1 },
+      task: { eid: 'open' },
+      filed: { eid: 'open', priority: 1 },
     },
     done: {
       entity: { eid: 'done', num: 6 },
-      task: { eid: 'done', priority: 1 },
+      task: { eid: 'done' },
+      filed: { eid: 'done', priority: 1 },
       completed: { eid: 'done' },
     },
     child: {
@@ -440,7 +446,8 @@ Deno.test('a hook-using renderer mounts through the helper', () => {
     task: {
       entity: { eid: 'task', num: 1 },
       doc: { eid: 'task', title: 'Hooked', body: '' },
-      task: { eid: 'task', status: 'open', priority: 1 },
+      task: { eid: 'task', status: 'open' },
+      filed: { eid: 'task', priority: 1 },
     },
   }
   let e = ent('task')

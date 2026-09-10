@@ -20,8 +20,8 @@ Deno.test('refCols names every {eid} reference from the vocabulary', () => {
   assertEquals(has('deliver', 'to'), true)
   assertEquals(has('comment', 'target'), true)
   assertEquals(has('claim', 'session'), true)
-  assertEquals(has('task', 'project'), true)
-  assertEquals(has('task', 'assignee'), true)
+  assertEquals(has('filed', 'project'), true)
+  assertEquals(has('filed', 'assignee'), true)
   // a server-stamped reference joins from `stamped`
   assertEquals(has('created', 'via'), true)
   // scalars never do
@@ -100,7 +100,7 @@ Deno.test('anchor unions the reverse index for a .refs= backlink lookup', () => 
     // three referrers of t1 through THREE different {eid} columns...
     c1: { comment: { target: 't1' } },
     c2: { comment: { target: 't1' } },
-    t2: { task: { project: 't1' } },
+    t2: { task: {}, filed: { project: 't1' } },
     // ...and one that points elsewhere
     x: { comment: { target: 'other' } },
   }, [])

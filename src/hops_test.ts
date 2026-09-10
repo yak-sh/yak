@@ -51,7 +51,8 @@ Deno.test('human reads the spine and worn names, not one table per kind', () => 
   let eid = crypto.randomUUID()
   apply(db, [
     { eid, name: 'doc', comp: { title: 'named' } },
-    { eid, name: 'task', comp: { priority: 'P2' } },
+    { eid, name: 'task', comp: {} },
+    { eid, name: 'filed', comp: { priority: 'P2' } },
   ])
   let { num } = db.prepare('select num from entity where eid = ?').get(eid) as {
     num: number
@@ -109,16 +110,18 @@ Deno.test('a hundred rows cost the components they wear, not the vocabulary', as
     let eid = crypto.randomUUID()
     apply(db, [
       { eid, name: 'doc', comp: { title: `row ${i}` } },
-      { eid, name: 'task', comp: { priority: 'P2' } },
+      { eid, name: 'task', comp: {} },
+      { eid, name: 'filed', comp: { priority: 'P2' } },
     ])
   }
   let tally: Tally = new Map()
   let rows = await tallying(tally, async () => {
-    let ask = askOf(['.task.priority=P2', 'limit=100'])
+    let ask = askOf(['.filed.priority=P2', 'limit=100'])
     return layered(db, await askRows(db, ask), ask)
   })
   assertEquals(rows.length, 100)
-  assertEquals(counts(tally).hops, 6)
+  // Filing is now a separate worn component: one extra table read, not N.
+  assertEquals(counts(tally).hops, 7)
 })
 
 // And the same number on the wire. The boot is the heavy tier's (agg_sub_test.ts

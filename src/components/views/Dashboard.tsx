@@ -65,7 +65,7 @@ let sessionsOf = (e: Ent, sessions: Ent[], claims: Ent[]) => {
     .filter((s) => {
       let job = jobs.get(s.eid)?.eid ?? s.session?.requested_task
       let role = s.session?.role
-      return (job != null && ent(job).task?.project == e.eid) ||
+      return (job != null && ent(job).filed?.project == e.eid) ||
         (!!role && ent(role).role?.scope == e.eid)
     })
     .sort((a, b) =>
@@ -92,7 +92,7 @@ export let Dashboard = ({ e }: { e: Ent }) => {
   // This facet paints eight rows, so stream only its eight warmest. Fetching
   // every task in every project card made the root canvas discard megabytes.
   let tasks = useQuery(
-    `.task.project=${e.eid}&.order=hot&.limit=${CAP}`,
+    `.filed.project=${e.eid}&.order=hot&.limit=${CAP}`,
   )
   let unread = useInbox(e.eid).filter(isUnread).length
   return (

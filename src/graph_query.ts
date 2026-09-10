@@ -646,9 +646,9 @@ let workSelectionSql = (
   let dispatch = opts.order == 'dispatch'
   let ordering = dispatch
     ? `resume.entity is null, resume.rank desc,
-       task.priority is null, task.priority asc,
+       filed.priority is null, filed.priority asc,
        created.at is null, created.at asc, entity.num asc`
-    : `task.priority is null, task.priority asc, entity.num desc`
+    : `filed.priority is null, filed.priority asc, entity.num desc`
   return {
     sql: `with recursive filtered(eid) as materialized (${base.sql}),
        candidate(origin, entity) as materialized (

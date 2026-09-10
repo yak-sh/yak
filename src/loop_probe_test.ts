@@ -31,7 +31,8 @@ let mkTask = (extra: Record<string, Change['comp']> = {}) => {
   let eid = uid()
   apply(db, [
     { eid, name: 'doc', comp: { title: 'task' } },
-    { eid, name: 'task', comp: { priority: 0 } },
+    { eid, name: 'task', comp: {} },
+    { eid, name: 'filed', comp: { priority: 0 } },
     ...Object.entries(extra).map(([name, comp]) => ({ eid, name, comp })),
   ])
   return eid

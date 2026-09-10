@@ -303,7 +303,7 @@ export function editorViews(): Renderer[] {
       ),
     },
     native(
-      '.column.comp=task .column.col=domain',
+      '.column.comp=filed .column.col=domain',
       (p) => <WellControl {...p} />,
     ),
     native('.column.type=string', (p) => <TextControl {...p} />),

@@ -84,7 +84,8 @@ Deno.test('a single break files one keyed, pointed, open ticket', () => {
         when exists(select 1 from cancelled x where x.entity = task.entity) then 'cancelled'
         when exists(select 1 from completed x where x.entity = task.entity) then 'done'
         when exists(select 1 from claim x where x.entity = task.entity) then 'wip'
-        else 'open' end as status, priority from task where ${OWNED}`,
+        else 'open' end as status, priority from task
+        left join filed on filed.entity = task.entity where task.${OWNED}`,
   )
     .get(mine[0].eid) as { status: string; priority: number }
   assertEquals(task.status, 'open')
@@ -239,11 +240,8 @@ let makeBug = (key: string, project?: string) => {
   let eid = uid()
   apply(db, [
     { eid, name: 'doc', comp: { title: 'a bug', body: 'broke' } },
-    {
-      eid,
-      name: 'task',
-      comp: { priority: 2, project: project ?? null },
-    },
+    { eid, name: 'task', comp: {} },
+    { eid, name: 'filed', comp: { priority: 2, project: project ?? null } },
     { eid, name: 'bug', comp: { fault: key, hits: 1, last: now() } },
   ])
   return eid

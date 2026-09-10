@@ -114,15 +114,11 @@ let world = () => {
       name: 'doc',
       comp: { title: 'widget crash', body: 'boom on boot' },
     },
+    { eid: t1, name: 'task', comp: {} },
     {
       eid: t1,
-      name: 'task',
-      comp: {
-        priority: 0,
-        project: P,
-        assignee: jeff,
-        domain: 'Eng',
-      },
+      name: 'filed',
+      comp: { priority: 0, project: P, assignee: jeff, domain: 'Eng' },
     },
     // t2: wip/P1, assigned priya, project P — status is DERIVED (D-24102):
     // wip = a live claim, so seed a session and claim it.
@@ -132,24 +128,17 @@ let world = () => {
       name: 'doc',
       comp: { title: 'ledger sync', body: 'reconcile widgets' },
     },
+    { eid: t2, name: 'task', comp: {} },
     {
       eid: t2,
-      name: 'task',
-      comp: {
-        priority: 1,
-        project: P,
-        assignee: pri,
-        domain: 'Eng',
-      },
+      name: 'filed',
+      comp: { priority: 1, project: P, assignee: pri, domain: 'Eng' },
     },
     { eid: t2, name: 'claim', comp: { session: sw } },
     // t3: done/P2, no project, no assignee — done = a completed mark
     { eid: t3, name: 'doc', comp: { title: 'archive old', body: '' } },
-    {
-      eid: t3,
-      name: 'task',
-      comp: { priority: 2, domain: 'Ops' },
-    },
+    { eid: t3, name: 'task', comp: {} },
+    { eid: t3, name: 'filed', comp: { priority: 2, domain: 'Ops' } },
     { eid: t3, name: 'completed', comp: {} },
     // t4: open/P3, assigned jeff, no project
     {
@@ -157,16 +146,18 @@ let world = () => {
       name: 'doc',
       comp: { title: 'widget polish', body: 'round the corners' },
     },
+    { eid: t4, name: 'task', comp: {} },
     {
       eid: t4,
-      name: 'task',
+      name: 'filed',
       comp: { priority: 3, assignee: jeff, domain: '' },
     },
     // t5: cancelled/P1, project P — cancelled = a cancelled mark
     { eid: t5, name: 'doc', comp: { title: 'dead end', body: '' } },
+    { eid: t5, name: 'task', comp: {} },
     {
       eid: t5,
-      name: 'task',
+      name: 'filed',
       comp: { priority: 1, project: P, domain: 'Ops' },
     },
     { eid: t5, name: 'cancelled', comp: {} },
@@ -232,7 +223,7 @@ battery('presence, absence, explicit component spelling', [
   '.project!',
   '.task.status=open',
   '.doc.title~=widget',
-  '.task.domain=Eng',
+  '.filed.domain=Eng',
 ])
 
 battery('derived kind (present comp AND every earlier absent)', [
@@ -254,7 +245,7 @@ battery('bare-word text', [
 battery('path predicates (deref joins, refined in JS)', [
   '.assignee.title~=jeff',
   '.assignee.title=Jeff Peterson',
-  '.task.project.doc.title~=platform',
+  '.filed.project.doc.title~=platform',
   '.project.color=green',
   '.comment.target.doc.title~=widget', // deep: comment → target task → title
 ])
@@ -277,9 +268,9 @@ battery('aggregate / projection selectors and mixed conjunctions', [
   '.distinct=status',
   '.tally=domain',
   '.fields=task.status',
-  '.fields=task.status,task.priority',
+  '.fields=task.status,filed.priority',
   '.status=open .assignee.title~=jeff',
-  '.kind=task .task.project.doc.title~=platform',
+  '.kind=task .filed.project.doc.title~=platform',
   '.status=open,wip .comments>=1',
   '.title~=widget .priority<=1',
 ])

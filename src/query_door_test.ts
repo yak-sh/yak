@@ -30,9 +30,11 @@ apply(db, [
   // writing one plants a store row in the same spine every filter selects from.
   { eid: bodied, name: 'doc', comp: { title: 'gamma', body: 'flour' } },
   { eid: a, name: 'doc', comp: { title: 'alpha' } },
-  { eid: a, name: 'task', comp: { priority: 1 } },
+  { eid: a, name: 'task', comp: {} },
+  { eid: a, name: 'filed', comp: { priority: 1 } },
   { eid: b, name: 'doc', comp: { title: 'beta' } },
-  { eid: b, name: 'task', comp: { priority: 2 } },
+  { eid: b, name: 'task', comp: {} },
+  { eid: b, name: 'filed', comp: { priority: 2 } },
   ...link(a, 'requires', b),
   { eid: hidden, name: 'doc', comp: { title: 'buried treasure' } },
   { eid: hidden, name: 'task', comp: {} },

@@ -18,9 +18,11 @@ Deno.test('a refused candidate is addressed durably and the next one commits', (
   let badSession = crypto.randomUUID(), goodSession = crypto.randomUUID()
   apply(db, [
     { eid: bad, name: 'doc', comp: { title: 'bad', body: 'CURRENT' } },
-    { eid: bad, name: 'task', comp: { priority: 0 } },
+    { eid: bad, name: 'task', comp: {} },
+    { eid: bad, name: 'filed', comp: { priority: 0 } },
     { eid: good, name: 'doc', comp: { title: 'good' } },
-    { eid: good, name: 'task', comp: { priority: 1 } },
+    { eid: good, name: 'task', comp: {} },
+    { eid: good, name: 'filed', comp: { priority: 1 } },
   ])
   let [badRow, goodRow] = rowsFor(db, [bad, good])
   let spawned = commitCandidates(
@@ -86,9 +88,11 @@ Deno.test('a post-commit cast failure charges its slot exactly once', () => {
   let firstSession = crypto.randomUUID(), secondSession = crypto.randomUUID()
   apply(db, [
     { eid: first, name: 'doc', comp: { title: 'first' } },
-    { eid: first, name: 'task', comp: { priority: 0 } },
+    { eid: first, name: 'task', comp: {} },
+    { eid: first, name: 'filed', comp: { priority: 0 } },
     { eid: second, name: 'doc', comp: { title: 'second' } },
-    { eid: second, name: 'task', comp: { priority: 1 } },
+    { eid: second, name: 'task', comp: {} },
+    { eid: second, name: 'filed', comp: { priority: 1 } },
   ])
   let [firstRow, secondRow] = rowsFor(db, [first, second])
   let spawned = commitCandidates(

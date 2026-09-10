@@ -174,20 +174,29 @@ let P = uuid(), T1 = uuid(), T2 = uuid(), C1 = uuid()
 Deno.test('parity: a create lands the same components', () => {
   both([
     { eid: P, name: 'project', comp: {} },
+    { eid: T1, name: 'task', comp: {} },
     {
       eid: T1,
-      name: 'task',
+      name: 'filed',
       comp: { priority: 1, domain: 'Eng', project: P },
     },
   ])
 })
 
 Deno.test('parity: a patch touches only the columns it names', () => {
-  both([{ eid: T1, name: 'task', comp: { priority: 2 } }])
+  both([{
+    eid: T1,
+    name: 'filed',
+    comp: { priority: 2 },
+  }])
 })
 
 Deno.test('parity: a null column clears it', () => {
-  both([{ eid: T1, name: 'task', comp: { domain: null } }])
+  both([{
+    eid: T1,
+    name: 'filed',
+    comp: { domain: null },
+  }])
 })
 
 Deno.test('parity: a null component drops it, the entity survives', () => {
@@ -198,7 +207,7 @@ Deno.test('parity: a null component drops it, the entity survives', () => {
 Deno.test('parity: an unknown component is a forward-compatible no-op', () => {
   both([
     { eid: T1, name: 'audiobook', comp: { minutes: 4 } },
-    { eid: T1, name: 'task', comp: { priority: 3 } },
+    { eid: T1, name: 'filed', comp: { priority: 3 } },
   ])
 })
 
@@ -208,30 +217,35 @@ Deno.test('parity: an unknown column refuses the batch', () => {
 
 Deno.test('parity: a server-owned column is dropped from the wire', () => {
   both([
-    { eid: T1, name: 'task', comp: { priority: 1 } },
+    { eid: T1, name: 'filed', comp: { priority: 1 } },
     { eid: T1, name: 'updated', comp: { at: '2020-01-01T00:00:00.000Z' } },
   ])
 })
 
 Deno.test('parity: a $was guard passes when the value still holds', () => {
-  both([{ eid: T1, name: 'task', comp: { domain: 'Ops' } }])
   both([{
     eid: T1,
-    name: 'task',
-    comp: { domain: 'Eng' },
+    name: 'filed',
+    comp: { domain: 'Ops' },
+  }])
+  both([{
+    eid: T1,
     was: { domain: sha('Ops') },
+    name: 'filed',
+    comp: { domain: 'Eng' },
   }])
 })
 
 Deno.test('parity: a moved value refuses the whole batch', () => {
   refuse(
     [
-      { eid: T2, name: 'task', comp: { priority: 5 } },
+      { eid: T2, name: 'task', comp: {} },
+      { eid: T2, name: 'filed', comp: { priority: 5 } },
       {
         eid: T1,
-        name: 'task',
+        was: { domain: sha('Ops') },
+        name: 'filed',
         comp: { domain: 'Nope' },
-        was: { domain: sha('Ops') }, // it is 'Eng' now
       },
     ],
     /moved|changed/i,
@@ -242,7 +256,8 @@ Deno.test('parity: a moved value refuses the whole batch', () => {
 
 Deno.test('parity: a delete tombstones the entity and cascades', () => {
   both([
-    { eid: T2, name: 'task', comp: { priority: 1 } },
+    { eid: T2, name: 'task', comp: {} },
+    { eid: T2, name: 'filed', comp: { priority: 1 } },
     { eid: C1, name: 'comment', comp: { target: T2 } },
   ])
   both([{ eid: T2, name: 'entity', comp: null }])
@@ -304,7 +319,8 @@ Deno.test('parity: the claim lease, with @yaks/session in', () => {
   let setup: Change[] = [
     { eid: s1, name: 'session', comp: { id: 'lease-one' } },
     { eid: s2, name: 'session', comp: { id: 'lease-two' } },
-    { eid: t, name: 'task', comp: { priority: 1 } },
+    { eid: t, name: 'task', comp: {} },
+    { eid: t, name: 'filed', comp: { priority: 1 } },
     { eid: t, name: 'claim', comp: { session: s1 } },
   ]
   apply(appDb, setup as never)
@@ -350,7 +366,14 @@ Deno.test('gap: the fleet rules the core does not carry', () => {
   // belongs on, when it becomes a plugin, is named beside it. (The claim lease
   // and the stop gate used to be here; they are the test above now.)
   let t = uuid(), m = uuid()
-  apply(appDb, [{ eid: t, name: 'task', comp: { priority: 1 } }] as never)
+  apply(
+    appDb,
+    [{ eid: t, name: 'task', comp: {} }, {
+      eid: t,
+      name: 'filed',
+      comp: { priority: 1 },
+    }] as never,
+  )
   // an alias slug names exactly one entity (precondition, @yaks/names)
   apply(appDb, [{ eid: t, name: 'alias', comp: { slug: 'taken' } }] as never)
   assertThrows(
@@ -373,7 +396,7 @@ Deno.test('gap: the fleet rules the core does not carry', () => {
   // ... and the core, with no plugins, applies each of these as ordinary data
   let t2 = uuid()
   core.apply([
-    { entity: { eid: t2 }, task: { priority: 1 } },
+    { entity: { eid: t2 }, task: {}, filed: { priority: 1 } },
     { entity: { eid: t2 }, alias: { slug: 'taken' } },
     { entity: { eid: t2 }, memory: { scope: null } },
   ])
@@ -385,11 +408,22 @@ Deno.test("gap: $edit field operators are the app's, not the core's", () => {
   // before the guard (editOps). The core has no operators: a column value is a
   // value, and an object where a scalar belongs is refused at admission.
   let e = uuid()
-  apply(appDb, [{ eid: e, name: 'task', comp: { domain: 'Eng' } }] as never)
+  apply(
+    appDb,
+    [{ eid: e, name: 'task', comp: {} }, {
+      eid: e,
+      name: 'filed',
+      comp: { domain: 'Eng' },
+    }] as never,
+  )
   let threw: unknown
   try {
     core.apply([
-      { entity: { eid: e }, task: { domain: { $edit: [] } as never } },
+      {
+        entity: { eid: e },
+        task: {},
+        filed: { domain: { $edit: [] } as never },
+      },
     ])
   } catch (err) {
     threw = err
@@ -406,8 +440,10 @@ Deno.test('a content-addressed id is derived, not demanded of the caller', () =>
   // with the fleet's knowledge in the fleet's plugin.
   let [p, c] = [uuid(), uuid()]
   apply(appDb, [
-    { eid: p, name: 'task', comp: { priority: 1 } },
-    { eid: c, name: 'task', comp: { priority: 1 } },
+    { eid: p, name: 'task', comp: {} },
+    { eid: p, name: 'filed', comp: { priority: 1 } },
+    { eid: c, name: 'task', comp: {} },
+    { eid: c, name: 'filed', comp: { priority: 1 } },
   ] as never)
   let guess = uuid()
   assertThrows(

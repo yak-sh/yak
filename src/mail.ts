@@ -174,8 +174,8 @@ let threadId = (eid: string) => {
 let repoUrl = (target: string | null) =>
   target
     ? (db.prepare(
-      `select repo.url from task join repo on repo.entity = task.project
-       where task.entity = ${idOf}`,
+      `select repo.url from filed join repo on repo.entity = filed.project
+       where filed.entity = ${idOf}`,
     ).get(target) as { url: string | null } | undefined)?.url ?? undefined
     : undefined
 
@@ -384,7 +384,7 @@ export let fanout =
     if (bornWithTarget(eid)) return
     let target = String(comp.target ?? '')
     let t = db.prepare(
-      `select ${refEid('project')} as project from task where ${OWNED}`,
+      `select ${refEid('project')} as project from filed where ${OWNED}`,
     ).get(
       target,
     ) as { project: string | null } | undefined

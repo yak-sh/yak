@@ -17,11 +17,8 @@ for (let i = 0; i < 2000; i++) {
   changes.push(
     { eid, name: 'entity', comp: { eid, num: i + 2 } },
     { eid, name: 'doc', comp: { title: `Task ${i}`, body: 'b'.repeat(200) } },
-    {
-      eid,
-      name: 'task',
-      comp: { priority: i % 3 },
-    },
+    { eid, name: 'task', comp: {} },
+    { eid, name: 'filed', comp: { priority: i % 3 } },
   )
   if (i % 4 == 0) changes.push({ eid, name: 'completed', comp: {} })
   if (i < 5) changes.push({ eid, name: 'claim', comp: { session: S } })
@@ -69,11 +66,8 @@ for (let i = 0; i < 2000; i++) {
     { eid, name: 'entity', comp: { eid, num: i + 2 } },
     { eid, name: 'created', comp: { at: recent, by } },
     { eid, name: 'doc', comp: { title: `Task ${i}`, body: 'b'.repeat(200) } },
-    {
-      eid,
-      name: 'task',
-      comp: { priority: i % 3 },
-    },
+    { eid, name: 'task', comp: {} },
+    { eid, name: 'filed', comp: { priority: i % 3 } },
   )
   if (i % 4 == 0) aCh.push({ eid, name: 'completed', comp: {} })
   if (i < 5) aCh.push({ eid, name: 'claim', comp: { session: AS } })
@@ -144,11 +138,8 @@ for (let i = 0; i < 2000; i++) {
     { eid, name: 'entity', comp: { eid, num: 100 + i } },
     { eid, name: 'created', comp: { at: nAt, by: 'other' } },
     { eid, name: 'doc', comp: { title: `Task ${i}`, body: 'b'.repeat(120) } },
-    {
-      eid,
-      name: 'task',
-      comp: { priority: i % 3, project: NH },
-    },
+    { eid, name: 'task', comp: {} },
+    { eid, name: 'filed', comp: { priority: i % 3, project: NH } },
   )
   if (i % 4 == 0) nCh.push({ eid, name: 'completed', comp: {} })
   if (i < 5) {
@@ -234,7 +225,8 @@ for (let i = 0; i < 200; i++) {
   seed.push(
     { eid, name: 'entity', comp: { eid, num: 10_000 + i } },
     { eid, name: 'doc', comp: { title: `Seeded ${i}`, body: 'b'.repeat(120) } },
-    { eid, name: 'task', comp: { priority: i % 3 } },
+    { eid, name: 'task', comp: {} },
+    { eid, name: 'filed', comp: { priority: i % 3 } },
   )
 }
 

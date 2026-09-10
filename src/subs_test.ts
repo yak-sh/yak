@@ -135,12 +135,19 @@ Deno.test('own-component operators maintain subscription membership', () => {
     Record<string, Record<string, unknown>>,
   ][] = [
     ['.status=open', { task: {} }, { task: {}, completed: {} }],
-    ['.domain=Ops,Eng', { task: { domain: 'Ops' } }, {
-      task: { domain: 'Web' },
+    ['.domain=Ops,Eng', { task: {}, filed: { domain: 'Ops' } }, {
+      task: {},
+      filed: { domain: 'Web' },
     }],
-    ['.priority=1..3', { task: { priority: 3 } }, { task: { priority: 4 } }],
+    ['.priority=1..3', { task: {}, filed: { priority: 3 } }, {
+      task: {},
+      filed: { priority: 4 },
+    }],
     ['.status!=done', { task: {} }, { task: {}, completed: {} }],
-    ['.priority>=2', { task: { priority: 2 } }, { task: { priority: 1 } }],
+    ['.priority>=2', { task: {}, filed: { priority: 2 } }, {
+      task: {},
+      filed: { priority: 1 },
+    }],
     ['.title~=flux', { doc: { title: 'Flux gate' } }, {
       doc: { title: 'Warp gate' },
     }],

@@ -73,14 +73,16 @@ if (Deno.env.get('TASKS_SLOW')) {
       comp: { id: uid() },
     },
     { eid: task, name: 'doc', comp: { title: 'Completed HTTP work' } },
-    { eid: task, name: 'task', comp: { project } },
+    { eid: task, name: 'task', comp: {} },
+    { eid: task, name: 'filed', comp: { project } },
     { eid: task, name: 'accept', comp: { body: 'exercise POST /verify' } },
     {
       eid: lifecycleTask,
       name: 'doc',
       comp: { title: 'Verify the effect lifecycle' },
     },
-    { eid: lifecycleTask, name: 'task', comp: { project } },
+    { eid: lifecycleTask, name: 'task', comp: {} },
+    { eid: lifecycleTask, name: 'filed', comp: { project } },
     {
       eid: lifecycleTask,
       name: 'accept',

@@ -123,7 +123,7 @@ to make again:
 
     await apply({
       entity: { eid: saved.aliases.$cake },
-      task: { priority: 1 },
+      task: {}, filed: { priority: 1 },
     })
 
     let toMake = await query('.task.status=open&.doc?')
@@ -272,15 +272,16 @@ renders as the day before for anyone west of Greenwich.
 
 - `doc` — `title` (text), `body` (text). The words a person reads; what `search`
   searches.
-- `task` — `priority` (number), `project` (eid), `assignee` (eid), `domain`
-  (text). Anything with a state. Its `status` is READ, not written — `open`,
-  `wip`, `done` or `cancelled`, derived from the two marks below. Before either
-  mark it is **`open`**, so `task: {}` is a thing to do.
+- `filed` — `priority` (number), `project` (eid), `assignee` (eid), `domain`
+  (text). Optional portfolio filing; a microtask needs none of these.
+- `task` — no stored columns. Anything with a state. Its `status` is READ, not
+  written — `open`, `wip`, `done` or `cancelled`, derived from the two marks
+  below. Before either mark it is **`open`**, so `task: {}` is a thing to do.
 - `completed` — `at` (time), `by` (eid). The mark that makes a task `done`; the
   store fills both, so `completed: {}` is the whole write.
 - `cancelled` — `at` (time), `by` (eid), `reason` (text). Called off rather than
   finished.
-- `project` — `color` (text). A thing others belong to, by `task.project`.
+- `project` — `color` (text). A thing others belong to, by `filed.project`.
 - `comment` — `target` (eid). A note aimed at another entity.
 - `person` — no columns. Whoever wrote a row; their name is their `doc.title`.
 - `archived` — no columns. The stamp that takes something out of the open list
@@ -329,7 +330,7 @@ taken:
     canvas card chat checkpoint claim client comment commit completed
     conflict contains content created cursor decided delegates deliver
     delivered deploy design doc dream edge effect email entity entry error
-    exception exit favorite feedback fetch finding fixer fold fork
+    exception exit favorite feedback fetch filed finding fixer fold fork
     generation goal graph_query headers hook hostname image imported
     installed knock layout lease mail member memory message meta meter model
     nofix notice notified noverify opaque opened output pane patch person

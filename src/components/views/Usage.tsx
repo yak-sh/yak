@@ -1,7 +1,7 @@
 // The Usage view on a project card: what the agent work homed here cost and
 // how fast it ran. A pure READ over usage.ts — it projects the token counts
 // already stamped on the project's settled sessions (each reached through its
-// requested_task → task.project, the same edge the Dashboard walks) and rolls
+// requested_task → filed.project, the same edge the Dashboard walks) and rolls
 // them up by model. Membership is never stored: a session shows here because it
 // worked a task of this project, so the view can't drift. Absent beats zero —
 // an unreported facet reads `—`, never 0, and an unpriced model shows no cost.
@@ -43,7 +43,7 @@ export let Usage = ({ e }: { e: Ent }) => {
   let uses: Use[] = []
   for (let s of sessions) {
     let task = s.session?.requested_task
-    if (!task || ent(task).task?.project != e.eid) continue
+    if (!task || ent(task).filed?.project != e.eid) continue
     let u = use(sessionOf(s)!)
     if (u) uses.push(u)
   }

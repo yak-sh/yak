@@ -47,7 +47,8 @@ let task = (() => {
   let eid = uid()
   apply(db, [
     { eid, name: 'doc', comp: { title: 'mint an api key' } },
-    { eid, name: 'task', comp: { project: project } },
+    { eid, name: 'task', comp: {} },
+    { eid, name: 'filed', comp: { project: project } },
   ])
   return eid
 })()

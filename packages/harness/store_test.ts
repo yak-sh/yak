@@ -66,7 +66,8 @@ Deno.test('a task applies and reads back with its derived status', async () => {
   h.g.apply([{
     entity: { eid: 't1' },
     doc: { title: 'reply with pong' },
-    task: { priority: 2 },
+    task: {},
+    filed: { priority: 2 },
   }])
   let [t] = await h.g.read('.task.status=open')
   assertEquals((t.doc as Comp).title, 'reply with pong')

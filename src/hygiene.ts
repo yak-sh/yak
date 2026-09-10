@@ -304,11 +304,8 @@ let file = (a: Artifact, cast: Cast): Filing => {
   let eid = uuid()
   land([
     { eid, name: 'doc', comp: { title: a.title, body: a.body } },
-    {
-      eid,
-      name: 'task',
-      comp: { priority: a.priority, project: a.project },
-    },
+    { eid, name: 'task', comp: {} },
+    { eid, name: 'filed', comp: { priority: a.priority, project: a.project } },
     { eid, name: 'proposed', comp: {} },
     {
       eid,

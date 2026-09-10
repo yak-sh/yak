@@ -12,19 +12,24 @@ let { freshDb } = await import('./testdb.ts')
 let uid = () => crypto.randomUUID()
 let task = (eid: string, i: number) => [
   { eid, name: 'doc', comp: { title: `Task ${i}`, body: 'b'.repeat(200) } },
-  { eid, name: 'task', comp: { priority: i % 3 } },
+  { eid, name: 'task', comp: {} },
+  { eid, name: 'filed', comp: { priority: i % 3 } },
 ]
 
 // A resident graph of 2k tasks for the read benches.
 let eids = Array.from({ length: 2000 }, uid)
 eids.forEach((eid, i) => apply(db, task(eid, i)))
 
-Deno.bench('apply: mint one task (2 comps)', () => {
+Deno.bench('apply: mint one task (3 comps)', () => {
   apply(db, task(uid(), 0))
 })
 
 Deno.bench('apply: patch one column', () => {
-  apply(db, [{ eid: eids[7], name: 'task', comp: { priority: 2 } }])
+  apply(db, [{
+    eid: eids[7],
+    name: 'filed',
+    comp: { priority: 2 },
+  }])
 })
 
 // The read path that replaced the whole-graph snapshot (M-21143): one entity's

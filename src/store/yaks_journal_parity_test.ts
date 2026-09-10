@@ -99,19 +99,24 @@ let T = uuid()
 Deno.test('parity: the two journals tell the same story about one entity', () => {
   both([
     { eid: T, name: 'doc', comp: { title: 'One' } },
-    { eid: T, name: 'task', comp: { priority: 1, domain: 'Eng' } },
+    { eid: T, name: 'task', comp: {} },
+    { eid: T, name: 'filed', comp: { priority: 1, domain: 'Eng' } },
   ])
   both([{ eid: T, name: 'doc', comp: { title: 'Two' } }])
-  both([{ eid: T, name: 'task', comp: { priority: 2 } }])
+  both([{ eid: T, name: 'task', comp: {} }, {
+    eid: T,
+    name: 'filed',
+    comp: { priority: 2 },
+  }])
   both([{ eid: T, name: 'task', comp: null }])
   both([{ eid: T, name: 'entity', comp: null }])
 
   let mine = pkgSaid(history(core)(T) as Batch[])
   assertEquals(mine, appSaid(T))
   assertEquals(mine, [
-    ['doc.title', 'task.priority', 'task.domain'],
+    ['doc.title', 'filed.priority', 'filed.domain'],
     ['doc.title'],
-    ['task.priority'],
+    ['filed.priority'],
     ['-task'],
     ['†'],
   ])

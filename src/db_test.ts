@@ -161,11 +161,16 @@ Deno.test('correct: an optimistic comp change is reverted to the stored value', 
   let t = uid()
   apply(d, [
     { eid: t, name: 'doc', comp: { title: 'a', body: '' } },
-    { eid: t, name: 'task', comp: { priority: 'P2' } },
+    { eid: t, name: 'task', comp: {} },
+    { eid: t, name: 'filed', comp: { priority: 'P2' } },
   ])
   // The sender optimistically bumped its priority; the server rejected the batch.
-  let out = correct(d, [{ eid: t, name: 'task', comp: { priority: 'P1' } }])
-  assertEquals(reverted(out, t, 'task')!.comp!.priority, 2)
+  let out = correct(d, [{ eid: t, name: 'task', comp: {} }, {
+    eid: t,
+    name: 'filed',
+    comp: { priority: 'P1' },
+  }])
+  assertEquals(reverted(out, t, 'filed')!.comp!.priority, 2)
   // Every stored component rides back whole (a delete-revert needs them all).
   assertEquals(!!reverted(out, t, 'doc'), true)
   assertEquals(!!reverted(out, t, 'entity'), true)
@@ -496,7 +501,7 @@ let contract = (
 })
 
 let contracts = [
-  contract('task', 'project', 'project', {}),
+  contract('filed', 'project', 'project', {}),
   contract('attachment', 'blob', 'blob'),
   contract('camera', 'client', 'client', (d) => ({
     canvas: tag(d, 'canvas'),
@@ -572,15 +577,10 @@ Deno.test('create + patch + column clear', () => {
     { eid: t, name: 'task', comp: {} },
   ])
   assertEquals(comp(t, 'doc')?.title, 'A')
-  assertEquals(comp(t, 'task')?.priority, 0) // schema default
+  assertEquals(comp(t, 'filed'), undefined) // bare tasks have no filing
   assertEquals(
     out.find((c) => c.eid == t && c.name == 'task')?.comp,
-    {
-      priority: 0,
-      project: null,
-      assignee: null,
-      domain: null,
-    },
+    {},
   ) // the live batch carries the same defaults as a snapshot
   apply(db, [{ eid: t, name: 'doc', comp: { title: 'B' } }])
   assertEquals(comp(t, 'doc')?.title, 'B')
@@ -885,7 +885,7 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
     { eid: target, name: 'person', comp: {} },
     { eid: target, name: 'alias', comp: { slug: 'typed-target' } },
     { eid: subject, name: 'doc', comp: { title: 'Subject' } },
-    { eid: subject, name: 'task', comp: { priority: 0 } },
+    { eid: subject, name: 'filed', comp: { priority: 0 } },
     { eid: subject, name: 'session', comp: { id: `typed-${subject}` } },
     { eid: subject, name: 'project', comp: {} },
     { eid: subject, name: 'board', comp: { query: '' } },
@@ -895,12 +895,8 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
   let out = apply(db, [
     {
       eid: 'typed-subject',
-      name: 'task',
-      comp: {
-        priority: 'P02',
-        assignee: 'typed-target',
-        domain: 'Eng',
-      },
+      name: 'filed',
+      comp: { priority: 'P02', assignee: 'typed-target', domain: 'Eng' },
     },
     {
       eid: 'typed-subject',
@@ -921,12 +917,8 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
   assertEquals(out.slice(0, 4), [
     {
       eid: subject,
-      name: 'task',
-      comp: {
-        priority: 2,
-        assignee: target,
-        domain: 'Eng',
-      },
+      name: 'filed',
+      comp: { priority: 2, assignee: target, domain: 'Eng' },
     },
     {
       eid: subject,
@@ -953,7 +945,7 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
       comp: { url: 'https://example.test/p' },
     },
   ])
-  assertEquals(comp(subject, 'task')?.priority, 2)
+  assertEquals(comp(subject, 'filed')?.priority, 2)
   assertEquals(comp(subject, 'session')?.operator, true)
   let logged = JSON.stringify(rowChanges(journalSince(db, 0).at(-1)!))
   assertEquals(logged.includes('P02'), false)
@@ -1082,7 +1074,8 @@ Deno.test('a column naming nothing is refused, not silently defaulted', () => {
     () =>
       apply(db, [
         { eid: t, name: 'doc', comp: { title: 'fine' } },
-        { eid: t, name: 'task', comp: { priority: 1, statuss: 'done' } },
+        { eid: t, name: 'task', comp: { statuss: 'done' } },
+        { eid: t, name: 'filed', comp: { priority: 1 } },
       ]),
     Error,
     'unknown column: task.statuss',
@@ -1626,11 +1619,8 @@ Deno.test('canonical mirrors roll back with a refused batch', () => {
       apply(d, [
         { eid: s, name: 'session', comp: { cwd: '/changed' } },
         { eid: s, name: 'spawn', comp: { model: 'changed' } },
-        {
-          eid: bad,
-          name: 'task',
-          comp: { project: ghost },
-        },
+        { eid: bad, name: 'task', comp: {} },
+        { eid: bad, name: 'filed', comp: { project: ghost } },
       ]),
     Error,
     'project',
@@ -1804,11 +1794,8 @@ Deno.test('task project requires a project and fails atomically', () => {
     () =>
       apply(db, [
         { eid: rider, name: 'doc', comp: { title: 'rides along' } },
-        {
-          eid: task,
-          name: 'task',
-          comp: { project: bare },
-        },
+        { eid: task, name: 'task', comp: {} },
+        { eid: task, name: 'filed', comp: { project: bare } },
       ]),
     Error,
     'refused',
@@ -1816,7 +1803,7 @@ Deno.test('task project requires a project and fails atomically', () => {
   // Outputs speak human (T-10277): the refusal names ids the caller can
   // paste, never the uuids it never typed. The task's own id is only a
   // shape here — its spine died with the rollback that built the message.
-  assertMatch(err.message, /^task T-\d+ refused: /)
+  assertMatch(err.message, /^filed T-\d+ refused: /)
   assertMatch(
     err.message,
     new RegExp(`project → D-${comp(bare, 'entity')?.num} \\(no such`),
@@ -1827,27 +1814,25 @@ Deno.test('task project requires a project and fails atomically', () => {
   let project = uid(), existing = uid(), patchRider = uid()
   apply(db, [
     { eid: project, name: 'project', comp: {} },
-    {
-      eid: existing,
-      name: 'task',
-      comp: { project: project },
-    },
+    { eid: existing, name: 'task', comp: {} },
+    { eid: existing, name: 'filed', comp: { project: project } },
   ])
   assertThrows(() =>
     apply(db, [
       { eid: patchRider, name: 'doc', comp: { title: 'also rides' } },
-      { eid: existing, name: 'task', comp: { project: bare } },
+      { eid: existing, name: 'task', comp: {} },
+      { eid: existing, name: 'filed', comp: { project: bare } },
     ])
   )
-  assertEquals(comp(existing, 'task')?.project, project)
+  assertEquals(comp(existing, 'filed')?.project, project)
   assertEquals(comp(patchRider, 'doc'), undefined)
 
   let ghost = uid()
   assertThrows(
     () =>
-      apply(db, [{
+      apply(db, [{ eid: uid(), name: 'task', comp: {} }, {
         eid: uid(),
-        name: 'task',
+        name: 'filed',
         comp: { project: ghost },
       }]),
     Error,
@@ -1871,22 +1856,16 @@ Deno.test('task project accepts projects created anywhere in its batch', () => {
   let before = uid(), after = uid(), a = uid(), b = uid()
   apply(db, [
     { eid: before, name: 'project', comp: {} },
-    {
-      eid: a,
-      name: 'task',
-      comp: { project: before },
-    },
+    { eid: a, name: 'task', comp: {} },
+    { eid: a, name: 'filed', comp: { project: before } },
   ])
   apply(db, [
-    {
-      eid: b,
-      name: 'task',
-      comp: { project: after },
-    },
+    { eid: b, name: 'task', comp: {} },
+    { eid: b, name: 'filed', comp: { project: after } },
     { eid: after, name: 'project', comp: {} },
   ])
-  assertEquals(comp(a, 'task')?.project, before)
-  assertEquals(comp(b, 'task')?.project, after)
+  assertEquals(comp(a, 'filed')?.project, before)
+  assertEquals(comp(b, 'filed')?.project, after)
 })
 
 Deno.test('typed eid contracts are the complete vocabulary set', () => {
@@ -1959,9 +1938,9 @@ Deno.test('a target component cannot leave typed references dangling', () => {
   let local = fresh()
   let project = tag(local, 'project')
   let task = uid(), rider = uid()
-  apply(local, [{
+  apply(local, [{ eid: task, name: 'task', comp: {} }, {
     eid: task,
-    name: 'task',
+    name: 'filed',
     comp: { project: project },
   }])
   assertThrows(
@@ -2839,9 +2818,11 @@ Deno.test('entity delete cascades to aimed entities, detaches soft refs', () => 
     { eid: p, name: 'doc', comp: { title: 'proj' } },
     { eid: p, name: 'project', comp: {} },
     { eid: t, name: 'doc', comp: { title: 'doomed' } },
-    { eid: t, name: 'task', comp: { project: p } },
+    { eid: t, name: 'task', comp: {} },
+    { eid: t, name: 'filed', comp: { project: p } },
     { eid: t2, name: 'doc', comp: { title: 'survivor' } },
-    { eid: t2, name: 'task', comp: { project: p } },
+    { eid: t2, name: 'task', comp: {} },
+    { eid: t2, name: 'filed', comp: { project: p } },
     { eid: card, name: 'card', comp: { target: t, view: 'Task' } },
     { eid: note, name: 'doc', comp: { title: '', body: 'aimed at doomed' } },
     { eid: note, name: 'comment', comp: { target: t } },
@@ -2857,7 +2838,7 @@ Deno.test('entity delete cascades to aimed entities, detaches soft refs', () => 
   }
   // deleting the project detaches its surviving tasks, kills nothing
   apply(db, [{ eid: p, name: 'entity', comp: null }])
-  assertEquals(comp(t2, 'task')?.project, null)
+  assertEquals(comp(t2, 'filed')?.project, null)
   assertEquals(comp(t2, 'doc')?.title, 'survivor')
 })
 
@@ -2916,11 +2897,13 @@ Deno.test('death broadcasts its soft-detaches: no ghost claims', async () => {
     { eid: p, name: 'doc', comp: { title: 'home' } },
     { eid: p, name: 'project', comp: {} },
     { eid: t2, name: 'doc', comp: { title: 'homed' } },
-    { eid: t2, name: 'task', comp: { project: p } },
+    { eid: t2, name: 'task', comp: {} },
+    { eid: t2, name: 'filed', comp: { project: p } },
     { eid: who, name: 'doc', comp: { title: 'holder' } },
     { eid: who, name: 'person', comp: {} },
     { eid: t3, name: 'doc', comp: { title: 'plated' } },
-    { eid: t3, name: 'task', comp: { assignee: who } },
+    { eid: t3, name: 'task', comp: {} },
+    { eid: t3, name: 'filed', comp: { assignee: who } },
   ])
   // dead session: the freed lease rides the return AND the Trace
   let tr = trace()
@@ -2934,7 +2917,7 @@ Deno.test('death broadcasts its soft-detaches: no ghost claims', async () => {
   out = apply(db, [{ eid: p, name: 'entity', comp: null }])
   assertEquals(
     out.some((c) =>
-      c.eid == t2 && c.name == 'task' && c.comp?.project === null
+      c.eid == t2 && c.name == 'filed' && c.comp?.project === null
     ),
     true,
   )
@@ -2942,7 +2925,7 @@ Deno.test('death broadcasts its soft-detaches: no ghost claims', async () => {
   out = apply(db, [{ eid: who, name: 'entity', comp: null }])
   assertEquals(
     out.some((c) =>
-      c.eid == t3 && c.name == 'task' && c.comp?.assignee === null
+      c.eid == t3 && c.name == 'filed' && c.comp?.assignee === null
     ),
     true,
   )
@@ -2954,12 +2937,13 @@ Deno.test('assignee: whose plate round-trips, a dead assignee detaches', () => {
     { eid: who, name: 'doc', comp: { title: 'Jeff' } },
     { eid: who, name: 'person', comp: {} },
     { eid: t, name: 'doc', comp: { title: 'chore' } },
-    { eid: t, name: 'task', comp: { assignee: who } },
+    { eid: t, name: 'task', comp: {} },
+    { eid: t, name: 'filed', comp: { assignee: who } },
   ])
-  assertEquals(comp(t, 'task')?.assignee, who)
+  assertEquals(comp(t, 'filed')?.assignee, who)
   // the person dies; the task stays, unassigned — soft ref, never cascade
   apply(db, [{ eid: who, name: 'entity', comp: null }])
-  assertEquals(comp(t, 'task')?.assignee, null)
+  assertEquals(comp(t, 'filed')?.assignee, null)
   assertEquals(comp(t, 'doc')?.title, 'chore')
 })
 
@@ -3357,7 +3341,8 @@ Deno.test('edge: a claim lands its worked edge in both stores', () => {
   apply(db, [
     { eid: session, name: 'session', comp: { id: session } },
     { eid: task, name: 'doc', comp: { title: 'claimed' } },
-    { eid: task, name: 'task', comp: { priority: 1 } },
+    { eid: task, name: 'task', comp: {} },
+    { eid: task, name: 'filed', comp: { priority: 1 } },
   ])
   apply(db, [{ eid: task, name: 'claim', comp: { session } }])
   let e = edgeEid(session, 'worked', task)
@@ -3738,11 +3723,8 @@ slow('open heals canonical stored values once and preserves failures', () => {
   let project = uid(), task = uid(), session = uid()
   apply(legacy, [
     { eid: project, name: 'project', comp: {} },
-    {
-      eid: task,
-      name: 'task',
-      comp: { priority: 2, project: project },
-    },
+    { eid: task, name: 'task', comp: {} },
+    { eid: task, name: 'filed', comp: { priority: 2, project: project } },
     {
       eid: session,
       name: 'session',
@@ -3879,7 +3861,8 @@ Deno.test('search: references and paths screen the hits', () => {
     { eid: other, name: 'person', comp: {} },
     { eid: other, name: 'alias', comp: { slug: 'alicej' } },
     { eid: t, name: 'doc', comp: { title: 'Wurlitzer tuning' } },
-    { eid: t, name: 'task', comp: { assignee: u } },
+    { eid: t, name: 'task', comp: {} },
+    { eid: t, name: 'filed', comp: { assignee: u } },
     { eid: t2, name: 'doc', comp: { title: 'Wurlitzer restringing' } },
     { eid: t2, name: 'task', comp: {} },
     { eid: instrument, name: 'doc', comp: { title: 'Wurlitzer console' } },
@@ -4061,9 +4044,11 @@ Deno.test('claim leaves one durable worked edge after its lease is released', ()
   apply(db, [
     { eid: session, name: 'session', comp: { id: session } },
     { eid: one, name: 'doc', comp: { title: 'one' } },
-    { eid: one, name: 'task', comp: { priority: 1 } },
+    { eid: one, name: 'task', comp: {} },
+    { eid: one, name: 'filed', comp: { priority: 1 } },
     { eid: two, name: 'doc', comp: { title: 'two' } },
-    { eid: two, name: 'task', comp: { priority: 1 } },
+    { eid: two, name: 'task', comp: {} },
+    { eid: two, name: 'filed', comp: { priority: 1 } },
   ])
   let worked = edgeEid(session, 'worked', one)
   let first = apply(db, [{ eid: one, name: 'claim', comp: { session } }])
@@ -4092,7 +4077,8 @@ Deno.test('historical worked edges materialize explicitly and idempotently', () 
   apply(db, [
     { eid: session, name: 'session', comp: { id: session } },
     { eid: task, name: 'doc', comp: { title: 'historical task' } },
-    { eid: task, name: 'task', comp: { priority: 1 } },
+    { eid: task, name: 'task', comp: {} },
+    { eid: task, name: 'filed', comp: { priority: 1 } },
   ])
   apply(db, [{ eid: task, name: 'claim', comp: { session } }])
   apply(db, [{ eid: task, name: 'claim', comp: null }])
@@ -4303,11 +4289,12 @@ Deno.test('normalized readers: removal, empty component, present-null', () => {
   // present-null: assignee written as an explicit null rides as a present null.
   apply(d, [
     { eid: a, name: 'doc', comp: { title: 'x' } },
-    { eid: a, name: 'task', comp: { assignee: null } },
+    { eid: a, name: 'task', comp: {} },
+    { eid: a, name: 'filed', comp: { assignee: null } },
     { eid: a, name: 'design', comp: {} }, // an intentionally empty component
   ])
   let first = journalOf(d, a)[0].changes
-  let task = first.find((c) => c.name == 'task')!
+  let task = first.find((c) => c.name == 'filed')!
   assertEquals((task.comp as { assignee: unknown }).assignee, null)
   assertEquals('assignee' in (task.comp as object), true) // present, not absent
   let design = first.find((c) => c.name == 'design')!
@@ -4473,7 +4460,8 @@ Deno.test('search: retired-project hits sink to the tail, flagged', () => {
     { eid: p, name: 'project', comp: {} },
     { eid: p, name: 'archived', comp: {} },
     { eid: sunk, name: 'doc', comp: { title: 'Quagga sunk chore' } },
-    { eid: sunk, name: 'task', comp: { project: p } },
+    { eid: sunk, name: 'task', comp: {} },
+    { eid: sunk, name: 'filed', comp: { project: p } },
     { eid: live, name: 'doc', comp: { title: 'Quagga live chore' } },
     { eid: live, name: 'task', comp: {} },
   ])
@@ -4600,7 +4588,11 @@ Deno.test('delta: snapshot@C0 + delta(C0) matches the live broadcast stream, cas
       ...link(other, 'requires', t),
     ],
     [{ eid: t, name: 'doc', comp: { title: 'doomed', body: 'v2 edit' } }],
-    [{ eid: other, name: 'task', comp: { priority: 1 } }], // survivor re-touched
+    [{ eid: other, name: 'task', comp: {} }, {
+      eid: other,
+      name: 'filed',
+      comp: { priority: 1 },
+    }], // survivor re-touched
     [{ eid: t, name: 'entity', comp: null }], // cascade
   ] as Wire[][]
 
@@ -4728,7 +4720,8 @@ Deno.test('attribution cascade: persona, then project, then model', () => {
     { eid: model, name: 'doc', comp: { title: 'Fable 5' } },
     { eid: model, name: 'model', comp: { name: 'claude-fable-5' } },
     { eid: t, name: 'doc', comp: { title: 'work' } },
-    { eid: t, name: 'task', comp: { project } },
+    { eid: t, name: 'task', comp: {} },
+    { eid: t, name: 'filed', comp: { project } },
     {
       eid: s,
       name: 'session',
@@ -5596,15 +5589,18 @@ Deno.test('apply answer: death wins over patches and every casualty clears the c
   land(
     cache,
     apply(d, [
-      { eid: target, name: 'task', comp: { domain: 'before' } },
+      { eid: target, name: 'task', comp: {} },
+      { eid: target, name: 'filed', comp: { domain: 'before' } },
       { eid: comment, name: 'comment', comp: { target } },
     ]),
   )
   let out = apply(d, [
     { eid: comment, name: 'comment', comp: { target } },
-    { eid: target, name: 'task', comp: { domain: 'during' } },
+    { eid: target, name: 'task', comp: {} },
+    { eid: target, name: 'filed', comp: { domain: 'during' } },
     { eid: target, name: 'entity', comp: null },
-    { eid: target, name: 'task', comp: { domain: 'after' } },
+    { eid: target, name: 'task', comp: {} },
+    { eid: target, name: 'filed', comp: { domain: 'after' } },
   ])
   for (let eid of [target, comment]) {
     assertEquals(out.filter((c) => c.eid == eid), [
@@ -5615,7 +5611,8 @@ Deno.test('apply answer: death wins over patches and every casualty clears the c
   assertEquals(cache.cache, {})
   assertEquals(
     apply(d, [
-      { eid: target, name: 'task', comp: { domain: 'replayed' } },
+      { eid: target, name: 'task', comp: {} },
+      { eid: target, name: 'filed', comp: { domain: 'replayed' } },
       { eid: target, name: 'entity', comp: null },
     ]),
     [],
@@ -5624,21 +5621,25 @@ Deno.test('apply answer: death wins over patches and every casualty clears the c
 
 Deno.test('apply answer: ordered guarded patches compose, defaults survive, guards do not', () => {
   let d = bareDb(), eid = uid()
-  let born = apply(d, [{ eid, name: 'task', comp: { domain: 'before' } }])
-  let row = born.find((c) => c.eid == eid && c.name == 'task')!.comp!
-  assertEquals(row.priority, 0)
+  let born = apply(d, [{ eid, name: 'task', comp: {} }, {
+    eid,
+    name: 'filed',
+    comp: { domain: 'before' },
+  }])
+  let row = born.find((c) => c.eid == eid && c.name == 'filed')!.comp!
+  assertEquals(row.priority, null)
   assertEquals(row.project, null)
   let out = apply(d, [
     {
       eid,
-      name: 'task',
-      comp: { domain: 'during' },
       was: { domain: sha('before') },
+      name: 'filed',
+      comp: { domain: 'during' },
     },
-    { eid, name: 'task', comp: { domain: 'after', priority: 1 } },
+    { eid, name: 'filed', comp: { domain: 'after', priority: 1 } },
   ])
-  assertEquals(out.filter((c) => c.name == 'task'), [
-    { eid, name: 'task', comp: { domain: 'after', priority: 1 } },
+  assertEquals(out.filter((c) => c.name == 'filed'), [
+    { eid, name: 'filed', comp: { domain: 'after', priority: 1 } },
   ])
   assertEquals(out.some((c) => c.was), false)
 })
@@ -5647,10 +5648,109 @@ Deno.test('apply answer: a birth deleted in its own batch has no surviving echoe
   let d = bareDb(), eid = uid()
   assertEquals(
     apply(d, [
-      { eid, name: 'task', comp: { domain: 'briefly alive' } },
+      { eid, name: 'task', comp: {} },
+      { eid, name: 'filed', comp: { domain: 'briefly alive' } },
       { eid, name: 'entity', comp: null },
-      { eid, name: 'task', comp: { priority: 1 } },
+      { eid, name: 'task', comp: {} },
+      { eid, name: 'filed', comp: { priority: 1 } },
     ]),
     [{ eid, name: 'entity', comp: null }],
   )
+})
+
+Deno.test('open backfills filing once without replacing task identities or owner data', () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'tasks-filed-' })
+  let path = `${dir}/owner.db`
+  let d = open(path)
+  try {
+    let project = uid(), person = uid(), task = uid(), board = uid()
+    apply(d, [
+      { eid: project, name: 'project', comp: {} },
+      { eid: person, name: 'person', comp: {} },
+      {
+        eid: task,
+        name: 'doc',
+        comp: { title: 'Owner task', body: 'Keep these bytes' },
+      },
+      { eid: task, name: 'task', comp: {} },
+      {
+        eid: task,
+        name: 'filed',
+        comp: { priority: 2.5, project, assignee: person, domain: 'Ops' },
+      },
+      { eid: task, name: 'completed', comp: {} },
+      {
+        eid: board,
+        name: 'board',
+        comp: { query: '.project=P-19 .priority<=P2' },
+      },
+    ])
+    let identity = d.prepare('select id, eid, num from entity order by id')
+      .all()
+    let filing = d.prepare('select * from filed order by entity').all()
+    // Reconstruct the old deployed shape on this disposable owner-data fixture.
+    d.exec(`alter table task add column priority real not null default 0;
+      alter table task add column project integer references entity(id);
+      alter table task add column assignee integer references entity(id);
+      alter table task add column domain text;
+      update task set (priority, project, assignee, domain) =
+        (select priority, project, assignee, domain from filed where filed.entity = task.entity);
+      create index task_project on task(project);
+      drop table filed;`)
+    // A retained trigger makes DROP COLUMN fail *after* the backfill, proving
+    // that open's transaction rolls back both the data move and additive DDL.
+    d.exec(
+      `create trigger block_filing before update on task begin select new.priority; end`,
+    )
+    d.close()
+    assertThrows(() => open(path), Error)
+    d = connect(path)
+    assertEquals(hasCol(d, 'task', 'priority'), true)
+    assertEquals(
+      d.prepare("select name from sqlite_master where name='filed'").get(),
+      undefined,
+    )
+    assertEquals(
+      d.prepare('select id, eid, num from entity order by id').all(),
+      identity,
+    )
+    d.exec('drop trigger block_filing')
+    d.close()
+    d = open(path)
+    assertEquals(d.prepare('select * from filed order by entity').all(), filing)
+    assertEquals(
+      d.prepare("select name from pragma_table_info('task')").all(),
+      [{ name: 'entity' }],
+    )
+    assertEquals(
+      d.prepare('select id, eid, num from entity order by id').all(),
+      identity,
+    )
+    let before = snapshot(d)
+    let bag = Object.fromEntries(
+      before.changes.filter((c) => c.eid == task).map((c) => [c.name, c.comp]),
+    )
+    assertEquals(bag.doc?.body, 'Keep these bytes')
+    assertEquals(!!bag.completed, true)
+    assertEquals(
+      before.changes.find((c) => c.eid == board && c.name == 'board')?.comp
+        ?.query,
+      '.project=P-19 .priority<=P2',
+    )
+    apply(d, [{ eid: task, name: 'filed', comp: { priority: 9 } }])
+    d.close()
+    d = open(path)
+    assertEquals(
+      snapshot(d).changes.find((c) => c.eid == task && c.name == 'filed')?.comp
+        ?.priority,
+      9,
+    )
+    assertEquals(
+      d.prepare('select id, eid, num from entity order by id').all(),
+      identity,
+    )
+  } finally {
+    d.close()
+    Deno.removeSync(dir, { recursive: true })
+  }
 })

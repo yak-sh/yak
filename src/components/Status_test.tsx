@@ -46,7 +46,8 @@ Deno.test('fix status links minted ids and follows the session lifecycle', async
     cache.value = {
       task: {
         entity: { eid: 'task', num: 26 },
-        task: { eid: 'task', status: 'open', priority: 0 },
+        task: { eid: 'task', status: 'open' },
+        filed: { eid: 'task', priority: 0 },
       },
       session: {
         session: { eid: 'session', id: 'provider-id' },

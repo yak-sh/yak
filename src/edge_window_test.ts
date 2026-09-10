@@ -41,7 +41,8 @@ let grow = (): Change[] => {
   kids.push(eid)
   return [
     { eid, name: 'doc', comp: { title: `kid ${kids.length}`, body: 'b' } },
-    { eid, name: 'task', comp: { priority: 1 } },
+    { eid, name: 'task', comp: {} },
+    { eid, name: 'filed', comp: { priority: 1 } },
     ...link(root, 'contains', eid),
   ]
 }

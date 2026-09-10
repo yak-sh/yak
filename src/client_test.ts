@@ -93,11 +93,13 @@ let snap: Snapshot = {
     { eid: S, name: 'session', comp: { id: 'sess-x', cwd: '/w' } },
     { eid: T1, name: 'entity', comp: { eid: T1, num: 2, created_at: '' } },
     { eid: T1, name: 'doc', comp: { title: 'First', body: '' } },
-    { eid: T1, name: 'task', comp: { status: 'wip', priority: 0 } },
+    { eid: T1, name: 'task', comp: { status: 'wip' } },
+    { eid: T1, name: 'filed', comp: { priority: 0 } },
     { eid: T1, name: 'claim', comp: { session: S } },
     { eid: T2, name: 'entity', comp: { eid: T2, num: 3, created_at: '' } },
     { eid: T2, name: 'doc', comp: { title: 'Second', body: '' } },
-    { eid: T2, name: 'task', comp: { priority: 1 } },
+    { eid: T2, name: 'filed', comp: { priority: 1 } },
+    { eid: T2, name: 'task', comp: {} },
     {
       eid: T2,
       name: 'alias',
@@ -133,7 +135,8 @@ Deno.test('mintedIn: names the minted eid, never a foreign num', () => {
   // provenance row. The old separate read-back could resolve to the session.
   let applied: Change[] = [
     { eid: NEW, name: 'doc', comp: { title: 'Fresh', body: '' } },
-    { eid: NEW, name: 'task', comp: { priority: 1 } },
+    { eid: NEW, name: 'filed', comp: { priority: 1 } },
+    { eid: NEW, name: 'task', comp: {} },
     { eid: NEW, name: 'entity', comp: { eid: NEW, num: 7, created_at: '' } },
     { eid: SESSION, name: 'session', comp: { id: 'sess-y', cwd: '/w' } },
     {
@@ -214,7 +217,8 @@ Deno.test('jsonOf: an entity is its components without SQL join keys', () => {
     comps: {
       entity: { eid: T1, num: 2 },
       doc: { eid: T1, title: 'First', body: '' },
-      task: { eid: T1, status: 'wip', priority: 0 },
+      task: { eid: T1, status: 'wip' },
+      filed: { eid: T1, priority: 0 },
       kind: { eid: T1, value: 'reserved' },
     },
   }
@@ -222,7 +226,8 @@ Deno.test('jsonOf: an entity is its components without SQL join keys', () => {
     kind: 'task',
     entity: { eid: T1, num: 2 },
     doc: { title: 'First', body: '' },
-    task: { status: 'wip', priority: 0 },
+    task: { status: 'wip' },
+    filed: { priority: 0 },
   })
 })
 
@@ -257,7 +262,7 @@ let CASES: [string, { comp: string; prop: string; value: unknown } | RegExp][] =
     ['.title=Hi', { comp: 'doc', prop: 'title', value: 'Hi' }],
     ['.status=done', { comp: 'task', prop: 'status', value: 'done' }],
     ['.status=WIP', { comp: 'task', prop: 'status', value: 'wip' }],
-    ['.domain=Eng', { comp: 'task', prop: 'domain', value: 'Eng' }],
+    ['.domain=Eng', { comp: 'filed', prop: 'domain', value: 'Eng' }],
     ['.proposed.at=2026-08-01T00:00:00.000Z', {
       comp: 'proposed',
       prop: 'at',
@@ -294,17 +299,17 @@ let CASES: [string, { comp: string; prop: string; value: unknown } | RegExp][] =
       prop: 'pid',
       value: 42,
     }],
-    ['.priority=1.5', { comp: 'task', prop: 'priority', value: 1.5 }],
+    ['.priority=1.5', { comp: 'filed', prop: 'priority', value: 1.5 }],
     // priority speaks P<n> at the write door too (T-6741/T-7143): 'P2' and
     // '2' both store the integer 2; garbage is a loud error, not bad data.
-    ['.priority=P2', { comp: 'task', prop: 'priority', value: 2 }],
-    ['.priority=2', { comp: 'task', prop: 'priority', value: 2 }],
-    ['.priority=P0', { comp: 'task', prop: 'priority', value: 0 }],
-    ['.task.priority=P1', { comp: 'task', prop: 'priority', value: 1 }],
+    ['.priority=P2', { comp: 'filed', prop: 'priority', value: 2 }],
+    ['.priority=2', { comp: 'filed', prop: 'priority', value: 2 }],
+    ['.priority=P0', { comp: 'filed', prop: 'priority', value: 0 }],
+    ['.filed.priority=P1', { comp: 'filed', prop: 'priority', value: 1 }],
     ['.priority=banana', /priority is a finite number/],
     ['.priority=P', /priority is a finite number/],
     ['.pin.x=12', { comp: 'pin', prop: 'x', value: 12 }],
-    ['.assignee=jeff', { comp: 'task', prop: 'assignee', value: 'jeff' }],
+    ['.assignee=jeff', { comp: 'filed', prop: 'assignee', value: 'jeff' }],
     // a shared ref name filters as any-of, but a WRITE must aim
     ['.actor=jeff', /ambiguous for writes/],
     ['.session.actor=jeff', {
@@ -387,7 +392,7 @@ Deno.test('param: a $-sigil JSON value routes as the field operator', () => {
   // by column, rather than deref failing on '[object Object]'.
   assertEquals(param(`.project=${JSON.stringify(edit)}`)?.value, edit)
   assertEquals(derefParams([], [param(`.project=${JSON.stringify(edit)}`)!]), [
-    { comp: 'task', prop: 'project', value: edit },
+    { comp: 'filed', prop: 'project', value: edit },
   ])
   // Only the sigil is reserved. Ordinary prose — JSON prose included — is a
   // literal, so a body that happens to be an object still stores verbatim.
@@ -702,7 +707,8 @@ Deno.test('byList: named values sort either way and missing values stay last', (
     num,
     kind: 'task',
     comps: {
-      task: { priority },
+      task: {},
+      filed: { priority },
       ...(created ? { created: { at: created } } : {}),
     },
   })
@@ -749,11 +755,12 @@ Deno.test('statusChanges replaces conflicting lifecycle facets', () => {
 Deno.test('patchChanges expands virtual status and preserves siblings', () => {
   assertEquals(
     patchChanges(by(T2), {
-      task: { status: 'done', priority: 2 },
+      task: { status: 'done' },
+      filed: { priority: 2 },
       doc: { body: 'shipped' },
     }),
     [
-      { eid: T2, name: 'task', comp: { priority: 2 } },
+      { eid: T2, name: 'filed', comp: { priority: 2 } },
       { eid: T2, name: 'doc', comp: { body: 'shipped' } },
       { eid: T2, name: 'cancelled', comp: null },
       { eid: T2, name: 'completed', comp: {} },
@@ -786,7 +793,8 @@ Deno.test('taskTreePlan: one rooted batch covers new and existing nodes', async 
       num: 3,
       kind: 'task',
       comps: {
-        task: { project: P },
+        task: {},
+        filed: { project: P },
         doc: { title: 'Initiative' },
       },
     },
@@ -819,7 +827,7 @@ Deno.test('taskTreePlan: one rooted batch covers new and existing nodes', async 
     ],
   )
   assertEquals(
-    plan.changes.find((c) => c.eid == made.eid && c.name == 'task')?.comp,
+    plan.changes.find((c) => c.eid == made.eid && c.name == 'filed')?.comp,
     { project: P, priority: 1 },
   )
   assertEquals(
@@ -897,7 +905,8 @@ Deno.test('normalizeLiterals: nested aliases compile to one canonical batch', ()
       key: 'goal',
       comps: {
         doc: { title: 'Goal' },
-        task: { project: 'project' },
+        task: {},
+        filed: { project: 'project' },
       },
       was: { doc: was },
       deps: {
@@ -905,7 +914,8 @@ Deno.test('normalizeLiterals: nested aliases compile to one canonical batch', ()
           key: 'gate',
           comps: {
             doc: { title: 'Gate' },
-            task: { project: 'project' },
+            task: {},
+            filed: { project: 'project' },
           },
           deps: { reads: ['memory'] },
         }],
@@ -941,21 +951,15 @@ Deno.test('normalizeLiterals: nested aliases compile to one canonical batch', ()
       comp: { title: 'Goal' },
       was: { title: 'old-title-hash' },
     },
-    {
-      eid: plan.aliases.goal,
-      name: 'task',
-      comp: { project: P },
-    },
+    { eid: plan.aliases.goal, name: 'filed', comp: { project: P } },
+    { eid: plan.aliases.goal, name: 'task', comp: {} },
     {
       eid: plan.aliases.gate,
       name: 'doc',
       comp: { title: 'Gate' },
     },
-    {
-      eid: plan.aliases.gate,
-      name: 'task',
-      comp: { project: P },
-    },
+    { eid: plan.aliases.gate, name: 'filed', comp: { project: P } },
+    { eid: plan.aliases.gate, name: 'task', comp: {} },
     {
       eid: plan.aliases.recall,
       name: 'recalled',
@@ -984,7 +988,8 @@ Deno.test('normalizeLiterals: the read shape writes — $alias, nesting, human i
       // changes land first, so the column names a spine that exists.
       entity: { eid: '$goal' },
       doc: { title: 'Goal' },
-      task: { project: '$space' },
+      task: {},
+      filed: { project: '$space' },
       was: { doc: was },
       edges: [
         { type: 'requires', child: 'T-3' },
@@ -999,7 +1004,8 @@ Deno.test('normalizeLiterals: the read shape writes — $alias, nesting, human i
       // A read sent back: its projections and stamps ride along and drop.
       kind: 'task',
       entity: { eid: 'T-3', num: 3 },
-      task: { status: 'open', priority: 1 },
+      task: { status: 'open' },
+      filed: { priority: 1 },
       created: { at: '2026-09-02T00:00:00Z', by: 'P-19' },
       refs: [],
       backrefs: [],
@@ -1022,10 +1028,12 @@ Deno.test('normalizeLiterals: the read shape writes — $alias, nesting, human i
     { eid: space, name: 'doc', comp: { title: 'Space' } },
     { eid: space, name: 'project', comp: {} },
     { eid: goal, name: 'doc', comp: { title: 'Goal' }, was },
-    { eid: goal, name: 'task', comp: { project: space } },
+    { eid: goal, name: 'filed', comp: { project: space } },
+    { eid: goal, name: 'task', comp: {} },
     { eid: gate, name: 'doc', comp: { title: 'Gate' } },
     { eid: T, name: 'created', comp: { at: '2026-09-02T00:00:00Z', by: P } },
-    { eid: T, name: 'task', comp: { priority: 1 } },
+    { eid: T, name: 'filed', comp: { priority: 1 } },
+    { eid: T, name: 'task', comp: {} },
     { eid: m, name: 'memory', comp: {} },
     { eid: note, name: 'comment', comp: { target: P, body: 'note' } },
     { eid: note, name: 'recalled', comp: { source: m } },
@@ -1035,8 +1043,8 @@ Deno.test('normalizeLiterals: the read shape writes — $alias, nesting, human i
   let bad: [string, Record<string, unknown>[], string][] = [
     [
       'dangling $alias',
-      [{ doc: { title: 'x' }, task: { project: '$nowhere' } }],
-      'no entity or literal key: $nowhere (.task.project)',
+      [{ doc: { title: 'x' }, task: {}, filed: { project: '$nowhere' } }],
+      'no entity or literal key: $nowhere (.filed.project)',
     ],
     [
       'double definition',
@@ -1277,8 +1285,8 @@ Deno.test('normalizeLiterals: invalid aliases, references, keys, and cycles reje
     ],
     [
       'dangling component reference',
-      [{ key: 'a', comps: { task: { project: 'missing' } } }],
-      'no entity or literal key: missing (.task.project)',
+      [{ key: 'a', comps: { task: {}, filed: { project: 'missing' } } }],
+      'no entity or literal key: missing (.filed.project)',
     ],
     [
       'unknown component',
@@ -1629,20 +1637,15 @@ Deno.test("spawnChanges: the actor chain — owner, then the task's project, the
       { eid: W, name: 'session', comp: { id: 'sess-w', actor: J } },
       { eid: T, name: 'entity', comp: { eid: T, num: 27, created_at: '' } },
       { eid: T, name: 'doc', comp: { title: 'work', body: '' } },
-      { eid: T, name: 'task', comp: { priority: 0 } },
+      { eid: T, name: 'task', comp: {} },
+      { eid: T, name: 'filed', comp: { priority: 0 } },
       { eid: V, name: 'entity', comp: { eid: V, num: 28, created_at: '' } },
       { eid: V, name: 'doc', comp: { title: 'Video', body: '' } },
       { eid: V, name: 'project', comp: {} },
       { eid: U, name: 'entity', comp: { eid: U, num: 29, created_at: '' } },
       { eid: U, name: 'doc', comp: { title: 'cut', body: '' } },
-      {
-        eid: U,
-        name: 'task',
-        comp: {
-          priority: 0,
-          project: V,
-        },
-      },
+      { eid: U, name: 'task', comp: {} },
+      { eid: U, name: 'filed', comp: { priority: 0, project: V } },
     ],
     deps: [
       { parent: O, type: 'contains', child: P },
@@ -1704,7 +1707,7 @@ Deno.test('task interaction anchors a tool-only session to the project', () => {
     changes: [
       ...snap.changes,
       { eid: project, name: 'project', comp: {} },
-      { eid: T2, name: 'task', comp: { project: project } },
+      { eid: T2, name: 'filed', comp: { project: project } },
     ],
   })
   let actor = { eid: S, name: 'session', comp: { actor: project } }
@@ -1899,7 +1902,8 @@ let planRows = () =>
         },
       },
       { eid: T1, name: 'entity', comp: { eid: T1, num: 2 } },
-      { eid: T1, name: 'task', comp: { priority: 0 } },
+      { eid: T1, name: 'task', comp: {} },
+      { eid: T1, name: 'filed', comp: { priority: 0 } },
       {
         eid: T1,
         name: 'spawn',
@@ -2285,19 +2289,23 @@ Deno.test('taskContextBlock: cycles terminate and every project root is explaina
     ...contextEntity(P2, 102, { doc: { title: 'Two' }, project: {} }),
     ...contextEntity(A, 103, {
       doc: { title: 'A' },
-      task: { project: P1 },
+      task: {},
+      filed: { project: P1 },
     }),
     ...contextEntity(B, 104, {
       doc: { title: 'B' },
-      task: { project: P2 },
+      task: {},
+      filed: { project: P2 },
     }),
     ...contextEntity(C, 105, {
       doc: { title: 'C' },
-      task: { project: P1 },
+      task: {},
+      filed: { project: P1 },
     }),
     ...contextEntity(TARGET, 106, {
       doc: { title: 'Target' },
-      task: { status: 'wip', project: P1 },
+      task: { status: 'wip' },
+      filed: { project: P1 },
     }),
   ]
   let deps: Dep[] = [
@@ -2327,15 +2335,18 @@ Deno.test('taskContextBlock: inherited rulings, memory, gates, and corrections s
     ...contextEntity(FOREIGN, 202, { doc: { title: 'Theirs' }, project: {} }),
     ...contextEntity(A, 203, {
       doc: { title: 'Parent' },
-      task: { project: P },
+      task: {},
+      filed: { project: P },
     }),
     ...contextEntity(TARGET, 204, {
       doc: { title: 'Target' },
-      task: { status: 'wip', project: P },
+      task: { status: 'wip' },
+      filed: { project: P },
     }),
     ...contextEntity(BLOCK, 205, {
       doc: { title: 'Open blocker' },
-      task: { project: P },
+      task: {},
+      filed: { project: P },
     }),
     ...contextEntity(OLD, 206, {
       doc: { title: 'Old ruling', body: 'Use the stable door.' },
@@ -2397,11 +2408,13 @@ Deno.test('taskContextGraph: reverse ancestry and correction reads are bounded a
     changes: [
       ...contextEntity(P, 301, { project: {}, doc: { title: 'P' } }),
       ...contextEntity(A, 302, {
-        task: { project: P },
+        task: {},
+        filed: { project: P },
         doc: { title: 'A' },
       }),
       ...contextEntity(TARGET, 303, {
-        task: { project: P },
+        task: {},
+        filed: { project: P },
         doc: { title: 'T' },
       }),
       ...contextEntity(OLD, 304, {
@@ -2815,8 +2828,10 @@ Deno.test('watch adds, mute subtracts, absent leaves addressed() alone', () => {
     { eid: A, name: 'doc', comp: { title: 'Operator' } },
     { eid: A, name: 'project', comp: {} },
     { eid: Sx, name: 'session', comp: { id: 'me', operator: 1, actor: A } },
-    { eid: far, name: 'task', comp: { priority: 0 } },
-    { eid: mine, name: 'task', comp: { priority: 0 } },
+    { eid: far, name: 'filed', comp: { priority: 0 } },
+    { eid: far, name: 'task', comp: {} },
+    { eid: mine, name: 'filed', comp: { priority: 0 } },
+    { eid: mine, name: 'task', comp: {} },
     { eid: mine, name: 'claim', comp: { session: Sx } },
     { eid: cFar, name: 'comment', comp: { target: far } },
     { eid: cMine, name: 'comment', comp: { target: mine } },
@@ -3318,12 +3333,14 @@ Deno.test('contextDigest: pulse — scoped tasks that moved, no foreign bleed', 
       ...mk(PF, ago(1), { doc: { title: 'Theirs' }, project: {} }),
       ...mk(eid(1), ago(2), {
         doc: { title: 'Ours moved', body: '' },
-        task: { status: 'wip', priority: 0, project: P },
+        task: { status: 'wip' },
+        filed: { priority: 0, project: P },
       }),
       // foreign-project task: must NOT bleed into our pulse
       ...mk(eid(2), ago(1), {
         doc: { title: 'Foreign task', body: '' },
-        task: { status: 'wip', priority: 0, project: PF },
+        task: { status: 'wip' },
+        filed: { priority: 0, project: PF },
       }),
       // a mail letter — doc but no task comp: never pulse material
       ...mk(eid(3), ago(1), {
@@ -3345,7 +3362,8 @@ Deno.test('contextDigest: pulse — scoped tasks that moved, no foreign bleed', 
       // pulse's age gate alone, nothing else.
       ...mk(eid(6), ago(24 * 9), {
         doc: { title: 'Ours stale', body: '' },
-        task: { status: 'wip', priority: 1, project: P },
+        task: { status: 'wip' },
+        filed: { priority: 1, project: P },
         claim: { session: eid(7) },
       }),
     ],
@@ -3388,7 +3406,8 @@ Deno.test('contextDigest: ## decided — by decision date, stamp-only', () => {
       ...mk(P, '2026-07-01T00:00:00Z', { doc: { title: 'Ours' }, project: {} }),
       ...mk(eid(1), '2026-07-19T00:00:00Z', {
         doc: { title: 'Ship weekly' },
-        task: { status: 'done', priority: 0, project: P },
+        task: { status: 'done' },
+        filed: { priority: 0, project: P },
         decided: { at: '2026-05-04T00:00:00Z' },
       }),
       ...mk(eid(2), '2026-07-02T00:00:00Z', {
@@ -3399,12 +3418,14 @@ Deno.test('contextDigest: ## decided — by decision date, stamp-only', () => {
       // no stamp: absent from the section, whatever its age
       ...mk(eid(3), '2026-07-19T00:00:00Z', {
         doc: { title: 'Still arguing' },
-        task: { priority: 0, project: P },
+        task: {},
+        filed: { priority: 0, project: P },
       }),
       // decided in another project: not ours
       ...mk(eid(4), '2026-07-19T00:00:00Z', {
         doc: { title: 'Their call' },
-        task: { status: 'done', priority: 0, project: eid(8) },
+        task: { status: 'done' },
+        filed: { priority: 0, project: eid(8) },
         decided: { at: '2026-07-01T00:00:00Z' },
       }),
     ],
@@ -3432,7 +3453,7 @@ Deno.test('belongs: a project reads each kind, and the fleet rides along', () =>
     kind: 'thing',
     comps,
   })
-  let task = row({ task: { project: P } })
+  let task = row({ task: {}, filed: { project: P } })
   let mine = row({ memory: { scope: P } })
   let fleet = row({ memory: {} })
   let doc = row({ doc: { title: 'a note' } })
@@ -3464,14 +3485,14 @@ Deno.test('spec: a typed task — leading P, params anywhere, body below', () =>
   )
   assertEquals(s.title, 'Build a thing blah blah')
   assertEquals(s.body, 'line two\nline three')
-  assertEquals(s.grouped.task, { priority: 1, domain: 'Eng' })
+  assertEquals(s.grouped.filed, { priority: 1, domain: 'Eng' })
   assertEquals(s.grouped.proposed, { at: '2026-08-01T00:00:00.000Z' })
   // P mid-title is a WORD — only a leading P is a setter
   assertEquals(spec('Fix the P2 endpoint').title, 'Fix the P2 endpoint')
   assertEquals(spec('Fix the P2 endpoint').grouped.task, undefined)
   // params still parse after words; fractional P too
   assertEquals(spec('Ship it .status=wip').grouped.task, { status: 'wip' })
-  assertEquals(spec('p0.5 Urgent').grouped.task?.priority, 0.5)
+  assertEquals(spec('p0.5 Urgent').grouped.filed?.priority, 0.5)
   // a malformed dot-word stays a word — mid-typing is not an error
   assertEquals(spec('touch .env file').title, 'touch .env file')
   assertEquals(spec('').title, '')
@@ -3628,14 +3649,19 @@ Deno.test('designChanges: routed props ride onto the entity', () => {
   let { eid, changes } = designChanges(all, {
     title: 'Local-first mail',
     session: 'sess-x',
-    props: { task: { project: 'proj-eid', priority: 2 }, doc: { body: 'why' } },
+    props: {
+      task: {},
+      filed: { project: 'proj-eid', priority: 2 },
+      doc: { body: 'why' },
+    },
   })
   let doc = changes.find((c) => c.name == 'doc')
   assertEquals(doc?.comp, { title: 'Local-first mail', body: 'why' })
   let task = changes.find((c) => c.name == 'task')
-  assertEquals(task, {
+  assertEquals(task, { eid, name: 'task', comp: {} })
+  assertEquals(changes.find((c) => c.name == 'filed'), {
     eid,
-    name: 'task',
+    name: 'filed',
     comp: { project: 'proj-eid', priority: 2 },
   })
   // Tag and mark still stand, and nothing became a decided design.
@@ -3759,7 +3785,7 @@ Deno.test('checkRefs: an unresolvable handle in a filter is a typo, not an empty
 Deno.test('resolveRefs stays total for a handle that is gone', () => {
   let preds = resolveRefs(parseQuery('.project=vanished'), () => undefined)
   assertEquals(preds[0].value, 'vanished') // as typed, matching nothing
-  assertEquals(matchQuery({ task: { project: 'x' } }, preds), false)
+  assertEquals(matchQuery({ task: {}, filed: { project: 'x' } }, preds), false)
 })
 
 // The failure fires exactly when someone reasons from the fleet id: the
@@ -3835,7 +3861,7 @@ Deno.test('showMd: frontmatter, edge sentences, claim holder, body', () => {
   assertMatch(md, new RegExp(`entity:\n {2}eid: ${T1}\n {2}num: `))
   // comps serialize nested — status is DERIVED, not a stored task column, so
   // the frontmatter carries only real columns; wip shows through the claim below
-  assertMatch(md, /task:\n {2}priority: P0/)
+  assertMatch(md, /filed:\n {2}priority: P0/)
   assertEquals(md.includes('task.status:'), false)
   assertEquals(md.includes('status: wip'), false)
   assertMatch(md, /mail:\n {2}verified: true/)
@@ -4204,11 +4230,13 @@ Deno.test('contextDigest: scope — local work, principle memory, cwd derives', 
       }),
       ...mk(TA, 3, {
         doc: { title: 'A work' },
-        task: { priority: 1, project: PA },
+        task: {},
+        filed: { priority: 1, project: PA },
       }),
       ...mk(TB, 4, {
         doc: { title: 'B work' },
-        task: { priority: 1, project: PB },
+        task: {},
+        filed: { priority: 1, project: PB },
       }),
       ...mk(MA, 5, {
         doc: { title: 'A lesson' },
@@ -4336,11 +4364,13 @@ Deno.test('contextDigest: preview parity — project layer matches with/without 
       ...mk(P, 1, ago(1), { doc: { title: 'Proj' }, project: {} }),
       ...mk(T1p, 2, ago(2), {
         doc: { title: 'First move' },
-        task: { status: 'wip', priority: 0, project: P },
+        task: { status: 'wip' },
+        filed: { priority: 0, project: P },
       }),
       ...mk(T2p, 3, ago(5), {
         doc: { title: 'Second move' },
-        task: { priority: 1, project: P },
+        task: {},
+        filed: { priority: 1, project: P },
       }),
       ...mk(M1p, 4, ago(1), {
         doc: { title: 'A principle' },
@@ -4457,7 +4487,8 @@ Deno.test('contextDigest: resume pops this actor stack before narrative memory',
   ) => [
     { eid, name: 'entity', comp: { eid, num } },
     { eid, name: 'doc', comp: { title, body: '' } },
-    { eid, name: 'task', comp: { status: 'wip', priority: num } },
+    { eid, name: 'task', comp: { status: 'wip' } },
+    { eid, name: 'filed', comp: { priority: num } },
     ...(resume ? [{ eid, name: 'resume', comp: resume }] : []),
     ...(claim ? [{ eid, name: 'claim', comp: claim }] : []),
   ]
@@ -4651,19 +4682,13 @@ Deno.test('contextDigest: golden — every section, frozen assembly', () => {
     },
     ...mkE('T1', 4, 40),
     { eid: G + 'T1', name: 'doc', comp: { title: 'First claimed', body: '' } },
-    {
-      eid: G + 'T1',
-      name: 'task',
-      comp: { priority: 0, project: P },
-    },
+    { eid: G + 'T1', name: 'filed', comp: { priority: 0, project: P } },
+    { eid: G + 'T1', name: 'task', comp: {} },
     { eid: G + 'T1', name: 'claim', comp: { session: S, claimed_at: ago(5) } },
     ...mkE('T2', 5, 39),
     { eid: G + 'T2', name: 'doc', comp: { title: 'Second claimed', body: '' } },
-    {
-      eid: G + 'T2',
-      name: 'task',
-      comp: { priority: 1, project: P },
-    },
+    { eid: G + 'T2', name: 'filed', comp: { priority: 1, project: P } },
+    { eid: G + 'T2', name: 'task', comp: {} },
     { eid: G + 'T2', name: 'claim', comp: { session: S, claimed_at: ago(6) } },
     ...mkE('T3', 6, 30),
     mkU('T3', 2),
@@ -4672,22 +4697,16 @@ Deno.test('contextDigest: golden — every section, frozen assembly', () => {
       name: 'doc',
       comp: { title: 'Open in project', body: '' },
     },
-    {
-      eid: G + 'T3',
-      name: 'task',
-      comp: { priority: 0, project: P },
-    },
+    { eid: G + 'T3', name: 'filed', comp: { priority: 0, project: P } },
+    { eid: G + 'T3', name: 'task', comp: {} },
     ...mkE('T4', 7, 20, 'alice'),
     {
       eid: G + 'T4',
       name: 'doc',
       comp: { title: 'Actor created open', body: '' },
     },
-    {
-      eid: G + 'T4',
-      name: 'task',
-      comp: { priority: 2, project: P },
-    },
+    { eid: G + 'T4', name: 'filed', comp: { priority: 2, project: P } },
+    { eid: G + 'T4', name: 'task', comp: {} },
     ...mkE('C1', 8, 1, 'bob'),
     {
       eid: G + 'C1',
@@ -4705,11 +4724,8 @@ Deno.test('contextDigest: golden — every section, frozen assembly', () => {
     ...mkE('D1', 11, 70),
     { eid: G + 'D1', name: 'doc', comp: { title: 'A decision', body: '' } },
     { eid: G + 'D1', name: 'decided', comp: { at: ago(70), by: 'jeff' } },
-    {
-      eid: G + 'D1',
-      name: 'task',
-      comp: { priority: 0, project: P },
-    },
+    { eid: G + 'D1', name: 'filed', comp: { priority: 0, project: P } },
+    { eid: G + 'D1', name: 'task', comp: {} },
     { eid: G + 'D1', name: 'completed', comp: { at: ago(70) } },
     ...mkE('M1', 12, 80),
     {

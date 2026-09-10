@@ -23,7 +23,8 @@ let task = () => {
   let eid = uid()
   apply(db, [
     { eid, name: 'doc', comp: { title: 'a task' } },
-    { eid, name: 'task', comp: { priority: 0 } },
+    { eid, name: 'task', comp: {} },
+    { eid, name: 'filed', comp: { priority: 0 } },
   ])
   return eid
 }

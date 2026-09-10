@@ -6,7 +6,7 @@ import { assertEquals } from '@std/assert'
 Deno.test('scrubbable names content columns, never structural or audit ones', () => {
   assertEquals(scrubbable('doc', 'title'), true)
   assertEquals(scrubbable('doc', 'body'), true)
-  assertEquals(scrubbable('task', 'domain'), true)
+  assertEquals(scrubbable('filed', 'domain'), true)
   assertEquals(scrubbable('comment', 'target'), false)
   assertEquals(scrubbable('redaction', 'column'), false)
   assertEquals(scrubbable('redaction', 'hash'), false)

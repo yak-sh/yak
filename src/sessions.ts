@@ -707,7 +707,7 @@ export let tidy = async (cast: Cast) => {
 let repoOf = (row: Row) =>
   db.prepare(
     `select r.path, r.base_branch from repo r
-     join task t on t.project = r.entity where t.entity = ${idOf}`,
+     join filed t on t.project = r.entity where t.entity = ${idOf}`,
   ).get(String(row.requested_task)) as
     | { path: string; base_branch: string }
     | undefined
@@ -2006,8 +2006,9 @@ export let spawned =
     let ad = adapters[String(row.spawn_provider)]
     let task = row.requested_task
       ? db.prepare(`
-      select ${refEid('t.project')} as project, e.num, d.title, d.body
+      select ${refEid('f.project')} as project, e.num, d.title, d.body
       from task t
+      left join filed f on f.entity = t.entity
       join entity e on e.id = t.entity
       left join doc_value d on d.entity = t.entity
       where t.${OWNED}

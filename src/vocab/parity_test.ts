@@ -169,8 +169,8 @@ Deno.test('parity: dotted paths aim through references', () => {
     { comp: 'comment', prop: 'target' },
     { comp: 'doc', prop: 'title' },
   ])
-  assertEquals(v.aim('task.project.doc.title'), [
-    { comp: 'task', prop: 'project' },
+  assertEquals(v.aim('filed.project.doc.title'), [
+    { comp: 'filed', prop: 'project' },
     { comp: 'doc', prop: 'title' },
   ])
   assertEquals(v.aim('created.by'), [{ comp: 'created', prop: 'by' }])

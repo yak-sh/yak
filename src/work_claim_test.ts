@@ -21,7 +21,8 @@ let task = (
   extra: Change[] = [],
 ): Change[] => [
   { eid, name: 'doc', comp: { title: eid.slice(0, 8), body: '' } },
-  { eid, name: 'task', comp: { project } },
+  { eid, name: 'task', comp: {} },
+  { eid, name: 'filed', comp: { project } },
   ...extra,
 ]
 

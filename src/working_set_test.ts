@@ -42,14 +42,16 @@ Deno.test('working set seeds the chrome only, never the long tail', () => {
     // The pinned task is what the card points at. It is NOT boot cargo: the
     // Card holds a route sub for it (live.ts routeSub, T-22371).
     { eid: pinnedTask, name: 'doc', comp: { title: 'pinned', body: 'x' } },
-    { eid: pinnedTask, name: 'task', comp: { priority: 0 } },
+    { eid: pinnedTask, name: 'task', comp: {} },
+    { eid: pinnedTask, name: 'filed', comp: { priority: 0 } },
     // A project — a defining set (nav lists it).
     { eid: project, name: 'doc', comp: { title: 'Proj', body: '' } },
     { eid: project, name: 'project', comp: {} },
     // The long tail: a task on no canvas, and a memory. NEITHER is defining
     // and NEITHER is a card target — the whole-graph snapshot shipped both.
     { eid: coldTask, name: 'doc', comp: { title: 'cold', body: '' } },
-    { eid: coldTask, name: 'task', comp: { priority: 0 } },
+    { eid: coldTask, name: 'task', comp: {} },
+    { eid: coldTask, name: 'filed', comp: { priority: 0 } },
     { eid: mem, name: 'doc', comp: { title: 'a lesson', body: 'widgets rot' } },
     { eid: mem, name: 'memory', comp: {} },
   ])
@@ -86,7 +88,8 @@ Deno.test('working set carries NO edges — a rider delivers them scoped', () =>
     { eid: card, name: 'card', comp: { target: task, view: 'text' } },
     { eid: card, name: 'pin', comp: { canvas, x: 0, y: 0, w: 1, h: 1, z: 0 } },
     { eid: task, name: 'doc', comp: { title: 't', body: '' } },
-    { eid: task, name: 'task', comp: { priority: 0 } },
+    { eid: task, name: 'task', comp: {} },
+    { eid: task, name: 'filed', comp: { priority: 0 } },
     // An edge between two entities. The boot used to ship every one of these
     // (4,909 on a copy of the live graph — 557 KB, 81% of the whole join frame)
     // because an edge had no other way to reach a client; the rider is that way

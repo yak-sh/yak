@@ -92,7 +92,8 @@ slow(
       }),
       ...ent(T, 3, {
         doc: { title: 'A task', body: '' },
-        task: { project: P },
+        task: {},
+        filed: { project: P },
         decided: {},
         created: { at: '2026-01-01', by: P },
       }),
@@ -130,12 +131,14 @@ slow(
     await post([
       ...ent(guarded, 5, {
         doc: { title: 'Guarded task', body: '' },
-        task: { project: P },
+        task: {},
+        filed: { project: P },
         decided: {},
       }),
       ...ent(wrongTask, 6, {
         doc: { title: 'Wrong task identity', body: '' },
-        task: { project: P },
+        task: {},
+        filed: { project: P },
       }),
       ...ent(design, 7, {
         doc: { title: 'Wrong design identity', body: '' },
@@ -214,17 +217,20 @@ slow(
     await post([
       ...ent(sourceFailed, 10, {
         doc: { title: 'Source refusal', body: '' },
-        task: { project: P },
+        task: {},
+        filed: { project: P },
         proposed: {},
       }),
       ...ent(sourceA, 11, {
         doc: { title: 'Source claim A', body: '' },
-        task: { project: P },
+        task: {},
+        filed: { project: P },
         decided: {},
       }),
       ...ent(sourceB, 12, {
         doc: { title: 'Source claim B', body: '' },
-        task: { project: P },
+        task: {},
+        filed: { project: P },
         decided: {},
       }),
     ])
@@ -307,7 +313,8 @@ slow(
     let racing = uid(4)
     await post(ent(racing, 4, {
       doc: { title: 'Racing task', body: '' },
-      task: { project: P },
+      task: {},
+      filed: { project: P },
       decided: {},
     }))
     let attempt = (session: string) =>

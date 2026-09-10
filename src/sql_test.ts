@@ -115,32 +115,37 @@ put('w5', { doc: { title: 'no stamps at all' } })
 put('sc', { session: { id: 'sc' } })
 put('e1', {
   doc: { title: 'alpha widget', body: 'the first one' },
-  task: { priority: 1, domain: 'Eng', project: 'p1' },
+  task: {},
+  filed: { priority: 1, domain: 'Eng', project: 'p1' },
   proposed: { at: '2026-08-01T00:00:00.000Z', by: null, via: null },
 })
 put('e2', {
   doc: { title: 'beta WIDGET', body: '100% sure' },
-  task: { priority: 2, domain: 'Ops', project: 'p1' },
+  task: {},
+  filed: { priority: 2, domain: 'Ops', project: 'p1' },
   // wip is derived from an active claim (D-24102), not a stored column.
   claim: { session: 'sc' },
 })
 put('e3', {
   doc: { title: 'gamma', body: 'under_score' },
-  task: { priority: 0, domain: '', project: null },
+  task: {},
+  filed: { priority: 0, domain: '', project: null },
   // done is derived from a completed mark (D-24102), not a stored column.
   completed: { at: '2026-08-02T00:00:00.000Z', by: null },
 })
 put('e4', { doc: { title: 'delta', body: '' } }) // no task component at all
 put('e5', {
   doc: { title: '10', body: 'digits in a text column' },
-  task: { priority: 10, domain: '9' },
+  task: {},
+  filed: { priority: 10, domain: '9' },
 })
 // Cancellation has highest precedence even if stale lower-priority lifecycle
 // facets coexist. This one row makes every status agreement case exercise the
 // full cancelled → completed → claim → open ordering, not just each mark alone.
 put('e9', {
   doc: { title: 'cancelled task' },
-  task: { priority: 3 },
+  task: {},
+  filed: { priority: 3 },
   claim: { session: 'sc' },
   completed: { at: '2026-08-02T00:00:00.000Z', by: null },
   cancelled: { at: '2026-08-03T00:00:00.000Z', by: null, reason: 'superseded' },
@@ -158,7 +163,7 @@ put('e8', { proposed: { at: '', by: null, via: null } })
 // is a task, not a project. It is the case presence (`.project!`) cannot tell
 // from a bare project and kind= must — the row kind=task keeps and kind=project
 // drops.
-put('pt', { task: { priority: 1, domain: '' }, project: {} })
+put('pt', { task: {}, filed: { priority: 1, domain: '' }, project: {} })
 
 // The lazy entry partition lives in the entity table like everything else, so
 // the index and the matcher must agree over its facets too — the exactness the
@@ -296,7 +301,9 @@ let graph = () => {
     (db.prepare('select name from pragma_table_info(?)').all(t) as {
       name: string
     }[]).map((r) => r.name).filter((c) => c != 'entity')
-  for (let comp of [...new Set([...kindOrder, 'proposed', ...facets])]) {
+  for (
+    let comp of [...new Set([...kindOrder, 'filed', 'proposed', ...facets])]
+  ) {
     let proj = colsOf(comp).map((c) =>
       isRef(comp, c)
         ? `(select __r.eid from entity __r where __r.id = "${comp}"."${c}") as "${c}"`
@@ -361,18 +368,18 @@ let COMPILES = [
   '.content.body~=',
   // equality, the plain case and the one where affinity would betray it
   '.task.status=open',
-  '.task.priority=1',
-  '.task.priority=10',
+  '.filed.priority=1',
+  '.filed.priority=10',
   '.doc.title=10',
-  '.task.domain=Eng',
+  '.filed.domain=Eng',
   // any-of
   '.task.status=open,wip',
-  '.task.priority=0,10',
+  '.filed.priority=0,10',
   '.task.status=open,wip,done',
   '.task.status=cancelled',
   // absent-or-empty, over a null column, an empty string, and a missing comp
-  '.task.project=',
-  '.task.domain=',
+  '.filed.project=',
+  '.filed.domain=',
   '.task.status=',
   // facet presence is the component row itself, not one nullable column
   '.proposed=',
@@ -381,54 +388,54 @@ let COMPILES = [
   '.proposed.at!',
   // negation
   '.task.status!=done',
-  '.task.priority!=1',
-  '.task.project!=',
+  '.filed.priority!=1',
+  '.filed.project!=',
   // contains, including the characters LIKE would have read as wildcards
   '.doc.title~=widget',
   '.doc.title~=WIDGET',
   '.doc.title~=',
   // a numeric operand that no JS number stringifies to: JS matches nothing
-  '.task.priority=1.0',
-  '.task.priority=01',
+  '.filed.priority=1.0',
+  '.filed.priority=01',
   // comparisons on a numeric column
-  '.task.priority<=1',
+  '.filed.priority<=1',
   // a text column against a non-numeric operand is a string compare for every
   // row, since cmp() only goes numeric when BOTH sides parse
   '.doc.title>=alpha',
   '.doc.title<gamma',
-  '.task.priority<1',
-  '.task.priority>=2',
-  '.task.priority>2',
+  '.filed.priority<1',
+  '.filed.priority>=2',
+  '.filed.priority>2',
   // ranges, inclusive and exclusive
-  '.task.priority=0..2',
-  '.task.priority=0...2',
-  '.task.priority=1..10',
+  '.filed.priority=0..2',
+  '.filed.priority=0...2',
+  '.filed.priority=1..10',
   // several preds AND together
-  '.task.status=open&.task.priority=1',
+  '.task.status=open&.filed.priority=1',
   '.task.status=open,wip&.doc.title~=widget',
-  '.task.status=open&.task.domain=Eng',
+  '.task.status=open&.filed.domain=Eng',
   // Forward paths: one-to-one reference dereferences compile as correlated
   // indexed lookups. Cover scalar/ref/derived/component leaves, a second hop,
   // and the broken-link NULL semantics where `!=` and absence still hold.
   // an eid equality over a reference column is an int comparison against a
   // spine lookup (refEq), any-of and `!=` included; a range or an empty part
   // stays on the text road
-  '.task.project=p1',
-  '.task.project=p1,nope',
-  '.task.project=nope',
-  '.task.project!=p1',
-  '.task.project=p1,',
+  '.filed.project=p1',
+  '.filed.project=p1,nope',
+  '.filed.project=nope',
+  '.filed.project!=p1',
+  '.filed.project=p1,',
   '.comment.target=e1',
   '.comment.target=e1,e2',
   '.comment.target!=e1',
-  '.task.project.doc.title=a project',
-  '.task.project.doc.title~=PROJECT',
-  '.task.project.doc.title!=other',
-  '.task.project.project!',
-  '.task.project.archived=',
-  '.comment.target.task.project=p1',
+  '.filed.project.doc.title=a project',
+  '.filed.project.doc.title~=PROJECT',
+  '.filed.project.doc.title!=other',
+  '.filed.project.project!',
+  '.filed.project.archived=',
+  '.comment.target.filed.project=p1',
   '.comment.target.task.status=open',
-  '.comment.target.task.project.doc.title=a project',
+  '.comment.target.filed.project.doc.title=a project',
   // the SPINE, which is the from table rather than a joined one — how `task
   // show T-3` asks its question, and the one component whose join would be
   // to itself
@@ -577,7 +584,7 @@ for (let q of COMPILES) {
 // own agreement case rather than by accident.
 let DECLINES = [
   '.doc.body=', // a body is only ever narrowed by the index, never scanned
-  '.task.domain>=1', // text column against a numeric operand
+  '.filed.domain>=1', // text column against a numeric operand
   // explicit substring filters shorter than a trigram still decline
   '.doc.body~=a',
   '.doc.body~=ab',
@@ -589,7 +596,7 @@ let DECLINES = [
   // A path body has a different owner from the outer row, so doc_gram's
   // outer-doc narrowing cannot be reused. It declines instead of emitting a
   // dangling `doc.rowid` reference.
-  '.task.project.doc.body~=project',
+  '.filed.project.doc.body~=project',
   // the reverse-union's presence/absence admit rows in no reverse map, so SQL
   // declines them (as the anchor does) and the matcher answers
   '.refs!',
@@ -819,12 +826,12 @@ Deno.test('a request joins no table, and narrows nothing', () => {
 // binds in that order. A change to any of it is a change to every query the
 // server answers, so it is spelled here rather than derived.
 let SKELETON = 'select "entity"."eid" as eid from "entity"' +
-  ' left join "task" on "task"."entity" = "entity"."id"' +
-  ' where cast("task"."domain" as text) = ?' +
+  ' left join "filed" on "filed"."entity" = "entity"."id"' +
+  ' where cast("filed"."domain" as text) = ?' +
   ' and not exists (select 1 from tombstone "t" where "t"."entity" = "entity"."id")'
 
 Deno.test('the compiled skeleton is unchanged, clause for clause', () => {
-  let ps = parseQuery('.task.domain=Eng')
+  let ps = parseQuery('.filed.domain=Eng')
   assertEquals(toSql(where(ps)!), { sql: SKELETON, params: ['Eng'] })
   assertEquals(toSql(countSql(ps)!), {
     sql: SKELETON.replace(

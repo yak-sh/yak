@@ -52,13 +52,15 @@ let seed = () => {
 
     { eid: B, name: 'entity', comp: { eid: B } },
     { eid: B, name: 'doc', comp: { title: 'It broke', body: 'a stack' } },
-    { eid: B, name: 'task', comp: { priority: 2, project: P } },
+    { eid: B, name: 'task', comp: {} },
+    { eid: B, name: 'filed', comp: { priority: 2, project: P } },
     { eid: B, name: 'bug', comp: { fault: 'boom' } },
     { eid: B, name: 'created', comp: { at: ago(9999) } },
 
     { eid: D, name: 'entity', comp: { eid: D } },
     { eid: D, name: 'doc', comp: { title: 'the desk' } },
-    { eid: D, name: 'task', comp: { priority: 3, project: P } },
+    { eid: D, name: 'task', comp: {} },
+    { eid: D, name: 'filed', comp: { priority: 3, project: P } },
     { eid: D, name: 'alias', comp: { slug: DESK.task } },
     { eid: D, name: 'created', comp: { at: ago(9999) } },
 

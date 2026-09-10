@@ -267,15 +267,15 @@ let go = (id: string, ctx: Ctx): Result => {
 // its query's scalar equalities — the same adopt() a board drop uses, so
 // the task JOINS the board — a project hands over itself, and a task the
 // project it belongs to.
-let inherit = (ctx: Ctx): Record<string, unknown> => {
+let inherit = (ctx: Ctx): Record<string, Record<string, unknown>> => {
   let r = ctx.eid ? graphOf(ctx).find(ctx.eid) : undefined
   if (!r) return {}
   if (r.comps.board) {
-    return adopt(parseQuery(String(r.comps.board.query ?? '')), 'task')
+    return adopt(parseQuery(String(r.comps.board.query ?? '')))
   }
-  if (r.comps.project) return { project: r.eid }
-  let p = r.comps.task?.project
-  return p ? { project: p } : {}
+  if (r.comps.project) return { filed: { project: r.eid } }
+  let p = r.comps.filed?.project
+  return p ? { filed: { project: p } } : {}
 }
 
 // :delete tombstones the focused entity — or the one the line names. The one
@@ -396,7 +396,7 @@ let card = (kind: typeof cardCommands[number]): Command => ({
     let ps = readParams(args, ctx)
     let grouped = typed?.grouped ?? patches(ps)
     let allowed = kind == 'task'
-      ? ['doc', 'task', 'accept']
+      ? ['doc', 'task', 'filed', 'accept']
       : kind == 'memory'
       ? ['doc', 'memory']
       : [kind]
@@ -457,11 +457,14 @@ export let commands: Record<string, Command> = {
     run: (rest, ctx) => {
       let { title, body, grouped } = spec(rest, ctx.read)
       if (!title) throw new Error('new: needs a title')
+      let inherited = inherit(ctx)
+      for (let [comp, values] of Object.entries(inherited)) {
+        grouped[comp] = { ...values, ...grouped[comp] }
+      }
       return {
         changes: taskChanges(uuid(), {
           ...grouped,
           doc: { title, body, ...grouped.doc },
-          task: { ...inherit(ctx), ...grouped.task },
         }),
         msg: `new: ${title}`,
       }
@@ -504,13 +507,13 @@ export let commands: Record<string, Command> = {
       }
       let { title, body, grouped } = spec(text, ctx.read)
       if (!title) throw new Error('fix: needs a title')
-      let task = { ...grouped.task }
-      if (!task.project) {
+      let filed = { ...grouped.filed }
+      if (!filed.project) {
         let tasks = g.find('tasks')
-        if (tasks?.comps.project) task.project = tasks.eid
+        if (tasks?.comps.project) filed.project = tasks.eid
         else {
           let repos = g.select('.repo! .project!')
-          if (repos.length == 1) task.project = repos[0].eid
+          if (repos.length == 1) filed.project = repos[0].eid
         }
       }
       let eid = uuid()
@@ -518,7 +521,7 @@ export let commands: Record<string, Command> = {
         changes: taskChanges(eid, {
           ...grouped,
           doc: { title, body, ...grouped.doc },
-          task,
+          filed,
         }),
         spawn: eid,
         msg: `fix: ${title}`,
@@ -737,7 +740,7 @@ export let commands: Record<string, Command> = {
         )
       }
       let words = more.filter(Boolean).join(' ')
-      let toEid = to?.eid ?? (r.comps.task?.project as string | undefined)
+      let toEid = to?.eid ?? (r.comps.filed?.project as string | undefined)
       if (!toEid) {
         throw new Error('knock: name a recipient (:knock homelab …)')
       }

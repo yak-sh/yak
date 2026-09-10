@@ -43,7 +43,8 @@ cache.value = {
   t: {
     entity: { eid: 't', num: 1 },
     doc: { eid: 't', title: 'Bench task', body: 'body text' },
-    task: { eid: 't', priority: 1 },
+    task: { eid: 't' },
+    filed: { eid: 't', priority: 1 },
   },
 }
 let e = ent('t')

@@ -110,7 +110,8 @@ slow(
     let p = uid(), t1 = uid(), t2 = uid(), session = uid()
     let task = (eid: string) => [
       { eid, name: 'doc', comp: { title: 'work', body: '' } },
-      { eid, name: 'task', comp: { project: p } },
+      { eid, name: 'task', comp: {} },
+      { eid, name: 'filed', comp: { project: p } },
     ]
     assertEquals(await post([{ eid: p, name: 'project', comp: {} }]), 200)
     assertEquals(
@@ -124,7 +125,7 @@ slow(
     assertEquals(await post(task(t1)), 200)
     assertEquals(await post(task(t2)), 200)
 
-    let q = `.task.project=${p}&.tally=task.status`
+    let q = `.filed.project=${p}&.tally=task.status`
     let { sock, next } = await dial(q, 'agg:tile')
     assertEquals((await next()).agg, { open: 2 })
 
@@ -154,13 +155,14 @@ slow('a count sub answers one number and maintains it', alone, async () => {
   let p = uid(), t1 = uid(), t2 = uid()
   let task = (eid: string) => [
     { eid, name: 'doc', comp: { title: 'c', body: '' } },
-    { eid, name: 'task', comp: { project: p } },
+    { eid, name: 'task', comp: {} },
+    { eid, name: 'filed', comp: { project: p } },
   ]
   assertEquals(await post([{ eid: p, name: 'project', comp: {} }]), 200)
   assertEquals(await post(task(t1)), 200)
 
   let { sock, next } = await dial(
-    `.task.project=${p}&.count!`,
+    `.filed.project=${p}&.count!`,
     'agg:count',
   )
   assertEquals((await next()).agg, { '': 1 })
@@ -170,7 +172,11 @@ slow('a count sub answers one number and maintains it', alone, async () => {
 
   // Leaving the selection counts the same as dying.
   assertEquals(
-    await post([{ eid: t2, name: 'task', comp: { project: null } }]),
+    await post([{ eid: t2, name: 'task', comp: {} }, {
+      eid: t2,
+      name: 'filed',
+      comp: { project: null },
+    }]),
     200,
   )
   assertEquals((await next()).agg, { '': 1 })

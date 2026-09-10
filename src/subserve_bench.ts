@@ -35,7 +35,8 @@ let eids = Array.from({ length: 600 }, uid)
 eids.forEach((eid, i) =>
   apply(db, [
     { eid, name: 'doc', comp: { title: `Task ${i}`, body: 'b'.repeat(120) } },
-    { eid, name: 'task', comp: { priority: i % 3, project: PROJ } },
+    { eid, name: 'task', comp: {} },
+    { eid, name: 'filed', comp: { priority: i % 3, project: PROJ } },
     ...(i % 4 == 0 ? [{ eid, name: 'completed', comp: {} }] : []),
   ])
 )
@@ -129,7 +130,7 @@ for (
 ) held.frame({ sub, q }, sink)
 
 let touched: Change[] = [
-  { eid: eids[7], name: 'task', comp: { priority: 2 } },
+  { eid: eids[7], name: 'filed', comp: { priority: 2 } },
 ]
 Deno.bench('subserve: fold one commit across five open subs', () => {
   held.maintain(touched, cursorOf(db))

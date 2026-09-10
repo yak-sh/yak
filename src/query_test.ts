@@ -57,12 +57,8 @@ let row = (
   created: { at: '2026-07-01' },
   updated: { at: '2026-07-16' },
   doc: { title: 'Fix the flux capacitor', body: '' },
-  task: {
-    priority: 1,
-    project: 'p1',
-    domain: 'Ops',
-    ...task,
-  },
+  task: { status: task.status },
+  filed: { priority: 1, project: 'p1', domain: 'Ops', ...task },
   ...extra,
 })
 
@@ -282,8 +278,7 @@ Deno.test('query: bad tokens are loud, bare words are terms', () => {
   assertThrows(
     () => parseQuery('.task.eels=9'),
     Error,
-    'no such prop: .task.eels — task has priority (number), project (eid), ' +
-      'assignee (eid), domain (text), status (open|wip|done|cancelled)',
+    'no such prop: .task.eels — task has status (open|wip|done|cancelled)',
   )
   assertThrows(
     () => parseQuery('.blob.data=x'),
@@ -383,20 +378,20 @@ Deno.test('query: adopt pins down scalar equalities only', () => {
     '.project=p1&.priority=2&.domain=Ops,Eng&.status!=done&.num=1..9&.title~=x',
   )
   // lists, ranges, negations, contains and other comps pin nothing down
-  assertEquals(adopt(preds, 'task'), { project: 'p1', priority: 2 })
+  assertEquals(adopt(preds, 'filed'), { project: 'p1', priority: 2 })
   assertEquals(adopt(preds, 'doc'), {})
   assertEquals(adopt(parseQuery(''), 'task'), {})
   // assignee rides the same generality: a board of Jeff's plate adopts — and a
   // status equality is a scalar too, so the derived .status=open pins down.
   assertEquals(
-    adopt(parseQuery('.assignee=u1&.status=open'), 'task'),
-    { assignee: 'u1', status: 'open' },
+    adopt(parseQuery('.assignee=u1&.status=open')),
+    { filed: { assignee: 'u1' }, task: { status: 'open' } },
   )
 })
 
 Deno.test('query: assignee routes bare and filters', () => {
   let p = pred('.assignee=u1')!
-  assertEquals([p.comp, p.prop, p.op], ['task', 'assignee', ''])
+  assertEquals([p.comp, p.prop, p.op], ['filed', 'assignee', ''])
   assert(matchQuery(row({ assignee: 'u1' }), [p]))
   assert(!matchQuery(row({ assignee: 'u2' }), [p]))
   assert(!matchQuery(row({}), [p]))
@@ -444,12 +439,12 @@ Deno.test('reverse hop: association names derive from the vocabulary', () => {
   })
   assertEquals(reverseAssocs.get('memories'), { comp: 'memory', prop: 'scope' })
   assertEquals(reverseAssocs.get('tasks'), undefined) // task has two ref cols
-  assertEquals(reverseAssocs.get('tasks_project'), {
-    comp: 'task',
+  assertEquals(reverseAssocs.get('fileds_project'), {
+    comp: 'filed',
     prop: 'project',
   })
-  assertEquals(reverseAssocs.get('tasks_assignee'), {
-    comp: 'task',
+  assertEquals(reverseAssocs.get('fileds_assignee'), {
+    comp: 'filed',
     prop: 'assignee',
   })
 })
@@ -545,12 +540,12 @@ Deno.test('.refs resolves its value like any id at delivery', () => {
 
 Deno.test('.distinct / .tally parse to an AGG projection over one column', () => {
   assertEquals(preds('.distinct=domain'), [
-    { comp: 'task', prop: 'domain', op: AGG, value: '', agg: 'distinct' },
+    { comp: 'filed', prop: 'domain', op: AGG, value: '', agg: 'distinct' },
   ])
   assertEquals(preds('.tally=domain')![0].agg, 'tally')
   // the explicit component spelling routes the same column
-  assertEquals(preds('.distinct=task.domain')![0], {
-    comp: 'task',
+  assertEquals(preds('.distinct=filed.domain')![0], {
+    comp: 'filed',
     prop: 'domain',
     op: AGG,
     value: '',
@@ -572,7 +567,7 @@ Deno.test('an aggregate rides the pred list without filtering, read via aggOf', 
   let ps = parseQuery('.distinct=domain')
   assert(rows.every((r) => matchQuery(r, ps))) // the directive filters nothing
   let agg = aggOf(ps)!
-  assertEquals(agg, { op: 'distinct', at: { comp: 'task', prop: 'domain' } })
+  assertEquals(agg, { op: 'distinct', at: { comp: 'filed', prop: 'domain' } })
   // distinct is sorted with the empty dropped; tally counts each value
   assertEquals(distinctValues(rows, agg.at), ['Eng', 'Ops'])
   assertEquals(tally(rows, agg.at).get('Ops'), 2)
@@ -971,7 +966,7 @@ Deno.test('time: >= takes the start, <= the end', () => {
   assertEquals(matchQuery(when(old), parseQuery('.updated.at<today')), true)
 })
 Deno.test('time: a string row named today stays a string', () => {
-  let c = { task: { domain: 'today' } }
+  let c = { task: {}, filed: { domain: 'today' } }
   assertEquals(matchQuery(c, parseQuery('.domain=today')), true)
 })
 
@@ -1173,7 +1168,7 @@ Deno.test('venture columns route qualified; incumbents keep bare', () => {
 
 Deno.test('references route and filter by their own names', () => {
   assertEquals(pred('.assignee=u1'), {
-    comp: 'task',
+    comp: 'filed',
     prop: 'assignee',
     op: '',
     value: 'u1',
@@ -1244,7 +1239,7 @@ Deno.test('paths: a component first segment stays the explicit spelling', () => 
 
 Deno.test('paths: .assignee.title walks the reference', () => {
   assertEquals(pred('.assignee.title~=jeff'), {
-    comp: 'task',
+    comp: 'filed',
     prop: 'assignee',
     op: '~',
     value: 'jeff',
@@ -1306,28 +1301,28 @@ Deno.test('paths: the owner example resolves through a target entity', () => {
 })
 
 Deno.test('paths: a chain derefs each reference in turn (two hops)', () => {
-  // comment → target (a task) → task.project → doc.title: two `{eid}` derefs
-  // then the leaf. `.project` names a component, so the explicit `.task.project`
+  // comment → target (a task) → filed.project → doc.title: two `{eid}` derefs
+  // then the leaf. `.project` names a component, so the explicit `.filed.project`
   // spelling is how a chain derefs it — the escape hatch for any ref whose
   // name collides with a component's.
   let world: Record<string, Record<string, Record<string, unknown>>> = {
-    task1: { doc: { title: 't' }, task: { project: 'proj1' } },
+    task1: { doc: { title: 't' }, task: {}, filed: { project: 'proj1' } },
     proj1: { doc: { title: 'Task Graph' }, project: {} },
     proj2: { doc: { title: 'Other' }, project: {} },
   }
   let ent = (e: string) => world[e]
   let comment = (target: string) => ({ comment: { target } })
-  let ps = parseQuery('.comment.target.task.project.doc.title~=graph')
+  let ps = parseQuery('.comment.target.filed.project.doc.title~=graph')
   assertEquals(ps[0].at, [
-    { comp: 'task', prop: 'project' },
+    { comp: 'filed', prop: 'project' },
     { comp: 'doc', prop: 'title' },
   ])
   assert(matchQuery(comment('task1'), ps, ent))
-  world.task1.task!.project = 'proj2'
+  world.task1.filed!.project = 'proj2'
   assert(!matchQuery(comment('task1'), ps, ent))
 })
 
-// A path-LEAF component-presence — `.task.project.archived!` — tests whether
+// A path-LEAF component-presence — `.filed.project.archived!` — tests whether
 // the far entity WEARS the component, the counterpoint to the depth-0
 // `.blocked!` presence test one hop out. `!`/`~=` hold when it is present, `=`
 // when absent; a broken link reads as absent, same as any null column. (Before
@@ -1338,15 +1333,15 @@ Deno.test('paths: a component-presence leaf tests the far entity (T-17677)', () 
     shelved: { project: {}, archived: { at: '2026-08-01' } },
   }
   let ent = (e: string) => world[e]
-  let task = (project: string) => ({ task: { project } })
+  let task = (project: string) => ({ task: {}, filed: { project } })
 
-  let present = parseQuery('.task.project.archived!')
+  let present = parseQuery('.filed.project.archived!')
   assertEquals(present[0].at, [{ comp: 'archived', prop: '' }])
   assert(matchQuery(task('shelved'), present, ent)) // project wears archived
   assert(!matchQuery(task('open'), present, ent)) // project lacks it
   assert(!matchQuery(task('gone'), present, ent)) // broken link reads absent
 
-  let absent = parseQuery('.task.project.archived=')
+  let absent = parseQuery('.filed.project.archived=')
   assert(!matchQuery(task('shelved'), absent, ent))
   assert(matchQuery(task('open'), absent, ent))
   assert(matchQuery(task('gone'), absent, ent)) // no target counts as absent
@@ -1356,13 +1351,13 @@ Deno.test('paths: a bare non-colliding ref chains too (assignee)', () => {
   // comment → target (task) → assignee (a user) → doc.title, where `assignee`
   // is a bare ref hop (no component wears its name), mixed with explicit hops.
   let world: Record<string, Record<string, Record<string, unknown>>> = {
-    task1: { task: { assignee: 'u1' } },
+    task1: { task: {}, filed: { assignee: 'u1' } },
     u1: { doc: { title: 'Jeff Peterson' } },
   }
   let ent = (e: string) => world[e]
   let ps = parseQuery('.comment.target.assignee.title~=jeff')
   assertEquals(ps[0].at, [
-    { comp: 'task', prop: 'assignee' },
+    { comp: 'filed', prop: 'assignee' },
     { comp: 'doc', prop: 'title' },
   ])
   assert(matchQuery({ comment: { target: 'task1' } }, ps, ent))
@@ -1424,7 +1419,7 @@ let has: [string, string, string, string][] = [
   ['doc prop', '.', '.title', 'doc'],
   ['spine is stamped', '.', '.num', 'entity · stamped'],
   ['recall bare + stamped', '.', '.count', 'recall · stamped'],
-  ['reference', '.', '.assignee', 'task · ref'],
+  ['reference', '.', '.assignee', 'filed · ref'],
   ['shared reference', '.', '.actor', 'ref'],
   ['prefix keeps the comp', '.mem', '.memory.', 'comp'],
   ['comp columns', '.memory.', '.memory.scope', 'memory'],
@@ -1468,7 +1463,7 @@ let has: [string, string, string, string][] = [
     'chain fresh far side',
     '.comment.target.',
     '.comment.target.assignee',
-    'task · ref',
+    'filed · ref',
   ],
   [
     'chain leaf value',
@@ -1560,8 +1555,8 @@ Deno.test('sunk: own stamp, or the project the task is filed under', () => {
   assertEquals(sunk({ project: {}, archived: { at: 'x' } }), true)
   assertEquals(sunk({ project: {} }), false)
   assertEquals(sunk({ archived: { at: 'x' } }), false)
-  assertEquals(sunk({ task: { project: P } }, look), true)
-  assertEquals(sunk({ task: { project: 'live' } }, look), false)
+  assertEquals(sunk({ task: {}, filed: { project: P } }, look), true)
+  assertEquals(sunk({ task: {}, filed: { project: 'live' } }, look), false)
   assertEquals(sunk({ task: {} }, look), false)
 })
 
@@ -1752,4 +1747,22 @@ Deno.test('prefix optional/missing components share the full query grammar', () 
   )
   assertEquals(pred('?memory'), pred('.memory?'))
   assertEquals(matchQuery(row({}), parseQuery('?memory')), true)
+})
+
+Deno.test('adopt groups routed equalities, never a reference path or comparison', () => {
+  assertEquals(
+    adopt(
+      parseQuery(
+        '.project=p1 .priority=P2 .status=open .review.verdict=approved .title~=needle .assignee.title=Jeff .domain=Ops,Eng',
+      ),
+    ),
+    {
+      filed: { project: 'p1', priority: 2 },
+      task: { status: 'open' },
+      review: { verdict: 'approved' },
+    },
+  )
+  for (let col of ['project', 'priority', 'assignee', 'domain']) {
+    assertThrows(() => parseQuery(`.task.${col}=x`), Error, 'no such prop')
+  }
 })

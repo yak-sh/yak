@@ -88,10 +88,10 @@ export let Relate = ({ e }: { e: Ent }) => {
       ...taskChanges(id, {
         ...grouped,
         doc: { title, body, ...grouped.doc },
-        task: {
-          project: e.task?.project ?? null,
-          domain: e.task?.domain ?? null,
-          ...grouped.task,
+        task: { ...grouped.task },
+        filed: {
+          project: e.filed?.project ?? null,
+          domain: e.filed?.domain ?? null,
         },
       }),
       ...edge(verb, id),

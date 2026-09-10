@@ -58,7 +58,8 @@ eids.forEach((eid, i) => {
         } and windows\n`.repeat(3),
       },
     },
-    { eid, name: 'task', comp: { priority: i % 3, project: PROJ } },
+    { eid, name: 'task', comp: {} },
+    { eid, name: 'filed', comp: { priority: i % 3, project: PROJ } },
     ...(i % 4 == 0 ? [{ eid, name: 'completed', comp: {} }] : []),
     ...(i % 97 == 0 ? [{ eid, name: 'claim', comp: { session: SESS } }] : []),
   ])

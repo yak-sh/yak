@@ -317,7 +317,7 @@ straight back means the entity it named:
     let [entry] = await query('.doc.title~=Fig&.created!')
     await apply({
       entity: { eid: entry.entity.eid },
-      task: { assignee: entry.created.by },   // {eid, name} writes as the eid
+      task: {}, filed: { assignee: entry.created.by },   // {eid, name} writes as the eid
     })
 
 A guest on an `open` app has nothing to name. Their `created.by` is null, which

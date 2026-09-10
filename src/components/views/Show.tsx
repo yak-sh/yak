@@ -150,7 +150,7 @@ export let Pip = ({ e }: { e: Ent }) => {
 let Rank = ({ e }: { e: Ent }) => (
   <Prop
     eid={e.eid}
-    comp='task'
+    comp='filed'
     prop='priority'
     editable
     name='priority'
@@ -161,7 +161,7 @@ let Rank = ({ e }: { e: Ent }) => (
 let Facet = ({ e }: { e: Ent }) => (
   <Prop
     eid={e.eid}
-    comp='task'
+    comp='filed'
     prop='domain'
     editable
     name='domain'
@@ -195,7 +195,7 @@ let By = (
 let Plate = ({ e }: { e: Ent }) => (
   <Prop
     eid={e.eid}
-    comp='task'
+    comp='filed'
     prop='assignee'
     editable
     handle
@@ -211,7 +211,7 @@ let Plate = ({ e }: { e: Ent }) => (
 let Home = ({ e }: { e: Ent }) => (
   <Prop
     eid={e.eid}
-    comp='task'
+    comp='filed'
     prop='project'
     editable
     handle
@@ -445,13 +445,13 @@ export let Boards = ({ e }: { e: Ent }) => {
 // page is a working view; the full history lives on its boards.
 export let Tasks = ({ e }: { e: Ent }) => {
   let ids = useBacklinks(e.eid)
-    .filter((b) => b.via == 'task.project')
+    .filter((b) => b.via == 'filed.project')
     .map((b) => ent(b.from))
     .filter((t) => t.task && !settled(statusOf(t)))
     .sort((a, b) =>
       statuses.findIndex((s) => s == statusOf(a)) -
         statuses.findIndex((s) => s == statusOf(b)) ||
-      a.task!.priority - b.task!.priority
+      (a.filed?.priority ?? 0) - (b.filed?.priority ?? 0)
     )
   if (!ids.length) return null
   return (

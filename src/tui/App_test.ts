@@ -42,7 +42,8 @@ let task = (body?: string): Ent => ({
   num: 1,
   kind: 'task',
   doc: { eid, title: 'One', ...(body === undefined ? {} : { body }) },
-  task: { eid, priority: 1.5 },
+  task: { eid },
+  filed: { eid, priority: 1.5 },
   refs: [],
   kids: [],
 })

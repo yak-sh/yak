@@ -1670,7 +1670,8 @@ let sub: Snapshot = {
     { eid: S, name: 'session', comp: { id: 'sub-1', agent_type: 'general' } },
     { eid: T, name: 'entity', comp: { eid: T, num: 2, created_at: '' } },
     { eid: T, name: 'doc', comp: { title: 'Child work', body: '' } },
-    { eid: T, name: 'task', comp: { priority: 0 } },
+    { eid: T, name: 'task', comp: {} },
+    { eid: T, name: 'filed', comp: { priority: 0 } },
     { eid: T, name: 'claim', comp: { session: S } },
   ],
   deps: [],
@@ -1685,7 +1686,8 @@ let graph: Snapshot = {
     { eid: N, name: 'session', comp: { id: 'idle-1' } },
     { eid: O, name: 'entity', comp: { eid: O, num: 4, created_at: '' } },
     { eid: O, name: 'doc', comp: { title: 'Open board task', body: '' } },
-    { eid: O, name: 'task', comp: { priority: 1 } },
+    { eid: O, name: 'task', comp: {} },
+    { eid: O, name: 'filed', comp: { priority: 1 } },
   ],
   deps: [],
 }
@@ -1776,7 +1778,8 @@ slow(
           name: 'doc',
           comp: { title: 'Verify from CLI', body: '' },
         },
-        { eid: target, name: 'task', comp: { priority: 1 } },
+        { eid: target, name: 'task', comp: {} },
+        { eid: target, name: 'filed', comp: { priority: 1 } },
         { eid: target, name: 'accept', comp: { body: 'Use the CLI.' } },
         {
           eid: target,
@@ -1892,7 +1895,8 @@ slow('task undo sends a named mutation through generic /apply', async () => {
     changes: [
       { eid, name: 'entity', comp: { eid, num: 91 } },
       { eid, name: 'doc', comp: { eid, title: 'undo me', body: '' } },
-      { eid, name: 'task', comp: { eid, priority: 1 } },
+      { eid, name: 'task', comp: { eid } },
+      { eid, name: 'filed', comp: { priority: 1 } },
     ],
     deps: [],
   }
@@ -1964,7 +1968,8 @@ slow(
     apply(db, [
       { eid: session, name: 'session', comp: { id: crypto.randomUUID() } },
       { eid: task, name: 'doc', comp: { title: 'historical task' } },
-      { eid: task, name: 'task', comp: { priority: 1 } },
+      { eid: task, name: 'task', comp: {} },
+      { eid: task, name: 'filed', comp: { priority: 1 } },
     ])
     apply(db, [{ eid: task, name: 'claim', comp: { session } }])
     apply(db, [{ eid: task, name: 'claim', comp: null }])
@@ -2041,11 +2046,8 @@ slow(
       { eid: project, name: 'doc', comp: { title: 'local project' } },
       { eid: project, name: 'project', comp: {} },
       { eid: item, name: 'doc', comp: { title: 'local history proof' } },
-      {
-        eid: item,
-        name: 'task',
-        comp: { priority: 1, project },
-      },
+      { eid: item, name: 'task', comp: {} },
+      { eid: item, name: 'filed', comp: { priority: 1, project } },
       ...link(project, 'wants', item),
     ])
     let id = human(db, item)
@@ -2107,11 +2109,8 @@ slow(
       changes: [
         { eid, name: 'entity', comp: { eid, num: 23321 } },
         { eid, name: 'doc', comp: { eid, title: 'remote history proof' } },
-        {
-          eid,
-          name: 'task',
-          comp: { eid, priority: 1 },
-        },
+        { eid, name: 'task', comp: { eid } },
+        { eid, name: 'filed', comp: { priority: 1 } },
       ],
       deps: [],
     }
@@ -2423,7 +2422,8 @@ slow(
       return [
         { eid, name: 'entity', comp: { eid, num } },
         { eid, name: 'doc', comp: { eid, title: `task ${status}`, body: '' } },
-        { eid, name: 'task', comp: { eid, priority: 1 } },
+        { eid, name: 'task', comp: { eid } },
+        { eid, name: 'filed', comp: { priority: 1 } },
         ...(status == 'wip'
           ? [{ eid, name: 'claim', comp: { session: S } }]
           : status == 'done'
@@ -2562,11 +2562,8 @@ slow(
           name: 'doc',
           comp: { eid: task, title: 'Structured', body: 'One shape' },
         },
-        {
-          eid: task,
-          name: 'task',
-          comp: { eid: task, status: 'done', priority: 2 },
-        },
+        { eid: task, name: 'task', comp: { eid: task, status: 'done' } },
+        { eid: task, name: 'filed', comp: { priority: 2 } },
         {
           eid: task,
           name: 'decided',
@@ -2601,7 +2598,8 @@ slow(
       kind: 'task',
       entity: { eid: task, num: 41 },
       doc: { title: 'Structured', body: 'One shape' },
-      task: { status: 'done', priority: 2 },
+      task: { status: 'done' },
+      filed: { priority: 2 },
       decided: { at: '2026-08-03T00:00:00.000Z' },
     }
     try {

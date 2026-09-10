@@ -117,7 +117,8 @@ Deno.test('release names the session by its chip id', () => {
   cache.value = {
     task: {
       entity: { eid: 'task', num: 1 },
-      task: { eid: 'task', priority: 0 },
+      task: { eid: 'task' },
+      filed: { eid: 'task', priority: 0 },
       claim: { eid: 'task', session: 'session' },
     },
     session: {
@@ -137,7 +138,8 @@ Deno.test('quarantine is hidden until revealed and can be cleared', () => {
     task: {
       entity: { eid: 'task', num: 1 },
       doc: { eid: 'task', title: 'unsafe', body: 'hidden' },
-      task: { eid: 'task', priority: 0 },
+      task: { eid: 'task' },
+      filed: { eid: 'task', priority: 0 },
       quarantined: { eid: 'task', at: 'now' },
     },
   }
@@ -169,7 +171,11 @@ Deno.test('a pending proposal keeps deletion named as deletion', () => {
 
   // An OPEN task's approval arms dispatch, and the label says so.
   cache.value = {
-    design: { ...cache.value.design, task: { eid: 'design', priority: 1 } },
+    design: {
+      ...cache.value.design,
+      task: { eid: 'design' },
+      filed: { eid: 'design', priority: 1 },
+    },
   }
   assertEquals(labels().includes('approve · dispatches a coder'), true)
   assertEquals(labels().includes('decline'), true)

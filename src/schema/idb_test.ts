@@ -52,19 +52,22 @@ let graph = (): Graph => ({
   p2: { entity: { num: 3 }, person: {}, doc: { title: 'bob' } },
   t1: {
     entity: { num: 4 },
-    task: { priority: 1, project: 'proj', assignee: 'p1' },
+    task: {},
+    filed: { priority: 1, project: 'proj', assignee: 'p1' },
     doc: { title: 'foo task' },
     created: { at: '2026-08-05T00:00:00.000Z' },
   },
   t2: {
     entity: { num: 5 },
-    task: { status: 'wip', priority: 2, project: 'proj', assignee: 'p2' },
+    task: { status: 'wip' },
+    filed: { priority: 2, project: 'proj', assignee: 'p2' },
     doc: { title: 'bar task' },
     created: { at: '2026-07-01T00:00:00.000Z' },
   },
   t3: {
     entity: { num: 6 },
-    task: { status: 'done', priority: 3, assignee: 'p1' },
+    task: { status: 'done' },
+    filed: { priority: 3, assignee: 'p1' },
     doc: { title: 'baz' },
     created: { at: '2026-08-10T00:00:00.000Z' },
   },
@@ -99,7 +102,7 @@ let battery = [
   '.status=open .priority<=2',
   'foo',
   '.comment.target.doc.title~=foo',
-  '.comment.target.task.assignee.doc.title~=alice',
+  '.comment.target.filed.assignee.doc.title~=alice',
 ]
 
 let fresh = async (g: Graph) => {
@@ -126,7 +129,7 @@ Deno.test('IDB and in-memory resolvers answer one query set identically', async 
     ])
     assertEquals(
       sorted(
-        await idb.ready(q('.comment.target.task.assignee.doc.title~=alice')),
+        await idb.ready(q('.comment.target.filed.assignee.doc.title~=alice')),
       ),
       ['c1', 'c3'],
     )
@@ -147,7 +150,8 @@ Deno.test('putBags writes a batch, deleting where a component is absent (slice e
       ['t3', { entity: { num: 6 }, doc: { title: 'baz' } }],
       ['t1', {
         entity: { num: 4 },
-        task: { priority: 1, project: 'proj', assignee: 'p2' },
+        task: {},
+        filed: { priority: 1, project: 'proj', assignee: 'p2' },
         doc: { title: 'foo task' },
       }],
     ])
@@ -194,7 +198,11 @@ Deno.test('a live subscription fires on a membership change, row-locally', async
 
     // Reassign t2 to p1 in the durable store, then tell the resolver which row
     // moved — it joins, and an unrelated query stays asleep.
-    let g2 = { ...g.t2!, task: { ...g.t2!.task, assignee: 'p1' } }
+    let g2 = {
+      ...g.t2!,
+      task: { ...g.t2!.task },
+      filed: { ...g.t2.filed, assignee: 'p1' },
+    }
     await seedIdb(db, { t2: g2 })
     await idb.refresh(new Set(['t2']))
     assertEquals(sorted(ids.value), ['t1', 't2', 't3'])
@@ -255,10 +263,10 @@ Deno.test('the schema version is a positive int, moved by any shape change', () 
   assert(Number.isInteger(v) && v >= 1)
   // drop an index from the shape → the version must move
   let mutated = idbStores().map((s) =>
-    s.name == 'task' ? { ...s, indexes: s.indexes.slice(1) } : s
+    s.name == 'filed' ? { ...s, indexes: s.indexes.slice(1) } : s
   )
   assert(schemaVersion(mutated) != v)
-  assert(schemaShape().includes('task_project'))
+  assert(schemaShape().includes('filed_project'))
 })
 
 // Frame-budget probe: the traversal set is the riskiest — an async cursor walk
@@ -271,7 +279,8 @@ slow('traversal resolves within the frame budget', async () => {
     let assignee = i % 2 ? 'p1' : 'p2'
     g[`k${i}`] = {
       entity: { num: 100 + i },
-      task: { priority: 1, assignee },
+      task: {},
+      filed: { priority: 1, assignee },
       doc: { title: `task ${i}` },
     }
     g[`m${i}`] = { entity: { num: 400 + i }, comment: { target: `k${i}` } }
@@ -281,7 +290,7 @@ slow('traversal resolves within the frame budget', async () => {
   let db = await fresh(g)
   let idb = idbResolver(db)
   try {
-    let line = '.comment.target.task.assignee.doc.title~=alice'
+    let line = '.comment.target.filed.assignee.doc.title~=alice'
     let preds = q(line)
     // warm once, then time the steady-state resolve
     await idb.ready(preds)

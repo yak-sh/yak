@@ -129,7 +129,8 @@ let task = (options: { accept?: boolean; cancelled?: boolean } = {}) => {
   let completed = iso(-60)
   apply(db, [
     { eid, name: 'doc', comp: { title: 'completed work', body: 'build it' } },
-    { eid, name: 'task', comp: { priority: 2, project } },
+    { eid, name: 'task', comp: {} },
+    { eid, name: 'filed', comp: { priority: 2, project } },
     ...(options.accept === false
       ? []
       : [{ eid, name: 'accept', comp: { body: 'exercise the shipped door' } }]),
@@ -776,7 +777,8 @@ Deno.test('verifierRun is bounded, newest-first, idempotent, and excludes automa
   let p2 = uid()
   apply(db, [
     { eid: p2, name: 'project', comp: {} },
-    { eid: muted.eid, name: 'task', comp: { project: p2 } },
+    { eid: muted.eid, name: 'task', comp: {} },
+    { eid: muted.eid, name: 'filed', comp: { project: p2 } },
   ])
   db.prepare(`insert into noverify (entity) values (${idOf})`).run(p2)
 

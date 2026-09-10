@@ -26,7 +26,7 @@ type Row = {
   // A reference to somebody the store knows answers with their name beside
   // the eid (listing.ts `named`), so one query draws a list with its writers.
   created: { by: { eid: string; name: string } }
-  task: { assignee: { eid: string; name: string } }
+  filed: { assignee: { eid: string; name: string } }
 }
 
 slow('the served client: a page saves, lists and watches', async () => {
@@ -99,9 +99,10 @@ slow('the served client: a page saves, lists and watches', async () => {
     // A second component on the same entity, and the filter that reads it.
     await store.apply({
       entity: { eid: cake },
-      task: { status: 'open', priority: 1 },
+      task: { status: 'open' },
+      filed: { priority: 1 },
     })
-    assertEquals((await store.query('.task.status=open'))[0].task.priority, 1)
+    assertEquals((await store.query('.task.status=open'))[0].filed.priority, 1)
 
     // A search that names no component answers the WHOLE bundle, the way an
     // `id=` fetch does: a bare word names nothing to leave out, and a page
@@ -109,10 +110,10 @@ slow('the served client: a page saves, lists and watches', async () => {
     // Name one and the ordinary rule is back.
     let [hit] = await store.search('lemon')
     assertEquals(hit.doc.title, 'Lemon cake')
-    assertEquals(hit.task.priority, 1)
+    assertEquals(hit.filed.priority, 1)
     assert(hit.rank.score > 0)
     let [narrow] = await store.search('lemon', '.task!')
-    assertEquals(narrow.task.priority, 1)
+    assertEquals(narrow.filed.priority, 1)
     assertEquals(narrow.doc, undefined)
     assert(narrow.rank.score > 0)
 
@@ -195,10 +196,11 @@ slow('the served client: a page saves, lists and watches', async () => {
     // since the byline is a rule about references and not about one stamp.
     await store.apply({
       entity: { eid: entry.entity.eid },
-      task: { assignee: entry.created.by },
+      task: {},
+      filed: { assignee: entry.created.by },
     })
     let [reread] = await store.query('.doc.title~=Fig&.created!&.task?')
-    assertEquals(reread.task.assignee, entry.created.by)
+    assertEquals(reread.filed.assignee, entry.created.by)
     let people = await store.query('.person!&.doc?')
     assertEquals(people.map((p: Row) => p.doc.title), [them.name])
     // Their address stays in the directory: an app's store learns a name and

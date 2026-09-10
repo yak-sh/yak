@@ -2,7 +2,7 @@ import { formatProp, propAt } from '../props.ts'
 import { el } from './ui.tsx'
 
 let Badge = el('span', 'Prio')
-let type = propAt('task', 'priority')!
+let type = propAt('filed', 'priority')!
 
 // The priority badge: P0 burns, P1 glows, P2 is the quiet default, P3+
 // fades. The label shows the TRUE value (fractional board-order values

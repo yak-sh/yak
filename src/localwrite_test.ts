@@ -109,7 +109,8 @@ slow(
       await assertRejects(() =>
         send([
           { eid, name: 'doc', comp: { title: 'must roll back' } },
-          { eid, name: 'task', comp: { priority: 'invalid' } },
+          { eid, name: 'task', comp: {} },
+          { eid, name: 'filed', comp: { priority: 'invalid' } },
         ], f.session)
       )
       assertEquals(eager(f.db, eid).doc?.title, 'before')

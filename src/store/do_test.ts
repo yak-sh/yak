@@ -24,7 +24,8 @@ slow('the store on Durable Object SQLite serves the wire', async () => {
     let note = crypto.randomUUID()
     let batch = await applied([
       { eid: task, name: 'doc', comp: { title: 'planted', body: 'in a DO' } },
-      { eid: task, name: 'task', comp: { priority: 1 } },
+      { eid: task, name: 'task', comp: {} },
+      { eid: task, name: 'filed', comp: { priority: 1 } },
       { eid: dep, name: 'doc', comp: { title: 'needed' } },
       { eid: dep, name: 'task', comp: {} },
       ...link(task, 'requires', dep),
@@ -66,7 +67,8 @@ slow('the store on Durable Object SQLite serves the wire', async () => {
     let bad = await post([
       { eid: task, name: 'doc', comp: { title: 'renamed' } },
       ...link(task, 'requires', 'x'),
-      { eid: task, name: 'task', comp: { priority: 'not a number' } },
+      { eid: task, name: 'task', comp: {} },
+      { eid: task, name: 'filed', comp: { priority: 'not a number' } },
     ])
     assertEquals(bad.status, 400)
     assertEquals(

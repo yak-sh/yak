@@ -39,7 +39,7 @@ let born = (r: Row) => {
   return Number.isNaN(at) ? Infinity : at
 }
 let rank = (r: Row) =>
-  typeof r.comps.task?.priority == 'number' ? r.comps.task.priority : Infinity
+  typeof r.comps.filed?.priority == 'number' ? r.comps.filed.priority : Infinity
 let resumeRank = (r: Row) => Number(r.comps.resume?.rank ?? 0)
 let order = (a: Row, b: Row) =>
   Number(!!b.comps.resume) - Number(!!a.comps.resume) ||

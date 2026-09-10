@@ -40,7 +40,8 @@ let page = () => {
     [eid]: {
       entity: { eid, num: 1 },
       doc: { eid, title: 'A task', body: 'Stored body' },
-      task: { eid, priority: 2 },
+      task: { eid },
+      filed: { eid, priority: 2 },
     },
   }
   return {
@@ -70,7 +71,7 @@ Deno.test('component properties open anchored reference and enum controls', asyn
   try {
     for (
       let [comp, col, control] of [
-        ['task', 'project', '.Prop_Pop-list .Prop_Find'],
+        ['filed', 'project', '.Prop_Pop-list .Prop_Find'],
         ['member', 'role', '.Prop_Tab'],
       ]
     ) {
@@ -111,7 +112,7 @@ Deno.test('properties stay closed and native read-only fields have no edit press
     assertEquals(row(root, 'status').querySelector('.Prop-live'), null)
     for (
       let [comp, col, readOnly] of [
-        ['task', 'priority', true],
+        ['filed', 'priority', true],
         ['task', 'status', false],
         ['session', 'status', false],
       ] as const

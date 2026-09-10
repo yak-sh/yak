@@ -170,7 +170,7 @@ loudly rather than quietly matching nothing:
     .task.status=finished
     → task.status is one of open, wip, done, cancelled — got 'finished'
 
-    .task.priority=high
+    .filed.priority=high
     → priority is a finite number, optionally P-prefixed (P2, p02, 1.5)
       — got 'high'
 
@@ -178,13 +178,13 @@ loudly rather than quietly matching nothing:
 - **number** — `.recipe.serves>=4`, decimals fine.
 - **enum** — `task.status` is `open`, `wip`, `done` or `cancelled`. It is read,
   never written: `.task.status=done` is the entity wearing a `completed`.
-- **priority** — a number, and `P` is optional: `.task.priority<=2` and
-  `.task.priority<=P2` ask the same thing.
+- **priority** — a number, and `P` is optional: `.filed.priority<=2` and
+  `.filed.priority<=P2` ask the same thing.
 - **time** — a stamp or a phrase; the next section is only about those.
 - **url** — text with a shape. Quote it (below), or the `&` in its query string
   starts a second predicate.
 - **eid** — a reference to another entity, by its eid: `.comment.target=940d…`,
-  `.task.assignee=dc5e…`, `.created.by=<who.person>`.
+  `.filed.assignee=dc5e…`, `.created.by=<who.person>`.
 
 Your OWN columns are a different bargain: they are stored as given and compared
 as text, with no parsing on either side. Two consequences worth knowing before
@@ -284,14 +284,14 @@ A dotted path walks a reference column and tests a column on the far side. Every
 hop but the last must be a reference:
 
     .comment.target.doc.title~=Pancakes    comments on the pancake recipe
-    .task.project.doc.title~=Kitchen       tasks in the project called Kitchen
-    .assignee.title~=maya                  bare: task.assignee → doc.title
+    .filed.project.doc.title~=Kitchen       tasks in the project called Kitchen
+    .assignee.title~=maya                  bare: filed.assignee → doc.title
 
 Only the platform's columns can be references — a `vocab.json` column is `text`,
 `number`, `bool`, `time` or `url` — so paths walk `comment.target`,
-`task.project`, `task.assignee`, `attachment.blob`, and the `by` of each stamp.
-Point at another entity from your own component by keeping its eid in a `text`
-column; it holds the address, but a path will not walk it.
+`filed.project`, `filed.assignee`, `attachment.blob`, and the `by` of each
+stamp. Point at another entity from your own component by keeping its eid in a
+`text` column; it holds the address, but a path will not walk it.
 
 The PLURAL form walks the other way — the entities pointing back at this one:
 
@@ -461,7 +461,7 @@ Everything else the grammar has, this store serves.
     .chore!&.count!
       how many chores there are, without listing one
 
-    .task.status=open&.tally=task.domain
+    .task.status=open&.tally=filed.domain
       how much open work each part of the house has
 
     .reading!&.reading.done=1&.reading.started>=2026-01-01&.doc?

@@ -6398,7 +6398,7 @@ slow('the answers four builders had to guess at', async () => {
     // two-marks sentence never named.
     await agent.tool('graph_apply', {
       app: 'diary',
-      entities: [{ entity: { eid: entry }, task: { priority: 2 } }],
+      entities: [{ entity: { eid: entry }, task: {}, filed: { priority: 2 } }],
     })
     let [chore] = await rows('.task!')
     assertEquals(chore.task!.status, 'open')

@@ -38,14 +38,12 @@ let snap: Snapshot = {
     { eid: B, name: 'board', comp: { query: `.project=${P}&.domain=Eng` } },
     { eid: T, name: 'entity', comp: { eid: T, num: 4 } },
     { eid: T, name: 'doc', comp: { title: 'A task', body: '' } },
-    {
-      eid: T,
-      name: 'task',
-      comp: { priority: 0, project: P },
-    },
+    { eid: T, name: 'task', comp: {} },
+    { eid: T, name: 'filed', comp: { priority: 0, project: P } },
     { eid: D, name: 'entity', comp: { eid: D, num: 5 } },
     { eid: D, name: 'doc', comp: { title: 'Scribe desk', body: '' } },
-    { eid: D, name: 'task', comp: { priority: 3 } },
+    { eid: D, name: 'task', comp: {} },
+    { eid: D, name: 'filed', comp: { priority: 3 } },
     { eid: D, name: 'alias', comp: { slug: 'scribe-desk' } },
     { eid: N, name: 'entity', comp: { eid: N, num: 6 } },
     { eid: N, name: 'doc', comp: { title: 'scribe', body: '' } },
@@ -103,7 +101,8 @@ Deno.test('basic card properties use the standard dot-param grammar', () => {
   // written — the honest path to wip is a claim.
   assertEquals(comps('task .title=Next step .priority=2 .status=wip'), {
     doc: { title: 'Next step', body: '' },
-    task: { priority: 2 },
+    task: {},
+    filed: { priority: 2 },
   })
   assertEquals(comps('task .title=Ship .accept.body=passes'), {
     doc: { title: 'Ship', body: '' },
@@ -172,10 +171,11 @@ Deno.test('new: a task, inheriting where you stand', () => {
   // On a board: the query's scalar equalities ride along, so it JOINS it.
   assertEquals(comps('new Ship it', B), {
     doc: { body: '', title: 'Ship it' },
-    task: { project: P, domain: 'Eng' },
+    task: {},
+    filed: { project: P, domain: 'Eng' },
   })
-  assertEquals(comps('new Ship it', P).task, { project: P })
-  assertEquals(comps('new Ship it', T).task, { project: P })
+  assertEquals(comps('new Ship it', P).filed, { project: P })
+  assertEquals(comps('new Ship it', T).filed, { project: P })
   assertEquals(comps('new Ship it').task, {}) // no context
   // the spec grammar tokenizes, so runs of spaces normalize to one
   assertEquals(
@@ -188,7 +188,7 @@ Deno.test('new: a task, inheriting where you stand', () => {
     body: 'why and how',
   })
   // …and setters in the line win over what the context hands down
-  assertEquals(comps('new P2 .domain=Ops Ship it', B).task, {
+  assertEquals(comps('new P2 .domain=Ops Ship it', B).filed, {
     project: P,
     domain: 'Ops',
     priority: 2,
@@ -211,7 +211,7 @@ Deno.test('fix: a bare id spawns, words file a task first', () => {
   let f = run('fix the toolbar clips', ctx())
   assertEquals(f.spawn, f.changes![0].eid)
   assertEquals(
-    Object.fromEntries(f.changes!.map((c) => [c.name, c.comp])).task,
+    Object.fromEntries(f.changes!.map((c) => [c.name, c.comp])).filed,
     { project: P },
   )
   // shift+enter's ask: line 2 on rides as the filed task's body
@@ -222,7 +222,7 @@ Deno.test('fix: a bare id spawns, words file a task first', () => {
   // a worded fix is about the TOOL, not where you stand: the board's
   // context does NOT ride along (its domain stays out), and with many
   // repo projects the `tasks` venture alias names the deployment's own
-  assertEquals(comps('fix Ship it', B).task, {
+  assertEquals(comps('fix Ship it', B).filed, {
     project: P,
   })
   let H = 'aaaaaaaa-0000-4000-8000-000000000008'
@@ -238,12 +238,12 @@ Deno.test('fix: a bare id spawns, words file a task first', () => {
   })
   let routed = run('fix Ship it', { rows: many, eid: B }).changes!
   assertEquals(
-    routed.find((c) => c.name == 'task')!.comp!.project,
+    routed.find((c) => c.name == 'filed')!.comp!.project,
     H, // the canonical venture wins over the focused board's project
   )
   // …but a typed .project= always outranks the deployment identity
   let told = run(`fix .project=${P} Ship it`, { rows: many }).changes!
-  assertEquals(told.find((c) => c.name == 'task')!.comp!.project, P)
+  assertEquals(told.find((c) => c.name == 'filed')!.comp!.project, P)
   // bare :fix means HERE — the focused task is the target
   assertEquals(run('fix', ctx(T)), { spawn: T, msg: 'T-4 → agent' })
   assertThrows(() => run('fix', ctx(B)), Error, 'B-3 is not a task')
@@ -435,7 +435,8 @@ Deno.test('claim: names a session, or takes the ambient one', () => {
 
 Deno.test('set: the write grammar, routed and grouped', () => {
   assertEquals(comps('set .status=done .priority=2', T), {
-    task: { status: 'done', priority: 2 },
+    task: { status: 'done' },
+    filed: { priority: 2 },
   })
   assertEquals(comps('set .title=two words .status=wip', T), {
     doc: { title: 'two words' }, // params start at a dot: spaces survive
@@ -802,4 +803,22 @@ Deno.test('delete/forget: leaf goes quietly, a target with dependents guards', (
   assertEquals(at('forget C-41').msg, 'deleted C-41')
   // An unknown id teaches at the door rather than deleting nothing silently.
   assertThrows(() => at('delete T-999'), Error, 'no entity')
+})
+
+Deno.test('new adopts each board equality through its routed component', () => {
+  let board = rows({
+    changes: [
+      { eid: B, name: 'entity', comp: { eid: B, num: 3 } },
+      {
+        eid: B,
+        name: 'board',
+        comp: { query: '.domain=Eng .review.verdict=approved' },
+      },
+    ],
+  })
+  let result = run('new .domain=Ops Ship it', { ...ctx(B), rows: board })
+  let made = Object.fromEntries(result.changes!.map((c) => [c.name, c.comp]))
+  assertEquals(made.filed, { domain: 'Ops' })
+  assertEquals(made.review, { verdict: 'approved' })
+  assertEquals(made.task, {})
 })

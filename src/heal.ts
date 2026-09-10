@@ -135,12 +135,12 @@ let home = (): string | undefined =>
 // the session's requested task, else the home project. "venture/actor" reduces
 // to a project reference — an owner the ticket lands in front of.
 let projectFor = (comps: Record<string, Record<string, unknown>>) => {
-  let p = comps.task?.project as string | undefined
+  let p = comps.filed?.project as string | undefined
   if (p) return p
   let req = comps.session?.requested_task as string | undefined
   if (req) {
     let t = db.prepare(
-      `select ${refEid('project')} as project from task where ${OWNED}`,
+      `select ${refEid('project')} as project from filed where ${OWNED}`,
     ).get(req) as
       | { project?: string }
       | undefined
@@ -312,12 +312,13 @@ export let ensureFixer = (cast: Cast) =>
   t: FixerGates = fixerTuning(),
 ): string | undefined => {
   let task = db.prepare(
-    `select ${refEid('t.project')} as project,
+    `select ${refEid('f.project')} as project,
               (exists (select 1 from completed x where x.entity = t.entity)
                or exists (select 1 from cancelled x where x.entity = t.entity))
                 as settled,
               b.fault as fault
-       from task t join bug b on b.entity = t.entity where t.${OWNED}`,
+       from task t join bug b on b.entity = t.entity
+       left join filed f on f.entity = t.entity where t.${OWNED}`,
   ).get(bug) as
     | { project: string | null; settled: number; fault: string | null }
     | undefined
@@ -463,13 +464,11 @@ export let fileBug =
       `\nBroken entity: ${human(db, eid)} · stamped ${comp.at ?? at}`
     cast(apply(db, [
       { eid: bug, name: 'doc', comp: { title, body } },
+      { eid: bug, name: 'task', comp: {} },
       {
         eid: bug,
-        name: 'task',
-        comp: {
-          priority: severity(message),
-          project: project ?? null,
-        },
+        name: 'filed',
+        comp: { priority: severity(message), project: project ?? null },
       },
       { eid: bug, name: 'bug', comp: { fault: key, hits: 1, last: at } },
       ...link(bug, 'about', eid),
