@@ -54,7 +54,7 @@ Deno.test('taskEntry atomically mints bare work, contains it, and spawns with in
   }
 })
 
-Deno.test('taskEntry refuses empty/missing parent and concurrent caps without orphan tasks or edges', async () => {
+Deno.test('taskEntry rejects invalid inputs and durably accepts concurrent queued tasks', async () => {
   let h = open(':memory:')
   try {
     await h.g.apply([{ entity: { eid: 'p' }, session: { id: 'parent' } }])
@@ -64,20 +64,15 @@ Deno.test('taskEntry refuses empty/missing parent and concurrent caps without or
       Error,
       'not a session',
     )
-    await assertRejects(
-      () => taskEntry(h.g, 'p', 'work', { maxSessions: 1 }),
-      Error,
-      'session cap',
-    )
     assertEquals(await h.g.read('.task'), [])
     let results = await Promise.allSettled([
       taskEntry(h.g, 'p', 'one', { maxChildren: 1 }),
       taskEntry(h.g, 'p', 'two', { maxChildren: 1 }),
     ])
-    assertEquals(results.map((r) => r.status), ['fulfilled', 'rejected'])
-    assertEquals((await h.g.read('.task')).length, 1)
-    assertEquals((await h.g.read('.contains')).length, 1)
-    assertEquals((await h.g.read('.spawned')).length, 1)
+    assertEquals(results.map((r) => r.status), ['fulfilled', 'fulfilled'])
+    assertEquals((await h.g.read('.task')).length, 2)
+    assertEquals((await h.g.read('.contains')).length, 2)
+    assertEquals((await h.g.read('.spawned')).length, 2)
   } finally {
     h.close()
   }
@@ -98,8 +93,14 @@ Deno.test('Agent.taskEntry honors agent limits', async () => {
   try {
     let parent = await a.start('parent')
     await a.idle(parent)
-    await assertRejects(() => a.taskEntry(parent, 'work'), Error, 'child cap')
-    assertEquals(await a.tasks(), [])
+    await a.taskEntry(parent, 'work')
+    assertEquals((await a.tasks()).length, 1)
+    assertEquals(
+      (await a.children(parent)).filter((b) =>
+        (b.dispatch as Comp)?.state == 'queued'
+      ).length,
+      1,
+    )
   } finally {
     await a.close()
   }

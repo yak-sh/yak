@@ -297,7 +297,7 @@ export let agent = (opts: Opts = {}): Agent => {
       (await h.g.read('.task.status=open,wip')).toSorted(byBirth),
     transcript: entries,
     resume: async () => {
-      let live = await h.g.read('.session.status=pending,running')
+      let live = await h.g.read('.session.status=pending,running,queued')
       // Reconcile receipts lost between a child commit and its effect.
       for (
         let b of await h.g.read(

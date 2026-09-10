@@ -1,9 +1,9 @@
-import { appendEntry } from './append.ts'
+import { configurePool, pool } from './pool.ts'
 // Delegation is transcript structure, not a process handle. A spawned session
 // names its parent and originating call; a fork additionally names a prefix.
-// Admission is serialized per graph (across parents and tool tables), with the
-// counts read from the graph inside that critical section. No reserved slots
-// survive a failed write, and replaying a call finds the same child.
+// Submission is serialized per graph (across parents and tool tables). The
+// durable queue order and fork prefix commit with the child. Replays find
+// that same child; preparation is deferred until a daemon admits it.
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { link } from '@yaks/edge'
 import { done, MARKS, statusOf as taskStatus } from '@yaks/task'
@@ -19,7 +19,7 @@ import {
 export type ChildLimits = {
   maxChildren?: number
   maxSessions?: number
-  /** Host-owned optional spawn parameters and preparation, before the child is runnable. */
+  /** Host-owned optional spawn parameters and preparation, when the child is admitted. */
   childProperties?: Record<string, unknown>
   prepareChild?: (
     input: { parent: Eid; child: Eid; args: Record<string, unknown> },
@@ -30,7 +30,6 @@ let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 let row = async (g: Graph, eid: Eid) =>
   (await g.storage.tx((tx) => tx.get([eid])))[0]
-let live = 'empty,pending,running'
 
 /** The lease rung for a task held by a session; terminal task marks win. */
 export let taskMarks = [...MARKS, {
@@ -58,6 +57,7 @@ export let admit = <T>(
   limits: ChildLimits,
   create: () => Promise<T>,
 ): Promise<T> => {
+  configurePool(g, limits)
   let go = (locks.get(g) ?? Promise.resolve()).catch(() => {}).then(
     async () => {
       let maxChildren = limits.maxChildren ?? 32
@@ -68,17 +68,9 @@ export let admit = <T>(
         }
       }
       if (
-        parent &&
-        (await g.read(`.spawned.parent=${parent} .session.status=${live}`))
-            .length >= maxChildren
-      ) {
-        throw new ToolError(
-          'child_cap',
-          `concurrent child cap (${maxChildren}) reached`,
-        )
-      }
-      if (
-        (await g.read(`.session .session.status=${live}`)).length >= maxSessions
+        !parent &&
+        (await g.read('.session .session.status=empty,pending,running'))
+            .length >= maxSessions
       ) {
         throw new ToolError(
           'session_cap',
@@ -107,7 +99,7 @@ let delegation = (
   name: fork ? 'fork' : 'spawn',
   description: fork
     ? 'Fork your transcript before this tool turn, with a new prompt. Returns the concurrent child session id; completion is delivered automatically.'
-    : 'Start a fresh subagent with a prompt OR a task id. A task is claimed atomically and its title/body become the input. Independent subtasks may run in parallel, subject to caps. Returns the child session id; completion is delivered automatically.',
+    : 'Start a fresh subagent with a prompt OR a task id. A task is claimed atomically and its title/body become the input. Returns a child ID immediately; a shared worker pool queues excess work durably and delivers completion automatically.',
   parameters: {
     type: 'object',
     properties: {
@@ -188,11 +180,6 @@ let delegation = (
       let anchorId = comp(newestAsk(ctx.entries), 'ask')?.through
       let anchor = ctx.entries.find((b) => b.entity.eid == anchorId)
       if (fork && !anchor) throw new ToolError('fork', 'no prefix to fork')
-      let prepared = await limits.prepareChild?.({
-        parent: ctx.session,
-        child: eid,
-        args,
-      })
       // Fork history is immutable. Fresh children receive the same shared
       // snapshots, never a filesystem reread or a replacement persona.
       let context: Bundle[] = fork
@@ -225,6 +212,12 @@ let delegation = (
         ...b,
         entry: { session: eid },
       }))
+      let order = Math.max(
+        0,
+        ...(await g.read('.dispatch')).map((b) =>
+          Number((b.dispatch as Comp).order ?? 0)
+        ),
+      ) + 1
       await g.apply([
         ...minted
           ? [{
@@ -257,7 +250,7 @@ let delegation = (
         ...task ? [{ entity: task.entity, claim: { session: eid } }] : [],
         {
           entity: { eid },
-          ...prepared,
+          dispatch: { state: 'queued', args: JSON.stringify(args), order },
           session: { id: eid },
           spawned: {
             parent: ctx.session,
@@ -279,7 +272,7 @@ let delegation = (
 
 /** Submit a microtask under the session's claimed work (or the session when
  * it holds no task). The task, containment, child and claim commit together:
- * a cap refusal leaves no orphan work. No filing metadata is inherited.
+ * queued work is accepted without preparing a checkout. No filing metadata is inherited.
  * The first line is the title; the complete submitted text is kept as body.
  * This is a user door, not a model call, so delivery is an ordinary input. */
 export let taskEntry = async (
@@ -309,6 +302,7 @@ export let taskEntry = async (
 
 /** The model doors use the same admission and spawn write as taskEntry. */
 export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
+  configurePool(g, limits)
   return [delegation(g, limits, true), delegation(g, limits, false), {
     name: 'notice',
     description:
@@ -381,40 +375,52 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
         throw new ToolError('timeout', 'invalid timeout')
       }
       let end = Date.now() + ms
-      for (;;) {
-        if (args.tasks != null) {
-          let results = await Promise.all(ids.map(async (id) => {
-            let b = await taskRow(g, id)
-            return {
-              task: id,
-              status: taskStatus(b, taskMarks),
-              done: await done(g.storage, id, { marks: taskMarks }),
+      pool(g).suspended.add(ctx.session)
+      pool(g).changed?.()
+      try {
+        for (;;) {
+          if (pool(g).stopping?.()) return JSON.stringify({ stopped: true })
+          if (args.tasks != null) {
+            let results = await Promise.all(ids.map(async (id) => {
+              let b = await taskRow(g, id)
+              return {
+                task: id,
+                status: taskStatus(b, taskMarks),
+                done: await done(g.storage, id, { marks: taskMarks }),
+              }
+            }))
+            if (results.every((r) => r.done) || Date.now() >= end) {
+              return JSON.stringify(results)
             }
-          }))
-          if (results.every((r) => r.done) || Date.now() >= end) {
-            return JSON.stringify(results)
-          }
-        } else {
-          let results = await Promise.all(ids.map(async (session) => {
-            let entries = await transcript(g, session)
-            let status = statusOf(entries)
-            return {
-              session,
-              status,
-              output: entries.length ? textOf(entries.at(-1)!) : '',
+          } else {
+            let results = await Promise.all(ids.map(async (session) => {
+              let entries = await transcript(g, session)
+              let state = comp(await row(g, session), 'dispatch')?.state
+              let status = state == 'queued' && statusOf(entries) != 'stopped'
+                ? 'queued'
+                : statusOf(entries)
+              return {
+                session,
+                status,
+                output: entries.length ? textOf(entries.at(-1)!) : '',
+              }
+            }))
+            if (
+              results.every((r) =>
+                ['settled', 'failed', 'stopped'].includes(r.status)
+              ) || Date.now() >= end
+            ) {
+              return JSON.stringify(results)
             }
-          }))
-          if (
-            results.every((r) =>
-              ['settled', 'failed', 'stopped'].includes(r.status)
-            ) || Date.now() >= end
-          ) {
-            return JSON.stringify(results)
           }
+          await new Promise((go) =>
+            setTimeout(go, Math.min(25, end - Date.now()))
+          )
         }
-        await new Promise((go) =>
-          setTimeout(go, Math.min(25, end - Date.now()))
-        )
+      } finally {
+        await pool(g).resume?.(ctx.session)
+        pool(g).suspended.delete(ctx.session)
+        pool(g).changed?.()
       }
     },
   }]

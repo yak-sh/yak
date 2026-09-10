@@ -1,3 +1,4 @@
+import { dispatch, pool } from './pool.ts'
 // The daemon: a `created(entry)` effect over `react`. Every entry that lands
 // wakes one step over its transcript, and the steps of one transcript run one
 // after another — the step that asks the model appends entries, those wake the
@@ -13,6 +14,8 @@
 import type { Comp, Eid, Graph } from '@yaks/graph'
 import type { Effects, Event } from '@yaks/effects'
 import { deliverChild } from './children.ts'
+import { transcript } from './react.ts'
+import { seqOf, statusOf } from './status.ts'
 import { ENTRY } from './native.ts'
 import { type Deps, react, type Step } from './react.ts'
 
@@ -52,6 +55,137 @@ export let daemon = (
   let stopping = false
   let stopped: Promise<void> | undefined
   let effects = new Set<Promise<unknown>>()
+  let p = pool(g)
+  let active = new Set<Eid>()
+  let resumes = new Map<Eid, () => void>()
+  let recovered = false
+  let scheduling: Promise<void> | undefined
+  let again = false
+  let schedule = () => {
+    if (stopping) return
+    again = true
+    if (scheduling) return
+    scheduling = enqueue('pool:scheduler', async () => {
+      do {
+        if (stopping) return
+        again = false
+        let rows = await g.read('.dispatch')
+        if (!recovered) {
+          recovered = true
+          for (let b of rows) {
+            if (dispatch(b)?.state == 'active') {
+              await g.apply([{
+                entity: b.entity,
+                dispatch: { state: 'queued' },
+              }], { trusted: true })
+              ;(b.dispatch as Comp).state = 'queued'
+            }
+          }
+        }
+        for (let [id, resume] of resumes) {
+          if (
+            active.size -
+                [...active].filter((id) => p.suspended.has(id)).length >=
+              (p.limits.maxChildren ?? 32)
+          ) break
+          p.suspended.delete(id)
+          resumes.delete(id)
+          resume()
+        }
+        rows.sort((a, b) =>
+          Number(dispatch(a)?.order ?? 0) - Number(dispatch(b)?.order ?? 0)
+        )
+        for (let b of rows) {
+          if (
+            active.size -
+                [...active].filter((id) => p.suspended.has(id)).length >=
+              (p.limits.maxChildren ?? 32)
+          ) break
+          let id = b.entity.eid
+          if (dispatch(b)?.state != 'queued' || active.has(id)) continue
+          if (stopping) return
+          active.add(id)
+          enqueue(id, async () => {
+            if (stopping) return
+            try {
+              let [fresh] = await g.storage.tx((tx) => tx.get([id]))
+              if (!fresh) return false
+              let entries = await transcript(g, id)
+              let cancelled = g.vocab.comps.includes('task') &&
+                (await g.read(`.task .claim.session=${id} .cancelled`)).length >
+                  0
+              if (cancelled && statusOf(entries) != 'stopped') {
+                await g.apply([{
+                  entity: { eid: id + ':cancelled' },
+                  entry: { session: id, seq: seqOf(entries.at(-1)!) + 1 },
+                  stop: {},
+                }], { trusted: true })
+              }
+              if (cancelled || statusOf(entries) == 'stopped') {
+                await g.apply([{
+                  entity: { eid: id },
+                  dispatch: { state: 'settled' },
+                }], { trusted: true })
+                return true
+              }
+              let args = dispatch(fresh)?.args
+              if (typeof args == 'string') {
+                let prepared = await p.limits.prepareChild?.({
+                  parent: String((b.spawned as Comp).parent),
+                  child: id,
+                  args: JSON.parse(args),
+                })
+                await g.apply([{
+                  entity: { eid: id },
+                  ...prepared,
+                  dispatch: { state: 'active', args: null },
+                }], { trusted: true })
+              } else {
+                await g.apply([{
+                  entity: { eid: id },
+                  dispatch: { state: 'active' },
+                }], { trusted: true })
+              }
+              return true
+            } catch (err) {
+              report(err, id)
+              let entries = await transcript(g, id)
+              await g.apply([{
+                entity: { eid: id },
+                dispatch: { state: 'settled' },
+              }, {
+                entity: { eid: id + ':preparation-error' },
+                entry: { session: id, seq: seqOf(entries.at(-1)!) + 1 },
+                exception: {},
+                content: { body: String(err) },
+              }, {
+                entity: { eid: id + ':preparation-stop' },
+                entry: { session: id, seq: seqOf(entries.at(-1)!) + 2 },
+                stop: {},
+              }], { trusted: true })
+              return true
+            }
+          }).then((ready) => ready ? turn(id) : undefined).finally(() => {
+            active.delete(id)
+            schedule()
+          }).catch(report)
+        }
+      } while (again)
+    }).finally(() => {
+      scheduling = undefined
+      if (again) schedule()
+    })
+    scheduling.catch(report)
+  }
+  p.changed = schedule
+  p.stopping = () => stopping
+  p.resume = (id) => {
+    if (stopping || !active.has(id)) return Promise.resolve()
+    return new Promise<void>((resolve) => {
+      resumes.set(id, resolve)
+      schedule()
+    })
+  }
   let busy = new Map<Eid, Promise<unknown>>()
   let queued = new Map<Eid, Promise<Step>>()
   let enqueue = <T>(session: Eid, work: () => Promise<T>): Promise<T> => {
@@ -64,7 +198,7 @@ export let daemon = (
     job.then(clear, clear)
     return job
   }
-  let wake = (session: Eid): Promise<Step> => {
+  let turn = (session: Eid): Promise<Step> => {
     if (stopping) {
       return Promise.resolve({ did: 'nothing', status: 'stopped', added: [] })
     }
@@ -78,6 +212,15 @@ export let daemon = (
       try {
         let step = await react(g, session, deps)
         each(step)
+        if (['settled', 'failed', 'stopped'].includes(step.status)) {
+          let [self] = await g.storage.tx((tx) => tx.get([session]))
+          if (self?.dispatch) {
+            await g.apply([{
+              entity: self.entity,
+              dispatch: { state: 'settled' },
+            }], { trusted: true })
+          }
+        }
         if (['settled', 'failed', 'stopped'].includes(step.status)) {
           let [self] = await g.storage.tx((tx) => tx.get([session]))
           let parent = (self?.spawned as Comp | undefined)?.parent
@@ -97,6 +240,31 @@ export let daemon = (
     queued.set(session, step)
     return step
   }
+  let wake = (session: Eid): Promise<Step> => {
+    if (stopping) {
+      return Promise.resolve({ did: 'nothing', status: 'stopped', added: [] })
+    }
+    return enqueue('pool:intake', async () => {
+      if (stopping) {
+        return { did: 'nothing', status: 'stopped', added: [] } as Step
+      }
+      let [self] = await g.storage.tx((tx) => tx.get([session]))
+      if (!self?.dispatch) {
+        turn(session).catch(report)
+        return { did: 'nothing', status: 'pending', added: [] } as Step
+      }
+      if (!active.has(session) || dispatch(self)?.state != 'settled') {
+        await g.apply([{
+          entity: { eid: session },
+          dispatch: { state: 'queued' },
+        }], { trusted: true })
+      }
+      schedule()
+      return { did: 'nothing', status: 'pending', added: [] } as Step
+    })
+  }
+  fx.created('dispatch', () => schedule())
+  schedule()
   fx.created(ENTRY, (e) => {
     if (stopping) return
     let session = String(e.comp?.session)
@@ -162,18 +330,27 @@ export let daemon = (
     }
   }
   let idle = async (session: Eid) => {
-    let seen: Promise<unknown> | undefined
-    while (busy.get(session) != seen) {
-      seen = busy.get(session)
-      await seen
+    for (;;) {
+      await busy.get('pool:intake')
+      await scheduling
+      let job = busy.get(session)
+      if (!job && !active.has(session)) return
+      await job
+      await Promise.resolve()
     }
   }
   let stop = () => {
     stopping = true
+    for (let resume of resumes.values()) resume()
+    resumes.clear()
     return stopped ??= (async () => {
       // Includes effects already reading storage, not just session queues.
-      while (busy.size || effects.size) {
-        await Promise.allSettled([...busy.values(), ...effects])
+      while (busy.size || effects.size || scheduling) {
+        await Promise.allSettled([
+          ...busy.values(),
+          ...effects,
+          ...scheduling ? [scheduling] : [],
+        ])
       }
     })()
   }

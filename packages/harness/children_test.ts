@@ -147,7 +147,7 @@ Deno.test('wait resolves while child completion waits behind the parent tool', a
   await a.close()
 })
 
-Deno.test('caps refuse with error entries, spawn nothing, and serialize across parents', async () => {
+Deno.test('child capacity queues without rejection; root starts retain their separate guard', async () => {
   let pending = deferred<Reply>()
   let childAsked = deferred<void>()
   let h = open(':memory:')
@@ -168,12 +168,8 @@ Deno.test('caps refuse with error entries, spawn nothing, and serialize across p
   let parent = await a.start('parent')
   await childAsked.promise
   await a.idle(parent)
-  assertEquals((await a.children(parent)).length, 1)
-  assert(
-    (await a.transcript(parent)).some((b) =>
-      (b.error as Comp)?.code == 'child_cap'
-    ),
-  )
+  assertEquals((await a.children(parent)).length, 2)
+  assertEquals((await h.g.read('.dispatch.state=queued')).length, 1)
   pending.resolve(reply('done'))
   await finish(a, parent)
   await a.close()
@@ -276,8 +272,8 @@ Deno.test('tool admission serializes competing parents, replays a call once, and
     spawn.run({ prompt: 'two' }, ctx(2)),
   ])
   assertEquals(results[0].status, 'fulfilled')
-  assertEquals(results[1].status, 'rejected')
-  assertEquals((await h.g.read('.spawned')).length, 1)
+  assertEquals(results[1].status, 'fulfilled')
+  assertEquals((await h.g.read('.spawned')).length, 2)
   let eid = (results[0] as PromiseFulfilledResult<string>).value
   assertEquals(await spawn.run({ prompt: 'replay' }, ctx(1)), eid)
   assertEquals((await h.g.read('.model.name=alternate')).length, 1)

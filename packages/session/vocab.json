@@ -272,6 +272,21 @@
           "format": "date-time"
         }
       }
+    },
+    "dispatch": {
+      "type": "object",
+      "description": "durable child pool admission; queued intent survives daemon restart",
+      "properties": {
+        "state": {
+          "type": "string"
+        },
+        "args": {
+          "type": "string"
+        },
+        "order": {
+          "type": "number"
+        }
+      }
     }
   },
   "$vocabulary": {

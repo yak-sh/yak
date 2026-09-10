@@ -168,7 +168,15 @@ export let usingBefore = (
  */
 export let sessionStatus = {
   tag: 'text' as const,
-  values: ['empty', 'pending', 'running', 'settled', 'stopped', 'failed'],
+  values: [
+    'empty',
+    'pending',
+    'running',
+    'queued',
+    'settled',
+    'stopped',
+    'failed',
+  ],
   deps: [] as string[],
   expr: (owner: string): string => {
     let newest = `(select e.entity from "entry" e where e."session" = ${owner}
@@ -207,6 +215,7 @@ export let sessionStatus = {
       when ${newest} is null then 'empty'
       when ${wears(STOP_ENTRY)} then 'stopped'
       when ${wears(EXCEPTION)} then 'failed'
+      when exists (select 1 from dispatch d where d.entity = ${owner} and d.state = 'queued') then 'queued'
       when ${
       wears(ERROR)
     } then case when ${allErrors} then 'failed' else 'pending' end

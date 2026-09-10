@@ -144,12 +144,22 @@ done still reports its outcome, using a receipt id derived from its final entry.
 `resume()` reconciles missed receipts without repeating ones already received.
 Fork/spawn calls themselves are idempotent by call id.
 
-`agent({maxChildren: 32, maxSessions: 64})` sets the defaults explicitly.
-Admission is serialized per graph across parents; concurrent roots count against
-the same live-session limit. A refused tool call writes an error and a tool
-result, and creates no child. Settled, failed, and stopped sessions free their
-slots. These are harness tool/start limits, not a security boundary against
-arbitrary graph writes or a distributed lock across multiple daemons.
+`agent({maxChildren: 32, maxSessions: 64})` sets the defaults explicitly. Child
+submissions return an ID and durable `dispatch.state=queued` intent;
+`session.status=queued` distinguishes waiting children from active or settled
+ones. One shared graph-local scheduler admits up to `maxChildren` callbacks
+across all parents (32 by default). FIFO submission order is durable; resumed
+nested waits reacquire a slot before returning. Root sessions do not consume
+child slots; `maxSessions` remains a root-start guard. A waiting delegated
+parent releases its slot, so capacity one supports nested delegation. Worktree
+preparation runs only on admission; failures and queued cancellation terminate
+with a completion receipt. Restart reconciles interrupted admissions; spawn
+replay preserves ID and fork anchor. `stop()` gates admission synchronously and
+drains running storage callbacks, not the durable queue or task settlement.
+Independent supervised processes are untouched. This is a single-daemon pool,
+not a distributed lease or a security boundary against arbitrary graph writes.
+Model/API throughput is still bounded by provider limits; full transcript
+transfer and coarse UI projection costs are unchanged.
 
 `tools` replaces the default table when supplied. `sessionTools(graph, limits)`
 from `@yaks/session` is the standalone delegation table (its admission queries
