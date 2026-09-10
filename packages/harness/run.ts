@@ -244,16 +244,17 @@ export let agent = (opts: Opts = {}): Agent => {
         ])
         return session
       }),
-    send: (session, text) =>
-      d.enqueue(session, async () => {
-        let eid = crypto.randomUUID() as Eid
-        await h.g.apply([{
-          entity: { eid },
-          [ENTRY]: { session },
-          [CONTENT]: { body: text },
-        }])
-        return eid
-      }),
+    send: async (session, text) => {
+      // Admission is independent of the provider/tool execution queue. The
+      // session plugin assigns seq inside this write's transaction.
+      let eid = crypto.randomUUID() as Eid
+      await h.g.apply([{
+        entity: { eid },
+        [ENTRY]: { session },
+        [CONTENT]: { body: text },
+      }])
+      return eid
+    },
     taskEntry: (session, text) =>
       d.enqueue(
         session,
