@@ -80,15 +80,20 @@ PII filter. Tasks enables it in its adapter. Observation vocabulary is not part
 of this package.
 
 The native transport defaults to two bounded retries for credential loading and
-5xx responses, one refresh on 401 when supplied, and no retries for network
-failures, 429, or a stream that has begun. `retries` and `pause` configure the
+for every transient wire failure — a connection that never landed, a body that
+dropped, a stream that ended with no completion, a 5xx or 429, and any fault
+whose provider `code` names capacity (`server_is_overloaded`, `server_error`,
+`overloaded`, `overloaded_error`, `rate_limit_exceeded`) whatever its status.
+Auth and validation refusals fail fast. `Retry-After` extends the backoff, up to
+60s. One refresh on 401 when supplied. `retries` and `pause` configure the
 backoff. `shape` replaces the default request shaping for compatible providers;
 otherwise requests always stream, default to `store: false`, and request
 encrypted reasoning. `reach()` probes `/models` with a five-second timeout: any
 HTTP answer proves connectivity, not authorization.
 
 Native failures are `ResponseError`s with a stable `kind` and optional provider
-`code`, HTTP `status`, rate `limits`, and partial `items`/`evidence`. The Model
+`code` (the error body's or event's `code`, or its `type` when the code is
+null), HTTP `status`, rate `limits`, and partial `items`/`evidence`. The Model
 adapter maps these to `ModelError`s and defaults to no retries. It accepts the
 same transport policies plus `refresh`, `signal`, and `event`; its `store` and
 anchor behavior is unchanged. `frames(stream)` exposes the same SSE decoder

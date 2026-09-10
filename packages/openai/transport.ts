@@ -181,11 +181,24 @@ let fault = (
   fields: Omit<ResponseFault, keyof Error> = {},
 ): ResponseError => Object.assign(new ResponseError(kind, message), fields)
 
+// Capacity is answered as a CODE at least as often as a status: a 200 stream
+// can end in `response.failed` carrying error.code=server_is_overloaded, and a
+// refusal body can name server_error with no 5xx of its own. Both are the
+// backend asking us to come back, so they retry like a dropped connection.
+let busy = new Set([
+  'server_is_overloaded',
+  'server_error',
+  'overloaded',
+  'overloaded_error',
+  'rate_limit_exceeded',
+])
+
 // Terminal provider failures and malformed events are not network failures.
 let transient = (error: ResponseError) =>
   error.kind == 'transport' || error.kind == 'disconnected' ||
   error.kind == 'no_stream' || error.status == 429 ||
-  (error.status != null && error.status >= 500 && error.status < 600)
+  (error.status != null && error.status >= 500 && error.status < 600) ||
+  (error.code != null && busy.has(error.code))
 
 let retryAfter = (error: ResponseError) => {
   let value = error.limits?.['retry-after']
@@ -249,6 +262,10 @@ let safe = (value: unknown, secrets: string[]) => {
   return clean
 }
 
+/** A short machine token — a fault code, a class name, an incomplete reason. */
+let codeOf = (value: unknown) =>
+  typeof value == 'string' && /^[\w.:-]{1,64}$/.test(value) ? value : undefined
+
 // An HTTP-error body carries both a short machine `code` and the human
 // `message` naming what it rejected ("No tool output for function call …").
 // A failed session stamps only the fault's .message, so the reason is the
@@ -266,9 +283,7 @@ let explain = (body: string, secrets: string[]) => {
     : record(parsed.detail)
     ? parsed.detail
     : parsed
-  let code = typeof error.code == 'string' && /^[\w.:-]{1,64}$/.test(error.code)
-    ? error.code
-    : undefined
+  let code = codeOf(error.code) ?? codeOf(error.type)
   let reason = typeof error.message == 'string' && error.message.trim()
     ? error.message.trim()
     : undefined
@@ -278,11 +293,12 @@ let explain = (body: string, secrets: string[]) => {
 let eventCode = (frame: ResponseEvent | undefined) => {
   if (!frame) return undefined
   let response = record(frame.response) ? frame.response : frame
-  let error = record(response.error) ? response.error : response
-  let value = error.code
-  return typeof value == 'string' && /^[\w.:-]{1,64}$/.test(value)
-    ? value
-    : undefined
+  let error = record(response.error) ? response.error : undefined
+  // A nested error names its class in `type` when `code` is null. A bare error
+  // frame's own `type` is the event name ('error'), never the fault's class.
+  return error
+    ? codeOf(error.code) ?? codeOf(error.type)
+    : codeOf(response.code)
 }
 
 let incomplete = (frame: ResponseEvent | undefined) => {
@@ -291,10 +307,7 @@ let incomplete = (frame: ResponseEvent | undefined) => {
   let details = record(response.incomplete_details)
     ? response.incomplete_details
     : {}
-  let reason = details.reason
-  return typeof reason == 'string' && /^[\w.:-]{1,64}$/.test(reason)
-    ? reason
-    : undefined
+  return codeOf(details.reason)
 }
 
 let limitNames = new Set([
@@ -434,6 +447,9 @@ let terminal = async (
     let reason = incomplete(ended) ?? eventCode(ended)
     throw fault(status, `responses: ${status}${reason ? ` — ${reason}` : ''}`, {
       code: eventCode(ended) ?? reason,
+      // A 200 that ends in an overload still answers with the account's rate
+      // headers; carry them so the backoff honors a Retry-After sent there.
+      limits: limits(response.headers),
       evidence: ended ? [...unknown, ended] : unknown,
       items,
     })

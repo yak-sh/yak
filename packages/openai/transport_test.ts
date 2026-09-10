@@ -465,9 +465,10 @@ Deno.test('responses names 429 limits after bounded retries without echoing secr
 })
 
 Deno.test('responses carries a 400 body reason into the fault message', async () => {
-  // The poisoned-session 400: the machine `code` is null and the whole
-  // complaint lives in `message`. The stamp keeps only .message, so the
-  // reason must ride there or the failure is undiagnosable (T-16887).
+  // The poisoned-session 400: the machine `code` is null, the class lives in
+  // `type`, and the whole complaint lives in `message`. The stamp keeps only
+  // .message, so the reason must ride there or the failure is
+  // undiagnosable (T-16887).
   let client = responses({
     credentials: auth(),
     fetch: () =>
@@ -494,7 +495,7 @@ Deno.test('responses carries a 400 body reason into the fault message', async ()
       'call_9 ([redacted]).',
   )
   assertEquals(error.status, 400)
-  assertEquals(error.code, undefined)
+  assertEquals(error.code, 'invalid_request_error')
   assertEquals(JSON.stringify(error).includes('acct-1'), false)
 })
 

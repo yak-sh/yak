@@ -21,6 +21,15 @@ let broken = () =>
       },
     }),
   )
+// The shape a busy backend actually sends: a 200 stream ending in
+// response.failed, the capacity code inside the response's error object.
+let overloaded = () =>
+  sse({
+    type: 'response.failed',
+    response: {
+      error: { code: 'server_is_overloaded', message: 'the server is busy' },
+    },
+  })
 let credentials = {
   get: () => ({ token: 'fake', base: 'https://fake.test/v1' }),
 }
@@ -89,6 +98,80 @@ Deno.test('three body-read failures become one ModelError, or a retry succeeds q
     }
     assertEquals(calls, failures == 1 ? 2 : 3)
     assertEquals(pauses, failures == 1 ? [1000] : [1000, 4000])
+  }
+})
+
+Deno.test('a capacity code is transient however it arrives, whatever the status', async () => {
+  for (
+    let [failure, wait] of [
+      [overloaded, 1000],
+      [
+        () => sse({ type: 'error', code: 'overloaded_error', message: 'busy' }),
+        1000,
+      ],
+      // A body naming its class in `type` with a null `code`, over a 4xx.
+      [() =>
+        new Response(JSON.stringify({ error: { type: 'server_error' } }), {
+          status: 400,
+        }), 1000],
+      [
+        () =>
+          new Response(
+            JSON.stringify({ error: { code: 'rate_limit_exceeded' } }),
+            {
+              status: 400,
+              headers: { 'retry-after': '3' },
+            },
+          ),
+        3000,
+      ],
+    ] as const
+  ) {
+    let calls = 0
+    let pauses: number[] = []
+    let client = transport({
+      credentials,
+      pause: (ms) => {
+        pauses.push(ms)
+        return Promise.resolve()
+      },
+      fetch: () => Promise.resolve(++calls == 1 ? failure() : complete()),
+    })
+    assertEquals((await client.run(req)).items, [item('done').item])
+    assertEquals(calls, 2)
+    assertEquals(pauses, [wait])
+  }
+})
+
+Deno.test('an overloaded backend recovers with no error, or exhausts into exactly one', async () => {
+  for (let mode of ['recover', 'exhaust', 'unauthorized'] as const) {
+    let calls = 0
+    let pauses: number[] = []
+    let model = responses({
+      credential: credentials.get,
+      pause: (ms) => {
+        pauses.push(ms)
+        return Promise.resolve()
+      },
+      fetch: () => {
+        calls++
+        if (mode == 'unauthorized') {
+          return Promise.resolve(new Response('', { status: 401 }))
+        }
+        return Promise.resolve(
+          mode == 'exhaust' || calls == 1 ? overloaded() : complete(),
+        )
+      },
+    })
+    let ask = () => model({ model: 'm', items: [], tools: [] })
+    if (mode == 'recover') {
+      assertEquals((await ask()).items, [{ kind: 'assistant', text: 'done' }])
+    } else await assertRejects(ask, ModelError)
+    assertEquals(calls, mode == 'recover' ? 2 : mode == 'exhaust' ? 3 : 1)
+    assertEquals(
+      pauses,
+      mode == 'recover' ? [1000] : mode == 'exhaust' ? [1000, 4000] : [],
+    )
   }
 })
 
