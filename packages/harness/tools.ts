@@ -1,3 +1,5 @@
+import { artifactTools } from './artifact_tools.ts'
+import type { ImageOptions } from './images.ts'
 import { valueTools } from '@yaks/blob'
 // What the agent can do here: run a program, and read and write its own graph.
 //
@@ -85,7 +87,9 @@ export let graphTools = (
 /** The shell, delegation, and the graph, with one wait for all three targets. */
 export let harnessTools = (
   g: Graph,
-  opts: { cwd?: string; depth?: Depth } & ChildLimits = {},
+  opts:
+    & { cwd?: string; depth?: Depth; images?: ImageOptions | false }
+    & ChildLimits = {},
 ): Tool[] => {
   let shell = shellTools(g, { cwd: opts.cwd })
   let directory = opts.cwd ?? Deno.cwd()
@@ -134,6 +138,7 @@ export let harnessTools = (
   return [
     ...shell.map((t) => t.name == 'wait' ? wait : t),
     ...session.filter((t) => t.name != 'wait'),
+    ...artifactTools(g, opts),
     ...graphTools(g, { depth: opts.depth }),
     ...valueTools(async (entity) =>
       (await g.read('.entity.eid=' + JSON.stringify(entity)))[0]

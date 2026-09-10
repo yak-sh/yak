@@ -80,6 +80,8 @@ export type Deps = {
   instructions?: string
   /** Optional bounded model-facing tool-result projection; storage stays unchanged. */
   resultText?: (entry: Bundle) => Promise<string>
+  /** Resolve explicitly admitted multimodal context without storing bytes in entries. */
+  contextItems?: (window: Bundle[], entries: Bundle[]) => Promise<Item[]>
   /** Unexpected model/tool defects, separate from expected refusals. */
   report?: (error: unknown, session: Eid, phase: string) => void
   mint?: () => Eid
@@ -280,6 +282,9 @@ export let react = async (
   }
   let reply: Reply
   try {
+    if (deps.contextItems) {
+      req.items.push(...await deps.contextItems(window, entries))
+    }
     reply = await deps.model(req)
   } catch (e) {
     if (!(e instanceof ModelError)) deps.report?.(e, session, 'model')

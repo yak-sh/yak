@@ -55,3 +55,11 @@ The caller supplies tool descriptions and executes returned calls. This
 interface neither executes tools nor stores conversation history. Optional
 provider anchors only work when the provider retains the corresponding response;
 without an anchor, the caller supplies the required conversation items again.
+
+### Image inputs
+
+An explicit image input is an `Item` with `kind: 'image'`, `bytes: Uint8Array`,
+`mediaType`, and a textual `label`. Providers translate it into their multimodal
+request format. Applications resolve artifact references before calling the
+model; raw bytes need not be persisted in conversation text. Applications should
+bound total image bytes and ensure the selected provider supports vision.

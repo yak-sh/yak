@@ -47,6 +47,8 @@ export let artifactDoc: VocabDoc = {
         'An artifact produced by a model response; the entry belongs to its session.',
       properties: {
         artifact: { type: 'string', ref: 'artifact', death: 'keep' },
+        audience: { type: 'string', enum: ['user', 'model'] },
+        revision: { type: 'string' },
         call: { type: 'string' },
         revised_prompt: { type: 'string' },
       },

@@ -45,6 +45,24 @@ let str = (value: unknown, fallback = '') =>
 
 // The neutral items in the API's four spellings.
 let shape: Record<Item['kind'], (item: Item) => unknown> = {
+  image: (i) => {
+    let image = i as Extract<Item, { kind: 'image' }>
+    let chunks: string[] = []
+    for (let at = 0; at < image.bytes.length; at += 8192) {
+      chunks.push(String.fromCharCode(...image.bytes.subarray(at, at + 8192)))
+    }
+    return {
+      role: 'user',
+      content: [
+        { type: 'input_text', text: image.label },
+        {
+          type: 'input_image',
+          image_url: 'data:' + image.mediaType + ';base64,' +
+            btoa(chunks.join('')),
+        },
+      ],
+    }
+  },
   instruction: (i) => ({
     role: 'developer',
     content: [{ type: 'input_text', text: (i as { text: string }).text }],

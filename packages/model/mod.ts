@@ -55,6 +55,7 @@ export let models = (): Plugin => ({ name: '@yaks/model', vocab: [modelDoc] })
 
 /** One line of a conversation as a model sees it. */
 export type Item =
+  | { kind: 'image'; bytes: Uint8Array; mediaType: string; label: string }
   | { kind: 'instruction'; text: string }
   | { kind: 'user'; text: string }
   | { kind: 'assistant'; text: string }

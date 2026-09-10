@@ -422,3 +422,33 @@ one transaction, preserving entry identities and fork boundaries. This is an
 O(history) one-time operation; subsequent startups use a migration marker. Do
 not run an older harness writer concurrently during the upgrade. Normal appends
 query the latest local entry, not the entire transcript.
+
+## Importing, attaching, and inspecting files
+
+The default tools include:
+
+- `artifact_import({path})`: copies a regular local file (up to 20 MiB) into
+  external artifact storage. Relative paths use the calling session's directory.
+  Later changes to the source file do not change the stored snapshot. Importing
+  does not attach the file or expose its contents to the model.
+- `artifact_attach({artifact})`: attaches an existing artifact to the current
+  tool-call entry for the user. Images can use the configured terminal renderer;
+  other formats retain a reference label. This does not enable model vision.
+- `image_view({artifact})`: explicitly supplies a registered PNG, JPEG, or WebP
+  to the model following the inspection result. This requires a vision-capable
+  provider/model. There is no automatic retry with the image removed.
+
+The tools use the same external storage directory as generated images. Image
+bytes are verified against the registered hash and size. The graph stores the
+reference, audience, and admitted revision, not base64. The OpenAI adapter adds
+an `input_image` user message after the tool results. Only the outgoing provider
+request contains a data URL. The original tool call/result pair remains intact.
+
+A replay, including inherited fork history, includes explicitly viewed images
+again; continuation requests include only inspection results in their new
+window. User-only attachments never become model image inputs. Changing an
+artifact reference after inspection fails the revision check instead of sending
+new bytes under the old admission. Requests are limited to 20 MiB of inspected
+images. These tools currently inspect signatures rather than fully decoding
+images; animated GIF, SVG, remote URL import, and video are unsupported. Unknown
+imported files receive `application/octet-stream`.

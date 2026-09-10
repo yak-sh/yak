@@ -1,3 +1,4 @@
+import { imageContext } from './artifact_tools.ts'
 import { configuredImages, type ImageOptions, readImage } from './images.ts'
 import { outputView } from '@yaks/context'
 import { rootOf } from './tree.ts'
@@ -187,6 +188,8 @@ export let agent = (opts: Opts = {}): Agent => {
       model,
       tools,
       instructions: opts.instructions,
+      contextItems: (window, entries) =>
+        imageContext(h.g, window, entries, opts.images),
       resultText: tools.some((t) => t.name == 'graph_value_read')
         ? (entry) => outputView(h.g, entry, opts.outputLimit)
         : undefined,
