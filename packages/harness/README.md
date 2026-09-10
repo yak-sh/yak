@@ -262,6 +262,7 @@ session, and anonymous/external completions retain their normal receipts.
 Provenance survives restart; older marks without an actor are treated as
 external. Removing and recreating a completion mark records the new writer;
 editing an existing mark preserves its original actor.
+
 ### Session tree
 
 Sessions are grouped beneath their root, with assignment titles and compact IDs.
