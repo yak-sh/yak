@@ -19,7 +19,8 @@ import { Unknown, type Vocab } from '@yaks/vocab'
 import { blobRead } from '@yaks/blob'
 import { fields, search } from '@yaks/fts'
 import { traverse } from '@yaks/edge'
-import { fleetVocabOf } from './db.ts'
+import { rows } from '@yaks/sqlite'
+import { fleetVocabOf, readDriver } from './db.ts'
 import type { Sql } from './store/sql.ts'
 import { derived } from './sql_derived.ts'
 import { sentences } from './edge.ts'
@@ -69,6 +70,19 @@ let context = (db: Sql) => {
   let entry = { v, opts }
   held.set(db, entry)
   return entry
+}
+
+// Incremental text membership uses the same doc/content extensions as a full
+// query. SQLite's unicode61 tokenizer, not a JS approximation, decides it.
+export let textMatchesAt = (db: Sql, eid: string, value: string): boolean => {
+  let { v, opts } = context(db)
+  return rows(
+    readDriver(db),
+    v,
+    q.and(q.text(value), q.pred('entity.eid', '=', q.scalar(eid))),
+    opts,
+  )
+    .length > 0
 }
 
 let field = (p: { comp: string; prop: string }): string =>

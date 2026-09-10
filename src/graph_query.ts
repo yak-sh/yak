@@ -52,7 +52,7 @@ import {
   referrersOf,
   refsOf,
   rowsOf,
-  search,
+  searchRead,
   textMatches,
   vocabHash,
   vocabOf,
@@ -78,6 +78,7 @@ import {
   namesLazy,
   ORDER,
   orderOf,
+  pageRanked,
   parseQuery,
   type Pred,
   PROJECT,
@@ -1137,19 +1138,7 @@ export let evalWork = (
   return hits
 }
 
-// A window over a RANKING (`.order=hot`, `.order=similar`) rather than over the
-// spine. An explicit order SURVIVES a window — a window says how much of a
-// sequence to answer with, never which sequence — so the cursor is the anchor's
-// place in the RANKING, not a num to compare against. The cursor spelling never
-// changes: `.after=<num>` names an entity, and each evaluator derives where that
-// entity sits in the order it was asked for (the same rule @yaks/sql compiles as
-// a keyset and @yaks/match answers in memory). An anchor the ranking does not
-// hold restarts from the front, which is what a first page already is.
-export let pageRanked = (rows: Row[], win: Win): Row[] => {
-  let at = win.after == null ? -1 : rows.findIndex((r) => r.num == win.after)
-  let rest = rows.slice(at + 1)
-  return win.limit == null ? rest : rest.slice(0, win.limit)
-}
+export { pageRanked } from './query.ts'
 
 // The authoritative filter-query answer. The index answers when it can (evalFast
 // over matching(), entries included); otherwise the JS matcher over the full
@@ -1178,12 +1167,13 @@ export let evalGraph = (
   // beside the ordinary components lets every /query consumer use one row
   // shape while renderers still receive snippets and comment destinations.
   if (asked.some((p) => p.op == 'text') || orderOf(asked) == 'search') {
-    let found = search(db, q, win.limit ?? ENTRY_PAGE)
-    // Hydrate the ranked set in ONE pass, keeping FTS's order: an eager() per
-    // hit is a statement per component per row. Measured on a copy of the live
-    // graph, 50 hits: 422ms per-hit, 21ms in one pass.
-    let byEid = new Map(
-      rowsOf(db, found.map((h) => h.eid)).map((r) => [r.eid, r.comps]),
+    // A cursor names an entity WITHIN the ranking, not an eid/num cutoff.
+    // Read through the anchor before cutting the page; a missing anchor restarts.
+    let { hits: found, byEid } = searchRead(
+      db,
+      q,
+      win.limit ?? ENTRY_PAGE,
+      win.after,
     )
     let hits = found.map((h) => {
       let row = rowed({ eid: h.eid, comps: byEid.get(h.eid) ?? {} })

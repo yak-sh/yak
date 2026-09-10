@@ -162,6 +162,23 @@ export type Pred = {
 // every ordering, so a caller pages without learning the order key.
 export type Win = { limit?: number; after?: number }
 
+// A window over a RANKING (`.order=hot`, `.order=similar`) rather than over the
+// spine. An explicit order SURVIVES a window — a window says how much of a
+// sequence to answer with, never which sequence — so the cursor is the anchor's
+// place in the RANKING, not a num to compare against. The cursor spelling never
+// changes: `.after=<num>` names an entity, and each evaluator derives where that
+// entity sits in the order it was asked for (the same rule @yaks/sql compiles as
+// a keyset and @yaks/match answers in memory). An anchor the ranking does not
+// hold restarts from the front, which is what a first page already is.
+export let pageRanked = <T extends { num: number }>(
+  rows: T[],
+  win: Win,
+): T[] => {
+  let at = win.after == null ? -1 : rows.findIndex((r) => r.num == win.after)
+  let rest = rows.slice(at + 1)
+  return win.limit == null ? rest : rest.slice(0, win.limit)
+}
+
 // One projected column: which component column a result row carries, and whether
 // a change to it WAKES the subscription. `wake: false` (a `~`-suffixed field) is
 // VOLATILE — its value still rides in the row, but a live layer excludes it from

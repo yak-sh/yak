@@ -55,9 +55,9 @@ import { homeReads } from './persona.ts'
 import {
   type EdgeSelector,
   ftsQuery,
-  ftsTerm,
   leafOf,
   matchQuery,
+  pageRanked,
   parseQuery,
   type Pred,
   type Reach,
@@ -65,12 +65,12 @@ import {
   teaches,
   TEXT,
 } from './query.ts'
-import { reachRows, where } from './sql.ts'
+import { reachRows, textMatchesAt, where } from './sql.ts'
 import { type Frag, toSql } from './relation.ts'
 import { derivedCols, indexDdlOne, tableDdl } from './ddl.ts'
 import { FILTERS, type Vocab, vocabOps } from './store/vocab.ts'
 import type { Vocab as FleetVocab } from '@yaks/vocab'
-import { type Bundle, read as sqliteRead } from '@yaks/sqlite'
+import { type Bundle, type Driver, read as sqliteRead } from '@yaks/sqlite'
 import { and as queryAnd, every, order } from '@yaks/query'
 import { type Derived, raw } from '@yaks/sql'
 import { blobRead } from '@yaks/blob'
@@ -163,6 +163,15 @@ let prep = (db: Sql, sql: string): Statement => {
   if (!s) m.set(sql, s = counting(db.prepare(sql)))
   return s
 }
+
+// Package reads use the same prepared-statement cache and hop accounting as
+// fleet reads. Keep their driver read-only; none of these paths stages writes.
+export let readDriver = (db: Sql): Driver => ({
+  query: (sql, params) => prep(db, sql).all(...params),
+  exec: () => {
+    throw new Error('a storage read cannot execute writes')
+  },
+})
 
 // Every transaction goes through the seam's one door, db.transaction(): the
 // file adapter spells it as BEGIN/savepoints, a hosted store as its runtime's
@@ -6845,17 +6854,12 @@ export let textMatches = (
   pred: Pred,
 ): boolean => {
   needFts(db)
-  let term = ftsTerm(pred.value)
-  return !!term && !!prep(
-    db,
-    `select 1 from entity e where e.eid = ? and e.id in (
-      select rowid from doc_fts where doc_fts match ?
-      union select rowid from content_fts where content_fts match ?
-    )`,
-  ).get(eid, term, term)
+  return textMatchesAt(db, eid, pred.value)
 }
 
-export let search = (db: Sql, q: string, limit = 20): Hit[] => {
+// Search metadata and its package-gathered rows travel together. The query
+// door must not gather a second time just to attach the rank component.
+export let searchRead = (db: Sql, q: string, limit = 20, after?: number) => {
   needFts(db)
   let preds = parseQuery(q, vocabOf(db))
   let addressed = preds.length == 1 && preds[0].op == TEXT
@@ -6886,11 +6890,20 @@ export let search = (db: Sql, q: string, limit = 20): Hit[] => {
       where c.entity = e.id
     )`
   }
-  let cap = narrow ? 'limit ?' : ''
+  let cap = narrow && !after && Number.isFinite(limit) ? 'limit ?' : ''
   let params = narrow?.params ?? []
   let match = ftsQuery(preds)
-  if (!match && !filters.length) return []
-  // Filters screen AFTER the rank, so cast a wider net before the cap.
+  if (!match && !filters.length) return { hits: [], byEid: new Map() }
+  // Retirement must be ordered BEFORE the page cap. Sinking only the capped
+  // hits changes the sequence between page one and a cursor continuation.
+  let retired = `exists (
+    select 1 from project p join archived a on a.entity = p.entity
+    where p.entity = e.id or p.entity =
+      (select project from filed where filed.entity = e.id)
+  )`
+  // These weights, recency and doc-over-content precedence are fleet policy,
+  // not the relevance-only/min-per-index policy of @yaks/fts.find(). FTS5's
+  // score/highlight/snippet must be read in the MATCH statement itself.
   // The bm25 weights read title 8, body 1, envelope 8: an address is
   // identity, so a letter to it outranks prose that merely mentions it.
   let rows = match
@@ -6903,9 +6916,9 @@ export let search = (db: Sql, q: string, limit = 20): Hit[] => {
         -(bm25(doc_fts, 8.0, 1.0, 8.0)
           - 2.0 / (1 + julianday('now') - julianday(coalesce(up.at, cr.at))))
           as score,
-        e.num
+        e.num, ${retired} as retired
       from doc_fts
-      join doc_value d on d.rowid = doc_fts.rowid
+      join doc d on d.entity = doc_fts.rowid
       join entity e on e.id = d.entity
       left join updated up on up.entity = e.id
       left join created cr on cr.entity = e.id
@@ -6916,14 +6929,14 @@ export let search = (db: Sql, q: string, limit = 20): Hit[] => {
         -(bm25(content_fts)
           - 2.0 / (1 + julianday('now') - julianday(coalesce(up.at, cr.at))))
           as score,
-        e.num
+        e.num, ${retired} as retired
       from content_fts
       join entity e on e.id = content_fts.rowid
       left join updated up on up.entity = e.id
       left join created cr on cr.entity = e.id
       where content_fts match ? ${screen}
         and e.id not in (select rowid from doc_fts where doc_fts match ?)
-      order by score desc
+      order by retired, score desc, num
         ${cap}
     `,
     ).all(
@@ -6935,23 +6948,23 @@ export let search = (db: Sql, q: string, limit = 20): Hit[] => {
       ...(cap ? [limit] : []),
     ) as (Omit<
       Hit,
-      'kind' | 'open' | 'retired'
+      'kind' | 'open'
     >)[]
     : prep(
       db,
       `
       select e.eid, d.title, d.title as title_hit, '' as snip,
-        coalesce(julianday(up.at), julianday(cr.at), 0) as score, e.num
+        coalesce(julianday(up.at), julianday(cr.at), 0) as score, e.num, ${retired} as retired
       from entity e
-      left join doc_value d on d.entity = e.id
+      left join doc d on d.entity = e.id
       left join updated up on up.entity = e.id
       left join created cr on cr.entity = e.id
       where 1 ${screen}
-      order by score desc, e.eid ${cap}
+      order by retired, score desc, e.eid ${cap}
     `,
     ).all(...params, ...(cap ? [limit] : [])) as (Omit<
       Hit,
-      'kind' | 'open' | 'retired'
+      'kind' | 'open'
     >)[]
   // An address is identity, not prose. Keep textual mentions behind the
   // entity the operator named, without giving ids a second search index.
@@ -6960,65 +6973,44 @@ export let search = (db: Sql, q: string, limit = 20): Hit[] => {
       db,
       `
       select e.eid, d.title, d.title as title_hit, '' as snip,
-        1000000000 as score, e.num
-      from doc_value d
+        1000000000 as score, e.num, ${retired} as retired
+      from doc d
       join entity e on e.id = d.entity
       where e.eid = ? ${screen}
     `,
     ).get(addressed, ...params) as
-      | Omit<Hit, 'kind' | 'open' | 'retired'>
+      | Omit<Hit, 'kind' | 'open'>
       | undefined
     if (direct) {
       rows = [direct, ...rows.filter((r) => r.eid != direct.eid)]
-        .slice(0, limit)
+      rows = [
+        ...rows.filter((r) => !r.retired),
+        ...rows.filter((r) => r.retired),
+      ]
     }
   }
-  if (filters.length) {
-    // Each hit's components, only the ones the filters actually read —
-    // matchQuery sees the same shape a live cache row has. A path pred
-    // reads its TARGET through the same fetcher (compsOf doubles as the
-    // ent argument), so `.comment.target.doc.title~=j` walks every hop's
-    // component one row further.
-    let owners = (comp: string, prop: string) => {
-      let cs = comp ? [comp] : propOwners(prop)
-      // task.status is DERIVED (D-24102), computed by statusOf from the
-      // completed/cancelled/claim marks — hydrate those so the JS refinement
-      // reads the right value, exactly as a full materialized bag would.
-      return prop == 'status' && cs.includes('task')
-        ? [...cs, 'completed', 'cancelled', 'claim']
-        : cs
+  if (narrow) rows = pageRanked(rows, { limit, after })
+  // Hydrate the candidate set through @yaks/sqlite once. Refinement only
+  // follows keyed references on a compiler decline; exact screens already ran
+  // before the cap. This also admits store-defined components without keeping
+  // another application copy of component projection here.
+  let byEid = new Map(
+    rowsOf(db, rows.map((r) => r.eid)).map((r) => [r.eid, r.comps]),
+  )
+  let compsOf = (eid: string) => {
+    if (!byEid.has(eid)) {
+      byEid.set(eid, rowsOf(db, [eid])[0]?.comps ?? {})
     }
-    // Every component a pred reads, forward path AND reverse hop (its child ref
-    // comp plus, recursively, its sub-filter's) — so compsOf can hydrate a hop's
-    // far side, whichever direction it walks.
-    let predComps = (p: Pred): string[] =>
-      p.rev ? [p.rev.comp, ...p.rev.preds.flatMap(predComps)] : [
-        ...owners(p.comp, p.prop),
-        ...(p.at ?? []).flatMap((h) => owners(h.comp, h.prop)),
-      ]
-    // Only what THIS store has: a filter may name a component another store
-    // in this process declared (query.ts routes them process-wide, parse-time
-    // only), and a store hydrates none of a word it has never planted.
-    let names = [...new Set(filters.flatMap(predComps))]
-      .filter((c) => readOf(db, c))
-    let get = new Map(
-      names.map((c) => [c, reads(db, c, 'where eid = ?')]),
-    )
-    let compsOf = (eid: string) => {
-      let comps: Record<string, Record<string, unknown> | undefined> = {}
-      for (let [c, s] of get) comps[c] = s.get(eid)
-      return comps
-    }
-    // A reverse hop's children, hydrated the same way — referrersOf reads the
-    // {eid}-ref index (T-17678), and each child bag carries its eid so a nested
-    // hop can ask "who points at ME" in turn.
+    return byEid.get(eid)!
+  }
+  if (!narrow) {
     let kids = (eid: string, comp: string, prop: string) =>
       referrersOf(db, [eid], { comp, prop }).map((k) => ({
-        entity: { eid: k },
         ...compsOf(k),
+        entity: { eid: k },
       }))
-    rows = rows
-      .filter((r) =>
+    rows = pageRanked(
+      rows.filter((r) =>
         matchQuery(
           compsOf(r.eid),
           filters,
@@ -7028,52 +7020,42 @@ export let search = (db: Sql, q: string, limit = 20): Hit[] => {
           undefined,
           (eid, p) => textMatches(db, eid, p),
         )
-      )
-      .slice(0, limit)
+      ),
+      { limit, after },
+    )
   }
-  let is = kindOrder.map((k) =>
-    [k, prep(db, `select 1 from ${sqlName(k)} where ${byEid}`)] as const
-  )
-  let aim = prep(
-    db,
-    `
-    select ${refEid('c.target')} as target, td.title from comment c
-    join entity ce on ce.id = c.entity
-    left join doc_value td on td.entity = c.target
-    where ce.eid = ?
-  `,
-  )
-  // Retirement sinks a hit, never hides it: a hit that IS a retired
-  // project, or a task filed under one, keeps its rank order among the
-  // sunk — they all queue behind the last live hit, flagged for the
-  // renderers to mark.
-  let sank = prep(
-    db,
-    `
-    select 1 from project p
-    join archived a on a.entity = p.entity
-    left join filed t on t.entity = (select id from entity where eid = ?1)
-    where p.entity in ((select id from entity where eid = ?1), t.project)
-  `,
-  )
-  let hits = rows.map((r) => {
-    let kind = is.find(([, s]) => s.get(r.eid))?.[0] ?? 'entity'
-    let at = aim.get(r.eid) as
-      | { target: string; title: string | null }
-      | undefined
+  // Comment destinations are read as a SET too, never one statement per hit
+  // per kind. Retirement remains a stable sink, not exclusion.
+  let refs = new Set<string>()
+  for (let r of rows) {
+    let c = compsOf(r.eid)
+    for (let eid of [c.comment?.target]) {
+      if (typeof eid == 'string' && !byEid.has(eid)) refs.add(eid)
+    }
+  }
+  for (let r of rowsOf(db, [...refs])) byEid.set(r.eid, r.comps)
+  let hits: Hit[] = rows.map((r) => {
+    let c = compsOf(r.eid)
+    let target = c.comment?.target as string | undefined
+    let at = target ? byEid.get(target) : undefined
+    let { retired, ...hit } = r
     return {
-      ...r,
-      title: r.title || at?.title || '',
-      kind,
-      open: at?.target ?? r.eid,
-      // What a comment hit points AT, spoken: the line already says
-      // `→ on …`, and a uuid there is unpasteable in every other door.
-      ...(at?.target ? { open_id: human(db, at.target) } : {}),
-      ...(sank.get(r.eid) ? { retired: true } : {}),
+      ...hit,
+      title: r.title || String(at?.doc?.title ?? ''),
+      kind: kindOf(c),
+      open: target ?? r.eid,
+      ...(target ? { open_id: human(db, target) } : {}),
+      ...(retired ? { retired: true } : {}),
     }
   })
-  return [...hits.filter((h) => !h.retired), ...hits.filter((h) => h.retired)]
+  return {
+    hits: [...hits.filter((h) => !h.retired), ...hits.filter((h) => h.retired)],
+    byEid,
+  }
 }
+
+export let search = (db: Sql, q: string, limit = 20): Hit[] =>
+  searchRead(db, q, limit).hits
 
 // Cursor invalidation stamps a delta client checks before trusting its
 // `since`. The epoch is the GRAPH's cursor-lineage identity: minted once and
@@ -7693,10 +7675,7 @@ let wireRead = (db: Sql) => {
 let readSet = (db: Sql, filter: Frag, sort = 'entity.eid') => {
   let { vocab, derived, shape, rank } = wireRead(db)
   let bundles = sqliteRead(
-    {
-      query: (sql, params) => prep(db, sql).all(...params),
-      exec: (sql) => db.exec(sql),
-    },
+    readDriver(db),
     vocab,
     queryAnd(every(), order(sort)),
     {

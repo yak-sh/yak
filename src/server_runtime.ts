@@ -20,7 +20,6 @@ import { host } from './host_deno.ts'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { known } from './catalog.ts'
 import { capabilities, type Change } from './types.ts'
-import { eager, locate } from './db.ts'
 import { type Mutation, mutationResult } from './mutation.ts'
 import {
   apply,
@@ -67,7 +66,8 @@ import { freeze, serveFrozen, store } from './freeze.ts'
 import { landBlob, serveBlob } from './blob.ts'
 import { filed } from './page.ts'
 import { fleetRaw, mailIdOf } from './inbound.ts'
-import { configureEmbed, FLOOR, similarTo, textOf } from './embed.ts'
+import { configureEmbed } from './embed.ts'
+import { similarRows } from './ranked.ts'
 import { type IO, mcpServer } from './mcp.ts'
 import { localIO } from './local_io.ts'
 import { nativeRunner } from './native_runner.ts'
@@ -85,16 +85,8 @@ import { type Observation, safeObservation } from './observations.ts'
 import { outcome, recent, record, stats, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
 import { graph as browserGraph, serverFile } from './reload.ts'
-import { nearOf, TEXT } from './query.ts'
 import { requestVerifier } from './verify.ts'
-import {
-  askOf,
-  askRows,
-  evalAgg,
-  layered,
-  rowed,
-  setRanker,
-} from './graph_query.ts'
+import { askOf, askRows, evalAgg, layered, setRanker } from './graph_query.ts'
 
 // The app plane owns the embedding provider, so it is the plane that teaches
 // the query door to rank. graph_query.ts holds the arm but not the import: the
@@ -102,25 +94,8 @@ import {
 // backend, and refuses a similarity order instead. `.near=` lets an entity
 // supply its current doc and its reusable stored vector; bare text remains
 // available for an arbitrary query.
-setRanker(async (db, asked, limit) => {
-  let near = nearOf(asked)
-  let eid = near ? locate(db, near) : undefined
-  let comps = eid ? eager(db, eid) : undefined
-  let text = eid
-    ? textOf(comps?.doc?.title, comps?.doc?.body)
-    : asked.filter((p) => p.op == TEXT).map((p) => p.value).join(' ')
-  if (!text) return []
-  let found = await similarTo(db, text, limit ?? 8, FLOOR, eid)
-  return (found ?? []).map((h) => {
-    let row = rowed({ eid: h.eid, comps: eager(db, h.eid) })
-    row.comps.rank = {
-      score: h.score,
-      open: h.eid,
-      title: String(row.comps.doc?.title ?? ''),
-    }
-    return row
-  })
-})
+setRanker(similarRows)
+
 import type { WorkLane } from './work.ts'
 import { nativeSoon } from './tmux.ts'
 import { loadPlugins, pluginSpecifiers } from './plugins.ts'
