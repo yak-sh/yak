@@ -1,4 +1,3 @@
-import { address, encode, bodies, blobKeywords, blobRead, blobs, blobSchema, sqliteBlobs } from '@yaks/blob'
 // The harness's own graph: one SQLite file, the vocabulary it speaks, and the
 // plugins that decide what a batch means. Nothing here reaches a server — the
 // harness holds its whole world in `~/.harness/harness.db` (or wherever
@@ -18,6 +17,17 @@ import { address, encode, bodies, blobKeywords, blobRead, blobs, blobSchema, sql
 // STEP leaves is reconciled a rung up, by run.ts `resume()`, because waking a
 // transcript needs a model and this file has none.
 
+import {
+  address,
+  blobKeywords,
+  blobRead,
+  type Blobs,
+  blobs,
+  blobSchema,
+  bodies,
+  encode,
+  sqliteBlobs,
+} from '@yaks/blob'
 import { checkoutDoc } from '@yaks/git/host'
 import { workspaceDoc } from './workspace.ts'
 import { Database } from '@yaks/sqlite/db'
@@ -133,6 +143,50 @@ export type Harness = {
  * h.close()
  * ```
  */
+/** Move every body column this vocabulary marks `store: blob` into the blob
+ * table, once. A marker row decides, never the shape of the text: a body that
+ * happens to read like a hash is prose like any other, and re-running the sweep
+ * over already-addressed rows would address the addresses. The marker and the
+ * rows it speaks for commit together, so a half-moved database cannot exist. */
+let toBlobs = (sql: Driver, bytes: Blobs) => {
+  let quote = (name: string) => '"' + name.replaceAll('"', '""') + '"'
+  sql.exec('begin immediate')
+  try {
+    for (let statement of blobSchema()) sql.exec(statement)
+    sql.exec(
+      'create table if not exists harness_upgrade (name text primary key)',
+    )
+    let done = sql.query(
+      "select name from harness_upgrade where name = 'blob-v1'",
+      [],
+    ).length
+    if (!done) {
+      for (let { comp, prop } of bodies(vocab)) {
+        let rows = sql.query(
+          'select entity, ' + quote(prop) + ' as body from ' + quote(comp) +
+            ' where ' + quote(prop) + ' is not null',
+          [],
+        )
+        for (let row of rows) {
+          let body = String(row.body)
+          let sha = address(body)
+          bytes.put(sha, encode(body))
+          sql.query(
+            'update ' + quote(comp) + ' set ' + quote(prop) +
+              ' = ? where entity = ?',
+            [sha, Number(row.entity)],
+          )
+        }
+      }
+      sql.exec("insert into harness_upgrade values ('blob-v1')")
+    }
+    sql.exec('commit')
+  } catch (error) {
+    sql.exec('rollback')
+    throw error
+  }
+}
+
 export let open = (path = dbPath()): Harness => {
   if (path != ':memory:') {
     let dir = path.slice(0, path.lastIndexOf('/'))
@@ -150,30 +204,13 @@ export let open = (path = dbPath()): Harness => {
   }
   let sql = driver(db)
   let bytes = sqliteBlobs(sql)
-  let store = storage(sql, vocab, { derived: { ...derived, ...blobRead(vocab) } })
+  let store = storage(sql, vocab, {
+    derived: { ...derived, ...blobRead(vocab) },
+  })
   store.install()
-  // One explicit transactional migration: never guess whether legacy prose
-  // happens to look like a hash. The marker and all replacements commit together.
-  let quote = (name: string) => '"' + name.replaceAll('"', '""') + '"'
-  sql.exec('begin immediate')
   try {
-    for (let statement of blobSchema()) sql.exec(statement)
-    sql.exec('create table if not exists harness_upgrade (name text primary key)')
-    if (!sql.query("select name from harness_upgrade where name = 'blob-v1'", []).length) {
-      for (let { comp, prop } of bodies(vocab)) {
-        let rows = sql.query('select entity, ' + quote(prop) + ' as body from ' + quote(comp) + ' where ' + quote(prop) + ' is not null', [])
-        for (let row of rows) {
-          let body = String(row.body)
-          let sha = address(body)
-          bytes.put(sha, encode(body))
-          sql.query('update ' + quote(comp) + ' set ' + quote(prop) + ' = ? where entity = ?', [sha, Number(row.entity)])
-        }
-      }
-      sql.exec("insert into harness_upgrade values ('blob-v1')")
-    }
-    sql.exec('commit')
+    toBlobs(sql, bytes)
   } catch (error) {
-    sql.exec('rollback')
     db.close()
     throw error
   }

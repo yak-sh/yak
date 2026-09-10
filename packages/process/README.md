@@ -73,10 +73,11 @@ user manager wants a different launcher, not a weaker one.
 `shellTools(graph)` is three tools for a [@yaks/session](../session) daemon —
 `shell`, `wait`, `stop` — over these same rows.
 
-Commands run with `bash -c`, inheriting the harness process environment (including
-`PATH` and `HOME`). This is a non-login, non-interactive shell: configure the
-environment when launching the harness, rather than relying on interactive
-`.bashrc` setup. The lower-level `launch` API still uses only its explicit `env`.
+Commands run with `bash -c`, inheriting the harness process environment
+(including `PATH` and `HOME`). This is a non-login, non-interactive shell:
+configure the environment when launching the harness, rather than relying on
+interactive `.bashrc` setup. The lower-level `launch` API still uses only its
+explicit `env`.
 
 ```ts
 import { shellTools } from '@yaks/process'
