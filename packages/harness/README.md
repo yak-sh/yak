@@ -343,3 +343,40 @@ limits.
 `postMessage`. It remains opt-in. See [the worker pilot](WORKER.md) for
 ownership, measurements, shutdown behavior, and unresolved
 subscription/backpressure issues.
+
+## Generated images
+
+Native OpenAI image generation is disabled by default. Set `HARNESS_IMAGES=1` to
+enable it with the configured OpenAI model; that model and API endpoint must
+support the Responses `image_generation` tool. This also works in worker mode.
+The default model/credential combination is not assumed to support image tools;
+use a supported Responses model and API key.
+
+Binary bytes use `@yaks/blob`'s external file backend under `~/.harness/images`,
+or `HARNESS_IMAGE_DIR`. This directory is made private. Keep it with database
+backups. Do not point it at an unrelated shared directory: the harness enforces
+mode 0700 on it.
+
+Programmatic configuration is
+`agent({h, name: 'gpt-4.1', images: {directory,
+tool: {output_format: 'png'}, maxBytes: 33554432}})`.
+`remote` accepts the same cloneable `images` options; storage callbacks are
+constructed inside the worker. Custom model implementations own their own
+artifact storage configuration.
+
+Images are persisted before their graph references, with content-derived
+artifact IDs and attachment entries associated with the original ask and
+session. The transcript shows an artifact label rather than base64. No terminal
+image display, image editing/input replay, or automatic blob cleanup is
+implemented. Inline images and Kitty graphics rendering can be added in the
+terminal backend later. Only the textual artifact reference is replayed when
+provider-side conversation storage is unavailable.
+
+For example, with `OPENAI_API_KEY` configured:
+
+```sh
+HARNESS_IMAGES=1 deno task harness new --model gpt-4.1 'Generate an image of a small garden'
+```
+
+This is a paid provider operation, not a test command. No live generation is
+performed merely by enabling the option; the model decides whether to invoke it.

@@ -57,3 +57,5 @@ export {
   transport,
   type TransportCredential,
 } from './transport.ts'
+
+export type { ImageGeneration, Images } from './images.ts'

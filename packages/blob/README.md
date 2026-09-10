@@ -207,3 +207,18 @@ non-text values fail; the tools do not serialize arbitrary objects.
 Offsets count code points rather than grapheme clusters or terminal columns.
 These APIs currently load the whole text through the reader before slicing or
 searching it; bounded output is not a streaming storage API.
+
+## Binary artifacts
+
+`artifactStore(blobs)` accepts bytes and a media type, returning
+`{address, media_type, size}` after storage verification. Use `fileBlobs` or
+`objectBlobs` for image and other binary bytes, not the SQLite text backend.
+Identical bytes share a SHA-256 address. Existing corrupt or partial objects are
+rewritten before a descriptor is returned. Configure access permissions and
+retention on the external store; it is not part of the SQLite transaction.
+
+`artifactDoc` declares generic `artifact` and `attachment` components. Artifact
+entities describe stored bytes; attachment entries refer to them and can record
+a provider call ID and revised prompt. The host must keep the configured binary
+store available alongside its database. There is no automatic garbage collection
+or database-only restore of external objects.

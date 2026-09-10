@@ -334,6 +334,31 @@ export let react = async (
       }))
     }
   }
+  for (let artifact of reply.artifacts ?? []) {
+    let eid = 'artifact:' + artifact.address
+    added.push({
+      entity: { eid },
+      artifact: {
+        address: artifact.address,
+        media_type: artifact.media_type,
+        size: artifact.size,
+      },
+    })
+    added.push(line({
+      attachment: {
+        artifact: eid,
+        call: artifact.call,
+        ...artifact.revised_prompt
+          ? { revised_prompt: artifact.revised_prompt }
+          : {},
+      },
+      [CONTENT]: {
+        source: ask.entity.eid,
+        body: 'Generated image: ' + eid + ' (' + artifact.media_type + ', ' +
+          artifact.size + ' bytes)',
+      },
+    }))
+  }
   return append(added)
 }
 

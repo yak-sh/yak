@@ -1,3 +1,4 @@
+import { type Artifact, artifactDoc } from '@yaks/blob'
 /**
  * @yaks/model is the seam between a conversation and whoever serves it: the
  * shape of a request, the shape of a reply, and the three entities a graph
@@ -40,7 +41,10 @@ import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 
 /** The `provider`, `model` and `tool` components, to load beside your own. */
-export let modelDoc: VocabDoc = doc
+export let modelDoc: VocabDoc = {
+  ...doc,
+  $defs: { ...doc.$defs, ...artifactDoc.$defs },
+}
 
 export let PROVIDER = 'provider'
 export let MODEL = 'model'
@@ -96,6 +100,7 @@ export type Reply = {
   model: string
   items: Item[]
   usage?: Usage
+  artifacts?: (Artifact & { call: string; revised_prompt?: string })[]
 }
 
 /** The comps a provider stamps on the entry that records a reply. */

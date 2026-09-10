@@ -1,3 +1,4 @@
+import type { ImageOptions } from './images.ts'
 /** Worker owns the authoritative database and all agent execution. */
 import { portLink } from '@yaks/sync'
 import { subscriptions } from '@yaks/api'
@@ -30,6 +31,7 @@ async function handle(method: string, value: unknown): Promise<unknown> {
     let options = args[0] as {
       db?: string
       cwd?: string
+      images?: ImageOptions
       instructions?: string
       fake?: boolean
     }
@@ -37,6 +39,7 @@ async function handle(method: string, value: unknown): Promise<unknown> {
       h: open(options.db),
       cwd: options.cwd,
       instructions: options.instructions,
+      images: options.images,
       ...(options.fake
         ? {
           name: 'fake',

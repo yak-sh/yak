@@ -18,6 +18,7 @@
     "@yaks/task": "../task/mod.ts",
     "@yaks/edge": "../edge/mod.ts",
     "@yaks/sql": "../sql/mod.ts",
-    "@yaks/context": "../context/mod.ts"
+    "@yaks/context": "../context/mod.ts",
+    "@yaks/blob": "../blob/mod.ts"
   }
 }

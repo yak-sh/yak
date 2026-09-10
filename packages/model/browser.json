@@ -1,12 +1,17 @@
 {
-  "_": "The browser gate: @yaks/model must type-check with only the web platform in scope — no Deno namespace, no Node types. `deno check --config packages/model/browser.json packages/model/mod.ts` is the check; it is part of `deno task check`.",
+  "_": "The browser gate: @yaks/model must type-check with only the web platform in scope \u2014 no Deno namespace, no Node types. `deno check --config packages/model/browser.json packages/model/mod.ts` is the check; it is part of `deno task check`.",
   "compilerOptions": {
-    "lib": ["dom", "esnext"],
+    "lib": [
+      "dom",
+      "esnext"
+    ],
     "strict": true
   },
   "imports": {
     "@yaks/query": "../query/mod.ts",
     "@yaks/vocab": "../vocab/mod.ts",
-    "@yaks/graph": "../graph/mod.ts"
+    "@yaks/graph": "../graph/mod.ts",
+    "@yaks/blob": "../blob/mod.ts",
+    "@yaks/sql": "../sql/mod.ts"
   }
 }

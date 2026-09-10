@@ -77,3 +77,9 @@ export * from './file.ts'
 export * from './object.ts'
 
 export { VALUE_LIMIT, type ValueTool, valueTools } from './value.ts'
+export {
+  type Artifact,
+  artifactDoc,
+  type ArtifactStore,
+  artifactStore,
+} from './artifact.ts'

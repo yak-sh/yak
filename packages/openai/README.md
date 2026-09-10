@@ -107,3 +107,43 @@ Cached tokens are part of input, and reasoning tokens are part of output;
 neither should be added again. Missing counts remain unknown, not zero. The
 provider does not report a cache expiration timestamp here; a cache hit records
 past reuse, not a promise that the next request will hit the cache.
+
+## Native image generation
+
+Image generation is opt-in. Supply an external binary store through the existing
+`@yaks/blob` backend interface:
+
+```ts
+import { artifactStore, fileBlobs } from '@yaks/blob'
+import { responses } from '@yaks/openai'
+
+const model = responses({
+  credential: () => ({ token: apiKey, base: 'https://api.openai.com/v1' }),
+  images: {
+    tool: { output_format: 'png', quality: 'auto' },
+    store: artifactStore(fileBlobs('/private/artifacts')),
+  },
+})
+```
+
+The option adds OpenAI's native `image_generation` tool alongside function
+tools. It is not a function tool implemented by the application. Use a Responses
+model that supports it (for example `gpt-4.1`), with API access to image
+generation. The adapter does not assume every model or the Codex subscription
+endpoint supports the tool. See the current
+[OpenAI image generation guide](https://developers.openai.com/api/docs/guides/tools-image-generation)
+for model availability, permissions, settings, and pricing.
+
+Completed `image_generation_call` items are decoded, checked against a default
+32 MiB per-image limit and their PNG/JPEG/WebP signature, then persisted before
+returning the reply. `reply.artifacts` contains addresses and metadata, never
+base64. Partial or incomplete images are not published. Image payloads are
+removed from the adapter's event callback, including nested completion events.
+The low-level transport is still a raw protocol interface: consumers using it
+directly must not log raw image events.
+
+The check validates format signatures, not full image decoding. Dimensions are
+not inferred. A storage error fails the response rather than claiming an image
+was saved. Failed graph admission after a successful external write can leave an
+unreferenced blob; cleanup is not automatic. No live-provider generation was
+used in the automated tests.

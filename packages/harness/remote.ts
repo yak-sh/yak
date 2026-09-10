@@ -1,3 +1,4 @@
+import type { ImageOptions } from './images.ts'
 /** Opt-in worker frontend. UI state remains in the frontend's private graph. */
 import { client } from '@yaks/client'
 import { type Frame, land, portLink, strip } from '@yaks/sync'
@@ -14,6 +15,7 @@ export let remote = async (
   options: {
     db?: string
     cwd?: string
+    images?: ImageOptions
     instructions?: string
     fake?: boolean
   } = {},

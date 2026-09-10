@@ -1,3 +1,4 @@
+import { generatedImages, type Images } from './images.ts'
 // Neutral model items in and out; transport.ts alone owns the Responses wire.
 import {
   type Item,
@@ -30,6 +31,8 @@ export type Options = Omit<ResponseOptions, 'credentials'> & RunOptions & {
   credential: () => Credential | Promise<Credential>
   /** Retry a rejected credential once with a fresh bearer. */
   refresh?: () => Credential | Promise<Credential>
+  /** Explicitly enable the native image tool; completed bytes must be persisted. */
+  images?: Images
 }
 
 type Frame = Record<string, unknown>
@@ -75,12 +78,19 @@ export let input = (items: Item[]): unknown[] =>
   items.map((i) => shape[i.kind](i))
 
 /** The whole request body. */
-export let body = (req: Request, store = false): ResponseRequest =>
+export let body = (
+  req: Request,
+  store = false,
+  images?: Images,
+): ResponseRequest =>
   request({
     model: req.model,
     ...req.instructions ? { instructions: req.instructions } : {},
     input: input(req.items),
-    tools: req.tools.map((t) => ({ type: 'function', strict: false, ...t })),
+    tools: [
+      ...req.tools.map((t) => ({ type: 'function', strict: false, ...t })),
+      ...images ? [{ ...images.tool, type: 'image_generation' }] : [],
+    ],
     ...req.effort ? { reasoning: { effort: req.effort } } : {},
     ...req.anchor ? { previous_response_id: req.anchor } : {},
   }, store)
@@ -146,14 +156,19 @@ let ask = (opts: Options) => {
   })
   return async (req: Request): Promise<Reply> => {
     try {
-      let out = await client.run(body(req, opts.store), {
+      let out = await client.run(body(req, opts.store, opts.images), {
         signal: opts.signal,
-        event: opts.event,
+        // Image payloads must never escape through diagnostic/event subscribers.
+        event: opts.event
+          ? (event) => opts.event!(imageSafe(event))
+          : undefined,
       })
+      let artifacts = await generatedImages(out.items, opts.images)
       return {
         id: str(out.response.id),
         model: out.model,
         items: items(out.items),
+        ...artifacts.length ? { artifacts } : {},
         ...tokenUsage(out.response.usage),
       }
     } catch (error) {
@@ -185,4 +200,16 @@ export let tokenUsage = (raw: unknown) => {
     ),
   ) as Usage
   return Object.keys(usage).length ? { usage } : {}
+}
+
+/** Remove binary result fields from event observers, including nested response output. */
+let imageSafe = <T>(value: T): T => {
+  if (Array.isArray(value)) return value.map(imageSafe) as T
+  if (!record(value)) return value
+  let image = value.type == 'image_generation_call'
+  return Object.fromEntries(
+    Object.entries(value).filter(([key]) =>
+      key != 'partial_image_b64' && !(image && key == 'result')
+    ).map(([key, item]) => [key, imageSafe(item)]),
+  ) as T
 }

@@ -116,6 +116,7 @@ let knownEvents = new Set([
 ])
 
 let knownItems = new Set([
+  'image_generation_call',
   'message',
   'reasoning',
   'function_call',
