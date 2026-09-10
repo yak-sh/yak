@@ -178,7 +178,7 @@
     "./packages/api",
     "./packages/mcp",
     "./packages/cli",
-    "./packages/workers",
+    "./packages/workerd",
     "./packages/task",
     "./packages/session",
     "./packages/process",
@@ -200,7 +200,7 @@
   ],
   "exclude": [
     "src/vendor",
-    "packages/workers/conform.ts",
+    "packages/workerd/conform.ts",
     "packages/durable-object/conform.ts",
     "packages/blob/conform.ts",
     "packages/d1/conform.ts",

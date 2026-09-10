@@ -70,7 +70,7 @@ export type Sockets = {
 // needs no Cloudflare dependency to compile.
 //
 // A plain Worker's upgrade — a pair accepted in THIS isolate, for @yaks/api's
-// own `/ws` route — is @yaks/workers' `workerUpgrade`. Here the socket is
+// own `/ws` route — is @yaks/workerd' `workerUpgrade`. Here the socket is
 // handed to the runtime instead, which is what hibernation means.
 declare let WebSocketPair: { new (): { 0: unknown; 1: Wire } }
 

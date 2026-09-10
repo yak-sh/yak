@@ -11,7 +11,7 @@
 // package declares them and exports nothing — and those globals merge into
 // whatever program includes them, redefining `Response`, `WebSocket` and
 // friends for every other file in it. One file wears them; the rest of the repo
-// type-checks against the web. @yaks/durable-object and @yaks/workers keep the
+// type-checks against the web. @yaks/durable-object and @yaks/workerd keep the
 // same gate.
 //
 // The one shape that cannot be a narrow slice is the PREPARED STATEMENT: it is

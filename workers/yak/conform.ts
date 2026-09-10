@@ -10,7 +10,7 @@
 // repo-wide check, because @cloudflare/workers-types arrives as GLOBALS — the
 // package declares them and exports nothing — and those globals merge into
 // whatever program includes them, redefining `Response`, `WebSocket` and
-// friends for every other file in it. @yaks/durable-object and @yaks/workers
+// friends for every other file in it. @yaks/durable-object and @yaks/workerd
 // keep the same gate, for the same reason.
 
 import { type State, Store } from './graph.ts'

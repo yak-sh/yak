@@ -1,4 +1,4 @@
-# @yaks/workers
+# @yaks/workerd
 
 Cloudflare Workers integration for [@yaks/api](../api/README.md). It provides a
 Worker fetch entrypoint, WebSocket upgrades through `WebSocketPair`, request
@@ -11,8 +11,8 @@ For bundle structure, write phases, and adapter responsibilities, see the
 ## Install
 
 ```sh
-deno add jsr:@yaks/workers
-# or: npx jsr add @yaks/workers
+deno add jsr:@yaks/workerd
+# or: npx jsr add @yaks/workerd
 ```
 
 ## Worker entrypoint
@@ -21,7 +21,7 @@ The examples are a bookshop: books with a price and a status, reviews about
 them, members who buy them.
 
 ```ts
-import { door, worker } from '@yaks/workers'
+import { door, worker } from '@yaks/workerd'
 import { shopGraph } from './shop.ts' // your graph, over your storage
 
 export default worker({
@@ -89,7 +89,7 @@ building the api yourself — inside a Durable Object, say:
 
 ```ts
 import { api } from '@yaks/api'
-import { workerUpgrade } from '@yaks/workers'
+import { workerUpgrade } from '@yaks/workerd'
 
 let handler = api({ graph, authenticate, upgrade: workerUpgrade })
 ```
@@ -107,7 +107,7 @@ server — work out **which** graph the request is for, and hand the request ove
 unopened:
 
 ```ts
-import { forward, type Namespace } from '@yaks/workers'
+import { forward, type Namespace } from '@yaks/workerd'
 
 type Env = { SHOPS: Namespace }
 

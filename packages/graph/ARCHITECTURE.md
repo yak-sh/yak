@@ -75,7 +75,7 @@ RAM or SQLite without a client or transport.
 | [sync](../sync/README.md)                                  | Synchronization primitives over journaled changes.                           |
 | [client](../client/README.md)                              | Local graph state, live queries, optional persistence and remote connection. |
 | [api](../api/README.md)                                    | HTTP writes/queries and WebSocket subscriptions.                             |
-| [edge](../edge/README.md), [workers](../workers/README.md) | Routing and Cloudflare deployment composition.                               |
+| [edge](../edge/README.md), [workerd](../workerd/README.md) | Routing and Cloudflare deployment composition.                               |
 
 SQLite and RAM implement the graph storage contract but have different query
 capabilities and durability. Remote storage also has different transaction

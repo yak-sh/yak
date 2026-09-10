@@ -11,7 +11,7 @@
 // package declares them and exports nothing — and those globals merge into
 // whatever program includes them, redefining `Response`, `WebSocket` and
 // friends for every other file in it. One file wears them; the rest of the
-// repo type-checks against the web. @yaks/workers keeps the same gate.
+// repo type-checks against the web. @yaks/workerd keeps the same gate.
 
 import type { DurableSql, DurableStorage, SqlCursor, SqlValue } from './sql.ts'
 import type { Hibernation, Wire } from './sockets.ts'

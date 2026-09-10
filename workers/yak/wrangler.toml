@@ -402,7 +402,7 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 "@yaks/vocab" = "../../packages/vocab/mod.ts"
 "@yaks/wake" = "../../packages/wake/mod.ts"
 "@yaks/wake/cloudflare" = "../../packages/wake/cloudflare.ts"
-"@yaks/workers" = "../../packages/workers/mod.ts"
+"@yaks/workerd" = "../../packages/workerd/mod.ts"
 "@yaks/yaml" = "../../packages/yaml/mod.ts"
 # @yaks/yaml's own dependency, spelled at the file it is. esbuild walks up from
 # packages/yaml/yaml.ts and finds no node_modules above it — the same reason

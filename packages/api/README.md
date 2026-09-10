@@ -208,7 +208,7 @@ Deno.serve(api({ graph, authenticate }))
 ```
 
 **Cloudflare Workers** — a `WebSocketPair`
-([@yaks/workers](https://jsr.io/@yaks/workers) wraps this for you):
+([@yaks/workerd](https://jsr.io/@yaks/workerd) wraps this for you):
 
 ```ts
 let upgrade = (request: Request) => {

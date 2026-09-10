@@ -45,7 +45,7 @@ let handing = (client: unknown): ResponseInit =>
  *
  * ```ts
  * import { api } from '@yaks/api'
- * import { workerUpgrade } from '@yaks/workers'
+ * import { workerUpgrade } from '@yaks/workerd'
  *
  * let handler = api({ graph, upgrade: workerUpgrade })
  * ```
@@ -56,7 +56,7 @@ export let workerUpgrade: Upgrade = (_request) => {
   let Pair = found()
   if (!Pair) {
     throw new Error(
-      '@yaks/workers: no WebSocketPair here — this needs a Worker',
+      '@yaks/workerd: no WebSocketPair here — this needs a Worker',
     )
   }
   let [client, server] = Object.values(new Pair())

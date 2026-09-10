@@ -156,7 +156,7 @@ In dependency order:
   the model, and a command (`new`, `send`, `ls`, `show`, `tasks`, `models`) over
   @yaks/cli's plugin seam. No server, no sync — everything in and out is a
   bundle or a query, so the same rows move into a fleet's graph unchanged.
-- **[@yaks/workers](./workers)** — that handler as a Cloudflare Worker: the
+- **[@yaks/workerd](./workerd)** — that handler as a Cloudflare Worker: the
   `WebSocketPair` upgrade `/ws` needs, the `fetch` entrypoint a Worker exports,
   a door that reads a cookie or a bearer token, and the hop to a Durable Object
   when the graph lives in one.
@@ -257,7 +257,7 @@ on its own:
   agree about who is writing, and it answers in the same bundles — described by
   an output schema derived from `@yaks/vocab`, so an agent reads a typed value
   rather than parsing prose.
-- `@yaks/workers` is the last inch of that on Cloudflare: the three things a
+- `@yaks/workerd` is the last inch of that on Cloudflare: the three things a
   Worker does differently — make a socket, export a `fetch`, name the writer —
   so a graph is served from the edge without `@yaks/api` learning a Cloudflare
   name.

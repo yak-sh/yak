@@ -183,7 +183,7 @@ sockets(subs, ctx) //                → { accept, message, close, wake }
 
 A regular Worker uses a different WebSocket lifecycle: a `WebSocketPair`
 accepted in the isolate, for [@yaks/api](https://jsr.io/@yaks/api)'s own `/ws`
-route. That one is [@yaks/workers](https://jsr.io/@yaks/workers)'
+route. That one is [@yaks/workerd](https://jsr.io/@yaks/workerd)'
 `workerUpgrade`, and it holds its subscriptions only as long as the isolate
 lives — inside a Durable Object, `sockets` hands them to the runtime instead.
 

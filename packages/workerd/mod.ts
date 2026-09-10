@@ -1,5 +1,5 @@
 /**
- * @yaks/workers — the Cloudflare Workers adapter that serves
+ * @yaks/workerd — the Cloudflare Workers adapter that serves
  * {@link https://jsr.io/@yaks/api | @yaks/api} from a Worker.
  *
  * `@yaks/api` is a plain `Request` → `Response` handler that knows nothing
@@ -20,7 +20,7 @@
  * object runs `api()` over its own storage.
  *
  * ```ts
- * import { door, worker } from '@yaks/workers'
+ * import { door, worker } from '@yaks/workerd'
  *
  * export default worker({
  *   api: (env: { DB: unknown }) => ({

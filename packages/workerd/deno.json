@@ -1,5 +1,5 @@
 {
-  "name": "@yaks/workers",
+  "name": "@yaks/workerd",
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
