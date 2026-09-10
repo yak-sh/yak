@@ -87,7 +87,7 @@ let fresh = newest.filter((e) => {
 Deno.test('priority window orders before limiting and refills on an outside rank edit', () => {
   let ids = Array.from({ length: 5 }, () => uuid())
   for (let [i, eid] of ids.entries()) {
-    apply(db, [
+    applyNumbered(db, [
       { eid, name: 'task', comp: {} },
       { eid, name: 'filed', comp: { domain: 'rank-window', priority: i + 1 } },
     ])
@@ -105,7 +105,7 @@ Deno.test('priority window orders before limiting and refills on an outside rank
   let s = subserve(db, (f) => seen.push(f as Record<string, unknown>))
   s.frame({ sub: 'rank-window', q: line })
   let change = { eid: ids[4], name: 'filed', comp: { priority: 0 } }
-  apply(db, [change])
+  applyNumbered(db, [change])
   seen.length = 0
   s.maintain([change] as never)
   assertEquals(
