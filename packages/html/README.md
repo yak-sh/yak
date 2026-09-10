@@ -28,6 +28,10 @@ serialized, including portable editor actions, and no client script or hydration
 is added. Property lists compose their editors through the same registry; pass
 `readOnly: true` to display values instead of controls.
 
+The caller supplies the registry, vocabulary and context; this package neither
+loads entities nor persists edits. For portable renderer selection and editor
+contracts, see [@yaks/render](../render/README.md).
+
 ## Compatibility
 
 Deno, Node, browsers and workers. No DOM or runtime globals are required.

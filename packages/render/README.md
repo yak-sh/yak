@@ -1,8 +1,8 @@
 # @yaks/render
 
-One renderer registry for yaks.app's browser, text and terminal hosts. Each
-portable renderer receives `(bundle, h, ctx)` and returns whatever the injected
-`h` builds. The package imports no host and performs no action.
+A renderer registry shared by browser, text and terminal hosts. Each portable
+renderer receives `(bundle, h, ctx)` and returns whatever the injected `h`
+builds. The package imports no host and performs no action.
 
 ```ts
 import { define, resolve } from '@yaks/render'

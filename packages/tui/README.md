@@ -1,8 +1,8 @@
 # @yaks/tui
 
 Preact, rendered to a terminal. Preact draws into a fake DOM; a **backend**
-turns that tree into what the screen shows. The backend that ships is a
-hand-rolled ANSI painter that repaints only the lines that changed.
+turns that tree into what the screen shows. The backend that ships is a ANSI
+painter that repaints only the lines that changed.
 
 ```ts
 import { h } from 'preact'
@@ -23,7 +23,7 @@ await run(App)
 thing driven: 500 transcript lines to scroll, an input box that appends to them,
 a sidebar of two panels. Ctrl-C quits.
 
-## The seam
+## Backend contract
 
 ```ts
 type Backend = {
@@ -35,11 +35,10 @@ type Backend = {
 }
 ```
 
-Five calls. `draw` is handed the rendered tree and answers with how many screen
-lines it wrote (what the snappiness test asserts on) and what it measured —
-`{total, height}` per element `id`, which is how a scroll region learns how much
-content it has, since only the thing that lays out knows. `run(App, {backend})`
-takes another one; nothing in a widget names ANSI.
+`draw` receives the rendered tree and returns the number of screen lines written
+and its layout measurements — `{total, height}` per element `id`, which is how a
+scroll region learns how much content it has, since only the thing that lays out
+knows. `run(App, {backend})` takes another one; nothing in a widget names ANSI.
 
 ## Layout
 
@@ -97,8 +96,8 @@ from `draw()` — never from content.
 
 Deno today: `run()` uses `Deno.stdin`, `Deno.consoleSize` and `SIGWINCH`.
 Everything below it — the DOM, the decoder, the painter, the widgets — is
-runtime-agnostic and tested through an injected size and write, so another
-host's entry point is a small file, not a port.
+runtime-agnostic and tested through an injected size and write, but another
+runtime still needs its own input and terminal-lifecycle adapter.
 
 ### Lazy lists
 

@@ -1,16 +1,15 @@
 # @yaks/harness
 
-An agent harness with nothing under it but a file. One SQLite database it makes
-itself, the session daemon in this process, and no server anywhere.
+A local agent runner with SQLite persistence, command-line tools and a terminal
+interface. It composes `@yaks/session` for model execution, `@yaks/process` for
+host commands, and graph-backed task and transcript storage. No server is
+required. Model calls may use an external provider; shell tools execute on the
+host and are not sandboxed.
 
-It is composition, not machinery. Four lines are the whole package:
-
-```
-open()          the file, the vocabulary, the plugins        store.ts
-harnessTools()  shell + delegation + graph, one merged wait    tools.ts
-agent()         the seed, the daemon (@yaks/session), the doors  run.ts
-plugin          the verbs, over @yaks/cli                      cli.ts
-```
+- `open()` creates or opens storage and registers vocabulary and plugins.
+- `harnessTools()` combines shell, delegation and graph tools.
+- `agent()` configures the model and session daemon and exposes session methods.
+- `plugin` supplies commands for `@yaks/cli`.
 
 ## Use
 
@@ -42,9 +41,10 @@ and completion arrives in the parent transcript without a keypress.
 Typing only touches the editor. Post-commit graph effects refresh the content,
 including model replies arriving while stdin is idle; there is no polling loop.
 The sidebar is `Opts.panels` in `app.ts`: each contribution in `panels.ts` is
-`{title, read, Render}`, with `read` returning bundles from graph-backed doors.
-To embed the app, mount `App` with `{agent: a, subscribe: changes(a), panels}`;
-use `run(() => h(App, opts), {backend})` to choose a terminal backend.
+`{title, read, Render}`, with `read` returning bundles from graph-backed
+interfaces. To embed the app, mount `App` with
+`{agent: a, subscribe: changes(a), panels}`; use
+`run(() => h(App, opts), {backend})` to choose a terminal backend.
 
 ```sh
 deno task harness new 'reply with the word pong'
@@ -62,7 +62,8 @@ model is `gpt-6-astra` unless `--model` says otherwise, reached with
 ```ts
 import { agent, open } from '@yaks/harness'
 
-let a = agent({ h: open(':memory:'), model: fake })
+// Supply a model adapter implementing the @yaks/session model contract.
+let a = agent({ h: open(':memory:'), model })
 let s = await a.start('reply with the word pong')
 await a.idle(s)
 for (let e of await a.transcript(s)) console.log(a.line(e))
@@ -76,11 +77,10 @@ isolate that database.
 
 ## What it is made of
 
-- **The graph is the harness.** A transcript is `entry` entities, what it ran is
+- **Persistent state.** A transcript is `entry` entities, what it ran is
   `process` entities, the work is `task` entities — @yaks/session, @yaks/process
-  and @yaks/task over @yaks/sqlite. Nothing here writes SQL and nothing keeps
-  state this process would lose: what is running is `.session.status=running`.
-  Point it at the fleet's graph and none of it changes.
+  and @yaks/task over @yaks/sqlite. Nothing here writes SQL and session state is
+  persisted; running sessions can be queried with `.session.status=running`.
 - **Two statuses are computed, never stored.** `sessionDerived` and @yaks/task's
   `derived(taskMarks)` are registered as derived columns. The task plugin uses
   the same `taskMarks` from @yaks/session: completed/cancelled win, then a claim
@@ -89,7 +89,7 @@ isolate that database.
 - **Work need not be filed.** `doc` + bare `task{}` is a microtask; optional
   `filed{project, priority, domain, assignee}` places it in the portfolio.
   `a.tasks()` reads `.task.status=open,wip`, oldest first, without requiring
-  filing or a project. The CLI and sidebar use that same door.
+  filing or a project. The CLI and sidebar use that same interface.
 - **The agent holds its own graph.** `harnessTools()` is @yaks/process's shell
   plus @yaks/mcp's generic tier (`graph_apply`, `graph_query`, `graph_show`,
   `graph_schema`), each tool's Zod arguments said as JSON Schema for the model.
@@ -236,28 +236,13 @@ admission controls, or prompt supersession. Prompt entries have a query-matched
 transcript renderer. Fork notes are guidance, not a prohibition on useful
 delegation. Provider cache hits are not guaranteed.
 
-#### Prefix identity and cache observations (follow-up)
+#### Prompt history and cache limits
 
-A file's `prompt.revision` is its content SHA-256, not an identity for the full
-served prefix. Delegation guidance and fork notes currently have no revision.
-The ordered transcript snapshots, fork anchor, and ask's recorded base
-instructions preserve instruction history, but no aggregate provider-request
-prefix identity or global cache-warmth registry is recorded yet.
-
-A future registry should derive identities from the exact ordered served prefix
-(including base instructions, message roles, tool definitions and relevant
-provider serialization), scoped by provider/model/account and caching options.
-Record request observations and provider-reported cached tokens separately from
-predicted warmth. Sending a prefix does not prove retention, and an aggregate
-cached-token count does not prove every prefix boundary was cached. Do not infer
-expiry from a universal five-minute timeout. Provider-specific retention
-controls and explicit cache breakpoints are distinct capabilities.
-
-A refresh must record a new served revision without rewriting old entries; forks
-must initially preserve their parent's prefix. Automatic revision selection,
-TTL-based refresh, and live-provider cache/mid-session experiments are outside
-this integration. Correctness and revoked guidance take precedence over cache
-savings.
+`prompt.revision` is the file content SHA-256, not an identity for a full model
+request. Ordered snapshots, the fork anchor and recorded base instructions
+preserve instruction history. There is no aggregate request-prefix identity,
+cache-retention registry, automatic prompt refresh or supersession. Provider
+cached-token counts do not guarantee that a particular prefix remains cached.
 
 Task completion receipts use the mutation's actor, not `completed.by` (the
 attribution of the work). Graph tools sign writes with their calling session;
@@ -289,7 +274,8 @@ were added.
 The session title projection reads original local input, excluding inherited
 fork history and instruction/notice entries. This currently adds transcript
 reads to domain refreshes (not keystrokes); the existing coarse async domain
-projection adapter remains a performance seam, documented in `FRONTEND.md`.
+projection adapter remains a performance interface, documented in
+[Frontend implementation](FRONTEND.md).
 
 ### Defect diagnostics
 
@@ -323,8 +309,7 @@ does not reinterpret ordinary tool results. Transcript entries use `eid` and
 session-local `entry.seq`, not human `entity.num`. Opening a database clears
 historical entry numbers without renumbering tasks or other entities. The SQLite
 allocator retains its pre-migration high-water mark, so old task/other human
-identifiers cannot be reassigned. This is an idempotent storage upgrade;
-candidate tests use temporary databases, never the live store.
+identifiers cannot be reassigned. This storage upgrade is idempotent.
 
 Transcript positions are retained per session, including detached item anchors,
 while asynchronous session reads are pending. **Ctrl+End** jumps to the

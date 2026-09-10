@@ -19,9 +19,9 @@ deno add jsr:@yaks/mcp
 ```ts
 import { mcp } from '@yaks/mcp'
 
-let door = mcp({ graph, authenticate })
+let handler = mcp({ graph, authenticate })
 
-Deno.serve((request) => door(request)) // …or any fetch-style host
+Deno.serve((request) => handler(request)) // …or any fetch-style host
 ```
 
 The handler answers **every** request it is given, so mount it wherever you like
@@ -38,23 +38,23 @@ Deno.serve((request) =>
 )
 ```
 
-The examples below are a bookshop: books with a price and a status, reviews
-about them, and members who buy them.
+These setup fragments assume a graph instance and an application-defined
+`authenticate` callback. The data examples use a bookshop: books with a price
+and a status, reviews about them, and members who buy them.
 
-## Five tools, and every one speaks bundles
+## Graph tools
 
-There is no tool per component here — no `book_shelve`, no `review_write`. A
-**bundle** already says everything such a tool would say (which entity, which
-components, which columns), so an agent that knows the wire can write anything
-your vocabulary declares.
+Tools operate on bundles: objects containing `entity: {eid}` and component
+objects. The graph vocabulary defines accepted components, columns and types.
+There is no separate tool for each application component.
 
 | tool           | what it does                                                 |
 | -------------- | ------------------------------------------------------------ |
 | `graph_apply`  | bundles in, the batch as applied out — one bundle per entity |
 | `graph_query`  | a query line in, bundles out                                 |
 | `graph_show`   | entities whole, with what points at them, as bundles         |
-| `graph_schema` | the index of your words, or one of them in full              |
-| `search`       | words, ranked — only when you pass a `search` seam           |
+| `graph_schema` | component index or detailed component schema                 |
+| `search`       | ranked text results — requires a `search` callback           |
 
 ```jsonc
 // graph_apply
@@ -91,8 +91,8 @@ its column names — small enough to read whole. Named, it answers that componen
 in full: each column's type and meaning, what is server-owned or unique or kept
 as bytes, what points at it and what it points at, a bundle that writes it, and
 the page your host documents it on (`guide`). It rarely has to ask at all:
-`graph_apply`'s own input schema is that vocabulary, typed, so the write door
-teaches itself.
+`graph_apply`'s own input schema is that vocabulary, typed, so the write
+interface teaches itself.
 
 ## Output schemas, and what they cost
 
@@ -169,7 +169,7 @@ writes anything your vocabulary declares, and a component appears in
 `graph_schema` and in the write schema by itself. A tool per feature is a roster
 that moves under every client you have.
 
-## The door is where trust lives
+## Authentication and write attribution
 
 A bundle can say anything, including whose name is on it. So a server is built
 per request around the identity your `authenticate` returned, and every batch a
@@ -183,30 +183,30 @@ let authenticate = (request: Request) => {
 ```
 
 Return `null` and writes land unattributed; throw `Unauthorized` and the request
-is answered with a 401. It is the same `Authenticate` seam
-[@yaks/api](https://jsr.io/@yaks/api) takes, and the same signing, so both doors
-onto one graph agree about who is writing.
+is answered with a 401. It is the same `Authenticate` interface
+[@yaks/api](https://jsr.io/@yaks/api) takes, and the same signing, so both
+interfaces onto one graph agree about who is writing.
 
 Nothing else about a call is trusted either: which columns a caller may write,
 whether a precondition still holds, and what a delete takes with it are all
 [@yaks/graph](https://jsr.io/@yaks/graph)'s to decide.
 
-A door anybody may call is `readOnly`: `graph_apply` is then not a tool that
-refuses, it is a tool that is not listed. Where such a door serves a graph it
-picks per call — one tenant, one app, one shelf — `scope` says what to name it
-by, and every read carries those arguments beside its own:
+For a public read-only endpoint, set `readOnly`: `graph_apply` is then not a
+tool that refuses, it is a tool that is not listed. Where such an endpoint
+serves a graph it picks per call — one tenant, one app, one shelf — `scope` says
+what to name it by, and every read carries those arguments beside its own:
 
 ```ts
-let door = mcp({
+let handler = mcp({
   graph: shelfFor(request),
   readOnly: true,
   scope: { shelf: z.string().describe('which shelf') },
 })
 ```
 
-The tools ignore them: the door read them off the call and built the graph they
-name before the server saw the request. They are declared so a client knows to
-say them.
+The tools ignore them: the interface read them off the call and built the graph
+they name before the server saw the request. They are declared so a client knows
+to say them.
 
 ## Plugins bring tools
 
@@ -295,7 +295,7 @@ in with it.
 ## Compatibility
 
 **Deno, Node, Bun, and Cloudflare Workers** for `@yaks/mcp`; `@yaks/mcp/stdio`
-needs a process, so Deno, Node and Bun. The HTTP door is stateless — one
+needs a process, so Deno, Node and Bun. The HTTP interface is stateless — one
 JSON-RPC request in, one reply out — so a restart strands nobody and two
 isolates need to agree about nothing. Its dependencies are the sibling packages
 `@yaks/graph`, `@yaks/api` and `@yaks/vocab`, plus `@modelcontextprotocol/sdk`
@@ -306,8 +306,8 @@ and `zod`.
 [@yaks/graph](https://jsr.io/@yaks/graph) owns the bundle wire and `apply()`;
 [@yaks/vocab](https://jsr.io/@yaks/vocab) describes the components;
 [@yaks/query](https://jsr.io/@yaks/query) parses the query line;
-[@yaks/api](https://jsr.io/@yaks/api) is the door for browsers and other
-programs, and this is the door for agents. Compose
+[@yaks/api](https://jsr.io/@yaks/api) is the interface for browsers and other
+programs, and this is the interface for agents. Compose
 [@yaks/fts](https://jsr.io/@yaks/fts) into your storage and a bare word filters
 inside `graph_query` too.
 

@@ -1,7 +1,9 @@
 # @yaks/preact
 
 Preact's host for `@yaks/render`. Bind a synchronous bundle store and optional
-subscription into an `Entity` component, then mount it with Preact:
+subscription into an `Entity` component, then mount it with Preact. This
+fragment assumes a registry from `@yaks/render`, a loaded vocabulary, a bundle
+map and an application subscription function `watch`:
 
 ```ts
 import { entity } from '@yaks/preact'
@@ -55,8 +57,8 @@ host never calls a native `Render` as an ordinary function.
 ## Example
 
 From this directory, run `deno task example`, then open the loopback address it
-prints. The yaks.app page demonstrates one portable renderer, a function store,
-and a button that updates it through the subscription seam.
+prints. The example page demonstrates one portable renderer, a function store,
+and a button that updates it through the subscription interface.
 
 The example serves TypeScript as individual JavaScript modules using the same
 Sucrase stripping as the application, with an import map pointing at the

@@ -53,8 +53,7 @@ that remove HTML may lose those distinctions.
 ## Content boundary
 
 Every text node and href loses the entire C0/DEL/C1 class before formatting.
-This lifts the control class from `src/terminal.ts` but deliberately retains
-none of its text exceptions: FTS markers, tabs and literal newlines disappear.
+Tabs, literal newlines and control-based search-highlight markers are removed.
 Use `br` or block/list elements to express line breaks, including inside `pre`.
 Only the host emits formatting newlines. Code and unknown wrappers cross the
 same boundary. Links also encode characters that would break Markdown's

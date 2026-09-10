@@ -13,7 +13,7 @@ That gives you `yak`. (`npx` and `bunx` reach JSR through its npm bridge at
 `npm.jsr.io` — configure the `@jsr` scope and the package is `@jsr/yaks__cli` —
 but Deno is the supported install, and the one this is tested against.)
 
-## What it is
+## Server tools
 
 There is no list of verbs in this package. It asks the server for `tools/list`
 and every tool it gets back is a subcommand:
@@ -24,9 +24,8 @@ yak app_files --app recipes --path index.html --content @index.html
 yak graph_query --q '.recipe!'
 ```
 
-So the CLI cannot drift from the connector an agent is talking to, and a tool a
-release adds is a subcommand the day it ships — without publishing this package
-again.
+Server tools become commands without a CLI release. Tool discovery depends on
+the selected server and its cached tool list.
 
 Four verbs are the command's own and shadow a tool of the same name: `help`,
 `login`, `logout`, `apply`.
@@ -41,7 +40,7 @@ import { main, type Plugin, PLUGINS } from '@yaks/cli/yak'
 
 let mine: Plugin = {
   name: 'mine',
-  about: 'this box’s own verbs',
+  about: 'local commands',
   verbs:
     () => [{ name: 'ping', about: 'say hello', run: (c) => (c.out('hi'), 0) }],
 }
@@ -50,10 +49,10 @@ Deno.exit(await main(Deno.args, [mine, ...PLUGINS]))
 ```
 
 `yak --help` renders every table on one page, one column throughout. The
-**first** plugin to name a verb wins, so the order is the precedence and a box
-that adds its own decides where it sits. A plugin is asked for its table only
-until the word is found, so one that has to reach the network for its verbs
-costs nothing on a line that never reaches it.
+**first** plugin to name a verb wins, so the order is the precedence and an
+application chooses precedence through plugin order. A plugin is asked for its
+table only until the word is found, so one that has to reach the network for its
+verbs costs nothing on a line that never reaches it.
 
 Two plugins ship here: the server's tools (above), and the apps' commands.
 
@@ -94,29 +93,27 @@ argument nobody gave are all refused here, before the round trip.
 
 ## Output
 
-The words the tool said, on stdout. `--json` prints its structured result
-instead:
+Tool text is written to stdout. `--json` prints its structured result instead:
 
 ```sh
 yak graph_query --q '.recipe!' --json | jq '.[].doc.title'
 ```
 
-Exit codes: `0` said, `1` the tool or the door refused, `2` the command line was
-wrong.
+Exit codes: `0` success, `1` tool or transport error, `2` invalid command-line
+arguments.
 
 ## Signing in
 
-The bearer is `$YAKS_TOKEN` when it is set — which is how a sandbox hands one
-over with no file to write — and otherwise the one `yak login` wrote, at 0600
-under this OS's config directory:
+The bearer token comes from `$YAKS_TOKEN` when set, otherwise from the file
+written by `yak login` with mode 0600 in the OS config directory:
 
 ```sh
 yak login <token>     # remembered for this host
 yak logout            # forgotten
 ```
 
-A 401 answers with the one sentence to act on, not an OAuth flow: this is a
-command line and it has no browser to follow a challenge with.
+A 401 reports an authentication error. The CLI does not launch an OAuth browser
+flow; supply a valid token and retry.
 
 ## Which server
 
@@ -139,9 +136,9 @@ cached list is not.
 
 ## apply
 
-`yak apply` is `graph_apply` with a door for a stream. A batch is atomic, and a
-file of bundles is a load rather than one batch, so NDJSON — one bundle per line
-— goes over in batches of 50:
+`yak apply` is `graph_apply` with streaming input. A batch is atomic, and a file
+of bundles is a load rather than one batch, so NDJSON — one bundle per line —
+goes over in batches of 50:
 
 ```sh
 cat bundles.ndjson | yak apply
@@ -151,6 +148,6 @@ yak apply --change '[{"entity":{"eid":"$r"},"doc":{"title":"Lemon cake"}}]'
 
 ## Dependencies
 
-None. The three JSON-RPC calls this makes — `initialize`, `tools/list`,
-`tools/call` — are smaller than the SDK that would answer them, so a
-`deno install` of this pulls nothing else down.
+The runtime uses native fetch and implements `initialize`, `tools/list` and
+`tools/call` without an MCP SDK dependency. Command execution and credential
+storage require Deno filesystem, environment and network permissions.
