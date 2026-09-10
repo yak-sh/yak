@@ -36,6 +36,12 @@ Output is not a component of this package. A line a process wrote is
 process — the same word a tool result and a model's own words wear, so anything
 that can read a transcript can read a log.
 
+Process files live in `opts.dir`, then `$PROCESS_DIR`, then
+`$TASKS_HOME/processes`, then `~/.tasks/processes` (in precedence order). For
+probes, set `TASKS_HOME` instead of redirecting `HOME` so Deno's module cache
+stays shared. This changes the supervisor's files, not the child's explicit
+environment.
+
 ## Four entry points, one loop
 
 ```ts

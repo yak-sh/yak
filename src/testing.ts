@@ -68,11 +68,15 @@ export let until = async <T>(
 // DENO_DIR) redirected fills a cache of its own: half a gigabyte of /tmp per
 // run, deleted only if the run reaches its cleanup. A test that redirects HOME
 // wants the harness paths moved, never the cache — hand the child this one.
-export let denoDir = () => {
-  let configured = Deno.env.get('DENO_DIR')
+let invokingDenoDir = (() => {
+  let configured = Deno.env.get('TEST_DENO_DIR') || Deno.env.get('DENO_DIR')
   if (configured) return configured
   let home = Deno.env.get('HOME')
   if (Deno.build.os == 'darwin') return `${home}/Library/Caches/deno`
   if (Deno.build.os == 'windows') return `${Deno.env.get('LOCALAPPDATA')}\\deno`
   return `${Deno.env.get('XDG_CACHE_HOME') ?? `${home}/.cache`}/deno`
-}
+})()
+
+// Capture before a test redirects HOME or DENO_DIR. The runner's explicit cache
+// survives even a test module that changes HOME before importing this helper.
+export let denoDir = () => invokingDenoDir

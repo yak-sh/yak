@@ -1,6 +1,7 @@
 import { repairSequences } from '@yaks/session'
 import type { Derived } from '@yaks/sql'
 import { diagnostics } from './diagnostics.ts'
+import { home } from './paths.ts'
 // The harness's own graph: one SQLite file, the vocabulary it speaks, and the
 // plugins that decide what a batch means. Nothing here reaches a server — the
 // harness holds its whole world in `~/.harness/harness.db` (or wherever
@@ -47,10 +48,10 @@ export { harnessDoc, vocab } from './vocab.ts'
 export let derived: Derived = { ...sessionDerived, ...taskDerived(taskMarks) }
 
 /** Where the graph lives when nobody says: `$HARNESS_DB`, else
- * `~/.harness/harness.db`. */
+ * `$HARNESS_HOME/harness.db` (home defaults to `~/.harness`). */
 export let dbPath = (
   env: (name: string) => string | undefined = Deno.env.get,
-): string => env('HARNESS_DB') || `${env('HOME')}/.harness/harness.db`
+): string => env('HARNESS_DB') || `${home(env)}/harness.db`
 
 /** @yaks/sqlite's two-method driver over an embedded database. */
 export let driver = (db: Database): Driver => {

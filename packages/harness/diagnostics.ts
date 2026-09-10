@@ -2,6 +2,7 @@
  * The independent JSONL journal is written FIRST, even if SQLite is broken.
  */
 import type { Bundle, Graph } from '@yaks/graph'
+import { errorPath } from './paths.ts'
 
 export type FailureContext = { phase: string; session?: string }
 export let describeFailure = (error: unknown): string => {
@@ -128,8 +129,7 @@ export let createDiagnostics = (opts: {
 let shared: ReturnType<typeof createDiagnostics> | undefined
 export let diagnostics = () =>
   shared ??= createDiagnostics({
-    path: Deno.env.get('HARNESS_ERROR_LOG') ||
-      (Deno.env.get('HOME') || '.') + '/.harness/exceptions.jsonl',
+    path: errorPath(),
     secrets: ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY'].map((k) =>
       Deno.env.get(k) ?? ''
     ),

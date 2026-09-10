@@ -65,7 +65,7 @@ export type Opts = {
    * files for a caller that publishes its own bounded result */
   stream?: boolean
   /** where pidfiles and stream files live (default `$PROCESS_DIR`, else
-   * `~/.tasks/processes`) */
+   * `$TASKS_HOME/processes`, else `~/.tasks/processes`) */
   dir?: string
   /** how long a wrapper has to write its pidfile before the child is called
    * stillborn (ms, default 10_000) */
@@ -114,9 +114,12 @@ let BEAT = 20
 let beat = (o: Opts) => Math.min(o.poll ?? 1000, BEAT)
 
 /** Where this supervisor keeps its files. */
-export let dirOf = (o: Opts = {}): string =>
-  o.dir ?? Deno.env.get('PROCESS_DIR') ??
-    `${Deno.env.get('HOME')}/.tasks/processes`
+export let dirOf = (
+  o: Opts = {},
+  env: (name: string) => string | undefined = Deno.env.get,
+): string =>
+  o.dir ?? env('PROCESS_DIR') ??
+    `${env('TASKS_HOME') || `${env('HOME')}/.tasks`}/processes`
 
 let files = (dir: string, eid: string) => ({
   out: `${dir}/${eid}.out`,

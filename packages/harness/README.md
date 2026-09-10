@@ -100,8 +100,16 @@ deno task harness tasks
 deno task harness models
 ```
 
-`$HARNESS_DB` says where the graph lives (default `~/.harness/harness.db`); the
-model is `gpt-6-astra` unless `--model` says otherwise, reached with
+`$HARNESS_HOME` moves harness state without changing `HOME`: the defaults are
+`$HARNESS_HOME/harness.db` and `$HARNESS_HOME/exceptions.jsonl`, with
+`~/.harness` as the state directory when unset. `$HARNESS_DB` (including
+`:memory:`) and `$HARNESS_ERROR_LOG` override the individual files. For probes,
+set `HARNESS_HOME` and `TASKS_HOME` to scratch directories and clean them up;
+`TASKS_HOME` moves the process supervisor's files (unless `PROCESS_DIR` is set).
+Keep `HOME` unchanged so Deno reuses its module cache. If a probe must move
+`HOME`, export the invoking `DENO_DIR` before moving it.
+
+The model is `gpt-6-astra` unless `--model` says otherwise, reached with
 `$OPENAI_API_KEY` or the Codex CLI's sign-in (@yaks/openai).
 
 ```ts

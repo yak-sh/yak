@@ -285,7 +285,7 @@ export async function runTestCommands(
 }
 
 if (import.meta.main) {
-  let env = { TEST_DENO_DIR: denoDir() }
+  let env = { TEST_DENO_DIR: denoDir(), DENO_DIR: denoDir() }
   let result = await runTestCommands([
     {
       command: Deno.execPath(),

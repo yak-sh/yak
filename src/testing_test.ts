@@ -3,7 +3,8 @@
 // a turn, reproducing a busy event loop without a wall-clock wait.
 import { assertEquals, assertRejects, assertStrictEquals } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
-import { until } from './testing.ts'
+import { stub } from '@std/testing/mock'
+import { denoDir, slow, until } from './testing.ts'
 
 Deno.test('until rechecks a settled fact after a delayed poll', async () => {
   using time = new FakeTime(0)
@@ -42,4 +43,28 @@ Deno.test('until preserves the fact value and errors', async () => {
     }).catch((e) => e),
     error,
   )
+})
+
+Deno.test('denoDir retains the invoking cache after test environment redirection', () => {
+  let cache = denoDir()
+  using _env = stub(Deno.env, 'get', () => '/redirected')
+  assertEquals(denoDir(), cache)
+})
+
+slow('a HOME-moving child shares the invoking Deno cache', async () => {
+  let home = await Deno.makeTempDir({ prefix: 'tasks-cache-probe-' })
+  try {
+    let result = await new Deno.Command(Deno.execPath(), {
+      args: ['info', '--json'],
+      env: { HOME: home, DENO_DIR: denoDir() },
+      stdout: 'piped',
+      stderr: 'piped',
+    }).output()
+    assertEquals(result.code, 0, new TextDecoder().decode(result.stderr))
+    let info = JSON.parse(new TextDecoder().decode(result.stdout))
+    assertEquals(Deno.realPathSync(info.denoDir), Deno.realPathSync(denoDir()))
+    assertEquals(Array.from(Deno.readDirSync(home)), [])
+  } finally {
+    await Deno.remove(home, { recursive: true })
+  }
 })
