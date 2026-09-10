@@ -130,8 +130,12 @@ Deno.test('graph effects paint a model reply without a keypress; sends are input
       (entries.find((b) => !b.prompt && b.content)!.content as Comp).body,
       'ping\n**second line**\n\nthird paragraph',
     )
+    await until(
+      () => ui.text().includes('third paragraph'),
+      'multiline transcript paint',
+    )
     let rows = ui.text().split('\n')
-    let first = rows.findIndex((row) => row.includes('ping'))
+    let first = rows.findIndex((row) => row.split('│')[1]?.includes('ping'))
     let second = rows.findIndex((row) => row.includes('second line'))
     let third = rows.findIndex((row) => row.includes('third paragraph'))
     assert(first >= 0, ui.text())
@@ -165,6 +169,7 @@ Deno.test('graph effects paint a model reply without a keypress; sends are input
       ),
     )
   } finally {
+    reply.resolve({ id: 'cleanup', model: 'fake', items: [] })
     ui.free()
     await a.close()
   }

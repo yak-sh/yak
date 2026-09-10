@@ -249,7 +249,6 @@ Deno.test('boxed user Markdown preserves explicit newlines and paragraph separat
     assertEquals(third, second + 2, ui.text())
     assertEquals(fourth, third + 1, ui.text())
     assertEquals(entry.content, { body: source })
-
   } finally {
     ui.free()
   }
