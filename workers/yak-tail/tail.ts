@@ -1,4 +1,4 @@
-import { FROM, REPLY_TO } from '../yak/mail-config.ts'
+import { INCIDENTS, REPLY_TO } from '../yak/mail-config.ts'
 import type { Binding } from '../yak/post.ts'
 import {
   COOLDOWN,
@@ -26,10 +26,21 @@ export type Env = {
   YAK_OWNER_EMAIL?: string
 }
 
+/** The fault's own words, one line of them: a subject stays a subject. */
+let brief = (message: string, max = 80) => {
+  let line = message.split('\n')[0].trim()
+  return line.length > max ? `${line.slice(0, max - 1)}…` : line
+}
+
 export let letter = (incident: Incident, to = REPLY_TO) => ({
-  from: FROM,
+  from: INCIDENTS,
   to,
-  subject: `yaks.app incident ${incident.signature.slice(0, 12)}`,
+  // What broke, where, in the subject line: an inbox is read at a glance, and
+  // the signature is the letter's own first line.
+  subject:
+    `[yaks.app] ${incident.sample.entrypoint}: ${incident.sample.name}: ${
+      brief(incident.sample.message)
+    }`,
   text: [
     `Signature: ${incident.signature}`,
     `Version: ${incident.version ?? 'unavailable'}`,
@@ -68,7 +79,10 @@ export let recorder = (
       )
       state = {
         incident: saved.value,
-        paged: saved.metadata?.paged ?? !!saved.value,
+        // Start held: only record() opens the door. Starting a first sighting
+        // unpaged mailed every patient fault's first hit, which is the one
+        // occurrence PATIENCE exists to swallow.
+        paged: saved.metadata?.paged ?? true,
         written: 0,
       }
       held.set(key, state)

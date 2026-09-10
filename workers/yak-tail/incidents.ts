@@ -64,8 +64,12 @@ export let normalise = (text: string): string =>
     .replace(/\s+/g, ' ')
     .trim()
 
+// The frame names where the defect is; its line:col names where the bundle
+// put it that day. Every deploy shifts the offsets, so keeping them minted a
+// new signature — and a fresh page — for one defect on each deploy.
 let frame = (text: string) =>
-  text.split('\n').find((line) => /^\s*at\s/.test(line))?.trim() ?? ''
+  (text.split('\n').find((line) => /^\s*at\s/.test(line))?.trim() ?? '')
+    .replace(/:\d+:\d+(?=\)?$)/, '')
 
 export let signature = async (sample: Sample): Promise<string> => {
   let key = JSON.stringify([

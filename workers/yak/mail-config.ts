@@ -9,6 +9,14 @@ import { replyTo } from './post.ts'
 export let FROM = 'hello@bot.yak.sh'
 export let REPLY_TO = replyTo()
 
+// A robot writing about a break is not the platform saying hello: incidents
+// write as themselves, so a mailbox rule can sort them away from the letters a
+// person sent. Same Email Sending domain, so the local part is free.
+export let INCIDENTS = {
+  name: 'yaks.app incidents',
+  email: 'incidents@bot.yak.sh',
+}
+
 // The fleet's task graph, addressed as a reader. hello@yaks.app forwards to a
 // person's mailbox and nowhere else, so a letter sent only there is invisible
 // to every agent: it waits for that person to relay it by hand. This is the

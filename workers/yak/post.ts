@@ -87,9 +87,12 @@ export let mailedTo = (address: string, env: Host = {}): Mailbox | null => {
  * miniflare below the pin in wrangler.ts knows alone (T-34179).
  * @see https://developers.cloudflare.com/email-service/api/send-emails/workers-api/
  */
+/** A sender or recipient, named or bare — the runtime's `EmailAddress`. */
+export type Address = string | { name: string; email: string }
+
 export type Binding = {
   send(letter: {
-    from: string
+    from: Address
     to: string
     subject: string
     text?: string

@@ -27,6 +27,7 @@ import { platform } from './harness.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { inApp } from './tool.ts'
+import type { Address } from './post.ts'
 import { letters } from './letters.ts'
 import { appVocab } from './vocab.ts'
 import { clock } from './timing.ts'
@@ -34,7 +35,7 @@ import { KERNEL, meta } from './meta.ts'
 import { stages } from '../../bin/app-deploy-time.ts'
 
 Deno.test('staging tool URLs and app mail use the same configured host', async () => {
-  let delivered: { to: string; from: string }[] = []
+  let delivered: { to: string; from: Address }[] = []
   let { env } = platform('staging-tool-secret', {
     APEX: 'yaks.fyi',
     MAIL: {

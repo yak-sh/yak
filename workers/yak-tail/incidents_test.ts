@@ -55,10 +55,20 @@ Deno.test('signature keeps the cause, top frame and entrypoint, ignores ids and 
       { name: 'SyntaxError' },
       { message: 'missing table' },
       { stack: 'Error\n    at read (graph.js:12:8)' },
-      { stack: 'Error\n    at boot (graph.js:94:2)' },
+      { stack: 'Error\n    at boot (other.js:12:8)' },
       { entrypoint: 'default' },
     ]
   ) assertNotEquals(a, await signature(sample(changed)))
+})
+
+Deno.test('signature ignores the frame offsets a deploy moves', async () => {
+  let frame = (at: string) => ({
+    stack: `TypeError: boot object 123 failed\n    at Object.fetch (${at})`,
+  })
+  assertEquals(
+    await signature(sample(frame('index.js:62944:67'))),
+    await signature(sample(frame('index.js:63102:12'))),
+  )
 })
 
 let event = (overrides: Partial<Event> = {}): Event => ({

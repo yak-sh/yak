@@ -1,5 +1,11 @@
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
-import { COOLDOWN, type Event, type Incident, REPAGE } from './incidents.ts'
+import {
+  COOLDOWN,
+  type Event,
+  type Incident,
+  PATIENCE,
+  REPAGE,
+} from './incidents.ts'
 import tail, { type Env, letter, recorder } from './tail.ts'
 
 let event = (at = 1000, message = 'boot 123 failed'): Event => ({
@@ -196,6 +202,61 @@ Deno.test('a KV write rate limit retries without sending another page', async ()
   assertEquals(attempts, 2)
   assertEquals(f.sent.length, 1)
   assertEquals(f.writes, [2000])
+})
+
+Deno.test('a letter writes as incidents@ and says what broke in the subject', () => {
+  let incident = (message: string): Incident => ({
+    signature: 'abcdef0123456789',
+    version: 'version-a',
+    first: 1000,
+    last: 1000,
+    count: 1,
+    sample: {
+      name: 'TypeError',
+      message,
+      stack: `TypeError: ${message}\n    at boot (graph.js:12:8)`,
+      entrypoint: 'Store',
+      url: null,
+    },
+  })
+  let mail = letter(incident('boot 123 failed'))
+  assertEquals(mail.from, {
+    name: 'yaks.app incidents',
+    email: 'incidents@bot.yak.sh',
+  })
+  assertEquals(mail.subject, '[yaks.app] Store: TypeError: boot 123 failed')
+  // A message with a novel in it still leaves a readable subject.
+  let long = letter(incident(`${'wide '.repeat(40)}\nand deep`))
+  assertEquals(long.subject.length, '[yaks.app] Store: TypeError: '.length + 80)
+})
+
+let weather = (at: number) =>
+  event(
+    at,
+    'Connection closed: this Durable Object instance is no longer active',
+  )
+
+Deno.test('a weather fault is recorded silently, and pages on the repeat', async () => {
+  let f = fixture()
+  await f.receive()([weather(1000)], f.env)
+  assertEquals(f.sent.length, 0)
+  let [row] = f.rows.values()
+  assertEquals(row.value.count, 1)
+  assertEquals(row.metadata.paged, true)
+  // A second inside PATIENCE (and the same outage) is a break worth a page.
+  await f.receive()([weather(1000 + PATIENCE / 4)], f.env)
+  assertEquals(f.sent.length, 1)
+  await f.receive()([weather(1001 + PATIENCE / 4)], f.env)
+  assertEquals(f.sent.length, 1)
+  assertEquals([...f.rows.values()][0].value.count, 3)
+})
+
+Deno.test('a deploy reset is weather the tail drops entirely', async () => {
+  let f = fixture()
+  let reset = 'Durable Object reset because its code was updated.'
+  await f.receive()([event(1000, reset), event(2000, reset)], f.env)
+  assertEquals(f.sent.length, 0)
+  assertEquals(f.rows.size, 0)
 })
 
 Deno.test('handler registers async work with waitUntil and ignores healthy traffic', async () => {

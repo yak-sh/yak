@@ -5,16 +5,22 @@ every kernel entrypoint, and `console.error` from `Store` and the default
 entrypoint. Dispatched apps have their own exception reporting and are ignored.
 
 The signature is SHA-256 of the exception name, message with numbers/UUIDs/
-object IDs normalized, first stack frame, and entrypoint. The frame retains its
-source location so separate throw sites stay separate. Missing runtime version,
-stack, or request information stays missing; the producer's `scriptVersion.id`
-is the version in the page. URLs use Cloudflare's redacted form.
+object IDs normalized, first stack frame, and entrypoint. The frame keeps its
+function and file so separate throw sites stay separate, and drops its
+`line:col`, which the bundle moves on every deploy — one defect is one signature
+across deploys, not one per version. Missing runtime version, stack, or request
+information stays missing; the producer's `scriptVersion.id` is the version in
+the page. URLs use Cloudflare's redacted form.
 
 The native `MAIL` binding sends the page directly, without depending on the
-kernel's Store. `YAK_OWNER_EMAIL` overrides the existing owner forwarding
-address in `workers/yak/mail-config.ts`; set it through `wrangler secret put` if
-needed. No owner address or mail credential belongs in this worker's
-configuration.
+kernel's Store. A page writes from `yaks.app incidents
+<incidents@bot.yak.sh>`
+(`mail-config.ts` `INCIDENTS`), so a mailbox rule can sort incidents away from
+the platform's own letters; the subject is
+`[yaks.app] <entrypoint>: <name>: <first line>`. `YAK_OWNER_EMAIL` overrides the
+existing owner forwarding address in `workers/yak/mail-config.ts`; set it
+through `wrangler secret put` if needed. No owner address or mail credential
+belongs in this worker's configuration.
 
 ## The incident reader contract (T-34701)
 
