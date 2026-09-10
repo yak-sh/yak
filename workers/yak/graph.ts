@@ -1305,7 +1305,7 @@ export class Store {
       try {
         await this.#auth(request)
       } catch (e) {
-        return refuse(e)
+        return refuse(e, request)
       }
       return this.#live.accept(request)
     }
@@ -1327,7 +1327,7 @@ export class Store {
           await this.#auth(request)
           return await this.#counted(line, agg)
         } catch (e) {
-          return refuse(e)
+          return refuse(e, request)
         }
       }
       return await this.#kinded(await this.#route(request), line)
@@ -1670,7 +1670,7 @@ export class Store {
       }
       return json(await this.#trust(body as Bundle[], vouchOf(request).person))
     } catch (e) {
-      return refuse(e)
+      return refuse(e, request)
     }
   }
 

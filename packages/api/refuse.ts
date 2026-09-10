@@ -72,5 +72,16 @@ export let json = (body: unknown, code = 200): Response =>
     headers: { 'content-type': 'application/json' },
   })
 
-/** A thrown error as its response: the refusal body, at its status. */
-export let refuse = (err: unknown): Response => json(refusal(err), status(err))
+/** A thrown error as its response: the refusal body, at its status. When a
+ * request is supplied, log server failures with the method and path, never
+ * the query string, headers or body. Expected client refusals stay quiet. */
+export let refuse = (err: unknown, request?: Request): Response => {
+  let code = status(err)
+  if (request && code >= 500) {
+    console.error(
+      `${request.method} ${new URL(request.url).pathname} failed —`,
+      err,
+    )
+  }
+  return json(refusal(err), code)
+}

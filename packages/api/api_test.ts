@@ -3,6 +3,7 @@
 // door's own actor on every write, and each refusal at its own status.
 
 import { assert, assertEquals } from '@std/assert'
+import { stub } from '@std/testing/mock'
 import type { Bundle } from '@yaks/graph'
 import { token } from '@yaks/graph'
 import type { Authenticate } from './actor.ts'
@@ -22,6 +23,71 @@ let shop = (authenticate: Authenticate = () => ada) => {
 
 let body = async (r: Response) => await r.json()
 let ask = (line: string) => req(`/query?q=${encodeURIComponent(line)}`)
+
+for (let async of [false, true]) {
+  for (let method of ['GET', 'POST']) {
+    Deno.test(`${method} /query logs ${async ? 'async' : 'sync'} failures with door context`, async () => {
+      let graph = shopGraph()
+      let error = new Error('too many terms in compound SELECT')
+      graph.read = () => {
+        if (async) return Promise.reject(error)
+        throw error
+      }
+      let handler = api({ graph })
+      using logged = stub(console, 'error')
+      let response = await handler(
+        method == 'GET'
+          ? ask('.title=private-query-value')
+          : post('/query', { q: '.title=private-query-value' }),
+      )
+      assertEquals(response.status, 500)
+      assertEquals(await response.json(), {
+        error: 'Error',
+        message: error.message,
+      })
+      assertEquals(logged.calls.map((c) => c.args), [
+        [`${method} /query failed —`, error],
+      ])
+    })
+  }
+}
+
+Deno.test('expected client refusals do not log server errors', async () => {
+  using logged = stub(console, 'error')
+  assertEquals(
+    (await shop(() => {
+      throw new Unauthorized()
+    })(ask(''))).status,
+    401,
+  )
+  assertEquals((await shop()(post('/query', '{'))).status, 400)
+  assertEquals(logged.calls.length, 0)
+})
+
+Deno.test('/apply logs failed post-commit effects while preserving its successful response', async () => {
+  let graph = shopGraph()
+  let error = new Error('observer failed')
+  graph.use({
+    name: 'shelf',
+    hooks: {
+      effect: () => {
+        throw error
+      },
+    },
+  })
+  let handler = api({ graph })
+  using logged = stub(console, 'error')
+  let response = await handler(post('/apply', [{
+    entity: { eid: 'b1' },
+    book: { price: 12 },
+  }]))
+  assertEquals(response.status, 200)
+  assertEquals(comp((await response.json())[0], 'book'), { price: 12 })
+  assertEquals(logged.calls.map((c) => c.args), [
+    ['shelf failed at effect —', error],
+  ])
+  assertEquals((await graph.read('.price=12')).length, 1)
+})
 
 Deno.test('a batch applied comes back as it landed, and reads back', async () => {
   let handler = shop()

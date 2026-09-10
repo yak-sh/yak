@@ -4,6 +4,7 @@
 // synchronous.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
+import { stub } from '@std/testing/mock'
 import { Checked, graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
 import type { Plugin } from './plugin.ts'
@@ -24,6 +25,68 @@ let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
 
 let at = (out: Bundle[], eid: string, name: string) =>
   comp(out.find((b) => b.entity.eid == eid && b[name] !== undefined), name)
+
+for (let async of [false, true]) {
+  Deno.test(`failed effect snapshots log at error level (${async ? 'async' : 'sync'})`, async () => {
+    let storage = memory()
+    let committed = false
+    let error = new Error('too many terms in compound SELECT')
+    let observed: string[] = []
+    let one = graph({
+      vocab: books,
+      storage: {
+        ...storage,
+        tx: (body) => {
+          if (committed) {
+            if (async) return Promise.reject(error)
+            throw error
+          }
+          return storage.tx(body)
+        },
+      },
+      plugins: [{
+        name: 'shelf',
+        rules: [{
+          phase: 'effect',
+          match: '*book',
+          run: () => {
+            observed.push('rule')
+          },
+        }],
+        hooks: {
+          commit: (b) => (committed = true, b),
+          effect: (b) => (observed.push('hook'), b),
+        },
+      }],
+    })
+    using logged = stub(console, 'error')
+    let out = await one.apply([{
+      entity: { eid: 'b1' },
+      book: { pages: 412 },
+    }])
+    assertEquals(logged.calls.map((c) => c.args), [
+      ['graph failed at effect —', error],
+    ])
+    assertEquals(observed, ['hook'])
+    assertEquals(at(out, 'b1', 'book').pages, 412)
+    let stored = await storage.tx((tx) => tx.get(['b1']))
+    assertEquals(at(stored, 'b1', 'book').pages, 412)
+  })
+}
+
+Deno.test('failed effect hooks log their plugin and do not undo committed writes', async () => {
+  let error = new Error('observer failed')
+  let one = g([{
+    name: 'shelf',
+    hooks: { effect: () => Promise.reject(error) },
+  }])
+  using logged = stub(console, 'error')
+  let out = await one.apply([{ entity: { eid: 'b1' }, book: { pages: 412 } }])
+  assertEquals(at(out, 'b1', 'book').pages, 412)
+  assertEquals(logged.calls.map((c) => c.args), [
+    ['shelf failed at effect —', error],
+  ])
+})
 
 Deno.test('a batch lands, and the return carries the births', () => {
   let one = g()

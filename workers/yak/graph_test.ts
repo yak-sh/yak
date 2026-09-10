@@ -13,6 +13,7 @@
 // web's — so a socket is driven the way the runtime drives a hibernated one,
 // through `webSocketMessage`.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import { stub } from '@std/testing/mock'
 import type { Frame } from '@yaks/api'
 import { type Bundle, type Rule, sha256 } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
@@ -114,6 +115,32 @@ let cookbook = async (ctx = state(), manifest = SHORT, v = owner) => {
   let store = new Store(ctx)
   assertEquals((await post(store, '/vocab', manifest, v)).status, 200)
   return store
+}
+
+for (let aggregate of [false, true]) {
+  Deno.test(`store ${aggregate ? 'aggregate' : 'listing'} query failures log the door`, async () => {
+    let store = await cookbook()
+    let error = new Error('query storage failed')
+    using broken = stub(store.door.graph, aggregate ? 'rows' : 'read', () => {
+      throw error
+    })
+    using logged = stub(console, 'error')
+    let response = await get(
+      store,
+      `/query?q=${aggregate ? '.count!' : '.recipe!'}`,
+      owner,
+    )
+    assertEquals(response.status, 500)
+    assertEquals(await response.json(), {
+      error: 'Error',
+      message: error.message,
+    })
+    assertEquals(broken.calls.length, 1)
+    assertEquals(logged.calls.map((c) => c.args), [[
+      'GET /query failed —',
+      error,
+    ]])
+  })
 }
 
 Deno.test("an app's vocab.json is read back as it was written", async () => {

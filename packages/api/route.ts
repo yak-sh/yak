@@ -74,7 +74,7 @@ export let api = (opts: Options): Handler => {
       }
       return no(`no route for ${path}`, 404)
     } catch (err) {
-      return refuse(err)
+      return refuse(err, request)
     }
   }
 }

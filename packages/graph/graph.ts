@@ -113,7 +113,7 @@ export type Options = {
    * commit. Discard the queue on rollback. Deferred observers do not change
    * this apply's answer; any writes they make are separate operations. */
   deferEffects?: (run: () => void | Promise<void>) => void
-  /** where a failing effect is reported (default: `console.warn`) */
+  /** where a failing effect is reported (default: `console.error`) */
   report?: (err: unknown, at: { phase: Phase; plugin: string }) => void
   /** what names an entity a batch minted under an alias, when no component
    * derives its own id (default: `crypto.randomUUID()`) */
@@ -151,8 +151,8 @@ export type Graph = {
 // One step of the pipeline: the batch in, the batch the next step sees out.
 type Step = (bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
 
-let warn = (err: unknown, at: { phase: Phase; plugin: string }) =>
-  console.warn(`${at.plugin} failed at ${at.phase} —`, err)
+let failed = (err: unknown, at: { phase: Phase; plugin: string }) =>
+  console.error(`${at.plugin} failed at ${at.phase} —`, err)
 
 /**
  * Build a graph over a storage and a vocabulary. The vocabulary must be the
@@ -162,7 +162,7 @@ let warn = (err: unknown, at: { phase: Phase; plugin: string }) =>
 export let graph = (opts: Options): Graph => {
   let { storage, vocab } = opts
   let plugins = [...(opts.plugins ?? [])]
-  let report = opts.report ?? warn
+  let report = opts.report ?? failed
   let mint = opts.mint ?? (() => crypto.randomUUID() as Eid)
 
   // What the VOCABULARY names for itself: every component declaring an
