@@ -23,7 +23,7 @@ export let graphics = (options: {
     failed?: boolean
   }
   let cache = new Map<string, Picture>()
-  let next = 1, closed = false, placements = ''
+  let next = 1, closed = false, placements = '', pending = 0
   let control = (params: string, data = '') => {
     let command = '\x1b_G' + params + (data ? ';' + data : '') + '\x1b\\'
     return options.tmux
@@ -36,6 +36,7 @@ export let graphics = (options: {
     if (found) return found
     let picture: Picture = { id: next++ }
     cache.set(source.key, picture)
+    pending++
     Promise.resolve().then(source.load).then((bytes) => {
       if (bytes.length > 4 * 1024 * 1024 || bytes.length < 24 || !png(bytes)) {
         picture.failed = true
@@ -51,6 +52,7 @@ export let graphics = (options: {
     }).catch(() => {
       picture.failed = true
     }).finally(() => {
+      pending--
       if (!closed) options.changed()
     })
     return picture
@@ -116,7 +118,9 @@ export let graphics = (options: {
         }
       }
       for (let v of visible) {
-        if (cache.size < 8 || cache.has(v.source.key)) load(v.source)
+        if (cache.has(v.source.key) || (cache.size < 8 && pending < 8)) {
+          load(v.source)
+        }
       }
       let ready = visible.filter((v) => cache.get(v.source.key)?.bytes)
       let signature = JSON.stringify(
