@@ -1154,7 +1154,7 @@ let syncOutbox = () => {
 // it land in the optimistic cache, and the drain path is about to reload the
 // page and wipe the in-memory `problem`; a refusal must not vanish with it. Each
 // is kept under the write's own delivery id — its stable identity — so it
-// survives the reload, surfaces again at boot, and clears only when the user
+// survives the reload and surfaces again at boot for seven days unless the user
 // dismisses it. It names what failed (the batch), why (the server's reason), and
 // that success would have been the write reaching the server. localStorage backs
 // it by default; the TUI and the fast tier swap an in-memory double.
@@ -1170,9 +1170,14 @@ type RefusalStore = {
   all: () => Refusal[]
 }
 let LEDGER = 'tasks-refused'
+const REFUSAL_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 let readLedger = (): Refusal[] => {
   try {
-    return JSON.parse(globalThis.localStorage?.getItem(LEDGER) ?? '[]')
+    let rs: Refusal[] = JSON.parse(
+      globalThis.localStorage?.getItem(LEDGER) ?? '[]',
+    )
+    let cutoff = Date.now() - REFUSAL_MAX_AGE_MS
+    return rs.filter((r) => r.at >= cutoff)
   } catch {
     return []
   }

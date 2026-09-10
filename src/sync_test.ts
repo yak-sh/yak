@@ -106,11 +106,36 @@ Deno.test('a refused write persists under a stable id and survives a reload', as
     assertEquals(live.refused.value.length, 1)
     assertEquals(live.refused.value[0].id, id)
 
-    // The one act that clears it: the user dismisses it, gone from both halves.
+    // The user dismisses it, gone from both halves.
     live.clearRefusal(id)
     assertEquals(live.refused.value.length, 0)
     assertEquals(store.disk.size, 0)
   } finally {
     live.useRefusalStore(prev)
+  }
+})
+
+Deno.test('loading refusals drops entries older than seven days and keeps fresh ones', async () => {
+  let live = await import('./live.ts')
+  let storage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+  let before = live.refused.value
+  let fresh = { id: uid(), reason: 'moved', at: Date.now(), summary: '' }
+  let old = { ...fresh, id: uid(), at: fresh.at - 8 * 24 * 60 * 60 * 1000 }
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => {
+        assertEquals(key, 'tasks-refused')
+        return JSON.stringify([old, fresh])
+      },
+    },
+  })
+  try {
+    live.loadRefusals()
+    assertEquals(live.refused.value, [fresh])
+  } finally {
+    live.refused.value = before
+    if (storage) Object.defineProperty(globalThis, 'localStorage', storage)
+    else Reflect.deleteProperty(globalThis, 'localStorage')
   }
 })
