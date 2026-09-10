@@ -207,7 +207,14 @@ export let storage = (
       for (let stmt of grown(driver, vocab)) driver.exec(stmt)
       // The indexes last: one may name a column this boot just added.
       for (let stmt of indexed(vocab)) driver.exec(stmt)
-      if (vocab.comp('archetype')) backfill(driver, base.number)
+      if (vocab.comp('archetype')) {
+        backfill(
+          driver,
+          typeof base.number == 'object'
+            ? !base.number.except.includes('archetype')
+            : base.number,
+        )
+      }
     },
     read: (query, opts) => read(driver, vocab, query, { ...base, ...opts }),
     rows: (query, opts) => rows(driver, vocab, query, { ...base, ...opts }),

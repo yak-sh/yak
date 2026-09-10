@@ -271,3 +271,25 @@ Deno.test('archetype: deletion removes physical facets outside the writer vocabu
   assertEquals(driver.query('select * from hidden', []), [])
   assertEquals(backfill(driver), { entities: 0, archetypes: 0, retired: 0 })
 })
+
+Deno.test('archetype: boot respects number exclusions and the persistent high-water mark', () => {
+  for (let numbered of [true, false]) {
+    let d = mem()
+    let s = storage(d, vocab, {
+      number: { except: numbered ? ['task'] : ['archetype'] },
+    })
+    s.install()
+    s.tx((tx) => tx.patch([{ entity: { eid: 'owner' }, doc: {} }]))
+    d.exec(
+      "update entity set num = 99 where eid = 'owner'; update entity set num = null where eid = 'owner'",
+    )
+    s.install()
+    let numbers = d.query(
+      'select num from entity join archetype a on a.entity = entity.id',
+      [],
+    )
+    assert(numbers.length > 0)
+    assert(numbers.every((r) => numbered ? Number(r.num) > 99 : r.num == null))
+    assertEquals(backfill(d), { entities: 0, archetypes: 0, retired: 0 })
+  }
+})

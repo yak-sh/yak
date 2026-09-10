@@ -43,7 +43,7 @@ import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Entity } from '@yaks/graph'
 import { comps } from '@yaks/graph'
 import type { Driver, Param, Row } from './driver.ts'
-import { componentTables } from './archetype.ts'
+import { componentTables } from './physical.ts'
 
 /** One statement of a write: the SQL, and the parameters it binds. This file
  * builds them; an adapter runs them — one at a time over an embedded engine,
