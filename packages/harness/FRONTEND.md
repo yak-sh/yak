@@ -86,3 +86,25 @@ ranges. This exposes a remaining package seam: rendered-cell selection needs
 source-span metadata in portable Markdown renderers, plus
 grapheme/display-column mapping. Do not infer source offsets from ANSI or
 eagerly render history to paper over that gap.
+
+### Transcript publication and pending submissions
+
+Transcript refreshes publish independently of asynchronous sidebar projections.
+A new graph change schedules a follow-up read without discarding the current
+valid read. Requiring a completely quiet graph before publishing can starve the
+transcript while other sessions continuously produce events. Selection identity
+and generation still reject results for a previously selected session.
+
+Submitting a message must admit it to the graph without waiting for an active
+provider request. Entry sequence allocation happens at transaction commit. A
+reply acknowledges only the input boundary recorded on its ask; messages
+admitted later remain pending and are included in the next request, including
+when using a provider continuation anchor. This is authoritative graph state,
+not an optimistic frontend copy. Rendering now also distinguishes ask entries
+carrying `using` metadata from real user content; provider configuration is not
+an author role.
+
+The domain subscription remains coarse: all graph changes can trigger transcript
+reads. This change removes the sidebar/quiet-period publication barrier, not the
+need for dependency-aware projections. Worker startup and initial subscription
+transfer latency still apply to the first selection.
