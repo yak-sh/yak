@@ -174,7 +174,7 @@ export let sequencing: Hook = (bundles, tx) =>
 export let appendEntry = (g: Graph, session: string, body: string, opts: {
   eid?: string
   notice?: boolean
-} = {}) =>
+} = {}): Bundle[] | Promise<Bundle[]> =>
   g.apply([{
     entity: { eid: opts.eid ?? crypto.randomUUID() },
     entry: { session },
@@ -185,7 +185,7 @@ export let appendEntry = (g: Graph, session: string, body: string, opts: {
 /** Repair historical ordering while retaining all entry IDs and fork anchors.
  * Run during exclusive startup, before admitting work. Parent sessions are
  * processed first so a child's initial position follows its repaired anchor. */
-export let repairSequences = (tx: Tx) =>
+export let repairSequences = (tx: Tx): number | Promise<number> =>
   then(
     tx.read(parse('.entry')),
     (entries) =>

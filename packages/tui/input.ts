@@ -224,12 +224,17 @@ export let decode = (s: string): Input[] => {
   return out
 }
 
+/** Read a chunk, or flush the Escape a chunk may have left held. */
+export type Feed = ((chunk: string) => Input[]) & { flush: () => Input[] }
+
 /**
  * Incremental keyboard decoder. Holds partial paste/control replies and routes
  * APC/DCS replies away from keyboard handlers. Call flush after a short idle
  * interval to dispatch a standalone Escape key.
  */
-export let feed = (onControl: (body: string) => void = () => {}) => {
+export let feed = (
+  onControl: (body: string) => void = () => {},
+): Feed => {
   let held = ''
   let dropping = false
   let read = (chunk: string): Input[] => {
