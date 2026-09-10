@@ -123,7 +123,10 @@ Deno.test('graph effects paint a model reply without a keypress; sends are input
       'root checkout preparation',
     )
     let entries = await a.transcript(s.entity.eid)
-    assertEquals((entries[0].content as Comp).body, 'ping\nsecond line')
+    assertEquals(
+      (entries.find((b) => !b.prompt && b.content)!.content as Comp).body,
+      'ping\nsecond line',
+    )
     assert(ui.text().includes('second line'), ui.text())
     reply.resolve({
       id: 'r1',

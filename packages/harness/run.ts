@@ -273,7 +273,11 @@ export let agent = (opts: Opts = {}): Agent => {
  * to it. */
 export let titleOf = (entries: Bundle[]): string =>
   String(
-    comp(entries.find((b) => CONTENT in b) ?? {} as Bundle, CONTENT)
+    comp(
+      entries.find((b) => CONTENT in b && !b.prompt && !b.notice) ??
+        {} as Bundle,
+      CONTENT,
+    )
       ?.body ?? '',
   )
     .split('\n')[0].slice(0, 60)

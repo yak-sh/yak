@@ -215,16 +215,40 @@ ordered developer messages, including mid-conversation admissions.
 
 Root sessions snapshot global `~/.agents/AGENTS.md` then ancestor `AGENTS.md`
 files from filesystem root to cwd. Missing files are ignored, other read errors
-abort admission. Each file's canonical path and content SHA-256 are recorded.
-No mtime sorting or retrospective reload occurs. Existing `opts.instructions`
-and `using.instructions` remain the legacy base instruction channel; delegated
+abort admission. Each file's canonical path and content SHA-256 are recorded. No
+mtime sorting or retrospective reload occurs. Existing `opts.instructions` and
+`using.instructions` remain the legacy base instruction channel; delegated
 `instructions` now append local guidance rather than replacing that base.
 
 Fresh children copy shared prompt snapshots from their parent. Forks copy no
 files: their exact inherited prefix is followed by a local fork-execution note,
-optional child guidance, and the assignment. Fresh children intentionally inherit
-the parent's file snapshots even when assigned a different home; admitting that
-new home's guidance is explicit. A renamed/deleted source doesn't alter history.
-This pilot is host/POSIX-oriented; it doesn't yet provide UI admission controls,
-prompt supersession, or a dedicated prompt renderer. Fork notes are guidance,
-not a prohibition on useful delegation. Provider cache hits are not guaranteed.
+optional child guidance, and the assignment. Fresh children intentionally
+inherit the parent's file snapshots even when assigned a different home;
+admitting that new home's guidance is explicit. A renamed/deleted source doesn't
+alter history. This pilot is host/POSIX-oriented; it doesn't yet provide UI
+admission controls, or prompt supersession. Prompt entries have a query-matched
+transcript renderer. Fork notes are guidance, not a prohibition on useful
+delegation. Provider cache hits are not guaranteed.
+
+#### Prefix identity and cache observations (follow-up)
+
+A file's `prompt.revision` is its content SHA-256, not an identity for the full
+served prefix. Delegation guidance and fork notes currently have no revision.
+The ordered transcript snapshots, fork anchor, and ask's recorded base
+instructions preserve instruction history, but no aggregate provider-request
+prefix identity or global cache-warmth registry is recorded yet.
+
+A future registry should derive identities from the exact ordered served prefix
+(including base instructions, message roles, tool definitions and relevant
+provider serialization), scoped by provider/model/account and caching options.
+Record request observations and provider-reported cached tokens separately from
+predicted warmth. Sending a prefix does not prove retention, and an aggregate
+cached-token count does not prove every prefix boundary was cached. Do not infer
+expiry from a universal five-minute timeout. Provider-specific retention
+controls and explicit cache breakpoints are distinct capabilities.
+
+A refresh must record a new served revision without rewriting old entries; forks
+must initially preserve their parent's prefix. Automatic revision selection,
+TTL-based refresh, and live-provider cache/mid-session experiments are outside
+this integration. Correctness and revoked guidance take precedence over cache
+savings.

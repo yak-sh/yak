@@ -50,6 +50,7 @@ Deno.test('send appends to a transcript and the daemon answers it', async () => 
   await a.send(s, 'two')
   await a.idle(s)
   let said = (await a.transcript(s))
+    .filter((b) => !b.prompt)
     .map((b) => (b.content as Comp)?.body).filter(Boolean)
   assertEquals(said, ['one', 'heard: one', 'two', 'heard: two'])
   a.close()
@@ -63,7 +64,7 @@ Deno.test('a session lists with its derived status, and renders as a line', asyn
   assertEquals(row.entity.eid, s)
   assertEquals((row.session as Comp).status, 'settled')
   let entries = await a.transcript(s)
-  assert(a.line(entries[0]).includes('ping'))
+  assert(a.line(entries.find((b) => !b.prompt && b.content)!).includes('ping'))
   assert(a.line(row, 'Status', { entries }).includes('settled'))
   a.close()
 })
@@ -166,4 +167,25 @@ Deno.test('transcript doors refuse unknown sessions before doing work', async ()
   } finally {
     a.close()
   }
+})
+
+Deno.test('transcript titles ignore instruction snapshots and lazy notices', () => {
+  assertEquals(
+    titleOf([
+      {
+        entity: { eid: 'p' },
+        prompt: { scope: 'shared' },
+        content: { body: 'rules' },
+      },
+      { entity: { eid: 'n' }, notice: {}, content: { body: 'task started' } },
+      { entity: { eid: 'u' }, content: { body: 'actual request\nmore' } },
+    ]),
+    'actual request',
+  )
+  assertEquals(
+    titleOf([
+      { entity: { eid: 'p' }, prompt: {}, content: { body: 'rules' } },
+    ]),
+    '',
+  )
 })
