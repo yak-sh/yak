@@ -81,6 +81,8 @@ import { fleetVocab } from './vocab/fleet_vocab.ts'
 import type { Graph } from '@yaks/graph'
 import { fleetGraph } from './store/fleet_graph.ts'
 import {
+  cameraEid,
+  cursorEid,
   edgeEid,
   link,
   links,
@@ -2962,6 +2964,43 @@ export let mintEpoch = (db: Sql) =>
     `insert or ignore into server_meta (k, v) values ('epoch', '${crypto.randomUUID()}')`,
   )
 
+// T-36727: rekey client singletons in open()'s one transaction. Keep the
+// integer spine id: component owners and ALL graph references (including
+// card.target and pin.canvas) already name that id, so they follow the new
+// public eid without copying or deleting any rows. Journal after-images are
+// historical evidence and stay untouched. The equality guard makes reopening
+// read-only; a conflicting derived eid refuses the whole migration, not data.
+let deriveClientRows = (db: Sql) => {
+  let changed = false
+  for (let table of ['camera', 'cursor']) {
+    let rows = prep(
+      db,
+      `
+      select e.id, e.eid, c.eid as client${
+        table == 'camera' ? ', v.eid as canvas' : ''
+      }
+      from ${table} r join entity e on e.id = r.entity
+      join entity c on c.id = r.client
+      ${table == 'camera' ? 'join entity v on v.id = r.canvas' : ''}
+    `,
+    ).all<{ id: number; eid: string; client: string; canvas: string }>()
+    for (let row of rows) {
+      let eid = table == 'camera'
+        ? cameraEid(row.client, row.canvas)
+        : cursorEid(row.client)
+      if (eid == row.eid) continue
+      prep(db, 'update entity set eid = ? where id = ?').run(eid, row.id)
+      changed = true
+    }
+  }
+  // Old UUIDs may survive in a returning browser's durable cache. This is a
+  // non-journaled identity rewrite: require a fresh snapshot, not a delta.
+  if (changed) {
+    prep(db, `insert or replace into server_meta (k, v) values ('epoch', ?)`)
+      .run(uuid())
+  }
+}
+
 // Bumped with every serving-schema change. Guards remain idempotent for
 // expand/contract upgrades; the version makes a newer database fail closed in
 // an older binary instead of letting that binary infer compatibility.
@@ -3403,6 +3442,7 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       migrateJournalKeys(db, fresh)
       gcJournal(db)
       migrateJournalRefs(db)
+      deriveClientRows(db)
       // The dormant columns are migration INPUT, and every one of them has now
       // been read for the last time (T-6670, T-7113, T-7006). A retired column
       // that lingers still answers a schema read, so it keeps teaching a

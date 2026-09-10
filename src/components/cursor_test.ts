@@ -5,6 +5,11 @@
 // restore_test's synthetic 'canvas'/'task'), because mark() writes them through
 // the same eid grammar apply() enforces, which only a UUID clears.
 import { assertEquals } from '@std/assert'
+import { cursorEid } from '../edge.ts'
+import type { Change } from '../types.ts'
+Deno.env.set('DB_PATH', ':memory:')
+let { apply } = await import('../db.ts')
+let { bareDb } = await import('../testdb.ts')
 import { applyLocal, cache, census, myCursor, useRoute } from '../live.ts'
 
 // A mounted view holds subscriptions. In a test there is no server to hold
@@ -126,4 +131,38 @@ Deno.test('a cursor write never navigates the tab (update-only)', () => {
     comp: { eid: cur, client: CLIENT, target: TASK },
   }])
   assertEquals(route.value, '/') // stays: rendering ignores the cursor read
+})
+
+Deno.test('a cold-cache navigation patches the server cursor without refusal', () => {
+  let db = bareDb()
+  apply(db, [
+    { eid: CANVAS, name: 'canvas', comp: {} },
+    { eid: TASK, name: 'doc', comp: { title: 'task' } },
+  ])
+  let refusals: unknown[] = []
+  let writes = 0
+  let previous = useRoute((frame) => {
+    let batch = (frame as { apply?: Change[] }).apply
+    if (!batch) return
+    writes++
+    try {
+      apply(db, batch)
+    } catch (e) {
+      refusals.push(e)
+    }
+  })
+  try {
+    for (let life = 0; life < 2; life++) {
+      graph() // surviving tasks-client, but no cached client or cursor
+      go('/')
+      navigate('/T-7')
+      assertEquals(myCursor(CLIENT)?.eid, cursorEid(CLIENT))
+    }
+    assertEquals(writes, 2)
+    assertEquals(refusals, [])
+    assertEquals(db.prepare('select count(*) as n from cursor').get(), { n: 1 })
+  } finally {
+    useRoute(previous)
+    db.close()
+  }
 })

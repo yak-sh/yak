@@ -17,6 +17,7 @@ import {
   uuid,
 } from '../live.ts'
 import { type Change } from '../types.ts'
+import { cameraEid } from '../edge.ts'
 import { cardCommands, run } from '../commands.ts'
 import { pasted } from '../paste.ts'
 import { block } from './ui.tsx'
@@ -201,16 +202,14 @@ export let Canvas = ({ eid }: { eid: string }) => {
     })
     let { w, h } = size()
 
-    // The snapshot is already in the cache — restore this client's camera,
-    // or mint the client + a camera centered so the plane origin sits at
-    // the viewport corner.
+    // Restore if warm; a cold cache is not proof that the row is absent.
+    // Both paths name the same sentence, so minting is an idempotent patch.
+    cam.current = cameraEid(id, eid)
     let mine = myCamera(id, eid)
     if (mine) {
-      cam.current = mine.eid
       camera.value = { x: mine.x, y: mine.y, zoom: mine.zoom, w, h }
       if (mine.w != w || mine.h != h) save({ w, h })
     } else {
-      cam.current = uuid()
       camera.value = { x: w / 2, y: h / 2, zoom: 1, w, h }
       mutate(
         {

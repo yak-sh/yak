@@ -17,8 +17,9 @@ import {
   trail,
 } from '../live.ts'
 import { type Action, actionsFor, resolve } from './registry.ts'
-import { type Change, type Ent, idOf, SHORT, uuid } from '../types.ts'
+import { type Change, type Ent, idOf, SHORT } from '../types.ts'
 import { dragData } from './drag.ts'
+import { cursorEid } from '../edge.ts'
 
 export { peek, trail }
 
@@ -349,7 +350,7 @@ let mark = () => {
   let client = clientId()
   let cur = myCursor(client)
   if (cur?.target == t.eid && (cur.view ?? null) == (t.view ?? null)) return
-  let eid = cur?.eid ?? uuid()
+  let eid = cursorEid(client) // identity never waits for the client-row sub
   let batch: Change[] = []
   // Mint the client entity when a cursor beats the canvas to it — a deep link
   // never mounts the Canvas that otherwise mints it, so the reference would

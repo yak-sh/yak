@@ -6,6 +6,8 @@ import {
   assertThrows,
 } from '@std/assert'
 import {
+  cameraEid,
+  cursorEid,
   edgeEid,
   link,
   moves,
@@ -136,4 +138,16 @@ Deno.test('moves: a batch read back as the sentences it says and unsays', () => 
   )
   // An ordinary entity's death is not an edge move.
   assertEquals(moves([{ eid: 'x', name: 'entity', comp: null }]), [])
+})
+
+Deno.test('client singleton sentences have stable, distinct UUID8 identities', () => {
+  assertEquals(cameraEid('a', 'b'), 'f8ed5a9a-5e24-8055-88d4-27e39fdc4bbd')
+  assertEquals(cursorEid('a'), '2a752f2b-add0-8957-9f0d-710fadcfc6c6')
+  assertMatch(cameraEid('a', 'b'), UUID8)
+  assertMatch(cursorEid('a'), UUID8)
+  assertNotEquals(cameraEid('a', 'b'), cameraEid('b', 'a'))
+  assertNotEquals(cameraEid('a', 'b'), cameraEid('a', 'c'))
+  assertNotEquals(cursorEid('a'), cursorEid('b'))
+  assertNotEquals(cameraEid('a', 'b'), cursorEid('a'))
+  assertNotEquals(cameraEid('a', 'b'), edgeEid('a', 'camera', 'b'))
 })

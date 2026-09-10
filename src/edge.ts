@@ -12,14 +12,25 @@ import { edges } from './types.ts'
 // variant bits stamped, so it passes every uuid door and can never collide
 // with a minted v4. Direction is part of the sentence: `a requires b` and
 // `b requires a` are two edges.
-export let edgeEid = (from: string, nature: string, to: string): string => {
-  let h = sha(`${from}|${nature}|${to}`).slice(0, 32)
+let sentenceEid = (sentence: string): string => {
+  let h = sha(sentence).slice(0, 32)
   let variant = ((parseInt(h[16], 16) & 0x3) | 0x8).toString(16)
   let s = `${h.slice(0, 12)}8${h.slice(13, 16)}${variant}${h.slice(17)}`
   return `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${
     s.slice(16, 20)
   }-${s.slice(20)}`
 }
+
+export let edgeEid = (from: string, nature: string, to: string): string =>
+  sentenceEid(`${from}|${nature}|${to}`)
+
+// Client singletons are sentences too. Their identity must not depend on a
+// cache warmed by an async subscription: a cold-cache mint patches the same
+// row. JSON tuples domain-separate these from edges and from one another.
+export let cameraEid = (client: string, canvas: string): string =>
+  sentenceEid(JSON.stringify(['camera', client, canvas]))
+export let cursorEid = (client: string): string =>
+  sentenceEid(JSON.stringify(['cursor', client]))
 
 // A relation has two spellings and they are not interchangeable: the TYPE is
 // what every read and every query says (`referenced`), the NATURE is the comp
