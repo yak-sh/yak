@@ -262,3 +262,19 @@ If a terminal sends a bare CR or LF for Shift+Enter, it is indistinguishable
 from plain Enter. The decoder cannot reconstruct the missing modifier. Inspect
 the terminal's extended-key settings or reset its terminal session in that case;
 application-side decoding changes cannot recover a modifier that was not sent.
+
+### Compact sidebars and controlled shortcuts
+
+A bounded `Frame` panel can set `fit: true`. It takes its natural content
+height, up to an equal share of the available height; ordinary bounded panels
+receive the unused rows. This keeps short summaries compact while a longer list
+uses the remaining space. Overflow still scrolls. Panel order is display order,
+so put a summary last to keep it at the bottom when another panel grows.
+
+The layout attribute `grow-fit="1"` provides the same behavior inside a column.
+The `fill="1"` attribute fills a row's available width with its inherited style,
+useful for background selection without adding a marker column.
+
+`Textarea` accepts an optional `passKey(key)` predicate. Returning true leaves
+that key to another mounted handler, allowing an application to reserve
+navigation shortcuts without changing the standalone editor's bindings.
