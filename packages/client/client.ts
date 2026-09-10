@@ -79,9 +79,9 @@ export type Client = {
   watches: Watches
   /** resolves when the local tier is back in the graph */
   ready: Promise<void>
-  /** watch a query: its answer now, and every later one. With a `url`, this
-   * also opens the server's subscription for that query and drops it on
-   * {@link Watch.close}. */
+  /** watch a query: its answer now, and every later one. Identical query lines
+   * and options share one evaluation and server subscription. Each returned
+   * handle closes independently; the last close drops the subscription. */
   watch: (query: string, opts?: ClientWatchOpts) => Watch
   /** read a query once, synchronously */
   read: (query: Query, opts?: ReadOpts) => Bundle[]
@@ -154,22 +154,108 @@ export let client = (
     })
     : undefined
 
-  // A watch is also the ask: the page says what it wants to see, and that is
-  // exactly the subscription the server should be holding for it.
+  type Shared = {
+    watch: Watch
+    release: () => void
+    holders: number
+  }
+  let shared = new Map<string, Shared>()
+  let handles = new Set<() => void>()
+  let closed = false
+
+  // Exact query text is deliberate: no normalizing quoted text, projection
+  // order or relative dates in a way that silently merges different asks.
   let watch = (query: string, o: ClientWatchOpts = {}): Watch => {
-    let w = seen.watch(query, o)
-    if (!wire || o.remote === false) return w
-    let id = wire.subscribe(query)
+    if (closed) throw new Error('client is closed')
+    let remote = !!wire && o.remote !== false
+    let key = JSON.stringify([query, o.now ?? null, remote])
+    let entry = shared.get(key)
+    if (!entry) {
+      let local = seen.watch(query, o)
+      let w = local
+      let release = local.close
+      if (remote) {
+        let id: string
+        try {
+          id = wire!.subscribe(query)
+        } catch (error) {
+          local.close()
+          throw error
+        }
+        let ready = (opts.signal ?? (<T>(value: T) => ({ value })))(
+          wire!.ready(id),
+        )
+        let listeners = new Set<(bundles: Bundle[]) => void>()
+        let publish = () => {
+          for (let fn of listeners) fn(local.value)
+        }
+        let stopLocal = local.subscribe(publish)
+        let stopReady = wire!.onReady((changed, value) => {
+          if (changed !== id) return
+          ready.value = value
+          publish()
+        })
+        release = () => {
+          stopReady()
+          stopLocal()
+          listeners.clear()
+          wire!.unsubscribe(id)
+          local.close()
+        }
+        w = {
+          query,
+          get value() {
+            return local.value
+          },
+          get ready() {
+            return ready.value && local.ready
+          },
+          subscribe: (fn) => {
+            listeners.add(fn)
+            return () => listeners.delete(fn)
+          },
+          close: release,
+        }
+      }
+      entry = { watch: w, release, holders: 0 }
+      shared.set(key, entry)
+    }
+    let own = entry
+    own.holders++
+    let active = true
+    let stops = new Set<() => void>()
+    let close = () => {
+      if (!active) return
+      active = false
+      handles.delete(close)
+      for (let stop of stops) stop()
+      stops.clear()
+      if (--own.holders === 0) {
+        shared.delete(key)
+        own.release()
+      }
+    }
+    handles.add(close)
     return {
-      query: w.query,
+      query,
       get value() {
-        return w.value
+        return own.watch.value
       },
-      subscribe: w.subscribe,
-      close: () => {
-        wire.unsubscribe(id)
-        w.close()
+      get ready() {
+        return own.watch.ready
       },
+      subscribe: (fn) => {
+        if (!active) return () => {}
+        // Wrap even identical callbacks: another handle may own the same fn.
+        let off = own.watch.subscribe((value) => fn(value))
+        let stop = () => {
+          off()
+          stops.delete(stop)
+        }
+        stops.add(stop)
+        return stop
+      },
+      close,
     }
   }
 
@@ -185,6 +271,8 @@ export let client = (
     ent: (eid) => store.tx((tx) => tx.get([eid]))[0],
     mutate: (change) => g.apply(change),
     close: () => {
+      closed = true
+      for (let close of handles) close()
       wire?.close()
       seen.close()
     },

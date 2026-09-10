@@ -45,8 +45,13 @@ export type Watch = {
   query: string
   /** the entities matching it, as of the last commit */
   readonly value: Bundle[]
+  /** the first answer has landed. Local watches become ready after their
+   * initial read; remote client watches wait for the server, even when cached
+   * rows can already paint. False again on disconnect. */
+  readonly ready: boolean
   /** hear about every later answer; call the returned function to stop
-   * listening. It is NOT called with the current answer — read `value` for
+   * listening. Also fires when `ready` changes, even if the answer is empty.
+   * It is NOT called with the current answer — read `value` for
    * that, which is also the `getSnapshot` half of React's
    * `useSyncExternalStore`. */
   subscribe: (fn: (bundles: Bundle[]) => void) => () => void
@@ -86,6 +91,7 @@ type Live = {
   /** the answer, by eid, in the order it is published */
   members: Map<Eid, Bundle>
   hold: Hold<Bundle[]>
+  ready: Hold<boolean>
   listeners: Set<(bundles: Bundle[]) => void>
 }
 
@@ -192,6 +198,7 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
       test: judge(query, graph.vocab, now),
       members: new Map(),
       hold: make<Bundle[]>([]),
+      ready: make(false),
       listeners: new Set(),
     }
     // The first answer, before the watch is registered: a query the graph
@@ -201,14 +208,20 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
       if (!active || closed) return
       w.members = new Map(set.map((b) => [b.entity.eid, b]))
       w.hold.value = set
+      w.ready.value = true
       held.add(w)
+      for (let fn of w.listeners) fn(set)
     })
     return {
       query,
       get value() {
         return w.hold.value
       },
+      get ready() {
+        return w.ready.value
+      },
       subscribe: (fn) => {
+        if (!active || closed) return () => {}
         w.listeners.add(fn)
         return () => w.listeners.delete(fn)
       },

@@ -63,10 +63,11 @@ Everything it built stays reachable — `box.graph` is an ordinary graph, with
 ```ts
 let dinners = box.watch('.course=dinner&.serves>4')
 
-dinners.value // → the bundles, now
+dinners.value // → the bundles, now (possibly cached)
+dinners.ready // → the current subscription has answered
 let stop = dinners.subscribe((bundles) => paint(bundles)) // → the next ones
 stop() // this listener only
-dinners.close() // the whole watch
+dinners.close() // this handle; the last handle stops the shared watch
 ```
 
 A watch re-evaluates on the graph's own `effect` phase, so it hears every
@@ -82,22 +83,34 @@ it answers depends on the query:
   orders, windows or counts — is **read again** and compared. `.order=title`
   therefore both defines the order and puts the watch in this mode.
 
-Either way the watch fires only when its own result changed. An unrelated write
-does not wake it.
+The watch fires when its result or readiness changes. An unrelated write does
+not wake it.
 
 ### With a server
 
 When the client has a `url`, opening a watch also opens the **server's**
-subscription for that query, and closing it drops that too — so what the page is
-looking at is what the server is sending. Pass `{ remote: false }` for a watch
-over data that is already local.
+subscription for that query. Identical query text and effective options (`now`,
+`remote`) share one local evaluation and one server subscription. Each call
+returns an independent handle: closing one removes only its listeners; the last
+close drops the shared subscription. `client.close()` closes every handle. No
+query-text normalization is performed. Pass `{ remote: false }` for a watch over
+data that is already local.
+
+`watch.ready` is false until the server's first answer is successfully applied,
+even if cached rows can already paint. An empty answer makes it true too. It
+returns to false on disconnect or subscription refusal, and becomes true again
+after the reconnect answer. `subscribe` notifies on readiness changes even when
+`value` has not changed. A local-only watch becomes ready after its initial
+read; this is separate from `client.ready`, the promise for local-vault
+hydration. Await that promise when opening a local watch that must include
+restored drafts.
 
 ### With signals
 
 `watch()` is framework-free: `value` plus `subscribe` is all of it. Hand
-`client` a signal factory and every `value` is a signal read instead, which is
-all a signals-based renderer needs to track it. Nothing is imported — the
-factory is yours:
+`client` a signal factory and both `value` and `ready` are signal reads instead,
+which is all a signals-based renderer needs to track it. Nothing is imported —
+the factory is yours:
 
 ```tsx
 import { signal } from '@preact/signals'
@@ -122,7 +135,8 @@ let useWatch = (query: string) => {
 ```
 
 The snapshot is a new array only when the result changed, so React re-renders
-when the result changes and not otherwise.
+when the result changes and not otherwise. To track loading independently, use
+`useSyncExternalStore(watch.subscribe, () => watch.ready)` as well.
 
 ## Three tiers, one apply()
 

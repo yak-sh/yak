@@ -151,7 +151,7 @@ Deno.test('a signal factory backs the value', () => {
   }
   let c = boxClient(undefined, { signal })
   let dinners = c.watch('.course=dinner')
-  assertEquals(made.length, 1)
+  assertEquals(made.length, 2)
 
   c.mutate([dal()])
   // The page reads the signal; the watch wrote to it.
@@ -183,4 +183,142 @@ Deno.test('closing a client during an asynchronous read closes its pending watch
   release([])
   await Promise.resolve()
   assertEquals(c.watches.size(), 0)
+})
+
+Deno.test('local ready is reactive and an empty asynchronous answer notifies', async () => {
+  let c = boxClient()
+  let release!: (rows: Bundle[]) => void
+  c.graph.read = () => new Promise<Bundle[]>((resolve) => release = resolve)
+  let w = c.watch('.recipe')
+  let heard: boolean[] = []
+  w.subscribe(() => heard.push(w.ready))
+  assertEquals(w.ready, false)
+  release([])
+  await Promise.resolve()
+  assertEquals(w.ready, true)
+  assertEquals(heard, [true])
+  c.close()
+})
+
+Deno.test('identical local watches share evaluation but not listener ownership', () => {
+  let c = boxClient()
+  let a = c.watch('.recipe')
+  let b = c.watch('.recipe', { remote: false })
+  assertEquals(c.watches.size(), 1)
+  assertEquals(a.ready, true)
+  let heard = 0
+  let same = () => heard++
+  a.subscribe(same)
+  b.subscribe(same)
+  a.close()
+  a.close()
+  a.subscribe(same) // a closed handle cannot acquire another listener
+  c.mutate([dal()])
+  assertEquals(heard, 1)
+  assertEquals(titles(b.value), ['Dal'])
+  assertEquals(c.watches.size(), 1)
+  b.close()
+  assertEquals(c.watches.size(), 0)
+  c.close()
+})
+
+Deno.test('remote watches share one sub until the last independent close', async () => {
+  let c = boxClient(server())
+  let a = c.watch('.course=dinner')
+  let b = c.watch('.course=dinner', { remote: true })
+  assertEquals(a.ready, false)
+  assertEquals(b.ready, false)
+  assertEquals(c.watches.size(), 1)
+  let heard: boolean[] = []
+  b.subscribe(() => heard.push(b.ready))
+  await c.idle()
+  assertEquals(a.ready, true)
+  assertEquals(b.ready, true)
+  assertEquals(heard, [true]) // an empty answer is still an answer
+  assertEquals(c.socket()?.sent, [{ subscribe: '.course=dinner', id: 's1' }])
+  a.close()
+  a.close()
+  assertEquals(c.socket()?.sent.length, 1)
+  b.close()
+  assertEquals(c.socket()?.sent.at(-1), { unsubscribe: 's1' })
+  assertEquals(c.watches.size(), 0)
+  let again = c.watch('.course=dinner')
+  await c.idle()
+  assertEquals(c.socket()?.sent.at(-1), {
+    subscribe: '.course=dinner',
+    id: 's2',
+  })
+  assertEquals(again.ready, true)
+  c.close()
+  assertEquals(c.socket()?.sent.at(-1), { unsubscribe: 's2' })
+})
+
+Deno.test('different options and query text never collapse into one watch', async () => {
+  let c = boxClient(server())
+  c.watch('.recipe')
+  c.watch('.recipe', { remote: false })
+  c.watch('.recipe', { now: 1 })
+  c.watch('.recipe', { now: 2 })
+  c.watch('.course=dinner')
+  assertEquals(c.watches.size(), 5)
+  await c.idle()
+  assertEquals(c.socket()?.sent.length, 4)
+  c.close()
+  assertEquals(c.watches.size(), 0)
+})
+
+Deno.test('cached results do not make a new or disconnected remote watch ready', async () => {
+  let srv = server()
+  let c = boxClient(srv)
+  c.mutate([dal()])
+  await c.idle()
+  let w = c.watch('.recipe')
+  assertEquals(titles(w.value), ['Dal'])
+  assertEquals(w.ready, false)
+  await c.idle()
+  assertEquals(w.ready, true)
+  let heard: boolean[] = []
+  w.subscribe(() => heard.push(w.ready))
+  let old = c.socket()!
+  old.close()
+  assertEquals(w.ready, false)
+  assertEquals(titles(w.value), ['Dal'])
+  c.fire()
+  await c.idle()
+  assertEquals(w.ready, true)
+  assertEquals(heard[0], false)
+  assertEquals(heard.at(-1), true)
+  old.emit('message', JSON.stringify({ id: 's1', bundles: [dal('late')] }))
+  assertEquals(c.ent('late'), undefined)
+  c.close()
+})
+
+Deno.test('late frames after unsubscribe cannot refill the graph', async () => {
+  let c = boxClient(server())
+  let w = c.watch('.recipe')
+  await c.idle()
+  w.close()
+  c.socket()!.emit(
+    'message',
+    JSON.stringify({ id: 's1', bundles: [dal('late')] }),
+  )
+  assertEquals(c.ent('late'), undefined)
+  assertEquals(c.wire!.ready('s1'), false)
+  c.close()
+})
+
+Deno.test('a refused remote subscription is never ready', async () => {
+  let c = boxClient(server())
+  let w = c.watch('.recipe')
+  await c.idle()
+  c.socket()!.emit(
+    'message',
+    JSON.stringify({
+      id: 's1',
+      refused: { error: 'Refused', message: 'permission changed' },
+    }),
+  )
+  assertEquals(w.ready, false)
+  assertEquals(c.trouble.length, 1)
+  c.close()
 })

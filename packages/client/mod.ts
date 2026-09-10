@@ -40,9 +40,10 @@
  * let stop = dinners.subscribe((bundles) => render(bundles))
  * ```
  *
- * With a `url`, opening a watch also opens the server's subscription for that
- * query, and closing it drops it — so what the page is looking at is what the
- * server is sending.
+ * With a `url`, identical watches share one server subscription until the last
+ * handle closes. `ready` is false until its first answer lands, even if cached
+ * rows can paint, and false again on disconnect. Both `value` and `ready` are
+ * reactive; listeners hear readiness changes even for an empty answer.
  *
  * ## Three tiers, one apply()
  * A component's `persist` keyword (@yaks/sync's) says where its state lives:

@@ -59,6 +59,12 @@ export type Sync = {
   unsubscribe: (id: string) => void
   /** whether the socket is open right now */
   connected: () => boolean
+  /** whether this subscription has successfully applied an answer on the
+   * current connection. Cached rows alone never make it ready. */
+  ready: (id: string) => boolean
+  /** hear readiness changes (including an empty first answer); not called
+   * immediately. Unsubscribe with the returned function. */
+  onReady: (fn: (id: string, ready: boolean) => void) => () => void
   /** settle: resolves when every batch in flight has been answered */
   idle: () => Promise<void>
   /** close the socket and stop reconnecting */
@@ -88,6 +94,18 @@ let warn: Report = (t) =>
 export let sync = (graph: Graph, opts: SyncOpts): Sync => {
   let report = opts.report ?? warn
   let sending: Promise<void> = Promise.resolve()
+  // A fresh object on every invalidation guards asynchronous apply completion
+  // against a disconnect, re-point or unsubscribe while it was in flight.
+  let states = new Map<string, { ready: boolean }>()
+  let listeners = new Set<(id: string, ready: boolean) => void>()
+  let notify = (id: string, ready: boolean) => {
+    for (let fn of listeners) fn(id, ready)
+  }
+  let pending = (id: string) => {
+    let was = states.get(id)?.ready
+    states.set(id, { ready: false })
+    if (was) notify(id, false)
+  }
 
   let plugin: Plugin = {
     name: '@yaks/sync',
@@ -129,15 +147,23 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
     timer: opts.timer,
     wait: opts.wait,
     most: opts.most,
+    pending,
     land: (frame: Frame) => {
       if (frame.refused) {
+        pending(frame.id)
         return report({
           sent: [],
           refused: frame.refused,
           reverted: false,
         })
       }
-      let out = land(graph, frame)
+      let state = states.get(frame.id)
+      let out = then(land(graph, frame), () => {
+        if (state && states.get(frame.id) === state && !state.ready) {
+          state.ready = true
+          notify(frame.id, true)
+        }
+      })
       if (out instanceof Promise) {
         out.catch((error: unknown) =>
           report({ sent: [], error, reverted: false })
@@ -151,9 +177,23 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
     plugin,
     open: w.open,
     subscribe: w.subscribe,
-    unsubscribe: w.unsubscribe,
+    unsubscribe: (id) => {
+      let ready = states.get(id)?.ready
+      states.delete(id)
+      w.unsubscribe(id)
+      if (ready) notify(id, false)
+    },
     connected: w.connected,
+    ready: (id) => states.get(id)?.ready ?? false,
+    onReady: (fn) => {
+      listeners.add(fn)
+      return () => listeners.delete(fn)
+    },
     idle: () => sending,
-    close: w.close,
+    close: () => {
+      w.close()
+      states.clear()
+      listeners.clear()
+    },
   }
 }

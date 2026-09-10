@@ -73,6 +73,8 @@ export type WireOpts = {
   most?: number
   /** each frame, once the reset bookkeeping has been done for it */
   land: (frame: Frame) => void
+  /** a subscription needs a fresh answer: opened, re-pointed or disconnected */
+  pending?: (id: string) => void
   /** anything that went wrong on the socket */
   report: (err: unknown) => void
 }
@@ -135,6 +137,9 @@ export let wire = (opts: WireOpts): Wire => {
   // client held and did not hear about as gone, and every frame keeps the
   // membership set current so the NEXT reset can do the same.
   let landed = (frame: Frame) => {
+    // An unsubscribe can race a frame already in transit. It must not refill
+    // the cache or recreate membership bookkeeping after its last owner left.
+    if (!asks.has(frame.id)) return
     let held = members.get(frame.id) ?? new Set<Eid>()
     members.set(frame.id, held)
     let gone = [...(frame.gone ?? [])]
@@ -166,6 +171,7 @@ export let wire = (opts: WireOpts): Wire => {
     let s = connect(wsUrl(opts.url))
     socket = s
     s.addEventListener('open', () => {
+      if (socket != s || closed) return
       wait = first // the server is reachable: the next drop retries promptly
       for (let [id, query] of asks) {
         resetting.add(id) // its answer is the whole set, as it now stands
@@ -173,6 +179,7 @@ export let wire = (opts: WireOpts): Wire => {
       }
     })
     s.addEventListener('message', (e) => {
+      if (socket != s || closed) return
       try {
         landed(JSON.parse(String(e.data)) as Frame)
       } catch (err) {
@@ -183,6 +190,7 @@ export let wire = (opts: WireOpts): Wire => {
     s.addEventListener('close', () => {
       if (socket != s) return
       socket = null
+      for (let id of asks.keys()) opts.pending?.(id)
       retry()
     })
   }
@@ -190,9 +198,12 @@ export let wire = (opts: WireOpts): Wire => {
   return {
     open,
     subscribe: (query, id) => {
+      if (closed) throw new Error('wire is closed')
       let key = id ?? `s${++n}`
       asks.set(key, query)
       members.set(key, new Set())
+      resetting.add(key)
+      opts.pending?.(key)
       open()
       send({ subscribe: query, id: key })
       return key
@@ -208,6 +219,10 @@ export let wire = (opts: WireOpts): Wire => {
       closed = true
       let s = socket
       socket = null
+      for (let id of asks.keys()) opts.pending?.(id)
+      asks.clear()
+      members.clear()
+      resetting.clear()
       s?.close()
     },
   }
