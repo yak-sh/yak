@@ -3,7 +3,7 @@ import { archetypeDoc, archetypes, eidOf } from '@yaks/archetype'
 import { type Bundle, graph, type Plugin } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { journal, journalDoc } from '@yaks/journal'
-import { backfill, componentTables, storage } from './mod.ts'
+import { backfill, componentTables, schema, storage } from './mod.ts'
 import { mem } from './harness.ts'
 
 let domain = {
@@ -29,6 +29,26 @@ let setup = (extra: Plugin[] = []) => {
   let get = (eid: string) => store.tx((tx) => tx.get([eid]))[0]
   return { driver, store, g, get }
 }
+
+Deno.test('archetype: non-opt-in schema adapters can reinstall over a legacy spine', () => {
+  let d = mem()
+  d.exec(
+    'create table entity(id integer primary key, eid text unique, num integer unique)',
+  )
+  for (let sql of schema(loadVocab([domain]))) d.exec(sql)
+  assertEquals(d.query('pragma table_info(entity)', []).map((r) => r.name), [
+    'id',
+    'eid',
+    'num',
+  ])
+  let s = storage(d, vocab)
+  s.install()
+  assert(
+    d.query('pragma index_list(entity)', []).some((r) =>
+      r.name == 'entity_archetype'
+    ),
+  )
+})
 
 Deno.test('archetype: two writers, create, value-only, add/remove, same-batch net move', () => {
   let { g, store, driver, get } = setup()

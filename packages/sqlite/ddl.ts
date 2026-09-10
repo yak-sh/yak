@@ -142,7 +142,11 @@ export let tabled = (vocab: Vocab, text: Text = {}): string[] => {
 // may name a column its table only gained on this boot, and SQLite refuses one
 // over a column that is not there yet.
 export let indexed = (vocab: Vocab): string[] => [
-  `create index if not exists entity_archetype on entity(archetype)`,
+  // Adapters that only replay schema() may still have the old spine. Until
+  // they opt into archetypes/migration, do not index a column they lack.
+  ...(vocab.comp('archetype')
+    ? [`create index if not exists entity_archetype on entity(archetype)`]
+    : []),
   ...vocab.all
     .filter((name) => name != 'entity')
     .flatMap((name) => vocab.indexes(name).map((i) => indexDdl(name, i))),
