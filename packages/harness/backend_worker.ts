@@ -33,7 +33,7 @@ async function handle(method: string, value: unknown): Promise<unknown> {
       cwd?: string
       images?: ImageOptions | false
       instructions?: string
-      fake?: boolean | 'stuck'
+      fake?: boolean | 'stuck' | { delayMs: number }
     }
     a = agent({
       h: open(options.db),
@@ -43,12 +43,18 @@ async function handle(method: string, value: unknown): Promise<unknown> {
       ...(options.fake
         ? {
           name: 'fake',
-          model: () =>
-            options.fake == 'stuck' ? new Promise(() => {}) : Promise.resolve({
+          model: async () => {
+            if (options.fake == 'stuck') return new Promise(() => {})
+            if (typeof options.fake == 'object') {
+              let delay = options.fake.delayMs
+              await new Promise((resolve) => setTimeout(resolve, delay))
+            }
+            return {
               id: 'test',
               model: 'fake',
               items: [{ kind: 'assistant' as const, text: 'ok' }],
-            }),
+            }
+          },
         }
         : {}),
     })

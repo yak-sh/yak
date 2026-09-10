@@ -322,3 +322,63 @@ Deno.test('close drains a held storage callback without stopping an independent 
     await a.close()
   }
 })
+
+Deno.test('send commits during a provider turn and unserved input reaches the next anchored request', async () => {
+  let release!: (value: Awaited<ReturnType<Model>>) => void
+  let began!: () => void
+  let first = new Promise<Awaited<ReturnType<Model>>>((resolve) =>
+    release = resolve
+  )
+  let called = new Promise<void>((resolve) => began = resolve)
+  let requests: Parameters<Model>[0][] = []
+  let model: Model = (req) => {
+    requests.push(req)
+    if (requests.length == 1) {
+      began()
+      return first
+    }
+    return echo(req)
+  }
+  model.mark = (reply) => ({ openai: { response_id: reply.id } })
+  model.anchor = (b) =>
+    (b.openai as Comp | undefined)?.response_id as string | undefined
+  let a = started(model)
+  let s = await a.start('first')
+  try {
+    await called
+    await a.send(s, 'while waiting')
+    let committed = await a.transcript(s)
+    assert(
+      committed.some((b) =>
+        (b.content as Comp | undefined)?.body == 'while waiting'
+      ),
+    )
+    assertEquals(requests.length, 1)
+    assert(!committed.some((b) => b.ask), 'first provider has not returned')
+    release({
+      id: 'r-first',
+      model: 'fake',
+      items: [{ kind: 'assistant', text: 'first reply' }],
+    })
+    await a.idle(s)
+    assertEquals(requests.length, 2)
+    assertEquals(requests[1].anchor, 'r-first')
+    assert(
+      requests[1].items.some((i) =>
+        i.kind == 'user' && i.text == 'while waiting'
+      ),
+    )
+    let entries = await a.transcript(s)
+    let seqs = entries.map((b) => Number((b.entry as Comp).seq))
+    assertEquals(new Set(seqs).size, seqs.length)
+    assertEquals(statusOf(entries), 'settled')
+  } finally {
+    release({
+      id: 'cleanup',
+      model: 'fake',
+      items: [{ kind: 'assistant', text: 'done' }],
+    })
+    await a.idle(s)
+    a.close()
+  }
+})

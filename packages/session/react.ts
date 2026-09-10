@@ -248,8 +248,16 @@ export let react = async (
   let anchorId = deps.model.anchor && asked
     ? deps.model.anchor(asked)
     : undefined
+  let boundary = asked &&
+    entries.find((b) => b.entity.eid == comp(asked!, ASK)?.through)
   let window = anchorId
-    ? entries.filter((b) => seqOf(b) > seqOf(asked!))
+    ? entries.filter((b) =>
+      seqOf(b) > seqOf(asked!) ||
+      // An input committed while this ask was in flight was not sent to the
+      // provider, even though its sequence precedes the recorded ask result.
+      (boundary && seqOf(b) > seqOf(boundary) && kindOf(b) == 'input' &&
+        !b.notice)
+    )
     : entries
   let effort = using?.effort ?? served?.effort
   const results = deps.resultText

@@ -138,6 +138,33 @@ Deno.test('worker subscribes only to selected fork ancestry, respecting each bou
   }
 })
 
+Deno.test('worker publishes a second input while a slow model is still pending', async () => {
+  let dir = await Deno.makeTempDir()
+  let r = await remote({ db: ':memory:', cwd: dir, fake: { delayMs: 500 } })
+  try {
+    let id = await r.agent.start('first')
+    // Ensure replication is watching before admitting the next message.
+    await r.agent.transcript(id)
+    await r.agent.send(id, 'second before reply')
+    let entries = await r.agent.transcript(id)
+    assert(
+      entries.some((b) =>
+        (b.content as { body?: string })?.body == 'second before reply'
+      ),
+    )
+    assert(
+      !entries.some((b) => b.ask),
+      'send must not wait for provider completion',
+    )
+    await r.idle(id)
+    entries = await r.agent.transcript(id)
+    assert(entries.some((b) => b.ask))
+  } finally {
+    await r.close()
+    await Deno.remove(dir, { recursive: true })
+  }
+})
+
 Deno.test('worker exit drains a burst and is idempotent', async () => {
   let dir = await Deno.makeTempDir()
   let r = await remote({ db: ':memory:', cwd: dir, fake: true })

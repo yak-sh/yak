@@ -17,7 +17,7 @@ export let remote = async (
     cwd?: string
     images?: ImageOptions | false
     instructions?: string
-    fake?: boolean | 'stuck'
+    fake?: boolean | 'stuck' | { delayMs: number }
   } = {},
 ) => {
   let worker = new Worker(
