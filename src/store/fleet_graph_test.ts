@@ -157,16 +157,18 @@ Deno.test('fleet number allocation waits for kinds, inline bodies are not CAS', 
       entity: { eid: 'wake' },
       wake: { target: 'a', note: 'inline', at: '2026-09-09T00:00:00Z' },
     },
-    { entity: { eid: 'b' }, content: { body: 'inline text' } },
+    {
+      entity: { eid: 'b' },
+      brief: { text: 'inline text' },
+    },
   ])
   assertEquals(out.find((b) => b.entity.eid == 'edge')?.entity.num, null)
   assertEquals(out.find((b) => b.entity.eid == 'wake')?.entity.num, null)
   assertEquals(out.find((b) => b.entity.eid == 'a')?.entity.num, 1)
   assertEquals(out.find((b) => b.entity.eid == 'b')?.entity.num, 2)
-  let got = fleetGraphOf(db).read('.content!') as Bundle[]
-  assertEquals(component(got, 'b', 'content'), {
-    body: 'inline text',
-    source: null,
+  let got = fleetGraphOf(db).read('.brief!') as Bundle[]
+  assertEquals(component(got, 'b', 'brief'), {
+    text: 'inline text',
   })
   assertEquals(raw(db, 'select count(*) as n from blob_text'), [{ n: 1 }])
 })
@@ -213,7 +215,7 @@ Deno.test('fleet uses Sql transactions and holds a write lock before normalize',
     },
   })
   write(proxy, [{ entity: { eid: 'p' }, doc: { body: 'nested' } }])
-  assertEquals(calls, [true, true])
+  assertEquals(calls, [true, true, true])
 })
 
 Deno.test('fleet CAS dry run returns exact defaults and numbers but keeps nothing', () => {

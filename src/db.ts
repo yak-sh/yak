@@ -39,7 +39,6 @@ import {
   shapeOf,
   SHORT,
   shortId,
-  slugsOf,
   type Snapshot,
   stamped,
   uuid,
@@ -72,7 +71,14 @@ import { derivedCols, indexDdlOne, tableDdl } from './ddl.ts'
 import { FILTERS, type Vocab, vocabOps } from './store/vocab.ts'
 import type { Vocab as FleetVocab } from '@yaks/vocab'
 import { fleetVocab } from './vocab/fleet_vocab.ts'
-import type { Graph } from '@yaks/graph'
+import { type Graph, Stale as CoreStale } from '@yaks/graph'
+import { Bounced as LeaseBounced } from '@yaks/session'
+import {
+  auditFleetBounce,
+  checkFleetChange,
+  fleetGuardTx,
+  type GuardHost,
+} from './store/fleet_preconditions.ts'
 import { fleetGraph } from './store/fleet_graph.ts'
 import { fleetNormalizers, normalizeFleet } from './store/fleet_normalize.ts'
 import {
@@ -3833,6 +3839,17 @@ export let fleetGraphOf = (db: Sql): Graph => {
           comps[name]?.[col] == 'text' || comps[name]?.[col] == 'body',
         name: (eid) => human(db, eid),
       }),
+      guards: fleetGuardHost(db),
+      refusal: (err) =>
+        err instanceof CoreStale
+          ? new Stale(
+            err.eid,
+            err.comp,
+            err.column,
+            err.current,
+            human(db, err.eid),
+          )
+          : err,
       number: (eid) => mintNum(db, eid),
       component: (eid, name) => readComp(db, eid, name),
     })
@@ -5200,6 +5217,312 @@ let workClaimRefusal = (db: Sql, eid: string) => {
   return `${id} is not ready to claim`
 }
 
+let fleetGuardHost = (
+  db: Sql,
+  person: (actor?: string | null) => boolean = (actor) =>
+    isPerson(db, actor === undefined ? writerActor(db, undefined) : actor),
+): GuardHost => ({
+  db,
+  prepare: (sql) => prep(db, sql),
+  name: (eid) => human(db, eid),
+  bounce: (err) => {
+    let label = prep(
+      db,
+      'select id from session where entity = (select id from entity where eid = ?)',
+    ).get<{ id: string | null }>(err.holder)?.id
+    return new Bounced(
+      `${human(db, err.on)} already claimed by ${
+        label ?? human(db, err.holder)
+      }`,
+      err.on,
+      err.loser,
+      err.holder,
+    )
+  },
+  before: (changes) => {
+    // A log entry is an append-only fact. Every request/content facet is
+    // born in the same batch as entry membership and can never be revised,
+    // removed, or attached later. Outcomes use server-owned facets instead.
+    let facts = new Set(
+      Object.keys(sessionComps)
+        .filter((name) =>
+          name != 'runner' && name != 'lease' && name != 'usage'
+        ),
+    )
+    let appends = new Set(
+      changes.filter((c) => c.name == 'entry' && c.comp?.session)
+        .map((c) => c.eid),
+    )
+    // An EDGE wearing `recalled{at}` is a sentence, not a log facet: the recall
+    // of one memory, timed on its own entity (D-23820, T-32471). The rule below
+    // guards entries, so it reads past anything this batch also makes an edge.
+    let edged = new Set(
+      changes.filter((c) => c.name == 'edge' && c.comp).map((c) => c.eid),
+    )
+    let existed = prep(
+      db,
+      'select 1 from entry where entity = (select id from entity where eid = ?)',
+    )
+    // A transcript entry is not the only thing a log fact can be a line OF
+    // (T-35323). A tracked process is the other: the lines it writes are
+    // `content{body, source}` naming it, and its ending is its own `exit{code}`.
+    // The anchor there is a `process` row that already STANDS, not one named in
+    // the same batch — a process's ending is necessarily later than its birth,
+    // which is exactly what an entry may never be. Entries keep the stricter
+    // rule below; this only says that a line off a stream is not a loose fact.
+    let processed = prep(
+      db,
+      'select 1 from process where entity = (select id from entity where eid = ?)',
+    )
+    let streamed = (eid: string, comp: Change['comp']) =>
+      !!processed.get(eid) ||
+      (comp?.source != null && !!processed.get(String(comp.source)))
+    for (let { eid, name, comp } of changes) {
+      if (!facts.has(name) || edged.has(eid) || streamed(eid, comp)) continue
+      // The one late mark: `prompt` may be ADDED to an existing turn, never
+      // revised or removed. `task backfill prompt` re-reads the turn's own
+      // transcript line for the tag ingest stamps at birth today; a tag is
+      // content-free, so nothing about what was said changes.
+      if (name == 'prompt' && comp != null && existed.get(eid)) continue
+      if (existed.get(eid)) {
+        throw new Error(`entry ${shortId(eid)} is immutable`)
+      }
+      if (name == 'entry' && !comp?.session) {
+        throw new Error(`entry ${shortId(eid)} needs a session`)
+      }
+      // This half of the rule is about ATTACHING a fact, and a null attaches
+      // nothing: the entity here has no entry (the immutable check above owns
+      // that case), so clearing a log word off it removes something that
+      // cannot be there. A supervisor's relaunch batch carries exactly such a
+      // clear (`exit: null` beside the new `process`, T-35328), and demanding
+      // an entry for it would be asking for a transcript nobody wrote.
+      if (name != 'entry' && comp != null && !appends.has(eid)) {
+        throw new Error(`${name} ${shortId(eid)} needs entry in its batch`)
+      }
+    }
+  },
+  // The package store can mint referenced spines; the fleet may not invent
+  // dangling identities (except its deliberate spawn-request placeholder).
+  // Judge these against FOUND + the batch's explicit births, before rehearsal.
+  references: (changes) => {
+    let births = new Set(
+      changes.filter((c) => c.comp != null).map((c) => c.eid),
+    )
+    for (let { eid, name, comp } of changes) {
+      if (!comp || graveOf(db).get(eid)) continue
+      for (let [n, col] of eidCols) {
+        if (n != name || comp[col] == null) continue
+        let target = String(comp[col])
+        if (
+          !graveOf(db).get(target) && (
+            births.has(target) ||
+            trustedRefs.some(([n, c]) => n == name && c == col)
+          )
+        ) continue
+        refToId(db, name, eid, col, target)
+      }
+    }
+  },
+  after: (changes, created) => {
+    // Typed references are judged against the final state: adding a target
+    // kind later in the batch is legal; leaving a ref to a removed kind is not.
+    for (let { eid, name, comp } of changes) {
+      for (let ref of refs) {
+        let refusal = ref.name == name && comp?.[ref.col] != null
+          ? refRefused(db, ref, eid)
+          : ref.target == name && comp == null
+          ? refRefused(db, ref, undefined, eid)
+          : null
+        if (refusal) throw refusal
+      }
+    }
+    // A proposal does not authorize an agent spawn. This rule sits after
+    // every write so deciding and spawning in one batch works, and before
+    // commit so every door — including a raw session request — gets the same
+    // refusal.
+    let request = prep(
+      db,
+      `select rt.eid as requested_task from session s
+       join entity o on o.id = s.entity
+       left join entity rt on rt.id = s.requested_task
+       where o.eid = ?`,
+    )
+    let pending = prep(
+      db,
+      `
+      select 1 from proposed p
+      left join decided d on d.entity = p.entity
+      where p.entity = (select id from entity where eid = ?) and d.entity is null
+    `,
+    )
+    for (let key of created) {
+      if (!key.startsWith('session ')) continue
+      let eid = key.slice('session '.length)
+      let row = request.get(eid) as
+        | { requested_task: string | null }
+        | undefined
+      let target = row?.requested_task
+      if (!target || !pending.get(target)) continue
+      let id = human(db, target)
+      throw new Error(
+        `${id} is proposed but not decided — accept it with ` +
+          `task set ${id} .decided.verdict=approved (by defaults to you; ` +
+          `name .decided.by=<person> only when relaying that person's ` +
+          `explicit decision)`,
+      )
+    }
+  },
+  check: (change, changes, target, actor) => {
+    let { eid, name, comp } = change
+    // A target can have died earlier in this batch, after the preflight's
+    // FOUND identity check. Tombstones never accept a fresh reference.
+    for (let [n, col] of eidCols) {
+      if (
+        n == name && comp?.[col] != null && graveOf(db).get(String(comp[col]))
+      ) {
+        refToId(db, name, eid, col, comp[col])
+      }
+    }
+    if (
+      name == 'claim' && comp && target == eid &&
+      !prep(
+        db,
+        'select 1 from claim where entity = (select id from entity where eid = ?)',
+      ).get(eid) &&
+      !prep(db, guardedWorkSql).get(eid)
+    ) {
+      throw new Error(workClaimRefusal(db, eid))
+    }
+    // A stop_request is a lever, not a note: it may only be pulled on a
+    // managed session that is still going — anything else is refused
+    // loudly, like a bounced claim. (The stop itself is an EFFECT,
+    // post-commit; this gate is the rule half.)
+    if (name == 'stop_request' && comp?.target) {
+      // session facets are int-keyed now: the target session's own eid names
+      // its row, and every entry-borne facet joins the entry by its owner
+      // int (e.entity), the id that was formerly e.eid.
+      let target = String(comp.target)
+      let s = prep(
+        db,
+        `select s.origin as origin, s.status as status from session s
+           join entity o on o.id = s.entity where o.eid = ?`,
+      )
+        .get(target) as
+          | { origin: string; status: string | null }
+          | undefined
+      let graph = !!prep(
+        db,
+        `select 1 from entry e
+           where e.session = (select id from entity where eid = ?) and (
+             exists (select 1 from lease l where l.entity = e.entity)
+             or (
+               not exists (select 1 from imported i where i.entity = e.entity)
+               and not exists (select 1 from error x where x.entity = e.entity)
+               and not exists (
+                 select 1 from cancel z where z.target = e.entity
+               )
+               and (
+                 (exists (select 1 from generation g where g.entity = e.entity)
+                  and not exists (
+                    select 1 from delivered d where d.entity = e.entity
+                  ))
+                 or
+                 (exists (select 1 from call c where c.entity = e.entity)
+                  and not exists (
+                    select 1 from result r where r.call = e.entity
+                  ))
+               )
+             )
+           ) limit 1`,
+      ).get(target)
+      if (
+        !s || s.origin != 'managed' ||
+        (!sessionActive.includes(String(s.status)) && !graph &&
+          !advanceable(db, target).length)
+      ) {
+        throw new Error(
+          `stop_request refused: session is ${
+            s ? s.status ?? 'external' : 'gone'
+          }`,
+        )
+      }
+    }
+    // A board IS its query (membership is never stored), so a query the
+    // grammar can't parse is a board that will never match anything and
+    // never say why. The parser already knows — `task list .zzz=1`
+    // errors — so refuse at the door, while the typo is still in front
+    // of whoever made it. Empty stays legal: it selects nothing.
+    if (name == 'board' && comp?.query != null) {
+      try {
+        parseQuery(String(comp.query), vocabOf(db))
+      } catch (e) {
+        throw new Error(
+          `board query refused: ${e instanceof Error ? e.message : e}`,
+        )
+      }
+    }
+    // A comment's identity is CREATED, never reused. The wire is
+    // patch-by-design (M-17872), so a client that reuses an eid for a SECOND
+    // comment silently DISPLACES the first: the doc.body change (processed
+    // just before this one) patches over the live comment, and the earlier
+    // note is lost with no trace (T-23428 — two sequential comments collided
+    // on one eid). No legit path re-asserts comment-hood on an entity that
+    // already wears it: editing a body sends `doc` alone, never the `comment`
+    // component again. So a `comment` component landing on an entity that is
+    // ALREADY a comment is identity reuse — bounce the whole batch loudly, the
+    // way a taken claim or alias does, rolling back the displacing doc write
+    // with it, for every entry path (CLI, MCP, raw graph_apply, deno eval).
+    // Reuse wears the CREATE shape, doc + comment on one eid; a `comment`
+    // arriving alone moves `target` and displaces nothing — an ordinary
+    // patch (M-17872), the retarget an aggregate tally follows.
+    if (
+      name == 'comment' && comp &&
+      changes.some((c) => c.eid == eid && c.name == 'doc' && c.comp)
+    ) {
+      if (
+        prep(
+          db,
+          `select 1 from comment
+             where entity = (select id from entity where eid = ?)`,
+        ).get(eid)
+      ) {
+        throw new Error(
+          `${human(db, eid)} is already a comment — mint a fresh id ` +
+            `(comment identity reuse would displace the existing one)`,
+        )
+      }
+    }
+    if (name == 'blob' && comp && !CONTENT_EID.test(eid)) {
+      throw new Error('blob eid must be its SHA-256')
+    }
+    // Accepting a proposed memory is the decision an agent may not take
+    // for itself: `decided` on one is a person's stamp only.
+    if (
+      name == 'decided' && comp && proposedMemory(db, eid) && !person(actor)
+    ) {
+      throw new Error(
+        `${human(db, eid)} is a proposed memory — a person decides it ` +
+          `(task set ${human(db, eid)} .decided.verdict=approved).`,
+      )
+    }
+    if (name == 'entity' && comp == null) {
+      // A redaction is the durable fact that bytes were deliberately
+      // forgotten. The value is gone, but that fact may not be erased —
+      // redacting a redaction would recreate the very ambiguity this audit
+      // exists to prevent.
+      if (
+        prep(
+          db,
+          `select 1 from redaction
+             where entity = (select id from entity where eid = ?)`,
+        ).get(eid)
+      ) {
+        throw new Error(`${human(db, eid)} is a permanent redaction audit`)
+      }
+    }
+  },
+})
+
 export let apply = (
   db: Sql,
   changes: Change[],
@@ -5248,8 +5571,6 @@ export let apply = (
   // rules that keep agents from programming the next agent's prompt.
   let personKnown: boolean | undefined
   let person = () => personKnown ??= isPerson(db, writerActor(db, writer))
-  let refWrites = new Map<string, [Ref, string]>()
-  let targetDrops = new Map<string, [Ref, string]>()
   // Whose provenance `by` the WIRE named this batch — the server keeps it
   // and only defaults the gap (created.by at birth, updated.by on a touch).
   let saidCreator = new Set<string>()
@@ -5332,66 +5653,9 @@ export let apply = (
     // `worked` endpoint in the batch.
     changes = edgeWrites(db, changes)
     changes = casBodies(db, changes)
-    // A log entry is an append-only fact. Every request/content facet is
-    // born in the same batch as entry membership and can never be revised,
-    // removed, or attached later. Outcomes use server-owned facets instead.
-    let facts = new Set(
-      Object.keys(sessionComps)
-        .filter((name) =>
-          name != 'runner' && name != 'lease' && name != 'usage'
-        ),
-    )
-    let appends = new Set(
-      changes.filter((c) => c.name == 'entry' && c.comp?.session)
-        .map((c) => c.eid),
-    )
-    // An EDGE wearing `recalled{at}` is a sentence, not a log facet: the recall
-    // of one memory, timed on its own entity (D-23820, T-32471). The rule below
-    // guards entries, so it reads past anything this batch also makes an edge.
-    let edged = new Set(
-      changes.filter((c) => c.name == 'edge' && c.comp).map((c) => c.eid),
-    )
-    let existed = prep(
-      db,
-      'select 1 from entry where entity = (select id from entity where eid = ?)',
-    )
-    // A transcript entry is not the only thing a log fact can be a line OF
-    // (T-35323). A tracked process is the other: the lines it writes are
-    // `content{body, source}` naming it, and its ending is its own `exit{code}`.
-    // The anchor there is a `process` row that already STANDS, not one named in
-    // the same batch — a process's ending is necessarily later than its birth,
-    // which is exactly what an entry may never be. Entries keep the stricter
-    // rule below; this only says that a line off a stream is not a loose fact.
-    let processed = prep(
-      db,
-      'select 1 from process where entity = (select id from entity where eid = ?)',
-    )
-    let streamed = (eid: string, comp: Change['comp']) =>
-      !!processed.get(eid) ||
-      (comp?.source != null && !!processed.get(String(comp.source)))
-    for (let { eid, name, comp } of changes) {
-      if (!facts.has(name) || edged.has(eid) || streamed(eid, comp)) continue
-      // The one late mark: `prompt` may be ADDED to an existing turn, never
-      // revised or removed. `task backfill prompt` re-reads the turn's own
-      // transcript line for the tag ingest stamps at birth today; a tag is
-      // content-free, so nothing about what was said changes.
-      if (name == 'prompt' && comp != null && existed.get(eid)) continue
-      if (existed.get(eid)) {
-        throw new Error(`entry ${shortId(eid)} is immutable`)
-      }
-      if (name == 'entry' && !comp?.session) {
-        throw new Error(`entry ${shortId(eid)} needs a session`)
-      }
-      // This half of the rule is about ATTACHING a fact, and a null attaches
-      // nothing: the entity here has no entry (the immutable check above owns
-      // that case), so clearing a log word off it removes something that
-      // cannot be there. A supervisor's relaunch batch carries exactly such a
-      // clear (`exit: null` beside the new `process`, T-35328), and demanding
-      // an entry for it would be asking for a transcript nobody wrote.
-      if (name != 'entry' && comp != null && !appends.has(eid)) {
-        throw new Error(`${name} ${shortId(eid)} needs entry in its batch`)
-      }
-    }
+    let guards = fleetGuardHost(db, person)
+    let guardTx = fleetGuardTx(fleetGraphOf(db))
+    guards.before(changes)
     // Mint spines in first-touch order before writing components. A typed
     // reference may then precede its target component without pre-minting that
     // target out of order. An entity-null still voids every later touch.
@@ -5465,17 +5729,6 @@ export let apply = (
         dropped.add(change)
         continue
       }
-      for (let ref of refs) {
-        if (ref.name == name && comp?.[ref.col] != null) {
-          refWrites.set(`${name}\0${eid}\0${ref.col}`, [ref, eid])
-        }
-        if (ref.target == name && comp == null) {
-          targetDrops.set(`${name}\0${eid}\0${ref.name}\0${ref.col}`, [
-            ref,
-            eid,
-          ])
-        }
-      }
       // A precondition is the graph's --ff-only: the caller names the value
       // it READ, and a value that has moved since refuses the whole batch
       // rather than clobbering the writer it never saw. Checked here with
@@ -5502,195 +5755,13 @@ export let apply = (
           throw new Stale(eid, name, col, cur, human(db, eid))
         }
       }
-      // A claim is a LEASE, not a patch: taking one over another session's
-      // claim fails the whole batch loudly — release, then claim. The same
-      // session re-claiming is a no-op refresh. apply() runs serially on
-      // the one db handle, so check-then-write here IS the atomic take.
-      if (name == 'claim' && comp) {
-        // claim.session and the owner are int ids; project the current
-        // holder's session eid (for the != comp.session eid compare) and its
-        // label. `eid` is the claimed entity's eid (claim is keyed by it).
-        let cur = prep(
-          db,
-          `
-          select cs.eid as session, s.id as id from claim c
-          left join session s on s.entity = c.session
-          left join entity cs on cs.id = c.session
-          where c.entity = (select id from entity where eid = ?)
-        `,
-        ).get(eid) as { session: string; id: string | null } | undefined
-        if (cur && cur.session != comp.session) {
-          // The holder is named by its session LABEL when it has one —
-          // that's a name someone chose, not an eid; only the fallback
-          // needs speaking.
-          throw new Bounced(
-            `${human(db, eid)} already claimed by ${
-              cur.id ?? human(db, cur.session)
-            }`,
-            eid,
-            String(comp.session),
-            cur.session,
-          )
-        }
-        // A worker take is stricter than raw graph mutation. The collision
-        // check stays first so a concurrent loser retains the established
-        // conflict audit; replay by the same holder is idempotent even though
-        // its live claim now derives wip. Every other readiness fact is read
-        // under this BEGIN IMMEDIATE transaction, after an optional bare
-        // decision in the same batch has landed.
-        if (
-          workClaim?.target == eid && !cur &&
-          !prep(db, guardedWorkSql).get(eid)
-        ) {
-          throw new Error(workClaimRefusal(db, eid))
-        }
-        // A claim IS wip now (D-24102): status is derived, so the claim's mere
-        // presence makes an open task read wip — no stored move to synthesize,
-        // and none to get stuck when the session dies and the claim is reaped.
-      }
-      // A stop_request is a lever, not a note: it may only be pulled on a
-      // managed session that is still going — anything else is refused
-      // loudly, like a bounced claim. (The stop itself is an EFFECT,
-      // post-commit; this gate is the rule half.)
-      if (name == 'stop_request' && comp?.target) {
-        // session facets are int-keyed now: the target session's own eid names
-        // its row, and every entry-borne facet joins the entry by its owner
-        // int (e.entity), the id that was formerly e.eid.
-        let target = String(comp.target)
-        let s = prep(
-          db,
-          `select s.origin as origin, s.status as status from session s
-           join entity o on o.id = s.entity where o.eid = ?`,
-        )
-          .get(target) as
-            | { origin: string; status: string | null }
-            | undefined
-        let graph = !!prep(
-          db,
-          `select 1 from entry e
-           where e.session = (select id from entity where eid = ?) and (
-             exists (select 1 from lease l where l.entity = e.entity)
-             or (
-               not exists (select 1 from imported i where i.entity = e.entity)
-               and not exists (select 1 from error x where x.entity = e.entity)
-               and not exists (
-                 select 1 from cancel z where z.target = e.entity
-               )
-               and (
-                 (exists (select 1 from generation g where g.entity = e.entity)
-                  and not exists (
-                    select 1 from delivered d where d.entity = e.entity
-                  ))
-                 or
-                 (exists (select 1 from call c where c.entity = e.entity)
-                  and not exists (
-                    select 1 from result r where r.call = e.entity
-                  ))
-               )
-             )
-           ) limit 1`,
-        ).get(target)
-        if (
-          !s || s.origin != 'managed' ||
-          (!sessionActive.includes(String(s.status)) && !graph &&
-            !advanceable(db, target).length)
-        ) {
-          throw new Error(
-            `stop_request refused: session is ${
-              s ? s.status ?? 'external' : 'gone'
-            }`,
-          )
-        }
-      }
-      // A slug names exactly ONE entity, so every member of an alias's set
-      // (the primary `slug` plus each word of `slugs`) must be free or already
-      // this eid's — the write-time generalization of the old single-column
-      // unique index, now that one entity wears several handles. A patch that
-      // touches only `slugs` merges over the stored `slug` so the check sees
-      // the whole set; a slug already worn by another entity bounces the batch,
-      // the way a taken claim does.
-      if (name == 'alias' && comp) {
-        let cur = prep(
-          db,
-          `select slug, slugs from alias
-           where entity = (select id from entity where eid = ?)`,
-        )
-          .get(eid) as { slug: string; slugs: string | null } | undefined
-        let slug = (comp.slug ?? cur?.slug ?? null) as string | null
-        let extra = (comp.slugs !== undefined ? comp.slugs : cur?.slugs) as
-          | string
-          | null
-        let seen = new Set<string>()
-        for (let s of slugsOf({ slug, slugs: extra })) {
-          if (seen.has(s)) throw new Error(`alias ${s} is listed twice`)
-          seen.add(s)
-          let owner = prep(
-            db,
-            `select o.eid as eid from alias a join entity o on o.id = a.entity
-             where o.eid != ? and (a.slug = ?
-               or instr(' ' || coalesce(a.slugs, '') || ' ', ' ' || ? || ' ') > 0)`,
-          ).get(eid, s, s) as { eid: string } | undefined
-          if (owner) {
-            throw new Error(`alias ${s} already names ${human(db, owner.eid)}`)
-          }
-        }
-      }
-      // A board IS its query (membership is never stored), so a query the
-      // grammar can't parse is a board that will never match anything and
-      // never say why. The parser already knows — `task list .zzz=1`
-      // errors — so refuse at the door, while the typo is still in front
-      // of whoever made it. Empty stays legal: it selects nothing.
-      if (name == 'board' && comp?.query != null) {
-        try {
-          parseQuery(String(comp.query), vocabOf(db))
-        } catch (e) {
-          throw new Error(
-            `board query refused: ${e instanceof Error ? e.message : e}`,
-          )
-        }
-      }
-      // A comment's identity is CREATED, never reused. The wire is
-      // patch-by-design (M-17872), so a client that reuses an eid for a SECOND
-      // comment silently DISPLACES the first: the doc.body change (processed
-      // just before this one) patches over the live comment, and the earlier
-      // note is lost with no trace (T-23428 — two sequential comments collided
-      // on one eid). No legit path re-asserts comment-hood on an entity that
-      // already wears it: editing a body sends `doc` alone, never the `comment`
-      // component again. So a `comment` component landing on an entity that is
-      // ALREADY a comment is identity reuse — bounce the whole batch loudly, the
-      // way a taken claim or alias does, rolling back the displacing doc write
-      // with it, for every entry path (CLI, MCP, raw graph_apply, deno eval).
-      // Reuse wears the CREATE shape, doc + comment on one eid; a `comment`
-      // arriving alone moves `target` and displaces nothing — an ordinary
-      // patch (M-17872), the retarget an aggregate tally follows.
-      if (
-        name == 'comment' && comp &&
-        changes.some((c) => c.eid == eid && c.name == 'doc' && c.comp)
-      ) {
-        if (
-          prep(
-            db,
-            `select 1 from comment
-             where entity = (select id from entity where eid = ?)`,
-          ).get(eid)
-        ) {
-          throw new Error(
-            `${human(db, eid)} is already a comment — mint a fresh id ` +
-              `(comment identity reuse would displace the existing one)`,
-          )
-        }
-      }
-      if (name == 'blob' && comp && !CONTENT_EID.test(eid)) {
-        throw new Error('blob eid must be its SHA-256')
-      }
-      // Accepting a proposed memory is the decision an agent may not take
-      // for itself: `decided` on one is a person's stamp only.
-      if (name == 'decided' && comp && proposedMemory(db, eid) && !person()) {
-        throw new Error(
-          `${human(db, eid)} is a proposed memory — a person decides it ` +
-            `(task set ${human(db, eid)} .decided.verdict=approved).`,
-        )
-      }
+      checkFleetChange(
+        guards,
+        guardTx,
+        change,
+        changes,
+        workClaim?.target,
+      )
       if (comp == null) {
         if (name != 'entity') {
           if (
@@ -5707,19 +5778,6 @@ export let apply = (
             if (fresh) touched.delete(eid)
           }
           continue
-        }
-        // A redaction is the durable fact that bytes were deliberately
-        // forgotten. The value is gone, but that fact may not be erased —
-        // redacting a redaction would recreate the very ambiguity this audit
-        // exists to prevent.
-        if (
-          prep(
-            db,
-            `select 1 from redaction
-             where entity = (select id from entity where eid = ?)`,
-          ).get(eid)
-        ) {
-          throw new Error(`${human(db, eid)} is a permanent redaction audit`)
         }
         // Death spreads to entities that exist ABOUT the dead one — cards
         // viewing it, comments aimed at it, pins and cameras on a dead
@@ -5962,49 +6020,7 @@ export let apply = (
     // downstream reader here (the proposed-not-decided check, effects, the
     // journal) and the births echo below all see the num rather than a NULL.
     for (let eid of minted) mintNum(db, eid)
-    for (let [ref, eid] of refWrites.values()) {
-      let refusal = refRefused(db, ref, eid)
-      if (refusal) throw refusal
-    }
-    for (let [ref, target] of targetDrops.values()) {
-      let refusal = refRefused(db, ref, undefined, target)
-      if (refusal) throw refusal
-    }
-    // A proposal does not authorize an agent spawn. This rule sits after
-    // every write so deciding and spawning in one batch works, and before
-    // commit so every door — including a raw session request — gets the same
-    // refusal.
-    let request = prep(
-      db,
-      `select rt.eid as requested_task from session s
-       join entity o on o.id = s.entity
-       left join entity rt on rt.id = s.requested_task
-       where o.eid = ?`,
-    )
-    let pending = prep(
-      db,
-      `
-      select 1 from proposed p
-      left join decided d on d.entity = p.entity
-      where p.entity = (select id from entity where eid = ?) and d.entity is null
-    `,
-    )
-    for (let key of createdComps) {
-      if (!key.startsWith('session ')) continue
-      let eid = key.slice('session '.length)
-      let row = request.get(eid) as
-        | { requested_task: string | null }
-        | undefined
-      let target = row?.requested_task
-      if (!target || !pending.get(target)) continue
-      let id = human(db, target)
-      throw new Error(
-        `${id} is proposed but not decided — accept it with ` +
-          `task set ${id} .decided.verdict=approved (by defaults to you; ` +
-          `name .decided.by=<person> only when relaying that person's ` +
-          `explicit decision)`,
-      )
-    }
+    guards.after(changes, [...createdComps])
     // One clock for the whole batch: every provenance stamp below reads it,
     // so a birth and the edits beside it agree instead of drifting by the
     // milliseconds between two `new Date()` calls (T-6670).
@@ -6368,35 +6384,21 @@ export let apply = (
 // a loser whose session was born in the rolled-back batch has none, and is
 // null. Whoever owns the outermost transaction writes it: apply() itself, or
 // claimWork() around a nested apply(), once its own rollback has run.
-export class Bounced extends Error {
+export class Bounced extends LeaseBounced {
   constructor(
     message: string,
     public target: string,
-    public loser: string,
-    public holder: string,
+    loser: string,
+    holder: string,
   ) {
-    super(message)
+    super(target, loser, holder)
+    this.message = message
   }
 }
 
 let auditBounce = (db: Sql, e: unknown) => {
-  if (!(e instanceof Bounced) || db.inTransaction) return
-  try {
-    db.transaction(() => {
-      let ceid = crypto.randomUUID()
-      spine(db, ceid)
-      prep(
-        db,
-        `insert into conflict (entity, target, loser, holder)
-         values ((select id from entity where eid = ?), ?,
-                 (select id from entity where eid = ?),
-                 (select id from entity where eid = ?))`,
-      ).run(ceid, refId(db, e.target), e.loser, e.holder)
-      mintNum(db, ceid) // spine no longer numbers at birth (T-3684)
-    })
-  } catch (audit) {
-    console.warn('conflict audit failed —', audit) // never mask the claim error
-  }
+  if (!(e instanceof LeaseBounced) || db.inTransaction) return
+  auditFleetBounce(db, fleetGraphOf(db), e)
 }
 
 // The Vocabulary doc — the schema, written INTO the graph it describes.

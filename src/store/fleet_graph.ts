@@ -20,6 +20,11 @@ import type { Vocab } from '@yaks/vocab'
 import { derived } from '../sql_derived.ts'
 import { sha } from '../sha.ts'
 import type { Sql } from './sql.ts'
+import {
+  auditFleetBounce,
+  fleetPreconditions,
+  type GuardHost,
+} from './fleet_preconditions.ts'
 
 // db.ts owns prepared statements, the fleet's kind-based number allocator,
 // and its canonical hydrated component read. Keep those truths single-owned.
@@ -28,6 +33,8 @@ export type FleetGraphHost = {
   driver: Driver
   vocab: Vocab
   normalizers: Plugin[]
+  guards: GuardHost
+  refusal: (err: unknown) => unknown
   number: (eid: string) => void
   component: (eid: string, name: string) => Comp | undefined
 }
@@ -68,7 +75,7 @@ export let fleetGraph = (host: FleetGraphHost): Graph => {
             ...tx,
             patch: (bundles) => {
               // SQLite checks INSERT's NOT NULL constraints before its UPSERT
-              // conflict arm. Existing doc/setting patches must supply omitted
+              // conflict arm. Existing doc/setting/alias/session patches must supply omitted
               // required values for that check, without echoing them as caller writes.
               // Work in order: two patches for one doc see each other's rows.
               // Mint all references first through the package, then patch each
@@ -90,10 +97,22 @@ export let fleetGraph = (host: FleetGraphHost): Graph => {
                   `select key from setting where entity = ${owner}`,
                   b.entity.eid,
                 )
+                let alias = b.alias as Comp | null | undefined
+                let slug = alias && row(
+                  `select slug from alias where entity = ${owner}`,
+                  b.entity.eid,
+                )
+                let session = b.session as Comp | null | undefined
+                let id = session && row(
+                  `select id from session where entity = ${owner}`,
+                  b.entity.eid,
+                )
                 tx.patch([{
                   ...b,
                   ...(doc ? { doc: { ...held, ...doc } } : {}),
                   ...(setting ? { setting: { ...key, ...setting } } : {}),
+                  ...(alias ? { alias: { ...slug, ...alias } } : {}),
+                  ...(session ? { session: { ...id, ...session } } : {}),
                 }])
               }
               return identities
@@ -223,7 +242,13 @@ export let fleetGraph = (host: FleetGraphHost): Graph => {
   let g = graph({
     storage: bound,
     vocab,
-    plugins: [...host.normalizers, prepare, cas, echoes],
+    plugins: [
+      ...host.normalizers,
+      prepare,
+      cas,
+      fleetPreconditions(host.guards, bound, vocab),
+      echoes,
+    ],
   })
   let apply = g.apply
   // Keep the OUTER write lock: fleet normalizers read committed state before
@@ -231,6 +256,13 @@ export let fleetGraph = (host: FleetGraphHost): Graph => {
   // reopen the read/upgrade race when the remaining policy plugins join.
   // No effect observers are registered in this phase: at the live-write flip,
   // effects must run AFTER this outer transaction, not just core's nested one.
-  g.apply = (changes, opts) => db.transaction(() => apply(changes, opts), true)
+  g.apply = (changes, opts) => {
+    try {
+      return db.transaction(() => apply(changes, opts), true)
+    } catch (err) {
+      auditFleetBounce(db, g, err)
+      throw host.refusal(err)
+    }
+  }
   return g
 }

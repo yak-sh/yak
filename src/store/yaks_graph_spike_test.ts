@@ -364,7 +364,7 @@ Deno.test('gap: the fleet rules the core does not carry', () => {
   // Each of these refuses in the app and lands in the core, because each is a
   // rule about a fleet COMPONENT rather than about the graph. The phase each
   // belongs on, when it becomes a plugin, is named beside it. (The claim lease
-  // and the stop gate used to be here; they are the test above now.)
+  // is tested above; legacy stop_request remains fleet policy.)
   let t = uuid(), m = uuid()
   apply(
     appDb,
@@ -374,7 +374,7 @@ Deno.test('gap: the fleet rules the core does not carry', () => {
       comp: { priority: 1 },
     }] as never,
   )
-  // an alias slug names exactly one entity (precondition, @yaks/names)
+  // an alias slug names exactly one entity (fleet precondition, not @yaks/names)
   apply(appDb, [{ eid: t, name: 'alias', comp: { slug: 'taken' } }] as never)
   assertThrows(
     () =>
