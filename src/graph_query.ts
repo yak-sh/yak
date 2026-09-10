@@ -1351,7 +1351,11 @@ export let askOf = (segs: string[]): Ask => {
     filters: segs.filter((s) =>
       !FLAGS.includes(s) && !RIDERS.some((k) => s.startsWith(k))
     ),
-    after: Number(rider(segs, 'after=')) || 0,
+    // Absence must leave the line's .after intact. An explicit zero still
+    // means restart, but inventing one here erases every in-line cursor.
+    after: rider(segs, 'after=') == null
+      ? undefined
+      : Number(rider(segs, 'after=')) || 0,
     limit: Number(rider(segs, 'limit=')) || undefined,
     reveal: segs.includes('quarantined=1'),
     backlinks: segs.includes('backlinks=1'),
