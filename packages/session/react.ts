@@ -62,13 +62,8 @@ export class ToolError extends Error {
   }
 }
 
-/** A transcript door was given an eid that does not name a session. */
-export class UnknownSession extends Error {
-  constructor(public session: Eid) {
-    super(`unknown session ${session}`)
-    this.name = 'UnknownSession'
-  }
-}
+export { UnknownSession } from './unknown.ts'
+import { UnknownSession } from './unknown.ts'
 
 /** A tool the model may call: its declaration, and how to run it. */
 export type Tool = Declared & {
@@ -173,16 +168,14 @@ export let react = async (
   if (!newest || status == 'settled' || status == 'stopped') return nothing
   if (status == 'failed') return nothing
   let mint = deps.mint ?? (() => crypto.randomUUID() as Eid)
-  let own = entries.filter((b) => comp(b, ENTRY)?.session == session)
-  let next = (own.length ? seqOf(own.at(-1)!) : seqOf(newest)) + 1
   let line = (extra: Record<string, Comp>, body?: string): Bundle => ({
     entity: { eid: mint() },
-    [ENTRY]: { session, seq: next++ },
+    [ENTRY]: { session },
     ...body == null ? {} : { [CONTENT]: { body } },
     ...extra,
   })
   let append = async (added: Bundle[]): Promise<Step> => {
-    await g.apply(added, { trusted: true })
+    added = await g.apply(added, { trusted: true })
     return {
       did: 'asked',
       status: statusOf([...entries, ...added]),

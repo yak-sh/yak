@@ -1,3 +1,4 @@
+import { repairSequences } from '@yaks/session'
 import type { Derived } from '@yaks/sql'
 import { diagnostics } from './diagnostics.ts'
 // The harness's own graph: one SQLite file, the vocabulary it speaks, and the
@@ -213,6 +214,20 @@ export let open = (path: string = dbPath()): Harness => {
   } catch (error) {
     db.close()
     throw error
+  }
+  // Exclusive startup transaction: preserve EID fork boundaries while repairing
+  // legacy fractional/duplicate positions. No live work is admitted yet.
+  sql.exec('create table if not exists harness_upgrade (name text primary key)')
+  if (
+    !sql.query(
+      "select name from harness_upgrade where name = 'entry-seq-v1'",
+      [],
+    ).length
+  ) {
+    store.tx((tx) => {
+      repairSequences(tx)
+      sql.exec("insert into harness_upgrade values ('entry-seq-v1')")
+    })
   }
   // The effects registry writes through the graph's own door, trusted: what an
   // effect writes is the harness's own word, never a client's.

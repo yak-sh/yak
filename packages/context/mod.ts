@@ -6,14 +6,14 @@ import type { Bundle } from '@yaks/graph'
 
 export let promptEntry = (
   session: string,
-  seq: number,
+  seq: number | undefined,
   body: string,
   source: string,
   scope = 'shared',
   revision?: string,
 ): Bundle => ({
   entity: { eid: crypto.randomUUID() },
-  entry: { session, seq },
+  entry: { session, ...seq == null ? {} : { seq } },
   prompt: { scope, source, ...revision ? { revision } : {} },
   content: { body },
 })

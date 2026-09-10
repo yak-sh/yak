@@ -211,3 +211,56 @@ Deno.test('harness tasks and sessions stay num-less; existing human numbers surv
     Deno.removeSync(dir, { recursive: true })
   }
 })
+
+Deno.test('startup repairs fractional positions once without moving fork anchors', async () => {
+  let dir = await Deno.makeTempDir()
+  let path = dir + '/sequences.db'
+  let h = open(path)
+  try {
+    await h.g.apply([
+      { entity: { eid: 's' }, session: {} },
+      { entity: { eid: 'a' }, entry: { session: 's', seq: 1 } },
+      { entity: { eid: 'b' }, entry: { session: 's', seq: 2 } },
+      { entity: { eid: 'f' }, session: {}, fork: { from: 'b' } },
+      { entity: { eid: 'c' }, entry: { session: 'f', seq: 3 } },
+    ])
+    h.db.exec('update entry set seq=seq-0.125 where seq > 1')
+    h.db.exec("delete from harness_upgrade where name='entry-seq-v1'")
+    h.close()
+    h = open(path)
+    let rows = await transcript(h.g, 'f')
+    assertEquals(rows.map((b) => b.entity.eid), ['a', 'b', 'c'])
+    assertEquals(rows.map((b) => (b.entry as Comp).seq), [1, 2, 3])
+    h.close()
+    h = open(path)
+    assertEquals(
+      (await transcript(h.g, 'f')).map((b) => (b.entry as Comp).seq),
+      [1, 2, 3],
+    )
+  } finally {
+    h.close()
+    await Deno.remove(dir, { recursive: true })
+  }
+})
+
+Deno.test('SQLite commits simultaneous append batches with distinct positions', async () => {
+  let h = open(':memory:')
+  try {
+    await h.g.apply([{ entity: { eid: 's' }, session: {} }])
+    await Promise.all(
+      Array.from({ length: 30 }, (_, i) =>
+        h.g.apply([{
+          entity: { eid: 'append' + i },
+          entry: { session: 's' },
+          notice: {},
+          content: { body: 'context' },
+        }])),
+    )
+    assertEquals(
+      (await transcript(h.g, 's')).map((b) => (b.entry as Comp).seq),
+      Array.from({ length: 30 }, (_, i) => i + 1),
+    )
+  } finally {
+    h.close()
+  }
+})

@@ -36,7 +36,6 @@ import {
   type Daemon,
   daemon,
   ENTRY,
-  seqOf,
   type Step,
   taskEntry,
   type Tool,
@@ -208,8 +207,6 @@ export let agent = (opts: Opts = {}): Agent => {
     model: idOf(MODEL, name),
   }
   let entries = (session: Eid) => transcript(h.g, session)
-  let next = async (session: Eid) =>
-    Math.max(0, ...(await entries(session)).map(seqOf)) + 1
 
   let closing = false
   let shutdown: Promise<void> | undefined
@@ -249,7 +246,7 @@ export let agent = (opts: Opts = {}): Agent => {
         let eid = crypto.randomUUID() as Eid
         await h.g.apply([{
           entity: { eid },
-          [ENTRY]: { session, seq: await next(session) },
+          [ENTRY]: { session },
           [CONTENT]: { body: text },
         }])
         return eid
@@ -326,10 +323,9 @@ export let agent = (opts: Opts = {}): Agent => {
       }, 'plain'),
     instruct: (session, text, source = 'explicit') =>
       d.enqueue(session, async () => {
-        let entries = await transcript(h.g, session)
         let entry = promptEntry(
           session,
-          entries.length ? Number((entries.at(-1)!.entry as Comp).seq) + 1 : 1,
+          undefined,
           text,
           source,
           'local',

@@ -72,3 +72,5 @@ export * from './daemon.ts'
 export * from './views.ts'
 
 export * from './children.ts'
+
+export { appendEntry, repairSequences } from './append.ts'

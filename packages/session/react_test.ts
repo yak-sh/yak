@@ -1,3 +1,4 @@
+import type { Comp } from '@yaks/graph'
 // The daemon's step over a fake model, on @yaks/ram: an input is asked, a tool
 // call is run, the transcript settles; a stop is obeyed; a fork continues from
 // its anchor with only what followed; errors retry to the bound and then stop;
@@ -309,4 +310,35 @@ Deno.test('unexpected model failures reach diagnostics, expected model errors do
   }
   assertEquals(reported.length, 1)
   assertEquals((reported[0] as Error).message, 'defect')
+})
+
+Deno.test('provider completion allocates positions after concurrently admitted notices', async () => {
+  let g = world()
+  let release!: (reply: Reply) => void
+  let entered!: () => void
+  let started = new Promise<void>((r) => entered = r)
+  let pending = react(g, ids.s, {
+    tools: [],
+    model: () => {
+      entered()
+      return new Promise<Reply>((r) => release = r)
+    },
+  })
+  await started
+  await g.apply([{
+    entity: { eid: 'during' },
+    entry: { session: ids.s },
+    notice: {},
+    content: { body: 'followup' },
+  }])
+  release({
+    id: 'response',
+    model: 'fake-1',
+    items: [{ kind: 'assistant', text: 'done' }],
+  })
+  await pending
+  let all = await transcript(g, ids.s)
+  assertEquals(all.map((b) => (b.entry as Comp).seq), [1, 2, 3, 4])
+  assertEquals(all[1].entity.eid, 'during')
+  assertEquals((all[2].ask as Comp).through, 'e1')
 })

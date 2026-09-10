@@ -339,10 +339,9 @@ limits.
 
 ## Worker runtime
 
-The TUI runs the backend in a Web Worker and communicates using
-`postMessage` by default. See [the worker runtime](WORKER.md) for
-ownership, measurements, shutdown behavior, and unresolved
-subscription/backpressure issues.
+The TUI runs the backend in a Web Worker and communicates using `postMessage` by
+default. See [the worker runtime](WORKER.md) for ownership, measurements,
+shutdown behavior, and unresolved subscription/backpressure issues.
 
 ## Generated images
 
@@ -416,3 +415,10 @@ base64 enters the replicated graph or transcript. The renderer keeps eight
 images and does not re-upload bytes on each keystroke. Partial clipping,
 JPEG/WebP display, progress/error indicators, and terminal capability discovery
 are future work.
+
+Transcript appends now allocate integer positions transactionally. On first
+startup after this upgrade, the harness repairs legacy fractional positions in
+one transaction, preserving entry identities and fork boundaries. This is an
+O(history) one-time operation; subsequent startups use a migration marker. Do
+not run an older harness writer concurrently during the upgrade. Normal appends
+query the latest local entry, not the entire transcript.

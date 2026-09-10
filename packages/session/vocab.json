@@ -106,7 +106,7 @@
         },
         "seq": {
           "type": "number",
-          "description": "its place in the transcript"
+          "description": "Positive integer position; omit on append to allocate atomically. Explicit fractional or occupied positions are refused."
         }
       },
       "index": [

@@ -144,3 +144,36 @@ mint entries and conflict records (pass your own `mint` to avoid it). Runs on
 It does not stop a daemon, release claims, or remove entries. Consumers decide
 which listings hide it; the harness archives root sessions and hides their
 subtrees without copying the mark to every child.
+
+### Appending entries
+
+Omit `entry.seq` when creating an entry. The session plugin assigns a positive
+integer inside the write transaction, after any concurrent entries already
+committed. Explicit positions remain available for imports, but fractional or
+occupied positions are rejected. Retrying the same entry EID preserves its
+position.
+
+```ts
+import { appendEntry } from '@yaks/session'
+
+await appendEntry(g, sessionId, 'A new message')
+await appendEntry(g, sessionId, 'Background context', {
+  eid: 'notice:operation-123',
+  notice: true,
+})
+```
+
+The `notice` session tool provides the second operation without requiring the
+caller to calculate sequence numbers. Passive notices do not wake a settled
+session. Applications can also use `g.apply` with
+`entry: { session: sessionId }` when they need additional components.
+
+`repairSequences(tx)` repairs historical positions in a startup transaction. It
+processes parent sessions before forks and retains entry EIDs, including
+`fork.from` and `ask.through` references. Run it before starting session work;
+older concurrent writers that still explicitly calculate positions may now
+receive a collision error and must be upgraded.
+
+Historical ties are not guessed: repair refuses duplicate positions because
+assigning an arbitrary order could change the inherited prefix of a fork. Those
+databases require an explicit ordering decision before startup.

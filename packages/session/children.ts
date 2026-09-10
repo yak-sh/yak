@@ -1,3 +1,4 @@
+import { appendEntry } from './append.ts'
 // Delegation is transcript structure, not a process handle. A spawned session
 // names its parent and originating call; a fork additionally names a prefix.
 // Admission is serialized per graph (across parents and tool tables), with the
@@ -10,7 +11,6 @@ import { type Tool, type ToolContext, ToolError, transcript } from './react.ts'
 import {
   newestAsk,
   openCalls,
-  seqOf,
   statusOf,
   textOf,
   usingBefore,
@@ -193,7 +193,6 @@ let delegation = (
         child: eid,
         args,
       })
-      let prefix = minted ? await transcript(g, ctx.session) : []
       // Fork history is immutable. Fresh children receive the same shared
       // snapshots, never a filesystem reread or a replacement persona.
       let context: Bundle[] = fork
@@ -222,10 +221,9 @@ let delegation = (
           content: { body: String(args.instructions) },
         })
       }
-      let first = fork ? seqOf(anchor!) + 1 : 1
-      context = context.map((b, i) => ({
+      context = context.map((b) => ({
         ...b,
-        entry: { session: eid, seq: first + i },
+        entry: { session: eid },
       }))
       await g.apply([
         ...minted
@@ -233,7 +231,6 @@ let delegation = (
             entity: { eid: 'notice:' + eid },
             entry: {
               session: ctx.session,
-              seq: prefix.length ? seqOf(prefix.at(-1)!) + 1 : 1,
             },
             notice: { child: eid, task: minted.entity.eid },
             content: {
@@ -270,7 +267,7 @@ let delegation = (
         },
         {
           entity: { eid: `${eid}:input` },
-          entry: { session: eid, seq: first + context.length },
+          entry: { session: eid },
           content: { body: prompt },
           using,
         },
@@ -313,6 +310,34 @@ export let taskEntry = async (
 /** The model doors use the same admission and spawn write as taskEntry. */
 export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
   return [delegation(g, limits, true), delegation(g, limits, false), {
+    name: 'notice',
+    description:
+      'Append passive context to a session without waking it. Sequence is assigned atomically; do not guess entry.seq.',
+    parameters: {
+      type: 'object',
+      properties: {
+        session: { type: 'string' },
+        body: { type: 'string' },
+        eid: {
+          type: 'string',
+          description: 'optional idempotent entry identity',
+        },
+      },
+      required: ['session', 'body'],
+    },
+    run: async (args, context) => {
+      caller(context)
+      let session = String(args.session)
+      if (!(await row(g, session))?.session) {
+        throw new ToolError('session', 'not a session: ' + session)
+      }
+      let added = await appendEntry(g, session, String(args.body), {
+        notice: true,
+        eid: args.eid == null ? undefined : String(args.eid),
+      })
+      return added[0].entity.eid
+    },
+  }, {
     name: 'wait',
     description:
       'Wait on direct children or tasks. Tasks wait until settled with no open dependencies; returns status when complete or the timeout passes.',
@@ -445,7 +470,6 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
     entity: { eid },
     entry: {
       session: parent,
-      seq: (prefix.length ? seqOf(prefix.at(-1)!) : 0) + 1,
     },
     content: { body: message + '\n' + context + textOf(last) },
     ...open ? { result: { call: link.call } } : {},

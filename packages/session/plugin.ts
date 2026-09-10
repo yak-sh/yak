@@ -1,3 +1,4 @@
+import { sequencing } from './append.ts'
 // The package as a graph plugin: the vocabulary, the rules, and the audit.
 //
 // It needs nothing from the application — no app to speak for, no roster to
@@ -44,7 +45,10 @@ export type SessionOpts = AuditOpts
 export let sessions = (opts: SessionOpts = {}): Plugin => {
   let lease = leasing(opts)
   let precondition: Hook = (bundles, tx, err) =>
-    then(lease(bundles, tx, err), (b) => naming(b, tx, err))
+    then(
+      lease(bundles, tx, err),
+      (b) => then(naming(b, tx, err), (named) => sequencing(named, tx, err)),
+    )
   return {
     name: '@yaks/session',
     vocab: [sessionDoc],
