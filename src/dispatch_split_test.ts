@@ -3,7 +3,7 @@
 // lets this test model a fresh server/effectsd pair without changing DB_PATH or
 // registering handlers in neighbouring test modules in the full-suite worker.
 import { assert, assertStringIncludes } from '@std/assert'
-import { slow } from './testing.ts'
+import { denoDir, slow } from './testing.ts'
 
 slow(
   'split dispatcher launches graph-native Session without restart',
@@ -15,7 +15,9 @@ slow(
       Deno.mkdirSync(tmp)
       let env = {
         DB_PATH: `${root}/graph.db`,
-        DENO_DIR: `${root}/deno`,
+        // Process isolation is the point here; cache isolation would only cost
+        // a cold download of the whole graph into a directory nothing reuses.
+        DENO_DIR: denoDir(),
         HOME: home,
         PATH: Deno.env.get('PATH') ?? '',
         TASKS_BACKOFF: '',

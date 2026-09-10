@@ -8,6 +8,9 @@
 // The isolated pass follows the parallel pass. Running it concurrently would
 // preserve module isolation but not scheduler isolation: debounce and process
 // fixtures would again be tested under artificial saturation.
+
+import { denoDir } from '../src/testing.ts'
+
 let isolated = new Set([
   'src/sessions_contention_test.ts',
   'src/sessions_test.ts',
@@ -72,16 +75,6 @@ let common = [
   '--unstable-worker-options',
   '--fail-fast',
 ]
-function denoDir(): string {
-  let configured = Deno.env.get('DENO_DIR')
-  if (configured) return configured
-  let home = Deno.env.get('HOME')
-  if (Deno.build.os === 'darwin') return `${home}/Library/Caches/deno`
-  if (Deno.build.os === 'windows') {
-    return `${Deno.env.get('LOCALAPPDATA')}\\deno`
-  }
-  return `${Deno.env.get('XDG_CACHE_HOME') ?? `${home}/.cache`}/deno`
-}
 export type TestCommand = {
   command: string
   args: string[]

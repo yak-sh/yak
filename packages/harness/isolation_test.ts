@@ -2,6 +2,17 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { agent } from './run.ts'
 import { open } from './store.ts'
 
+// Where Deno keeps its module cache for this process, so a child that moves
+// HOME can still be handed it.
+let denoDir = () => {
+  let configured = Deno.env.get('DENO_DIR')
+  if (configured) return configured
+  let home = Deno.env.get('HOME')
+  if (Deno.build.os == 'darwin') return `${home}/Library/Caches/deno`
+  if (Deno.build.os == 'windows') return `${Deno.env.get('LOCALAPPDATA')}\\deno`
+  return `${Deno.env.get('XDG_CACHE_HOME') ?? `${home}/.cache`}/deno`
+}
+
 Deno.test('agent rejects a spread harness before opening a default database', () => {
   let h = open(':memory:')
   try {
@@ -29,6 +40,11 @@ Deno.test('prompt admission tests never open the environment database', async ()
         new URL('./prompts_test.ts', import.meta.url).pathname,
       ],
       env: {
+        // The harness paths move; the module cache must not. Deno resolves it
+        // under HOME, so a redirected HOME alone makes the child download the
+        // whole graph into a private cache — half a gigabyte of temp per run,
+        // and a leak whenever the run never reaches the cleanup below.
+        DENO_DIR: denoDir(),
         HOME: home,
         HARNESS_DB: path,
         HARNESS_ERROR_LOG: home + '/exceptions.jsonl',
