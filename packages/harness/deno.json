@@ -13,7 +13,8 @@
     "zod": "npm:zod@^3.24.0",
     "zod-to-json-schema": "npm:zod-to-json-schema@^3.25.1",
     "preact": "npm:preact@^10.29.1",
-    "preact/hooks": "npm:preact@^10.29.1/hooks"
+    "preact/hooks": "npm:preact@^10.29.1/hooks",
+    "@preact/signals": "npm:@preact/signals@^2.9.0"
   },
   "publish": {
     "exclude": [

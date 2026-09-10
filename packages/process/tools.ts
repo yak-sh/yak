@@ -125,7 +125,10 @@ export let shellTools = (g: Graph, o: ShellOpts = {}): Tool[] => {
     parameters: {
       type: 'object',
       properties: {
-        command: { type: 'string', description: 'the command line, run by sh' },
+        command: {
+          type: 'string',
+          description: 'the command line, run by bash',
+        },
         cwd: { type: 'string', description: 'where to run it' },
         timeout: {
           type: 'number',
@@ -139,8 +142,9 @@ export let shellTools = (g: Graph, o: ShellOpts = {}): Tool[] => {
       let budget = Number(args.timeout ?? o.budget ?? 5000)
       let end = Date.now() + budget
       let run = await launch(processes, {
-        command: 'sh',
+        command: 'bash',
         args: ['-c', command],
+        env: Deno.env.toObject(),
         cwd: args.cwd == null ? o.cwd : String(args.cwd),
       }, opts)
       // The budget covers the whole call, launch included; a child that

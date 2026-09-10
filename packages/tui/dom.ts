@@ -66,6 +66,19 @@ export class TText extends TNode {
 
 /** An element: children, class, attributes, listeners. */
 export class TElement extends TNode {
+  // Preact uses native property presence to normalize event names to lowercase.
+  onwheel = null
+  onmousedown = null
+  onmouseup = null
+  onmousemove = null
+  /** Optional viewport layout owned by a virtual list, not DOM children. */
+  viewport?: (
+    width: number,
+    height: number,
+    style: import('./theme.ts').Style,
+    sheet: import('./theme.ts').Sheet,
+  ) => import('./paint.ts').Line[]
+
   /** DOM node type, as Preact expects to read it. */
   nodeType = 1
   /** Children in document order. */
@@ -73,7 +86,7 @@ export class TElement extends TNode {
   /** Present because Preact writes to it; the painter reads none of it. */
   style: Record<string, unknown> = {}
   private attrs = new Map<string, string>()
-  private handlers = new Map<string, unknown>()
+  handlers = new Map<string, unknown>()
   constructor(public localName: string) {
     super()
   }
@@ -121,7 +134,7 @@ export class TElement extends TNode {
     this.attrs.delete(k)
     touch()
   }
-  /** Record a listener. Nothing dispatches them; keys go through `screen`. */
+  /** Record a listener. Pointer events bubble here; keys go through `screen`. */
   addEventListener(t: string, fn: unknown) {
     this.handlers.set(t, fn)
   }

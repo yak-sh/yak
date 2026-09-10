@@ -104,3 +104,90 @@ Deno.test('Agent.taskEntry honors agent limits', async () => {
     a.close()
   }
 })
+
+Deno.test('auto-task notice is lazy, reaches next ask, and contextual completion is idempotent', async () => {
+  let requests: string[] = []
+  let release!: () => void
+  let waiting = new Promise<void>((resolve) => release = resolve)
+  let h = open(':memory:')
+  let a = agent({
+    h,
+    tools: [],
+    model: async (req) => {
+      let text = JSON.stringify(req.items)
+      requests.push(text)
+      if (text.includes('Original task request') && !text.includes('Origin:')) {
+        await waiting
+        return {
+          id: 'child-answer',
+          model: 'fake',
+          items: [{ kind: 'assistant', text: 'Child result' }],
+        }
+      }
+      return {
+        id: 'parent-answer',
+        model: 'fake',
+        items: [{ kind: 'assistant', text: 'ready' }],
+      }
+    },
+  })
+  try {
+    let parent = await a.start('parent')
+    await a.idle(parent)
+    let { child } = await a.taskEntry(
+      parent,
+      'Original task request\nDetails to retain',
+    )
+    await a.idle(parent)
+    assertEquals(
+      requests.filter((r) => !r.includes('Original task request')).length,
+      1,
+    )
+    assertEquals(
+      (await a.sessions()).find((b) => b.entity.eid == parent)?.session &&
+        ((await a.sessions()).find((b) => b.entity.eid == parent)!
+          .session as Comp).status,
+      'settled',
+    )
+    assertEquals((await a.transcript(parent)).filter((b) => b.notice).length, 1)
+    assertEquals((await a.transcript(parent)).filter((b) => b.ask).length, 1)
+    await a.send(parent, 'Continue naturally')
+    await a.idle(parent)
+    assert(
+      requests.some((r) =>
+        r.includes('Continue naturally') &&
+        r.includes('Origin: user-created task') &&
+        r.includes('Details to retain')
+      ),
+    )
+    release()
+    await a.idle(child)
+    await a.idle(parent)
+    let receipts = (await a.transcript(parent)).filter((b) =>
+      b.entity.eid.startsWith('delivery:')
+    )
+    assertEquals(receipts.length, 1)
+    let body = String((receipts[0].content as Comp).body)
+    for (
+      let part of [
+        'Original task request',
+        'Details to retain',
+        'Origin: user-created task',
+        'Outcome: child settled',
+        'Child result',
+      ]
+    ) assert(body.includes(part), body)
+    await a.resume()
+    await a.idle(child)
+    await a.idle(parent)
+    assertEquals(
+      (await a.transcript(parent)).filter((b) =>
+        b.entity.eid.startsWith('delivery:')
+      ).length,
+      1,
+    )
+  } finally {
+    release()
+    a.close()
+  }
+})

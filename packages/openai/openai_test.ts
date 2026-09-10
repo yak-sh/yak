@@ -114,7 +114,18 @@ Deno.test('a streamed reply is read to its end', async () => {
       },
       {
         type: 'response.completed',
-        response: { id: 'r1', model: 'm-2', status: 'completed' },
+        response: {
+          id: 'r1',
+          model: 'm-2',
+          status: 'completed',
+          usage: {
+            input_tokens: 1000,
+            output_tokens: 20,
+            total_tokens: 1020,
+            input_tokens_details: { cached_tokens: 800 },
+            output_tokens_details: { reasoning_tokens: 10 },
+          },
+        },
       },
     ),
   )
@@ -124,6 +135,13 @@ Deno.test('a streamed reply is read to its end', async () => {
     id: 'r1',
     model: 'm-2',
     items: [{ kind: 'assistant', text: 'done' }],
+    usage: {
+      input_tokens: 1000,
+      output_tokens: 20,
+      total_tokens: 1020,
+      cached_tokens: 800,
+      reasoning_tokens: 10,
+    },
   })
   assertEquals(asked[0].url, 'https://x.test/codex/responses')
   assertEquals(asked[0].headers.get('authorization'), 'Bearer t')
@@ -261,4 +279,22 @@ Deno.test('the Model maps the shared watchdog to ModelError', async () => {
     'transport stalled',
   )
   assertEquals(error.code, 'stalled')
+})
+
+Deno.test('usage keeps missing counts unknown and rejects invalid counts', async () => {
+  let { tokenUsage } = await import('./responses.ts')
+  assertEquals(tokenUsage(undefined), {})
+  assertEquals(tokenUsage({}), {})
+  assertEquals(tokenUsage({ input_tokens: 42 }), {
+    usage: { input_tokens: 42 },
+  })
+  assertEquals(
+    tokenUsage({
+      input_tokens: -1,
+      output_tokens: 1.5,
+      total_tokens: '3',
+      input_tokens_details: { cached_tokens: 0 },
+    }),
+    { usage: { cached_tokens: 0 } },
+  )
 })

@@ -1,9 +1,16 @@
 /** The harness on @yaks/tui: local editing, graph-backed content. */
 import { h, type JSX } from 'preact'
-import { useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks'
+import { frontend, type Frontend } from './frontend.ts'
 import type { Bundle, Eid } from '@yaks/graph'
-import { Frame, run, Scroll, Textarea, useKeys } from '@yaks/tui'
-import { type Context, type Panel, panels, type UIAgent } from './panels.ts'
+import { Frame, run, Textarea, useKeys, VirtualList } from '@yaks/tui'
+import {
+  type Context,
+  type Panel,
+  panels,
+  type UIAgent,
+  visibleSessions,
+} from './panels.ts'
 import { type Agent, agent } from './run.ts'
 import { INSTRUCTIONS } from './cli.ts'
 
@@ -45,8 +52,22 @@ type Snapshot = { sessions: Bundle[]; entries: Bundle[]; rows: Bundle[][] }
 export let App = (
   { agent: a, panels: sidebar = panels, subscribe }: Opts,
 ): JSX.Element => {
-  let [selection, setSelection] = useState<Selection>({})
-  let selected = useRef(selection)
+  let ui = useMemo(() => frontend(), [])
+  useLayoutEffect(() => () => ui.close(), [ui])
+  let state = ui.view.value[0].frontend!
+  let showSettled = Boolean(state.showSettled)
+  let mode = String(state.mode) as 'message' | 'task'
+  let error = String(state.error ?? '')
+  let selection = { id: state.selected == null ? undefined : String(state.selected) }
+  // Promises are execution machinery, not graph data. Selection identity lives
+  // in the frontend graph; this map only serializes concurrent submissions.
+  let pending = useMemo(() => new Map<string, Promise<Eid>>(), [])
+  let current = () => {
+    let value = ui.client.ent('view')!.frontend!
+    return { id: value.selected == null ? undefined : String(value.selected),
+      mode: String(value.mode), showSettled: Boolean(value.showSettled) }
+  }
+  let setError = (error: string) => ui.patch({ error })
   let [data, setData] = useState<Snapshot>({
     sessions: [],
     entries: [],
@@ -54,13 +75,9 @@ export let App = (
   })
   let latest = useRef(data)
   latest.current = data
-  let [mode, setMode] = useState<'message' | 'task'>('message')
-  let liveMode = useRef(mode)
-  let [error, setError] = useState('')
   let refresh = useRef(() => {})
   let choose = (s: Selection) => {
-    selected.current = s
-    setSelection(s)
+    ui.patch({ selected: s.id ?? null })
     setData((d) => ({ ...d, entries: [] }))
     refresh.current()
   }
@@ -75,14 +92,14 @@ export let App = (
       try {
         while (alive && dirty) {
           dirty = false
-          let s = selected.current
+          let s = current()
           let sessions = await a.sessions()
           let ctx: Context = { agent: a, session: s.id, sessions }
           let [entries, rows] = await Promise.all([
             s.id ? a.transcript(s.id) : Promise.resolve([]),
             Promise.all(sidebar.map((p) => p.read(ctx))),
           ])
-          if (alive && s == selected.current && !dirty) {
+          if (alive && s.id == current().id && !dirty) {
             setData({ sessions, entries, rows })
           }
         }
@@ -117,8 +134,11 @@ export let App = (
   // Refs make several keys in one stdin read move several rows.
   useKeys((k) => {
     if (k.name == 'tab' && !k.ctrl && !k.alt) {
-      liveMode.current = liveMode.current == 'message' ? 'task' : 'message'
-      setMode(liveMode.current)
+      ui.patch({ mode: current().mode == 'message' ? 'task' : 'message' })
+      return true
+    }
+    if (k.ctrl && k.text == 's') {
+      ui.patch({ showSettled: !current().showSettled })
       return true
     }
     if (k.ctrl && k.text == 'o') {
@@ -131,40 +151,40 @@ export let App = (
       ? -1
       : 0
     if (!delta) return false
-    let ids = [undefined, ...latest.current.sessions.map((b) => b.entity.eid)]
-    let at = ids.indexOf(selected.current.id)
+    let ids = [
+      undefined,
+      ...visibleSessions(
+        latest.current.sessions,
+        current().id,
+        current().showSettled,
+      ).map((b) => b.entity.eid),
+    ]
+    let at = ids.indexOf(current().id)
     choose({ id: ids[(at + delta + ids.length) % ids.length] })
     return true
   })
 
   let submit = (text: string) => {
-    let s = selected.current
+    let s = current()
+    let key = s.id ?? 'new'
+    let previous = pending.get(key)
     setError('')
-    let mode = liveMode.current
-    if (mode == 'task' && !s.id && !s.pending) {
-      setError(`Not sent: ${text}\nSelect a session before submitting a task.`)
+    if (s.mode == 'task' && !s.id && !previous) {
+      setError(`Not sent: \nSelect a session before submitting a task.`)
       return
     }
     let send = async (id: Eid) => {
-      if (mode == 'task') await a.taskEntry(id, text)
+      if (s.mode == 'task') await a.taskEntry(id, text)
       else await a.send(id, text)
       return id
     }
-    // Serialize submissions per selection, including two Enters in the same
-    // stdin read before start() has supplied the new session id.
-    let write = s.pending
-      ? s.pending.then(send)
-      : s.id
-      ? send(s.id)
-      : a.start(text)
-    s.pending = write
+    let write = previous ? previous.then(send) : s.id ? send(s.id) : a.start(text)
+    pending.set(key, write)
     void write.then((id) => {
-      s.id = id
-      if (selected.current == s) setSelection({ ...s })
+      if (current().id == s.id) ui.patch({ selected: id })
       refresh.current()
-    }, (e) => {
-      if (s.pending == write) s.pending = undefined
-      setError(`Not sent: ${text}\n${String(e)}`)
+    }, (e) => setError(`Not sent: \n`)).finally(() => {
+      if (pending.get(key) == write) pending.delete(key)
     })
   }
 
@@ -172,35 +192,66 @@ export let App = (
     agent: a,
     session: selection.id,
     sessions: data.sessions,
+    showSettled,
   }
+  let transcriptItems = useMemo(
+    () => data.entries.map((b) => ({ id: b.entity.eid, bundle: b })),
+    [data.entries],
+  )
   return h(
-    Frame,
-    {
-      sidebar: sidebar.map((p, i) => ({
-        title: p.title,
-        Render: () => h(p.Render, { ...ctx, rows: data.rows[i] ?? [] }),
-      })),
-    },
+    'div',
+    { col: '1' },
     h(
       'div',
-      { class: 'Title' },
-      `Harness — ${selection.id?.slice(0, 8) ?? 'New session'}`,
-    ),
-    h(
-      Scroll,
-      { id: `transcript-${selection.id ?? 'new'}`, grow: '1' },
-      ...data.entries.map((b) =>
+      { grow: '1' },
+      h(
+        Frame,
+        {
+          sidebar: sidebar.map((p, i) => ({
+            title: p.title,
+            titleClass: p.titleClass,
+            Render: () => h(p.Render, { ...ctx, rows: data.rows[i] ?? [] }),
+          })),
+        },
         h(
           'div',
-          { key: b.entity.eid, wrap: '1' },
-          a.line(b, 'Line', { full: true }),
-        )
+          { class: 'Title' },
+          `Harness — ${selection.id?.slice(0, 8) ?? 'New session'}`,
+        ),
+        h(
+          VirtualList<{ id: string; bundle: Bundle }>,
+          {
+            id: 'transcript-' + (selection.id ?? 'new'),
+            grow: '1',
+            follow: true,
+            scrollbar: true,
+            items: transcriptItems,
+            renderItem: (item: { id: string; bundle: Bundle }) =>
+              a.entry(item.bundle),
+          },
+        ),
       ),
     ),
     error ? h('div', { wrap: '1' }, error) : null,
-    h('div', { class: 'Entry_Hint' }, `${mode} · Tab toggles message / task`),
-    h(Textarea, { max: 6, onSubmit: submit }),
+    h(
+      'div',
+      { border: 'Composer_Border' },
+      h(
+        'div',
+        null,
+        h('span', { class: mode == 'message' ? 'Good' : 'Task' }, mode),
+        h('span', { class: 'Entry_Hint' }, ' · Tab toggles message / task'),
+      ),
+      h(Draft, { ui, submit }),
+    ),
   )
+}
+
+/** This leaf alone subscribes to draft changes: typing does not render App. */
+let Draft = ({ ui, submit }: { ui: Frontend; submit: (text: string) => void }) => {
+  let draft = ui.draft.value[0].draft!
+  return h(Textarea, { max: 6, value: { text: String(draft.text), at: Number(draft.at) },
+    onEdit: ui.edit, onSubmit: submit })
 }
 
 /** No-verb entry. The daemon runs in this process while the terminal is open. */

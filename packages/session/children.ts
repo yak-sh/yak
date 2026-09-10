@@ -16,7 +16,15 @@ import {
   usingBefore,
 } from './status.ts'
 
-export type ChildLimits = { maxChildren?: number; maxSessions?: number }
+export type ChildLimits = {
+  maxChildren?: number
+  maxSessions?: number
+  /** Host-owned optional spawn parameters and preparation, before the child is runnable. */
+  childProperties?: Record<string, unknown>
+  prepareChild?: (
+    input: { parent: Eid; child: Eid; args: Record<string, unknown> },
+  ) => Promise<Omit<Bundle, 'entity'>>
+}
 let locks = new WeakMap<Graph, Promise<unknown>>()
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -103,6 +111,7 @@ let delegation = (
   parameters: {
     type: 'object',
     properties: {
+      ...limits.childProperties,
       prompt: { type: 'string' },
       ...fork
         ? {}
@@ -178,7 +187,32 @@ let delegation = (
       let anchorId = comp(newestAsk(ctx.entries), 'ask')?.through
       let anchor = ctx.entries.find((b) => b.entity.eid == anchorId)
       if (fork && !anchor) throw new ToolError('fork', 'no prefix to fork')
+      let prepared = await limits.prepareChild?.({
+        parent: ctx.session,
+        child: eid,
+        args,
+      })
+      let prefix = minted ? await transcript(g, ctx.session) : []
       await g.apply([
+        ...minted
+          ? [{
+            entity: { eid: 'notice:' + eid },
+            entry: {
+              session: ctx.session,
+              seq: prefix.length ? seqOf(prefix.at(-1)!) + 1 : 1,
+            },
+            notice: { child: eid, task: minted.entity.eid },
+            content: {
+              body: [
+                'Task: ' + String(doc?.title ?? ''),
+                'Origin: user-created task, automatically delegated to child ' +
+                eid,
+                'Request:',
+                String(doc?.body ?? ''),
+              ].join('\n'),
+            },
+          }]
+          : [],
         ...models,
         ...minted
           ? [
@@ -191,6 +225,7 @@ let delegation = (
         ...task ? [{ entity: task.entity, claim: { session: eid } }] : [],
         {
           entity: { eid },
+          ...prepared,
           session: { id: eid },
           spawned: {
             parent: ctx.session,
@@ -355,6 +390,11 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
     } ${taskStatus(task!, taskMarks)}`
     : `child ${child} ${status}`
   if (await row(g, eid)) return
+  let notice = await row(g, 'notice:' + child)
+  let context = notice?.notice
+    ? textOf(notice) + '\nOutcome: child ' + status +
+      (ready ? '; task ' + taskStatus(task!, taskMarks) : '') + '\nResult:\n'
+    : ''
   let parent = String(link.parent)
   let prefix = await transcript(g, parent)
   // A stop is an explicit end, not a request to wake on the next delivery.
@@ -366,7 +406,7 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
       session: parent,
       seq: (prefix.length ? seqOf(prefix.at(-1)!) : 0) + 1,
     },
-    content: { body: `${message}\n${textOf(last)}` },
+    content: { body: message + '\n' + context + textOf(last) },
     ...open ? { result: { call: link.call } } : {},
   }], { trusted: true })
 }

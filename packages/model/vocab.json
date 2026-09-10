@@ -43,6 +43,32 @@
           "type": "string"
         }
       }
+    },
+    "usage": {
+      "type": "object",
+      "description": "provider-reported token counts for one completed model request, stored on its ask entry; not cumulative and not a live context estimate",
+      "properties": {
+        "input_tokens": {
+          "type": "integer",
+          "description": "input context tokens, including cached tokens"
+        },
+        "output_tokens": {
+          "type": "integer",
+          "description": "generated tokens, including reasoning tokens"
+        },
+        "total_tokens": {
+          "type": "integer",
+          "description": "total input and output tokens reported by the provider"
+        },
+        "cached_tokens": {
+          "type": "integer",
+          "description": "input tokens read from the provider cache; not a guarantee of future cache availability"
+        },
+        "reasoning_tokens": {
+          "type": "integer",
+          "description": "reasoning tokens within output tokens"
+        }
+      }
     }
   }
 }

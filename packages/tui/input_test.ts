@@ -3,6 +3,9 @@ import { decode, feed, type Key } from './input.ts'
 
 // bytes → the keys they mean. One row per binding worth having.
 let table: [string, Key[]][] = [
+  ['\x1b[27;2;13~', [{ name: 'enter', shift: true }]],
+  ['\x1b[27;3;13~', [{ name: 'enter', alt: true }]],
+  ['\x1b[27;5;99~', [{ name: 'char', text: 'c', ctrl: true }]],
   ['hi', [{ name: 'char', text: 'hi' }]],
   ['\r', [{ name: 'enter' }]],
   ['\n', [{ name: 'enter' }]],
@@ -36,9 +39,6 @@ let table: [string, Key[]][] = [
   ['\x1bb', [{ name: 'char', text: 'b', alt: true }]],
   ['\x1b[98;3u', [{ name: 'char', text: 'b', alt: true }]],
   ['\x1b[97;2u', [{ name: 'char', text: 'A', shift: true }]],
-  ['\x1b[<64;10;5M', [{ name: 'wheelup' }]],
-  ['\x1b[<65;10;5M', [{ name: 'wheeldown' }]],
-  ['\x1b[<0;10;5M', []], // a click is not a key
   ['\x1b[200~pasted\x1b[201~', [{ name: 'paste', text: 'pasted' }]],
   ['ab\rcd', [{ name: 'char', text: 'ab' }, { name: 'enter' }, {
     name: 'char',

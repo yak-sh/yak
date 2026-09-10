@@ -6,7 +6,7 @@
 
 import type { Comp } from '@yaks/graph'
 import { parse } from '@yaks/query'
-import { type Bundle, define, type Registry } from '@yaks/render'
+import { type Bundle, define, type Registry, type Renderer } from '@yaks/render'
 import { SESSION } from './comp.ts'
 import { ASK, CALL, ENTRY } from './native.ts'
 import { kindOf, statusOf, textOf } from './status.ts'
@@ -29,36 +29,46 @@ let reached = (
     (id ? ` (${id.slice(0, 12)}…)` : '')
 }
 
+/** Shared prose tree; hosts keep metadata structural rather than stripping text. */
+export let entryBody: Renderer['render'] = (b, h, ctx) => {
+  let first = ctx.full ? textOf(b) : textOf(b).split('\n')[0].slice(0, 70)
+  let names = (ctx.names ?? {}) as Record<string, string>
+  let anchor = ctx.anchor as ((b: Bundle) => string | undefined) | undefined
+  let line = [
+    reached(b, names, anchor),
+    first,
+  ].filter(Boolean).join(' ')
+  // Text hosts strip literal control bytes. Structural breaks preserve
+  // transcript lines without letting other controls through.
+  return h(
+    'span',
+    null,
+    ...line.split('\n').flatMap((text, i) =>
+      i ? [h('br', null), text] : [text]
+    ),
+  )
+}
+
 /** The transcript views: `Line` for an entry, `Status` for a transcript. The
  * context may carry `names` (model or tool eid → name), `anchor` (reads a
  * provider's anchor off an ask entry), and `entries` (the transcript, for
- * `Status`), and `full` (untruncated entry prose for transcript panes). */
+ * `Status`), `full` (untruncated entry prose for transcript panes). */
 export let views: Registry = define([
   {
     view: 'Line',
-    match: parse(`.${ENTRY}`),
-    render: (b, h, ctx) => {
-      let e = comp(b, ENTRY)!
-      let first = ctx.full ? textOf(b) : textOf(b).split('\n')[0].slice(0, 70)
-      let names = (ctx.names ?? {}) as Record<string, string>
-      let anchor = ctx.anchor as ((b: Bundle) => string | undefined) | undefined
-      let line = [
-        String(e.seq).padStart(3),
-        (kindOf(b) ?? 'entry').padEnd(9),
-        reached(b, names, anchor),
-        first,
-      ].filter(Boolean).join(' ')
-      // Text hosts strip literal control bytes. Structural breaks preserve
-      // transcript lines without letting other controls through.
-      return h(
+    match: parse('.entry'),
+    render: (b, h, ctx) =>
+      h(
         'p',
         null,
-        ...line.split('\n').flatMap((text, i) =>
-          i ? [h('br', null), text] : [text]
-        ),
-      )
-    },
+        String(comp(b, ENTRY)!.seq).padStart(3),
+        ' ',
+        (kindOf(b) ?? 'entry').padEnd(9),
+        ' ',
+        entryBody(b, h, ctx),
+      ),
   },
+  { view: 'Body', match: parse('.entry'), render: entryBody },
   {
     view: 'Status',
     match: parse(`.${SESSION}`),

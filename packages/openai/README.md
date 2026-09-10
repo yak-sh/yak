@@ -98,3 +98,13 @@ adapter maps these to `ModelError`s and defaults to no retries. It accepts the
 same transport policies plus `refresh`, `signal`, and `event`; its `store` and
 anchor behavior is unchanged. `frames(stream)` exposes the same SSE decoder
 without transport policies or redaction and releases its reader on exit.
+
+Completed Responses usage is returned as provider-neutral `Reply.usage` and
+persisted by the session on the ask entry's `usage` component. Counts include
+input, output, total, cached input, and reasoning output tokens when reported.
+Cached tokens are part of input, and reasoning tokens are part of output;
+neither should be added again. Missing counts remain unknown, not zero. The
+sidebar uses the latest reported request's input count as context length, not a
+cumulative session total or an estimate of unsent messages. The provider does
+not report a cache expiration timestamp here; a cache hit records past reuse,
+not a promise that the next request will hit the cache.

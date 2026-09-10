@@ -17,6 +17,8 @@
 // STEP leaves is reconciled a rung up, by run.ts `resume()`, because waking a
 // transcript needs a model and this file has none.
 
+import { checkoutDoc } from '@yaks/git/host'
+import { workspaceDoc } from './workspace.ts'
 import { Database } from '@yaks/sqlite/db'
 import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
@@ -64,6 +66,8 @@ export let harnessDoc: VocabDoc = {
 /** Everything the harness speaks, loaded once. */
 export let vocab: Vocab = loadVocab([
   harnessDoc,
+  checkoutDoc,
+  workspaceDoc,
   docDoc,
   edgeDoc,
   sessionDoc,

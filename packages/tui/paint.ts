@@ -1,3 +1,4 @@
+import { scrollbar } from './scrollbar.ts'
 /**
  * The ANSI backend: a tree of fake-DOM nodes becomes lines, and lines become
  * bytes on a terminal.
@@ -32,11 +33,14 @@ import { TText } from './dom.ts'
 import { type Sheet, type Style, theme as base } from './theme.ts'
 
 /** A run of text under one style. */
-export type Seg = { text: string; style: Style }
+export type Seg = { text: string; style: Style; owner?: TElement }
 /** One screen line, as styled runs. */
 export type Line = Seg[]
 /** What a scroll region measured on the last paint, per element id. */
-export type Metrics = Record<string, { total: number; height: number }>
+export type Metrics = Record<
+  string,
+  { total: number; height: number; width: number }
+>
 
 /** The five calls `run()` makes of whatever draws the screen. */
 export type Backend = {
@@ -45,7 +49,9 @@ export type Backend = {
   /** Take the screen (alt screen, raw mode's escapes, hidden cursor). */
   start: () => void
   /** Paint the tree; report lines written and what was measured. */
-  draw: (root: TElement) => { written: number; metrics: Metrics }
+  draw: (
+    root: TElement,
+  ) => { written: number; metrics: Metrics; lines?: Line[] }
   /** Forget what is on screen, so the next draw repaints every line. */
   reset: () => void
   /** Give the screen back exactly as it was found. */
@@ -57,15 +63,30 @@ export type Backend = {
 let safe = (text: string) =>
   text.replaceAll('\t', '  ').split('\n').map(strip).join('\n')
 
+// Semantic HTML emitted by shared Preact renderers. ANSI stays in this backend.
+let semantic = (el: TElement, sheet: Sheet): Style => {
+  let tag = el.localName
+  if (tag == 'strong' || tag == 'b' || /^h[1-6]$/.test(tag) || tag == 'th') {
+    return { bold: true }
+  }
+  if (tag == 'em' || tag == 'i') return { italic: true }
+  if (tag == 'del') return { strike: true }
+  if (tag == 'code' || tag == 'pre') return { ...sheet.Code }
+  if (tag == 'blockquote') return { indent: 2, ...sheet.Quote }
+  if (tag == 'hr') return { glyph: '────────', dim: true }
+  return {}
+}
+
 let own = (el: TElement, sheet: Sheet): Style =>
   Object.assign(
-    {},
+    semantic(el, sheet),
     ...el.className.split(/\s+/).filter(Boolean).map((c) => sheet[c] ?? {}),
   )
 
 // Inherit text style down the tree; glyph/indent/gap act only where set.
 let inherit = (parent: Style, node: Style): Style => ({
   fg: node.fg ?? parent.fg,
+  bg: node.bg ?? parent.bg,
   bold: node.bold ?? parent.bold,
   dim: node.dim ?? parent.dim,
   italic: node.italic ?? parent.italic,
@@ -75,14 +96,25 @@ let inherit = (parent: Style, node: Style): Style => ({
   href: node.href ?? parent.href,
 })
 
-let INLINE = new Set(['span', 'b', 'i', 'a', 'button', 'label'])
+let INLINE = new Set([
+  'span',
+  'b',
+  'i',
+  'strong',
+  'em',
+  'del',
+  'code',
+  'a',
+  'button',
+  'label',
+])
 
 type Ctx = { sheet: Sheet; metrics: Metrics }
 
 let inline = (n: TNode, st: Style, c: Ctx): Seg[] => {
   if (n instanceof TText) {
     let text = safe(n.data)
-    return text ? [{ text, style: st }] : []
+    return text ? [{ text, style: st, owner: n.parentNode ?? undefined }] : []
   }
   let el = n as TElement
   let o = own(el, c.sheet)
@@ -92,7 +124,7 @@ let inline = (n: TNode, st: Style, c: Ctx): Seg[] => {
     o.href = safeHref(el.attr('href')!)
   }
   let s = inherit(st, o)
-  if (o.glyph) return [{ text: o.glyph, style: s }]
+  if (o.glyph) return [{ text: o.glyph, style: s, owner: el }]
   return el.childNodes.flatMap((k) => inline(k, s, c))
 }
 
@@ -131,6 +163,15 @@ let flow = (
     if (cur.length) lines.push(cur)
     cur = []
   }
+  if (el.localName == 'tr') {
+    for (let [i, cell] of kids(el).entries()) {
+      if (i) cur.push({ text: ' | ', style: s })
+      cur.push(...inline(cell, s, c))
+    }
+    flush()
+    return lines
+  }
+  if (el.localName == 'hr') return [[{ text: '────────', style: s }]]
   if (el.localName == 'pre') {
     for (let l of text(el).split('\n')) lines.push([{ text: l, style: s }])
     return lines
@@ -146,7 +187,7 @@ let flow = (
             lines.push(cur) // even empty — a blank line is content here
             cur = []
           }
-          if (part) cur.push({ text: part, style: seg.style })
+          if (part) cur.push({ ...seg, text: part })
         })
       }
     } else {
@@ -208,10 +249,16 @@ let row = (el: TElement, s: Style, w: number, h: number | null, c: Ctx) => {
 }
 
 // Window a box's content from its scroll offset, recording what it measured.
-let windowed = (el: TElement, lines: Line[], h: number | null, c: Ctx) => {
+let windowed = (
+  el: TElement,
+  lines: Line[],
+  h: number | null,
+  c: Ctx,
+  width: number,
+) => {
   let height = h ?? lines.length
   let id = el.attr('id')
-  if (id) c.metrics[id] = { total: lines.length, height }
+  if (id) c.metrics[id] = { total: lines.length, height, width }
   let top = Math.min(
     Math.max(0, num(el, 'scroll') ?? 0),
     Math.max(0, lines.length - height),
@@ -220,32 +267,98 @@ let windowed = (el: TElement, lines: Line[], h: number | null, c: Ctx) => {
 }
 
 /** The lines an element becomes, given a content width and allotted rows. */
-export let lay = (
+let layout = (
   el: TElement,
   st: Style,
   w: number,
   h: number | null,
   c: Ctx,
 ): Line[] => {
+  if (el.viewport) return el.viewport(w, h ?? 0, st, c.sheet)
   let o = own(el, c.sheet)
   let s = inherit(st, o)
-  let box = num(el, 'height') ?? h
-  let contentWidth = Math.max(0, w - (o.indent ?? 0))
+  let outer = num(el, 'height') ?? h
+  // Borders consume real layout space; descendants measure the inner width.
+  let border = el.attr('border')
+  let framed = border != null && w >= 3
+  let box = outer == null ? null : Math.max(0, outer - (framed ? 2 : 0))
+  let bar = el.attr('scrollbar') != null && el.attr('scroll') != null &&
+    w - (o.indent ?? 0) - (framed ? 2 : 0) >= 2
+  let contentWidth = Math.max(
+    0,
+    w - (o.indent ?? 0) - (framed ? 2 : 0) - (bar ? 1 : 0),
+  )
   let lines = el.attr('row') != null
     ? row(el, s, contentWidth, box, c)
     : el.attr('col') != null
     ? col(el, s, contentWidth, box, c)
     : flow(el, s, contentWidth, el.attr('wrap') != null ? null : box, c)
+  if (el.localName == 'li') {
+    let marker = safe(el.attr('data-marker') ?? '• ')
+    lines = lines.map((
+      line,
+      i,
+    ) => [{ text: i ? ' '.repeat(marker.length) : marker, style: s }, ...line])
+  }
   if (el.attr('wrap') != null) {
     lines = lines.flatMap((line) => wrap(line, contentWidth))
   }
-  if (el.attr('scroll') != null) lines = windowed(el, lines, box, c)
+  if (el.attr('scroll') != null) {
+    let total = lines.length
+    lines = windowed(el, lines, box, c, contentWidth)
+    if (bar) {
+      lines = scrollbar(lines, contentWidth + 1, {
+        total,
+        height: box ?? total,
+        top: Math.min(
+          Math.max(0, total - (box ?? total)),
+          Math.max(0, num(el, 'scroll') ?? 0),
+        ),
+        bottom: el.attr('scroll-snapped') != null,
+      }, c.sheet)
+    }
+  }
   if (o.indent) {
     lines = lines.map((l) => [{ text: ' '.repeat(o.indent!), style: s }, ...l])
   }
   if (o.gap && lines.length) lines.push([])
-  return box == null ? lines : fit(lines, box)
+  if (box != null) lines = fit(lines, box)
+  if (framed) {
+    let edge = c.sheet[border!] ?? {}
+    let rule = (left: string, right: string): Line => [{
+      text: left + '─'.repeat(Math.max(0, w - 2)) + right,
+      style: edge,
+    }]
+    lines = [
+      rule('╭', '╮'),
+      ...lines.map((line): Line => [
+        { text: '│', style: edge },
+        ...pad(clip(line, w - 2), w - 2),
+        { text: '│', style: edge },
+      ]),
+      rule('╰', '╯'),
+    ]
+  }
+  return outer == null ? lines : fit(lines, outer)
 }
+
+/** Ownership travels with the painted cells through windowing, wrapping and clipping. */
+export let lay = (
+  el: TElement,
+  st: Style,
+  w: number,
+  h: number | null,
+  c: Ctx,
+): Line[] =>
+  layout(el, st, w, h, c).map((line) =>
+    (el.viewport || el.attr('scroll') != null || el.attr('width') != null ||
+        el.attr('grow') != null
+      ? pad(clip(line, w), w)
+      : line).map((seg) => ({
+        ...seg,
+        owner: el.viewport ? el : seg.owner ?? el,
+      }))
+  )
 
 let fit = (lines: Line[], h: number): Line[] =>
   lines.length >= h
@@ -296,7 +409,7 @@ export let wrap = (line: Line, columns: number): Line[] => {
       let s = line[seg]
       let n = Math.min(left, s.text.length - offset)
       if (n) {
-        row.push({ text: s.text.slice(offset, offset + n), style: s.style })
+        row.push({ ...s, text: s.text.slice(offset, offset + n) })
       }
       left -= n
       offset += n
@@ -321,6 +434,7 @@ export let ansi = (line: Line): string =>
   line.map((s) => {
     let codes: string[] = []
     if (s.style.fg) codes.push(`38;2;${rgb(s.style.fg).join(';')}`)
+    if (s.style.bg) codes.push(`48;2;` + rgb(s.style.bg).join(';'))
     if (s.style.bold) codes.push('1')
     if (s.style.dim) codes.push('2')
     if (s.style.italic) codes.push('3')
@@ -375,8 +489,14 @@ export let ansiBackend = (opts: {
     // Alt screen, hidden cursor, bracketed paste, alternate scroll (the wheel
     // arrives as arrow keys), and the kitty disambiguate flag — without it the
     // terminal collapses Shift+Enter to a bare CR.
-    start: () => write('\x1b[?1049h\x1b[?25l\x1b[?2004h\x1b[?1007h\x1b[>1u'),
-    stop: () => write('\x1b[<u\x1b[?1007l\x1b[?2004l\x1b[?25h\x1b[?1049l'),
+    start: () =>
+      write(
+        '\x1b[?1049h\x1b[?25l\x1b[?2004h\x1b[?1007h\x1b[?1000s\x1b[?1006s\x1b[?1000h\x1b[?1006h\x1b[>4;2m\x1b[>1u',
+      ),
+    stop: () =>
+      write(
+        '\x1b[<u\x1b[>4;0m\x1b[?1006r\x1b[?1000r\x1b[?1007l\x1b[?2004l\x1b[?25h\x1b[?1049l',
+      ),
     reset: () => last = [],
     draw: (root) => {
       let { columns, rows } = size()
@@ -392,7 +512,11 @@ export let ansiBackend = (opts: {
       }
       last.length = rows
       if (out) write(out)
-      return { written, metrics }
+      return {
+        written,
+        metrics,
+        lines: lines.slice(0, rows).map((line) => clip(line, columns)),
+      }
     },
   }
 }

@@ -287,6 +287,7 @@ export let react = async (
     [ASK]: { to: modelEid, through: newest.entity.eid },
     ...using ? { [USING]: using } : {},
     ...deps.model.mark?.(reply) ?? {},
+    ...reply.usage ? { usage: reply.usage } : {},
   })
   let added: Bundle[] = [ask]
   let byName = new Map(

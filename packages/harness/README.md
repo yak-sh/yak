@@ -14,6 +14,12 @@ plugin          the verbs, over @yaks/cli                      cli.ts
 
 ## Use
 
+Settled subagents are hidden from Sessions and Subagents by default. **Ctrl+S**
+toggles **Show settled** (shown in Keys). Root sessions and the selected child
+stay visible. This is only a display/navigation filter: parent completion
+messages and child transcripts are retained; enable the toggle to revisit a
+settled child. Failed and stopped children remain visible for attention.
+
 `deno task harness` with no verb opens the terminal UI. The transcript scrolls
 and word-wraps beside the Sessions, Subagents, Tasks and Keys panels. Enter
 starts a session (or sends to the selected one); Shift+Enter inserts a newline.
@@ -153,3 +159,48 @@ This reports warmed median/p95 fresh-entry apply time and the subsequent react
 step's model-dispatch overhead with a fixed 1,000-entry SQLite transcript. It
 uses a fake model and measures no network time. The SQLite/daemon integration
 suite lives under `packages/`, outside the repository's fast test tier.
+
+### Auto-task lifecycle context
+
+Task-mode submission writes a passive `notice` entry into the parent transcript
+in the same batch as the task and child. It records the original request and
+user-created origin. A notice neither wakes the parent nor changes its derived
+status; the next natural ask includes it. Completion still wakes the parent,
+with the original context, factual child/task status, and child result. Receipt
+identity remains durable and idempotent across resume/reconciliation. Ordinary
+model delegation keeps its existing receipt behavior.
+
+### Sidebar status indicators
+
+Session and task indicators use query-matched `@yaks/render` registrations: `●`
+green = completed task / settled session; `●` yellow = active work; `◐` yellow =
+task still claimed by a settled worker; `○` blue = open; `●` red = failed
+session / unfinished task whose worker failed. Stopped sessions and cancelled
+tasks use a muted open circle. A stopped or unknown/missing task worker uses a
+muted half-circle rather than claiming the work is active or complete. Completed
+tasks outrank their worker's state. The task panel joins already-read session
+state only for rendering; nothing is persisted twice. Completed tasks still
+follow the existing open-task filtering.
+
+### Subagent Git homes
+
+Sessions carry `home{worktree,cwd}`. The worktree reference names a shared Git
+checkout entity owned by `@yaks/git`; cwd is a separate optional command
+default, not an isolation boundary. Root starts discover the existing checkout.
+Legacy sessions attach lazily on their first shell call. Ordinary children
+inherit home without making a checkout.
+
+`spawn` and `fork` accept `worktree: {path, base?, branch?}` to create a
+checkout, or `home: <worktree-eid>` to attach an existing one. These are
+mutually exclusive. `cwd` can override the command directory independently.
+Creation finishes before child session/input publication, so no child runs
+against an unprepared checkout. The generic session package only exposes a host
+preparation hook; it knows no Git.
+
+A new worktree defaults to detached committed HEAD, not the parent's dirty
+files. Its root becomes the default cwd unless explicitly overridden. Shell
+resolution is per call → persisted session cwd → home worktree root → harness
+directory; it inherits the harness environment. This is not sandboxing. No
+checkout is merged or deleted automatically. Failed Git preparation remains as
+`checkout` intent/error and as the failed tool result; retrying reconciles the
+same path.

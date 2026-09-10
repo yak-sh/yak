@@ -1,7 +1,14 @@
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { decode } from './input.ts'
-import { edit, spot, Textarea } from './Textarea.ts'
+import {
+  edit,
+  spot,
+  Textarea,
+  visualEdit,
+  visualRows,
+  visualSpot,
+} from './Textarea.ts'
 import { Scroll } from './Scroll.ts'
 import { mount } from './harness.ts'
 
@@ -9,7 +16,7 @@ import { mount } from './harness.ts'
 // where the cursor lands, so a row reads like the screen does.
 let typed = (bytes: string, from = { text: '', at: 0 }) => {
   let s = from
-  for (let k of decode(bytes)) s = edit(s, k) ?? s
+  for (let k of decode(bytes)) if (k.name != 'mouse') s = edit(s, k) ?? s
   return `${s.text.slice(0, s.at)}|${s.text.slice(s.at)}`
 }
 
@@ -82,4 +89,107 @@ Deno.test('a keystroke repaints the line it changed, not the screen', async () =
   assertEquals(await ui.send('bcdef'), 1)
   assertEquals(await ui.send('\x7f'), 1)
   ui.free()
+})
+
+Deno.test('soft rows preserve whitespace, hard breaks, long tokens and cursor offsets', () => {
+  let text = 'one two three\n\nabcdefghij'
+  let rows = visualRows(text, 6)
+  assertEquals(rows.map((r) => text.slice(r.start, r.end)), [
+    'one ',
+    'two ',
+    'three',
+    '',
+    'abcdef',
+    'ghij',
+  ])
+  assertEquals(visualSpot(rows, 4), { row: 1, col: 0 })
+  assertEquals(visualRows('abcdef', 6), [{ start: 0, end: 6 }, {
+    start: 6,
+    end: 6,
+  }])
+  assertEquals(visualRows('ab', 0), [
+    { start: 0, end: 1 },
+    { start: 1, end: 2 },
+    { start: 2, end: 2 },
+  ])
+  assertEquals(visualRows('ab cd', 5), [{ start: 0, end: 5 }, {
+    start: 5,
+    end: 5,
+  }])
+  let s = { text: 'abcdefghij', at: 8 }
+  assertEquals(visualEdit(s, { name: 'up' }, 6)?.at, 2)
+  assertEquals(visualEdit({ ...s, at: 2 }, { name: 'down' }, 6)?.at, 8)
+  assertEquals(visualEdit(s, { name: 'home' }, 6)?.at, 6)
+  assertEquals(visualEdit(s, { name: 'end' }, 6)?.at, 10)
+  assertEquals(visualEdit({ ...s, at: 2 }, { name: 'end' }, 6)?.at, 5)
+  assertEquals(visualEdit(s, { name: 'home', ctrl: true }, 6)?.at, 0)
+})
+
+Deno.test('soft input wraps and resizes without changing submitted text', async () => {
+  let sent: string[] = []
+  let changed: string[] = []
+  let ui = await mount(
+    () =>
+      h(Textarea, {
+        onSubmit: (t: string) => sent.push(t),
+        onChange: (t: string) => changed.push(t),
+      }),
+    8,
+    6,
+  )
+  try {
+    await ui.send('hello world')
+    assertEquals(ui.text().split('\n').slice(0, 2), ['> hello', '  world'])
+    await ui.resize(20, 6)
+    assertEquals(ui.text().split('\n')[0], '> hello world')
+    await ui.resize(5, 6)
+    assertEquals(ui.text().split('\n').slice(0, 4), [
+      '> hel',
+      '  lo',
+      '  wor',
+      '  ld',
+    ])
+    assertEquals(changed, ['hello world'])
+    await ui.send('\r')
+    assertEquals(sent, ['hello world'])
+  } finally {
+    ui.free()
+  }
+})
+
+Deno.test('soft rows scroll to the cursor and use allocated width, not terminal width', async () => {
+  let ui = await mount(
+    () =>
+      h(
+        'div',
+        { row: '1' },
+        h('div', { width: '8' }, h(Textarea, { max: 2 })),
+        h('div', { grow: '1' }, 'side'),
+      ),
+    20,
+    5,
+  )
+  try {
+    await ui.send('abcdefghijklmnop')
+    assertEquals(ui.text().split('\n').slice(0, 2), ['  ghijklside', '  mnop'])
+    await ui.send('\x1b[A\x1b[A')
+    assertEquals(ui.text().split('\n').slice(0, 2), [
+      '> abcdefside',
+      '  ghijkl',
+    ])
+  } finally {
+    ui.free()
+  }
+})
+
+Deno.test('a one-column input hides its gutter and keeps the cursor visible', async () => {
+  let ui = await mount(() => h(Textarea, { max: 4 }), 1, 4)
+  try {
+    await ui.send('ab')
+    assertEquals(ui.text().split('\n').slice(0, 3), ['a', 'b', ''])
+    await ui.send('\x1b[A\x7f')
+    assertEquals(ui.text().split('\n')[0], 'b')
+  } finally {
+    ui.free()
+  }
 })

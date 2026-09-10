@@ -1,3 +1,5 @@
+import { clip } from './paint.ts'
+import { routeMouse } from './mouse.ts'
 /**
  * A mounted app for a test: a fake terminal of a fixed size, the ANSI backend
  * writing into an array instead of a tty, and keys delivered the way the real
@@ -23,6 +25,7 @@ export let mount = async (
   out: string[]
   text: () => string
   send: (bytes: string) => Promise<number>
+  resize: (width: number, height: number) => Promise<void>
   free: () => void
 }> => {
   let screen = install()
@@ -53,9 +56,25 @@ export let mount = async (
         .join('\n'),
     send: async (bytes: string) => {
       wrote = 0
-      for (let key of decode(bytes)) press(key)
+      for (let key of decode(bytes)) {
+        if (key.name == 'mouse') {
+          routeMouse(
+            key,
+            screenful(screen.root, columns, rows).lines.slice(0, rows).map(
+              (line) => clip(line, columns),
+            ),
+          )
+        } else press(key)
+      }
       await settle()
       return wrote
+    },
+    resize: async (width, height) => {
+      columns = width
+      rows = height
+      size.value = { columns, rows }
+      measured(backend.draw(screen.root).metrics)
+      await settle()
     },
     free: () => {
       render(null, screen.root as unknown as Parameters<typeof render>[1])

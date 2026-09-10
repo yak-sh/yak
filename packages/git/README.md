@@ -228,3 +228,46 @@ from: that word is the host's, written `beside` the moved ref.
 `crypto.subtle` and `CompressionStream` are the platform APIs, so the same code
 runs on a server, in a worker and in a browser tab — and because they are async,
 so is writing an object.
+
+## Host checkouts and shared refs
+
+`@yaks/git/host` adds host-only `discover`, `checkoutAt`, and `createWorktree`.
+The portable object/HTTP entrypoint still type-checks without Deno. Load
+`checkoutDoc` when composing with transcripts: it excludes Git tree `entry`,
+which is a different vocabulary from transcript `entry`.
+
+- `repository{common}` identifies a local object database by canonical common
+  Git directory. Independent clones are different repositories.
+- `worktree{repository,path,gitdir,head,branch,managed}` is a checkout entity.
+  Its derived eid uses repository + canonical root path; branches and HEAD can
+  change without changing identity. Symlink aliases converge. Moving a checkout
+  creates a new identity; this deliberately avoids relying on reusable linked
+  admin-directory names. These are local-host identities, not portable clone
+  IDs.
+- Existing `ref{app,name,commit}` is reused: `app` can name the repository
+  entity, and `refEid(repository, fullName)` remains stable through branch
+  movement. Host observations add `oid` (raw target, including annotated tags),
+  `target` (symbolic full name), and `present`. Deleted refs are marked absent,
+  not tombstoned, so recreation reuses their identity. No competing branch
+  entity.
+- HEAD belongs to each worktree: `head` is its resolved object id, `branch`
+  points to the shared ref or is absent for detached HEAD. Unborn branches have
+  absent refs with stable IDs. Discovery refreshes refs on demand, not via a
+  watcher; it does not import every commit body into the graph.
+- `checkout` is durable creation intent on the prospective worktree entity:
+  requested base, pinned commit, branch, preparation state and failure message.
+  Creation is serialized per path in-process and through an OS advisory lock in
+  the repository across processes. The OS releases the lock on process death.
+  Retry reconciles Git success before graph completion. Git errors leave intent
+  visible; preparation never silently falls back to another checkout.
+
+Creation defaults to detached HEAD at the source's committed HEAD. Dirty files
+are neither copied, committed, reset nor stashed. An optional short branch name
+creates a new branch. Existing checkouts must be discovered/attached explicitly;
+creation refuses to adopt arbitrary existing directories. No automatic merging,
+pruning or deletion happens when an agent settles. A lost managed directory is
+an error, not permission to recreate potentially lost uncommitted work.
+
+Identity/locking assumes one host filesystem and a shared graph for cooperating
+harness processes. Filesystem moves and external Git mutations are observed on
+explicit discovery; there is no continuous reconciliation service.

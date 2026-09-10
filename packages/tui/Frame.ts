@@ -12,7 +12,11 @@ import { type ComponentChildren, type ComponentType, h, type JSX } from 'preact'
 import { size } from './screen.ts'
 
 /** One sidebar panel: a heading and whatever draws under it. */
-export type Panel = { title: string; Render: ComponentType }
+export type Panel = {
+  title: string
+  titleClass?: string
+  Render: ComponentType
+}
 
 /** Main column plus right sidebar; below `min` columns the sidebar folds. */
 export let Frame = (
@@ -36,7 +40,9 @@ export let Frame = (
           h(
             'div',
             { class: 'Panel', key: p.title },
-            h('div', { class: 'Panel_Title' }, p.title),
+            h('div', {
+              class: ['Panel_Title', p.titleClass].filter(Boolean).join(' '),
+            }, p.title),
             h(p.Render, {}),
           )
         ),

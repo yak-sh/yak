@@ -1,3 +1,7 @@
+import { homeAt, workspace } from './workspace.ts'
+import { render as tree } from '@yaks/preact'
+import type { VNode } from 'preact'
+import { transcriptViews } from './transcript.ts'
 // The harness running: the rows every transcript is served from, the daemon
 // over them, and the four things a door asks for — start one, say something to
 // one, list them, read one back.
@@ -71,6 +75,8 @@ export let seed = (
 /** How a harness is started: what it stores in, what serves it, and what the
  * agent may do. */
 export type Opts = ChildLimits & {
+  /** initial default directory; session home is discovered here */
+  cwd?: string
   /** the graph to run over (default: the one at `HARNESS_DB`) */
   h?: Harness
   /** what serves an ask (default: @yaks/openai over the found credential) */
@@ -113,6 +119,7 @@ export type Agent = {
   /** wait for a transcript to run out of things to do */
   idle: (session: Eid) => Promise<void>
   /** one bundle as a line of text, through @yaks/render's session views */
+  entry: (b: Bundle) => VNode | null
   line: (b: Bundle, view?: string, ctx?: Record<string, unknown>) => string
   close: () => void
 }
@@ -169,9 +176,14 @@ export let agent = (opts: Opts = {}): Agent => {
     model: idOf(MODEL, name),
     start: (prompt, o = {}) =>
       admit(h.g, undefined, opts, async () => {
+        let home = await homeAt(h.g, opts.cwd ?? Deno.cwd())
         let session = crypto.randomUUID() as Eid
         await h.g.apply([
-          { entity: { eid: session }, session: { id: session.slice(0, 8) } },
+          {
+            entity: { eid: session },
+            session: { id: session.slice(0, 8) },
+            home,
+          },
           {
             entity: { eid: crypto.randomUUID() as Eid },
             [ENTRY]: { session, seq: 1 },
@@ -191,7 +203,15 @@ export let agent = (opts: Opts = {}): Agent => {
         }])
         return eid
       }),
-    taskEntry: (session, text) => taskEntry(h.g, session, text, opts),
+    taskEntry: (session, text) =>
+      d.enqueue(
+        session,
+        () =>
+          taskEntry(h.g, session, text, {
+            ...workspace(h.g, opts.cwd),
+            ...opts,
+          }),
+      ),
     sessions: async () => (await h.g.read('.session')).toSorted(byNum),
     children: (session) => children(h.g, session),
     tasks: async () =>
@@ -212,6 +232,11 @@ export let agent = (opts: Opts = {}): Agent => {
       return woken
     },
     idle: (session) => d.idle(session),
+    entry: (b) =>
+      tree(transcriptViews, b, 'Transcript', h.vocab, {
+        names,
+        anchor: model.anchor,
+      }),
     line: (b, view = 'Line', ctx = {}) =>
       render(views, b, view, h.vocab, {
         names,

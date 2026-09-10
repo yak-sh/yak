@@ -12,6 +12,8 @@
 export type Style = {
   /** Foreground colour, `#rrggbb`. */
   fg?: string
+  /** Background colour, `#rrggbb`. */
+  bg?: string
   /** Bold. */
   bold?: boolean
   /** Dim. */
@@ -40,6 +42,7 @@ export type Sheet = Record<string, Style>
 /** Everforest, as the palette the default sheet draws from. */
 export let everforest = {
   fg: '#d3c6aa',
+  surface: '#343f44',
   grey: '#7a8478',
   muted: '#9da9a0',
   green: '#a7c080',
@@ -57,7 +60,11 @@ export let theme: Sheet = {
   Dim: { fg: everforest.grey, dim: true },
   Key: { fg: everforest.yellow },
   Accent: { fg: everforest.blue },
+  Code: { fg: everforest.blue, bg: everforest.surface },
+  Quote: { fg: everforest.fg, bg: everforest.surface, dim: false },
   Good: { fg: everforest.green },
+  Task: { fg: everforest.orange },
+  Composer_Border: { fg: everforest.grey, dim: true },
   Warn: { fg: everforest.yellow },
   Bad: { fg: everforest.red },
   Link: { fg: everforest.blue, underline: true },
@@ -66,6 +73,8 @@ export let theme: Sheet = {
   // The text cursor is a painted cell: the terminal's own cursor is hidden, so
   // an inverted character is the only thing saying where typing lands.
   Cursor: { inverse: true },
+  Scrollbar: { fg: everforest.grey },
+  Scrollbar_Snapped: { dim: true },
   Frame_Side: { indent: 2 },
   Panel: { gap: true },
   Panel_Title: { fg: everforest.grey, bold: true },

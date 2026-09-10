@@ -5,6 +5,7 @@ import {
   ModelError,
   type Reply,
   type Request,
+  type Usage,
 } from '@yaks/model'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Credential } from './credential.ts'
@@ -149,10 +150,35 @@ let ask = (opts: Options) => {
         id: str(out.response.id),
         model: out.model,
         items: items(out.items),
+        ...tokenUsage(out.response.usage),
       }
     } catch (error) {
       if (!(error instanceof ResponseError)) throw error
       throw new ModelError(error.code ?? error.kind, error.message)
     }
   }
+}
+
+/** Preserve absence: an unreported cache count is not a cache miss. */
+export let tokenUsage = (raw: unknown) => {
+  if (!raw || typeof raw != 'object') return {}
+  let u = raw as Record<string, unknown>
+  let detail = (key: string, field: string) => {
+    let value = u[key]
+    return value && typeof value == 'object'
+      ? (value as Record<string, unknown>)[field]
+      : undefined
+  }
+  let usage = Object.fromEntries(
+    Object.entries({
+      input_tokens: u.input_tokens,
+      output_tokens: u.output_tokens,
+      total_tokens: u.total_tokens,
+      cached_tokens: detail('input_tokens_details', 'cached_tokens'),
+      reasoning_tokens: detail('output_tokens_details', 'reasoning_tokens'),
+    }).filter(([, n]) =>
+      typeof n == 'number' && Number.isSafeInteger(n) && n >= 0
+    ),
+  ) as Usage
+  return Object.keys(usage).length ? { usage } : {}
 }

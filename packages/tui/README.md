@@ -75,8 +75,10 @@ to add to it or replace an entry. `Style` is the whole vocabulary a class has:
 - **`Textarea`** — the input box. Enter submits, Shift+Enter opens a line (which
   is why `run` pushes the kitty keyboard flag), plus arrows, home/end, word jump
   and word delete, `^A ^E ^U ^K ^W`, bracketed paste, and a painted cursor. It
-  grows to `max` rows and then scrolls. `edit()` is the whole editor as one pure
-  function.
+  soft-wraps at its measured content width, grows to `max` visual rows and then
+  scrolls. Arrows and Home/End navigate visual rows; Ctrl+A/E still address hard
+  lines. Soft wraps never change submitted text. `edit()` handles text edits;
+  `visualRows()` and `visualEdit()` handle wrapping and visual navigation.
 - **`Frame`** — a main column and a right sidebar of `{title, Render}` panels,
   which folds away below `min` columns.
 
@@ -97,3 +99,76 @@ Deno today: `run()` uses `Deno.stdin`, `Deno.consoleSize` and `SIGWINCH`.
 Everything below it — the DOM, the decoder, the painter, the widgets — is
 runtime-agnostic and tested through an injected size and write, so another
 host's entry point is a small file, not a port.
+
+### Lazy lists
+
+`VirtualList` accepts items with stable `id`s, `renderItem`, and an optional
+content `version(item)` (default: JSON). Use `follow: true` for transcripts;
+ordinary lists start at the first item. Detached scrolling keeps the top item ID
+and its local visual-row offset. Reordering or changing earlier items does not
+move that anchor. Shrinking the anchor clamps its offset; removing it selects
+its old-index successor, or the final remaining item. A changed `id` resets the
+viewport. Home/End with Ctrl jump to start/follow-end; paging and wheel keys
+move locally. Viewport height changes preserve a detached top anchor, or the
+bottom edge while following.
+
+Cold bottom-open walks backward only until the screen fills. No earlier-item
+height pass, prefix sum, total-height measurement, or spacer estimate is needed.
+The painter delegates this viewport's layout directly, bypassing normal child
+layout. There is no extra overscan: each visited item is measured as a unit and
+its complete wrapped lines remain available for subsequent nearby scrolling.
+Only visible items are revisited on warm paints. Preact structural trees (and
+therefore parsed Markdown results) and wrapped lines are retained in separate
+256-item LRU caches. Resize/theme changes re-layout visible cached trees only;
+content versions invalidate trees as well. List item renderers must be static
+presentation: live editing components belong outside this cache. If rendering
+also depends on external data, include that revision in `version`.
+
+This is rendering virtualization, not graph pagination: replacing the items
+array builds an O(N) identity index; unchanged arrays do not. The application
+still owns the full item data. Memory is bounded by item count, not bytes, and a
+single giant entry still costs its whole parse/layout. No scrollbar is exposed,
+so there is no misleading exact total height for unmeasured history.
+
+### Pointer routing
+
+`decode`/`feed` return `Input` (`Key | Mouse`): narrow `name === 'mouse'` before
+sending keyboard input to `press`. SGR reports carry zero-based `x/y`, button,
+modifiers, release, event type and signed wheel deltas. Button reports are
+retained; no click synthesis or application click actions are installed.
+
+The ANSI backend returns ownership-bearing, screen-clipped `lines`. `routeMouse`
+hit-tests these painted cells and bubbles through `TElement.parentNode` to
+Preact `onWheel`, `onMouseDown`, `onMouseUp` and `onMouseMove` listeners.
+Handlers receive `target`, `currentTarget`, `preventDefault()` (consumption) and
+`stopPropagation()`. Returning true also consumes. This is bubble-only, not a
+full browser event model. Misses do not fall back to keyboard focus. Resize and
+shutdown invalidate the saved hit surface. Custom backends without `lines`
+continue to support keyboard input but do not provide pointer targets.
+
+`Scroll` and `VirtualList` accept unmodified vertical wheel notches at the
+pointed region, consuming movement and allowing known boundaries to bubble.
+Keyboard scrolling is unchanged. Virtual item trees remain detached/lazy;
+currently their painted cells target the list host, not individual item nodes.
+Terminal mode 1000 supplies buttons/wheels, 1006 selects SGR; their previous
+modes are saved/restored using DEC private mode save/restore. Alternate-scroll
+mode remains enabled for terminals without mouse reporting. Terminals must
+support these mode controls for restoration to work. Motion is decoded if
+received, but motion reporting is not enabled.
+
+Hit coordinates follow the painter's existing string-length width model, so wide
+glyphs/combining characters share its existing limitations. No pointer capture,
+capture-phase listeners, synthetic clicks or horizontal scrolling yet.
+
+### Optional scrollbars
+
+`VirtualList` and `Scroll` accept `scrollbar: true`. The bar reserves one column
+and uses a three-row solid thumb on a `│` track (short viewports clamp it;
+widths below two columns omit it). `Scrollbar` and `Scrollbar_Snapped` theme
+tokens control its appearance; following the end dims the bar. This is visual
+only, without dragging or click-to-jump.
+
+Virtual-list thumb positions estimate unvisited heights from the bounded
+measurement cache. Estimates may adjust as items are visited, but never move the
+item-relative anchor or cause offscreen layout. Empty and short content still
+show the thumb; an end-following list places it at the bottom.

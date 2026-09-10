@@ -153,3 +153,10 @@ Deno.test('usingBefore is the newest using at or before a seq', () => {
   assertEquals(usingBefore(entries, 2)?.model, 'a')
   assertEquals(usingBefore([input(1)]), undefined)
 })
+
+Deno.test('passive notices do not change settled, stopped or empty status', () => {
+  let notice = entry(10, { notice: {}, content: { body: 'context' } })
+  assertEquals(statusOf([notice]), 'empty')
+  assertEquals(statusOf([said(3, 'e2'), notice]), 'settled')
+  assertEquals(statusOf([entry(3, { stop: {} }), notice]), 'stopped')
+})

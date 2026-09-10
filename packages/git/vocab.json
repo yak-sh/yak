@@ -87,6 +87,92 @@
           "ref": "entity",
           "death": "detach",
           "description": "the commit object the branch points at"
+        },
+        "target": {
+          "type": "string",
+          "description": "symbolic target full ref name, absent for direct refs"
+        },
+        "oid": {
+          "type": "string",
+          "description": "raw Git object id; annotated tags need not point directly to commits"
+        },
+        "present": {
+          "type": "boolean",
+          "description": "false when a previously observed host ref has been deleted"
+        }
+      }
+    },
+    "repository": {
+      "type": "object",
+      "description": "A local Git object database, identified by its canonical common Git directory.",
+      "properties": {
+        "common": {
+          "type": "string",
+          "description": "canonical absolute common Git directory"
+        }
+      }
+    },
+    "worktree": {
+      "type": "object",
+      "description": "A local checkout. Identity is repository plus canonical checkout root, not branch or HEAD.",
+      "properties": {
+        "repository": {
+          "type": "string",
+          "description": "repository entity",
+          "ref": "entity",
+          "death": "keep"
+        },
+        "path": {
+          "type": "string",
+          "description": "canonical checkout root"
+        },
+        "gitdir": {
+          "type": "string",
+          "description": "per-worktree Git admin directory"
+        },
+        "head": {
+          "type": "string",
+          "description": "HEAD object id; absent for unborn HEAD"
+        },
+        "branch": {
+          "type": "string",
+          "description": "shared ref entity HEAD is attached to; absent for detached HEAD",
+          "ref": "entity",
+          "death": "keep"
+        },
+        "managed": {
+          "type": "boolean",
+          "description": "created by this integration, never implies automatic cleanup"
+        }
+      }
+    },
+    "checkout": {
+      "type": "object",
+      "description": "Durable host checkout creation intent; ready only after Git succeeds. Failed requests retain their error for retry.",
+      "properties": {
+        "repository": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep"
+        },
+        "path": {
+          "type": "string"
+        },
+        "base": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        },
+        "requested": {
+          "type": "string",
+          "description": "original base expression, while base is the pinned commit oid"
         }
       }
     }

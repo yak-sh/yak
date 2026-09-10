@@ -246,6 +246,21 @@
           "bare": false
         }
       }
+    },
+    "notice": {
+      "type": "object",
+      "description": "passive transcript context, included in the next ask without requesting one",
+      "properties": {
+        "child": {
+          "type": "string",
+          "ref": "session",
+          "death": "keep"
+        },
+        "task": {
+          "type": "string",
+          "description": "the task that prompted this notice"
+        }
+      }
     }
   }
 }

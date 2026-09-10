@@ -15,6 +15,7 @@
 // a provider reads a tool's parameters on its own, without a document to
 // resolve `$ref` against.
 
+import { sessionCwd, workspace } from './workspace.ts'
 import type { Entity, Graph, Tool as GraphTool, ToolCtx } from '@yaks/graph'
 import { shapeOf } from '@yaks/mcp'
 import { core, type Depth } from '@yaks/mcp'
@@ -73,7 +74,16 @@ export let harnessTools = (
   opts: { cwd?: string; depth?: Depth } & ChildLimits = {},
 ): Tool[] => {
   let shell = shellTools(g, { cwd: opts.cwd })
-  let session = sessionTools(g, opts)
+  let directory = opts.cwd ?? Deno.cwd()
+  let baseShell = shell.find((t) => t.name == 'shell')!
+  let runShell = baseShell.run
+  baseShell.run = async (args, ctx) =>
+    runShell({
+      ...args,
+      cwd: args.cwd ??
+        (ctx ? await sessionCwd(g, ctx.session, directory) : directory),
+    }, ctx)
+  let session = sessionTools(g, { ...workspace(g, directory), ...opts })
   let processWait = shell.find((t) => t.name == 'wait')!
   let childWait = session.find((t) => t.name == 'wait')!
   let wait: Tool = {

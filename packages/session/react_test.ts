@@ -270,3 +270,19 @@ Deno.test('as an effect, the steps run themselves until the transcript settles',
   assertEquals(asked.length, 2)
   assertEquals(steps.filter((s) => s != 'nothing'), ['asked', 'ran', 'asked'])
 })
+
+Deno.test('usage is persisted once on its ask, not on output entries', async () => {
+  let g = world()
+  let usage = {
+    input_tokens: 1000,
+    cached_tokens: 800,
+    output_tokens: 20,
+    total_tokens: 1020,
+  }
+  let { model } = scripted([{ ...says('r1', 'done'), usage }])
+  await settle(g, ids.s, { model, tools: [echo], mint })
+  let entries = await transcript(g, ids.s)
+  assertEquals(entries.filter((b) => b.usage).length, 1)
+  assertEquals(entries[1].usage, usage)
+  assertEquals(kindOf(entries[1]), 'ask')
+})

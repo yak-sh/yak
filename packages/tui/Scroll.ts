@@ -11,6 +11,7 @@
 
 import { type ComponentChildren, h, type JSX } from 'preact'
 import { useLayoutEffect, useRef, useState } from 'preact/hooks'
+import type { MouseEvent } from './mouse.ts'
 import type { Key } from './input.ts'
 import { useKeys, useMetric } from './screen.ts'
 
@@ -46,8 +47,9 @@ export let scrolled = (top: number, key: Key, v: View): number | null => {
 
 /** A scrolling window over its children. `id` is how the painter reports it. */
 export let Scroll = (
-  { id, follow = true, children, ...rest }: {
+  { id, follow = true, scrollbar = false, children, ...rest }: {
     id: string
+    scrollbar?: boolean
     follow?: boolean
     children?: ComponentChildren
     [attr: string]: unknown
@@ -81,5 +83,22 @@ export let Scroll = (
   useLayoutEffect(() => {
     if (stick && top != max) setTop(max)
   })
-  return h('div', { ...rest, id, scroll: String(Math.min(top, max)) }, children)
+  return h('div', {
+    ...rest,
+    id,
+    scroll: String(Math.min(top, max)),
+    'scroll-snapped': stick ? '1' : undefined,
+    scrollbar: scrollbar ? '1' : undefined,
+    onWheel: (event: MouseEvent) => {
+      if (
+        !event.deltaY || event.release || event.ctrl || event.alt || event.shift
+      ) return
+      let to = Math.max(0, Math.min(max, live.current + event.deltaY * WHEEL))
+      if (to == live.current) return
+      live.current = to
+      setStick(to >= max)
+      setTop(to)
+      event.preventDefault()
+    },
+  }, children)
 }

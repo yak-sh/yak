@@ -7,6 +7,7 @@ import { App, changes } from './app.ts'
 import { panels, type UIAgent } from './panels.ts'
 import { agent } from './run.ts'
 import { open } from './store.ts'
+import { until } from '../process/harness.ts'
 
 let settle = async () => {
   for (let i = 0; i < 100; i++) await Promise.resolve()
@@ -46,6 +47,8 @@ Deno.test('fake agent: panels, burst selector keys, editing and stale reads', as
         entity: { eid: s },
         content: { body: `transcript ${s}` },
       }]),
+    entry: (b) =>
+      h('span', null, String((b.content as Comp | undefined)?.body ?? '')),
     line: (b) => String((b.content as Comp).body),
     start: () => Promise.resolve('new'),
     send: () => Promise.resolve('input'),
@@ -68,8 +71,16 @@ Deno.test('fake agent: panels, burst selector keys, editing and stale reads', as
     await settle()
     for (let p of panels) assert(ui.text().includes(p.title), p.title)
     assert(ui.text().includes('test task'))
+    let ansi = ui.out.join('')
+    assert(ansi.includes('38;2;167;192;128mmessage'))
+    assert(ansi.includes('38;2;230;152;117;1mTasks'))
+    assert(ansi.includes('38;2;122;132;120;2m╭'))
+    await ui.send('\t')
+    assert(ui.out.join('').includes('38;2;230;152;117mtask'))
+    await ui.send('\t')
     let before = reads
-    assertEquals(await ui.send('ab\x1b[13;2ucd\x1b[D!'), 3)
+    // Composer growth also moves the scrollbar thumb.
+    assertEquals(await ui.send('ab\x1b[13;2ucd\x1b[D!'), 5)
     assertEquals(reads, before) // typing does not query the graph
     assert(ui.text().includes('c!d'))
     await ui.send('\x0e') // begin a slow s1 read
@@ -81,7 +92,7 @@ Deno.test('fake agent: panels, burst selector keys, editing and stale reads', as
     await settle()
     assert(ui.text().includes('transcript s2'))
     assert(!ui.text().includes('STALE'))
-    assert(ui.text().includes('s3  settled')) // child panel
+    assert(ui.text().includes('● s3')) // child panel
     await ui.send('\x0f\x0e\x0e\x0e') // four selector keys in one read
     await settle()
     assert(ui.text().includes('Harness — s3'))
@@ -107,7 +118,10 @@ Deno.test('graph effects paint a model reply without a keypress; sends are input
   try {
     await ui.send('ping\x1b[13;2usecond line\r')
     await settle()
-    let [s] = await a.sessions()
+    let s = await until(
+      async () => (await a.sessions())[0],
+      'root checkout preparation',
+    )
     let entries = await a.transcript(s.entity.eid)
     assertEquals((entries[0].content as Comp).body, 'ping\nsecond line')
     assert(ui.text().includes('second line'), ui.text())
@@ -153,6 +167,8 @@ Deno.test('two submissions before start resolves stay ordered in one new session
     sessions: () => Promise.resolve([]),
     tasks: () => Promise.resolve([]),
     transcript: () => Promise.resolve([]),
+    entry: (b) =>
+      h('span', null, String((b.content as Comp | undefined)?.body ?? '')),
     line: () => '',
     start: (text) => {
       starts.push(text)
@@ -189,6 +205,8 @@ Deno.test('a failed send is visible and contributed panels read and render bundl
     sessions: () => Promise.resolve([]),
     tasks: () => Promise.resolve([]),
     transcript: () => Promise.resolve([]),
+    entry: (b) =>
+      h('span', null, String((b.content as Comp | undefined)?.body ?? '')),
     line: () => '',
     start: () => Promise.reject(new Error('offline')),
     send: () => Promise.reject(new Error('offline')),
@@ -236,6 +254,8 @@ Deno.test('Tab preserves editing and captures message/task mode for each queued 
     sessions: () => Promise.resolve([]),
     tasks: () => Promise.resolve([]),
     transcript: () => Promise.resolve([]),
+    entry: (b) =>
+      h('span', null, String((b.content as Comp | undefined)?.body ?? '')),
     line: () => '',
     start: (text) => {
       writes.push(`start: ${text}`)
@@ -307,7 +327,10 @@ Deno.test('task mode paints claimed work and subagent, then its delivered result
   try {
     await ui.send('parent\r')
     await settle()
-    let [parent] = await a.sessions()
+    let parent = await until(
+      async () => (await a.sessions())[0],
+      'root checkout preparation',
+    )
     await a.idle(parent.entity.eid)
     await ui.send('\tmicrotask\x1b[13;2udetails\r')
     await childAsked.promise
@@ -315,8 +338,11 @@ Deno.test('task mode paints claimed work and subagent, then its delivered result
     let [task] = await a.tasks()
     let [child] = await a.children(parent.entity.eid)
     assertEquals((task.claim as Comp).session, child.entity.eid)
-    assert(ui.text().includes('wip microtask'), ui.text())
-    assert(ui.text().includes('child:'), ui.text())
+    assert(ui.text().includes('microtask'), ui.text())
+    assert(
+      ui.text().includes(child.entity.eid.replace(/^child:/, '').slice(0, 8)),
+      ui.text(),
+    )
     assert(ui.text().includes(`Harness — ${parent.entity.eid.slice(0, 8)}`))
     await a.h.g.apply([{ entity: task.entity, completed: {} }])
     childReply.resolve({
@@ -332,5 +358,124 @@ Deno.test('task mode paints claimed work and subagent, then its delivered result
   } finally {
     ui.free()
     a.close()
+  }
+})
+
+Deno.test('composer spans the bottom below transcript and responsive sidebar', async () => {
+  let a: UIAgent = {
+    start: () => Promise.resolve('s'),
+    send: () => Promise.resolve('e'),
+    taskEntry: () => Promise.resolve({ task: 't', child: 'c' }),
+    sessions: () => Promise.resolve([]),
+    tasks: () => Promise.resolve([]),
+    children: () => Promise.resolve([]),
+    transcript: () => Promise.resolve([]),
+    entry: () => h('span', null, 'entry'),
+    line: () => '',
+  }
+  for (let width of [120, 80]) {
+    let ui = await mount(
+      () =>
+        h(App, {
+          agent: a,
+          subscribe: () => () => {},
+          panels: [{
+            title: 'Sidebar',
+            read: () => Promise.resolve([]),
+            Render: () => h('div', null, 'side content'),
+          }],
+        }),
+      width,
+      12,
+    )
+    try {
+      await settle()
+      // Longer than the transcript column, but short enough for the full width.
+      let draft = 'x'.repeat(width - 8)
+      await ui.send(draft)
+      let lines = ui.text().split('\n')
+      assertEquals(lines.length, 12)
+      assert(lines[10].includes(draft), ui.text())
+      assert(lines[9].includes('message · Tab'), ui.text())
+      assertEquals(ui.text().includes('Sidebar'), width >= 90)
+      await ui.send('\x1b[13;2usecond line')
+      lines = ui.text().split('\n')
+      assert(lines[8].includes('message · Tab'), ui.text())
+      assert(lines[9].includes(draft), ui.text())
+      assert(lines[10].includes('second line'), ui.text())
+      assert(lines[11].startsWith('╰'), ui.text())
+    } finally {
+      ui.free()
+    }
+  }
+})
+
+Deno.test('settled subagents are hidden, toggled and retained while selected', async () => {
+  let sessions: Bundle[] = [
+    { entity: { eid: 'parent' }, session: { id: 'ROOT', status: 'settled' } },
+    {
+      entity: { eid: 'child' },
+      session: { id: 'DONE_CHILD', status: 'settled' },
+      spawned: { parent: 'parent' },
+    },
+    {
+      entity: { eid: 'active' },
+      session: { id: 'ACTIVE_CHILD', status: 'running' },
+      spawned: { parent: 'parent' },
+    },
+  ]
+  let a: UIAgent = {
+    sessions: () => Promise.resolve(sessions),
+    children: () => Promise.resolve(sessions.slice(1)),
+    tasks: () => Promise.resolve([]),
+    transcript: (id) =>
+      Promise.resolve([{
+        entity: { eid: 'entry' },
+        content: {
+          body: id == 'parent'
+            ? 'parent retains child result'
+            : 'child transcript intact',
+        },
+      }]),
+    entry: (b) => h('span', null, String((b.content as Comp).body)),
+    line: () => '',
+    start: () => Promise.resolve('parent'),
+    send: () => Promise.resolve('input'),
+    taskEntry: () => Promise.resolve({ task: 'task', child: 'child' }),
+  }
+  let ui = await mount(
+    () => h(App, { agent: a, subscribe: () => () => {} }),
+    120,
+    40,
+  )
+  try {
+    await settle()
+    assert(ui.text().includes('ROOT'))
+    assert(ui.text().includes('ACTIVE_CHILD'))
+    assert(!ui.text().includes('DONE_CHILD'))
+    assert(ui.text().includes('Show settled: off'))
+    await ui.send('\x0e')
+    await settle()
+    assert(ui.text().includes('parent retains child result'))
+    assert(!ui.text().includes('DONE_CHILD'))
+    await ui.send('\x0e') // hidden child is skipped
+    await settle()
+    assert(ui.text().includes('> ● ACTIVE_CHILD'))
+    await ui.send('\x13')
+    assert(ui.text().includes('Show settled: on'))
+    assert(ui.text().includes('DONE_CHILD'))
+    await ui.send('\x10') // now the settled child is selectable
+    await settle()
+    assert(ui.text().includes('> ● DONE_CHILD'))
+    assert(ui.text().includes('child transcript intact'))
+    await ui.send('\x13') // selected child remains even with filter on
+    assert(ui.text().includes('> ● DONE_CHILD'))
+    await ui.send('\x10')
+    await settle()
+    assert(ui.text().includes('parent retains child result'))
+    assert(!ui.text().includes('DONE_CHILD'))
+    assertEquals(sessions.length, 3)
+  } finally {
+    ui.free()
   }
 })

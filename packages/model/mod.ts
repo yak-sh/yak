@@ -79,12 +79,22 @@ export type Request = {
   anchor?: string
 }
 
-/** One answer: the provider's id for it, the model that served, what it said
- * and asked for. */
+/** Counts for one request. Cached input and reasoning output are subsets,
+ * not additional tokens. Missing counts are unknown. */
+export type Usage = {
+  input_tokens?: number
+  output_tokens?: number
+  total_tokens?: number
+  cached_tokens?: number
+  reasoning_tokens?: number
+}
+
+/** One answer: the provider's id, the model that served, and what it said. */
 export type Reply = {
   id: string
   model: string
   items: Item[]
+  usage?: Usage
 }
 
 /** The comps a provider stamps on the entry that records a reply. */

@@ -120,7 +120,7 @@ export let openCalls = (entries: Bundle[]): Bundle[] => {
 
 /** The status of a transcript, from its entries in any order. */
 export let statusOf = (entries: Bundle[]): TranscriptStatus => {
-  let all = ordered(entries)
+  let all = ordered(entries).filter((b) => !b.notice)
   let newest = all.at(-1)
   if (!newest) return 'empty'
   let kind = kindOf(newest)
@@ -159,6 +159,7 @@ export let sessionStatus = {
   deps: [] as string[],
   expr: (owner: string): string => {
     let newest = `(select e.entity from "entry" e where e."session" = ${owner}
+      and not exists (select 1 from "notice" n where n.entity = e.entity)
       order by e.seq desc limit 1)`
     let wears = (comp: string, and = '') =>
       `exists (select 1 from "${comp}" k where k.entity = ${newest}${and})`

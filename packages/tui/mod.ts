@@ -50,3 +50,12 @@ export { quit, run } from './run.ts'
 export { Scroll, scrolled, type View } from './Scroll.ts'
 export { bol, type Edit, edit, eol, spot, Textarea } from './Textarea.ts'
 export { Frame, type Panel } from './Frame.ts'
+export {
+  type Anchor,
+  type VirtualItem,
+  VirtualList,
+  VirtualWindow,
+} from './VirtualList.ts'
+
+export { hit, type MouseEvent, routeMouse } from './mouse.ts'
+export type { Input, Mouse } from './input.ts'

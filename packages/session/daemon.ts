@@ -86,7 +86,11 @@ export let daemon = (
     return step
   }
   fx.created(ENTRY, (e) => {
-    wake(String(e.comp?.session))
+    let session = String(e.comp?.session)
+    enqueue(session, async () => {
+      let [entry] = await g.storage.tx((tx) => tx.get([e.entity.eid]))
+      if (!entry?.notice) wake(session)
+    }).catch(report)
   })
   // A task may become done after its worker has gone quiet: a contained or
   // required task settles, or an edge is removed. Recheck only the changed

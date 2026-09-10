@@ -51,6 +51,7 @@
     "./packages/match",
     "./packages/render",
     "./packages/preact",
+    "./packages/markdown",
     "./packages/html",
     "./packages/text",
     "./packages/graph",

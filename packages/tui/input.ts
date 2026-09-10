@@ -21,6 +21,22 @@ export type Key = {
   shift?: boolean
 }
 
+/** SGR pointer report, in zero-based terminal cells (never a keyboard key). */
+export type Mouse = {
+  name: 'mouse'
+  type: 'wheel' | 'mousedown' | 'mouseup' | 'mousemove'
+  x: number
+  y: number
+  button: number
+  deltaX: number
+  deltaY: number
+  release: boolean
+  shift: boolean
+  alt: boolean
+  ctrl: boolean
+}
+export type Input = Key | Mouse
+
 /** The keys this decoder names. Anything else is dropped. */
 export type Name =
   | 'char'
@@ -80,7 +96,7 @@ let tildes: Record<string, Name> = {
 // deno-lint-ignore no-control-regex -- the ESC that opens a sequence IS the subject
 let csiU = /^\x1b\[(\d+)(?:;(\d+))?u/
 // deno-lint-ignore no-control-regex -- ditto
-let sgr = /^\x1b\[<(\d+);\d+;\d+[Mm]/
+let sgr = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/
 // deno-lint-ignore no-control-regex -- ditto
 let tilde = /^\x1b\[(\d+)(?:;(\d+))?~/
 // deno-lint-ignore no-control-regex -- ditto
@@ -98,8 +114,16 @@ let named: Record<number, Name> = {
 }
 
 // One escape sequence at `i`: the key it means (null = drop it) and its length.
-let escape = (s: string, i: number): [Key | null, number] => {
+let escape = (s: string, i: number): [Input | null, number] => {
   let rest = s.slice(i)
+  // xterm modifyOtherKeys, also used by tmux's extended-keys mode.
+  // deno-lint-ignore no-control-regex -- ESC is part of the terminal protocol
+  let extended = rest.match(/^\x1b\[27;(\d+);(\d+)~/)
+  if (extended) {
+    let [, modifier, code] = extended
+    let [key] = escape('\x1b[' + code + ';' + modifier + 'u', 0)
+    return [key, extended[0].length]
+  }
   let m = rest.match(csiU)
   if (m) {
     let code = +m[1], mod = mods(m[2])
@@ -111,13 +135,27 @@ let escape = (s: string, i: number): [Key | null, number] => {
     return [only({ name: 'char', text, ...mod }), m[0].length]
   }
   if ((m = rest.match(sgr))) {
-    let button = +m[1]
-    let name: Name | null = button == 64
-      ? 'wheelup'
-      : button == 65
-      ? 'wheeldown'
-      : null
-    return [name ? { name } : null, m[0].length]
+    let bits = +m[1], button = bits & 3, release = m[4] == 'm'
+    if (+m[2] < 1 || +m[3] < 1) return [null, m[0].length]
+    return [{
+      name: 'mouse',
+      type: release
+        ? 'mouseup'
+        : bits & 64
+        ? 'wheel'
+        : bits & 32
+        ? 'mousemove'
+        : 'mousedown',
+      x: +m[2] - 1,
+      y: +m[3] - 1,
+      button,
+      release,
+      deltaX: bits & 64 && button >= 2 ? (button == 2 ? -1 : 1) : 0,
+      deltaY: bits & 64 && button < 2 ? (button == 0 ? -1 : 1) : 0,
+      shift: !!(bits & 4),
+      alt: !!(bits & 8),
+      ctrl: !!(bits & 16),
+    }, m[0].length]
   }
   if ((m = rest.match(tilde))) {
     let name = tildes[m[1]]
@@ -141,8 +179,8 @@ let escape = (s: string, i: number): [Key | null, number] => {
  * Decode one chunk. A bracketed paste without its terminator is taken whole,
  * so a paste split across reads needs `feed()` rather than this.
  */
-export let decode = (s: string): Key[] => {
-  let out: Key[] = []
+export let decode = (s: string): Input[] => {
+  let out: Input[] = []
   let i = 0
   while (i < s.length) {
     let c = s[i]
@@ -184,7 +222,7 @@ export let decode = (s: string): Key[] => {
  * A decoder that survives chunk boundaries: an unterminated bracketed paste is
  * held until the terminator arrives rather than arriving as two edits.
  */
-export let feed = (): (chunk: string) => Key[] => {
+export let feed = (): (chunk: string) => Input[] => {
   let held = ''
   return (chunk) => {
     let s = held + chunk
@@ -193,6 +231,13 @@ export let feed = (): (chunk: string) => Key[] => {
       held = s.slice(open)
       s = s.slice(0, open)
     } else held = ''
+    // Keep a fragmented SGR report, but preserve bare Escape key behavior.
+    // deno-lint-ignore no-control-regex -- fragmented terminal protocol
+    let partial = s.match(/\x1b\[<(?:\d+(?:;\d*)?(?:;\d*)?)?$/)
+    if (partial) {
+      held = partial[0] + held
+      s = s.slice(0, partial.index)
+    }
     return decode(s)
   }
 }

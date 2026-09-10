@@ -11,6 +11,8 @@
 import { type ComponentType, h, render } from 'preact'
 import { install, onPaint, touch } from './dom.ts'
 import { ansiBackend, type Backend } from './paint.ts'
+import { routeMouse } from './mouse.ts'
+import type { Line } from './paint.ts'
 import { feed } from './input.ts'
 import { clear, measured, press, size } from './screen.ts'
 import type { Sheet } from './theme.ts'
@@ -36,10 +38,13 @@ export let run = async (
 
   let resize = () => {
     size.value = backend.size()
+    painted = []
     backend.reset()
     touch()
   }
+  let painted: Line[] = []
   let bye = () => {
+    painted = []
     render(null, host)
     onPaint(() => {})
     clear()
@@ -53,21 +58,29 @@ export let run = async (
     } catch { /* not a tty */ }
   }
 
-  Deno.stdin.setRaw(true)
-  backend.start()
-  size.value = backend.size()
-  Deno.addSignalListener('SIGWINCH', resize)
-  onPaint(() => measured(backend.draw(screen.root).metrics))
-  render(h(App, {}), host)
-
-  let keys = feed()
-  let buf = new Uint8Array(4096)
-  let dec = new TextDecoder()
   try {
+    Deno.stdin.setRaw(true)
+    backend.start()
+    size.value = backend.size()
+    Deno.addSignalListener('SIGWINCH', resize)
+    onPaint(() => {
+      let frame = backend.draw(screen.root)
+      painted = frame.lines ?? []
+      measured(frame.metrics)
+    })
+    render(h(App, {}), host)
+
+    let keys = feed()
+    let buf = new Uint8Array(4096)
+    let dec = new TextDecoder()
     while (!done) {
       let n = await Deno.stdin.read(buf)
       if (n == null) break
       for (let key of keys(dec.decode(buf.subarray(0, n)))) {
+        if (key.name == 'mouse') {
+          routeMouse(key, painted)
+          continue
+        }
         if (press(key)) continue
         if (key.ctrl && key.text == 'c') done = true
       }
