@@ -130,6 +130,7 @@ let judge = (query: string, vocab: Vocab, now?: number): Filter | null => {
  */
 export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
   let held = new Set<Live>()
+  let closed = false
   let make = base.signal ?? plain
 
   let publish = (w: Live, value: Bundle[]) => {
@@ -182,6 +183,8 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
   })
 
   let watch = (query: string, opts: WatchOpts = {}): Watch => {
+    if (closed) throw new Error('watch registry is closed')
+    let active = true
     let now = opts.now ?? base.now
     let w: Live = {
       query,
@@ -195,6 +198,7 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
     // cannot answer throws HERE, out of `watch()`, rather than on every later
     // commit for the life of the page.
     then(graph.read(query, { now }), (set) => {
+      if (!active || closed) return
       w.members = new Map(set.map((b) => [b.entity.eid, b]))
       w.hold.value = set
       held.add(w)
@@ -209,6 +213,7 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
         return () => w.listeners.delete(fn)
       },
       close: () => {
+        active = false
         held.delete(w)
         w.listeners.clear()
       },
@@ -219,6 +224,7 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
     watch,
     size: () => held.size,
     close: () => {
+      closed = true
       for (let w of held) w.listeners.clear()
       held.clear()
     },

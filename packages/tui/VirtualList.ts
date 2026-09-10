@@ -12,6 +12,7 @@ import type { Key } from './input.ts'
 export type VirtualItem = { id: string }
 type Cached = { version: string; width: number; style: string; lines: Line[] }
 export type Anchor = { id: string; offset: number }
+export type ViewportState = { anchor?: Anchor; follow: boolean }
 
 /** Also usable without Preact: measure is called only for visited items.
  * Cache is bounded by item count; one very large item still costs its full size.
@@ -194,12 +195,23 @@ export class VirtualWindow<T extends VirtualItem> {
  * Width/style changes invalidate lazily, so resize only measures visible items.
  */
 export let VirtualList = <T extends VirtualItem>(
-  { items, renderItem, version = JSON.stringify, follow = false, ...attrs }: {
+  {
+    items,
+    renderItem,
+    version = JSON.stringify,
+    follow = false,
+    value,
+    onViewportChange,
+    ...attrs
+  }: {
     items: readonly T[]
     renderItem: (item: T) => ComponentChildren
     version?: (item: T) => string
     scrollbar?: boolean
     follow?: boolean
+    /** Controlled logical position; measurements and caches remain internal. */
+    value?: ViewportState
+    onViewportChange?: (value: ViewportState) => void
     id?: string
     grow?: string
   },
@@ -257,6 +269,17 @@ export let VirtualList = <T extends VirtualItem>(
       follow,
     )
   }
+  if (value) {
+    state.current.anchor = value.anchor
+    state.current.follow = value.follow
+  }
+  let publish = () => {
+    let next = { anchor: state.current!.anchor, follow: state.current!.follow }
+    if (
+      next.follow != value?.follow || next.anchor?.id != value?.anchor?.id ||
+      next.anchor?.offset != value?.anchor?.offset
+    ) onViewportChange?.(next)
+  }
   state.current.update(items)
   useKeys((key) => {
     if (!state.current!.key(key)) return false
@@ -289,6 +312,7 @@ export let VirtualList = <T extends VirtualItem>(
           height,
           JSON.stringify([style, sheet]),
         )
+        publish()
         return attrs.scrollbar
           ? drawScrollbar(lines, width, state.current!.position(inner), sheet)
           : lines

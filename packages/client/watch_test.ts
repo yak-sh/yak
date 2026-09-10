@@ -159,3 +159,28 @@ Deno.test('a signal factory backs the value', () => {
   assertEquals(dinners.value, made[0].value)
   c.close()
 })
+
+Deno.test('closing during an asynchronous first read cannot resurrect a watch', async () => {
+  let c = boxClient()
+  let initial = c.graph.read.bind(c.graph)
+  let release!: (rows: Bundle[]) => void
+  c.graph.read = () => new Promise<Bundle[]>((resolve) => release = resolve)
+  let watch = c.watch('.recipe')
+  watch.close()
+  release([])
+  await Promise.resolve()
+  assertEquals(c.watches.size(), 0)
+  c.graph.read = initial
+  c.close()
+})
+
+Deno.test('closing a client during an asynchronous read closes its pending watches', async () => {
+  let c = boxClient()
+  let release!: (rows: Bundle[]) => void
+  c.graph.read = () => new Promise<Bundle[]>((resolve) => release = resolve)
+  c.watch('.recipe')
+  c.close()
+  release([])
+  await Promise.resolve()
+  assertEquals(c.watches.size(), 0)
+})

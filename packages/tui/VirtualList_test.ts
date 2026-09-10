@@ -213,3 +213,35 @@ Deno.test('input-only paints do not parse history; switching viewport resets fol
     ui.free()
   }
 })
+
+Deno.test('controlled viewport publishes anchors and restores externally owned position', async () => {
+  let position = { follow: false, anchor: { id: '12', offset: 0 } }
+  let seen: string[] = []
+  let ui = await mount(
+    () =>
+      h(VirtualList<{ id: string; text: string }>, {
+        items: items(40),
+        value: position,
+        renderItem: (item: { id: string; text: string }) =>
+          h('div', null, item.text),
+        onViewportChange: (
+          next: { follow: boolean; anchor?: { id: string; offset: number } },
+        ) => {
+          position = { follow: next.follow, anchor: next.anchor! }
+          seen.push(position.anchor.id)
+        },
+      }),
+    20,
+    5,
+  )
+  try {
+    assert(ui.text().startsWith('12\n'))
+    await ui.send('\x1b[6~')
+    assert(seen.includes('16'))
+    assertEquals(position.follow, false)
+    assert(ui.text().startsWith('16\n'))
+    await ui.send('\x1b[1;5F')
+  } finally {
+    ui.free()
+  }
+})
