@@ -78,7 +78,11 @@ export let seed = (
 
 /** How a harness is started: what it stores in, what serves it, and what the
  * agent may do. */
-export type Opts = ChildLimits & {
+// A Harness must be passed under `h`, never spread into the options. Explicit
+// exclusions also catch spreads, which TypeScript's excess-property check skips.
+type NotHarness = { [K in keyof Harness]?: never }
+
+export type Opts = ChildLimits & NotHarness & {
   /** initial default directory; session home is discovered here */
   cwd?: string
   /** the graph to run over (default: the one at `HARNESS_DB`) */
@@ -149,6 +153,15 @@ let byNum = (a: Bundle, b: Bundle) =>
  * ```
  */
 export let agent = (opts: Opts = {}): Agent => {
+  // Check before opening any database: a misspelled handle must not fall back
+  // to the user's persistent store, including for untyped JavaScript callers.
+  for (let key of ['path', 'db', 'store', 'g', 'fx', 'vocab', 'close']) {
+    if (Object.hasOwn(opts, key)) {
+      throw new TypeError(
+        'Pass the harness as agent({ h: open(...) }), not spread options',
+      )
+    }
+  }
   let h = opts.h ?? open()
   let detachDiagnostics = diagnostics().attach(h.g)
   let name = opts.name ?? ASTRA

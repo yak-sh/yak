@@ -58,7 +58,7 @@ Deno.test('root admission is snapshotted and explicit later context is an instru
   let requests: import('@yaks/model').Request[] = []
   await Deno.writeTextFile(dir + '/AGENTS.md', 'shared rule')
   let a = await agent({
-    ...open(':memory:'),
+    h: open(':memory:'),
     model: (req) => {
       requests.push(req)
       return Promise.resolve({

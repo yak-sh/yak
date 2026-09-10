@@ -68,6 +68,12 @@ await a.idle(s)
 for (let e of await a.transcript(s)) console.log(a.line(e))
 ```
 
+For tests and embedded instances, pass the storage handle as `h`. Do not spread
+`open()` into the options: `agent({ ...open(':memory:') })` is rejected by both
+the type contract and a runtime check. Without an explicit `h`, `agent()` opens
+the configured persistent database. A temporary working directory does not
+isolate that database.
+
 ## What it is made of
 
 - **The graph is the harness.** A transcript is `entry` entities, what it ran is
