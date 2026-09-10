@@ -367,7 +367,26 @@ export let daemon = (
       await busy.get('pool:intake')
       await scheduling
       let job = busy.get(session)
-      if (!job && !active.has(session)) return
+      if (!job && !active.has(session)) {
+        // Effects enqueue intake after the session callback resolves. A queue
+        // marker is durable evidence of owed work even in that microtask gap.
+        let [self] = await g.storage.tx((tx) => tx.get([session]))
+        if (
+          !stopping &&
+          dispatch(self ?? { entity: { eid: session } })?.state == 'queued' &&
+          (p.limits.maxChildren ?? 32) > 0
+        ) {
+          schedule()
+          await scheduling
+          if (busy.has(session) || active.has(session)) continue
+        }
+        await Promise.resolve()
+        if (
+          busy.has('pool:intake') || scheduling || busy.has(session) ||
+          active.has(session)
+        ) continue
+        return
+      }
       await job
       await Promise.resolve()
     }
