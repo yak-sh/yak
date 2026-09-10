@@ -96,3 +96,27 @@ Deno.test('journal failure prints original and graph shutdown drain is bounded',
   assertMatch(warnings[0], /Original exception:.*original/)
   assertMatch(warnings[1], /still pending/)
 })
+
+Deno.test('fatal unhandled rejection really exits subprocess but leaves durable stack', async () => {
+  let dir = Deno.makeTempDirSync()
+  let path = dir + '/fatal.jsonl'
+  let module = new URL('./diagnostics.ts', import.meta.url).href
+  let script = 'import {createDiagnostics,uncaught} from ' +
+    JSON.stringify(module) + ';' +
+    'uncaught(createDiagnostics({path:' + JSON.stringify(path) + '}));' +
+    'Promise.reject(new Error("fatal-test", {cause:new Error("root-test")}));'
+  try {
+    let child = await new Deno.Command(Deno.execPath(), {
+      args: ['eval', script],
+      stdout: 'null',
+      stderr: 'piped',
+    }).output()
+    assert(!child.success)
+    let record = JSON.parse(Deno.readTextFileSync(path))
+    assertEquals(record.phase, 'unhandledrejection')
+    assertMatch(record.body, /fatal-test/)
+    assertMatch(record.body, /root-test/)
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})

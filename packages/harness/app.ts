@@ -415,6 +415,9 @@ export let tui = async (): Promise<void> => {
   try {
     await a.resume()
     await run(() => h(App, { agent: a, subscribe }))
+  } catch (error) {
+    diagnostics().report(error, { phase: 'tui' })
+    throw error
   } finally {
     await diagnostics().drain()
     a.close()
