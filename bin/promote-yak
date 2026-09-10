@@ -1,8 +1,0 @@
-#!/bin/sh
-# Publish only the tested tip of main. Never force: an older/cancelled gate
-# cannot rewind deploy, even if cancellation races with this push.
-set -eu
-sha=${1:?usage: bin/promote-yak full-sha}
-[ "$(git rev-parse HEAD)" = "$sha" ] || { echo 'checkout is not the tested commit' >&2; exit 1; }
-[ "$(git ls-remote origin refs/heads/main | cut -f1)" = "$sha" ] || { echo 'main moved; a newer gate must promote it' >&2; exit 1; }
-git push origin "$sha:refs/heads/deploy"

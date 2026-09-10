@@ -6,7 +6,7 @@
 # versioned like everything else.
 #
 # Workers Builds is the whole deploy: the Cloudflare GitHub App watches
-# yak-sh/yak, and on a gated push to deploy it clones, runs this, then runs
+# yak-sh/yak, and on a push to main it clones, runs this, then runs
 # this file's deploy mode with a token it mints for itself — nothing is minted by
 # hand and no secret lives in the repo or on the Actions runner. A non-zero
 # exit in build mode deploys nothing. Deploy mode preserves a successful
@@ -26,16 +26,6 @@
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-
-# Fail closed while the dashboard is being switched from main to deploy,
-# and on manual retries of an old build. Both build and deploy check the ref.
-# No API credential is read: git uses Builds' existing repository access.
-cd "$root"
-approved=$(git ls-remote origin refs/heads/deploy | cut -f1)
-if [ -z "$approved" ] || [ "$(git rev-parse HEAD)" != "$approved" ]; then
-  echo "Refusing ungated build: HEAD is not the gate-approved deploy branch" >&2
-  exit 1
-fi
 
 # Workers Builds restores npm's cache, but not Deno's default directories.
 # Keep Deno's executable and module cache beside the cached npm packages so

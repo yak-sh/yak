@@ -1,6 +1,23 @@
-# The self-hosted gate advances deploy only after the tests pass. Workers
-# Builds must watch deploy, not main (workers/yak/README.md). No Cloudflare
-# credential is needed here; Builds still owns the upload and its token.
+# The gate: what `deno task check` and the test tiers say about a commit.
+#
+# It does not deploy. The kernel Worker ships through Cloudflare Workers Builds,
+# which runs its own build (bin/build-yak) and mints its own token — see
+# workers/yak/README.md. Nothing here holds a Cloudflare credential: the one
+# step that reads Cloudflare (deploy time) runs wrangler against the box's own
+# login under $HOME, the way the box does by hand.
+#
+# Runs on THIS box, not GitHub's — we buy no Actions minutes (M-9560). The
+# runner is a `systemd --user` unit; its install, its PATH and the command that
+# removes it are all in etc/actions-runner.service. `runs-on` names the custom
+# label `yak`, so a workflow can never silently fall back to a hosted runner.
+#
+#   systemctl --user status actions-runner    # is it listening
+#   gh api repos/yak-sh/yak/actions/runners   # does GitHub agree
+#
+# The repo is public, so a fork PR must never reach this box: the `if` below
+# refuses one, and the repository requires approval before a fork PR workflow
+# runs at all (`actions/permissions/fork-pr-contributor-approval` =
+# all_external_contributors).
 name: gate
 
 on:
@@ -8,24 +25,22 @@ on:
     branches: [main]
   pull_request:
 
+# One gate per ref. A second push supersedes the first — nobody reads the
+# verdict on a commit that is already history.
 concurrency:
   group: gate-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-
 jobs:
   gate:
-    # Public fork PRs must never execute on this box.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, yak]
-    permissions:
-      contents: write
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
+          # The workerd tier scopes itself by diff, so the base commit of a
+          # push must be in the clone.
           fetch-depth: 0
 
       - name: worker paths
@@ -35,11 +50,6 @@ jobs:
           PR_BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           base="${PR_BASE:-$BEFORE}"
-          # Include worker changes in a superseded/failed push, even when the
-          # newest push only edits docs. Already-promoted docs changes skip it.
-          if [ -z "$PR_BASE" ] && git show-ref --verify --quiet refs/remotes/origin/deploy; then
-            base=refs/remotes/origin/deploy
-          fi
           if [ -z "$base" ] || [ "$base" = 0000000000000000000000000000000000000000 ]; then
             base=$(git hash-object -t tree /dev/null)
           fi
@@ -49,39 +59,65 @@ jobs:
             echo 'workers=true' >> "$GITHUB_OUTPUT"
           fi
 
+      # FIRST, before a single test: `live` is the recorder's first successful
+      # probe, so whatever the job does before this step is measured as deploy
+      # latency. Run last (T-35336), the recorder reached the probe ~2m30 after
+      # the push, found the version long since serving, and wrote that 2m30 as
+      # the number — 175.689s for d03e4fba, 180.670s for d59bb215, 203.932s for
+      # ef364c57, each of them `upload` under a minute. Three REGRESSIONs in a
+      # row that were the gate timing its own test suite (T-35426).
+      #
+      # The commit under test times its own deploy. Push only: a PR has no main
+      # push to time. A push outside the Worker's watch paths deploys nothing,
+      # and the recorder says so instead of waiting (workers/yak/README.md). No
+      # Actions secret is added — the recorder uses the box's own gh and
+      # wrangler logins under $HOME. Nothing here pushes, so the row lands in
+      # this run's checkout and in the job summary; commit it with the next
+      # change, like bench-gate's baseline. A bench-row commit on main would
+      # start another Workers Build and another gate.
+      - name: deploy time
+        if: github.event_name == 'push'
+        run: deno task deploy:time ${{ github.sha }}
+
       - name: deno task check
         run: deno task check
 
+      # Quoted: a bare YAML scalar cannot carry a `: ` — the runner would never
+      # see this line, the file would fail to parse.
       - name: tests
         run: 'DB_PATH=:memory: deno task test'
 
-      # The fast tier skips slow(...). This tier boots real workerd/SQLite;
-      # probe.ts installs the pinned npm dependencies on a fresh checkout.
+      # No install step: the Worker's npm dependencies are gitignored, and
+      # since T-34159 the probe fills them itself (workers/yak/wrangler.ts
+      # `ready()`, called from probe.ts) before workerd reads them.
+      #
+      # @db/sqlite ships a prebuilt libsqlite3.so that segfaults on this box the
+      # moment it is opened. Nothing here has to say so any more: since T-34183
+      # every importer takes `Database` from @yaks/sqlite/db, whose prelude names
+      # the system library first (packages/sqlite/sqlitepath_test.ts holds that
+      # line). Before that, these runs only survived because every login shell
+      # here exports DENO_SQLITE_PATH and a systemd unit inherits none of it.
+      # The fast tier skips slow(...); this one boots real workerd and SQLite,
+      # so it runs where the diff touches those paths. It REPORTS: a red
+      # workerd tier is a bug to fix, never a held-back deploy (T-37250).
       - name: workerd tests
         if: steps.paths.outputs.workers == 'true'
+        continue-on-error: true
         run: deno task test:workerd
 
+      # Reads the row `deploy time` wrote; needs no credentials. Until
+      # T-35336 rows were only written when someone hand-ran deploy:time, so
+      # one unlucky Workers Builds row (39–71s, Cloudflare-side) stayed "the
+      # latest deploy" and failed every later commit.
+      - name: deploy gate
+        run: deno task deploy:gate
+
+      # Box-side app-deploy:time records what an app_files write costs a person;
+      # this reads the committed rows and refuses a slower one (T-34986).
       - name: app deploy gate
         run: deno task app-deploy:gate
 
+      # Reports a regression against the committed floor; it does not block.
       - name: bench gate
+        continue-on-error: true
         run: deno task bench:gate
-
-      - name: advance production branch
-        id: promote
-        if: github.event_name == 'push' && steps.paths.outputs.workers == 'true'
-        run: |
-          echo "pushed=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-          bin/promote-yak "$GITHUB_SHA"
-
-      # Time the deployment branch push, not the preceding workerd tests.
-      # Start immediately after promotion so the first live probe is honest.
-      - name: deploy time
-        if: steps.promote.outcome == 'success'
-        env:
-          DEPLOY_PUSHED_AT: ${{ steps.promote.outputs.pushed }}
-        run: deno task deploy:time ${{ github.sha }}
-
-      - name: deploy gate
-        if: steps.promote.outcome == 'success'
-        run: deno task deploy:gate

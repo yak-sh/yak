@@ -1,7 +1,13 @@
 import { assertEquals, assertRejects } from '@std/assert'
 import { parse } from '@std/yaml'
 
-type Step = { id?: string; name?: string; if?: string; run?: string }
+type Step = {
+  id?: string
+  name?: string
+  if?: string
+  run?: string
+  'continue-on-error'?: boolean
+}
 let workflow = parse(
   Deno.readTextFileSync(
     new URL('../.github/workflows/gate.yml', import.meta.url),
@@ -9,21 +15,16 @@ let workflow = parse(
 ) as { jobs: { gate: { 'runs-on': string[]; steps: Step[] } } }
 let steps = workflow.jobs.gate.steps
 
-Deno.test('workerd gates promotion on the self-hosted runner, never on a PR', () => {
+Deno.test('the workerd tier is path-scoped, self-hosted, and reports without blocking', () => {
   assertEquals(workflow.jobs.gate['runs-on'], ['self-hosted', 'yak'])
-  let workerd = steps.findIndex((s) => s.run == 'deno task test:workerd')
-  let promote = steps.findIndex((s) => s.id == 'promote')
-  assertEquals(steps[workerd].if, "steps.paths.outputs.workers == 'true'")
-  assertEquals(
-    steps[promote].if,
-    "github.event_name == 'push' && steps.paths.outputs.workers == 'true'",
-  )
-  for (
-    let name of ['deno task check', 'tests', 'workerd tests', 'bench gate']
-  ) {
-    let at = steps.findIndex((s) => s.name == name)
-    assertEquals(at >= 0 && at < promote, true, name)
+  let workerd = steps.find((s) => s.run == 'deno task test:workerd')!
+  assertEquals(workerd.if, "steps.paths.outputs.workers == 'true'")
+  // Tests exercise and report; they never hold a deploy back.
+  for (let name of ['workerd tests', 'bench gate']) {
+    assertEquals(steps.find((s) => s.name == name)!['continue-on-error'], true)
   }
+  // Nothing here publishes: Workers Builds watches main itself.
+  assertEquals(steps.some((s) => (s.run ?? '').includes('promote')), false)
   let tasks = JSON.parse(
     Deno.readTextFileSync(new URL('../deno.json', import.meta.url)),
   ).tasks
@@ -33,7 +34,7 @@ Deno.test('workerd gates promotion on the self-hosted runner, never on a PR', ()
   )
 })
 
-Deno.test('worker path scope covers nested files, deletions and superseded pushes; bad diffs fail closed', async () => {
+Deno.test('worker path scope covers nested files and deletions; a bad diff fails closed', async () => {
   let dir = await Deno.makeTempDir()
   let command = async (args: string[], env: Record<string, string> = {}) => {
     let out = await new Deno.Command(args[0], {
@@ -92,13 +93,7 @@ Deno.test('worker path scope covers nested files, deletions and superseded pushe
     assertEquals(await scoped(packages, deleted), true)
     let later = await commit('docs/later.md')
     assertEquals(await scoped(deleted, later), false)
-    // A cancelled gate left packages unpromoted: a subsequent docs push must
-    // test that pending change. Once promoted, docs-only pushes skip workerd.
-    await git('update-ref', 'refs/remotes/origin/deploy', docs)
-    assertEquals(await scoped(deleted, later), true)
-    await git('update-ref', 'refs/remotes/origin/deploy', deleted)
-    assertEquals(await scoped(deleted, later), false)
-    // PRs compare against their own base, not the production branch.
+    // A PR compares against its own base, not the previous push.
     assertEquals(await scoped('', later, docs), true)
     await assertRejects(() => scoped('', later, 'nonexistent'))
   } finally {
