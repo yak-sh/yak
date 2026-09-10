@@ -151,8 +151,13 @@ import {
   refusedSell,
   selling,
 } from './sell.ts'
-import { mailFrom, replyTo } from './post.ts'
-import { apex as platformHost, spaceHost, url as hostUrl } from './host.ts'
+import { mailFrom } from './post.ts'
+import {
+  apex as platformHost,
+  replyTo,
+  spaceHost,
+  url as hostUrl,
+} from './host.ts'
 import { foreign, SLUG } from './route.ts'
 import { globs } from './router.ts'
 import type { Reach } from './reach.ts'

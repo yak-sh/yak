@@ -136,5 +136,3 @@ export let posting = (
     return id ? { id } : {}
   },
 })
-
-export let replyTo = (env: Host = {}) => `hello@${apex(env)}`

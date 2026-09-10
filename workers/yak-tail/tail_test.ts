@@ -268,3 +268,33 @@ Deno.test('handler registers async work with waitUntil and ignores healthy traff
   assertEquals(f.rows.size, 0)
   assertEquals(f.sent.length, 0)
 })
+
+// esbuild bundles this Worker with no aliases and no node_modules above it, so
+// one RUNTIME import reaching out of workers/ fails `wrangler deploy` — and it
+// fails days later, when someone tries to ship. mail-config.ts importing
+// post.ts, which imports `@yaks/mail`, is what left the tail three commits
+// stale while the inbox filled. Type-only imports are erased, so they are
+// free; the walk follows `code` edges alone.
+Deno.test('the tail bundles from workers/ alone', async () => {
+  type Mod = {
+    specifier: string
+    dependencies?: { code?: { specifier: string } }[]
+  }
+  let root = new URL('./tail.ts', import.meta.url).href
+  let { stdout } = await new Deno.Command(Deno.execPath(), {
+    args: ['info', '--json', root],
+  }).output()
+  let graph: { modules: Mod[] } = JSON.parse(new TextDecoder().decode(stdout))
+  let by = new Map(graph.modules.map((m) => [m.specifier, m]))
+  let run = new Set<string>()
+  let walk = (specifier: string) => {
+    if (run.has(specifier)) return
+    run.add(specifier)
+    for (let d of by.get(specifier)?.dependencies ?? []) {
+      if (d.code) walk(d.code.specifier)
+    }
+  }
+  walk(root)
+  let workers = new URL('../', import.meta.url).href
+  assertEquals([...run].filter((s) => !s.startsWith(workers)), [])
+})

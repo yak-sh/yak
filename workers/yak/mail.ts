@@ -27,8 +27,8 @@ export type Letter = { to: string | string[]; subject: string; body: string }
 export type Mail = (l: Letter) => Promise<void>
 
 import { FROM } from './mail-config.ts'
-import { replyTo, sink } from './post.ts'
-import type { Host } from './host.ts'
+import { sink } from './post.ts'
+import { type Host, replyTo } from './host.ts'
 export { FROM, GRAPH, REPLY_TO } from './mail-config.ts'
 
 // One line, JSON, tagged: a person reads it at a glance and a probe parses

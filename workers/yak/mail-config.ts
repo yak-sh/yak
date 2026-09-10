@@ -5,7 +5,7 @@
 // the API. The reader still answers the platform: REPLY_TO is the yaks.app
 // address, and the display name is the platform's. A space that white-labels
 // its login will want its own pair; that is a later leaf's.
-import { replyTo } from './post.ts'
+import { replyTo } from './host.ts'
 export let FROM = 'hello@bot.yak.sh'
 export let REPLY_TO = replyTo()
 

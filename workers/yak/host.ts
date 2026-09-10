@@ -6,6 +6,11 @@ export type Host = Pick<Env, 'APEX'>
 export let apex = (env: Host = {}) => env.APEX || 'yaks.app'
 export let spaceHost = (env: Host, space: string) => `${space}.${apex(env)}`
 export let url = (env: Host, path = '') => `https://${apex(env)}${path}`
+// The address a reader answers. It lives here, with the deployment's other
+// addresses, and not in post.ts: mail-config.ts is read by yak-tail, whose
+// bundle has no npm or @yaks/* resolution, so it must not reach a module that
+// imports @yaks/mail.
+export let replyTo = (env: Host = {}) => `hello@${apex(env)}`
 
 let addresses = new RegExp(
   `\\bhttps?:\\/\\/[^\\s<>"'\`]+|(?:@|\\.)${

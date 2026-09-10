@@ -51,8 +51,7 @@ import { keyed, prefixOf } from './files.ts'
 import { type Letter, REPLY_TO } from './mail.ts'
 import { esc } from './pages.ts'
 import { GALLERY } from './seo.ts'
-import { type Host, url as siteUrl } from './host.ts'
-import { replyTo } from './post.ts'
+import { type Host, replyTo, url as siteUrl } from './host.ts'
 
 // Where the gallery lives, and where a letter's links land. What the page SAYS
 // about itself — its title and its line — is seo.ts's, beside the same two
