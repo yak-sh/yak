@@ -142,6 +142,12 @@ export let ledger = (opts: LedgerOpts): Ledger => {
     eid: Eid,
     row: Comp,
   ): boolean | Promise<boolean> => {
+    // A complementary process must not claim (or mark failed) work belonging
+    // to its sibling. Unknown ids still take the ordinary reporting path.
+    let handler = String(row.handler)
+    if (fx.slots().some((s) => s.id == handler) && !fx.owns(handler)) {
+      return false
+    }
     let attempts = Number(row.attempts ?? 0)
     let expiry = row.lease_expiry ? Date.parse(String(row.lease_expiry)) : 0
     // Somebody else is on it, and their claim still stands.

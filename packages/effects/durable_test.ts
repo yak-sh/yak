@@ -182,3 +182,31 @@ Deno.test('a row naming a handler nobody registered is reported, not guessed at'
   assertEquals(f.oops, ['post.created.nope'])
   assertEquals(f.rows().map((r) => r.state), ['failed'])
 })
+
+Deno.test('split reconciliation never claims or settles another process class', () => {
+  let g = blogGraph([], durableBlog)
+  let tx = detached(g.storage)
+  let log = ledger({ owner: 'server' })
+  let fx = effects(durableBlog, { want: (w) => w == 'serve' })
+  let ran = 0
+  fx.created('post', () => ran++) // do owned
+  tx.patch([{
+    entity: { eid: 'r1' },
+    effect: {
+      handler: 'post.created',
+      target: 'p1',
+      comp: 'post',
+      kind: 'created',
+      state: 'pending',
+      attempts: 1,
+    },
+  }])
+  let before = sync(tx.get(['r1']))
+  assertEquals(sync(log.reconcile(fx, tx)), 0)
+  assertEquals(
+    sync(tx.get(['r1'])),
+    before,
+    'the sibling keeps its retry and pending state',
+  )
+  assertEquals(ran, 0)
+})

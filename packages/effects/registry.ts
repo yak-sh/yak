@@ -40,6 +40,21 @@ import {
   wanting,
 } from './trace.ts'
 import { generation, marked, unmark, type Write } from './write.ts'
+import {
+  describe,
+  type Description,
+  type Dispatch,
+  type Policy,
+  type Registration,
+  type SweepRows,
+} from './registration.ts'
+export type {
+  Description,
+  Dispatch,
+  Policy,
+  Registration,
+  SweepRows,
+} from './registration.ts'
 
 /** A post-commit observer: what happened, a detached transaction to read
  * through, and the door to WRITE through ({@link Write}). Its return value is
@@ -49,7 +64,9 @@ export type Handler = (event: Event, tx: Tx, write: Write) => unknown
 /** One registration: the component it watches, what has to happen to it, and
  * the handler. `id` names it — `post.created`, `post.changed.published`,
  * `post.removed`, with `#2` appended when a slot is taken twice. */
-export type Slot = {
+export type Slot = Policy & {
+  /** Related hooks registered in one on() call. */
+  group?: string
   /** the registration's name, unique within one registry */
   id: string
   /** the component name it watches */
@@ -99,6 +116,8 @@ export type Opts = {
    * write is 1, so the default lets one effect see another's write and stops
    * the generation after that. */
   depth?: number
+  /** Default process selection, also used by replay and reconciliation. */
+  want?: (where: string) => boolean
 }
 
 /**
@@ -109,13 +128,32 @@ export type Opts = {
  */
 export type Effects = Plugin & {
   /** run when an entity gains this component */
-  created: (comp: string, run: Handler) => Effects
+  created: (comp: string, run: Handler, policy?: Policy) => Effects
   /** run when this component is patched — for one column, or for any */
-  changed: (comp: string, column: string | Handler, run?: Handler) => Effects
+  changed: (
+    comp: string,
+    column: string | Handler,
+    run?: Handler,
+    policy?: Policy,
+  ) => Effects
   /** run when this component goes, by its own deletion or with its entity */
-  removed: (comp: string, run: Handler) => Effects
+  removed: (comp: string, run: Handler, policy?: Policy) => Effects
   /** every registration, in the order they were made */
   slots: () => Slot[]
+  /** Whether this registry consumer owns a registered slot. Reconcilers must
+   * check before claiming or settling durable work. Unknown ids return false. */
+  owns: (id: string) => boolean
+  /** Register related component hooks together. */
+  on: (comp: string, registration: Registration) => Effects
+  /** Documentation derived from the actual registered slots. */
+  docs: () => Description[]
+  /** Dispatch events from an external committed journal. Runs start eagerly,
+   * independently of slow siblings. Without tx, event-only handlers work;
+   * attempts to read a transaction fail explicitly and are reported. */
+  dispatch: (events: Event[], tx?: Tx, pass?: Dispatch) => Promise<unknown[]>
+  /** Re-drive each owned created slot's pending rows. Fetch and handler
+   * failures are isolated; no ledger or automatic retry is implied. */
+  relay: (rows: SweepRows, tx?: Tx, pass?: Dispatch) => Promise<unknown[]>
   /** run one registration by id, isolated: `true` if it completed, `false` if
    * it failed and was reported. The door a reconciler re-runs through. */
   attempt: (id: string, event: Event, tx: Tx) => boolean | Promise<boolean>
@@ -152,7 +190,23 @@ let watching = (s: Slot, e: Event): boolean =>
  */
 export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   let slots: Slot[] = []
-  let report = opts.report ?? warn
+  let report: Report = (err, job) => {
+    try {
+      ;(opts.report ?? warn)(err, job)
+    } catch (e) {
+      console.warn('effect reporting failed —', e)
+    }
+  }
+  let selected = (s: Slot, pass?: Dispatch) =>
+    (pass?.want ?? opts.want ?? (() => true))(s.where ?? 'do')
+  let reportTo = (pass?: Dispatch): Report =>
+    !pass?.report ? report : (err, job) => {
+      try {
+        pass.report!(err, job)
+      } catch (e) {
+        console.warn('effect reporting failed —', e)
+      }
+    }
   let around = opts.around
   let depth = opts.depth ?? 1
 
@@ -175,8 +229,23 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     return taken.length ? `${base}#${taken.length + 1}` : base
   }
 
-  let add = (comp: string, kind: Kind, run: Handler, column?: string) => {
-    slots.push({ id: name(comp, kind, column), comp, kind, column, run })
+  let add = (
+    comp: string,
+    kind: Kind,
+    run: Handler,
+    column?: string,
+    policy: Policy = {},
+    group?: string,
+  ) => {
+    slots.push({
+      ...policy,
+      group,
+      id: name(comp, kind, column),
+      comp,
+      kind,
+      column,
+      run,
+    })
     return fx
   }
 
@@ -187,10 +256,11 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     event: Event,
     tx: Tx,
     write: Write,
+    reportFailure: Report = report,
   ): boolean | Promise<boolean> => {
     let job: Job = { handler: s.id, event }
     let failed = (err: unknown) => {
-      report(err, job)
+      reportFailure(err, job)
       return false
     }
     try {
@@ -213,7 +283,9 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     if (gen > depth) return clean()
     let write = writer(gen)
     let jobs = events(bundles).flatMap((e) =>
-      slots.filter((s) => watching(s, e)).map((s) => [s, e] as [Slot, Event])
+      slots.filter((s) => selected(s) && watching(s, e)).map((s) =>
+        [s, e] as [Slot, Event]
+      )
     )
     if (!jobs.length) return clean()
     return then(over(jobs, ([s, e]) => fire(s, e, tx, write)), clean)
@@ -228,14 +300,83 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
       effect: dispatch,
     },
     // Nothing is read while no handler is registered, so nothing is asked for.
-    wants: (bundles) => slots.length ? wanting(vocab)(bundles) : [],
-    created: (comp, run) => add(comp, 'created', run),
-    changed: (comp, column, run) =>
+    wants: (bundles) => [
+      ...(slots.length ? wanting(vocab)(bundles) : []),
+      ...[...new Set(slots.filter((s) => selected(s)).map((s) => s.wants))]
+        .flatMap((wants) => wants?.(bundles) ?? []),
+    ],
+    created: (comp, run, policy) =>
+      add(comp, 'created', run, undefined, policy),
+    changed: (comp, column, run, policy) =>
       typeof column == 'string'
-        ? add(comp, 'changed', run as Handler, column)
-        : add(comp, 'changed', column),
-    removed: (comp, run) => add(comp, 'removed', run),
+        ? add(comp, 'changed', run as Handler, column, policy)
+        : add(comp, 'changed', column, undefined, policy),
+    removed: (comp, run, policy) =>
+      add(comp, 'removed', run, undefined, policy),
     slots: () => [...slots],
+    owns: (id) => slots.some((s) => s.id == id && selected(s)),
+    on: (comp, registration) => {
+      let { created, changed, removed, ...policy } = registration
+      let group = `on:${slots.length}`
+      if (created) add(comp, 'created', created, undefined, policy, group)
+      for (let [col, run] of Object.entries(changed ?? {})) {
+        add(comp, 'changed', run, col, policy, group)
+      }
+      if (removed) add(comp, 'removed', removed, undefined, policy, group)
+      return fx
+    },
+    docs: () => describe(slots),
+    dispatch: (events, tx = eventOnly, pass) => {
+      let jobs = events.flatMap((e) =>
+        slots
+          .filter((s) => selected(s, pass) && watching(s, e))
+          .map((s) => fire(s, e, tx, writer(0), reportTo(pass)))
+      )
+      return Promise.all(jobs)
+    },
+    relay: (rows, tx = eventOnly, pass) => {
+      let jobs: Promise<unknown[]>[] = []
+      let reportFailure = reportTo(pass)
+      for (let s of slots) {
+        if (!s.sweep || s.kind != 'created' || !selected(s, pass)) continue
+        let failed = (err: unknown): unknown[] => {
+          reportFailure(err, {
+            handler: s.id,
+            event: {
+              kind: 'created',
+              entity: { eid: '' },
+              name: s.comp,
+            },
+          })
+          return []
+        }
+        try {
+          // Sync readers start handlers now, just like journal dispatch. A
+          // remote reader must not hold up another slot's reconciliation.
+          let out = then(rows(s.comp, s.sweep.pending), (got) =>
+            Promise.all(
+              got.map((row) =>
+                fire(
+                  s,
+                  {
+                    kind: 'created',
+                    entity: { eid: String(row.eid) },
+                    name: s.comp,
+                    comp: row,
+                  },
+                  tx,
+                  writer(0),
+                  reportFailure,
+                )
+              ),
+            ))
+          jobs.push(Promise.resolve(out).catch(failed))
+        } catch (err) {
+          failed(err)
+        }
+      }
+      return Promise.all(jobs).then((out) => out.flat())
+    },
     attempt: (id, event, tx) => {
       let s = slots.find((x) => x.id == id)
       if (!s) {
@@ -245,10 +386,23 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
         })
         return false
       }
+      if (!selected(s)) return false
       // A reconciled run stands outside any batch, so its own writes start the
       // chain over: what it writes is generation 1, like a fresh run's.
       return fire(s, event, tx, writer(0))
     },
   }
   return fx
+}
+
+// An external journal may have no graph transaction at all. Never fake an
+// empty answer (or silently permit a write outside apply): fail at that door.
+let noTransaction = (): never => {
+  throw new Error('external effect dispatch has no transaction')
+}
+let eventOnly: Tx = {
+  read: noTransaction,
+  get: noTransaction,
+  patch: noTransaction,
+  remove: noTransaction,
 }

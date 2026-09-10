@@ -165,3 +165,41 @@ this one the committed batch. Beside it, any storage adapter —
 a server. Above it, the plugins that have something to do: this is the seam a
 component domain uses to act on its own components without touching the write
 path.
+
+## External journals and split processes
+
+A journal consumer can feed committed `Event[]` to `fx.dispatch(events, tx)`
+without installing the graph plugin or adopting the package journal layout. The
+consumer owns its cursor and process lease; dispatch does not persist or replay
+anything. Handlers start eagerly and failures stay telemetry. Omit `tx` for
+event-only handlers; trying to read through it then is a reported error, never a
+made-up empty result. The configured `write` door remains available.
+
+```ts
+let fx = effects(vocab, { want: (where) => where == 'do', write })
+fx.on('order', {
+  where: 'do', // default; applications name their own process classes
+  created: ship,
+  changed: { address: reroute },
+  sweep: { pending: 'shipped_at is null' },
+  doc: 'ship each pending order',
+  wants: (bundles) => [{ eids: bundles.map((b) => b.entity.eid) }],
+})
+await fx.dispatch(events, tx)
+await fx.relay((comp, pending) => pendingRows(comp, pending), tx)
+```
+
+`want` selects slots in plugin dispatch, external dispatch, `attempt`, and
+`relay`. A pass may override it (and `report`) with the third argument to
+`dispatch` or `relay`. Inline consumers omit it to run every class. `wants` is a
+graph-plugin read declaration, gathered once per grouped registration; an
+external consumer brings its own detached transaction.
+
+A sweep re-drives only the created slot, one fetch per declaration. The reader
+interprets `pending` (SQL above is an application choice), and returns rows with
+`eid`. Sync readers start handlers synchronously; async readers do not block
+other declarations. Fetch failures and individual handler failures are isolated.
+Declaring a sweep promises an **idempotent** handler: this is at-least-once boot
+reconciliation, not an exactly-once delivery guarantee or the optional durable
+ledger. `fx.docs()` lists the actual grouped hooks, pending predicates, and
+descriptions; `fx.slots()` exposes individual slots.

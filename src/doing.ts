@@ -544,6 +544,29 @@ export let tick = (
   return run
 }
 
+// The package registry owns pending-row replay. Count launch requests handed
+// back at boot, not historical journal rows; this is the deployment safety beat.
+export let replayDoing = async (
+  rows: (comp: string, pending: string) => Row[] = (comp, pending) =>
+    sweepRows(db, comp, pending) as Row[],
+) => {
+  let spawns = new Set<string>()
+  let out = await relay(
+    (comp, pending) => {
+      let got = rows(comp, pending)
+      if (comp == 'session') {
+        for (let row of got) {
+          spawns.add(String(row.eid))
+        }
+      }
+      return got
+    },
+    undefined,
+    (w) => w == 'do',
+  )
+  return { spawns: spawns.size, fired: out.length }
+}
+
 // The boot-time reconcile and the recurring sweeps — the doing owner's half.
 // Runs in the serving process (inline mode) or in effectsd (split mode),
 // strictly after migrations: the caller guarantees the schema is current
@@ -671,11 +694,9 @@ export let bootDoing = (d: Doing, syncSoon: () => void) => {
   // recover(), so a re-driven stop finds the adopted pid to signal. Only the
   // sweeps this process owns — which, since the runner moved here (T-35018),
   // is every one of them.
-  relay(
-    (comp, pending) => sweepRows(db, comp, pending) as Row[],
-    undefined,
-    (w) => w == 'do',
-  )
+  replayDoing().then(({ spawns }) =>
+    console.log(`effects boot relay: replayed ${spawns} spawns`)
+  ).catch((e) => console.warn('effects boot relay —', e))
 
   // Inbound rides the pull (inbound.ts): the fleet-mail sweep, on an
   // interval like the log tailer. Boot sweeps too (idempotency makes it

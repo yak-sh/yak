@@ -54,6 +54,7 @@ globalThis.addEventListener('unhandledrejection', (e) => {
 // worker's exit to free the flock; the kernel releases it on every exit.
 let lease = await takeEffectsLease(graph, { wait: true })
 void lease // held for the process lifetime, released by exit
+console.error(`effectsd: acquired effects lock for ${graph}`)
 
 // Doing needs a codex-readiness probe, the provider table for dispatch, and —
 // since T-35018 — the transport the graph-native runner generates over. All
@@ -145,7 +146,8 @@ let oops = (comp: string, e: unknown) =>
     error: String(e),
   })
 
-// The feed: dispatch-only — no sockets to cast to. Post-dispatch settles
+// The feed: fleet journal → @yaks/effects dispatch, no ledger replay.
+// Dispatch-only — no sockets to cast to. Post-dispatch settles
 // catch what an async handler wrote after its row's pass (our own commits
 // never bump data_version, so the watcher alone would miss them), and a slow
 // safety tick bounds the window either way.
