@@ -54,7 +54,11 @@
     "fleet/file/fts": 1269476,
     "fleet/file/walk-16": 762704,
     "fleet/file/walk-unbounded": 1379322,
-    "fleet/file/apply-100": 21203272
+    "fleet/file/apply-100": 21203272,
+    "archetype/memory/backfill": 319894420,
+    "archetype/memory/move-100": 6588588,
+    "archetype/file/backfill": 223351867,
+    "archetype/file/move-100": 7448232
   },
   "samples": {
     "sqlite/memory/point": [
@@ -296,6 +300,34 @@
       16176199,
       27334642,
       21203272
+    ],
+    "archetype/memory/backfill": [
+      310586113,
+      319894420,
+      344910972
+    ],
+    "archetype/memory/move-100": [
+      6907162,
+      6588588,
+      6419502
+    ],
+    "archetype/file/backfill": [
+      223351867,
+      264357836,
+      198006265
+    ],
+    "archetype/file/move-100": [
+      7448232,
+      13425380,
+      6694445
     ]
-  }
+  },
+  "extensions": [
+    {
+      "prefix": "archetype/",
+      "measuredAt": "2026-09-10T17:56:36.734Z",
+      "revision": "4c0e7f76c3ff2dac4beea3fe65a700d0397b0e62",
+      "note": "T-37055 working tree: four new cases only; existing baseline unchanged."
+    }
+  ]
 }

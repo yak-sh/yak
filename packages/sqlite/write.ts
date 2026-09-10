@@ -43,6 +43,7 @@ import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Entity } from '@yaks/graph'
 import { comps } from '@yaks/graph'
 import type { Driver, Param, Row } from './driver.ts'
+import { componentTables } from './archetype.ts'
 
 /** One statement of a write: the SQL, and the parameters it binds. This file
  * builds them; an adapter runs them — one at a time over an embedded engine,
@@ -194,17 +195,26 @@ export let dropSql = (eid: string, comp: string): Sql => ({
   params: [eid],
 })
 
+/** The identity metadata write, using the portable eid as an integer lookup. */
+export let archetypeSql = (b: Bundle): Sql[] =>
+  b.entity.archetype === undefined ? [] : [{
+    sql: `update entity set archetype = ${OWNER} where eid = ?`,
+    params: [b.entity.archetype, b.entity.eid],
+  }]
+
 /**
  * The statements that patch one bundle in: a plan per component it names, a drop
  * for each `null` one. Identity is minted separately (see {@link mintSql}),
  * because a batch mints every eid it touches or points at before it writes
  * anything.
  */
-export let patchSql = (v: Vocab, b: Bundle): Sql[] =>
-  comps(b).flatMap(([name, comp]) => {
+export let patchSql = (v: Vocab, b: Bundle): Sql[] => [
+  ...archetypeSql(b),
+  ...comps(b).flatMap(([name, comp]) => {
     let { first, fallback } = patchOne(v, b.entity.eid, name, comp)
     return fallback ? [first, fallback()] : [first]
-  })
+  }),
+]
 
 // One component's plan: a drop, a bare insert, or UPDATE then absent INSERT.
 // An interactive driver uses the UPDATE's affected-row count to omit its
@@ -262,6 +272,7 @@ export let removeSql = (v: Vocab, entity: Entity, at: string): Sql[] => [
 export let touched = (v: Vocab, bundles: Bundle[]): string[] =>
   bundles.flatMap((b) => [
     b.entity.eid,
+    ...(b.entity.archetype ? [b.entity.archetype] : []),
     ...comps(b).flatMap(([name, comp]) =>
       Object.entries(comp ?? {})
         .filter(([prop, val]) => val != null && isRef(v, name, prop))
@@ -340,6 +351,8 @@ export let patch = (
     }
   }
 
+  // Metadata can classify a tombstone too; it does not resurrect components.
+  for (let b of bundles) for (let s of archetypeSql(b)) run(driver, s)
   return born
 }
 
@@ -354,7 +367,22 @@ export let remove = (
   entities: Entity[],
 ): void => {
   let now = new Date().toISOString()
+  // With table-based identities enabled, deletion must honor that same
+  // physical set even when this writer has a narrower vocabulary.
+  let physical = vocab.comp('archetype') ? componentTables(driver) : undefined
   for (let e of entities) {
-    for (let s of removeSql(vocab, e, now)) run(driver, s)
+    let statements = removeSql(vocab, e, now)
+    if (physical) {
+      statements = [
+        ...physical.filter((n) => n != 'tombstone').map((n) => ({
+          sql: `delete from "${
+            n.replaceAll('"', '""')
+          }" where entity = ${OWNER}`,
+          params: [e.eid],
+        })),
+        statements.at(-1)!,
+      ]
+    }
+    for (let s of statements) run(driver, s)
   }
 }

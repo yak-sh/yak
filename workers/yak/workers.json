@@ -27,6 +27,7 @@
     "@yaks/query": "../../packages/query/mod.ts",
     "@yaks/render": "../../packages/render/mod.ts",
     "@yaks/sql": "../../packages/sql/mod.ts",
+    "@yaks/archetype": "../../packages/archetype/mod.ts",
     "@yaks/sqlite": "../../packages/sqlite/mod.ts",
     "@yaks/vocab": "../../packages/vocab/mod.ts",
     "@yaks/wake": "../../packages/wake/mod.ts",

@@ -28,6 +28,11 @@ In dependency order:
 - **[@yaks/sql](./sql)** — compile a `@yaks/query` AST against a `@yaks/vocab`
   schema into a SQL string and bound params, through a dialect-agnostic
   relational IR (a SQLite dialect ships with the package).
+- **[@yaks/archetype](./archetype)** — one content-addressed entity per
+  component-table set: portable SHA-256 identity, cached table-presence matches
+  and add/remove transitions, and the graph plugin maintaining each entity's
+  archetype. SQLite backfills from the physical file and retires descriptors
+  whose tables disappeared; readers with narrower vocabularies still agree.
 - **@yaks/sqlite** — the storage adapter: composes the three packages above to
   answer queries as result bundles and write bundles back to a SQLite database.
   (In development.)

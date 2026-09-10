@@ -44,7 +44,7 @@ import type { Vocab } from '@yaks/vocab'
 import { type Bundle, type Change, comps, type Eid } from './bundle.ts'
 import type { Row, Storage, Tx } from './storage.ts'
 import { detached, type Query, type ReadOpts } from './storage.ts'
-import type { Hook, Phase, Plugin, WriteHook } from './plugin.ts'
+import type { Hook, Phase, Plugin, Tracker, WriteHook } from './plugin.ts'
 import { type Derive, resolve } from './alias.ts'
 import { identified, identities } from './identity.ts'
 import { admit } from './admit.ts'
@@ -366,6 +366,14 @@ export let graph = (opts: Options): Graph => {
         // thing, and a patch through the gathered transaction is folded back
         // into the snapshot, so the phases still read each other.
         then(gather(tx, vocab, asking(bundles)), (snap) => {
+          let trackers: Tracker[] = []
+          for (let p of plugins) {
+            if (!p.track) continue
+            let tracker = p.track(tx, (eid) => snap.got.get(eid))
+            trackers.push(tracker)
+            tx = tracker.tx
+          }
+          let flush: Step = (b) => each(trackers, b, (out, t) => t.flush(out))
           let held = holding(tx, vocab, snap)
           // What the graph holds for one entity, every patch this batch made
           // already folded in — what a rule is judged against (./rules.ts).
@@ -390,8 +398,10 @@ export let graph = (opts: Options): Graph => {
                 // for an entity: a birth is an entity with no `created`.
                 phase('stamp', tx, (b) =>
                   births(b, st), holds),
+                flush,
                 phase('journal', tx),
                 phase('commit', tx),
+                flush,
               ],
               bundles,
               (b, step) =>

@@ -22,12 +22,20 @@ export let keyed = (driver: Driver, vocab: Vocab, opts: BindOpts) => {
     if (eids.length != 1) return get(driver, vocab, eids, opts)
     let eid = eids[0]
     let row = driver.query(
-      `select e.id, e.num, t.entity as dead from entity e
+      `select e.id, e.num, t.entity as dead${
+        vocab.comp('archetype')
+          ? ', (select a.eid from entity a where a.id = e.archetype) as archetype'
+          : ''
+      } from entity e
        left join tombstone t on t.entity = e.id where e.eid = ?`,
       [eid],
     )[0]
     if (!row) return []
-    let entity = { eid, ...row.num == null ? {} : { num: Number(row.num) } }
+    let entity = {
+      eid,
+      ...row.num == null ? {} : { num: Number(row.num) },
+      ...(row.archetype == null ? {} : { archetype: String(row.archetype) }),
+    }
     if (row.dead != null) return [tombstoned(entity)]
     let b: Bundle = { entity }
     let found = selected

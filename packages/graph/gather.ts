@@ -149,6 +149,9 @@ let once = (rows: Bundle[]): Bundle[] => {
  */
 export let merged = (held: Bundle | null, b: Bundle): Bundle => {
   let out: Bundle = { ...(held ?? { entity: b.entity }) }
+  if (b.entity.archetype !== undefined) {
+    out.entity = { ...out.entity, archetype: b.entity.archetype }
+  }
   for (let [name, comp] of comps(b)) {
     if (comp == null) delete out[name]
     else out[name] = { ...(out[name] as Comp | undefined ?? {}), ...comp }

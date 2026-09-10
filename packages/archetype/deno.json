@@ -1,0 +1,8 @@
+{
+  "name": "@yaks/archetype",
+  "version": "0.0.0",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "Content-addressed component-table sets, cached presence matching and transitions, and graph archetype assignment.",
+  "publish": { "exclude": ["**/*_test.ts", "**/*_bench.ts", "browser.json"] }
+}

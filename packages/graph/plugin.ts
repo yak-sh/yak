@@ -177,6 +177,11 @@ export type Tool = {
  * machinery is plugins, not privileged code.
  */
 export type Plugin = {
+  /** Transaction-local write tracking. Receives the gathered pre-image lookup
+   * (undefined means not gathered, null means absent). Wraps every phase's
+   * writes; flush runs before journal and after commit hooks, inside the same
+   * transaction. Use it for derived storage metadata, never external effects. */
+  track?: (tx: Tx, found: (eid: Eid) => Bundle | null | undefined) => Tracker
   /** Ordered write policy. The factory sees the storage-ready batch once;
    * its hook checks/rewrites each live operation against its already-written
    * prefix. Opting in makes mutate/cascade run per operation, in the SAME
@@ -235,3 +240,13 @@ export let vocabOf = (plugins: Plugin[]): VocabDoc[] =>
  * lists beside its own. */
 export let toolsOf = (plugins: Plugin[]): Tool[] =>
   plugins.flatMap((p) => p.tools ?? [])
+
+/** A transaction-local projection of writes. Flush may append synthesized
+ * bundles, so the journal and the caller hear the same derived facts. The
+ * second flush includes journal/commit writes without journaling the log itself. */
+export type Tracker = {
+  /** The transaction with writes observed; reads retain the storage contract. */
+  tx: Tx
+  /** Drain pending changes; repeated flushes with no writes are no-ops. */
+  flush: (bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
+}

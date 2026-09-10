@@ -11,6 +11,7 @@
     "@yaks/match": "../match/mod.ts",
     "@yaks/query": "../query/mod.ts",
     "@yaks/sql": "../sql/mod.ts",
+    "@yaks/archetype": "../archetype/mod.ts",
     "@yaks/sqlite": "../sqlite/mod.ts",
     "@yaks/vocab": "../vocab/mod.ts"
   }

@@ -43,9 +43,11 @@ import type { Query } from './read.ts'
 import { grown, indexed, schema, tabled, type Text } from './ddl.ts'
 import { doom, read, rows } from './read.ts'
 import { keyed } from './keyed.ts'
+import { backfill } from './archetype.ts'
 import { patch, remove } from './write.ts'
 
 export * from './driver.ts'
+export * from './archetype.ts'
 export * from './bundle.ts'
 export { grown, indexed, schema, tabled, type Text } from './ddl.ts'
 export {
@@ -205,6 +207,7 @@ export let storage = (
       for (let stmt of grown(driver, vocab)) driver.exec(stmt)
       // The indexes last: one may name a column this boot just added.
       for (let stmt of indexed(vocab)) driver.exec(stmt)
+      if (vocab.comp('archetype')) backfill(driver, base.number)
     },
     read: (query, opts) => read(driver, vocab, query, { ...base, ...opts }),
     rows: (query, opts) => rows(driver, vocab, query, { ...base, ...opts }),

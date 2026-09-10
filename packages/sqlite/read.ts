@@ -177,14 +177,22 @@ export let get = (
     let byId = new Map<number, Bundle>()
     for (
       let row of driver.query(
-        `select e.id, e.eid, e.num, t.entity as dead from entity e
+        `select e.id, e.eid, e.num, t.entity as dead${
+          vocab.comp('archetype')
+            ? ', (select a.eid from entity a where a.id = e.archetype) as archetype'
+            : ''
+        } from entity e
        left join tombstone t on t.entity = e.id where e.eid in (${sub})`,
         params,
       )
     ) {
       let eid = String(row.eid)
       owners.push(Number(row.id))
-      let entity = { eid, ...row.num == null ? {} : { num: Number(row.num) } }
+      let entity = {
+        eid,
+        ...row.num == null ? {} : { num: Number(row.num) },
+        ...(row.archetype == null ? {} : { archetype: String(row.archetype) }),
+      }
       let bundle = row.dead == null ? { entity } : tombstoned(entity)
       found.set(eid, bundle)
       byId.set(Number(row.id), bundle)

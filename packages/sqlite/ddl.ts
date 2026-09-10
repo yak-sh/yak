@@ -37,7 +37,8 @@ let SPINE = [
   `create table if not exists entity (
     id   integer primary key,
     eid  text not null unique,
-    num  integer unique
+    num  integer unique,
+    archetype integer references entity(id)
   )`,
   `create table if not exists entity_sequence (singleton integer primary key check(singleton = 1), high integer not null)`,
   `insert into entity_sequence (singleton, high) select 1, coalesce(max(num), 0) from entity where true
@@ -140,10 +141,12 @@ export let tabled = (vocab: Vocab, text: Text = {}): string[] => {
 // Declared and automatic reference indexes. Raised last, after `grown()`: an index
 // may name a column its table only gained on this boot, and SQLite refuses one
 // over a column that is not there yet.
-export let indexed = (vocab: Vocab): string[] =>
-  vocab.all
+export let indexed = (vocab: Vocab): string[] => [
+  `create index if not exists entity_archetype on entity(archetype)`,
+  ...vocab.all
     .filter((name) => name != 'entity')
-    .flatMap((name) => vocab.indexes(name).map((i) => indexDdl(name, i)))
+    .flatMap((name) => vocab.indexes(name).map((i) => indexDdl(name, i))),
+]
 
 // What `schema()` alone cannot say: the columns a component GREW after its
 // table was already raised. `create table if not exists` is silent about a
@@ -157,8 +160,15 @@ export let indexed = (vocab: Vocab): string[] =>
 // because rows are already written under the words the table has. A column
 // arrives nullable with no default, which is the one form SQLite accepts an
 // `add column` carrying a foreign key in.
-export let grown = (driver: Driver, vocab: Vocab): string[] =>
-  vocab.all
+export let grown = (driver: Driver, vocab: Vocab): string[] => [
+  ...(driver.query('pragma table_info(entity)', []).some((r) =>
+      r.name == 'archetype'
+    )
+    ? []
+    : [
+      'alter table entity add column archetype integer references entity(id)',
+    ]),
+  ...vocab.all
     .filter((name) => name != 'entity')
     .flatMap((comp) => {
       let has = new Set(
@@ -168,4 +178,5 @@ export let grown = (driver: Driver, vocab: Vocab): string[] =>
       return stored(vocab, comp)
         .filter((c) => !has.has(c.prop))
         .map((c) => `alter table ${q(comp)} add column ${colDdl(c)}`)
-    })
+    }),
+]

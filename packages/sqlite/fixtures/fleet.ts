@@ -131,7 +131,11 @@ export const OPERATIONS = [
 ]
 export const LAYERS = ['sqlite', 'sql', 'query', 'fleet'] as const
 export const MODES = ['memory', 'file'] as const
-export const benchmarkNames = () =>
-  LAYERS.flatMap((layer) =>
+export const benchmarkNames = () => [
+  ...LAYERS.flatMap((layer) =>
     MODES.flatMap((mode) => OPERATIONS.map((op) => `${layer}/${mode}/${op}`))
-  )
+  ),
+  ...MODES.flatMap((mode) =>
+    ['backfill', 'move-100'].map((op) => `archetype/${mode}/${op}`)
+  ),
+]

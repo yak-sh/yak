@@ -186,6 +186,14 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     for (let b of bundles) {
       let rec = rows.get(b.entity.eid)
       let patches = comps(b)
+      if (rec && b.entity.archetype !== undefined) {
+        save(b.entity.eid)
+        rec = {
+          ...rec,
+          entity: { ...rec.entity, archetype: b.entity.archetype },
+        }
+        rows.set(b.entity.eid, rec)
+      }
       if (!rec || rec.dead || !patches.length) continue
       save(b.entity.eid)
       let held: Record<string, Comp> = { ...rec.comps }

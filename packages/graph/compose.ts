@@ -63,6 +63,9 @@ export let composed = (bundles: Bundle[]): Bundle[] => {
     if (b.entity.num !== undefined && one.entity.num == null) {
       one.entity = { ...one.entity, num: b.entity.num }
     }
+    if (b.entity.archetype !== undefined) {
+      one.entity.archetype = b.entity.archetype
+    }
     if (typeof b.$alias == 'string') one.$alias = b.$alias
     if (dead(b)) gone.add(eid)
     for (let [name, comp] of comps(b)) {

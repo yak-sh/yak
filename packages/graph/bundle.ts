@@ -29,7 +29,13 @@ export type Eid = string
  * no claim about numbering. `num` is optional — it is storage's to hand out,
  * and an adapter that has no use for a small human-facing number never mints one.
  */
-export type Entity = { eid: Eid; num?: number | null }
+export type Entity = {
+  eid: Eid
+  num?: number | null
+  /** Portable archetype eid; SQLite stores its integer spine id. Derived, not
+   * caller-owned. Absent when archetype tracking is not composed in. */
+  archetype?: Eid
+}
 
 /** A component's columns — a flat bag of scalar values, never nested. */
 export type Comp = Record<string, unknown>

@@ -13,6 +13,7 @@ const BASELINE = 'bench/baseline.json'
 const RESULTS = 'bench/results.json'
 const FILES = [
   'packages/sqlite/throughput_bench.ts',
+  'packages/sqlite/archetype_bench.ts',
   'packages/sql/throughput_bench.ts',
   'packages/query/throughput_bench.ts',
   'src/throughput_bench.ts',

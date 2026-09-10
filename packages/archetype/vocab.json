@@ -1,0 +1,22 @@
+{
+  "$vocabulary": { "https://yaks.sh/vocab/core": true },
+  "title": "archetype",
+  "$defs": {
+    "archetype": {
+      "type": "object",
+      "kind": true,
+      "description": "Immutable component-table set; its eid is the full SHA-256 of bytewise-sorted table names joined with |.",
+      "properties": {
+        "tables": {
+          "type": "string",
+          "format": "json",
+          "description": "The canonical table-name list, encoded as a JSON array."
+        }
+      }
+    },
+    "retired": {
+      "type": "object",
+      "description": "This archetype names a table no longer in the file. Kept forever, never tombstoned."
+    }
+  }
+}

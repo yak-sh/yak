@@ -1,0 +1,17 @@
+{
+  "_": "Browser gate: the archetype machinery uses only the web platform.",
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "esnext"
+    ],
+    "strict": true
+  },
+  "imports": {
+    "@yaks/graph": "../graph/mod.ts",
+    "@yaks/match": "../match/mod.ts",
+    "@yaks/query": "../query/mod.ts",
+    "@yaks/sql": "../sql/mod.ts",
+    "@yaks/vocab": "../vocab/mod.ts"
+  }
+}
