@@ -101,6 +101,37 @@ export function regressions(base: Measurement, current: Measurement): string[] {
 }
 
 async function measure() {
+  console.error(
+    `bench: ${RUNS} samples per benchmark per storage mode (median)`,
+  )
+  // Best effort: tests do not participate in the throughput lock. Report only
+  // pid and subcommand, not arbitrary process arguments (which may be private).
+  try {
+    let ps = await new Deno.Command('ps', {
+      args: ['-eo', 'pid=,args='],
+      stdout: 'piped',
+      stderr: 'null',
+    }).output()
+    if (!ps.success) throw new Error('ps failed')
+    for (let line of new TextDecoder().decode(ps.stdout).split('\n')) {
+      let match = line.match(
+        /^\s*(\d+)\s+(?:\S*\/)?deno\s+(bench|test)(?:\s|$)/,
+      )
+      if (match && Number(match[1]) != Deno.pid) {
+        console.error(
+          `bench: WARNING: other deno ${
+            match[2]
+          } process running at start (pid ${
+            match[1]
+          }); timings may be contended`,
+        )
+      }
+    }
+  } catch {
+    console.error(
+      'bench: WARNING: could not inspect other deno bench/test processes',
+    )
+  }
   let samples: Record<string, number[]> = Object.fromEntries(
     benchmarkNames().map((n) => [n, []]),
   )

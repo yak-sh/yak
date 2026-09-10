@@ -80,3 +80,22 @@ hot-path ratio gate is independent: `bench:gate` / `bench:accept` now retain
 their original numbers in `bench/hotpath.baseline.json`. Web performance is
 unchanged. Neither existing gate is replaced by this throughput suite;
 `bench:hotpaths` retains the old direct `deno bench -A src` entry point.
+
+## Box-wide serialization
+
+`bench`, `bench:check`, and `bench:ratchet` use `bin/bench.sh` to take an
+exclusive `flock` on `${TMPDIR:-/tmp}/yaks-throughput-bench.lock` before
+starting Deno. All sessions/worktrees on the box must use the same TMPDIR (the
+default is `/tmp`). This requires Bash and util-linux `flock`. A second
+invocation prints one waiting line with the holder's PID and waits up to 1,800
+seconds, then fails without measuring if the lock is still busy. The PID can
+briefly be unknown while the first holder records it. The kernel releases the
+lock on process exit; stale PID text is harmless. Never delete the lock file,
+even after a crash: doing so would let new runs bypass waiters on the old inode.
+
+The runner prints the sample count and warns at measurement start if `ps` finds
+other `deno bench` or `deno test` processes (with their PIDs). This is
+best-effort, not a CPU-idleness guarantee: tests, direct `deno bench` calls,
+other benchmark gates, and jobs started later do not acquire this lock. Keep the
+box quiet. Calling `bin/bench.ts` directly also bypasses serialization; use the
+tasks above for measurements.

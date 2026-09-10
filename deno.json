@@ -31,13 +31,13 @@
     "test": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno run -A bin/test.ts",
     "test:all": "TASKS_SLOW=1 DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno run -A bin/test.ts",
     "test:budget": "deno run -A bin/test-budget.ts",
-    "bench": "deno run -A bin/bench.ts",
+    "bench": "bash bin/bench.sh",
     "bench:gate": "deno run -A bin/bench-gate.ts",
     "bench:accept": "BENCH_ACCEPT=1 deno run -A bin/bench-gate.ts",
     "bench:gate:web": "deno run -A --unstable-net --unstable-worker-options bin/webperf-gate.ts",
     "bench:accept:web": "BENCH_ACCEPT=1 deno run -A --unstable-net --unstable-worker-options bin/webperf-gate.ts",
-    "bench:check": "deno run -A bin/bench.ts check",
-    "bench:ratchet": "deno run -A bin/bench.ts ratchet",
+    "bench:check": "bash bin/bench.sh check",
+    "bench:ratchet": "bash bin/bench.sh ratchet",
     "bench:hotpaths": "deno bench -A src"
   },
   "workspace": [
