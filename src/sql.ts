@@ -33,6 +33,7 @@ import {
   REACHES,
   refCols,
   TEXT,
+  WALK_LIMIT,
   WANT,
   type Win,
   WINDOW,
@@ -766,9 +767,10 @@ let revSql = (p: Pred, now: number): Frag | null => {
 // target and stepped along the arrow — `->` reads `d.child = <current>` and
 // collects parents, which is `edge_to` (the reverse endpoint's own index), so
 // the closure is a sequence of index SEARCHES and never a scan; `<-` reads the
-// parent and collects children. The depth cap is the recursion's own guard, so
-// a cycle terminates by arithmetic rather than by SQLite's dedupe alone.
-// `depth > 0` excludes the target: reaching is at least one hop.
+// parent and collects children. Without a hop cap UNION dedupes on id alone:
+// cycles terminate and DAG merges never re-expand a node at different depths.
+// The outer LIMIT stops the FIFO queue at the nearest WALK_LIMIT non-seed nodes.
+// Only an explicit cap adds depth; its arithmetic bounds the recursion.
 //
 // One nature, one branch (edge.ts sentences), so the type is no longer a term
 // the planner can prefer over the endpoint — which is what the old `+d.type`
@@ -782,22 +784,28 @@ export let stepSql = (r: Reach): string =>
     : sentences(r.type)
 export let reachCte = (r: Reach): string => {
   let [here, there] = r.dir == '<-' ? ['parent', 'child'] : ['child', 'parent']
-  return `with recursive __reach(id, depth) as (` +
-    ` select id, 0 from entity where eid = ?` +
-    ` union select d.${there}, __reach.depth + 1` +
+  let bounded = r.depth != null
+  return `with recursive __reach(id${bounded ? ', depth' : ''}) as (` +
+    ` select id${bounded ? ', 0' : ''} from entity where eid = ?` +
+    ` union select d.${there}${bounded ? ', __reach.depth + 1' : ''}` +
     ` from (${stepSql(r)}) d` +
     ` join __reach on d.${here} = __reach.id` +
-    ` where __reach.depth < ?` +
+    (bounded ? ` where __reach.depth < ?` : '') +
     `)`
 }
+// Shared by SQL membership and the fallback reader, including the row valve.
+export let reachRows = (r: Reach, target: string): Frag => ({
+  sql: reachCte(r) + ` select id from __reach where ` +
+    (r.depth != null
+      ? `depth > 0`
+      : `id != (select id from entity where eid = ?) limit ?`),
+  params: r.depth != null ? [target, r.depth] : [target, target, WALK_LIMIT],
+})
 let reachSql = (p: Pred): Frag | null => {
   let r = p.reach
   if (!r || !p.value) return null
-  return {
-    sql: `"entity"."id" in (${reachCte(r)}` +
-      ` select id from __reach where depth > 0)`,
-    params: [p.value, r.depth],
-  }
+  let rows = reachRows(r, p.value)
+  return { sql: `"entity"."id" in (${rows.sql})`, params: rows.params }
 }
 
 // The multi-column reverse-union compiled: the backlinks of `value` are the

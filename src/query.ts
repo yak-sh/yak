@@ -140,11 +140,11 @@ export type Pred = {
   // first, and the reply states the total it is a prefix of. Its own field
   // rather than `win`, which is the ROW window and spells itself `.limit=`.
   limit?: number
-  // A bounded WALK rather than a column read: `.requires[<=3]->T-42` selects
+  // A WALK rather than a column read: `.requires[<=3]->T-42` selects
   // the entities that reach `value` through at most `depth` hops of one step —
   // an edge type, or a reference column (`via`) — and `<-` walks the other way.
-  // op is REACHES. The cap is part of the grammar (16 with no bracket) — an
-  // unbounded closure over the edge table has no spelling (M-17862).
+  // op is REACHES. No bracket means depth-free with a WALK_LIMIT row valve;
+  // only an explicit [<=N] brings the hop cap back.
   reach?: Reach
 }
 
@@ -660,7 +660,7 @@ export let edgeRider = (preds: Pred[]): EdgeRider | undefined => {
 }
 
 // A WALK pred — `.requires[<=3]->T-42` — is a real filter, not a rider: it
-// SELECTS the entities within a depth-capped transitive closure over one step.
+// SELECTS a transitive closure over one step, optionally capped by hops.
 // sql.ts compiles it to a recursive CTE over the indexed dep table (or the
 // reference column); the JS matcher answers it from a `walk` that resolves the
 // same closure once per query rather than per row.
@@ -671,11 +671,13 @@ export let REACHES = 'reaches'
 // candidate reaches the target, `<-` the target reaches the candidate.
 export type Reach = {
   type: string
-  depth: number
+  depth?: number
   dir: '->' | '<-'
   via?: Hop
 }
 export let WALK_DEPTH = 16
+// Default closure: no hop cap, at most this many non-seed nodes (nearest first).
+export const WALK_LIMIT = 10_000
 
 // The traversal closures a pred list asks for, deduped — what a door precomputes
 // before matching so the walk happens once, not per candidate row.
@@ -1020,8 +1022,8 @@ export let preds = (token: string, vocab: Vocab = NONE): Pred[] | null => {
           '.requires[<=3]->T-42',
       )
     }
-    let depth = cap ? Number(cap[1]) : WALK_DEPTH
-    if (depth < 1) {
+    let depth = cap ? Number(cap[1]) : undefined
+    if (depth != null && depth < 1) {
       throw new Error(`a walk needs at least one hop: <=${cap![1]}`)
     }
     let reach: Reach = { type: path, depth, dir: dir as Reach['dir'] }

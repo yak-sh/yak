@@ -17,6 +17,7 @@ import {
   type Refs,
   type Value,
   type Walk,
+  WALK_LIMIT,
 } from '@yaks/query'
 import { identity, Unsupported } from '@yaks/sql'
 import type { Assoc, Hop, Vocab } from '@yaks/vocab'
@@ -270,6 +271,26 @@ let walk = (ctx: Ctx, w: Walk): Test => {
       let p = step(b, among)
       return p ? [p] : []
     })
+    if (w.depth == null) {
+      let adj = new Map<string, string[]>()
+      for (let p of pairs) {
+        let next = adj.get(p[here])
+        if (!next) adj.set(p[here], next = [])
+        next.push(p[there])
+      }
+      let queue = [t.entity.eid]
+      let seen = new Set(queue)
+      for (let i = 0; i < queue.length; i++) {
+        for (let e of adj.get(queue[i]) ?? []) {
+          if (seen.has(e)) continue
+          seen.add(e)
+          queue.push(e)
+          out.add(e)
+          if (out.size == WALK_LIMIT) return out
+        }
+      }
+      return out
+    }
     let frontier = new Set([t.entity.eid])
     for (let d = 0; d < w.depth && frontier.size; d++) {
       let next = new Set<string>()

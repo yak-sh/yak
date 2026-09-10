@@ -81,17 +81,19 @@ export type Qual = { key?: string; op?: string; value: string }
 // A transitive WALK: `.requires[<=3]->T-42` selects what reaches `target`
 // through at most `depth` hops of `path`; `<-` walks the other way. The path is
 // raw segments — a relation name or a reference column, which is schema. The
-// cap is part of the grammar (default WALK_DEPTH; an unbounded closure has no
-// spelling) and `target` is one entity, by eid or human id.
+// optional cap bounds hops; without it the closure has a WALK_LIMIT row valve.
+// `target` is one entity, by eid or human id.
 export type Dir = '->' | '<-'
 export type Walk = {
   kind: 'walk'
   path: string[]
   dir: Dir
-  depth: number
+  depth?: number
   target: string
 }
 export let WALK_DEPTH = 16
+// Default closure: no hop cap, at most this many non-seed nodes (nearest first).
+export const WALK_LIMIT = 10_000
 
 // ---- rule sigils ----
 // A component word may wear a PREFIX SIGIL saying what a rule does with it.
@@ -244,7 +246,7 @@ export let walk = (
   field: string,
   dir: Dir,
   target: string,
-  depth = WALK_DEPTH,
+  depth?: number,
 ): Walk => ({ kind: 'walk', path: dot(field), dir, depth, target })
 
 // A field selector from `'pin.x'` or `'pin.z~'` (volatile), or a ready one.

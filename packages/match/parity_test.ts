@@ -289,7 +289,6 @@ Deno.test('a walk over edges selects the same entities', () => {
     'p3',
   ])
   assertEquals(eids(matcher('.cites<-p1', blog)(posts)).sort(), [
-    'p1',
     'p2',
     'p3',
     'p4',

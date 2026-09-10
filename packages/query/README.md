@@ -96,14 +96,15 @@ operator is part of the value (`.title~=x[1]`).
   (inclusive), `1...5` exclusive end · `.p!=v` not · `.p~=v` contains (literal)
   · `.p<v .p<=v .p>v .p>=v` comparisons · `.p?` want the field alongside the
   filter.
-- **The walk**: `.requires->T-42` selects what reaches `T-42` through at most 16
-  `requires` hops; `.requires<-T-42` walks the other way (what `T-42` reaches);
+- **The walk**: `.requires->T-42` selects what reaches `T-42` through `requires`
+  hops; `.requires<-T-42` walks the other way (what `T-42` reaches);
   `.requires[<=3]->T-42` caps the depth. The path is a relation name, a
   reference column (`.fork.from->S-7`), or a chain of reference columns
   (`.fork.from.session->S-1` — one step composed of the hops, so a walk over it
   is the fork lineage) — which is schema — and the target is one entity, by eid
-  or human id. The cap is part of the grammar: an unbounded walk has no
-  spelling. Parses to a `walk` node (`walk(field, dir,
+  or human id. Without a bracket, the walk has no hop cap and returns at most
+  10,000 nearest non-seed nodes; only an explicit `[<=N]` adds a hop cap. Parses
+  to a `walk` node (`walk(field, dir,
   target, depth?)`).
 - **Qualifiers**: a path may wear a bracket of comma-separated arguments — `<=3`
   (an operator and a value), `key=value`, or a bare `word`. Each clause says

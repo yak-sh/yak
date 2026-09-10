@@ -1,9 +1,10 @@
 // The transitive walk compiled: `.requires[<=3]->T-42` is one recursive CTE,
 // seeded at the target and stepped backward along the arrow, so every step is
 // a seek on the STEP relation's own endpoint column rather than a scan. The
-// depth cap is the recursion's own guard — a cycle terminates by arithmetic,
-// not by luck — and `depth > 0` excludes the target itself: reaching is at
-// least one hop.
+// default UNION dedupes on id alone: cycles terminate and DAG merges never
+// re-expand a node at different depths. The outer LIMIT stops the FIFO queue
+// at the nearest WALK_LIMIT non-seed nodes. Only an explicit cap adds depth;
+// its arithmetic bounds the recursion.
 //
 // What differs between the two walk shapes is only the STEP: the relation of
 // `"from"`/`"to"` integer-id pairs one hop follows. An edge-typed walk's step
@@ -15,7 +16,7 @@
 //   ->  the candidate REACHES the target: seed the target, follow `to` → `from`
 //   <-  the target reaches the candidate: seed the target, follow `from` → `to`
 
-import type { Walk } from '@yaks/query'
+import { type Walk, WALK_LIMIT } from '@yaks/query'
 import { type Cond, type Frag, raw } from './ir.ts'
 import { identity } from './ident.ts'
 
@@ -39,13 +40,21 @@ let seed = (target: string): Frag => {
 export let walkSql = (owner: string, c: Walk, step: string): Cond => {
   let [here, there] = c.dir == '->' ? ['to', 'from'] : ['from', 'to']
   let s = seed(c.target)
+  let bounded = c.depth != null
   return raw({
-    sql: `${owner} in (with recursive __walk(id, depth) as (` +
-      ` select id, 0 from entity where ${s.sql}` +
-      ` union select d."${there}", __walk.depth + 1 from (${step}) d` +
+    sql:
+      `${owner} in (with recursive __walk(id${bounded ? ', depth' : ''}) as (` +
+      ` select id${bounded ? ', 0' : ''} from entity where ${s.sql}` +
+      ` union select d."${there}"${bounded ? ', __walk.depth + 1' : ''}` +
+      ` from (${step}) d` +
       ` join __walk on d."${here}" = __walk.id` +
-      ` where __walk.depth < ?` +
-      `) select id from __walk where depth > 0)`,
-    params: [...s.params, c.depth],
+      (bounded ? ` where __walk.depth < ?` : '') +
+      `) select id from __walk where ` +
+      (bounded
+        ? `depth > 0)`
+        : `id != (select id from entity where ${s.sql}) limit ?)`),
+    params: c.depth != null
+      ? [...s.params, c.depth]
+      : [...s.params, ...s.params, WALK_LIMIT],
   })
 }

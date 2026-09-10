@@ -101,7 +101,8 @@ has any comment, '.comments=' has none, '.comments>=5' counts them, and a
 jeff, '.comments!.created.by!=jeff' has EVERY comment by jeff (ALL, by De
 Morgan). Bare words are text terms (doc contains).
 A WALK follows a relation or a reference column transitively:
-'.requires->T-42' keeps what reaches T-42 through at most 16 requires edges
+By default it has no hop cap and returns at most 10,000 nearest non-seed nodes.
+'.requires->T-42' keeps what reaches T-42 through requires edges
 (its dependents), '.requires<-T-42' what T-42 reaches (its prerequisites),
 '.requires[<=3]->T-42' caps the depth, and '.comment.target->T-42' walks a
 reference column the same way. The bracket is a QUALIFIER on the path — the

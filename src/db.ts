@@ -67,7 +67,7 @@ import {
   teaches,
   TEXT,
 } from './query.ts'
-import { reachCte, where } from './sql.ts'
+import { reachRows, where } from './sql.ts'
 import { type Frag, toSql } from './relation.ts'
 import {
   Invalid,
@@ -8972,22 +8972,22 @@ export let selectedDeps = (
 }
 
 // The walk `.requires[<=N]->id` selects: the eids that reach `target` through
-// at most `depth` steps along the arrow (sql.ts reachCte — one CTE, shared, so
-// the two readers cannot drift). The target itself is excluded — reaching is a
-// path of at least one hop. This is the JS matcher's half of the same closure
+// the arrow, with an optional hop cap (sql.ts reachRows — one query, shared, so
+// the two readers cannot drift). The default excludes the target; an explicit
+// cap selects nonzero paths. This is the JS matcher's half of the same closure
 // the compiler emits, so a query mixing a walk with a pred SQL declines still
 // answers, and answers identically.
 //
 // There is no whole-graph edge reader beside it, deliberately: `allDeps` — the
 // dump every joining client used to receive — is gone (T-22371). Edges are
 // delivered SCOPED, by depsOf above, to whatever a subscription selected.
-export let reaching = (db: Sql, target: string, r: Reach): string[] =>
-  (prep(
+export let reaching = (db: Sql, target: string, r: Reach): string[] => {
+  let rows = reachRows(r, target)
+  return (prep(
     db,
-    `${reachCte(r)}
-     select o.eid as eid from __reach join entity o on o.id = __reach.id
-      where __reach.depth > 0`,
-  ).all(target, r.depth) as { eid: string }[]).map((r) => r.eid)
+    `select eid from entity where id in (${rows.sql})`,
+  ).all(...rows.params) as { eid: string }[]).map((r) => r.eid)
+}
 
 // Who points AT these entities through a typed eid column — one keyed
 // statement per column in the readable vocabulary (`stamped` included, so an

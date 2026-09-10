@@ -22,10 +22,11 @@ import {
   type Reach,
   tally,
   type Walk,
+  WALK_LIMIT,
 } from './query.ts'
 import { aggregateSql, countSql, select, where, windowed } from './sql.ts'
 import { run, toSql } from './relation.ts'
-import { textBlob, textMatches } from './db.ts'
+import { reaching, textBlob, textMatches } from './db.ts'
 import { kindOf, kindOrder } from './types.ts'
 import { edgeEid, natureOf } from './edge.ts'
 import { isRef } from './props.ts'
@@ -203,9 +204,8 @@ put('c3', {
 
 // The stored edges. `.type[<=N]->id` walks these, so the compiler's
 // recursive CTE and an ordinary JS breadth-first walk have to name the same
-// set. The chain is a CYCLE on purpose (e1→e2→e3→e1): an
-// unbounded closure over it would never terminate, so the depth cap is what
-// makes the traversal an answer at all, and both readers must cap identically.
+// set. The chain is a CYCLE on purpose (e1→e2→e3→e1): a depth-free
+// closure terminates by deduping nodes; an explicit cap still bounds hops.
 // The `contains` edge beside it proves the walk stays inside ONE edge type.
 let link = (parent: string, type: string, child: string) => {
   // The SENTENCE entity, written straight into the tables: this fixture's
@@ -240,13 +240,17 @@ let reachers = (r: Reach, target: string) => {
   let [here, there]: ['child' | 'parent', 'child' | 'parent'] = r.dir == '<-'
     ? ['parent', 'child']
     : ['child', 'parent']
-  for (let d = 0; d < r.depth; d++) {
+  for (let d = 0; d < (r.depth ?? Infinity) && frontier.length; d++) {
     let next: string[] = []
     for (let node of frontier) {
       for (let e of EDGES) {
         if (e.type != r.type || e[here] != node) continue
+        if (r.depth == null && (e[there] == target || seen.has(e[there]))) {
+          continue
+        }
         next.push(e[there])
         seen.add(e[there])
+        if (r.depth == null && seen.size == WALK_LIMIT) return seen
       }
     }
     frontier = next
@@ -546,7 +550,7 @@ let COMPILES = [
   '.requires[<=2]->e3',
   '.requires[<=3]->e3', // the cycle closes: e3 reaches itself
   '.requires[<=9]->e3', // and a deeper cap adds nothing more
-  '.requires->e3', // the default cap
+  '.requires->e3', // depth-free, excluding the seed
   '.contains[<=3]->e3', // one edge type only — e4, never the requires chain
   '.requires[<=2]->e4', // nothing points at e4 through requires
   '.requires[<=2]->nobody', // an unknown target reaches nothing
@@ -846,5 +850,16 @@ Deno.test('a reverse child TEXT predicate tests the child, not the outer spine',
   pred.rev!.preds = parseQuery('first')
   assertEquals(run<{ eid: string }>(db, where([pred])!).map((r) => r.eid), [
     'e1',
+  ])
+})
+
+Deno.test('fallback walk reader shares the depth-free and capped closure', () => {
+  let r: Reach = { type: 'requires', dir: '->' }
+  assertEquals(reaching(db, 'e1', r).sort(), ['e2', 'e3'])
+  assertEquals(reaching(db, 'e1', { ...r, depth: 1 }), ['e3'])
+  assertEquals(reaching(db, 'e1', { ...r, depth: 3 }).sort(), [
+    'e1',
+    'e2',
+    'e3',
   ])
 })

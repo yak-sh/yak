@@ -142,7 +142,7 @@ let refuse = (word: string, quals: Qual[], raw: string | undefined) => {
 }
 
 // The walk's one qualifier: its depth cap, `<=N`, at least one hop. With no
-// bracket the walk is capped at WALK_DEPTH; an unbounded walk has no spelling.
+// bracket this helper is not called: only explicit caps bring depth back.
 let cap = (word: string, quals: Qual[]): number => {
   if (!quals.length) return WALK_DEPTH
   let [q, ...more] = quals
@@ -266,7 +266,7 @@ export let parseDot = (token: string): Clause[] | null => {
       kind: 'walk',
       path: segs,
       dir: op as Dir,
-      depth: cap(pathStr, quals),
+      depth: quals.length ? cap(pathStr, quals) : undefined,
       target: val,
     }]
   }

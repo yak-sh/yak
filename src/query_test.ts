@@ -738,7 +738,7 @@ Deno.test('the EDGES rider is a delivery, never a filter', () => {
   assert(matchQuery({ doc: { title: 'anything' } }, parseQuery('.edges!')))
 })
 
-Deno.test('a walk parses to a bounded closure, either way, capped', () => {
+Deno.test('a walk is depth-free unless explicitly capped, either way', () => {
   assertEquals(preds('.requires[<=3]->T-42'), [
     {
       comp: '',
@@ -748,17 +748,17 @@ Deno.test('a walk parses to a bounded closure, either way, capped', () => {
       reach: { type: 'requires', depth: 3, dir: '->' },
     },
   ])
-  // whitespace inside the bracket is allowed; with no bracket the cap is 16
+  // whitespace inside the bracket is allowed; with no bracket there is no hop cap
   assertEquals(preds('.contains[ <= 2 ]<-T-1')![0].reach, {
     type: 'contains',
     depth: 2,
     dir: '<-',
   })
-  assertEquals(preds('.requires->T-1')![0].reach?.depth, 16)
+  assertEquals(preds('.requires->T-1')![0].reach?.depth, undefined)
   // a reference column walks too, and says which column it follows
   assertEquals(preds('.comment.target->T-1')![0].reach, {
     type: 'comment.target',
-    depth: 16,
+    depth: undefined,
     dir: '->',
     via: { comp: 'comment', prop: 'target' },
   })
