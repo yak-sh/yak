@@ -391,12 +391,11 @@ export let connect = (path = file, vector = false, readOnly = false) => {
   // Connection-local settings only: busy_timeout and synchronous both live in
   // the connection; the persistent journal-mode setting stays in wal().
   db.exec('pragma busy_timeout = 5000')
-  // Durability is tunable for throwaway graphs (TASKS_SYNC, like TASKS_BACKOFF):
-  // the default (unset) leaves SQLite's own `full`, which fsyncs every DDL
-  // statement — and migrate() runs ~200 of them (schema + migrations), so a
-  // fresh file on real disk costs ~2s. A test graph is ephemeral and never
-  // survives a crash, so the test task sets `off` and every file-backed open
-  // drops from ~2s to ~10ms. Production never sets it and stays fully durable.
+  // connect() leaves SQLite's default `full`; open()'s wal() sets `normal`
+  // on the WAL writer. TASKS_SYNC overrides both for writable connections:
+  // tests use `off` to skip fsyncs on throwaway graphs, making the ~200 DDL
+  // statements in a fresh migration cheap. WAL + NORMAL preserves consistency
+  // after a crash, but a power loss can lose recent committed transactions.
   let sync = Deno.env.get('TASKS_SYNC')
   // Durability is a writer's concern; a read-only handle never fsyncs, so skip
   // the pragma rather than run a connection setting a reader has no use for.

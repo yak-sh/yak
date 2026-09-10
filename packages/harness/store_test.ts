@@ -96,3 +96,21 @@ Deno.test('a stale lease is freed at boot', async () => {
   assertEquals(page.claim, undefined)
   two.close()
 })
+
+Deno.test('a file-backed harness uses WAL with NORMAL sync and a busy timeout', () => {
+  let dir = Deno.makeTempDirSync()
+  try {
+    let h = open(`${dir}/h.db`)
+    try {
+      assertEquals(h.db.prepare('pragma journal_mode').get(), {
+        journal_mode: 'wal',
+      })
+      assertEquals(h.db.prepare('pragma synchronous').get(), { synchronous: 1 })
+      assertEquals(h.db.prepare('pragma busy_timeout').get(), { timeout: 5000 })
+    } finally {
+      h.close()
+    }
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})

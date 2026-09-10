@@ -137,7 +137,12 @@ export let open = (path = dbPath()): Harness => {
   db.exec('pragma foreign_keys = on')
   // A file is read by a person's `ls` while an agent writes it; a memory
   // database has no journal to move.
-  if (path != ':memory:') db.exec('pragma journal_mode = wal')
+  if (path != ':memory:') {
+    db.exec('pragma journal_mode = wal')
+    // NORMAL is WAL's crash-safe pairing: checkpoints fsync; power loss may lose recent commits.
+    db.exec('pragma synchronous = normal')
+    db.exec('pragma busy_timeout = 5000')
+  }
   let store = storage(driver(db), vocab, { derived })
   store.install()
   // The effects registry writes through the graph's own door, trusted: what an
