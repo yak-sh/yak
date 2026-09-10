@@ -29,9 +29,19 @@ export let quit = (): void => stop.fn()
  */
 export let run = async (
   App: ComponentType,
-  opts: { backend?: Backend; sheet?: Sheet } = {},
+  opts: {
+    backend?: Backend
+    sheet?: Sheet
+    graphics?: 'kitty' | 'none'
+    tmux?: boolean
+  } = {},
 ): Promise<void> => {
-  let backend = opts.backend ?? ansiBackend({ sheet: opts.sheet })
+  let backend = opts.backend ??
+    ansiBackend({
+      sheet: opts.sheet,
+      graphics: opts.graphics,
+      tmux: opts.tmux,
+    })
   let screen = install()
   let host = screen.root as unknown as Parameters<typeof render>[1]
   let done = false

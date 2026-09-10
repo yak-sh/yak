@@ -1,4 +1,4 @@
-import { configuredImages, type ImageOptions } from './images.ts'
+import { configuredImages, type ImageOptions, readImage } from './images.ts'
 import { outputView } from '@yaks/context'
 import { rootOf } from './tree.ts'
 import { diagnostics } from './diagnostics.ts'
@@ -134,6 +134,7 @@ export type Agent = {
   /** wait for a transcript to run out of things to do */
   idle: (session: Eid) => Promise<void>
   /** one bundle as a line of text, through @yaks/render's session views */
+  image: (eid: string) => Promise<Uint8Array>
   entry: (b: Bundle) => VNode | null
   line: (b: Bundle, view?: string, ctx?: Record<string, unknown>) => string
   /** Explicit instruction admission; appends a snapshot, never a user turn. */
@@ -304,8 +305,11 @@ export let agent = (opts: Opts = {}): Agent => {
       return woken
     },
     idle: (session) => d.idle(session),
+    image: (eid) => readImage(h.g, eid, opts.images),
     entry: (b) =>
       tree(transcriptViews, b, 'Transcript', h.vocab, {
+        inlineImages: Deno.env.get('HARNESS_GRAPHICS') == 'kitty',
+        image: (eid: string) => readImage(h.g, eid, opts.images),
         names,
         anchor: model.anchor,
       }),

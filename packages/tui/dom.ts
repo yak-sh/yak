@@ -66,6 +66,8 @@ export class TText extends TNode {
 
 /** An element: children, class, attributes, listeners. */
 export class TElement extends TNode {
+  image?: import('./Image.ts').ImageSource
+
   // Preact uses native property presence to normalize event names to lowercase.
   onwheel = null
   onmousedown = null

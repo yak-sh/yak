@@ -141,7 +141,11 @@ export let remote = async (
       )
     },
     entry: (b) =>
-      tree(transcriptViews, b, 'Transcript', vocab, { names: init.names }),
+      tree(transcriptViews, b, 'Transcript', vocab, {
+        names: init.names,
+        inlineImages: Deno.env.get('HARNESS_GRAPHICS') == 'kitty',
+        image: (eid: string) => request('image', [eid]),
+      }),
     line: (b, view = 'Line', ctx = {}) =>
       render(views, b, view, vocab, { names: init.names, ...ctx }, 'plain'),
   }

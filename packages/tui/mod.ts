@@ -66,3 +66,5 @@ export {
   useVisualController,
   type VisualState,
 } from './visual.ts'
+
+export { Image, type ImageSource } from './Image.ts'

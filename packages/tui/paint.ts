@@ -30,11 +30,22 @@ import { scrollbar } from './scrollbar.ts'
 
 import { safe as strip, safeHref } from '@yaks/text'
 import type { TElement, TNode } from './dom.ts'
-import { TText } from './dom.ts'
+import { touch, TText } from './dom.ts'
+import { graphics } from './graphics.ts'
 import { type Sheet, type Style, theme as base } from './theme.ts'
 
 /** A run of text under one style. */
-export type Seg = { text: string; style: Style; owner?: TElement }
+export type Seg = {
+  text: string
+  style: Style
+  owner?: TElement
+  image?: {
+    source: import('./Image.ts').ImageSource
+    row: number
+    rows: number
+    width: number
+  }
+}
 /** One screen line, as styled runs. */
 export type Line = Seg[]
 /** What a scroll region measured on the last paint, per element id. */
@@ -277,6 +288,17 @@ let layout = (
   h: number | null,
   c: Ctx,
 ): Line[] => {
+  if (el.image) {
+    let rows = Math.max(1, Math.min(16, Math.floor(el.image.rows) || 8))
+    return Array.from({ length: rows }, (_, row) => [{
+      text: row == 0
+        ? safe(el.image!.alt).replaceAll('\n', ' ').slice(0, w).padEnd(w)
+        : ' '.repeat(w),
+      style: st,
+      owner: el,
+      image: { source: el.image!, row, rows, width: w },
+    }])
+  }
   let selected = visualLines(el.attr('id') ?? '', w, h ?? 6)
   if (selected) return selected
   if (el.viewport) return el.viewport(w, h ?? 0, st, c.sheet)
@@ -489,7 +511,14 @@ export let ansiBackend = (opts: {
   sheet?: Sheet
   size?: () => { columns: number; rows: number }
   write?: (s: string) => void
+  graphics?: 'kitty' | 'none'
+  tmux?: boolean
 } = {}): Backend => {
+  let pictures = graphics({
+    enabled: opts.graphics == 'kitty',
+    tmux: opts.tmux,
+    changed: touch,
+  })
   let sheet = { ...base, ...opts.sheet }
   let size = opts.size ?? (() => Deno.consoleSize())
   let write = opts.write ??
@@ -507,9 +536,13 @@ export let ansiBackend = (opts: {
       ),
     stop: () =>
       write(
-        '\x1b[<u\x1b[>4;0m\x1b[?1006r\x1b[?1000r\x1b[?1007l\x1b[?2004l\x1b[?25h\x1b[?1049l',
+        pictures.close() +
+          '\x1b[<u\x1b[>4;0m\x1b[?1006r\x1b[?1000r\x1b[?1007l\x1b[?2004l\x1b[?25h\x1b[?1049l',
       ),
-    reset: () => last = [],
+    reset: () => {
+      last = []
+      pictures.reset()
+    },
     draw: (root) => {
       let { columns, rows } = size()
       let { lines, metrics } = screenful(root, columns, rows, sheet)
@@ -523,6 +556,10 @@ export let ansiBackend = (opts: {
         written++
       }
       last.length = rows
+      out += pictures.draw(
+        lines.slice(0, rows).map((line) => clip(line, columns)),
+        !!out,
+      )
       if (out) write(out)
       return {
         written,

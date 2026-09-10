@@ -82,6 +82,8 @@ async function handle(method: string, value: unknown): Promise<unknown> {
   }
   // Narrow command/projection API: never evaluate caller-provided code.
   switch (method) {
+    case 'image':
+      return await a.image(String(args[0]))
     case 'start':
       return a.start(String(args[0]))
     case 'send':

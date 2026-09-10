@@ -43,6 +43,28 @@ let row = (
 // Older content-only receipts have no author facet; their durable delivery IDs
 // keep them out of the user-message fallback. Other machine facets win ties.
 export let transcriptViews = define([
+  {
+    view: 'Transcript',
+    match: parse('.entry&.attachment&.content'),
+    render: (b, h, ctx) => {
+      let eid = String((b.attachment as Comp).artifact ?? '')
+      let alt = String((b.content as Comp).body ?? 'Image artifact')
+      let load = ctx.image as ((eid: string) => Promise<Uint8Array>) | undefined
+      if (!load || !ctx.inlineImages) return h('div', { wrap: '1' }, alt)
+      return h('terminal-image', {
+        ref: (node: unknown) => {
+          if (node) {
+            ;(node as { image?: unknown }).image = {
+              key: eid,
+              alt,
+              rows: 8,
+              load: () => load(eid),
+            }
+          }
+        },
+      })
+    },
+  },
   row('.entry&.prompt&.content', 'prompt', 'Muted'),
   row('.entry&.content&.entity.eid~=delivery:', 'notice', 'Muted', true),
   row('.entry&.using', 'input', 'Muted', false, true),

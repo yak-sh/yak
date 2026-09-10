@@ -206,3 +206,33 @@ keyboard stack), no mouse selection yet, and display geometry uses the editor's
 existing UTF-16 column model rather than grapheme/wcwidth-aware geometry. The
 controller must return current state synchronously so burst input can advance
 selection.
+
+## Inline images (experimental)
+
+`Image` is a graph-independent component accepting an `ImageSource` with a
+stable `key`, an asynchronous `load(): Promise<Uint8Array>`, `alt` text, and a
+fixed cell height (`rows`). Enable `graphics: 'kitty'` on `ansiBackend` or `run`
+to transmit PNG images using the Kitty graphics protocol. Pass `tmux: true` for
+tmux DCS passthrough. Graphics are disabled by default; there is no capability
+probe yet.
+
+Images load only when their entire reserved rectangle is visible. Partially
+clipped rectangles keep their text fallback instead of drawing over neighboring
+content. Changing placement deletes the previous placement; removing the image
+or stopping the backend cleans up its placements. A warm paint does not upload
+image bytes again. Text changes may re-place a cached image, without
+retransmitting it. Resizing recomputes the rectangle but does not invalidate its
+bytes.
+
+The first version supports PNG only, limits uploads to 4 MiB and declared pixel
+area to 32 megapixels, and retains at most eight images (up to 32 MiB of source
+bytes, plus temporary base64 encoding). Rows are clamped to 1–16. Images scale
+to the reserved cell rectangle; aspect-ratio-aware sizing is not implemented. A
+failed load keeps the label for the life of that cache entry. The terminal owns
+PNG decoding; signature/dimension checks are not full image validation.
+
+Kitty-capable terminal support must be configured by the application. In tmux,
+`set -g allow-passthrough on` may be necessary. Protocol generation is tested,
+but visual behavior depends on terminal/tmux versions and has not been verified
+on a live iTerm2 installation. iTerm2's separate OSC 1337 protocol is not
+implemented.

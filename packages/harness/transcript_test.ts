@@ -173,3 +173,33 @@ Deno.test('user inputs share composer borders, machine entries do not', async ()
     }
   }
 })
+
+Deno.test('attachment renderer reserves lazy image cells only with explicit graphics configuration', async () => {
+  let loads = 0
+  let entry = {
+    entity: { eid: 'image-entry' },
+    entry: { session: 's', seq: 1 },
+    attachment: { artifact: 'artifact:test' },
+    content: { body: 'Image artifact:test' },
+  }
+  for (let inlineImages of [false, true]) {
+    let ui = await mount(
+      () =>
+        render(transcriptViews, entry, 'Transcript', vocab, {
+          inlineImages,
+          image: () => {
+            loads++
+            return Promise.resolve(new Uint8Array())
+          },
+        }),
+      40,
+      10,
+    )
+    try {
+      assert(ui.text().includes('Image artifact:test'))
+      assertEquals(loads, 0)
+    } finally {
+      ui.free()
+    }
+  }
+})

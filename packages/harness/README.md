@@ -388,3 +388,31 @@ deno task harness new --model gpt-4.1 'Generate an image of a small garden'
 
 This is a paid provider operation, not a test command. No live generation is
 performed merely by enabling the option; the model decides whether to invoke it.
+
+### Inline generated images (experimental)
+
+Set `HARNESS_GRAPHICS=kitty` to display fully visible PNG attachments using the
+Kitty graphics protocol. This is separate from image-generation enablement. The
+default remains a text artifact label. Both inline and worker modes resolve
+registered artifact entities through the configured external image store;
+neither accepts arbitrary file paths. Reads check the artifact's size and
+SHA-256 hash. Back up the image directory with the graph database.
+
+Attachments reserve eight terminal rows. Their bytes load only when the complete
+rectangle is on screen; partially visible attachments show a label. PNG files
+above 4 MiB, other image formats, unavailable files, and load failures also
+retain the label. Scrolling, resizing, and session changes remove old
+placements. VISUAL mode continues to select the artifact's textual label, not
+image pixels.
+
+In tmux, enable `allow-passthrough`; the harness wraps graphics commands when
+`TMUX` is set. SSH requires no server-side display. This pilot does not
+negotiate terminal support: only enable it on terminals supporting Kitty
+graphics. Actual visual placement in iTerm2 still needs user verification.
+
+The worker's image read uses a bounded `Uint8Array` postMessage result; it is
+structured-cloned, not transferred. This copies up to 4 MiB per cache miss. No
+base64 enters the replicated graph or transcript. The renderer keeps eight
+images and does not re-upload bytes on each keystroke. Partial clipping,
+JPEG/WebP display, progress/error indicators, and terminal capability discovery
+are future work.

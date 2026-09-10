@@ -449,8 +449,14 @@ export let tui = async (): Promise<void> => {
     })
     try {
       await backend.resume()
-      await run(() =>
-        h(App, { agent: backend.agent, subscribe: backend.subscribe })
+      await run(
+        () => h(App, { agent: backend.agent, subscribe: backend.subscribe }),
+        {
+          graphics: Deno.env.get('HARNESS_GRAPHICS') == 'kitty'
+            ? 'kitty'
+            : 'none',
+          tmux: !!Deno.env.get('TMUX'),
+        },
       )
     } finally {
       await backend.close()
@@ -462,7 +468,10 @@ export let tui = async (): Promise<void> => {
   let subscribe = changes(a)
   try {
     await a.resume()
-    await run(() => h(App, { agent: a, subscribe }))
+    await run(() => h(App, { agent: a, subscribe }), {
+      graphics: Deno.env.get('HARNESS_GRAPHICS') == 'kitty' ? 'kitty' : 'none',
+      tmux: !!Deno.env.get('TMUX'),
+    })
   } catch (error) {
     diagnostics().report(error, { phase: 'tui' })
     throw error
