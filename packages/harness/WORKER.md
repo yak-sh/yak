@@ -156,3 +156,9 @@ cache; revisiting a session still transfers its full selected transcript. Under
 active writes, summary subscriptions still invalidate broadly. First-class
 incremental summary projections and bounded transfer/application remain
 follow-up work.
+
+After integration with the independent input-publication fix, another run of the
+same fixture measured 786 ms for the cold selection, 194 ms warm median, 284 ms
+warm p95, and 142 ms maximum timer delay. Runs were taken on a shared host, not
+under controlled load. Both elapsed time and main-thread stalls should continue
+to be measured as the projection and transfer APIs change.
