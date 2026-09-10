@@ -168,6 +168,7 @@ let escape = (s: string, i: number): [Input | null, number] => {
   if ((m = rest.match(ss3))) return [{ name: arrows[m[1]] }, m[0].length]
   // Alt+key: the terminal's oldest modifier, an ESC prefix on the key itself.
   let c = rest[1]
+  if (c == '\r' || c == '\n') return [{ name: 'enter', alt: true }, 2]
   if (c == '\x7f' || c == '\x08') return [{ name: 'backspace', alt: true }, 2]
   if (c && c >= ' ' && c != '\x7f') {
     return [{ name: 'char', text: c, alt: true }, 2]
@@ -290,9 +291,13 @@ export let feed = (onControl: (body: string) => void = () => {}) => {
         held = tail
         break
       }
-      // deno-lint-ignore no-control-regex -- fragmented SGR mouse report
-      if (/^\x1b\[<(?:\d+(?:;\d*)?(?:;\d*)?)?$/.test(tail)) {
-        held = tail
+      // A terminal sequence is one event even when SSH/stdin splits its bytes.
+      // CSI parameters/intermediates end only at the final byte (@ through ~).
+      // Hold SS3's introducer too. Complete events still dispatch immediately.
+      // deno-lint-ignore no-control-regex -- incomplete CSI sequence
+      if (/^\x1b\[[\x20-\x3f]*$/.test(tail) || tail == '\x1bO') {
+        // Bound malformed unterminated keyboard reports separately from APC data.
+        if (tail.length <= 128) held = tail
         break
       }
       plain += s[i++]

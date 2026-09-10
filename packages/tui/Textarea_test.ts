@@ -25,7 +25,9 @@ let table: [string, string][] = [
   ['abc\x7f', 'ab|'], // backspace at the end
   ['ab\x1b[Dc', 'ac|b'],
   ['ab\x1b[D\x1b[3~', 'a|'], // delete forward
-  ['ab\x1b[13;2ucd', 'ab\ncd|'], // ⇧⏎ opens a line
+  ['ab\x1b[13;2ucd', 'ab\ncd|'],
+  ['ab\x1b[27;2;13~cd', 'ab\ncd|'],
+  ['ab\x1b\rcd', 'ab\ncd|'], // ⇧⏎ opens a line
   ['ab\rcd', 'abcd|'], // plain ⏎ is not an edit: it submits
   ['one two\x1b[200~ three\x1b[201~', 'one two three|'],
   ['one two\x17', 'one |'], // ^W kills a word

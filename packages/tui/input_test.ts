@@ -113,3 +113,35 @@ Deno.test('oversized terminal control replies are discarded with bounded bufferi
   assertEquals(read('\\safe'), [{ name: 'char', text: 'safe' }])
   assertEquals(replies, [])
 })
+
+Deno.test('modified Enter survives every stdin boundary without submitting', () => {
+  for (
+    let [bytes, key] of [
+      ['\x1b[13;2u', { name: 'enter', shift: true }],
+      ['\x1b[27;2;13~', { name: 'enter', shift: true }],
+      ['\x1b[13;3u', { name: 'enter', alt: true }],
+      ['\x1b\r', { name: 'enter', alt: true }],
+      ['\x1b\n', { name: 'enter', alt: true }],
+      ['\x1bOA', { name: 'up' }],
+    ] as const
+  ) {
+    for (let split = 0; split <= bytes.length; split++) {
+      let read = feed()
+      assertEquals([
+        ...read(bytes.slice(0, split)),
+        ...read(bytes.slice(split)),
+      ], [key])
+    }
+    let read = feed()
+    assertEquals([...bytes].flatMap((byte) => read(byte)), [key])
+  }
+})
+
+Deno.test('partial CSI does not expire into keys; plain Enter stays Enter', () => {
+  let read = feed()
+  assertEquals(read('\x1b[27;2;'), [])
+  assertEquals(read.flush(), [])
+  assertEquals(read('13~'), [{ name: 'enter', shift: true }])
+  assertEquals(read('\r\n'), [{ name: 'enter' }, { name: 'enter' }])
+  assertEquals(read('hello'), [{ name: 'char', text: 'hello' }])
+})

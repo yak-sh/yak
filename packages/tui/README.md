@@ -72,12 +72,13 @@ to add to it or replace an entry. `Style` is the whole vocabulary a class has:
   the bottom; arrows, page keys and the wheel move it. `scrolled()` is the math
   on its own.
 - **`Textarea`** — the input box. Enter submits, Shift+Enter opens a line (which
-  is why `run` pushes the kitty keyboard flag), plus arrows, home/end, word jump
-  and word delete, `^A ^E ^U ^K ^W`, bracketed paste, and a painted cursor. It
-  soft-wraps at its measured content width, grows to `max` visual rows and then
-  scrolls. Arrows and Home/End navigate visual rows; Ctrl+A/E still address hard
-  lines. Soft wraps never change submitted text. `edit()` handles text edits;
-  `visualRows()` and `visualEdit()` handle wrapping and visual navigation.
+  is why `run` requests Kitty and xterm extended keys), plus arrows, home/end,
+  word jump and word delete, `^A ^E ^U ^K ^W`, bracketed paste, and a painted
+  cursor. It soft-wraps at its measured content width, grows to `max` visual
+  rows and then scrolls. Arrows and Home/End navigate visual rows; Ctrl+A/E
+  still address hard lines. Soft wraps never change submitted text. `edit()`
+  handles text edits; `visualRows()` and `visualEdit()` handle wrapping and
+  visual navigation.
 - **`Frame`** — a main column and a right sidebar of `{title, Render}` panels,
   which folds away below `min` columns.
 
@@ -248,3 +249,16 @@ Image fallback labels distinguish loading, clipped/unvisited images, and failed
 loads or rejected images. A “Kitty image sent” label means the backend sent its
 commands, not that the terminal confirmed a visible placement. If that label
 remains visible, verify terminal support and tmux passthrough configuration.
+
+### Modified Enter
+
+`feed()` preserves CSI keyboard sequences across stdin chunks, including Kitty
+`CSI 13;2u` and xterm `CSI 27;2;13~` for Shift+Enter. Alt+Enter also inserts a
+newline, including the legacy ESC-prefixed CR/LF form. Complete sequences are
+dispatched immediately; partial CSI sequences are held without extending the
+existing standalone Escape timeout.
+
+If a terminal sends a bare CR or LF for Shift+Enter, it is indistinguishable
+from plain Enter. The decoder cannot reconstruct the missing modifier. Inspect
+the terminal's extended-key settings or reset its terminal session in that case;
+application-side decoding changes cannot recover a modifier that was not sent.
