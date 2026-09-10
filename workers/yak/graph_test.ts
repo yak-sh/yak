@@ -382,6 +382,7 @@ Deno.test('the object plants core + member + edge + the app, and nothing else', 
       'blob_text',
       // the spine
       'entity',
+      'entity_sequence',
       'tombstone',
       // core
       'doc',

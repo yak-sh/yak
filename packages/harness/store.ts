@@ -229,6 +229,26 @@ export let open = (path = dbPath()): Harness => {
     derived: { ...derived, ...blobRead(vocab) },
   })
   store.install()
+  // The short-lived completed.actor spelling duplicated the completion
+  // author. Preserve that author (including anonymous nulls), not the old
+  // work-attribution value in by. The column itself is the migration guard.
+  sql.exec('begin immediate')
+  try {
+    if (
+      sql.query('pragma table_info(completed)', []).some((c) =>
+        c.name == 'actor'
+      )
+    ) {
+      sql.exec('update completed set "by" = actor')
+      sql.exec('drop index if exists completed_actor')
+      sql.exec('alter table completed drop column actor')
+    }
+    sql.exec('commit')
+  } catch (error) {
+    sql.exec('rollback')
+    db.close()
+    throw error
+  }
   // Sequence high-water was captured by install before clearing historical
   // entry numbers. No remaining human identifier is renumbered or reused.
   sql.exec(

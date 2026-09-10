@@ -1,4 +1,4 @@
-/** Record write provenance once per completion, not the task's work author. */
+/** Keep the completion author on its mark, including across later edits. */
 import { type Comp, type Hook, then } from '@yaks/graph'
 
 export let completing: Hook = (bundles, tx) => {
@@ -11,7 +11,7 @@ export let completing: Hook = (bundles, tx) => {
       let old = previous.get(b.entity.eid)
       b.completed = {
         ...(b.completed as Comp),
-        actor: old ? old.actor ?? null : actor ?? null,
+        by: old ? old.by ?? null : (b.completed as Comp).by ?? actor ?? null,
       }
     }
     return bundles

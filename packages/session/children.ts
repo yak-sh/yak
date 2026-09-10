@@ -419,7 +419,7 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
   // while an already delivered response must not echo on completion/restart.
   let announceTask = ready &&
     (taskStatus(task!, taskMarks) != 'done' ||
-      comp(task, 'completed')?.actor != String(link.parent))
+      comp(task, 'completed')?.by != String(link.parent))
   let eid = announceTask
     ? `delivery:${child}:task:${task!.entity.eid}:${
       taskStatus(task!, taskMarks)

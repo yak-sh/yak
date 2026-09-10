@@ -206,6 +206,7 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
     [
       // the spine @yaks/sqlite raises for every layout
       'entity',
+      'entity_sequence',
       'tombstone',
       // core
       'doc',

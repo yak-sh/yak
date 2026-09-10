@@ -81,13 +81,6 @@
           "ref": "entity",
           "death": "keep",
           "description": "who finished it \u2014 kept as history when that entity is deleted"
-        },
-        "actor": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "stamped": true,
-          "description": "the actor that recorded completion, distinct from attribution of the work; absent for an anonymous write"
         }
       }
     },

@@ -142,3 +142,46 @@ Deno.test('entries omit human numbers, including migrated entries after reopen',
     Deno.removeSync(dir, { recursive: true })
   }
 })
+
+Deno.test('legacy completion actors become authors once, including anonymous marks', () => {
+  let dir = Deno.makeTempDirSync()
+  let path = dir + '/legacy.db'
+  let h = open(path)
+  try {
+    h.g.apply([
+      { entity: { eid: 'parent' }, session: {} },
+      { entity: { eid: 'worker' }, session: {} },
+      { entity: { eid: 'known' }, task: {}, completed: { by: 'worker' } },
+      { entity: { eid: 'anonymous' }, task: {}, completed: { by: 'worker' } },
+    ])
+    h.db.exec('alter table completed add column actor integer')
+    h.db.exec('create index completed_actor on completed(actor)')
+    h.db.exec(
+      `update completed set actor = (select id from entity where eid = 'parent')
+      where entity = (select id from entity where eid = 'known')`,
+    )
+    h.close()
+    h = open(path)
+    let authors = () =>
+      h.store.read('.task').map((b) => [
+        b.entity.eid,
+        (b.completed as Comp).by ?? null,
+      ]).sort()
+    assertEquals(authors(), [['anonymous', null], ['known', 'parent']])
+    assert(
+      !h.db.prepare('pragma table_info(completed)').all<{ name: string }>()
+        .some((c) => c.name == 'actor'),
+    )
+    // An edit after migration must survive the next open: no stale actor copy.
+    h.db.exec(
+      `update completed set "by" = (select id from entity where eid = 'worker')
+      where entity = (select id from entity where eid = 'known')`,
+    )
+    h.close()
+    h = open(path)
+    assertEquals(authors(), [['anonymous', null], ['known', 'worker']])
+  } finally {
+    h.close()
+    Deno.removeSync(dir, { recursive: true })
+  }
+})

@@ -368,13 +368,13 @@ for (let writer of ['p', 'child', 'other', 'external']) {
       )
       let actor = writer == 'child' ? child : writer
       if (writer == 'external') {
-        await h.g.apply([{ entity: { eid: 'work' }, completed: { by: 'p' } }])
+        await h.g.apply([{ entity: { eid: 'work' }, completed: {} }])
       } else {
         let apply = harnessTools(h.g).find((t) => t.name == 'graph_apply')!
         await apply.run({
           change: [{
             entity: { eid: 'work' },
-            completed: { by: 'p' },
+            completed: {},
             $actor: { by: 'spoof' },
           }],
         }, { ...ctx, session: actor })
@@ -382,10 +382,9 @@ for (let writer of ['p', 'child', 'other', 'external']) {
       await d.idle('p')
       let [work] = await h.g.read('.task')
       assertEquals(
-        (work.completed as Comp).actor ?? null,
+        (work.completed as Comp).by ?? null,
         writer == 'external' ? null : actor,
       )
-      assertEquals((work.completed as Comp).by, 'p') // work attribution is not the writer
       let receiptId = 'delivery:' + child + ':task:work:done'
       assertEquals(
         (await transcript(h.g, 'p')).some((b) => b.entity.eid == receiptId),
@@ -432,7 +431,7 @@ Deno.test('parent completion does not suppress a later child response', async ()
   h.close()
 })
 
-Deno.test('completion actor survives database reopen; another parent still receives the result', async () => {
+Deno.test('completion author survives database reopen; another parent still receives the result', async () => {
   let dir = Deno.makeTempDirSync()
   let path = dir + '/receipt.db'
   let h = open(path)
@@ -472,21 +471,20 @@ Deno.test('completion actor survives database reopen; another parent still recei
   }
 })
 
-Deno.test('reopening a task allows a new completion actor without changing work attribution', async () => {
+Deno.test('reopening a task allows a new completion author', async () => {
   let { h } = setup()
   await h.g.apply([{
     entity: { eid: 'work' },
-    completed: { by: 'worker' },
+    completed: {},
     $actor: { by: 'p' },
   }])
   await h.g.apply([{ entity: { eid: 'work' }, completed: null }])
   await h.g.apply([{
     entity: { eid: 'work' },
-    completed: { by: 'worker' },
+    completed: {},
     $actor: { by: 'q' },
   }])
   let [work] = await h.g.read('.task')
-  assertEquals((work.completed as Comp).actor, 'q')
-  assertEquals((work.completed as Comp).by, 'worker')
+  assertEquals((work.completed as Comp).by, 'q')
   h.close()
 })
