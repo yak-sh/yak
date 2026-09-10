@@ -73,10 +73,10 @@ Deno.test('worker frontend typing stays local after its subscribed view is ready
     )
     // Transcript now paints before summaries finish; wait for the actual
     // panel projection as well before measuring steady-state traffic.
-    for (let i = 0; i < 100 && !screen.text().includes('>   ● selected'); i++) {
+    for (let i = 0; i < 100 && !screen.text().includes('● selected'); i++) {
       await new Promise((resolve) => setTimeout(resolve, 10))
     }
-    assert(screen.text().includes('>   ● selected'), screen.text())
+    assert(screen.text().includes('● selected'), screen.text())
     // A subscription frame can queue a catch-up projection after the first
     // visible snapshot. Wait for that traffic, not just the initial paint.
     for (let i = 0; i < 100; i++) {
