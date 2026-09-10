@@ -209,10 +209,13 @@ export let doneOf = (index: Index, eid: string) => {
   return !!comps?.has('archived')
 }
 
-// eid → human id (T-7), or null when the spine's num hasn't been seen yet.
+// eid → human id (T-7), or null when this index has never seen the entity.
+// A num is a REQUESTED handle now, not a birthright, so a num-less row is
+// ordinary: idOf renders it as the short eid, exactly as db.ts human() does
+// for the same entity server-side. Null stays reserved for "unknown here".
 export let humanId = (index: Index, eid: string): string | null => {
   let row = index.get(eid)
-  if (!row || !row.num) return null
+  if (!row) return null
   let has: Record<string, true> = {}
   for (let c of row.comps) has[c] = true
   return idOf({ eid, kind: kindOf(has), num: row.num })
