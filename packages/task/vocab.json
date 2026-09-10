@@ -19,7 +19,13 @@
           ],
           "persist": false,
           "description": "where the task stands — read off the completed and cancelled marks, never written"
-        },
+        }
+      }
+    },
+    "filed": {
+      "type": "object",
+      "description": "optional portfolio filing, separate from being a task",
+      "properties": {
         "priority": {
           "type": "number",
           "format": "priority",
@@ -30,6 +36,16 @@
           "ref": "project",
           "death": "detach",
           "description": "what it is filed under; deleting the project frees the task rather than taking it along"
+        },
+        "assignee": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach",
+          "description": "whose queue this task is filed in"
+        },
+        "domain": {
+          "type": "string",
+          "description": "the work area this task is filed in"
         }
       }
     },

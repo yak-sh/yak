@@ -13,8 +13,8 @@ import { guarding } from './guard.ts'
 import { type Mark, MARKS } from './words.ts'
 
 /**
- * The task plugin: the `task`, `project`, `board`, `completed`, `cancelled` and
- * `blocked` components, the `requires` and `contains` relations, and a
+ * The task plugin: the `task`, `filed`, `project`, `board`, `completed`,
+ * `cancelled` and `blocked` components, the `requires` and `contains` relations, and a
  * `precondition` hook that refuses a board whose query would quietly match
  * nothing.
  *

@@ -1,8 +1,8 @@
 // The words this package spells, and the one list the status rule is read from.
 //
 // A task's STATUS is not a column somebody writes. It is read off the marks the
-// task wears: a `cancelled` component means cancelled, a `completed` component
-// means done, and a task wearing neither is open. That is the whole rule, and it
+// task wears, independently of any optional `filed` component: `cancelled`
+// means cancelled, `completed` means done, and a task wearing neither is open. That is the whole rule, and it
 // lives here as DATA — an ordered list of marks — so the two evaluators that
 // need it (a database through @yaks/sql, an array through @yaks/match) are built
 // from one declaration rather than from two copies that drift.

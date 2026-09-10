@@ -3,7 +3,7 @@
 
 import { assertEquals } from '@std/assert'
 import { link } from '@yaks/edge'
-import { gated, openDeps } from './deps.ts'
+import { done, gated, openDeps } from './deps.ts'
 import { teamGraph } from './harness.ts'
 
 Deno.test('gated reads the blocked facet, and nothing else', () => {
@@ -85,4 +85,80 @@ Deno.test('finishing a child lowers the count', () => {
     completed: { at: '2026-01-01T00:00:00.000Z' },
   }])
   assertEquals(openDeps(storage, 'p'), 0)
+})
+
+Deno.test('done requires a task and a settled status, not merely zero children', () => {
+  let storage = seeded()
+  assertEquals(done(storage, 'a'), false)
+  assertEquals(done(storage, 'b'), true)
+  assertEquals(done(storage, 'c'), true)
+  assertEquals(done(storage, 'd'), false)
+  assertEquals(done(storage, 'missing'), false)
+})
+
+Deno.test('done waits for both relations, deduplicates children, and accepts cancellation', () => {
+  let { g, storage } = teamGraph()
+  g.install()
+  g.apply([
+    { entity: { eid: 'p' }, task: {}, completed: {} },
+    { entity: { eid: 'a' }, task: {}, claim: {} },
+    { entity: { eid: 'b' }, task: {} },
+    link('p', 'requires', 'a'),
+    link('p', 'contains', 'a'),
+    link('p', 'contains', 'b'),
+  ])
+  assertEquals(done(storage, 'p'), false)
+  assertEquals(openDeps(storage, 'p'), 2)
+  g.apply([{ entity: { eid: 'a' }, completed: {} }])
+  assertEquals(done(storage, 'p'), false)
+  assertEquals(done(storage, 'p', { relations: ['requires'] }), true)
+  g.apply([{ entity: { eid: 'b' }, cancelled: {} }])
+  assertEquals(done(storage, 'p'), true)
+  g.apply([{ entity: { eid: 'a' }, completed: null }])
+  assertEquals(done(storage, 'p'), false)
+})
+
+Deno.test('done uses the supplied ladder for the parent and the children', () => {
+  let { g, storage } = teamGraph()
+  g.install()
+  g.apply([
+    { entity: { eid: 'p' }, task: {}, claim: {} },
+    { entity: { eid: 'a' }, task: {}, claim: {} },
+    link('p', 'requires', 'a'),
+  ])
+  let marks = [{ status: 'wip', comp: 'claim', settled: false }]
+  assertEquals(done(storage, 'p', { marks }), false)
+  marks = [{ status: 'accepted', comp: 'claim', settled: true }]
+  assertEquals(done(storage, 'p', { marks }), true)
+})
+
+Deno.test('done stays async over asynchronous storage, for true and false answers', async () => {
+  let s = seeded()
+  s.tx((tx) => tx.patch([{ entity: { eid: 'p' }, completed: {} }]))
+  let asyncStorage: import('@yaks/graph').Storage = {
+    ...s,
+    read: async (...args) => await s.read(...args),
+    tx: (body) => Promise.resolve(s.tx(body)),
+  }
+  for (
+    let [eid, expected] of [['a', false], ['b', true], ['p', false]] as const
+  ) {
+    let result = done(asyncStorage, eid)
+    assertEquals(result instanceof Promise, true)
+    assertEquals(await result, expected)
+  }
+})
+
+Deno.test('done cannot settle a non-task or a parent waiting on one', () => {
+  let { g, storage } = teamGraph()
+  g.install()
+  g.apply([
+    { entity: { eid: 'p' }, task: {}, cancelled: {} },
+    { entity: { eid: 'spec' }, doc: { title: 'spec' }, completed: {} },
+    link('p', 'requires', 'spec'),
+  ])
+  assertEquals(done(storage, 'spec'), false)
+  assertEquals(done(storage, 'p'), false)
+  g.apply([{ entity: { eid: 'spec' }, task: {} }])
+  assertEquals(done(storage, 'p'), true)
 })

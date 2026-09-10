@@ -15,10 +15,12 @@ deno add jsr:@yaks/task
 Say a team keeps a list of what it has to do. Four questions come up, and this
 package is the four answers.
 
-**What is on the list?** An entity carrying `task{status, priority, project}` is
-a to-do item. It is a facet, not a record — the same entity carries your `doc`,
-your `estimate`, whatever else it is. Adding `task` to something makes it
-something to do without making it stop being what it was.
+**What is on the list?** An entity carrying `task{}` is a to-do item. It is a
+facet, not a record — the same entity carries your `doc`, your `estimate`,
+whatever else it is. Adding `task` to something makes it something to do without
+making it stop being what it was. Optional
+`filed{project, priority, domain, assignee}` places it in a portfolio; a
+microtask needs only `doc` and `task`, with no filing.
 
 **Where does it stand?** Nowhere in a column. A task wearing `completed` is
 done, one wearing `cancelled` is cancelled, and one wearing neither is open.
@@ -50,12 +52,14 @@ g.apply([
   {
     entity: { eid: 't1' },
     doc: { title: 'Buy the cake' },
-    task: { priority: 1 },
+    task: {},
+    filed: { priority: 1 },
   },
   {
     entity: { eid: 't2' },
     doc: { title: 'Book the room' },
-    task: { priority: 0 },
+    task: {},
+    filed: { priority: 0 },
   },
   link('t1', 'requires', 't2'),
   {
@@ -114,16 +118,20 @@ every query for open work exactly when somebody needs to see it.
 So the two questions stay apart, and they read differently:
 
 ```ts
-import { gated, openDeps } from '@yaks/task'
+import { done, gated, openDeps } from '@yaks/task'
 
 gated(bundle) // something OUTSIDE is in the way — an alarm
 openDeps(storage, 't1') // how many children are unfinished — a count
+done(storage, 't1') // settled itself AND no unfinished children
 ```
 
 `openDeps` follows `requires` and `contains` and counts what has not settled. A
 task with three unfinished children is a task in progress, not a task in
 trouble: it renders as "3 left", and zero renders as nothing at all. A child
-that is not a task cannot settle, so it stays counted.
+that is not a task cannot settle, so it stays counted. `done` uses the same
+optional `marks` and `relations` as `openDeps`; both return synchronously for
+synchronous storage and a promise for asynchronous storage. They inspect direct
+children, not a recursive closure.
 
 ## The board guard
 
@@ -156,4 +164,4 @@ API.
 
 `taskDoc`, `tasks`, `MARKS`, `Mark`, `Status`, `OPEN`, `statuses`, `settled`,
 `statusOf`, `compute`, `derived`, `unroutable`, `guarding`, `gated`, `openDeps`,
-and the component-name constants.
+`done`, and the component-name constants.

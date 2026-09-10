@@ -1,7 +1,8 @@
 // The components this package ships, as one vocabulary document to load beside
 // your own.
 //
-//   task{status, priority, project}   what makes an entity a to-do item
+//   task{}                            a to-do item, with derived status
+//   filed{project, priority, domain, assignee}  optional portfolio filing
 //   project{}                         something the tasks are grouped under
 //   board{query}                      a saved filter over them
 //   completed{at, by}                 it got done, when, and by whom
@@ -40,7 +41,7 @@
 //
 // THE MARKS DIE WITH NOBODY. `completed.by` and `cancelled.by` are `death: keep`
 // — deleting the person who finished a task does not unfinish it. The reference
-// stands as history. `task.project` is `death: detach`: deleting a project frees
+// stands as history. `filed.project` is `death: detach`: deleting a project frees
 // its tasks rather than deleting them, because they are not ABOUT the project,
 // they were only filed under it.
 //
@@ -53,6 +54,9 @@ import doc from './vocab.json' with { type: 'json' }
 
 /** The component that makes an entity a task. */
 export let TASK = 'task'
+
+/** The optional portfolio filing: project, priority, domain and assignee. */
+export let FILED = 'filed'
 
 /** The component naming something tasks are grouped under. */
 export let PROJECT = 'project'

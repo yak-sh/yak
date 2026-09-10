@@ -8,13 +8,18 @@ import { MARKS, OPEN, settled, statuses } from './words.ts'
 
 let task = (extra: Record<string, unknown> = {}): Bundle => ({
   entity: { eid: 't1' },
-  task: { priority: 1 },
+  task: {},
   ...extra,
 })
 
 // Every case the ladder distinguishes, as (bundle, status) pairs.
 let CASES: [Bundle, string | null][] = [
   [task(), OPEN],
+  [task({ filed: { priority: 1, domain: 'Eng' } }), OPEN],
+  [
+    { entity: { eid: 'filed-only' }, filed: { priority: 1 }, completed: {} },
+    null,
+  ],
   [task({ completed: { at: '2026-01-01T00:00:00.000Z' } }), 'done'],
   [task({ cancelled: { at: '2026-01-01T00:00:00.000Z' } }), 'cancelled'],
   // cancelled outranks done: calling work off is a later fact than finishing

@@ -11,6 +11,7 @@ Deno.test('the components this package ships', () => {
   for (
     let c of [
       'task',
+      'filed',
       'project',
       'board',
       'completed',
@@ -57,11 +58,26 @@ Deno.test('the marks keep their author as history; a project only detaches', () 
   for (let comp of ['completed', 'cancelled']) {
     assertEquals(team.column(comp, 'by')!.death, 'keep')
   }
-  assertEquals(team.column('task', 'project')!.death, 'detach')
-  assertEquals(team.column('task', 'project')!.ref, 'project')
+  assertEquals(team.column('filed', 'project')!.death, 'detach')
+  assertEquals(team.column('filed', 'project')!.ref, 'project')
 })
 
 Deno.test('blocked carries a reason and is not a status', () => {
   assertEquals(team.comp('blocked')!.writable, ['on'])
   assert(!team.column('task', 'status')!.values!.includes('blocked'))
+})
+
+Deno.test('a bare task has no writable columns; filing is optional and routes alone', () => {
+  assertEquals(team.comp('task')!.writable, [])
+  assertEquals(team.comp('filed')!.writable.sort(), [
+    'assignee',
+    'domain',
+    'priority',
+    'project',
+  ])
+  for (let prop of ['project', 'priority', 'domain', 'assignee']) {
+    assertEquals(team.route(prop), { comp: 'filed', prop })
+    assertEquals(team.column('task', prop), undefined)
+  }
+  assertEquals(team.column('filed', 'assignee')!.death, 'detach')
 })

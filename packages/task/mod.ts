@@ -5,10 +5,11 @@
  * Say a team keeps a list of what it has to do. Four things come up, and this
  * package is the four answers:
  *
- * - **What is on the list?** An entity carrying `task{status, priority,
- *   project}` is a to-do item. It is a FACET, not a record: the same entity
+ * - **What is on the list?** An entity carrying `task{}` is a to-do item. It is
+ *   a FACET, not a record: the same entity
  *   carries your `doc`, your `estimate`, whatever else it is — adding `task` to
  *   something makes it something to do without making it stop being what it was.
+ *   Optional `filed{project, priority, domain, assignee}` places it in a portfolio.
  * - **Where does it stand?** Nowhere in a column. A task wearing `completed` is
  *   done, one wearing `cancelled` is cancelled, and one wearing neither is open.
  *   `status` is computed from those marks, so finishing something records WHEN

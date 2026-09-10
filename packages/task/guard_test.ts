@@ -20,7 +20,9 @@ Deno.test('a query that routes is fine', () => {
       '.status!=done',
       '.priority<3',
       '.task!',
-      '.task.project=p1',
+      '.filed.project=p1',
+      '.project=p1',
+      '.filed.priority<3',
       'widget', // a bare word is a text term, and a valid board query
       '', // the empty query selects nothing, on purpose
     ]
@@ -72,4 +74,44 @@ Deno.test('dropping a board states no query and is never refused', () => {
   g.apply(board('.status=open'))
   g.apply([{ entity: { eid: 'b1' }, board: null }])
   assertEquals((g.read('.board!') as unknown[]).length, 0)
+})
+
+Deno.test('qualified filing columns no longer belong to task', () => {
+  for (let prop of ['project', 'priority', 'domain', 'assignee']) {
+    assertEquals(typeof unroutable(`.task.${prop}=x`, team), 'string')
+  }
+})
+
+Deno.test('a bare microtask stores presence, never a supplied status', () => {
+  let { g } = teamGraph()
+  g.install()
+  g.apply([{
+    entity: { eid: 'micro' },
+    doc: { title: 'one step' },
+    task: {},
+  }])
+  g.apply([{ entity: { eid: 'micro' }, task: { status: 'done' } }])
+  let [b] = g.read('.task!') as import('@yaks/graph').Bundle[]
+  assertEquals(b.task, {})
+  assertEquals(b.filed, undefined)
+})
+
+Deno.test('filing stores separately and a bare priority query orders filed tasks', () => {
+  let { g } = teamGraph()
+  g.install()
+  g.apply([
+    {
+      entity: { eid: 'later' },
+      task: {},
+      filed: { priority: 2, domain: 'Eng' },
+    },
+    { entity: { eid: 'first' }, task: {}, filed: { priority: 0 } },
+    { entity: { eid: 'micro' }, task: {} },
+  ])
+  let rows = g.read(
+    '.priority>=0 .order=filed.priority',
+  ) as import('@yaks/graph').Bundle[]
+  assertEquals(rows.map((b) => b.entity.eid), ['first', 'later'])
+  assertEquals(rows[1].task, {})
+  assertEquals(rows[1].filed, { priority: 2, domain: 'Eng' })
 })

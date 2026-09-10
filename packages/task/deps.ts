@@ -108,3 +108,24 @@ export let openDeps = (
       }),
   ) as number | Promise<number>
 }
+
+/**
+ * Has this task settled AND finished its dependencies? Completion alone does
+ * not release a parent while `requires` or `contains` children remain open.
+ * Like {@link openDeps}, this counts direct far ends, not a recursive walk.
+ * A missing entity or an entity without `task` is never done.
+ *
+ * Sync storage returns a boolean; async storage returns a promise.
+ */
+export let done = (
+  storage: Storage,
+  eid: Eid,
+  opts: DepOpts = {},
+): boolean | Promise<boolean> => {
+  let marks = opts.marks ?? MARKS
+  return then(detached(storage).get([eid]), (bundles) => {
+    let status = bundles[0] ? statusOf(bundles[0], marks) : null
+    if (status == null || !settled(status, marks)) return false
+    return then(openDeps(storage, eid, opts), (count) => count == 0)
+  }) as boolean | Promise<boolean>
+}
