@@ -262,6 +262,16 @@
           "description": "the task that prompted this notice"
         }
       }
+    },
+    "archived": {
+      "description": "Hidden from ordinary listings, without stopping execution or deleting history.",
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
     }
   },
   "$vocabulary": {

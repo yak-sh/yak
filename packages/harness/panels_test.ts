@@ -105,7 +105,7 @@ Deno.test('sidebar labels keep names and indicators without redundant status tex
       session: { id: 'Meaningful name', status: 'running' },
     },
   ]
-  for (let title of ['Sessions', 'Subagents', 'Tasks']) {
+  for (let title of ['Sessions', 'Tasks']) {
     let p = panels.find((p) => p.title == title)!
     let rows = title == 'Tasks'
       ? [{
@@ -135,7 +135,7 @@ Deno.test('sidebar labels keep names and indicators without redundant status tex
       } else {
         assert(shown.includes('● abcdef01'), shown)
         assert(shown.includes('Meaningful name'), shown)
-        if (title == 'Sessions') assert(shown.includes('> ● abcdef01'), shown)
+        if (title == 'Sessions') assert(shown.includes('>   ● abcdef01'), shown)
       }
     } finally {
       ui.free()

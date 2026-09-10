@@ -1,3 +1,4 @@
+import { parentId, rootOf, sessionTree } from './tree.ts'
 /** The harness on @yaks/tui: local editing, graph-backed content. */
 import { h, type JSX } from 'preact'
 import { useLayoutEffect, useMemo, useRef } from 'preact/hooks'
@@ -8,13 +9,7 @@ import { signal } from '@preact/signals'
 import { type Frontend, frontend } from './frontend.ts'
 import type { Bundle, Comp, Eid } from '@yaks/graph'
 import { Frame, run, Textarea, useKeys, VirtualList } from '@yaks/tui'
-import {
-  type Context,
-  type Panel,
-  panels,
-  type UIAgent,
-  visibleSessions,
-} from './panels.ts'
+import { type Context, type Panel, panels, type UIAgent } from './panels.ts'
 import { type Agent, agent } from './run.ts'
 import { INSTRUCTIONS } from './cli.ts'
 
@@ -77,6 +72,8 @@ export let App = (
       generation: Number(value.generation),
       mode: String((ui.client.ent('composer')!.composer as Comp).mode),
       showSettled: Boolean(value.showSettled),
+      showArchived: Boolean(value.showArchived),
+      expanded: JSON.parse(String(value.expanded ?? '[]')) as string[],
     }
   }
   let setError = (error: string) => ui.patch({ error })
@@ -173,21 +170,77 @@ export let App = (
       choose({})
       return true
     }
-    let delta = k.ctrl && k.text == 'n' || k.alt && k.name == 'down'
+    // Ordinary typing must never build the session tree.
+    if (
+      !(k.ctrl && (k.text == 'n' || k.text == 'p') ||
+        k.alt && (['a', 'z', 'h', 'j', 'k', 'l'].includes(k.text ?? '') ||
+            k.name == 'up' || k.name == 'down'))
+    ) return false
+    let state = current()
+    let rows = projection.peek().sessions
+    let tree = sessionTree(rows, { ...state, selected: state.id })
+    let selected = tree.find((r) => r.bundle.entity.eid == state.id)
+    let expand = (id: string, open: boolean) =>
+      ui.patch({
+        expanded: JSON.stringify(
+          open
+            ? [...new Set([...state.expanded, id])]
+            : state.expanded.filter((v) => v != id),
+        ),
+      })
+    if (k.alt && k.text == 'z') {
+      ui.patch({ showArchived: !state.showArchived })
+      return true
+    }
+    if (k.alt && k.text == 'a') {
+      let root = rows.find((b) => b.entity.eid == rootOf(rows, state.id))
+      if (root && a.archive) {
+        void a.archive(root.entity.eid, !root.archived).then(() => {
+          if (
+            !root.archived && !current().showArchived &&
+            rootOf(rows, current().id) == root.entity.eid
+          ) choose({})
+          refresh.current()
+        }).catch((e) => setError(String(e)))
+      }
+      return true
+    }
+    if (k.alt && k.text == 'l') {
+      if (selected?.children) {
+        if (!selected.expanded) expand(selected.bundle.entity.eid, true)
+        else {
+          let next = tree[tree.indexOf(selected) + 1]
+          if (next && next.depth > selected.depth) {
+            choose({ id: next.bundle.entity.eid })
+          }
+        }
+      }
+      return true
+    }
+    if (k.alt && k.text == 'h') {
+      if (selected?.expanded) expand(selected.bundle.entity.eid, false)
+      else if (selected) {
+        let parent = parentId(selected.bundle)
+        if (rows.some((b) => b.entity.eid == parent)) choose({ id: parent })
+      }
+      return true
+    }
+    let within = k.alt && (k.text == 'j' || k.text == 'k')
+    let delta = k.ctrl && k.text == 'n' || k.alt && k.name == 'down' ||
+        k.alt && k.text == 'j'
       ? 1
-      : k.ctrl && k.text == 'p' || k.alt && k.name == 'up'
+      : k.ctrl && k.text == 'p' || k.alt && k.name == 'up' ||
+          k.alt && k.text == 'k'
       ? -1
       : 0
     if (!delta) return false
-    let ids = [
+    let ids: (string | undefined)[] = [
       undefined,
-      ...visibleSessions(
-        projection.peek().sessions,
-        current().id,
-        current().showSettled,
-      ).map((b) => b.entity.eid),
+      ...tree.filter((r) => within || r.depth == 0).map((r) =>
+        r.bundle.entity.eid
+      ),
     ]
-    let at = ids.indexOf(current().id)
+    let at = ids.indexOf(within ? state.id : rootOf(rows, state.id))
     choose({ id: ids[(at + delta + ids.length) % ids.length] })
     return true
   })
@@ -229,6 +282,8 @@ export let App = (
     session: selection.id,
     sessions: data.sessions,
     showSettled,
+    showArchived: Boolean(state.showArchived),
+    expanded: JSON.parse(String(state.expanded ?? '[]')),
   }
   let transcriptItems = useMemo(
     () => data.entries.map((b) => ({ id: b.entity.eid, bundle: b })),

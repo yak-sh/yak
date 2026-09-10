@@ -1,3 +1,4 @@
+import { rootOf } from './tree.ts'
 import { promptEntry } from '@yaks/context'
 import { instructionFiles } from '@yaks/context/host'
 import { homeAt, workspace } from './workspace.ts'
@@ -109,6 +110,7 @@ export type Agent = {
   /** mint and delegate unfiled work under an existing session */
   taskEntry: (session: Eid, text: string) => Promise<{ task: Eid; child: Eid }>
   /** every session, oldest first, each carrying its derived status */
+  archive: (session: Eid, archived: boolean) => Promise<void>
   sessions: () => Promise<Bundle[]>
   /** open/wip tasks, filed or bare, oldest first */
   tasks: () => Promise<Bundle[]>
@@ -221,7 +223,34 @@ export let agent = (opts: Opts = {}): Agent => {
             ...opts,
           }),
       ),
-    sessions: async () => (await h.g.read('.session')).toSorted(byNum),
+    archive: async (session, archived) => {
+      let rows = await h.g.read('.session')
+      let root = rootOf(rows, session)
+      if (!root || !rows.some((b) => b.entity.eid == root)) {
+        throw new Error('Unknown session')
+      }
+      await h.g.apply([{
+        entity: { eid: root },
+        archived: archived ? { at: new Date().toISOString() } : null,
+      }])
+    },
+    sessions: async () =>
+      Promise.all(
+        (await h.g.read('.session')).toSorted(byNum).map(async (b) => ({
+          ...b,
+          session: {
+            ...b.session as Comp,
+            title: titleOf(
+              (await h.g.read('.entry.session=' + b.entity.eid)).toSorted((
+                a,
+                b,
+              ) =>
+                Number((a.entry as Comp).seq) - Number((b.entry as Comp).seq)
+              ),
+            ),
+          },
+        })),
+      ),
     children: (session) => children(h.g, session),
     tasks: async () =>
       (await h.g.read('.task.status=open,wip')).toSorted(byNum),

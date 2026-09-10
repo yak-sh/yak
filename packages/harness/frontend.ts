@@ -12,6 +12,8 @@ export let frontendVocab = loadVocab([{
         selected: { type: 'string' },
         generation: { type: 'number' },
         showSettled: { type: 'boolean' },
+        showArchived: { type: 'boolean' },
+        expanded: { type: 'string' },
       },
     },
     composer: {

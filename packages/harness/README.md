@@ -262,3 +262,24 @@ session, and anonymous/external completions retain their normal receipts.
 Provenance survives restart; older marks without an actor are treated as
 external. Removing and recreating a completion mark records the new writer;
 editing an existing mark preserves its original actor.
+### Session tree
+
+Sessions are grouped beneath their root, with assignment titles and compact IDs.
+`Ctrl+N/P` (also Alt+Down/Up) switch **roots**, skipping descendants. `Alt+j/k`
+moves through visible tree rows; `Alt+l` expands or enters a child, and `Alt+h`
+collapses or selects its parent. Plain hjkl still types in the composer. The
+selected child's ancestors stay open. `Ctrl+S` reveals settled children; roots
+remain visible until archived.
+
+`Alt+a` archives/unarchives the selected root, even when invoked on a
+descendant. `Alt+z` shows archived roots so they can be selected and restored.
+Archival is a persistent `archived` facet: it neither stops execution nor
+removes history. Descendants inherit visibility from their root; they receive no
+archive marks. Expansion and visibility preferences live only in the frontend
+graph. Trees are keyboard-controlled for now; no coordinate-specific mouse hacks
+were added.
+
+The session title projection reads original local input, excluding inherited
+fork history and instruction/notice entries. This currently adds transcript
+reads to domain refreshes (not keystrokes); the existing coarse async domain
+projection adapter remains a performance seam, documented in `FRONTEND.md`.

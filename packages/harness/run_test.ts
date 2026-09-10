@@ -189,3 +189,79 @@ Deno.test('transcript titles ignore instruction snapshots and lazy notices', () 
     '',
   )
 })
+
+Deno.test('archiving is a persistent visibility mark, not an execution transition', async () => {
+  let a = started()
+  try {
+    let root = await a.start('Archive me')
+    await a.idle(root)
+    let before = await a.transcript(root)
+    await a.archive(root, true)
+    assertEquals(
+      Boolean((await a.sessions()).find((b) => b.entity.eid == root)?.archived),
+      true,
+    )
+    assertEquals(await a.transcript(root), before)
+    await a.archive(root, false)
+    assertEquals(
+      Boolean((await a.sessions()).find((b) => b.entity.eid == root)?.archived),
+      false,
+    )
+  } finally {
+    a.close()
+  }
+})
+
+Deno.test('session titles use local assignment, not inherited parent context', async () => {
+  let h = open(':memory:')
+  await h.g.apply([
+    { entity: { eid: 'parent' }, session: { id: 'parent' } },
+    {
+      entity: { eid: 'parent-input' },
+      entry: { session: 'parent', seq: 1 },
+      content: { body: 'Parent discussion' },
+    },
+    {
+      entity: { eid: 'parent-stop' },
+      entry: { session: 'parent', seq: 2 },
+      stop: {},
+    },
+    {
+      entity: { eid: 'worker' },
+      session: { id: 'worker' },
+      fork: { from: 'parent-input' },
+      spawned: { parent: 'parent' },
+    },
+    {
+      entity: { eid: 'assignment' },
+      entry: { session: 'worker', seq: 2 },
+      content: { body: 'Research mushrooms' },
+    },
+    {
+      entity: { eid: 'worker-stop' },
+      entry: { session: 'worker', seq: 3 },
+      stop: {},
+    },
+  ])
+  let a = agent({ h, model: echo, tools: [] })
+  try {
+    assertEquals(
+      ((await a.sessions()).find((b) => b.entity.eid == 'worker')
+        ?.session as Comp)?.title,
+      'Research mushrooms',
+    )
+    await a.archive('worker', true)
+    assertEquals(
+      Boolean(
+        (await a.sessions()).find((b) => b.entity.eid == 'parent')?.archived,
+      ),
+      true,
+    )
+    assertEquals(
+      (await a.sessions()).find((b) => b.entity.eid == 'worker')?.archived,
+      undefined,
+    )
+  } finally {
+    a.close()
+  }
+})

@@ -1,3 +1,4 @@
+import { frontend } from './frontend.ts'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -454,31 +455,103 @@ Deno.test('settled subagents are hidden, toggled and retained while selected', a
   try {
     await settle()
     assert(ui.text().includes('ROOT'))
-    assert(ui.text().includes('ACTIVE_CHILD'))
+    assert(!ui.text().includes('ACTIVE_CHILD'))
     assert(!ui.text().includes('DONE_CHILD'))
     assert(ui.text().includes('Show settled: off'))
     await ui.send('\x0e')
     await settle()
     assert(ui.text().includes('parent retains child result'))
     assert(!ui.text().includes('DONE_CHILD'))
-    await ui.send('\x0e') // hidden child is skipped
+    await ui.send('\x1bl') // expand root
+    await ui.send('\x1bj') // first visible child
     await settle()
-    assert(ui.text().includes('> ● ACTIVE_CHILD'))
+    assert(ui.text().includes('● ACTIVE_CHILD'))
     await ui.send('\x13')
     assert(ui.text().includes('Show settled: on'))
     assert(ui.text().includes('DONE_CHILD'))
-    await ui.send('\x10') // now the settled child is selectable
+    await ui.send('\x1bk') // now the settled child is selectable
     await settle()
-    assert(ui.text().includes('> ● DONE_CHILD'))
+    assert(ui.text().includes('● DONE_CHILD'))
     assert(ui.text().includes('child transcript intact'))
     await ui.send('\x13') // selected child remains even with filter on
-    assert(ui.text().includes('> ● DONE_CHILD'))
-    await ui.send('\x10')
+    assert(ui.text().includes('● DONE_CHILD'))
+    await ui.send('\x1bh')
+    await ui.send('\x1bh') // collapse root
     await settle()
     assert(ui.text().includes('parent retains child result'))
     assert(!ui.text().includes('DONE_CHILD'))
     assertEquals(sessions.length, 3)
   } finally {
     ui.free()
+  }
+})
+
+Deno.test('tree navigation skips children between roots and archive toggles stay in graph state', async () => {
+  let sessions: Bundle[] = [
+    { entity: { eid: 'a' }, session: { id: 'ROOT_A', status: 'settled' } },
+    {
+      entity: { eid: 'child' },
+      session: { id: 'WORKER', title: 'Research widgets', status: 'running' },
+      spawned: { parent: 'a' },
+    },
+    { entity: { eid: 'b' }, session: { id: 'ROOT_B', status: 'settled' } },
+  ]
+  let state = frontend()
+  let a: UIAgent = {
+    sessions: () => Promise.resolve(sessions),
+    children: () => Promise.resolve([]),
+    tasks: () => Promise.resolve([]),
+    transcript: () => Promise.resolve([]),
+    entry: () => h('span', null),
+    line: () => '',
+    start: () => Promise.resolve('a'),
+    send: () => Promise.resolve('input'),
+    taskEntry: () => Promise.resolve({ task: 't', child: 'c' }),
+    archive: (id, archived) => {
+      let row = sessions.find((b) => b.entity.eid == id)!
+      if (archived) row.archived = {}
+      else delete row.archived
+      return Promise.resolve()
+    },
+  }
+  let ui = await mount(
+    () => h(App, { agent: a, subscribe: () => () => {}, frontend: state }),
+    130,
+    40,
+  )
+  let selected = () => (state.client.ent('view')!.frontend as Comp).selected
+  try {
+    await settle()
+    await ui.send('\x0e')
+    await settle()
+    assertEquals(selected(), 'a')
+    await ui.send('\x1bl')
+    assert(ui.text().includes('Research widgets'), ui.text())
+    await ui.send('\x1bj')
+    await settle()
+    assertEquals(selected(), 'child')
+    await ui.send('\x0e')
+    await settle()
+    assertEquals(selected(), 'b')
+    await ui.send('\x10')
+    await settle()
+    assertEquals(selected(), 'a')
+    await ui.send('\x1ba')
+    await settle()
+    assert(!ui.text().includes('ROOT_A'))
+    assert(sessions[0].archived)
+    assertEquals((sessions[1].session as Comp).status, 'running')
+    await ui.send('\x1bz')
+    assert(ui.text().includes('ROOT_A'))
+    await ui.send('\x0e')
+    await settle()
+    await ui.send('\x1ba')
+    await settle()
+    assertEquals(sessions[0].archived, undefined)
+    await ui.send('hjkl') // never steal plain vim letters from the editor
+    assertEquals((state.client.ent('draft')!.draft as Comp).text, 'hjkl')
+  } finally {
+    ui.free()
+    state.close()
   }
 })

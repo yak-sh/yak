@@ -1,3 +1,4 @@
+import { sessionTree } from './tree.ts'
 /** Sidebar contributions: one graph read and one renderer, added as one row. */
 import { type ComponentType, h } from 'preact'
 import type { Bundle, Comp, Eid } from '@yaks/graph'
@@ -5,18 +6,20 @@ import type { Agent } from './run.ts'
 import { indicator } from './status.ts'
 
 /** The doors used by the UI; a test can supply just these. */
-export type UIAgent = Pick<
-  Agent,
-  | 'start'
-  | 'send'
-  | 'taskEntry'
-  | 'sessions'
-  | 'children'
-  | 'tasks'
-  | 'transcript'
-  | 'line'
-  | 'entry'
->
+export type UIAgent =
+  & Pick<
+    Agent,
+    | 'start'
+    | 'send'
+    | 'taskEntry'
+    | 'sessions'
+    | 'children'
+    | 'tasks'
+    | 'transcript'
+    | 'line'
+    | 'entry'
+  >
+  & Partial<Pick<Agent, 'archive'>>
 
 /** The selection and graph doors handed to every panel. */
 export type Context = {
@@ -24,6 +27,8 @@ export type Context = {
   session?: Eid
   sessions: Bundle[]
   showSettled?: boolean
+  showArchived?: boolean
+  expanded?: string[]
 }
 /** A panel's data stays in bundles, not in a second model of the graph. */
 export type Panel = {
@@ -48,10 +53,13 @@ export let visibleSessions = (
 export let shortSessionId = (id: string): string =>
   id.replace(/^child:/, '').slice(0, 8)
 
-let sessionLine = (b: Bundle) => {
-  let name = (b.session as Comp).id
-  return name && name != b.entity.eid
-    ? String(name)
+export let sessionLine = (b: Bundle) => {
+  let session = b.session as Comp
+  let title = session.title || (b.doc as Comp | undefined)?.title
+  let name = session.id && session.id != b.entity.eid ? String(session.id) : ''
+  let label = title ? String(title) : name
+  return label
+    ? label + ' [' + shortSessionId(b.entity.eid) + ']'
     : shortSessionId(b.entity.eid)
 }
 let list = (
@@ -72,7 +80,7 @@ export let panels: Panel[] = [
   {
     title: 'Sessions',
     read: (c) => c.sessions,
-    Render: ({ rows, session, showSettled }) =>
+    Render: ({ rows, session, showSettled, showArchived, expanded }) =>
       h(
         'div',
         null,
@@ -81,7 +89,12 @@ export let panels: Panel[] = [
           { class: session ? 'Muted' : 'Title' },
           `${session ? '  ' : '> '}New session`,
         ),
-        ...visibleSessions(rows, session, showSettled).map((b) =>
+        ...sessionTree(rows, {
+          selected: session,
+          showSettled,
+          showArchived,
+          expanded,
+        }).map(({ bundle: b, depth, children, expanded: open }) =>
           h(
             'div',
             {
@@ -90,21 +103,13 @@ export let panels: Panel[] = [
               wrap: '1',
             },
             session == b.entity.eid ? '> ' : '  ',
+            '  '.repeat(depth),
+            children ? (open ? '▾ ' : '▸ ') : '  ',
             indicator(b),
             ' ',
             sessionLine(b),
           )
         ),
-      ),
-  },
-  {
-    title: 'Subagents',
-    read: (c) => c.session ? c.agent.children(c.session) : [],
-    Render: ({ rows, session, showSettled }) =>
-      list(
-        visibleSessions(rows, session, showSettled),
-        (b) => h('span', null, indicator(b), ' ', sessionLine(b)),
-        'No visible subagents',
       ),
   },
   {
@@ -168,13 +173,17 @@ export let panels: Panel[] = [
   {
     title: 'Keys',
     read: () => [],
-    Render: ({ showSettled }) =>
+    Render: ({ showSettled, showArchived }) =>
       h(
         'div',
         null,
         ...[
-          '^N / ^P  select session',
-          'Alt+↑/↓   select session',
+          '^N / ^P  next/previous root',
+          'Alt+↑/↓   next/previous root',
+          'Alt+j/k   next/previous tree row',
+          'Alt+h/l   collapse/parent; expand/child',
+          'Alt+a     archive/unarchive root',
+          `Alt+z     Show archived: ${showArchived ? 'on' : 'off'}`,
           '^O        new session',
           `^S        Show settled: ${showSettled ? 'on' : 'off'}`,
           'Tab       message / task',

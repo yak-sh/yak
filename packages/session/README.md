@@ -140,3 +140,8 @@ a drawing are plain entities in your own vocabulary; a lock works on anything.
 Pure TypeScript; the only platform API it touches is `crypto.randomUUID`, to
 mint entries and conflict records (pass your own `mint` to avoid it). Runs on
 **Deno**, **Node**, in the **browser**, and inside a Cloudflare Worker.
+
+`archived{at}` is a durable visibility facet, independent of transcript status.
+It does not stop a daemon, release claims, or remove entries. Consumers decide
+which listings hide it; the harness archives root sessions and hides their
+subtrees without copying the mark to every child.
