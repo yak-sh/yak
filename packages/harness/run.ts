@@ -314,7 +314,7 @@ export let agent = (opts: Opts = {}): Agent => {
     entry: (b) =>
       tree(transcriptViews, b, 'Transcript', h.vocab, {
         inlineImages: Deno.env.get('HARNESS_GRAPHICS') == 'kitty',
-        image: (eid: string) => readImage(h.g, eid, opts.images),
+        image: (eid: string) => a.image(eid),
         names,
         anchor: model.anchor,
       }),
@@ -362,6 +362,7 @@ export let agent = (opts: Opts = {}): Agent => {
       'children',
       'transcript',
       'instruct',
+      'image',
     ] as const
   ) {
     let method = a[key] as (...args: unknown[]) => Promise<unknown>

@@ -445,10 +445,15 @@ export let tui = async (): Promise<void> => {
   const backend = await remote({ instructions: INSTRUCTIONS, cwd: Deno.cwd() })
   try {
     await backend.resume()
-    await run(() => h(App, { agent: backend.agent, subscribe: backend.subscribe }), {
-      graphics: Deno.env.get('HARNESS_GRAPHICS') == 'kitty' ? 'kitty' : 'none',
-      tmux: !!Deno.env.get('TMUX'),
-    })
+    await run(
+      () => h(App, { agent: backend.agent, subscribe: backend.subscribe }),
+      {
+        graphics: Deno.env.get('HARNESS_GRAPHICS') == 'kitty'
+          ? 'kitty'
+          : 'none',
+        tmux: !!Deno.env.get('TMUX'),
+      },
+    )
   } finally {
     await backend.close()
   }

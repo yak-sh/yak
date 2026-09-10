@@ -295,3 +295,30 @@ Deno.test('Agent close stops admission and drains an active model before SQLite 
   await shutdown
   assertEquals(closed, true)
 })
+
+Deno.test('close drains a held storage callback without stopping an independent process', async () => {
+  let a = started()
+  let entered = Promise.withResolvers<void>()
+  let release = Promise.withResolvers<void>()
+  let process = new Deno.Command('/bin/sleep', { args: ['10'] }).spawn()
+  try {
+    let s = await a.start('callback')
+    await a.idle(s)
+    let callback = a.d.enqueue(s, async () => {
+      entered.resolve()
+      await release.promise
+      await a.h.g.apply([{ entity: { eid: crypto.randomUUID() }, task: {} }])
+    })
+    await entered.promise
+    let close = a.close()
+    release.resolve()
+    await callback
+    await close
+    // Independent process ownership is not transferred to Agent.close().
+    Deno.kill(process.pid, 'SIGCONT')
+  } finally {
+    process.kill('SIGTERM')
+    await process.status
+    await a.close()
+  }
+})

@@ -102,3 +102,15 @@ burst writes, duplicate close, peer disconnect, and a real worker crash.
 The diagnostic journal confirmed the reported normal Ctrl+C failure was the
 old two-second `Worker shutdown timeout` exception; that deadline now returns
 an expected non-drained result instead.
+
+A private-HOME tmux smoke test of the default TUI exited 0 on Ctrl+C, restored
+identical `stty -g` settings, and produced no exception journal. The stuck-worker
+test also reopens its private file-backed database, resumes, and gets a reply.
+An admitted storage-callback test verifies an independently spawned process is
+still alive after Agent close. This is not a live-provider/subagent load test.
+
+A private-HOME tmux smoke test of the default TUI exited 0 on Ctrl+C, restored
+identical `stty -g` settings, and produced no exception journal. The stuck-worker
+test also reopens its private file-backed database, resumes, and gets a reply.
+An admitted storage-callback test verifies an independently spawned process is
+still alive after Agent close. This is not a live-provider/subagent load test.

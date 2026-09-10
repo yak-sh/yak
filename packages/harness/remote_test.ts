@@ -159,7 +159,8 @@ Deno.test('worker exit drains a burst and is idempotent', async () => {
 
 Deno.test('stuck model deadline is an expected bounded exit, not a crash', async () => {
   let dir = await Deno.makeTempDir()
-  let r = await remote({ db: ':memory:', cwd: dir, fake: 'stuck' })
+  let db = dir + '/shutdown.db'
+  let r = await remote({ db, cwd: dir, fake: 'stuck' })
   try {
     await r.agent.start('stuck')
     // Let the admitted turn enter the model callback.
@@ -167,6 +168,21 @@ Deno.test('stuck model deadline is an expected bounded exit, not a crash', async
     let start = performance.now()
     assertEquals(await r.close(), { drained: false })
     assert(performance.now() - start < 4000)
+    let resumed = await remote({ db, cwd: dir, fake: true })
+    try {
+      await resumed.resume()
+      let sessions = await resumed.agent.sessions()
+      assertEquals(sessions.length, 1)
+      let id = sessions[0].entity.eid
+      await resumed.idle(id)
+      assert(
+        (await resumed.agent.transcript(id)).some((b) =>
+          (b.content as { body?: string })?.body == 'ok'
+        ),
+      )
+    } finally {
+      await resumed.close()
+    }
   } finally {
     await r.close()
     await Deno.remove(dir, { recursive: true })
