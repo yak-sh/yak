@@ -459,11 +459,13 @@ export let rows = ({ changes }: { changes: Change[] }, quarantined = false) => {
   let out = new Map<string, Row>()
   for (let { eid, name, comp } of changes) {
     if (!comp) continue
-    let row = out.get(eid) ??
-      { eid, num: 0, kind: 'entity', comps: {} }
+    let row = out.get(eid)
+    if (!row) {
+      row = { eid, num: 0, kind: 'entity', comps: {} }
+      out.set(eid, row)
+    }
     if (name == 'entity') row.num = Number(comp.num ?? 0)
     row.comps[name] = comp // entity rides too (eid, num); provenance is created/updated
-    out.set(eid, row)
   }
   for (let r of out.values()) {
     projectSession(r.comps)

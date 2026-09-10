@@ -177,6 +177,27 @@ Deno.test('fetched dedupes and bounds address batches', async () => {
   assertEquals(calls.every((c) => c[1] == '.kind=person'), true)
 })
 
+Deno.test('rows: insert each owner once, retain encounter order and last facets', () => {
+  let first = { title: 'First' }
+  let last = { title: 'Last' }
+  let all = rows({
+    changes: [
+      { eid: T1, name: 'doc', comp: first },
+      { eid: S, name: 'entity', comp: { eid: S, num: 1 } },
+      { eid: T1, name: 'entity', comp: { eid: T1, num: 2 } },
+      { eid: T1, name: 'task', comp: {} },
+      { eid: T1, name: 'doc', comp: last },
+      { eid: T1, name: 'doc', comp: null },
+      { eid: 'absent', name: 'doc', comp: null },
+    ],
+  })
+  assertEquals(all.map((r) => [r.eid, r.num, r.kind]), [
+    [T1, 2, 'task'],
+    [S, 1, 'entity'],
+  ])
+  assertEquals(all[0].comps.doc === last, true)
+})
+
 Deno.test('rows: canonical Session facets win, including null', () => {
   let projected = rows({
     changes: [
