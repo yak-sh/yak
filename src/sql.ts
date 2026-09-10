@@ -237,9 +237,9 @@ export let windowed = (base: Rel, w: Win): Rel => {
 export let priorityWindow = (base: Rel, w: Win): Rel => {
   let ir = toPackage(base)
   let priority =
-    'coalesce((select priority from filed where filed.entity = entity.eid), 0)'
+    'coalesce((select priority from filed where filed.entity = entity.id), 0)'
   let anchor =
-    'coalesce((select priority from filed join entity a on a.eid = filed.entity where a.num = ?), 0)'
+    'coalesce((select priority from filed join entity a on a.id = filed.entity where a.num = ?), 0)'
   return fromPackage({
     ...ir,
     where: w.after == null ? ir.where : and(

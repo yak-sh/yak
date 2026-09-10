@@ -1,4 +1,5 @@
 import { type Signal, useComputed, useSignal } from '@preact/signals'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { camera, ent, mutate, pinZ, toFront } from '../live.ts'
 import { type Pinned } from '../types.ts'
 import { block, el } from './ui.tsx'
@@ -113,6 +114,19 @@ export let Card = (
     p.target,
     collection ? 'doc.title,board.query,project.color' : undefined,
   )
+  // A canvas can hold many boards outside the viewport. Keep their frames
+  // and titles in place, but acquire member pages only as a tile approaches.
+  let frame = useRef<HTMLElement>(null)
+  let [near, setNear] = useState(!globalThis.IntersectionObserver)
+  useEffect(() => {
+    if (!frame.current || !globalThis.IntersectionObserver) return
+    let observer = new IntersectionObserver(
+      ([entry]) => setNear(entry.isIntersecting),
+      { rootMargin: '160px' },
+    )
+    observer.observe(frame.current)
+    return () => observer.disconnect()
+  }, [])
   // Plain props do not invalidate a computed signal. Mirror the latest pin
   // into one so moves update the style while z-only raises still bind
   // straight to the attribute without rerendering the card body.
@@ -206,7 +220,7 @@ export let Card = (
       // and selectable text keep the browser's own menu.
       onContextMenu={cardMenuAt(ent(p.target))}
     >
-      <Frame>
+      <Frame elRef={frame}>
         <Tabs>
           <Entity eid={p.target} view='Card.Title' />
           {filterable.has(p.view) && <FilterInput eid={p.target} />}
@@ -244,7 +258,9 @@ export let Card = (
               face (Card.Full) serves it, anything else walks to the plain
               role — the titlebar above already shows the head. */
           }
-          <Entity eid={p.target} view={`Card.${p.view}`} />
+          {!collection || near
+            ? <Entity eid={p.target} view={`Card.${p.view}`} />
+            : <div class={p.view} />}
         </Scroll>
       </Frame>
       {!docked && resizeDirs.map((d) => (

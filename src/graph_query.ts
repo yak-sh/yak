@@ -49,6 +49,7 @@ import {
   locate,
   matching,
   reaching,
+  readDriver,
   referrersOf,
   refsOf,
   rowsOf,
@@ -512,6 +513,53 @@ export type SubAnswer = {
   exact?: boolean
 }
 
+// Warmth needs three recall scalars, two timestamps and an archive bit — not
+// every document/session body in the graph. Rank this narrow projection and
+// hydrate ONLY the selected page. The filter still comes from the shared SQL
+// compiler; declining/source-backed filters retain the bounded fallback.
+let hotPage = (db: Sql, asked: Pred[], win: Win): SubAnswer | undefined => {
+  if (hasSources()) return
+  let built = where(db, screened(inputsOf(asked), false))
+  if (!built) return
+  let filter = toSql(built)
+  let candidates = readDriver(db).query(
+    `select entity.eid, entity.num, r.count, r.first_at, r.last_at,
+       u.at as updated_at, c.at as created_at,
+       ((p.entity is not null and a.entity is not null) or
+         pa.entity is not null) as sunk
+     from entity
+     left join recall r on r.entity = entity.id
+     left join updated u on u.entity = entity.id
+     left join created c on c.entity = entity.id
+     left join project p on p.entity = entity.id
+     left join archived a on a.entity = entity.id
+     left join filed f on f.entity = entity.id
+     left join archived pa on pa.entity = f.project
+     where entity.eid in (${filter.sql})
+     order by entity.id`,
+    filter.params,
+  )
+  let now = Date.now()
+  let ranked = candidates.map((r) => ({
+    eid: String(r.eid),
+    num: Number(r.num ?? 0),
+    score: warm({
+      recall: { count: r.count, first_at: r.first_at, last_at: r.last_at },
+      updated: { at: r.updated_at },
+      created: { at: r.created_at },
+      ...(r.sunk ? { project: {}, archived: {} } : {}),
+    }, now),
+  })).sort((a, b) => b.score - a.score)
+  let page = pageRanked(ranked, win)
+  let rows = new Map(rowsOf(db, page.map((r) => r.eid)).map((r) => [r.eid, r]))
+  return {
+    preds: asked,
+    hits: page.flatMap((r) => rows.has(r.eid) ? [rowed(rows.get(r.eid)!)] : []),
+    exact: true,
+    window: { limit: win.limit!, total: ranked.length },
+  }
+}
+
 export let evalSub = (
   db: Sql,
   q: string,
@@ -530,6 +578,12 @@ export let evalSub = (
   // all it wants; SUB_CAP is the server's floor under the ones that say nothing,
   // so no single socket can stage the graph. Both are the same stated form.
   let limit = win.limit ?? cap
+  // A small hot tile must be a prefix of the ranked answer, not the hottest
+  // row in a small newest-first sample. Rank on the server before windowing.
+  if (orderOf(asked) == 'hot') {
+    let ranked = hotPage(db, asked, { ...win, limit })
+    if (ranked) return ranked
+  }
   // Read ONE past the bound: that single extra row tells a whole answer from a
   // prefix without paying a count for every subscription in the fleet.
   let fast = evalFast(db, q, false, { limit: limit + 1, after: win.after })

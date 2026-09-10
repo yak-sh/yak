@@ -84,6 +84,52 @@ let fresh = newest.filter((e) => {
   return i == 1 ? true : i == 2 ? false : i % 2 == 0
 })
 
+Deno.test('priority window orders before limiting and refills on an outside rank edit', () => {
+  let ids = Array.from({ length: 5 }, () => uuid())
+  for (let [i, eid] of ids.entries()) {
+    apply(db, [
+      { eid, name: 'task', comp: {} },
+      { eid, name: 'filed', comp: { domain: 'rank-window', priority: i + 1 } },
+    ])
+  }
+  let line = '.domain=rank-window .task! .order=priority .limit=2'
+  let answer = evalSub(db, line)
+  assertEquals(answer.hits.map((r) => r.eid), ids.slice(0, 2))
+  assertEquals(evalGraph(db, line).hits.map((r) => r.eid), ids.slice(0, 2))
+  let cursor = answer.hits[1].num
+  assertEquals(
+    evalSub(db, line + ` .after=${cursor}`).hits.map((r) => r.eid),
+    ids.slice(2, 4),
+  )
+  let seen: Record<string, unknown>[] = []
+  let s = subserve(db, (f) => seen.push(f as Record<string, unknown>))
+  s.frame({ sub: 'rank-window', q: line })
+  let change = { eid: ids[4], name: 'filed', comp: { priority: 0 } }
+  apply(db, [change])
+  seen.length = 0
+  s.maintain([change] as never)
+  assertEquals(
+    seen.some((f) => (f.drop as string[] | undefined)?.includes(ids[1])),
+    true,
+  )
+  assertEquals(
+    seen.some((f) =>
+      (f.changes as { eid: string }[] | undefined)?.some((c) => c.eid == ids[4])
+    ),
+    true,
+  )
+})
+
+Deno.test('hot tile windows are prefixes of the ranked answer, not newest-row samples', () => {
+  let line = `${MINE}&.order=hot`
+  let whole = evalGraph(db, line).hits
+  let page = evalSub(db, line + '&.limit=3')
+  assertEquals(page.hits.map((r) => r.eid), whole.slice(0, 3).map((r) => r.eid))
+  assertEquals(page.window, { limit: 3, total: whole.length })
+  let next = evalSub(db, line + `&.limit=3&.after=${page.hits[2].num}`)
+  assertEquals(next.hits.map((r) => r.eid), whole.slice(3, 6).map((r) => r.eid))
+})
+
 // ---- the grammar ----
 
 Deno.test('window: .limit and .after parse into one folded bound', () => {

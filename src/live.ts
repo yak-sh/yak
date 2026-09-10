@@ -298,6 +298,7 @@ type ServerSet = {
   // resolver owns the signal (re-primed on read, refreshed on local writes);
   // from the first landSub frame on, the server's answer is authoritative.
   live: boolean
+  line: string
 }
 let queryUses = new Map<string, ServerSet>() // canonical preds key -> set
 let querySignals = new Map<string, Signal<string[]>>() // sub name -> its signal
@@ -460,6 +461,7 @@ let refreshServerSets = (eids: Set<string>) => {
 // it down, and an imperative read meanwhile reuses the held set.
 let serverSet = (preds: Pred[], line: string): ServerSet => {
   let key = qkey(preds)
+  let bounded = textual(preds) || preds.some((p) => p.win || p.op == ORDER)
   let found = queryUses.get(key)
   if (!found) {
     // `q:<canonical preds>` — the projection is IN the key, so the same filter
@@ -467,9 +469,10 @@ let serverSet = (preds: Pred[], line: string): ServerSet => {
     let sub = `q:${key}`
     found = {
       n: 0,
-      ids: signal(textual(preds) ? [] : mem.resolve(preds)),
+      ids: signal(bounded ? [] : mem.resolve(preds)),
       sub,
       preds,
+      line,
       live: false,
       wake: (fieldsOf(preds) ?? []).filter((f) => f.wake),
       vals: new Map(),
@@ -478,7 +481,7 @@ let serverSet = (preds: Pred[], line: string): ServerSet => {
     querySignals.set(sub, found.ids)
     seedWake(found, found.ids.peek())
     ownBoard(sub, line)
-  } else if (!found.live && !textual(preds)) {
+  } else if (!found.live && !bounded) {
     // Unconfirmed by the server: the prime may predate cache churn a local
     // maintenance pass didn't see (a wholesale replacement) — re-prime.
     let ids = mem.resolve(preds)
@@ -492,24 +495,23 @@ let serverSet = (preds: Pred[], line: string): ServerSet => {
 }
 
 // Read a query's result signal (get-or-create; the render half of the hook).
-export let queryEids = (preds: Pred[]): Signal<string[]> => {
-  let line = serverLine(preds)
+export let queryEids = (preds: Pred[], source?: string): Signal<string[]> => {
+  let line = source?.trim() || serverLine(preds)
   return line ? serverSet(preds, line).ids : (store ?? mem).subscribe(preds)
 }
 // Ref-count a query for a component's lifetime (the hook's effect half); the
 // last release drops the set so distinct queries don't accumulate.
-export let holdQuery = (preds: Pred[]): Signal<string[]> => {
-  let line = serverLine(preds)
+export let holdQuery = (preds: Pred[], source?: string): Signal<string[]> => {
+  let line = source?.trim() || serverLine(preds)
   if (!line) return (store ?? mem).hold(preds)
   let s = serverSet(preds, line)
   s.n++
   return s.ids
 }
 export let dropQuery = (preds: Pred[]) => {
-  let line = serverLine(preds)
-  if (!line) return void (store ?? mem).drop(preds)
   let s = queryUses.get(qkey(preds))
-  if (!s || --s.n > 0) return
+  if (!s) return void (store ?? mem).drop(preds)
+  if (--s.n > 0) return
   queryUses.delete(qkey(preds))
   querySignals.delete(s.sub)
   dropBoard(s.sub)
@@ -2447,8 +2449,9 @@ export type SubscriptionRead = { sub: string; state: SubscriptionState }
 // shapes share the exact ServerSet that queryEids reads.
 export let querySubscription = (
   preds: Pred[],
+  source?: string,
 ): SubscriptionRead | undefined => {
-  let line = serverLine(preds)
+  let line = source?.trim() || serverLine(preds)
   if (!line) return undefined
   let set = serverSet(preds, line)
   return { sub: set.sub, state: subscriptionState(set.sub) }
@@ -2457,7 +2460,7 @@ export let querySubscription = (
 export let retrySubscription = (sub: string) => {
   if (owner?.retry(sub)) return true
   let direct = [...queryUses.values()].find((set) => set.sub == sub)
-  let q = boardUses.get(sub)?.q ?? (direct && serverLine(direct.preds)) ??
+  let q = boardUses.get(sub)?.q ?? direct?.line ??
     (sub.startsWith('entries:')
       ? `.entry.session=${sub.slice('entries:'.length)}`
       : sub.startsWith('route:')
@@ -3394,6 +3397,7 @@ let aggQuery = (name: string, line: string): AggSet => {
   let found = aggSet(name, line)
   if (!found.open) {
     found.open = true
+    found.line = line
     ownBoard(name, line)
   } else if (found.line != line) {
     found.line = line
@@ -3414,7 +3418,12 @@ let scheduleCommentTally = () => {
     commentScheduled = false
     let targets = [...commentTargets.keys()].sort()
     if (!targets.length) {
-      aggSets.delete(COMMENTS)
+      let set = aggSets.get(COMMENTS)
+      if (set) {
+        set.open = false
+        set.live.value = false
+        set.map.value = {}
+      }
       dropBoard(COMMENTS)
     } else {
       aggQuery(
@@ -3448,7 +3457,7 @@ export let commentCount = (target: string): Signal<number> =>
   })
 
 // An aggregate held for a VIEW's lifetime. The comment tally above is one
-// GLOBAL shape and stays open for the socket's life; an aggregate keyed by an
+// shared shape held by mounted badges; an aggregate keyed by an
 // ENTITY (a board's status tally) has an unbounded key space, so its render
 // path holds and releases exactly like an eid-keyed query sub does (T-21489) —
 // the last drop closes the wire sub.

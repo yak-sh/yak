@@ -9,7 +9,7 @@
 // The signal's backing is the store-agnostic seam (live.ts queryEids): today an
 // in-memory index, tomorrow an IDB indexed cursor — the call site never
 // changes (T-17046).
-import { useEffect, useMemo } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useMemo } from 'preact/hooks'
 import {
   type Backlink,
   dropQuery,
@@ -39,19 +39,27 @@ export type QueryResult = {
   loaded: typeof loaded
 }
 
+// Windowed/server-owned callers opt into the authored line: re-serializing
+// bound predicates can decline valid grammar (edge riders, time comparisons,
+// reverse hops) into a local cache scan. Legacy local callers keep that path.
 // The result and addressed read state of one direct query. Most callers need
 // only eids; query-driven UI also consumes a refusal so it never paints a
 // local partial set as the server's answer.
-export let useQueryResult = (query: string, enabled = true): QueryResult => {
+export let useQueryResult = (
+  query: string,
+  enabled = true,
+  direct = false,
+): QueryResult => {
   let preds = useMemo(() => resolve(query), [query])
-  useEffect(() => {
+  let source = direct ? query : undefined
+  useLayoutEffect(() => {
     if (!enabled) return
-    holdQuery(preds)
+    holdQuery(preds, source)
     return () => dropQuery(preds)
-  }, [preds, enabled])
-  let subscription = enabled ? querySubscription(preds) : undefined
+  }, [preds, enabled, source])
+  let subscription = enabled ? querySubscription(preds, source) : undefined
   return {
-    eids: enabled ? queryEids(preds).value : [],
+    eids: enabled ? queryEids(preds, source).value : [],
     subscription,
     ready: !subscription || subscription.state.status == 'ready',
     loaded,
@@ -60,8 +68,8 @@ export let useQueryResult = (query: string, enabled = true): QueryResult => {
 
 // The matching eids, as a live array. Prefer this when the caller only needs
 // ids (membership, a count); `useQuery` assembles the Ents.
-export let useQueryEids = (query: string): string[] =>
-  useQueryResult(query).eids
+export let useQueryEids = (query: string, direct = false): string[] =>
+  useQueryResult(query, true, direct).eids
 
 // The matching entities, assembled. Each rides its own `row` signal, so the
 // list re-renders on membership change and each row on its own edits.

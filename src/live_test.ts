@@ -27,6 +27,7 @@ import {
   findEid,
   foldFor,
   gated,
+  holdCommentCount,
   holdQuery,
   hostFrom,
   inbox,
@@ -99,6 +100,50 @@ let mark = (status: string, eid: string): Record<string, unknown> =>
 // put the wire back with wired(); everything else can hold a subscription
 // without a server existing.
 let transport = useRoute(() => {})
+
+Deno.test('comment badges share a target tally, refcount it, and reopen it', async () => {
+  let sent: Record<string, unknown>[] = []
+  let prior = useRoute((f) => sent.push(f as Record<string, unknown>))
+  let a = crypto.randomUUID(), b = crypto.randomUUID()
+  let value = commentCount(a)
+  let off = holdCommentCount(a), duplicate = holdCommentCount(a)
+  let other = holdCommentCount(b)
+  try {
+    await Promise.resolve()
+    let asks = () => sent.filter((f) => f.sub == 'agg:comments')
+    assertEquals(asks().length, 1)
+    assertEquals(String(asks()[0].q).includes('.tally=comment.target'), true)
+    assertEquals(String(asks()[0].q).includes(a), true)
+    assertEquals(String(asks()[0].q).includes(b), true)
+    landSub({
+      sub: 'agg:comments',
+      changes: [],
+      replace: true,
+      agg: { [a]: 7 },
+    })
+    assertEquals(value.value, 7)
+    off()
+    await Promise.resolve()
+    assertEquals(asks().length, 1)
+    duplicate()
+    other()
+    await Promise.resolve()
+    assertEquals(sent.some((f) => f.unsub == 'agg:comments'), true)
+    let again = holdCommentCount(a)
+    await Promise.resolve()
+    landSub({
+      sub: 'agg:comments',
+      changes: [],
+      replace: true,
+      agg: { [a]: 9 },
+    })
+    assertEquals(value.value, 9)
+    again()
+    await Promise.resolve()
+  } finally {
+    useRoute(prior)
+  }
+})
 let wired = <T>(fn: () => T): T => {
   useRoute(transport)
   try {

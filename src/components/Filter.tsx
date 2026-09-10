@@ -36,6 +36,19 @@ export let filterable = new Set(['Board', 'List'])
 // while nothing narrows it here. Reading the signal subscribes the caller.
 export let filterLine = (eid: string): string => lineOf(eid).value
 
+// Windowed faces filter BEFORE taking a page. A half-typed expression stays
+// inert, just as it does for the local faces, but a valid one rides the saved
+// query instead of filtering an already-truncated page of cached rows.
+export let filteredQuery = (eid: string, query: string): string => {
+  let line = filterLine(eid).trim()
+  try {
+    parseQuery(line)
+    return line ? query + '&' + line : query
+  } catch {
+    return query
+  }
+}
+
 // the face's half: the current pass predicate for this entity's rows
 export type Pass = ((eid: string) => boolean) & {
   subscription?: SubscriptionRead

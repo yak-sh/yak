@@ -81,7 +81,7 @@ export let traySessions = (rows: [string, Session][]) =>
 
 let useLive = () => {
   // Fixed query list: hooks and ownership stay stable across renders.
-  let ids = traySessionQueries.flatMap((q) => useQueryEids(q))
+  let ids = traySessionQueries.flatMap((q) => useQueryEids(q, true))
   return traySessions([...new Set(ids)].flatMap((eid) => {
     let s = ent(eid).session
     return s && shown(eid, s) ? [[eid, s] as [string, Session]] : []
@@ -142,8 +142,9 @@ let drop = (e: DragEvent) => {
 // collapsed tray — the default — never asks for those columns at all.
 let LiveRows = ({ ls }: { ls: [string, Session][] }) => {
   useQueryEids(
-    `.num=${ls.map(([eid]) => ent(eid).num).join(',') || 0}&` +
+    `.eid=${ls.map(([eid]) => eid).join(',')}&` +
       sessionDetail.split('&')[1],
+    true,
   )
   return (
     <Group>

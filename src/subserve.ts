@@ -789,7 +789,7 @@ export let subserve = (db: Sql, send: (frame: Frame) => void) => {
               line,
               limit: window.limit,
               total: window.total,
-              watch: predComps(inputsOf(asked)),
+              watch: predComps(asked),
               exact: !!('exact' in answer && answer.exact),
             },
           }
