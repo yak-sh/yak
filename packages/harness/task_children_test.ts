@@ -331,3 +331,162 @@ Deno.test('cancelled task returns cancelled; stopped parents do not receive deli
   assertEquals((await transcript(h.g, 'p')).at(-1)!.entity.eid, 'parent-stop')
   h.close()
 })
+
+for (let writer of ['p', 'child', 'other', 'external']) {
+  Deno.test(
+    'completion by ' + writer +
+      ': durable provenance controls only the redundant receipt',
+    async () => {
+      let { h, ctx, spawn } = setup()
+      let child = String(await spawn.run({ task: 'work' }, ctx))
+      await h.g.apply([{
+        entity: { eid: 'answer' },
+        entry: { session: child, seq: 2 },
+        content: { body: 'Finished', source: 'call' },
+      }])
+      await deliverChild(h.g, child)
+      // Close the original tool call so any new receipt would wake the parent.
+      let before = (await transcript(h.g, 'p')).length
+      let asks = 0
+      let errors: unknown[] = []
+      let d = daemon(
+        h.g,
+        h.fx,
+        {
+          model: () => {
+            asks++
+            return Promise.resolve({
+              id: 'r',
+              model: 'fake',
+              items: [{ kind: 'assistant', text: 'Received' }],
+            })
+          },
+          tools: [],
+        },
+        undefined,
+        (e) => errors.push(e),
+      )
+      let actor = writer == 'child' ? child : writer
+      if (writer == 'external') {
+        await h.g.apply([{ entity: { eid: 'work' }, completed: { by: 'p' } }])
+      } else {
+        let apply = harnessTools(h.g).find((t) => t.name == 'graph_apply')!
+        await apply.run({
+          change: [{
+            entity: { eid: 'work' },
+            completed: { by: 'p' },
+            $actor: { by: 'spoof' },
+          }],
+        }, { ...ctx, session: actor })
+      }
+      await d.idle('p')
+      let [work] = await h.g.read('.task')
+      assertEquals(
+        (work.completed as Comp).actor ?? null,
+        writer == 'external' ? null : actor,
+      )
+      assertEquals((work.completed as Comp).by, 'p') // work attribution is not the writer
+      let receiptId = 'delivery:' + child + ':task:work:done'
+      assertEquals(
+        (await transcript(h.g, 'p')).some((b) => b.entity.eid == receiptId),
+        writer != 'p',
+      )
+      if (writer == 'p') {
+        assertEquals(asks, 0)
+        assertEquals((await transcript(h.g, 'p')).length, before)
+      }
+      let after = (await transcript(h.g, 'p')).length
+      // Reconstruct delivery from durable state, with no remembered actor/event.
+      await h.g.apply([{
+        entity: { eid: 'work' },
+        completed: { at: '2026-01-01T00:00:00Z' },
+        $actor: { by: 'later-editor' },
+      }])
+      await deliverChild(h.g, child)
+      await deliverChild(h.g, child)
+      await d.idle('p')
+      assertEquals((await transcript(h.g, 'p')).length, after)
+      assertEquals(errors, [])
+      h.close()
+    },
+  )
+}
+
+Deno.test('parent completion does not suppress a later child response', async () => {
+  let { h, ctx, spawn } = setup()
+  let child = String(await spawn.run({ task: 'work' }, ctx))
+  let apply = harnessTools(h.g).find((t) => t.name == 'graph_apply')!
+  await apply.run({ change: [{ entity: { eid: 'work' }, completed: {} }] }, ctx)
+  await h.g.apply([{
+    entity: { eid: 'later-answer' },
+    entry: { session: child, seq: 2 },
+    content: { body: 'New response', source: 'call' },
+  }])
+  await deliverChild(h.g, child)
+  let entries = await transcript(h.g, 'p')
+  assertEquals(
+    entries.at(-1)!.entity.eid,
+    'delivery:' + child + ':later-answer',
+  )
+  assert(textOf(entries.at(-1)!).endsWith('New response'))
+  h.close()
+})
+
+Deno.test('completion actor survives database reopen; another parent still receives the result', async () => {
+  let dir = Deno.makeTempDirSync()
+  let path = dir + '/receipt.db'
+  let h = open(path)
+  try {
+    await h.g.apply([
+      { entity: { eid: 'p' }, session: {} },
+      { entity: { eid: 'q' }, session: {} },
+      { entity: { eid: 'c' }, session: {}, spawned: { parent: 'p' } },
+      { entity: { eid: 'work' }, task: {}, claim: { session: 'c' } },
+      {
+        entity: { eid: 'final' },
+        entry: { session: 'c', seq: 1 },
+        content: { body: 'Finished', source: 'source' },
+      },
+    ])
+    await deliverChild(h.g, 'c')
+    await h.g.apply([{
+      entity: { eid: 'work' },
+      completed: {},
+      $actor: { by: 'p' },
+    }])
+    h.close()
+    h = open(path)
+    let before = (await transcript(h.g, 'p')).length
+    await deliverChild(h.g, 'c')
+    assertEquals((await transcript(h.g, 'p')).length, before)
+    // Suppression compares the recipient, not merely the existence of an actor.
+    await h.g.apply([{ entity: { eid: 'c' }, spawned: { parent: 'q' } }])
+    await deliverChild(h.g, 'c')
+    assertEquals(
+      (await transcript(h.g, 'q')).at(-1)!.entity.eid,
+      'delivery:c:task:work:done',
+    )
+  } finally {
+    h.close()
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
+Deno.test('reopening a task allows a new completion actor without changing work attribution', async () => {
+  let { h } = setup()
+  await h.g.apply([{
+    entity: { eid: 'work' },
+    completed: { by: 'worker' },
+    $actor: { by: 'p' },
+  }])
+  await h.g.apply([{ entity: { eid: 'work' }, completed: null }])
+  await h.g.apply([{
+    entity: { eid: 'work' },
+    completed: { by: 'worker' },
+    $actor: { by: 'q' },
+  }])
+  let [work] = await h.g.read('.task')
+  assertEquals((work.completed as Comp).actor, 'q')
+  assertEquals((work.completed as Comp).by, 'worker')
+  h.close()
+})

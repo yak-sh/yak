@@ -414,12 +414,18 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
     await done(g.storage, task.entity.eid, { marks: taskMarks })
   let last = entries.at(-1)
   if (!last) return
-  let eid = ready
+  // A parent's own completion is already known to it. Fall back to the
+  // ordinary child receipt identity: a new child response must still arrive,
+  // while an already delivered response must not echo on completion/restart.
+  let announceTask = ready &&
+    (taskStatus(task!, taskMarks) != 'done' ||
+      comp(task, 'completed')?.actor != String(link.parent))
+  let eid = announceTask
     ? `delivery:${child}:task:${task!.entity.eid}:${
       taskStatus(task!, taskMarks)
     }`
     : `delivery:${child}:${last.entity.eid}`
-  let message = ready
+  let message = announceTask
     ? `task ${
       task!.entity.num != null ? `T-${task!.entity.num}` : task!.entity.eid
     } ${taskStatus(task!, taskMarks)}`

@@ -18,7 +18,7 @@
             "open"
           ],
           "persist": false,
-          "description": "where the task stands — read off the completed and cancelled marks, never written"
+          "description": "where the task stands \u2014 read off the completed and cancelled marks, never written"
         }
       }
     },
@@ -29,7 +29,7 @@
         "priority": {
           "type": "number",
           "format": "priority",
-          "description": "queue order — lower is more urgent"
+          "description": "queue order \u2014 lower is more urgent"
         },
         "project": {
           "type": "string",
@@ -58,7 +58,7 @@
     "board": {
       "type": "object",
       "kind": true,
-      "description": "a saved filter over the tasks — membership is never stored",
+      "description": "a saved filter over the tasks \u2014 membership is never stored",
       "properties": {
         "query": {
           "type": "string",
@@ -80,7 +80,14 @@
           "type": "string",
           "ref": "entity",
           "death": "keep",
-          "description": "who finished it — kept as history when that entity is deleted"
+          "description": "who finished it \u2014 kept as history when that entity is deleted"
+        },
+        "actor": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the actor that recorded completion, distinct from attribution of the work; absent for an anonymous write"
         }
       }
     },
@@ -97,7 +104,7 @@
           "type": "string",
           "ref": "entity",
           "death": "keep",
-          "description": "who called it off — kept as history when that entity is deleted"
+          "description": "who called it off \u2014 kept as history when that entity is deleted"
         },
         "reason": {
           "type": "string",

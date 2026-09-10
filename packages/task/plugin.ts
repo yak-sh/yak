@@ -6,7 +6,8 @@
 // So a graph is built in two steps, the way @yaks/edge's is: load the documents,
 // then hand the same vocabulary to the plugin.
 
-import type { Plugin } from '@yaks/graph'
+import { type Plugin, then } from '@yaks/graph'
+import { completing } from './completion.ts'
 import type { Vocab } from '@yaks/vocab'
 import { taskDoc } from './comp.ts'
 import { guarding } from './guard.ts'
@@ -46,5 +47,11 @@ import { type Mark, MARKS } from './words.ts'
 export let tasks = (vocab: Vocab, marks: Mark[] = MARKS): Plugin => ({
   name: '@yaks/task',
   vocab: [taskDoc],
-  hooks: { precondition: guarding(vocab, marks) },
+  hooks: {
+    precondition: (bundles, tx, err) =>
+      then(
+        guarding(vocab, marks)(bundles, tx, err),
+        (checked) => completing(checked, tx),
+      ),
+  },
 })

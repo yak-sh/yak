@@ -252,3 +252,13 @@ must initially preserve their parent's prefix. Automatic revision selection,
 TTL-based refresh, and live-provider cache/mid-session experiments are outside
 this integration. Correctness and revoked guidance take precedence over cache
 savings.
+
+Task completion receipts use the mutation's actor, not `completed.by` (the
+attribution of the work). Graph tools sign writes with their calling session;
+`@yaks/task` records that actor on the first completion mark. If the receiving
+parent wrote the completion, its previously delivered child result is not echoed
+back or used to wake it again. New child responses still arrive. Child, other
+session, and anonymous/external completions retain their normal receipts.
+Provenance survives restart; older marks without an actor are treated as
+external. Removing and recreating a completion mark records the new writer;
+editing an existing mark preserves its original actor.

@@ -64,7 +64,20 @@ export let graphTools = (
     name: t.name,
     description: t.description,
     parameters: parametersOf(t),
-    run: async (args: Record<string, unknown>) => said(await t.run(args, ctx)),
+    run: async (args: Record<string, unknown>, call) => {
+      let actor = call?.session ? { eid: call.session } : ctx.actor
+      return said(
+        await t.run(args, {
+          ...ctx,
+          actor,
+          apply: (change) =>
+            g.apply(change.map((b) => ({
+              ...b,
+              $actor: actor ? { by: actor.eid } : {},
+            }))),
+        }),
+      )
+    },
   }))
 }
 
