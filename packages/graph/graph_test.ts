@@ -387,3 +387,65 @@ Deno.test('registries are per instance', () => {
   b.use({ name: 'q' })
   assertEquals(a.plugins.length, 1)
 })
+
+for (let async of [false, true]) {
+  Deno.test(`provenance policy selects, overrides and suppresses without bypassing core clock (${async ? 'async' : 'sync'})`, async () => {
+    let store = memory()
+    let one = graph({
+      storage: async ? slow(store) : store,
+      vocab: books,
+      provenance: (b) =>
+        b.entity.eid == 'skip' ? null : {
+          kind: b.entity.eid == 'edit' ? 'updated' : 'created',
+          by: b.entity.eid == 'unowned' ? null : 'author',
+          via: 'not-in-this-vocabulary',
+        },
+    })
+    let now = '2026-09-01T01:02:03.000Z'
+    let out = await one.apply(
+      ['birth', 'edit', 'skip', 'unowned'].map((eid) => ({
+        entity: { eid },
+        doc: { title: eid },
+        $actor: { by: 'writer' },
+      })),
+      { now },
+    )
+    assertEquals(at(out, 'birth', 'created'), { at: now, by: 'author' })
+    assertEquals(at(out, 'edit', 'updated'), { at: now, by: 'author' })
+    assertEquals(at(out, 'unowned', 'created'), { at: now, by: null })
+    let skipped = out.find((b) => b.entity.eid == 'skip')!
+    assertEquals(skipped.created, undefined)
+    assertEquals(skipped.updated, undefined)
+    let held = await store.tx((tx) => tx.get(['skip']))
+    assertEquals(held[0].created, undefined)
+    assertEquals(held[0].updated, undefined)
+  })
+}
+
+Deno.test('provenance policy narrows an attribution-only vocabulary, including explicit null', async () => {
+  let { loadVocab } = await import('@yaks/vocab')
+  let vocab = loadVocab({
+    $defs: {
+      doc: { type: 'object', properties: { title: { type: 'string' } } },
+      created: {
+        type: 'object',
+        properties: { by: { type: 'string', stamped: true } },
+      },
+    },
+  })
+  let one = graph({
+    storage: memory(),
+    vocab,
+    provenance: (b) => ({
+      kind: 'created',
+      by: b.entity.eid == 'a' ? 'author' : null,
+      via: 'omitted',
+    }),
+  })
+  let out = sync(one.apply([
+    { entity: { eid: 'a' }, doc: { title: 'A' } },
+    { entity: { eid: 'b' }, doc: { title: 'B' } },
+  ]))
+  assertEquals(at(out, 'a', 'created'), { by: 'author' })
+  assertEquals(at(out, 'b', 'created'), { by: null })
+})

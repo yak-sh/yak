@@ -31,6 +31,7 @@ export type GuardHost = {
   prepare: (sql: string) => Statement
   name: (eid: string) => string
   bounce: (err: LeaseBounced) => Error
+  settle: (change: Change) => Change | null
   before: (changes: Change[]) => void
   references: (changes: Change[]) => void
   after: (changes: Change[], created: string[]) => void
@@ -152,7 +153,35 @@ export let fleetPreconditions = (
               if (held.alias) out.push({ entity: held.entity, alias: null })
             }
           }
-          out.push(b)
+          if (!dead(b)) {
+            let keep = { ...b }
+            let changed = false
+            for (let c of asChanges(b)) {
+              if (c.name == 'entity') continue
+              // CAS has swapped the storage value; settle against hydrated
+              // text, then retain only the storage columns that differ.
+              let body = (b.$blob as Record<string, unknown> | undefined)
+                ?.['doc.body']
+              let logical = c.name == 'doc' && c.comp && body !== undefined
+                ? { ...c, comp: { ...c.comp, body } }
+                : c
+              let left = b.$fleetMaterialized ? logical : host.settle(logical)
+              if (!left) {
+                delete keep[c.name]
+                continue
+              }
+              changed = true
+              keep[c.name] = left.comp && c.comp
+                ? Object.fromEntries(
+                  Object.keys(left.comp).map((col) => [col, c.comp![col]]),
+                )
+                : left.comp
+              if (c.name == 'doc' && (!left.comp || !('body' in left.comp))) {
+                delete keep.$blob
+              }
+            }
+            if (changed || !asChanges(b).length) out.push(keep)
+          } else out.push(b)
         }
         return out
       })(ordered, detached(storage))

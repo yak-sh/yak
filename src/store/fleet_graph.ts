@@ -1,8 +1,9 @@
 // The package graph bound to the fleet's existing SQL layout. This is storage
-// composition plus registered normalize policy; live mutation stays on its
-// old path until admission/lifecycle plugins are composed too. Hooks on this
+// composition plus registered fleet policy; live mutation stays on its old
+// path until the remaining admission/entry/effect doors switch. Hooks on this
 // Sql-backed handle must be synchronous (the driver transaction contract).
 import {
+  type ApplyOpts,
   type Bundle,
   Checked,
   type Comp,
@@ -17,6 +18,7 @@ import {
 import { blobRead, blobs, decode, encode } from '@yaks/blob'
 import { type Driver, storage, touched } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
+import { fleetStamps, type FleetWrite, type StampHost } from './fleet_stamps.ts'
 import { derived } from '../sql_derived.ts'
 import { sha } from '../sha.ts'
 import type { Sql } from './sql.ts'
@@ -34,13 +36,23 @@ export type FleetGraphHost = {
   vocab: Vocab
   normalizers: Plugin[]
   guards: GuardHost
+  lifecycle: StampHost
   refusal: (err: unknown) => unknown
   number: (eid: string) => void
   component: (eid: string, name: string) => Comp | undefined
 }
 
-export let fleetGraph = (host: FleetGraphHost): Graph => {
+export type FleetGraph = Graph & {
+  write: (
+    changes: Bundle[],
+    context: FleetWrite,
+    opts?: ApplyOpts,
+  ) => Bundle[] | Promise<Bundle[]>
+}
+
+export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
   let { db, driver, vocab } = host
+  let lifecycle = fleetStamps(host.lifecycle)
   // Only doc.body has migrated to CAS in the fleet. The other `body`-typed
   // columns still hold inline text; treating every body as a blob loses them.
   let columns = [{ comp: 'doc', prop: 'body' }]
@@ -73,6 +85,19 @@ export let fleetGraph = (host: FleetGraphHost): Graph => {
         try {
           let out = body({
             ...tx,
+            remove: (entities) => {
+              for (let e of entities) {
+                let held = tx.get([e.eid])
+                if (held instanceof Promise) {
+                  throw new Error('fleet storage must be synchronous')
+                }
+                lifecycle.remove(
+                  e.eid,
+                  held.flatMap((b) => comps(b).map(([name]) => name)),
+                )
+              }
+              return tx.remove(entities)
+            },
             patch: (bundles) => {
               // SQLite checks INSERT's NOT NULL constraints before its UPSERT
               // conflict arm. Existing doc/setting/alias/session patches must supply omitted
@@ -86,7 +111,9 @@ export let fleetGraph = (host: FleetGraphHost): Graph => {
                 })),
               )
               born.push(...identities)
+              lifecycle.born(identities.map((e) => e.eid))
               for (let b of bundles) {
+                lifecycle.patch(b)
                 let doc = b.doc as Comp | null | undefined
                 let held = doc && row(
                   `select title, body from doc where entity = ${owner}`,
@@ -174,6 +201,7 @@ export let fleetGraph = (host: FleetGraphHost): Graph => {
                     entity: { eid },
                     blob: { bytes: encode(value).byteLength },
                     $fleetCreated: { blob: true },
+                    $fleetMaterialized: true,
                   })
                 }
               }
@@ -184,6 +212,7 @@ export let fleetGraph = (host: FleetGraphHost): Graph => {
             // through the transaction so gathers/stamps see their births, and
             // carry the returned identities into the authoritative echo.
             return then(tx.patch(materialized), (born) => {
+              lifecycle.materialized(materialized)
               for (let b of materialized) {
                 b.entity = born.find((e) => e.eid == b.entity.eid) ?? b.entity
               }
@@ -220,20 +249,19 @@ export let fleetGraph = (host: FleetGraphHost): Graph => {
       // writable rows. Patches stay patches; server columns ride stamp echoes.
       commit: (bundles) => {
         let full = new Map<string, Bundle>()
-        for (let b of bundles) {
-          for (let name of Object.keys(b.$fleetCreated ?? {})) {
-            let row = host.component(b.entity.eid, name)
-            if (!row) continue
-            full.set(`${b.entity.eid} ${name}`, {
-              entity: b.entity,
-              [name]: Object.fromEntries(
-                (vocab.comp(name)?.writable ?? [])
-                  .filter((prop) => prop in row).map((
-                    prop,
-                  ) => [prop, row[prop]]),
-              ),
-            })
-          }
+        for (let key of lifecycle.created()) {
+          let cut = key.indexOf(' ')
+          let name = key.slice(0, cut), eid = key.slice(cut + 1)
+          let row = host.component(eid, name)
+          if (!row) continue
+          full.set(key, {
+            entity: { eid },
+            $fleetWhole: name,
+            [name]: Object.fromEntries(
+              (vocab.comp(name)?.writable ?? []).filter((prop) => prop in row)
+                .map((prop) => [prop, row[prop]]),
+            ),
+          })
         }
         return [...bundles, ...full.values()]
       },
@@ -242,12 +270,16 @@ export let fleetGraph = (host: FleetGraphHost): Graph => {
   let g = graph({
     storage: bound,
     vocab,
+    provenance: lifecycle.policy,
     plugins: [
       ...host.normalizers,
+      lifecycle.capture,
       prepare,
       cas,
       fleetPreconditions(host.guards, bound, vocab),
+      // Lifecycle commit needs the restored bodies and full creation rows.
       echoes,
+      lifecycle.plugin,
     ],
   })
   let apply = g.apply
@@ -256,13 +288,18 @@ export let fleetGraph = (host: FleetGraphHost): Graph => {
   // reopen the read/upgrade race when the remaining policy plugins join.
   // No effect observers are registered in this phase: at the live-write flip,
   // effects must run AFTER this outer transaction, not just core's nested one.
-  g.apply = (changes, opts) => {
+  let write: FleetGraph['write'] = (changes, context, opts) => {
     try {
-      return db.transaction(() => apply(changes, opts), true)
+      return db.transaction(
+        () =>
+          lifecycle.run(context, opts, (options) => apply(changes, options)),
+        true,
+      )
     } catch (err) {
       auditFleetBounce(db, g, err)
       throw host.refusal(err)
     }
   }
-  return g
+  g.apply = (changes, opts) => write(changes, {}, opts)
+  return Object.assign(g, { write })
 }

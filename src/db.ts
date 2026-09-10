@@ -71,7 +71,7 @@ import { derivedCols, indexDdlOne, tableDdl } from './ddl.ts'
 import { FILTERS, type Vocab, vocabOps } from './store/vocab.ts'
 import type { Vocab as FleetVocab } from '@yaks/vocab'
 import { fleetVocab } from './vocab/fleet_vocab.ts'
-import { type Graph, Stale as CoreStale } from '@yaks/graph'
+import { Stale as CoreStale } from '@yaks/graph'
 import { Bounced as LeaseBounced } from '@yaks/session'
 import {
   auditFleetBounce,
@@ -79,7 +79,14 @@ import {
   fleetGuardTx,
   type GuardHost,
 } from './store/fleet_preconditions.ts'
-import { fleetGraph } from './store/fleet_graph.ts'
+import {
+  lifecycleAfter,
+  lifecycleBefore,
+  type LifecycleHost,
+  priorClaimsOf,
+  syncFacetAliases,
+} from './store/fleet_lifecycle.ts'
+import { type FleetGraph, fleetGraph } from './store/fleet_graph.ts'
 import { fleetNormalizers, normalizeFleet } from './store/fleet_normalize.ts'
 import {
   cameraEid,
@@ -3816,10 +3823,10 @@ export let fleetVocabOf = (db: Sql): FleetVocab => {
   return vocab
 }
 
-// Bound once per Sql handle: storage/CAS plus shared normalize hooks. Live
-// mutation remains below until fleet admission, guards and stamps are composed.
-let fleetGraphs = new WeakMap<Sql, Graph>()
-export let fleetGraphOf = (db: Sql): Graph => {
+// Bound once per Sql handle: storage/CAS and composed fleet policy. Live
+// mutation remains below until the final admission/entry/effect-door switch.
+let fleetGraphs = new WeakMap<Sql, FleetGraph>()
+export let fleetGraphOf = (db: Sql): FleetGraph => {
   let held = fleetGraphs.get(db)
   if (!held) {
     held = fleetGraph({
@@ -3840,6 +3847,17 @@ export let fleetGraphOf = (db: Sql): Graph => {
         name: (eid) => human(db, eid),
       }),
       guards: fleetGuardHost(db),
+      lifecycle: {
+        ...fleetLifecycleHost(db),
+        actor: (writer) => writerActor(db, writer),
+        via: (writer) => writerVia(db, writer),
+        person: (actor) => isPerson(db, actor),
+        number: (eid) => mintNum(db, eid),
+        removalOrder: () =>
+          [...Object.keys(cmps), ...Object.keys(vocabOf(db))].toReversed(),
+        journal: (now, actor, via, trace, changes) =>
+          journalWrite(db, now, actor, via, trace, changes),
+      },
       refusal: (err) =>
         err instanceof CoreStale
           ? new Stale(
@@ -4301,39 +4319,6 @@ let dualFacet = (
     out[facet].comp = { ...out[facet].comp, ...writable }
   }
   return out
-}
-
-let syncFacetAliases = (
-  db: Sql,
-  changes: Change[],
-  extra: Change[],
-) => {
-  for (let name of ['worktree', 'runtime'] as const) {
-    let cols = facetCols(name)
-    let eids = new Set(
-      changes.filter((c) => c.name == name).map((c) => c.eid),
-    )
-    for (let eid of eids) {
-      if (!prep(db, `select 1 from session where ${byEid}`).get(eid)) continue
-      let row = prep(
-        db,
-        `select ${cols.map(sqlName).join(', ')} from ${sqlName(name)}
-         where ${byEid}`,
-      ).get(eid) as Record<string, unknown> | undefined
-      let spec = row ?? Object.fromEntries(cols.map((col) => [col, null]))
-      prep(
-        db,
-        `update session set ${
-          cols.map((col) => `${sqlName(col)} = ?`).join(', ')
-        }
-         where ${byEid}`,
-      ).run(
-        ...cols.map((col) => spec[col] as string | number | null ?? null),
-        eid,
-      )
-      extra.push({ eid, name: 'session', comp: spec })
-    }
-  }
 }
 
 // Graph-out is the declared readable vocabulary, never the table's migration
@@ -5239,6 +5224,12 @@ let fleetGuardHost = (
       err.holder,
     )
   },
+  settle: (c) => {
+    if (c.name == 'entity') return c
+    if (c.comp == null) return readComp(db, c.eid, c.name) ? c : null
+    let comp = settled(db, c.name, c.eid, c.comp)
+    return comp ? { ...c, comp } : null
+  },
   before: (changes) => {
     // A log entry is an append-only fact. Every request/content facet is
     // born in the same batch as entry membership and can never be revised,
@@ -5523,6 +5514,27 @@ let fleetGuardHost = (
   },
 })
 
+let fleetLifecycleHost = (db: Sql): LifecycleHost => ({
+  db,
+  prepare: (sql) => prep(db, sql),
+  id: (eid) => refId(db, eid),
+  component: (eid, name) =>
+    name == 'entity'
+      ? prep(db, 'select eid, num from entity where eid = ?').get(eid)
+      : name == 'tombstone'
+      ? prep(
+        db,
+        'select 1 from tombstone where entity = (select id from entity where eid = ?)',
+      ).get(eid)
+      : readComp(db, eid, name),
+  venture: (cwd) => ventureAt(db, cwd),
+  sender: (writer) => senderActor(db, writer),
+  stamps,
+  clocked,
+  quote: sqlName,
+  facetCols,
+})
+
 export let apply = (
   db: Sql,
   changes: Change[],
@@ -5594,23 +5606,8 @@ export let apply = (
     // Claim release is the interruption event. Capture the holder before the
     // row can vanish — including through a session cascade — then derive the
     // durable actor stack from the transaction's final state below.
-    let priorClaims = prep(
-      db,
-      `
-      select co.eid as eid, c.claimed_at, c.rowid as claim_order,
-             act.eid as actor, s.cwd as cwd
-      from claim c
-      join entity co on co.id = c.entity
-      left join session s on s.entity = c.session
-      left join entity act on act.id = s.actor
-    `,
-    ).all() as {
-      eid: string
-      claimed_at: string
-      claim_order: number
-      actor: string | null
-      cwd: string | null
-    }[]
+    let lifecycle = fleetLifecycleHost(db)
+    let priorClaims = priorClaimsOf(lifecycle)
     changes = normalizeFleet(db, fleetGraphOf(db), changes)
     changes = dualSpawn(db, changes)
     changes = dualFacet(db, changes, 'worktree')
@@ -6013,7 +6010,7 @@ export let apply = (
     // Canonical session facets are the read truth. Mirror their final state
     // after every component patch, including a deletion, so a rollback server
     // and an old client see the same values without gaining stamp authority.
-    syncFacetAliases(db, changes, extra)
+    syncFacetAliases(lifecycle, changes, extra)
     // Components have landed, so each new spine's KIND is finally knowable —
     // assign the human number spine() no longer mints at birth (T-3684). Only
     // the spines born in THIS batch, still inside the transaction, so every
@@ -6025,110 +6022,21 @@ export let apply = (
     // so a birth and the edits beside it agree instead of drifting by the
     // milliseconds between two `new Date()` calls (T-6670).
     let now = new Date().toISOString()
-    // Taking a task again pops it; settling one removes it. Releasing an
-    // unsettled task pushes it for the holder's actor. A wrap releases several
-    // claims in one batch, so claimed_at supplies their nested order and rank
-    // preserves it after those lease rows are gone.
-    let finalClaims = new Set(
-      (prep(
-        db,
-        'select o.eid as eid from claim c join entity o on o.id = c.entity',
-      ).all() as { eid: string }[])
-        .map((r) => r.eid),
-    )
-    // Status is derived (D-24102): settled = wears completed or cancelled. A
-    // non-task eid returns no row, exactly as the old `select status` did.
-    let settledRow = prep(
-      db,
-      `select (
-         exists(select 1 from cancelled x where x.entity = t.entity)
-         or exists(select 1 from completed x where x.entity = t.entity)
-       ) as settled
-       from task t where t.entity = (select id from entity where eid = ?)`,
-    )
-    let clear = new Set(
-      changes.filter((c) =>
-        c.name == 'claim' || c.name == 'task' || c.name == 'completed' ||
-        c.name == 'cancelled'
-      )
-        .map((c) => c.eid),
-    )
-    for (let eid of clear) {
-      let task = settledRow.get(eid) as { settled: number } | undefined
-      if (!finalClaims.has(eid) && task && !task.settled) continue
-      if (
-        prep(
-          db,
-          'delete from resume where entity = (select id from entity where eid = ?)',
-        ).run(eid).changes
-      ) {
-        took(eid, 'resume')
-        extra.push({ eid, name: 'resume', comp: null })
-      }
-    }
-    let released = priorClaims
-      .filter((c) => !finalClaims.has(c.eid))
-      .filter((c) => {
-        let task = settledRow.get(c.eid) as { settled: number } | undefined
-        return task && !task.settled
-      })
-      .map((c) => ({ ...c, actor: c.actor ?? ventureAt(db, c.cwd) }))
-      .filter((c) => c.actor)
-      .sort((a, b) =>
-        a.claimed_at.localeCompare(b.claimed_at) ||
-        a.claim_order - b.claim_order
-      )
-    let top = Number(
-      (prep(db, 'select coalesce(max(rank), 0) as rank from resume')
-        .get() as {
-          rank: number
-        }).rank,
-    )
-    let push = prep(
-      db,
-      `
-      insert into resume (entity, actor, at, rank)
-      values ((select id from entity where eid = ?), ?, ?, ?)
-      on conflict(entity) do update set actor = excluded.actor,
-        at = excluded.at, rank = excluded.rank
-    `,
-    )
-    for (let item of released) {
-      let comp = { actor: String(item.actor), at: now, rank: ++top }
-      push.run(item.eid, toId(db, comp.actor), comp.at, comp.rank)
-      extra.push({ eid: item.eid, name: 'resume', comp })
-    }
-    // A session that RAN somewhere but names no actor gets one from where
-    // it stands — the writing identity is never blank (T-6669). Resolved
-    // from the session row's CURRENT cwd (not a client's stale snapshot,
-    // the bug that left real sessions blank when cwd and reify split across
-    // batches): the venture whose repo holds the cwd, else the box owner.
-    // actor stays wire-writable — a batch that named an actor keeps it;
-    // the server only fills the gap, and only for a session with a cwd (a
-    // real run, never an abstract fixture), so the fill heals old blanks on
-    // their next touch. It rides the return so caches hear it.
-    let fill = prep(
-      db,
-      'update session set actor = ? where entity = (select id from entity where eid = ?)',
-    )
-    let has = prep(
-      db,
-      `select s.cwd as cwd, act.eid as actor from session s
-       join entity o on o.id = s.entity
-       left join entity act on act.id = s.actor
-       where o.eid = ?`,
-    )
-    for (let eid of touched) {
-      let s = has.get(eid) as
-        | { cwd: string | null; actor: string | null }
-        | undefined
-      if (!s || s.actor || !s.cwd) continue
-      let a = ventureAt(db, s.cwd)
-      if (a) {
-        fill.run(refId(db, a), eid)
-        extra.push({ eid, name: 'session', comp: { actor: a } })
-      }
-    }
+    let lifecycleBatch = () => ({
+      changes,
+      extra,
+      touched,
+      minted,
+      createdComps,
+      now,
+      actor: null as string | null,
+      via: null as string | null,
+      person,
+      writer,
+      imports,
+      took,
+    })
+    lifecycleBefore(lifecycle, lifecycleBatch(), priorClaims)
     // Provenance components (T-6670): who + when, paired. `created` is set
     // once at birth — `by` the author (the wire's, else the writing actor);
     // `updated` is the LAST edit, absent until the first touch after birth.
@@ -6165,24 +6073,6 @@ export let apply = (
       let row = readComp(db, eid, 'created')
       if (row) extra.push({ eid, name: 'created', comp: row })
     }
-    // A memory born of anything that is not a person lands PROPOSED
-    // (M-31946): recallable and searchable, but no persona preloads it and
-    // no index calls it accepted until a person decides. A person's own
-    // memory is accepted as written. Server-stamped here so every door —
-    // MCP, CLI, a raw /apply — says the same thing.
-    if (!person()) {
-      let propose = prep(
-        db,
-        `insert or ignore into proposed (entity, at, "by", via)
-         values ((select id from entity where eid = ?), ?, ?, ?)`,
-      )
-      for (let eid of minted) {
-        if (!createdComps.has(`memory ${eid}`) || !alive.get(eid)) continue
-        propose.run(eid, now, actorId, viaId)
-        let row = readComp(db, eid, 'proposed')
-        if (row) extra.push({ eid, name: 'proposed', comp: row })
-      }
-    }
     let uSet = prep(
       db,
       `insert into updated (entity, at, "by", via)
@@ -6201,97 +6091,7 @@ export let apply = (
       let row = readComp(db, eid, 'updated')
       if (row) extra.push({ eid, name: 'updated', comp: row })
     }
-    // The ingest coordinate (D-16704), stamped beside the entry it marks so
-    // the pair (entry, imported) commits atomically. Only the trusted append
-    // path passes `imports`; the wire never does. It rides `extra` (not the
-    // `echoed` set below), so it reaches the journal and every replaying
-    // cache — the coordinate is the durable cursor and must not be lost.
-    if (imports) {
-      let stampImported = prep(
-        db,
-        `insert into imported (entity, source, line)
-         values ((select id from entity where eid = ?), ?, ?)`,
-      )
-      for (let [eid, coord] of imports) {
-        if (!alive.get(eid)) continue
-        stampImported.run(eid, coord.source, coord.line)
-        extra.push({ eid, name: 'imported', comp: { eid, ...coord } })
-      }
-    }
-    // The stamp family (notified/opened/archived/decided/proposed): fill the
-    // actor GAP
-    // and stamp the instrument, on insert only — then re-read the row so an
-    // optimistic cache never keeps a blank stamp. The created/updated re-read,
-    // generalized to one small loop.
-    //
-    // `coalesce` is what lets one loop serve both halves of the family: a
-    // notification stamp can't carry a wire `by` (the column isn't in comps),
-    // so filling it is unconditional there; `decided` can, and a caller who
-    // named the decider keeps it. Insert-only for the same reason `created`
-    // is: correcting a decision's date later doesn't change who wrote it down,
-    // and the correction is journaled anyway.
-    for (let { eid, name, comp } of changes) {
-      if (comp == null || !stamps.includes(name) || !alive.get(eid)) continue
-      if (createdComps.has(`${name} ${eid}`)) {
-        prep(
-          db,
-          `update ${sqlName(name)} set "by" = coalesce("by", ?), via = ?
-           where entity = (select id from entity where eid = ?)`,
-        ).run(actorId, viaId, eid)
-      }
-      let row = readComp(db, eid, name)
-      if (row) extra.push({ eid, name, comp: row })
-    }
-    // Clocked presence facets freeze their insertion time. Re-reading on every
-    // effective presence write keeps an optimistic cache complete, while only
-    // a delete followed by a fresh insert can move the clock.
-    for (let { eid, name, comp } of changes) {
-      if (comp == null || !clocked.includes(name) || !alive.get(eid)) continue
-      if (createdComps.has(`${name} ${eid}`)) {
-        prep(
-          db,
-          `update ${sqlName(name)} set at = ?
-           where entity = (select id from entity where eid = ?)`,
-        ).run(now, eid)
-      }
-      let row = readComp(db, eid, name)
-      if (row) extra.push({ eid, name, comp: row })
-    }
-    // The mail SENDER, derived. `from` is off the wire (types.ts), so this
-    // is its only writer: a letter speaks as the actor that WROTE it, the
-    // same resolution behind created.by. No caller can sign as anyone else
-    // (T-9511), and nothing signs as the fleet default any more (T-9489).
-    //
-    // An actor with no address leaves `from` empty rather than failing the
-    // batch — writing the graph is not sending, and a fixture that mints a
-    // mail is not asking to deliver one. The refusal belongs at delivery,
-    // where mailed() stamps the error onto the row and the board shows it.
-    //
-    // Inbound arrives through this door too (inbound.ts mint), and its
-    // message_id — the never-send mark — is stamped just AFTER apply. So a
-    // swept row is stamped here as well and corrected a moment later by that
-    // same stamp, before dispatch hands anything to delivery. Only the
-    // intermediate cast ever carries the derived value.
-    let addrOf = prep(
-      db,
-      'select address from email where entity = (select id from entity where eid = ?)',
-    )
-    let sender = prep(
-      db,
-      'update mail set "from" = ? where entity = (select id from entity where eid = ?)',
-    )
-    for (let key of createdComps) {
-      if (!key.startsWith('mail ')) continue
-      let eid = key.slice(5)
-      if (!alive.get(eid)) continue
-      let signer = senderActor(db, writer)
-      let addr = signer
-        ? (addrOf.get(signer) as { address: string } | undefined)?.address
-        : undefined
-      if (!addr) continue
-      sender.run(addr, eid)
-      extra.push({ eid, name: 'mail', comp: { eid, from: addr } })
-    }
+    lifecycleAfter(lifecycle, { ...lifecycleBatch(), actor, via })
     // A create may omit columns that SQLite defaults. The persisted row is
     // complete, so make the last write for that new component complete too:
     // a live cache then sees the same writable shape as a fresh snapshot in

@@ -53,7 +53,7 @@ import { type Ask, gather, holding, reached } from './gather.ts'
 import { guard } from './guard.ts'
 import { mutate } from './mutate.ts'
 import { cascade } from './cascade.ts'
-import { actorOf, births, stamps } from './stamp.ts'
+import { actorOf, births, provenance, type StampPolicy } from './stamp.ts'
 import { fire, registry, type Resource, type Rule, stands } from './rules.ts'
 import { state } from './state.ts'
 import { each, isPromise, then } from './pipe.ts'
@@ -103,6 +103,8 @@ export type Options = {
   vocab: Vocab
   /** the plugins whose hooks run in `apply()` */
   plugins?: Plugin[]
+  /** Per-entity provenance policy; core retains the stamp mechanism. */
+  provenance?: StampPolicy
   /** where a failing effect is reported (default: `console.warn`) */
   report?: (err: unknown, at: { phase: Phase; plugin: string }) => void
   /** what names an entity a batch minted under an alias, when no component
@@ -184,8 +186,9 @@ export let graph = (opts: Options): Graph => {
 
   // The rules registered on a phase: the core's own (the stamps), then each
   // plugin's, in registration order.
+  let stamping = provenance(opts.provenance)
   let ruled = (phase: Phase): Rule[] =>
-    [...stamps, ...plugins.flatMap((p) => p.rules ?? [])]
+    [...stamping, ...plugins.flatMap((p) => p.rules ?? [])]
       .filter((r) => r.phase == phase)
 
   // The singletons a rule may bind with `#Name`: each plugin's, then this

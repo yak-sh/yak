@@ -17,7 +17,7 @@
 import type { Vocab } from '@yaks/vocab'
 import type { Actor, Bundle, Comp } from './bundle.ts'
 import type { State } from './state.ts'
-import type { Patch, Rule } from './rules.ts'
+import type { Bound, Patch, Rule } from './rules.ts'
 
 /** The actor a batch names: the first `$actor` component in it. A batch speaks
  * with one voice, so the first one found is the writer for the whole batch. */
@@ -27,54 +27,71 @@ export let actorOf = (bundles: Bundle[]): Actor =>
 // The stamp for one entity, narrowed to the columns this vocabulary declares
 // on that component — `at`, and whichever of `by`/`via` the batch's actor
 // named. An empty result means there is nothing to say.
+type Attribution = { by?: string | null; via?: string | null }
+
 let mark = (
   vocab: Vocab,
   comp: string,
   now: string,
   actor: Actor,
+  overrides?: Attribution,
 ): Comp | undefined => {
   let info = vocab.comp(comp)
   if (!info) return undefined
   let has = new Set(vocab.columns(comp))
   let out: Comp = {}
   if (has.has('at')) out.at = now
-  if (has.has('by') && actor.by) out.by = actor.by
-  if (has.has('via') && actor.via) out.via = actor.via
+  for (let col of ['by', 'via'] as const) {
+    if (!has.has(col)) continue
+    if (overrides && col in overrides) out[col] = overrides[col]
+    else if (actor[col]) out[col] = actor[col]
+  }
   return Object.keys(out).length ? out : undefined
 }
 
-/**
- * The stamp phase, as two rules. `created` goes on every entity the graph holds
- * none for — which is what a birth IS — and `updated` on every other entity the
- * batch touched; the gate on `created` is what keeps them apart. The phase
- * judges both against ONE frozen view (./rules.ts), so a birth is never also a
- * touch. What they produce is written through the transaction and synthesized
- * into the batch, so a cache that applies the return sees the provenance a
- * fresh read would.
- *
- * The instant, the actor and the vocabulary each rule reads are RESOURCES it
- * names in its match (`#Now, #Actor, #Vocab`), so `run` takes the bound bundle
- * and nothing else. `updated` ensures itself (`+updated`) because a touch is
- * the first time that component is written, and `*updated` alone would ask for
- * one already there.
- *
- * A graph whose vocabulary declares no `created` is stamped not at all: a rule
- * about a component that does not exist here is inert.
- */
-export let stamps: Rule[] = [
-  {
-    name: 'created',
-    phase: 'stamp',
-    match: '.entity, +!created, *created, #Vocab, #Actor, #Now',
-    run: ({ Vocab, Now, Actor }) => wear('created', Vocab, Now.at, Actor),
-  },
-  {
-    name: 'updated',
-    phase: 'stamp',
-    match: '.entity, .created, +updated, *updated, #Vocab, #Actor, #Now',
-    run: ({ Vocab, Now, Actor }) => wear('updated', Vocab, Now.at, Actor),
-  },
-]
+/** Application policy may classify a touched entity and supply its per-entity
+ * attribution. The generic rules still own column narrowing and the clock.
+ * Returning null suppresses provenance (for example, a settled no-op). */
+export type StampPolicy = (bundle: Bound) =>
+  | ({
+    kind: 'created' | 'updated'
+  } & Attribution)
+  | null
+
+/** Default provenance uses two rules judged against ONE frozen view: a birth
+ * wears created, a later touch wears updated. Policy can choose or suppress the
+ * stamp, but both routes use the same clock, attribution and vocabulary writer.
+ * Now, Actor and Vocab are rule resources; no app vocabulary is assumed. */
+export let provenance = (policy?: StampPolicy): Rule[] =>
+  policy
+    ? [{
+      name: 'provenance',
+      phase: 'stamp',
+      // The policy chooses which component to create; no unconditional ensure
+      // may run here, because a suppressed stamp must write nothing at all.
+      match: '.entity, #Vocab, #Actor, #Now',
+      run: (b: Bound) => {
+        let choice = policy(b)
+        if (!choice) return
+        return wear(choice.kind, b.Vocab, b.Now.at, b.Actor, choice)
+      },
+    }]
+    : [
+      {
+        name: 'created',
+        phase: 'stamp',
+        match: '.entity, +!created, *created, #Vocab, #Actor, #Now',
+        run: ({ Vocab, Now, Actor }) => wear('created', Vocab, Now.at, Actor),
+      },
+      {
+        name: 'updated',
+        phase: 'stamp',
+        match: '.entity, .created, +updated, *updated, #Vocab, #Actor, #Now',
+        run: ({ Vocab, Now, Actor }) => wear('updated', Vocab, Now.at, Actor),
+      },
+    ]
+
+export let stamps: Rule[] = provenance()
 
 // One rule's patch: the component, narrowed to the columns this vocabulary
 // declares. Nothing to say is no patch — the gate has already put the
@@ -84,8 +101,9 @@ let wear = (
   vocab: Vocab,
   now: string,
   actor: Actor,
+  overrides?: Attribution,
 ): Patch | undefined => {
-  let m = mark(vocab, comp, now, actor)
+  let m = mark(vocab, comp, now, actor, overrides)
   return m ? { [comp]: m } : undefined
 }
 
