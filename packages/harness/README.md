@@ -346,22 +346,19 @@ subscription/backpressure issues.
 
 ## Generated images
 
-Native image generation is offered automatically for documented supported models
-at the public OpenAI Responses endpoint, including dated snapshots. This applies
-per request (including model changes) and in worker mode. The documented list is
-`gpt-5.5`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.2`, `gpt-5`, `gpt-5-nano`,
-`o3`, `gpt-4.1`, `gpt-4.1-mini`, `gpt-4.1-nano`, `gpt-4o`, and `gpt-4o-mini`.
-See
-[OpenAI's tool documentation](https://developers.openai.com/api/docs/guides/tools-image-generation).
+Native image generation is enabled by default on Responses requests, including
+Codex OAuth, unknown models, and custom endpoints. The server decides support;
+there is no model allowlist or startup capability probe.
 
-Set `HARNESS_IMAGES=0` or pass `images: false` to disable it. Unknown models,
-custom endpoints, and the Codex OAuth endpoint omit the tool by default because
-there is no reliable capability discovery API. `HARNESS_IMAGES=1` or an explicit
-`images: {...}` configuration forces enablement for a compatible endpoint not in
-the list. Programmatic settings override the environment. A forced unsupported
-configuration returns the provider's error; it is not retried with the tool
-removed. No capability probe or paid generation is made at startup. Account
-permissions may still prevent a documented model from using the tool.
+Set `HARNESS_IMAGES=0` or pass `images: false` to disable it. `HARNESS_IMAGES=1`
+explicitly enables the default behavior. Programmatic image settings override
+the environment. Worker mode uses the same configuration.
+
+An unsupported tool can cause the entire request to be rejected. The adapter
+preserves the provider error instead of silently retrying without the tool.
+Current provider errors do not reliably distinguish unsupported image tools from
+other invalid requests, so there is no negative capability cache or speculative
+fallback. Disable images explicitly if your endpoint rejects them.
 
 Binary bytes use `@yaks/blob`'s external file backend under `~/.harness/images`,
 or `HARNESS_IMAGE_DIR`. This directory is made private. Keep it with database

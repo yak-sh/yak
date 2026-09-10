@@ -1,7 +1,6 @@
 /** Native Responses image-generation output. Binary persistence is injected. */
 import { ModelError, type Reply } from '@yaks/model'
 import type { ArtifactStore } from '@yaks/blob'
-import { OPENAI } from './credential.ts'
 
 export type ImageGeneration = {
   type?: 'image_generation'
@@ -10,30 +9,8 @@ export type ImageGeneration = {
   size?: 'auto' | '1024x1024' | '1536x1024' | '1024x1536'
   background?: 'auto' | 'opaque' | 'transparent'
 }
-/** Documented Responses tool models; unknown models/endpoints require an override.
- * https://developers.openai.com/api/docs/guides/tools-image-generation
- */
-export let supportsImages = (model: string, base: string): boolean => {
-  if (base.replace(/\/$/, '') != OPENAI) return false
-  let name = model.replace(/-\d{4}-\d{2}-\d{2}$/, '')
-  return [
-    'gpt-5.5',
-    'gpt-5.4-mini',
-    'gpt-5.4-nano',
-    'gpt-5.2',
-    'gpt-5',
-    'gpt-5-nano',
-    'o3',
-    'gpt-4.1',
-    'gpt-4.1-mini',
-    'gpt-4.1-nano',
-    'gpt-4o',
-    'gpt-4o-mini',
-  ].includes(name)
-}
-
 export type Images = {
-  /** Only offer the tool on documented models at the public OpenAI endpoint. */
+  /** @deprecated Ignored. Configured image tools are offered on every endpoint. */
   auto?: boolean
   tool?: ImageGeneration
   store: ArtifactStore

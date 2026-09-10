@@ -1,4 +1,4 @@
-import { generatedImages, type Images, supportsImages } from './images.ts'
+import { generatedImages, type Images } from './images.ts'
 // Neutral model items in and out; transport.ts alone owns the Responses wire.
 import {
   type Item,
@@ -31,7 +31,7 @@ export type Options = Omit<ResponseOptions, 'credentials'> & RunOptions & {
   credential: () => Credential | Promise<Credential>
   /** Retry a rejected credential once with a fresh bearer. */
   refresh?: () => Credential | Promise<Credential>
-  /** Configure native image storage; auto selects documented capabilities per ask. */
+  /** Configure native image storage and offer the tool on every ask. */
   images?: Images
 }
 
@@ -156,14 +156,9 @@ let ask = (opts: Options) => {
   })
   return async (req: Request): Promise<Reply> => {
     try {
-      // Resolve capabilities for each ask: sessions can change models. Keep the
-      // transport alive across asks so its connection can be reused.
-      let base = opts.base ??
-        (opts.images?.auto ? (await opts.credential()).base : '')
-      let selected = opts.images?.auto &&
-          !supportsImages(req.model, base)
-        ? undefined
-        : opts.images
+      // The endpoint decides support, including OAuth and custom deployments.
+      // Never retry without the tool based on an ambiguous provider error.
+      let selected = opts.images
       let out = await client.run(body(req, opts.store, selected), {
         signal: opts.signal,
         // Image payloads must never escape through diagnostic/event subscribers.

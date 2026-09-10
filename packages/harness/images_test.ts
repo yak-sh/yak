@@ -110,10 +110,10 @@ Deno.test('image options cross the worker boundary without serializing callbacks
   }
 })
 
-Deno.test('image configuration defaults to automatic with explicit disable and override', async () => {
+Deno.test('image configuration defaults to enabled with explicit disable and override', async () => {
   let { configuredImages } = await import('./images.ts')
-  assertEquals(configuredImages(undefined, '')?.auto, true)
-  assertEquals(configuredImages(undefined, '1')?.auto, false)
+  assertEquals(typeof configuredImages(undefined, '')?.store, 'function')
+  assertEquals(typeof configuredImages(undefined, '1')?.store, 'function')
   assertEquals(configuredImages(undefined, '0'), undefined)
   assertEquals(configuredImages(false, '1'), undefined)
   assertEquals(configuredImages({}, '0')?.auto, undefined)

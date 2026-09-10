@@ -144,15 +144,15 @@ Deno.test('JPEG and WebP output honor format settings and mixed output stays sep
   }
 })
 
-Deno.test('automatic image tools follow model and endpoint capabilities per ask', async () => {
+Deno.test('configured image tools are offered on OAuth, unknown models and custom endpoints', async () => {
   for (
     let [name, endpoint, auto, expected] of [
       ['gpt-4.1', 'https://api.openai.com/v1', true, true],
       ['gpt-4.1-2025-04-14', 'https://api.openai.com/v1', true, true],
       ['gpt-5.5', 'https://api.openai.com/v1/', true, true],
-      ['gpt-6-astra', 'https://api.openai.com/v1', true, false],
-      ['gpt-4.1', 'https://chatgpt.com/backend-api/codex', true, false],
-      ['gpt-4.1', 'https://proxy.example/v1', true, false],
+      ['gpt-6-astra', 'https://api.openai.com/v1', true, true],
+      ['gpt-4.1', 'https://chatgpt.com/backend-api/codex', true, true],
+      ['gpt-4.1', 'https://proxy.example/v1', true, true],
       ['custom', 'https://proxy.example/v1', false, true],
     ] as const
   ) {
@@ -181,6 +181,75 @@ Deno.test('automatic image tools follow model and endpoint capabilities per ask'
     await model({ model: name, items: [], tools: [] })
     assertEquals(sent[0].tools, expected ? [{ type: 'image_generation' }] : [])
     await model({ model: 'unknown', items: [], tools: [] })
-    assertEquals(sent[1].tools, auto ? [] : [{ type: 'image_generation' }])
+    assertEquals(sent[1].tools, [{ type: 'image_generation' }])
   }
+})
+
+Deno.test('image-tool rejection propagates without stripping tools or caching a guess', async () => {
+  for (let status of [400, 403]) {
+    let sent: Record<string, unknown>[] = []
+    let model = responses({
+      credential: () => ({
+        token: 'test',
+        base: 'https://chatgpt.com/backend-api/codex',
+      }),
+      images: { store: artifactStore(memory().blobs) },
+      fetch: ((_url, init) => {
+        sent.push(JSON.parse(String(init?.body)))
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              error: {
+                type: 'invalid_request_error',
+                code: 'unsupported_value',
+                param: 'tools[0].type',
+                message: 'image_generation is not supported',
+              },
+            }),
+            { status },
+          ),
+        )
+      }) as typeof fetch,
+    })
+    for (let i = 0; i < 2; i++) {
+      await assertRejects(
+        () => model({ model: 'unknown', items: [], tools: [] }),
+        Error,
+        'image_generation is not supported',
+      )
+    }
+    assertEquals(sent.length, 2)
+    for (let request of sent) {
+      assertEquals(request.tools, [{ type: 'image_generation' }])
+    }
+  }
+})
+
+Deno.test('unconfigured image tools remain disabled on OAuth', async () => {
+  let sent: Record<string, unknown>[] = []
+  let model = responses({
+    credential: () => ({
+      token: 'test',
+      base: 'https://chatgpt.com/backend-api/codex',
+    }),
+    fetch: ((_url, init) => {
+      sent.push(JSON.parse(String(init?.body)))
+      return Promise.resolve(
+        new Response(
+          'data: ' + JSON.stringify({
+            type: 'response.completed',
+            response: {
+              id: 'r',
+              model: 'unknown',
+              status: 'completed',
+              output: [],
+            },
+          }) + '\n\n',
+          { headers: { 'content-type': 'text/event-stream' } },
+        ),
+      )
+    }) as typeof fetch,
+  })
+  await model({ model: 'unknown', items: [], tools: [] })
+  assertEquals(sent[0].tools, [])
 })

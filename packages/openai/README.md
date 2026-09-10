@@ -148,13 +148,12 @@ was saved. Failed graph admission after a successful external write can leave an
 unreferenced blob; cleanup is not automatic. No live-provider generation was
 used in the automated tests.
 
-With `images: {auto: true, store}`, the tool is offered only for documented
-supported models on the public OpenAI endpoint. Model selection is checked on
-each request, including dated snapshots. Unknown models and custom or Codex
-endpoints omit the tool in automatic mode; the list is maintained in `images.ts`
-from the
-[provider documentation](https://developers.openai.com/api/docs/guides/tools-image-generation).
-Omitting `auto` explicitly enables the tool, allowing compatible custom
-endpoints and newly supported models. Omitting `images` disables it. Automatic
-selection uses no network capability probe; provider account permissions still
-apply.
+When `images` provides a storage callback, the tool is offered on every request,
+including OAuth, unknown models, and custom endpoints. Omitting `images`
+disables it. The legacy `auto` option is deprecated and ignored; it no longer
+filters models or endpoints. The server decides whether the tool is supported.
+
+Provider errors propagate without a speculative retry that removes the tool.
+There is no reliable structured capability-rejection contract across these
+endpoints, so the adapter does not infer support from error-message substrings
+or cache negative observations. No paid capability probes are performed.
