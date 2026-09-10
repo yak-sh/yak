@@ -129,7 +129,8 @@ export let project = (
   for (let b of entries) {
     let kind = kindOf(b)
     let c = comp(b, CALL)
-    if (kind == 'input') out.push({ kind: 'user', text: textOf(b) })
+    if (b.prompt) out.push({ kind: 'instruction', text: textOf(b) })
+    else if (kind == 'input') out.push({ kind: 'user', text: textOf(b) })
     else if (kind == 'output') out.push({ kind: 'assistant', text: textOf(b) })
     else if (kind == 'call' && c?.source != anchor) {
       out.push({
@@ -285,7 +286,14 @@ export let react = async (
   // provider keeps about the reply rides beside it as the provider's own comp.
   let ask = line({
     [ASK]: { to: modelEid, through: newest.entity.eid },
-    ...using ? { [USING]: using } : {},
+    ...using || req.instructions
+      ? {
+        [USING]: {
+          ...using,
+          ...req.instructions ? { instructions: req.instructions } : {},
+        },
+      }
+      : {},
     ...deps.model.mark?.(reply) ?? {},
     ...reply.usage ? { usage: reply.usage } : {},
   })

@@ -51,6 +51,7 @@ export let models = (): Plugin => ({ name: '@yaks/model', vocab: [modelDoc] })
 
 /** One line of a conversation as a model sees it. */
 export type Item =
+  | { kind: 'instruction'; text: string }
   | { kind: 'user'; text: string }
   | { kind: 'assistant'; text: string }
   /** a tool call the model asked for: its id, the tool, the arguments as JSON */

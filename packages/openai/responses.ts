@@ -42,6 +42,10 @@ let str = (value: unknown, fallback = '') =>
 
 // The neutral items in the API's four spellings.
 let shape: Record<Item['kind'], (item: Item) => unknown> = {
+  instruction: (i) => ({
+    role: 'developer',
+    content: [{ type: 'input_text', text: (i as { text: string }).text }],
+  }),
   user: (i) => ({
     role: 'user',
     content: [{ type: 'input_text', text: (i as { text: string }).text }],

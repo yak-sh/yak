@@ -31,6 +31,8 @@ let finish = async (a: Agent, parent: string) => {
 
 for (let kind of ['fork', 'spawn']) {
   Deno.test(`${kind}: concurrent child, lineage, prefix, settings, delivery and parent reaction`, async () => {
+    let directory = Deno.makeTempDirSync()
+    Deno.writeTextFileSync(directory + '/AGENTS.md', 'shared snapshot')
     let childAsked = deferred<Request>()
     let childReply = deferred<Reply>()
     let calls = 0
@@ -43,6 +45,10 @@ for (let kind of ['fork', 'spawn']) {
         return childReply.promise
       }
       if (calls++ == 0) {
+        Deno.writeTextFileSync(
+          directory + '/AGENTS.md',
+          'changed after parent ask',
+        )
         return Promise.resolve(call(kind, {
           prompt: 'child work',
           instructions: 'child instructions',
@@ -54,16 +60,28 @@ for (let kind of ['fork', 'spawn']) {
     }
     let h = open(':memory:')
     h.g.apply([{ entity: { eid: 'other' }, model: { name: 'alternate' } }])
-    let a = agent({ h, model, tools: sessionTools(h.g) })
+    let a = agent({ h, model, cwd: directory, tools: sessionTools(h.g) })
     let parent = await a.start('parent context')
     let req = await childAsked.promise
     await a.idle(parent) // parent progresses before child has answered
     let [child] = await a.children(parent)
     assertEquals((child.spawned as Comp).parent, parent)
     assertEquals('fork' in child, kind == 'fork')
+    assertEquals(req.items[0], { kind: 'instruction', text: 'shared snapshot' })
+    assertEquals(
+      req.items.some((i) =>
+        i.kind == 'instruction' &&
+        i.text.includes('You are executing an assignment')
+      ),
+      kind == 'fork',
+    )
     assertEquals(req.model, 'alternate')
     assertEquals(req.effort, 'high')
-    assertEquals(req.instructions, 'child instructions')
+    assert(
+      req.items.some((i) =>
+        i.kind == 'instruction' && i.text == 'child instructions'
+      ),
+    )
     assertEquals(
       req.items.filter((i) => i.kind == 'user').map((i) => i.text),
       kind == 'fork' ? ['parent context', 'child work'] : ['child work'],
@@ -72,6 +90,7 @@ for (let kind of ['fork', 'spawn']) {
     assert(!req.items.some((i) => i.kind == 'call'))
     childReply.resolve(reply('child final'))
     await finish(a, parent)
+    await Deno.remove(directory, { recursive: true })
     let entries = await a.transcript(parent)
     assertEquals(statusOf(entries), 'settled')
     assertEquals(textOf(entries.at(-1)!), 'parent reacted')

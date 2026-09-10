@@ -1,3 +1,4 @@
+import { instructionFiles, promptEntry } from './prompts.ts'
 import { homeAt, workspace } from './workspace.ts'
 import { render as tree } from '@yaks/preact'
 import type { VNode } from 'preact'
@@ -121,6 +122,8 @@ export type Agent = {
   /** one bundle as a line of text, through @yaks/render's session views */
   entry: (b: Bundle) => VNode | null
   line: (b: Bundle, view?: string, ctx?: Record<string, unknown>) => string
+  /** Explicit instruction admission; appends a snapshot, never a user turn. */
+  instruct: (session: Eid, text: string, source?: string) => Promise<Eid>
   close: () => void
 }
 
@@ -178,7 +181,12 @@ export let agent = (opts: Opts = {}): Agent => {
       admit(h.g, undefined, opts, async () => {
         let home = await homeAt(h.g, opts.cwd ?? Deno.cwd())
         let session = crypto.randomUUID() as Eid
+        let files = await instructionFiles(opts.cwd ?? Deno.cwd())
+        let context = files.map((f, i) =>
+          promptEntry(session, i + 1, f.body, f.source, 'shared', f.revision)
+        )
         await h.g.apply([
+          ...context,
           {
             entity: { eid: session },
             session: { id: session.slice(0, 8) },
@@ -186,7 +194,7 @@ export let agent = (opts: Opts = {}): Agent => {
           },
           {
             entity: { eid: crypto.randomUUID() as Eid },
-            [ENTRY]: { session, seq: 1 },
+            [ENTRY]: { session, seq: context.length + 1 },
             [CONTENT]: { body: prompt },
             using: { ...using, ...o.effort ? { effort: o.effort } : {} },
           },
@@ -243,6 +251,19 @@ export let agent = (opts: Opts = {}): Agent => {
         anchor: model.anchor,
         ...ctx,
       }, 'plain'),
+    instruct: (session, text, source = 'explicit') =>
+      d.enqueue(session, async () => {
+        let entries = await a.transcript(session)
+        let entry = promptEntry(
+          session,
+          entries.length ? Number((entries.at(-1)!.entry as Comp).seq) + 1 : 1,
+          text,
+          source,
+          'local',
+        )
+        await h.g.apply([entry])
+        return entry.entity.eid
+      }),
     close: h.close,
   }
   return a

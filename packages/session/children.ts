@@ -180,7 +180,8 @@ let delegation = (
           })
         }
       }
-      for (let key of ['effort', 'instructions']) {
+      // Legacy base instructions are inherited; child guidance is additive.
+      for (let key of ['effort']) {
         if (args[key] != null) using[key] = String(args[key])
       }
       // Never inherit the unanswered delegation call (or any sibling calls).
@@ -193,6 +194,39 @@ let delegation = (
         args,
       })
       let prefix = minted ? await transcript(g, ctx.session) : []
+      // Fork history is immutable. Fresh children receive the same shared
+      // snapshots, never a filesystem reread or a replacement persona.
+      let context: Bundle[] = fork
+        ? []
+        : ctx.entries.filter((b) =>
+          (b.prompt as Comp | undefined)?.scope == 'shared'
+        ).map((b, i) => ({
+          entity: { eid: eid + ':shared:' + i },
+          content: { body: textOf(b) },
+          prompt: { ...(b.prompt as Comp) },
+        }))
+      if (fork) {
+        context.push({
+          entity: { eid: eid + ':fork-context' },
+          prompt: { scope: 'local', source: 'harness:fork' },
+          content: {
+            body:
+              'You are executing an assignment in a fork of the parent transcript. Perform the assigned work here. Do not reflexively delegate it because the inherited parent conversation discusses delegation.',
+          },
+        })
+      }
+      if (args.instructions != null) {
+        context.push({
+          entity: { eid: eid + ':guidance' },
+          prompt: { scope: 'local', source: 'delegation:instructions' },
+          content: { body: String(args.instructions) },
+        })
+      }
+      let first = fork ? seqOf(anchor!) + 1 : 1
+      context = context.map((b, i) => ({
+        ...b,
+        entry: { session: eid, seq: first + i },
+      }))
       await g.apply([
         ...minted
           ? [{
@@ -214,6 +248,7 @@ let delegation = (
           }]
           : [],
         ...models,
+        ...context,
         ...minted
           ? [
             minted,
@@ -235,7 +270,7 @@ let delegation = (
         },
         {
           entity: { eid: `${eid}:input` },
-          entry: { session: eid, seq: fork ? seqOf(anchor!) + 1 : 1 },
+          entry: { session: eid, seq: first + context.length },
           content: { body: prompt },
           using,
         },

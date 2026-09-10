@@ -204,3 +204,27 @@ directory; it inherits the harness environment. This is not sandboxing. No
 checkout is merged or deleted automatically. Failed Git preparation remains as
 `checkout` intent/error and as the failed tool result; retrying reconciles the
 same path.
+
+### Prompt context pilot
+
+`prompt{scope,source,revision}` on an entry explicitly admits its `content.body`
+as instructions. Ordinary file reads and tool results never gain instruction
+status. `agent.instruct(session, text, source)` appends local instructions; it
+is an explicit wake-producing operation, not a passive notice. OpenAI receives
+ordered developer messages, including mid-conversation admissions.
+
+Root sessions snapshot global `~/.agents/AGENTS.md` then ancestor `AGENTS.md`
+files from filesystem root to cwd. Missing files are ignored, other read errors
+abort admission. Each file's canonical path and content SHA-256 are recorded.
+No mtime sorting or retrospective reload occurs. Existing `opts.instructions`
+and `using.instructions` remain the legacy base instruction channel; delegated
+`instructions` now append local guidance rather than replacing that base.
+
+Fresh children copy shared prompt snapshots from their parent. Forks copy no
+files: their exact inherited prefix is followed by a local fork-execution note,
+optional child guidance, and the assignment. Fresh children intentionally inherit
+the parent's file snapshots even when assigned a different home; admitting that
+new home's guidance is explicit. A renamed/deleted source doesn't alter history.
+This pilot is host/POSIX-oriented; it doesn't yet provide UI admission controls,
+prompt supersession, or a dedicated prompt renderer. Fork notes are guidance,
+not a prohibition on useful delegation. Provider cache hits are not guaranteed.

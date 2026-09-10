@@ -43,6 +43,7 @@ let row = (
 // Older content-only receipts have no author facet; their durable delivery IDs
 // keep them out of the user-message fallback. Other machine facets win ties.
 export let transcriptViews = define([
+  row('.entry&.prompt&.content', 'prompt', 'Muted'),
   row('.entry&.content&.entity.eid~=delivery:', 'notice', 'Muted', true),
   row('.entry&.using', 'input', 'Muted', false, true),
   row('.entry&.error', 'error', 'Bad'),
