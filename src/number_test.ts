@@ -2,6 +2,7 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { apply, delta, fleetGraphOf, human, readComp } from './db.ts'
 import { connect } from './store/sqlite.ts'
 import { slow } from './testing.ts'
+import { served } from './served.ts'
 import { bareDb } from './testdb.ts'
 import { idOf, uuid } from './types.ts'
 import {
@@ -49,6 +50,11 @@ Deno.test('numbers: late request survives literals, echoes and journals the same
   assert(first.every((c) => !('$num' in c)))
   assertEquals(readComp(db, eid, 'created'), created)
   assertEquals(first.filter((c) => c.name == 'created'), [])
+  assertEquals(
+    delta(db, 0).changes.filter((c) => c.eid == eid && c.name == 'created')
+      .length,
+    1,
+  )
 })
 
 Deno.test('numbers: alias requests are per entity and roll back on refusal', () => {
@@ -189,4 +195,27 @@ Deno.test('numbers: late numbering never relocates an eid-owned managed checkout
     )
     assert(made.changes.every((c) => c.comp?.cwd === undefined))
   }
+})
+
+Deno.test('numbers: a handle belongs to the entity, not its display kind', () => {
+  let db = bareDb(), eid = uuid()
+  apply(db, [{ eid, name: 'doc', comp: { title: 'document' }, $num: true }])
+  assertEquals(readComp(db, eid, 'entity')?.num, 1)
+  apply(db, [{ eid, name: 'task', comp: {} }])
+  assertEquals(human(db, eid), 'T-1')
+  assertEquals(readComp(db, eid, 'entity')?.num, 1)
+})
+
+Deno.test('numbers: the served session is chosen by creation, never a late number', () => {
+  let seats = [
+    {
+      eid: 'older',
+      id: 'before-clear',
+      pid: 7,
+      at: '2026-09-10T12:00:00Z',
+      num: 99,
+    },
+    { eid: 'newer', id: 'after-clear', pid: 7, at: '2026-09-10T12:01:00Z' },
+  ]
+  assertEquals(served(seats, 7)?.eid, 'newer')
 })
