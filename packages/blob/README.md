@@ -181,3 +181,29 @@ reads, and the indexed words. Each override carries a `text(stored)` expression
 as well as `expr(owner)`, because an FTS delete trigger must resolve `old.body`,
 not look up the owner after its row has changed or disappeared. `blobText()`
 remains the address-only form for callers that already hold a stored value.
+
+## Bounded graph-value inspection
+
+`valueTools(readEntity)` returns provider-neutral `graph_value_read` and
+`graph_value_search` tool declarations with executable `run` functions. Supply
+the same authorized entity reader used by your application's other graph tools.
+The tools never accept filesystem paths or raw blob hashes as read capabilities.
+They work for any string-valued graph property, not just blob-backed columns.
+
+Both accept `entity`, `component`, and `property`. An optional `revision` checks
+the SHA-256 of the UTF-8 text and fails if it changed. Missing, denied, or
+non-text values fail; the tools do not serialize arbitrary objects.
+
+- Read: `start` is a zero-based Unicode code-point offset; `count` defaults to
+  2048 and cannot exceed 8192. The response includes `start`, `end`, `total`,
+  `revision`, `text`, and `next` (null at EOF). Escaped JSON text is further
+  bounded, so a response can contain fewer characters than requested.
+- Search: `query` is a nonempty, case-sensitive literal (at most 256 UTF-16 code
+  units), not a regular expression. `start` skips a character range and `limit`
+  defaults to 10, at most 20. Matches include offsets and short excerpts. `next`
+  is a continuation offset when the match limit was reached; a subsequent search
+  may find no further matches.
+
+Offsets count code points rather than grapheme clusters or terminal columns.
+These APIs currently load the whole text through the reader before slicing or
+searching it; bounded output is not a streaming storage API.

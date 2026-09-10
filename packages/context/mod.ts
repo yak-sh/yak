@@ -37,3 +37,5 @@ export let snapshot = async (
   ).join('')
   return { body, source, revision }
 }
+
+export { OUTPUT_LIMIT, outputView } from './output.ts'

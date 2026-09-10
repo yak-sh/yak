@@ -1,3 +1,4 @@
+import { outputView } from '@yaks/context'
 import { rootOf } from './tree.ts'
 import { diagnostics } from './diagnostics.ts'
 import { promptEntry } from '@yaks/context'
@@ -95,6 +96,8 @@ export type Opts = ChildLimits & NotHarness & {
   tools?: Tool[]
   /** the system prompt every ask carries */
   instructions?: string
+  /** Maximum tool-result code points before model-facing handle projection. */
+  outputLimit?: number
   /** each step of every transcript, as it lands */
   each?: (step: Step) => void
 }
@@ -178,6 +181,9 @@ export let agent = (opts: Opts = {}): Agent => {
       model,
       tools,
       instructions: opts.instructions,
+      resultText: tools.some((t) => t.name == 'graph_value_read')
+        ? (entry) => outputView(h.g, entry, opts.outputLimit)
+        : undefined,
       report: (error, session, phase) =>
         diagnostics().report(error, { session, phase }),
     },

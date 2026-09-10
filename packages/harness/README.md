@@ -318,3 +318,20 @@ Sidebar panels share the available height instead of letting a large session
 tree hide Tasks, Context usage, or Keys. Wheel over a panel to scroll its
 contents; tree keyboard selection is automatically revealed. Long tree labels
 are clipped to one row.
+
+### Inspecting large tool results
+
+The standard tools include `graph_value_read` and `graph_value_search` from
+`@yaks/blob`. Tool-result bodies over 16,384 Unicode code points are replaced in
+model requests by a short preview and a revisioned graph address. The full
+result remains in the transcript and blob-backed storage. This applies equally
+to shell output and large graph-tool responses. User messages and instruction
+snapshots are unchanged. Set `outputLimit` on `agent()` to change the threshold.
+
+Read accepts `entity`, `component`, `property`, `start`, `count`, and optional
+`revision`. Search accepts the same address with a literal `query` and bounded
+`limit`. These tools inspect any authorized text property, including `doc.body`,
+not only tool results. They don't open files or grant access through a raw hash.
+See [`@yaks/blob`](../blob/README.md#bounded-graph-value-inspection) for range
+units and [`@yaks/context`](../context/README.md#large-tool-results) for policy
+limits.

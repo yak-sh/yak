@@ -36,3 +36,35 @@ const entry = promptEntry(
 // Persist entry using your graph. The session must exist, and seq must be allocated
 // by the caller to preserve transcript order.
 ```
+
+## Large tool results
+
+`outputView(graph, resultEntry, limit = 16384)` produces a model-facing view of
+a stored tool result. Results within the limit are unchanged. Larger results get
+a short notice with a 512-code-point preview, size, snapshot entity address, and
+inspection instructions. The limit counts Unicode code points, not tokens or
+UTF-8 bytes. User messages and admitted instructions are not shortened.
+
+The full original entry remains available to the UI. A `context_output` row
+stores a revisioned copy, using the existing blob-backed body property.
+Identical text is deduplicated by `@yaks/blob`; editing the original entry does
+not alter the copy. Its source is the original entry EID. These rows are data,
+not instructions or transcript entries, and do not wake sessions. A fork uses
+the same snapshot address for inherited results. The session package accepts an
+optional `resultText` projection callback; it does not depend on the context
+package.
+
+The harness enables this projection when its standard value-inspection tools are
+available. `agent({ outputLimit })` configures the per-result limit (integer at
+least 512). Custom tool sets without `graph_value_read` retain the previous
+unbounded behavior. There is no aggregate request budget yet: many individually
+small results can still produce a large request. Previously sent provider
+context is not retroactively removed. Snapshot generation hashes and reads the
+full text; it bounds model input, not storage I/O or memory use. Changing policy
+changes future model-facing projections, not stored transcript history.
+
+Snapshots are regular graph data with the same access policy as other entities.
+They are not a security boundary against callers with graph write access.
+Passing the advertised revision to an inspection tool detects a modified value
+rather than silently reading its replacement. Automatic snapshot garbage
+collection is not implemented.

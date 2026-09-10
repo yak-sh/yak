@@ -1,3 +1,4 @@
+import { valueTools } from '@yaks/blob'
 // What the agent can do here: run a program, and read and write its own graph.
 //
 // Both halves already exist as packages — @yaks/process declares the shell as
@@ -134,5 +135,20 @@ export let harnessTools = (
     ...shell.map((t) => t.name == 'wait' ? wait : t),
     ...session.filter((t) => t.name != 'wait'),
     ...graphTools(g, { depth: opts.depth }),
+    ...valueTools(async (entity) =>
+      (await g.read('.entity.eid=' + JSON.stringify(entity)))[0]
+    ).map((tool) => ({
+      ...tool,
+      run: async (args: Record<string, unknown>) => {
+        try {
+          return await tool.run(args)
+        } catch (error) {
+          throw new ToolError(
+            'value',
+            error instanceof Error ? error.message : String(error),
+          )
+        }
+      },
+    })),
   ]
 }

@@ -83,6 +83,8 @@ export type Deps = {
   model: Model
   tools: Tool[]
   instructions?: string
+  /** Optional bounded model-facing tool-result projection; storage stays unchanged. */
+  resultText?: (entry: Bundle) => Promise<string>
   /** Unexpected model/tool defects, separate from expected refusals. */
   report?: (error: unknown, session: Eid, phase: string) => void
   mint?: () => Eid
@@ -125,6 +127,7 @@ export let project = (
   entries: Bundle[],
   tools: Map<Eid, Declared>,
   anchor?: Eid,
+  results?: Map<Eid, string>,
 ): Item[] => {
   let out: Item[] = []
   let byId = new Map(entries.map((b) => [b.entity.eid, b]))
@@ -146,7 +149,7 @@ export let project = (
       out.push({
         kind: 'result',
         id: String(comp(call!, CALL)?.id ?? ''),
-        output: textOf(b),
+        output: results?.get(b.entity.eid) ?? textOf(b),
       })
     }
   }
@@ -254,6 +257,15 @@ export let react = async (
     ? entries.filter((b) => seqOf(b) > seqOf(asked!))
     : entries
   let effort = using?.effort ?? served?.effort
+  const results = deps.resultText
+    ? new Map(
+      await Promise.all(
+        window.filter((b) => b.result).map(async (b) =>
+          [b.entity.eid, await deps.resultText!(b)] as const
+        ),
+      ),
+    )
+    : undefined
   let req: Request = {
     model: modelName,
     effort: effort == null ? undefined : String(effort),
@@ -264,6 +276,7 @@ export let react = async (
       window,
       toolEntities,
       anchorId ? asked!.entity.eid : undefined,
+      results,
     ),
     tools: deps.tools.map(({ name, description, parameters }) => ({
       name,

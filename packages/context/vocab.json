@@ -18,6 +18,22 @@
           "description": "SHA-256 of the admitted text when loaded from a file"
         }
       }
+    },
+    "context_output": {
+      "type": "object",
+      "description": "Immutable full tool-result snapshot, scoped by originating transcript entry.",
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string",
+          "store": "blob"
+        }
+      }
     }
   }
 }
