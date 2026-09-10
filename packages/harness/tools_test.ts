@@ -50,3 +50,37 @@ Deno.test('a graph tool writes and reads the harness graph', async () => {
   assert(out.includes('a task'), out)
   h.close()
 })
+
+Deno.test('the merged wait preserves process output and child status alongside task waiting', async () => {
+  let h = open(':memory:')
+  try {
+    await h.g.apply([
+      { entity: { eid: 'p' }, session: {} },
+      { entity: { eid: 'c' }, session: {}, spawned: { parent: 'p' } },
+      {
+        entity: { eid: 'command' },
+        process: { command: 'true' },
+        exit: { code: 0 },
+      },
+      {
+        entity: { eid: 'output' },
+        content: { source: 'command', body: 'process output' },
+      },
+    ])
+    let wait = harnessTools(h.g).find((t) => t.name == 'wait')!
+    let process = await wait.run({ process: 'command', timeout: 0 })
+    assertEquals(process, 'process command exited 0\nprocess output')
+    let children = await wait.run({ children: ['c'], timeout: 0 }, {
+      session: 'p',
+      call: { entity: { eid: 'call' } },
+      entries: [],
+    })
+    assertEquals(JSON.parse(String(children)), [{
+      session: 'c',
+      status: 'empty',
+      output: '',
+    }])
+  } finally {
+    h.close()
+  }
+})

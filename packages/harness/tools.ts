@@ -67,7 +67,7 @@ export let graphTools = (
   }))
 }
 
-/** Everything the harness gives an agent: the shell, and the graph. */
+/** The shell, delegation, and the graph, with one wait for all three targets. */
 export let harnessTools = (
   g: Graph,
   opts: { cwd?: string; depth?: Depth } & ChildLimits = {},

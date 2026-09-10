@@ -7,7 +7,7 @@ It is composition, not machinery. Four lines are the whole package:
 
 ```
 open()          the file, the vocabulary, the plugins        store.ts
-harnessTools()  the shell (@yaks/process) + the graph tier (@yaks/mcp)
+harnessTools()  shell + delegation + graph, one merged wait    tools.ts
 agent()         the seed, the daemon (@yaks/session), the doors  run.ts
 plugin          the verbs, over @yaks/cli                      cli.ts
 ```
@@ -70,8 +70,14 @@ for (let e of await a.transcript(s)) console.log(a.line(e))
   state this process would lose: what is running is `.session.status=running`.
   Point it at the fleet's graph and none of it changes.
 - **Two statuses are computed, never stored.** `sessionDerived` and @yaks/task's
-  `derived()` are registered as derived columns, so those queries filter in the
-  database.
+  `derived(taskMarks)` are registered as derived columns. The task plugin uses
+  the same `taskMarks` from @yaks/session: completed/cancelled win, then a claim
+  means wip, otherwise open. `blocked` stays a facet, never a status. Queries
+  filter in the database, and the sidebar reads that same status.
+- **Work need not be filed.** `doc` + bare `task{}` is a microtask; optional
+  `filed{project, priority, domain, assignee}` places it in the portfolio.
+  `a.tasks()` reads `.task.status=open,wip`, oldest first, without requiring
+  filing or a project. The CLI and sidebar use that same door.
 - **The agent holds its own graph.** `harnessTools()` is @yaks/process's shell
   plus @yaks/mcp's generic tier (`graph_apply`, `graph_query`, `graph_show`,
   `graph_schema`), each tool's Zod arguments said as JSON Schema for the model.
@@ -99,19 +105,32 @@ The default tool table includes `fork`, `spawn`, and `wait`:
   session id. It inherits the serving configuration, not the transcript. `model`
   accepts a model name (served by the inherited provider) or an existing model
   entity id.
+- `spawn({task, instructions?, model?, effort?})` instead accepts a task eid or
+  `T-<number>`. The child's first input records its title and body as served;
+  its claim commits with the child, so the task is wip from the first tick.
+  Choose exactly one of `prompt` and `task`. Independent subtasks can run in
+  parallel; tree ordering is through `requires`/`contains`, not priority.
 - `wait({children: [id, ...], timeout?: milliseconds})` waits on direct children
   and returns their statuses and output. The default timeout is 60 seconds;
-  timing out leaves the children running. `wait({process, timeout?})` still
-  waits on a shell process. Use one target shape, not both.
+  timing out leaves the children running.
+- `wait({tasks: [id, ...], timeout?: milliseconds})` returns each task's
+  `{task, status, done}`. Shared @yaks/task `done()` requires a settled task
+  (completed or cancelled) with no open direct `requires`/`contains` far ends.
+  Timeout returns the current state without cancelling work.
+- `wait({process, timeout?})` still waits on a shell process. The tool table
+  exposes one merged `wait`: choose exactly one of process, children, or tasks.
 
 A child carries `spawned{parent, call}`; a fork additionally has `fork{from}`.
 `a.children(session)` reads that structure. When a child settles, the daemon
 queues a completion receipt behind any active parent step: a result if the
 originating call is still open, otherwise an input that wakes another parent
 turn. Failed/stopped children also report their terminal outcome. A stopped
-parent is not revived. Receipt ids are derived from the child's final entry, so
-`resume()` can reconcile a missed completion without repeating one already
-received. Fork/spawn calls themselves are idempotent by call id.
+parent is not revived. When its claimed task is done, a quiet child delivers
+`task T-<number> <status>` plus its final message, with the idempotent receipt
+id `delivery:<child>:task:<task>:<status>`. A child settling before the task is
+done still reports its outcome, using a receipt id derived from its final entry.
+`resume()` reconciles missed receipts without repeating ones already received.
+Fork/spawn calls themselves are idempotent by call id.
 
 `agent({maxChildren: 4, maxSessions: 16})` sets the defaults explicitly.
 Admission is serialized per graph across parents; concurrent roots count against

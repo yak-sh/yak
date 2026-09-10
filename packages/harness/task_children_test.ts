@@ -153,6 +153,8 @@ Deno.test('task wait uses done including contains/requires and cancellation; mer
       { tasks: ['work'], timeout: -1 },
       { tasks: ['work'], children: ['child:call'] },
       { tasks: ['work'], process: 'x' },
+      { children: ['child:call'], process: 'x' },
+      { tasks: ['work'], children: ['child:call'], process: 'x' },
       {},
     ]
   ) {

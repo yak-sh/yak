@@ -102,7 +102,7 @@ export type Agent = {
   taskEntry: (session: Eid, text: string) => Promise<{ task: Eid; child: Eid }>
   /** every session, oldest first, each carrying its derived status */
   sessions: () => Promise<Bundle[]>
-  /** the open work in this graph, oldest first */
+  /** open/wip tasks, filed or bare, oldest first */
   tasks: () => Promise<Bundle[]>
   /** direct delegated sessions, including forks */
   children: (session: Eid) => Promise<Bundle[]>

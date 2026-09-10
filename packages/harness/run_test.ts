@@ -68,21 +68,45 @@ Deno.test('a session lists with its derived status, and renders as a line', asyn
   a.close()
 })
 
-Deno.test('the agent reads the open work in its own graph', async () => {
+Deno.test('the agent reads bare and filed open work, including claims and blocked facets', async () => {
   let a = started()
   await a.h.g.apply([
     { entity: { eid: 't1' }, doc: { title: 'first' }, task: {} },
+    { entity: { eid: 'holder' }, session: {} },
     {
       entity: { eid: 't2' },
       doc: { title: 'done already' },
       task: {},
       completed: {},
+      claim: { session: 'holder' },
     },
+    {
+      entity: { eid: 't3' },
+      doc: { title: 'claimed microtask' },
+      task: {},
+      claim: { session: 'holder' },
+    },
+    {
+      entity: { eid: 't4' },
+      doc: { title: 'filed work' },
+      task: {},
+      filed: { priority: 2, domain: 'Eng' },
+      blocked: { on: 'a reply' },
+    },
+    { entity: { eid: 't5' }, task: {}, cancelled: {} },
+    { entity: { eid: 'not-work' }, filed: { priority: 1 } },
   ])
+  let work = await a.tasks()
   assertEquals(
-    (await a.tasks()).map((b) => (b.doc as Comp).title),
-    ['first'],
+    work.map((b) => (b.doc as Comp).title),
+    ['first', 'claimed microtask', 'filed work'],
   )
+  assertEquals(work.map((b) => (b.task as Comp).status), [
+    'open',
+    'wip',
+    'open',
+  ])
+  assertEquals(work.slice(0, 2).map((b) => b.filed), [undefined, undefined])
   a.close()
 })
 

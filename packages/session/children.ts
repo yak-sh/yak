@@ -5,7 +5,7 @@
 // survive a failed write, and replaying a call finds the same child.
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { link } from '@yaks/edge'
-import { MARKS, openDeps, settled, statusOf as taskStatus } from '@yaks/task'
+import { done, MARKS, statusOf as taskStatus } from '@yaks/task'
 import { type Tool, type ToolContext, ToolError, transcript } from './react.ts'
 import {
   newestAsk,
@@ -38,11 +38,6 @@ let taskRow = async (g: Graph, id: string): Promise<Bundle> => {
   if (!b?.task) throw new ToolError('task', `not a task: ${id}`)
   return b
 }
-
-// Replaced by @yaks/task's shared done() when the vocabulary split lands.
-let done = async (g: Graph, b: Bundle) =>
-  settled(taskStatus(b, taskMarks)!, taskMarks) &&
-  await openDeps(g.storage, b.entity.eid) == 0
 
 /** Direct children, including forks created by the session tools. */
 export let children = (g: Graph, session: Eid): Promise<Bundle[]> =>
@@ -298,7 +293,7 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
             return {
               task: id,
               status: taskStatus(b, taskMarks),
-              done: await done(g, b),
+              done: await done(g.storage, id, { marks: taskMarks }),
             }
           }))
           if (results.every((r) => r.done) || Date.now() >= end) {
@@ -345,7 +340,8 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
     ? await g.read(`.task .claim.session=${child}`)
     : []
   let task = tasks.find((b) => b.task)
-  let ready = task && await done(g, task)
+  let ready = task &&
+    await done(g.storage, task.entity.eid, { marks: taskMarks })
   let last = entries.at(-1)
   if (!last) return
   let eid = ready
