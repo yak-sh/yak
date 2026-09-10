@@ -427,10 +427,11 @@ Deno.test('responses refreshes once on 401 and never returns credentials', async
   )
 })
 
-Deno.test('responses names 429 limits without retrying or echoing errors', async () => {
+Deno.test('responses names 429 limits after bounded retries without echoing secrets', async () => {
   let calls = 0
   let client = responses({
     credentials: auth(),
+    pause: () => Promise.resolve(),
     fetch: () => {
       calls++
       return Promise.resolve(
@@ -451,7 +452,7 @@ Deno.test('responses names 429 limits without retrying or echoing errors', async
   let error = await assertRejects(
     () => client.run({ model: 'm', input: [] }),
   ) as ResponseFault
-  assertEquals(calls, 1)
+  assertEquals(calls, 3)
   // The body message rides into the fault message, redacted along the way.
   assertEquals(error.message, 'responses: HTTP 429 — [redacted]')
   assertEquals(error.code, 'rate_limit')
@@ -518,10 +519,10 @@ Deno.test('responses retries bounded server failures before reading events', asy
   })
   await client.run({ model: 'm', input: [] })
   assertEquals(calls, 3)
-  assertEquals(pauses, [200, 400])
+  assertEquals(pauses, [1000, 4000])
 })
 
-Deno.test('responses fails a network interruption once with bounded evidence', async () => {
+Deno.test('responses retries a network interruption with bounded evidence', async () => {
   let calls = 0
   let client = responses({
     credentials: auth(),
@@ -535,9 +536,7 @@ Deno.test('responses fails a network interruption once with bounded evidence', a
   let error = await assertRejects(
     () => client.run({ model: 'm', input: [] }),
   ) as ResponseFault
-  // A request may have reached the provider before the socket failed. Retrying
-  // here could bill or advance twice; a durable graph wake starts the next try.
-  assertEquals(calls, 1)
+  assertEquals(calls, 2)
   assertEquals(error.message, 'responses: transport failed')
   assertEquals(JSON.stringify(error).includes('secret-old'), false)
   assertEquals(JSON.stringify(error).includes('acct-1'), false)

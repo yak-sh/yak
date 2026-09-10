@@ -138,8 +138,6 @@ let ask = (opts: Options) => {
   let client = transport({
     ...opts,
     credentials: { get: opts.credential, refresh: opts.refresh },
-    // The Model previously made one attempt; retries are caller policy.
-    retries: opts.retries ?? 0,
   })
   return async (req: Request): Promise<Reply> => {
     try {

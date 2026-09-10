@@ -73,7 +73,9 @@ export type ResponseOptions = {
   base?: string
   fetch?: typeof fetch
   headers?: Record<string, string>
-  /** Retries for credential loads and 5xx only; default 2. */
+  /** Additional attempts for credential loads and transient wire failures;
+   * default 2 (three total attempts). Wire backoff is 1s, 4s, then capped at
+   * 16s; Retry-After may extend it, up to 60s. */
   retries?: number
   pause?: (ms: number) => Promise<void>
   id?: () => string
@@ -178,6 +180,51 @@ let fault = (
   message: string,
   fields: Omit<ResponseFault, keyof Error> = {},
 ): ResponseError => Object.assign(new ResponseError(kind, message), fields)
+
+// Terminal provider failures and malformed events are not network failures.
+let transient = (error: ResponseError) =>
+  error.kind == 'transport' || error.kind == 'disconnected' ||
+  error.kind == 'no_stream' || error.status == 429 ||
+  (error.status != null && error.status >= 500 && error.status < 600)
+
+let retryAfter = (error: ResponseError) => {
+  let value = error.limits?.['retry-after']
+  if (!value) return 0
+  let ms = /^\d+(\.\d+)?$/.test(value)
+    ? Number(value) * 1000
+    : Date.parse(value) - Date.now()
+  return Number.isFinite(ms) ? Math.min(60_000, Math.max(0, ms)) : 0
+}
+
+// Stop is prompt even during backoff, and never starts another HTTP attempt.
+let backoff = (
+  ms: number,
+  signal?: AbortSignal,
+  pause?: ResponseOptions['pause'],
+) =>
+  new Promise<void>((resolve, reject) => {
+    signal?.throwIfAborted()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let close = () => {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', abort)
+    }
+    let abort = () => {
+      close()
+      reject(signal?.reason)
+    }
+    let done = () => {
+      close()
+      resolve()
+    }
+    signal?.addEventListener('abort', abort, { once: true })
+    if (pause) {
+      Promise.resolve().then(() => pause(ms)).then(done, (error) => {
+        close()
+        reject(error)
+      })
+    } else timer = setTimeout(done, ms)
+  })
 
 let scrub = (value: unknown, secrets: string[]): unknown => {
   if (typeof value == 'string') {
@@ -297,7 +344,18 @@ export let frames = async function* (
     let decoder = new TextDecoder()
     let pending = ''
     while (true) {
-      let part = await reader.read()
+      // Only a reader rejection is a transport fault. Parser defects and the
+      // caller's event hook must never be mistaken for a dropped connection.
+      let part: ReadableStreamReadResult<Uint8Array>
+      try {
+        part = await reader.read()
+      } catch (error) {
+        if ((error as Error)?.name == 'AbortError') throw error
+        throw fault(
+          'transport',
+          'responses: error reading a body from connection',
+        )
+      }
       pending += decoder.decode(part.value, { stream: !part.done })
       let blocks = pending.split(/\r?\n\r?\n/)
       pending = blocks.pop() ?? ''
@@ -485,7 +543,11 @@ export let transport = (options: ResponseOptions): {
     let refreshed = false
     let failures = 0
     let requestId = id()
+    let payload = JSON.stringify(
+      options.shape?.(value) ?? request(value, options.store),
+    )
     while (true) {
+      run.signal?.throwIfAborted()
       let headers = new Headers(options.headers)
       headers.set('accept', 'text/event-stream')
       if (auth.token) headers.set('authorization', `Bearer ${auth.token}`)
@@ -498,59 +560,52 @@ export let transport = (options: ResponseOptions): {
       // A trip aborts its own signal (not run.signal), so the throw below is a
       // named stall the caller can fail on, never a silent hang.
       let dog = watchdog(stallMs, run.signal)
-      let response: Response
       try {
-        let endpoint = (base ?? auth.base ?? 'https://api.openai.com/v1')
-          .replace(/\/$/, '')
-        response = await fetcher(`${endpoint}/responses`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(
-            options.shape?.(value) ?? request(value, options.store),
-          ),
-          signal: dog.signal,
-        })
-      } catch (error) {
-        dog.close()
-        if (dog.stalled()) {
-          throw fault('stalled', 'responses: transport stalled')
+        let response: Response
+        try {
+          let endpoint = (base ?? auth.base ?? 'https://api.openai.com/v1')
+            .replace(/\/$/, '')
+          response = await fetcher(`${endpoint}/responses`, {
+            method: 'POST',
+            headers,
+            body: payload,
+            signal: dog.signal,
+          })
+        } catch (error) {
+          if (dog.stalled()) {
+            throw fault('stalled', 'responses: transport stalled')
+          }
+          if (run.signal?.aborted || (error as Error)?.name == 'AbortError') {
+            throw error
+          }
+          throw fault('transport', 'responses: transport failed')
         }
-        if (run.signal?.aborted || (error as Error)?.name == 'AbortError') {
-          throw error
-        }
-        throw fault('transport', 'responses: transport failed')
-      }
 
-      if (
-        response.status == 401 &&
-        !refreshed &&
-        options.credentials.refresh
-      ) {
-        dog.close()
-        await response.body?.cancel()
-        auth = await credentials(
-          options.credentials.refresh,
-          'responses: credential refresh failed',
-          options.authentication == 'optional',
-          retries,
-          pause,
-          undefined,
-          options.redact,
-        )
-        remember(auth)
-        refreshed = true
-        continue
-      }
-      if (response.status >= 500 && failures < retries) {
-        dog.close()
-        await response.body?.cancel()
-        await pause(200 * 2 ** failures++)
-        continue
-      }
-      try {
+        if (
+          response.status == 401 &&
+          !refreshed &&
+          options.credentials.refresh
+        ) {
+          dog.close()
+          await response.body?.cancel()
+          auth = await credentials(
+            options.credentials.refresh,
+            'responses: credential refresh failed',
+            options.authentication == 'optional',
+            retries,
+            pause,
+            undefined,
+            options.redact,
+          )
+          remember(auth)
+          refreshed = true
+          continue
+        }
         dog.kick()
         if (!response.ok) {
-          let body = await response.text()
+          // Once HTTP has refused the request its status wins, even if its
+          // diagnostic body drops. A broken 401 body is not a retryable 200.
+          let body = await response.text().catch(() => '')
           let status = response.status
           let { code, reason } = explain(body, secrets)
           throw fault(
@@ -561,8 +616,27 @@ export let transport = (options: ResponseOptions): {
         }
         return await terminal(response, secrets, run.event, dog.kick)
       } catch (error) {
-        if (dog.stalled()) throw fault('stalled', 'responses: stream stalled')
-        throw error
+        if (run.signal?.aborted) throw error
+        if (dog.stalled()) {
+          if (error instanceof ResponseError && error.kind == 'stalled') {
+            throw error
+          }
+          throw fault('stalled', 'responses: stream stalled')
+        }
+        if (
+          !(error instanceof ResponseError) || !transient(error) ||
+          failures >= retries
+        ) {
+          throw error
+        }
+        // Nothing from this attempt is committed. Reuse the exact body and
+        // correlation id; only a complete exchange may reach the runner.
+        dog.close()
+        await backoff(
+          Math.max(Math.min(1000 * 4 ** failures++, 16_000), retryAfter(error)),
+          run.signal,
+          options.pause,
+        )
       } finally {
         dog.close()
       }

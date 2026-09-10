@@ -72,7 +72,7 @@ let stallMs = Number(Deno.env.get('CODEX_STALL_MS') ?? 300_000)
 let codexBus = responses({
   credentials: codexAccount.credentials,
   headers: { originator: 'tasks', version: '0' },
-  retries: 1,
+  retries: 2,
   stallMs,
 })
 let codexReady = codexReadiness(

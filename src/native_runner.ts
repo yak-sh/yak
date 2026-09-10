@@ -45,7 +45,7 @@ export let nativeRunner = (o: {
     transport: o.transport,
     generators: {
       ollama: codexGeneration(
-        ollamaTransport({ retries: 1, stallMs: o.stallMs }, o.ollama),
+        ollamaTransport({ retries: 2, stallMs: o.stallMs }, o.ollama),
       ),
     },
     tools: async (tree, session) => {

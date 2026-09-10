@@ -688,7 +688,7 @@ let stallMs = Number(Deno.env.get('CODEX_STALL_MS') ?? 300_000)
 let codexTransport = responses({
   credentials: codexAccount.credentials,
   headers: { originator: 'tasks', version: '0' },
-  retries: 1,
+  retries: 2,
   stallMs,
 })
 // The adapter table stamped with live readiness: the graph-native Codex

@@ -9,6 +9,7 @@ import {
   type ResponseEvent,
   type ResponseItem,
   type ResponseResult,
+  responses,
 } from './responses.ts'
 import {
   type EntryRow,
@@ -840,4 +841,95 @@ Deno.test('a malformed checkpoint falls back to the previous valid one', () => {
   // one neither bounds nor appears as a replayable item.
   assertEquals(input[0], checkpointItem)
   assertEquals(JSON.stringify(input).includes('original instruction'), false)
+})
+
+Deno.test('native turn retries body-read failures before recording one error', async () => {
+  for (let mode of ['recover', 'exhaust', 'unauthorized']) {
+    let state = memoryLog([row('input', 1, {
+      message: { role: 'user' },
+      content: { body: 'finish the investigation' },
+    })])
+    let calls = 0
+    let pauses: number[] = []
+    let bodies: unknown[] = []
+    let turn = () =>
+      runTurn({
+        log: {
+          ...state.log,
+          fail: async (generation, message) => {
+            await state.log.fail!(generation, message)
+            await state.log.append([{ error: {}, content: { body: message } }])
+          },
+        },
+        through: 'input',
+        provider: 'codex',
+        model: 'm',
+        instructions: 'continue',
+        tools: {
+          tools: [],
+          call: () => {
+            throw new Error('must not run')
+          },
+        },
+        transport: responses({
+          credentials: { get: () => Promise.resolve({ token: 'fake' }) },
+          pause: (ms) => {
+            pauses.push(ms)
+            return Promise.resolve()
+          },
+          fetch: (_url, init) => {
+            calls++
+            bodies.push(init?.body)
+            if (mode == 'unauthorized') {
+              return Promise.resolve(new Response('', { status: 401 }))
+            }
+            if (mode == 'exhaust' || calls == 1) {
+              return Promise.resolve(
+                new Response(
+                  new ReadableStream({
+                    start(c) {
+                      c.error(
+                        new TypeError('error reading a body from connection'),
+                      )
+                    },
+                  }),
+                ),
+              )
+            }
+            return Promise.resolve(
+              new Response(
+                [
+                  {
+                    type: 'response.output_item.done',
+                    item: {
+                      type: 'message',
+                      role: 'assistant',
+                      content: [{ type: 'output_text', text: 'finished' }],
+                    },
+                  },
+                  {
+                    type: 'response.completed',
+                    response: { status: 'completed', model: 'm' },
+                  },
+                ].map((e) => `data: ${JSON.stringify(e)}\n\n`).join(''),
+              ),
+            )
+          },
+        }),
+      })
+    if (mode == 'recover') assertEquals((await turn()).finalText, 'finished')
+    else await assertRejects(turn)
+    assertEquals(calls, mode == 'recover' ? 2 : mode == 'exhaust' ? 3 : 1)
+    assertEquals(
+      pauses,
+      mode == 'recover' ? [1000] : mode == 'exhaust' ? [1000, 4000] : [],
+    )
+    assertEquals(bodies.every((body) => body == bodies[0]), true)
+    assertEquals(
+      state.entries.filter((e) => e.comps.error).length,
+      mode == 'recover' ? 0 : 1,
+    )
+    assertEquals(state.failures.length, mode == 'recover' ? 0 : 1)
+    assertEquals(state.entries.filter((e) => e.comps.generation).length, 1)
+  }
 })
