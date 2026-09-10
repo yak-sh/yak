@@ -180,7 +180,7 @@ export let react = async (
     added = await g.apply(added, { trusted: true })
     return {
       did: 'asked',
-      status: statusOf([...entries, ...added]),
+      status: statusOf(await transcript(g, session)),
       added,
     }
   }
