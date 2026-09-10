@@ -231,3 +231,35 @@ ends.
 ## License
 
 Apache-2.0
+
+## Workers and MessagePorts
+
+`portLink(port, options)` exchanges structured messages over a `Worker` or
+`MessagePort`, without HTTP, JSON serialization, or sockets. Both ends use the
+same link. It supports request/reply operations and the existing subscription
+`Frame` type. A receiver applies subscription frames with `land(graph, frame)`;
+server-side subscriptions can come from `@yaks/api`'s `subscriptions` registry.
+
+```ts
+const client = portLink(worker, {
+  frame: (frame) => {
+    void land(localGraph, frame)
+  },
+})
+await client.request('subscribe', ['books', '.book'])
+```
+
+The receiver supplies an explicit `receive(method, value)` handler. Only expose
+operations you intend the peer to call. This helper does not authorize queries
+or implement optimistic writes, reconnection, or subscription membership
+ownership. Those remain responsibilities of the composition. In particular,
+`land` strips `gone` entities; overlapping subscriptions must not evict data
+still needed by another subscription.
+
+Requests have a 30-second default timeout and a 256-request pending limit,
+configurable through `timeout` and `maxPending`. Timeout rejects the caller; it
+**does not cancel an operation that may already have executed**. Do not blindly
+retry mutations. `close()` removes the listener and rejects pending requests,
+but does not terminate or close the caller-owned port. `stats` counts sent,
+received, and subscription-frame messages. Frame streams have no credit-based
+backpressure yet.

@@ -3,7 +3,8 @@
   "version": "0.0.0",
   "exports": {
     ".": "./mod.ts",
-    "./host": "./host.ts"
+    "./host": "./host.ts",
+    "./checkout-vocab": "./checkout_vocab.ts"
   },
   "license": "Apache-2.0",
   "description": "Git objects as entities: an object index whose entity id is its SHA-1 object id, a SHA-256 name beside it, trees and commits built from a file manifest, and the v2 packfile a clone of them is.",

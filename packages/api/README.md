@@ -249,3 +249,13 @@ API endpoint for these operations.
 ## License
 
 Apache-2.0
+
+### External dependencies in subscriptions
+
+Some query results depend on entities outside their result set. For example, a
+session's computed status can depend on transcript entries. Hosts can pass
+`subscriptions(graph, { invalidate(query, applied) })`. When the callback
+returns true, that subscription is re-read and its full current set is sent,
+including departed IDs. The callback is an explicit dependency policy; this is
+not automatic dependency analysis. Use it narrowly to avoid full-set updates on
+unrelated commits.

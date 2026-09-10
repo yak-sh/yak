@@ -20,7 +20,6 @@ import { diagnostics } from './diagnostics.ts'
 
 import {
   address,
-  blobKeywords,
   blobRead,
   type Blobs,
   blobs,
@@ -29,65 +28,18 @@ import {
   encode,
   sqliteBlobs,
 } from '@yaks/blob'
-import { checkoutDoc } from '@yaks/git/host'
-import { workspaceDoc } from './workspace.ts'
 import { Database } from '@yaks/sqlite/db'
-import { docDoc } from '@yaks/doc'
-import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
+import { edges } from '@yaks/edge'
 import { type Effects, effects } from '@yaks/effects'
 import { type Graph, graph } from '@yaks/graph'
-import { modelDoc } from '@yaks/model'
-import { openaiDoc } from '@yaks/openai'
-import { processDoc, processes } from '@yaks/process'
-import {
-  reapLeases,
-  sessionDerived,
-  sessionDoc,
-  sessions,
-  taskMarks,
-} from '@yaks/session'
+import { processes } from '@yaks/process'
+import { reapLeases, sessionDerived, sessions, taskMarks } from '@yaks/session'
 import { type Driver, storage, type Store } from '@yaks/sqlite'
-import { derived as taskDerived, taskDoc, tasks } from '@yaks/task'
-import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
+import { derived as taskDerived, tasks } from '@yaks/task'
+import { type Vocab } from '@yaks/vocab'
 
-/** The words no package owns: the spine, and the two stamps @yaks/graph writes
- * when a vocabulary declares them — without which nothing here has a time. */
-export let harnessDoc: VocabDoc = {
-  title: 'harness',
-  $defs: {
-    entity: {
-      type: 'object',
-      wire: false,
-      properties: { num: { type: 'number', stamped: true } },
-    },
-    created: {
-      type: 'object',
-      properties: {
-        at: { type: 'string', format: 'date-time', stamped: true },
-      },
-    },
-    updated: {
-      type: 'object',
-      properties: {
-        at: { type: 'string', format: 'date-time', stamped: true },
-      },
-    },
-  },
-}
-
-/** Everything the harness speaks, loaded once. */
-export let vocab: Vocab = loadVocab([
-  harnessDoc,
-  checkoutDoc,
-  workspaceDoc,
-  docDoc,
-  edgeDoc,
-  sessionDoc,
-  modelDoc,
-  openaiDoc,
-  processDoc,
-  taskDoc,
-], [edgeKeywords, blobKeywords])
+import { vocab } from './vocab.ts'
+export { harnessDoc, vocab } from './vocab.ts'
 
 /** The computed columns, said in SQL: a transcript's status and a task's. */
 export let derived = { ...sessionDerived, ...taskDerived(taskMarks) }

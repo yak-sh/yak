@@ -170,3 +170,21 @@ Deno.test('closing and dropping stop the pushes', () => {
   graph.apply([{ entity: { eid: 'b2' }, book: { price: 9 } }])
   assertEquals(two.take(), [])
 })
+
+Deno.test('explicit dependency invalidation refreshes a query on unrelated writes', async () => {
+  let g = shop()
+  await g.apply([{ entity: { eid: 'book' }, book: { price: 3 } }])
+  let subs = subscriptions(g, {
+    invalidate: (query, applied) =>
+      query == '.book' && applied.some((b) => b.doc != null),
+  })
+  let e = ear()
+  await subs.open(e.to, 'books', '.book')
+  e.take()
+  await g.apply([{
+    entity: { eid: 'note' },
+    doc: { title: 'changed dependency' },
+  }])
+  assertEquals(e.take().map(ids), [['book']])
+  subs.drop(e.to)
+})

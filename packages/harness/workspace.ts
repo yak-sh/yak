@@ -1,27 +1,10 @@
 /** Thin session integration over @yaks/git's host checkout model. */
 import { checkoutAt, createWorktree, discover } from '@yaks/git/host'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
-import type { VocabDoc } from '@yaks/vocab'
 import type { ChildLimits } from '@yaks/session'
 
-export let workspaceDoc: VocabDoc = {
-  title: 'workspace',
-  $defs: {
-    home: {
-      type: 'object',
-      description:
-        'An agent home checkout, separate from working directory; not a sandbox.',
-      properties: {
-        worktree: { type: 'string', ref: 'worktree', death: 'keep' },
-        cwd: {
-          type: 'string',
-          description:
-            'Optional default command directory, independent of the home checkout.',
-        },
-      },
-    },
-  },
-}
+export { workspaceDoc } from './vocab.ts'
+
 let row = async (g: Graph, eid: string) =>
   (await g.storage.tx((tx) => tx.get([eid])))[0]
 export let homeAt = async (g: Graph, cwd: string): Promise<Comp> => {

@@ -2,19 +2,10 @@
  * Kept off the portable object/HTTP entrypoint: these operations require a host.
  */
 import { type Bundle, type Comp, derivedEid, type Graph } from '@yaks/graph'
-import type { VocabDoc } from '@yaks/vocab'
-import gitDoc from './vocab.json' with { type: 'json' }
 import { refEid } from './refs.ts'
 
-/** The host subset avoids importing Git tree `entry` into a transcript vocabulary. */
-export let checkoutDoc: VocabDoc = {
-  title: 'git-checkout',
-  $defs: Object.fromEntries(
-    ['repository', 'worktree', 'ref', 'checkout'].map((
-      k,
-    ) => [k, (gitDoc.$defs as Record<string, unknown>)[k]]),
-  ) as VocabDoc['$defs'],
-}
+export { checkoutDoc } from './checkout_vocab.ts'
+
 export let repositoryEid = (common: string) =>
   derivedEid('repository|' + common)
 export let worktreeEid = (repository: string, path: string) =>

@@ -115,7 +115,12 @@ let judge = (ast: Clause, query: string, vocab: Vocab): Filter | null => {
  * subs.open(sink, 'cheap', '.book&.price<20')
  * ```
  */
-export let subscriptions = (graph: Graph): Subs => {
+export let subscriptions = (graph: Graph, opts: {
+  /** A query may depend on entities outside its result (for example a computed
+   * session status depends on transcript entries). Returning true refreshes
+   * that subscription after this commit. It does not subscribe to those rows. */
+  invalidate?: (query: string, applied: Bundle[]) => boolean
+} = {}): Subs => {
   let held = new Map<Sink, Map<string, Sub>>()
   let all = () => [...held.values()].flatMap((m) => [...m.values()])
 
@@ -208,7 +213,18 @@ export let subscriptions = (graph: Graph): Subs => {
     let touched = [...new Set(applied.map((b) => b.entity.eid))]
     return then(detached(graph.storage).get(touched), (now) =>
       then(
-        over(queries, (s) => attempt(s, () => push(s, now, touched))),
+        over(queries, (s) =>
+          attempt(s, () => {
+            if (opts.invalidate?.(s.query, applied)) {
+              return then(graph.read(s.query), (set) => {
+                let ids = new Set(set.map((b) => b.entity.eid))
+                let gone = [...s.members].filter((id) => !ids.has(id))
+                s.members = ids
+                s.sink({ id: s.id, bundles: set, gone })
+              })
+            }
+            return push(s, now, touched)
+          })),
         () => undefined,
       ))
   }

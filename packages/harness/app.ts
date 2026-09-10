@@ -441,6 +441,23 @@ let Draft = (
 
 /** No-verb entry. The daemon runs in this process while the terminal is open. */
 export let tui = async (): Promise<void> => {
+  if (Deno.env.get('HARNESS_WORKER') == '1') {
+    const { remote } = await import('./remote.ts')
+    const backend = await remote({
+      instructions: INSTRUCTIONS,
+      cwd: Deno.cwd(),
+    })
+    try {
+      await backend.resume()
+      await run(() =>
+        h(App, { agent: backend.agent, subscribe: backend.subscribe })
+      )
+    } finally {
+      await backend.close()
+    }
+    return
+  }
+
   let a = agent({ instructions: INSTRUCTIONS })
   let subscribe = changes(a)
   try {
