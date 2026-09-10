@@ -5,8 +5,10 @@
 // Driver over the app connection), and a graph seeded through the app's own real
 // `apply()` — then holds @yaks/sqlite's membership answers against what the app's
 // own reader (query.ts → sql.ts → relation.run) returns for the same query. Two
-// independent readers, one real graph, the same question: if they disagree the
-// spike says so. Every executable gap it opened with is now closed.
+// composition paths over one real graph: after T-36850/36851 they share the
+// package compiler/gather, but still bind different extension/routing options.
+// These are integration checks, not independent implementation parity. The
+// independent fleet wire projection is pinned in fleet_read_test.ts.
 //
 // This is NOT the same as sql_parity_test. That test proves @yaks/sql's compiled
 // SQL equals src/sql.ts's over a hand-built fixture, calling compile() directly.
@@ -114,7 +116,7 @@ let driver: Driver = {
 // registers the other half of the app's layout: doc.body is an id into
 // `blob_text`, and `blobRead` is the read override that resolves it — the app's
 // table named column for column, so the existing rows are read where they lie.
-let bodies = blobRead(V, { table: 'blob_text', key: 'entity', value: 'value' })
+let bodies = { 'doc.body': blobRead(V, { key: 'entity' })['doc.body'] }
 // @yaks/sql carries no built-in text lowering; @yaks/fts contributes the search
 // clause, pointed at the app's doc-only index (`doc_fts`, kept by db.ts).
 let opts = {

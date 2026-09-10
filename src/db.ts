@@ -70,6 +70,10 @@ import { type Frag, toSql } from './relation.ts'
 import { derivedCols, indexDdlOne, tableDdl } from './ddl.ts'
 import { FILTERS, type Vocab, vocabOps } from './store/vocab.ts'
 import type { Vocab as FleetVocab } from '@yaks/vocab'
+import { type Bundle, read as sqliteRead } from '@yaks/sqlite'
+import { and as queryAnd, every, order } from '@yaks/query'
+import { type Derived, raw } from '@yaks/sql'
+import { blobRead } from '@yaks/blob'
 import { fleetVocab } from './vocab/fleet_vocab.ts'
 import { Stale as CoreStale } from '@yaks/graph'
 import { Bounced as LeaseBounced } from '@yaks/session'
@@ -7192,10 +7196,7 @@ let worn = (
   return names.filter((n) => has.has(n))
 }
 
-// The two drivers: everything `hit` holds, and one entity by eid.
-let fromHit = (t: string) =>
-  `hit h cross join entity o on o.eid = h.eid cross join ${t} c ` +
-  `on c.entity = o.id`
+// The keyed driver, shared with the write-side precondition reader.
 let fromEid = (t: string) =>
   `entity o cross join ${t} c on c.entity = o.id where o.eid = ?`
 
@@ -7319,7 +7320,12 @@ let homes = (db: Sql, only = '') =>
 // until the database moves. total_changes() sees every write through this
 // handle, including stamps that deliberately do not journal; data_version sees
 // commits through another handle. Per-db keeps probe graphs apart.
-type SnapHit = { local: number; remote: number; snap: Snapshot }
+type SnapHit = {
+  local: number
+  remote: number
+  vocab: FleetVocab
+  snap: Snapshot
+}
 let snapCache = new WeakMap<Sql, SnapHit>()
 
 let snapKey = (db: Sql) => ({
@@ -7338,18 +7344,10 @@ let snapKey = (db: Sql) => ({
 let scratch = (db: Sql, ddl: string) =>
   db.exec(`create ${db.can.temp ? 'temp ' : ''}table if not exists ${ddl}`)
 
-// Materialize the lazy omit-set ONCE into an indexed temp table, then read it
-// as the `not in` source per component table, instead of re-materializing a
-// ~36k-row spine-join UNION subquery inside each of the 89 per-table scans
-// (T-18874: that subquery cost ~50ms per table even on empty ones). The outer
-// query keeps its EXACT prior shape — only the `not in (…)` source changes —
-// so the planner's scan order is untouched and the wire stays byte-identical;
-// an anti-join instead would reorder rows. `if not exists` + `delete from`
-// keeps `_omit` safe across repeated calls and lets the cached statements that
-// read it stay valid — the temp table lives for the connection. `insert or
-// ignore` folds the lazy tables the way `union` did; every eid is non-null
-// (entity.eid), so `not in` carries no NULL footgun. snapshot() AND allDeps()
-// share it, so an edge omitted from the components is omitted from the deps too.
+// Materialize the lazy omit-set once for snapshot membership and edge reads.
+// The indexed scratch table avoids repeating the large lazy-partition join;
+// clearing it keeps prepared statements valid across snapshots. Every eid is
+// non-null, so NOT IN cannot accidentally screen the entire eager partition.
 let fillOmit = (db: Sql) => {
   scratch(db, '_omit(eid text primary key)')
   db.exec('delete from _omit')
@@ -7367,36 +7365,34 @@ export let snapshot = (db: Sql): Snapshot => {
   let cursor = cursorOf(db)
   let key = snapKey(db)
   let hit = snapCache.get(db)
-  if (hit?.local == key.local && hit.remote == key.remote) return hit.snap
+  let vocab = fleetVocabOf(db)
+  if (
+    hit?.local == key.local && hit.remote == key.remote && hit.vocab === vocab
+  ) {
+    return hit.snap
+  }
   fillOmit(db)
-  let changes: Change[] = []
-  for (let name of readNames(db)) {
-    for (
-      let row of reads(
-        db,
-        name,
-        // A tombstoned entity keeps its spine row (so its int id can never
-        // recycle, C-19754#2) but leaves the wire: exclude it from the entity
-        // walk. Component tables never hold a dead entity's row (the delete
-        // cascades them), so the tombstone clause is a no-op on the 88
-        // component tables — but it stays on EVERY table, exactly as the
-        // pre-opt query had it: this whole change swaps only the omit-set
-        // SOURCE (the ~36k-row spine-join UNION → the indexed `_omit` temp),
-        // leaving the WHERE shape untouched so the planner's per-table scan
-        // order — and thus the wire — is byte-for-byte unchanged. Dropping the
-        // clause from the 88 tables reorders their rows (a no-op `not in`
-        // still shifts the plan), and tombstone is a tiny indexed scan, so the
-        // saving is nil and the wire-order cost is real. Verified byte-identical
-        // on a live-size copy (T-20299).
-        `where eid not in (select eid from _omit)
-           and eid not in (
-             select e.eid from tombstone t join entity e on e.id = t.entity
-           )`,
-      ).all()
-    ) {
-      changes.push({ eid: row.eid as string, name, comp: row })
+  // Membership belongs to the app (the eager partition); gathering belongs to
+  // @yaks/sqlite. Keep the wire component-major, with explicit legacy ordering.
+  let rows = readSet(db, {
+    sql: 'select eid from entity where eid not in (select eid from _omit)',
+    params: [],
+  }, 'storage')
+  let byName = new Map<string, Change[]>()
+  for (let { eid, comps } of rows) {
+    for (let [name, comp] of Object.entries(comps)) {
+      let changes = byName.get(name)
+      if (!changes) byName.set(name, changes = [])
+      changes.push({ eid, name, comp })
     }
   }
+  let changes = readNames(db).flatMap((name) => {
+    let changes = byName.get(name) ?? []
+    // The spine scan was in storage order; component reads drove from the eid
+    // index. State those orders rather than inheriting a package query plan.
+    if (name != 'entity') changes.sort((a, b) => cmp(a.eid, b.eid))
+    return changes
+  })
   // Edge endpoints are int ids in storage; project both back to their eids.
   // Both endpoints read the same `_omit` set the component walk used.
   let deps = (prep(
@@ -7420,7 +7416,9 @@ export let snapshot = (db: Sql): Snapshot => {
     vocabHash,
     capabilities,
   }
-  snapCache.set(db, { ...key, snap })
+  // The omit scratch writes are ours, not a graph change. Cache the frontier
+  // AFTER those writes so the very next unchanged read can actually hit it.
+  snapCache.set(db, { ...snapKey(db), vocab, snap })
   return snap
 }
 
@@ -7643,45 +7641,107 @@ let stage = (db: Sql, eids: string[]) => {
   for (let e of eids) put.run(e)
 }
 
-// The comps of whatever `hit` holds, shaped as `rows(snapshot())` shapes them.
-let staged = (db: Sql) => {
-  let out = new Map<string, Record<string, Record<string, unknown>>>()
-  let only = `where eid in (select eid from hit)`
-  let spine = reads(db, 'entity', only).all()
-  for (let r of spine) out.set(String(r.eid), { entity: r })
-  if (!out.size) return []
-  for (let name of worn(db, fromHit)) {
-    let rows = reads(db, name, only).all()
-    for (let r of rows) {
-      let e = out.get(String(r.eid))
-      if (e) e[name] = r
-    }
+// Package bundles have no component eid, and may carry computed columns.
+// The fleet wire is its declared readable columns, not the package's bag of
+// values. Cache that projection by vocabulary identity, so planting app words
+// replaces both the gather vocabulary and the shaping rules on this handle.
+let wireReads = new WeakMap<Sql, {
+  vocab: FleetVocab
+  derived: Derived
+  rank: Map<string, number>
+  shape: Map<
+    string,
+    (eid: string, comp: Record<string, unknown>) => Record<string, unknown>
+  >
+}>()
+let wireRead = (db: Sql) => {
+  let vocab = fleetVocabOf(db)
+  let held = wireReads.get(db)
+  if (held?.vocab === vocab) return held
+  let shape = new Map(
+    readNames(db).map((name) => {
+      let cols = readOf(db, name)!
+      let fix = unbool(db, name)
+      return [name, (eid: string, comp: Record<string, unknown>) => {
+        let row: Record<string, unknown> = {}
+        for (let col of cols) row[col] = col == 'eid' ? eid : comp[col] ?? null
+        return fix(row)
+      }] as const
+    }),
+  )
+  let entry = {
+    vocab,
+    // Only doc.body is CAS. Other body columns are inline, including an app's
+    // own bodies. updated.at is computed for FILTERING but stored on the wire;
+    // do not coalesce it with created.at here or synthesize task.status.
+    derived: {
+      'doc.body': blobRead(vocab, { key: 'entity' })['doc.body'],
+      'updated.at': { tag: 'time' as const, expr: () => '"updated"."at"' },
+    },
+    shape,
+    rank: new Map([...shape.keys()].map((name, i) => [name, i])),
   }
-  return [...out].map(([eid, comps]) => ({ eid, comps }))
+  wireReads.set(db, entry)
+  return entry
 }
+
+// A composed membership statement is already lowered (including app screens,
+// fallback candidates and windows). The `every` extension embeds that set as
+// one IN subquery: SQLite evaluates it once, then the package gathers only its
+// members, in bounded chunks with a sparse-table probe. No per-entity reader,
+// no re-running the filter for every component, and no write to stage a read.
+let readSet = (db: Sql, filter: Frag, sort = 'entity.eid') => {
+  let { vocab, derived, shape, rank } = wireRead(db)
+  let bundles = sqliteRead(
+    {
+      query: (sql, params) => prep(db, sql).all(...params),
+      exec: (sql) => db.exec(sql),
+    },
+    vocab,
+    queryAnd(every(), order(sort)),
+    {
+      derived,
+      extend: [{
+        name: 'fleet/membership',
+        compile: {
+          every: () =>
+            raw({
+              sql: `"entity"."eid" in (${filter.sql})`,
+              params: filter.params,
+            }),
+        },
+        order: (name) => name == 'storage' ? '"entity"."id"' : null,
+      }],
+    },
+  )
+  return bundles.map((bundle: Bundle) => {
+    let eid = bundle.entity.eid
+    let comps: Record<string, Record<string, unknown>> = {}
+    // Keep the app's component order, without walking the entire wide
+    // vocabulary per entity just to sort the handful of facets it wears.
+    let names = Object.keys(bundle).sort((a, b) =>
+      (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity)
+    )
+    for (let name of names) {
+      let project = shape.get(name)
+      if (project) {
+        comps[name] = project(eid, bundle[name] as Record<string, unknown>)
+      }
+    }
+    return { eid, comps }
+  })
+}
+
+let staged = (db: Sql) =>
+  readSet(db, { sql: 'select eid from hit', params: [] })
 
 // Every entity a compiled filter matches, with its components — the shape
 // `rows(snapshot())` hands a matcher, restricted to the rows that matched.
-//
-// One statement per component table, rather than one `eager()` per row: a
-// query matching the 10,618-entity graph costs about as many statements as the
-// graph has components either way, where per-row reads cost 150,000 and time
-// out.
-//
-// The filter itself runs ONCE, into `hit`. It used to ride into each of those
-// statements as a subquery, which re-asked the whole question forty times over
-// — invisible while every predicate was an indexed column read, and the whole
-// cost the moment one of them takes milliseconds. A substring over a body
-// (sql.ts) is that predicate: answered forty times it is slower than the JS
-// matcher it replaces, and answered once it is several times faster.
 export let matching = (
   db: Sql,
   filter: { sql: string; params: (string | number)[] },
 ): { eid: string; comps: Record<string, Record<string, unknown>> }[] => {
-  clear(db)
-  prep(db, `insert or ignore into hit (eid) ${filter.sql}`)
-    .run(...filter.params)
-  let out = staged(db)
+  let out = readSet(db, filter)
   // Union in pass-through entities the sources say match the same query — a
   // board of ephemeral (e.g. legacy-session) entities. Skip any eid already in
   // SQL (a graduated entity), so a match is never double-counted.
@@ -7703,8 +7763,10 @@ export let matching = (
 // statement per component per row; this costs one per component.
 export let rowsOf = (db: Sql, eids: string[]) => {
   if (!eids.length) return []
-  stage(db, eids)
-  let out = staged(db)
+  let out = readSet(db, {
+    sql: 'select value as eid from json_each(?)',
+    params: [JSON.stringify(eids)],
+  })
   // Any requested eid SQL had no rows for may be a pass-through entity — hydrate
   // it from its source. Graduated entities are in SQL, so they never double.
   if (hasSources() && out.length < eids.length) {
