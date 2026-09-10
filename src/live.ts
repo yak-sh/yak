@@ -7,6 +7,7 @@
 // upstream. Retention lets reopens paint; ready separates loading from absent.
 // Then db.ts snapshot() dissolves into @yaks/api subscriptions and @yaks/sync,
 // not a new package primitive. Never restore whole-db sync or an unbounded cache.
+import { IdError } from './types.ts'
 import {
   batch,
   computed,
@@ -17,6 +18,7 @@ import {
 import {
   awake,
   type Change,
+  checkPrefix,
   comps,
   type Dep,
   type Ent,
@@ -27,7 +29,7 @@ import {
   type Session,
   sessionOf,
   settled,
-  SHORT,
+  shortParts,
   slugsOf,
   type Snapshot,
   statusOf,
@@ -603,11 +605,11 @@ let attachStore = async () => {
 
 let indexId = (eid: string, r?: Comps) => {
   if (!r) return
-  if (r.entity) numEids.set(r.entity.num, eid)
+  if (r.entity?.num) numEids.set(r.entity.num, eid)
   for (let s of slugsOf(r.alias)) aliasEids.set(s, eid)
-  for (let n = 6; n <= Math.min(8, eid.length); n++) {
-    let key = eid.slice(0, n).toLowerCase()
-    if (!SHORT.test(key)) continue
+  let hex = eid.replaceAll('-', '').toLowerCase()
+  for (let n = 6; n <= Math.min(10, hex.length); n++) {
+    let key = hex.slice(0, n)
     let hits = shortEids.get(key)
     if (hits) hits.add(eid)
     else shortEids.set(key, new Set([eid]))
@@ -622,8 +624,9 @@ let unindexId = (eid: string, r?: Comps) => {
   for (let s of slugsOf(r.alias)) {
     if (aliasEids.get(s) == eid) aliasEids.delete(s)
   }
-  for (let n = 6; n <= Math.min(8, eid.length); n++) {
-    let key = eid.slice(0, n).toLowerCase()
+  let hex = eid.replaceAll('-', '').toLowerCase()
+  for (let n = 6; n <= Math.min(10, hex.length); n++) {
+    let key = hex.slice(0, n)
     let hits = shortEids.get(key)
     if (!hits) continue
     hits.delete(eid)
@@ -1933,6 +1936,15 @@ let settleEdges = (gained: Dep[], lost: Dep[]) => {
 // maintenance frames patch it.
 export let landSub = (f: Sub) => {
   if (f.error) {
+    let one = oneShots.get(f.sub)
+    if (one) {
+      oneShots.delete(f.sub)
+      clearTimeout(one.timer)
+      queueMicrotask(() => {
+        one.fail(f.error)
+        unsubscribe(f.sub)
+      })
+    }
     subFailures.set(f.sub, {
       reason: f.error,
       reference: f.reference ?? f.sub,
@@ -2180,13 +2192,17 @@ export let subscribe = (sub: string, q: string) => {
 // fetch-only endpoint while keeping timeout/retry behavior explicit.
 let oneShots = new Map<
   string,
-  { done: () => void; fail: () => void; timer: ReturnType<typeof setTimeout> }
+  {
+    done: () => void
+    fail: (reason?: string) => void
+    timer: ReturnType<typeof setTimeout>
+  }
 >()
 let oneShot = (
   sub: string,
   q: string,
   done: () => void,
-  fail: () => void,
+  fail: (reason?: string) => void,
 ) => {
   let timer = setTimeout(() => {
     if (!oneShots.delete(sub)) return
@@ -2979,12 +2995,26 @@ export let findEid = (id: string): string | undefined => {
   syncIds()
   let num = id.match(/^[A-Za-z]+-(\d+)$/)?.[1] ?? id.match(/^(\d+)$/)?.[1]
   if (num) return numEids.get(+num)
-  if (cached(id)) return id // a full eid, verbatim
-  // A SHORT-eid handle: the 6–8 hex prefix a num-less entity wears (T-3684).
-  if (SHORT.test(id)) {
-    let hits = shortEids.get(id.toLowerCase())
-    if (hits?.size == 1) return hits.values().next().value
-    if (hits?.size) return // ambiguous
+  if (cached(id.toLowerCase())) return id.toLowerCase()
+  let fragment = shortParts(id)
+  if (fragment) {
+    let hits = [...shortEids.get(fragment.hex.slice(0, 10)) ?? []]
+      .filter((eid) => eid.replaceAll('-', '').startsWith(fragment.hex))
+    if (hits.length > 1) {
+      throw new IdError(
+        `${id} is an ambiguous id — matches ${
+          hits.join(', ')
+        }; use more characters`,
+      )
+    }
+    if (hits.length == 1) {
+      checkPrefix(id, ent(hits[0]).kind)
+      return hits[0]
+    }
+    return undefined
+  }
+  if (id.includes('#')) {
+    throw new IdError(`${id}: expected [kind]# followed by 6–64 hex characters`)
   }
   return aliasEids.get(id)
 }
@@ -3010,6 +3040,7 @@ type Named = { eid: string; num: number; kind: string }
 let named = new Map<string, Named | null>() // token OR eid -> naming (null = gone)
 let resolvingIds = new Map<string, Promise<Named | null>>() // token -> in flight
 let resolveFailed = new Map<string, number>() // token -> when its resolve failed
+let resolveErrors = new Map<string, string>()
 export let resolveGen = signal(0) // bumped when a resolve settles, to re-render
 let COOLDOWN_MS = 3000
 
@@ -3035,9 +3066,10 @@ let kickResolve = (token: string): Promise<Named | null> => {
         num: Number(comps.entity?.num ?? 0),
         kind: kindOf(comps),
       }))
-    }, () => {
+    }, (reason) => {
       resolvingIds.delete(token)
       resolveFailed.set(token, Date.now())
+      if (reason) resolveErrors.set(token, reason)
       resolveGen.value++
       resolve(null)
     })
@@ -3052,6 +3084,8 @@ let kickResolve = (token: string): Promise<Named | null> => {
 // the caller live to the landing.
 let nameFor = (token: string): Named | null | undefined => {
   resolveGen.value // subscribe: a landing re-runs the reader
+  let error = resolveErrors.get(token)
+  if (error) throw new IdError(error)
   if (named.has(token)) return named.get(token)!
   if (resolvingIds.has(token)) return undefined // in flight
   let failed = resolveFailed.get(token)
@@ -3087,6 +3121,7 @@ export let clearResolved = () => {
   named.clear()
   resolvingIds.clear()
   resolveFailed.clear()
+  resolveErrors.clear()
   resolveGen.value++
 }
 // The same query over the WHOLE graph — the board's List face. No task

@@ -9,7 +9,7 @@
 // here. Everything lands as DATA: unverified mail arrives verbatim with
 // its verdict on the row; nothing executes on content. SERVER-ONLY
 // (imports db).
-import { apply, readComp } from './db.ts'
+import { apply, readComp, resolveId } from './db.ts'
 import { link } from './edge.ts'
 import { db } from './live_db.ts'
 import { commitEffects } from './effects.ts'
@@ -150,13 +150,9 @@ export let fleetApi = (): FleetApi | null => {
 // a null message_id = a row that never came through the spool (outbound
 // and relay mail carry no attachments).
 export let mailIdOf = (ref: string): { message_id: string | null } | null => {
-  let m = ref.match(/^[A-Za-z]+-(\d+)$/) ?? ref.match(/^(\d+)$/)
-  let row = m
-    ? db.prepare(
-      `select m.message_id from mail m
-       join entity e on e.id = m.entity where e.num = ?`,
-    ).get(+m[1])
-    : db.prepare(`select message_id from mail where ${OWNED}`).get(ref)
+  let eid = resolveId(db, ref)
+  if (!eid) return null
+  let row = db.prepare(`select message_id from mail where ${OWNED}`).get(eid)
   return (row ?? null) as { message_id: string | null } | null
 }
 

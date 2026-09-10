@@ -69,11 +69,11 @@ Deno.test('human reads the spine and worn names, not one table per kind', () => 
   apply(db, [{ eid, name: 'entity', comp: null }])
   expect(eid, `E-${num}`, 2)
 
-  // No human number means no component probe, whether the spine exists or not.
+  // Num-less handles derive their kind too, whether the spine exists or not.
   let cheap = 'dead1234-0000-4000-8000-00000000cafe'
-  expect(cheap, 'dead1234', 1)
+  expect(cheap, 'E#dead123400', 2)
   db.prepare('insert into entity (eid) values (?)').run(cheap)
-  expect(cheap, 'dead1234', 1)
+  expect(cheap, 'E#dead123400', 2)
 })
 
 // What reading ONE entity by id costs in statements. A read visits the

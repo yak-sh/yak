@@ -31,6 +31,7 @@
 //    return takes — server-constructed, post-commit, so every cache hears
 //    the truth exactly once and none of it ever rode the wire inbound.
 import { basename, dirname, resolve } from 'node:path'
+import { shortId } from './types.ts'
 import { processStore } from './processes.ts'
 import { childEnv } from './agent_env.ts'
 import { sentences } from './edge.ts'
@@ -732,7 +733,7 @@ export let projectRepo = (
 let sidOf = (row: Row) => String(row.eid)
 
 // A session owns the tree it CUT, and says so in its branch: spawn and regrow
-// both name it `session/<eid>` (legacy trees used `session/S-N`). Any other branch on the row is the caller's own
+// both name it `session/S#<hex>` (legacy trees used eids or S-N). Any other branch on the row is the caller's own
 // (`task spawn --worktree <path>`) — a tree we neither remove nor recreate,
 // because attaching borrows a checkout, it does not adopt one. A swept row has
 // shed its branch (null), and is ours to regrow.
@@ -740,6 +741,7 @@ let owns = (row: Row) => {
   let branch = row.branch ? String(row.branch) : ''
   let sid = sidOf(row)
   return !branch || branch == `session/${sid}` ||
+    branch == `session/${shortId(sid, 'session')}` ||
     branch == `session/${human(db, String(row.eid))}`
 }
 
@@ -2079,7 +2081,7 @@ export let spawned =
       `Acting as ${voice.comps.doc?.title ?? human(db, voice.eid)} (${
         human(db, voice.eid)
       })${project ? ` for ${human(db, String(project))}` : ''}.`
-    let sid = eid
+    let sid = human(db, eid)
     // `task spawn --worktree <path>`: the request already names a tree, riding
     // in as worktree.cwd. The session ATTACHES to it — on the branch it stands
     // on, with nothing created here and nothing swept later (owns()) — because

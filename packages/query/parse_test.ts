@@ -70,6 +70,8 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['*created', and(mutable('created'))],
   // a resource is capitalized: it binds beside the components, not among them
   ['#Clock', and(resource('Clock'))],
+  ['#3f9a1c2e7b', and(resource('3f9a1c2e7b'))],
+  ['#1234567890', and(resource('1234567890'))],
   ['$e', and(variable('e'))],
   ['.entity,+!created', and(present('entity'), gate('created'))],
   ['.entity, +!created', and(present('entity'), gate('created'))],

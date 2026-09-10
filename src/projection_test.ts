@@ -181,7 +181,10 @@ Deno.test('a subscription exception is addressed and recorded as read telemetry'
   assertEquals(frame.replace, true)
   assertEquals(frame.changes, [])
   assertStringIncludes(frame.error ?? '', 'priority')
-  assertStringIncludes(frame.reference ?? '', `entries:${session.slice(0, 8)}`)
+  assertStringIncludes(
+    frame.reference ?? '',
+    `entries:${'S#' + session.replaceAll('-', '').slice(0, 10)}`,
+  )
   let stored = db.prepare(`
     select source, name, session_id, ok, error, detail
     from tool_call order by rowid desc limit 1
@@ -208,7 +211,7 @@ Deno.test('an expected missing entry source is a refusal, not ready-empty', () =
     assertStringIncludes(frames[0].error ?? '', 'entry source missing')
     assertStringIncludes(
       frames[0].reference ?? '',
-      `entries:${session.slice(0, 8)}`,
+      `entries:${'S#' + session.replaceAll('-', '').slice(0, 10)}`,
     )
   } finally {
     clearSources()

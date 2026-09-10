@@ -6,6 +6,7 @@
 //   .doc.title=Hello    the explicit spelling, for collisions (pin/camera
 //                       geometry) or clarity
 // Values that look like numbers become numbers.
+import { IdError } from './types.ts'
 import {
   byName,
   type Change,
@@ -37,7 +38,14 @@ import type {
   WorkClaimMutation,
 } from './mutation.ts'
 export type { EntityLiteral, LiteralRef } from './mutation.ts'
-import { EID, idOf, SHORT, shortId, slugsOf } from './types.ts'
+import {
+  checkPrefix,
+  EID,
+  idOf,
+  shortId,
+  shortParts,
+  slugsOf,
+} from './types.ts'
 import { link, moves, saidEid, typeOf } from './edge.ts'
 import {
   fieldOp,
@@ -748,7 +756,9 @@ export type JournalEntry = {
   changes: Change[]
 }
 export let httpHistory = async (eid: string, limit = 50) => {
-  let res = await request(`http://${host()}/journal?eid=${eid}&limit=${limit}`)
+  let res = await request(
+    `http://${host()}/journal?eid=${encodeURIComponent(eid)}&limit=${limit}`,
+  )
   if (!res.ok) throw new Error(`server said ${res.status}`)
   return res.json() as Promise<JournalEntry[]>
 }
@@ -798,7 +808,7 @@ export let ledger = (entries: JournalEntry[], all: Row[]): string[] => {
     return r
       ? `${idOf(r)} ${cut(r.comps.doc?.title ?? r.comps.session?.id ?? '', 48)}`
         .trim()
-      : String(eid).slice(0, 8)
+      : shortId(String(eid))
   }
   let lines: string[] = []
   for (let e of [...entries].reverse()) { // oldest first: the day as lived
@@ -879,14 +889,19 @@ export let ledger = (entries: JournalEntry[], all: Row[]): string[] => {
 // compactly — comp{cols} for writes, -comp for removals, † for the
 // entity's death — enough to scan a trail without reading JSON. The #id is
 // the handle `task undo #id` reverses.
-export let historyLine = (e: JournalEntry) => {
+export let historyLine = (
+  e: JournalEntry,
+  names: Map<string, string> = new Map(),
+) => {
   let what = e.changes.map((c) =>
     c.comp == null
       ? c.name == 'entity' ? '†' : `-${c.name}`
       : `${c.name}{${Object.keys(c.comp).filter((k) => k != 'eid').join(' ')}}`
   ).join(' · ')
   return `#${String(e.id).padEnd(6)} ${local(e.ts)}  ${
-    (e.actor ?? 'unknown').slice(0, 24).padEnd(24)
+    (e.actor
+      ? names.get(e.actor) ?? (EID.test(e.actor) ? shortId(e.actor) : e.actor)
+      : 'unknown').padEnd(24)
   } ${what}`
 }
 
@@ -2235,22 +2250,32 @@ export let taskTreeText = (plan: TaskTreePlan, applied?: Change[]) => {
 
 // Resolve 'T-3' / a bare num / a full eid / a SHORT-eid handle / an alias slug
 // to a row — the cache-side twin of db.ts resolveId (T-3684). Num first, then
-// exact eid, then a 6–8 hex prefix (unique or it throws, git-style), then slug.
+// exact eid, then a sigilled hex prefix (unique or it throws), then slug.
 export let find = (all: Row[], id: string) => {
   let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
   if (m) return all.find((r) => r.num == +m![1])
-  let exact = all.find((r) => r.eid == id)
+  let exact = all.find((r) => r.eid == id.toLowerCase())
   if (exact) return exact
-  if (SHORT.test(id)) {
-    let hits = all.filter((r) => r.eid.startsWith(id.toLowerCase()))
+  let fragment = shortParts(id)
+  if (fragment) {
+    let hits = all.filter((r) =>
+      r.eid.replaceAll('-', '').startsWith(fragment.hex)
+    )
     if (hits.length > 1) {
-      throw new Error(
+      throw new IdError(
         `${id} is an ambiguous id — matches ${
-          hits.slice(0, 3).map((r) => shortId(r.eid)).join(', ')
-        } and more; use more characters`,
+          hits.map((r) => `${idOf(r)} (${r.eid})`).join(', ')
+        }; use more characters`,
       )
     }
-    if (hits.length == 1) return hits[0]
+    if (hits.length == 1) {
+      checkPrefix(id, hits[0].kind)
+      return hits[0]
+    }
+    return undefined
+  }
+  if (id.includes('#')) {
+    throw new IdError(`${id}: expected [kind]# followed by 6–64 hex characters`)
   }
   return all.find((r) => slugsOf(r.comps.alias).includes(id))
 }
@@ -3696,7 +3721,7 @@ let whereOf = (r: Row, byEid: Map<string, Row>) => {
   )
   if (!ref) return ''
   let at = byEid.get(ref)
-  return at ? idOf(at) : ref.slice(0, 8)
+  return at ? idOf(at) : shortId(ref)
 }
 
 // Everything a person authored, as acts on one timeline: a turn typed at a

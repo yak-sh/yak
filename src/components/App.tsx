@@ -1,3 +1,4 @@
+import { entityPath } from '../url.ts'
 import { useEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
 import { census, ent, mode, routeSub, serverName } from '../live.ts'
@@ -104,9 +105,9 @@ let Crumbs = () => {
       {items.map(({ eid, id, tip }) => (
         <Chip
           key={eid}
-          href={`/${id}`}
+          href={entityPath(id)}
           data-tip={tip}
-          onClick={follow(`/${id}`)}
+          onClick={follow(entityPath(id))}
         >
           {id}
         </Chip>
@@ -147,7 +148,7 @@ export let App = () => {
     ? undefined
     : screenTarget()?.eid
   useEffect(() => rootEid ? routeSub(rootEid) : undefined, [rootEid])
-  let goto = (t: string) => navigate(`/${idOf(ent(t))}`)
+  let goto = (t: string) => navigate(entityPath(idOf(ent(t))))
 
   // The census rides beside the canvas: /admin* swaps the body wholesale;
   // the bar keeps only the brand (the sidebar is the navigation there).
@@ -277,7 +278,7 @@ export let App = () => {
               menu.value = {
                 x: r.right,
                 y: r.bottom,
-                href: `/${idOf(e)}`,
+                href: entityPath(idOf(e)),
                 eid: e.eid,
                 align: 'right',
               }

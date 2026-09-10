@@ -2,7 +2,7 @@
 // the canvas drop and the palette's board chip ride.
 import { pasted } from './paste.ts'
 import { cache } from './live.ts'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertThrows } from '@std/assert'
 
 let comps = (text: string) => {
   let spec = pasted(text)!
@@ -29,6 +29,19 @@ Deno.test('pasted: a known id targets the existing entity', () => {
   cache.value = { e1: { entity: { eid: 'e1', num: 7 } } }
   assertEquals(pasted('T-7'), { changes: [], target: 'e1' })
   assertEquals(pasted('T-8'), null)
+})
+
+Deno.test('pasted: sigilled ids and full UUIDs target an unnumbered entity', () => {
+  let eid = '3f9a1c2e-7b00-4000-8000-000000000001'
+  cache.value = { [eid]: { entity: { eid, num: 0 }, task: { eid } } }
+  try {
+    for (let id of [eid, 'T#3f9a1c2e7b', '#3f9a1c']) {
+      assertEquals(pasted(id), { changes: [], target: eid })
+    }
+    assertThrows(() => pasted('S#3f9a1c'), Error, 'prefix S')
+  } finally {
+    cache.value = {}
+  }
 })
 
 Deno.test('pasted: plain text becomes a task, first line the title', () => {

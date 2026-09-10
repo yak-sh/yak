@@ -204,20 +204,20 @@ Deno.test('saidLines: everything the owner authored, oldest first', () => {
   // Each line names the entity (its own id, `task show`-able), the act, and
   // where it sits.
   assertEquals(saidLines(all, byEid, 10), [
-    '- 09-01 19:25 e-1 turn S-1 · first thing',
-    '- 09-01 19:26 c-1 comment T-2 · ship it',
+    '- 09-01 19:25 E#e1 turn S-1 · first thing',
+    '- 09-01 19:26 C#c1 comment T-2 · ship it',
     '- 09-01 19:33 T-9 task T-2 · Fix the TUI',
     '- 09-01 19:34 M-11 feedback · no war stories',
     '- 09-01 19:35 D-12 decided approved · Owner stream',
     '- 09-01 19:36 T-8 edit · Agent task',
-    '- 09-01 19:40 e-2 turn S-1 · second thing',
+    '- 09-01 19:40 E#e2 turn S-1 · second thing',
   ])
   assertEquals(saidLines(all, byEid, 1), [
-    '- 09-01 19:40 e-2 turn S-1 · second thing',
+    '- 09-01 19:40 E#e2 turn S-1 · second thing',
   ])
   // The line is cut to the given width, never a fixed count.
   assertEquals(saidLines(all, byEid, 1, 39), [
-    '- 09-01 19:40 e-2 turn S-1 · second thi…',
+    '- 09-01 19:40 E#e2 turn S-1 · second th…',
   ])
   // --full prints each whole text under its line, blank-line separated; a
   // titled thing leads with its title.
@@ -227,7 +227,7 @@ Deno.test('saidLines: everything the owner authored, oldest first', () => {
     '',
   ])
   assertEquals(saidLines(all, byEid, 1, 39, true), [
-    '- 09-01 19:40 e-2 turn S-1 ·',
+    '- 09-01 19:40 E#e2 turn S-1 ·',
     'second thing\nmore',
     '',
   ])

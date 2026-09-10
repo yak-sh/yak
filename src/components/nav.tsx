@@ -1,10 +1,10 @@
+import { entityPath } from '../url.ts'
 import { signal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import { block, copy, setFollow } from './ui.tsx'
 import { usePlaceAt } from './overlay.tsx'
 import {
   cache,
-  census,
   clientId,
   ent,
   findEid,
@@ -125,33 +125,23 @@ export let openAt = (eid: string, ev: MouseEvent) => {
     peek.value = same
       ? stack.slice(0, -1)
       : [...stack, { eid, x: ev.clientX, y: ev.clientY, from }]
-  } else navigate(`/${idOf(ent(eid))}`)
+  } else navigate(entityPath(idOf(ent(eid))))
 }
 
-// An id in the wild — T-num, bare num, raw eid, a SHORT-eid handle (the
-// 6–8 hex prefix a num-less entity wears, T-3684), or an alias slug (any of
-// an entity's handles) — resolved against the live cache in db.ts resolveId's
-// order; undefined when unloaded, dead, or an ambiguous prefix. The slug
+// An id in the wild — T-num, bare num, raw eid, a sigilled eid fragment, or
+// an alias slug — resolved in db.ts resolveId's order; undefined while unloaded
+// or dead. An ambiguous fragment is refused, never treated as a miss. The slug
 // fallback is what lets a URL name an entity by handle (/home), matching the
 // CLI and MCP id doors.
 // Cache misses fall to serverEid — live.ts's addressed-sub sidecar —
 // so a token naming a live-but-unloaded entity still navigates once the boot
 // flip (T-18059) serves a partial working set. The fallback is async: it
 // returns undefined the first miss and the eid once its one-row subscription
-// lands (the caller re-renders on resolveGen). A LOCAL ambiguity still refuses.
+// lands (the caller re-renders on resolveGen). Fragments always ask the server
+// because a partial cache cannot prove global uniqueness.
 export let eidOf = (id: string) => {
-  let eids = census.value
-  let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
-  if (m) {
-    return findEid(id) ?? serverEid(id)
-  }
-  if (eids.includes(id)) return id // a full eid, verbatim
-  if (SHORT.test(id)) {
-    let hits = eids.filter((eid) => eid.startsWith(id.toLowerCase()))
-    if (hits.length > 1) return undefined // ambiguous locally → no navigation
-    if (hits.length == 1) return hits[0]
-  }
-  // an alias slug through every cached handle, then the server
+  // A partial cache cannot prove uniqueness across the graph.
+  if (SHORT.test(id)) return serverEid(id)
   return findEid(id) ?? serverEid(id)
 }
 
@@ -177,7 +167,8 @@ export let follow = (href: string, eid?: string) => (ev: MouseEvent) => {
 // entity at click time so they peek like any chip; double click stays
 // the deliberate navigate.
 setFollow((href) => ({
-  onClick: (ev: MouseEvent) => follow(href, eidOf(href.slice(1)))(ev),
+  onClick: (ev: MouseEvent) =>
+    follow(href, eidOf(decodeURIComponent(href.slice(1))))(ev),
   onDblClick: follow(href),
 }))
 
@@ -191,7 +182,7 @@ let openRef = (ev: MouseEvent) => {
   if (!a) return
   let id = a.getAttribute('data-ref')!
   let eid = eidOf(id)
-  if (eid) follow(`/${id}`, eid)(ev)
+  if (eid) follow(entityPath(id), eid)(ev)
 }
 
 // Component-owned entity links carry menuAt directly. Rendered prose and
@@ -201,7 +192,7 @@ let menuRef = (ev: MouseEvent) => {
   let a = (ev.target as Element | null)?.closest?.('a[href]')
   let href = a?.getAttribute('href') ?? ''
   let id = href.match(/^\/([^/?#]+)(?:\?[^#]*)?$/)?.[1]
-  let eid = id && eidOf(id)
+  let eid = id && eidOf(decodeURIComponent(id))
   if (eid) menuAt(ent(eid))(ev)
 }
 
@@ -225,7 +216,7 @@ wire()
 // deliberate fullscreen, and right-click opens the target entity's menu.
 // For tiles whose wrapper already owns the drag (a board Item, a List Row).
 export let clickProps = (e: Ent) => {
-  let href = `/${idOf(e)}`
+  let href = entityPath(idOf(e))
   return {
     href,
     onClick: follow(href, e.eid),
@@ -412,7 +403,12 @@ export let menu = signal<MenuState | null>(null)
 export let menuAt = (e: Ent) => (ev: MouseEvent) => {
   ev.preventDefault()
   ev.stopPropagation()
-  menu.value = { x: ev.clientX, y: ev.clientY, href: `/${idOf(e)}`, eid: e.eid }
+  menu.value = {
+    x: ev.clientX,
+    y: ev.clientY,
+    href: entityPath(idOf(e)),
+    eid: e.eid,
+  }
 }
 
 // A point on empty canvas has no entity navigation, only the verbs its host

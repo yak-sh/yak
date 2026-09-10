@@ -31,10 +31,12 @@ Deno.test('cites: id tokens, deduped in order', () => {
   cited('nothing here', [])
   cited('ABC-123 T-3a UTF-8 t-9', []) // inside words, trailing letters, lowercase
   cited('(D-21262)', ['D-21262'])
+  cited('T#3f9a1c2e7b and #1234567890', ['T#3f9a1c2e7b', '#1234567890'])
 })
 
 Deno.test('cites: a graph entity link folds into ids', () => {
   cited('https://tasks.yak.sh/T-7', ['T-7'])
+  cited('https://tasks.yak.sh/T%233f9a1c2e7b', ['T#3f9a1c2e7b'])
   cited('https://tasks.yak.sh/T-7?v=json', ['T-7'])
   cited('see https://tasks.yak.sh/M-42.', ['M-42']) // prose punctuation
   cited('https://tasks.yak.sh/search', [], ['https://tasks.yak.sh/search'])

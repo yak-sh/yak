@@ -47,8 +47,8 @@ Deno.test('a numbered entity wears its human id', () => {
 })
 
 Deno.test('an unnumbered entity wears its short handle', () => {
-  assertEquals(id({ eid, kind: 'book' }), '9f1c8d2a')
-  assertEquals(id({ eid, kind: 'book', num: null }), '9f1c8d2a')
+  assertEquals(id({ eid, kind: 'book' }), 'B#9f1c8d2a0b')
+  assertEquals(id({ eid, kind: 'book', num: null }), 'B#9f1c8d2a0b')
   assert(SHORT.test(short(eid)))
 })
 

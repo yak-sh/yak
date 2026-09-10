@@ -2,6 +2,7 @@
 // validation all read this table. The palette keeps its own command table;
 // this module renders it directly, so neither vocabulary can drift.
 
+import { EID, SHORT } from './types.ts'
 import { commands } from './commands.ts'
 import {
   arm,
@@ -1897,7 +1898,9 @@ export let validateCommand = (name: string, args: string[]) => {
     // A colon verb reads its entity from the FOCUS, not the argument list, so
     // an entity-shaped stray argument means the caller inverted the spelling —
     // name the one that works instead of a bare count (T-10331).
-    let ent = head.find((a) => /^[A-Za-z]+-\d+$/.test(a))
+    let ent = head.find((
+      a,
+    ) => (/^[A-Za-z]+-\d+$/.test(a) || SHORT.test(a) || EID.test(a)))
     if (ent) {
       throw new UsageError(
         `:${name} ${

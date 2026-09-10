@@ -201,7 +201,7 @@ Deno.test('findEid indexes human ids, aliases, and short handles', () => {
   // Every additional slug resolves to the same entity, not just the primary.
   assertEquals(findEid('extra'), 'abcdef10-0000-4000-8000-000000000001')
   assertEquals(findEid('more'), 'abcdef10-0000-4000-8000-000000000001')
-  assertEquals(findEid('abcdef'), 'abcdef10-0000-4000-8000-000000000001')
+  assertEquals(findEid('#abcdef'), 'abcdef10-0000-4000-8000-000000000001')
 
   // An incremental patch that grows the set indexes the new member live.
   applyLocal([{
@@ -216,7 +216,7 @@ Deno.test('findEid indexes human ids, aliases, and short handles', () => {
     name: 'entity',
     comp: { eid: 'abcdef10-0000-4000-8000-000000000002', num: 32 },
   }])
-  assertEquals(findEid('abcdef'), undefined)
+  assertThrows(() => findEid('#abcdef'), Error, 'ambiguous')
 
   applyLocal([{
     eid: 'abcdef10-0000-4000-8000-000000000002',
@@ -227,7 +227,7 @@ Deno.test('findEid indexes human ids, aliases, and short handles', () => {
     name: 'alias',
     comp: { slug: 'renamed' },
   }])
-  assertEquals(findEid('abcdef'), 'abcdef10-0000-4000-8000-000000000001')
+  assertEquals(findEid('#abcdef'), 'abcdef10-0000-4000-8000-000000000001')
   assertEquals(findEid('indexed'), undefined)
   assertEquals(findEid('renamed'), 'abcdef10-0000-4000-8000-000000000001')
 })
@@ -319,6 +319,41 @@ Deno.test('server-resolve: an unloaded id resolves through one addressed sub', a
     assertEquals(f.calls, ['T-99']) // deduped: one round trip, not per read
   } finally {
     f.restore()
+  }
+})
+
+Deno.test('server-resolve: short-id ambiguity outside the cache preserves candidates', async () => {
+  clearResolved()
+  let eid = '3f9a1c2e-7b00-4000-8000-000000000001'
+  let other = '3f9a1c2e-7bff-4000-8000-000000000002'
+  cache.value = { [eid]: { entity: { eid, num: 0 }, task: { eid } } }
+  let prior = useRoute((frame) => {
+    let { sub, q } = frame as { sub?: string; q?: string }
+    if (!sub || !q) return
+    queueMicrotask(() =>
+      landSub({
+        sub,
+        changes: [],
+        drop: [],
+        replace: true,
+        error: `ambiguous id: ${eid}, ${other}`,
+      })
+    )
+  })
+  try {
+    assertEquals(findEid('T#3f9a1c2e7b'), eid) // local cache alone is insufficient
+    assertEquals(serverEid('T#3f9a1c2e7b'), undefined)
+    await new Promise((r) => setTimeout(r, 0))
+    let error = assertThrows(
+      () => serverEid('T#3f9a1c2e7b'),
+      Error,
+      'ambiguous',
+    )
+    assertEquals(error.message.includes(other), true)
+  } finally {
+    useRoute(prior)
+    clearResolved()
+    cache.value = {}
   }
 })
 

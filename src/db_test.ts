@@ -5191,11 +5191,11 @@ Deno.test('a num-less entity: short-eid handle renders and resolves', () => {
   db.prepare('insert into entity (eid) values (?)').run(e)
   db.prepare(`insert into doc (entity, title, body) values (${idOf}, ?, ?)`)
     .run(e, 'cheap', textBlob(db, ''))
-  assertEquals(human(db, e), 'dead1234') // the 8-hex handle, never T-0
-  assertEquals(human(db, e), shortId(e))
+  assertEquals(human(db, e), 'D#dead123400') // the kind-prefixed 10-hex handle, never T-0
+  assertEquals(human(db, e), shortId(e, 'doc'))
   // the handle round-trips through the shared resolver and its doors
-  assertEquals(resolveId(db, 'dead1234'), e)
-  assertEquals(locate(db, 'dead1234'), e)
+  assertEquals(resolveId(db, '#dead1234'), e)
+  assertEquals(locate(db, '#dead1234'), e)
   // a full uuid still exact-matches
   assertEquals(resolveId(db, e), e)
 })
@@ -5205,8 +5205,8 @@ Deno.test('an ambiguous short-eid prefix is refused, naming the collision', () =
   let b = 'abcabc22-0000-4000-8000-000000000002'
   db.prepare('insert into entity (eid) values (?)').run(a)
   db.prepare('insert into entity (eid) values (?)').run(b)
-  assertThrows(() => resolveId(db, 'abcabc'), Error, 'ambiguous')
-  assertEquals(resolveId(db, 'abcabc11'), a) // a longer, unique prefix resolves
+  assertThrows(() => resolveId(db, '#abcabc'), Error, 'ambiguous')
+  assertEquals(resolveId(db, '#abcabc11'), a) // a longer, unique prefix resolves
 })
 
 Deno.test('num order is preserved: T-3 and a bare num still resolve', () => {

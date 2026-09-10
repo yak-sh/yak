@@ -58,6 +58,19 @@ Deno.test('md: a bare id auto-links with data-ref', () => {
   assertStringIncludes(md('N-9 and P-19'), 'data-ref="N-9"')
 })
 
+Deno.test('md: sigilled ids link with an encoded path, not a browser fragment', () => {
+  for (let id of ['T#3f9a1c2e7b', '#3f9a1c2e7b']) {
+    let path = '/' + encodeURIComponent(id)
+    assertStringIncludes(md(`see ${id}`), `href="${path}" data-ref="${id}"`)
+    assertStringIncludes(
+      mdAbs(`see ${id}`),
+      `href="https://tasks.yak.sh${path}"`,
+    )
+    assertStringIncludes(md(`[task](${id})`), `href="${path}"`)
+    assertEquals(mdMentions(`see ${id}`), [{ kind: 'entity', id }])
+  }
+})
+
 Deno.test('md: a written link aims at an id', () => {
   assertStringIncludes(
     md('[my task idea](T-123)'),

@@ -649,6 +649,14 @@ Deno.test('mailIdOf: E-num, bare num, and eid all land; the misses differ', () =
     num: number
   }
   assertEquals(mailIdOf(eid)?.message_id, 'msg:1752000000000:abc')
+  assertEquals(
+    mailIdOf('E#' + eid.replaceAll('-', '').slice(0, 10))?.message_id,
+    'msg:1752000000000:abc',
+  )
+  assertEquals(
+    mailIdOf('#' + eid.replaceAll('-', '').slice(0, 10))?.message_id,
+    'msg:1752000000000:abc',
+  )
   assertEquals(mailIdOf(`E-${num}`)?.message_id, 'msg:1752000000000:abc')
   assertEquals(mailIdOf(String(num))?.message_id, 'msg:1752000000000:abc')
   assertEquals(mailIdOf('nope-not-here'), null) // no mail at all

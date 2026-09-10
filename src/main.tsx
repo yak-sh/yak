@@ -1,3 +1,4 @@
+import { entityPath } from './url.ts'
 import { render } from 'preact'
 import { agreementProbe, boot, cache, clientId, config, ent } from './live.ts'
 import { idOf, slugsOf } from './types.ts'
@@ -47,7 +48,7 @@ if (legacy) {
     slugsOf(c.alias).includes(legacy) || idOf(ent(eid)) == legacy
   )
   if (hit) {
-    history.replaceState(null, '', `/${idOf(ent(hit[0]))}`)
+    history.replaceState(null, '', entityPath(idOf(ent(hit[0]))))
     route.value = location.pathname + location.search
   }
 }

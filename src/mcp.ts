@@ -34,6 +34,7 @@ import {
   edges,
   type Hit,
   sessionOf,
+  shortId,
   type Snapshot,
   statuses,
   uuid,
@@ -972,7 +973,7 @@ Reference param values accept human ids
       let after = await io.get(minted)
       let ids = minted.map((eid) => {
         let made = after.find((r) => r.eid == eid)
-        return made ? idOf(made) : eid
+        return made ? idOf(made) : shortId(eid)
       })
       // A single create earns the dupe check; a batch is a deliberate
       // plan, not a probe — hinting on each would drown the reply.
@@ -1292,7 +1293,9 @@ then the shared anonymous default. persona names the persona entity
       await io.write(made.changes, session)
       let after = (await io.get([made.eid]))[0]
       return bus(
-        `spawned ${after ? idOf(after) : made.eid} onto ${id}`,
+        `spawned ${
+          after ? idOf(after) : shortId(made.eid, 'session')
+        } onto ${id}`,
         session,
       )
     },
@@ -1403,14 +1406,14 @@ ${
         // The just-minted session's id, read back after the write lands.
         let landed = (await io.get([made.eid]))[0]
         said.push(
-          `spawned ${landed ? idOf(landed) : made.eid}${
+          `spawned ${landed ? idOf(landed) : shortId(made.eid, 'session')}${
             onto ? ` onto ${idOf(onto)}` : ' as chat'
           }`,
         )
       }
       if (out.go) {
         let r = byEid(out.go)
-        said.push(entityUrl(r ? idOf(r) : out.go))
+        said.push(entityUrl(r ? idOf(r) : shortId(out.go)))
       }
       return bus(said.join('\n') || 'ok', session)
     },
@@ -1556,7 +1559,12 @@ maximum number of newest batches to return. ${BUS}`,
       if (!row) return err(`no entity: ${id}`)
       let entries = await io.history(row.eid, limit)
       if (!entries.length) return bus(`${idOf(row)}: no history`, session)
-      return bus(entries.map(historyLine).join('\n'), session)
+      let authors = (await Promise.all(
+        entries.flatMap((e) => e.actor ? [got(e.actor)] : []),
+      ))
+        .filter((r) => r != null)
+      let names = new Map(authors.map((r) => [r.eid, idOf(r)]))
+      return bus(entries.map((e) => historyLine(e, names)).join('\n'), session)
     },
   )
 
@@ -1677,7 +1685,9 @@ first.`,
       let after = mine ? (await io.get([mine]))[0] : undefined
       let said = verdict ? `${verdict} review` : 'comment'
       return bus(
-        `${after ? idOf(after) : mine} — ${said} on ${idOf(row)}${wall(words)}`,
+        `${
+          after ? idOf(after) : mine ? shortId(mine, 'comment') : 'comment'
+        } — ${said} on ${idOf(row)}${wall(words)}`,
         session,
       )
     },
@@ -1839,7 +1849,7 @@ your read is refused, with their text and a fresh token. ${BUS}`,
       await io.write(made.changes, session)
       let after = (await io.get([made.eid]))[0]
       let dupe = await similarHint(`${title}\n${body ?? ''}`, made.eid)
-      let mid = after ? idOf(after) : made.eid
+      let mid = after ? idOf(after) : shortId(made.eid, 'memory')
       // An agent's memory lands proposed (db.ts apply): say so, and name the
       // one door that makes it count, so the writer never assumes it did.
       let pending = after?.comps.proposed
@@ -2420,7 +2430,7 @@ card id (close it with card_close, move it with card_move).`,
         },
       ])
       let made = (await io.get([eid]))[0]
-      return text(`opened ${made ? idOf(made) : eid} at ${x},${y}`)
+      return text(`opened ${made ? idOf(made) : shortId(eid)} at ${x},${y}`)
     },
   )
 
@@ -2523,7 +2533,9 @@ there. Back-navigation still returns them — moving a cursor never traps.`,
       }], session)
       let who = (await io.get([clientEid]))[0]
       return bus(
-        `showing ${idOf(row)} to ${who ? idOf(who) : clientEid}`,
+        `showing ${idOf(row)} to ${
+          who ? idOf(who) : shortId(clientEid, 'client')
+        }`,
         session,
       )
     },
@@ -2557,7 +2569,7 @@ its page and title instead.`,
       }
       await io.upload(eid, html)
       let made = (await io.get([eid]))[0]
-      let name = made ? idOf(made) : eid
+      let name = made ? idOf(made) : shortId(eid)
       return text(`published ${name} — card_open ${name} to show it`)
     },
   )

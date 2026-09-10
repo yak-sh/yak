@@ -1,3 +1,4 @@
+import { entityPath } from '../url.ts'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { type Hit, idOf, kindOrder, plural, uuid } from '../types.ts'
 import { ent, mutate, searchOpen } from '../live.ts'
@@ -140,7 +141,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
     open(h.open)
     close()
   }
-  let href = (h: Hit) => `/${idOf(h.open == h.eid ? h : ent(h.open))}`
+  let href = (h: Hit) => entityPath(idOf(h.open == h.eid ? h : ent(h.open)))
   // The board chip's click: the search BECOMES a board — the line is
   // already a query (terms are text preds, query.ts), so the board saves
   // it verbatim and stays live. Named by the line; retitle it in place.
@@ -152,7 +153,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
       { eid, name: 'board', $num: true, comp: { query: q.trim() } },
     )
     close()
-    navigate(`/${eid}`)
+    navigate(entityPath(eid))
   }
   let key = (e: KeyboardEvent) => {
     if (c.key(e)) return // the dropdown eats its keys (Escape included)

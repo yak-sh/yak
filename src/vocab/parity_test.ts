@@ -136,7 +136,7 @@ Deno.test('parity: the id prefixes, read through @yaks/id', () => {
     }),
   )
   assertEquals(id({ eid: EID, kind: 'entity', num: 3 }), 'E-3')
-  assertEquals(id({ eid: EID, kind: 'task' }), shortId(EID))
+  assertEquals(id({ eid: EID, kind: 'task' }), shortId(EID, 'task'))
 })
 
 Deno.test('parity: the kinds whose title is a name, read through @yaks/names', () => {

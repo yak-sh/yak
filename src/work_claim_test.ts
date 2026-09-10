@@ -426,7 +426,7 @@ Deno.test('claim_work atomically graduates a source Session at its existing iden
     assertThrows(
       () => take(db, wrongTarget, wrongSid),
       Error,
-      `${wrongEid.slice(0, 8)} is not a session`,
+      `E#${wrongEid.replaceAll('-', '').slice(0, 10)} is not a session`,
     )
     assertEquals(
       cell(db, 'select 1 from entity where eid = ?', wrongEid),

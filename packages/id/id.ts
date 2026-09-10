@@ -72,5 +72,6 @@ export let parse = (id: string): Parsed | undefined => {
  */
 export let idOf = (v: Vocab): (e: Named) => string => {
   let letter = prefixOf(v)
-  return (e) => e.num ? format(letter(e.kind), e.num) : short(e.eid)
+  return (e) =>
+    e.num ? format(letter(e.kind), e.num) : short(e.eid, letter(e.kind))
 }

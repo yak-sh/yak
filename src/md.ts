@@ -31,10 +31,11 @@
 // difference (how a ref becomes an href), so neither can drift.
 // `mdInline` is the title face: no block wrapper, links/images flattened
 // because the surrounding title is usually the link.
+import { EID, SHORT } from './types.ts'
 import { Marked } from 'marked'
 import { highlight } from './highlight.ts'
 import { prefix } from './types.ts'
-import { entityUrl } from './url.ts'
+import { entityPath, entityUrl } from './url.ts'
 
 // The vendored marked ships no types — the token shapes we touch.
 type RefToken = { id?: unknown }
@@ -65,7 +66,9 @@ let LINKABLE = /^(?:https?:\/\/|mailto:|tel:|[/#?]|[\w.-]+(?:[/#?]|$))/i
 // about) — a boundary-anchored T-123 is a reference, but UTF-8 and
 // SHA-256 stay words because their letters sit mid-word.
 let LETTERS = [...new Set([...Object.values(prefix), 'D'])].join('|')
-let REF = new RegExp(`^(?:${LETTERS})-\\d+\\b`)
+let REF = new RegExp(
+  `^(?:(?:${LETTERS})-\\d+|(?:[A-Za-z]+)?#[0-9a-fA-F]{6,64})\\b`,
+)
 
 type Ref = (id: string, text: string) => string
 
@@ -91,7 +94,11 @@ let door = (ref: Ref, repo?: string | null, links = true) =>
       name: 'ref',
       level: 'inline',
       start: (src: string) =>
-        src.match(new RegExp(`\\b(?:${LETTERS})-\\d`))?.index,
+        src.match(
+          new RegExp(
+            `(?<![\\w])(?:(?:${LETTERS})-\\d|(?:[A-Za-z]+)?#[0-9a-fA-F]{6})`,
+          ),
+        )?.index,
       tokenizer(src: string) {
         let m = REF.exec(src)
         if (m) return { type: 'ref', raw: m[0], id: m[0] }
@@ -107,7 +114,10 @@ let door = (ref: Ref, repo?: string | null, links = true) =>
       // couldn't be an href — then the words stay, the trap goes.
       link(this: Inline, token: LinkToken) {
         if (!links) return this.parser.parseInline(token.tokens)
-        if (/^[A-Za-z]+-\d+$/.test(token.href)) {
+        if (
+          (/^[A-Za-z]+-\d+$/.test(token.href) || SHORT.test(token.href) ||
+            EID.test(token.href))
+        ) {
           return ref(token.href, this.parser.parseInline(token.tokens))
         }
         if (!LINKABLE.test(token.href.trim())) {
@@ -135,7 +145,7 @@ let door = (ref: Ref, repo?: string | null, links = true) =>
   })
 
 let canvasRef = (id: string, text: string) =>
-  `<a href="/${id}" data-ref="${id}">${text}</a>`
+  `<a href="${entityPath(id)}" data-ref="${id}">${text}</a>`
 
 // Away from the canvas data-ref has nothing to bind to — the delegated
 // listeners aren't there — so the anchor sheds it rather than mailing
@@ -178,7 +188,9 @@ export let mdMentions = (s: string, repo?: string | null): Mention[] => {
       !/["'\\]/.test(t.href)
     ) {
       let href = t.href.trim()
-      if (/^[A-Za-z]+-\d+$/.test(href)) {
+      if (
+        (/^[A-Za-z]+-\d+$/.test(href) || SHORT.test(href) || EID.test(href))
+      ) {
         out.push({ kind: 'entity', id: href })
       } else if (LINKABLE.test(href)) out.push({ kind: 'link', href })
     } else if (t.type == 'codespan' && t.text) {

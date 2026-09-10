@@ -1,3 +1,4 @@
+import { entityPath } from '../url.ts'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { signal } from '@preact/signals'
 import { base, ent, mutate, toPlane, topZ, uuid } from '../live.ts'
@@ -137,7 +138,7 @@ let Form = ({ a }: { a: Ask }) => {
         : []),
     )
     run.value = null
-    if (!at) navigate(`/${eid}`)
+    if (!at) navigate(entityPath(eid))
   }
 
   return (

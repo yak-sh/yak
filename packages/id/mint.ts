@@ -19,15 +19,9 @@ export let mint = (): string => {
   }-${h.slice(20)}`
 }
 
-/**
- * The short handle an entity with no number wears: the eid's leading 8 hex —
- * its first group, already dashless. Honest that there is no human id, and
- * still typeable, because a store resolves it back by prefix match.
- */
-export let short = (eid: string): string => eid.slice(0, 8)
+/** A sigilled, dashless 10-hex eid fragment, optionally kind-prefixed. */
+export let short = (eid: string, prefix = ''): string =>
+  `${prefix}#${eid.replaceAll('-', '').slice(0, 10).toLowerCase()}`
 
-/**
- * What a short handle looks like as a TOKEN: 6–8 hex, no dashes. Six at the
- * least, so a stray two-character word never "resolves" to somebody's entity.
- */
-export let SHORT: RegExp = /^[0-9a-f]{6,8}$/i
+/** Short input handles carry 6–64 hex characters; bare hex is never an id fragment. */
+export let SHORT: RegExp = /^(?:[a-z]+)?#[0-9a-f]{6,64}$/i

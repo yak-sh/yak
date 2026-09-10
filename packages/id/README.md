@@ -50,7 +50,7 @@ let v = loadVocab([catalog], [idKeywords])
 let id = idOf(v)
 
 id({ eid: mint(), kind: 'book', num: 7 }) // 'B-7'
-id({ eid: 'a3f19c02-…', kind: 'book' }) // 'a3f19c02' — not numbered yet
+id({ eid: 'a3f19c02-4b00-4000-8000-000000000001', kind: 'book' }) // 'B#a3f19c024b'
 parse('B-7') // { prefix: 'B', num: 7 }
 parse('7') // { prefix: '', num: 7 }
 ```
@@ -59,20 +59,26 @@ The letter is display, the number is identity: `B-7` and `7` name the same book,
 so an id typed from memory — or in the wrong case — still lands. A component
 that declares no prefix borrows its own initial, so every entity has an id to
 show. An entity the store has not numbered yet has the short handle instead: the
-eid's leading 8 hex, typeable and resolvable by prefix match.
+kind prefix, `#`, and the eid's leading 10 dashless hex. The sigil distinguishes
+even an all-digit eid fragment from a number. Resolvers accept prefixed or bare
+`#` fragments (at least 6 hex), refuse ambiguity, and check a supplied kind
+prefix after resolving the fragment. Full UUIDs remain valid input. Web links
+encode the sigil as `%23`, since a literal `#` starts a browser fragment, not a
+path. Quote bare sigilled handles in a shell (`task show '#3f9a1c2e7b'`), where
+an unquoted leading `#` starts a comment.
 
 ## Exports
 
-| export                 | is                                                              |
-| ---------------------- | --------------------------------------------------------------- |
-| `idKeywords`, `ID_URI` | the `prefix` keyword vocabulary, ready to register              |
-| `mint()`               | a fresh eid (a v4 uuid)                                         |
-| `short(eid)`, `SHORT`  | the 8-hex handle, and what one looks like as a token            |
-| `prefixes(v)`          | every declared prefix: component name → letter                  |
-| `prefixOf(v)`          | the letter a component's ids have (declared, or its initial)    |
-| `format(prefix, num)`  | `'B-7'`                                                         |
-| `parse(id)`            | `'B-7'` → `{ prefix: 'B', num: 7 }`; `undefined` if it is no id |
-| `idOf(v)`              | an entity → its display ID                                      |
+| export                         | is                                                              |
+| ------------------------------ | --------------------------------------------------------------- |
+| `idKeywords`, `ID_URI`         | the `prefix` keyword vocabulary, ready to register              |
+| `mint()`                       | a fresh eid (a v4 uuid)                                         |
+| `short(eid, prefix?)`, `SHORT` | the 10-hex sigilled handle, and the input token pattern         |
+| `prefixes(v)`                  | every declared prefix: component name → letter                  |
+| `prefixOf(v)`                  | the letter a component's ids have (declared, or its initial)    |
+| `format(prefix, num)`          | `'B-7'`                                                         |
+| `parse(id)`                    | `'B-7'` → `{ prefix: 'B', num: 7 }`; `undefined` if it is no id |
+| `idOf(v)`                      | an entity → its display ID                                      |
 
 ## Integration
 

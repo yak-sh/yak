@@ -9,6 +9,7 @@
 // Dot-params route by prop through the shared vocabulary (.title → doc);
 // collisions use the explicit .comp.prop spelling. TASKS_HOST points at a
 // non-default server.
+import { EID, SHORT } from './types.ts'
 import {
   addressed,
   around,
@@ -939,7 +940,8 @@ let redact = async (got: Got) => {
 // legitimate reason for that focused task. T-14573 found `task cancel T-123`
 // silently cancelling the wrong task; T-20976 found the sibling asymmetry where
 // `task wip T-123` was refused despite being the predictable shell spelling.
-let idLike = (s?: string) => !!s && /^[A-Za-z]+-\d+$/.test(s)
+let idLike = (s?: string) =>
+  !!s && (/^[A-Za-z]+-\d+$/.test(s) || SHORT.test(s) || EID.test(s))
 
 let finish =
   (status: 'wip' | 'done' | 'cancelled') => async (args: string[]) => {
@@ -1381,11 +1383,11 @@ let subscribe = (mode: 'watch' | 'mute') => async (input: Got) => {
 // missing or non-session id ERRORS rather than minting a phantom session
 // named after the literal string — two builders passed `S-16450` and claimed
 // under a garbage session whose id was the string "S-16450", so `task land`
-// then found "no task" (T-16487). A raw external id (a uuid, never idLike)
+// then found "no task" (T-16487). A raw external id (a uuid)
 // passes straight through; the guarded writer reifies a hook/spawn's session
 // on first sight.
 let sessionArg = async (arg: string): Promise<string> => {
-  if (!idLike(arg)) return arg
+  if (!idLike(arg) || EID.test(arg)) return arg
   let row = await needed(arg)
   let sid = row.comps.session?.id
   if (!sid) throw new Error(`${idOf(row)} is not a session`)
@@ -1592,7 +1594,11 @@ let colon = async (focus: string | undefined, argv: string[]) => {
   }
   if (name == 'open' || name == 'reply') await one(rest[0])
   if (name == 'fix') {
-    if (/^[A-Za-z]+-\d+$/.test(line.slice(name.length).trim())) {
+    if (
+      (/^[A-Za-z]+-\d+$/.test(line.slice(name.length).trim()) ||
+        SHORT.test(line.slice(name.length).trim()) ||
+        EID.test(line.slice(name.length).trim()))
+    ) {
       await one(line.slice(name.length).trim())
     } else {
       all.push(...await query(['.kind=project', '.repo!']))
@@ -1978,7 +1984,9 @@ let past = async (got: Got) => {
   let entries = await history(row.eid, n)
   if (json) return print(jsonText(entries))
   if (!entries.length) return print(`${idOf(row)}: no history`)
-  for (let e of entries) print(historyLine(e))
+  let authors = await fetched(entries.flatMap((e) => e.actor ? [e.actor] : []))
+  let names = new Map(authors.map((r) => [r.eid, idOf(r)]))
+  for (let e of entries) print(historyLine(e, names))
 }
 
 // What the owner has said, linearly across every session — the signal, in
@@ -2553,7 +2561,9 @@ let context = async (input: Got) => {
     return await tell(snap, String(named.comps.session.id))
   }
   if (named) throw new Error(`${sid} is a ${named.kind}, not a session`)
-  if (/^[A-Za-z]+-\d+$/.test(sid)) throw new Error(`no entity: ${sid}`)
+  if (/^[A-Za-z]+-\d+$/.test(sid) || SHORT.test(sid)) {
+    throw new Error(`no entity: ${sid}`)
+  }
   let snap = await read(sid)
   let all = rows(snap)
   // A raw sid REIFIES (T-4554): a hand-made session — codex, a foreign

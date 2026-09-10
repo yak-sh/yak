@@ -170,6 +170,11 @@ let PRESENCE: Record<string, Clause> = {
 // and `.comp` are ordinary predicates — absence and presence are questions any
 // evaluator answers from data — and the other four are the rule's own words.
 let sigil = (token: string): Clause[] | null => {
+  // An eid fragment is a singleton resource too; unlike a component word it
+  // may contain (or consist entirely of) digits. The store resolves it.
+  if (/^#[0-9a-f]{6,64}$/i.test(token)) {
+    return [{ kind: 'resource', comp: token.slice(1) }]
+  }
   let plain = token.match(PLAIN)
   if (plain) return [PRESENCE[plain[1]] ?? pres(plain[1])]
   let m = token.match(SIGIL)

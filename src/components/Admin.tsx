@@ -1,3 +1,4 @@
+import { entityPath } from '../url.ts'
 // The census — the canvas's counterpart. A traditional admin: sidebar of
 // components (derived from comps), an index per component whose columns ARE
 // the vocabulary row (admin.ts columnsFor), and a new-form whose fields
@@ -214,7 +215,7 @@ let Index = (
               ))}
             </Row>
             {shown.map((e) => (
-              <Row key={e.eid} onClick={follow(`/${idOf(e)}`, e.eid)}>
+              <Row key={e.eid} onClick={follow(entityPath(idOf(e)), e.eid)}>
                 {cols.map((c) => (
                   <Cell key={c.key} mod={c.key}>
                     <CellVal e={e} col={c} />
@@ -352,7 +353,7 @@ let NewForm = ({ kind }: { kind: string }) => {
         $num: ['task', 'board', 'project', 'comment'].includes(kind),
       },
     )
-    navigate(`/${eid}`)
+    navigate(entityPath(eid))
   }
   return (
     <Main>

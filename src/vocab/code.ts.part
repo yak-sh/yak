@@ -277,16 +277,24 @@ export let kindWord = (word: string) =>
   kindOrder.find((k) => k == word || plural(k) == word || `${k}s` == word)
 
 
-// The short handle a NUM-LESS entity wears: the uuid's leading 8 hex — its
-// first group, already dashless. Honest that there is no human number, and
-// still RESOLVABLE: the id doors prefix-match it back to the eid (db.ts
-// resolveId, nav eidOf, client find). A tombstone with no live kind wears it
-// too. `human()` (server) renders the same handle.
-export let shortId = (eid: string) => eid.slice(0, 8)
-// A short-eid TOKEN: 6–8 hex, dashless. Its own prefix of the uuid's first
-// group, so a case-folded string prefix-match (or a sargable PK range) finds
-// the entity. Min 6 so a stray one- or two-char token doesn't "resolve".
-export let SHORT = /^[0-9a-f]{6,8}$/i
+// Short eid handles are explicitly sigilled: never confuse a decimal fragment
+// with a num, or a bare hex word with a git commit. Kind is a check, not identity.
+export let shortId = (eid: string, kind = '') =>
+  `${prefixOf(kind)}#${eid.replaceAll('-', '').slice(0, 10).toLowerCase()}`
+export let prefixOf = (kind: string) => prefix[kind] ?? kind.slice(0, 1).toUpperCase()
+export let SHORT = /^(?:[a-z]+)?#[0-9a-f]{6,64}$/i
+// Identity refusals must not become a saved query's ordinary "not loaded" miss.
+export class IdError extends Error {}
+export let shortParts = (id: string) => {
+  let m = id.match(/^([a-z]*)#([0-9a-f]{6,64})$/i)
+  return m ? { prefix: m[1].toUpperCase(), hex: m[2].toLowerCase() } : undefined
+}
+export let checkPrefix = (id: string, kind: string) => {
+  let p = shortParts(id)?.prefix
+  if (p && p != prefixOf(kind)) {
+    throw new IdError(`${id} has prefix ${p}, but resolves to ${kind} (${prefixOf(kind) || 'no prefix'})`)
+  }
+}
 // A WHOLE eid, in every shape a client may name an entity by: the uuid it
 // mints, or the hash a content-addressed entity is its own name by — a
 // blob's sha-256 (64 hex), a commit's git sha (40). One spelling for every
@@ -296,8 +304,8 @@ export let EID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$|^[0-9a-f]{40}$|^[0-9a-f]{64}$/i
 export let idOf =(e: { eid: string; kind: string; num?: number | null }) =>
   e.num
-    ? `${prefix[e.kind] ?? e.kind[0].toUpperCase()}-${e.num}`
-    : shortId(e.eid)
+    ? `${prefixOf(e.kind)}-${e.num}`
+    : shortId(e.eid, e.kind)
 
 // A model's short name — 'claude-fable-5' is fable, 'gpt-5.6-sol' is sol:
 // drop the vendor word and anything wearing a digit, keep what's left.

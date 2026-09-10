@@ -1,3 +1,4 @@
+import { entityPath } from '../url.ts'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { signal } from '@preact/signals'
 import {
@@ -257,11 +258,11 @@ let exec = async (line: string) => {
     if (task) changes = [...changes, ...scene(task)]
     if (changes.length) mutate(...changes)
     if (r.mutation) await mutateWork(r.mutation)
-    if (r.go) navigate(`/${idOf(ent(r.go))}`)
+    if (r.go) navigate(entityPath(idOf(ent(r.go))))
     if (r.card) {
       let root = screenTarget()
       if (root && ent(root.eid).canvas) spawnHit(root.eid, r.card)
-      else navigate(`/${idOf(ent(r.card))}`)
+      else navigate(entityPath(idOf(ent(r.card))))
     }
     if (r.spawn) {
       launching = line.trim().split(/\s/)[0]

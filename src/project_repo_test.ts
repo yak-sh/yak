@@ -44,5 +44,5 @@ Deno.test('a project with no repo is told what to set, by id', () => {
     said,
     `${id} has no repo — set it: task set ${id} .repo.path=<absolute path>`,
   )
-  assertMatch(said, /^[0-9a-f]{8} /)
+  assertMatch(said, /^P#[0-9a-f]{10} /)
 })

@@ -183,7 +183,9 @@ let cycle = (d: number) => {
 // line that is only prose, which is why `l` there does nothing.
 let pointed = () => {
   let href = link(root, spot())
-  return href?.startsWith('/') ? eidOf(href.slice(1)) : undefined
+  return href?.startsWith('/')
+    ? eidOf(decodeURIComponent(href.slice(1)))
+    : undefined
 }
 
 let enter = (): boolean => {

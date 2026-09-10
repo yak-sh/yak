@@ -116,6 +116,25 @@ slow('a worktree is cut from the repo and given back to it', async () => {
   }
 })
 
+Deno.test('worktree creation reuses an orphaned short session branch without resetting it', async () => {
+  let { dir, repo: r } = await repo()
+  let tree = `${dir}-tree`, branch = 'session/S#3f9a1c2e7b'
+  try {
+    assert((await r.worktreeCreate(tree, branch, 'main')).ok)
+    write(`${tree}/a.txt`, 'unmerged session work\n')
+    assert((await gitRepo(tree).commitPaths(['a.txt'], 'session work')).ok)
+    let head = (await gitRepo(tree).revAt()).out
+    assert((await r.worktreeRemove(tree)).ok)
+    assert((await r.worktreeCreate(tree, branch, 'main')).ok)
+    assertEquals((await gitRepo(tree).revAt()).out, head)
+    // A branch checked out elsewhere still refuses: no --force, no reset.
+    assert(!(await r.worktreeCreate(`${tree}-other`, branch, 'main')).ok)
+    assert((await r.worktreeRemove(tree)).ok)
+  } finally {
+    gone(dir)
+  }
+})
+
 slow('a directory that is no repo refuses, and never throws', async () => {
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-repo-bare-' })
   try {

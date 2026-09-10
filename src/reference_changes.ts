@@ -9,7 +9,7 @@ import { type Change } from './types.ts'
 
 let idOf = `(select id from entity where eid = ?)`
 let refEid = (col: string) => `(select eid from entity where id = ${col})`
-let ID = /\b[A-Z]-\d+\b/g
+let ID = /\b[A-Z]-\d+\b|(?<![\w#])(?:[A-Za-z]+)?#[0-9a-fA-F]{6,64}\b/g
 let URLS = /https?:\/\/[^\s<>"'`)\]]+/g
 
 export type Cites = { ids: string[]; urls: string[] }

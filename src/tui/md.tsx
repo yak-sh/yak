@@ -1,7 +1,7 @@
 import { type JSX } from 'preact'
 import { highlight, type Token } from '../highlight.ts'
 import { commitUrl } from '../md.ts'
-import { prefix } from '../types.ts'
+import { EID, prefix, SHORT } from '../types.ts'
 
 // Markdown for the terminal: the tiny common subset parsed into spans the
 // sheet knows how to dress — ANSI bold/italic/strike, colored code, and
@@ -14,7 +14,7 @@ import { prefix } from '../types.ts'
 let LETTERS = [...new Set([...Object.values(prefix), 'D'])].join('|')
 let RE = new RegExp(
   `(\\*\\*|__)(.+?)\\1|(\\*|_)(.+?)\\3|\`([^\`]+)\`|~~(.+?)~~|` +
-    `\\[([^\\]]+)\\]\\(([^)]+)\\)|\\b((?:${LETTERS})-\\d+)\\b`,
+    `\\[([^\\]]+)\\]\\(([^)]+)\\)|(?<![\\w])((?:${LETTERS})-\\d+|(?:[A-Za-z]+)?#[0-9a-fA-F]{6,64})\\b`,
 )
 
 let inline = (t: string, repo?: string): (string | JSX.Element)[] => {
@@ -42,7 +42,10 @@ let inline = (t: string, repo?: string): (string | JSX.Element)[] => {
       )
     } else if (m[6]) out.push(<span key={k} class='Md_S'>{m[6]}</span>)
     else if (m[9]) out.push(<span key={k} class='Md_Ref'>{m[9]}</span>)
-    else if (/^[A-Za-z]+-\d+$/.test(m[8] ?? '')) {
+    else if (
+      (/^[A-Za-z]+-\d+$/.test(m[8] ?? '') || SHORT.test(m[8] ?? '') ||
+        EID.test(m[8] ?? ''))
+    ) {
       // a written link aimed at an id: the words, then the id it means
       out.push(<span key={k} class='Md_Ref'>{m[7]} ({m[8]})</span>)
     } else out.push(<a key={k} class='Md_A' href={m[8]}>{m[7]}</a>)

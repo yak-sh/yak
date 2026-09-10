@@ -79,7 +79,7 @@ Deno.test('awake operator actor: the cast is the delivery', () => {
     `update session set origin = 'managed', status = 'running' where ${OWNED}`,
   ).run(s)
   let k = knock(task, project)
-  assertMatch(String(drow(k)?.via), /^cast [0-9a-f]{8}$/)
+  assertMatch(String(drow(k)?.via), /^cast S#[0-9a-f]{10}$/)
   assertEquals(erow(k), undefined)
   db.prepare(`update session set status = 'completed' where ${OWNED}`).run(s)
 })
@@ -130,11 +130,11 @@ Deno.test('an addressed person: the knock rides mail, words and all', () => {
     { eid: c, name: 'comment', comp: { target: task } },
   ])
   let k = knock(task, jeff)
-  assertMatch(String(drow(k)?.via), /^mailed [0-9a-f]{8}$/)
+  assertMatch(String(drow(k)?.via), /^mailed U#[0-9a-f]{10}$/)
   let m = db.prepare(
     'select d.title, d.body from mail m join doc_value d on d.entity = m.entity',
   ).get() as { title: string; body: string }
-  assertMatch(m.title, /^knock: [0-9a-f]{8}/)
+  assertMatch(m.title, /^knock: T#[0-9a-f]{10}/)
   assertEquals(m.body, 'need this today')
 })
 
@@ -232,13 +232,13 @@ Deno.test('a settled managed session: the knock rides its input door', () => {
 
   let k = knock(task, sess)
   assertEquals(erow(k), undefined)
-  assertMatch(String(drow(k)?.via), /^commented [0-9a-f]{8}$/)
+  assertMatch(String(drow(k)?.via), /^commented S#[0-9a-f]{10}$/)
   // The comment landed ON the session — that IS the input.
   let input = db.prepare(
     `select d.body from comment c join doc_value d on d.entity = c.entity
      where c.target = ${idOf} order by c.rowid desc limit 1`,
   ).get(sess) as { body: string }
-  assertMatch(input.body, /^knock: [0-9a-f]{8} — the key expires today$/)
+  assertMatch(input.body, /^knock: T#[0-9a-f]{10} — the key expires today$/)
 })
 
 // An EXTERNAL session that has gone quiet has no run to continue, so it

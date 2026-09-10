@@ -1,9 +1,14 @@
 // Human-facing graph addresses. Transport stays local through TASKS_HOST;
 // anything handed to a person uses the board's stable public door.
 
+import { EID, SHORT } from './types.ts'
+
 let origin = 'https://tasks.yak.sh'
 
-export let entityUrl = (id: string) => `${origin}/${id}`
+// Encode the path segment: a literal # would start a browser fragment, which
+// is never sent to the server. /T%23abcdef1234 survives copy, reload and new tab.
+export let entityPath = (id: string) => `/${encodeURIComponent(id)}`
+export let entityUrl = (id: string) => `${origin}${entityPath(id)}`
 
 // entityUrl's inverse: the id token a graph entity link names — undefined for
 // any other address. Only id-shaped path segments count (prefix-num, short
@@ -17,9 +22,15 @@ export let entityId = (raw: string): string | undefined => {
     return undefined
   }
   if (u.origin != origin) return undefined
-  return u.pathname.match(
-    /^\/([A-Za-z]+-\d+|[0-9a-f]{6,8}|[0-9a-f][0-9a-f-]{34}[0-9a-f])$/,
-  )?.[1]
+  let id: string
+  try {
+    id = decodeURIComponent(u.pathname.slice(1))
+  } catch {
+    return undefined
+  }
+  return /^[A-Za-z]+-\d+$/.test(id) || SHORT.test(id) || EID.test(id)
+    ? id
+    : undefined
 }
 
 // ONE canonical spelling for a page address. A page filed from a browser

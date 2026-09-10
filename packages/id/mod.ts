@@ -27,7 +27,7 @@
  * let id = idOf(v)
  *
  * id({ eid: mint(), kind: 'book', num: 7 }) // 'B-7'
- * id({ eid: 'a3f19c02-…', kind: 'book' }) // 'a3f19c02' — not numbered yet
+ * id({ eid: 'a3f19c02-4b00-4000-8000-000000000001', kind: 'book' }) // 'B#a3f19c024b'
  * parse('B-7') // { prefix: 'B', num: 7 }
  * parse('7') // { prefix: '', num: 7 } — the number is the identity
  * ```

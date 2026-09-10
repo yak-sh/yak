@@ -10,6 +10,7 @@
 //
 // Ids: `eid` is a UUID so ANY side (client included) can mint entities;
 // `num` is the server-minted human number (T-7 in the UI, one global counter).
+import { IdError } from './types.ts'
 import type { SchemaOp, Sql, SqlValue, Statement } from './store/sql.ts'
 import { SEED } from './catalog.ts'
 import { asBundle, asChanges } from './store/wire.ts'
@@ -23,6 +24,7 @@ import { hop } from './hops.ts'
 import {
   capabilities,
   type Change,
+  checkPrefix,
   comps,
   type Dep,
   EID,
@@ -36,8 +38,8 @@ import {
   sessionActive,
   sessionComps,
   shapeOf,
-  SHORT,
   shortId,
+  shortParts,
   type Snapshot,
   stamped,
   uuid,
@@ -2364,17 +2366,8 @@ export let migrateDelivery = (db: Sql) => {
   drop('stop_request', 'acted_at')
 }
 
-// The one id resolver: a token → its eid, across every read door (T-3684).
-// Order is deliberate. A human number FIRST (`T-3` / bare `3`), so a small
-// decimal is never shadowed by a hex handle. Then a full uuid, exact. Then a
-// SHORT-eid handle — a 6–8 hex PREFIX of the uuid, matched on the PK as a
-// sargable range (`eid >= p and eid < succ(p)`, succ = last char bumped), so
-// it's an index seek not a scan; unique resolves, ambiguous THROWS naming the
-// collision (git-style). Then an alias slug. A bare all-decimal token that is
-// no known num falls THROUGH to short/slug, so a num-less entity whose handle
-// reads decimal still resolves. undefined names nothing; the throw is only for
-// an ambiguous prefix. Defined ahead of `open()` so the boot migration may
-// lean on it without a TDZ trap.
+// One resolver for read/write doors. Nums, whole eids, sigilled fragments,
+// aliases. Fragment resolution uses PK ranges, never replace(eid) or LIKE.
 let succ = (p: string) =>
   p.slice(0, -1) + String.fromCharCode(p.charCodeAt(p.length - 1) + 1)
 export let resolveId = (
@@ -2388,10 +2381,7 @@ export let resolveId = (
   let pre = id.match(/^[A-Za-z]+-(\d+)$/)
   if (pre) return numOf(+pre[1]) // a prefixed num is num-only
   let bare = id.match(/^(\d+)$/)
-  if (bare) {
-    let hit = numOf(+bare[1])
-    if (hit) return hit // else fall through — a bare token may be a short eid
-  }
+  if (bare) return numOf(+bare[1])
   let low = id.toLowerCase()
   // A full eid: a uuid, a blob's content hash, or a commit's git sha.
   if (EID.test(id)) {
@@ -2402,19 +2392,42 @@ export let resolveId = (
     // else fall through — a uuid with no SQL row may be a pass-through
     // entity's own (deterministic) eid, resolvable by a source below.
   }
-  if (SHORT.test(id)) {
-    let hits = prep(
-      db,
-      'select eid from entity where eid >= ? and eid < ? limit 2',
-    ).all(low, succ(low)) as { eid: string }[]
+  let fragment = shortParts(id)
+  if (fragment) {
+    let p = fragment.hex
+    // UUID storage has dashes; hash eids do not. Both ranges seek the eid PK.
+    let dashed = p.replace(
+      /^(.{8})(.{1,4})?(.{1,4})?(.{1,4})?(.+)?$/,
+      (_, a, b, c, d, e) => [a, b, c, d, e].filter(Boolean).join('-'),
+    )
+    let ranges = [...new Set([p, ...(p.length <= 32 ? [dashed] : [])])]
+    let hits = ranges.flatMap((p) =>
+      prep(
+        db,
+        'select eid from entity where eid >= ? and eid < ? order by eid',
+      ).all(p, succ(p)) as { eid: string }[]
+    )
     if (hits.length > 1) {
-      throw new Error(
+      throw new IdError(
         `${id} is an ambiguous id — matches ${
-          hits.map((h) => shortId(h.eid)).join(', ')
-        } and more; use more characters`,
+          hits.map((h) => `${human(db, h.eid)} (${h.eid})`).join(', ')
+        }; use more characters`,
       )
     }
-    if (hits.length == 1) return hits[0].eid
+    if (hits.length == 1) {
+      let hit = hits[0].eid
+      checkPrefix(
+        id,
+        kindOf(
+          Object.fromEntries(worn(db, fromEid, hit).map((n) => [n, true])),
+        ),
+      )
+      return hit
+    }
+    return undefined
+  }
+  if (id.includes('#')) {
+    throw new IdError(`${id}: expected [kind]# followed by 6–64 hex characters`)
   }
   // Membership, not equality: a slug matches the primary or any word of the
   // space-delimited `slugs` set. instr on a space-padded column matches whole
@@ -2447,25 +2460,24 @@ export let resolveId = (
 let ident = resolveId
 
 // ident's inverse: eid → the human id every other door speaks (T-7) — the
-// raw eid when there is none to speak. Every agent-facing message owes
+// kind-prefixed #eid fragment when there is no num. Every agent-facing message owes
 // this. Inputs accept both spellings; outputs speak human, or a caller
 // that typed `M-10276` is handed back an identifier it has no index for,
 // at the one moment (a refusal) it most wants to open the entity.
 // A tombstone keeps its num on its retained spine row (D-18866 — the id
 // never recycles), so it is still named BY that num; only its components
 // died, so kindOf finds none and it wears the generic prefix rather
-// than a kind-specific one. The raw-eid fallback is for an entity with no
+// than a kind-specific one. The short-eid fallback is for an entity with no
 // num at all (a numless cheap/bulk entity, or a numless old grave), never
 // a demotion a death itself imposes.
 export let human = (db: Sql, eid: string): string => {
   let row = prep(db, 'select num from entity where eid = ?').get(eid) as
     | { num: number }
     | undefined
-  if (!row?.num) return shortId(eid)
   let kind = kindOf(
     Object.fromEntries(worn(db, fromEid, eid).map((n) => [n, true])),
   )
-  return idOf({ eid, kind, num: row.num })
+  return idOf({ eid, kind, num: row?.num })
 }
 
 let ADDR = /@/
@@ -2491,13 +2503,22 @@ let addressed = (db: Sql, addr: string): string | undefined => {
   return namedAddress(db, addr) ?? undefined
 }
 
-// Derived fleet addresses bind to the displayed human id, including a short
-// eid for an unnumbered session. Ambiguity must never silently misdeliver.
+// Derived fleet addresses accept graph ids, including eid fragments. Preserve
+// the numbered-prefix check too: ambiguity must never silently misdeliver.
 export let namedAddress = (db: Sql, addr: string): string | null => {
   let local = fleetLocal(addr)
-  if (!local || !/^(?:[A-Za-z]+-\d+|[0-9a-f]{8,64})$/i.test(local)) return null
+  if (
+    !local ||
+    !(/^[A-Za-z]+-\d+$/.test(local) || shortParts(local) || EID.test(local))
+  ) {
+    return null
+  }
   let eid = resolveId(db, local)
-  return eid && human(db, eid).toLowerCase() == local.toLowerCase() ? eid : null
+  if (!eid) return null
+  return shortParts(local) || EID.test(local) ||
+      human(db, eid).toLowerCase() == local.toLowerCase()
+    ? eid
+    : null
 }
 
 // Find-or-mint the address-book entity wearing `addr` (D-14945): an external
@@ -6372,7 +6393,10 @@ let claimWork = (
       // persisted graph address is authoritative; a source address graduates at
       // its existing eid through apply() below instead of minting a lookalike.
       let sessionAddress = resolveId(db, ask.session)
-      if (!sessionAddress && /^[A-Za-z]+-\d+$/.test(ask.session)) {
+      if (
+        !sessionAddress &&
+        (/^[A-Za-z]+-\d+$/.test(ask.session) || shortParts(ask.session))
+      ) {
         throw new Error(`no entity: ${ask.session}`)
       }
       let storedAddress = sessionAddress && prep(

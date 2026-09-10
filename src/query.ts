@@ -56,6 +56,7 @@
 // N-hop CHAIN: each `{eid}` deref moves to the target entity and the next
 // segment(s) read there, so `.comment.target.doc.title~=foo` walks
 // comment→target then tests doc.title, arbitrarily deep (groupsOf).
+import { IdError } from './types.ts'
 import { bareType, isRef, parseProp, type Prop, propAt } from './props.ts'
 import {
   comps,
@@ -990,6 +991,11 @@ export let bindClause = (c: Clause, vocab: Vocab = NONE): Pred[] => {
       return [never()]
     case 'text':
       return [text(c.value)]
+    case 'resource':
+      if (/^[0-9a-f]{6,64}$/i.test(c.comp)) {
+        return bindClause(parse(`.eid=#${c.comp}`), vocab)
+      }
+      throw new Error(`a fleet read cannot evaluate resource #${c.comp}`)
     case 'every':
       return [] // full rows are the fleet's default projection
     case 'order':
@@ -1335,7 +1341,8 @@ export let resolveRefs = (
       try {
         let value = String(parseProp(REFS_PROP, p.value, { resolve: lookup }))
         return value == p.value ? p : { ...p, value }
-      } catch {
+      } catch (error) {
+        if (error instanceof IdError) throw error
         return p
       }
     }
@@ -1362,7 +1369,8 @@ export let resolveRefs = (
         if (!part) return part
         try {
           return String(parseProp(type, part, { resolve: lookup }))
-        } catch {
+        } catch (error) {
+          if (error instanceof IdError) throw error
           return part // a live saved query may name an entity not here yet
         }
       })

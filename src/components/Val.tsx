@@ -2,6 +2,7 @@ import { type JSX } from 'preact'
 import { findEid } from '../live.ts'
 import { TimeVal, UrlVal } from './editors.tsx'
 import { Entity } from './Entity.tsx'
+import { EID, SHORT } from '../types.ts'
 
 // <Val value/> — the untyped door, beside <Prop> (a typed value through
 // comps) and <Entity> (an entity through a view). For values with no comps
@@ -25,7 +26,9 @@ export let faces: Face[] = [
   },
   { match: (v) => v instanceof URL, show: (v) => UrlVal(String(v)) },
   {
-    match: (v) => typeof v == 'string' && ID.test(v) && !!findEid(v),
+    match: (v) =>
+      typeof v == 'string' && (ID.test(v) || SHORT.test(v) || EID.test(v)) &&
+      !!findEid(v),
     show: (v) => <Entity eid={findEid(String(v))!} view='Inline' />,
   },
 ]

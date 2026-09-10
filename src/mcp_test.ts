@@ -367,6 +367,50 @@ Deno.test('command: open returns the public entity URL', async () => {
   })
 })
 
+Deno.test('MCP short ids: show, query and command share resolution and refusals', async () => {
+  let { db, io } = graph()
+  let eid = '3f9a1c2e-7b00-4000-8000-000000000001'
+  let other = '3f9a1c2e-7bff-4000-8000-000000000002'
+  try {
+    await io.write([{ eid, name: 'task', comp: {} }])
+    await protocol(io, async (client) => {
+      for (let id of [eid, 'T#3f9a1c2e7b', '#3f9a1c2e7b']) {
+        let shown = await client.callTool({
+          name: 'task_show',
+          arguments: { id },
+        }) as ToolResult
+        assertEquals(JSON.parse(said(shown)).entity.eid, eid)
+        let queried = await client.callTool({
+          name: 'graph_query',
+          arguments: { query: `.eid=${id}` },
+        }) as ToolResult
+        assertEquals(JSON.parse(said(queried))[0].entity.eid, eid)
+        let opened = await client.callTool({
+          name: 'command',
+          arguments: { line: `:open ${id}` },
+        }) as ToolResult
+        assertEquals(said(opened), 'https://tasks.yak.sh/T%233f9a1c2e7b')
+      }
+      let wrong = await client.callTool({
+        name: 'task_show',
+        arguments: { id: 'S#3f9a1c2e7b' },
+      }) as ToolResult
+      assertEquals(wrong.isError, true)
+      assertMatch(said(wrong), /prefix S/)
+      await io.write([{ eid: other, name: 'task', comp: {} }])
+      let ambiguous = await client.callTool({
+        name: 'task_show',
+        arguments: { id: 'T#3f9a1c2e7b' },
+      }) as ToolResult
+      assertEquals(ambiguous.isError, true)
+      assertMatch(said(ambiguous), /ambiguous/)
+      assert(said(ambiguous).includes(eid) && said(ambiguous).includes(other))
+    })
+  } finally {
+    db.close()
+  }
+})
+
 Deno.test('command: setting a wake returns every pending wake for its session', async () => {
   let { db, io } = graph()
   let session = crypto.randomUUID()
@@ -459,12 +503,12 @@ Deno.test('work_start bootstraps without a session id and resumes it', async () 
     assertEquals(started.isError, undefined)
     assertMatch(
       said(started),
-      /^session: [0-9a-f]{8}\nsid: [0-9a-f-]+\nstate: created/m,
+      /^session: S#[0-9a-f]{10}\nsid: [0-9a-f-]+\nstate: created/m,
     )
     assertEquals(said(started).includes(WORKER_PROTOCOL), true)
     assertEquals(said(started).split(WORKER_PROTOCOL).length, 2)
     assertMatch(said(started), /# Context\n# tasks · session/)
-    session = said(started).match(/^session: ([0-9a-f]{8})$/m)![1]
+    session = said(started).match(/^session: (S#[0-9a-f]{10})$/m)![1]
     sid = said(started).match(/^sid: ([^\n]+)$/m)![1]
     assertEquals(
       db.prepare('select id from session').all(),
@@ -712,7 +756,7 @@ Deno.test('concurrent work_start calls converge on one stable identity', async (
         arguments: { session: 'desktop-worker-1' },
       }) as Promise<ToolResult>
     let [a, b] = await Promise.all([call(), call()])
-    let session = said(a).match(/^session: ([0-9a-f]{8})$/m)![1]
+    let session = said(a).match(/^session: (S#[0-9a-f]{10})$/m)![1]
     assertMatch(said(b), new RegExp(`^session: ${session}$`, 'm'))
     assertEquals(
       [said(a), said(b)].filter((s) => /state: created/.test(s)).length,
@@ -738,7 +782,7 @@ Deno.test('concurrent anonymous work_start calls mint separate identities', asyn
       >
     let [a, b] = await Promise.all([call(), call()])
     let sessions = [a, b].map((out) =>
-      said(out).match(/^session: ([0-9a-f]{8})$/m)![1]
+      said(out).match(/^session: (S#[0-9a-f]{10})$/m)![1]
     )
     let sids = [a, b].map((out) => said(out).match(/^sid: ([^\n]+)$/m)![1])
     assertEquals(new Set(sessions).size, 2)
@@ -770,7 +814,7 @@ Deno.test('work_start preserves its durable identity when context fails', async 
       arguments: {},
     }) as ToolResult
     assertEquals(out.isError, true)
-    assertMatch(said(out), /^worker [0-9a-f]{8} is durable/)
+    assertMatch(said(out), /^worker S#[0-9a-f]{10} is durable/)
     assertMatch(said(out), /context index unavailable/)
     assertMatch(said(out), /Its sid is [0-9a-f-]+/)
     let sid = said(out).match(/Its sid is ([0-9a-f-]+)/)![1]
@@ -787,7 +831,7 @@ Deno.test('work_start preserves its durable identity when context fails', async 
       assertEquals(resumed.isError, undefined)
       assertMatch(
         said(resumed),
-        /^session: [0-9a-f]{8}\nsid: [^\n]+\nstate: resumed/m,
+        /^session: S#[0-9a-f]{10}\nsid: [^\n]+\nstate: resumed/m,
       )
     })
     assertEquals(

@@ -402,6 +402,9 @@ Deno.test('a task spawn is told how a run ends: land, done, release', async () =
   let prompt = ''
   await spawned(cast, (_got, launch) => {
     prompt = String(launch.prompt ?? '')
+    let sid = 'S#' + eid.replaceAll('-', '').slice(0, 10)
+    assertEquals(launch.branch, `session/${sid}`)
+    assertEquals(launch.tree?.endsWith('/' + sid), true)
     return Promise.resolve()
   })(eid, spawnRow(eid) ?? {})
   let id = human(db, t)
@@ -977,7 +980,7 @@ slow('a fake session runs end to end', async () => {
   )
   assertEquals(JSON.parse(String(s.usage_json)).output_tokens, 34)
   assertEquals(failure(eid), undefined)
-  assertMatch(String(s.branch), /^session\/S-\d+$/)
+  assertMatch(String(s.branch), /^session\/S#[0-9a-f]{10}$/)
   assertMatch(String(s.base_revision), /^[0-9a-f]{40}$/)
   assert(Deno.statSync(String(s.cwd)).isDirectory) // it ran in its worktree
   // The summary rode the wire as whole session comps, never as raw log.

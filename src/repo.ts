@@ -118,8 +118,19 @@ export let gitRepo = (root: string): Repo => {
       let [behind, ahead] = counts.out.trim().split(/\s+/).map(Number)
       return { ahead, behind }
     },
-    worktreeCreate: (tree, branch, base) =>
-      at(['worktree', 'add', tree, '-b', branch, base]),
+    worktreeCreate: async (tree, branch, base) => {
+      let exists = await at([
+        'show-ref',
+        '--verify',
+        '--quiet',
+        `refs/heads/${branch}`,
+      ])
+      // A pruned checkout may leave its branch. Preserve its commits rather
+      // than resetting it to base; git still refuses a branch checked out elsewhere.
+      return exists.ok
+        ? at(['worktree', 'add', tree, branch])
+        : at(['worktree', 'add', tree, '-b', branch, base])
+    },
     worktreeRemove: (tree) => at(['worktree', 'remove', tree]),
   }
 }

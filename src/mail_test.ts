@@ -1116,5 +1116,9 @@ Deno.test('a num-less session address round trips without minting an address-boo
   assertEquals(addressOf(human(db, eid)), addr)
   assertEquals(named(addr), eid)
   assertEquals(addressEntity(db, addr), eid)
+  for (let token of [eid, '#' + eid.replaceAll('-', '').slice(0, 6)]) {
+    assertEquals(named(`${token}@bot.test`), eid)
+    assertEquals(addressEntity(db, `${token}@bot.test`), eid)
+  }
   assertEquals(readComp(db, eid, 'entity')?.num, null)
 })

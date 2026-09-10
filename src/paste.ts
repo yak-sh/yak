@@ -3,8 +3,8 @@
 // entity (rendered as the framed page); JSON minting comps, or carrying a
 // known eid, or shaped like a task, does the obvious; anything else becomes
 // a task — first line title, rest body.
-import { base, cache, uuid } from './live.ts'
-import { type Change } from './types.ts'
+import { base, cache, findEid, uuid } from './live.ts'
+import { type Change, EID, SHORT } from './types.ts'
 
 // What a paste resolves to: comps to mint (none for existing entities),
 // the entity a card should target, and optionally how to show it.
@@ -14,9 +14,6 @@ export type Pasted = {
   view?: string
   w?: number
 }
-
-let byNum = (num: number) =>
-  Object.entries(cache.value).find(([, r]) => r.entity?.num == num)?.[0]
 
 let task = (title: string, body = '', status = 'open'): Pasted => {
   let eid = uuid()
@@ -81,12 +78,8 @@ let json = (text: string): Pasted | null => {
 export let pasted = (raw: string): Pasted | null => {
   let text = raw.trim()
   if (!text) return null
-  if (/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(text)) {
-    return cache.value[text] ? { changes: [], target: text } : null
-  }
-  let m = text.match(/^[A-Za-z]+-(\d+)$/)
-  if (m) {
-    let eid = byNum(+m[1])
+  if (EID.test(text) || SHORT.test(text) || /^[A-Za-z]+-\d+$/.test(text)) {
+    let eid = findEid(text)
     return eid ? { changes: [], target: eid } : null
   }
   if (/^https?:\/\/\S+$/.test(text)) {
