@@ -143,8 +143,7 @@ export let eidOf = (id: string) => {
   let eids = census.value
   let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
   if (m) {
-    return eids.find((eid) => cache.peek()[eid]?.entity?.num == +m![1]) ??
-      serverEid(id)
+    return findEid(id) ?? serverEid(id)
   }
   if (eids.includes(id)) return id // a full eid, verbatim
   if (SHORT.test(id)) {

@@ -1,13 +1,9 @@
-// The client cache's disk shadow: IndexedDB persistence so a returning tab
-// hydrates the graph from local disk (tens of ms) + a small delta, instead
-// of re-pulling its working set and subscriptions cold on every reload
-// (T-6823). Raw IndexedDB, no wrapper lib (vendored-only philosophy),
-// feature-detected. A failed IDB op is telemetry, never a broken render —
-// every path degrades to today's full-snapshot boot. The stores mirror the
-// in-memory shape 1:1 (live.ts cache/deps signals): `ents` keyed by eid
-// holds the whole Comps record, `deps` keyed per-edge, `meta` the cursor +
-// the epoch/vocabHash a delta is validated against, plus the forward-compat
-// `scope` seam (T-3683 partial caches).
+// The client cache's disk shadow. The browser checkpoints a bounded retention
+// floor: returning tabs paint from it while subscriptions reconfirm, never
+// resume the journal from a partial replica's cursor. The epoch validates that
+// floor on reset. Raw IndexedDB, feature-detected; failure is never a broken
+// render. `ents` holds Comps by eid, `meta` scopes them and records LRU order.
+// The legacy full-seed/delta API remains available to full-replica callers.
 //
 // The Web-Lock leader is the sole live writer (T-6883). Without that layer,
 // writes stay boot-only: persisting per-tab live frames would let a throttled
@@ -15,6 +11,7 @@
 // commit remains forward-only, so disabling leadership cleanly restores the
 // multi-writer 2.1 behavior.
 import { type Comps } from './live.ts'
+import { RETENTION_ROWS } from './retention.ts'
 import { type Change, type Dep } from './types.ts'
 
 // Bump when the store LAYOUT changes: onupgradeneeded drops and recreates
@@ -38,6 +35,7 @@ export type Meta = {
   capabilities?: string[]
   schemaVersion?: number
   scope?: string
+  order?: string[]
 }
 
 // The stamps a boot write commits with — the server-boot `epoch`, the
@@ -121,7 +119,7 @@ let ask = <T>(r: IDBRequest<T>, fb: T): Promise<T> =>
 // before this read; a leader write is therefore either wholly visible here,
 // or waits behind this transaction and arrives as a buffered channel frame.
 // Splitting meta from rows would admit values@D with cursor=C.
-export let hydrate = async (): Promise<{
+export let hydrate = async (limit?: number): Promise<{
   ents: Record<string, Comps>
   deps: Dep[]
   meta: Meta
@@ -135,9 +133,13 @@ export let hydrate = async (): Promise<{
     let ms = tx.objectStore(META)
     // Issue every request before yielding; an IDB transaction auto-closes
     // when its request queue empties.
-    let keys = ask(es.getAllKeys(), [] as IDBValidKey[])
-    let vals = ask(es.getAll(), [] as Comps[])
-    let ds = ask(tx.objectStore(DEPS).getAll(), [] as Dep[])
+    let keys = ask(es.getAllKeys(undefined, limit), [] as IDBValidKey[])
+    let vals = ask(es.getAll(undefined, limit), [] as Comps[])
+    // Bounded boot restores rows only; subscriptions rebuild edge riders. Do
+    // not read an old whole-graph edge table just to discard it in restore().
+    let ds = limit == null
+      ? ask(tx.objectStore(DEPS).getAll(), [] as Dep[])
+      : Promise.resolve([] as Dep[])
     let names = [
       'cursor',
       'epoch',
@@ -145,6 +147,7 @@ export let hydrate = async (): Promise<{
       'capabilities',
       'schemaVersion',
       'scope',
+      'order',
     ]
     let meta = names.map((name) => ask(ms.get(name), undefined))
     let [ks, vs, deps, mv] = await Promise.all([
@@ -160,6 +163,11 @@ export let hydrate = async (): Promise<{
     names.forEach((name, i) => {
       if (mv[i] !== undefined) record[name] = mv[i]
     })
+    if (out.order) {
+      let ordered: Record<string, Comps> = {}
+      for (let eid of out.order) if (ents[eid]) ordered[eid] = ents[eid]
+      return { ents: ordered, deps, meta: out }
+    }
     return { ents, deps, meta: out }
   } catch {
     return empty
@@ -181,6 +189,7 @@ export let meta = async (): Promise<Meta> => {
       'capabilities',
       'schemaVersion',
       'scope',
+      'order',
     ]
     await Promise.all(keys.map(async (k) => {
       let v = await ask(s.get(k), undefined)
@@ -203,7 +212,12 @@ export let meta = async (): Promise<Meta> => {
 let commit = async (
   next: Stamp,
   full: boolean,
-  write: (s: { ents: IDBObjectStore; deps: IDBObjectStore }) => void,
+  write: (s: {
+    ents: IDBObjectStore
+    deps: IDBObjectStore
+    meta: IDBObjectStore
+  }) => void,
+  partial = false,
 ): Promise<boolean> => {
   let db = await open()
   if (!db) return false
@@ -220,14 +234,22 @@ let commit = async (
             epoch: ce.result as string | undefined,
             cursor: cc.result as number | undefined,
           }
-          if (!ahead(stored, next, full)) return // a peer is ahead — skip
+          if (
+            !ahead(stored, next, full) &&
+            !(partial && stored.epoch == next.epoch &&
+              stored.cursor == next.cursor)
+          ) return // a peer is ahead — skip
           wrote = true
-          write({ ents: tx.objectStore(ENTS), deps: tx.objectStore(DEPS) })
+          write({
+            ents: tx.objectStore(ENTS),
+            deps: tx.objectStore(DEPS),
+            meta: ms,
+          })
           ms.put(next.epoch, 'epoch')
           ms.put(next.vocabHash, 'vocabHash')
           ms.put(next.capabilities ?? [], 'capabilities')
           ms.put(SCHEMA, 'schemaVersion')
-          ms.put('full-eager', 'scope') // T-3683 seam: partial caches widen it
+          ms.put(partial ? 'retention' : 'full-eager', 'scope')
           ms.put(next.cursor, 'cursor')
         }
       }
@@ -287,6 +309,42 @@ export let persist = (
       }
     }
   })
+
+// A partial cache is a paint floor, never a resumable journal replica. Equal
+// cursors are intentional: several subscription replacements can all describe
+// the SAME database revision. Only the socket leader writes these checkpoints.
+// Row order and pruning commit atomically with the epoch; even disk stays bounded.
+export let retain = (
+  eids: string[],
+  cache: Record<string, Comps>,
+  next: Stamp,
+  full = false,
+  limit = RETENTION_ROWS,
+): Promise<boolean> =>
+  commit(next, full, ({ ents, deps, meta }) => {
+    let request = meta.get('order')
+    request.onsuccess = () => {
+      let order = new Set<string>(full ? [] : request.result ?? [])
+      if (full) {
+        ents.clear()
+        deps.clear() // edge riders are reconfirmed, not restored as permanent holds
+      }
+      for (let eid of eids) {
+        order.delete(eid)
+        let row = cache[eid]
+        if (row) {
+          order.add(eid)
+          ents.put(row, eid)
+        } else ents.delete(eid)
+      }
+      while (order.size > limit) {
+        let first = order.values().next().value!
+        order.delete(first)
+        ents.delete(first)
+      }
+      meta.put([...order], 'order')
+    }
+  }, true)
 
 // The durable outbox (T-21440): the stores above shadow the graph; this one
 // shadows a tab's UNDELIVERED intent. live.ts parks every local write here

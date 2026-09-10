@@ -2,12 +2,13 @@
 import { effect } from '@preact/signals'
 import { parseHTML } from 'linkedom'
 import { assertEquals, assertStrictEquals } from '@std/assert'
-import { peek as shellPeek } from '../live.ts'
+import { cache, peek as shellPeek, restore } from '../live.ts'
 import { type Ent } from '../types.ts'
 import {
   actionsAt,
   cardMenuAt,
   clickProps,
+  eidOf,
   menu,
   openAt,
   peek,
@@ -22,6 +23,20 @@ let e: Ent = {
 }
 
 let from = () => peek.value.at(-1)?.from
+
+Deno.test('numeric routes resolve retained disk rows without a server frame', () => {
+  cache.value = {}
+  try {
+    restore({
+      retained: { entity: { eid: 'retained', num: 12345 } },
+    }, { epoch: 'route-retention' })
+    assertEquals(cache.peek().retained, undefined)
+    assertEquals(eidOf('T-12345'), 'retained')
+    assertEquals(eidOf('12345'), 'retained')
+  } finally {
+    restore({}, {})
+  }
+})
 
 Deno.test('peek state lives above the hot-swap boundary', () => {
   assertStrictEquals(peek, shellPeek)

@@ -73,11 +73,12 @@ import {
   putBags,
   seedIdb,
 } from './schema/idb.ts'
-import { normalizeChanges } from './props.ts'
+import { bodyCols, normalizeChanges } from './props.ts'
 import * as idb from './idb.ts'
 import { topology } from './leader.ts'
 import { liveChanges } from './wire.ts'
-import { diff, gaps } from './subs.ts'
+import { bodied, diff, gaps } from './subs.ts'
+import { retention, RETENTION_ROWS } from './retention.ts'
 import {
   foldObservation,
   type ObservationState,
@@ -100,13 +101,38 @@ export type Comps =
 // THE client cache — and it is PARTIAL (T-21491, step 4 of D-21486): the
 // working-set boot seed, plus every row a mounted subscription streams in
 // (defining subs, open-card reverse subs, the per-client singleton sub), plus
-// rows want() fetched on demand. An eid leaving its last subscription is
-// evicted (landSub/forget → evict). The one contract every reader carries:
+// rows want() fetched on demand. Last release moves a row into the bounded
+// retention floor; an authoritative drop removes it. Every reader carries:
 // ABSENCE NEVER MEANS NON-EXISTENCE — a row not here may simply not be held;
 // ask the query door (queryEids — server-answered) or want() it, never infer
 // "doesn't exist" from a miss. It exists because a mounted view must paint
 // from memory at frame rate; it is a speed layer, not the graph.
 export let cache = signal<Record<string, Comps>>({})
+let retained = retention<Comps>()
+let retentionVersion = signal(0)
+let liveGraph = cache.peek()
+let setCache = (next: Record<string, Comps>) => {
+  liveGraph = next
+  cache.value = next
+}
+// The read view is live-first. Ownership stays in cache/subMembers; retained
+// rows can paint but can NEVER make subscriptionState say ready.
+let paint = computed(() => {
+  retentionVersion.value
+  let live = cache.value
+  // External wholesale replacements (hosts/tests) start a new working set.
+  if (live !== liveGraph) {
+    retained.rows.clear()
+    liveGraph = live
+  }
+  return retained.rows.size
+    ? { ...Object.fromEntries(retained.rows), ...live }
+    : live
+})
+let cached = (eid: string) => {
+  paint.peek() // heal an external wholesale replacement before reading the LRU
+  return cache.peek()[eid] ?? retained.get(eid)
+}
 export let deps = signal<Dep[]>([])
 export let problem = signal('')
 let pinZs = new Map<string, Signal<number>>()
@@ -119,13 +145,13 @@ export let reveal = (eid: string) => {
   revealed.value = new Set([...revealed.peek(), eid])
 }
 export let shown = (eid: string) =>
-  !cache.value[eid]?.quarantined || revealed.value.has(eid)
+  !paint.value[eid]?.quarantined || revealed.value.has(eid)
 let canvasVersion = signal(0)
 let noRelations: Dep[] = []
 
 // Human ids are a hot lookup vocabulary, not a query. Keep them beside the
 // cache so rendering one reference never scans or subscribes to the graph.
-let idGraph = cache.peek()
+let idGraph = paint.peek()
 let numEids = new Map<number, string>()
 let aliasEids = new Map<string, string>()
 let shortEids = new Map<string, Set<string>>()
@@ -136,19 +162,19 @@ let shortEids = new Map<string, Set<string>>()
 // host integrations) is healed lazily: ixGraph/ixDeps mark the last-indexed
 // refs, so a mismatch rebuilds once rather than per patch.
 let ix = emptyIndex()
-let ixGraph = cache.peek()
+let ixGraph = paint.peek()
 let ixDeps = deps.peek()
 let syncIx = () => {
-  if (ixGraph != cache.peek() || ixDeps != deps.peek()) {
-    indexAll(ix, cache.peek(), deps.peek())
-    ixGraph = cache.peek()
+  if (ixGraph != paint.peek() || ixDeps != deps.peek()) {
+    indexAll(ix, paint.peek(), deps.peek())
+    ixGraph = paint.peek()
     ixDeps = deps.peek()
   }
 }
 
 // A reverse hop's Kids accessor over the live index: heal it, read the children
-// (index.ts `children`), resolve each to a bag through `get` — `cache.value` to
-// stay reactive inside a render, `cache.peek()` off it. One helper so every
+// (index.ts `children`), resolve each to a bag through `get` — `paint.value` to
+// stay reactive inside a render, `paint.peek()` off it. One helper so every
 // matcher call site answers `.comments…` the same way.
 let kidsVia =
   (get: (eid: string) => Comps | undefined) =>
@@ -164,12 +190,12 @@ let kidsVia =
 // realization: it reads the cache through the store below — its initial fill
 // anchors on the derived index (index.ts — O(result), never O(graph)), and
 // `refresh` re-tests ONLY the eids each patch touched, so an unrelated patch
-// never wakes a subscriber. Never `Object.values(cache.value).filter` in a
+// never wakes a subscriber. Never `Object.values(paint.value).filter` in a
 // render: that scans the whole graph AND subscribes to every patch (T-17036,
 // the 16ms frame budget).
 let mem: MemoryResolver = memoryResolver({
-  read: (eid) => cache.peek()[eid],
-  keys: () => Object.keys(cache.peek()),
+  read: (eid) => paint.peek()[eid],
+  keys: () => Object.keys(paint.peek()),
   // Heal the derived index before narrowing — the same guard querySet held.
   anchor: (preds) => {
     syncIx()
@@ -178,7 +204,7 @@ let mem: MemoryResolver = memoryResolver({
   // A reverse hop's children, read off the same derived index the anchor uses —
   // the reverse map IS the EXISTS engine (index.ts). Healed first, then each
   // child eid resolved to its cache bag for the sub-filter.
-  kids: (eid, comp, prop) => kidsVia((k) => cache.peek()[k])(eid, comp, prop),
+  kids: (eid, comp, prop) => kidsVia((k) => paint.peek()[k])(eid, comp, prop),
 })
 
 // The durable query surface (T-17126, slice e of D-17120). Where IndexedDB is
@@ -212,7 +238,7 @@ let queueStore = (fn: () => Promise<void>): Promise<void> =>
 let mirror = (eids: string[]) =>
   putBags(
     storeDb!,
-    eids.map((eid) => [eid, cache.peek()[eid] ?? {}] as const),
+    eids.map((eid) => [eid, paint.peek()[eid] ?? {}] as const),
   )
 
 // A patch's touched eids: write them through, then re-test. `mem` still drives
@@ -236,7 +262,7 @@ let resetQueries = () => {
   if (!store) return void mem.reset()
   queueStore(async () => {
     await clearIdb(storeDb!)
-    await seedIdb(storeDb!, cache.peek())
+    await seedIdb(storeDb!, paint.peek())
     await store!.reset()
   })
 }
@@ -350,10 +376,12 @@ let serverLine = (preds: Pred[]): string | undefined => predsToQuery(preds)
 // fresh cache (mem.resolve — the same priming a new set gets) and awaits the
 // server's re-confirmation, the same as a newborn set.
 let resetServerSets = () => {
+  for (let [sub, q] of subQueries) primeSub(sub, q)
   for (let s of queryUses.values()) {
     s.live = false
     if (!textual(s.preds)) s.ids.value = mem.resolve(s.preds)
     seedWake(s, s.ids.peek())
+    subPrimes.set(s.sub, new Set(s.ids.peek()))
   }
 }
 
@@ -361,7 +389,7 @@ let resetServerSets = () => {
 // compares against to tell a move (a pin's x/y/w/h) from a mute z-bump. The
 // resolver's own `sig`, over the cache these sets read.
 let wakeSig = (eid: string, fields: Field[]): string => {
-  let r = cache.peek()[eid]
+  let r = paint.peek()[eid]
   return JSON.stringify(fields.map((f) => r?.[f.comp]?.[f.prop] ?? null))
 }
 let seedWake = (s: ServerSet, ids: Iterable<string>) => {
@@ -372,7 +400,7 @@ let seedWake = (s: ServerSet, ids: Iterable<string>) => {
 
 let refreshServerSets = (eids: Set<string>) => {
   if (!queryUses.size) return
-  let read = (t: string) => cache.peek()[t]
+  let read = (t: string) => paint.peek()[t]
   for (let s of queryUses.values()) {
     let serverOwned = textual(s.preds)
     let ids = s.ids.peek()
@@ -552,7 +580,7 @@ let attachStore = async () => {
     // storeWork so a live frame's mirror lands after the seed, not inside it.
     let gate = queueStore(async () => {
       await clearIdb(db)
-      await seedIdb(db, cache.peek())
+      await seedIdb(db, paint.peek())
     })
     store = idbResolver(db, undefined, (preds) => mem.resolve(preds), gate)
   } catch (e) {
@@ -601,7 +629,7 @@ let indexIds = (graph: Record<string, Comps>) => {
 // Tests and host integrations may replace the exported cache directly. The
 // browser stays incremental; an outside replacement pays one rebuild.
 let syncIds = () => {
-  let graph = cache.peek()
+  let graph = paint.peek()
   if (graph != idGraph) indexIds(graph)
 }
 
@@ -609,7 +637,7 @@ let syncIds = () => {
 // persistence and query door. A signal is minted once per eid so a patch
 // cannot wake an unrelated entity.
 export let row = (eid: string) => {
-  let current = untracked(() => cache.value[eid])
+  let current = untracked(() => cached(eid))
   let found = rowSignals.get(eid)
   if (!found) {
     rowSignals.set(eid, found = signal(current))
@@ -649,7 +677,7 @@ let publish = (
   batch(() => {
     for (let eid of eids) {
       let found = rowSignals.get(eid)
-      if (found) found.value = cache.value[eid]
+      if (found) found.value = paint.value[eid]
     }
     for (let eid of parentEids) {
       let found = relationSignals.get(eid)
@@ -670,12 +698,12 @@ let publish = (
 export let resetSignals = () =>
   batch(() => {
     syncIds()
-    indexAll(ix, cache.peek(), deps.peek())
-    ixGraph = cache.peek()
+    indexAll(ix, paint.peek(), deps.peek())
+    ixGraph = paint.peek()
     ixDeps = deps.peek()
-    census.value = Object.keys(cache.value)
+    census.value = Object.keys(paint.value)
     canvasVersion.value++
-    for (let [eid, found] of rowSignals) found.value = cache.value[eid]
+    for (let [eid, found] of rowSignals) found.value = paint.value[eid]
     for (let [eid, found] of relationSignals) {
       found.value = ix.byParent.get(eid) ?? noRelations
     }
@@ -784,7 +812,7 @@ export let warmth = (e: Ent, now: number) =>
       task: e.task as unknown as Record<string, unknown> | undefined,
     },
     now,
-    (eid) => cache.value[eid],
+    (eid) => paint.value[eid],
   )
 export let byWarmth = (now: number) => (a: Ent, b: Ent) =>
   (warmth(b, now) - warmth(a, now)) || (b.num - a.num)
@@ -814,7 +842,7 @@ export let openDeps = (e: Ent) => {
 // viewer that names none holds no standing instructions, so the verbs
 // that need one simply aren't offered.
 export let myActor = () => {
-  let c = config.client ? cache.value[config.client] : undefined
+  let c = config.client ? paint.value[config.client] : undefined
   return String(c?.client?.actor ?? '') || undefined
 }
 
@@ -826,7 +854,7 @@ export let myMode = (target: string) => {
   let me = myActor()
   if (!me) return undefined
   syncIx()
-  let g = cache.value
+  let g = paint.value
   let hit = children(ix, target, 'subscription', 'target').find((eid) =>
     !g[eid]?.quarantined && String(g[eid]?.subscription?.actor) == me
   )
@@ -909,7 +937,7 @@ export let crewed = (e: Ent) => {
 // live-only columns that never touch IDB). Not load-bearing.
 let mark = (path: string) => ((globalThis as { __boot?: string }).__boot = path)
 ;(globalThis as { __peek?: (eid: string) => unknown }).__peek = (eid) =>
-  cache.value[eid]
+  paint.value[eid]
 
 // Land a batch in the cache with the same patch semantics the db uses:
 // comps merge per-column, comp: null deletes the component, entity: null
@@ -917,10 +945,10 @@ let mark = (path: string) => ((globalThis as { __boot?: string }).__boot = path)
 // it touched (an entity death touches the eid AND every edge it swept) so the
 // persist tail — and boot's explicit delta write — mirror exactly those keys
 // into IDB, no diff of the whole cache.
-export let applyLocal = (changes: Change[]) => {
+export let applyLocal = (changes: Change[], complete?: Set<string>) => {
   syncIds()
   syncIx()
-  let graph = cache.peek()
+  let graph = paint.peek()
   let eids = new Set<string>()
   let edges: Dep[] = []
   let changedRows = new Set<string>()
@@ -933,12 +961,12 @@ export let applyLocal = (changes: Change[]) => {
   // Camera motion renders from camera.value + hear(), not the graph cache.
   // Keep its durable row current without publishing a whole-graph signal.
   let motion = ({ eid, name, comp }: Change) =>
-    !!cache.value[eid]?.camera && comp != null &&
+    !!paint.value[eid]?.camera && comp != null &&
     (name == 'camera' || name == 'updated')
   // Stacking is its own live partition too: raising one card must repaint
   // pins, not every entity and board mounted around them.
   let stacking = ({ eid, name, comp }: Change) =>
-    !!cache.value[eid]?.pin && comp != null &&
+    !!paint.value[eid]?.pin && comp != null &&
     (name == 'updated' ||
       (name == 'pin' && Object.keys(comp).every((p) => p == 'z')))
   let quiet = changes.length > 0 &&
@@ -954,6 +982,13 @@ export let applyLocal = (changes: Change[]) => {
   // stream lets go.
   let said = moves(changes, (e) => depOf(graph[e]))
   for (let { eid, name, comp } of changes) {
+    if (!next[eid] && retained.rows.has(eid)) {
+      next[eid] = retained.rows.get(eid)!
+      retained.rows.delete(eid)
+      changed = true
+      changedCensus = true
+      changedRows.add(eid)
+    }
     if (name == 'entity' && comp == null) {
       let before = next[eid]
       let lived = !!before
@@ -994,7 +1029,9 @@ export let applyLocal = (changes: Change[]) => {
       continue
     }
     let prior = before?.[name] as Record<string, unknown> | undefined
-    let after = { ...prior, ...comp }
+    // Full confirmations replace retained component values, not just their
+    // present columns: a column removed while unheld must not survive a merge.
+    let after = complete?.has(eid) ? { ...comp } : { ...prior, ...comp }
     if (prior && sameProps(prior, after)) continue
     next[eid] = { ...before, [name]: after } as Comps
     if (!before) changedCensus = true
@@ -1006,7 +1043,10 @@ export let applyLocal = (changes: Change[]) => {
     changedRows.add(eid)
   }
   if (changed && !quiet) {
-    cache.value = next
+    batch(() => {
+      retentionVersion.value = retentionVersion.peek() + 1
+      setCache(next)
+    })
     // During a wholesale (re)seed the resetSignals() that follows in seedFrom
     // rebuilds the id-index and derived index in ONE pass (syncIds + indexAll)
     // and refreshes every partition — so the per-row maintenance and the batch
@@ -1019,7 +1059,7 @@ export let applyLocal = (changes: Change[]) => {
         indexId(eid, next[eid])
         reindex(ix, eid, graph[eid], next[eid])
       }
-      idGraph = next
+      idGraph = paint.peek()
     }
   }
   for (let { dep, gone } of said) {
@@ -1037,11 +1077,14 @@ export let applyLocal = (changes: Change[]) => {
   if (depsMoved) {
     deps.value = heldDeps = [...edgeHolders.values()].map((h) => h.dep)
   }
+  if (quiet) {
+    for (let eid of eids) paint.peek()[eid] = next[eid]
+  }
   if (seeding) return { eids: [...eids], edges }
-  ixGraph = cache.peek()
+  ixGraph = paint.peek()
   ixDeps = deps.peek()
   batch(() => {
-    if (changedCensus) census.value = Object.keys(next)
+    if (changedCensus) census.value = Object.keys(paint.peek())
     if (changedCanvas) canvasVersion.value++
     publish(changedRows, changedParents, changedChildren)
     refreshQueries(changedRows)
@@ -1654,11 +1697,30 @@ export let send = (...changes: unknown[]) => deliver(changes as Change[])
 
 // Query subscriptions (T-3683), the client half. The cache becomes a UNION of
 // subscription result sets: `subMembers` refcounts which eids each sub holds,
-// so an eid that leaves EVERY subscription is evicted — the one new cache
-// mechanic (design §4). A legacy full-broadcast client never subscribes, so
+// so an eid released by EVERY subscription becomes retained, not live. A
+// server-side removal instead drops it. A legacy client never subscribes, so
 // this map stays empty and nothing is ever evicted. A shadow sub tracks the set
 // without eviction while the complete stream remains the cache owner.
 let subMembers = new Map<string, Set<string>>()
+let subPrimes = new Map<string, Set<string>>()
+let subQueries = new Map<string, string>()
+let primeSub = (sub: string, q: string) => {
+  subQueries.set(sub, q)
+  try {
+    // Addressed sub queries have a transport-level id= prefix; in ordinary
+    // query grammar bare `id` means session.id, not the entity's identity.
+    let addressed = q.match(/^id=([^&\s]+)/)?.[1]
+    if (addressed) {
+      let eid = findEid(addressed)
+      subPrimes.set(sub, new Set(eid ? [eid] : []))
+      return
+    }
+    subPrimes.set(
+      sub,
+      new Set(mem.resolve(resolveRefs(parseQuery(q), findEid))),
+    )
+  } catch { /* the server owns query failures */ }
+}
 let subVersion = signal(0)
 let shadows = new Set<string>()
 
@@ -1724,7 +1786,7 @@ export let loaded = (eid: string, comp: string, prop: string): boolean => {
   // the honest test: a column the peer payload did not carry is unloaded, and a
   // render that needs it subscribes the row whole.
   for (let peers of subPeers.values()) {
-    if (peers.has(eid)) return cache.peek()[eid]?.[comp]?.[prop] !== undefined
+    if (peers.has(eid)) return paint.peek()[eid]?.[comp]?.[prop] !== undefined
   }
   return true
 }
@@ -1864,7 +1926,7 @@ export let landSub = (f: Sub) => {
     // any prior membership for cache ownership, but publish the failure so a
     // first read cannot remain silently undefined and an old read cannot pose
     // as current. Only a later successful replacement clears this state.
-    subVersion.value++
+    subVersion.value = subVersion.peek() + 1
     return { eids: [], edges: [] }
   }
   if (f.replace) subFailures.delete(f.sub)
@@ -1925,13 +1987,45 @@ export let landSub = (f: Sub) => {
   // rides its own held set, consulted by evict().
   let peered = f.peers?.length ? applyLocal(f.peers) : undefined
   let graphChanges = f.changes.filter((c) => !(c.name in resultComps))
-  let touched = applyLocal(graphChanges)
+  let complete = new Set<string>()
+  if (f.replace && !f.fields) {
+    if (!bodied(f.sub)) {
+      graphChanges = graphChanges.map((c) => {
+        let old = retained.rows.get(c.eid)?.[c.name]
+        if (!old || !c.comp) return c
+        // Ordinary query frames deliberately omit bodies. Their omission is
+        // UNLOADED, not a deletion; only a bodied door can reconfirm them.
+        let bodies = Object.fromEntries(
+          bodyCols(c.name).filter((p) => p in old).map((p) => [p, old[p]]),
+        )
+        return { ...c, comp: { ...bodies, ...c.comp } }
+      })
+    }
+    let names = new Map<string, Set<string>>()
+    for (let c of graphChanges) {
+      let set = names.get(c.eid) ?? new Set<string>()
+      set.add(c.name)
+      names.set(c.eid, set)
+    }
+    for (let [eid, delivered] of names) {
+      let old = retained.rows.get(eid)
+      if (!old) continue
+      complete.add(eid)
+      // A full confirmation must not resurrect a removed component. Land its
+      // removals and its current values together, never blank-then-repopulate.
+      for (let name of Object.keys(old)) {
+        if (!delivered.has(name)) graphChanges.push({ eid, name, comp: null })
+      }
+    }
+  }
+  let touched = applyLocal(graphChanges, complete)
   settleObservations(graphChanges)
   // The server marks shadow-ness on every frame it sends, so believe the
   // frame: the local `shadows` set only knows what THIS client asked for,
   // and the two must not be able to disagree about who owns the cache.
   if (f.shadow) shadows.add(f.sub)
-  let old = subMembers.get(f.sub) ?? new Set<string>()
+  let old = subMembers.get(f.sub) ?? subPrimes.get(f.sub) ?? new Set<string>()
+  subPrimes.delete(f.sub)
   // A queryEids sub (T-17126) republishes its per-sub signal on MEMBERSHIP change
   // only — a standing-match content frame leaves the set alone, and the member's
   // own row signal already carries that edit, so the list stays asleep for it.
@@ -1972,7 +2066,7 @@ export let landSub = (f: Sub) => {
   if (had && membersChanged(had, mine)) {
     querySignals.get(f.sub)!.value = [...mine]
   }
-  subVersion.value++
+  subVersion.value = subVersion.peek() + 1
   if (f.replace) {
     let one = oneShots.get(f.sub)
     if (one) {
@@ -1991,6 +2085,8 @@ export let landSub = (f: Sub) => {
       ...new Set([
         ...touched.eids,
         ...(peered?.eids ?? []),
+        ...leaving,
+        ...orphans,
         ...(f.drop ?? []),
       ]),
     ],
@@ -2001,46 +2097,44 @@ export let landSub = (f: Sub) => {
 // Drop from the cache any eid held by no remaining subscription — a death
 // already removed itself via applyLocal (harmless to revisit), a drop is the
 // live "you no longer see this" that only this layer expresses.
-let evict = (eids: string[]) => {
+let evict = (eids: string[], keep = false) => {
   syncIds()
   syncIx()
-  let graph = cache.peek()
-  // A row is held by MEMBERSHIP or by PEERSHIP — the far endpoint of an edge a
-  // rider delivered is in the cache for a reason, and evicting it out from under
-  // the tree that renders it would blank the tree.
+  let graph = paint.peek()
   let held = (eid: string) =>
     [...subMembers.values()].some((s) => s.has(eid)) ||
     [...subPeers.values()].some((s) => s.has(eid))
-  let next = { ...cache.value }
-  let changed = false
-  let changedCanvas = false
-  let gone = new Set<string>()
+  let next = { ...cache.peek() }
+  let touched = new Set<string>()
   for (let eid of eids) {
-    if (!held(eid) && next[eid]) {
-      if (next[eid].canvas) changedCanvas = true
-      delete next[eid]
-      pinZs.delete(eid)
-      asked.delete(eid) // it may come back bodyless; let it ask again
-      changed = true
-      gone.add(eid)
-    }
+    if (held(eid)) continue
+    let r = next[eid] ?? retained.rows.get(eid)
+    if (!r) continue
+    if (keep) {
+      for (let gone of retained.put(eid, r)) touched.add(gone)
+    } else retained.rows.delete(eid)
+    delete next[eid]
+    asked.delete(eid)
+    touched.add(eid)
   }
-  if (changed) {
-    for (let eid of gone) {
+  if (!touched.size) return
+  batch(() => {
+    retentionVersion.value = retentionVersion.peek() + 1
+    setCache(next)
+    let all = paint.peek()
+    for (let eid of touched) {
       unindexId(eid, graph[eid])
-      reindex(ix, eid, graph[eid], undefined)
+      indexId(eid, all[eid])
+      reindex(ix, eid, graph[eid], all[eid])
+      if (!all[eid]) pinZs.delete(eid)
     }
-    cache.value = next
-    idGraph = next
-    ixGraph = next
-    batch(() => {
-      census.value = Object.keys(next)
-      if (changedCanvas) canvasVersion.value++
-      publish(gone, new Set(), new Set())
-      refreshQueries(gone)
-      refreshServerSets(gone)
-    })
-  }
+    idGraph = ixGraph = all
+    census.value = Object.keys(all)
+    if ([...touched].some((e) => graph[e]?.canvas)) canvasVersion.value++
+    publish(touched, new Set(), new Set())
+    refreshQueries(touched)
+    refreshServerSets(touched)
+  })
 }
 
 // A control frame is an OBJECT (design §1), distinct from the array batches
@@ -2048,7 +2142,10 @@ let evict = (eids: string[]) => {
 let control = (frame: object) => {
   route(frame)
 }
-export let subscribe = (sub: string, q: string) => control({ sub, q })
+export let subscribe = (sub: string, q: string) => {
+  primeSub(sub, q)
+  control({ sub, q })
+}
 
 // A transient projection still uses the subscription protocol: one initial
 // replace lands through the normal cache seam, then the hold is returned. This
@@ -2093,6 +2190,8 @@ let forget = (sub: string) => {
   subPeers.delete(sub)
   shadows.delete(sub)
   subMembers.delete(sub)
+  subPrimes.delete(sub)
+  subQueries.delete(sub)
   subWindows.delete(sub)
   if (sub.startsWith('route:')) routeWindows.delete(sub.slice('route:'.length))
   subFields.delete(sub)
@@ -2101,8 +2200,8 @@ let forget = (sub: string) => {
     clearObservations(sub.slice('entries:'.length))
   }
   settleEdges([], lost)
-  if (leaving.length || peers.length) evict([...leaving, ...peers])
-  subVersion.value++
+  if (leaving.length || peers.length) evict([...leaving, ...peers], true)
+  subVersion.value = subVersion.peek() + 1
 }
 export let unsubscribe = (sub: string) => {
   forget(sub)
@@ -2191,8 +2290,10 @@ let resultSignals = new Map<
 // paged membership.
 let boardEntrySubs = new Map<string, Map<string, () => void>>()
 
-let ownBoard = (sub: string, q: string) =>
-  owner ? owner.use(sub, q) : shadow(sub, q)
+let ownBoard = (sub: string, q: string) => {
+  primeSub(sub, q)
+  return owner ? owner.use(sub, q) : shadow(sub, q)
+}
 let dropBoard = (sub: string) => owner ? owner.drop(sub) : unsubscribe(sub)
 
 // Hold one addressed edge-rider query for a component's lifetime. The rider is
@@ -2415,15 +2516,21 @@ export let boardQuery = (e: Ent) => {
   syncEntrySubs(sub, q)
 }
 
-// Fetch the whole graph, fill the signals, seed IDB — the first-visit path
-// and the 409 fallback share it (a stale cursor just means "do what a new
-// visitor does"). Replace the cache wholesale (clear then apply), stamp the
-// held cursor, and seed IDB — seed() is a `full` forward-only commit that
-// wins across a changed epoch and clears the stale rows in the same txn.
-let seedFrom = (snap: Snapshot, write = true) => {
+// Reset the working set and validate the retention epoch. Same-epoch reconnects
+// keep a bounded paint floor; a changed epoch invalidates every old row. The
+// disk checkpoint replaces rows and epoch in one transaction, never the outbox.
+export let seedFrom = (snap: Snapshot, write = true) => {
+  if (!snap.epoch || snap.epoch != retainedEpoch) retained.rows.clear()
+  else {
+    for (let [eid, r] of Object.entries(cache.peek())) retained.put(eid, r)
+  }
+  retainedEpoch = snap.epoch
+  retentionVersion.value = retentionVersion.peek() + 1
+  subMembers.clear()
+  subPrimes.clear()
   clearObservations()
   pinZs.clear()
-  cache.value = {}
+  setCache({})
   // A seed replaces the ROWS; the edge table is rebuilt by the subs that hold
   // it, which re-subscribe over the same reconnect. A working-set boot now
   // carries `deps: []` — it used to carry 4,909 of them, 81% of the frame on the
@@ -2445,14 +2552,12 @@ let seedFrom = (snap: Snapshot, write = true) => {
     capabilities: snap.capabilities,
   }
   if (write) {
-    return idb.seed(
-      cache.value,
-      deps.value,
-      snap.cursor ?? 0,
-      snap.epoch ?? '',
-      snap.vocabHash ?? '',
-      snap.capabilities ?? [],
-    )
+    return idb.retain(Object.keys(paint.peek()), paint.peek(), {
+      cursor: snap.cursor ?? 0,
+      epoch: snap.epoch ?? '',
+      vocabHash: snap.vocabHash ?? '',
+      capabilities: snap.capabilities ?? [],
+    }, true)
   }
   return Promise.resolve(false)
 }
@@ -2461,7 +2566,7 @@ let persist = (
   touched: { eids: string[]; edges: Dep[] },
   cursor: number,
 ) =>
-  idb.persist(touched.eids, touched.edges, cache.value, deps.value, {
+  idb.retain(touched.eids, paint.peek(), {
     epoch: held.epoch ?? '',
     vocabHash: held.vocabHash ?? '',
     cursor,
@@ -2553,22 +2658,30 @@ let land = async (data: unknown, mode: Land) => {
   }
 }
 
-// Every boot is COLD (T-21491): the socket's ws:1 handshake seeds the working
-// set as its reset — there is no whole-graph load, over any door. The IDB
-// hydrate+delta return path is gone with it: a stored graph re-entered the
-// cache as rows NO subscription holds, so it could never evict and the cache
-// regrew whole on every return. The working-set reset is ~0.55MB — the cold
-// boot the epic already accepted — and idb.persist still shadows the (now
-// partial) cache, so T-21492 can measure whether partial persistence earns a
-// read path back. Meta (cursor/epoch) is deliberately NOT adopted either:
-// a delta against a cache that wasn't hydrated would patch rows that aren't
-// there.
-let local = () => mark('working-set')
+// Hydrated rows are a bounded, provisional read floor, NOT a resumable
+// journal replica. Always request the working-set reset; it validates epoch
+// before any subscription confirms these rows. Never adopt the disk cursor.
+let retainedEpoch: string | undefined
+export let restore = (ents: Record<string, Comps>, meta: idb.Meta) => {
+  paint.peek()
+  retained.rows.clear()
+  retainedEpoch = meta.epoch
+  if (meta.epoch) {
+    for (let [eid, r] of Object.entries(ents)) retained.put(eid, r)
+  }
+  retentionVersion.value = retentionVersion.peek() + 1
+  resetSignals()
+}
+let local = async () => {
+  let saved = await idb.hydrate(RETENTION_ROWS)
+  restore(saved.ents, saved.meta)
+  mark('working-set')
+}
 
 let booted = false
 let once = async () => {
   if (booted) return
-  local()
+  await local()
   // Requeue any write a prior life left undelivered, BEFORE the socket opens —
   // so a crash or manual reload can no longer silently lose it (T-21440).
   await replayOutbox()
@@ -2710,6 +2823,7 @@ let probe = globalThis as {
     subShapes: () => Record<string, number>
     subMembersOf: (line: string) => number
     cacheN: () => number
+    retainedN: () => number
     wire: () => { total: number; subs: Record<string, number> }
   }
 }
@@ -2754,6 +2868,7 @@ probe.__probe = {
   // How many rows the partial cache holds — the T-21491 bound: working-set
   // floor + sub-held + demand-fetched, far below the server's row count.
   cacheN: () => Object.keys(cache.peek()).length,
+  retainedN: () => retained.rows.size,
   wire: () => ({ total: carried.total, subs: { ...carried.subs } }),
 }
 
@@ -2814,7 +2929,7 @@ export let findEid = (id: string): string | undefined => {
   syncIds()
   let num = id.match(/^[A-Za-z]+-(\d+)$/)?.[1] ?? id.match(/^(\d+)$/)?.[1]
   if (num) return numEids.get(+num)
-  if (cache.peek()[id]) return id // a full eid, verbatim
+  if (cached(id)) return id // a full eid, verbatim
   // A SHORT-eid handle: the 6–8 hex prefix a num-less entity wears (T-3684).
   if (SHORT.test(id)) {
     let hits = shortEids.get(id.toLowerCase())
@@ -2864,7 +2979,7 @@ let kickResolve = (token: string): Promise<Named | null> => {
     oneShot(sub, `id=${token}`, () => {
       let eid = [...(subEids(sub) ?? [])][0]
       if (!eid) return resolve(settle(null))
-      let comps = cache.peek()[eid] ?? {}
+      let comps = paint.peek()[eid] ?? {}
       resolve(settle({
         eid,
         num: Number(comps.entity?.num ?? 0),
@@ -2946,7 +3061,7 @@ export let boardPost = (
   eids: Iterable<string>,
 ): string[] =>
   [...eids].filter((eid) => {
-    // Each member read through its OWN row signal, never `cache.value` — the
+    // Each member read through its OWN row signal, never `paint.value` — the
     // filter stays asleep on an unrelated patch and wakes on a member's edit
     // (a row gaining/losing `task` moves the tasks-only face), where a whole-
     // cache read would wake the board on every patch.
@@ -3017,11 +3132,11 @@ export let sieve = (line: string): (eid: string) => boolean => {
   if (!preds.length) return () => true
   return (eid) =>
     matchQuery(
-      cache.peek()[eid] ?? {},
+      paint.peek()[eid] ?? {},
       preds,
-      (t) => cache.peek()[t],
+      (t) => paint.peek()[t],
       undefined,
-      kidsVia((t) => cache.peek()[t]),
+      kidsVia((t) => paint.peek()[t]),
     )
 }
 
@@ -3029,7 +3144,7 @@ export let sieve = (line: string): (eid: string) => boolean => {
 // (find, the change builders, the command line's Ctx), so an id lookup or
 // a claim batch is written once and serves the CLI, the web and the TUI.
 export let rows = (): Row[] =>
-  Object.entries(cache.value).filter(([, r]) => !r.quarantined).map((
+  Object.entries(paint.value).filter(([, r]) => !r.quarantined).map((
     [eid, r],
   ) => ({
     eid,
@@ -3054,7 +3169,7 @@ export let domains = {
   get value() {
     let t = aggQuery('agg:domains', '.task!&.distinct=filed.domain')
     return t.live.value ? Object.keys(t.map.value).sort() : distinctValues(
-      localEids([has('task')]).value.map((eid) => cache.peek()[eid] ?? {}),
+      localEids([has('task')]).value.map((eid) => paint.peek()[eid] ?? {}),
       { comp: 'filed', prop: 'domain' },
     )
   },
@@ -3068,8 +3183,8 @@ export let domains = {
 export let projects = (): Ent[] =>
   queryEids([has('project')]).value
     .toSorted((a, b) =>
-      (cache.peek()[a]?.entity?.num ?? Infinity) -
-      (cache.peek()[b]?.entity?.num ?? Infinity)
+      (paint.peek()[a]?.entity?.num ?? Infinity) -
+      (paint.peek()[b]?.entity?.num ?? Infinity)
     )
     .map(ent)
 // The session chrome, projected (D-22567 §3). `.session!` is the one UNBOUNDED
@@ -3321,7 +3436,7 @@ export let foldFor = (client: string, board: string): Folded | undefined => {
 export let rootCanvas = () => {
   canvasVersion.value
   return queryEids([has('canvas')]).value
-    .map((eid) => [eid, cache.peek()[eid]] as const)
+    .map((eid) => [eid, paint.peek()[eid]] as const)
     .sort(([, a], [, b]) =>
       (a?.entity?.num ?? Infinity) - (b?.entity?.num ?? Infinity)
     )[0]
@@ -3361,7 +3476,7 @@ let pinsOn = (canvas: string): Pred[] => [
 
 export let pinned = (canvas: string): Pinned[] =>
   (!canvas ? [] : queryEids(pinsOn(canvas)).value)
-    .map((eid) => [eid, cache.peek()[eid]] as const)
+    .map((eid) => [eid, paint.peek()[eid]] as const)
     .filter((x): x is readonly [string, Comps] => !!x[1]?.pin && !!x[1].card)
     .map(([eid, r]) => ({
       ...r.pin!,
@@ -3407,7 +3522,7 @@ export let backlinks = (target: string): Backlink[] =>
 // the row), so the face wakes exactly when its session gains or loses a claimed
 // task — no bespoke per-session set to keep (T-17064).
 export let jobOf = (e: Ent): string | null => {
-  let g = cache.peek()
+  let g = paint.peek()
   return queryEids([eq('claim', 'session', e.eid), has('task')]).value
     .toSorted((a, b) =>
       String(g[b]?.claim?.claimed_at ?? '').localeCompare(
@@ -3438,7 +3553,7 @@ export let topZ = (canvas: string) =>
   Math.max(
     0,
     ...(!canvas ? [] : queryEids(pinsOn(canvas)).value
-      .map((eid) => cache.peek()[eid]?.pin?.z ?? 0)),
+      .map((eid) => paint.peek()[eid]?.pin?.z ?? 0)),
   )
 
 // Any interaction pulls a card to the front. Reads the pins fresh from the
@@ -3446,13 +3561,13 @@ export let topZ = (canvas: string) =>
 // The card must clear every OTHER pin, not merely match the canvas top —
 // a tie at the top (fresh pins all land at 0) still raises.
 export let toFront = (pin: string) => {
-  let p = cache.value[pin]?.pin
+  let p = paint.value[pin]?.pin
   if (!p) return
   let top = Math.max(
     -1,
     ...queryEids(pinsOn(p.canvas)).value
       .filter((eid) => eid != pin)
-      .map((eid) => cache.peek()[eid]?.pin?.z ?? -1),
+      .map((eid) => paint.peek()[eid]?.pin?.z ?? -1),
   )
   if (p.z <= top) mutate({ eid: pin, name: 'pin', comp: { z: top + 1 } })
 }
@@ -3477,7 +3592,7 @@ export let myCamera = (client: string, canvas: string) => {
     eq('camera', 'canvas', canvas),
   ])
     .value
-    .map((eid) => cache.peek()[eid]?.camera)
+    .map((eid) => paint.peek()[eid]?.camera)
     .find((c) => !!c)
 }
 
