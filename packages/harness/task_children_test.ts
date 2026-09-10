@@ -60,7 +60,9 @@ Deno.test('task spawn snapshots doc and commits claim before first entry effect;
     observations.push(String((task.claim as Comp).session))
   })
   let [work] = await h.g.read('.task')
-  let child = await spawn.run({ task: `T-${work.entity.num}` }, ctx)
+  assertEquals(work.entity.num, undefined)
+  let child = await spawn.run({ task: work.entity.eid }, ctx)
+  assertEquals((await h.g.read('.spawned'))[0].entity.num, undefined)
   assertEquals(child, 'child:call')
   assertEquals(observations, [child])
   assertEquals((await h.g.read('.task.status=wip')).map((b) => b.entity.eid), [
@@ -182,7 +184,7 @@ Deno.test('task completion receipt is idempotent, keeps final message, and incom
   let receipt = entries.at(-1)!
   assertEquals(receipt.entity.eid, `delivery:${child}:task:work:done`)
   assertEquals((receipt.result as Comp).call, 'call')
-  assert(textOf(receipt).match(/^task T-\d+ done\nFinal answer$/))
+  assertEquals(textOf(receipt), 'task work done\nFinal answer')
   await h.g.apply([{ entity: { eid: 'work' }, completed: null }])
   await deliverChild(h.g, child)
   assertEquals(

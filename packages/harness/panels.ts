@@ -182,7 +182,7 @@ export let panels: Panel[] = [
           null,
           indicator(b, sessions),
           ' ',
-          `${b.entity.num ?? ''} ${
+          `${b.entity.num ?? b.entity.eid.slice(0, 8)} ${
             (b.doc as Comp | undefined)?.title ?? b.entity.eid
           }${held ? ` [${shortSessionId(String(held))}]` : ''}`,
         )

@@ -142,10 +142,12 @@ export type Agent = {
   close: () => void
 }
 
-// Oldest first, by the number the graph minted on first touch — the only
-// ordering that is the same for two rows written in the same millisecond.
-let byNum = (a: Bundle, b: Bundle) =>
-  Number(a.entity.num ?? 0) - Number(b.entity.num ?? 0)
+// A handle can be minted long after birth; it is not a clock. Stable ties
+// preserve the read order for rows written in the same millisecond.
+let byBirth = (a: Bundle, b: Bundle) =>
+  String((a.created as Comp)?.at ?? '').localeCompare(
+    String((b.created as Comp)?.at ?? ''),
+  )
 
 /**
  * Start the harness: open the graph, seed what serves it, and put the daemon
@@ -271,7 +273,7 @@ export let agent = (opts: Opts = {}): Agent => {
     },
     sessions: async () =>
       Promise.all(
-        (await h.g.read('.session')).toSorted(byNum).map(async (b) => ({
+        (await h.g.read('.session')).toSorted(byBirth).map(async (b) => ({
           ...b,
           session: {
             ...b.session as Comp,
@@ -288,7 +290,7 @@ export let agent = (opts: Opts = {}): Agent => {
       ),
     children: (session) => children(h.g, session),
     tasks: async () =>
-      (await h.g.read('.task.status=open,wip')).toSorted(byNum),
+      (await h.g.read('.task.status=open,wip')).toSorted(byBirth),
     transcript: entries,
     resume: async () => {
       let live = await h.g.read('.session.status=pending,running')

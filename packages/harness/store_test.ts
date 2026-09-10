@@ -136,7 +136,8 @@ Deno.test('entries omit human numbers, including migrated entries after reopen',
     h = open(path)
     assertEquals((await h.g.read('.entry'))[0].entity.num, undefined)
     await h.g.apply([{ entity: { eid: 't' }, task: {} }])
-    assertEquals((await h.g.read('.task'))[0].entity.num, 100000)
+    assertEquals((await h.g.read('.task'))[0].entity.num, undefined)
+    assertEquals((await h.g.read('.session'))[0].entity.num, undefined)
     h.close()
   } finally {
     Deno.removeSync(dir, { recursive: true })
@@ -180,6 +181,31 @@ Deno.test('legacy completion actors become authors once, including anonymous mar
     h.close()
     h = open(path)
     assertEquals(authors(), [['anonymous', null], ['known', 'worker']])
+  } finally {
+    h.close()
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
+Deno.test('harness tasks and sessions stay num-less; existing human numbers survive', async () => {
+  let dir = Deno.makeTempDirSync()
+  let h = open(dir + '/numbers.db')
+  try {
+    await h.g.apply([
+      { entity: { eid: 'old' }, task: {} },
+      { entity: { eid: 'parent' }, session: {} },
+      { entity: { eid: 'micro' }, task: {}, doc: { title: 'TUI task' } },
+      { entity: { eid: 'child' }, session: {}, spawned: { parent: 'parent' } },
+    ])
+    assertEquals(
+      (await h.g.read('.task')).every((b) => b.entity.num == null),
+      true,
+    )
+    assertEquals((await h.g.read('.session'))[0].entity.num, undefined)
+    h.db.exec("update entity set num = 42 where eid = 'old'")
+    h.close()
+    h = open(dir + '/numbers.db')
+    assertEquals((await h.g.read('.entity.num=42'))[0].entity.eid, 'old')
   } finally {
     h.close()
     Deno.removeSync(dir, { recursive: true })

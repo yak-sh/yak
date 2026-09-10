@@ -129,7 +129,7 @@ let tasks = async (c: Ctx): Promise<number> => {
     for (let t of await a.tasks()) {
       let held = (t.claim as Comp | undefined)?.session
       c.out(
-        `${String(t.entity.num ?? '').padStart(4)}  ` +
+        `${String(t.entity.num ?? t.entity.eid.slice(0, 8)).padStart(4)}  ` +
           `${String((t.task as Comp).status ?? 'open').padEnd(7)}  ` +
           `${String((t.doc as Comp)?.title ?? t.entity.eid)}` +
           (held ? `  (held by ${String(held).slice(0, 8)})` : ''),

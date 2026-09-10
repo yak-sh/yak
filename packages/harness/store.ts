@@ -178,7 +178,8 @@ export let open = (path: string = dbPath()): Harness => {
   let sql = driver(db)
   let bytes = sqliteBlobs(sql)
   let store = storage(sql, vocab, {
-    number: { except: ['entry'] },
+    // Agent sessions, TUI microtasks and transcript artifacts use eids.
+    number: false,
     derived: { ...derived, ...blobRead(vocab) },
   })
   store.install()
