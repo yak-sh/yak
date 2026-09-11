@@ -31,7 +31,7 @@ let said = (n: number, source: string) =>
 
 // Every shape, as the entries that make it.
 let shapes: [string, Bundle[], TranscriptStatus][] = [
-  ['interrupted response waits for input', [
+  ['interrupted response is failed until new input', [
     input(1),
     entry(2, { ask: { through: 'e1' }, attempt: { state: 'interrupted' } }),
     said(3, 'e2'),
@@ -39,7 +39,7 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
       error: { code: 'interrupted' },
       content: { body: 'Response interrupted.' },
     }),
-  ], 'settled'],
+  ], 'failed'],
   ['input during interrupted response remains pending', [
     input(1),
     entry(2, { ask: { through: 'e1' }, attempt: { state: 'interrupted' } }),
@@ -50,6 +50,33 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
       content: { body: 'Response interrupted.' },
     }),
   ], 'pending'],
+
+  ...(['400', '429'] as const).flatMap(
+    (code): [string, Bundle[], TranscriptStatus][] => {
+      let rejected = [
+        input(1),
+        entry(2, { ask: { through: 'e1' }, attempt: { state: 'interrupted' } }),
+        entry(3, {
+          error: { code: 'interrupted' },
+          content: { body: `Response interrupted: ModelError: ${code}` },
+        }),
+      ]
+      return [
+        [`provider ${code} rejection is failed`, rejected, 'failed'],
+        [
+          `new input after ${code} allows recovery`,
+          [...rejected, input(4)],
+          'pending',
+        ],
+        [`successful response after ${code} clears failure`, [
+          ...rejected,
+          input(4),
+          entry(5, { ask: { through: 'e4' }, attempt: { state: 'completed' } }),
+          said(6, 'e5'),
+        ], 'settled'],
+      ]
+    },
+  ),
 
   ['input arriving during ask remains pending after response', [
     input(1),

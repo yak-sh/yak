@@ -94,7 +94,7 @@ Deno.test('partial failure preserves text and does not automatically retry ambig
     await a.idle(id)
     const entries = await a.transcript(id)
     assertEquals(calls, 1)
-    assertEquals(statusOf(entries), 'settled')
+    assertEquals(statusOf(entries), 'failed')
     assertEquals(
       (entries.find((b) => b.ask)!.attempt as Comp).state,
       'interrupted',
@@ -229,7 +229,7 @@ Deno.test('restart of dispatched attempt is interrupted, never resent', async ()
     const entries = await a.transcript('interrupted-session')
     assertEquals(entries.filter((b) => b.error).length, 1)
     assertEquals(entries.filter((b) => b.exception).length, 0)
-    assertEquals(statusOf(entries), 'settled')
+    assertEquals(statusOf(entries), 'failed')
     assertEquals(
       (entries.find((b) => b.ask)!.attempt as Comp).state,
       'interrupted',
@@ -366,7 +366,7 @@ Deno.test('operational interruption retains partial context, waits, and continue
     await a.send(id, 'second')
     await a.idle(id)
     let rows = await a.transcript(id)
-    assertEquals(statusOf(rows), 'settled')
+    assertEquals(statusOf(rows), 'failed')
     assertEquals(rows.filter((b) => b.exception).length, 0)
     assertEquals(rows.filter((b) => b.error).length, 1)
     await a.resume()
@@ -498,6 +498,52 @@ Deno.test('invalid provider history records a healable exception, not an operati
         String((b.content as Comp)?.body).includes('No tool output found')
       ),
     )
+  } finally {
+    await a.close()
+  }
+})
+
+Deno.test('provider rejection paints crashed and successful recovery clears it', async () => {
+  let h = open(':memory:')
+  let calls = 0
+  let a = agent({
+    h,
+    streaming: true,
+    model: () => {
+      calls++
+      return calls == 1
+        ? Promise.reject(new ModelError('400', 'No tool output found'))
+        : Promise.resolve({
+          id: 'recovered',
+          model: 'fake',
+          items: [{ kind: 'assistant' as const, text: 'done' }],
+        })
+    },
+  })
+  try {
+    let { resolve } = await import('@yaks/render')
+    let { statusViews, statusVocab } = await import('./status.ts')
+    let id = await a.start('hello')
+    await a.idle(id)
+    let check = async (status: string, color: string, title: string) => {
+      let [row] = await h.g.read(`.session.status=${status}`)
+      assertEquals(row?.entity.eid, id)
+      assertEquals(statusOf(await a.transcript(id)), status)
+      let renderer = resolve(statusViews, row, 'Indicator', statusVocab)!
+      let node = renderer.render<{ props: Record<string, unknown> | null }>(
+        row,
+        (_tag, props) => ({ props }),
+        {},
+      )
+      assertEquals(node.props?.class, color)
+      assertEquals(node.props?.title, title)
+    }
+    await check('failed', 'Bad', 'Crashed')
+    assertEquals(calls, 1)
+    await a.send(id, 'continue')
+    await a.idle(id)
+    await check('settled', 'Good', 'Settled')
+    assertEquals(calls, 2)
   } finally {
     await a.close()
   }

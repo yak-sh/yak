@@ -129,7 +129,7 @@ export let statusOf = (entries: Bundle[]): TranscriptStatus => {
     const ask = newestAsk(all)
     return ask && all.some((b) => seqOf(b) > seqOf(ask) && kindOf(b) == 'input')
       ? 'pending'
-      : 'settled'
+      : 'failed'
   }
   if (kind == 'error') {
     // failed once the last RETRIES entries are all errors
@@ -203,7 +203,7 @@ export let sessionStatus = {
       order by e.seq desc limit 1)`
     let open = `exists (select 1 from "${CALL}" c
       join "entry" e on e.entity = c.entity
-      where e."session" = ${owner} and c."source" = ${ask}
+      where e."session" = ${owner}
         and not exists (
           select 1 from "${RESULT}" r where r."call" = c.entity))`
     let unread = `exists (select 1 from "entry" u
@@ -236,7 +236,7 @@ export let sessionStatus = {
           and not exists (select 1 from ask n where n.entity = u.entity)
           and not exists (select 1 from call n where n.entity = u.entity)
           and not exists (select 1 from stop n where n.entity = u.entity))
-        then 'pending' else 'settled' end
+        then 'pending' else 'failed' end
       when ${
       wears(ERROR)
     } then case when ${allErrors} then 'failed' else 'pending' end
