@@ -63,3 +63,33 @@ Deno.test('a broken streamed exchange is not retried after public text was expos
   )
   assertEquals(calls, 1)
 })
+
+Deno.test('per-request cancellation reaches provider fetch without changing adapter-wide options', async () => {
+  const started = Promise.withResolvers<void>()
+  const controller = new AbortController()
+  let seen: AbortSignal | null | undefined
+  const model = responses({
+    credential: () => ({ token: 'private', base: 'https://example.invalid' }),
+    fetch: (_url, init) => {
+      seen = init?.signal
+      started.resolve()
+      return new Promise((_resolve, reject) => {
+        seen!.addEventListener(
+          'abort',
+          () => reject(new DOMException('cancelled', 'AbortError')),
+          { once: true },
+        )
+      })
+    },
+  })
+  const pending = model({
+    model: 'fake',
+    items: [],
+    tools: [],
+    signal: controller.signal,
+  })
+  await started.promise
+  controller.abort()
+  await assertRejects(() => pending)
+  assertEquals(seen?.aborted, true)
+})

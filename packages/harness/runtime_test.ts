@@ -65,7 +65,7 @@ Deno.test('runtime queued cancellation is scoped, and inspection does not schedu
   let calls = 0
   let a = agent({
     h,
-    maxSessions: 0,
+    maxChildren: 0,
     name: 'fake',
     model: () => {
       calls++
@@ -172,12 +172,35 @@ Deno.test('runtime panel reads only while visible; navigation and feedback stay 
     assertEquals(reads, 1)
     observer?.()
     await screen.send('')
-    assertEquals(reads, 2)
+    assertEquals(reads, 1) // domain changes wait for the coalescing clock
     await screen.send('\x1b')
     assertEquals(observer, undefined)
     assert(!screen.text().includes('Runtime ·'))
   } finally {
     screen.free()
     await ui.close()
+  }
+})
+
+Deno.test('worker runtime projection and scoped continuation use explicit commands', async () => {
+  const { remote } = await import('./remote.ts')
+  let connection = await remote({ db: ':memory:', fake: true })
+  try {
+    let id = await connection.agent.start('runtime worker fixture')
+    await connection.idle(id)
+    let rows = await connection.agent.runtime!(id)
+    assertEquals(rows.length, 1)
+    assertEquals(rows[0].entity.eid, id)
+    assertMatch(
+      await connection.agent.control!(id, 'interrupt'),
+      'No cancellable',
+    )
+    assertMatch(
+      await connection.agent.control!(id, 'resume'),
+      'Continuation input',
+    )
+    await connection.idle(id)
+  } finally {
+    await connection.close()
   }
 })

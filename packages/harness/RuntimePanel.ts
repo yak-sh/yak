@@ -33,7 +33,7 @@ export let runtimeViews = define([
   label('.session&.attempt.state=inflight', 'generating', 'Key'),
   label('.session&.error.code=interrupted', 'interrupted', 'Muted'),
   label('.session.status=running&.call', 'waiting for tool', 'Key'),
-  label('.session.status=running', 'running', 'Key'),
+  label('.session.status=running', 'waiting for tool/dispatch', 'Key'),
   label('.session.status=pending', 'pending', 'Key'),
   label('.session.status=failed', 'failed', 'Bad'),
   label('.session.status=stopped', 'stopped', 'Muted'),
@@ -76,15 +76,21 @@ export let RuntimePanel = ({ ui, agent, session, subscribe }: {
         if (alive) ui.keys({ runtimeFeedback: String(e) })
       } finally {
         busy = false
-        if (dirty && alive) {
-          dirty = false
-          void load()
-        }
+        // Domain notifications are coalesced by the presentation clock.
+        // Streaming deltas must not issue one projection query per token.
       }
     }
     void load()
-    let off = subscribe(() => void load())
-    let timer = setInterval(() => now.value = Date.now(), 1000)
+    let off = subscribe(() => {
+      dirty = true
+    })
+    let timer = setInterval(() => {
+      now.value = Date.now()
+      if (dirty && !busy) {
+        dirty = false
+        void load()
+      }
+    }, 1000)
     return () => {
       alive = false
       off()

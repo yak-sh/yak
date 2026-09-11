@@ -559,14 +559,15 @@ its direct children. `j`/`k` select a row; `r` or Escape closes it. The panel
 shows queued, generating, waiting-for-tool, interrupted, and terminal states.
 Durations are time since the displayed request or last activity, not provider
 billing time. Only the visible panel updates its clock (once a second); clock
-updates do not query the backend.
+updates do not query the backend unless a domain change is pending. Domain
+notifications are coalesced to at most one read per second while visible.
 
 - `x` requests cancellation of the selected model request, or cancels a queued
-  session before execution. Cancellation uses `AbortSignal`; a custom model
-  must honor it. It does not terminate independent processes or cancel tasks.
-- `c` submits an explicit continuation instruction to a settled session. It does
-  not resend an interrupted HTTP request. Running and stopped sessions are not
-  resumed through this action.
+  session before execution. Cancellation uses `AbortSignal`; a custom model must
+  honor it. It does not terminate independent processes or cancel tasks.
+- `c` submits an explicit continuation instruction to an idle or interrupted
+  session. It does not resend an interrupted HTTP request. Running and stopped
+  sessions are not resumed through this action.
 
 The read API is `agent.runtime(session)`; actions use
 `agent.control(session, 'interrupt' | 'cancel-queued' | 'resume')`. The worker
@@ -575,4 +576,5 @@ precondition, so a stale panel cannot cancel work that has already started.
 Provider cancellation has no remote completion acknowledgment: the panel reports
 that cancellation was requested, not that the server stopped billing or that an
 external operation was undone. Process termination remains the separate,
-explicit process tool; this panel intentionally does not offer a kill-all action.
+explicit process tool; this panel intentionally does not offer a kill-all
+action.
