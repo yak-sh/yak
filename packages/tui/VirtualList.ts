@@ -264,7 +264,7 @@ export class VirtualWindow<T extends VirtualItem> {
     }
     // Scrolling down into the end snaps; an append while detached never does.
     if (
-      selected === undefined && !this.follow && this.movement > 0 && exhausted
+      !this.follow && this.movement > 0 && exhausted
     ) {
       this.follow = true
       this.movement = 0

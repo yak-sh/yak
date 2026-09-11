@@ -352,3 +352,23 @@ Deno.test('wheel scrolling remains possible after selected item is revealed', ()
   v.layout(80, 10)
   assert(v.anchor!.id !== before)
 })
+
+Deno.test('wheel scrolling clamps at the end even with a selected entry', () => {
+  let v = window(false)
+  v.update(items(100))
+  v.selected = '20'
+  v.layout(20, 5)
+  for (let n = 0; n < 40; n++) {
+    v.key({ name: 'wheeldown' })
+    v.layout(20, 5)
+  }
+  assertEquals(text(v.layout(20, 5)), ['95', '96', '97', '98', '99'])
+  assertEquals(v.follow, true)
+  assertEquals(v.anchor, { id: '95', offset: 0 })
+  assertEquals(v.selected, '20')
+  v.update(items(101))
+  assertEquals(text(v.layout(20, 5)), ['96', '97', '98', '99', '100'])
+  v.key({ name: 'wheelup' })
+  assertEquals(text(v.layout(20, 5)), ['93', '94', '95', '96', '97'])
+  assertEquals(v.follow, false)
+})
