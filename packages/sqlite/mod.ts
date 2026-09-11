@@ -191,3 +191,5 @@ export let storage = (
     tx: (body) => unit(driver, () => body(tx)),
   }
 }
+
+export * from './migration.ts'

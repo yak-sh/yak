@@ -26,6 +26,7 @@ export let remote = async (
     images?: ImageOptions | false
     streaming?: boolean
     stream?: boolean
+    migrationPollMs?: number
     instructions?: string
     fake?: boolean | 'stuck' | 'held' | { delayMs: number; deltas?: number }
   } = {},

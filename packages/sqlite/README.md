@@ -263,3 +263,65 @@ Clearing numbers never recycles an old human identifier, even after reopening
 the store. RAM retains its existing transactional high-water counter. An
 identity minted as a bare reference in an _earlier_ transaction may already have
 consumed a number; classification cannot anticipate future facets.
+
+## Preannounced migrations
+
+`migrations(driver)` provides a small cooperative control table independent of
+application tables. A migrator commits an announcement, waits outside a write
+transaction, then commits its synchronous migration and completion record
+atomically:
+
+```ts
+import { migrations, watchMigrations } from '@yaks/sqlite'
+
+const control = migrations(driver)
+control.ready() // call before installing application tables; refuses pending/failed work
+
+// On each application connection, after initialization:
+const monitor = watchMigrations(control, (reason) => {
+  // Stop accepting work, drain current callbacks, close the connection, and
+  // tell the operator to restart. The monitor does not own those resources.
+  console.error(reason.message)
+}, 1000)
+
+// On a separate, quiescent migrator connection (not inside another transaction):
+await control.run('documents/add-summary-v1', (db) => {
+  db.exec('alter table doc add column summary text')
+}, { intervalMs: 1000, marginMs: 100 })
+
+monitor.stop() // before closing the application connection
+```
+
+The example assumes `driver` is an existing SQLite driver. Use the same maximum
+polling interval across cooperating hosts; a longer interval on any peer needs a
+correspondingly longer grace period. The default is one second plus a 100 ms
+migration margin. Polling performs one control-table read per interval, not a
+query before every application operation. An observed generation change stops
+the monitor and invokes its callback once, even if it missed the pending phase.
+
+The single row retains a generation, migration name, pending/applied/failed
+state, announcement/deadline timestamps, and completion/error information. It is
+not a migration history or a replacement for application migration markers.
+`announce`, `apply`, and `fail` expose the stages separately. Concurrent
+announcements serialize through `BEGIN IMMEDIATE`; a pending or failed migration
+cannot be silently replaced. A failed callback rolls back its DDL/data changes,
+then records failure separately. A crash may leave `pending`; it requires
+operator investigation. `acknowledge(generation)` explicitly releases a failed
+or abandoned announcement **after** repair/inspection; it does not undo changes
+or determine whether replay is safe. All migration callbacks must be synchronous
+and must not start external side effects or manage their own transactions.
+
+**This is best-effort cooperation, not a corruption-prevention guarantee.** A
+suspended process, delayed timer, or long-running callback can outlast the grace
+period. There are no peer acknowledgments. SQLite serializes write transactions,
+but that does not establish application-level schema compatibility. Stop peers
+explicitly for migrations that require guaranteed quiescence. A crash between
+rollback and recording failure can also leave a pending announcement.
+
+Deploy this protocol to all participating writers before depending on it.
+Unaware clients, raw SQL, and migrations outside this API do not participate.
+The control table must be initialized during that rollout. On a fresh open,
+`ready()` cannot determine whether older application code understands a
+migration that already completed; version compatibility still belongs to the
+application. Data-only transformations are announced just like DDL when
+performed via this API.

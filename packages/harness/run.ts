@@ -1,3 +1,4 @@
+import { watchMigrations } from '@yaks/sqlite'
 import { inheritedInstructions } from './legacy_instructions.ts'
 import { stepLock } from './step_lock.ts'
 import { type RuntimeAction, runtimeAction, runtimeRows } from './runtime.ts'
@@ -112,6 +113,8 @@ export type Opts = ChildLimits & NotHarness & {
   streaming?: boolean
   /** Alias for streaming. If both are supplied, streaming takes precedence. */
   stream?: boolean
+  /** Cooperating migrations must allow at least this polling interval. */
+  migrationPollMs?: number
   checkpointMs?: number
   /** The system prompt every ask carries. */
   instructions?: string
@@ -240,6 +243,8 @@ export let agent = (opts: Opts = {}): Agent => {
   }
   let entries = (session: Eid) => transcript(h.g, session)
 
+  let migrationError: Error | undefined
+  let migrationWatch: ReturnType<typeof watchMigrations> | undefined
   let closing = false
   let shutdown: Promise<void> | undefined
   let operations = new Set<Promise<unknown>>()
@@ -372,6 +377,7 @@ export let agent = (opts: Opts = {}): Agent => {
     close: () =>
       shutdown ??= (async () => {
         closing = true
+        migrationWatch?.stop()
         let drained = d.stop()
         await Promise.allSettled([...operations])
         await drained
@@ -400,6 +406,7 @@ export let agent = (opts: Opts = {}): Agent => {
     let method = a[key] as (...args: unknown[]) => Promise<unknown>
     Object.assign(a, {
       [key]: (...args: unknown[]) => {
+        if (migrationError) return Promise.reject(migrationError)
         if (closing) return Promise.reject(new Error('Agent is closing'))
         let pending = method(...args)
         operations.add(pending)
@@ -411,6 +418,15 @@ export let agent = (opts: Opts = {}): Agent => {
       },
     })
   }
+  migrationWatch = watchMigrations(h.migrations, (reason) => {
+    migrationError = reason
+    // Stop scheduling immediately, but leave SQLite open for admitted work to
+    // drain. Restart is an explicit owner action, not a migration side effect.
+    void a.close().catch((error) =>
+      diagnostics().report(error, { phase: 'migration-drain' })
+    )
+    console.error(reason.message)
+  }, opts.migrationPollMs ?? 1000)
   return a
 }
 

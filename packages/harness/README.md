@@ -607,3 +607,27 @@ loads overlapping ranges on navigation. Context usage reads only the newest
 reported usage fields. Full model history is unchanged. See
 [WINDOWS.md](WINDOWS.md) for the subscription design, benchmark, and entry-size
 limits.
+
+### Cooperative migration announcements
+
+The harness checks the SQLite migration control table before installing its
+application schema. A pending/failed announcement refuses startup. While
+running, it polls that table once per second. A new announcement or completed
+generation stops admission, drains active work, and closes the database;
+subsequent commands report that a restart is required. It does not automatically
+restart the worker. `migrationPollMs` can configure the interval in
+`agent`/`remote` options.
+
+Migration tooling can use `h.migrations.run(name, callback, options)` from an
+otherwise idle handle, or `migrations(driver)` on a dedicated connection. The
+migrator must allow at least the longest participating polling interval. See
+[@yaks/sqlite migration announcements](../sqlite/README.md#preannounced-migrations)
+for failure recovery and timing limitations. In particular, the grace period is
+not a guarantee that all active callbacks finished.
+
+This first version protects only **explicitly announced migrations**. Existing
+synchronous `open()` schema installation and legacy startup conversions have not
+been converted to asynchronous preannounced migrations. Do not assume opening a
+new harness version is coordinated with older running connections. Stop those
+connections before such upgrades. Already-completed migrations are not a version
+compatibility check when an older binary first opens the file.

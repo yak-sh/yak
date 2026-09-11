@@ -47,6 +47,7 @@ async function handle(method: string, value: unknown): Promise<unknown> {
       web?: boolean
       images?: ImageOptions | false
       streaming?: boolean
+      migrationPollMs?: number
       instructions?: string
       fake?: boolean | 'stuck' | 'held' | { delayMs: number; deltas?: number }
     }
@@ -56,6 +57,7 @@ async function handle(method: string, value: unknown): Promise<unknown> {
       cwd: options.cwd,
       streaming: options.streaming,
       instructions: options.instructions,
+      migrationPollMs: options.migrationPollMs,
       images: options.images,
       web: options.web,
       ...(options.fake

@@ -37,7 +37,7 @@ import { type Effects, effects } from '@yaks/effects'
 import { type Graph, graph } from '@yaks/graph'
 import { processes } from '@yaks/process'
 import { reapLeases, sessionDerived, sessions, taskMarks } from '@yaks/session'
-import { type Driver, storage, type Store } from '@yaks/sqlite'
+import { type Driver, migrations, storage, type Store } from '@yaks/sqlite'
 import { derived as taskDerived, tasks } from '@yaks/task'
 import { type Vocab } from '@yaks/vocab'
 
@@ -105,6 +105,7 @@ export type Harness = {
   g: Graph
   fx: Effects
   vocab: Vocab
+  migrations: ReturnType<typeof migrations>
   close: () => void
 }
 
@@ -178,6 +179,13 @@ export let open = (path: string = dbPath()): Harness => {
     db.exec('pragma busy_timeout = 5000')
   }
   let sql = driver(db)
+  const migration = migrations(sql)
+  try {
+    migration.ready()
+  } catch (error) {
+    db.close()
+    throw error
+  }
   let bytes = sqliteBlobs(sql)
   let store = storage(sql, vocab, {
     // Agent sessions, TUI microtasks and transcript artifacts use eids.
@@ -265,5 +273,14 @@ export let open = (path: string = dbPath()): Harness => {
     ],
   })
   reapLeases(store)
-  return { path, db, store, g, fx, vocab, close: () => db.close() }
+  return {
+    path,
+    db,
+    store,
+    g,
+    fx,
+    vocab,
+    migrations: migration,
+    close: () => db.close(),
+  }
 }
