@@ -11,6 +11,20 @@ export type MigrationState = {
   finished: number | null
   error: string | null
 }
+export type MigrationControl = {
+  read: () => MigrationState | undefined
+  ready: () => number
+  announce: (migration: string, graceMs?: number) => MigrationState
+  apply: (claim: MigrationState, change: (db: Driver) => void) => void
+  fail: (claim: MigrationState, reason: string) => void
+  acknowledge: (generation: number) => void
+  run: (
+    name: string,
+    change: (db: Driver) => void,
+    options?: { intervalMs?: number; marginMs?: number },
+  ) => Promise<MigrationState>
+}
+export type MigrationWatch = { check: () => void; stop: () => void }
 export class MigrationPending extends Error {
   constructor(public readonly migration: MigrationState) {
     super(
@@ -22,7 +36,7 @@ export class MigrationPending extends Error {
 
 /** Open at top level, before application schema installation. All peers must
  * deploy this control table before relying on announcement protection. */
-export function migrations(db: Driver) {
+export function migrations(db: Driver): MigrationControl {
   db.exec(`create table if not exists ${table} (
     singleton integer primary key check(singleton = 1),
     generation integer not null, migration text not null,
@@ -170,10 +184,10 @@ export function migrations(db: Driver) {
  * change latches even if pending was missed. Callback runs once; caller owns
  * admission/drain/close policy. Poll errors also stop the monitor. */
 export function watchMigrations(
-  control: ReturnType<typeof migrations>,
+  control: MigrationControl,
   changed: (reason: Error) => void,
   intervalMs = 1000,
-) {
+): MigrationWatch {
   if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
     throw new TypeError('Invalid polling interval')
   }
