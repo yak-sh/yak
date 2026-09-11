@@ -12,7 +12,15 @@
 // each, kept because a page reaches for them constantly and because the
 // application this package was cut from spells them that way.
 
-import type { Bundle, Change, Eid, Graph, Plugin, ReadOpts } from '@yaks/graph'
+import type {
+  Bundle,
+  Change,
+  Eid,
+  Graph,
+  Plugin,
+  ReadOpts,
+  StampPolicy,
+} from '@yaks/graph'
 import { graph } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { type Query, ram, type Store } from '@yaks/ram'
@@ -73,6 +81,8 @@ export type ClientOpts = {
   signal?: Make
   /** what names an entity minted under an alias (default: a random uuid) */
   mint?: () => Eid
+  /** Replica hosts may leave provenance exclusively to their authority. */
+  provenance?: StampPolicy
 }
 
 /** A client: the graph, the pieces around it, and the four calls a page makes
@@ -155,7 +165,13 @@ export let client = (
 ): Client => {
   // `adopt`: the numbers come from the server, not from this map.
   let store = ram(vocab, { adopt: true })
-  let g = graph({ storage: store, vocab, plugins, mint: opts.mint })
+  let g = graph({
+    storage: store,
+    vocab,
+    plugins,
+    mint: opts.mint,
+    provenance: opts.provenance,
+  })
   // Sync pins local commits before any rendering or asynchronous vault effect.
   let cache: Retained
   let wire = opts.url

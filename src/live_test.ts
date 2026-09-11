@@ -919,7 +919,7 @@ Deno.test('transient observations yield to the durable Session partition', () =>
 
 // Closing the last consumer is the only moment the cache can leak: the
 // departing set is gone from `subMembers` before anyone asks what it held.
-Deno.test('unsubscribing evicts only what no other subscription holds', () => {
+Deno.test('unsubscribing releases ownership into the single bounded payload floor', () => {
   let ent = (eid: string) => [
     { eid, name: 'entity', comp: { eid, num: 1 } },
   ]
@@ -937,13 +937,13 @@ Deno.test('unsubscribing evicts only what no other subscription holds', () => {
   assertEquals(Object.keys(cache.value).toSorted(), ['both', 'mine', 'theirs'])
 
   unsubscribe('left')
-  // `mine` was held by nobody else and goes; `both` is still the right
-  // subscription's, and evicting it would blank a board still on screen.
-  assertEquals(Object.keys(cache.value).toSorted(), ['both', 'theirs'])
+  // The render snapshot refers to the same package RAM retention floor.
+  assertEquals(Object.keys(cache.value).toSorted(), ['both', 'mine', 'theirs'])
   assertEquals(subEids('left'), undefined)
 
   unsubscribe('right')
-  assertEquals(Object.keys(cache.value), [])
+  assertEquals(Object.keys(cache.value).toSorted(), ['both', 'mine', 'theirs'])
+  assertEquals(subEids('right'), undefined)
 })
 
 // The client half of the EDGES rider (T-22371). Edges are held exactly the way
@@ -1038,7 +1038,8 @@ Deno.test('rider peers are held apart from members, and evicted with them', () =
   assertEquals(Object.keys(cache.value), ['a'])
 
   unsubscribe('card')
-  assertEquals(Object.keys(cache.value), [])
+  assertEquals(Object.keys(cache.value), ['a'])
+  assertEquals(subEids('card'), undefined)
 })
 
 // A shadow subscription rides beside the complete stream, which is still the

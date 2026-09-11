@@ -77,8 +77,8 @@ export type Sync = {
   subscribe: (query: Ask, id?: string, opts?: SubscribeOpts) => string
   /** drop one subscription */
   unsubscribe: (id: string) => void
-  /** Ask every subscription for a fresh authoritative frame. */
-  refresh: () => void
+  /** Ask one subscription, or every subscription, for a fresh authoritative frame. */
+  refresh: (id?: string) => void
   /** whether the socket is open right now */
   connected: () => boolean
   /** whether this subscription has successfully applied an answer on the
@@ -248,8 +248,10 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
         throw error
       }
     },
-    refresh: () => {
-      for (let [id, query] of asks) w.subscribe(query, id)
+    refresh: (only) => {
+      for (let [id, query] of asks) {
+        if (only === undefined || only === id) w.subscribe(query, id)
+      }
     },
     unsubscribe: (id) => {
       let ready = states.get(id)?.ready

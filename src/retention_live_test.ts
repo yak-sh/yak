@@ -3,10 +3,12 @@ import {
   applyLocal,
   cache,
   census,
+  config,
   dropQuery,
   ent,
   holdQuery,
   landSub,
+  loaded,
   restore,
   seedFrom,
   subscribe,
@@ -33,7 +35,7 @@ Deno.test('reopen paints retained rows before sending; confirmation removes stal
     let before = census.peek()
     unsubscribe(sub)
     assertEquals(census.peek() === before, true)
-    assertEquals(cache.peek().a, undefined)
+    assertEquals(cache.peek().a?.doc?.title, 'a')
     assertEquals(ent('a').doc?.title, 'a')
     let sent = false
     useRoute(() => {
@@ -119,7 +121,7 @@ Deno.test('bounded confirmation does not invalidate retained rows outside its pa
       window: { limit: 400 },
       changes: changes('other'),
     })
-    assertEquals(cache.peek().comment, undefined)
+    assertEquals(cache.peek().comment?.doc?.title, 'comment')
     assertEquals(ent('comment').doc?.title, 'comment')
     unsubscribe('board:hot')
   } finally {
@@ -154,7 +156,7 @@ Deno.test('full confirmation drops removed components without blanking retained 
   }
 })
 
-Deno.test('disk rows stay provisional across same epoch and vanish on epoch bump', async () => {
+Deno.test('legacy disk rows never bypass package epoch validation', async () => {
   cache.value = {}
   restore({
     old: { entity: { eid: 'old', num: 1 }, doc: { eid: 'old', title: 'old' } },
@@ -163,17 +165,17 @@ Deno.test('disk rows stay provisional across same epoch and vanish on epoch bump
     cursor: 999,
   })
   assertEquals(cache.peek().old, undefined)
-  assertEquals(ent('old').doc?.title, 'old')
+  assertEquals(ent('old').doc, undefined)
   assertEquals(subscriptionState('boot'), { status: 'loading' })
   await seedFrom({ changes: [], deps: [], epoch: 'A', cursor: 1000 }, false)
-  assertEquals(ent('old').doc?.title, 'old')
+  assertEquals(ent('old').doc, undefined)
   await seedFrom({ changes: [], deps: [], epoch: 'B', cursor: 1 }, false)
   assertEquals(ent('old').doc, undefined)
   restore({ unscoped: { doc: { eid: 'unscoped', title: 'untrusted' } } }, {})
   assertEquals(ent('unscoped').doc, undefined)
 })
 
-Deno.test('bodyless confirmations preserve retained bodies', () => {
+Deno.test('bodyless confirmations unload unowned retained bodies without claiming them empty', () => {
   let route = useRoute(() => {})
   try {
     cache.value = {}
@@ -184,9 +186,14 @@ Deno.test('bodyless confirmations preserve retained bodies', () => {
       comp: { body: 'cached body' },
     }])
     unsubscribe('bodyless')
+    assertEquals(ent('bodyless').doc?.body, 'cached body')
     subscribe('bodyless', 'id=bodyless')
     landSub({ sub: 'bodyless', replace: true, changes: changes('bodyless') })
-    assertEquals(ent('bodyless').doc?.body, 'cached body')
+    assertEquals(ent('bodyless').doc?.body, undefined)
+    let priorHost = config.host
+    config.host = 'browser.test'
+    assertEquals(loaded('bodyless', 'doc', 'body'), false)
+    config.host = priorHost
     unsubscribe('bodyless')
   } finally {
     useRoute(route)
@@ -210,7 +217,7 @@ Deno.test('same-epoch reconnect retains live rows and re-primes mounted subscrip
       { changes: [], deps: [], epoch: 'reconnect', cursor: 1 },
       false,
     )
-    assertEquals(cache.peek().reconnect, undefined)
+    assertEquals(cache.peek().reconnect?.doc?.title, 'reconnect')
     assertEquals(ent('reconnect').doc?.title, 'reconnect')
     assertEquals(subscriptionState('route:reconnect').status, 'loading')
     landSub({ sub: 'route:reconnect', replace: true, changes: [] })

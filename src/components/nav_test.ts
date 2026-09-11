@@ -7,7 +7,7 @@ import {
   clearResolved,
   landSub,
   peek as shellPeek,
-  restore,
+  unsubscribe,
   useRoute,
 } from '../live.ts'
 import { type Ent } from '../types.ts'
@@ -85,17 +85,25 @@ Deno.test('short id chip and browser route round trip; kind is checked', async (
   }
 })
 
-Deno.test('numeric routes resolve retained disk rows without a server frame', () => {
+Deno.test('numeric routes resolve confirmed retained rows before a reopen frame', () => {
   cache.value = {}
   try {
-    restore({
-      retained: { entity: { eid: 'retained', num: 12345 } },
-    }, { epoch: 'route-retention' })
-    assertEquals(cache.peek().retained, undefined)
+    landSub({
+      sub: 'route:retained',
+      replace: true,
+      changes: [
+        {
+          eid: 'retained',
+          name: 'entity',
+          comp: { eid: 'retained', num: 12345 },
+        },
+      ],
+    })
+    unsubscribe('route:retained')
     assertEquals(eidOf('T-12345'), 'retained')
     assertEquals(eidOf('12345'), 'retained')
   } finally {
-    restore({}, {})
+    cache.value = {}
   }
 })
 

@@ -39,11 +39,13 @@ import { isUnread, type Row } from './client.ts'
 import type { WorkClaimMutation } from './mutation.ts'
 import {
   distinctValues,
+  EDGES,
   EXISTS,
   type Field,
   fieldsOf,
   matchQuery,
   namesLazy,
+  NEAR,
   ORDER,
   parseQuery,
   type Pred,
@@ -51,10 +53,10 @@ import {
   resolveRefs,
   type ResultComp,
   resultComps,
+  reverseAssocs,
   scopedSessions,
-  selected,
   TEXT,
-  textual,
+  WANT,
   warm,
   windowOf,
 } from './query.ts'
@@ -68,20 +70,13 @@ import {
   reindexEdge,
 } from './index.ts'
 import { type MemoryResolver, memoryResolver } from './resolver.ts'
-import {
-  clearIdb,
-  type IdbResolver,
-  idbResolver,
-  openIdb,
-  putBags,
-  seedIdb,
-} from './schema/idb.ts'
-import { bodyCols, normalizeChanges } from './props.ts'
+import { type LiveClient, liveClient } from './live_client.ts'
+import { normalizeChanges } from './props.ts'
 import * as idb from './idb.ts'
 import { topology } from './leader.ts'
 import { liveChanges } from './wire.ts'
-import { bodied, diff, gaps } from './subs.ts'
-import { retention, RETENTION_ROWS } from './retention.ts'
+import { diff, gaps } from './subs.ts'
+import { dead } from '@yaks/graph'
 import {
   foldObservation,
   type ObservationState,
@@ -111,30 +106,119 @@ export type Comps =
 // "doesn't exist" from a miss. It exists because a mounted view must paint
 // from memory at frame rate; it is a speed layer, not the graph.
 export let cache = signal<Record<string, Comps>>({})
-let retained = retention<Comps>()
-let retentionVersion = signal(0)
+// Compatibility render snapshot: component references from the package RAM,
+// never an independently retained payload owner. onRows is its only writer.
 let liveGraph = cache.peek()
 let setCache = (next: Record<string, Comps>) => {
   liveGraph = next
   cache.value = next
 }
-// The read view is live-first. Ownership stays in cache/subMembers; retained
-// rows can paint but can NEVER make subscriptionState say ready.
-let paint = computed(() => {
-  retentionVersion.value
-  let live = cache.value
-  // External wholesale replacements (hosts/tests) start a new working set.
-  if (live !== liveGraph) {
-    retained.rows.clear()
-    liveGraph = live
-  }
-  return retained.rows.size
-    ? { ...Object.fromEntries(retained.rows), ...live }
-    : live
-})
+let paint = computed(() => cache.value)
 let cached = (eid: string) => {
-  paint.peek() // heal an external wholesale replacement before reading the LRU
-  return cache.peek()[eid] ?? retained.get(eid)
+  ensureClient()
+  replica.box.cache.touch([eid])
+  return cache.peek()[eid]
+}
+let componentViews = new WeakMap<object, Record<string, unknown>>()
+let componentView = (comp: Record<string, unknown>) => {
+  if (!Object.values(comp).includes(null)) return comp
+  let view = componentViews.get(comp)
+  if (!view) {
+    view = new Proxy(comp, {
+      get: (target, key) => Reflect.get(target, key) ?? undefined,
+      ownKeys: (target) =>
+        Reflect.ownKeys(target).filter((k) => Reflect.get(target, k) !== null),
+    })
+    componentViews.set(comp, view)
+  }
+  return view
+}
+let replica: LiveClient
+let replacing = false
+let makeClient = () =>
+  liveClient({
+    disk: typeof location !== 'undefined',
+    send: (sub, q) => {
+      if (replacing) return
+      if (q !== undefined) {
+        owner
+          ? owner.use(sub, q)
+          : control({ sub, q, ...shadowSubs.has(sub) ? { shadow: true } : {} })
+      } else owner ? owner.drop(sub) : control({ unsub: sub })
+    },
+    ready: (sub) => {
+      if (replacing) return
+      let ids = replica.members(sub)
+      let s = [...queryUses.values()].find((s) => s.sub === sub)
+      if (s && (config.host || replica.ready(sub) || ids.length)) {
+        let old = s.ids.peek()
+        if (ids.length !== old.length || ids.some((e, i) => e !== old[i])) {
+          s.ids.value = ids
+        }
+        s.live = replica.ready(sub)
+      }
+      let agg = aggSets.get(sub)
+      if (agg) agg.live.value = replica.ready(sub)
+      subVersion.value = subVersion.peek() + 1
+    },
+    changed: (eids) => {
+      if (replacing) return
+      let changes: Change[] = []
+      for (let eid of eids) {
+        let before = cache.peek()[eid]
+        let after = replica.box.ent(eid)
+        if (!after || dead(after)) {
+          changes.push({ eid, name: 'entity', comp: null })
+        } else {
+          for (let name of Object.keys(before ?? {})) {
+            if (!(name in after)) {
+              changes.push({ eid, name, comp: null })
+            }
+          }
+          for (let [name, raw] of Object.entries(after)) {
+            let comp = raw && componentView(raw as Record<string, unknown>)
+            if (
+              comp &&
+              (!before?.[name] ||
+                !sameProps(before[name]!, comp as Record<string, unknown>))
+            ) {
+              changes.push({ eid, name, comp: comp as Record<string, unknown> })
+            }
+          }
+        }
+      }
+      publishLocal(changes, new Set(eids))
+    },
+  })
+// Tests/hosts may replace cache wholesale. Import that explicitly rather than
+// leaving a second writable store beside RAM. Production never takes this arm.
+let ensureClient = () => {
+  if (replica && cache.peek() === liveGraph) return
+  let rows = cache.peek()
+  replacing = true
+  replica?.box.close()
+  replica = makeClient()
+  liveGraph = rows
+  replica.patch(
+    Object.entries(rows).flatMap(([eid, row]) =>
+      Object.entries(row).map(([name, comp]) => ({
+        eid,
+        name,
+        comp: comp
+          ? Object.fromEntries(
+            Object.entries(comp).filter(([p]) =>
+              p === 'eid' || replica.box.vocab.columns(name).includes(p)
+            ),
+          )
+          : null,
+      }))
+    ),
+  )
+  replacing = false
+  for (let s of queryUses.values()) {
+    s.live = false
+    s.ids.value = config.host ? [] : mem.resolve(s.preds)
+  }
 }
 export let deps = signal<Dep[]>([])
 export let problem = signal('')
@@ -210,64 +294,11 @@ let mem: MemoryResolver = memoryResolver({
   kids: (eid, comp, prop) => kidsVia((k) => paint.peek()[k])(eid, comp, prop),
 })
 
-// The durable query surface (T-17126, slice e of D-17120). Where IndexedDB is
-// present (the browser), `store` is the store-backed idbResolver (schema/idb.ts)
-// and queryEids reads THROUGH it — the generated per-component indexes answer a
-// query, not the in-memory mirror. The mirror (cache) STAYS: ~90 sites still
-// scan it directly (T-17064, held off so this diff owns live.ts), and it is this
-// resolver's SYNCHRONOUS prime (mem.resolve — anchored, O(result)) so a board
-// paints on the frame it mounts rather than empty-then-filled. Absent IDB (the
-// TUI, private mode, a blocked upgrade) `store` stays null and `mem` drives
-// queries exactly as before — the seam's whole point, no call-site churn.
-let store: IdbResolver | null = null
-let storeDb: IDBDatabase | null = null
-// During a wholesale (re)seed the per-row mirror below is skipped — resetQueries
-// writes the whole graph in one bulk pass instead of one put per change.
 let seeding = false
-
-// All durable-store work runs on one chain, in order: a mirror's write settles
-// before its refresh reads, and a reset's clear+seed can't interleave with a
-// live frame's put. The signal fills on settle — the async bridge the seam
-// documents — so the frame is never blocked on IDB.
-let storeWork = Promise.resolve()
-let queueStore = (fn: () => Promise<void>): Promise<void> =>
-  storeWork = storeWork.then(fn).catch((e) => {
-    console.warn('durable query store —', e)
-  })
-
-// Mirror the touched eids into the durable store: an eid absent from the cache
-// (deleted/evicted) carries an empty bag, so putBags deletes it from every
-// store. Then re-test just those eids against every held query.
-let mirror = (eids: string[]) =>
-  putBags(
-    storeDb!,
-    eids.map((eid) => [eid, paint.peek()[eid] ?? {}] as const),
-  )
-
-// A patch's touched eids: write them through, then re-test. `mem` still drives
-// the signals where there is no durable store (the TUI).
-let refreshQueries = (eids: Set<string>) => {
-  if (!store) return void mem.refresh(eids)
-  if (seeding || !eids.size) return
-  let ids = [...eids]
-  queueStore(async () => {
-    await mirror(ids)
-    await store!.refresh(new Set(ids))
-  })
-}
-
-// A wholesale cache replacement (seed / snapshot reset): clear the store, seed
-// the fresh graph, then re-scan every held query from it. Server-backed sets
-// re-prime from the fresh cache the same way they were born — the sub's next
-// frame replaces them with the authoritative answer when it lands.
+let refreshQueries = (eids: Set<string>) => mem.refresh(eids)
 let resetQueries = () => {
   resetServerSets()
-  if (!store) return void mem.reset()
-  queueStore(async () => {
-    await clearIdb(storeDb!)
-    await seedIdb(storeDb!, paint.peek())
-    await store!.reset()
-  })
+  mem.reset()
 }
 
 // queryEids rides a genuine SERVER subscription (T-17126): the cache is
@@ -305,23 +336,33 @@ type ServerSet = {
 let queryUses = new Map<string, ServerSet>() // canonical preds key -> set
 let querySignals = new Map<string, Signal<string[]>>() // sub name -> its signal
 let qkey = (preds: Pred[]) => JSON.stringify(preds)
-let membersChanged = (a: Set<string>, b: Set<string>) =>
-  a.size != b.size || [...b].some((e) => !a.has(e))
 
-// Serialize exactly the pred shapes queryEids builds (has/eq/contains/refs) back
-// to a query line, then PROVE the round-trip: only a line that re-parses to the
-// same preds may open a sub, so an unhandled shape (a projection, a path deref,
-// a reverse hop) FALLS BACK to mem rather than putting a wrong query on the wire.
-// Values are already eids; findEid passes an eid through verbatim.
+// Programmatic queries must round-trip through the Tasks grammar. The browser
+// transports the result opaquely; FTS, semantic ranking and graph-wide walks
+// must never be re-evaluated against a partial working set.
+let quoteQuery = (value: string) =>
+  /[\s&"'\\]/.test(value) ? JSON.stringify(value) : value
 let predLine = (p: Pred): string | undefined => {
-  if (p.op == TEXT) {
-    let value = p.value.replaceAll('"', '')
-    return /\s/.test(value) ? `"${value}"` : value
+  let value = quoteQuery(p.value)
+  let op = p.op === ''
+    ? '='
+    : p.op === '~'
+    ? '~='
+    : p.op === '!'
+    ? '!='
+    : p.op === EXISTS
+    ? '!'
+    : ['<', '<=', '>', '>='].includes(p.op)
+    ? p.op
+    : undefined
+  if (p.op === TEXT) return value
+  if (p.refs) {
+    return p.op === EXISTS
+      ? '.refs!'
+      : p.op === ''
+      ? `.refs=${value}`
+      : undefined
   }
-  if (p.refs) return p.op == '' ? `.refs=${p.value}` : undefined
-  // A window is a bound, not a filter, and it spells itself: without this a
-  // `.limit=` query would fail the round-trip and fall back to a LOCAL scan of
-  // a partial cache — the exact under-report the server sub exists to prevent.
   if (p.win) {
     return p.win.limit != null
       ? `.limit=${p.win.limit}`
@@ -329,13 +370,8 @@ let predLine = (p: Pred): string | undefined => {
       ? `.after=${p.win.after}`
       : undefined
   }
-  // A PROJECTION serializes back to its own directive — `.fields=eid` for the
-  // eids-only form, else the columns with `~` back on the volatile ones. The
-  // round-trip proof below is what makes this safe: a projection that does not
-  // re-parse identically falls back to mem rather than opening a sub the server
-  // would answer with different columns.
   if (p.fields) {
-    return p.op != PROJECT
+    return p.op !== PROJECT
       ? undefined
       : p.fields.length
       ? `.fields=${
@@ -343,22 +379,50 @@ let predLine = (p: Pred): string | undefined => {
       }`
       : '.fields=eid'
   }
-  if (p.rev) return undefined
-  if (p.at) {
-    if (p.op != '' && p.op != '~') return undefined
-    let path = [p, ...p.at].map((h) => `${h.comp}.${h.prop}`).join('.')
-    return `.${path}${p.op}=${p.value}`
+  if (p.agg) {
+    return p.agg === 'count' ? '.count!' : `.${p.agg}=${p.comp}.${p.prop}`
   }
-  if (p.op == ORDER) return `.order=${p.value}`
-  // A shared-ref equality (`.client=X` — query.ts sharedRef routes comp '')
-  // is one read concept across every owning component; the grammar already
-  // speaks it, and the round-trip proof below still gates the wire.
-  if (!p.comp) return p.prop && p.op == '' ? `.${p.prop}=${p.value}` : undefined
-  if (p.op == EXISTS && p.prop == '') return `.${p.comp}!`
-  if (p.prop == '') return undefined
-  if (p.op == '') return `.${p.comp}.${p.prop}=${p.value}`
-  if (p.op == '~') return `.${p.comp}.${p.prop}~=${p.value}`
-  return undefined
+  if (p.reach) {
+    let r = p.reach
+    return `.${r.type}${
+      r.depth == null ? '' : `[<=${r.depth}]`
+    }${r.dir}${value}`
+  }
+  if (p.op === EDGES) {
+    // Each directive is a separate predicate; do not coalesce their identity.
+    if (p.edge) {
+      return `.edges[${p.edge.type}${
+        p.edge.via ? `,${p.edge.via.comp}.${p.edge.via.prop}` : ''
+      }]!`
+    }
+    if (p.limit != null) return `.edges.limit=${p.limit}`
+    return p.peers?.length
+      ? `.edges.peers=${p.peers.map((f) => `${f.comp}.${f.prop}`).join(',')}`
+      : '.edges!'
+  }
+  if (p.rev) {
+    let r = p.rev
+    let assoc = [...reverseAssocs].find(([, h]) =>
+      h.comp === r.comp && h.prop === r.prop
+    )?.[0]
+    if (!assoc) return undefined
+    if (r.count) return op ? `.${assoc}${op}${value}` : undefined
+    if (!r.preds.length) return `.${assoc}${r.not ? '=' : '!'}`
+    // A simple reverse path has one leaf. Compound/grouped predicates require
+    // their original source line rather than a guessed alternate spelling.
+    if (r.preds.length !== 1) return undefined
+    let inner = predLine(r.preds[0])
+    return inner?.startsWith('.')
+      ? `.${assoc}${r.not ? '!' : ''}${inner}`
+      : undefined
+  }
+  if (p.op === ORDER || p.op === NEAR) return `.${p.op}=${value}`
+  if (p.op === WANT) return `?${p.comp}`
+  if (!op) return undefined
+  let path = [p, ...p.at ?? []].map((h) =>
+    [h.comp, h.prop].filter(Boolean).join('.')
+  ).join('.')
+  return path ? `.${path}${op}${p.op === EXISTS ? '' : value}` : undefined
 }
 export let predsToQuery = (preds: Pred[]): string | undefined => {
   if (!preds.length) return undefined
@@ -375,7 +439,15 @@ export let predsToQuery = (preds: Pred[]): string | undefined => {
 
 // The server line for a query when the flag is on and the shape round-trips;
 // undefined routes the caller to the local resolver exactly as before.
-let serverLine = (preds: Pred[]): string | undefined => predsToQuery(preds)
+let serverLine = (preds: Pred[]): string | undefined => {
+  let line = predsToQuery(preds)
+  if (!line && config.host) {
+    throw new Error(
+      'This query requires its original server source; a partial cache cannot answer it',
+    )
+  }
+  return line
+}
 
 // A LOCAL write must paint through a server-backed set immediately: between
 // applyLocal and the sub's echo (or with the socket down — a test, an offline
@@ -386,12 +458,12 @@ let serverLine = (preds: Pred[]): string | undefined => predsToQuery(preds)
 // fresh cache (mem.resolve — the same priming a new set gets) and awaits the
 // server's re-confirmation, the same as a newborn set.
 let resetServerSets = () => {
-  for (let [sub, q] of subQueries) primeSub(sub, q)
   for (let s of queryUses.values()) {
     s.live = false
-    if (!textual(s.preds)) s.ids.value = mem.resolve(s.preds)
+    s.ids.value = config.host
+      ? replica?.members(s.sub) ?? []
+      : mem.resolve(s.preds)
     seedWake(s, s.ids.peek())
-    subPrimes.set(s.sub, new Set(s.ids.peek()))
   }
 }
 
@@ -410,13 +482,18 @@ let seedWake = (s: ServerSet, ids: Iterable<string>) => {
 
 let refreshServerSets = (eids: Set<string>) => {
   if (!queryUses.size) return
-  let read = (t: string) => paint.peek()[t]
   for (let s of queryUses.values()) {
     // A path's far rows need not be in this cache. Re-screening a server hit
     // locally would drop it merely because its requested task is unloaded.
     // Ranked/windowed sets likewise belong to the server, not a local scan.
-    let serverOwned = textual(s.preds) ||
-      s.preds.some((p) => p.at || p.rev || p.win || p.op == ORDER)
+    if (!config.host && !s.live) {
+      let next = mem.resolve(s.preds)
+      let before = s.ids.peek()
+      if (
+        next.length !== before.length || next.some((e, i) => e !== before[i])
+      ) s.ids.value = next
+      continue
+    }
     let ids = s.ids.peek()
     let next = ids
     // A waking projected field of a STANDING member moved. Membership is
@@ -426,12 +503,10 @@ let refreshServerSets = (eids: Set<string>) => {
     // and wakes nothing.
     let moved = false
     for (let eid of eids) {
-      let r = read(eid)
       let had = next.includes(eid)
       // FTS5 membership belongs to SQLite. A local write may refresh projected
       // values, but only the subscription frame may add or remove a text hit.
-      let wants = serverOwned ? had : !!r && selected(r, s.preds) &&
-        matchQuery(r, s.preds, read, undefined, kidsVia(read))
+      let wants = had
       if (had != wants) {
         next = wants ? [...next, eid] : next.filter((x) => x != eid)
         if (s.wake.length) {
@@ -463,7 +538,6 @@ let refreshServerSets = (eids: Set<string>) => {
 // it down, and an imperative read meanwhile reuses the held set.
 let serverSet = (preds: Pred[], line: string): ServerSet => {
   let key = qkey(preds)
-  let bounded = textual(preds) || preds.some((p) => p.win || p.op == ORDER)
   let found = queryUses.get(key)
   if (!found) {
     // `q:<canonical preds>` — the projection is IN the key, so the same filter
@@ -471,7 +545,7 @@ let serverSet = (preds: Pred[], line: string): ServerSet => {
     let sub = `q:${key}`
     found = {
       n: 0,
-      ids: signal(bounded ? [] : mem.resolve(preds)),
+      ids: signal<string[]>(config.host ? [] : mem.resolve(preds)),
       sub,
       preds,
       line,
@@ -483,14 +557,8 @@ let serverSet = (preds: Pred[], line: string): ServerSet => {
     querySignals.set(sub, found.ids)
     seedWake(found, found.ids.peek())
     ownBoard(sub, line)
-  } else if (!found.live && !bounded) {
-    // Unconfirmed by the server: the prime may predate cache churn a local
-    // maintenance pass didn't see (a wholesale replacement) — re-prime.
-    let ids = mem.resolve(preds)
-    let held = found.ids.peek()
-    if (ids.length != held.length || ids.some((e, i) => e != held[i])) {
-      found.ids.value = ids
-      seedWake(found, ids)
+    if (config.host || replica.ready(sub) || replica.members(sub).length) {
+      found.ids.value = replica.members(sub)
     }
   }
   return found
@@ -498,21 +566,25 @@ let serverSet = (preds: Pred[], line: string): ServerSet => {
 
 // Read a query's result signal (get-or-create; the render half of the hook).
 export let queryEids = (preds: Pred[], source?: string): Signal<string[]> => {
+  if (!config.host && !source) {
+    let held = queryUses.get(qkey(preds))
+    return held?.n ? held.ids : mem.subscribe(preds)
+  }
   let line = source?.trim() || serverLine(preds)
-  return line ? serverSet(preds, line).ids : (store ?? mem).subscribe(preds)
+  return line ? serverSet(preds, line).ids : mem.subscribe(preds)
 }
 // Ref-count a query for a component's lifetime (the hook's effect half); the
 // last release drops the set so distinct queries don't accumulate.
 export let holdQuery = (preds: Pred[], source?: string): Signal<string[]> => {
   let line = source?.trim() || serverLine(preds)
-  if (!line) return (store ?? mem).hold(preds)
+  if (!line) return mem.hold(preds)
   let s = serverSet(preds, line)
   s.n++
   return s.ids
 }
 export let dropQuery = (preds: Pred[]) => {
   let s = queryUses.get(qkey(preds))
-  if (!s) return void (store ?? mem).drop(preds)
+  if (!s) return void mem.drop(preds)
   if (--s.n > 0) return
   queryUses.delete(qkey(preds))
   querySignals.delete(s.sub)
@@ -572,36 +644,6 @@ let refsTo = (value: string): Pred => ({
   value,
   refs: true,
 })
-
-// Open and populate the durable query store, then make it the query surface.
-// Awaited inside boot BEFORE the first render, so queryEids never sees a
-// half-open store and the first paint has the store's answers (primed from the
-// cache). A distinct db name from idb.ts's 'tasks' — that store is the boot
-// hydration shadow, this one the query index; two shapes, two databases. Any
-// failure leaves `store` null and `mem` in charge — the graceful degrade idb.ts
-// already models. Only a socket-owning tab (solo/leader) attaches; a follower
-// keeps `mem` so two tabs never contend to write one origin-shared store (the
-// multi-writer store is future work, like idb.ts's leader-only write path).
-let attachStore = async () => {
-  if (store || !config.store) return
-  if (!(globalThis as { indexedDB?: IDBFactory }).indexedDB) return
-  try {
-    let db = await openIdb('tasks-graph')
-    storeDb = db
-    // Seed the whole graph in the BACKGROUND — boot never blocks on it, and
-    // mem.resolve (the prime, reading the full in-memory cache) answers every
-    // query instantly meanwhile. The store's own reads wait on this gate, so a
-    // half-seeded store never overwrites a primed answer with a short one. On
-    // storeWork so a live frame's mirror lands after the seed, not inside it.
-    let gate = queueStore(async () => {
-      await clearIdb(db)
-      await seedIdb(db, paint.peek())
-    })
-    store = idbResolver(db, undefined, (preds) => mem.resolve(preds), gate)
-  } catch (e) {
-    console.warn('durable query store unavailable —', e)
-  }
-}
 
 let indexId = (eid: string, r?: Comps) => {
   if (!r) return
@@ -961,7 +1003,20 @@ let mark = (path: string) => ((globalThis as { __boot?: string }).__boot = path)
 // it touched (an entity death touches the eid AND every edge it swept) so the
 // persist tail — and boot's explicit delta write — mirror exactly those keys
 // into IDB, no diff of the whole cache.
-export let applyLocal = (changes: Change[], complete?: Set<string>) => {
+export let applyLocal = (changes: Change[]) => {
+  ensureClient()
+  let edges = moves(changes, (e) => depOf(cache.peek()[e])).map((m) => m.dep)
+  for (let c of changes) {
+    if (c.name === 'entity' && c.comp === null) {
+      edges.push(
+        ...deps.peek().filter((d) => d.parent === c.eid || d.child === c.eid),
+      )
+    }
+  }
+  batch(() => replica.patch(changes))
+  return { eids: [...new Set(changes.map((c) => c.eid))], edges }
+}
+let publishLocal = (changes: Change[], complete?: Set<string>) => {
   syncIds()
   syncIx()
   let graph = paint.peek()
@@ -998,13 +1053,6 @@ export let applyLocal = (changes: Change[], complete?: Set<string>) => {
   // stream lets go.
   let said = moves(changes, (e) => depOf(graph[e]))
   for (let { eid, name, comp } of changes) {
-    if (!next[eid] && retained.rows.has(eid)) {
-      next[eid] = retained.rows.get(eid)!
-      retained.rows.delete(eid)
-      changed = true
-      // Re-confirming an identical retained row changes ownership only. The
-      // loop below publishes actual component changes, not the promotion.
-    }
     if (name == 'entity' && comp == null) {
       let before = next[eid]
       let lived = !!before
@@ -1047,7 +1095,7 @@ export let applyLocal = (changes: Change[], complete?: Set<string>) => {
     let prior = before?.[name] as Record<string, unknown> | undefined
     // Full confirmations replace retained component values, not just their
     // present columns: a column removed while unheld must not survive a merge.
-    let after = complete?.has(eid) ? { ...comp } : { ...prior, ...comp }
+    let after = complete?.has(eid) ? comp : { ...prior, ...comp }
     if (prior && sameProps(prior, after)) continue
     next[eid] = { ...before, [name]: after } as Comps
     if (!before) changedCensus = true
@@ -1060,7 +1108,6 @@ export let applyLocal = (changes: Change[], complete?: Set<string>) => {
   }
   if (changed && !quiet) {
     batch(() => {
-      retentionVersion.value = retentionVersion.peek() + 1
       setCache(next)
     })
     // During a wholesale (re)seed the resetSignals() that follows in seedFrom
@@ -1188,6 +1235,7 @@ export let pending = (e: Ent) => {
 // applyLocal showed success while the frame died on a closing socket, and
 // nothing ever retried or complained). An entry leaves only on `{ack}` (or a
 // rejection frame, which surfaces and heals) — never on a send ATTEMPT.
+let pendingPins = new Map<string, () => void>()
 let outbox = new Map<string, { changes: Change[]; at: number }>()
 export let unsent = () => [...outbox.keys()]
 
@@ -1371,12 +1419,16 @@ let deliver = (changes: Change[]) => {
   let id = crypto.randomUUID()
   let o = { changes, at: Date.now() }
   outbox.set(id, o)
+  ensureClient()
+  pendingPins.set(id, replica.box.cache.protect(changes.map((c) => c.eid)))
   outboxStore.park(id, o) // durable: outlive a crash/reload before the ack
   syncOutbox() // the standing indicator now shows this write as unsent
   armRedeliver()
   route({ apply: changes, id }, id)
 }
 export let acked = (id: string) => {
+  pendingPins.get(id)?.()
+  pendingPins.delete(id)
   outbox.delete(id)
   waits.delete(id) // the backoff leaves with its write
   outboxStore.unpark(id) // the durable copy leaves with the in-memory one
@@ -1399,6 +1451,8 @@ export let replayOutbox = async () => {
   for (let [id, o] of await outboxStore.parked()) {
     if (outbox.has(id)) continue
     outbox.set(id, o)
+    ensureClient()
+    pendingPins.set(id, replica.box.cache.protect(o.changes.map((c) => c.eid)))
     woke = true
   }
   if (woke) {
@@ -1424,8 +1478,7 @@ let drain = async (): Promise<boolean> => {
         body: JSON.stringify(o.changes),
       })
       if (!res.ok) refuse(id, await res.text(), o.changes) // durable: the reload
-      outbox.delete(id) //                     this drain precedes would wipe it
-      waits.delete(id)
+      acked(id)
     } catch {
       return false
     }
@@ -1652,6 +1705,8 @@ let connect = () => {
     if (ws != socket) return
     ws = null
     clearObservations()
+    replica?.invalidate()
+    owner?.fan({ disconnected: true })
     owner?.fan({ observe: null })
     if (polling) return
     polling = true
@@ -1698,8 +1753,9 @@ let wire = (frame: unknown) => {
 
 // An acked delivery threads its id through so a retry REPLACES its queued
 // transport entry instead of piling up a duplicate per tick.
-let route: (frame: unknown, id?: string) => void = (frame, id) =>
+let defaultRoute = (frame: unknown, id?: string) =>
   owner ? owner.route(frame, id) : wire(frame)
+let route = defaultRoute
 // The transport seam (mirrors useOutboxStore): a test counts redelivery sends
 // without a socket. Returns the prior route so the test can restore it.
 export let useRoute = (fn: typeof route): typeof route => {
@@ -1717,28 +1773,15 @@ export let send = (...changes: unknown[]) => deliver(changes as Change[])
 // server-side removal instead drops it. A legacy client never subscribes, so
 // this map stays empty and nothing is ever evicted. A shadow sub tracks the set
 // without eviction while the complete stream remains the cache owner.
-let subMembers = new Map<string, Set<string>>()
-let subPrimes = new Map<string, Set<string>>()
 let subQueries = new Map<string, string>()
-let primeSub = (sub: string, q: string) => {
+let shadowSubs = new Set<string>()
+let primeSub = (sub: string, q: string, silent = false) => {
+  ensureClient()
   subQueries.set(sub, q)
-  try {
-    // Addressed sub queries have a transport-level id= prefix; in ordinary
-    // query grammar bare `id` means session.id, not the entity's identity.
-    let addressed = q.match(/^id=([^&\s]+)/)?.[1]
-    if (addressed) {
-      let eid = findEid(addressed)
-      subPrimes.set(sub, new Set(eid ? [eid] : []))
-      return
-    }
-    subPrimes.set(
-      sub,
-      new Set(mem.resolve(resolveRefs(parseQuery(q), findEid))),
-    )
-  } catch { /* the server owns query failures */ }
+  replica.open(sub, q, silent)
+  primeMetadata(sub)
 }
 let subVersion = signal(0)
-let shadows = new Set<string>()
 
 // What each sub's frames SAID about its bounds. A window is the server telling
 // a view "you hold the newest `limit` of `total`", so a face can say what it is
@@ -1786,27 +1829,14 @@ let subFields = new Map<string, Field[]>()
 // other way is the masquerade this exists to prevent.
 export let loaded = (eid: string, comp: string, prop: string): boolean => {
   subVersion.value
-  if (!row(eid).value) return false
-  let projectedOnly = false
-  let member = false
-  for (let [sub, members] of subMembers) {
-    if (!members.has(eid)) continue
-    member = true
-    let fields = subFields.get(sub)
-    if (!fields) return true
-    if (fields.some((f) => f.comp == comp && f.prop == prop)) return true
-    projectedOnly = true
+  row(eid).value
+  if (replica.box.cache.loaded(eid, comp, prop)) return true
+  // The location-less whole-graph host has no remote readiness contract. A
+  // projected subscription still must not promote its omissions to known.
+  if (!config.host && cached(eid)) {
+    return ![...subFields].some(([sub]) => replica.members(sub).includes(eid))
   }
-  if (member) return !projectedOnly
-  // A row held only as an edge PEER (T-22371) is projected too — it carries
-  // whatever `.edges.peers=` named and nothing else — but the rider states its
-  // columns by DELIVERING them rather than by naming a contract, so presence is
-  // the honest test: a column the peer payload did not carry is unloaded, and a
-  // render that needs it subscribes the row whole.
-  for (let peers of subPeers.values()) {
-    if (peers.has(eid)) return paint.peek()[eid]?.[comp]?.[prop] !== undefined
-  }
-  return true
+  return false
 }
 
 // Edges are HELD the way rows are (T-22371). `subEdges` is which triples each
@@ -1818,7 +1848,6 @@ export let loaded = (eid: string, comp: string, prop: string): boolean => {
 // boot because an edge had no scoped delivery, so nothing could be released.
 let edgeHolders = new Map<string, { dep: Dep; subs: Set<string> }>()
 let subEdges = new Map<string, Set<string>>()
-let subPeers = new Map<string, Set<string>>()
 let edgeKey = (d: Dep) => `${d.parent}\0${d.type}\0${d.child}`
 
 // Two holders that are not subscriptions. LIVE_EDGES is the complete broadcast
@@ -1934,7 +1963,60 @@ let settleEdges = (gained: Dep[], lost: Dep[]) => {
 // only). Either way it leaves the sub's set, and an eid now in no set is
 // evicted from the cache. A control reply replaces the prior set wholesale;
 // maintenance frames patch it.
-export let landSub = (f: Sub) => {
+let implicitQuery = (sub: string) => {
+  if (sub.startsWith('entries:')) return `.entry.session=${sub.slice(8)}`
+  if (sub.startsWith('route:')) {
+    return routeLine(...sub.slice(6).split(':') as [string, string?])
+  }
+  if (sub.startsWith('q:')) {
+    try {
+      return predsToQuery(JSON.parse(sub.slice(2))) ?? `remote:${sub}`
+    } catch { /* addressed host fixture */ }
+  }
+  return `remote:${sub}`
+}
+export let landSub = (f: Sub) =>
+  batch(() => {
+    ensureClient()
+    // Boot/topology can deliver subscriptions installed by another tab. Attach
+    // without echoing a subscribe back into topology's ownership calculation.
+    if (!replica.has(f.sub)) {
+      let q = owner?.query(f.sub) ?? subQueries.get(f.sub)
+      // An in-flight frame after final release must not create a new owner.
+      // Host fixtures may inject frames; browser frames need topology intent.
+      if (!q && config.host) return { eids: [], edges: [] }
+      replica.open(f.sub, q ?? implicitQuery(f.sub), true)
+    }
+    replica.receive(f)
+    let touched = { eids: [] as string[], edges: [] as Dep[] }
+    for (let sub of replica.aliases(f.sub)) {
+      touched = landSubFrame({ ...f, sub })
+    }
+    return touched
+  })
+// A newly mounted alias shares the answered metadata too. This is result
+// metadata, not a payload mirror; rows and membership remain package-owned.
+let primeMetadata = (sub: string) => {
+  let source = replica.aliases(sub).find((s) => s !== sub)
+  if (!source) return
+  if (subWindows.has(source)) subWindows.set(sub, subWindows.get(source)!)
+  if (subFields.has(source)) subFields.set(sub, subFields.get(source)!)
+  if (subFailures.has(source)) subFailures.set(sub, subFailures.get(source)!)
+  let agg = aggSets.get(sub), prior = aggSets.get(source)
+  if (agg && prior) {
+    agg.map.value = prior.map.peek()
+    agg.live.value = replica.ready(sub)
+  }
+  let result = resultSignals.get(sub), previous = resultSignals.get(source)
+  if (result && previous) result.value = previous.peek()
+  let edges = [...subEdges.get(source) ?? []].flatMap((k) => {
+    let dep = edgeHolders.get(k)?.dep
+    return dep ? [dep] : []
+  })
+  let rode = holdEdges(sub, edges, [])
+  settleEdges(rode.gained, rode.lost)
+}
+let landSubFrame = (f: Sub) => {
   if (f.error) {
     let one = oneShots.get(f.sub)
     if (one) {
@@ -2008,97 +2090,14 @@ export let landSub = (f: Sub) => {
   if (f.replace) {
     f.fields ? subFields.set(f.sub, f.fields) : subFields.delete(f.sub)
   }
-  // The rider's rows land like any others, but they are held by PEERSHIP, not
-  // membership: a peer is in the cache because an edge points at it, so it never
-  // joins `subMembers` (a useQuery result would wrongly gain it) and instead
-  // rides its own held set, consulted by evict().
-  let peered = f.peers?.length ? applyLocal(f.peers) : undefined
-  let graphChanges = f.changes.filter((c) => !(c.name in resultComps))
-  let complete = new Set<string>()
-  if (f.replace && !f.fields) {
-    if (!bodied(f.sub)) {
-      graphChanges = graphChanges.map((c) => {
-        let old = retained.rows.get(c.eid)?.[c.name]
-        if (!old || !c.comp) return c
-        // Ordinary query frames deliberately omit bodies. Their omission is
-        // UNLOADED, not a deletion; only a bodied door can reconfirm them.
-        let bodies = Object.fromEntries(
-          bodyCols(c.name).filter((p) => p in old).map((p) => [p, old[p]]),
-        )
-        return { ...c, comp: { ...bodies, ...c.comp } }
-      })
-    }
-    let names = new Map<string, Set<string>>()
-    for (let c of graphChanges) {
-      let set = names.get(c.eid) ?? new Set<string>()
-      set.add(c.name)
-      names.set(c.eid, set)
-    }
-    for (let [eid, delivered] of names) {
-      let old = retained.rows.get(eid)
-      if (!old) continue
-      complete.add(eid)
-      // A full confirmation must not resurrect a removed component. Land its
-      // removals and its current values together, never blank-then-repopulate.
-      for (let name of Object.keys(old)) {
-        if (!delivered.has(name)) graphChanges.push({ eid, name, comp: null })
-      }
-    }
-  }
-  let touched = applyLocal(graphChanges, complete)
-  settleObservations(graphChanges)
-  // The server marks shadow-ness on every frame it sends, so believe the
-  // frame: the local `shadows` set only knows what THIS client asked for,
-  // and the two must not be able to disagree about who owns the cache.
-  if (f.shadow) shadows.add(f.sub)
-  let confirmed = subMembers.get(f.sub)
-  let old = confirmed ?? subPrimes.get(f.sub) ?? new Set<string>()
-  subPrimes.delete(f.sub)
-  // A queryEids sub (T-17126) republishes its per-sub signal on MEMBERSHIP change
-  // only — a standing-match content frame leaves the set alone, and the member's
-  // own row signal already carries that edit, so the list stays asleep for it.
-  let had = querySignals.has(f.sub) ? new Set(old) : null
-  // The server has spoken for this query — its set is authoritative from here.
-  let set = had
-    ? [...queryUses.values()].find((s) => s.sub == f.sub)
-    : undefined
-  if (set) set.live = true
-  let mine = f.replace ? new Set<string>() : old
-  subMembers.set(f.sub, mine)
-  // A provisional local match is not proof of membership in a bounded server
-  // page. Its omission says only "outside this page", not "no longer exists".
-  // Still reconcile previously confirmed members and unbounded provisional
-  // answers, whose replacement really does establish absence from the set.
-  let leaving: string[] = f.replace
-    ? f.window && !confirmed ? [] : [...old]
-    : [...(f.drop ?? [])]
-  for (let c of f.changes) {
-    if (c.name == 'entity' && c.comp == null) {
-      mine.delete(c.eid)
-      leaving.push(c.eid)
-    } else mine.add(c.eid)
-  }
-  for (let eid of f.drop ?? []) mine.delete(eid)
-  if (f.replace) leaving = leaving.filter((eid) => !mine.has(eid))
-  // The edges this sub holds, before eviction asks who holds what: a replace
-  // starts from nothing, a delta adds and cuts. A frame carrying no rider at all
-  // leaves the tables untouched — most subs never ask for edges.
+  settleObservations(f.changes)
   let dropped = f.replace ? freeEdges(f.sub) : []
   let rode = holdEdges(f.sub, f.edges ?? [], f.unedges ?? [])
-  let was = subPeers.get(f.sub) ?? new Set<string>()
-  let peers = f.replace ? new Set<string>() : new Set(was)
-  for (let c of f.peers ?? []) peers.add(c.eid)
-  for (let e of f.unpeers ?? []) peers.delete(e)
-  subPeers.set(f.sub, peers)
-  let orphans = [...was].filter((e) => !peers.has(e))
   settleEdges(rode.gained, [...dropped, ...rode.lost])
-  if (!f.shadow && !shadows.has(f.sub)) evict([...leaving, ...orphans])
-  // The server's answer replaces the set, so a projected sub's waking-value
-  // signatures are reseeded from it — otherwise the first later patch reads
-  // them against the pre-answer prime and reports a move nobody made.
-  if (set?.wake.length && f.replace) seedWake(set, mine)
-  if (had && membersChanged(had, mine)) {
-    querySignals.get(f.sub)!.value = [...mine]
+  let set = [...queryUses.values()].find((s) => s.sub === f.sub)
+  if (set) {
+    set.live = replica.ready(f.sub)
+    seedWake(set, replica.members(f.sub))
   }
   subVersion.value = subVersion.peek() + 1
   if (f.replace) {
@@ -2106,8 +2105,6 @@ export let landSub = (f: Sub) => {
     if (one) {
       oneShots.delete(f.sub)
       clearTimeout(one.timer)
-      // Let this frame finish publishing before the unsubscribe can evict a
-      // row held only by the transient projection.
       queueMicrotask(() => {
         one.done()
         unsubscribe(f.sub)
@@ -2115,65 +2112,9 @@ export let landSub = (f: Sub) => {
     }
   }
   return {
-    eids: [
-      ...new Set([
-        ...touched.eids,
-        ...(peered?.eids ?? []),
-        ...leaving,
-        ...orphans,
-        ...(f.drop ?? []),
-      ]),
-    ],
-    edges: [...touched.edges, ...rode.gained, ...rode.lost],
+    eids: [...new Set([...f.changes, ...f.peers ?? []].map((c) => c.eid))],
+    edges: [...rode.gained, ...rode.lost],
   }
-}
-
-// Drop from the cache any eid held by no remaining subscription — a death
-// already removed itself via applyLocal (harmless to revisit), a drop is the
-// live "you no longer see this" that only this layer expresses.
-let evict = (eids: string[], keep = false) => {
-  syncIds()
-  syncIx()
-  let graph = paint.peek()
-  let held = (eid: string) =>
-    [...subMembers.values()].some((s) => s.has(eid)) ||
-    [...subPeers.values()].some((s) => s.has(eid))
-  let next = { ...cache.peek() }
-  let touched = new Set<string>()
-  for (let eid of eids) {
-    if (held(eid)) continue
-    let r = next[eid] ?? retained.rows.get(eid)
-    if (!r) continue
-    if (keep) {
-      for (let gone of retained.put(eid, r)) touched.add(gone)
-    } else retained.rows.delete(eid)
-    delete next[eid]
-    asked.delete(eid)
-    touched.add(eid)
-  }
-  if (!touched.size) return
-  batch(() => {
-    retentionVersion.value = retentionVersion.peek() + 1
-    setCache(next)
-    let all = paint.peek()
-    // Ownership-only moves leave the read view unchanged. In particular, do
-    // not feed these rows back into bounded server query sets as local edits,
-    // or wake every census reader when a card merely unmounts.
-    touched = new Set([...touched].filter((eid) => graph[eid] !== all[eid]))
-    for (let eid of touched) {
-      unindexId(eid, graph[eid])
-      indexId(eid, all[eid])
-      reindex(ix, eid, graph[eid], all[eid])
-      if (!all[eid]) pinZs.delete(eid)
-    }
-    idGraph = ixGraph = all
-    if (!touched.size) return
-    census.value = Object.keys(all)
-    if ([...touched].some((e) => graph[e]?.canvas)) canvasVersion.value++
-    publish(touched, new Set(), new Set())
-    refreshQueries(touched)
-    refreshServerSets(touched)
-  })
 }
 
 // A control frame is an OBJECT (design §1), distinct from the array batches
@@ -2183,7 +2124,6 @@ let control = (frame: object) => {
 }
 export let subscribe = (sub: string, q: string) => {
   primeSub(sub, q)
-  control({ sub, q })
 }
 
 // A transient projection still uses the subscription protocol: one initial
@@ -2212,29 +2152,11 @@ let oneShot = (
   oneShots.set(sub, { done, fail, timer })
   subscribe(sub, q)
 }
-let shadow = (sub: string, q: string) => {
-  shadows.add(sub)
-  control({ sub, q, shadow: true })
-}
-// Closing a subscription hands its members back. Both orderings matter and
-// they pull opposite ways: the departing set must be read BEFORE the
-// subscription goes (deleting it first loses the list), and evict() must run
-// AFTER, because it asks the REMAINING subscriptions whether anyone still
-// holds each eid — an eid two boards share survives the first close and
-// leaves on the second. A shadow sub never owned the cache (the complete
-// stream did), so it takes nothing with it.
 let forget = (sub: string) => {
-  let leaving = shadows.has(sub) ? [] : [...(subMembers.get(sub) ?? [])]
-  // Edges and peers go back regardless of shadow-ness: a shadow sub never owned
-  // the cache, but its RIDER is the only door its edges came through, so nothing
-  // else is keeping them and they leave with it.
+  replica?.close(sub)
   let lost = freeEdges(sub)
-  let peers = [...(subPeers.get(sub) ?? [])]
-  subPeers.delete(sub)
-  shadows.delete(sub)
-  subMembers.delete(sub)
-  subPrimes.delete(sub)
   subQueries.delete(sub)
+  shadowSubs.delete(sub)
   subWindows.delete(sub)
   if (sub.startsWith('route:')) routeWindows.delete(sub.slice('route:'.length))
   subFields.delete(sub)
@@ -2243,20 +2165,12 @@ let forget = (sub: string) => {
     clearObservations(sub.slice('entries:'.length))
   }
   settleEdges([], lost)
-  if (leaving.length || peers.length) evict([...leaving, ...peers], true)
   subVersion.value = subVersion.peek() + 1
 }
-export let unsubscribe = (sub: string) => {
-  forget(sub)
-  control({ unsub: sub })
-}
-
-// The subscription result is separate from the cache: undefined means the
-// initial frame has not landed; an empty Set is a ready, empty result.
+export let unsubscribe = (sub: string) => forget(sub)
 export let subEids = (sub: string): Set<string> | undefined => {
   subVersion.value
-  let found = subMembers.get(sub)
-  return found && new Set(found)
+  return replica?.ready(sub) ? new Set(replica.members(sub)) : undefined
 }
 
 type Agreement = {
@@ -2334,10 +2248,10 @@ let resultSignals = new Map<
 let boardEntrySubs = new Map<string, Map<string, () => void>>()
 
 let ownBoard = (sub: string, q: string) => {
-  primeSub(sub, q)
-  return owner ? owner.use(sub, q) : shadow(sub, q)
+  if (!config.host && !owner) shadowSubs.add(sub)
+  primeSub(sub, q, !config.host && !owner && route === defaultRoute)
 }
-let dropBoard = (sub: string) => owner ? owner.drop(sub) : unsubscribe(sub)
+let dropBoard = (sub: string) => unsubscribe(sub)
 
 // Hold one addressed edge-rider query for a component's lifetime. The rider is
 // query grammar, not a feature channel: callers may select any stored edge type
@@ -2454,7 +2368,7 @@ export let subscriptionState = (sub: string): SubscriptionState => {
   subVersion.value
   let failed = subFailures.get(sub)
   if (failed) return { status: 'failed', ...failed }
-  let eids = subMembers.get(sub)
+  let eids = subEids(sub)
   return eids ? { status: 'ready', eids: new Set(eids) } : { status: 'loading' }
 }
 
@@ -2483,7 +2397,8 @@ export let retrySubscription = (sub: string) => {
       ? routeLine(...sub.slice(6).split(':') as [string, string?])
       : undefined)
   if (!q) return false
-  subscribe(sub, q)
+  if (replica?.has(sub)) replica.retry(sub)
+  else subscribe(sub, q)
   return true
 }
 
@@ -2586,30 +2501,26 @@ export let boardQuery = (e: Ent) => {
 // Reset the working set and validate the retention epoch. Same-epoch reconnects
 // keep a bounded paint floor; a changed epoch invalidates every old row. The
 // disk checkpoint replaces rows and epoch in one transaction, never the outbox.
-export let seedFrom = (snap: Snapshot, write = true) => {
-  if (!snap.epoch || snap.epoch != retainedEpoch) retained.rows.clear()
-  else {
-    for (let [eid, r] of Object.entries(cache.peek())) retained.put(eid, r)
-  }
-  retainedEpoch = snap.epoch
-  retentionVersion.value = retentionVersion.peek() + 1
-  subMembers.clear()
-  subPrimes.clear()
+export let seedFrom = async (snap: Snapshot, write = true) => {
+  ensureClient()
+  if (snap.epoch) await replica.box.setEpoch(snap.epoch)
+  else replica.box.wire?.refresh()
   clearObservations()
   pinZs.clear()
-  setCache({})
   // A seed replaces the ROWS; the edge table is rebuilt by the subs that hold
   // it, which re-subscribe over the same reconnect. A working-set boot now
   // carries `deps: []` — it used to carry 4,909 of them, 81% of the frame on the
   // live graph (T-22371) — and a
   // legacy whole-graph snapshot still seeds its own, unheld, exactly as before.
   deps.value = snap.deps
-  subPeers.clear()
   syncHolders()
   // A wholesale replacement: skip the per-change durable mirror below and let
   // resetSignals → resetQueries seed the store in one bulk pass instead.
   seeding = true
-  applyLocal(snap.changes)
+  if (config.host) {
+    replica.open('boot', '@boot', true)
+    replica.receive({ sub: 'boot', replace: true, changes: snap.changes })
+  } else applyLocal(snap.changes)
   resetSignals()
   seeding = false
   held = {
@@ -2618,27 +2529,12 @@ export let seedFrom = (snap: Snapshot, write = true) => {
     vocabHash: snap.vocabHash,
     capabilities: snap.capabilities,
   }
-  if (write) {
-    return idb.retain(Object.keys(paint.peek()), paint.peek(), {
-      cursor: snap.cursor ?? 0,
-      epoch: snap.epoch ?? '',
-      vocabHash: snap.vocabHash ?? '',
-      capabilities: snap.capabilities ?? [],
-    }, true)
-  }
-  return Promise.resolve(false)
+  void write
+  await replica.box.cache.idle()
+  return false
 }
-
-let persist = (
-  touched: { eids: string[]; edges: Dep[] },
-  cursor: number,
-) =>
-  idb.retain(touched.eids, paint.peek(), {
-    epoch: held.epoch ?? '',
-    vocabHash: held.vocabHash ?? '',
-    cursor,
-    capabilities: held.capabilities ?? [],
-  })
+let persist = (_touched: { eids: string[]; edges: Dep[] }, _cursor: number) =>
+  replica.box.cache.idle()
 
 type Land = 'leader' | 'follower' | 'solo'
 
@@ -2654,6 +2550,10 @@ let land = async (data: unknown, mode: Land) => {
     else if ('hmr' in data) {
       config.swap ? config.swap(data.hmr) : config.reload()
     } else config.css?.(data.css)
+    return
+  }
+  if (data && typeof data == 'object' && 'disconnected' in data) {
+    replica?.invalidate()
     return
   }
   if (data && typeof data == 'object' && 'ack' in data) {
@@ -2728,20 +2628,15 @@ let land = async (data: unknown, mode: Land) => {
 // Hydrated rows are a bounded, provisional read floor, NOT a resumable
 // journal replica. Always request the working-set reset; it validates epoch
 // before any subscription confirms these rows. Never adopt the disk cursor.
-let retainedEpoch: string | undefined
-export let restore = (ents: Record<string, Comps>, meta: idb.Meta) => {
-  paint.peek()
-  retained.rows.clear()
-  retainedEpoch = meta.epoch
-  if (meta.epoch) {
-    for (let [eid, r] of Object.entries(ents)) retained.put(eid, r)
-  }
-  retentionVersion.value = retentionVersion.peek() + 1
+export let restore = (_ents: Record<string, Comps>, _meta: idb.Meta) => {
+  // Legacy disk rows are no longer trusted or mirrored. The package restores
+  // only after seedFrom receives the authoritative server epoch.
+  ensureClient()
   resetSignals()
 }
 let local = async () => {
-  let saved = await idb.hydrate(RETENTION_ROWS)
-  restore(saved.ents, saved.meta)
+  ensureClient()
+  await replica.box.ready
   mark('working-set')
 }
 
@@ -2800,13 +2695,14 @@ export let boot = async () => {
     if (!owner?.isLeader()) return
     let s = ws
     ws = null
+    replica?.invalidate()
+    owner.fan({ disconnected: true })
     s?.close()
     owner.cede()
   })
   doc?.addEventListener?.('resume', () => owner?.seek())
   if (!canShare()) {
     await once()
-    await attachStore()
     connect()
     return
   }
@@ -2825,13 +2721,11 @@ export let boot = async () => {
     {
       lead: async () => {
         await once()
-        await attachStore()
         connect()
       },
       follow: () => once(),
       solo: async () => {
         await once()
-        await attachStore()
         connect()
       },
       receive: (frame) => {
@@ -2884,6 +2778,7 @@ let probe = globalThis as {
     held: (line: string) => number
     served: (line: string) => boolean
     subN: () => number
+    transportN: () => number
     subShapes: () => Record<string, number>
     subMembersOf: (line: string) => number
     cacheN: () => number
@@ -2892,12 +2787,16 @@ let probe = globalThis as {
   }
 }
 probe.__probe = {
-  store: () => !!store,
-  resolve: async (line) => {
+  store: () => false,
+  resolve: (line) => {
     let preds = resolveRefs(parseQuery(line), findEid)
     let t0 = performance.now()
-    let ids = store ? await store.ready(preds) : mem.resolve(preds)
-    return { store: !!store, ms: performance.now() - t0, n: ids.length }
+    let ids = mem.resolve(preds)
+    return Promise.resolve({
+      store: false,
+      ms: performance.now() - t0,
+      n: ids.length,
+    })
   },
   hold: (line) => {
     let preds = resolveRefs(parseQuery(line), findEid)
@@ -2910,6 +2809,7 @@ probe.__probe = {
   // many are open across the tab.
   served: (line) => queryUses.has(qkey(resolveRefs(parseQuery(line), findEid))),
   subN: () => queryUses.size,
+  transportN: () => replica?.active() ?? 0,
   // A histogram of open query subs by SHAPE (`comp.prop op`) — to see what a
   // page actually subscribes and prove the flip's sub count is bounded.
   subShapes: () => {
@@ -2932,7 +2832,7 @@ probe.__probe = {
   // How many rows the partial cache holds — the T-21491 bound: working-set
   // floor + sub-held + demand-fetched, far below the server's row count.
   cacheN: () => Object.keys(cache.peek()).length,
-  retainedN: () => retained.rows.size,
+  retainedN: () => replica.box.cache.size(),
   wire: () => ({ total: carried.total, subs: { ...carried.subs } }),
 }
 

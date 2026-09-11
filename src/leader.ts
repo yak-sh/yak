@@ -276,6 +276,7 @@ export let topology = <T>(
     drop,
     isLeader: () => leader && serving,
     isSolo: () => standalone,
+    query: (name: string) => wanted().get(name)?.use.value,
     leave,
     route,
     seek,

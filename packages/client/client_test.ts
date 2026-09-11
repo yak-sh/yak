@@ -73,3 +73,16 @@ Deno.test('close stops the watches and the socket', async () => {
   assertEquals(c.watches.size(), 0)
   assertEquals(c.wire?.connected(), false)
 })
+
+Deno.test('a replica can leave provenance exclusively to its authority', () => {
+  let c = client(box, [], { vault: false, provenance: () => null })
+  try {
+    c.mutate([dal()])
+    assertEquals(c.ent('r1')?.created, undefined)
+    assertEquals(c.ent('r1')?.updated, undefined)
+    c.mutate([{ entity: { eid: 'r1' }, doc: { title: 'changed' } }])
+    assertEquals(c.ent('r1')?.updated, undefined)
+  } finally {
+    c.close()
+  }
+})
