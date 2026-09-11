@@ -13,19 +13,16 @@ a Git repository (or without a committed HEAD), submission fails explicitly
 before creating the task. Ordinary model delegation still shares home unless
 requested otherwise.
 
-## Snapshot boundary
+## Fork boundary
 
-Idle tasks inherit the current transcript. During an unfinished or interrupted
-provider attempt, tasks inherit the prefix before that attempt and record later
-user inputs and passive context as child-owned entries. Unfinished provider
-output and associated tool activity are excluded, not replayed; an explicit
-snapshot notice is included in the child context. Later user input is not
-silently dropped. The recorded inputs are written once at admission and are not
-recopied on reload. Subsequent parent inputs and output do not enter an already
-submitted task.
+Tasks reference a parent entry through `fork.from`, just like ordinary forks.
+They inherit the contiguous prefix through that entry; context is not copied
+into new child entries. The child receives its fork note and task assignment.
 
-This is an intentionally bounded snapshot, not a complete copy of ongoing tool
-execution: a task requiring results of unfinished parent tools must receive
-those results later or be submitted after completion. This default policy is
-user-approved: include full outputs only, omit incomplete streamed outputs, and
-retain recent inputs.
+Without an active provider attempt, the boundary is the latest parent entry.
+During an active attempt, it is the entry immediately before the first in-flight
+ask. This excludes the mutable output and any later messages. Submit another
+instruction to the child if it needs those later messages. Interrupted and
+completed attempts are terminal and do not hold future forks at an old boundary.
+Their already-recorded history remains available; no historical entries are
+rewritten or removed by this change.

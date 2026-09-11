@@ -184,39 +184,17 @@ let delegation = (
       // Never inherit the unanswered delegation call (or any sibling calls).
       let anchorId = comp(newestAsk(ctx.entries), 'ask')?.through
       let anchor = ctx.entries.find((b) => b.entity.eid == anchorId)
-      let pendingInputs: Bundle[] = []
       if (minted) {
-        // User admission has no model tool-turn boundary. Include the newest
-        // stable prefix, stopping before the first mutable provider attempt.
-        // Record later inputs separately: a cutoff alone loses user messages.
+        // User tasks reference a contiguous parent prefix. Only an active
+        // attempt can still change it; terminal attempts must not pin future
+        // forks to an old boundary. Inputs after this boundary remain in the
+        // parent, rather than being copied into the child.
         let active = ctx.entries.findIndex((b) =>
-          ['inflight', 'interrupted'].includes(
-            String((b.attempt as Comp | undefined)?.state),
-          )
+          (b.attempt as Comp | undefined)?.state == 'inflight'
         )
-        anchor = ctx.entries.at(active < 0 ? -1 : active - 1)
-        if (active == 0) anchor = undefined
-        if (active >= 0) {
-          pendingInputs = ctx.entries.slice(active).filter((b) =>
-            !b.ask && !b.call && !b.result && !b.error && !b.exception &&
-            !(b.content as Comp | undefined)?.source &&
-            (b.content || b.prompt || b.using)
-          ).map((b, i) => ({
-            entity: { eid: `${eid}:recorded-input:${i}` },
-            ...b.content ? { content: { ...(b.content as Comp) } } : {},
-            ...b.prompt ? { prompt: { ...(b.prompt as Comp) } } : {},
-            ...b.using ? { using: { ...(b.using as Comp) } } : {},
-            ...b.notice ? { notice: { ...(b.notice as Comp) } } : {},
-          }))
-          pendingInputs.unshift({
-            entity: { eid: `${eid}:snapshot-limit` },
-            prompt: { scope: 'local', source: 'harness:task-snapshot' },
-            content: {
-              body:
-                'Task context snapshot: unfinished provider output and its tool activity are excluded. Later user inputs and passive context are recorded below as submitted, not dropped. This snapshot does not track subsequent parent changes.',
-            },
-          })
-        }
+        anchor = active == 0
+          ? undefined
+          : ctx.entries.at(active < 0 ? -1 : active - 1)
       }
       if (fork && !anchor && !minted) {
         throw new ToolError('fork', 'no prefix to fork')
@@ -245,7 +223,6 @@ let delegation = (
           content: { body: textOf(b) },
           prompt: { ...(b.prompt as Comp) },
         }))
-      context.push(...pendingInputs)
       if (fork) {
         context.push({
           entity: { eid: eid + ':fork-context' },

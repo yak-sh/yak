@@ -195,7 +195,7 @@ Deno.test('auto-task notice is lazy, reaches next ask, and contextual completion
   }
 })
 
-Deno.test('taskEntry records latest inputs beyond mutable output without replay or reload duplication', async () => {
+Deno.test('taskEntry references the stable prefix without copying later inputs', async () => {
   let h = open(':memory:')
   try {
     await h.g.apply([
@@ -229,8 +229,18 @@ Deno.test('taskEntry records latest inputs beyond mutable output without replay 
       before.filter((b) =>
         (b.content as Comp)?.body == 'latest essential instruction'
       ).length,
-      1,
+      0,
     )
+    assertEquals(
+      before.some((b) => b.entity.eid.includes('recorded-input')),
+      false,
+    )
+    assertEquals(
+      before.some((b) => b.entity.eid.includes('snapshot-limit')),
+      false,
+    )
+    let [child] = await h.g.read('.eid=' + result.child)
+    assertEquals((child.fork as Comp).from, 'first')
     assertEquals(before.some((b) => b.entity.eid == 'partial'), false)
     assertEquals(before.some((b) => b.entity.eid == 'first'), true)
     await h.g.apply([{
@@ -290,5 +300,44 @@ Deno.test('taskEntry inherits completed output and tool results with recent inpu
     )
   } finally {
     h.close()
+  }
+})
+
+Deno.test('terminal attempts do not pin task forks to an old prefix', async () => {
+  for (let state of ['interrupted', 'completed']) {
+    let h = open(':memory:')
+    try {
+      await h.g.apply([
+        { entity: { eid: 'p' }, session: {} },
+        {
+          entity: { eid: 'old-input' },
+          entry: { session: 'p' },
+          content: { body: 'old' },
+        },
+        {
+          entity: { eid: 'old-ask' },
+          entry: { session: 'p' },
+          ask: { through: 'old-input' },
+          attempt: { state },
+        },
+        {
+          entity: { eid: 'new-input' },
+          entry: { session: 'p' },
+          content: { body: 'current assignment context' },
+        },
+      ])
+      let result = await taskEntry(h.g, 'p', 'new task')
+      let [child] = await h.g.storage.tx((tx) => tx.get([result.child]))
+      assertEquals((child.fork as Comp).from, 'new-input')
+      let { transcript } = await import('@yaks/session')
+      let entries = await transcript(h.g, result.child)
+      assertEquals(entries.filter((b) => b.entity.eid == 'new-input').length, 1)
+      assertEquals(
+        entries.some((b) => b.entity.eid.includes('recorded-input')),
+        false,
+      )
+    } finally {
+      h.close()
+    }
   }
 })
