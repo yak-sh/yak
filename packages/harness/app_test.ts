@@ -135,9 +135,14 @@ Deno.test('graph effects paint a model reply without a keypress; sends are input
       'multiline transcript paint',
     )
     let rows = ui.text().split('\n')
-    let first = rows.findIndex((row) => row.split('│')[1]?.includes('ping'))
-    let second = rows.findIndex((row) => row.includes('second line'))
-    let third = rows.findIndex((row) => row.includes('third paragraph'))
+    // The sidebar names the session after its first prompt, so 'ping' appears
+    // there too. Read only the columns left of the sidebar heading.
+    let edge = rows[0].indexOf('Sessions')
+    assert(edge > 0, ui.text())
+    let pane = (row: string) => row.slice(0, edge)
+    let first = rows.findIndex((row) => pane(row).includes('ping'))
+    let second = rows.findIndex((row) => pane(row).includes('second line'))
+    let third = rows.findIndex((row) => pane(row).includes('third paragraph'))
     assert(first >= 0, ui.text())
     assertEquals(second, first + 1, ui.text())
     assertEquals(third, second + 2, ui.text())
