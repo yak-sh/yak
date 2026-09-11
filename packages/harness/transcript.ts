@@ -97,6 +97,8 @@ export let transcriptViews = define([
   row('.entry&.notice&.content', 'notice', 'Muted', true),
   row('.entry&.result', 'result', 'Muted', true),
   row('.entry&.call', 'call', 'Key'),
+  row('.entry&.ask&.attempt.state=inflight', 'asking', 'Key'),
+  row('.entry&.ask&.attempt.state=interrupted', 'interrupted', 'Bad'),
   row('.entry&.ask', 'ask', 'Muted'),
   row('.entry&.stop', 'stop', 'Warn'),
   row('.entry&.content.source!', 'output', 'Accent', false, true),

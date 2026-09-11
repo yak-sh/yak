@@ -137,6 +137,9 @@ export let statusOf = (entries: Bundle[]): TranscriptStatus => {
       : 'pending'
   }
   if (openCalls(all).length) return 'running'
+  if (
+    kind == 'ask' && (newest.attempt as Comp | undefined)?.state == 'completed'
+  ) return 'settled'
   if (kind == 'ask' || kind == 'call') return 'running'
   // Inputs can be admitted while a provider request is in flight. Its reply
   // does not acknowledge messages after that request's recorded boundary.
@@ -224,6 +227,9 @@ export let sessionStatus = {
       wears(ERROR)
     } then case when ${allErrors} then 'failed' else 'pending' end
       when ${open} then 'running'
+      when ${
+      wears(ASK)
+    } and exists (select 1 from attempt a where a.entity = ${newest} and a.state = 'completed') then 'settled'
       when ${wears(ASK)} or ${wears(CALL)} then 'running'
       when ${wears(RESULT)} then 'pending'
       when ${wears(CONTENT, ' and k."source" is not null')} then

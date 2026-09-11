@@ -322,3 +322,28 @@ Deno.test('a refused remote subscription is never ready', async () => {
   assertEquals(c.trouble.length, 1)
   c.close()
 })
+
+Deno.test('closing one watch does not disconnect other transient observers', async () => {
+  const { transient } = await import('@yaks/graph')
+  const { client } = await import('./client.ts')
+  const { loadVocab } = await import('@yaks/vocab')
+  const c = client(
+    loadVocab([{
+      $defs: { text: { properties: { body: { type: 'string' } } } },
+    }]),
+    [],
+    { vault: false },
+  )
+  try {
+    c.mutate([{ entity: { eid: 'd' }, text: { body: '' } }])
+    const first = c.watch('.text'), second = c.watch('.text.body=')
+    first.close()
+    const live = await transient(c.graph).begin('d', 'text', 'body', 's')
+    live.append('visible')
+    assertEquals(second.value[0].text, { body: 'visible' })
+    live.discard()
+    assertEquals(second.value[0].text, { body: '' })
+  } finally {
+    c.close()
+  }
+})

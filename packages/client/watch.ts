@@ -239,7 +239,6 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
         return () => w.listeners.delete(fn)
       },
       close: () => {
-        offLive()
         active = false
         held.delete(w)
         w.listeners.clear()
