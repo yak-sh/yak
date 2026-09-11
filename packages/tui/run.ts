@@ -48,6 +48,7 @@ export let run = async (
     })
   let screen = install()
   let host = screen.root as unknown as Parameters<typeof render>[1]
+  let cancelRead: (() => Promise<void>) | undefined
   let done = false
   let quitting = shutdown({ drain: opts.shutdown, force: opts.force })
   let interrupt = () => quitting.interrupt()
@@ -109,11 +110,12 @@ export let run = async (
         if (key.ctrl && key.text == 'c') done = true
       }
     }
-    let buf = new Uint8Array(4096)
+    let reader = Deno.stdin.readable.getReader()
+    cancelRead = () => reader.cancel().catch(() => {})
     let dec = new TextDecoder()
     while (!done) {
       let n = await Promise.race([
-        Deno.stdin.read(buf),
+        reader.read().then(({ value, done }) => done ? null : value),
         quitting.done.then(() => null),
       ])
       if (n == null) {
@@ -124,11 +126,14 @@ export let run = async (
         break
       }
       clearTimeout(escapeTimer)
-      dispatch(keys(dec.decode(buf.subarray(0, n), { stream: true })))
+      dispatch(keys(dec.decode(n, { stream: true })))
       escapeTimer = setTimeout(() => dispatch(keys.flush()), 25)
     }
     clearTimeout(escapeTimer)
   } finally {
     bye()
+    // Cancel the pending read after restoring raw mode; it otherwise keeps
+    // the process alive after an asynchronous drain completes.
+    await cancelRead?.()
   }
 }
