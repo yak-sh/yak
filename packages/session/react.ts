@@ -1,3 +1,4 @@
+import { transient } from '@yaks/graph'
 // The daemon's one step. `react(graph, session)` reads the newest entry of a
 // transcript and does the one next thing it says: a pending input or result
 // asks the model; an open tool call is performed; an error under the retry
@@ -76,6 +77,10 @@ export type Tool = Declared & {
 
 /** What `react` is handed beside the graph. */
 export type Deps = {
+  /** Experimental durable request admission with transient text. */
+  streaming?: boolean
+  /** Minimum interval between durable stream checkpoints; zero disables. */
+  checkpointMs?: number
   model: Model
   tools: Tool[]
   instructions?: string
@@ -186,6 +191,20 @@ export let react = async (
       status: statusOf(await transcript(g, session)),
       added,
     }
+  }
+  const unfinished = entries.find((b) =>
+    (b.attempt as Comp | undefined)?.state == 'inflight'
+  )
+  if (unfinished) {
+    // A live invocation is serialized by the daemon. Re-entering an unfinished
+    // attempt means interrupted execution, not permission to repeat a request.
+    return append([
+      { entity: unfinished.entity, attempt: { state: 'interrupted' } },
+      line(
+        { [EXCEPTION]: {} },
+        'Provider attempt interrupted; remote execution is unknown. Inspect before retrying.',
+      ),
+    ])
   }
   let toolEntities = new Map<Eid, Tool>()
   for (let b of await g.read(`.${TOOL}`)) {
@@ -299,25 +318,6 @@ export let react = async (
     })),
     anchor: anchorId,
   }
-  let reply: Reply
-  try {
-    if (deps.contextItems) {
-      req.items.push(...await deps.contextItems(window, entries))
-    }
-    reply = await deps.model(req)
-  } catch (e) {
-    if (!(e instanceof ModelError)) deps.report?.(e, session, 'model')
-    // The bound is the status rule's: RETRIES consecutive errors read `failed`,
-    // and a failed transcript is left alone at the top of the next step.
-    return append([
-      e instanceof ModelError
-        ? line({ [ERROR]: { code: e.code } }, e.message)
-        : line({ [EXCEPTION]: {} }, String(e)),
-    ])
-  }
-  // The ask is recorded once the model answered: an ask that never went out
-  // takes no seq, so the error or exception that stands for it does. What the
-  // provider keeps about the reply rides beside it as the provider's own comp.
   let ask = line({
     [ASK]: { to: modelEid, through: newest.entity.eid },
     ...using || req.instructions
@@ -328,17 +328,112 @@ export let react = async (
         },
       }
       : {},
+    ...deps.streaming ? { attempt: { state: 'inflight' } } : {},
+  })
+  const stream = new Map<
+    string,
+    {
+      entry: Bundle
+      writer: Awaited<ReturnType<ReturnType<typeof transient>['begin']>>
+    }
+  >()
+  let tail = Promise.resolve(), streamFailure: unknown
+  let accepting = true, checkpointAt = Date.now()
+  const checkpointMs = deps.checkpointMs ?? 2000
+  const enqueue = (work: () => Promise<void>) => {
+    tail = tail.then(work).catch((e) => {
+      streamFailure ??= e
+    })
+  }
+  if (deps.streaming) {
+    // Resolve inputs before admitting the request: a local image read failure
+    // must not be mistaken for an ambiguous network dispatch.
+    if (deps.contextItems) {
+      req.items.push(...await deps.contextItems(window, entries))
+    }
+    ;[ask] = await g.apply([ask], { trusted: true })
+    req.onText = ({ index, id, text }) => {
+      if (!accepting) return
+      const key = id ?? String(index)
+      enqueue(async () => {
+        if (!Number.isSafeInteger(index) || index < 0) {
+          throw new Error('Invalid streamed item index')
+        }
+        let active = stream.get(key)
+        if (!active) {
+          const [entry] = await g.apply([
+            line({ [CONTENT]: { body: '', source: ask.entity.eid } }),
+          ], { trusted: true })
+          active = {
+            entry,
+            writer: await transient(g).begin(
+              entry.entity.eid,
+              CONTENT,
+              'body',
+              entry.entity.eid,
+            ),
+          }
+          stream.set(key, active)
+        }
+        active.writer.append(text)
+        if (checkpointMs > 0 && Date.now() - checkpointAt >= checkpointMs) {
+          for (const item of stream.values()) await item.writer.checkpoint()
+          checkpointAt = Date.now()
+        }
+      })
+    }
+  }
+  let reply: Reply
+  try {
+    if (!deps.streaming && deps.contextItems) {
+      req.items.push(...await deps.contextItems(window, entries))
+    }
+    reply = await deps.model(req)
+    accepting = false
+    await tail
+    if (streamFailure) throw streamFailure
+  } catch (e) {
+    accepting = false
+    await tail
+    for (const active of stream.values()) await active.writer.commit()
+    if (!(e instanceof ModelError)) deps.report?.(e, session, 'model')
+    if (deps.streaming) {
+      return append([
+        { entity: ask.entity, attempt: { state: 'interrupted' } },
+        line(
+          { [EXCEPTION]: {} },
+          'Provider attempt failed or interrupted: ' + String(e),
+        ),
+      ])
+    }
+    return append([
+      e instanceof ModelError
+        ? line({ [ERROR]: { code: e.code } }, e.message)
+        : line({ [EXCEPTION]: {} }, String(e)),
+    ])
+  }
+  const finalAsk: Bundle = {
+    ...ask,
     ...deps.model.mark?.(reply) ?? {},
     ...reply.usage ? { usage: reply.usage } : {},
-  })
-  let added: Bundle[] = [ask]
+    ...deps.streaming ? { attempt: { state: 'completed' } } : {},
+  }
+  let added: Bundle[] = [finalAsk]
+  let textIndex = 0
   let byName = new Map(
     [...toolEntities].map(([eid, t]) => [t.name, eid] as const),
   )
   for (let item of reply.items) {
     if (item.kind == 'assistant') {
+      const active = stream.get(item.id ?? String(textIndex))
+      textIndex++
       added.push(
-        line({ [CONTENT]: { body: item.text, source: ask.entity.eid } }),
+        active
+          ? {
+            entity: active.entry.entity,
+            [CONTENT]: { body: item.text, source: ask.entity.eid },
+          }
+          : line({ [CONTENT]: { body: item.text, source: ask.entity.eid } }),
       )
     } else if (item.kind == 'call') {
       added.push(line({
@@ -376,7 +471,17 @@ export let react = async (
       },
     }))
   }
-  return append(added)
+  for (const active of stream.values()) {
+    if (!added.some((b) => b.entity.eid == active.entry.entity.eid)) {
+      // A provider omitted a streamed item from its final response: preserve
+      // evidence, but never present it as a successfully completed message.
+      await active.writer.commit()
+      throw new Error('Completed reply omitted a streamed text item')
+    }
+  }
+  const result = await append(added)
+  for (const active of stream.values()) active.writer.discard()
+  return result
 }
 
 /** Run `react` until the transcript settles, stops, or fails, or `cap` steps

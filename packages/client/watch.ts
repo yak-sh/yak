@@ -24,7 +24,7 @@
 // the one the store answers with.
 
 import type { Bundle, Eid, Graph } from '@yaks/graph'
-import { detached, over, then } from '@yaks/graph'
+import { detached, over, then, transient } from '@yaks/graph'
 import { type Filter, filter } from '@yaks/match'
 import { bare, type Clause, parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
@@ -163,7 +163,7 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
       for (let eid of touched) {
         if (!seen.has(eid) && w.members.delete(eid)) moved = true
       }
-      if (moved) publish(w, [...w.members.values()])
+      if (moved) publish(w, live.project([...w.members.values()]))
       return
     }
     // Refresh: the answer is a property of the whole set, so ask for it again.
@@ -175,6 +175,17 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
     })
   }
 
+  const live = transient(graph)
+  live.subscribe((f) => {
+    for (const w of held) {
+      if (!w.members.has(f.entity)) continue
+      // Read the durable base again on discard/finalize; never persist projections.
+      then(detached(graph.storage).get([f.entity]), (base) => {
+        for (const b of base) w.members.set(b.entity.eid, b)
+        publish(w, live.project([...w.members.values()]))
+      })
+    }
+  })
   let commit = (applied: Bundle[]) => {
     if (!held.size) return
     let touched = [...new Set(applied.map((b) => b.entity.eid))]

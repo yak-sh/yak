@@ -291,6 +291,19 @@
           "type": "number"
         }
       }
+    },
+    "attempt": {
+      "description": "Provider request lifecycle. Unfinished dispatched attempts are ambiguous on restart, never automatically replayed.",
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "inflight",
+            "completed",
+            "interrupted"
+          ]
+        }
+      }
     }
   },
   "$vocabulary": {

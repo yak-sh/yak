@@ -98,6 +98,8 @@ export type Opts = ChildLimits & NotHarness & {
   /** what the agent may call (default: the shell and the graph) */
   tools?: Tool[]
   /** the system prompt every ask carries */
+  streaming?: boolean
+  checkpointMs?: number
   instructions?: string
   /** Maximum tool-result code points before model-facing handle projection. */
   outputLimit?: number
@@ -187,6 +189,8 @@ export let agent = (opts: Opts = {}): Agent => {
     {
       model,
       tools,
+      streaming: opts.streaming,
+      checkpointMs: opts.checkpointMs,
       instructions: opts.instructions,
       contextItems: (window, entries) =>
         imageContext(h.g, window, entries, opts.images),

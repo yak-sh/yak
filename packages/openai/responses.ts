@@ -122,7 +122,11 @@ export let items = (done: Frame[]): Item[] => {
       let parts = Array.isArray(item.content) ? item.content : []
       let text = parts.map((p: unknown) => record(p) ? str(p.text) : '')
         .join('')
-      out.push({ kind: 'assistant', text })
+      out.push({
+        kind: 'assistant',
+        text,
+        ...item.id ? { id: str(item.id) } : {},
+      })
     } else if (item.type == 'function_call') {
       out.push({
         kind: 'call',
@@ -177,12 +181,26 @@ let ask = (opts: Options) => {
       // The endpoint decides support, including OAuth and custom deployments.
       // Never retry without the tool based on an ambiguous provider error.
       let selected = opts.images
+      const textIndexes = new Map<string, number>()
       let out = await client.run(body(req, opts.store, selected), {
         signal: opts.signal,
+        noRetry: !!req.onText,
         // Image payloads must never escape through diagnostic/event subscribers.
-        event: opts.event
-          ? (event) => opts.event!(imageSafe(event))
-          : undefined,
+        event: (event) => {
+          if (
+            event.type == 'response.output_text.delta' &&
+            typeof event.delta == 'string'
+          ) {
+            const key = String(event.item_id ?? event.output_index)
+            if (!textIndexes.has(key)) textIndexes.set(key, textIndexes.size)
+            req.onText?.({
+              index: textIndexes.get(key)!,
+              id: key,
+              text: event.delta,
+            })
+          }
+          opts.event?.(imageSafe(event))
+        },
       })
       let artifacts = await generatedImages(out.items, selected)
       return {

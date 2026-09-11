@@ -1,3 +1,4 @@
+import { transient } from '@yaks/graph'
 import { Keyboard } from './keyboard.ts'
 import { useVisualController, type VisualState } from '@yaks/tui'
 import { parentId, rootOf, sessionTree } from './tree.ts'
@@ -38,6 +39,7 @@ export let changes = (a: Agent): Opts['subscribe'] => {
     let notify = () => {
       for (let fn of listeners!) fn()
     }
+    transient(a.h.g).subscribe(notify)
     for (let comp of a.h.vocab.all) {
       a.h.fx.created(comp, notify).changed(comp, notify).removed(comp, notify)
     }

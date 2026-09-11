@@ -126,6 +126,9 @@ export let statusOf = (entries: Bundle[]): TranscriptStatus => {
   let kind = kindOf(newest)
   if (kind == 'stop') return 'stopped'
   if (kind == 'exception') return 'failed'
+  if (all.some((b) => (b.attempt as Comp | undefined)?.state == 'inflight')) {
+    return 'running'
+  }
   if (kind == 'error') {
     // failed once the last RETRIES entries are all errors
     let tail = all.slice(-RETRIES)
@@ -215,6 +218,7 @@ export let sessionStatus = {
       when ${newest} is null then 'empty'
       when ${wears(STOP_ENTRY)} then 'stopped'
       when ${wears(EXCEPTION)} then 'failed'
+      when exists (select 1 from attempt a join entry e on e.entity = a.entity where e.session = ${owner} and a.state = 'inflight') then 'running'
       when exists (select 1 from dispatch d where d.entity = ${owner} and d.state = 'queued') then 'queued'
       when ${
       wears(ERROR)

@@ -12,7 +12,7 @@
 // a real death arrives as a `tombstone` component in the bundles.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
-import { comps, dead, detached, then } from '@yaks/graph'
+import { comps, dead, detached, then, transient } from '@yaks/graph'
 import { echo } from './mark.ts'
 import type { Frame } from './socket.ts'
 import { tierOf } from './tier.ts'
@@ -52,14 +52,17 @@ export let land = (
   frame: Frame,
 ): Bundle[] | Promise<Bundle[]> => {
   if (frame.refused) return []
+  const live = transient(graph)
   let bundles = frame.bundles ?? []
   let gone = frame.gone ?? []
   return then(
     bundles.length ? graph.apply(echo(bundles), { trusted: true }) : [],
-    (applied) =>
-      gone.length
+    (applied) => {
+      for (const update of frame.transient ?? []) live.receive(update)
+      return gone.length
         ? then(strip(graph, gone), (out) => [...applied, ...out])
-        : applied,
+        : applied
+    },
   )
 }
 

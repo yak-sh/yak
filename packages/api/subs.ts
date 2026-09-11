@@ -21,7 +21,15 @@
 // that stopped matching — so the server is what remembers who is in.
 
 import type { Bundle, Eid, Graph } from '@yaks/graph'
-import { composed, detached, isPromise, over, then } from '@yaks/graph'
+import {
+  composed,
+  detached,
+  isPromise,
+  over,
+  then,
+  transient,
+  type TransientFrame,
+} from '@yaks/graph'
 import { type Filter, filter } from '@yaks/match'
 import { bare, type Clause, parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
@@ -35,6 +43,7 @@ import { type Refusal, refusal } from './refuse.ts'
  * matching. `refused` replaces both when the subscription could not be opened.
  */
 export type Frame = {
+  transient?: TransientFrame[]
   /** the subscription this frame answers */
   id: string
   /** the entities now in the set (whole), or the composed batch for a raw
@@ -158,9 +167,16 @@ export let subscriptions = (graph: Graph, opts: {
       // Parsed here, outside `judge`, so an unreadable query is refused rather
       // than quietly demoted to a subscription that re-reads it forever.
       sub.test = judge(parse(line), line, graph.vocab)
-      return then(graph.read(line), (bundles) => {
+      return then(graph.storage.read(line), (bundles) => {
         for (let b of bundles) sub.members.add(b.entity.eid)
-        sink({ id, bundles })
+        const snapshots = live.snapshots().filter((f) =>
+          sub.members.has(f.entity)
+        )
+        sink({
+          id,
+          bundles,
+          ...snapshots.length ? { transient: snapshots } : {},
+        })
       })
     })
   }
@@ -187,7 +203,7 @@ export let subscriptions = (graph: Graph, opts: {
       return
     }
     // Refresh: the answer is a property of the whole set, so ask for it again.
-    return then(graph.read(sub.query), (set) => {
+    return then(graph.storage.read(sub.query), (set) => {
       let ids = new Set(set.map((b) => b.entity.eid))
       let gone = [...sub.members].filter((e) => !ids.has(e))
       sub.members = ids
@@ -216,7 +232,7 @@ export let subscriptions = (graph: Graph, opts: {
         over(queries, (s) =>
           attempt(s, () => {
             if (opts.invalidate?.(s.query, applied)) {
-              return then(graph.read(s.query), (set) => {
+              return then(graph.storage.read(s.query), (set) => {
                 let ids = new Set(set.map((b) => b.entity.eid))
                 let gone = [...s.members].filter((id) => !ids.has(id))
                 s.members = ids
@@ -228,6 +244,17 @@ export let subscriptions = (graph: Graph, opts: {
         () => undefined,
       ))
   }
+
+  const live = transient(graph)
+  live.subscribe((frame) => {
+    for (const mine of held.values()) {
+      for (const sub of mine.values()) {
+        if (sub.raw || sub.members.has(frame.entity)) {
+          sub.sink({ id: sub.id, transient: [frame] })
+        }
+      }
+    }
+  })
 
   graph.use({
     name: '@yaks/api',

@@ -93,6 +93,8 @@ export type ResponseOptions = {
 
 /** Per-exchange cancellation and a hook for every parsed frame (after redaction). */
 export type RunOptions = {
+  /** Do not replay a dispatched exchange when callers expose partial output. */
+  noRetry?: boolean
   signal?: AbortSignal
   event?: (event: ResponseEvent) => void
 }
@@ -656,7 +658,7 @@ export let transport = (options: ResponseOptions): {
         // the same way, and a caller that says how long it can wait keeps its
         // turn alive through one instead of failing in five seconds.
         if (
-          !(fail instanceof ResponseError) || !transient(fail) ||
+          run.noRetry || !(fail instanceof ResponseError) || !transient(fail) ||
           (failures >= retries && waited >= patienceMs)
         ) {
           throw fail

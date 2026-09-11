@@ -1,3 +1,4 @@
+import { transient } from '@yaks/graph'
 import type { ImageOptions } from './images.ts'
 /** Opt-in worker frontend. UI state remains in the frontend's private graph. */
 import { client } from '@yaks/client'
@@ -16,6 +17,7 @@ export let remote = async (
     db?: string
     cwd?: string
     images?: ImageOptions | false
+    streaming?: boolean
     instructions?: string
     fake?: boolean | 'stuck' | { delayMs: number }
   } = {},
@@ -74,7 +76,10 @@ export let remote = async (
   }
   let init: { names: Record<string, string> }
   try {
-    init = await request('init', [options]) as typeof init
+    init = await request('init', [{
+      streaming: Deno.env.get('HARNESS_STREAM') == '1',
+      ...options,
+    }]) as typeof init
   } catch (e) {
     link.close()
     worker.terminate()
@@ -84,7 +89,7 @@ export let remote = async (
   let rows = (id: string) =>
     (members.get(id) ?? []).flatMap((id) => {
       let b = replica.ent(id)
-      return b ? [b] : []
+      return b ? transient(replica.graph).project([b]) : []
     })
   let listen = async (id: string, query: string) => {
     initializing.add(id)

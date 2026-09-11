@@ -58,7 +58,7 @@ export type Item =
   | { kind: 'image'; bytes: Uint8Array; mediaType: string; label: string }
   | { kind: 'instruction'; text: string }
   | { kind: 'user'; text: string }
-  | { kind: 'assistant'; text: string }
+  | { kind: 'assistant'; text: string; id?: string }
   /** a tool call the model asked for: its id, the tool, the arguments as JSON */
   | { kind: 'call'; id: string; name: string; args: string }
   /** what the tool answered, by the call's id */
@@ -73,7 +73,11 @@ export type Tool = {
 }
 
 /** One ask of a model. */
+/** Output text only; never private reasoning or partial tool arguments.
+ * Index identifies the final assistant item order in Reply.items. */
+export type TextDelta = { index: number; id?: string; text: string }
 export type Request = {
+  onText?: (delta: TextDelta) => void
   model: string
   effort?: string
   instructions?: string

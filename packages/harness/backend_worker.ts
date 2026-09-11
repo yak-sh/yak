@@ -32,12 +32,14 @@ async function handle(method: string, value: unknown): Promise<unknown> {
       db?: string
       cwd?: string
       images?: ImageOptions | false
+      streaming?: boolean
       instructions?: string
       fake?: boolean | 'stuck' | { delayMs: number }
     }
     a = agent({
       h: open(options.db),
       cwd: options.cwd,
+      streaming: options.streaming,
       instructions: options.instructions,
       images: options.images,
       ...(options.fake

@@ -47,6 +47,7 @@ export type Ask = string | true
 /** One push from the server: the entities now in the set, the ones that left
  * it, or the refusal that closed the subscription. */
 export type Frame = {
+  transient?: import('@yaks/graph').TransientFrame[]
   /** the subscription this frame answers */
   id: string
   /** the entities now in the set (whole), or the applied batch for a raw feed */
