@@ -144,3 +144,26 @@ Deno.test('the browser graph resolves through its static roots and import map', 
     }
   }
 })
+
+// crypto.randomUUID is gated to SECURE contexts, and this app is served over
+// plain http on the tailnet — there the property is simply not a function, so
+// the first write throws out of a layout effect and the canvas never paints.
+// types.ts `uuid` (and @yaks/id `mint`) build a v4 from getRandomValues, which
+// is gated nowhere. Browser code mints through those, always.
+Deno.test('browser code mints uuids outside a secure context', async () => {
+  let files = await served()
+  let gated: string[] = []
+  for (let href of files.keys()) {
+    let path = local(new URL(href))
+    if (!/\.tsx?$/.test(path.pathname)) continue
+    let source = await Deno.readTextFile(path)
+    if (source.includes('crypto.randomUUID(')) {
+      gated.push(new URL(href).pathname)
+    }
+  }
+  assert(
+    !gated.length,
+    `${gated.join(', ')} name crypto.randomUUID(), which is absent on plain ` +
+      `http — mint with uuid() from types.ts (or mint() from @yaks/id)`,
+  )
+})

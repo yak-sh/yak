@@ -148,6 +148,7 @@ let ordinary = (): Vault | null => globalThis.indexedDB ? idb() : null
  *
  * ```ts
  * import { client } from '@yaks/client'
+ * import { mint } from '@yaks/id'
  * import { loadVocab } from '@yaks/vocab'
  * import { syncKeywords } from '@yaks/sync'
  * import { signal } from '@preact/signals'
@@ -156,7 +157,7 @@ let ordinary = (): Vault | null => globalThis.indexedDB ? idb() : null
  * let box = client(vocab, [], { url: 'https://recipes.example', signal })
  *
  * let dinners = box.watch('.course=dinner&.serves>4')
- * box.mutate([{ entity: { eid: crypto.randomUUID() }, doc: { title: 'Dal' } }])
+ * box.mutate([{ entity: { eid: mint() }, doc: { title: 'Dal' } }])
  * ```
  *
  * The vocabulary must be the one your server speaks, loaded with

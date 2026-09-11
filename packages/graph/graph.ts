@@ -41,6 +41,8 @@
 // inside the transaction is never left believing its rows are still there.
 
 import type { Vocab } from '@yaks/vocab'
+// getRandomValues, never crypto.randomUUID: a page on plain http mints too.
+import { mint as fresh } from '@yaks/id'
 import { type Bundle, type Change, comps, type Eid } from './bundle.ts'
 import type { Row, Storage, Tx } from './storage.ts'
 import { detached, type Query, type ReadOpts } from './storage.ts'
@@ -116,7 +118,7 @@ export type Options = {
   /** where a failing effect is reported (default: `console.error`) */
   report?: (err: unknown, at: { phase: Phase; plugin: string }) => void
   /** what names an entity a batch minted under an alias, when no component
-   * derives its own id (default: `crypto.randomUUID()`) */
+   * derives its own id (default: `mint()` from the id package) */
   mint?: () => Eid
 }
 
@@ -163,7 +165,7 @@ export let graph = (opts: Options): Graph => {
   let { storage, vocab } = opts
   let plugins = [...(opts.plugins ?? [])]
   let report = opts.report ?? failed
-  let mint = opts.mint ?? (() => crypto.randomUUID() as Eid)
+  let mint = opts.mint ?? (() => fresh() as Eid)
 
   // What the VOCABULARY names for itself: every component declaring an
   // `identity` derives its entity's id from that value (identity.ts). Fixed

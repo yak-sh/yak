@@ -117,11 +117,16 @@ Deno.test('run waits announced grace outside transaction; early application is r
     a.control.fail(claim, 'operator cancelled')
     a.control.acknowledge(claim.generation)
     let polled = false
+    // Poll by hand, not on the interval: a 1ms timer racing a 15ms grace is
+    // decided by the scheduler, and a loaded box loses. check() is the same
+    // poll the loop runs, so this asserts what matters — a peer that polls
+    // during the grace sees the pending generation — without the wall clock.
     const watch = watchMigrations(b.control, () => {
       polled = true
-    }, 1)
+    }, 60000)
     try {
       const result = await a.control.run('next', () => {
+        watch.check()
         assertEquals(polled, true)
         const current = a.control.read()!
         assertEquals(Date.now() >= current.notBefore, true)

@@ -15,6 +15,7 @@
  * ## One call
  * ```ts
  * import { client } from '@yaks/client'
+ * import { mint } from '@yaks/id'
  * import { loadVocab } from '@yaks/vocab'
  * import { syncKeywords } from '@yaks/sync'
  *
@@ -22,7 +23,7 @@
  * let box = client(vocab, [], { url: 'https://recipes.example' })
  *
  * box.mutate([{
- *   entity: { eid: crypto.randomUUID() },
+ *   entity: { eid: mint() },
  *   doc: { title: 'Dal' },
  *   recipe: { serves: 4, course: 'dinner' },
  * }])

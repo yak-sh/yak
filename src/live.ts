@@ -1427,7 +1427,7 @@ let armRedeliver = () => {
     .Deno?.unrefTimer?.(redeliver as unknown as number)
 }
 let deliver = (changes: Change[]) => {
-  let id = crypto.randomUUID()
+  let id = uuid()
   let o = { changes, at: Date.now() }
   outbox.set(id, o)
   ensureClient()

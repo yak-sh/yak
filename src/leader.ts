@@ -4,6 +4,8 @@
 // both ways. The lock callback is the lease: destroying its page releases it
 // and promotes the next queued tab.
 
+import { uuid } from './types.ts'
+
 export type Lock = {
   request: (name: string, hold: () => Promise<void>) => Promise<void>
 }
@@ -51,7 +53,7 @@ export let topology = <T>(
   locks: Lock,
   bus: Channel<T>,
   io: IO<T>,
-  key: () => string = () => crypto.randomUUID(),
+  key: () => string = uuid,
   hold = forever,
 ) => {
   let tab = key()

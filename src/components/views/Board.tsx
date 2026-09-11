@@ -266,7 +266,7 @@ export let Board = ({ e }: { e: Ent }) => {
     if (!me) return
     folded.has(s) ? folded.delete(s) : folded.add(s)
     mutate({
-      eid: row?.eid ?? crypto.randomUUID(),
+      eid: row?.eid ?? uuid(),
       name: 'fold',
       comp: {
         client: me,
