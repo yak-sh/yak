@@ -63,7 +63,7 @@ Deno.test('the workerd tier is path-scoped, self-hosted, and reports without blo
   ).tasks
   assertEquals(
     tasks['test:workerd:run'],
-    'TASKS_SLOW=1 deno test -A --unstable-net --unstable-worker-options workers/yak/ workers/yak-tail/',
+    'deno run -A bin/test-workerd.ts',
   )
 })
 

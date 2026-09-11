@@ -14,5 +14,8 @@
     "preact": "10.29.7",
     "preact-render-to-string": "6.7.0",
     "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "wrangler": "4.111.0"
   }
 }

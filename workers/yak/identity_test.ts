@@ -1399,11 +1399,12 @@ slow('a link signs a person in, once or until it is revoked', async () => {
       ),
       code_challenge_method: 'S256',
     }).toString()
+    let received = letters(k, email).length
     let asked = await form(k, '/login', { email, q })
     assertEquals(asked.status, 200)
     await asked.body?.cancel()
     let linking = await click(
-      where((await letter(k, email, 'sign in with one click')).body),
+      where((await letter(k, email, 'sign in with one click', received)).body),
     )
     assertEquals(linking.status, 302)
     await linking.body?.cancel()

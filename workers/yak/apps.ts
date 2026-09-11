@@ -530,7 +530,7 @@ let RATE = 30
 let counted = new Map<string, { minute: number; n: number }>()
 
 let flooding = (space: Space, app: App) => {
-  let key = `${space.slug}/${app.slug}`
+  let key = `${space.eid}/${app.eid}`
   let minute = Math.floor(Date.now() / 60_000)
   let hit = counted.get(key)
   if (!hit || hit.minute != minute) {

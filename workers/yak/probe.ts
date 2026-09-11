@@ -49,9 +49,46 @@ let listening = async (port: number) => {
   }
 }
 
+// The suite owns one kernel runtime. A lease gets private binding names,
+// variables and logs, not a process. Direct deno test remains supported by
+// the standalone Wrangler path below.
+let leased = async (body: unknown) => {
+  let host = Deno.env.get('YAK_PROBE_HOST')!
+  let response = await fetch(host, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) throw new Error(await response.text())
+  let { id, ...lease } = await response.json() as {
+    id: string
+    base: string
+    secret: string
+    log: string
+    socket?: { port: number; headers: Record<string, string> }
+  }
+  let stop = async () => {
+    let response = await fetch(`${host}/${id}`, { method: 'DELETE' })
+    if (!response.ok) throw new Error(await response.text())
+    await response.body?.cancel()
+  }
+  return { ...lease, stop }
+}
+
 export type Kernel = Awaited<ReturnType<typeof kernel>>
 
 export let kernel = async (vars: Record<string, string> = {}) => {
+  if (Deno.env.get('YAK_PROBE_HOST')) {
+    let lease = await leased({ vars })
+    let at = (host: string, path: string, init: RequestInit = {}) =>
+      fetch(`${lease.base}${path}`, {
+        ...init,
+        headers: {
+          ...(init.headers as Record<string, string>),
+          'x-yak-host': host,
+        },
+      })
+    return { ...lease, at, host: apex(vars) }
+  }
   await ready()
   let host = apex(vars)
   let secret = crypto.randomUUID()
@@ -148,7 +185,7 @@ export let kernel = async (vars: Record<string, string> = {}) => {
     await stop()
     throw e
   }
-  return { base, secret, at, stop, log, host }
+  return { base, secret, at, stop, log, host, socket: undefined }
 }
 
 /**
@@ -166,6 +203,21 @@ export let script = async (
   files: Record<string, string | Uint8Array>,
   main = 'entry.js',
 ) => {
+  if (Deno.env.get('YAK_PROBE_HOST')) {
+    let lease = await leased({
+      main,
+      files: Object.fromEntries(
+        Object.entries(files).map((
+          [name, body],
+        ) => [name, typeof body == 'string' ? body : [...body]]),
+      ),
+    })
+    return {
+      ...lease,
+      at: (path: string, init?: RequestInit) =>
+        fetch(`${lease.base}${path}`, init),
+    }
+  }
   let dir = Deno.makeTempDirSync({ prefix: 'yak-script-' })
   for (let [name, body] of Object.entries(files)) {
     let at = `${dir}/${name}`
@@ -281,7 +333,8 @@ export let relay = (
   cookie?: string,
   origin?: string,
 ) => {
-  let up = Number(new URL(k.base).port)
+  let socket = k.socket
+  let up = socket?.port ?? Number(new URL(k.base).port)
   let l = Deno.listen({ hostname: '127.0.0.1', port: 0 })
   let open = new Set<Deno.Conn>()
   let carry = async (down: Deno.Conn) => {
@@ -296,7 +349,10 @@ export let relay = (
       if (n == null) return
       head += new TextDecoder().decode(buf.subarray(0, n))
     }
-    let extra = `x-yak-host: ${host}\r\n` +
+    let extra =
+      Object.entries(socket?.headers ?? {}).map(([k, v]) => `${k}: ${v}\r\n`)
+        .join('') +
+      `x-yak-host: ${host}\r\n` +
       (cookie ? `cookie: ${cookie}\r\n` : '') +
       (origin ? `origin: ${origin}\r\n` : '')
     await out.write(
@@ -422,10 +478,15 @@ export let letters = (k: Pick<Kernel, 'log'>, to: string): Letter[] =>
 
 // The latest letter to an address that says a thing, waited for — an
 // invitation is sent while the tool is answering (T-32629).
-export let letter = async (k: Kernel, to: string, saying: string) =>
+export let letter = async (
+  k: Pick<Kernel, 'log'>,
+  to: string,
+  saying: string,
+  after = 0,
+) =>
   (await until(
     () =>
-      letters(k, to).findLast((l) =>
+      letters(k, to).slice(after).findLast((l) =>
         `${l.subject}\n${l.body}`.includes(saying)
       ),
     {

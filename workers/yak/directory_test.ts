@@ -350,3 +350,15 @@ Deno.test('signing in asks the directory a bounded number of questions', async (
   assertEquals((await m.dir.own(them)).eid, mine.eid)
   assertEquals(m.hops.length, 4, m.hops.join('\n'))
 })
+
+Deno.test('directory caches belong to a store, not the shared isolate', async () => {
+  let a = stub()
+  let b = stub()
+  a.at.version = 17
+  b.at.version = 23
+  assertEquals((await a.dir.app(space, 'recipes'))?.version, 17)
+  assertEquals((await b.dir.app(space, 'recipes'))?.version, 23)
+  assertEquals((await a.dir.app(space, 'recipes'))?.version, 17)
+  assertEquals(a.at.reads, 1)
+  assertEquals(b.at.reads, 1)
+})

@@ -26,7 +26,14 @@
 // where 4.111.0 runs it at the old pin's pace. Measure before moving.
 // Exact pins can reuse npm's restored cache without registry revalidation.
 import { fileURLToPath } from 'node:url'
-export let WRANGLER = ['npx', '--yes', '--prefer-offline', 'wrangler@4.111.0']
+import packages from './package.json' with { type: 'json' }
+
+export let WRANGLER = [
+  'npx',
+  '--yes',
+  '--prefer-offline',
+  `wrangler@${packages.devDependencies.wrangler}`,
+]
 
 export let dir = fileURLToPath(new URL('./', import.meta.url)).replace(
   /\/$/,

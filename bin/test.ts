@@ -285,20 +285,31 @@ export async function runTestCommands(
 }
 
 if (import.meta.main) {
-  let env = { TEST_DENO_DIR: denoDir(), DENO_DIR: denoDir() }
-  let result = await runTestCommands([
-    {
-      command: Deno.execPath(),
-      args: [...common, '--parallel', ...tests.filter((f) => !isolated.has(f))],
-      env,
-    },
-    // Deno's sequential test modules still share process environment. A file
-    // that owns HOME must not redirect the next file's nested tools or cache.
-    ...tests.filter((f) => isolated.has(f)).map((file) => ({
-      command: Deno.execPath(),
-      args: [...common, file],
-      env,
-    })),
-  ], { terminateOnSignal: true })
-  Deno.exit(result.code)
+  let suite = Deno.env.get('TASKS_SLOW')
+    ? await (await import('../workers/yak/probe-suite.ts')).probeSuite()
+    : undefined
+  let env = { TEST_DENO_DIR: denoDir(), DENO_DIR: denoDir(), ...suite?.env }
+  try {
+    let result = await runTestCommands([
+      {
+        command: Deno.execPath(),
+        args: [
+          ...common,
+          '--parallel',
+          ...tests.filter((f) => !isolated.has(f)),
+        ],
+        env,
+      },
+      // Deno's sequential test modules still share process environment. A file
+      // that owns HOME must not redirect the next file's nested tools or cache.
+      ...tests.filter((f) => isolated.has(f)).map((file) => ({
+        command: Deno.execPath(),
+        args: [...common, file],
+        env,
+      })),
+    ], { terminateOnSignal: !suite })
+    Deno.exitCode = result.code ?? (result.signal === 'SIGINT' ? 130 : 143)
+  } finally {
+    await suite?.stop()
+  }
 }

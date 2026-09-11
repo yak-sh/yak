@@ -9,7 +9,7 @@
 // in it, its home, a person's role) and writes the ones that change it (a
 // space born, an app born, a deploy). meta.ts is the store below it.
 //
-// Answers are cached in a Map private to this module with a 30-second TTL
+// Answers are cached per store in private Maps, with a 30-second TTL
 // rather than the Cache API: a resolution is a few hundred bytes, the Cache
 // API is per-colo anyway and wants a synthetic Request as its key, and a Map
 // costs nothing to reason about; a rename shows within the TTL. An empty
@@ -355,7 +355,12 @@ export let slugFor = (email: string) => {
 }
 
 let TTL = 30_000
-let cache = new Map<string, { at: number; body: string }>()
+let caches = new WeakMap<Meta, Map<string, { at: number; body: string }>>()
+let cached = (store: Meta) => {
+  let held = caches.get(store)
+  if (!held) caches.set(store, held = new Map())
+  return held
+}
 
 // One seed per isolate, awaited by the WRITE door and by nothing else
 // (T-33176). It used to sit in front of every read, which cost a round trip
@@ -458,6 +463,7 @@ let forwarded = (req: Request) =>
 // on as they are (meta.ts). `over` names the store the door speaks to, which is
 // the seam a test drives a whole directory against.
 export let over = (store: Meta) => async (req: Request): Promise<Response> => {
+  let cache = cached(store)
   let url = new URL(req.url)
   if (url.pathname == '/apply' && req.method == 'POST') {
     let first = seeded.get(store)
@@ -532,7 +538,7 @@ export let stamp = async (
   mutation: { entities: Bundle[] },
 ) => {
   await metaStore(env).apply(mutation.entities, KERNEL)
-  cache.clear()
+  cached(metaStore(env)).clear()
 }
 
 // A listing carries the components the filter NAMES (graph.ts `#wanted`),

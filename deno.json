@@ -149,7 +149,7 @@
       ]
     },
     "test:run": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno run -A bin/test.ts",
-    "test:workerd:run": "TASKS_SLOW=1 deno test -A --unstable-net --unstable-worker-options workers/yak/ workers/yak-tail/"
+    "test:workerd:run": "deno run -A bin/test-workerd.ts"
   },
   "workspace": [
     "./workers/yak",
