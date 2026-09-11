@@ -17,6 +17,12 @@ let caches = new WeakMap<Sql, {
   statements: Map<string, Statement>
 }>()
 
+// Queue cardinality, not graph cardinality, bounds every flush. Without CROSS
+// JOIN SQLite chooses a covering scan of the spine even for an empty queue.
+export const pendingSql = `select p.owner, p.prior, e.eid, a.tables
+    from archetype_pending p cross join entity e on e.id = p.owner
+    left join archetype a on a.entity = p.prior`
+
 export function watchArchetypes(db: Sql, driver: Driver): void {
   db.exec(`create table if not exists archetype_pending (
     owner integer primary key, prior integer
@@ -67,9 +73,7 @@ export function flushArchetypes(db: Sql): Change[] {
     if (!set) text.set(value, set = cache.intern(tablesOf(value)))
     return set
   }
-  let pending = prep(`select p.owner, p.prior, e.eid, a.tables
-    from archetype_pending p join entity e on e.id = p.owner
-    left join archetype a on a.entity = p.prior`).all<{
+  let pending = prep(pendingSql).all<{
     owner: number
     prior: number | null
     eid: string

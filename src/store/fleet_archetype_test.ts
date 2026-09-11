@@ -22,8 +22,19 @@ import { where } from '../sql.ts'
 import { bareDb } from '../testdb.ts'
 import type { Sql } from './sql.ts'
 import { open } from './sqlite.ts'
+import { pendingSql } from './fleet_archetype.ts'
 
 let quote = (s: string) => `"${s.replaceAll('"', '""')}"`
+
+Deno.test('archetype flush scans the queue, never the entity spine', () => {
+  let db = bareDb()
+  let plan = db.prepare(`explain query plan ${pendingSql}`)
+    .all<{ detail: string }>().map((r) => r.detail)
+  assert(plan.some((step) => /^SCAN p\b/.test(step)))
+  assert(plan.some((step) => /^SEARCH e\b/.test(step)))
+  assert(!plan.some((step) => /^SCAN e\b/.test(step)))
+  db.close()
+})
 
 // T-37310: the reported collision now succeeds through Fleet's real writer.
 for (let blobsFirst of [true, false]) {
