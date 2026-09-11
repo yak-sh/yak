@@ -445,19 +445,20 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
 export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
   let link = comp(await row(g, child), 'spawned')
   if (!link?.parent || !await row(g, String(link.parent))) return
-  let entries = await transcript(g, child)
-  let status = statusOf(entries)
-  // Do not consume the receipt id on an intermediate tool turn: the final
-  // message is known only once the child has stopped asking for work. A later
-  // dependency change still triggers this path after the child is quiet.
-  if (!['settled', 'failed', 'stopped'].includes(status)) return
+  // A settled child's receipt usually already exists. Inspect its local tail
+  // before materializing the inherited prefix (which can be very large).
+  let [tail] = await g.read(
+    '.entry.session=' + child + '&.order=-entry.seq&.limit=1',
+  )
+  let entries: Bundle[] | undefined
+  if (!tail) entries = await transcript(g, child)
   let tasks = g.vocab.comps.includes('task')
     ? await g.read(`.task .claim.session=${child}`)
     : []
   let task = tasks.find((b) => b.task)
   let ready = task &&
     await done(g.storage, task.entity.eid, { marks: taskMarks })
-  let last = entries.at(-1)
+  let last = tail ?? entries?.at(-1)
   if (!last) return
   // A parent's own completion is already known to it. Fall back to the
   // ordinary child receipt identity: a new child response must still arrive,
@@ -465,17 +466,28 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
   let announceTask = ready &&
     (taskStatus(task!, taskMarks) != 'done' ||
       comp(task, 'completed')?.by != String(link.parent))
-  let eid = announceTask
-    ? `delivery:${child}:task:${task!.entity.eid}:${
-      taskStatus(task!, taskMarks)
-    }`
-    : `delivery:${child}:${last.entity.eid}`
+  let receipt = (last: Bundle) =>
+    announceTask
+      ? `delivery:${child}:task:${task!.entity.eid}:${
+        taskStatus(task!, taskMarks)
+      }`
+      : `delivery:${child}:${last.entity.eid}`
+  let eid = receipt(last)
+  if (await row(g, eid)) return
+  entries ??= await transcript(g, child)
+  let status = statusOf(entries)
+  // A new receipt still requires the full transcript's terminal outcome.
+  if (!['settled', 'failed', 'stopped'].includes(status)) return
+  // The model may have finished while the fast-path reads were awaiting.
+  // Use the same terminal snapshot for the receipt identity and its text.
+  last = entries.at(-1)!
+  eid = receipt(last)
+  if (await row(g, eid)) return
   let message = announceTask
     ? `task ${
       task!.entity.num != null ? `T-${task!.entity.num}` : task!.entity.eid
     } ${taskStatus(task!, taskMarks)}`
     : `child ${child} ${status}`
-  if (await row(g, eid)) return
   let notice = await row(g, 'notice:' + child)
   let context = notice?.notice
     ? textOf(notice) + '\nOutcome: child ' + status +

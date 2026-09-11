@@ -37,6 +37,7 @@ import {
   CONTENT,
   type Daemon,
   daemon,
+  deliverChild,
   ENTRY,
   type Step,
   taskEntry,
@@ -310,7 +311,17 @@ export let agent = (opts: Opts = {}): Agent => {
           '.spawned .session.status=settled,failed,stopped',
         )
       ) {
-        d.wake(b.entity.eid)
+        // Reconcile delivery without scheduling another execution of a
+        // finished child. The daemon tracks this work for shutdown draining.
+        let parent = String((b.spawned as Comp).parent)
+        d.enqueue(parent, () => deliverChild(h.g, b.entity.eid)).catch(
+          (error) => {
+            diagnostics().report(error, {
+              phase: 'resume-receipt',
+              session: parent,
+            })
+          },
+        )
       }
       let woken = live.map((b) => b.entity.eid)
       for (let s of woken) d.wake(s)

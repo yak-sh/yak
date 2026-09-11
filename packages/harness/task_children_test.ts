@@ -492,3 +492,61 @@ Deno.test('reopening a task allows a new completion author', async () => {
   assertEquals((work.completed as Comp).by, 'q')
   h.close()
 })
+
+Deno.test('existing fork receipts do not read inherited transcript bodies on resume', async () => {
+  let h = open(':memory:')
+  await h.g.apply([
+    { entity: { eid: 'parent' }, session: {} },
+    {
+      entity: { eid: 'source' },
+      entry: { session: 'parent' },
+      content: { body: 'request' },
+    },
+    {
+      entity: { eid: 'answer' },
+      entry: { session: 'parent' },
+      content: { body: 'large history', source: 'source' },
+    },
+    {
+      entity: { eid: 'child' },
+      session: {},
+      spawned: { parent: 'parent' },
+      fork: { from: 'answer' },
+      dispatch: { state: 'settled', order: 1 },
+    },
+    {
+      entity: { eid: 'child-answer' },
+      entry: { session: 'child' },
+      content: { body: 'done', source: 'source' },
+    },
+    {
+      entity: { eid: 'delivery:child:child-answer' },
+      entry: { session: 'parent' },
+      content: { body: 'delivered', source: 'source' },
+    },
+  ])
+  let reads: string[] = []
+  let read = h.g.read.bind(h.g)
+  h.g.read = ((query: string, ...rest: unknown[]) => {
+    reads.push(query)
+    return read(query, ...rest as [])
+  }) as typeof h.g.read
+  let a = agent({
+    h,
+    name: 'fake',
+    model: () => {
+      throw new Error('settled children must not execute')
+    },
+  })
+  try {
+    assertEquals(await a.resume(), [])
+    await a.d.idle('parent')
+    assert(!reads.some((q) => q == '.entry.session=parent'), reads.join('\n'))
+    assert(!reads.some((q) => q == '.entry.session=child'), reads.join('\n'))
+    let [child] = await h.g.storage.tx((tx) => tx.get(['child']))
+    assertEquals((child.dispatch as Comp).state, 'settled')
+    assertEquals((await read('.entry.session=parent')).length, 3)
+  } finally {
+    await a.close()
+  }
+})
