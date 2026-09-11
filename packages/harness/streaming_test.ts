@@ -301,3 +301,37 @@ Deno.test('an empty successful reply completes its ask rather than issuing anoth
     await a.close()
   }
 })
+
+Deno.test('checkpoints bound blob versions and finalization persists one stable response', async () => {
+  const h = open(':memory:')
+  const initial =
+    h.db.prepare('select count(*) as n from blob_text').get<{ n: number }>()!.n
+  let appends = 0
+  transient(h.g).subscribe((f) => {
+    if (f.op == 'append') appends++
+  })
+  const a = agent({
+    h,
+    streaming: true,
+    checkpointMs: 0,
+    model: (req) => {
+      for (let i = 0; i < 2000; i++) req.onText?.({ index: 0, text: 'chunk' })
+      return Promise.resolve({
+        id: 'r',
+        model: 'fake',
+        items: [{ kind: 'assistant', text: 'chunk'.repeat(2000) }],
+      })
+    },
+  })
+  try {
+    const id = await a.start('hello')
+    await a.idle(id)
+    const count =
+      h.db.prepare('select count(*) as n from blob_text').get<{ n: number }>()!
+        .n
+    assertEquals(appends, 2000)
+    assert(count - initial < 20, 'not one blob per delta')
+  } finally {
+    await a.close()
+  }
+})
