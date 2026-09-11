@@ -600,3 +600,21 @@ Deno.test('receipt fast-path refreshes its tail when a child finishes between re
     h.close()
   }
 })
+
+Deno.test('task fork claims original task and snapshots original title/body exactly once', async () => {
+  let { h, ctx } = setup()
+  try {
+    let fork = sessionTools(h.g).find((t) => t.name == 'fork')!
+    ctx = { ...ctx, entries: await transcript(h.g, 'p') } as typeof ctx
+    let child = await fork.run({ task: 'work' }, ctx)
+    let entries = await transcript(h.g, String(child))
+    assertEquals(entries.filter((b) => textOf(b) == 'Title\n\nBody').length, 1)
+    assertEquals(entries[0].entity.eid, 'input')
+    assertEquals((await h.g.read('.task')).length, 1)
+    assertEquals(((await h.g.read('.task'))[0].claim as Comp).session, child)
+    assertEquals(await fork.run({ task: 'work' }, ctx), child)
+    assertEquals(await transcript(h.g, String(child)), entries)
+  } finally {
+    h.close()
+  }
+})

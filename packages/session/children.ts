@@ -101,7 +101,7 @@ let delegation = (
 ): Tool => ({
   name: fork ? 'fork' : 'spawn',
   description: fork
-    ? 'Fork your transcript before this tool turn, with a new prompt. Returns the concurrent child session id; completion is delivered automatically.'
+    ? 'Fork your transcript before this tool turn with a prompt OR atomically claimed task (original title/body). Returns the concurrent child session id; completion is delivered automatically.'
     : 'Start a fresh subagent with a prompt OR a task id. A task is claimed atomically and its title/body become the input. Returns a child ID immediately; a shared worker pool queues excess work durably and delivers completion automatically.',
   parameters: {
     type: 'object',
@@ -151,10 +151,15 @@ let delegation = (
         : []
       let parents = work.length ? work.map((b) => b.entity.eid) : [ctx.session]
       let doc = comp(task, 'doc')
-      let prompt = task ? doc?.body || doc?.title || '' : args.prompt
+      let prompt = minted
+        ? doc?.body || doc?.title || ''
+        : task
+        ? [doc?.title, doc?.body].filter(Boolean).join('\n\n')
+        : args.prompt
       if (minted && limits.taskDefaults) {
         args = { ...await limits.taskDefaults(ctx.session, eid), ...args }
       }
+      if (minted) ctx = { ...ctx, entries: await transcript(g, ctx.session) }
       let using = { ...usingBefore(ctx.entries) }
       let models: Bundle[] = []
       if (args.model != null) {
@@ -179,14 +184,39 @@ let delegation = (
       // Never inherit the unanswered delegation call (or any sibling calls).
       let anchorId = comp(newestAsk(ctx.entries), 'ask')?.through
       let anchor = ctx.entries.find((b) => b.entity.eid == anchorId)
+      let pendingInputs: Bundle[] = []
       if (minted) {
         // User admission has no model tool-turn boundary. Include the newest
         // stable prefix, stopping before the first mutable provider attempt.
+        // Record later inputs separately: a cutoff alone loses user messages.
         let active = ctx.entries.findIndex((b) =>
-          (b.attempt as Comp | undefined)?.state == 'inflight'
+          ['inflight', 'interrupted'].includes(
+            String((b.attempt as Comp | undefined)?.state),
+          )
         )
         anchor = ctx.entries.at(active < 0 ? -1 : active - 1)
         if (active == 0) anchor = undefined
+        if (active >= 0) {
+          pendingInputs = ctx.entries.slice(active).filter((b) =>
+            !b.ask && !b.call && !b.result && !b.error && !b.exception &&
+            !(b.content as Comp | undefined)?.source &&
+            (b.content || b.prompt || b.using)
+          ).map((b, i) => ({
+            entity: { eid: `${eid}:recorded-input:${i}` },
+            ...b.content ? { content: { ...(b.content as Comp) } } : {},
+            ...b.prompt ? { prompt: { ...(b.prompt as Comp) } } : {},
+            ...b.using ? { using: { ...(b.using as Comp) } } : {},
+            ...b.notice ? { notice: { ...(b.notice as Comp) } } : {},
+          }))
+          pendingInputs.unshift({
+            entity: { eid: `${eid}:snapshot-limit` },
+            prompt: { scope: 'local', source: 'harness:task-snapshot' },
+            content: {
+              body:
+                'Task context snapshot: unfinished provider output and its tool activity are excluded. Later user inputs and passive context are recorded below as submitted, not dropped. This snapshot does not track subsequent parent changes.',
+            },
+          })
+        }
       }
       if (fork && !anchor && !minted) {
         throw new ToolError('fork', 'no prefix to fork')
@@ -215,6 +245,7 @@ let delegation = (
           content: { body: textOf(b) },
           prompt: { ...(b.prompt as Comp) },
         }))
+      context.push(...pendingInputs)
       if (fork) {
         context.push({
           entity: { eid: eid + ':fork-context' },

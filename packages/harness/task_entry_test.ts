@@ -194,3 +194,52 @@ Deno.test('auto-task notice is lazy, reaches next ask, and contextual completion
     await a.close()
   }
 })
+
+Deno.test('taskEntry records latest inputs beyond mutable output without replay or reload duplication', async () => {
+  let h = open(':memory:')
+  try {
+    await h.g.apply([
+      { entity: { eid: 'p' }, session: { id: 'parent' } },
+      {
+        entity: { eid: 'first' },
+        entry: { session: 'p' },
+        content: { body: 'first input' },
+      },
+      {
+        entity: { eid: 'active' },
+        entry: { session: 'p' },
+        ask: { through: 'first' },
+        attempt: { state: 'inflight' },
+      },
+      {
+        entity: { eid: 'partial' },
+        entry: { session: 'p' },
+        content: { body: 'unfinished', source: 'active' },
+      },
+      {
+        entity: { eid: 'latest' },
+        entry: { session: 'p' },
+        content: { body: 'latest essential instruction' },
+      },
+    ])
+    let result = await taskEntry(h.g, 'p', 'tiny task')
+    let { transcript } = await import('@yaks/session')
+    let before = await transcript(h.g, result.child)
+    assertEquals(
+      before.filter((b) =>
+        (b.content as Comp)?.body == 'latest essential instruction'
+      ).length,
+      1,
+    )
+    assertEquals(before.some((b) => b.entity.eid == 'partial'), false)
+    assertEquals(before.some((b) => b.entity.eid == 'first'), true)
+    await h.g.apply([{
+      entity: { eid: 'partial' },
+      content: { body: 'completed output' },
+    }])
+    assertEquals(await transcript(h.g, result.child), before)
+    assertEquals(await transcript(h.g, result.child), before)
+  } finally {
+    h.close()
+  }
+})
