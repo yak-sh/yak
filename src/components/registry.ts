@@ -24,6 +24,7 @@ import { ent, findEid, mutate, problem } from '../live.ts'
 import { editorViews } from './editors.tsx'
 import { and, present } from '@yaks/query'
 import { type Ent, statusOf } from '../types.ts'
+import { archetypeTables } from '../live_archetypes.ts'
 import { fleetVocab } from '../vocab/fleet_vocab.ts'
 
 export type Renderer = ComponentRenderer<Ent> & {
@@ -49,19 +50,37 @@ let columns = (): Entry[] => [
   ...editors(vocab, editOptions),
   properties(vocab),
 ]
-export let registry = registryOf<Entry, Action, Ent>(columns(), { vocab })
+export let registry = registryOf<Entry, Action, Ent>(columns(), {
+  vocab,
+  archetypes: archetypeTables,
+})
 
 // Ent flattens the spine and adds display/edge data. Queries read components;
 // native views and action factories still receive the original Ent.
-export let bundle = (e: Ent): Bundle => ({
-  ...Object.fromEntries(
-    Object.entries(e).filter(([, row]) =>
-      row && typeof row == 'object' && !Array.isArray(row)
-    ),
-  ),
-  entity: { eid: e.eid, num: e.num },
-  ...(e.task && { task: { ...e.task, status: statusOf(e) } }),
-})
+export let bundle = (e: Ent): Bundle => {
+  let entity = { ...(e.entity as object), eid: e.eid, num: e.num }
+  // Presence selection reads only the spine. Bodies and derived task status
+  // are projected lazily when a value predicate or the selected view asks.
+  let row = (key: string) => {
+    if (key == 'entity') return entity
+    let value = e[key]
+    if (!value || typeof value != 'object' || Array.isArray(value)) return
+    return key == 'task' ? { ...e.task, status: statusOf(e) } : value
+  }
+  return new Proxy({ entity } as Bundle, {
+    get: (_target, key) => typeof key == 'string' ? row(key) : undefined,
+    ownKeys: () => [
+      ...new Set([
+        'entity',
+        ...Object.keys(e).filter((k) => row(k)),
+      ]),
+    ],
+    getOwnPropertyDescriptor: (_target, key) =>
+      typeof key == 'string' && row(key)
+        ? { enumerable: true, configurable: true, value: row(key) }
+        : undefined,
+  })
+}
 
 // Kept as the plugin's component-query builder; no predicate callbacks.
 export let has = (...names: string[]) => and(...names.map(present))

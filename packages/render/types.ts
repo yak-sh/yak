@@ -7,6 +7,7 @@
 import type { Bundle } from '@yaks/match'
 import type { Query } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
+import type { ArchetypeLookup } from './archetype.ts'
 
 /** A host node, literal content, an empty child, or nested children. */
 export type Child<Node> =
@@ -63,6 +64,8 @@ export type Contributor<A = Action, E = Bundle> = {
 
 /** Registry configuration; actions preserve component and contribution order. */
 export type Options<A = Action, E = Bundle> = {
+  /** Immutable table sets held by the host's descriptor subscription. */
+  archetypes?: ArchetypeLookup
   actions?:
     | Readonly<Record<string, readonly (A & { when?: Query })[]>>
     | readonly Contributor<A, E>[]
@@ -82,5 +85,5 @@ export type Registry<
 /** The part of a registry selection needs, independent of its action types. */
 export type Selection<R extends Registration = Renderer> = Pick<
   Registry<R>,
-  'renderers' | 'views'
+  'renderers' | 'views' | 'archetypes'
 >

@@ -44,6 +44,8 @@
 import { type Bundle, type Filter, filter } from '@yaks/match'
 import type { Query } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
+import { type ArchetypeLookup, archetypeMatch } from './archetype.ts'
+export type { ArchetypeLookup } from './archetype.ts'
 import { column, columnVocab } from './column.ts'
 import type {
   Action,
@@ -114,18 +116,26 @@ let predicate = (match: Query, vocab: Vocab): Filter => {
   return f
 }
 
-let matches = (match: Registration['match'], bundle: Bundle, vocab: Vocab) =>
-  match === true || predicate(match, vocab)(bundle)
+let matches = (
+  match: Registration['match'],
+  bundle: Bundle,
+  vocab: Vocab,
+  archetypes?: ArchetypeLookup,
+) =>
+  match === true ||
+  (archetypeMatch(match, bundle, vocab, archetypes) ??
+    predicate(match, vocab)(bundle))
 
 let best = <R extends Registration>(
   pool: readonly R[],
   bundle: Bundle,
   vocab: Vocab,
+  archetypes?: ArchetypeLookup,
 ): R | undefined => {
   let top: R | undefined
   let max = -Infinity
   for (let r of pool) {
-    if (!matches(r.match, bundle, vocab)) continue
+    if (!matches(r.match, bundle, vocab, archetypes)) continue
     // Shift the whole query tier so an empty conjunction beats the catch-all
     // while still ranking below every query with clauses.
     let score = r.match === true ? 0.5 : 1 + r.match.clauses.length
@@ -143,14 +153,15 @@ let walk = <R extends Registration>(
   view: string | undefined,
   vocab: Vocab,
 ): R | undefined => {
-  let { renderers, views } = registry
+  let { renderers, views, archetypes } = registry
   let pick = (name: string) =>
-    best(renderers.filter((r) => r.view == name), bundle, vocab)
+    best(renderers.filter((r) => r.view == name), bundle, vocab, archetypes)
   if (!view) {
     return best(
       renderers.filter((r) => !views || views.includes(r.view)),
       bundle,
       vocab,
+      archetypes,
     ) ?? pick('JSON')
   }
   for (let v = view; v; v = v.replace(/^[^.]+\.?/, '')) {
@@ -213,6 +224,7 @@ export let applicable = <R extends Registration>(
   vocab: Vocab,
   ctx: Context = {},
 ): string[] => {
+  let archetypes = ctx.col == null ? registry.archetypes : undefined
   if (ctx.col != null) {
     bundle = column(vocab, ctx)
     vocab = columnVocab
@@ -221,7 +233,7 @@ export let applicable = <R extends Registration>(
     [...new Set(registry.renderers.map((r) => r.view))]
   return views.filter((view) =>
     registry.renderers.some((r) =>
-      r.view == view && matches(r.match, bundle, vocab)
+      r.view == view && matches(r.match, bundle, vocab, archetypes)
     )
   )
 }
@@ -252,7 +264,7 @@ export function actions<R extends Registration, A, E>(
   let test = (match: Registration['match']) => {
     if (match === true) return true
     if (!vocab) throw new Error('action conditions need a vocabulary')
-    return matches(match, bundle, vocab)
+    return matches(match, bundle, vocab, registry.archetypes)
   }
   let offered: readonly (A & { when?: Query })[]
   if (Array.isArray(registry.actions)) {

@@ -8,6 +8,7 @@
 // Then db.ts snapshot() dissolves into @yaks/api subscriptions and @yaks/sync,
 // not a new package primitive. Never restore whole-db sync or an unbounded cache.
 import { IdError } from './types.ts'
+import { bootArchetypes } from './live_archetypes.ts'
 import {
   batch,
   computed,
@@ -93,7 +94,7 @@ import {
 // keyof and lose them); the same open index signature is intersected back on so
 // a plugin's comp reaches the cache as `unknown` (D-18663 seam 2, T-12765).
 export type Comps =
-  & { entity?: { eid: string; num: number } }
+  & { entity?: { eid: string; num: number; archetype?: string } }
   & Omit<EntCore, 'eid' | 'num' | 'kind' | 'refs' | 'kids'>
   & { [comp: string]: Record<string, unknown> | undefined }
 
@@ -2713,6 +2714,7 @@ export let boot = async () => {
   if (!canShare()) {
     await once()
     connect()
+    await bootArchetypes()
     return
   }
   let nav = (globalThis as { navigator: Navigator }).navigator
@@ -2755,6 +2757,7 @@ export let boot = async () => {
   )
   addEventListener('pagehide', owner.leave)
   await owner.start()
+  await bootArchetypes()
 }
 ;(globalThis as {
   __sync?: () => {
@@ -2854,6 +2857,7 @@ export let ent = (eid: string): Ent => {
     // created/updated (provenance) ride here like any other component now
     ...(session ? { session } : {}),
     eid,
+    entity,
     num: entity?.num ?? 0,
     kind: kindOf(comps), // derived — the display convention, not data
     refs: mine
