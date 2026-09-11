@@ -51,7 +51,7 @@ let {
 )
 let { db } = await import('./live_db.ts')
 let { hookClaim, noticesFor, rows } = await import('./client.ts')
-let { childEnv, childPath } = await import('./agent_env.ts')
+let { childEnv, childPath, denoCache } = await import('./agent_env.ts')
 let { append, readEntries } = await import('./entries.ts')
 let { graphLog, pageEntries } = await import('./entry_log.ts')
 let { referencedEntry } = await import('./referenced.ts')
@@ -343,6 +343,21 @@ slow('managed child environment excludes provider credentials', () => {
       else Deno.env.set(name, before[i]!)
     }
   }
+})
+
+// T-37394: the cache is pinned in the env, not asked for in the docs, so a
+// probe that moves HOME on the command line still writes to the one cache. A
+// `HOME=` prefix cannot unset a variable the parent exported — that is why the
+// pin works, and this spawns a child to say so rather than trusting it.
+slow('a child cannot move the module cache by moving HOME', async () => {
+  let env = childEnv('session', '/scratch/tree')
+  assertEquals(env.DENO_DIR, denoCache)
+  let out = await new Deno.Command('sh', {
+    args: ['-c', 'HOME=/nonexistent printenv DENO_DIR'],
+    clearEnv: true,
+    env,
+  }).output()
+  assertEquals(new TextDecoder().decode(out.stdout).trim(), denoCache)
 })
 
 slow(

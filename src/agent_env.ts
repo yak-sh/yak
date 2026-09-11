@@ -9,6 +9,27 @@
 // hand-edited running unit still hands agents the tracked PATH — a missing
 // provider dir is exit 127 for the agent (M-17876), and this is what prevents
 // it. See T-16728.
+//
+// The module cache is pinned the same way, and for the same reason: a value
+// every child gets beats a rule every agent is asked to remember.
+
+// Deno resolves its module cache under HOME, so a child handed a redirected
+// home — `HOME=$(mktemp -d) deno …`, the probe-isolation idiom — downloads a
+// whole cache of its own, ~800 MB including the workerd binary, and leaves it
+// there. 142 such throwaway homes in twelve hours ate 46.6 GB and filled the
+// disk twice (T-37394). The docs already asked agents to export DENO_DIR
+// first; guidance is not enforcement (M-4066), so the cache is pinned in the
+// environment instead. Resolved ONCE from the environment this process started
+// in, before anything can move HOME, and exported to every child — where a
+// `HOME=` prefix on the command line cannot reach it, which is the point.
+export let denoCache = (() => {
+  let configured = Deno.env.get('DENO_DIR')
+  if (configured) return configured
+  let home = Deno.env.get('HOME')
+  if (Deno.build.os == 'darwin') return `${home}/Library/Caches/deno`
+  if (Deno.build.os == 'windows') return `${Deno.env.get('LOCALAPPDATA')}\\deno`
+  return `${Deno.env.get('XDG_CACHE_HOME') ?? `${home}/.cache`}/deno`
+})()
 
 // The tracked drop-in, resolved from this module so CWD never matters.
 let CONTRACT = new URL('../etc/tasksd.service.d/path.conf', import.meta.url)
@@ -45,6 +66,7 @@ export let childEnv = (
   return {
     PATH: childPath(home),
     HOME: home,
+    DENO_DIR: denoCache,
     TERM: Deno.env.get('TERM') ?? 'dumb',
     ...(session ? { TASKS_SESSION: session } : {}),
     TASKS_TREE: tree,

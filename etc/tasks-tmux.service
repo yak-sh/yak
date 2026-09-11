@@ -23,6 +23,15 @@ Description=tmux server for the tasks fleet
 # point is that the two lifetimes are unrelated.
 
 [Service]
+# The tmux server is the ancestor of every operator pane, so its environment is
+# where a variable reaches every interactive agent shell at once. DENO_DIR is
+# pinned here for the same reason src/agent_env.ts pins it for spawned agents:
+# a probe that moves HOME would otherwise download an ~800 MB module cache into
+# its throwaway home, and 142 of those filled the disk twice (T-37394). A
+# `HOME=` prefix on a command cannot unset what the pane already exports.
+# Panes inherit this at server start — tmux's update-environment does not
+# touch DENO_DIR — so a running server wants `tmux setenv -g DENO_DIR …` too.
+Environment=DENO_DIR=%h/.cache/deno
 # ONE tmux invocation, not two. `start-server` alone leaves a server with no
 # sessions, which exits immediately — a second command to set the option
 # always loses that race (measured). `exit-empty off` in the same invocation
