@@ -129,6 +129,12 @@ export let statusOf = (entries: Bundle[]): TranscriptStatus => {
   if (all.some((b) => (b.attempt as Comp | undefined)?.state == 'inflight')) {
     return 'running'
   }
+  if (kind == 'error' && (newest.error as Comp)?.code == 'interrupted') {
+    const ask = newestAsk(all)
+    return ask && all.some((b) => seqOf(b) > seqOf(ask) && kindOf(b) == 'input')
+      ? 'pending'
+      : 'settled'
+  }
   if (kind == 'error') {
     // failed once the last RETRIES entries are all errors
     let tail = all.slice(-RETRIES)
@@ -223,6 +229,18 @@ export let sessionStatus = {
       when ${wears(EXCEPTION)} then 'failed'
       when exists (select 1 from attempt a join entry e on e.entity = a.entity where e.session = ${owner} and a.state = 'inflight') then 'running'
       when exists (select 1 from dispatch d where d.entity = ${owner} and d.state = 'queued') then 'queued'
+      when ${wears(ERROR, " and k.code = 'interrupted'")} then case
+        when exists (select 1 from entry u join content c on c.entity = u.entity
+          where u.session = ${owner} and u.seq > (select seq from entry where entity = ${ask})
+          and c.source is null
+          and not exists (select 1 from notice n where n.entity = u.entity)
+          and not exists (select 1 from error n where n.entity = u.entity)
+          and not exists (select 1 from exception n where n.entity = u.entity)
+          and not exists (select 1 from result n where n.entity = u.entity)
+          and not exists (select 1 from ask n where n.entity = u.entity)
+          and not exists (select 1 from call n where n.entity = u.entity)
+          and not exists (select 1 from stop n where n.entity = u.entity))
+        then 'pending' else 'settled' end
       when ${
       wears(ERROR)
     } then case when ${allErrors} then 'failed' else 'pending' end

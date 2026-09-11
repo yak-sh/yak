@@ -31,6 +31,26 @@ let said = (n: number, source: string) =>
 
 // Every shape, as the entries that make it.
 let shapes: [string, Bundle[], TranscriptStatus][] = [
+  ['interrupted response waits for input', [
+    input(1),
+    entry(2, { ask: { through: 'e1' }, attempt: { state: 'interrupted' } }),
+    said(3, 'e2'),
+    entry(4, {
+      error: { code: 'interrupted' },
+      content: { body: 'Response interrupted.' },
+    }),
+  ], 'settled'],
+  ['input during interrupted response remains pending', [
+    input(1),
+    entry(2, { ask: { through: 'e1' }, attempt: { state: 'interrupted' } }),
+    input(3),
+    said(4, 'e2'),
+    entry(5, {
+      error: { code: 'interrupted' },
+      content: { body: 'Response interrupted.' },
+    }),
+  ], 'pending'],
+
   ['input arriving during ask remains pending after response', [
     input(1),
     entry(2, { ask: { to: 'm', through: 'e1' } }),

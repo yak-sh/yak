@@ -201,8 +201,8 @@ export let react = async (
     return append([
       { entity: unfinished.entity, attempt: { state: 'interrupted' } },
       line(
-        { [EXCEPTION]: {} },
-        'Provider attempt interrupted; remote execution is unknown. Inspect before retrying.',
+        { [ERROR]: { code: 'interrupted' } },
+        'Response interrupted.',
       ),
     ])
   }
@@ -275,6 +275,13 @@ export let react = async (
       line({ [ERROR]: { code: 'no_model' } }, 'no model in force'),
     ])
   }
+  // Only completed responses can supply provider continuation state. A partial
+  // response remains ordinary visible history after the last completed anchor.
+  asked = newestAsk(
+    entries.filter((b) =>
+      !b.attempt || (b.attempt as Comp).state == 'completed'
+    ),
+  )
   let anchorId = deps.model.anchor && asked
     ? deps.model.anchor(asked)
     : undefined
@@ -407,13 +414,17 @@ export let react = async (
         deps.report?.(failure, session, 'stream-checkpoint')
       }
     }
-    if (!(e instanceof ModelError)) deps.report?.(e, session, 'model')
+    const operational = e instanceof ModelError ||
+      (e instanceof Error && e.name == 'AbortError')
+    if (!operational) deps.report?.(e, session, 'model')
     if (deps.streaming) {
       return append([
         { entity: ask.entity, attempt: { state: 'interrupted' } },
         line(
-          { [EXCEPTION]: {} },
-          'Provider attempt failed or interrupted: ' + String(e),
+          operational
+            ? { [ERROR]: { code: 'interrupted' } }
+            : { [EXCEPTION]: {} },
+          operational ? 'Response interrupted: ' + String(e) : String(e),
         ),
       ])
     }

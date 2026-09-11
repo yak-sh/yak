@@ -42,12 +42,25 @@ blob versions. A crash can lose the tail after the last checkpoint. There is no
 timer-based checkpoint while the provider is silent.
 
 Success patches the original ask to `completed` and updates the same response
-entries; it does not append duplicate final messages. Failure preserves partial
-text and marks the attempt `interrupted`, followed by an exception entry. This
-pilot deliberately does not automatically distinguish retry-safe provider errors
-from ambiguous execution. Inspect the failure and submit a new message to retry.
-The raw exception, request configuration, and ask boundary remain available.
-Partial content is durable but is not represented as a successful response.
+entries; it does not append duplicate final messages. Operational interruption
+(abort, transport/provider error, or an unfinished attempt recovered on restart)
+preserves received/checkpointed text and marks the attempt `interrupted`. An
+`error{code: "interrupted"}` entry records the outcome; it is not a defect or a
+crashed session. With no newer input the session settles, without automatically
+resending the request. New inputs already admitted during the attempt, or
+submitted afterward, continue normally. Repeated restarts do not append
+additional interruption records.
+
+Continuation uses the last completed response, never an interrupted attempt's
+provider ID. Intervening user inputs and partial assistant text are included as
+conversation history. Partial tool arguments are not admitted as executable
+calls. This is not a guarantee of exactly-once execution for provider-native
+side effects: an interrupted image or other native operation may have executed
+remotely, and a new explicit request may repeat it.
+
+Unexpected adapter/programming exceptions and checkpoint/finalization failures
+remain defects with exception records. Recognized operational errors bypass the
+defect journal. This does not change nonstreaming request retry policy.
 
 New messages arriving during a request remain outside its frozen boundary and
 are served by a subsequent ask. Session status stays running while the request

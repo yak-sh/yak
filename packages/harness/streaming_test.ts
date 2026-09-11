@@ -2,6 +2,7 @@ import { assert, assertEquals } from '@std/assert'
 import { agent } from './run.ts'
 import { open } from './store.ts'
 import { type Comp, transient } from '@yaks/graph'
+import { ModelError } from '@yaks/model'
 import { statusOf } from '@yaks/session'
 
 Deno.test('streaming records ask before dispatch, projects text without durable token writes, and finalizes same entry', async () => {
@@ -85,7 +86,7 @@ Deno.test('partial failure preserves text and does not automatically retry ambig
     model: (req) => {
       calls++
       req.onText?.({ index: 0, text: 'partial' })
-      return Promise.reject(new Error('connection lost'))
+      return Promise.reject(new ModelError('network', 'connection lost'))
     },
   })
   try {
@@ -93,7 +94,7 @@ Deno.test('partial failure preserves text and does not automatically retry ambig
     await a.idle(id)
     const entries = await a.transcript(id)
     assertEquals(calls, 1)
-    assertEquals(statusOf(entries), 'failed')
+    assertEquals(statusOf(entries), 'settled')
     assertEquals(
       (entries.find((b) => b.ask)!.attempt as Comp).state,
       'interrupted',
@@ -224,7 +225,7 @@ Deno.test('restart of dispatched attempt is interrupted, never resent', async ()
     await a.resume()
     await a.idle('interrupted-session')
     const entries = await a.transcript('interrupted-session')
-    assertEquals(statusOf(entries), 'failed')
+    assertEquals(statusOf(entries), 'settled')
     assertEquals(
       (entries.find((b) => b.ask)!.attempt as Comp).state,
       'interrupted',
@@ -331,6 +332,83 @@ Deno.test('checkpoints bound blob versions and finalization persists one stable 
         .n
     assertEquals(appends, 2000)
     assert(count - initial < 20, 'not one blob per delta')
+  } finally {
+    await a.close()
+  }
+})
+
+Deno.test('operational interruption retains partial context, waits, and continues from completed anchor', async () => {
+  const h = open(':memory:')
+  const requests: import('@yaks/model').Request[] = []
+  const model: import('@yaks/model').Model = (req) => {
+    requests.push(req)
+    if (requests.length == 2) {
+      req.onText?.({ index: 0, text: 'That' })
+      return Promise.reject(new DOMException('Stopped', 'AbortError'))
+    }
+    return Promise.resolve({
+      id: 'r' + requests.length,
+      model: 'fake',
+      items: [{ kind: 'assistant' as const, text: 'okay' }],
+    })
+  }
+  model.mark = (reply) => ({ openai: { response_id: reply.id } })
+  model.anchor = (entry) =>
+    (entry.openai as Comp | undefined)?.response_id as string | undefined
+  const a = agent({ h, streaming: true, model })
+  try {
+    const id = await a.start('first')
+    await a.idle(id)
+    await a.send(id, 'second')
+    await a.idle(id)
+    let rows = await a.transcript(id)
+    assertEquals(statusOf(rows), 'settled')
+    assertEquals(rows.filter((b) => b.exception).length, 0)
+    assertEquals(rows.filter((b) => b.error).length, 1)
+    await a.resume()
+    await a.resume()
+    await a.idle(id)
+    assertEquals(requests.length, 2)
+    await a.send(id, 'continue')
+    await a.idle(id)
+    assertEquals(requests.length, 3)
+    assertEquals(requests[2].anchor, 'r1')
+    assert(
+      requests[2].items.some((i) => i.kind == 'user' && i.text == 'second'),
+    )
+    assert(
+      requests[2].items.some((i) => i.kind == 'assistant' && i.text == 'That'),
+    )
+    assert(
+      requests[2].items.some((i) => i.kind == 'user' && i.text == 'continue'),
+    )
+    rows = await a.transcript(id)
+    assertEquals(statusOf(rows), 'settled')
+  } finally {
+    await a.close()
+  }
+})
+
+Deno.test('unexpected model programming failure remains an exception', async () => {
+  const h = open(':memory:')
+  const a = agent({
+    h,
+    streaming: true,
+    model: () => {
+      throw new TypeError('broken adapter')
+    },
+  })
+  try {
+    const id = await a.start('hello')
+    await a.idle(id)
+    const rows = await a.transcript(id)
+    assertEquals(statusOf(rows), 'failed')
+    assert(
+      rows.some((b) =>
+        b.exception &&
+        String((b.content as Comp)?.body).includes('broken adapter')
+      ),
+    )
   } finally {
     await a.close()
   }
