@@ -57,7 +57,11 @@ Deno.test('fleet CAS creates default both doc columns and echo whole writable ro
   assertEquals(blob.blob, {
     bytes: new TextEncoder().encode('Only body 🦬').length,
   })
-  assertEquals(blob.entity, { eid: sha('Only body 🦬'), num: null })
+  assertEquals(blob.entity, {
+    eid: sha('Only body 🦬'),
+    num: null,
+    archetype: String(readComp(db, blob.entity.eid, 'entity')?.archetype),
+  })
   assertEquals(asChanges(blob).find((c) => c.name == 'entity'), {
     eid: sha('Only body 🦬'),
     name: 'entity',

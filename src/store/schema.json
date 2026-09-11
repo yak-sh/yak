@@ -13,6 +13,14 @@
   },
   {
     "kind": "exec",
+    "sql": "create table if not exists \"archetype\" (\n    entity integer primary key references entity(id),\n    \"tables\" text\n  );"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists \"retired\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "exec",
     "sql": "create table if not exists \"filed\" (\n    entity integer primary key references entity(id),\n    \"priority\" real,\n    \"project\" integer references entity(id),\n    \"assignee\" integer references entity(id),\n    \"domain\" text\n  );"
   },
   {
@@ -278,6 +286,12 @@
   {
     "kind": "exec",
     "sql": "create table if not exists \"satisfies\" (\n    entity integer primary key references entity(id)\n  );"
+  },
+  {
+    "kind": "addColumn",
+    "table": "archetype",
+    "col": "tables",
+    "sql": "alter table archetype add column \"tables\" text"
   },
   {
     "kind": "addColumn",
@@ -1145,6 +1159,12 @@
   },
   {
     "kind": "addColumn",
+    "table": "entity",
+    "col": "archetype",
+    "sql": "alter table \"entity\" add column archetype integer references entity(id)"
+  },
+  {
+    "kind": "addColumn",
     "table": "session",
     "col": "pid",
     "sql": "alter table \"session\" add column pid integer"
@@ -1814,6 +1834,1190 @@
   },
   {
     "kind": "exec",
+    "sql": "create index if not exists entity_archetype on \"entity\" (\"archetype\");"
+  },
+  {
+    "kind": "exec",
     "sql": "drop index if exists subscription_one"
+  },
+  {
+    "kind": "exec",
+    "sql": "create table if not exists archetype_pending (\n    owner integer primary key, prior integer\n  );\n  create table if not exists archetype_delta (\n    owner integer, name text, present integer, primary key(owner, name)\n  );\n  create trigger if not exists archetype_birth after insert on entity begin\n    insert or ignore into archetype_pending(owner, prior) values (new.id, null);\n  end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_about_insert\"\n        after insert on \"about\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'about', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_about_delete\"\n        after delete on \"about\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'about', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_accept_insert\"\n        after insert on \"accept\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'accept', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_accept_delete\"\n        after delete on \"accept\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'accept', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_alias_insert\"\n        after insert on \"alias\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'alias', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_alias_delete\"\n        after delete on \"alias\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'alias', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_anchor_insert\"\n        after insert on \"anchor\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'anchor', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_anchor_delete\"\n        after delete on \"anchor\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'anchor', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_app_insert\"\n        after insert on \"app\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'app', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_app_delete\"\n        after delete on \"app\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'app', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_apply_insert\"\n        after insert on \"apply\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'apply', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_apply_delete\"\n        after delete on \"apply\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'apply', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_archetype_insert\"\n        after insert on \"archetype\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'archetype', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_archetype_delete\"\n        after delete on \"archetype\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'archetype', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_architecture_insert\"\n        after insert on \"architecture\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'architecture', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_architecture_delete\"\n        after delete on \"architecture\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'architecture', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_archived_insert\"\n        after insert on \"archived\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'archived', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_archived_delete\"\n        after delete on \"archived\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'archived', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_attachment_insert\"\n        after insert on \"attachment\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'attachment', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_attachment_delete\"\n        after delete on \"attachment\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'attachment', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_attention_insert\"\n        after insert on \"attention\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'attention', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_attention_delete\"\n        after delete on \"attention\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'attention', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_bash_insert\"\n        after insert on \"bash\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'bash', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_bash_delete\"\n        after delete on \"bash\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'bash', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_blob_insert\"\n        after insert on \"blob\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'blob', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_blob_delete\"\n        after delete on \"blob\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'blob', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_blob_text_insert\"\n        after insert on \"blob_text\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'blob_text', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_blob_text_delete\"\n        after delete on \"blob_text\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'blob_text', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_blocked_insert\"\n        after insert on \"blocked\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'blocked', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_blocked_delete\"\n        after delete on \"blocked\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'blocked', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_board_insert\"\n        after insert on \"board\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'board', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_board_delete\"\n        after delete on \"board\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'board', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_brief_insert\"\n        after insert on \"brief\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'brief', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_brief_delete\"\n        after delete on \"brief\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'brief', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_bug_insert\"\n        after insert on \"bug\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'bug', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_bug_delete\"\n        after delete on \"bug\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'bug', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_call_insert\"\n        after insert on \"call\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'call', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_call_delete\"\n        after delete on \"call\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'call', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_camera_insert\"\n        after insert on \"camera\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'camera', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_camera_delete\"\n        after delete on \"camera\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'camera', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_cancel_insert\"\n        after insert on \"cancel\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'cancel', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_cancel_delete\"\n        after delete on \"cancel\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'cancel', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_cancelled_insert\"\n        after insert on \"cancelled\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'cancelled', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_cancelled_delete\"\n        after delete on \"cancelled\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'cancelled', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_canvas_insert\"\n        after insert on \"canvas\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'canvas', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_canvas_delete\"\n        after delete on \"canvas\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'canvas', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_card_insert\"\n        after insert on \"card\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'card', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_card_delete\"\n        after delete on \"card\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'card', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_chat_insert\"\n        after insert on \"chat\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'chat', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_chat_delete\"\n        after delete on \"chat\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'chat', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_checkpoint_insert\"\n        after insert on \"checkpoint\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'checkpoint', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_checkpoint_delete\"\n        after delete on \"checkpoint\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'checkpoint', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_claim_insert\"\n        after insert on \"claim\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'claim', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_claim_delete\"\n        after delete on \"claim\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'claim', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_client_insert\"\n        after insert on \"client\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'client', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_client_delete\"\n        after delete on \"client\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'client', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_comment_insert\"\n        after insert on \"comment\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'comment', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_comment_delete\"\n        after delete on \"comment\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'comment', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_commit_insert\"\n        after insert on \"commit\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'commit', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_commit_delete\"\n        after delete on \"commit\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'commit', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_completed_insert\"\n        after insert on \"completed\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'completed', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_completed_delete\"\n        after delete on \"completed\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'completed', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_conflict_insert\"\n        after insert on \"conflict\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'conflict', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_conflict_delete\"\n        after delete on \"conflict\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'conflict', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_contains_insert\"\n        after insert on \"contains\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'contains', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_contains_delete\"\n        after delete on \"contains\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'contains', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_content_insert\"\n        after insert on \"content\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'content', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_content_delete\"\n        after delete on \"content\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'content', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_created_insert\"\n        after insert on \"created\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'created', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_created_delete\"\n        after delete on \"created\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'created', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_cursor_insert\"\n        after insert on \"cursor\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'cursor', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_cursor_delete\"\n        after delete on \"cursor\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'cursor', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_decided_insert\"\n        after insert on \"decided\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'decided', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_decided_delete\"\n        after delete on \"decided\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'decided', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_delegates_insert\"\n        after insert on \"delegates\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'delegates', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_delegates_delete\"\n        after delete on \"delegates\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'delegates', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_deliver_insert\"\n        after insert on \"deliver\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'deliver', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_deliver_delete\"\n        after delete on \"deliver\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'deliver', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_delivered_insert\"\n        after insert on \"delivered\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'delivered', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_delivered_delete\"\n        after delete on \"delivered\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'delivered', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_deploy_insert\"\n        after insert on \"deploy\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'deploy', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_deploy_delete\"\n        after delete on \"deploy\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'deploy', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_design_insert\"\n        after insert on \"design\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'design', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_design_delete\"\n        after delete on \"design\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'design', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_doc_insert\"\n        after insert on \"doc\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'doc', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_doc_delete\"\n        after delete on \"doc\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'doc', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_dream_insert\"\n        after insert on \"dream\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'dream', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_dream_delete\"\n        after delete on \"dream\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'dream', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_edge_insert\"\n        after insert on \"edge\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'edge', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_edge_delete\"\n        after delete on \"edge\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'edge', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_effect_insert\"\n        after insert on \"effect\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'effect', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_effect_delete\"\n        after delete on \"effect\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'effect', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_email_insert\"\n        after insert on \"email\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'email', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_email_delete\"\n        after delete on \"email\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'email', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_embedding_insert\"\n        after insert on \"embedding\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'embedding', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_embedding_delete\"\n        after delete on \"embedding\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'embedding', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_entry_insert\"\n        after insert on \"entry\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'entry', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_entry_delete\"\n        after delete on \"entry\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'entry', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_error_insert\"\n        after insert on \"error\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'error', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_error_delete\"\n        after delete on \"error\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'error', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_exception_insert\"\n        after insert on \"exception\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'exception', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_exception_delete\"\n        after delete on \"exception\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'exception', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_exit_insert\"\n        after insert on \"exit\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'exit', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_exit_delete\"\n        after delete on \"exit\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'exit', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_favorite_insert\"\n        after insert on \"favorite\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'favorite', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_favorite_delete\"\n        after delete on \"favorite\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'favorite', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_feedback_insert\"\n        after insert on \"feedback\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'feedback', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_feedback_delete\"\n        after delete on \"feedback\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'feedback', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_fetch_insert\"\n        after insert on \"fetch\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'fetch', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_fetch_delete\"\n        after delete on \"fetch\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'fetch', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_filed_insert\"\n        after insert on \"filed\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'filed', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_filed_delete\"\n        after delete on \"filed\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'filed', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_finding_insert\"\n        after insert on \"finding\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'finding', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_finding_delete\"\n        after delete on \"finding\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'finding', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_fixer_insert\"\n        after insert on \"fixer\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'fixer', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_fixer_delete\"\n        after delete on \"fixer\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'fixer', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_fold_insert\"\n        after insert on \"fold\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'fold', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_fold_delete\"\n        after delete on \"fold\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'fold', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_fork_insert\"\n        after insert on \"fork\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'fork', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_fork_delete\"\n        after delete on \"fork\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'fork', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_generation_insert\"\n        after insert on \"generation\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'generation', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_generation_delete\"\n        after delete on \"generation\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'generation', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_goal_insert\"\n        after insert on \"goal\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'goal', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_goal_delete\"\n        after delete on \"goal\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'goal', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_graph_query_insert\"\n        after insert on \"graph_query\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'graph_query', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_graph_query_delete\"\n        after delete on \"graph_query\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'graph_query', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_headers_insert\"\n        after insert on \"headers\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'headers', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_headers_delete\"\n        after delete on \"headers\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'headers', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_hook_insert\"\n        after insert on \"hook\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'hook', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_hook_delete\"\n        after delete on \"hook\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'hook', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_hostname_insert\"\n        after insert on \"hostname\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'hostname', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_hostname_delete\"\n        after delete on \"hostname\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'hostname', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_image_insert\"\n        after insert on \"image\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'image', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_image_delete\"\n        after delete on \"image\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'image', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_imported_insert\"\n        after insert on \"imported\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'imported', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_imported_delete\"\n        after delete on \"imported\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'imported', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_installed_insert\"\n        after insert on \"installed\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'installed', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_installed_delete\"\n        after delete on \"installed\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'installed', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_knock_insert\"\n        after insert on \"knock\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'knock', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_knock_delete\"\n        after delete on \"knock\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'knock', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_layout_insert\"\n        after insert on \"layout\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'layout', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_layout_delete\"\n        after delete on \"layout\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'layout', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_lease_insert\"\n        after insert on \"lease\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'lease', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_lease_delete\"\n        after delete on \"lease\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'lease', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_mail_insert\"\n        after insert on \"mail\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'mail', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_mail_delete\"\n        after delete on \"mail\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'mail', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_member_insert\"\n        after insert on \"member\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'member', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_member_delete\"\n        after delete on \"member\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'member', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_memory_insert\"\n        after insert on \"memory\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'memory', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_memory_delete\"\n        after delete on \"memory\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'memory', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_message_insert\"\n        after insert on \"message\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'message', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_message_delete\"\n        after delete on \"message\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'message', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_meta_insert\"\n        after insert on \"meta\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'meta', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_meta_delete\"\n        after delete on \"meta\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'meta', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_meter_insert\"\n        after insert on \"meter\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'meter', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_meter_delete\"\n        after delete on \"meter\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'meter', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_model_insert\"\n        after insert on \"model\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'model', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_model_delete\"\n        after delete on \"model\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'model', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_nofix_insert\"\n        after insert on \"nofix\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'nofix', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_nofix_delete\"\n        after delete on \"nofix\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'nofix', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_notice_insert\"\n        after insert on \"notice\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'notice', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_notice_delete\"\n        after delete on \"notice\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'notice', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_notified_insert\"\n        after insert on \"notified\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'notified', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_notified_delete\"\n        after delete on \"notified\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'notified', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_noverify_insert\"\n        after insert on \"noverify\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'noverify', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_noverify_delete\"\n        after delete on \"noverify\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'noverify', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_opaque_insert\"\n        after insert on \"opaque\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'opaque', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_opaque_delete\"\n        after delete on \"opaque\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'opaque', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_opened_insert\"\n        after insert on \"opened\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'opened', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_opened_delete\"\n        after delete on \"opened\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'opened', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_output_insert\"\n        after insert on \"output\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'output', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_output_delete\"\n        after delete on \"output\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'output', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_pane_insert\"\n        after insert on \"pane\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'pane', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_pane_delete\"\n        after delete on \"pane\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'pane', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_patch_insert\"\n        after insert on \"patch\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'patch', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_patch_delete\"\n        after delete on \"patch\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'patch', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_person_insert\"\n        after insert on \"person\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'person', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_person_delete\"\n        after delete on \"person\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'person', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_persona_insert\"\n        after insert on \"persona\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'persona', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_persona_delete\"\n        after delete on \"persona\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'persona', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_pin_insert\"\n        after insert on \"pin\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'pin', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_pin_delete\"\n        after delete on \"pin\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'pin', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_plan_insert\"\n        after insert on \"plan\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'plan', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_plan_delete\"\n        after delete on \"plan\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'plan', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_process_insert\"\n        after insert on \"process\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'process', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_process_delete\"\n        after delete on \"process\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'process', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_project_insert\"\n        after insert on \"project\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'project', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_project_delete\"\n        after delete on \"project\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'project', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_prompt_insert\"\n        after insert on \"prompt\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'prompt', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_prompt_delete\"\n        after delete on \"prompt\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'prompt', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_proposed_insert\"\n        after insert on \"proposed\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'proposed', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_proposed_delete\"\n        after delete on \"proposed\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'proposed', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_provider_insert\"\n        after insert on \"provider\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'provider', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_provider_delete\"\n        after delete on \"provider\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'provider', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_published_insert\"\n        after insert on \"published\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'published', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_published_delete\"\n        after delete on \"published\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'published', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_quarantined_insert\"\n        after insert on \"quarantined\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'quarantined', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_quarantined_delete\"\n        after delete on \"quarantined\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'quarantined', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_reads_insert\"\n        after insert on \"reads\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'reads', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_reads_delete\"\n        after delete on \"reads\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'reads', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_reasoning_insert\"\n        after insert on \"reasoning\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'reasoning', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_reasoning_delete\"\n        after delete on \"reasoning\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'reasoning', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_recall_insert\"\n        after insert on \"recall\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'recall', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_recall_delete\"\n        after delete on \"recall\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'recall', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_recalled_insert\"\n        after insert on \"recalled\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'recalled', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_recalled_delete\"\n        after delete on \"recalled\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'recalled', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_redaction_insert\"\n        after insert on \"redaction\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'redaction', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_redaction_delete\"\n        after delete on \"redaction\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'redaction', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_references_insert\"\n        after insert on \"references\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'references', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_references_delete\"\n        after delete on \"references\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'references', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_repo_insert\"\n        after insert on \"repo\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'repo', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_repo_delete\"\n        after delete on \"repo\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'repo', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_report_insert\"\n        after insert on \"report\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'report', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_report_delete\"\n        after delete on \"report\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'report', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_requires_insert\"\n        after insert on \"requires\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'requires', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_requires_delete\"\n        after delete on \"requires\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'requires', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_response_insert\"\n        after insert on \"response\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'response', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_response_delete\"\n        after delete on \"response\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'response', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_result_insert\"\n        after insert on \"result\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'result', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_result_delete\"\n        after delete on \"result\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'result', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_resume_insert\"\n        after insert on \"resume\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'resume', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_resume_delete\"\n        after delete on \"resume\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'resume', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_retired_insert\"\n        after insert on \"retired\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'retired', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_retired_delete\"\n        after delete on \"retired\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'retired', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_review_insert\"\n        after insert on \"review\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'review', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_review_delete\"\n        after delete on \"review\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'review', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_role_insert\"\n        after insert on \"role\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'role', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_role_delete\"\n        after delete on \"role\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'role', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_run_insert\"\n        after insert on \"run\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'run', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_run_delete\"\n        after delete on \"run\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'run', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_runner_insert\"\n        after insert on \"runner\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'runner', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_runner_delete\"\n        after delete on \"runner\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'runner', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_runtime_insert\"\n        after insert on \"runtime\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'runtime', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_runtime_delete\"\n        after delete on \"runtime\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'runtime', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_satisfies_insert\"\n        after insert on \"satisfies\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'satisfies', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_satisfies_delete\"\n        after delete on \"satisfies\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'satisfies', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_service_insert\"\n        after insert on \"service\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'service', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_service_delete\"\n        after delete on \"service\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'service', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_session_insert\"\n        after insert on \"session\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'session', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_session_delete\"\n        after delete on \"session\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'session', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_setting_insert\"\n        after insert on \"setting\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'setting', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_setting_delete\"\n        after delete on \"setting\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'setting', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_settled_insert\"\n        after insert on \"settled\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'settled', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_settled_delete\"\n        after delete on \"settled\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'settled', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_shelf_insert\"\n        after insert on \"shelf\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'shelf', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_shelf_delete\"\n        after delete on \"shelf\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'shelf', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_signin_insert\"\n        after insert on \"signin\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'signin', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_signin_delete\"\n        after delete on \"signin\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'signin', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_space_insert\"\n        after insert on \"space\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'space', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_space_delete\"\n        after delete on \"space\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'space', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_spawn_insert\"\n        after insert on \"spawn\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'spawn', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_spawn_delete\"\n        after delete on \"spawn\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'spawn', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_stderr_insert\"\n        after insert on \"stderr\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'stderr', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_stderr_delete\"\n        after delete on \"stderr\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'stderr', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_stop_insert\"\n        after insert on \"stop\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'stop', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_stop_delete\"\n        after delete on \"stop\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'stop', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_stop_request_insert\"\n        after insert on \"stop_request\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'stop_request', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_stop_request_delete\"\n        after delete on \"stop_request\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'stop_request', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_subscription_insert\"\n        after insert on \"subscription\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'subscription', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_subscription_delete\"\n        after delete on \"subscription\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'subscription', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_supersedes_insert\"\n        after insert on \"supersedes\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'supersedes', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_supersedes_delete\"\n        after delete on \"supersedes\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'supersedes', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_supervises_insert\"\n        after insert on \"supervises\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'supervises', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_supervises_delete\"\n        after delete on \"supervises\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'supervises', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_task_insert\"\n        after insert on \"task\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'task', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_task_delete\"\n        after delete on \"task\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'task', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_task_context_insert\"\n        after insert on \"task_context\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'task_context', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_task_context_delete\"\n        after delete on \"task_context\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'task_context', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_timeout_insert\"\n        after insert on \"timeout\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'timeout', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_timeout_delete\"\n        after delete on \"timeout\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'timeout', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_tombstone_insert\"\n        after insert on \"tombstone\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'tombstone', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_tombstone_delete\"\n        after delete on \"tombstone\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'tombstone', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_tool_insert\"\n        after insert on \"tool\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'tool', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_tool_delete\"\n        after delete on \"tool\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'tool', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_updated_insert\"\n        after insert on \"updated\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'updated', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_updated_delete\"\n        after delete on \"updated\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'updated', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_usage_insert\"\n        after insert on \"usage\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'usage', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_usage_delete\"\n        after delete on \"usage\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'usage', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_venture_insert\"\n        after insert on \"venture\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'venture', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_venture_delete\"\n        after delete on \"venture\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'venture', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_verifier_insert\"\n        after insert on \"verifier\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'verifier', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_verifier_delete\"\n        after delete on \"verifier\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'verifier', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_wake_insert\"\n        after insert on \"wake\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'wake', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_wake_delete\"\n        after delete on \"wake\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'wake', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_wants_insert\"\n        after insert on \"wants\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'wants', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_wants_delete\"\n        after delete on \"wants\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'wants', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_web_insert\"\n        after insert on \"web\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'web', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_web_delete\"\n        after delete on \"web\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'web', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_worked_insert\"\n        after insert on \"worked\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'worked', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_worked_delete\"\n        after delete on \"worked\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'worked', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_worktree_insert\"\n        after insert on \"worktree\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'worktree', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_worktree_delete\"\n        after delete on \"worktree\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'worktree', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_yield_insert\"\n        after insert on \"yield\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = new.entity;\n        insert into archetype_delta(owner, name, present)\n          values (new.entity, 'yield', 1)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = new.entity;\n      end;"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"archetype_yield_delete\"\n        after delete on \"yield\" begin\n        insert or ignore into archetype_pending(owner, prior)\n          select id, archetype from entity where id = old.entity;\n        insert into archetype_delta(owner, name, present)\n          values (old.entity, 'yield', 0)\n          on conflict(owner, name) do update set present = excluded.present;\n        update entity set archetype = null where id = old.entity;\n      end;"
   }
 ]

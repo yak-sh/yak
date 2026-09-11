@@ -132,6 +132,11 @@ let narrows = (preds: Pred[]) =>
 // resolved once (one recursive CTE, db.ts reaching) and every row then tests it
 // with a Set lookup. Built per call so nothing caches a closure across writes —
 // an edge landing between two queries must move the answer.
+// Catalog IDs and the rows they select must come from one SQLite snapshot.
+// Nested query doors borrow the caller's transaction, not a second snapshot.
+let readUnit = <T>(db: Sql, read: () => T): T =>
+  db.inTransaction ? read() : db.transaction(read)
+
 export let walker = (db: Sql): Walk => {
   let memo = new Map<string, Set<string>>()
   return (r, target) => {
@@ -252,35 +257,36 @@ export let entryUniverse = (
   after: number,
   limit: number,
   doors: QueryUniverseDoors = universeDoors,
-): Row[] => {
-  if (limit <= 0) return []
-  let session = entryScope(preds)
-  if (session === undefined && after > 0) {
-    throw new Error(
-      'entry .after cursor requires one scalar .entry.session= value',
-    )
-  }
-  // Unscoped: the newest `limit` entries the query's own compilable preds
-  // admit (entry presence pinned, quarantine screened), so `.message.role=user`
-  // over the whole fleet answers the last user turns, not the first 500 rows
-  // of one session with its tool calls. A declining pred widens the candidate
-  // set; the JS pass after this refines it exactly, as everywhere else.
-  let got = session === null ? [] : session === undefined
-    ? doors.entriesScan(
-      db,
-      after,
-      limit,
-      toSql(whereSome(
+): Row[] =>
+  readUnit(db, () => {
+    if (limit <= 0) return []
+    let session = entryScope(preds)
+    if (session === undefined && after > 0) {
+      throw new Error(
+        'entry .after cursor requires one scalar .entry.session= value',
+      )
+    }
+    // Unscoped: the newest `limit` entries the query's own compilable preds
+    // admit (entry presence pinned, quarantine screened), so `.message.role=user`
+    // over the whole fleet answers the last user turns, not the first 500 rows
+    // of one session with its tool calls. A declining pred widens the candidate
+    // set; the JS pass after this refines it exactly, as everywhere else.
+    let got = session === null ? [] : session === undefined
+      ? doors.entriesScan(
         db,
-        screened(
-          [...preds, { comp: 'entry', prop: '', op: EXISTS, value: '' }],
-          true,
-        ),
-      )),
-    )
-    : doors.entriesOf(db, session, after, limit)
-  return got.map((e) => rowed({ eid: e.eid, comps: e.comps }))
-}
+        after,
+        limit,
+        toSql(whereSome(
+          db,
+          screened(
+            [...preds, { comp: 'entry', prop: '', op: EXISTS, value: '' }],
+            true,
+          ),
+        )),
+      )
+      : doors.entriesOf(db, session, after, limit)
+    return got.map((e) => rowed({ eid: e.eid, comps: e.comps }))
+  })
 
 // Entry hits ordered as the partition IS: by session, then the server seq the
 // runner stamped. Eager hits answer in num order; entries carry no num, so seq
@@ -342,49 +348,50 @@ export let evalFast = (
   q: string,
   forceEntries = false,
   w?: Win,
-) => {
-  let preds = heard(db, q)
-  let inputs = inputsOf(preds)
-  if (!narrows(inputs)) return null
-  let entries = forceEntries || namesLazy(preds)
-  // Lazy membership is selected from its storage partition before hydration.
-  // Even a fully compilable lazy predicate must not take matching(): its SQL
-  // answer is unwindowed here because entries page by seq downstream, which
-  // used to hydrate the session's entire history and discard all but 500.
-  // evalQuery applies the same predicates/projections to the bounded lazy door.
-  if (entries) return null
-  // The statement carries the screens the JS filters below otherwise apply
-  // AFTER it (query.ts screened) — which is the whole reason a LIMIT may ride
-  // it: a filter that runs after the limit under-fills the page. The JS filters
-  // stay for the rows matching() unions in from a SOURCE, which no statement saw.
-  let built = where(db, screened(inputs, entries))
-  if (!built) return null
-  let win = merged(windowOf(preds), w)
-  // Entries page by their own seq (orderedEntries), never by spine num, so a
-  // lazy answer stays whole here and is windowed downstream.
-  let bounded = !entries && (win.limit != null || win.after != null)
-  let plan = orderOf(preds) == 'priority'
-    ? priorityWindow(built, win)
-    : bounded
-    ? windowed(built, win)
-    : built
-  let hits = matching(db, toSql(plan))
-    .map(rowed)
-    .filter((r) =>
-      entries || inputs.some((p) => p.op == TEXT) || !r.comps.entry
-    )
-  hits = withResults(db, preds, hits)
-    .filter((r) => selected(r.comps, preds))
-  if (resultsOf(preds).length) {
-    hits = hits.filter((r) => matchQuery(r.comps, preds))
-  }
-  return {
-    preds,
-    entries,
-    win,
-    hits,
-  }
-}
+) =>
+  readUnit(db, () => {
+    let preds = heard(db, q)
+    let inputs = inputsOf(preds)
+    if (!narrows(inputs)) return null
+    let entries = forceEntries || namesLazy(preds)
+    // Lazy membership is selected from its storage partition before hydration.
+    // Even a fully compilable lazy predicate must not take matching(): its SQL
+    // answer is unwindowed here because entries page by seq downstream, which
+    // used to hydrate the session's entire history and discard all but 500.
+    // evalQuery applies the same predicates/projections to the bounded lazy door.
+    if (entries) return null
+    // The statement carries the screens the JS filters below otherwise apply
+    // AFTER it (query.ts screened) — which is the whole reason a LIMIT may ride
+    // it: a filter that runs after the limit under-fills the page. The JS filters
+    // stay for the rows matching() unions in from a SOURCE, which no statement saw.
+    let built = where(db, screened(inputs, entries))
+    if (!built) return null
+    let win = merged(windowOf(preds), w)
+    // Entries page by their own seq (orderedEntries), never by spine num, so a
+    // lazy answer stays whole here and is windowed downstream.
+    let bounded = !entries && (win.limit != null || win.after != null)
+    let plan = orderOf(preds) == 'priority'
+      ? priorityWindow(built, win)
+      : bounded
+      ? windowed(built, win)
+      : built
+    let hits = matching(db, toSql(plan))
+      .map(rowed)
+      .filter((r) =>
+        entries || inputs.some((p) => p.op == TEXT) || !r.comps.entry
+      )
+    hits = withResults(db, preds, hits)
+      .filter((r) => selected(r.comps, preds))
+    if (resultsOf(preds).length) {
+      hits = hits.filter((r) => matchQuery(r.comps, preds))
+    }
+    return {
+      preds,
+      entries,
+      win,
+      hits,
+    }
+  })
 
 // The scoped fallback for a query the index cannot answer WHOLE — a declining
 // predicate, or a hot ranking. It no longer materializes the graph: whereSome()
@@ -406,37 +413,38 @@ export let evalQuery = (
   after = 0,
   limit = ENTRY_PAGE,
   doors: QueryUniverseDoors = universeDoors,
-) => {
-  let preds = heard(db, q)
-  let inputs = inputsOf(preds)
-  let entries = namesLazy(preds)
-  let ent = (e: string) => eager(db, e)
-  // A reverse hop reads the children pointing back at each row, keyed off the
-  // live db — the same reverse walk localQuery does — so a `.comments…` hop
-  // answers identically over a narrowed candidate set as over the whole graph.
-  let kids = (eid: string, comp: string, prop: string) =>
-    referrersOf(db, [eid], { comp, prop }).map(ent)
-  let walk = walker(db)
-  let fts = (eid: string, p: Pred) => textMatches(db, eid, p)
-  // Select the relevant storage partition BEFORE hydration. Naming a positive
-  // session-log facet can only match lazy entries, so enumerating the eager /
-  // source-list universe first is both wasted and dangerous: matching() also
-  // sees entry spines and can hydrate an unbounded history. Conversely an eager
-  // query never opens the lazy door. There is one branch, at the universe
-  // boundary, for every lazy predicate — not a query-string special case.
-  let all = entries
-    ? entryUniverse(db, preds, after, limit, doors)
-    : doors.matching(db, toSql(whereSome(db, inputs))).map(rowed)
-      // matching() may union source rows wearing entry; eager queries do not
-      // opt into that partition.
-      .filter((r) => inputs.some((p) => p.op == TEXT) || !r.comps.entry)
-  all = withResults(db, preds, all)
-  let hits = all.filter((r) =>
-    selected(r.comps, preds) &&
-    matchQuery(r.comps, preds, ent, undefined, kids, walk, fts)
-  )
-  return { preds, hits, ent }
-}
+) =>
+  readUnit(db, () => {
+    let preds = heard(db, q)
+    let inputs = inputsOf(preds)
+    let entries = namesLazy(preds)
+    let ent = (e: string) => eager(db, e)
+    // A reverse hop reads the children pointing back at each row, keyed off the
+    // live db — the same reverse walk localQuery does — so a `.comments…` hop
+    // answers identically over a narrowed candidate set as over the whole graph.
+    let kids = (eid: string, comp: string, prop: string) =>
+      referrersOf(db, [eid], { comp, prop }).map(ent)
+    let walk = walker(db)
+    let fts = (eid: string, p: Pred) => textMatches(db, eid, p)
+    // Select the relevant storage partition BEFORE hydration. Naming a positive
+    // session-log facet can only match lazy entries, so enumerating the eager /
+    // source-list universe first is both wasted and dangerous: matching() also
+    // sees entry spines and can hydrate an unbounded history. Conversely an eager
+    // query never opens the lazy door. There is one branch, at the universe
+    // boundary, for every lazy predicate — not a query-string special case.
+    let all = entries
+      ? entryUniverse(db, preds, after, limit, doors)
+      : doors.matching(db, toSql(whereSome(db, inputs))).map(rowed)
+        // matching() may union source rows wearing entry; eager queries do not
+        // opt into that partition.
+        .filter((r) => inputs.some((p) => p.op == TEXT) || !r.comps.entry)
+    all = withResults(db, preds, all)
+    let hits = all.filter((r) =>
+      selected(r.comps, preds) &&
+      matchQuery(r.comps, preds, ent, undefined, kids, walk, fts)
+    )
+    return { preds, hits, ent }
+  })
 
 // A subscription whose filter the index cannot answer WHOLE gets a BOUNDED
 // newest-first answer instead of whereSome's full candidate scan. On the live
@@ -456,37 +464,38 @@ export let evalCapped = (
   q: string,
   cap = SUB_CAP,
   after?: number,
-) => {
-  let preds = heard(db, q)
-  let inputs = inputsOf(preds)
-  let ent = (e: string) => eager(db, e)
-  let kids = (eid: string, comp: string, prop: string) =>
-    referrersOf(db, [eid], { comp, prop }).map(ent)
-  // The entry and quarantine screens ride the compiled preds like any filter
-  // (query.ts screened), so the candidate window is spent on rows that can
-  // actually match rather than on entry spines the JS pass drops afterwards.
-  let room = cap * 2
-  let base = windowed(whereSome(db, screened(inputs, false)), {
-    limit: room,
-    after,
+) =>
+  readUnit(db, () => {
+    let preds = heard(db, q)
+    let inputs = inputsOf(preds)
+    let ent = (e: string) => eager(db, e)
+    let kids = (eid: string, comp: string, prop: string) =>
+      referrersOf(db, [eid], { comp, prop }).map(ent)
+    // The entry and quarantine screens ride the compiled preds like any filter
+    // (query.ts screened), so the candidate window is spent on rows that can
+    // actually match rather than on entry spines the JS pass drops afterwards.
+    let room = cap * 2
+    let base = windowed(whereSome(db, screened(inputs, false)), {
+      limit: room,
+      after,
+    })
+    // matching() reads the hit table in its own order — re-rank by num so the
+    // slice keeps the NEWEST matches, not an arbitrary cap-full.
+    let walk = walker(db)
+    let fts = (eid: string, p: Pred) => textMatches(db, eid, p)
+    let raw = withResults(db, preds, matching(db, toSql(base)).map(rowed))
+    let hits = raw
+      .filter((r) =>
+        selected(r.comps, preds) &&
+        matchQuery(r.comps, preds, ent, undefined, kids, walk, fts)
+      )
+      .sort((a, b) => b.num - a.num)
+    // A candidate read that came back SHORT of its own bound saw the whole
+    // superset, and refining a complete superset is a complete answer — which is
+    // how a declining query can still know it is not holding a prefix.
+    let whole = raw.length < room && hits.length <= cap
+    return { preds, hits: hits.slice(0, cap), whole }
   })
-  // matching() reads the hit table in its own order — re-rank by num so the
-  // slice keeps the NEWEST matches, not an arbitrary cap-full.
-  let walk = walker(db)
-  let fts = (eid: string, p: Pred) => textMatches(db, eid, p)
-  let raw = withResults(db, preds, matching(db, toSql(base)).map(rowed))
-  let hits = raw
-    .filter((r) =>
-      selected(r.comps, preds) &&
-      matchQuery(r.comps, preds, ent, undefined, kids, walk, fts)
-    )
-    .sort((a, b) => b.num - a.num)
-  // A candidate read that came back SHORT of its own bound saw the whole
-  // superset, and refining a complete superset is a complete answer — which is
-  // how a declining query can still know it is not holding a prefix.
-  let whole = raw.length < room && hits.length <= cap
-  return { preds, hits: hits.slice(0, cap), whole }
-}
 
 // The MEMBERSHIP answerer control() calls: exact when the index answers whole
 // (evalFast), exact when the sub NEEDS the whole universe (an entries partition,
@@ -565,71 +574,72 @@ export let evalSub = (
   q: string,
   details = false,
   cap = SUB_CAP,
-): SubAnswer => {
-  let asked = heard(db, q)
-  // A sub that NEEDS the whole universe never windows: entries page by their
-  // own seq, and a capped tally would undercount every badge.
-  if (details || namesLazy(asked) || aggOf(asked)) {
-    let { preds, hits } = evalQuery(db, q)
-    return { preds, hits }
-  }
-  let win = windowOf(asked)
-  // Every row sub is bounded. `.limit=` is a client saying a smaller window is
-  // all it wants; SUB_CAP is the server's floor under the ones that say nothing,
-  // so no single socket can stage the graph. Both are the same stated form.
-  let limit = win.limit ?? cap
-  // A small hot tile must be a prefix of the ranked answer, not the hottest
-  // row in a small newest-first sample. Rank on the server before windowing.
-  if (orderOf(asked) == 'hot') {
-    let ranked = hotPage(db, asked, { ...win, limit })
-    if (ranked) return ranked
-  }
-  // Read ONE past the bound: that single extra row tells a whole answer from a
-  // prefix without paying a count for every subscription in the fleet.
-  let fast = evalFast(db, q, false, { limit: limit + 1, after: win.after })
-  if (fast) {
-    let hits = fast.hits.sort(
-      orderOf(fast.preds) == 'priority'
-        ? priorityOrder
-        : (a, b) => b.num - a.num,
-    )
-    // Whole, and nobody asked for a window: the frame says nothing about bounds
-    // because there is nothing to say.
-    if (hits.length <= limit && win.limit == null) {
-      return { preds: fast.preds, hits, exact: true }
+): SubAnswer =>
+  readUnit(db, () => {
+    let asked = heard(db, q)
+    // A sub that NEEDS the whole universe never windows: entries page by their
+    // own seq, and a capped tally would undercount every badge.
+    if (details || namesLazy(asked) || aggOf(asked)) {
+      let { preds, hits } = evalQuery(db, q)
+      return { preds, hits }
     }
-    let over = hits.length > limit
-    return {
-      preds: fast.preds,
-      hits: hits.slice(0, limit),
-      exact: true,
-      window: {
-        limit,
-        total: over
-          ? countOf(db, screened(inputsOf(fast.preds), false))
-          : hits.length,
-      },
+    let win = windowOf(asked)
+    // Every row sub is bounded. `.limit=` is a client saying a smaller window is
+    // all it wants; SUB_CAP is the server's floor under the ones that say nothing,
+    // so no single socket can stage the graph. Both are the same stated form.
+    let limit = win.limit ?? cap
+    // A small hot tile must be a prefix of the ranked answer, not the hottest
+    // row in a small newest-first sample. Rank on the server before windowing.
+    if (orderOf(asked) == 'hot') {
+      let ranked = hotPage(db, asked, { ...win, limit })
+      if (ranked) return ranked
     }
-  }
-  // The filter declines, so the answer is a candidate prefix the JS matcher
-  // refined and no statement can total. Saying the bound and leaving the total
-  // unstated is the honest frame: the client knows it holds a window, and knows
-  // nobody counted the rest.
-  if (orderOf(asked) == 'priority') {
-    let { hits } = evalQuery(db, q)
-    let page = pageRanked(hits.sort(priorityOrder), { ...win, limit })
-    return {
-      preds: asked,
-      hits: page,
-      exact: true,
-      window: { limit, total: hits.length },
+    // Read ONE past the bound: that single extra row tells a whole answer from a
+    // prefix without paying a count for every subscription in the fleet.
+    let fast = evalFast(db, q, false, { limit: limit + 1, after: win.after })
+    if (fast) {
+      let hits = fast.hits.sort(
+        orderOf(fast.preds) == 'priority'
+          ? priorityOrder
+          : (a, b) => b.num - a.num,
+      )
+      // Whole, and nobody asked for a window: the frame says nothing about bounds
+      // because there is nothing to say.
+      if (hits.length <= limit && win.limit == null) {
+        return { preds: fast.preds, hits, exact: true }
+      }
+      let over = hits.length > limit
+      return {
+        preds: fast.preds,
+        hits: hits.slice(0, limit),
+        exact: true,
+        window: {
+          limit,
+          total: over
+            ? countOf(db, screened(inputsOf(fast.preds), false))
+            : hits.length,
+        },
+      }
     }
-  }
-  let capped = evalCapped(db, q, limit, win.after)
-  return capped.whole && win.limit == null
-    ? { preds: capped.preds, hits: capped.hits }
-    : { preds: capped.preds, hits: capped.hits, window: { limit } }
-}
+    // The filter declines, so the answer is a candidate prefix the JS matcher
+    // refined and no statement can total. Saying the bound and leaving the total
+    // unstated is the honest frame: the client knows it holds a window, and knows
+    // nobody counted the rest.
+    if (orderOf(asked) == 'priority') {
+      let { hits } = evalQuery(db, q)
+      let page = pageRanked(hits.sort(priorityOrder), { ...win, limit })
+      return {
+        preds: asked,
+        hits: page,
+        exact: true,
+        window: { limit, total: hits.length },
+      }
+    }
+    let capped = evalCapped(db, q, limit, win.after)
+    return capped.whole && win.limit == null
+      ? { preds: capped.preds, hits: capped.hits }
+      : { preds: capped.preds, hits: capped.hits, window: { limit } }
+  })
 
 // The aggregate answer — a query carrying `.count!`, `.distinct=col` or
 // `.tally=col` reduced server-side. SQL when the column and every filter beside
@@ -646,26 +656,27 @@ export let evalAgg = (
   q: string,
 ):
   | { op: 'distinct' | 'tally' | 'count'; values: Map<string, number> }
-  | null => {
-  let preds = heard(db, q)
-  let agg = aggOf(preds)
-  if (!agg) return null
-  let rel = aggregateSql(db, preds)
-  if (rel) {
-    let rows = run<{ value: string; n?: number }>(db, rel)
+  | null =>
+  readUnit(db, () => {
+    let preds = heard(db, q)
+    let agg = aggOf(preds)
+    if (!agg) return null
+    let rel = aggregateSql(db, preds)
+    if (rel) {
+      let rows = run<{ value: string; n?: number }>(db, rel)
+      return {
+        op: agg.op,
+        values: new Map(rows.map((r) => [String(r.value), Number(r.n ?? 1)])),
+      }
+    }
+    let { hits } = evalQuery(db, q)
     return {
       op: agg.op,
-      values: new Map(rows.map((r) => [String(r.value), Number(r.n ?? 1)])),
+      values: agg.op == 'count'
+        ? new Map([['', hits.length]])
+        : tally(hits.map((h) => h.comps), agg.at),
     }
-  }
-  let { hits } = evalQuery(db, q)
-  return {
-    op: agg.op,
-    values: agg.op == 'count'
-      ? new Map([['', hits.length]])
-      : tally(hits.map((h) => h.comps), agg.at),
-  }
-}
+  })
 
 // The build lane is a derived selection, not a status. Its recursive CTE walks
 // from the scoped candidate set toward approved ancestors, so a query never
@@ -766,12 +777,13 @@ export let evalBuildWork = (
   db: Sql,
   q: string,
   opts: { limit?: number; recursive?: boolean } = {},
-): Row[] => {
-  let built = buildWorkSql(db, q, opts)
-  let ids = db.prepare(built.sql).all(...built.params) as { eid: string }[]
-  let by = new Map(rowsFor(db, ids.map((r) => r.eid)).map((r) => [r.eid, r]))
-  return ids.map((r) => by.get(r.eid)).filter((r): r is Row => !!r)
-}
+): Row[] =>
+  readUnit(db, () => {
+    let built = buildWorkSql(db, q, opts)
+    let ids = db.prepare(built.sql).all(...built.params) as { eid: string }[]
+    let by = new Map(rowsFor(db, ids.map((r) => r.eid)).map((r) => [r.eid, r]))
+    return ids.map((r) => by.get(r.eid)).filter((r): r is Row => !!r)
+  })
 
 // Managed dispatch consumes the SAME complete membership CTE as external
 // workers, but keeps its established spend order: resumed generation/rank,
@@ -782,16 +794,17 @@ export let evalDispatchWork = (
   db: Sql,
   q: string,
   recursive = false,
-): Row[] => {
-  let built = workSelectionSql(db, q, {
-    limit: null,
-    recursive,
-    order: 'dispatch',
+): Row[] =>
+  readUnit(db, () => {
+    let built = workSelectionSql(db, q, {
+      limit: null,
+      recursive,
+      order: 'dispatch',
+    })
+    let ids = db.prepare(built.sql).all(...built.params) as { eid: string }[]
+    let by = new Map(rowsFor(db, ids.map((r) => r.eid)).map((r) => [r.eid, r]))
+    return ids.map((r) => by.get(r.eid)).filter((r): r is Row => !!r)
   })
-  let ids = db.prepare(built.sql).all(...built.params) as { eid: string }[]
-  let by = new Map(rowsFor(db, ids.map((r) => r.eid)).map((r) => [r.eid, r]))
-  return ids.map((r) => by.get(r.eid)).filter((r): r is Row => !!r)
-}
 
 // Verification is ordered by the fact workers are reviewing, not task
 // creation or priority. The completed_at index owns the walk, every optional
@@ -829,12 +842,13 @@ export let evalVerifyWork = (
   db: Sql,
   q: string,
   opts: { limit?: number } = {},
-): Row[] => {
-  let built = verifyWorkSql(db, q, opts)
-  let ids = db.prepare(built.sql).all(...built.params) as { eid: string }[]
-  let by = new Map(rowsFor(db, ids.map((r) => r.eid)).map((r) => [r.eid, r]))
-  return ids.map((r) => by.get(r.eid)).filter((r): r is Row => !!r)
-}
+): Row[] =>
+  readUnit(db, () => {
+    let built = verifyWorkSql(db, q, opts)
+    let ids = db.prepare(built.sql).all(...built.params) as { eid: string }[]
+    let by = new Map(rowsFor(db, ids.map((r) => r.eid)).map((r) => [r.eid, r]))
+    return ids.map((r) => by.get(r.eid)).filter((r): r is Row => !!r)
+  })
 
 let WORK_TEXT_LIMIT = 4000
 
@@ -1228,91 +1242,93 @@ export let evalGraph = (
   db: Sql,
   q: string,
   opts: { after?: number; limit?: number } = {},
-): { preds: Pred[]; hits: Row[] } => {
-  // The LINE's own window (`.limit=`/`.after=`) is the default; an explicit
-  // opts bound — the /query door's paging — overrides it, so a caller that
-  // always passed a limit keeps doing exactly what it did.
-  let asked = heard(db, q)
-  if (orderOf(asked) == 'similar') {
-    throw new Error('similarity rank requires the embedding query evaluator')
-  }
-  let win = merged(windowOf(asked), opts)
-  let after = win.after ?? 0
-  let limit = win.limit ?? ENTRY_PAGE
-  // Text retrieval is a query, not a second HTTP resource. FTS decides the
-  // order and contributes a query-result-only `rank` component; stored rows
-  // never wear it and `comps` never admits it on write. Keeping the metadata
-  // beside the ordinary components lets every /query consumer use one row
-  // shape while renderers still receive snippets and comment destinations.
-  if (asked.some((p) => p.op == 'text') || orderOf(asked) == 'search') {
-    // A cursor names an entity WITHIN the ranking, not an eid/num cutoff.
-    // Read through the anchor before cutting the page; a missing anchor restarts.
-    let { hits: found, byEid } = searchRead(
-      db,
-      q,
-      win.limit ?? ENTRY_PAGE,
-      win.after,
-    )
-    let hits = found.map((h) => {
-      let row = rowed({ eid: h.eid, comps: byEid.get(h.eid) ?? {} })
-      row.comps.rank = {
-        title: h.title,
-        title_hit: h.title_hit,
-        snip: h.snip,
-        score: Number(h.score ?? 0),
-        open: h.open,
-        ...(h.open_id ? { open_id: h.open_id } : {}),
-        ...(h.retired ? { retired: true } : {}),
-      }
-      return row
-    })
-    return { preds: asked, hits }
-  }
-  // Creation order — the num the store minted, ascending — is what an eager
-  // listing answers in, whichever lane answered it. The ORDER lives here
-  // rather than in either lane because the lanes disagree otherwise: the
-  // index lane's rows come off the spine, while the JS-matcher lane's come in
-  // whatever order the candidate scan produced, which is no order at all. A
-  // filter naming an app's own component (store/vocab.ts) always declines to
-  // the matcher, so `.book!` listed 3,4,2 where `.doc!` listed 2,3,4 — two
-  // orders for one grammar (C-32574 item 3).
-  //
-  // An EXPLICIT limit bounds an eager answer too — the newest `limit` by num,
-  // returned in num order, and `after` continues that window below a num.
-  // Entry pages keep their own seq paging; a caller that named no window keeps
-  // the whole eager answer, as before.
-  let cut = (hits: Row[]) => {
-    let rows =
-      (win.after != null ? hits.filter((r) => r.num < win.after!) : hits)
-        .sort((a, b) => a.num - b.num)
-    return win.limit != null && rows.length > win.limit
-      ? rows.slice(-win.limit)
-      : rows
-  }
-  let fast = evalFast(db, q, false, win)
-  if (fast && orderOf(fast.preds) != 'hot') {
-    return {
-      preds: fast.preds,
-      hits: fast.entries
-        ? orderedEntries(fast.hits, after, limit)
-        : orderOf(fast.preds) == 'priority'
-        ? fast.hits.sort(priorityOrder)
-        : cut(fast.hits),
+): { preds: Pred[]; hits: Row[] } =>
+  readUnit(db, () => {
+    // The LINE's own window (`.limit=`/`.after=`) is the default; an explicit
+    // opts bound — the /query door's paging — overrides it, so a caller that
+    // always passed a limit keeps doing exactly what it did.
+    let asked = heard(db, q)
+    if (orderOf(asked) == 'similar') {
+      throw new Error('similarity rank requires the embedding query evaluator')
     }
-  }
-  let { preds, ent, hits } = evalQuery(db, q, after, limit)
-  let now = Date.now()
-  if (orderOf(preds) == 'hot') {
-    hits = pageRanked(
-      hits.sort((a, b) => warm(b.comps, now, ent) - warm(a.comps, now, ent)),
-      win,
-    )
-  } else if (orderOf(preds) == 'priority') {
-    hits = pageRanked(hits.sort(priorityOrder), win)
-  } else if (namesLazy(preds)) hits = orderedEntries(hits, after, limit)
-  else hits = cut(hits)
-  return { preds, hits }
-}
+    let win = merged(windowOf(asked), opts)
+    let after = win.after ?? 0
+    let limit = win.limit ?? ENTRY_PAGE
+    // Text retrieval is a query, not a second HTTP resource. FTS decides the
+    // order and contributes a query-result-only `rank` component; stored rows
+    // never wear it and `comps` never admits it on write. Keeping the metadata
+    // beside the ordinary components lets every /query consumer use one row
+    // shape while renderers still receive snippets and comment destinations.
+    if (asked.some((p) => p.op == 'text') || orderOf(asked) == 'search') {
+      // A cursor names an entity WITHIN the ranking, not an eid/num cutoff.
+      // Read through the anchor before cutting the page; a missing anchor restarts.
+      let { hits: found, byEid } = searchRead(
+        db,
+        q,
+        win.limit ?? ENTRY_PAGE,
+        win.after,
+      )
+      let hits = found.map((h) => {
+        let row = rowed({ eid: h.eid, comps: byEid.get(h.eid) ?? {} })
+        row.comps.rank = {
+          title: h.title,
+          title_hit: h.title_hit,
+          snip: h.snip,
+          score: Number(h.score ?? 0),
+          open: h.open,
+          ...(h.open_id ? { open_id: h.open_id } : {}),
+          ...(h.retired ? { retired: true } : {}),
+        }
+        return row
+      })
+      return { preds: asked, hits }
+    }
+    // Creation order — the num the store minted, ascending — is what an eager
+    // listing answers in, whichever lane answered it. The ORDER lives here
+    // rather than in either lane because the lanes disagree otherwise: the
+    // index lane's rows come off the spine, while the JS-matcher lane's come in
+    // whatever order the candidate scan produced, which is no order at all. A
+    // filter naming an app's own component (store/vocab.ts) always declines to
+    // the matcher, so `.book!` listed 3,4,2 where `.doc!` listed 2,3,4 — two
+    // orders for one grammar (C-32574 item 3).
+    //
+    // An EXPLICIT limit bounds an eager answer too — the newest `limit` by num,
+    // returned in num order, and `after` continues that window below a num.
+    // Entry pages keep their own seq paging; a caller that named no window keeps
+    // the whole eager answer, as before.
+    let cut = (hits: Row[]) => {
+      let rows = (win.after != null
+        ? hits.filter((r) => r.num < win.after!)
+        : hits)
+        .sort((a, b) => a.num - b.num)
+      return win.limit != null && rows.length > win.limit
+        ? rows.slice(-win.limit)
+        : rows
+    }
+    let fast = evalFast(db, q, false, win)
+    if (fast && orderOf(fast.preds) != 'hot') {
+      return {
+        preds: fast.preds,
+        hits: fast.entries
+          ? orderedEntries(fast.hits, after, limit)
+          : orderOf(fast.preds) == 'priority'
+          ? fast.hits.sort(priorityOrder)
+          : cut(fast.hits),
+      }
+    }
+    let { preds, ent, hits } = evalQuery(db, q, after, limit)
+    let now = Date.now()
+    if (orderOf(preds) == 'hot') {
+      hits = pageRanked(
+        hits.sort((a, b) => warm(b.comps, now, ent) - warm(a.comps, now, ent)),
+        win,
+      )
+    } else if (orderOf(preds) == 'priority') {
+      hits = pageRanked(hits.sort(priorityOrder), win)
+    } else if (namesLazy(preds)) hits = orderedEntries(hits, after, limit)
+    else hits = cut(hits)
+    return { preds, hits }
+  })
 
 // The DEFINING sets a working-set boot seeds — the canvas chrome and the nav's
 // own queries (a client subscribes to exactly these on mount, and a

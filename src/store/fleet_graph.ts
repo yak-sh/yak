@@ -48,6 +48,7 @@ export type FleetGraphHost = {
   patchRefusal: (b: Bundle, err: unknown) => unknown
   number: (eid: string) => void
   component: (eid: string, name: string) => Comp | undefined
+  archetypes: (journal: boolean) => Change[]
 }
 
 export type FleetGraph = Graph & {
@@ -112,6 +113,11 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
             pick: (eids, names) => booleans(tx.pick(eids, names)),
             remove: (entities) => {
               for (let e of entities) {
+                if (
+                  row(`select 1 from archetype where entity = ${owner}`, e.eid)
+                ) {
+                  throw new Error('archetypes are permanent')
+                }
                 let held = tx.get([e.eid])
                 if (held instanceof Promise) {
                   throw new Error('fleet storage must be synchronous')
@@ -130,6 +136,11 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
                 : [bundles]
               for (let group of groups) {
                 for (let b of group) {
+                  if (
+                    Object.hasOwn(b, 'archetype') || Object.hasOwn(b, 'retired')
+                  ) {
+                    throw new Error('archetypes are maintained by storage')
+                  }
                   lifecycle.patch(b)
                   let entry = b.entry as Comp | null | undefined
                   if (
@@ -305,6 +316,11 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
         name: 'fleet/input',
         hooks: {
           normalize: (bundles) => {
+            bundles = bundles.map((b) => {
+              let entity = { ...b.entity }
+              delete entity.archetype
+              return { ...b, entity }
+            })
             if (!lifecycle.input().resolve) return bundles
             return host.input(bundles.flatMap(inputChanges)).map(asBundle)
           },
@@ -349,6 +365,36 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
         return { eid, num: held?.num == null ? null : Number(held.num) }
       }),
       lifecycle.plugin,
+      {
+        name: 'fleet/archetypes',
+        track: (tx) => {
+          let wrote = false
+          let journaled = false
+          return {
+            tx: {
+              ...tx,
+              patch: (bundles) => {
+                wrote ||= bundles.length > 0
+                return tx.patch(bundles)
+              },
+              remove: (entities) => {
+                wrote ||= entities.length > 0
+                return tx.remove(entities)
+              },
+            },
+            flush: (bundles) => {
+              if (!wrote) return bundles
+              let changes = host.archetypes(journaled)
+              // The first flush is before lifecycle commit: descriptors and
+              // pointers belong to that same journal batch. Only bytes minted
+              // BY journaling need a subsequent storage-only batch.
+              if (!journaled) lifecycle.derived(changes)
+              journaled = true
+              return [...bundles, ...changes.map(asBundle)]
+            },
+          }
+        },
+      },
     ],
   })
   let apply = g.apply

@@ -299,7 +299,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     let set = identity(hop.prop, flat(p.value))
     if (set) return raw(inSet(ctx, set))
   }
-  let read = readCol(ctx, hop.comp, hop.prop, `"${hop.comp}"."entity"`)
+  let read = readCol(ctx, hop.comp, hop.prop, ctx.d.ownerKey(hop.comp))
   if (!read) {
     throw new Unsupported(
       'a computed column',
@@ -475,7 +475,7 @@ let refsUnion = (ctx: Ctx, r: Refs): Cond => {
   if (!cols.length) return FALSE
   let at = '(select id from entity where eid = ?)'
   let sub = ([c, props]: Arm) =>
-    `select "${c}"."entity" from "${c}" where ` +
+    `select ${ctx.d.ownerKey(c)} from "${c}" where ` +
     props.map((p) => `"${c}"."${p}" = ${at}`).join(' or ')
   return or(
     ...cut(arms(cols), ARMS).map((group) =>
@@ -599,7 +599,7 @@ let walk = (ctx: Ctx, c: Walk): Cond => {
     from += ` join ${source(h.comp)} as "${a}" on "${a}"."entity" = ${to}`
     to = `"${a}"."${h.prop}"`
   })
-  let step = `select "${root.comp}"."entity" as "from", ${to} as "to"` +
+  let step = `select ${ctx.d.ownerKey(root.comp)} as "from", ${to} as "to"` +
     ` from ${from}`
   return walkSql(ctx.d.ownerKey('entity'), c, step)
 }

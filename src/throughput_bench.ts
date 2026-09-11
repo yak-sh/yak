@@ -44,11 +44,14 @@ let changes = (bundles: Bundle[]): Change[] =>
 let data = workload()
 apply(db, changes(data.bundles))
 for (let q of data.queries) {
-  let read = () => {
-    let rel = where(db, parseQuery(q.query))
-    if (!rel) throw new Error(`Fleet declined ${q.query}`)
-    return matching(db, toSql(rel))
-  }
+  // Match the fleet query door: plan-time descriptor IDs and execution share
+  // one read snapshot. Detached relations deliberately use the safe fallback.
+  let read = () =>
+    db.transaction(() => {
+      let rel = where(db, parseQuery(q.query))
+      if (!rel) throw new Error(`Fleet declined ${q.query}`)
+      return matching(db, toSql(rel))
+    })
   assertEquals(read().map((r) => r.eid).sort(), [...q.expected].sort(), q.name)
   Deno.bench(`fleet/${loc.mode}/${q.name}`, () => {
     read()

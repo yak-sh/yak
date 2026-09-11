@@ -197,6 +197,8 @@ export let fleetDocs = (): VocabDoc[] => {
       'error',
       'exception',
       'redaction',
+      'archetype',
+      'retired',
     ]
   ) {
     let def = docs.map((d) => d.$defs?.[name]).find((x) => x)

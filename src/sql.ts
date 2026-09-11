@@ -19,7 +19,7 @@ import { Unknown, type Vocab } from '@yaks/vocab'
 import { blobRead } from '@yaks/blob'
 import { fields, search } from '@yaks/fts'
 import { traverse } from '@yaks/edge'
-import { rows } from '@yaks/sqlite'
+import { catalog, rows } from '@yaks/sqlite'
 import { fleetVocabOf, readDriver } from './db.ts'
 import type { Sql } from './store/sql.ts'
 import { derived } from './sql_derived.ts'
@@ -140,7 +140,15 @@ let filters = (ps: Pred[]): q.Clause[] =>
   ps.filter((p) => !directive(p)).map(clause)
 let compile = (db: Sql, cs: q.Clause[], now: number): PackageRel => {
   let { v, opts } = context(db)
-  return bind(q.and(...cs), v, { ...opts, now })
+  // A returned relation may outlive this call. Only pin local descriptor IDs
+  // when the caller owns the compile-through-execute snapshot. Detached SQL
+  // retains the legacy presence predicate rather than becoming stale when a
+  // second connection commits a newly minted descriptor.
+  return bind(q.and(...cs), v, {
+    ...opts,
+    now,
+    archetypes: db.inTransaction ? catalog(readDriver(db)) : undefined,
+  })
 }
 let attempt = <T>(body: () => T): T | null => {
   try {

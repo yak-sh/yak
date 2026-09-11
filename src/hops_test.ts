@@ -82,7 +82,7 @@ Deno.test('human reads the spine and worn names, not one table per kind', () => 
 // size of the vocabulary. It was 145, one statement per declared component
 // whether or not anything wore it. The same number twice below, in-process and
 // over HTTP, because the route is an adapter and adds nothing of its own.
-let ONE = 7
+let ONE = 6
 
 Deno.test('reading one entity is the statements it costs', async () => {
   let db = freshDb()
@@ -121,7 +121,8 @@ Deno.test('a hundred rows cost the components they wear, not the vocabulary', as
   })
   assertEquals(rows.length, 100)
   // Filing is now a separate worn component: one extra table read, not N.
-  assertEquals(counts(tally).hops, 7)
+  // Two plan-time catalog reads replace the component census.
+  assertEquals(counts(tally).hops, 8)
 })
 
 // And the same number on the wire. The boot is the heavy tier's (agg_sub_test.ts

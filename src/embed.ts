@@ -11,6 +11,7 @@
 // fault is no longer invisible — it is stamped on embedHealth() and recorded to
 // telemetry (M-16612). apply() never waits on any of this.
 import type { Sql } from './store/sql.ts'
+import { settleArchetypes } from './db.ts'
 import { DIM, knn, refreshVector, vectorReady } from './vector.ts'
 import { envConfig, type OllamaConfig, ollamaEmbed } from './ollama.ts'
 import { resolve } from './config.ts'
@@ -144,19 +145,27 @@ export let stale = (db: Sql, limit = Infinity) =>
 // became a comment. Pruning reads the SAME rule stale() embeds by, so the
 // table can never keep a vector the sweep would never refresh.
 export let prune = (db: Sql) =>
-  db.prepare(
-    `delete from embedding
+  db.transaction(() => {
+    let result = db.prepare(
+      `delete from embedding
      where entity not in (select doc.entity from doc_value doc where ${ELIGIBLE})`,
-  ).run(WS)
+    ).run(WS)
+    settleArchetypes(db)
+    return result
+  }, true)
 
 let put = (db: Sql, eid: string, text: string, vec: Float32Array) =>
-  db.prepare(
-    `insert into embedding (entity, model, hash, vec)
+  db.transaction(() => {
+    let result = db.prepare(
+      `insert into embedding (entity, model, hash, vec)
      values ((select id from entity where eid = ?), ?, ?, vector_as_f32(?, ?))
      on conflict (entity) do update set
        model = excluded.model, hash = excluded.hash, vec = excluded.vec,
        at = strftime('%Y-%m-%dT%H:%M:%fZ','now')`,
-  ).run(eid, MODEL, hash(text), new Uint8Array(vec.buffer), DIM)
+    ).run(eid, MODEL, hash(text), new Uint8Array(vec.buffer), DIM)
+    settleArchetypes(db)
+    return result
+  }, true)
 
 // The sweep: prune, then re-embed every doc whose text hash moved. Embedding is
 // a REMOTE call now (ollama.ts), so the sweep holds no in-process inference

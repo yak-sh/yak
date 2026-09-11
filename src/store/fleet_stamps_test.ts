@@ -363,6 +363,7 @@ Deno.test('fleet lifecycle: trusted imports and mail sender reach return and jou
   assertEquals(out.find((b) => b.entity.eid == 'entry')?.entity, {
     eid: 'entry',
     num: null,
+    archetype: String(readComp(db, 'entry', 'entity')?.archetype),
   })
   assertEquals(
     journalSince(db, 0).at(-1)!.batch.find((c) => c.name == 'imported')?.comp,
@@ -415,7 +416,11 @@ Deno.test('fleet trace: casualties answer only death; rollback leaves journal an
   }])
   let t = fed()
   let out = write(db, [{ entity: { eid: 'a' }, tombstone: {} }], { trace: t })
-  assertEquals(out.flatMap(asChanges), [{
+  assert(
+    out.some((b) => b.archetype),
+    'new tombstone descriptor rides the batch',
+  )
+  assertEquals(out.filter((b) => !b.archetype).flatMap(asChanges), [{
     eid: 'a',
     name: 'entity',
     comp: null,

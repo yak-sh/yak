@@ -3,6 +3,7 @@ import { Archetypes, tablesOf } from '@yaks/archetype'
 import type { Driver } from './driver.ts'
 import { componentTables } from './physical.ts'
 import { mintSql } from './write.ts'
+import { unit } from './unit.ts'
 
 export { componentTables } from './physical.ts'
 
@@ -10,7 +11,6 @@ let quote = (name: string) => `"${name.replaceAll('"', '""')}"`
 
 /** Counts from a boot: existing assignments stay untouched on a repeated run. */
 export type Backfill = { entities: number; archetypes: number; retired: number }
-let sequence = 0
 
 /**
  * Idempotent, atomic boot maintenance, after additive DDL has installed the
@@ -19,12 +19,10 @@ let sequence = 0
  * plus null assignments, in table-sized scans. No per-owner component census.
  */
 export function backfill(driver: Driver, number = true): Backfill {
-  let savepoint = `archetype_boot_${sequence++}`
-  driver.exec(`savepoint ${savepoint}`)
   let run = (sql: string, params: (string | number)[] = []) =>
     driver.query(sql, params)
   let counts: Backfill = { entities: 0, archetypes: 0, retired: 0 }
-  try {
+  return unit(driver, () => {
     let cache = new Archetypes()
     let tables = componentTables(driver)
     let present = new Set(
@@ -144,20 +142,33 @@ export function backfill(driver: Driver, number = true): Backfill {
     }
     // Resolve all sets before assigning: a bare reference stub can become one
     // of the descriptors below, regardless of its position in the snapshot.
-    let targets = [...owners].map(([owner, names]) =>
-      [owner, mint(cache.intern(names).eid)] as const
-    )
-    for (let [owner, id] of targets) {
-      if (!made.has(owner)) {
-        run('update entity set archetype = ? where id = ?', [id, owner])
-      }
-      counts.entities++
+    // The physical table scan already gave every owner the SAME ordering.
+    // Canonicalize/hash once per distinct set, not half a million times, and
+    // bind owner groups in bounded chunks rather than crossing the driver for
+    // each individual assignment.
+    let groups = new Map<string, { names: string[]; owners: number[] }>()
+    for (let [owner, names] of owners) {
+      let key = JSON.stringify(names)
+      let group = groups.get(key)
+      if (!group) groups.set(key, group = { names, owners: [] })
+      group.owners.push(owner)
     }
-    driver.exec(`release ${savepoint}`)
+    let targets = [...groups.values()].map((g) =>
+      [g.owners, mint(cache.intern(g.names).eid)] as const
+    )
+    for (let [owners, id] of targets) {
+      let pending = owners.filter((owner) => !made.has(owner))
+      for (let i = 0; i < pending.length; i += 2048) {
+        run(
+          'update entity set archetype = ? where id in (select value from json_each(?))',
+          [
+            id,
+            JSON.stringify(pending.slice(i, i + 2048)),
+          ],
+        )
+      }
+      counts.entities += owners.length
+    }
     return counts
-  } catch (error) {
-    driver.exec(`rollback to ${savepoint}`)
-    driver.exec(`release ${savepoint}`)
-    throw error
-  }
+  })
 }

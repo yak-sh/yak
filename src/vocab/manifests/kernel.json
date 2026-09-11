@@ -195,7 +195,11 @@
     "entity": {
       "wire": false,
       "stamped": {
-        "num": "number"
+        "num": "number",
+        "archetype": {
+          "eid": "archetype",
+          "death": "keep"
+        }
       }
     },
     "exception": {
@@ -340,7 +344,14 @@
       }
     },
     "wants": {},
-    "worked": {}
+    "worked": {},
+    "archetype": {
+      "kind": true,
+      "cols": {
+        "tables": "text"
+      }
+    },
+    "retired": {}
   },
   "edges": [
     "requires",

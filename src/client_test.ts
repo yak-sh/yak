@@ -146,6 +146,14 @@ Deno.test('mintedIn: names the minted eid, never a foreign num', () => {
     },
   ]
   assertEquals(mintedIn(applied, NEW), 'T-7')
+  applied.push({ eid: NEW, name: 'entity', comp: { archetype: 'shape' } })
+  assertEquals(mintedIn(applied, NEW), 'T-7')
+  assertEquals(rows({ changes: applied })[0].comps.entity, {
+    eid: NEW,
+    num: 7,
+    created_at: '',
+    archetype: 'shape',
+  })
 })
 
 Deno.test('mintedIn: no spine for the eid is a loud failure, not a stale num', () => {

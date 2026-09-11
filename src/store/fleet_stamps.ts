@@ -356,5 +356,6 @@ export let fleetStamps = (host: StampHost) => {
       }
     },
     created: () => current().created,
+    derived: (changes: Change[]) => current().extra.push(...changes),
   }
 }

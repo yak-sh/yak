@@ -15,6 +15,7 @@
 // sorts chronologically as text, so the `lease_expiry < at` guard is a plain
 // string comparison.
 import type { Sql } from './store/sql.ts'
+import { settleArchetypes } from './db.ts'
 
 // A leased effect row as the claim returns it. `entity` is the claim entity's
 // integer id (the `effect` table's pk); `lease_token` is the guard a settle must
@@ -68,6 +69,7 @@ export let enqueue = (
       `insert into effect (entity, jrow, handler, state, attempts)
        values (?, ?, ?, 'pending', 0)`,
     ).run(id, jrow, handler)
+    settleArchetypes(db)
     return id
   })
 

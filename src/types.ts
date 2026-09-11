@@ -178,6 +178,9 @@ export let comps: Record<string, Record<string, PropType>> = {
   apply: {
     changes: 'body',
   },
+  archetype: {
+    tables: 'text',
+  },
   architecture: {},
   archived: {},
   attachment: {
@@ -523,6 +526,7 @@ export let comps: Record<string, Record<string, PropType>> = {
     call: { eid: 'call', death: 'keep' },
   },
   resume: {},
+  retired: {},
   review: {
     verdict: {
       enum: verdicts,
@@ -730,6 +734,7 @@ export let stamped: Record<string, Record<string, PropType>> = {
   },
   entity: {
     num: 'number',
+    archetype: { eid: 'archetype', death: 'keep' },
   },
   entry: {
     seq: 'number',
@@ -907,6 +912,7 @@ export let stamped: Record<string, Record<string, PropType>> = {
 // names it. Order derived alphabetically, refined by `before`.
 export let kindOrder = [
   'app',
+  'archetype',
   'attachment',
   'camera',
   'canvas',

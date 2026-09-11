@@ -73,7 +73,9 @@ let ownerKey = (base: string): string =>
 // reference column is an int id projected to the referent's eid through a
 // correlated spine lookup so every predicate compares eids to eids.
 let col = (comp: string, prop: string, v: Vocab): string | null => {
-  if (comp == 'entity') return `"entity"."${prop}"`
+  if (comp == 'entity' && v.column(comp, prop)?.category != 'ref') {
+    return `"entity"."${prop}"`
+  }
   if (prop == 'eid') return `"${comp}"."entity"`
   let c = v.column(comp, prop)
   if (!c) return null

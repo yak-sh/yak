@@ -473,8 +473,12 @@ export let rows = ({ changes }: { changes: Change[] }, quarantined = false) => {
       row = { eid, num: 0, kind: 'entity', comps: {} }
       out.set(eid, row)
     }
-    if (name == 'entity') row.num = Number(comp.num ?? 0)
-    row.comps[name] = comp // entity rides too (eid, num); provenance is created/updated
+    if (name == 'entity') {
+      if ('num' in comp) row.num = Number(comp.num ?? 0)
+      // A presence transition echoes only the derived archetype pointer.
+      // Keep the identity stamped earlier in the same batch.
+      row.comps.entity = { ...row.comps.entity, ...comp }
+    } else row.comps[name] = comp
   }
   for (let r of out.values()) {
     projectSession(r.comps)

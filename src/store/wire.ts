@@ -33,8 +33,8 @@ export let asChanges = (b: Bundle): Change[] => {
   let eid = b.entity.eid
   if (b.$delete || b.tombstone) return [{ eid, name: 'entity', comp: null }]
   let out: Change[] = []
-  if (b.entity.num !== undefined) {
-    out.push({ eid, name: 'entity', comp: { eid, num: b.entity.num } })
+  if (b.entity.num !== undefined || b.entity.archetype !== undefined) {
+    out.push({ eid, name: 'entity', comp: { ...b.entity } })
   }
   for (let [name, comp] of Object.entries(b)) {
     if (name == 'entity' || name.startsWith('$')) continue
@@ -55,7 +55,7 @@ export let composedChanges = (changes: Change[]): Change[] => {
   return composed(changes.map(asBundle)).flatMap((b) => {
     let out = asChanges(b)
     let identity = identities.get(b.entity.eid)
-    if (!dead(b) && b.entity.num === undefined && identity) {
+    if (!dead(b) && !out.some((c) => c.name == 'entity') && identity) {
       out.unshift({ eid: b.entity.eid, name: 'entity', comp: identity })
     }
     return out

@@ -171,6 +171,19 @@ Deno.test('fleet: @yaks/match agrees with @yaks/sql over the real graph', () => 
   assertEquals(ram('.project!'), [P])
 })
 
+Deno.test('fleet: archetype is a spine reference in SQL and memory', () => {
+  let shape = String(bundles.find((b) => b.entity.eid == T1)!.entity.archetype)
+  for (
+    let q of [
+      `.entity.archetype=${shape}`,
+      `.entity.archetype!=${shape}`,
+      `.refs=${shape}`,
+      `.entity.archetype->${shape}`,
+    ]
+  ) agree(q)
+  assert(sql(`.refs=${shape}`).includes(T1))
+})
+
 Deno.test('fleet: a window pages identically', () => {
   for (
     let q of [

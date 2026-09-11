@@ -72,7 +72,13 @@ import { type Frag, toSql } from './relation.ts'
 import { derivedCols, indexDdlOne, tableDdl } from './ddl.ts'
 import { FILTERS, type Vocab, vocabOps } from './store/vocab.ts'
 import type { Vocab as FleetVocab } from '@yaks/vocab'
-import { type Bundle, type Driver, read as sqliteRead } from '@yaks/sqlite'
+import {
+  backfill,
+  type Bundle,
+  type Driver,
+  read as sqliteRead,
+} from '@yaks/sqlite'
+import { flushArchetypes, watchArchetypes } from './store/fleet_archetype.ts'
 import { and as queryAnd, every, order } from '@yaks/query'
 import { type Derived, raw, STOCK } from '@yaks/sql'
 import { blobRead } from '@yaks/blob'
@@ -168,13 +174,22 @@ let prep = (db: Sql, sql: string): Statement => {
 
 // Package reads use the same prepared-statement cache and hop accounting as
 // fleet reads. Keep their driver read-only; none of these paths stages writes.
-export let readDriver = (db: Sql): Driver => ({
-  query: (sql, params) => prep(db, sql).all(...params),
-  exec: () => {
-    throw new Error('a storage read cannot execute writes')
-  },
-  arms: STOCK,
-})
+let readDrivers = new WeakMap<Sql, Driver>()
+export let readDriver = (db: Sql): Driver => {
+  let driver = readDrivers.get(db)
+  if (!driver) {
+    driver = {
+      query: (sql, params) => prep(db, sql).all(...params),
+      tx: (fn) => db.transaction(fn),
+      exec: () => {
+        throw new Error('a storage read cannot execute writes')
+      },
+      arms: STOCK,
+    }
+    readDrivers.set(db, driver)
+  }
+  return driver
+}
 
 // Every transaction goes through the seam's one door, db.transaction(): the
 // file adapter spells it as BEGIN/savepoints, a hosted store as its runtime's
@@ -1121,6 +1136,8 @@ export let fillContentFts = (db: Sql, limit = 64): boolean => {
 // comp equals its vocabulary columns exactly, and every OTHER comp still carries
 // every column it declares.
 export let derived = [
+  'archetype',
+  'retired',
   'filed',
   'project',
   'accept',
@@ -2477,7 +2494,7 @@ export let human = (db: Sql, eid: string): string => {
     | { num: number }
     | undefined
   let kind = kindOf(
-    Object.fromEntries(worn(db, fromEid, eid).map((n) => [n, true])),
+    Object.fromEntries(worn(db, eid).map((n) => [n, true])),
   )
   return idOf({ eid, kind, num: row?.num })
 }
@@ -3128,6 +3145,7 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       for (let comp of derived) {
         for (let { prop, ddl } of derivedCols(comp)) addCol(comp, prop, ddl)
       }
+      addCol('entity', 'archetype', 'archetype integer references entity(id)')
       // Favorite predates its clock. The insertion moment is unavailable for
       // rows already standing, so preserve their relative age with the entity's
       // creation stamp; anonymous legacy rows fall back to migration time.
@@ -3536,6 +3554,7 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       // boot the row stands, so every later epochOf() is a pure SELECT.
       mintEpoch(db)
       initVector(db)
+      migrateArchetypes(db)
       if (stored != schemaVersion) db.version = schemaVersion
       return db
     }, true)
@@ -3546,6 +3565,72 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
     // state it inherited instead of enabling caching in its outer migration.
     caching = wasCaching
   }
+}
+
+// Additive boot maintenance owns the only full-file census. Descriptors are
+// ordinary content-addressed entities; minting them is journaled, assignments
+// themselves are derived and do not manufacture half a million user edits.
+export let archetypeBoots = new WeakMap<Sql, {
+  entities: number
+  archetypes: number
+  retired: number
+  ms: number
+}>()
+export let migrateArchetypes = (db: Sql) => {
+  let before = new Set(
+    prep(db, 'select entity from archetype').all<{ entity: number }>()
+      .map((r) => r.entity),
+  )
+  let retired = new Set(
+    prep(db, 'select entity from retired').all<{ entity: number }>()
+      .map((r) => r.entity),
+  )
+  let driver: Driver = {
+    ...readDriver(db),
+    exec: (sql) => db.exec(sql),
+  }
+  let start = performance.now()
+  let result = backfill(driver, false)
+  let changes = prep(
+    db,
+    `select a.entity, e.eid, a.tables, d.eid as descriptor from archetype a
+    join entity e on e.id = a.entity left join entity d on d.id = e.archetype`,
+  ).all<{ entity: number; eid: string; tables: string; descriptor: string }>()
+    .filter((r) => !before.has(r.entity))
+    .flatMap((r): Change[] => [
+      {
+        eid: r.eid,
+        name: 'entity',
+        comp: { eid: r.eid, num: null, archetype: r.descriptor },
+      },
+      { eid: r.eid, name: 'archetype', comp: { tables: r.tables } },
+    ])
+  changes.push(
+    ...prep(
+      db,
+      `select r.entity, e.eid from retired r
+    join entity e on e.id = r.entity`,
+    ).all<{ entity: number; eid: string }>()
+      .filter((r) => !retired.has(r.entity))
+      .map((r): Change => ({ eid: r.eid, name: 'retired', comp: {} })),
+  )
+  if (changes.length) {
+    journalWrite(db, new Date().toISOString(), null, null, null, changes)
+  }
+  watchArchetypes(db, driver)
+  db.exec('delete from archetype_delta; delete from archetype_pending')
+  let measured = { ...result, ms: performance.now() - start }
+  archetypeBoots.set(db, measured)
+  return measured
+}
+
+/** Drain physical presence moves under the caller's write transaction. */
+export let settleArchetypes = (db: Sql): Change[] => {
+  let changes = flushArchetypes(db)
+  if (changes.length) {
+    journalWrite(db, new Date().toISOString(), null, null, null, changes)
+  }
+  return changes
 }
 
 // The planner's statistics, kept within 2x of the truth. ANALYZE had run once,
@@ -3685,6 +3770,7 @@ export let plant = <D extends Sql>(db: D, ops: SchemaOp[]): D =>
   shaped(db, () => {
     raise(db, ops)
     mintEpoch(db)
+    migrateArchetypes(db)
     db.version = schemaVersion
     return db
   })
@@ -3868,6 +3954,8 @@ export let fleetGraphOf = (db: Sql): FleetGraph => {
           : fleetRefusal(db, err),
       number: (eid) => mintNum(db, eid),
       component: (eid, name) => readComp(db, eid, name),
+      archetypes: (journal) =>
+        journal ? settleArchetypes(db) : flushArchetypes(db),
     })
     fleetGraphs.set(db, held)
   }
@@ -3904,6 +3992,7 @@ export let plantVocab = (db: Sql, vocab: Vocab): void => {
   fleetGraphs.delete(db)
   learnKinds(Object.keys(vocab))
   teaches(FILTERS)
+  watchArchetypes(db, readDriver(db))
 }
 
 // This store's whole writable vocabulary at one name: the platform's, then its
@@ -4300,7 +4389,8 @@ let readable: Record<string, string[]> = Object.fromEntries(
 // projects itself.
 let select = (db: Sql, name: string): string => {
   if (name == 'entity') {
-    return `select ${readable.entity.map(sqlName).join(', ')} from entity`
+    return `select * from (select e.eid, e.num, a.eid as archetype from entity e
+      left join entity a on a.id = e.archetype)`
   }
   let joins: string[] = []
   let cols = readOf(db, name)!.map((c) => {
@@ -5710,6 +5800,7 @@ export let record = (
   let via = writerVia(db, writer)
   // Most stamps carry no trace; the few effect-bearing lifecycle stamps pass
   // the process driver's trace so split ownership is preserved.
+  changes.push(...flushArchetypes(db))
   journalWrite(
     db,
     now,
@@ -5723,6 +5814,9 @@ export let record = (
       : null,
     changes,
   )
+  // Journaling inline bodies can itself materialize physical blob_text rows.
+  // Include their descriptors on both replay and the caller's live cast.
+  changes.push(...settleArchetypes(db))
 }
 
 // Server-owned SQL and its replay batch commit together. Keep casts and effects
@@ -5998,6 +6092,7 @@ export let redact = (
       if (comp) updated = { eid: target, name: 'updated', comp }
     }
 
+    let archetypes = settleArchetypes(db)
     let redaction = {
       eid: audit,
       name: 'redaction',
@@ -6036,6 +6131,8 @@ export let redact = (
 
     let changes: Change[] = [
       ...logged,
+      ...archetypes,
+      ...settleArchetypes(db),
       created,
       ...(updated ? [updated] : []),
     ]
@@ -6267,9 +6364,16 @@ export let inverseBatch = (db: Sql, id: number): Change[] => {
   // belongs to the collector (collectBlobText), never to undo — deleting it
   // strands blob_text's FK onto the blob row and every doc that adopted the
   // same content. So the inverse leaves content alone, born or written.
-  let content = new Set(batch.filter((c) => c.name == 'blob').map((c) => c.eid))
+  // Archetype descriptors likewise belong to storage and are permanent.
+  // Pointer-only entity echoes below are moves, never entity births.
+  let content = new Set(
+    batch.filter((c) => c.name == 'blob' || c.name == 'archetype')
+      .map((c) => c.eid),
+  )
   let born = new Set(
-    batch.filter((c) => c.name == 'entity' && c.comp && !content.has(c.eid))
+    batch.filter((c) =>
+      c.name == 'entity' && c.comp && 'num' in c.comp && !content.has(c.eid)
+    )
       .map((c) => c.eid),
   )
   let touchedSince = prep(
@@ -6681,10 +6785,16 @@ export let rowChanges = (r: JournalRow): Change[] => {
   let touched = new Set<string>()
   let saidCreated = new Set<string>()
   let saidUpdated = new Set<string>()
+  let descriptors = new Set(
+    r.batch.filter((c) => c.name == 'archetype' || c.name == 'retired').map((
+      c,
+    ) => c.eid),
+  )
   for (let c of r.batch) {
+    if (descriptors.has(c.eid)) continue
     if (c.name == 'entity') {
       if (!c.comp) dead.add(c.eid)
-      else if (!r.numbered?.includes(c.eid)) born.add(c.eid)
+      else if ('num' in c.comp && !r.numbered?.includes(c.eid)) born.add(c.eid)
     } else {
       touched.add(c.eid)
       // An edge is news at both its ends, as apply() has it.
@@ -6774,48 +6884,49 @@ export let touch = (
   db: Sql,
   eids: string[],
   confirm = false,
-): Change[] => {
-  let now = new Date().toISOString()
-  let out: Change[] = []
-  for (let eid of eids) {
-    // A LIVE spine only: D-18866 retains a tombstoned entity's row (its id never
-    // recycles), so existence in `entity` no longer proves liveness — a dead eid
-    // is excluded by the tombstone, or touch would revive a recall row on it.
-    if (
-      !prep(
-        db,
-        `select 1 from entity e where e.eid = ?
+): Change[] =>
+  db.transaction(() => {
+    let now = new Date().toISOString()
+    let out: Change[] = []
+    for (let eid of eids) {
+      // A LIVE spine only: D-18866 retains a tombstoned entity's row (its id never
+      // recycles), so existence in `entity` no longer proves liveness — a dead eid
+      // is excluded by the tombstone, or touch would revive a recall row on it.
+      if (
+        !prep(
+          db,
+          `select 1 from entity e where e.eid = ?
          and not exists (select 1 from tombstone t where t.entity = e.id)`,
-      ).get(eid)
-    ) continue
-    prep(
-      db,
-      `
+        ).get(eid)
+      ) continue
+      prep(
+        db,
+        `
       insert into recall (entity, first_at, last_at)
         values ((select id from entity where eid = ?), ?, ?)
       on conflict (entity) do update
       set count = count + 1, last_at = excluded.last_at
     `,
-    ).run(eid, now, now)
-    out.push({
-      eid,
-      name: 'recall',
-      comp: reads(db, 'recall', 'where eid = ?').get(eid) as Change['comp'],
-    })
-    if (
-      confirm &&
-      prep(db, `update memory set last_confirmed_at = ? where ${byEid}`)
-        .run(now, eid).changes
-    ) {
+      ).run(eid, now, now)
       out.push({
         eid,
-        name: 'memory',
-        comp: reads(db, 'memory', 'where eid = ?').get(eid) as Change['comp'],
+        name: 'recall',
+        comp: reads(db, 'recall', 'where eid = ?').get(eid) as Change['comp'],
       })
+      if (
+        confirm &&
+        prep(db, `update memory set last_confirmed_at = ? where ${byEid}`)
+          .run(now, eid).changes
+      ) {
+        out.push({
+          eid,
+          name: 'memory',
+          comp: reads(db, 'memory', 'where eid = ?').get(eid) as Change['comp'],
+        })
+      }
     }
-  }
-  return out
-}
+    return [...out, ...settleArchetypes(db)]
+  }, true)
 
 // Full-text search over docs and content — including doc-less transcript
 // entries, whose identity remains the entry, not its session. User words are quoted into FTS terms (AND semantics) so raw
@@ -7133,53 +7244,29 @@ export let cursorStale = (
 ): boolean =>
   epochHeld != epochOf(db) || vocabHeld != vocabHash || since > cursorOf(db)
 
-// A SQL string literal, for a name the reader has to SAY rather than address —
-// the component name each branch of the probe below returns as its answer.
-let sqlText = (s: string) => `'${s.replaceAll("'", "''")}'`
-
-// WHICH COMPONENTS a set of entities wears, in ONE statement. The graph
-// declares ~140 components and an entity wears a handful, so a reader that
-// visits every table to find out spends its whole cost on tables with nothing
-// in them: a single-entity read was 143 statements, ~139 of them empty
-// (T-35451). One compound `exists` answers for every table at once, each branch
-// stopping at its first row, and the reads that follow are exactly the
-// components the results carry.
-//
-// `drive` writes one branch's FROM, given the component table — and it must
-// drive from the ENTITIES, never from the component table, because the entity
-// set is small and a component table is not. Left to choose, the planner scans
-// the table and probes the entities: a `join` spelling of the same branch made
-// one /query on the live graph take minutes. `cross join` is SQLite's stated
-// join order, which is the whole point here.
-//
-// The parameters a branch takes are repeated for every branch: the store seam
-// binds positionally (store/sql.ts), so a value named once and read by 140
-// branches is not something every backend can be asked for.
-let worn = (
-  db: Sql,
-  drive: (table: string) => string,
-  arg?: SqlValue,
-): string[] => {
-  let names = readNames(db).filter((n) => n != 'entity')
-  if (!names.length) return []
-  let sql = names.map((n) =>
-    `select ${sqlText(n)} as c where exists (select 1 from ${
-      drive(sqlName(n))
-    })`
-  ).join(' union all ')
-  let has = new Set(
-    (prep(db, sql).all(...(arg === undefined ? [] : names.map(() => arg))) as {
-      c: string
-    }[]).map((r) => r.c),
+// One indexed pointer lookup; the rare unclassified row (an out-of-band
+// SQL writer) retains the physical census until its pending moves are flushed.
+let worn = (db: Sql, eid: string): string[] => {
+  let row = prep(
+    db,
+    `select a.tables from entity e
+    left join archetype a on a.entity = e.archetype where e.eid = ?`,
   )
-  // In readNames order — the order a snapshot row's comps have always carried,
-  // stated rather than left to the compound's evaluation order.
-  return names.filter((n) => has.has(n))
+    .get<{ tables: string | null }>(eid)
+  if (!row) return []
+  let names = readNames(db).filter((n) => n != 'entity')
+  if (row.tables != null) {
+    let has = new Set(JSON.parse(row.tables) as string[])
+    return names.filter((n) => has.has(n))
+  }
+  let sql = names.map((n) =>
+    `select '${n.replaceAll("'", "''")}' as name from ${
+      sqlName(n)
+    } where entity = (select id from entity where eid = ?)`
+  ).join(' union all ')
+  return prep(db, sql).all<{ name: string }>(...names.map(() => eid))
+    .map((r) => r.name)
 }
-
-// The keyed driver, shared with the write-side precondition reader.
-let fromEid = (t: string) =>
-  `entity o cross join ${t} c on c.entity = o.id where o.eid = ?`
 
 // One entity's current components, keyed read — what subscription maintenance
 // tests a touched eid against (design §2). Shaped like a snapshot row's comps
@@ -7199,7 +7286,7 @@ export let eager = (
     return {}
   }
   let out: Record<string, Record<string, unknown>> = { entity: spine }
-  for (let name of worn(db, fromEid, eid)) {
+  for (let name of worn(db, eid)) {
     let row = reads(db, name, 'where eid = ?').get(eid)
     if (row) out[name] = row
   }
@@ -8165,7 +8252,7 @@ export let refsOf = (db: Sql, eids: string[]) => {
       let rows = prep(
         db,
         `select o.eid as eid, r.eid as at from ${sqlName(name)} t
-          join entity o on o.id = t.entity
+          join entity o on o.id = t.${name == 'entity' ? 'id' : 'entity'}
           join entity r on r.id = t.${sqlName(col)}
           where r.eid in (select eid from hit)`,
       ).all() as { eid: string; at: string }[]
@@ -8196,7 +8283,7 @@ export let referrersOf = (
     let rows = prep(
       db,
       `select o.eid as eid from ${sqlName(name)} t
-        join entity o on o.id = t.entity
+        join entity o on o.id = t.${name == 'entity' ? 'id' : 'entity'}
         join entity r on r.id = t.${sqlName(prop)}
         where r.eid in (select eid from hit)`,
     ).all() as { eid: string }[]
@@ -8221,7 +8308,7 @@ export let refValuesOf = (
   let rows = prep(
     db,
     `select r.eid as v from ${sqlName(comp)} t
-      join entity o on o.id = t.entity
+      join entity o on o.id = t.${comp == 'entity' ? 'id' : 'entity'}
       join entity r on r.id = t.${sqlName(prop)}
       where o.eid in (select eid from hit) and t.${sqlName(prop)} is not null`,
   ).all() as { v: string }[]
