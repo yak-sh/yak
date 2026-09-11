@@ -1,0 +1,349 @@
+{
+  "baseline": "c856f55f",
+  "candidate": "08a3cc83",
+  "viewport": [
+    1440,
+    1000
+  ],
+  "settleMs": 15000,
+  "samples": {
+    "before": [
+      {
+        "cold": {
+          "bytes": 3672059,
+          "distinctIDs": 2228,
+          "subs": 139,
+          "unsubs": 11,
+          "received": 140,
+          "cards": 11,
+          "peeks": 0,
+          "cache": 2479,
+          "queries": 100,
+          "transports": 128
+        },
+        "firstWire": {
+          "bytes": 391135,
+          "distinctIDs": 215,
+          "subs": 114,
+          "unsubs": 0,
+          "received": 69
+        },
+        "performance": {
+          "paint": [
+            {
+              "name": "first-paint",
+              "startTime": 108
+            },
+            {
+              "name": "first-contentful-paint",
+              "startTime": 460
+            }
+          ],
+          "first": {
+            "at": 1424.699999988079,
+            "cards": 11
+          }
+        },
+        "descriptors": null,
+        "errors": 0,
+        "firstCPU": {
+          "LayoutDuration": 0.017089,
+          "RecalcStyleDuration": 0.015118,
+          "ScriptDuration": 0.060696,
+          "TaskDuration": 0.687469,
+          "JSHeapUsedSize": 13441156
+        }
+      },
+      {
+        "cold": {
+          "bytes": 3672000,
+          "distinctIDs": 2229,
+          "subs": 138,
+          "unsubs": 10,
+          "received": 139,
+          "cards": 11,
+          "peeks": 0,
+          "cache": 2480,
+          "queries": 100,
+          "transports": 128
+        },
+        "firstWire": {
+          "bytes": 391076,
+          "distinctIDs": 216,
+          "subs": 113,
+          "unsubs": 0,
+          "received": 68
+        },
+        "performance": {
+          "paint": [
+            {
+              "name": "first-paint",
+              "startTime": 52
+            },
+            {
+              "name": "first-contentful-paint",
+              "startTime": 328
+            }
+          ],
+          "first": {
+            "at": 1385.5,
+            "cards": 11
+          }
+        },
+        "descriptors": null,
+        "errors": 0,
+        "firstCPU": {
+          "LayoutDuration": 0.017574,
+          "RecalcStyleDuration": 0.016074,
+          "ScriptDuration": 0.069038,
+          "TaskDuration": 0.72568,
+          "JSHeapUsedSize": 15312384
+        }
+      }
+    ],
+    "after": [
+      {
+        "cold": {
+          "bytes": 3845202,
+          "distinctIDs": 2675,
+          "subs": 140,
+          "unsubs": 10,
+          "received": 141,
+          "cards": 11,
+          "peeks": 0,
+          "cache": 2926,
+          "queries": 101,
+          "transports": 130
+        },
+        "firstWire": {
+          "bytes": 564278,
+          "distinctIDs": 662,
+          "subs": 115,
+          "unsubs": 0,
+          "received": 70
+        },
+        "performance": {
+          "paint": [
+            {
+              "name": "first-paint",
+              "startTime": 240
+            },
+            {
+              "name": "first-contentful-paint",
+              "startTime": 1136
+            }
+          ],
+          "first": {
+            "at": 1857,
+            "cards": 11
+          }
+        },
+        "descriptors": {
+          "at": 848.6000000238419,
+          "rows": 445
+        },
+        "errors": 0,
+        "firstCPU": {
+          "LayoutDuration": 0.018464,
+          "RecalcStyleDuration": 0.016044,
+          "ScriptDuration": 0.063577,
+          "TaskDuration": 0.901086,
+          "JSHeapUsedSize": 25580872
+        }
+      },
+      {
+        "cold": {
+          "bytes": 3846829,
+          "distinctIDs": 2677,
+          "subs": 140,
+          "unsubs": 10,
+          "received": 141,
+          "cards": 11,
+          "peeks": 0,
+          "cache": 2928,
+          "queries": 101,
+          "transports": 130
+        },
+        "firstWire": {
+          "bytes": 565905,
+          "distinctIDs": 664,
+          "subs": 115,
+          "unsubs": 0,
+          "received": 70
+        },
+        "performance": {
+          "paint": [
+            {
+              "name": "first-paint",
+              "startTime": 240
+            },
+            {
+              "name": "first-contentful-paint",
+              "startTime": 1108
+            }
+          ],
+          "first": {
+            "at": 1740.8999999761581,
+            "cards": 11
+          }
+        },
+        "descriptors": {
+          "at": 801.1000000238419,
+          "rows": 445
+        },
+        "errors": 0,
+        "firstCPU": {
+          "LayoutDuration": 0.017699,
+          "RecalcStyleDuration": 0.014977,
+          "ScriptDuration": 0.062184,
+          "TaskDuration": 0.89774,
+          "JSHeapUsedSize": 25698116
+        }
+      }
+    ]
+  },
+  "exploratory": {
+    "before": {
+      "settleMs": 4000,
+      "cold": {
+        "bytes": 3589463,
+        "distinctIDs": 2078,
+        "subs": 118,
+        "unsubs": 0,
+        "received": 122,
+        "cards": 11,
+        "peeks": 0,
+        "cache": 191,
+        "queries": 97,
+        "transports": 118
+      },
+      "performance": {
+        "paint": [
+          {
+            "name": "first-paint",
+            "startTime": 180
+          },
+          {
+            "name": "first-contentful-paint",
+            "startTime": 3492
+          }
+        ],
+        "first": {
+          "at": 8788,
+          "cards": 11
+        }
+      },
+      "descriptors": null,
+      "errors": 0
+    },
+    "after": {
+      "settleMs": 4000,
+      "cold": {
+        "bytes": 3760979,
+        "distinctIDs": 2523,
+        "subs": 119,
+        "unsubs": 0,
+        "received": 123,
+        "cards": 11,
+        "peeks": 0,
+        "cache": 2556,
+        "queries": 97,
+        "transports": 119
+      },
+      "performance": {
+        "paint": [
+          {
+            "name": "first-paint",
+            "startTime": 264
+          },
+          {
+            "name": "first-contentful-paint",
+            "startTime": 1224
+          }
+        ],
+        "first": {
+          "at": 2002.1000000238419,
+          "cards": 11
+        }
+      },
+      "descriptors": {
+        "at": 924.6999999880791,
+        "rows": 445
+      },
+      "errors": 0
+    }
+  },
+  "postRebaseSmoke": {
+    "cold": {
+      "bytes": 3845143,
+      "distinctIDs": 2676,
+      "subs": 139,
+      "unsubs": 10,
+      "received": 140,
+      "cards": 11,
+      "peeks": 0,
+      "cache": 2927,
+      "queries": 100,
+      "transports": 129
+    },
+    "performance": {
+      "paint": [
+        {
+          "name": "first-paint",
+          "startTime": 136
+        },
+        {
+          "name": "first-contentful-paint",
+          "startTime": 1028
+        }
+      ],
+      "first": {
+        "at": 1762.7999999523163,
+        "cards": 11
+      }
+    },
+    "descriptors": {
+      "at": 748.5999999642372,
+      "rows": 445
+    },
+    "dom": {
+      "cards": [
+        {
+          "body": true
+        },
+        {
+          "body": true
+        },
+        {
+          "body": true
+        },
+        {
+          "body": true
+        },
+        {
+          "body": true
+        },
+        {
+          "body": true
+        },
+        {
+          "body": true
+        },
+        {
+          "body": true
+        },
+        {
+          "body": true
+        },
+        {
+          "body": true
+        },
+        {
+          "body": true
+        }
+      ],
+      "loading": 0
+    },
+    "errors": 0
+  }
+}
