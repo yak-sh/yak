@@ -25,7 +25,7 @@ export let size: Signal<{ columns: number; rows: number }> = signal({
 
 /** Terminal focus reporting is independent of application/widget focus.
  * Defaults to focused when the terminal does not send focus reports. */
-export let terminalFocused = signal(true)
+export let terminalFocused: Signal<boolean> = signal(true)
 
 /** What the last paint measured, per element id. */
 export let metrics: Signal<Metrics> = signal<Metrics>({})
