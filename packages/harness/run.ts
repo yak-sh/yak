@@ -3,6 +3,7 @@ import { stepLock } from './step_lock.ts'
 import { type RuntimeAction, runtimeAction, runtimeRows } from './runtime.ts'
 import {
   type TranscriptPage,
+  transcriptUsage,
   type TranscriptWindow,
   transcriptWindow,
 } from '@yaks/session'
@@ -148,6 +149,7 @@ export type Agent = {
     session: Eid,
     request?: TranscriptWindow,
   ) => Promise<TranscriptPage>
+  usage: (session: Eid) => Promise<Bundle[]>
   /** wake every transcript a restart left mid-step */
   resume: () => Promise<Eid[]>
   /** wait for a transcript to run out of things to do */
@@ -313,6 +315,7 @@ export let agent = (opts: Opts = {}): Agent => {
     tasks: async () =>
       (await h.g.read('.task.status=open,wip')).toSorted(byBirth),
     transcript: entries,
+    usage: (session) => transcriptUsage(h.g, session),
     transcriptWindow: (session, request) =>
       transcriptWindow(h.g, session, request),
     resume: async () => {

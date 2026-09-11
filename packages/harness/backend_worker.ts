@@ -133,6 +133,8 @@ async function handle(method: string, value: unknown): Promise<unknown> {
       return a.idle(String(args[0]))
     case 'sessions':
       return a.sessions()
+    case 'usage':
+      return a.usage(String(args[0]))
     case 'tasks':
       return a.tasks()
     case 'children':

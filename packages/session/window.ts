@@ -146,3 +146,18 @@ export let transcriptWindow = async (
     after: plan.after,
   }
 }
+
+/** Latest reported usage in a logical fork transcript, without reading prose. */
+export let transcriptUsage = async (
+  g: Graph,
+  session: Eid,
+): Promise<Bundle[]> => {
+  for (let segment of (await transcriptSegments(g, session)).reverse()) {
+    let rows = await g.read(
+      base(segment) +
+        '&.ask&.usage&.fields=ask.to,ask.through,usage.input_tokens,usage.output_tokens,usage.total_tokens,usage.cached_tokens,usage.reasoning_tokens&.order=-entry.seq&.limit=1',
+    )
+    if (rows.length) return rows
+  }
+  return []
+}

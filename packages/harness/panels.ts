@@ -20,7 +20,7 @@ export type UIAgent =
     | 'line'
     | 'entry'
   >
-  & Partial<Pick<Agent, 'archive' | 'runtime' | 'control' | 'transcriptWindow'>>
+  & Partial<Pick<Agent, 'archive' | 'runtime' | 'control' | 'transcriptWindow' | 'usage'>>
 
 /** The selection and graph doors handed to every panel. */
 export type Context = {
@@ -200,7 +200,12 @@ export let panels: Panel[] = [
   {
     title: 'Context usage',
     fit: true,
-    read: (c) => c.session ? c.agent.transcript(c.session) : [],
+    read: (c) =>
+      c.session
+        ? c.agent.usage
+          ? c.agent.usage(c.session)
+          : c.agent.transcript(c.session)
+        : [],
     Render: ({ rows }) => {
       // Transcript order includes a fork's inherited prefix. Sequence numbers
       // alone need not be monotonic across that boundary; never sum requests.

@@ -152,6 +152,29 @@ export let App = (
             s.generation == current().generation
           ) {
             setData((d) => ({ ...d, entries, page, loadedFor: s.id }))
+            if (position?.windowLoading) {
+              let edge = position.windowEdge
+              ui.client.mutate([{
+                entity: { eid: 'viewport-' + s.id },
+                viewport: {
+                  windowLoading: false,
+                  windowAnchor: null,
+                  windowEdge: null,
+                  ...edge && entries.length
+                    ? {
+                      item:
+                        (edge == 'start' ? entries[0] : entries.at(-1)!).entity
+                          .eid,
+                      selected:
+                        (edge == 'start' ? entries[0] : entries.at(-1)!).entity
+                          .eid,
+                      offset: 0,
+                      follow: edge == 'end',
+                    }
+                    : {},
+                },
+              }])
+            }
           }
         }
       } catch (e) {
@@ -497,6 +520,7 @@ let Transcript = ({ ui, id, items, agent, pending, page, load }: {
       ui.client.mutate([{
         entity: { eid: 'viewport-' + id },
         viewport: {
+          windowLoading: true,
           windowAnchor: request.anchor ?? null,
           windowEdge: request.edge ?? null,
           ...request.edge
@@ -509,11 +533,15 @@ let Transcript = ({ ui, id, items, agent, pending, page, load }: {
             : {},
         },
       }])
+      ui.patch({
+        generation:
+          Number((ui.client.ent('view')!.frontend as Comp).generation) + 1,
+      })
       load()
     },
     grow: '1',
     scrollbar: true,
-    pending,
+    pending: pending || Boolean(position?.windowLoading),
     items,
     value: {
       follow: position?.follow == null ? true : Boolean(position.follow),
@@ -522,18 +550,7 @@ let Transcript = ({ ui, id, items, agent, pending, page, load }: {
         offset: Number(position.offset),
       },
     },
-    onViewportChange: (
-      next: { anchor?: { id: string; offset: number }; follow: boolean },
-    ) => {
-      viewport.set(next)
-      ui.client.mutate([{
-        entity: { eid: 'viewport-' + id },
-        viewport: {
-          windowAnchor: null,
-          windowEdge: next.follow ? 'end' : null,
-        },
-      }])
-    },
+    onViewportChange: viewport.set,
     selected: position?.selected == null
       ? undefined
       : String(position.selected),

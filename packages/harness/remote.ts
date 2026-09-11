@@ -256,6 +256,7 @@ export let remote = async (
       await request('control', [id, action]) as string,
     sessions: () => summary('sessions'),
     tasks: () => summary('tasks'),
+    usage: async (session) => await request('usage', [session]) as Bundle[],
     children: async (id) => await request('children', [id]) as Bundle[],
     transcript: (id) => select(id),
     transcriptWindow: windowed,
