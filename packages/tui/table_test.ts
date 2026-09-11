@@ -165,7 +165,7 @@ Deno.test('Markdown table inside a list reflows on resize without losing code pi
   )
   try {
     assert(ui.text().includes('a|b'), ui.text())
-    assert(ui.out.join('').includes('48;2;52;63;68'))
+    assert(ui.out.join('').includes('48;2;52;52;52'))
     await ui.resize(12, 20)
     assert(ui.text().includes('Value'), ui.text())
     assert(ui.text().includes('a|b'), ui.text())

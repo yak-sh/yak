@@ -377,7 +377,6 @@ export let agent = (opts: Opts = {}): Agent => {
     close: () =>
       shutdown ??= (async () => {
         closing = true
-        migrationWatch?.stop()
         let drained = d.stop()
         await Promise.allSettled([...operations])
         await drained
@@ -427,6 +426,14 @@ export let agent = (opts: Opts = {}): Agent => {
     )
     console.error(reason.message)
   }, opts.migrationPollMs ?? 1000)
+  // Daemon-only shutdown is also a supported restart boundary: a replacement
+  // agent can reuse h and later close it. The old host must not keep polling
+  // that connection (or its cached, now-finalized native statements).
+  let stopDaemon = d.stop
+  d.stop = () => {
+    migrationWatch?.stop()
+    return stopDaemon()
+  }
   return a
 }
 

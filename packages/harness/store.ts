@@ -59,8 +59,15 @@ export let driver = (db: Database): Driver => {
   // a bounded statement cache, not tens of thousands of prepare/finalize pairs
   // per transcript. Database.close() finalizes the retained statements.
   let cache = new Map<string, ReturnType<Database['prepare']>>()
+  let checkOpen = () => {
+    // @db/sqlite closes/finalizes native handles without invalidating the JS
+    // Statement objects. Calling a cached one after close is a SIGSEGV, not a
+    // catchable SQLite error. Refuse at the driver boundary, before any FFI.
+    if (!db.open) throw new Error('Harness database is closed')
+  }
   return {
     query: (sql, params) => {
+      checkOpen()
       let statement = cache.get(sql)
       if (!statement) {
         if (cache.size >= 256) {
@@ -92,7 +99,10 @@ export let driver = (db: Database): Driver => {
         throw error
       }
     },
-    exec: (sql) => db.exec(sql),
+    exec: (sql) => {
+      checkOpen()
+      db.exec(sql)
+    },
   }
 }
 

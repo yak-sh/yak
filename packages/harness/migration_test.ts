@@ -1,8 +1,43 @@
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
+import { FakeTime } from '@std/testing/time'
 import { Database } from '@yaks/sqlite/db'
 import { MigrationPending, migrations } from '@yaks/sqlite'
 import { agent } from './run.ts'
 import { driver, open } from './store.ts'
+
+Deno.test('daemon stop releases its migration monitor before a shared harness is reused', async () => {
+  using time = new FakeTime()
+  const h = open(':memory:')
+  const read = h.migrations.read
+  let reads = 0
+  h.migrations.read = () => {
+    reads++
+    // Detect the lifetime violation without passing a freed pointer to FFI.
+    if (!h.db.open) throw new Error('monitor read a closed database')
+    return read()
+  }
+  const a = agent({ h })
+  let b: ReturnType<typeof agent> | undefined
+  try {
+    time.tick(1000)
+    assertEquals(reads, 1)
+    await a.d.stop()
+    time.tick(1000)
+    assertEquals(reads, 1)
+    // Daemon-only shutdown deliberately leaves the connection open for the
+    // replacement host (pool_test's durable-queue restart contract).
+    assertEquals(h.db.open, true)
+    b = agent({ h })
+    time.tick(1000)
+    assertEquals(reads, 2)
+    await b.close()
+    time.tick(10_000)
+    assertEquals(reads, 2)
+  } finally {
+    await a.close()
+    await b?.close()
+  }
+})
 
 Deno.test('pending migration refuses harness startup before installing domain tables', () => {
   const dir = Deno.makeTempDirSync()
