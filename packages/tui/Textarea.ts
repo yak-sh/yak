@@ -142,7 +142,6 @@ export let Textarea = (
     max = 8,
     prompt = '> ',
     onSubmit,
-    clearOnSubmit = true,
     onChange,
     value,
     onEdit,
@@ -152,9 +151,8 @@ export let Textarea = (
     id?: string
     max?: number
     prompt?: string
-    /** Controlled hosts may clear only after admission succeeds. */
-    clearOnSubmit?: boolean
-    onSubmit?: (text: string) => void
+    /** Return false to retain a rejected draft; other return values clear it. */
+    onSubmit?: (text: string) => unknown
     onChange?: (text: string) => void
     /** Controlled editor state; onEdit receives cursor-only changes too. */
     value?: Edit
@@ -187,8 +185,8 @@ export let Textarea = (
     if (k.ctrl && (k.name == 'end' || k.name == 'home')) return false
     let now = live.current
     if (k.name == 'enter' && !k.shift && !k.alt) {
-      if (now.text) onSubmit?.(now.text)
-      if (clearOnSubmit) take({ text: '', at: 0 })
+      const accepted = now.text ? onSubmit?.(now.text) : undefined
+      if (accepted !== false) take({ text: '', at: 0 })
       return true
     }
     let next = visualEdit(now, k, width)

@@ -86,7 +86,7 @@ Deno.test('fake agent: panels, burst selector keys, editing and stale reads', as
     assert(ui.text().includes('c!d'))
     await ui.send('\x0e') // begin a slow s1 read
     await ui.send('X')
-    assert(ui.text().includes('c!Xd')) // the graph read is still blocked
+    assert(ui.text().includes('X')) // a separate draft while the graph read is blocked
     await ui.send('\x7f')
     await ui.send('\x0e') // switch to s2 before s1 answers
     stale.resolve([{ entity: { eid: 'old' }, content: { body: 'STALE' } }])
@@ -101,7 +101,7 @@ Deno.test('fake agent: panels, burst selector keys, editing and stale reads', as
     await settle()
     assert(ui.text().includes('Harness — s2'))
     await ui.send('\x1b[A?') // ordinary up still edits after switching transcripts
-    assert(ui.text().includes('ab?'))
+    assert(ui.text().includes('?')) // this session has its own draft
     listener()
     await settle()
     assert(reads > before)
@@ -298,7 +298,8 @@ Deno.test('Tab preserves editing and captures message/task mode for each queued 
     await settle()
     assert(ui.text().includes('Select a session'))
     assertEquals(writes, [])
-    await ui.send('\tstart\rfirst\t\x1b[13;2usecond\r\tmessage\r\t\ttail\r')
+    await ui.send('\t\x15')
+    await ui.send('start\rfirst\t\x1b[13;2usecond\r\tmessage\r\t\ttail\r')
     started.resolve('parent')
     await settle()
     assertEquals(writes, [
@@ -820,6 +821,8 @@ Deno.test('Ctrl directions navigate visual rows and spatial focus; legacy Enter 
     assertEquals(selected(), 'aa')
     await ui.send('preserve')
     await key(107)
+    assertEquals((f.client.ent('draft')!.draft as Comp).text, '')
+    f.patch({ selected: 'aa' })
     assertEquals((f.client.ent('draft')!.draft as Comp).text, 'preserve')
     assert(
       ui.out.join('').includes('48;2;52;63;68'),

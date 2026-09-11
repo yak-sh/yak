@@ -286,3 +286,33 @@ Deno.test('NORMAL registry routes spatial focus and contextual movement without 
     f.close()
   }
 })
+
+Deno.test('Alt+p restores local yank into the draft without sending', async () => {
+  const f = frontend()
+  const ui = await mount(
+    () =>
+      h(
+        'div',
+        null,
+        h(Keyboard, { ui: f, action: () => false }),
+        h(Textarea, {
+          value: f.draft.value[0].draft as unknown as {
+            text: string
+            at: number
+          },
+          onEdit: f.edit,
+        }),
+      ),
+    40,
+    8,
+  )
+  try {
+    f.edit({ text: 'ab', at: 1 })
+    f.select({ surface: '', text: '', anchor: 0, at: 0, yank: 'saved\ntext' })
+    await ui.send('\x1bp')
+    assertEquals(f.draft.value[0].draft, { text: 'asaved\ntextb', at: 11 })
+  } finally {
+    ui.free()
+    f.close()
+  }
+})

@@ -1,9 +1,11 @@
 /** Frontend-local graph state. Only drafts and recovery data enter the local vault. */
 import { type Client, client, type Vault, type Watch } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
+import { SYNC_URI, syncKeywords } from '@yaks/sync'
 import { signal } from '@preact/signals'
 
 export let frontendVocab = loadVocab([{
+  $vocabulary: { [SYNC_URI]: true },
   $defs: {
     entity: { properties: { eid: { type: 'string' } } },
     keyboard: {
@@ -53,9 +55,21 @@ export let frontendVocab = loadVocab([{
         follow: { type: 'boolean' },
       },
     },
+    pendingDraft: {
+      persist: 'local',
+      properties: {
+        text: { type: 'string' },
+        owner: { type: 'string' },
+        order: { type: 'number' },
+      },
+    },
     savedDraft: {
       persist: 'local',
-      properties: { text: { type: 'string' }, at: { type: 'number' }, mode: { type: 'string' } },
+      properties: {
+        text: { type: 'string' },
+        at: { type: 'number' },
+        mode: { type: 'string' },
+      },
     },
     recovery: {
       persist: 'local',
@@ -66,31 +80,47 @@ export let frontendVocab = loadVocab([{
       properties: { text: { type: 'string' }, at: { type: 'number' } },
     },
   },
-}])
+}], [syncKeywords])
 
 export let frontend = (vault: Vault | false = false): Frontend => {
   // No URL or socket: the local vault is never replicated to the backend.
   let pending = Promise.resolve()
   let failure: unknown
   const enqueue = (write: () => Promise<void>) => {
-    pending = pending.then(write).catch(error => {
+    pending = pending.then(write).catch((error) => {
       failure = error
-      c.mutate([{ entity: { eid: 'feedback' }, feedback: { error: 'Draft recovery could not be saved: ' + String(error) } }])
+      mutate([{
+        entity: { eid: 'feedback' },
+        feedback: {
+          error: 'Draft recovery could not be saved: ' + String(error),
+        },
+      }])
     })
     return pending
   }
   const kept: Vault | false = vault && {
     load: () => vault.load(),
-    save: rows => enqueue(() => vault.save(rows)),
-    drop: ids => enqueue(() => vault.drop(ids)),
+    save: (rows) => enqueue(() => vault.save(rows)),
+    drop: (ids) => enqueue(() => vault.drop(ids)),
     clear: () => enqueue(() => vault.clear()),
   }
   let c = client(frontendVocab, [], { vault: kept, signal })
-  c.mutate([{
+  const writes = new Set<Promise<unknown>>()
+  const mutate: Client['mutate'] = (change) => {
+    const result = c.mutate(change)
+    if (result instanceof Promise) {
+      const done = result.catch((error) => {
+        failure = error
+      }).finally(() => writes.delete(done))
+      writes.add(done)
+    }
+    return result
+  }
+  mutate([{
     entity: { eid: 'visual' },
     visual: { surface: '', text: '', anchor: 0, at: 0, yank: '' },
   }])
-  c.mutate([
+  mutate([
     {
       entity: { eid: 'view' },
       frontend: {
@@ -117,70 +147,160 @@ export let frontend = (vault: Vault | false = false): Frontend => {
   let feedback = c.watch('.feedback')
   const record = (id: string, comp: string) =>
     (c.ent(id)?.[comp] ?? {}) as Record<string, unknown>
-  const slot = (selected: string | null) => 'draft:' + (selected == null ? 'new' : 'session:' + selected)
-  let selected: string | null = null
-  let revision = 0
+  const slot = (selected: string | null) =>
+    'draft:' + (selected == null ? 'new' : 'session:' + selected)
+  const selected = (): string | null => {
+    const id = record('view', 'frontend').selected
+    return id == null ? null : String(id)
+  }
   let touched = false
-  const save = () => c.mutate([{
-    entity: { eid: slot(selected) },
-    savedDraft: { ...record('draft', 'draft'), mode: record('composer', 'composer').mode },
-  }])
+  const save = () =>
+    mutate([{
+      entity: { eid: slot(selected()) },
+      savedDraft: {
+        ...record('draft', 'draft'),
+        mode: record('composer', 'composer').mode,
+      },
+    }])
   const restore = () => {
-    const d = record(slot(selected), 'savedDraft')
-    c.mutate([
-      { entity: { eid: 'draft' }, draft: { text: d.text ?? '', at: d.at ?? 0 } },
+    const d = record(slot(selected()), 'savedDraft')
+    mutate([
+      {
+        entity: { eid: 'draft' },
+        draft: { text: d.text ?? '', at: d.at ?? 0 },
+      },
       { entity: { eid: 'composer' }, composer: { mode: d.mode ?? 'message' } },
     ])
-    revision++
   }
   const ready = c.ready.then(() => {
-    if (touched) return
+    if (!vault || touched) return
+    // Interrupted admissions become editable recovered drafts, never automatic sends.
+    const interrupted = c.watch('.pendingDraft')
+    const rows = [...interrupted.value].sort((a, b) =>
+      Number((a.pendingDraft as Record<string, unknown>).order) -
+      Number((b.pendingDraft as Record<string, unknown>).order)
+    )
+    const byOwner = new Map<string, string[]>()
+    for (const row of rows) {
+      const pending = row.pendingDraft as Record<string, unknown>
+      const owner = String(pending.owner ?? '')
+      byOwner.set(owner, [
+        ...byOwner.get(owner) ?? [],
+        String(pending.text ?? ''),
+      ])
+    }
+    for (const [owner, texts] of byOwner) {
+      const saved = record(slot(owner || null), 'savedDraft')
+      const text = [...texts, saved.text].filter(Boolean).join('\n')
+      mutate([{
+        entity: { eid: slot(owner || null) },
+        savedDraft: { ...saved, text, at: text.length },
+      }])
+    }
+    for (const row of rows) mutate([{ entity: row.entity, pendingDraft: null }])
+    interrupted.close()
     const r = record('recovery', 'recovery')
-    selected = typeof r.selected == 'string' && r.selected ? r.selected : null
-    c.mutate([
-      { entity: { eid: 'view' }, frontend: { selected } },
+    const restored = typeof r.selected == 'string' && r.selected
+      ? r.selected
+      : null
+    mutate([
+      { entity: { eid: 'view' }, frontend: { selected: restored } },
       { entity: { eid: 'visual' }, visual: { yank: r.yank ?? '' } },
     ])
     restore()
   })
   return {
     ready,
-    flush: async () => { await pending; if (failure) throw failure },
+    flush: async () => {
+      while (writes.size) await Promise.all([...writes])
+      await pending
+      if (failure) throw failure
+    },
     submission: () => {
-      const owner = selected, version = revision
+      const owner = selected()
+      const generation = record('view', 'frontend').generation
       const submitted = record('draft', 'draft')
+      const id = 'pending:' + crypto.randomUUID()
+      mutate([{
+        entity: { eid: id },
+        pendingDraft: {
+          text: submitted.text ?? '',
+          owner: owner ?? '',
+          order: Date.now(),
+        },
+      }])
+      mutate([{ entity: { eid: 'draft' }, draft: { text: '', at: 0 } }])
+      save()
       return {
         accepted: (session: string) => {
-          // The acknowledged revision alone is cleared. Text entered while the
-          // request was pending remains a draft, including after switching away.
-          if (owner == selected && version == revision) {
-            c.mutate([{ entity: { eid: 'draft' }, draft: { text: '', at: 0 } }])
-            save()
-          }
-          if (owner != selected) {
-            const d = record(slot(owner), 'savedDraft')
-            if (d.text == submitted.text && d.at == submitted.at) {
-              c.mutate([{ entity: { eid: slot(owner) }, savedDraft: { text: '', at: 0 } }])
+          mutate([{ entity: { eid: id }, pendingDraft: null }])
+          if (owner == null) {
+            // All queued submissions for this new session now have a durable
+            // owner, including those whose acknowledgements arrive later.
+            const outstanding = c.watch('.pendingDraft')
+            for (const row of outstanding.value) {
+              if ((row.pendingDraft as Record<string, unknown>).owner === '') {
+                mutate([{
+                  entity: row.entity,
+                  pendingDraft: { owner: session },
+                }])
+              }
+            }
+            outstanding.close()
+            if (
+              selected() == null &&
+              generation === record('view', 'frontend').generation
+            ) {
+              const d = record('draft', 'draft')
+              mutate([
+                {
+                  entity: { eid: slot(session) },
+                  savedDraft: {
+                    ...d,
+                    mode: record('composer', 'composer').mode,
+                  },
+                },
+                {
+                  entity: { eid: slot(null) },
+                  savedDraft: { text: '', at: 0, mode: 'message' },
+                },
+                { entity: { eid: 'view' }, frontend: { selected: session } },
+                {
+                  entity: { eid: 'recovery' },
+                  recovery: { selected: session },
+                },
+              ])
             }
           }
-          if (owner == null && selected == null) {
-            const d = record('draft', 'draft')
-            c.mutate([
-              { entity: { eid: slot(session) }, savedDraft: { ...d, mode: record('composer', 'composer').mode } },
-              { entity: { eid: slot(null) }, savedDraft: { text: '', at: 0, mode: 'message' } },
-            ])
-          }
+        },
+        failed: () => {
+          const target = String(record(id, 'pendingDraft').owner ?? '') || null
+          const d = target == selected()
+            ? record('draft', 'draft')
+            : record(slot(target), 'savedDraft')
+          const text = [submitted.text, d.text].filter(Boolean).join('\n')
+          mutate([{
+            entity: { eid: slot(target) },
+            savedDraft: { text, at: text.length },
+          }])
+          if (target == selected()) restore()
+          mutate([{ entity: { eid: id }, pendingDraft: null }])
         },
       }
     },
     client: c,
     keyboard: c.watch('.keyboard'),
     keys: (fields: Record<string, string | boolean>) =>
-      c.mutate([{ entity: { eid: 'keyboard' }, keyboard: fields }]),
+      mutate([{ entity: { eid: 'keyboard' }, keyboard: fields }]),
     visual: c.watch('.visual'),
     select: (state: import('@yaks/tui').VisualState) => {
-      if (state.yank !== undefined) c.mutate([{ entity: { eid: 'recovery' }, recovery: { yank: state.yank } }])
-      return c.mutate([{ entity: { eid: 'visual' }, visual: state }])
+      if (state.yank !== undefined) {
+        mutate([{
+          entity: { eid: 'recovery' },
+          recovery: { yank: state.yank },
+        }])
+      }
+      return mutate([{ entity: { eid: 'visual' }, visual: state }])
     },
     view,
     draft,
@@ -189,17 +309,35 @@ export let frontend = (vault: Vault | false = false): Frontend => {
     patch: (fields: Record<string, string | number | boolean | null>) => {
       let { mode, error, ...selection } = fields
       touched = true
-      if ('selected' in selection && (selection.selected ?? null) !== selected) {
-        save()
-        selected = selection.selected == null ? null : String(selection.selected)
-        c.mutate([{ entity: { eid: 'recovery' }, recovery: { selected: selected ?? '' } }])
-        restore()
-      }
-      const result = c.mutate([
+      const switching = 'selected' in selection &&
+        (selection.selected ?? null) !== selected()
+      const destination = selection.selected == null
+        ? null
+        : String(selection.selected)
+      const next = switching
+        ? record(slot(destination), 'savedDraft')
+        : undefined
+      if (switching) save()
+      const result = mutate([
         ...Object.keys(selection).length
           ? [{ entity: { eid: 'view' }, frontend: selection }]
           : [],
-        ...mode !== undefined
+        ...next
+          ? [
+            {
+              entity: { eid: 'recovery' },
+              recovery: { selected: destination ?? '' },
+            },
+            {
+              entity: { eid: 'draft' },
+              draft: { text: next.text ?? '', at: next.at ?? 0 },
+            },
+            {
+              entity: { eid: 'composer' },
+              composer: { mode: mode ?? next.mode ?? 'message' },
+            },
+          ]
+          : mode !== undefined
           ? [{ entity: { eid: 'composer' }, composer: { mode } }]
           : [],
         ...error !== undefined
@@ -211,14 +349,13 @@ export let frontend = (vault: Vault | false = false): Frontend => {
     },
     edit: (value: { text: string; at: number }) => {
       touched = true
-      revision++
-      const result = c.mutate([{ entity: { eid: 'draft' }, draft: value }])
+      const result = mutate([{ entity: { eid: 'draft' }, draft: value }])
       save()
       return result
     },
     viewport: (id: string) => {
       if (!c.ent(id)) {
-        c.mutate([{
+        mutate([{
           entity: { eid: id },
           viewport: { follow: true, offset: 0 },
         }])
@@ -229,7 +366,7 @@ export let frontend = (vault: Vault | false = false): Frontend => {
         set: (
           value: { anchor?: { id: string; offset: number }; follow: boolean },
         ) => {
-          c.mutate([{
+          mutate([{
             entity: { eid: id },
             viewport: {
               item: value.anchor?.id ?? null,
@@ -246,7 +383,7 @@ export let frontend = (vault: Vault | false = false): Frontend => {
 export type Frontend = {
   ready: Promise<void>
   flush: () => Promise<void>
-  submission: () => { accepted: (session: string) => void }
+  submission: () => { accepted: (session: string) => void; failed: () => void }
   keyboard: Watch
   keys: (
     fields: Record<string, string | boolean>,

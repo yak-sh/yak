@@ -18,7 +18,7 @@ Deno.test('frontend graph is private, transient and query granular', async () =>
     assertEquals(a.client.wire, undefined)
     a.patch({ selected: 'session', mode: 'task', showSettled: true })
     assertEquals(viewChanges, 1)
-    assertEquals(draftChanges, 1)
+    assertEquals(draftChanges, 2) // changing sessions selects a separate draft
     a.patch({ mode: 'message', error: 'visible' })
     assertEquals(viewChanges, 1) // composer/feedback are independently subscribed
     let viewport = a.viewport('reading')

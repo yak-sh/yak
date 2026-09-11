@@ -1,7 +1,8 @@
 # Frontend graph pilot
 
-Each mounted frontend owns a local-only `@yaks/client` over RAM. All UI
-components declare `persist: none`; no URL, socket or vault is configured.
+Each mounted frontend owns a local-only `@yaks/client` over RAM. Most UI
+components declare `persist: none`. Draft recovery records declare
+`persist: local` and use the client vault. No URL or socket is configured.
 Identical local entity IDs in two clients deliberately refer to different
 frontend instances. `App` also accepts an application-owned `frontend` so other
 controls/tests can read and mutate the same state.
@@ -56,9 +57,9 @@ This is **not** the finished ideal graph frontend yet:
    trees, estimated heights and transient pending movement remain local to the
    generic widget. Repeated unchanged publications are suppressed; huge single
    entries still incur full parse/layout, as before.
-6. Draft is currently per frontend, preserving the existing behavior across
-   session switches. Per-session drafts can become separate draft entities
-   without a widget change.
+6. The active editor is an ephemeral projection of a per-session local draft.
+   Submission receipts retain unacknowledged text until the backend confirms
+   admission. These local records are never sent through domain synchronization.
 
 A small shared-package fix accompanies the pilot: closing a client/watch before
 its asynchronous initial read finishes can no longer resurrect that watch. Tests
@@ -124,3 +125,46 @@ rendered-text cursor. `v` selects the anchored item's source, so it retains the
 same source-mapping and cross-item limits as the previous VISUAL implementation.
 Sidebar focus uses sibling/parent/child navigation. Help is mounted only while
 requested with `?`. Modified legacy actions remain aliases, not a second mode.
+
+## Local draft recovery
+
+The terminal host opens a `@yaks/client` Vault before mounting the UI. Only
+`savedDraft`, `pendingDraft`, and `recovery` enter it; domain replicas, prompt
+context, visual selections, and credentials do not. The vocabulary explicitly
+registers `syncKeywords`; declaring `persist` without registering the extension
+would silently use the default wire tier.
+
+Drafts include source text, cursor, and message/task mode for each session and
+for the unsent new-session composer. The last selected session and local yank
+also recover. Changing sessions selects its own draft. Submission clears the
+editor immediately but retains a pending local record until admission succeeds;
+a failure restores that text ahead of any newer edits. A restart restores
+unacknowledged submissions as editable text, never automatically resends them.
+Admission may already have succeeded remotely, so inspect the transcript before
+resending recovered pending text. Checkpoint files are individually atomic, not
+a transaction spanning every local record; a crash during acknowledgement can
+recover text that was already sent rather than lose it.
+
+`Ctrl+U` intentionally clears the draft and retains the yank. `Alt+p` inserts
+the local yank at the current draft cursor, including after restart.
+
+Default storage is `~/.harness/drafts/<profile>/`, with private directory/file
+permissions (0700/0600). These are unencrypted JSON files: do not type secrets
+unless that local-at-rest policy is acceptable. `HARNESS_DRAFT_DIR` relocates
+the root. Profile identity combines the configured database path and
+`HARNESS_FRONTEND`, falling back to the tmux pane or terminal device. Set a
+stable `HARNESS_FRONTEND` to recover the same draft after replacing a terminal
+window. Different profiles are isolated; an OS file lock rejects simultaneous
+writers to one profile. Stop that frontend and remove its profile directory to
+erase its recovery data. There is no automatic retention expiry. Programmatic
+`frontend(false)` remains memory-only; `frontend(vault)` accepts browser
+IndexedDB or another standard client vault. Await `ready` before mounting and
+`flush` before closing. Host startup refuses malformed recovery records rather
+than silently deleting drafts.
+
+Writes run asynchronously in order, off the keyboard rendering path; shutdown
+waits for them. An abrupt process kill can lose edits not yet written, and
+writes are not fsynced for power-loss durability. Write failures appear in
+feedback and make `flush` reject. The file adapter rewrites only changed local
+entities, not the whole graph, but does not yet debounce repeated edits to a
+very large draft.

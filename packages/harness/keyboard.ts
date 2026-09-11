@@ -100,6 +100,7 @@ export const shortcuts = [
   ['? / Esc', 'show / dismiss help'],
   ['r', 'runtime panel: j/k select, x interrupt/cancel queued, c continue'],
   ['Ctrl+U', 'INSERT / VISUAL: cut entire draft'],
+  ['Alt+p', 'insert saved local yank into draft'],
   ['Ctrl+C', 'quit'],
 ]
 
@@ -130,6 +131,23 @@ export let Keyboard = ({ ui, action }: {
           clipboard: 'Clipboard write failed; draft retained; local yank saved',
         })
       }
+      return true
+    }
+    if (key.alt && key.text == 'p') {
+      const yank = String(
+        (ui.client.ent('visual')!.visual as VisualState).yank ?? '',
+      )
+      const draft = ui.client.ent('draft')!.draft as Comp
+      const text = String(draft.text ?? ''), at = Number(draft.at ?? 0)
+      if (yank) {
+        ui.edit({
+          text: text.slice(0, at) + yank + text.slice(at),
+          at: at + yank.length,
+        })
+      }
+      ui.keys({
+        clipboard: yank ? 'Local yank inserted' : 'Local yank is empty',
+      })
       return true
     }
     let s = current()

@@ -578,3 +578,16 @@ that cancellation was requested, not that the server stopped billing or that an
 external operation was undone. Process termination remains the separate,
 explicit process tool; this panel intentionally does not offer a kill-all
 action.
+### Draft recovery
+
+Draft text, cursor, and message/task mode are restored per session, including
+unsent new-session text. Recovery stays on the frontend machine, not the backend
+or model. `Ctrl+U` cuts to the clipboard and saved local yank; `Alt+p` restores
+that yank. Failed or interrupted admissions restore editable text rather than
+automatically resending it.
+
+Local unencrypted recovery files use private permissions under
+`~/.harness/drafts`. Set `HARNESS_FRONTEND` for a stable named profile and
+`HARNESS_DRAFT_DIR` to relocate storage. See
+[frontend state](FRONTEND.md#local-draft-recovery) for isolation, retention, and
+crash-recovery limits.

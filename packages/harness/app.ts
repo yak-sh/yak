@@ -324,7 +324,6 @@ export let App = (
   useKeys(action)
 
   let submit = (text: string) => {
-    let receipt = ui.submission()
     let s = current()
     let key = s.id ?? 'new-' + s.generation
     let previous = pending.get(key)
@@ -333,8 +332,9 @@ export let App = (
       setError(
         'Not sent: ' + text + '\nSelect a session before submitting a task.',
       )
-      return
+      return false
     }
+    let receipt = ui.submission()
     let send = async (id: Eid) => {
       if (s.mode == 'task') await a.taskEntry(id, text)
       else await a.send(id, text)
@@ -353,6 +353,7 @@ export let App = (
       }
       refresh.current()
     }, (e) => {
+      receipt.failed()
       if (!(e instanceof ToolError)) {
         diagnostics().report(e, { phase: 'frontend-submit', session: s.id })
       }
@@ -439,7 +440,7 @@ let Feedback = ({ ui }: { ui: Frontend }) => {
 }
 
 let Composer = (
-  { ui, submit }: { ui: Frontend; submit: (text: string) => void },
+  { ui, submit }: { ui: Frontend; submit: (text: string) => boolean | void },
 ) => {
   let mode = String((ui.composer.value[0].composer as Comp).mode)
   return h(
@@ -514,15 +515,14 @@ let frontendViews = define<ComponentRenderer>([{
       onEdit: edit as Frontend['edit'],
       passKey: (k: import('@yaks/tui').Key) =>
         !!k.ctrl && ['h', 'j', 'k', 'l'].includes(k.text ?? ''),
-      clearOnSubmit: false,
-      onSubmit: submit as (text: string) => void,
+      onSubmit: submit as (text: string) => boolean | void,
     })
   },
 }])
 
 /** This leaf alone subscribes to draft changes: typing does not render App. */
 let Draft = (
-  { ui, submit }: { ui: Frontend; submit: (text: string) => void },
+  { ui, submit }: { ui: Frontend; submit: (text: string) => boolean | void },
 ) =>
   renderView(frontendViews, ui.draft.value[0], 'Editor', ui.client.vocab, {
     edit: ui.edit,
@@ -536,11 +536,20 @@ export let tui = async (): Promise<void> => {
   const { openDrafts } = await import('./draft_vault.ts')
   const drafts = await openDrafts()
   const backend = await remote({ instructions: INSTRUCTIONS, cwd: Deno.cwd() })
+    .catch(async (error) => {
+      await drafts.close()
+      throw error
+    })
   const ui = drafts.ui
   try {
     await backend.resume()
     await run(
-      () => h(App, { agent: backend.agent, subscribe: backend.subscribe, frontend: drafts.ui }),
+      () =>
+        h(App, {
+          agent: backend.agent,
+          subscribe: backend.subscribe,
+          frontend: drafts.ui,
+        }),
       {
         graphics: Deno.env.get('HARNESS_GRAPHICS') == 'kitty'
           ? 'kitty'
@@ -557,6 +566,10 @@ export let tui = async (): Promise<void> => {
       },
     )
   } finally {
-    try { await backend.close() } finally { await drafts.close() }
+    try {
+      await backend.close()
+    } finally {
+      await drafts.close()
+    }
   }
 }
