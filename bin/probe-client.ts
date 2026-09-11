@@ -98,7 +98,16 @@ try {
   const settled = async () => {
     for (let i = 0; i < 900; i++) {
       if ([...active.values()].every(Boolean) && Date.now() - last > 2000) {
-        return
+        // CDP sees frames before the app's serialized apply/persist queue.
+        // Wire quiet alone can measure half a boot (or a body still loading)
+        // under host load. Wait for the addressed browser reads too.
+        if (
+          await evaluate(
+            `${
+              JSON.stringify([...active.keys()])
+            }.every(sub=>__live.subscriptionState(sub).status!=='loading')`,
+          )
+        ) return
       }
       await pause(100)
     }
@@ -156,12 +165,12 @@ try {
   await wait(
     `!!globalThis.__probe && __probe.cacheN()>10 && !!document.querySelector('.Card,.Dot,.Id') && typeof __flush==='function'`,
   )
-  await pause(15000)
-  await settled()
-  const cold = { ...metrics(), ...await stats() }
   await evaluate(
     `(async()=>{globalThis.__live=await import('/live.ts');globalThis.__nav=await import('/components/nav.tsx')})()`,
   )
+  await pause(15000)
+  await settled()
+  const cold = { ...metrics(), ...await stats() }
   let targets: string[]
   try {
     targets = JSON.parse(await Deno.readTextFile(targetFile))
@@ -271,11 +280,11 @@ try {
     ),
   )
   if (
-    errors.length || opens.some((o) =>
+    errors.length || answers.some((a) => a.error) || opens.some((o) =>
       o.body.length === null || o.text === 0
     ) || !during.title || !during.text || readiness.some((r: any) =>
       r.status !== 'loading'
-    )
+    ) || afterReadiness.some((r: any) => r.status !== 'ready')
   ) throw Error('Rendering/readiness gate failed; see JSON report')
 } finally {
   ws?.close()
