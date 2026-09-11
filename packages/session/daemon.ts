@@ -424,10 +424,16 @@ export let daemon = (
       }
     })()
   }
-  return { wake, idle, enqueue, stop, interrupt: (session) => {
-    let controller = requests.get(session)
-    if (!controller) return false
-    controller.abort()
-    return true
-  } }
+  return {
+    wake,
+    idle,
+    enqueue,
+    stop,
+    interrupt: (session) => {
+      let controller = requests.get(session)
+      if (!controller) return false
+      controller.abort()
+      return true
+    },
+  }
 }

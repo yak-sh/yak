@@ -179,3 +179,10 @@ by when they were stamped, then by the order storage handed the rows back, then
 by eid. An entry left unpositioned takes the slot of the last entry stamped
 before it and is settled there by the same tiebreak. Every boot repairs a
 database the same way.
+
+`daemon.interrupt(session)` aborts the signal for the session's current request
+and returns whether an active turn received the request. It does not wait for
+provider acknowledgment or stop independent tool processes. The harness checks
+for an in-flight model attempt before offering this operation. Models receive
+the signal through `Request.signal`; custom models must observe it. This is
+separate from `daemon.stop()`, which stops admission and drains the daemon.

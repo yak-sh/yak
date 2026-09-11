@@ -175,7 +175,10 @@ export let Keyboard = ({ ui, action }: {
     function command(k: Key): boolean {
       s = current()
       let text = k.name == 'char' && !k.alt && !k.ctrl ? k.text : undefined
-      if (text == 'r') { ui.keys({ runtime: !s.runtime }); return true }
+      if (text == 'r') {
+        ui.keys({ runtime: !s.runtime })
+        return true
+      }
       if (s.runtime) return false
       if (s.help) {
         if (text == '?' || k.name == 'escape') ui.keys({ help: false })

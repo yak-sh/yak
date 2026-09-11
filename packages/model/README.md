@@ -63,3 +63,7 @@ An explicit image input is an `Item` with `kind: 'image'`, `bytes: Uint8Array`,
 request format. Applications resolve artifact references before calling the
 model; raw bytes need not be persisted in conversation text. Applications should
 bound total image bytes and ensure the selected provider supports vision.
+
+A request may carry `signal: AbortSignal`. Model adapters should propagate it to
+provider I/O. Cancellation applies to that request, not independently launched
+tool processes. Adapters that cannot cancel should document that limitation.
