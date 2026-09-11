@@ -24,9 +24,8 @@
 // which describes namespace and object metrics. Object ids identify the
 // same object across both datasets and remain distinct across deployments.
 //
-// Without CF_ANALYTICS_TOKEN there is nothing to ask, so the sweep says one
-// line on the log and returns: the secret is the owner's to set (T-32759), and
-// a deploy standing before they do must not fail every hour.
+// Without CF_ANALYTICS_TOKEN only R2 storage is measured; analytics readings
+// remain untouched until that binding is configured.
 //
 // What a space is ALLOWED — the ceilings, the letters, the line the agent
 // reads and the sentence a door says no with — is meter.ts, which this half
@@ -46,6 +45,7 @@ import {
   atCeiling,
   ceilings,
   type Counts,
+  FILES,
   level,
   monthOf,
   none,
@@ -165,24 +165,37 @@ export let bytesOf = async (env: Env, name: string) => {
 // The hourly reading. Returns how many rows it wrote, so a caller (and the
 // log) can say whether it found anything at all.
 export let sweep = async (env: Env, now = new Date()) => {
-  if (!env.CF_ANALYTICS_TOKEN) {
-    console.log('yak-meter: no CF_ANALYTICS_TOKEN — nothing metered')
-    return 0
-  }
   let month = monthOf(now)
   let at = now.toISOString()
-  let counts = read(
-    await ask(
-      env.CF_ANALYTICS_TOKEN,
-      env.CF_ACCOUNT ?? '',
-      `${month}-01T00:00:00Z`,
-      at,
-    ),
-  )
+  let counts = env.CF_ANALYTICS_TOKEN
+    ? read(
+      await ask(
+        env.CF_ANALYTICS_TOKEN,
+        env.CF_ACCOUNT ?? '',
+        `${month}-01T00:00:00Z`,
+        at,
+      ),
+    )
+    : null
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let entities: Bundle[] = []
   for (let space of await dir.all()) {
-    let total = { ...none(), bytes: 0 }
+    let files = await filesOf(env, space)
+    // R2 accounting does not depend on the analytics credential. Leave the
+    // analytics timestamp/month untouched when only storage was measured.
+    if (!counts) {
+      let apps = (await dir.apps(space)).length
+      let meter = { ...spent(space, now), files }
+      let moved =
+        level({ ...space, meter }, apps, now) != level(space, apps, now)
+      entities.push({
+        entity: { eid: space.eid },
+        meter: { files },
+        ...(moved ? { notified: null } : {}),
+      })
+      continue
+    }
+    let total = { ...none(), bytes: 0, files }
     let apps = await dir.apps(space)
     for (let app of apps) {
       let name = storeName(space, app)
@@ -217,8 +230,8 @@ export let sweep = async (env: Env, now = new Date()) => {
     // something new to hear, so the mark that it was told goes (unseen.ts
     // `ceiling` writes it back). A level that has not moved keeps its mark,
     // which is what makes the line ride ONE reply.
-    let moved = level({ ...space, meter }, apps.length) !=
-      level(space, apps.length)
+    let moved = level({ ...space, meter }, apps.length, now) !=
+      level(space, apps.length, now)
     entities.push({
       entity: { eid: space.eid },
       meter,
@@ -245,9 +258,7 @@ export let metered = async (env: Env, now = new Date()) => {
 // ceiling — under it an hour-old figure is close enough, and asking would
 // double the Durable Object requests we are metering in the first place.
 //
-// It is the STORE's bytes: an app's uploaded files live in R2, which nothing
-// meters per space yet (D-32751 open question 2), so those count only as the
-// bytes of the request carrying them.
+// App data only; photos and files have their own R2 ceiling below.
 export let full = async (
   env: Env,
   space: Space,
@@ -264,5 +275,46 @@ export let full = async (
   let live = await bytesOf(env, storeName(space, app))
   return held - mine + live + extra > free.bytes
     ? atCeiling(space, 'bytes', env)
+    : ''
+}
+
+// Space-owned R2 objects: live files, uploaded blobs, trash and local history.
+// Shared sha/ pins are platform retention, not attributable physical bytes of
+// one space. The trailing slash prevents a space from counting a slug sibling.
+let fileSizes = async (env: Env, space: Space) => {
+  let sizes = new Map<string, number>()
+  let cursor: string | undefined
+  do {
+    let page = await env.BLOBS.list({ prefix: `${space.slug}/`, cursor })
+    for (let object of page.objects) sizes.set(object.key, object.size)
+    cursor = page.truncated ? page.cursor : undefined
+  } while (cursor)
+  return sizes
+}
+
+export let filesOf = async (env: Env, space: Space) =>
+  [...(await fileSizes(env, space)).values()].reduce((sum, n) => sum + n, 0)
+
+// Read R2 itself at upload time: the hourly reading cannot authorize a burst
+// of uploads or a new month's first upload. Use actual body sizes, never the
+// caller's Content-Length. Overwrites spend only growth; duplicates spend none.
+export let fullFiles = async (
+  env: Env,
+  space: Space,
+  writes: { key: string; bytes: number }[],
+) => {
+  let sizes = await fileSizes(env, space)
+  let held = [...sizes.values()].reduce((sum, n) => sum + n, 0)
+  let delta = 0
+  // A batch may repeat a path; parallel puts can finish in either order.
+  let incoming = new Map<string, number>()
+  for (let w of writes) {
+    incoming.set(w.key, Math.max(incoming.get(w.key) ?? 0, w.bytes))
+  }
+  for (let [key, bytes] of incoming) {
+    delta += bytes - (sizes.get(key) ?? 0)
+  }
+  return delta > 0 && held + delta > FILES[space.tier ?? 'free']
+    ? atCeiling(space, 'files', env)
     : ''
 }

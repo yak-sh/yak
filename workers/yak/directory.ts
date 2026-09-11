@@ -63,6 +63,8 @@ export type Meter = {
   rows_read: number
   rows_written: number
   bytes: number
+  // Stored R2 bytes, independent of the calendar month; absent before rollout.
+  files?: number
   emails: number
   // Monthly builder usage. `built` keeps a lifetime total for usage reporting;
   // both plans enforce their build allowance against the monthly `builds`.
@@ -336,6 +338,7 @@ let meterOf = (r: Row): Meter | null =>
       rows_read: r.meter.rows_read ?? 0,
       rows_written: r.meter.rows_written ?? 0,
       bytes: r.meter.bytes ?? 0,
+      files: r.meter.files ?? 0,
       emails: r.meter.emails ?? 0,
       builds: r.meter.builds ?? 0,
       tokens: r.meter.tokens ?? 0,

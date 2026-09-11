@@ -192,6 +192,7 @@ export let bucket = () => {
           objects: [...held.keys()].filter((k) => k.startsWith(prefix))
             .map((key) => ({
               key,
+              size: held.get(key)!.byteLength,
               uploaded: new Date(at.get(key) ?? Date.now()),
             })),
           truncated: false,

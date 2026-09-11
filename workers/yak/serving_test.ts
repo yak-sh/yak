@@ -44,6 +44,7 @@ import * as sell from './sell.ts'
 import { call, type Ctx, wrote } from './tools.ts'
 import { archive, openIn, serve } from './unseen.ts'
 import { PLATFORM_STORE } from './door.ts'
+import { sweep } from './usage.ts'
 
 let SECRET = 'a probe secret'
 
@@ -1945,4 +1946,100 @@ Deno.test('the fee is whole basis points, and never more than the sale', async (
   assertEquals((await feeAt(env, setting(cookie, '10000'))).status, 200)
   assertEquals((await feeAt(env, setting(cookie, '0'))).status, 200)
   assertEquals(await sell.feeOf(dir), 0)
+})
+
+Deno.test('photo and file uploads enforce space R2 limits from actual bytes', async () => {
+  let { env, files } = platform()
+  let { dir, space, app } = await seeded(env)
+  let cookie = await as(ADA)
+  env.FILES = {
+    fetch: () => Promise.resolve(new Response(null, { status: 204 })),
+  }
+  let list = env.BLOBS.list.bind(env.BLOBS)
+  let occupied = 0
+  // Synthetic size metadata exercises GB ceilings without allocating GBs.
+  env.BLOBS.list = async (opts) => {
+    let page = await list(opts)
+    page.objects.push({
+      key: 'ada/another/blob',
+      size: occupied,
+      uploaded: new Date(),
+    })
+    return page
+  }
+  let upload = (path: string, body: string, length?: string) =>
+    apps.fetch(
+      visit(`/cookbook/api/${path}`, {
+        method: path == 'blob' ? 'POST' : 'PUT',
+        body,
+        headers: { cookie, ...(length ? { 'content-length': length } : {}) },
+      }),
+      env,
+    )
+  for (let tier of ['free', 'plus'] as const) {
+    await stamp(env, {
+      entities: [{ entity: { eid: space.eid }, plan: { tier } }],
+    })
+    let cap = tier == 'plus' ? 50 * 1024 ** 3 : 1024 ** 3
+    files.held.clear()
+    occupied = cap - 3
+    // No length header, and an understated length: both are refused on bytes.
+    for (let length of [undefined, '1']) {
+      for (let path of ['blob', 'files/new.txt']) {
+        let no = await upload(path, 'four', length)
+        assertEquals(no.status, 413)
+        let error = (await no.json()).error
+        assertEquals(error.code, 'space_full')
+        assertStringIncludes(
+          error.message,
+          `${tier == 'plus' ? 50 : 1} GB of photos and files`,
+        )
+        assertEquals(files.held.size, 0)
+      }
+    }
+    let yes = await upload('blob', 'abc')
+    assertEquals(yes.status, 200)
+    let photo = await yes.json()
+    assertEquals(files.held.size, 1)
+    // At the limit, the same content is free and reads remain available.
+    let duplicate = await upload('blob', 'abc')
+    assertEquals(duplicate.status, 200)
+    assertEquals((await duplicate.json()).eid, photo.eid)
+    let read = await apps.fetch(visit(photo.url), env)
+    assertEquals(await read.text(), 'abc')
+    let no = await upload('blob', 'x')
+    assertEquals(no.status, 413)
+    await no.body?.cancel()
+    files.held.clear()
+    let put = await upload('files/new.txt', 'abc')
+    assertEquals(put.status, 200)
+    await put.body?.cancel()
+    let smaller = await upload('files/new.txt', 'a')
+    assertEquals(smaller.status, 200)
+    await smaller.body?.cancel()
+    let bigger = await upload('files/new.txt', 'four')
+    assertEquals(bigger.status, 413)
+    await bigger.body?.cancel()
+    // The connector, ZIP drop and sandbox share this write seam.
+    let current = (await dir.space(space.slug))!
+    await assertRejects(
+      () =>
+        wrote(env, current, app, { person: ADA, role: 'owner' }, [
+          { path: 'one.txt', bytes: new Uint8Array(2) },
+          { path: 'two.txt', bytes: new Uint8Array(2) },
+        ]),
+      Error,
+      'photos and files',
+    )
+    assertEquals(files.held.has('ada/cookbook/one.txt'), false)
+    await sweep(env)
+    let listing = await call({ env, dir, person: ADA }, 'app_list', {
+      space: 'ada',
+    })
+    let data = listing.data as {
+      spaces: { usage: { files: number }; ceilings: { files: number } }[]
+    }
+    assertEquals(data.spaces[0].usage.files, cap - 2)
+    assertEquals(data.spaces[0].ceilings.files, cap)
+  }
 })

@@ -87,7 +87,7 @@ import { edits, mode, reads, writes } from '@yaks/member'
 import { type Door, storeOf } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { noted, refusal, serving } from './unseen.ts'
-import { full } from './usage.ts'
+import { full, fullFiles } from './usage.ts'
 import { sha256 } from './versions.ts'
 // The space index's own visitor block reads views.ts directly (`visits`
 // below): drawing a page out of another module's data is not a slot, it is one
@@ -712,6 +712,11 @@ let took = async (
   let bytes = new Uint8Array(await req.arrayBuffer())
   if (!bytes.byteLength) return json(400, 'no_bytes')
   if (bytes.byteLength > MAX) return json(413, 'too_large')
+  let stopped = await fullFiles(env, space, [{
+    key: blobKey(space, app, await sha256(bytes)),
+    bytes: bytes.byteLength,
+  }])
+  if (stopped) return json(413, 'space_full', stopped)
   let file = await filed(env, space, app, bytes, mimeSent(req), nameSent(req))
   try {
     await metaOf(store).apply(file.bundles, headers)
@@ -1097,13 +1102,6 @@ let api = async (
   if (path == '/blob') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (!mayPost) return refused()
-    let stopped = await full(
-      env,
-      space,
-      app,
-      Number(req.headers.get('content-length') ?? 0),
-    )
-    if (stopped) return json(413, 'space_full', stopped)
     return took(req, env, space, app, store, {
       ...headers,
       ...(await named(env, who, app)),
@@ -1118,7 +1116,13 @@ let api = async (
     if (req.method != 'PUT') return json(405, 'method_not_allowed')
     if (!writes(who.role)) return refused()
     let key = keyOf(space, app, path.slice('/files'.length))
-    await r2Blobs(env.BLOBS).put(key, new Uint8Array(await req.arrayBuffer()))
+    let bytes = new Uint8Array(await req.arrayBuffer())
+    let stopped = await fullFiles(env, space, [{
+      key,
+      bytes: bytes.byteLength,
+    }])
+    if (stopped) return json(413, 'space_full', stopped)
+    await r2Blobs(env.BLOBS).put(key, bytes)
     await purged(env, app)
     return Response.json({ ok: true, key })
   }

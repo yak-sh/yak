@@ -704,6 +704,7 @@ export let platformDoc: VocabDoc = {
         rows_read: num,
         rows_written: num,
         bytes: num,
+        files: num,
         emails: num,
         builds: num,
         tokens: num,

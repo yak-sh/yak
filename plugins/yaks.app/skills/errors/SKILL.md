@@ -41,7 +41,11 @@ The codes a door answers, with what each means:
 - **`no_such_file`** — 404. `blob/<eid>` where the eid is not a sha-256, or
   names bytes this app does not hold.
 - **`space_full`** — 413. The space is at its app data ceiling (1 GB on Free, 10
-  GB on Plus). The message says which ceiling and what to do; the app is fine.
+  GB on Plus) or photos-and-files ceiling (1 GB on Free, 50 GB on Plus). The
+  message says which ceiling and what to do; the app is fine. File uploads check
+  live storage and only charge growth; duplicates and smaller replacements still
+  work. The usage tool reports the hourly storage reading. Space-owned files in
+  the trash still count until erased; shared version snapshots do not.
 - **`too_many_reports`** — 429. More than 30 reports from one app in one minute.
   A page in a render loop, not a broken door.
 

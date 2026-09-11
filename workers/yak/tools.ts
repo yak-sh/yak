@@ -37,6 +37,7 @@ import { deployWorker } from './deploy_worker.ts'
 import { bindingLines, bindings } from './bindings.ts'
 import type { Blobs } from '../../src/store/blobs.ts'
 import { r2Blobs } from '../../src/blobs_r2.ts'
+import { fullFiles } from './usage.ts'
 import { parseTools, TOOLS_EXAMPLE, viewsOf } from '../../src/store/tools.ts'
 import {
   borrowed,
@@ -190,6 +191,7 @@ import {
   builds,
   ceilings,
   countedSandbox,
+  FILES,
   letters,
   monthOf,
   size,
@@ -1226,6 +1228,15 @@ export let wrote = async (
 ) => {
   let blobs = r2Blobs(env.BLOBS)
   let prefix = fileKey(space, app, '')
+  let stopped = await fullFiles(
+    env,
+    space,
+    files.map((f) => ({
+      key: fileKey(space, app, f.path),
+      bytes: f.bytes.byteLength,
+    })),
+  )
+  if (stopped) throw new Error(stopped)
   // The one file with a ceiling of its own (standing.ts): the app's notes are
   // handed whole to any agent that can reach the app, so they are refused
   // over the cap here — at the write, whichever door brought the bytes —
@@ -3283,6 +3294,7 @@ let OURS: Row[] = [
           // (meter.ts). `usage.builds` counts against the monthly allowance.
           ceilings: {
             ...(ceilings(space.tier, space.slug) ?? {}),
+            files: FILES[space.tier ?? 'free'],
             emails: letters(space.tier),
             builds: builds(space.tier),
           },

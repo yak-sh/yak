@@ -98,11 +98,17 @@ export let none = (): Counts => ({ requests: 0, rows_read: 0, rows_written: 0 })
 let GB = 1024 ** 3
 
 // The free tier, as decided (D-32751): what a space gets for nothing.
-export let FREE = { apps: 5, requests: 50_000, bytes: GB }
-export let PLUS = { apps: 50, requests: 1_000_000, bytes: 10 * GB }
+export let FREE = { apps: 5, requests: 50_000, bytes: GB, files: GB }
+export let PLUS = {
+  apps: 50,
+  requests: 1_000_000,
+  bytes: 10 * GB,
+  files: 50 * GB,
+}
 
-// Published R2 allowance; enforcement is added by T-37149. Free is unmetered.
-export let FILES: Record<Tier, number | null> = { free: null, plus: 50 * GB }
+// Photos and files, including on comped spaces (only apps/data are exempt).
+// Free: proposed 1 GB allowance (T-37149), pending owner feedback.
+export let FILES: Record<Tier, number> = { free: FREE.files, plus: PLUS.files }
 
 // Where the warning line sits, as a fraction of a ceiling.
 export let WARN = 0.8
@@ -163,7 +169,10 @@ let empty = (month: string, built = 0): Meter => ({
 // through: a lifetime figure is not started over by a new month.
 export let spent = (space: Space, now = new Date()) =>
   thisMonth(space.meter, monthOf(now)) ??
-    empty(monthOf(now), space.meter?.built ?? 0)
+    {
+      ...empty(monthOf(now), space.meter?.built ?? 0),
+      files: space.meter?.files ?? 0,
+    }
 
 // Both plans count completed builds in the current calendar month.
 export let usedBuilds = (space: Space, now = new Date()) =>
@@ -176,6 +185,7 @@ export let fullness = (space: Space, apps: number, now = new Date()) => {
   let free = ceilings(space.tier, space.slug)
   let m = spent(space, now)
   let both = {
+    files: (m.files ?? 0) / FILES[space.tier ?? 'free'],
     emails: m.emails / letters(space.tier),
     builds: usedBuilds(space, now) / builds(space.tier),
   }
@@ -227,14 +237,17 @@ export let standing = (
   // The tokens those builds spent: the one place a person sees what a build
   // costs us, and the month's, whatever span the builds are counted over.
   let cost = `${count(m.tokens)} tokens this month`
+  let files = `${size(m.files ?? 0)} of ${
+    size(FILES[space.tier ?? 'free'])
+  } photos and files (hourly reading)`
   if (!free) {
     return `${space.slug}: no ceilings on this plan beyond ${mail} and ` +
-      `${made} (${cost}).`
+      `${made} (${cost}), and ${files}.`
   }
   let refused =
     `Requests are never refused; an app past ${free.apps}, a build past ${
       count(builds(space.tier))
-    }, data past ${size(free.bytes)}, or the ${
+    }, data past ${size(free.bytes)}, files past ${size(free.files)}, or the ${
       count(letters(space.tier) + 1)
     }st letter SENT is — a letter that ` +
     `arrives always lands. What the plans hold: ${url(env, '/pricing')}`
@@ -248,11 +261,13 @@ export let standing = (
   // waits on the sweep. Before the first one this month there is no reading at
   // all, and zero would be a claim rather than a number.
   if (!read) {
-    return `${head}, ${mail}, ${made} (${cost}). The month's requests and ` +
+    return `${head}, ${files}, ${mail}, ${made} (${cost}). The month's requests and ` +
       `data have not been read yet — the meter sweeps hourly. ${refused}`
   }
   return `${head}, ${count(m.requests)} of ${count(free.requests)} requests, ` +
-    `${size(m.bytes)} of ${size(free.bytes)}, ${mail}${read}, ${made} ` +
+    `${size(m.bytes)} of ${
+      size(free.bytes)
+    } app data, ${files}, ${mail}${read}, ${made} ` +
     `(${cost}). ${refused}`
 }
 
@@ -266,7 +281,7 @@ export let standing = (
 // signed-in web page's door (billing.ts).
 export let atCeiling = (
   space: Space,
-  what: 'apps' | 'bytes' | 'emails' | 'builds',
+  what: 'apps' | 'bytes' | 'files' | 'emails' | 'builds',
   env: Host = {},
 ) => {
   let free = ceilings(space.tier, space.slug)!
@@ -280,6 +295,9 @@ export let atCeiling = (
       `${space.slug} is on the ${tier} tier, which is ${
         size(free.bytes)
       } of app data — delete what it no longer needs to save more`,
+    files: () =>
+      `${space.slug} is on the ${tier} tier, which is ${size(FILES[tier])}` +
+      ` of photos and files — delete files it no longer needs to upload more`,
     // The one refusal both tiers can hit, and the one a person cannot clear
     // by deleting something: the month is what lifts it. An ARRIVAL is never
     // refused — a letter turned away at the door is somebody else's words

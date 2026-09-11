@@ -7,7 +7,7 @@ import {
   assertThrows,
 } from '@std/assert'
 import type { App, Meter, Space, Tier } from './directory.ts'
-import { full, read, sweep } from './usage.ts'
+import { filesOf, full, fullFiles, read, sweep } from './usage.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { platform } from './harness.ts'
@@ -17,6 +17,7 @@ import {
   BUILDS,
   ceilings,
   countedBuild,
+  FILES,
   FREE,
   LETTERS,
   level,
@@ -67,6 +68,7 @@ Deno.test('meter queries distinguish the same handle in two deployments', async 
     CF_ANALYTICS_TOKEN: 'read-only',
     WORKER_NAME: 'yak-staging',
   })
+  await env.BLOBS.put('ada/recipes/blobs/photo', new Uint8Array(17))
   let stores = env.STORE
   env.STORE = {
     idFromName: (name) => `staging:${name}`,
@@ -116,6 +118,7 @@ Deno.test('meter queries distinguish the same handle in two deployments', async 
     assertEquals(app.meter?.requests, 7)
     assertEquals(app.meter?.rows_read, 7)
     assertEquals(space.meter?.requests, 7)
+    assertEquals(space.meter?.files, 17)
   } finally {
     globalThis.fetch = was
   }
@@ -226,7 +229,12 @@ Deno.test('Plus ceilings are distinct and comped apps/data stay uncapped', () =>
   assertEquals(ceilings(null), FREE)
   assertEquals(ceilings('free'), FREE)
   assertEquals(ceilings('plus'), PLUS)
-  assertEquals(PLUS, { apps: 50, requests: 1_000_000, bytes: 10 * 1024 ** 3 })
+  assertEquals(PLUS, {
+    apps: 50,
+    requests: 1_000_000,
+    bytes: 10 * 1024 ** 3,
+    files: 50 * 1024 ** 3,
+  })
   assertEquals(LETTERS.plus, 2_500)
   assertEquals(BUILDS.plus, 100)
   for (let tier of [null, 'free', 'plus'] as const) {
@@ -453,4 +461,112 @@ Deno.test('Plus byte writes use the live 10 GB ceiling; comped spaces bypass it'
     '',
   )
   assertEquals(calls, before)
+})
+
+Deno.test('R2 files use every page of the space prefix, not a sibling or shared pins', async () => {
+  let { env } = platform('files-pages')
+  let calls: (string | undefined)[] = []
+  env.BLOBS.list = ({ prefix, cursor }) => {
+    assertEquals(prefix, 'jeff/')
+    calls.push(cursor)
+    let objects = cursor
+      ? [{ key: 'jeff/trashed/blobs/photo', size: 30, uploaded: NOW }]
+      : [
+        { key: 'jeff/a/index.html', size: 10, uploaded: NOW },
+        { key: 'jeff/b/blobs/photo', size: 20, uploaded: NOW },
+      ]
+    return Promise.resolve({
+      objects,
+      truncated: !cursor,
+      cursor: cursor ? undefined : 'next',
+    })
+  }
+  assertEquals(await filesOf(env, space()), 60)
+  assertEquals(calls, [undefined, 'next'])
+})
+
+Deno.test('file ceilings use live R2 growth, allow duplicates and shrinking overwrites', async () => {
+  let { env } = platform('files-full')
+  for (let tier of ['free', 'plus'] as const) {
+    let cap = FILES[tier]
+    let extra = 0
+    env.BLOBS.list = () =>
+      Promise.resolve({
+        objects: [{
+          key: 'jeff/a/existing',
+          size: cap - 3 + extra,
+          uploaded: NOW,
+        }],
+        truncated: false,
+      })
+    let old = space({ files: 0, month: '2026-08' }, tier)
+    assertEquals(
+      await fullFiles(env, old, [{ key: 'jeff/b/new', bytes: 3 }]),
+      '',
+    )
+    assertStringIncludes(
+      await fullFiles(env, old, [{ key: 'jeff/b/new', bytes: 4 }]),
+      `${size(cap)} of photos and files`,
+    )
+    assertStringIncludes(
+      await fullFiles(env, old, [
+        { key: 'jeff/b/new', bytes: 2 },
+        { key: 'jeff/a/another', bytes: 2 },
+      ]),
+      'photos and files',
+    )
+    extra = 10 // Over the allowance after a downgrade: growth stops, removal does not.
+    assertEquals(
+      await fullFiles(env, old, [{ key: 'jeff/a/existing', bytes: cap + 7 }]),
+      '',
+    )
+    assertEquals(
+      await fullFiles(env, old, [{ key: 'jeff/a/existing', bytes: 1 }]),
+      '',
+    )
+    assertStringIncludes(
+      await fullFiles(env, { ...old, slug: 'yourname' }, [{
+        key: 'yourname/a/new',
+        bytes: 1,
+      }]),
+      'photos and files',
+    )
+  }
+})
+
+Deno.test('R2 accounting sweeps without analytics, follows deletion and survives the month', async () => {
+  let { env, files } = platform('files-sweep')
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  await dir.apply({
+    entities: [{
+      entity: { eid: '$space' },
+      space: { slug: 'jeff' },
+      meter: { month: '2026-08', requests: 77, emails: 12 },
+    }],
+  }, { 'x-yak-role': 'owner' })
+  files.held.set('jeff/a/photo', new Uint8Array(20))
+  files.held.set('jeff/trash/photo', new Uint8Array(30))
+  files.held.set('jeffrey/a/photo', new Uint8Array(100))
+  files.held.set('sha/shared', new Uint8Array(100))
+  assert((await sweep(env, NOW)) >= 1)
+  let got = (await dir.space('jeff'))!
+  assertEquals(got.meter?.files, 50)
+  assertEquals(got.meter?.month, '2026-08')
+  assertEquals(got.meter?.requests, 77)
+  assertEquals(spent(got, NOW).files, 50)
+  assertEquals(spent(got, NOW).requests, 0)
+  await countedBuild(env, got, { input: 0, output: 0 }, 0, NOW)
+  assertEquals((await dir.space('jeff'))!.meter?.files, 50)
+  files.held.delete('jeff/a/photo')
+  await sweep(env, NOW)
+  assertEquals((await dir.space('jeff'))!.meter?.files, 30)
+  assertEquals(level(space({ files: FILES.free * .8 }), 0, NOW), 'near')
+  assertEquals(
+    level(space({ files: FILES.free, month: '2026-08' }), 0, NOW),
+    'over',
+  )
+  assertStringIncludes(
+    standing(space({ files: FILES.plus }, 'plus'), 0, NOW),
+    '50 GB of 50 GB photos and files',
+  )
 })
