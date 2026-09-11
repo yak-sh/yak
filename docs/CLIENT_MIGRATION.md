@@ -151,3 +151,68 @@ the landed SHA and post-rebase gates. Probe servers are reaped by their
 registered PIDs and scratch DB/profile trees removed. No live graph,
 credentials, renderer, `src/db.ts`, harness, TUI or session implementation was
 changed for this migration.
+
+## T-37383: authoritative inbox subscription shaping
+
+The follow-up keeps the package-owned cache and server-owned membership above
+unchanged. `inbox_queries.ts` now builds canonical, projected candidate reads:
+
+- Badges ask only for unread policy columns; the inbox list also asks for title
+  and creation time. Neither pulls letter bodies or delivery job payloads.
+- `deliver.to` requires a knock, excluding wake jobs and outbound delivery work
+  that the shared `inboxItem` policy would discard anyway.
+- Direct project mail requires an inbound message ID. Address delivery excludes
+  rows already selected by target. Watched mail remains a separate policy arm:
+  watching overrides the direct-address rule, even for outbound letters.
+- Watched knocks exclude direct deliveries already selected. Value sets are
+  deduped/sorted/quoted so equivalent subscribers share their query identity.
+- Archive/unread predicates run on the server before its existing result window.
+  There is no new lower cap and no partial-cache membership fallback.
+
+`inbox_queries_test.ts` crosses real SQLite → `subserve` → package cache. It
+checks candidate/policy parity, address-only mail (absent target), watched
+outbound mail, knock deduplication, muting, live opened/archive transitions,
+moves between mail arms, and suppression of body-only updates. Both list and
+badge projections are covered; server-owned inbound envelope fields are stamped
+through SQL in the fixture rather than being silently rejected by wire apply.
+
+### Same-snapshot CDP result
+
+Payload-free evidence is in `INBOX_SUBSCRIPTIONS_CDP.json`; the reproducible
+command remains
+`deno run -A bin/probe-client.ts <scratch-url> <six-targets.json>`. The driver
+now waits for browser subscription readiness as well as addressed wire replies
+and network quiet. Under host load, wire quiet alone captured a partially
+applied boot; those failed reports were discarded.
+
+- Before: `c856f55f` (authoritative package-cache browser, without this task).
+- After: `35bd1515` (this task on main through `cf5fced5`).
+- Snapshot SHA-256:
+  `893826a82ba5316e6780cc6c840b63dc80e16afd02ad159e43a33d445e39bfbe`.
+- Fresh scratch DB copies on ports 35925/35927, `PROBE=1`, isolated HOME/TMPDIR,
+  shared explicit DENO_DIR, sync/embeddings disabled. Fresh Chrome profiles,
+  1440×1000 root canvas with 11 cards and the same six targets. Runs completed
+  minutes apart; identity and clock-sensitive maintenance can vary counts.
+
+| Scenario           | Before bytes / IDs | After bytes / IDs | Before sub/unsub sends | After sub/unsub sends |
+| ------------------ | -----------------: | ----------------: | ---------------------: | --------------------: |
+| Cold canvas        |  3,751,508 / 2,227 |     622,613 / 549 |               138 / 10 |              138 / 10 |
+| Six opens + closes |      169,860 / 369 |     169,860 / 369 |                49 / 49 |               49 / 49 |
+| Reopen first       |        22,598 / 56 |       22,598 / 56 |                  6 / 1 |                 6 / 1 |
+
+Cold traffic falls **83.4%**, to **0.62 MB**, not the historical T-37034
+**479,778 B / 297 IDs** target. Across all stages, addressed mail/deliver answer
+payloads fall from **3,166,387 B to 124,190 B**. Subscription count does not
+fall: this is chiefly narrower selection and projection, not fewer inbox readers
+or a return to incomplete-cache answers.
+
+Both runs have identical six-card body lengths/SHA-256s, no browser exceptions
+or addressed errors, and unchanged query/transport counts after all six closes
+(100/128). Reopening retains visible content while all six reads are loading;
+all become ready after paused delivery resumes. The reopen still transfers
+22,598 B: this change does not promise delta-only freshness. Runtime evidence
+covers the root canvas/card scenario; live inbox policy changes are covered by
+the SQLite integration tests, not asserted from this static CDP snapshot.
+
+Required gates are `deno task check` and `DB_PATH=:memory: deno task test`; the
+T-37383 done comment records the landed SHA and final gate result.

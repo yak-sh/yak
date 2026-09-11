@@ -1,0 +1,389 @@
+{
+  "task": "T-37383",
+  "snapshot_sha256": "893826a82ba5316e6780cc6c840b63dc80e16afd02ad159e43a33d445e39bfbe",
+  "before_commit": "c856f55f",
+  "after_commit": "35bd1515",
+  "notes": [
+    "Both servers use separate fresh copies of the same snapshot, PROBE=1, sync/embeddings disabled, isolated HOME/TMPDIR and shared explicit DENO_DIR.",
+    "1440x1000, fresh Chrome profiles, root canvas, same six targets; inbound WebSocket UTF-8 payload bytes, not HTTP or compressed network bytes.",
+    "Driver waits for wire quiet AND the browser subscription apply queue; an earlier under-load wire-only measurement was discarded.",
+    "Baseline and optimized scenarios completed minutes apart; fresh browser identity and clock-sensitive maintenance can vary counts.",
+    "No new lower membership cap; policy fields projected and irrelevant/duplicate arms screened server-side. The ~0.48 MB historical target is not claimed."
+  ],
+  "before": {
+    "base": "http://localhost:35925",
+    "targets": [
+      "33365ea3-f3e5-42e5-9035-85bbb6ab85e1",
+      "8a88b12a-ae7f-4bee-891a-e431e41b3dd5",
+      "1db34918-f8d8-4d49-a83a-fd1a6e8a0789",
+      "2e0b3e3e-5470-4d48-8d09-4423f320f3ff",
+      "6d422fc0-d0f8-46b8-81bf-70f651dd7e1c",
+      "03f45fb2-1168-40b0-8a21-68c8cc510901"
+    ],
+    "cold": {
+      "bytes": 3751508,
+      "distinctIDs": 2227,
+      "subs": 138,
+      "unsubs": 10,
+      "received": 190,
+      "cards": 11,
+      "peeks": 0,
+      "cache": 2478,
+      "queries": 100,
+      "transports": 128
+    },
+    "six": {
+      "bytes": 169860,
+      "distinctIDs": 369,
+      "subs": 49,
+      "unsubs": 49,
+      "received": 50,
+      "cards": 11,
+      "peeks": 0,
+      "cache": 2841,
+      "queries": 100,
+      "transports": 128,
+      "opens": [
+        {
+          "bytes": 24067,
+          "distinctIDs": 56,
+          "subs": 7,
+          "unsubs": 2,
+          "received": 7,
+          "body": {
+            "length": 1008,
+            "sha256": "4cb712c6f42831c0f8fdd70fc3ef804bd3aaae47773b55e073830a6088e953de"
+          },
+          "text": 1543
+        },
+        {
+          "bytes": 36831,
+          "distinctIDs": 89,
+          "subs": 9,
+          "unsubs": 2,
+          "received": 9,
+          "body": {
+            "length": 532,
+            "sha256": "8e045e6cac7bca76976d71ccce52f855d52a0a0d7932bbf5cf281cfd70843f3a"
+          },
+          "text": 1098
+        },
+        {
+          "bytes": 10699,
+          "distinctIDs": 6,
+          "subs": 8,
+          "unsubs": 2,
+          "received": 8,
+          "body": {
+            "length": 3918,
+            "sha256": "b414018d249c77ddcfb0aa2bb566d0b7b3a1eaf02c612402169f628c02a2726a"
+          },
+          "text": 4418
+        },
+        {
+          "bytes": 17549,
+          "distinctIDs": 36,
+          "subs": 7,
+          "unsubs": 2,
+          "received": 7,
+          "body": {
+            "length": 1471,
+            "sha256": "370261e062984c10a737967f57260c7199a196d5d5d57bb9424aea81f2b874ee"
+          },
+          "text": 1893
+        },
+        {
+          "bytes": 16787,
+          "distinctIDs": 35,
+          "subs": 7,
+          "unsubs": 2,
+          "received": 7,
+          "body": {
+            "length": 1078,
+            "sha256": "b72e4ee2fa1f32bafb16bb7a760edf4f0a7a0f2f89d717a7099872cef4f3df9d"
+          },
+          "text": 1367
+        },
+        {
+          "bytes": 58874,
+          "distinctIDs": 147,
+          "subs": 8,
+          "unsubs": 2,
+          "received": 8,
+          "body": {
+            "length": 2168,
+            "sha256": "5c8781c0b718c3f77aeadbba147dfbeca731aa048c6d9b49733d5bedb9132f8d"
+          },
+          "text": 2865
+        }
+      ]
+    },
+    "reopen": {
+      "before": {
+        "title": true
+      },
+      "during": {
+        "title": true,
+        "text": 1543,
+        "queued": 6
+      },
+      "body": {
+        "length": 1008,
+        "sha256": "4cb712c6f42831c0f8fdd70fc3ef804bd3aaae47773b55e073830a6088e953de"
+      },
+      "readiness": [
+        {
+          "sub": "q:[{\"comp\":\"board\",\"prop\":\"query\",\"op\":\"~\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "loading"
+        },
+        {
+          "sub": "q:[{\"comp\":\"\",\"prop\":\"\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\",\"refs\":true}]",
+          "status": "loading"
+        },
+        {
+          "sub": "q:[{\"comp\":\"comment\",\"prop\":\"target\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "loading"
+        },
+        {
+          "sub": "q:[{\"comp\":\"commit\",\"prop\":\"target\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "loading"
+        },
+        {
+          "sub": "route:33365ea3-f3e5-42e5-9035-85bbb6ab85e1:repo.url,filed.project,comment.target,session.requested_task,session.actor,role.scope,memory.scope,entry.session",
+          "status": "loading"
+        },
+        {
+          "sub": "agg:comments",
+          "status": "loading"
+        }
+      ],
+      "afterReadiness": [
+        {
+          "sub": "q:[{\"comp\":\"board\",\"prop\":\"query\",\"op\":\"~\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "ready"
+        },
+        {
+          "sub": "q:[{\"comp\":\"\",\"prop\":\"\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\",\"refs\":true}]",
+          "status": "ready"
+        },
+        {
+          "sub": "q:[{\"comp\":\"comment\",\"prop\":\"target\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "ready"
+        },
+        {
+          "sub": "q:[{\"comp\":\"commit\",\"prop\":\"target\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "ready"
+        },
+        {
+          "sub": "route:33365ea3-f3e5-42e5-9035-85bbb6ab85e1:repo.url,filed.project,comment.target,session.requested_task,session.actor,role.scope,memory.scope,entry.session",
+          "status": "ready"
+        },
+        {
+          "sub": "agg:comments",
+          "status": "ready"
+        }
+      ],
+      "bytes": 22598,
+      "distinctIDs": 56,
+      "subs": 6,
+      "unsubs": 1,
+      "received": 6,
+      "cards": 11,
+      "peeks": 1,
+      "cache": 2841,
+      "queries": 104,
+      "transports": 133
+    },
+    "errors": [],
+    "mail_deliver_answer_bytes_all_stages": 3166387,
+    "addressed_errors": []
+  },
+  "after": {
+    "base": "http://localhost:35927",
+    "targets": [
+      "33365ea3-f3e5-42e5-9035-85bbb6ab85e1",
+      "8a88b12a-ae7f-4bee-891a-e431e41b3dd5",
+      "1db34918-f8d8-4d49-a83a-fd1a6e8a0789",
+      "2e0b3e3e-5470-4d48-8d09-4423f320f3ff",
+      "6d422fc0-d0f8-46b8-81bf-70f651dd7e1c",
+      "03f45fb2-1168-40b0-8a21-68c8cc510901"
+    ],
+    "cold": {
+      "bytes": 622613,
+      "distinctIDs": 549,
+      "subs": 138,
+      "unsubs": 10,
+      "received": 139,
+      "cards": 11,
+      "peeks": 0,
+      "cache": 582,
+      "queries": 100,
+      "transports": 128
+    },
+    "six": {
+      "bytes": 169860,
+      "distinctIDs": 369,
+      "subs": 49,
+      "unsubs": 49,
+      "received": 50,
+      "cards": 11,
+      "peeks": 0,
+      "cache": 947,
+      "queries": 100,
+      "transports": 128,
+      "opens": [
+        {
+          "bytes": 24067,
+          "distinctIDs": 56,
+          "subs": 7,
+          "unsubs": 2,
+          "received": 7,
+          "body": {
+            "length": 1008,
+            "sha256": "4cb712c6f42831c0f8fdd70fc3ef804bd3aaae47773b55e073830a6088e953de"
+          },
+          "text": 1247
+        },
+        {
+          "bytes": 36831,
+          "distinctIDs": 89,
+          "subs": 9,
+          "unsubs": 2,
+          "received": 9,
+          "body": {
+            "length": 532,
+            "sha256": "8e045e6cac7bca76976d71ccce52f855d52a0a0d7932bbf5cf281cfd70843f3a"
+          },
+          "text": 1098
+        },
+        {
+          "bytes": 10709,
+          "distinctIDs": 6,
+          "subs": 8,
+          "unsubs": 2,
+          "received": 9,
+          "body": {
+            "length": 3918,
+            "sha256": "b414018d249c77ddcfb0aa2bb566d0b7b3a1eaf02c612402169f628c02a2726a"
+          },
+          "text": 4418
+        },
+        {
+          "bytes": 17549,
+          "distinctIDs": 36,
+          "subs": 7,
+          "unsubs": 2,
+          "received": 7,
+          "body": {
+            "length": 1471,
+            "sha256": "370261e062984c10a737967f57260c7199a196d5d5d57bb9424aea81f2b874ee"
+          },
+          "text": 1688
+        },
+        {
+          "bytes": 16787,
+          "distinctIDs": 35,
+          "subs": 7,
+          "unsubs": 2,
+          "received": 7,
+          "body": {
+            "length": 1078,
+            "sha256": "b72e4ee2fa1f32bafb16bb7a760edf4f0a7a0f2f89d717a7099872cef4f3df9d"
+          },
+          "text": 1367
+        },
+        {
+          "bytes": 58874,
+          "distinctIDs": 147,
+          "subs": 8,
+          "unsubs": 2,
+          "received": 8,
+          "body": {
+            "length": 2168,
+            "sha256": "5c8781c0b718c3f77aeadbba147dfbeca731aa048c6d9b49733d5bedb9132f8d"
+          },
+          "text": 2865
+        }
+      ]
+    },
+    "reopen": {
+      "before": {
+        "title": true
+      },
+      "during": {
+        "title": true,
+        "text": 1247,
+        "queued": 6
+      },
+      "body": {
+        "length": 1008,
+        "sha256": "4cb712c6f42831c0f8fdd70fc3ef804bd3aaae47773b55e073830a6088e953de"
+      },
+      "readiness": [
+        {
+          "sub": "q:[{\"comp\":\"board\",\"prop\":\"query\",\"op\":\"~\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "loading"
+        },
+        {
+          "sub": "q:[{\"comp\":\"\",\"prop\":\"\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\",\"refs\":true}]",
+          "status": "loading"
+        },
+        {
+          "sub": "q:[{\"comp\":\"comment\",\"prop\":\"target\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "loading"
+        },
+        {
+          "sub": "q:[{\"comp\":\"commit\",\"prop\":\"target\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "loading"
+        },
+        {
+          "sub": "route:33365ea3-f3e5-42e5-9035-85bbb6ab85e1:repo.url,filed.project,comment.target,session.requested_task,session.actor,role.scope,memory.scope,entry.session",
+          "status": "loading"
+        },
+        {
+          "sub": "agg:comments",
+          "status": "loading"
+        }
+      ],
+      "afterReadiness": [
+        {
+          "sub": "q:[{\"comp\":\"board\",\"prop\":\"query\",\"op\":\"~\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "ready"
+        },
+        {
+          "sub": "q:[{\"comp\":\"\",\"prop\":\"\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\",\"refs\":true}]",
+          "status": "ready"
+        },
+        {
+          "sub": "q:[{\"comp\":\"comment\",\"prop\":\"target\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "ready"
+        },
+        {
+          "sub": "q:[{\"comp\":\"commit\",\"prop\":\"target\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "ready"
+        },
+        {
+          "sub": "route:33365ea3-f3e5-42e5-9035-85bbb6ab85e1:repo.url,filed.project,comment.target,session.requested_task,session.actor,role.scope,memory.scope,entry.session",
+          "status": "ready"
+        },
+        {
+          "sub": "agg:comments",
+          "status": "ready"
+        }
+      ],
+      "bytes": 22598,
+      "distinctIDs": 56,
+      "subs": 6,
+      "unsubs": 1,
+      "received": 6,
+      "cards": 11,
+      "peeks": 1,
+      "cache": 947,
+      "queries": 104,
+      "transports": 133
+    },
+    "errors": [],
+    "mail_deliver_answer_bytes_all_stages": 124190,
+    "addressed_errors": []
+  }
+}
