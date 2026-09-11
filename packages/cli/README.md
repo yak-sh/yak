@@ -154,13 +154,18 @@ storage require Deno filesystem, environment and network permissions.
 
 ## Structured command pilot
 
-`@yaks/cli/structured` exports `defineCommands`, `commandPlugin`,
-`commandTools`, and `resolveCommand`. A command supplies a noun path and verb
-plus an existing graph Tool definition. CLI aliases are explicit; MCP names use
-the canonical path joined with underscores. The CLI host supplies argument
-decoding and output formatting. This is opt-in and does not alter the existing
-plugin API.
+`@yaks/cli/structured` consumes graph `Tool` definitions with string `noun` and
+`verb` fields. `session list` and `list session` automatically traverse the same
+registry; they are not separately registered aliases. `completeCommand` lists
+matching nouns or verbs. `resolveCommand` resolves the first two words and
+`commandArguments` decodes the remaining arguments against `inputSchema`.
 
-See the [composition design](../plugin/DESIGN.md) and the working
-[session-list definition](../harness/commands.ts). Installing a dependency does
-not register or activate its commands automatically.
+Long options derive from JSON Schema properties. Optional `options.positional`
+and `options.short` metadata describe positional fields and short flags. Shared
+validation applies types, bounds, enums, required fields and defaults. The CLI
+adapter supplies execution context; the handler remains the graph Tool's `run`.
+
+MCP and provider adapters derive a name such as `session_list` when no explicit
+transport name is present. Existing name-only tools remain supported. JSON
+Schema tool declarations are available through `@yaks/vocab/tools`; where they
+belong within vocabulary documents remains an open design question.

@@ -163,3 +163,17 @@ requirements.
 
 Experimental live text projections are described in
 [TRANSIENT.md](TRANSIENT.md).
+
+### Structured tool identity
+
+A `Tool` can declare `noun: 'session'` and `verb: 'list'` instead of a transport
+name. `toolName(tool)` derives `session_list`; `namedTool(tool)` normalizes a
+transport-facing copy. Existing `name`-only tools continue to work. The core
+stores this metadata but does not interpret CLI arguments or execute a different
+command framework.
+
+`inputSchema` is a JSON Schema for the complete arguments object. Existing
+`input` bags remain available for legacy adapters; do not supply both. See
+[`@yaks/vocab` tool declarations](../vocab/README.md#tool-definitions-experimental)
+for shared validation and optional positional/short-flag presentation. Tool
+nouns are independent of graph component names.

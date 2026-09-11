@@ -158,3 +158,42 @@ examples.
 
 Pure TypeScript with no runtime dependency — a vocabulary is plain JSON Schema.
 Runs on **Deno** and **Node** (via JSR / npm).
+
+## Tool definitions (experimental)
+
+`@yaks/vocab/tools` validates JSON Schema tool declarations independently of
+component vocabulary loading. It does **not** assign tools to components or
+change the root format of existing `vocab.json` files. Placement of action
+schemas in those files is deliberately open for further design.
+
+```ts
+import { toolDefinition } from '@yaks/vocab/tools'
+import type { Tool } from '@yaks/graph'
+
+const definition = toolDefinition({
+  noun: 'session',
+  verb: 'list',
+  description: 'List sessions',
+  inputSchema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: { limit: { type: 'integer', minimum: 1, default: 20 } },
+  },
+  options: { short: { n: 'limit' } },
+})
+const tool: Tool = { ...definition, run: (args) => args }
+```
+
+`toolDefinitionSchema` is the JSON Schema for the declaration itself.
+`validateToolInput(tool, args)` validates a copy of the argument object and
+applies schema defaults. It uses JSON Schema draft 2020-12, including local
+references; it does not fetch remote references. Validators are cached per
+schema object. Treat registered schemas as immutable.
+
+Nouns and verbs are single lowercase words (hyphens and digits allowed).
+`options.positional` orders input property names; `options.short` maps single
+letter flags to property names. Long options derive from property names.
+Handlers remain code and receive the existing graph Tool context. The older
+opaque/Zod argument bag remains supported by existing adapters, but cannot be
+combined with `inputSchema` on the same tool. JSON output declarations and a
+uniform migration of legacy tools are not part of this first input pilot.

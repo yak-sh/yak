@@ -1932,6 +1932,7 @@
         "dependencies": [
           "jsr:@std/assert@1",
           "npm:@modelcontextprotocol/sdk@^1.29.0",
+          "npm:zod-to-json-schema@^3.25.1",
           "npm:zod@^3.24.0"
         ]
       },
@@ -2031,7 +2032,8 @@
       },
       "packages/vocab": {
         "dependencies": [
-          "jsr:@std/assert@1"
+          "jsr:@std/assert@1",
+          "npm:ajv@^8.17.1"
         ]
       },
       "packages/wake": {

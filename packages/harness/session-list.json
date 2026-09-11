@@ -1,0 +1,11 @@
+{
+  "noun": "session",
+  "verb": "list",
+  "description": "List sessions in the connected graph.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "readOnly": true
+}

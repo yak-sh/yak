@@ -2,10 +2,14 @@
   "name": "@yaks/vocab",
   "version": "0.1.0",
   "description": "Loads and validates component vocabularies expressed as JSON Schema with custom keywords, exposing column types, path routing, and display ordering.",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./tools": "./tools.ts"
+  },
   "license": "Apache-2.0",
   "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "ajv": "npm:ajv@^8.17.1"
   },
   "publish": {
     "exclude": [

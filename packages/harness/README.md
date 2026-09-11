@@ -641,6 +641,7 @@ starts no services. It is not yet a complete replacement for harness startup.
 
 The existing executable also accepts `session list` and `list session`,
 returning session bundles as JSON. The same definition can be exposed as MCP
-`session_list` using `commandTools` from `@yaks/cli/structured`. Existing
+`session_list` directly through the MCP adapter. Both CLI word orders derive
+from the same Tool noun/verb fields, without alias declarations. Existing
 commands remain available. See [the design and limits](../plugin/DESIGN.md). No
 daemon, installer, or `:` command interface is added in this pilot.

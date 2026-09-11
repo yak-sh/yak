@@ -315,3 +315,20 @@ inside `graph_query` too.
 ## License
 
 Apache-2.0
+
+### JSON Schema tool input
+
+Tools may supply `noun`/`verb` and a complete `inputSchema` rather than a legacy
+name and per-argument Zod `input` bag. The server derives the MCP name (for
+example, `session_list`), advertises the original JSON Schema, and validates
+arguments through `@yaks/vocab/tools` before calling the same `run` handler.
+Legacy tools retain their Zod validation. Security callbacks receive normalized
+names in either case.
+
+The MCP SDK's high-level registration currently accepts Zod rather than raw JSON
+Schema. For a mixed registry this adapter provides its own tools/list projection
+and uses shared JSON Schema validation for the new declarations. This projection
+describes the server's initial static registry; dynamically adding, disabling,
+or modifying SDK tools after construction is not supported when JSON Schema
+tools are present. This is an explicit adapter limitation, not a second schema
+compiler. Output schemas retain the existing Zod path.

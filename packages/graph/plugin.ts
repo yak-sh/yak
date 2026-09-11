@@ -135,8 +135,19 @@ export type ToolCtx = {
  * which for most tools is bundles.
  */
 export type Tool = {
-  /** the tool's name, as an agent calls it */
-  name: string
+  /** Legacy transport name. Structured tools derive it from noun and verb. */
+  name?: string
+  /** Resource word, independent of CLI word order or graph components. */
+  noun?: string
+  /** Operation word. Must be supplied together with noun. */
+  verb?: string
+  /** JSON Schema object for the complete argument object. Preferred over input. */
+  inputSchema?: Record<string, unknown>
+  /** Optional CLI presentation; ordinary long options use property names. */
+  options?: {
+    positional?: readonly string[]
+    short?: Readonly<Record<string, string>>
+  }
   /** a short human title */
   title?: string
   /** what it does and when to reach for it — the agent reads this */

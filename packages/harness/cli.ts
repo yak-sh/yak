@@ -214,13 +214,9 @@ export let plugin: Plugin = {
 
 /** Optional structured entrypoint alongside the existing short CLI verbs. */
 export const structured = commandPlugin(commands, async (command, args, c) => {
-  if (args.length) {
-    c.note('session list takes no arguments')
-    return 2
-  }
   const h = open()
   try {
-    const result = await command.run({}, {
+    const result = await command.run(args, {
       graph: h.g,
       actor: null,
       read: (query, opts) => h.g.read(query, opts),

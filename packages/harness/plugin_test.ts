@@ -32,7 +32,7 @@ Deno.test('manifest contributions share one command between CLI and MCP over a g
   }
   const results: unknown[] = []
   const cli = commandPlugin(declarations, async (c, args) => {
-    assertEquals(args, [])
+    assertEquals(args, {})
     results.push(await c.run({}, context))
     return 0
   })
@@ -47,7 +47,7 @@ Deno.test('manifest contributions share one command between CLI and MCP over a g
   )
   const client = await connect({
     graph: h.g,
-    tools: commandTools(declarations),
+    tools: [...declarations],
   })
   try {
     const listed = await client.listTools()
@@ -68,29 +68,63 @@ Deno.test('manifest contributions share one command between CLI and MCP over a g
   }
 })
 
-Deno.test('structured paths are explicit, deterministic, and collision checked', () => {
+Deno.test('noun and verb traversal is automatic and collision checked', () => {
   const c = commands[0]
   assertEquals(commandTools([c])[0].name, 'session_list')
   assertEquals(resolveCommand([c], ['session', 'list', 'extra'])?.args, [
     'extra',
   ])
+  assertEquals(resolveCommand([c], ['list', 'session'])?.command, c)
   assertEquals(resolveCommand([c], ['list']), undefined)
-  assertThrows(() => defineCommands([c, c]), Error, 'Duplicate')
+  assertThrows(() => defineCommands([c, c]), Error, 'duplicate')
   assertThrows(
-    () =>
-      defineCommands([c, {
-        ...c,
-        noun: ['other'],
-        aliases: [['session', 'list', 'all']],
-      }]),
+    () => defineCommands([c, { ...c, noun: 'list', verb: 'session' }]),
     Error,
     'Ambiguous',
   )
-  assertThrows(
-    () => defineCommands([{ ...c, noun: ['repo_branch'] }]),
-    Error,
-    'lowercase',
-  )
-  const trio = { ...c, noun: ['repo', 'branch'], verb: 'create', aliases: [] }
-  assertEquals(commandTools([trio])[0].name, 'repo_branch_create')
+})
+
+Deno.test('JSON Schema tool uses identical metadata and constraints through MCP and provider adapter', async () => {
+  const { commandArguments } = await import('@yaks/cli/structured')
+  const { parametersOf } = await import('./tools.ts')
+  const { toolDefinition } = await import('@yaks/vocab/tools')
+  const tool = {
+    ...toolDefinition({
+      noun: 'example',
+      verb: 'list',
+      description: 'Example',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['scope'],
+        properties: {
+          scope: { type: 'string' },
+          limit: { type: 'integer', minimum: 1, default: 2 },
+        },
+      },
+      options: { positional: ['scope'], short: { n: 'limit' } },
+    }),
+    run: (args: Record<string, unknown>) => args,
+  }
+  const h = open(':memory:')
+  const c = await connect({ graph: h.g, tools: [tool] })
+  try {
+    const listed = (await c.listTools()).tools.find((
+      t: { name: string; inputSchema: unknown },
+    ) => t.name === 'example_list')!
+    assertEquals(listed.inputSchema, tool.inputSchema)
+    assertEquals(parametersOf(tool), tool.inputSchema)
+    const args = commandArguments(tool, ['root', '-n', '3'])
+    const response = await c.callTool({ name: 'example_list', arguments: args })
+    assertEquals(response.isError, undefined)
+    assertEquals(JSON.stringify(response).includes('root'), true)
+    const invalid = await c.callTool({
+      name: 'example_list',
+      arguments: { scope: 'root', limit: 0 },
+    })
+    assertEquals(invalid.isError, true)
+  } finally {
+    await c.close()
+    h.close()
+  }
 })

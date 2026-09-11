@@ -1,13 +1,10 @@
 /** One read-only command shared by the CLI and MCP adapters. */
 import { parse } from '@yaks/query'
-import { defineCommands } from '@yaks/cli/structured'
+import type { Tool } from '@yaks/graph'
+import { toolDefinition } from '@yaks/vocab/tools'
+import definition from './session-list.json' with { type: 'json' }
 
-export const commands = defineCommands([{
-  noun: ['session'],
-  verb: 'list',
-  aliases: [['list', 'session']],
-  description: 'List sessions in the connected graph.',
-  input: {},
-  readOnly: true,
+export const commands: Tool[] = [{
+  ...toolDefinition(definition),
   run: (_args, ctx) => ctx.read(parse('.session')),
-}])
+}]

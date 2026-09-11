@@ -1,3 +1,7 @@
+import { validateToolInput } from '@yaks/vocab/tools'
+import { type NamedTool, namedTool, toolName } from '@yaks/graph'
+import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import { zodToJsonSchema } from 'zod-to-json-schema'
 // The server: a graph, its tools, and the MCP protocol machine that lists and
 // calls them. Everything transport-shaped lives in ./mount.ts and ./stdio.ts;
 // this file only knows how a `Tool` becomes an MCP tool.
@@ -98,7 +102,7 @@ export type Options = {
    * A function is asked once per tool, for a door where the answer differs
    * from one to the next: a read anybody may make beside a write that needs a
    * token, listed together so a host has something to offer the sign-in for */
-  security?: Security[] | ((t: Tool) => Security[] | undefined)
+  security?: Security[] | ((t: NamedTool) => Security[] | undefined)
   /** tools beside the generic tier and the graph's plugins' */
   tools?: Tool[]
   /** what a result should ALSO say, given the names this server is listing
@@ -189,7 +193,7 @@ let noting = (out: CallToolResult, line: string | undefined): CallToolResult =>
 // there — a mixed-auth server's open tools are told apart from its closed ones
 // by this field alone.
 let metaOf = (
-  tool: Tool,
+  tool: NamedTool,
   security: Options['security'],
 ): Record<string, unknown> | undefined => {
   let says = typeof security == 'function' ? security(tool) : security
@@ -209,7 +213,7 @@ export let shapeOf = (tool: Tool): Record<string, z.ZodTypeAny> =>
   Object.fromEntries(
     Object.entries(tool.input ?? {}).map((
       [name, s],
-    ) => [name, zodOf(tool.name, `argument '${name}'`, s)!]),
+    ) => [name, zodOf(toolName(tool), `argument '${name}'`, s)!]),
   )
 
 /**
@@ -217,7 +221,7 @@ export let shapeOf = (tool: Tool): Record<string, z.ZodTypeAny> =>
  * tier, then the graph's plugins', then the host's own.
  *
  * ```ts
- * let names = listing(opts).map((t) => t.name)
+ * let names = listing(opts).map(toolName)
  * ```
  */
 export let listing = (opts: Options): Tool[] => [
@@ -237,8 +241,7 @@ export let listing = (opts: Options): Tool[] => [
 
 /** The ROSTER this server serves: the names it lists, in listing order. What a
  * client caches at connect, and what {@link rosterVersion} names. */
-export let roster = (opts: Options): string[] =>
-  listing(opts).map((t) => t.name)
+export let roster = (opts: Options): string[] => listing(opts).map(toolName)
 
 /**
  * One tool's behavior, as MCP's four hints (`ToolAnnotations`). A host reads
@@ -296,7 +299,7 @@ export let server = (opts: Options): McpServer => {
     read: (query, readOpts) => graph.read(query, readOpts),
   }
 
-  let tools = listing(opts)
+  let tools = listing(opts).map(namedTool)
   let names = tools.map((t) => t.name)
 
   for (let t of tools) {
@@ -305,14 +308,14 @@ export let server = (opts: Options): McpServer => {
     let config = {
       ...(t.title ? { title: t.title } : {}),
       description: t.description,
-      inputSchema: shapeOf(t),
+      inputSchema: t.inputSchema ? z.object({}).passthrough() : shapeOf(t),
       annotations: annotated(t),
       ...(meta ? { _meta: meta } : {}),
     }
     let run = async (args: Record<string, unknown>) => {
       let out: CallToolResult
       try {
-        let value = await t.run(args, ctx)
+        let value = await t.run(validateToolInput(t, args), ctx)
         out = value instanceof Say
           ? spoke(value)
           : output
@@ -328,6 +331,33 @@ export let server = (opts: Options): McpServer => {
     if (output) {
       mcp.registerTool(t.name, { ...config, outputSchema: output }, run)
     } else mcp.registerTool(t.name, config, run)
+  }
+  // Preserve JSON Schema declarations exactly on the wire. SDK argument parsing
+  // for these tools is passthrough; the shared validator runs before the handler.
+  if (tools.some((t) => t.inputSchema)) {
+    mcp.server.setRequestHandler(ListToolsRequestSchema, () => ({
+      tools: tools.map((t) => ({
+        name: t.name,
+        ...(t.title ? { title: t.title } : {}),
+        description: t.description,
+        inputSchema: (t.inputSchema ?? zodToJsonSchema(z.object(shapeOf(t)), {
+          target: 'jsonSchema7',
+          $refStrategy: 'none',
+        })) as { type: 'object'; [key: string]: unknown },
+        ...(t.output
+          ? {
+            outputSchema: zodToJsonSchema(zodOf(t.name, 'output', t.output)!, {
+              target: 'jsonSchema7',
+              $refStrategy: 'none',
+            }) as { type: 'object'; [key: string]: unknown },
+          }
+          : {}),
+        annotations: annotated(t),
+        ...(metaOf(t, opts.security)
+          ? { _meta: metaOf(t, opts.security) }
+          : {}),
+      })),
+    }))
   }
   return mcp
 }

@@ -15,15 +15,15 @@ configuration-file search, hot reload, or a new command prompt.
 
 - `@yaks/plugin`: explicit installed-module loading, version-1 manifests, lazy
   target selection, capability checks, and identity validation.
-- `@yaks/cli/structured`: noun-path/verb identities around the existing
-  `@yaks/graph` Tool schema, annotations, execution context, and handler.
+- `@yaks/cli/structured`: noun/verb traversal of the existing `@yaks/graph` Tool
+  schema, annotations, execution context, and handler.
 - `@yaks/harness/plugin`: session vocabulary, session graph rules, and a session
   list command. This is a partial manifest, **not everything required to boot
   the harness**. Model/tool/context vocabulary and derived columns still come
   from the existing host composition.
-- `harness session list` and the explicit alias `harness list session` are wired
-  into the existing executable. They return session bundles as JSON. Existing
-  short commands such as `ls` are unchanged.
+- `harness session list` and the verb-first traversal `harness list session` are
+  wired into the existing executable. They return session bundles as JSON.
+  Existing short commands such as `ls` are unchanged.
 - The same command becomes MCP `session_list` by passing
   `commandTools(commands)` to the existing MCP server. An in-memory MCP
   client/server regression exercises this path; the harness does not start a new
@@ -36,11 +36,10 @@ without loading a service factory. No daemon or extra executable is required.
 
 ```ts
 {
-  noun: ['session'],
+  noun: 'session',
   verb: 'list',
-  aliases: [['list', 'session']],
   description: 'List sessions in the connected graph.',
-  input: {},
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   readOnly: true,
   run: (_args, ctx) => ctx.read(parse('.session')),
 }
@@ -51,22 +50,24 @@ The command runs against an injected `ToolCtx`. Its authenticated actor and
 arguments. Authorization remains the responsibility of that context and graph
 rules.
 
-Canonical CLI spelling is noun-first. Alternate order is explicitly registered;
-there is no natural-language parser. The MCP name joins canonical words with
-underscores. Words may contain lowercase letters, digits, and hyphens, but not
-underscores. Duplicate paths and prefix-ambiguous paths are rejected before
-registration, rather than resolved silently by install order.
+Noun and verb belong to the graph `Tool` contract. They are single strings, not
+paths or aliases. Both `session list` and `list session` resolve the same tool.
+Completion after `list` shows nouns with that verb; after `session` it shows
+that noun's verbs. The first two words resolve identity before positional
+arguments are interpreted. Registries reject ambiguous reversed pairs. Existing
+named tools remain supported by transports without inventing nouns for them.
 
-A three-word command could use `noun: ['repo', 'branch'], verb: 'create'`. The
-repository instance is a structured input argument, not part of command
-identity. Likewise an authorization scope is execution context, not a freely
-chosen subject.
-
-CLI argument decoding, validation, and output formatting still belong to the CLI
-adapter. This pilot's command has no arguments and rejects extra words. Its MCP
-adapter uses the existing graph Tool schema machinery. We deliberately have not
-introduced a second argument/schema compiler. A command with arguments is the
-next useful test before extracting a separate `@yaks/command` package.
+The portable declaration is JSON Schema-validated by `@yaks/vocab/tools`. Its
+physical placement inside `vocab.json` remains open: the pilot uses a small
+standalone JSON fixture, not a mandated document layout. Tools are not tied to
+components. Input properties define options, constraints and defaults;
+`options.positional` lists positional field names and `options.short` maps short
+flags to properties. Ordinary long flags require no extra registration. Objects
+and arrays are JSON CLI values; union coercion and shell completion integration
+are outside this small parser. CLI and MCP validate with the same JSON Schema
+validator. MCP advertises the original schema; provider declarations reuse it.
+Legacy Zod-shaped `input` bags remain compatible but cannot accompany an
+`inputSchema`. No handler execution framework was added.
 
 The structured registry validates collisions **within the supplied set**. Mixing
 it with existing CLI plugins still uses the old CLI precedence rules. A complete
@@ -160,3 +161,20 @@ Next iteration: add a command with validated arguments, receiver-side typed
 target contracts, and one host activation lifecycle. Do not migrate every
 command or add service placement syntax before those examples establish what is
 needed.
+
+## Revised tool pilot boundaries
+
+Tool identity is now directly on `@yaks/graph.Tool`, not a separate Command
+shape. `@yaks/vocab/tools` is a lazy optional entrypoint for JSON Schema
+declarations and validation; importing the graph core does not load Ajv. The
+complete repository type check and focused mixed-registry tests cover legacy
+named/Zod tools alongside noun/verb JSON Schema tools. The demonstration
+`session-list.json` is a fixture, not a decision to require another root file.
+
+The declaration schema and inputs use draft 2020-12. Output-schema migration,
+provider-wide enumeration of all installed contributions, shell completion
+installation, and merging collision policy with unrelated legacy CLI plugins
+remain open. `completeCommand` exposes the two traversal directions to adapters;
+it does not install shell completion scripts. The MCP SDK adaptation uses a
+static listing projection when raw JSON Schema tools are present, so hosts must
+rebuild that server to change its registry.

@@ -1,3 +1,5 @@
+import { validateToolInput } from '@yaks/vocab/tools'
+import { toolName } from '@yaks/graph'
 import { artifactTools } from './artifact_tools.ts'
 import type { ImageOptions } from './images.ts'
 import { valueTools } from '@yaks/blob'
@@ -35,6 +37,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema'
 /** A graph tool's arguments as JSON Schema, the way a model declaration takes
  * them. */
 export let parametersOf = (tool: GraphTool): Record<string, unknown> => {
+  if (tool.inputSchema) return tool.inputSchema
   let json = zodToJsonSchema(z.object(shapeOf(tool)), {
     $refStrategy: 'none',
   }) as Record<string, unknown>
@@ -64,13 +67,13 @@ export let graphTools = (
     read: (query, o) => g.read(query, o),
   }
   return core({ vocab: g.vocab, depth: opts.depth ?? 'names' }).map((t) => ({
-    name: t.name,
+    name: toolName(t),
     description: t.description,
     parameters: parametersOf(t),
     run: async (args: Record<string, unknown>, call) => {
       let actor = call?.session ? { eid: call.session } : ctx.actor
       return said(
-        await t.run(args, {
+        await t.run(validateToolInput(t, args), {
           ...ctx,
           actor,
           apply: (change) =>
