@@ -21,6 +21,7 @@ export type ViewportState = { anchor?: Anchor; follow: boolean }
 export class VirtualWindow<T extends VirtualItem> {
   anchor?: Anchor
   selected?: string
+  selectionVisible = true
   selectionStyle: Style = { bg: '#343f44' }
   follow: boolean
   private items: readonly T[] = []
@@ -250,7 +251,7 @@ export class VirtualWindow<T extends VirtualItem> {
         lines.length - local <= height - out.length
       let visible = lines.slice(local, local + height - out.length)
       out.push(
-        ...(end == selected
+        ...(this.selectionVisible && end == selected
           ? visible.map((line) =>
             line.map((seg) => ({
               ...seg,
@@ -292,12 +293,17 @@ export let VirtualList = <T extends VirtualItem>(
     value,
     onViewportChange,
     selected,
+    selectionVisible = true,
+    selectionClass = 'List_Selected',
     onSelect,
     ...attrs
   }: {
     items: readonly T[]
     /** Controlled selected item; onSelect enables item-navigation keys. */
     selected?: string
+    /** Keep the logical selection while hiding its painted highlight. */
+    selectionClass?: string
+    selectionVisible?: boolean
     onSelect?: (id: string) => void
     textOf?: (item: T) => string
     renderItem: (item: T) => ComponentChildren
@@ -408,6 +414,7 @@ export let VirtualList = <T extends VirtualItem>(
       return { text: item && textOf ? textOf(item) : '' }
     },
   })
+  state.current.selectionVisible = selectionVisible
   state.current.selected = selected
   useKeys((key) => {
     if (onSelect) {
@@ -426,7 +433,7 @@ export let VirtualList = <T extends VirtualItem>(
   }, String(attrs.id))
   useLayoutEffect(() => {
     touch()
-  }, [items, renderItem, selected])
+  }, [items, renderItem, selected, selectionVisible, selectionClass])
   return h('div', {
     ...attrs,
     onWheel: (event: MouseEvent) => {
@@ -445,7 +452,8 @@ export let VirtualList = <T extends VirtualItem>(
       ;(el as TElement).viewport = (width, height, style, sheet) => {
         selectionWidth.current = width
         env.current = { style, sheet }
-        state.current!.selectionStyle = sheet.List_Selected ?? { bg: '#343f44' }
+        state.current!.selectionStyle = sheet[selectionClass] ??
+          { bg: '#343f44' }
         let inner = attrs.scrollbar && width >= 2 ? width - 1 : width
         if (pending) return []
         let lines = state.current!.layout(

@@ -372,3 +372,16 @@ Deno.test('wheel scrolling clamps at the end even with a selected entry', () => 
   assertEquals(text(v.layout(20, 5)), ['93', '94', '95', '96', '97'])
   assertEquals(v.follow, false)
 })
+
+Deno.test('hidden selection retains logical position without painting highlight', () => {
+  let v = window(false)
+  v.update(items(20))
+  v.selected = '0'
+  v.selectionStyle = { bg: '#123456' }
+  assert(v.layout(40, 5)[0].some((s) => s.style.bg == '#123456'))
+  v.selectionVisible = false
+  assert(v.layout(40, 5)[0].every((s) => s.style.bg != '#123456'))
+  assertEquals(v.selected, '0')
+  v.selectionVisible = true
+  assert(v.layout(40, 5)[0].some((s) => s.style.bg == '#123456'))
+})

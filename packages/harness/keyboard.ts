@@ -142,7 +142,13 @@ export let Keyboard = ({ ui, action }: {
       return true
     }
     if (key.name == 'escape') {
-      ui.keys({ mode: 'NORMAL', help: false, runtime: false, pending: '' })
+      ui.keys({
+        mode: 'NORMAL',
+        ...(s.mode == 'INSERT' ? { focus: 'transcript' } : {}),
+        help: false,
+        runtime: false,
+        pending: '',
+      })
       return true
     }
     if (s.mode == 'INSERT') {

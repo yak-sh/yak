@@ -27,6 +27,7 @@ export type Context = {
   agent: UIAgent
   session?: Eid
   sessions: Bundle[]
+  active?: boolean
   sidebar?: string
   showSettled?: boolean
   showArchived?: boolean
@@ -102,7 +103,7 @@ export let panels: Panel[] = [
     ],
     scrollable: true,
     read: (c) => c.sessions,
-    Render: ({ rows, session, sidebar, showSettled, showArchived }) => {
+    Render: ({ rows, session, sidebar, active, showSettled, showArchived }) => {
       let tree = sessionTree(rows, {
         selected: session,
         showSettled,
@@ -129,7 +130,7 @@ export let panels: Panel[] = [
             'div',
             {
               class: (sidebar ?? session ?? 'new') == 'new'
-                ? 'Session_Selected'
+                ? (active ? 'Selection_Active' : 'Session_Selected')
                 : 'Muted',
               fill: '1',
             },
@@ -142,7 +143,7 @@ export let panels: Panel[] = [
                 key: b.entity.eid,
                 fill: '1',
                 class: (sidebar ?? session) == b.entity.eid
-                  ? 'Session_Selected'
+                  ? (active ? 'Selection_Active' : 'Session_Selected')
                   : '',
               },
               h('span', { class: 'Muted' }, prefix),
@@ -167,7 +168,7 @@ export let panels: Panel[] = [
     fit: true,
     titleClass: 'Task',
     read: (c) => c.agent.tasks(),
-    Render: ({ rows, sessions, sidebar }) =>
+    Render: ({ rows, sessions, sidebar, active }) =>
       h(
         Scroll,
         {
@@ -183,7 +184,9 @@ export let panels: Panel[] = [
             'div',
             {
               fill: '1',
-              class: sidebar == b.entity.eid ? 'Session_Selected' : '',
+              class: sidebar == b.entity.eid
+                ? (active ? 'Selection_Active' : 'Session_Selected')
+                : '',
             },
             indicator(b, sessions),
             ' ',

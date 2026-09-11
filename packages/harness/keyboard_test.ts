@@ -57,10 +57,12 @@ Deno.test('controlled NORMAL routing preserves draft, selects sources, and hides
   let keys = () => f.client.ent('keyboard')!.keyboard as Comp
   let text = () => (f.client.ent('draft')!.draft as Comp).text
   try {
+    f.keys({ focus: 'sidebar' })
     await ui.send('draft?')
     assertEquals(text(), 'draft?')
     await ui.send('\x1b')
     assertEquals(keys().mode, 'NORMAL')
+    assertEquals(keys().focus, 'transcript')
     await ui.send('jkhlnp')
     assertEquals(text(), 'draft?')
     assertEquals(actions, ['n', 'p'])

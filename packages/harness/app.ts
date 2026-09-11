@@ -366,6 +366,8 @@ export let App = (
     sessions: data.sessions,
     showSettled,
     sidebar: state.sidebar == null ? undefined : String(state.sidebar),
+    active: (ui.keyboard.value[0].keyboard as Comp).mode == 'NORMAL' &&
+      (ui.keyboard.value[0].keyboard as Comp).focus == 'sidebar',
     showArchived: Boolean(state.showArchived),
   }
   let transcriptItems = useMemo(
@@ -480,6 +482,11 @@ let Transcript = ({ ui, id, items, agent, pending }: {
     selected: position?.selected == null
       ? undefined
       : String(position.selected),
+    selectionVisible: (ui.keyboard.value[0].keyboard as Comp).mode == 'NORMAL',
+    selectionClass:
+      (ui.keyboard.value[0].keyboard as Comp).focus == 'transcript'
+        ? 'Selection_Active'
+        : 'List_Selected',
     onSelect: (selected: string) =>
       ui.client.mutate([{
         entity: { eid: 'viewport-' + id },
