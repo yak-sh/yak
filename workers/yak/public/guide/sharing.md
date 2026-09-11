@@ -157,7 +157,7 @@ Read it before you build something somebody may already have made.
 - An address already taken here — by an app, or by an address an app has LEFT
   and still redirects from — is refused, telling you to pass `as`.
 - An installed app counts against the space's app ceiling like any other (the
-  free tier allows five).
+  free tier allows five, Plus allows 50; trashed apps do not count).
 - The copy takes the published app's `access` with it: an app written to be
   voted on has to stay votable. `app_set` changes it after.
 - The copy is not made the front page: `<space>.yaks.app/` lists what is here

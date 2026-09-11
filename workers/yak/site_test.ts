@@ -7,7 +7,16 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { slow } from '../../src/testing.ts'
 import { REPLY_TO } from './mail.ts'
-import { CURRENCY, LETTERS, PRICE } from './meter.ts'
+import {
+  BUILDS,
+  CURRENCY,
+  FILES,
+  FREE,
+  LETTERS,
+  PLUS,
+  PRICE,
+  size,
+} from './meter.ts'
 import { quoted, rate } from './sell.ts'
 import { page as galleryPage } from './gallery.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
@@ -176,6 +185,41 @@ Deno.test('the plan pages carry the email allowance the code enforces', () => {
     let html = flat(read(page))
     assert(html.includes(free), `${page} does not say ${free}`)
     assert(html.includes(plus), `${page} does not say ${plus}`)
+  }
+})
+
+Deno.test('the plan cards and Plus offer carry the meter allowances', () => {
+  let allowances = (tier: 'free' | 'plus') => {
+    let limits = tier == 'plus' ? PLUS : FREE
+    return [
+      `${limits.apps} apps`,
+      `${limits.requests.toLocaleString('en-US')} visits a month`,
+      `${size(limits.bytes)} of app data`,
+      `${LETTERS[tier].toLocaleString('en-US')} emails a month`,
+      `${BUILDS[tier]} built-in builds a month`,
+      ...(FILES[tier] == null
+        ? []
+        : [`${size(FILES[tier])} of photos and files`]),
+    ]
+  }
+  for (let page of ['index.html', 'pricing.html']) {
+    let { document } = parseHTML(read(page))
+    for (let tier of ['free', 'plus'] as const) {
+      let card = document.querySelector(
+        tier == 'plus' ? '.Plan-plus' : '.Plan:not(.Plan-plus)',
+      )!
+      for (let text of allowances(tier)) {
+        assertStringIncludes(flat(card.textContent!), text, `${page}: ${tier}`)
+      }
+    }
+  }
+  let [doc] = ld(read('index.html'))
+  let app = doc['@graph'].find((n: { '@type': string }) =>
+    n['@type'] == 'SoftwareApplication'
+  )
+  let offer = app.offers.find((o: { name: string }) => o.name == 'Plus')
+  for (let text of allowances('plus')) {
+    assertStringIncludes(offer.description, text)
   }
 })
 
@@ -722,5 +766,24 @@ slow('the apex answers the crawler and the model', async () => {
     assert(!(await theirs.text()).includes('Sitemap: https://yaks.app'))
   } finally {
     await k.stop()
+  }
+})
+
+Deno.test('the signed-in plan copy derives both tiers from the meter', async () => {
+  for (let plus of [false, true]) {
+    let limits = plus ? PLUS : FREE
+    let html = flat(
+      await connect({
+        slug: 'dana',
+        fixed: false,
+        plan: { plus, ends: '', known: plus },
+      }).text(),
+    )
+    assertStringIncludes(
+      html,
+      `${limits.apps} apps, ${
+        limits.requests.toLocaleString('en-US')
+      } visits a month, ${size(limits.bytes)} of app data`,
+    )
   }
 })

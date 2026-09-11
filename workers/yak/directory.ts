@@ -80,7 +80,7 @@ export type Tier = 'free' | 'plus'
 
 // Spaces the platform comps. `yourname` is its own shopfront — the six apps
 // every home page example links to (T-33053), one over the free five — and it
-// pays nobody, so it answers to no ceiling.
+// pays nobody, so it has no app/data ceiling (meter.ts `ceilings`).
 //
 // A comp is a CONSTANT, read here and written nowhere. `plan` is stamped
 // precisely so that a person cannot lift their own ceilings (billing.ts), and
@@ -90,7 +90,8 @@ export type Tier = 'free' | 'plus'
 // credit and a demo all want one, and Stripe owns only the paying case.
 export let COMPED = ['yourname']
 
-// The tier a space is HELD to: what it pays for, or `plus` where we comp it.
+// Paid features and mail/build allowances: `plus` also applies to comps.
+// Their separate app/data exemption is resolved by meter.ts from COMPED.
 export let tierOf = (slug: string, tier: Tier | null): Tier | null =>
   COMPED.includes(slug) ? 'plus' : tier
 

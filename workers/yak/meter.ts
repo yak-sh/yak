@@ -15,6 +15,7 @@ import { type Host, url } from './host.ts'
 import type { Sender } from '@yaks/mail'
 import * as dirPart from './directory.ts'
 import {
+  COMPED,
   type Directory,
   directory,
   type Meter,
@@ -98,27 +99,31 @@ let GB = 1024 ** 3
 
 // The free tier, as decided (D-32751): what a space gets for nothing.
 export let FREE = { apps: 5, requests: 50_000, bytes: GB }
+export let PLUS = { apps: 50, requests: 1_000_000, bytes: 10 * GB }
+
+// Published R2 allowance; enforcement is added by T-37149. Free is unmetered.
+export let FILES: Record<Tier, number | null> = { free: null, plus: 50 * GB }
 
 // Where the warning line sits, as a fraction of a ceiling.
 export let WARN = 0.8
 
-// What a tier is held to. Nothing is on `plus` yet — the app, request and byte
-// ceilings wait on Stripe (T-32760) and on T-33724 — and a space that somehow
-// is answers to none of those rather than to the free one.
-export let ceilings = (tier: Tier | null) => tier == 'plus' ? null : FREE
+// Visits are reported, not refused. Comped spaces retain their app/data
+// exemption independently of the paid Plus allowance.
+export let ceilings = (tier: Tier | null, slug = '') =>
+  COMPED.includes(slug) ? null : tier == 'plus' ? PLUS : FREE
 
 // The letters, both directions, a space may spend in a month — the one
 // allowance BOTH tiers carry, because a letter costs money to carry however
 // the plan is paid for, and the pricing page sells a number on each
 // (public/pricing.html). Counted at the two mail doors as they happen:
 // `metering` below for a letter that left, inbox.ts for one that arrived.
-export let LETTERS: Record<Tier, number> = { free: 100, plus: 1_000 }
+export let LETTERS: Record<Tier, number> = { free: 100, plus: 2_500 }
 
 export let letters = (tier: Tier | null): number => LETTERS[tier ?? 'free']
 
 // Monthly allowances for the optional built-in builder. Making and changing
 // apps through a connected agent (app_new, app_files) is not metered here.
-export let BUILDS: Record<Tier, number> = { free: 5, plus: 30 }
+export let BUILDS: Record<Tier, number> = { free: 5, plus: 100 }
 
 export let builds = (tier: Tier | null): number => BUILDS[tier ?? 'free']
 
@@ -168,7 +173,7 @@ export let usedBuilds = (space: Space, now = new Date()) =>
 // the builds are there on every plan; the other three only where the plan has
 // them.
 export let fullness = (space: Space, apps: number, now = new Date()) => {
-  let free = ceilings(space.tier)
+  let free = ceilings(space.tier, space.slug)
   let m = spent(space, now)
   let both = {
     emails: m.emails / letters(space.tier),
@@ -213,7 +218,7 @@ export let standing = (
   now = new Date(),
   env: Host = {},
 ) => {
-  let free = ceilings(space.tier)
+  let free = ceilings(space.tier, space.slug)
   let m = spent(space, now)
   let mail = `${count(m.emails)} of ${count(letters(space.tier))} emails`
   let made = `${count(usedBuilds(space, now))} of ${
@@ -227,13 +232,16 @@ export let standing = (
       `${made} (${cost}).`
   }
   let refused =
-    `Requests are never refused; a sixth app, a build past ${
+    `Requests are never refused; an app past ${free.apps}, a build past ${
       count(builds(space.tier))
     }, data past ${size(free.bytes)}, or the ${
       count(letters(space.tier) + 1)
     }st letter SENT is — a letter that ` +
     `arrives always lands. What the plans hold: ${url(env, '/pricing')}`
-  let head = `${space.slug} (free tier, ${m.month}): ${apps} of ${free.apps} ` +
+  let head =
+    `${space.slug} (${
+      space.tier ?? 'free'
+    } tier, ${m.month}): ${apps} of ${free.apps} ` +
     'apps'
   let read = asOf(m.at)
   // The apps, the letters and the builds are counted here and now; the rest
@@ -261,17 +269,15 @@ export let atCeiling = (
   what: 'apps' | 'bytes' | 'emails' | 'builds',
   env: Host = {},
 ) => {
-  let free = ceilings(space.tier)!
+  let free = ceilings(space.tier, space.slug)!
   let tier = space.tier ?? 'free'
-  // Said LAZILY: the letters and the builds are refusals a paid space can hit
-  // too, and a paid space answers to none of the three above (`ceilings`), so
-  // only the branch taken may read them.
+  // Comped spaces can hit the letter/build allowances, not app/data ceilings.
   let said = {
     apps: () =>
-      `${space.slug} is on the free tier, which is ${free.apps} apps` +
+      `${space.slug} is on the ${tier} tier, which is ${free.apps} apps` +
       ` — delete one (app_delete) to make another`,
     bytes: () =>
-      `${space.slug} is on the free tier, which is ${
+      `${space.slug} is on the ${tier} tier, which is ${
         size(free.bytes)
       } of app data — delete what it no longer needs to save more`,
     // The one refusal both tiers can hit, and the one a person cannot clear

@@ -1950,10 +1950,10 @@ let OURS: Row[] = [
     run: async (ctx, args) => {
       let { space, who } = await inSpace(ctx, args, true)
       let s = slug(args.slug, 'slug')
-      // The free tier's app ceiling (T-32758), at the one door that adds one.
+      // The plan's app ceiling (T-32758), at the one door that adds one.
       // An app costs money to keep, so this is a refusal and not a warning —
       // the warning came at 80%, on the unseen channel (unseen.ts `ceiling`).
-      let free = ceilings(space.tier)
+      let free = ceilings(space.tier, space.slug)
       // What the space HAS: an app in the trash is one the person has already
       // said they are done with, so it stands against nothing (erase.ts).
       let apps = (await ctx.dir.apps(space)).filter((a) => !a.trashed)
@@ -3279,10 +3279,10 @@ let OURS: Row[] = [
           tier: space.tier ?? 'free',
           usage: spent(space),
           // The letters and the builds are the allowances every plan carries,
-          // so they are beside the three a free space alone answers to
+          // so they are beside the app, visit and data ceilings
           // (meter.ts). `usage.builds` counts against the monthly allowance.
           ceilings: {
-            ...(ceilings(space.tier) ?? {}),
+            ...(ceilings(space.tier, space.slug) ?? {}),
             emails: letters(space.tier),
             builds: builds(space.tier),
           },
@@ -3825,8 +3825,8 @@ let OURS: Row[] = [
       let { space, who } = await inSpace(ctx, args, true)
       // An installed app costs what any other does, so it is counted like any
       // other (T-32758) — the same refusal app_new gives.
-      let free = ceilings(space.tier)
-      let apps = await ctx.dir.apps(space)
+      let free = ceilings(space.tier, space.slug)
+      let apps = (await ctx.dir.apps(space)).filter((a) => !a.trashed)
       if (free && apps.length >= free.apps) {
         throw new Error(atCeiling(space, 'apps', ctx.env))
       }

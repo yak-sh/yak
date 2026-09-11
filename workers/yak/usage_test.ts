@@ -6,8 +6,8 @@ import {
   assertStringIncludes,
   assertThrows,
 } from '@std/assert'
-import type { Meter, Space, Tier } from './directory.ts'
-import { read, sweep } from './usage.ts'
+import type { App, Meter, Space, Tier } from './directory.ts'
+import { full, read, sweep } from './usage.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { platform } from './harness.ts'
@@ -15,9 +15,12 @@ import type { Namespace } from './door.ts'
 import {
   atCeiling,
   BUILDS,
+  ceilings,
   countedBuild,
   FREE,
+  LETTERS,
   level,
+  PLUS,
   refusedBuild,
   size,
   spent,
@@ -209,14 +212,42 @@ Deno.test('a space is near a ceiling at 80% and over it at 100%', () => {
   assertEquals(level(space(), 5, NOW), 'over')
   assertEquals(level(space({ emails: 81 }), 1, NOW), 'near')
   assertEquals(level(space({ bytes: FREE.bytes }), 1, NOW), 'over')
-  // The letters are the one allowance a paid space still has, so a plus space
-  // is not simply beyond every line (T-33688).
+  // Paid spaces have their own ceilings.
   assertEquals(level(space({}, 'plus'), 9, NOW), 'ok')
-  assertEquals(level(space({ emails: 1_000 }, 'plus'), 9, NOW), 'over')
+  assertEquals(level(space({ emails: LETTERS.plus }, 'plus'), 9, NOW), 'over')
   // Last month's reading is not this month's usage.
   assertEquals(
     level(space({ month: '2026-08', requests: 60_000 }), 1, NOW),
     'ok',
+  )
+})
+
+Deno.test('Plus ceilings are distinct and comped apps/data stay uncapped', () => {
+  assertEquals(ceilings(null), FREE)
+  assertEquals(ceilings('free'), FREE)
+  assertEquals(ceilings('plus'), PLUS)
+  assertEquals(PLUS, { apps: 50, requests: 1_000_000, bytes: 10 * 1024 ** 3 })
+  assertEquals(LETTERS.plus, 2_500)
+  assertEquals(BUILDS.plus, 100)
+  for (let tier of [null, 'free', 'plus'] as const) {
+    assertEquals(ceilings(tier, 'yourname'), null)
+  }
+  assertEquals(level(space({}, 'plus'), PLUS.apps, NOW), 'over')
+  assertEquals(level(space({ bytes: PLUS.bytes }, 'plus'), 1, NOW), 'over')
+  let comped = { ...space({ bytes: PLUS.bytes * 2 }, 'plus'), slug: 'yourname' }
+  assertEquals(level(comped, PLUS.apps * 2, NOW), 'ok')
+  let said = standing(space({ bytes: PLUS.bytes }, 'plus'), PLUS.apps, NOW)
+  assertStringIncludes(said, 'plus tier')
+  assertStringIncludes(said, '50 of 50 apps')
+  assertStringIncludes(said, '10 GB of 10 GB')
+  assertStringIncludes(said, 'Requests are never refused')
+  assertStringIncludes(
+    atCeiling(space({}, 'plus'), 'apps'),
+    'plus tier, which is 50 apps',
+  )
+  assertStringIncludes(
+    atCeiling(space({}, 'plus'), 'bytes'),
+    'plus tier, which is 10 GB',
   )
 })
 
@@ -264,7 +295,7 @@ Deno.test('a refusal names the ceiling and where the plans are written', () => {
   assertStringIncludes(atCeiling(space(), 'emails'), 'still arrive')
   assertStringIncludes(
     atCeiling(space({}, 'plus'), 'emails'),
-    '1,000 emails a month',
+    '2,500 emails a month',
   )
   assert(
     !/checkout|billing/i.test(standing(space(), 3)),
@@ -331,10 +362,10 @@ Deno.test('a paid space counts its builds down, and the month gives them back', 
     space({ month, builds, built: 40 }, 'plus')
   assertEquals(refusedBuild(plus(BUILDS.plus - 1), NOW), null)
   let no = refusedBuild(plus(BUILDS.plus), NOW)!
-  assertStringIncludes(no, '30 built-in builds this month')
+  assertStringIncludes(no, `${BUILDS.plus} built-in builds this month`)
   assertStringIncludes(no, 'build again on the 1st')
   assertStringIncludes(no, 'https://yaks.app/pricing')
-  // Last month's thirty are not this month's.
+  // Last month's builds are not this month's.
   assertEquals(refusedBuild(plus(BUILDS.plus, '2026-08'), NOW), null)
 
   // The tokens are the month's, summed both ways, because what they cost is
@@ -359,9 +390,18 @@ Deno.test('a paid space counts its builds down, and the month gives them back', 
 })
 
 Deno.test('the build line warns at 80%, and the line says both numbers', () => {
-  assertEquals(level(space({ builds: 23, built: 40 }, 'plus'), 1, NOW), 'ok')
-  assertEquals(level(space({ builds: 24, built: 40 }, 'plus'), 1, NOW), 'near')
-  assertEquals(level(space({ builds: 30, built: 40 }, 'plus'), 1, NOW), 'over')
+  assertEquals(
+    level(space({ builds: BUILDS.plus * 0.8 - 1, built: 40 }, 'plus'), 1, NOW),
+    'ok',
+  )
+  assertEquals(
+    level(space({ builds: BUILDS.plus * 0.8, built: 40 }, 'plus'), 1, NOW),
+    'near',
+  )
+  assertEquals(
+    level(space({ builds: BUILDS.plus, built: 40 }, 'plus'), 1, NOW),
+    'over',
+  )
   assertEquals(level(space({ builds: 3, built: 40 }), 1, NOW), 'ok')
   assertEquals(level(space({ builds: 4, built: 40 }), 1, NOW), 'near')
   assertEquals(level(space({ builds: 5, built: 40 }), 1, NOW), 'over')
@@ -372,6 +412,45 @@ Deno.test('the build line warns at 80%, and the line says both numbers', () => {
   assertStringIncludes(said, 'a build past 5')
   assertStringIncludes(
     standing(space({ builds: 4, tokens: 900, built: 44 }, 'plus'), 9, NOW),
-    '4 of 30 builds a month (900 tokens this month)',
+    `4 of ${BUILDS.plus} builds a month (900 tokens this month)`,
   )
+})
+
+Deno.test('Plus byte writes use the live 10 GB ceiling; comped spaces bypass it', async () => {
+  let calls = 0
+  let live = 0
+  let { env } = platform('plus-bytes', {
+    STORE: {
+      idFromName: (name) => name,
+      get: () => ({
+        fetch: () => {
+          calls++
+          return Promise.resolve(Response.json({ bytes: live }))
+        },
+      }),
+    },
+  })
+  let app = { slug: 'notes', store: 'jeff/notes', meter: null } as App
+  let plus = space({ bytes: PLUS.bytes }, 'plus')
+  assertEquals(
+    await full(env, space({ bytes: FREE.bytes }, 'plus'), app, 1, NOW),
+    '',
+  )
+  assertEquals(calls, 0)
+  assertEquals(await full(env, plus, app, 0, NOW), '')
+  assertStringIncludes(
+    await full(env, plus, app, 1, NOW),
+    'plus tier, which is 10 GB',
+  )
+  live = 1
+  assertStringIncludes(
+    await full(env, plus, app, 0, NOW),
+    'plus tier, which is 10 GB',
+  )
+  let before = calls
+  assertEquals(
+    await full(env, { ...plus, slug: 'yourname' }, app, PLUS.bytes, NOW),
+    '',
+  )
+  assertEquals(calls, before)
 })

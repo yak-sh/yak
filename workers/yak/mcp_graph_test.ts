@@ -7,8 +7,16 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { slow } from '../../src/testing.ts'
-import { client, connector, kernel, meta, seed, signIn } from './probe.ts'
-import { monthOf } from './meter.ts'
+import {
+  client,
+  connector,
+  kernel,
+  meta,
+  seed,
+  signed,
+  signIn,
+} from './probe.ts'
+import { monthOf, PLUS } from './meter.ts'
 import { minted } from './mcp-probe.ts'
 
 // An entity spans apps (T-32699): a read that names no app asks every store
@@ -673,3 +681,128 @@ slow('a word the space already has is used where it lives', async () => {
     await k.stop()
   }
 })
+
+slow(
+  'Plus app ceilings count live apps at both creation doors; comps stay exempt',
+  async () => {
+    let k = await kernel({ STRIPE_WEBHOOK_SECRET: 'plus-limits-test' })
+    try {
+      let { cookie, eids } = await seed(k, [
+        { slug: 'plus-limits', apps: ['original'] },
+        { slug: 'yourname', apps: [] },
+      ])
+      let agent = connector(k, cookie)
+      await agent.tool('app_files', {
+        space: 'plus-limits',
+        app: 'original',
+        path: 'index.html',
+        content: '<h1>Original</h1>',
+      })
+      await agent.tool('app_deploy', { space: 'plus-limits', app: 'original' })
+      await agent.tool('app_publish', {
+        space: 'plus-limits',
+        app: 'original',
+        name: 'limits-example',
+      })
+      let at = Math.floor(Date.now() / 1000)
+      let raw = JSON.stringify({
+        id: 'evt_plus_limits',
+        type: 'customer.subscription.updated',
+        created: at,
+        data: {
+          object: {
+            id: 'sub_plus_limits',
+            customer: 'cus_plus_limits',
+            status: 'active',
+            metadata: { space: eids['plus-limits'] },
+          },
+        },
+      })
+      let paid = await k.at('yaks.app', '/stripe/webhook', {
+        method: 'POST',
+        body: raw,
+        headers: {
+          'stripe-signature': await signed('plus-limits-test', raw, at),
+        },
+      })
+      assertEquals(paid.status, 200)
+      await paid.body?.cancel()
+      await meta(k, cookie).apply([
+        ...['plus-limits', 'yourname'].flatMap((slug) =>
+          Array.from({ length: PLUS.apps - 2 }, (_, i) => ({
+            entity: { eid: crypto.randomUUID() },
+            doc: { title: `App ${i}` },
+            app: {
+              slug: `app-${i}`,
+              space: eids[slug],
+              store: `${slug}/app-${i}`,
+            },
+          }))
+        ),
+      ])
+      // Refresh the directory after seeding through its graph.
+      await agent.tool('space_new', {
+        slug: 'limits-refresh',
+        title: 'Refresh',
+      })
+      await agent.tool('app_new', {
+        space: 'plus-limits',
+        slug: 'last',
+        title: 'Last',
+      })
+      await assertRejects(
+        () =>
+          agent.tool('app_new', {
+            space: 'plus-limits',
+            slug: 'over',
+            title: 'Over',
+          }),
+        Error,
+        'plus tier, which is 50 apps',
+      )
+      await assertRejects(
+        () =>
+          agent.tool('app_install', {
+            space: 'plus-limits',
+            name: 'limits-example',
+            as: 'copy',
+          }),
+        Error,
+        'plus tier, which is 50 apps',
+      )
+      await agent.tool('app_delete', { space: 'plus-limits', app: 'last' })
+      assertStringIncludes(
+        await agent.tool('app_install', {
+          space: 'plus-limits',
+          name: 'limits-example',
+          as: 'copy',
+        }),
+        'as plus-limits/copy',
+      )
+      await agent.tool('app_delete', { space: 'plus-limits', app: 'copy' })
+      await agent.tool('app_new', {
+        space: 'plus-limits',
+        slug: 'replacement',
+        title: 'Replacement',
+      })
+      // Bring the comped space above the paid ceiling through both doors.
+      for (let i = 0; i < 3; i++) {
+        await agent.tool('app_new', {
+          space: 'yourname',
+          slug: `extra-${i}`,
+          title: 'Extra',
+        })
+      }
+      assertStringIncludes(
+        await agent.tool('app_install', {
+          space: 'yourname',
+          name: 'limits-example',
+          as: 'copy',
+        }),
+        'as yourname/copy',
+      )
+    } finally {
+      await k.stop()
+    }
+  },
+)

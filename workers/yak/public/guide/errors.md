@@ -49,8 +49,8 @@ The codes a door answers, with what each means:
   page before sending it.
 - **`no_such_file`** — 404. `blob/<eid>` where the eid is not a sha-256, or
   names bytes this app does not hold.
-- **`space_full`** — 413. The space is at the free tier's data ceiling. The
-  message says which ceiling and what to do; the app is fine.
+- **`space_full`** — 413. The space is at its app data ceiling (1 GB on Free, 10
+  GB on Plus). The message says which ceiling and what to do; the app is fine.
 - **`too_many_reports`** — 429. More than 30 reports from one app in one minute.
   A page in a render loop, not a broken door.
 

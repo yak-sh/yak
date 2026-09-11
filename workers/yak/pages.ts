@@ -18,7 +18,7 @@ export { esc } from './html.ts'
 import { managePath, type ManageView, OAUTH } from './route.ts'
 import { CONNECTOR } from './seo.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
-import { CURRENCY, PRICE } from './meter.ts'
+import { CURRENCY, FREE, PLUS, PRICE, size } from './meter.ts'
 
 let home = (env: Host) => `<a class="Away" href="${url(env, '/')}">yaks.app</a>`
 
@@ -1267,14 +1267,19 @@ let day = (iso: string) => {
 
 let plan = (y: Yours, env: Host) => {
   let ends = y.plan.ends ? day(y.plan.ends) : ''
+  let limits = y.plan.plus ? PLUS : FREE
+  let allowance = `${limits.apps} apps, ${
+    limits.requests.toLocaleString('en-US')
+  } visits a month, ${size(limits.bytes)} of app data`
   let head = y.plan.plus
-    ? `<p>${esc(spaceHost(env, y.slug))} is on <b>Plus</b>.${
+    ? `<p>${esc(spaceHost(env, y.slug))} is on <b>Plus</b> — ${allowance}.${
       ends ? ` It runs until ${esc(ends)} and then stops renewing.` : ''
     }</p>`
     : `<p>${
       esc(spaceHost(env, y.slug))
-    } is on the <b>free</b> plan — five apps, 50,000
-visits a month, 1 GB. <a href="${url(env, '/pricing')}">Compare plans</a>.</p>`
+    } is on the <b>free</b> plan — ${allowance}. <a href="${
+      url(env, '/pricing')
+    }">Compare plans</a>.</p>`
   // Someone Stripe has met can always reach their own billing, whatever plan
   // they are on today: an invoice from a month they paid for is theirs to
   // read after they cancel.

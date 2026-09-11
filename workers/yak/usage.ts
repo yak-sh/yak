@@ -255,7 +255,7 @@ export let full = async (
   extra = 0,
   now = new Date(),
 ) => {
-  let free = ceilings(space.tier)
+  let free = ceilings(space.tier, space.slug)
   if (!free) return ''
   let month = monthOf(now)
   let held = thisMonth(space.meter, month)?.bytes ?? 0
