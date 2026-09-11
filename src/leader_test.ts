@@ -152,6 +152,55 @@ Deno.test('a follower drains frames that arrive while it hydrates', async () => 
   lease.resolve()
 })
 
+Deno.test('followers receive current state before their ready beat', async () => {
+  let lock = locks()
+  let channel = channels<string>()
+  let lease = deferred()
+  let seen = [[], []] as string[][]
+  let done = () => Promise.resolve()
+  let leader = topology(
+    lock,
+    channel(),
+    {
+      lead: done,
+      follow: done,
+      solo: done,
+      receive: () => {},
+      send: () => {},
+      state: () => 'current',
+    },
+    () => 'leader',
+    () => lease.promise,
+  )
+  let follower = (i: number, id: string) =>
+    topology(
+      lock,
+      channel(),
+      {
+        lead: done,
+        follow: done,
+        solo: done,
+        receive: (frame) => seen[i].push(frame),
+        send: () => {},
+      },
+      () => id,
+    )
+
+  // Already waiting when the owner becomes ready: the owner's wildcard state
+  // precedes its ready announcement.
+  let first = follower(0, 'first')
+  await Promise.all([leader.start(), first.start()])
+  assertEquals(seen[0], ['current'])
+
+  // Joined after the original server snapshot: hello gets a targeted current
+  // state, rather than a ready beat over an empty cache.
+  let late = follower(1, 'late')
+  await late.start()
+  assertEquals(seen[1], ['current'])
+
+  lease.resolve()
+})
+
 Deno.test('writes wait for the holder to finish booting', async () => {
   let lock = locks()
   let channel = channels<string>()

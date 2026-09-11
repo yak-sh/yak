@@ -10,7 +10,8 @@ export type Lock = {
 
 export type Message<T> =
   | { kind: 'ready' }
-  | { kind: 'hello' }
+  | { kind: 'hello'; tab: string }
+  | { kind: 'state'; tab: string; frame: T }
   | { kind: 'frame'; frame: T }
   | { kind: 'out'; id: string; frame: T }
   | { kind: 'sent'; id: string }
@@ -29,6 +30,10 @@ export type IO<T> = {
   solo: () => Promise<void>
   receive: (frame: T) => void
   send: (frame: T) => void
+  /** A current bootstrap frame for a tab which joined after the original
+   * server snapshot. It is sent before `ready`, so the follower's first paint
+   * has the same state as the socket owner. */
+  state?: () => T | undefined
   subscribe?: (name: string, value: string) => void
   unsubscribe?: (name: string) => void
   forget?: (name: string) => void
@@ -68,6 +73,11 @@ export let topology = <T>(
 
   let announce = () =>
     bus.postMessage({ kind: 'owned', tab, uses: [...mine.values()] })
+
+  let sync = (to: string) => {
+    let frame = io.state?.()
+    if (frame !== undefined) bus.postMessage({ kind: 'state', tab: to, frame })
+  }
 
   let wanted = () => {
     let tabs: [string, Use[]][] = [[tab, [...mine.values()]]]
@@ -157,9 +167,16 @@ export let topology = <T>(
   bus.onmessage = ({ data }) => {
     if (data.kind == 'hello') {
       announce()
-      if (leader && serving) bus.postMessage({ kind: 'ready' })
+      if (leader && serving) {
+        sync(data.tab)
+        bus.postMessage({ kind: 'ready' })
+      }
     } else if (data.kind == 'ready') {
       if (!leader) follow()
+    } else if (data.kind == 'state') {
+      if (data.tab != '*' && data.tab != tab) return
+      if (landed) io.receive(data.frame)
+      else inbox.push(data.frame)
     } else if (data.kind == 'frame') {
       if (landed) io.receive(data.frame)
       else inbox.push(data.frame)
@@ -191,6 +208,10 @@ export let topology = <T>(
     if (!landed) finish()
     settle(true)
     serving = true
+    // Followers may already be waiting from a hello sent while this tab was
+    // still opening its socket. Give every one the current state before the
+    // ready beat; late joiners get the same pair in the hello branch above.
+    sync('*')
     bus.postMessage({ kind: 'ready' })
     flush()
     await Promise.race([hold(), new Promise<void>((r) => vacate = r)])
@@ -219,7 +240,7 @@ export let topology = <T>(
     seek()
     if (io.subscribe || io.unsubscribe) timer = setInterval(pulse, PULSE)
     announce()
-    bus.postMessage({ kind: 'hello' })
+    bus.postMessage({ kind: 'hello', tab })
     return ready
   }
 

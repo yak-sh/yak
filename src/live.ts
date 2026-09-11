@@ -1579,6 +1579,44 @@ let ws: WebSocket | null = null
 let polling = false
 let serial = Promise.resolve()
 
+// First paint is allowed only after an authoritative bootstrap has landed.
+// Opening a WebSocket is not that boundary: its snapshot arrives on a later
+// turn, and painting between the two made `/` claim there was no root canvas.
+// A follower gets the socket owner's current Reset frame over BroadcastChannel
+// (leader.ts), and crosses this same boundary when that frame lands.
+let initialResolve: () => void
+let initialReady = new Promise<void>((resolve) => initialResolve = resolve)
+let initialLanded = false
+let settleInitial = () => {
+  if (initialLanded) return
+  initialLanded = true
+  initialResolve()
+}
+
+// A current bootstrap for a tab joining after the leader's original server
+// snapshot. The cache is deliberately partial, but every row in it is current;
+// defining subscriptions opened by the newcomer fill the rest. In particular
+// this carries the root canvas before the newcomer renders its first frame.
+let currentState = (): Reset | undefined => {
+  if (!initialLanded) return undefined
+  let changes = Object.entries(cache.peek()).flatMap(([eid, row]) =>
+    Object.entries(row).flatMap(([name, comp]) =>
+      comp ? [{ eid, name, comp } as Change] : []
+    )
+  )
+  return {
+    reset: true,
+    snapshot: {
+      changes,
+      deps: deps.peek(),
+      cursor: held.cursor,
+      epoch: held.epoch,
+      vocabHash: held.vocabHash,
+      capabilities: held.capabilities,
+    },
+  }
+}
+
 // Socket liveness (T-21511). A half-open socket (network drop with no FIN, a
 // suspended/backgrounded tab) stays `readyState == OPEN`, so onclose never fires
 // and the reconnect poller never starts — the tab goes silently deaf until a
@@ -2623,9 +2661,11 @@ let land = async (data: unknown, mode: Land) => {
       held = { ...held, cursor: frame.cursor }
       if (mode != 'follower') await persist(touched, frame.cursor)
     }
+    settleInitial()
   } else if (frame.snapshot) {
     mark('reset')
     await seedFrom(frame.snapshot, mode != 'follower')
+    settleInitial()
   } else if (typeof frame.sub == 'string') {
     let touched = landSub(frame as Sub)
     if (frame.cursor !== undefined) {
@@ -2713,6 +2753,7 @@ export let boot = async () => {
   if (!canShare()) {
     await once()
     connect()
+    await initialReady
     return
   }
   let nav = (globalThis as { navigator: Navigator }).navigator
@@ -2722,7 +2763,7 @@ export let boot = async () => {
     postMessage: (message) => bus.postMessage(message),
   }
   bus.onmessage = ({ data }) => channel.onmessage?.({ data })
-  owner = topology(
+  owner = topology<unknown>(
     {
       request: (name, hold) => nav.locks.request(name, hold),
     },
@@ -2731,16 +2772,19 @@ export let boot = async () => {
       lead: async () => {
         await once()
         connect()
+        await initialReady
       },
       follow: () => once(),
       solo: async () => {
         await once()
         connect()
+        await initialReady
       },
       receive: (frame) => {
         serial = serial.then(() => land(frame, 'follower'))
       },
       send: wire,
+      state: currentState,
       // NON-shadow on purpose (T-21491): the first sub flips this socket into
       // the server's `filtered` set, so the whole-graph live broadcast stops
       // and every row arrives owned by a subscription — landSub records its
@@ -2755,6 +2799,7 @@ export let boot = async () => {
   )
   addEventListener('pagehide', owner.leave)
   await owner.start()
+  await initialReady
 }
 ;(globalThis as {
   __sync?: () => {
