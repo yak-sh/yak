@@ -224,7 +224,11 @@ Deno.test('restart of dispatched attempt is interrupted, never resent', async ()
     ], { trusted: true })
     await a.resume()
     await a.idle('interrupted-session')
+    await a.resume()
+    await a.idle('interrupted-session')
     const entries = await a.transcript('interrupted-session')
+    assertEquals(entries.filter((b) => b.error).length, 1)
+    assertEquals(entries.filter((b) => b.exception).length, 0)
     assertEquals(statusOf(entries), 'settled')
     assertEquals(
       (entries.find((b) => b.ask)!.attempt as Comp).state,
@@ -410,6 +414,53 @@ Deno.test('unexpected model programming failure remains an exception', async () 
       ),
     )
   } finally {
+    await a.close()
+  }
+})
+
+Deno.test('input admitted during an aborted turn is served once after interruption', async () => {
+  const h = open(':memory:')
+  let started!: () => void, abort!: () => void
+  const entered = new Promise<void>((r) => started = r)
+  const gate = new Promise<void>((r) => abort = r)
+  const requests: import('@yaks/model').Request[] = []
+  const a = agent({
+    h,
+    streaming: true,
+    model: async (req) => {
+      requests.push(req)
+      if (requests.length == 1) {
+        req.onText?.({ index: 0, text: 'partial' })
+        started()
+        await gate
+        throw new DOMException('Stopped', 'AbortError')
+      }
+      return {
+        id: 'continued',
+        model: 'fake',
+        items: [{ kind: 'assistant', text: 'done' }],
+      }
+    },
+  })
+  try {
+    const id = await a.start('first')
+    await entered
+    await a.send(id, 'correction')
+    abort()
+    await a.idle(id)
+    assertEquals(requests.length, 2)
+    assert(requests[1].items.some((i) => i.kind == 'user' && i.text == 'first'))
+    assert(
+      requests[1].items.some((i) => i.kind == 'user' && i.text == 'correction'),
+    )
+    assert(
+      requests[1].items.some((i) =>
+        i.kind == 'assistant' && i.text == 'partial'
+      ),
+    )
+    assertEquals(statusOf(await a.transcript(id)), 'settled')
+  } finally {
+    abort()
     await a.close()
   }
 })
