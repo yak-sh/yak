@@ -177,6 +177,18 @@ Deno.test('briefOf: the brief, else the legacy final text', () => {
   assertEquals(briefOf(legacy({})), '')
 })
 
+Deno.test('session brief includes the measured tool account once', () => {
+  let call = row({ bash: { command: 'deno task check' } }, 100)
+  let result = row({ result: { call: call.eid, ms: 90_000 } }, 101)
+  let entries = [call, result]
+  let text = briefOf(legacy({ final_text: 'landed' }), entries)
+  assertEquals(
+    text,
+    'landed\n\nTool wall-clock: 1m30s (sum of 1 measured calls; parallel waits add).\nSlowest commands/tools:\n- 1m30s — deno task check',
+  )
+  assertEquals(briefOf(legacy({}, { brief: { text } }), entries), text)
+})
+
 Deno.test('sessionLine: id, status, runner, age, and what it is about', () => {
   let now = Date.parse('2026-09-08T12:30:00Z')
   let r = legacy(

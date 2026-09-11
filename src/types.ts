@@ -130,6 +130,7 @@ export let sessionComps: Record<string, Record<string, PropType>> = {
     status: 'number',
   },
   result: {
+    ms: 'number',
     call: { eid: 'call', death: 'keep' },
   },
   runner: {
@@ -518,6 +519,7 @@ export let comps: Record<string, Record<string, PropType>> = {
     status: 'number',
   },
   result: {
+    ms: 'number',
     call: { eid: 'call', death: 'keep' },
   },
   resume: {},

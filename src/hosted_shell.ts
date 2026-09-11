@@ -104,6 +104,7 @@ export let hostedShell = async (o: HostedShell): Promise<ToolOutcome> => {
       // Session (entry_log.ts). This is an answer the model gets to act on.
       return {
         output: `${vanished}${output ? `\n${output}` : ''}`,
+        ms: run.elapsed(),
         failed: true,
         facets: { ...stderr ? { stderr: { text: stderr } } : {} },
       }
@@ -113,6 +114,7 @@ export let hostedShell = async (o: HostedShell): Promise<ToolOutcome> => {
     }
     return {
       output,
+      ms: run.elapsed(),
       failed: code != 0,
       facets: { exit: { code }, ...stderr ? { stderr: { text: stderr } } : {} },
     }

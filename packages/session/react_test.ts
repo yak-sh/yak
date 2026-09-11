@@ -22,6 +22,7 @@ import { kindOf, statusOf } from './status.ts'
 import { sessions } from './plugin.ts'
 import { react, settle, transcript } from './react.ts'
 import { daemon } from './daemon.ts'
+import { took } from './timing.ts'
 
 // What the fake provider keeps about an ask: its own comp, the way @yaks/openai
 // keeps `openai{response_id}`.
@@ -135,7 +136,7 @@ Deno.test('an input is asked, a tool call is run, the transcript settles', async
   assertEquals(asked[1].items, [{
     kind: 'result',
     id: 'c1',
-    output: 'echo: hi',
+    output: took('echo: hi', Number((entries[3].result as Comp).ms)),
   }])
 })
 

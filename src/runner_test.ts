@@ -283,7 +283,7 @@ Deno.test('tool replay includes stdout, stderr, and exit status', () => {
       patch: { path: '.', diff: '*** Begin Patch' },
     }),
     row('result', 4, {
-      result: { call: 'call' },
+      result: { call: 'call', ms: 252_000 },
       content: { body: 'partial output' },
       stderr: { text: 'patch refused' },
       exit: { code: 2 },
@@ -294,7 +294,7 @@ Deno.test('tool replay includes stdout, stderr, and exit status', () => {
   ], 'current') as { type?: string; output?: string }[]
   assertEquals(
     input.find((item) => item.type == 'function_call_output')?.output,
-    'partial output\nstderr:\npatch refused\nexit code: 2',
+    'partial output\nstderr:\npatch refused\nexit code: 2\ntook 4m12s — over 60s: report this slow command',
   )
 })
 
@@ -563,6 +563,7 @@ Deno.test('executeCall recovers typed dispatch and records tool failures as resu
     ],
   })
   assertEquals(spec.result.call, 'call')
+  assert(typeof spec.result.ms == 'number' && spec.result.ms >= 0)
   assertMatch(String(spec.content.body), /tool failed: refused/)
 })
 

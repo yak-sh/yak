@@ -84,6 +84,8 @@ export type Opts = {
 
 /** What a caller holds of a tracked process. */
 export type Run = {
+  /** Elapsed wall-clock milliseconds, including time before adoption when known. */
+  elapsed: () => number
   /** the process entity */
   eid: string
   /** its pid — 0 when no wrapper ever reported one */
@@ -126,6 +128,8 @@ let files = (dir: string, eid: string) => ({
   err: `${dir}/${eid}.err`,
   pid: `${dir}/${eid}.pid`,
   code: `${dir}/${eid}.code`,
+  started: `${dir}/${eid}.started`,
+  ended: `${dir}/${eid}.ended`,
 })
 
 // The firebreak script, run inside the scope by `setsid sh <this file>`. It
@@ -133,7 +137,7 @@ let files = (dir: string, eid: string) => ({
 // own $-expansion to the command it launches and `$$` is its escape for a
 // literal `$` — a bare path carries no metacharacter for it to shred.
 let WRAPPER = '"$@" >> "$TASKS_OUT" 2>> "$TASKS_ERR" & trap "" INT TERM; ' +
-  'echo "$$ $!" > "$TASKS_PID"; wait $!; echo $? > "$TASKS_CODE"'
+  'echo "$$ $!" > "$TASKS_PID"; wait $!; code=$?; date +%s%3N > "$TASKS_ENDED"; echo $code > "$TASKS_CODE"'
 
 // A transient scope name, unique per LAUNCH: systemd refuses a name whose
 // predecessor is still loaded, and --collect frees a settled scope but not
@@ -181,6 +185,7 @@ let spawn = (
       TASKS_ERR: f.err,
       TASKS_PID: f.pid,
       TASKS_CODE: f.code,
+      TASKS_ENDED: f.ended,
     },
     stdin: 'null',
     stdout: 'null',
@@ -219,6 +224,13 @@ let codeOf = (path: string) => {
   } catch {
     return null
   }
+}
+
+// Durable start/end clocks keep reattachment from reporting only the final wait.
+let elapsedOf = (dir: string, eid: string) => {
+  let f = files(dir, eid)
+  let start = codeOf(f.started) ?? Date.now()
+  return () => Math.max(0, (codeOf(f.ended) ?? Date.now()) - start)
 }
 
 // The agent is never our child, so waitpid is out of reach from the first
@@ -377,6 +389,8 @@ export let launch = async (
   let tails = o.stream === false ? [] : [tail(f.out), tail(f.err)]
   clear(f.pid)
   clear(f.code)
+  clear(f.ended)
+  Deno.writeTextFileSync(f.started, String(Date.now()))
   spawn(eid, argv, cwd, spec.env ?? {}, dir)
   let pid = 0
   for (let end = Date.now() + (o.birth ?? 10_000); !pid && Date.now() < end;) {
@@ -391,7 +405,7 @@ export let launch = async (
     ...(o.eid ? { [EXIT]: null } : {}),
   }])
   let done = follow(store, eid, pid, tails, reported(f.code, beat(o)), o)
-  return { eid, pid, done }
+  return { eid, pid, done, elapsed: elapsedOf(dir, eid) }
 }
 
 /**
@@ -417,6 +431,7 @@ export let adopt = async (
   return {
     eid,
     pid,
+    elapsed: elapsedOf(dirOf(o), eid),
     done: follow(store, eid, pid, [], o.code ?? (() => null), o),
   }
 }
@@ -445,6 +460,7 @@ export let watch = async (store: Store, o: Opts = {}): Promise<Run[]> => {
     runs.push({
       eid,
       pid,
+      elapsed: elapsedOf(dir, eid),
       done: follow(store, eid, pid, [], reported(f.code, beat(o)), o),
     })
   }

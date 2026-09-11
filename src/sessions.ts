@@ -1,3 +1,4 @@
+import { toolTiming } from '@yaks/session'
 // Managed sessions: spawn an agent on a task, in its own git worktree, and
 // keep its session row honest while it runs. Server-only. Everything here
 // enters through the GRAPH, not routes: a session created with a normalized
@@ -633,13 +634,28 @@ let settled = (eid: string, status: string, cast: Cast) => {
     : []
   let spoke = evalGraph(db, `.created.via=${eid}&.comment.target!`).hits
   let all = uniq([sess, ...held, ...lapses, ...spoke])
+  let timing = toolTiming(entriesFrom(db, eid, 0))
+  let final = [String(row.final_text ?? ''), timing].filter(Boolean).join(
+    '\n\n',
+  )
   let changes: Change[] = wrapChanges(
     all,
     String(sess.comps.session?.id ?? ''),
     Date.now(),
     [],
-    String(row.final_text ?? '') || undefined,
+    final || undefined,
   )
+  // Keep a deliberate handoff, but still attach the measured session account.
+  if (
+    timing && sess.comps.brief?.text &&
+    !String(sess.comps.brief.text).includes(timing)
+  ) {
+    changes.push({
+      eid,
+      name: 'brief',
+      comp: { text: `${sess.comps.brief.text}\n\n${timing}` },
+    })
+  }
   // The process the run happened in ends with the run (T-35323), carrying the
   // code the tailer actually observed — null when the ending was seen but the
   // code was not, which is the same story the session's own row tells.

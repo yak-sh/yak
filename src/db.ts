@@ -564,7 +564,8 @@ let schema = `
   );
   create table if not exists result (
     entity  integer primary key references entity(id),
-    call integer not null
+    call integer not null,
+    ms real
   );
   -- How something ended. A transcript's exit always carries a code; a tracked
   -- process's ending (T-35323) may be witnessed without one — the wrapper died
@@ -3099,6 +3100,7 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
           db.exec(`alter table ${sqlName(table)} add column ${ddl}`)
         }
       }
+      addCol('result', 'ms', 'ms real')
       // The mirror of addCol, for a column whose mechanism is gone. A retired
       // column that lingers still answers a schema read, so it keeps teaching a
       // mechanism the code no longer has — the drop is what makes removal true.

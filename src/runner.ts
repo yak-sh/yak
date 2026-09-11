@@ -1,3 +1,4 @@
+import { took } from '@yaks/session'
 // The provider-neutral first-party agent loop. It projects an ordered Session
 // prefix into Responses input, records completed provider items as immutable
 // entry specs, and executes typed calls through hosted tools. Scheduling,
@@ -477,18 +478,24 @@ let toolOutput = (comps: EntryRow['comps']) => {
 let replayLimit = 64 * 1024
 let replayToolOutput = (row: EntryRow) => {
   let body = toolOutput(row.comps)
+  let ms = row.comps.result?.ms
+  let timed = (text: string) => typeof ms == 'number' ? took(text, ms) : text
   let bytes = new TextEncoder().encode(body)
-  if (bytes.length <= replayLimit) return body
+  if (bytes.length <= replayLimit) return timed(body)
   let head = replayLimit * 3 / 4
   while (head && (bytes[head] & 0xc0) == 0x80) head--
   let tail = bytes.length - replayLimit / 4
   while (tail < bytes.length && (bytes[tail] & 0xc0) == 0x80) tail++
   let decode = (part: Uint8Array) => new TextDecoder().decode(part)
-  return decode(bytes.subarray(0, head)) +
-    `\n[… ${bytes.length - head - (bytes.length - tail)} bytes omitted from ` +
-    `provider replay; full result preserved in session entry ${row.eid}. ` +
-    'Narrow or page the request to inspect it.]\n' +
-    decode(bytes.subarray(tail))
+  return timed(
+    decode(bytes.subarray(0, head)) +
+      `\n[… ${
+        bytes.length - head - (bytes.length - tail)
+      } bytes omitted from ` +
+      `provider replay; full result preserved in session entry ${row.eid}. ` +
+      'Narrow or page the request to inspect it.]\n' +
+      decode(bytes.subarray(tail)),
+  )
 }
 
 export let attentionPrompt =
@@ -765,7 +772,7 @@ let requestOf = (row: EntryRow) => {
 }
 
 export let resultEntry = (call: string, outcome: ToolOutcome): EntrySpec => ({
-  result: { call },
+  result: { call, ...outcome.ms == null ? {} : { ms: outcome.ms } },
   content: { body: outcome.output },
   ...outcome.facets,
 })
@@ -782,6 +789,7 @@ export let executeCall = async (
   // performs the operation a second time.
   let run = resume ? tools.resume : tools.call
   let outcome: ToolOutcome
+  let started = performance.now()
   try {
     if (!run) throw new Error(interrupted)
     outcome = await run(call.name, call.args, { signal, entry: row.eid })
@@ -791,6 +799,7 @@ export let executeCall = async (
       failed: true,
     }
   }
+  outcome.ms ??= Math.round(performance.now() - started)
   return resultEntry(row.eid, outcome)
 }
 
@@ -853,6 +862,7 @@ export let runTurn = async (options: TurnOptions) => {
     await options.log.settle?.(generation, work.usage)
     if (!work.calls.length) return { finalText: work.finalText, generation }
     await Promise.all(work.calls.map(async (call) => {
+      let started = performance.now()
       let eid = outputs[call.index]
       let outcome: ToolOutcome
       if (call.error) {
@@ -869,6 +879,7 @@ export let runTurn = async (options: TurnOptions) => {
           }
         }
       }
+      outcome.ms ??= Math.round(performance.now() - started)
       await options.log.append([resultEntry(eid, outcome)])
     }))
     let entries = await options.log.read()

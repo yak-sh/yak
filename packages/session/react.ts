@@ -64,6 +64,7 @@ export class ToolError extends Error {
 
 export { UnknownSession } from './unknown.ts'
 import { UnknownSession } from './unknown.ts'
+import { took } from './timing.ts'
 
 /** A tool the model may call: its declaration, and how to run it. */
 export type Tool = Declared & {
@@ -143,10 +144,12 @@ export let project = (
       })
     } else if (kind == 'result') {
       let call = byId.get(String(comp(b, RESULT)?.call))
+      let text = results?.get(b.entity.eid) ?? textOf(b)
+      let ms = comp(b, RESULT)?.ms
       out.push({
         kind: 'result',
         id: String(comp(call!, CALL)?.id ?? ''),
-        output: results?.get(b.entity.eid) ?? textOf(b),
+        output: typeof ms == 'number' ? took(text, ms) : text,
       })
     }
   }
@@ -208,6 +211,7 @@ export let react = async (
         args = JSON.parse(String(c.args ?? '{}'))
       } catch { /* malformed arguments are the tool's problem to report */ }
       let out: string
+      let started = performance.now()
       try {
         out = tool
           ? String(await tool.run(args, { session, call: pending, entries }))
@@ -224,7 +228,14 @@ export let react = async (
           ),
         )
       }
-      added.push(line({ [RESULT]: { call: pending.entity.eid } }, out))
+      added.push(
+        line({
+          [RESULT]: {
+            call: pending.entity.eid,
+            ms: Math.round(performance.now() - started),
+          },
+        }, out),
+      )
     }
     let step = await append(added)
     return { ...step, did: 'ran' }

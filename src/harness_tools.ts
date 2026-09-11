@@ -19,6 +19,7 @@ export type ToolDefinition = {
 
 export type ToolOutcome = {
   output: string
+  ms?: number
   failed?: boolean
   facets?: Record<string, Record<string, unknown>>
 }

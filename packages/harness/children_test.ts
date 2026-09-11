@@ -129,7 +129,7 @@ Deno.test('wait resolves while child completion waits behind the parent tool', a
     if (turns == 2) {
       let result = req.items.findLast((i) => i.kind == 'result')!
       return Promise.resolve(call('wait', {
-        children: [(result as { output: string }).output],
+        children: [(result as { output: string }).output.split('\n')[0]],
         timeout: 1000,
       }))
     }

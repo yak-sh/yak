@@ -1,4 +1,4 @@
-import { assertEquals, assertMatch } from '@std/assert'
+import { assert, assertEquals, assertMatch } from '@std/assert'
 import { type HostedShell, hostedShell } from './hosted_shell.ts'
 import { slow, until } from './testing.ts'
 
@@ -10,6 +10,23 @@ let setup = (): HostedShell => ({
   env: { PATH: '/usr/bin:/bin' },
   timeout: 5000,
   limit: 1024,
+})
+
+Deno.test('hosted recovery reads the original durable wall-clock, not the recovery wait', async () => {
+  let o = setup()
+  try {
+    let path = `${o.dir}/${o.entry}`
+    Deno.writeTextFileSync(`${path}.started`, '1000000')
+    Deno.writeTextFileSync(`${path}.ended`, '1252000')
+    Deno.writeTextFileSync(`${path}.code`, '0')
+    Deno.writeTextFileSync(`${path}.out`, 'done')
+    let result = await hostedShell({ ...o, resume: true })
+    assertEquals(result.ms, 252_000)
+    assertEquals(result.output, 'done')
+    assertEquals(await hostedShell({ ...o, resume: true }), result)
+  } finally {
+    Deno.removeSync(o.dir!, { recursive: true })
+  }
 })
 
 // An actual killed runner, not a mocked process handle. The shell is gated on
@@ -47,6 +64,7 @@ slow(
       Deno.writeTextFileSync(`${o.dir}/release`, '')
       let result = await recovered
       assertEquals(result.output, 'once\ndone\n')
+      assert(typeof result.ms == 'number' && result.ms >= 0)
       assertEquals(result.facets?.exit, { code: 7 })
       assertEquals(result.facets?.stderr, { text: 'err\n' })
       // Another restart after exit but before graph settlement reads the same
@@ -77,6 +95,7 @@ slow(
     let result = await hostedShell({ ...o, resume: true })
     assertMatch(result.output, /restarted mid-call/)
     assertEquals(result.failed, true)
+    assert(typeof result.ms == 'number' && result.ms >= 0)
     assertEquals(result.facets?.exit, undefined)
     assertEquals(
       [...Deno.readDirSync(o.dir!)].some((f) => f.name.endsWith('.out')),
@@ -92,6 +111,7 @@ slow(
     let o = setup()
     let result = await hostedShell({ ...o, command: 'sleep 10', timeout: 100 })
     assertEquals([124, 137].includes(Number(result.facets?.exit.code)), true)
+    assert(typeof result.ms == 'number' && result.ms >= 100)
     let controller = new AbortController()
     let pending = hostedShell({
       ...o,

@@ -283,6 +283,7 @@
     "result": {
       "log": true,
       "cols": {
+        "ms": "number",
         "call": {
           "eid": "call",
           "death": "keep"

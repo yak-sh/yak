@@ -1,3 +1,4 @@
+import { toolTiming } from '@yaks/session'
 // The three session verbs a coordinator drives from a shell: `task sessions`
 // (what is running and what just ran), `task tail <S>` (a transcript as it
 // grows), and `task session wait <S>` (block until a session is over, print its
@@ -125,8 +126,14 @@ export let exitCode = (r: Row, s: Status, entries: Row[] = []): number => {
 }
 
 /** The words a session leaves behind: its brief, else a legacy final text. */
-export let briefOf = (r: Row): string =>
-  String(r.comps.brief?.text ?? r.comps.session?.final_text ?? '').trim()
+export let briefOf = (r: Row, entries: Row[] = []): string => {
+  let text = String(r.comps.brief?.text ?? r.comps.session?.final_text ?? '')
+    .trim()
+  let timing = toolTiming(entries)
+  return timing && !text.includes(timing)
+    ? [text, timing].filter(Boolean).join('\n\n')
+    : text
+}
 
 let first = (s: unknown) => String(s ?? '').split('\n')[0].trim()
 
@@ -454,11 +461,16 @@ export let waitFor = async (id: string, got: Got) => {
     // Only entry lines in follow mode, including at the terminal poll.
   } else if (got.flags.has('--json')) {
     out(
-      JSON.stringify({ id: name, status: end.s, code, brief: briefOf(end.r) }),
+      JSON.stringify({
+        id: name,
+        status: end.s,
+        code,
+        brief: briefOf(end.r, end.entries),
+      }),
     )
   } else {
     out(`${name}: ${end.s}`)
-    let brief = briefOf(end.r)
+    let brief = briefOf(end.r, end.entries)
     if (brief) out(brief)
   }
   if (code) Deno.exit(code)

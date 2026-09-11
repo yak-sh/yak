@@ -84,7 +84,9 @@ export let graphTools = (
   }))
 }
 
-/** The shell, delegation, and the graph, with one wait for all three targets. */
+/** The shell, delegation, and the graph, with one wait for all three targets.
+ * react records every tool's wall-clock and projects it AFTER output bounding;
+ * these raw answers remain parseable JSON for non-model callers. */
 export let harnessTools = (
   g: Graph,
   opts:
