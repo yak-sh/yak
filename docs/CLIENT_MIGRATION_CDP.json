@@ -1,0 +1,380 @@
+{
+  "snapshotSHA256": "cfe241eb832a19286b33f85ec124ae85d8a8ae8da4c6053d9959287a17817dc7",
+  "beforeCommit": "c3da85be02cae568a12ed7dbb7755139850e219c",
+  "afterCommit": "commit containing this report",
+  "notes": [
+    "Both probes started from fresh copies of the same snapshot; new browser profiles, parallel wall-clock runs.",
+    "Before server has only the subscription queue cancellation guard backported; before frontend is unchanged.",
+    "Inbound WebSocket UTF-8 payload bytes, not HTTP assets or compressed transport bytes.",
+    "Clock-sensitive maintenance and new browser identity account for run-to-run differences. No graph edits were driven by the script."
+  ],
+  "before": {
+    "base": "http://localhost:35909",
+    "targets": [
+      "33365ea3-f3e5-42e5-9035-85bbb6ab85e1",
+      "8a88b12a-ae7f-4bee-891a-e431e41b3dd5",
+      "1db34918-f8d8-4d49-a83a-fd1a6e8a0789",
+      "2e0b3e3e-5470-4d48-8d09-4423f320f3ff",
+      "6d422fc0-d0f8-46b8-81bf-70f651dd7e1c",
+      "03f45fb2-1168-40b0-8a21-68c8cc510901"
+    ],
+    "cold": {
+      "bytes": 464461,
+      "distinctIDs": 399,
+      "subs": 64,
+      "unsubs": 6,
+      "received": 68,
+      "cards": 11,
+      "peeks": 0,
+      "cache": 400,
+      "queries": 26
+    },
+    "six": {
+      "bytes": 151728,
+      "distinctIDs": 369,
+      "subs": 48,
+      "unsubs": 42,
+      "received": 51,
+      "cards": 11,
+      "peeks": 0,
+      "cache": 399,
+      "queries": 26,
+      "opens": [
+        {
+          "bytes": 21160,
+          "distinctIDs": 56,
+          "subs": 7,
+          "unsubs": 1,
+          "received": 7,
+          "body": {
+            "length": 1008,
+            "sha256": "4cb712c6f42831c0f8fdd70fc3ef804bd3aaae47773b55e073830a6088e953de"
+          },
+          "text": 1247
+        },
+        {
+          "bytes": 31171,
+          "distinctIDs": 89,
+          "subs": 8,
+          "unsubs": 1,
+          "received": 8,
+          "body": {
+            "length": 532,
+            "sha256": "8e045e6cac7bca76976d71ccce52f855d52a0a0d7932bbf5cf281cfd70843f3a"
+          },
+          "text": 1102
+        },
+        {
+          "bytes": 10199,
+          "distinctIDs": 6,
+          "subs": 8,
+          "unsubs": 2,
+          "received": 9,
+          "body": {
+            "length": 3918,
+            "sha256": "b414018d249c77ddcfb0aa2bb566d0b7b3a1eaf02c612402169f628c02a2726a"
+          },
+          "text": 4423
+        },
+        {
+          "bytes": 15662,
+          "distinctIDs": 36,
+          "subs": 7,
+          "unsubs": 1,
+          "received": 7,
+          "body": {
+            "length": 1471,
+            "sha256": "370261e062984c10a737967f57260c7199a196d5d5d57bb9424aea81f2b874ee"
+          },
+          "text": 1688
+        },
+        {
+          "bytes": 14951,
+          "distinctIDs": 35,
+          "subs": 7,
+          "unsubs": 1,
+          "received": 7,
+          "body": {
+            "length": 1078,
+            "sha256": "b72e4ee2fa1f32bafb16bb7a760edf4f0a7a0f2f89d717a7099872cef4f3df9d"
+          },
+          "text": 1367
+        },
+        {
+          "bytes": 51173,
+          "distinctIDs": 147,
+          "subs": 8,
+          "unsubs": 2,
+          "received": 8,
+          "body": {
+            "length": 2168,
+            "sha256": "5c8781c0b718c3f77aeadbba147dfbeca731aa048c6d9b49733d5bedb9132f8d"
+          },
+          "text": 2899
+        }
+      ]
+    },
+    "reopen": {
+      "before": {
+        "title": true
+      },
+      "during": {
+        "title": true,
+        "text": 1247,
+        "queued": 6
+      },
+      "body": {
+        "length": 1008,
+        "sha256": "4cb712c6f42831c0f8fdd70fc3ef804bd3aaae47773b55e073830a6088e953de"
+      },
+      "readiness": [
+        {
+          "sub": "q:[{\"comp\":\"board\",\"prop\":\"query\",\"op\":\"~\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "loading"
+        },
+        {
+          "sub": "q:[{\"comp\":\"\",\"prop\":\"\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\",\"refs\":true}]",
+          "status": "loading"
+        },
+        {
+          "sub": "q:[{\"comp\":\"comment\",\"prop\":\"target\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "loading"
+        },
+        {
+          "sub": "q:[{\"comp\":\"commit\",\"prop\":\"target\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "loading"
+        },
+        {
+          "sub": "route:33365ea3-f3e5-42e5-9035-85bbb6ab85e1:repo.url,filed.project,comment.target,session.requested_task,session.actor,role.scope,memory.scope,entry.session",
+          "status": "loading"
+        },
+        {
+          "sub": "agg:comments",
+          "status": "loading"
+        }
+      ],
+      "afterReadiness": [
+        {
+          "sub": "q:[{\"comp\":\"board\",\"prop\":\"query\",\"op\":\"~\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "ready"
+        },
+        {
+          "sub": "q:[{\"comp\":\"\",\"prop\":\"\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\",\"refs\":true}]",
+          "status": "ready"
+        },
+        {
+          "sub": "q:[{\"comp\":\"comment\",\"prop\":\"target\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "ready"
+        },
+        {
+          "sub": "q:[{\"comp\":\"commit\",\"prop\":\"target\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "ready"
+        },
+        {
+          "sub": "route:33365ea3-f3e5-42e5-9035-85bbb6ab85e1:repo.url,filed.project,comment.target,session.requested_task,session.actor,role.scope,memory.scope,entry.session",
+          "status": "ready"
+        },
+        {
+          "sub": "agg:comments",
+          "status": "loading"
+        }
+      ],
+      "bytes": 19742,
+      "distinctIDs": 56,
+      "subs": 6,
+      "unsubs": 0,
+      "received": 6,
+      "cards": 11,
+      "peeks": 1,
+      "cache": 454,
+      "queries": 30
+    },
+    "errors": []
+  },
+  "after": {
+    "base": "http://localhost:35907",
+    "targets": [
+      "33365ea3-f3e5-42e5-9035-85bbb6ab85e1",
+      "8a88b12a-ae7f-4bee-891a-e431e41b3dd5",
+      "1db34918-f8d8-4d49-a83a-fd1a6e8a0789",
+      "2e0b3e3e-5470-4d48-8d09-4423f320f3ff",
+      "6d422fc0-d0f8-46b8-81bf-70f651dd7e1c",
+      "03f45fb2-1168-40b0-8a21-68c8cc510901"
+    ],
+    "cold": {
+      "bytes": 3510992,
+      "distinctIDs": 2225,
+      "subs": 136,
+      "unsubs": 10,
+      "received": 137,
+      "cards": 11,
+      "peeks": 0,
+      "cache": 2477,
+      "queries": 98,
+      "transports": 126
+    },
+    "six": {
+      "bytes": 152645,
+      "distinctIDs": 369,
+      "subs": 49,
+      "unsubs": 50,
+      "received": 52,
+      "cards": 11,
+      "peeks": 0,
+      "cache": 2839,
+      "queries": 97,
+      "transports": 125,
+      "opens": [
+        {
+          "bytes": 21160,
+          "distinctIDs": 56,
+          "subs": 7,
+          "unsubs": 2,
+          "received": 7,
+          "body": {
+            "length": 1008,
+            "sha256": "4cb712c6f42831c0f8fdd70fc3ef804bd3aaae47773b55e073830a6088e953de"
+          },
+          "text": 1543
+        },
+        {
+          "bytes": 32088,
+          "distinctIDs": 89,
+          "subs": 9,
+          "unsubs": 2,
+          "received": 9,
+          "body": {
+            "length": 532,
+            "sha256": "8e045e6cac7bca76976d71ccce52f855d52a0a0d7932bbf5cf281cfd70843f3a"
+          },
+          "text": 1097
+        },
+        {
+          "bytes": 10199,
+          "distinctIDs": 6,
+          "subs": 8,
+          "unsubs": 3,
+          "received": 9,
+          "body": {
+            "length": 3918,
+            "sha256": "b414018d249c77ddcfb0aa2bb566d0b7b3a1eaf02c612402169f628c02a2726a"
+          },
+          "text": 4418
+        },
+        {
+          "bytes": 15662,
+          "distinctIDs": 36,
+          "subs": 7,
+          "unsubs": 2,
+          "received": 7,
+          "body": {
+            "length": 1471,
+            "sha256": "370261e062984c10a737967f57260c7199a196d5d5d57bb9424aea81f2b874ee"
+          },
+          "text": 1893
+        },
+        {
+          "bytes": 17320,
+          "distinctIDs": 35,
+          "subs": 7,
+          "unsubs": 2,
+          "received": 9,
+          "body": {
+            "length": 1078,
+            "sha256": "b72e4ee2fa1f32bafb16bb7a760edf4f0a7a0f2f89d717a7099872cef4f3df9d"
+          },
+          "text": 1367
+        },
+        {
+          "bytes": 51173,
+          "distinctIDs": 147,
+          "subs": 8,
+          "unsubs": 2,
+          "received": 8,
+          "body": {
+            "length": 2168,
+            "sha256": "5c8781c0b718c3f77aeadbba147dfbeca731aa048c6d9b49733d5bedb9132f8d"
+          },
+          "text": 2865
+        }
+      ]
+    },
+    "reopen": {
+      "before": {
+        "title": true
+      },
+      "during": {
+        "title": true,
+        "text": 1543,
+        "queued": 6
+      },
+      "body": {
+        "length": 1008,
+        "sha256": "4cb712c6f42831c0f8fdd70fc3ef804bd3aaae47773b55e073830a6088e953de"
+      },
+      "readiness": [
+        {
+          "sub": "q:[{\"comp\":\"board\",\"prop\":\"query\",\"op\":\"~\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "loading"
+        },
+        {
+          "sub": "q:[{\"comp\":\"\",\"prop\":\"\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\",\"refs\":true}]",
+          "status": "loading"
+        },
+        {
+          "sub": "q:[{\"comp\":\"comment\",\"prop\":\"target\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "loading"
+        },
+        {
+          "sub": "q:[{\"comp\":\"commit\",\"prop\":\"target\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "loading"
+        },
+        {
+          "sub": "route:33365ea3-f3e5-42e5-9035-85bbb6ab85e1:repo.url,filed.project,comment.target,session.requested_task,session.actor,role.scope,memory.scope,entry.session",
+          "status": "loading"
+        },
+        {
+          "sub": "agg:comments",
+          "status": "loading"
+        }
+      ],
+      "afterReadiness": [
+        {
+          "sub": "q:[{\"comp\":\"board\",\"prop\":\"query\",\"op\":\"~\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "ready"
+        },
+        {
+          "sub": "q:[{\"comp\":\"\",\"prop\":\"\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\",\"refs\":true}]",
+          "status": "ready"
+        },
+        {
+          "sub": "q:[{\"comp\":\"comment\",\"prop\":\"target\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "ready"
+        },
+        {
+          "sub": "q:[{\"comp\":\"commit\",\"prop\":\"target\",\"op\":\"\",\"value\":\"33365ea3-f3e5-42e5-9035-85bbb6ab85e1\"}]",
+          "status": "ready"
+        },
+        {
+          "sub": "route:33365ea3-f3e5-42e5-9035-85bbb6ab85e1:repo.url,filed.project,comment.target,session.requested_task,session.actor,role.scope,memory.scope,entry.session",
+          "status": "ready"
+        },
+        {
+          "sub": "agg:comments",
+          "status": "ready"
+        }
+      ],
+      "bytes": 19742,
+      "distinctIDs": 56,
+      "subs": 6,
+      "unsubs": 1,
+      "received": 6,
+      "cards": 11,
+      "peeks": 1,
+      "cache": 2839,
+      "queries": 101,
+      "transports": 130
+    },
+    "errors": []
+  }
+}

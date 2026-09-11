@@ -2848,18 +2848,17 @@ Deno.test('an aggregate frame replaces, then deltas merge', () => {
   // working set, Y one — authoritative over the local scan.
   landSub({
     sub: 'agg:comments',
-    changes: [],
     replace: true,
     agg: { [X]: 3, [Y]: 1 },
   })
   assertEquals(x.value, 3)
   assertEquals(y.value, 1)
   // A delta frame moves one key and leaves the rest standing.
-  landSub({ sub: 'agg:comments', changes: [], agg: { [X]: 4 } })
+  landSub({ sub: 'agg:comments', agg: { [X]: 4 } })
   assertEquals(x.value, 4)
   assertEquals(y.value, 1)
   // n=0 drops the key — the last comment left.
-  landSub({ sub: 'agg:comments', changes: [], agg: { [Y]: 0 } })
+  landSub({ sub: 'agg:comments', agg: { [Y]: 0 } })
   assertEquals(y.value, 0)
   assertEquals(Object.keys(cache.value).length, 1) // no rows landed
 })
@@ -3001,3 +3000,40 @@ slow(
     }
   },
 )
+
+Deno.test('an empty browser query is locally empty, never an unsupported remote ask', () => {
+  let prior = config.host
+  config.host = 'browser.test'
+  let preds = parseQuery('')
+  try {
+    let ids = holdQuery(preds)
+    assertEquals(ids.peek(), [])
+    dropQuery(preds)
+  } finally {
+    config.host = prior
+  }
+})
+
+Deno.test('evicting a peer payload does not cascade independently held edge sentences', () => {
+  cache.value = {}
+  let dep = { parent: 'root', type: 'requires' as const, child: 'peer' }
+  landSub({
+    sub: 'edge-holder',
+    replace: true,
+    changes: [{ eid: 'root', name: 'entity', comp: { eid: 'root', num: 1 } }],
+    edges: [dep],
+  })
+  landSub({
+    sub: 'peer-holder',
+    replace: true,
+    changes: [{ eid: 'peer', name: 'entity', comp: { eid: 'peer', num: 2 } }],
+  })
+  landSub({ sub: 'peer-holder', replace: true, changes: [] })
+  assertEquals(cache.peek().peer, undefined)
+  assertEquals(deps.peek(), [dep])
+  // A real death still cascades, even if only its edge (not payload) is held.
+  applyLocal([{ eid: 'peer', name: 'entity', comp: null }])
+  assertEquals(deps.peek(), [])
+  unsubscribe('edge-holder')
+  unsubscribe('peer-holder')
+})

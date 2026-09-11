@@ -242,3 +242,62 @@ Deno.test('synchronous transport replies are owned before send, including empty 
     c.box.close()
   }
 })
+
+Deno.test('value-only frames and refusals neither require changes nor create entities', () => {
+  let { c } = harness()
+  try {
+    c.open('tally', '.comment! .tally=comment.target')
+    c.receive({ sub: 'tally', replace: true, agg: { a: 4 } })
+    assertEquals(c.ready('tally'), true)
+    assertEquals(c.members('tally'), [])
+    c.open('row', '.task!')
+    c.receive({ sub: 'row', replace: true, changes: row('a') })
+    c.receive({
+      sub: 'row',
+      replace: true,
+      error: 'unavailable',
+      changes: [{ eid: 'a', name: 'entity', comp: null }],
+    })
+    assertFalse(c.ready('row'))
+    assertEquals(c.members('row'), ['a'])
+    assertEquals(c.box.ent('a')?.doc, { title: 'a' })
+  } finally {
+    c.box.close()
+  }
+})
+
+Deno.test('a one-shot body survives release beside a live projection, but is not active coverage', async () => {
+  let { c } = harness()
+  try {
+    c.open('list', '.task!')
+    c.receive({ sub: 'list', replace: true, changes: row('a') })
+    c.open('want:a', 'id=a .fields=doc.body')
+    c.receive({
+      sub: 'want:a',
+      replace: true,
+      fields: [{ comp: 'doc', prop: 'body', wake: true }],
+      changes: spread('a', { entity: { eid: 'a' }, doc: { body: 'complete' } }),
+    })
+    assertEquals(c.box.cache.loaded('a', 'doc', 'body'), true)
+    c.close('want:a')
+    c.receive({ sub: 'list', changes: spread('a', { doc: { title: 'new' } }) })
+    assertEquals(c.box.ent('a')?.doc, { title: 'new', body: 'complete' })
+    assertFalse(c.box.cache.loaded('a', 'doc', 'body'))
+    c.open('want:a', 'id=a .fields=doc.body')
+    assertFalse(c.ready('want:a'))
+    assertEquals(c.box.ent('a')?.doc, { title: 'new', body: 'complete' })
+    c.receive({
+      sub: 'want:a',
+      replace: true,
+      fields: [{ comp: 'doc', prop: 'body', wake: true }],
+      changes: spread('a', { entity: { eid: 'a' }, doc: { body: null } }),
+    })
+    assertEquals(c.box.ent('a')?.doc, { title: 'new', body: null })
+    c.close('want:a')
+    await c.box.setEpoch('first')
+    await c.box.setEpoch('second')
+    assertEquals(c.box.ent('a'), undefined)
+  } finally {
+    c.box.close()
+  }
+})

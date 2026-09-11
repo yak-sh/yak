@@ -50,3 +50,14 @@ Deno.test('an unsub cancels a sub still waiting', async () => {
   await after(2)
   assertEquals(served, ['unsub:gone', 'sub:board'])
 })
+
+Deno.test('cancelling the last queued ask during the hop keeps the socket usable', async () => {
+  let { served, push, after } = record()
+  push({ sub: 'gone', q: '.task!' })
+  push({ unsub: 'gone' })
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  assertEquals(served, ['unsub:gone'])
+  push({ sub: 'next', q: '.task!' })
+  await after(2)
+  assertEquals(served, ['unsub:gone', 'sub:next'])
+})

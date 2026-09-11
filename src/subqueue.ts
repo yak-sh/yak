@@ -94,7 +94,9 @@ export let subqueue = (db: Sql, serve: (f: Ctl) => void) => {
     try {
       while (pending.length) {
         await turn()
-        serve(take().f)
+        // An unsubscribe may cancel the last ask during the channel hop.
+        let next = take()
+        if (next) serve(next.f)
       }
     } finally {
       draining = false

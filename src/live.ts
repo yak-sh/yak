@@ -46,6 +46,7 @@ import {
   matchQuery,
   namesLazy,
   NEAR,
+  NEVER,
   ORDER,
   parseQuery,
   type Pred,
@@ -164,11 +165,18 @@ let makeClient = () =>
     changed: (eids) => {
       if (replacing) return
       let changes: Change[] = []
+      let deaths = new Set<string>()
       for (let eid of eids) {
         let before = cache.peek()[eid]
         let after = replica.box.ent(eid)
         if (!after || dead(after)) {
           changes.push({ eid, name: 'entity', comp: null })
+          if (after && dead(after)) deaths.add(eid)
+          // A retained body may now be genuinely unloaded (LRU/epoch), unlike
+          // a successful read of an absent column. Let the next paint ask again.
+          for (let key of asked) {
+            if (key.startsWith(`${eid}\0`)) asked.delete(key)
+          }
         } else {
           for (let name of Object.keys(before ?? {})) {
             if (!(name in after)) {
@@ -187,7 +195,7 @@ let makeClient = () =>
           }
         }
       }
-      publishLocal(changes, new Set(eids))
+      publishLocal(changes, new Set(eids), deaths)
     },
   })
 // Tests/hosts may replace cache wholesale. Import that explicitly rather than
@@ -433,17 +441,20 @@ export let predsToQuery = (preds: Pred[]): string | undefined => {
     // Self-verify: the line must re-parse to the exact same preds, or it is not
     // trusted on the wire — the server would maintain a DIFFERENT set.
     if (qkey(resolveRefs(parseQuery(line), findEid)) == qkey(preds)) return line
-  } catch { /* a shape the grammar can't round-trip — fall back to mem */ }
+  } catch { /* the caller must supply source or refuse this shape */ }
   return undefined
 }
 
-// The server line for a query when the flag is on and the shape round-trips;
-// undefined routes the caller to the local resolver exactly as before.
+// Never queries are locally empty by definition. Every other browser query
+// must round-trip or carry its original source, never infer a partial answer.
 let serverLine = (preds: Pred[]): string | undefined => {
+  if (preds.some((p) => p.op === NEVER)) return undefined
   let line = predsToQuery(preds)
-  if (!line && config.host) {
+  if (!line && preds.length && config.host) {
     throw new Error(
-      'This query requires its original server source; a partial cache cannot answer it',
+      `This query requires its original server source; a partial cache cannot answer it: ${
+        qkey(preds)
+      }`,
     )
   }
   return line
@@ -816,13 +827,8 @@ export let config: {
   // Stage-2 migration probes compare shadow sets to scans. Deployed clients
   // maintain the shadow without carrying agreement telemetry.
   agreement: boolean
-  // Make the durable IDB store the query surface (T-17126). OFF by default:
-  // real-browser measurement (~58s whole-graph seed, 75–450ms cold resolve at
-  // 15.5k entities) shows the async store can't yet be the LIVE surface while
-  // the full in-memory cache remains the escape hatch — the fast in-memory
-  // resolver stays the surface until the cache shrinks (T-17064) and a
-  // persistent delta-synced store lands. The flip mechanism is wired and
-  // parity-proven; a probe (?store=idb) turns it on to exercise and measure it.
+  // Legacy probe flag, accepted for URL compatibility only. The package RAM
+  // replica is always the live surface; no alternate IDB query/cache owner.
   store: boolean
   reload: () => void
   swap?: (gen: number) => void
@@ -1000,9 +1006,9 @@ let mark = (path: string) => ((globalThis as { __boot?: string }).__boot = path)
 // Land a batch in the cache with the same patch semantics the db uses:
 // comps merge per-column, comp: null deletes the component, entity: null
 // deletes the entity and every edge touching it. Returns the eids and edges
-// it touched (an entity death touches the eid AND every edge it swept) so the
-// persist tail — and boot's explicit delta write — mirror exactly those keys
-// into IDB, no diff of the whole cache.
+// it touched (an entity death touches the eid AND every edge it swept).
+// Package row observation publishes the compatibility signals; persistence
+// and retention belong to that same replica, never to this facade.
 export let applyLocal = (changes: Change[]) => {
   ensureClient()
   let edges = moves(changes, (e) => depOf(cache.peek()[e])).map((m) => m.dep)
@@ -1016,7 +1022,11 @@ export let applyLocal = (changes: Change[]) => {
   batch(() => replica.patch(changes))
   return { eids: [...new Set(changes.map((c) => c.eid))], edges }
 }
-let publishLocal = (changes: Change[], complete?: Set<string>) => {
+let publishLocal = (
+  changes: Change[],
+  complete: Set<string>,
+  deaths: Set<string>,
+) => {
   syncIds()
   syncIx()
   let graph = paint.peek()
@@ -1030,7 +1040,7 @@ let publishLocal = (changes: Change[], complete?: Set<string>) => {
   let changedCensus = false
   let changed = false
   // Camera motion renders from camera.value + hear(), not the graph cache.
-  // Keep its durable row current without publishing a whole-graph signal.
+  // Keep its facade row current without publishing a whole-graph signal.
   let motion = ({ eid, name, comp }: Change) =>
     !!paint.value[eid]?.camera && comp != null &&
     (name == 'camera' || name == 'updated')
@@ -1065,11 +1075,9 @@ let publishLocal = (changes: Change[], complete?: Set<string>) => {
         changedRows.add(eid)
         if (before.canvas) changedCanvas = true
       }
-      // The cascade: every edge touching the dead eid leaves the table
-      // outright — whoever held it, the edge no longer exists — so it goes from
-      // every holder at once, and is recorded so the IDB shadow drops the same
-      // rows the signal does.
-      for (let d of edgesAt(eid)) {
+      // Only an authoritative tombstone cascades. Storage-only eviction of a
+      // peer's payload says nothing about independently held edge sentences.
+      for (let d of deaths.has(eid) ? edgesAt(eid) : []) {
         edges.push(d)
         reindexEdge(ix, d, true)
         changedParents.add(d.parent)
@@ -1214,7 +1222,10 @@ let sweep = () => {
 export let want = (eid: string, comp = 'doc', prop = 'body') => {
   let field = `${comp}.${prop}`
   let key = `${eid}\0${field}`
-  if (asked.has(key) || queue.get(eid)?.has(field)) return
+  // Mark even a successful absent field: it must not trigger a render/fetch
+  // loop. Row eviction/epoch invalidation clears markers in onRows above.
+  if (asked.has(key)) return
+  if (queue.get(eid)?.has(field)) return
   if (!queue.size) setTimeout(sweep)
   let fields = queue.get(eid) ?? new Set<string>()
   queue.set(eid, fields.add(field))
@@ -1521,7 +1532,7 @@ type Catchup = { catchup: Change[]; cursor: number }
 type Reset = { reset?: boolean; snapshot: Snapshot; error?: string }
 export type Sub = {
   sub: string
-  changes: Change[]
+  changes?: Change[]
   drop?: string[]
   replace?: boolean
   cursor?: number
@@ -1990,7 +2001,7 @@ export let landSub = (f: Sub) =>
     replica.receive(f)
     let touched = { eids: [] as string[], edges: [] as Dep[] }
     for (let sub of replica.aliases(f.sub)) {
-      touched = landSubFrame({ ...f, sub })
+      touched = landSubFrame({ ...f, sub, changes: f.changes ?? [] })
     }
     return touched
   })
@@ -2016,7 +2027,7 @@ let primeMetadata = (sub: string) => {
   let rode = holdEdges(sub, edges, [])
   settleEdges(rode.gained, rode.lost)
 }
-let landSubFrame = (f: Sub) => {
+let landSubFrame = (f: Sub & { changes: Change[] }) => {
   if (f.error) {
     let one = oneShots.get(f.sub)
     if (one) {
@@ -2514,8 +2525,7 @@ export let seedFrom = async (snap: Snapshot, write = true) => {
   // legacy whole-graph snapshot still seeds its own, unheld, exactly as before.
   deps.value = snap.deps
   syncHolders()
-  // A wholesale replacement: skip the per-change durable mirror below and let
-  // resetSignals → resetQueries seed the store in one bulk pass instead.
+  // Rebuild derived signals around the package-owned boot answer in one pass.
   seeding = true
   if (config.host) {
     replica.open('boot', '@boot', true)
@@ -2664,8 +2674,7 @@ let canShare = () => {
 // follower cannot miss a leader frame during hydration. The gate's fallback
 // is exactly slice 2.1: boot locally and open this tab's socket.
 export let boot = async () => {
-  // Opt into the durable IDB query surface from the URL (?store=idb) — a probe
-  // switch, OFF by default (see config.store).
+  // Accept the old probe flag, but it no longer selects a second cache owner.
   let search = (globalThis as { location?: { search?: string } }).location
     ?.search ?? ''
   config.store ||= storeProbe(search)
@@ -2760,13 +2769,9 @@ export let boot = async () => {
   socket: ws?.readyState ?? null,
   cursor: held.cursor,
 })
-// Probe hooks (T-17126) — for eyes (a CDP probe, the console) to verify the
-// durable flip took and measure the real-browser subscribe/resolve latency the
-// fake-indexeddb shim can only approximate. `store()` tells whether the IDB
-// resolver is the surface; `resolve` times a one-shot indexed resolve; `hold`/
-// `held` prove a HELD subscription's signal updates on a patch (the live
-// reactivity path useQuery rides). Each mirrors exactly what the hook does —
-// parse, ref-resolve, then the active resolver. Not load-bearing.
+// Probe hooks: subscription/membership/wire counters over the active adapter.
+// `store()` remains false: the legacy IDB resolver is no longer a live surface.
+// `resolve` is a diagnostic local lookup only, never an authoritative query.
 let probeHeld = new Map<string, Signal<string[]>>()
 let probe = globalThis as {
   __probe?: {

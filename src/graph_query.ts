@@ -577,6 +577,12 @@ export let evalSub = (
 ): SubAnswer =>
   readUnit(db, () => {
     let asked = heard(db, q)
+    // The synchronous subscription door cannot run the async ranker. Refuse
+    // before either capped/index path can silently return ordinary membership
+    // for a semantic ranking. /query's askRows owns this contract.
+    if (orderOf(asked) == 'similar') {
+      throw new Error('similarity rank requires the embedding query evaluator')
+    }
     // A sub that NEEDS the whole universe never windows: entries page by their
     // own seq, and a capped tally would undercount every badge.
     if (details || namesLazy(asked) || aggOf(asked)) {

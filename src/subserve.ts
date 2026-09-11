@@ -958,6 +958,14 @@ export let subserve = (db: Sql, send: (frame: Frame) => void) => {
         if (watch && !batch.some((c) => aggDirty(watch, c.name))) continue
         let answer = evalSub(db, line, sub.details, limit)
         let next = new Set(answer.hits.map((r) => r.eid))
+        // The wire's ordinary delta keeps survivors in place and appends new
+        // members. When that cannot express the server's order, send a reset;
+        // partial browser rows must never re-sort a ranked/windowed answer.
+        let appended = [
+          ...[...sub.members].filter((eid) => next.has(eid)),
+          ...[...next].filter((eid) => !sub.members.has(eid)),
+        ]
+        let reorder = [...next].some((eid, i) => appended[i] !== eid)
         let changes: Change[] = []
         let drop: string[] = []
         let entered: string[] = []
@@ -1001,6 +1009,25 @@ export let subserve = (db: Sql, send: (frame: Frame) => void) => {
             batch,
             touched,
           )
+        if (reorder) {
+          // A reset replaces rider ownership too, so repeat the complete
+          // bounded rider, not merely the edge delta computed above.
+          if (sub.edges) {
+            let opened = riderOpen(
+              db,
+              sub.edges.peers,
+              next,
+              sub.edges.select,
+              sub.edges.limit,
+            )
+            sub.edges = opened.state
+            ride = { ...opened.frame, unedges: [], unpeers: [] }
+          }
+          changes = [
+            ...answer.hits.flatMap((r) => payload(sub, r.eid, r.comps)),
+            ...changes.filter((c) => c.name === 'entity' && c.comp === null),
+          ]
+        }
         let rode = ride && rider(ride)
         let resultChanges = sub.results && resultDelta(
           db,
@@ -1010,7 +1037,7 @@ export let subserve = (db: Sql, send: (frame: Frame) => void) => {
         )
         if (resultChanges?.length) changes.push(...resultChanges)
         if (
-          changes.length || drop.length || moved || rode
+          changes.length || drop.length || moved || rode || reorder
         ) {
           send({
             sub: id,
@@ -1019,6 +1046,7 @@ export let subserve = (db: Sql, send: (frame: Frame) => void) => {
             cursor: cur,
             shadow: sub.shadow,
             window: win,
+            ...(reorder ? { replace: true, fields: sub.fields } : {}),
             ...(rode ? ride : {}),
           })
         }

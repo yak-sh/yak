@@ -316,6 +316,42 @@ Deno.test('omission cannot erase another projected owner, explicit null is autho
   c.close()
 })
 
+Deno.test('opt-in one-shot columns retain paint, not coverage, within the row budget', () => {
+  let { c, frame } = fixture({ retention: 1, retainUnownedColumns: true })
+  let list = c.watch('list', server)
+  frame({ id: 's1', bundles: [row('a')], coverage: { a: { doc: ['title'] } } })
+  let body = c.watch('body', server)
+  frame({
+    id: 's2',
+    bundles: [{ entity: { eid: 'a' }, doc: { body: 'paint' } }],
+    coverage: { a: { doc: ['body'] } },
+  })
+  body.close()
+  assertEquals(comp(c.ent('a'), 'doc').body, 'paint')
+  assertEquals(c.cache.loaded('a', 'doc', 'body'), false)
+  frame({ id: 's1', bundles: [row('a')], coverage: { a: { doc: ['title'] } } })
+  assertEquals(comp(c.ent('a'), 'doc').body, 'paint')
+  let again = c.watch('body', server)
+  assertEquals(again.ready, false)
+  // A confirmed covered omission still clears the retained value.
+  frame({
+    id: 's3',
+    bundles: [{ entity: { eid: 'a' }, doc: {} }],
+    coverage: { a: { doc: ['body'] } },
+    reset: true,
+  })
+  assertEquals(comp(c.ent('a'), 'doc').body, null)
+  again.close()
+  list.close()
+  assertEquals(c.cache.size(), 1)
+  let other = c.watch('other', server)
+  frame({ id: 's4', bundles: [row('b')] })
+  other.close()
+  assertEquals(c.ent('a'), undefined)
+  assertEquals(c.cache.size(), 1)
+  c.close()
+})
+
 Deno.test('body omission is unloaded while covered omission is a known absence', () => {
   let { c, frame } = fixture()
   c.watch('bodyless', server)

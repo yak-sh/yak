@@ -175,7 +175,7 @@ Deno.test('legacy disk rows never bypass package epoch validation', async () => 
   assertEquals(ent('unscoped').doc, undefined)
 })
 
-Deno.test('bodyless confirmations unload unowned retained bodies without claiming them empty', () => {
+Deno.test('bodyless confirmations preserve the paint floor without claiming body coverage', () => {
   let route = useRoute(() => {})
   try {
     cache.value = {}
@@ -189,7 +189,7 @@ Deno.test('bodyless confirmations unload unowned retained bodies without claimin
     assertEquals(ent('bodyless').doc?.body, 'cached body')
     subscribe('bodyless', 'id=bodyless')
     landSub({ sub: 'bodyless', replace: true, changes: changes('bodyless') })
-    assertEquals(ent('bodyless').doc?.body, undefined)
+    assertEquals(ent('bodyless').doc?.body, 'cached body')
     let priorHost = config.host
     config.host = 'browser.test'
     assertEquals(loaded('bodyless', 'doc', 'body'), false)

@@ -77,6 +77,7 @@ export let liveClient = (opts: {
     url: 'http://tasks-adapter.invalid',
     connect: () => socket,
     vault: false,
+    retainUnownedColumns: true,
     provenance: () => null,
     wireVault: opts.disk && globalThis.indexedDB
       ? wireIdb({ name: 'tasks-client-wire' })
@@ -187,13 +188,28 @@ export let liveClient = (opts: {
   let receive = (f: Sub) => {
     let g = transports.get(f.sub) ?? names.get(f.sub)
     if (!g) return
+    // A refusal carries no authoritative data, even if a malformed transport
+    // attached changes. Preserve payload, membership and coverage unchanged.
+    if (f.error) {
+      message?.(
+        {
+          data: JSON.stringify({
+            id: g.id!,
+            refused: { error: 'read', message: f.error },
+          }),
+        } as Event & { data: string },
+      )
+      return [...g.names]
+    }
     if (f.replace && !f.error) {
       g.fields = f.fields
       g.peers.clear()
     }
     // Tasks sends patches after the initial reset; sync expects covered snapshots.
-    let rows = bundles(f.changes, !!f.replace && !f.shadow)
-    let deaths = f.changes.filter((c) => c.name === 'entity' && c.comp === null)
+    let rows = bundles(f.changes ?? [], !!f.replace && !f.shadow)
+    let deaths = (f.changes ?? []).filter((c) =>
+      c.name === 'entity' && c.comp === null
+    )
     if (deaths.length) box.graph.apply(echo(bundles(deaths)), { trusted: true })
     let peers = bundles(f.peers ?? [], !!f.replace)
     let frame: Frame = {
@@ -225,7 +241,6 @@ export let liveClient = (opts: {
         g.peers.set(row.entity.eid, coverage)
         return [row.entity.eid, coverage]
       })),
-      refused: f.error ? { error: 'read', message: f.error } : undefined,
     }
     for (let eid of f.unpeers ?? []) g.peers.delete(eid)
     message?.({ data: JSON.stringify(frame) } as Event & { data: string })

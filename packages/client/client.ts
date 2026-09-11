@@ -69,6 +69,10 @@ export type ClientOpts = {
   vault?: Vault | false
   /** Maximum inactive wire payloads (default: 20,000). */
   retention?: number
+  /** Keep uncovered columns as a paint floor in the same RAM row. They do
+   * not count as loaded; covered omissions, deaths and epoch changes still
+   * reconcile them. Useful for one-shot field reads beside live projections. */
+  retainUnownedColumns?: boolean
   /** Maximum encoded bytes of retained server membership/coverage metadata. */
   answerBytes?: number
   /** Server tier, separate from local drafts. Default: wireIdb in browsers.
@@ -196,6 +200,7 @@ export let client = (
   let kept = vault ? keep(g, vault) : null
 
   cache = retention(g, store, seen, {
+    retainUnownedColumns: opts.retainUnownedColumns,
     limit: opts.retention,
     answerBytes: opts.answerBytes,
     localOnly: !opts.url,

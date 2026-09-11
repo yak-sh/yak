@@ -59,6 +59,7 @@ export let retention = (
   watches: Watches,
   opts: {
     limit?: number
+    retainUnownedColumns?: boolean
     answerBytes?: number
     vault?: WireVault
     localOnly?: boolean
@@ -236,6 +237,11 @@ export let retention = (
   // Relinquishing a role can unload columns while another role still pins the
   // row. This is storage maintenance, never a graph deletion or outbound write.
   let trim = (eids: Eid[]) => {
+    // Some hosts render one-shot fields beside a standing narrow projection.
+    // Keep their payload in the ONE row, not a second read cache or permanent
+    // owner. loaded() still consults active coverage only. snapshot() still
+    // clears covered omissions; ordinary row eviction bounds this floor too.
+    if (opts.retainUnownedColumns) return
     let changed: Eid[] = []
     for (let eid of eids) {
       if (!protectedByOwner(eid) || pins.has(eid)) continue
