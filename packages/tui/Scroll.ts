@@ -82,7 +82,7 @@ export let Scroll = (
     setStick(to >= max)
     setTop(to)
     return true
-  }, id)
+  })
   // A different id is a different transcript, without remounting the key
   // handler above the editor in the focus stack.
   useLayoutEffect(() => {

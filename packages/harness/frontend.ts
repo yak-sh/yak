@@ -6,7 +6,6 @@ import { signal } from '@preact/signals'
 export let frontendVocab = loadVocab([{
   $defs: {
     entity: { properties: { eid: { type: 'string' } } },
-    inspection: { persist: 'none', properties: { session: { type: 'string' }, mode: { type: 'string' }, query: { type: 'string' }, message: { type: 'string' }, matches: { type: 'string' }, cursor: { type: 'string' }, index: { type: 'number' }, entity: { type: 'string' }, metadata: { type: 'string' }, revision: { type: 'string' }, text: { type: 'string' }, start: { type: 'number' }, end: { type: 'number' }, next: { type: 'number' }, total: { type: 'number' }, generation: { type: 'number' } } },
     keyboard: {
       persist: 'none',
       properties: {
@@ -86,15 +85,12 @@ export let frontend = (): Frontend => {
     { entity: { eid: 'feedback' }, feedback: { error: '' } },
     { entity: { eid: 'draft' }, draft: { text: '', at: 0 } },
   ])
-  c.mutate([{ entity: { eid: 'inspection' }, inspection: { mode: '', query: '', matches: '[]', index: -1, generation: 0 } }])
   let view = c.watch('.frontend')
   let draft = c.watch('.draft')
   let composer = c.watch('.composer')
   let feedback = c.watch('.feedback')
   return {
     client: c,
-    inspection: c.watch('.inspection'),
-    inspectState: (fields: Record<string, string | number | null>) => c.mutate([{ entity: { eid: 'inspection' }, inspection: fields }]),
     keyboard: c.watch('.keyboard'),
     keys: (fields: Record<string, string | boolean>) =>
       c.mutate([{ entity: { eid: 'keyboard' }, keyboard: fields }]),
@@ -149,8 +145,6 @@ export let frontend = (): Frontend => {
   }
 }
 export type Frontend = {
-  inspection: Watch
-  inspectState: (fields: Record<string, string | number | null>) => ReturnType<Client['mutate']>
   keyboard: Watch
   keys: (
     fields: Record<string, string | boolean>,
