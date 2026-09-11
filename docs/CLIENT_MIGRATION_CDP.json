@@ -1,13 +1,14 @@
 {
   "snapshotSHA256": "cfe241eb832a19286b33f85ec124ae85d8a8ae8da4c6053d9959287a17817dc7",
   "beforeCommit": "c3da85be02cae568a12ed7dbb7755139850e219c",
-  "afterCommit": "commit containing this report",
+  "afterCommit": "9e5ec097",
   "notes": [
     "Both probes started from fresh copies of the same snapshot; new browser profiles, parallel wall-clock runs.",
     "Before server has only the subscription queue cancellation guard backported; before frontend is unchanged.",
     "Inbound WebSocket UTF-8 payload bytes, not HTTP assets or compressed transport bytes.",
     "Clock-sensitive maintenance and new browser identity account for run-to-run differences. No graph edits were driven by the script.",
-    "After includes incoming main changes through 7ff78e07, including archetype migration; this is an integrated before/after measurement, not an isolated adapter microbenchmark."
+    "After includes incoming main changes through 7ff78e07, including archetype migration; this is an integrated before/after measurement, not an isolated adapter microbenchmark.",
+    "Subsequent landing rebase brought only harness/TUI changes; measured browser code is unchanged. Final landed SHA is recorded on T-37276."
   ],
   "before": {
     "base": "http://localhost:35919",

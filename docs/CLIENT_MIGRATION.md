@@ -97,9 +97,10 @@ Servers must be scratch-copy `PROBE=1` instances, never a production URL.
 - Before frontend: `c3da85be02cae568a12ed7dbb7755139850e219c`; only the server
   queue cancellation guard was backported to keep the comparison's socket
   usable.
-- After frontend/server: the commit containing this report (rescued adapter
-  `4715e7be` plus integration fixes and incoming main through `7ff78e07`). Final
-  landed SHA is on T-37276/T-37035.
+- After frontend/server: `9e5ec097` (integrated adapter plus incoming main
+  through `7ff78e07`). The subsequent landing rebase only brought harness/TUI
+  changes; measured browser code is unchanged. Final landed SHA is on
+  T-37276/T-37035.
 - Both servers freshly copied snapshot SHA-256
   `cfe241eb832a19286b33f85ec124ae85d8a8ae8da4c6053d9959287a17817dc7`. Ports
   35919/35917; isolated HOME/TMPDIR; sync and embeddings disabled. Both
@@ -145,8 +146,8 @@ made.
 ## Gates and cleanup
 
 Required gates: `deno task check` and `DB_PATH=:memory: deno task test`; both
-passed again after the landing rebase (1,616 package tests in `check`). The
-task's final comment is the receipt for the landed SHA and post-rebase gates.
-Probe servers are reaped by their registered PIDs and scratch DB/profile trees
-removed. No live graph, credentials, renderer, `src/db.ts`, harness, TUI or
-session implementation was changed for this migration.
+passed again after landing rebases. The task's final comment is the receipt for
+the landed SHA and post-rebase gates. Probe servers are reaped by their
+registered PIDs and scratch DB/profile trees removed. No live graph,
+credentials, renderer, `src/db.ts`, harness, TUI or session implementation was
+changed for this migration.
