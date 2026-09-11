@@ -27,10 +27,10 @@ authoritative commands with explicit responses.
 
 Session and task entities are subscribed globally. Transcript subscriptions
 cover only the selected session and its inherited fork prefix. Previous
-transcript subscriptions are removed on selection changes. The initial selected
-transcript still arrives as a full set; rendering virtualization is not data
-pagination. This worker is a thread in the same process, not a sandbox or a
-separate fault-isolated process.
+transcript subscriptions are removed on selection changes. The UI now uses
+bounded transcript pages; see [WINDOWS.md](WINDOWS.md) for window subscriptions,
+retained rows, and entry-size limits. This worker is a thread in the same
+process, not a sandbox or a separate fault-isolated process.
 
 ## What is incomplete
 
@@ -44,9 +44,10 @@ separate fault-isolated process.
   clone and replica application. Overlapping transcript queries are arranged as
   disjoint session ranges; generic overlapping-subscription retention is not
   solved by this pilot.
-- The existing graph `land` API applies received entities. The pilot manually
-  tracks subscription membership/readiness. A reusable client transport with
-  subscription readiness, errors, and ownership would remove this boilerplate.
+- The client working-set API applies received entities and owns bounded
+  retention. The worker adapter still tracks subscription membership/readiness.
+  A reusable client transport with subscription readiness, errors, and ownership
+  would remove this boilerplate.
 - No transparent worker restart or mutation retry: a timeout does not prove a
   write failed. Worker errors reject pending calls and surface in diagnostics.
 - `Daemon.stop()` synchronously stops admission and new turns, then drains all
@@ -153,11 +154,10 @@ These are synthetic measurements, not production latency guarantees. The larger
 maximum timer delay in this run remains a concern: initial replica application,
 text extraction in the test terminal, and full transcript transfers still do
 synchronous work. The change reduces elapsed switching latency, not every
-main-thread stall. There is no pagination or retained offscreen transcript
-cache; revisiting a session still transfers its full selected transcript. Under
-active writes, summary subscriptions still invalidate broadly. First-class
-incremental summary projections and bounded transfer/application remain
-follow-up work.
+main-thread stall. These measurements predate the bounded loading implementation
+in [WINDOWS.md](WINDOWS.md). Under active writes, summary subscriptions still
+invalidate broadly. First-class incremental summary projections and bounded
+transfer/application remain follow-up work.
 
 After integration with the independent input-publication fix, another run of the
 same fixture measured 786 ms for the cold selection, 194 ms warm median, 284 ms

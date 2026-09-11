@@ -599,3 +599,11 @@ still supply explicit `instructions`. Existing sessions retain their served
 request history, but the retired built-in harness instruction is omitted from
 future requests. A restart loads this behavior; it cannot retract instructions
 from a request already in progress.
+
+## Transcript loading
+
+The UI loads a 64-entry window around the bottom or saved entry anchor, then
+loads overlapping ranges on navigation. Context usage reads only the newest
+reported usage fields. Full model history is unchanged. See
+[WINDOWS.md](WINDOWS.md) for the subscription design, benchmark, and entry-size
+limits.
