@@ -326,3 +326,10 @@ rest of the current text painter, widths count UTF-16 code units, not terminal
 grapheme widths; wide CJK characters, combining marks and emoji can therefore
 misalign. This renderer does not introduce a separate, incompatible Unicode
 width calculation just for tables.
+
+### Code block backgrounds
+
+Semantic `pre` elements fill their available width with the `Code` theme style,
+including blank lines. Enclosing borders and indentation reduce that width.
+Inline `code` styles only its text. Source text and the enclosing layout's
+existing long-line wrapping or clipping behavior are unchanged.

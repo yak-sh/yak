@@ -267,3 +267,54 @@ Deno.test('br preserves explicit breaks inside styled inline content and blank r
     ['first', 'second', '', 'third'],
   )
 })
+
+Deno.test('pre backgrounds fill allocated width including empty lines; inline code does not', () => {
+  let code = el('pre', {}, el('code', {}, 'one\n\nthree'))
+  let lines = screenful(el('root', {}, code), 12, 3).lines
+  assertEquals(lines.map((row) => row.map((s) => s.text).join('')), [
+    'one         ',
+    '            ',
+    'three       ',
+  ])
+  for (let row of lines) {
+    assert(row.every((s) => s.style.bg == '#343f44'))
+  }
+  let inline =
+    screenful(el('root', {}, el('div', {}, el('code', {}, 'x'), 'y')), 12, 1)
+      .lines[0]
+  assertEquals(inline.map((s) => s.text).join(''), 'xy')
+  assertEquals(inline[0].style.bg, '#343f44')
+  assertEquals(inline[1].style.bg, undefined)
+})
+
+Deno.test('pre fill respects nested borders, indentation and narrow widths', () => {
+  let root = el(
+    'root',
+    {},
+    el(
+      'div',
+      { border: 'Composer_Border' },
+      el('blockquote', {}, el('pre', {}, el('code', {}, 'x\n'))),
+    ),
+  )
+  let lines = screenful(root, 12, 5).lines
+  for (let row of lines.slice(1, 3)) {
+    assertEquals(row.map((s) => s.text).join('').length, 12)
+    let filled = row.filter((s) => s.style.fg == '#7fbbb3')
+    assertEquals(filled.map((s) => s.text).join('').length, 8)
+  }
+  assertEquals(seen(el('root', {}, el('pre', {}, 'long\n')), 1, 2), [
+    'long',
+    '',
+  ])
+})
+
+Deno.test('full-width pre background is stable on warm paints', () => {
+  let root = el('root', {}, el('pre', {}, 'short\n\nlast'))
+  let backend = ansiBackend({
+    size: () => ({ columns: 20, rows: 3 }),
+    write: () => {},
+  })
+  assertEquals(backend.draw(root).written, 3)
+  assertEquals(backend.draw(root).written, 0)
+})

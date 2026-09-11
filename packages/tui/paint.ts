@@ -192,7 +192,11 @@ let flow = (
   }
   if (el.localName == 'hr') return [[{ text: '────────', style: s }]]
   if (el.localName == 'pre') {
-    for (let l of text(el).split('\n')) lines.push([{ text: l, style: s }])
+    // A preformatted block paints its allocated width, including blank rows.
+    // Keep long lines intact so the enclosing layout retains its wrap policy.
+    for (let l of text(el).split('\n')) {
+      lines.push([{ text: l.padEnd(Math.max(0, w), ' '), style: s }])
+    }
     return lines
   }
   let previousParagraph = false

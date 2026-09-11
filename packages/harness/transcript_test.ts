@@ -318,3 +318,28 @@ Deno.test('prompt source metadata cannot insert extra transcript rows', async ()
     ui.free()
   }
 })
+
+Deno.test('fenced code fills the boxed message interior without changing source', async () => {
+  let source = '```text\nshort\n\nlast\n```'
+  let entry: Bundle = {
+    entity: { eid: 'code-message' },
+    entry: { session: 's', seq: 1 },
+    content: { body: source },
+  }
+  let ui = await mount(
+    () => render(transcriptViews, entry, 'Transcript', vocab),
+    30,
+    10,
+  )
+  try {
+    assert(ui.text().includes('short'))
+    assert(ui.text().includes('last'))
+    // The border reserves two columns, leaving 28 code-background cells.
+    let output = ui.out.join('')
+    assert(output.includes('short' + ' '.repeat(23)), output)
+    assert(output.includes('last' + ' '.repeat(24)), output)
+    assertEquals((entry.content as { body: string }).body, source)
+  } finally {
+    ui.free()
+  }
+})
