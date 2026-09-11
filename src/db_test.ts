@@ -1,5 +1,6 @@
 // apply()/snapshot() semantics against an in-memory db — the wire's
 // contract: patches, creates, deletes, tombstones, and the claim lease.
+import { eidOf } from '@yaks/archetype'
 import { fileURLToPath } from 'node:url'
 import { applyNumbered } from './testdb.ts'
 import type { Dep } from './types.ts'
@@ -789,6 +790,8 @@ Deno.test('graph-out carries declared columns only', () => {
 // This list IS the contract — an addition to it is a decision, so each entry
 // says why it is not a component.
 let outsideVocabulary: Record<string, string> = {
+  archetype_pending: 'transactional queue of physical presence pre-images',
+  archetype_delta: 'transactional final presence moves, not graph facets',
   tombstone: 'death record: the eid is dead, nothing reads a component back',
   journal_tx: 'the journal: one row per applied batch, log data',
   journal_change: 'the journal: one ordered operation per Change',
@@ -914,7 +917,7 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
       comp: { url: 'HTTPS://Example.test/p/?utm_source=n#top' },
     },
   ])
-  assertEquals(out.slice(0, 4), [
+  assertEquals(out.filter((c) => c.name != 'entity').slice(0, 4), [
     {
       eid: subject,
       name: 'filed',
@@ -2054,20 +2057,29 @@ Deno.test('a birth rides the return: the minted spine, once', () => {
     .filter((c) => c.eid == t && c.name == 'entity')
   assertEquals(born.length, 1)
   assertEquals(Number(born[0].comp?.num) > 0, true)
-  // a patch touches an EXISTING spine — no re-announcement
+  // First edit adds updated: a pointer move, not a birth announcement.
   let patched = applyNumbered(db, [{
     eid: t,
     name: 'doc',
     comp: { title: 'named' },
   }])
-  assertEquals(patched.some((c) => c.name == 'entity'), false)
+  assertEquals(patched.filter((c) => c.name == 'entity' && c.eid == t), [
+    {
+      eid: t,
+      name: 'entity',
+      comp: { eid: t, archetype: eidOf(['created', 'doc', 'updated']) },
+    },
+  ])
   // create-then-delete in one batch: the spine is gone, nothing rides
   let x = uid()
   let brief = applyNumbered(db, [
     { eid: x, name: 'doc', comp: { title: 'mayfly' } },
     { eid: x, name: 'entity', comp: null },
   ])
-  assertEquals(brief.some((c) => c.name == 'entity' && c.comp), false)
+  assertEquals(
+    brief.some((c) => c.eid == x && c.name == 'entity' && c.comp),
+    false,
+  )
 })
 
 Deno.test('provenance: created once at birth, updated absent until edited', () => {
@@ -3976,7 +3988,14 @@ Deno.test('touch confirm stamps the memory; death takes the recall row', () => {
     { eid: m, name: 'memory', comp: {} },
   ])
   let out = touch(db, [m], true)
-  assertEquals(out.map((c) => c.name), ['recall', 'memory'])
+  assertEquals(
+    out.filter((c) => c.eid == m && c.name != 'entity').map((c) => c.name),
+    ['recall', 'memory'],
+  )
+  assertEquals(
+    comp(m, 'entity')?.archetype,
+    eidOf(Object.keys(eager(db, m)).filter((n) => n != 'entity')),
+  )
   assertMatch(String(comp(m, 'memory')?.last_confirmed_at), /^\d{4}-/)
   apply(db, [{ eid: m, name: 'entity', comp: null }])
   assertEquals(comp(m, 'recall'), undefined)
@@ -4255,6 +4274,10 @@ Deno.test('journalOf: newest first, cut to the eid', () => {
     eid: t,
     name: 'doc',
     comp: { title: 'v2' },
+  }, {
+    eid: t,
+    name: 'entity',
+    comp: { archetype: eidOf(['created', 'doc', 'updated']) },
   }])
   assertEquals(past.every((e) => e.changes.every((c) => c.eid == t)), true)
 })
@@ -5622,7 +5645,10 @@ Deno.test('apply answer: death wins over patches and every casualty clears the c
     ])
   }
   land(cache, out)
-  assertEquals(cache.cache, {})
+  assertEquals(cache.cache[target], undefined)
+  assertEquals(cache.cache[comment], undefined)
+  // Permanent descriptors survive owners, and remain useful to other clients.
+  assertEquals(Object.values(cache.cache).every((row) => !!row.archetype), true)
   assertEquals(
     apply(d, [
       { eid: target, name: 'task', comp: {} },
@@ -5667,7 +5693,7 @@ Deno.test('apply answer: a birth deleted in its own batch has no surviving echoe
       { eid, name: 'entity', comp: null },
       { eid, name: 'task', comp: {} },
       { eid, name: 'filed', comp: { priority: 1 } },
-    ]),
+    ]).filter((c) => c.eid == eid),
     [{ eid, name: 'entity', comp: null }],
   )
 })
@@ -5725,7 +5751,10 @@ Deno.test('open backfills filing once without replacing task identities or owner
       undefined,
     )
     assertEquals(
-      d.prepare('select id, eid, num from entity order by id').all(),
+      d.prepare('select id, eid, num from entity order by id').all().slice(
+        0,
+        identity.length,
+      ),
       identity,
     )
     d.exec('drop trigger block_filing')
@@ -5737,7 +5766,10 @@ Deno.test('open backfills filing once without replacing task identities or owner
       [{ name: 'entity' }],
     )
     assertEquals(
-      d.prepare('select id, eid, num from entity order by id').all(),
+      d.prepare('select id, eid, num from entity order by id').all().slice(
+        0,
+        identity.length,
+      ),
       identity,
     )
     let before = snapshot(d)
@@ -5760,7 +5792,10 @@ Deno.test('open backfills filing once without replacing task identities or owner
       9,
     )
     assertEquals(
-      d.prepare('select id, eid, num from entity order by id').all(),
+      d.prepare('select id, eid, num from entity order by id').all().slice(
+        0,
+        identity.length,
+      ),
       identity,
     )
   } finally {

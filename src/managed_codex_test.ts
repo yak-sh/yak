@@ -1233,7 +1233,11 @@ for (let state of ['ready', 'leased', 'settled'] as const) {
         ])
       }
       let history = readEntries(db, sid)
-      for (let row of history) delete row.comps.lease
+      for (let row of history) {
+        delete row.comps.lease
+        // Releasing a lease changes the physical archetype, not transcript content.
+        delete row.comps.entity.archetype
+      }
       let service = managedCodex({
         db,
         runner,
@@ -1265,7 +1269,20 @@ for (let state of ['ready', 'leased', 'settled'] as const) {
           standing: 'terminal',
           end: 'interrupted',
         })
-        assertEquals(stopped.filter((r) => !r.comps.cancel), history)
+        assertEquals(
+          stopped.filter((r) => !r.comps.cancel).map((r) => ({
+            ...r,
+            comps: {
+              ...r.comps,
+              entity: Object.fromEntries(
+                Object.entries(r.comps.entity).filter(([k]) =>
+                  k != 'archetype'
+                ),
+              ),
+            },
+          })),
+          history,
+        )
         await service.sweep()
         assertEquals(calls, 0)
         assertEquals(called, [])

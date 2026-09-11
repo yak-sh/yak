@@ -192,18 +192,32 @@ export let fleetStamps = (host: StampHost) => {
           (eid) => {
             if (gone(eid)) return []
             let comp = host.component(eid, 'entity')
+            // Read caches may still carry the pre-flush spine (notably CAS
+            // blobs). The physical writer's echo is the authoritative move.
+            let pointer = s.extra.findLast((c) =>
+              c.eid == eid && c.name == 'entity' && c.comp?.archetype
+            )?.comp?.archetype
+            if (comp && pointer) comp = { ...comp, archetype: pointer }
             return comp
               ? [{
                 eid,
                 name: 'entity',
-                comp: s.minted.has(eid) ? comp : { num: comp.num },
+                comp: s.minted.has(eid) ? comp : {
+                  num: comp.num,
+                  ...(pointer ? { archetype: pointer } : {}),
+                },
               }]
               : []
           },
         )
+        let born = new Set(births.map((c) => c.eid))
         let logged = [
           ...changes,
-          ...s.extra.filter((c) => !echoed.has(c.name)),
+          // A birth already carries its final archetype. Keep moves for
+          // existing owners, but never announce the same spine twice.
+          ...s.extra.filter((c) =>
+            !echoed.has(c.name) && !(c.name == 'entity' && born.has(c.eid))
+          ),
           ...births,
         ]
         if (logged.length) {

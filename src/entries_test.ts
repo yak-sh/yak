@@ -188,7 +188,12 @@ Deno.test('lease and usage facets are server-owned and one runner wins', () => {
     output: 5,
     reasoning: 2,
   }, () => new Date('2026-08-10T12:00:01Z'))
-  assertEquals(settled.map((c) => c.name), ['usage', 'delivered', 'lease'])
+  assertEquals(
+    settled.filter((c) => c.eid == generation && c.name != 'entity').map((c) =>
+      c.name
+    ),
+    ['usage', 'delivered', 'lease'],
+  )
   let row = readEntries(db, sid).find((e) => e.eid == generation)!.comps
   assertEquals(row.usage, {
     eid: generation,
@@ -417,7 +422,12 @@ Deno.test('failed leased work stays visible and cannot rerun', () => {
   }]).eids[0]
   let won = takeEntry(db, generation, runner)!
   let failed = failEntry(db, won.token, 'provider unavailable')
-  assertEquals(failed.map((c) => c.name), ['error', 'lease'])
+  assertEquals(
+    failed.filter((c) => c.eid == generation && c.name != 'entity').map((c) =>
+      c.name
+    ),
+    ['error', 'lease'],
+  )
   assertMatch(
     String(
       readEntries(db, sid).find((e) => e.eid == generation)!.comps.error

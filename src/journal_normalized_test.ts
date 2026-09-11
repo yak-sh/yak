@@ -125,15 +125,19 @@ Deno.test('journal: within-batch ordinals reproduce applied order', () => {
     'select ordinal, component from journal_change where tx = ? order by ordinal',
   ).all(tx) as { ordinal: number; component: string }[]
   // (tx, ordinal) is a dense 0..n-1 sequence matching the batch positions.
-  assertEquals(rows.map((r) => r.ordinal), [0, 1, 2, 3, 4, 5])
-  assertEquals(rows.map((r) => r.component), [
+  assertEquals(rows.map((r) => r.ordinal), rows.map((_, i) => i))
+  assertEquals(rows.slice(0, 4).map((r) => r.component), [
     'blob',
     'doc',
     'task',
     'filed',
-    'entity',
-    'entity',
   ])
+  assertEquals(
+    rows.slice(4).every((r) =>
+      r.component == 'entity' || r.component == 'archetype'
+    ),
+    true,
+  )
 })
 
 Deno.test('journal: a present null field is distinct from a tombstone', () => {

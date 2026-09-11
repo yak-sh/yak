@@ -25,36 +25,57 @@ import { open } from './sqlite.ts'
 
 let quote = (s: string) => `"${s.replaceAll('"', '""')}"`
 
-// D-35546 currently shares the bare SHA-256 namespace with text blobs. Keep
-// the refusal atomic while that design collision is resolved: empty text and
-// the empty table set have identical bytes to hash, not a cryptographic clash.
-Deno.test('empty-set/blob identity collision refuses atomically instead of corrupting content', () => {
-  let db = bareDb()
-  let blob = textBlob(db, '')
-  let empty = eidOf([])
-  assertEquals(
-    db.prepare('select eid from entity where id = ?').get<{ eid: string }>(blob)
-      ?.eid,
-    empty,
-  )
-  db.prepare("insert into entity(eid) values ('empty-owner')").run()
-  let before = cursorOf(db)
-  assertThrows(
-    () => db.transaction(() => settleArchetypes(db)),
-    Error,
-    `Archetype identity is occupied: ${empty}`,
-  )
-  assertEquals(cursorOf(db), before)
-  assertEquals(
-    db.prepare(
-      'select value from blob_text b join entity e on e.id = b.entity where e.eid = ?',
-    )
-      .get<{ value: string }>(empty)?.value,
-    '',
-  )
-  assertEquals(readComp(db, empty, 'archetype'), undefined)
-  db.close()
-})
+// T-37310: the reported collision now succeeds through Fleet's real writer.
+for (let blobsFirst of [true, false]) {
+  Deno.test(`empty-set/blob identities coexist, blobsFirst=${blobsFirst}`, () => {
+    let db = bareDb()
+    try {
+      let writes = [
+        () => {
+          textBlob(db, '')
+        },
+        () => {
+          db.prepare(
+            "insert into entity(eid) values ('cccccccc-cccc-4ccc-8ccc-cccccccccccc')",
+          ).run()
+        },
+      ]
+      for (let write of blobsFirst ? writes : writes.reverse()) {
+        db.transaction(() => {
+          write()
+          settleArchetypes(db)
+        })
+      }
+      let empty = eidOf([])
+      assertEquals(
+        readComp(db, 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'entity')!
+          .archetype,
+        empty,
+      )
+      let blob = textBlob(db, '')
+      let blobEid = db.prepare('select eid from entity where id = ?')
+        .get<{ eid: string }>(blob)!.eid
+      assert(blobEid != empty)
+      assertEquals(
+        db.prepare('select value from blob_text where entity = ?')
+          .get<{ value: string }>(blob)!.value,
+        '',
+      )
+      assertEquals(readComp(db, blobEid, 'archetype'), undefined)
+      apply(db, [{
+        eid: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        name: 'entity',
+        comp: null,
+      }])
+      assertEquals(readComp(db, empty, 'archetype')!.tables, '[]')
+      assertThrows(() =>
+        apply(db, [{ eid: empty, name: 'entity', comp: null }])
+      )
+    } finally {
+      db.close()
+    }
+  })
+}
 
 let parity = (db: Sql) => {
   let names = componentTables(readDriver(db))
@@ -274,6 +295,29 @@ Deno.test('archetype identities are storage-owned and permanent', () => {
   db.close()
 })
 
+Deno.test('numbering an existing owner retains its archetype move in the journal', () => {
+  let db = bareDb()
+  let eid = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+  apply(db, [{ eid, name: 'task', comp: {} }])
+  let cursor = cursorOf(db)
+  let changes = apply(db, [{
+    eid,
+    name: 'doc',
+    comp: { title: 'numbered' },
+    $num: true,
+  }])
+  let entity = readComp(db, eid, 'entity')!
+  assert(entity.num != null)
+  for (let batch of [changes, delta(db, cursor).changes]) {
+    let spine = batch.filter((c) => c.eid == eid && c.name == 'entity')
+    assertEquals(spine.length, 1)
+    assertEquals(spine[0].comp?.num, entity.num)
+    assertEquals(spine[0].comp?.archetype, entity.archetype)
+  }
+  parity(db)
+  db.close()
+})
+
 Deno.test('boot backfill is physical, idempotent, and retires missing tables', () => {
   let db = bareDb()
   db.exec(
@@ -288,11 +332,52 @@ Deno.test('boot backfill is physical, idempotent, and retires missing tables', (
   assertEquals(readComp(db, 'foreign', 'entity')!.archetype, descriptor)
   let again = db.transaction(() => migrateArchetypes(db))
   assertEquals([again.entities, again.archetypes, again.retired], [0, 0, 0])
+  let cursor = cursorOf(db)
   db.exec('drop table unknown_facet')
   let dropped = db.transaction(() => migrateArchetypes(db))
   assertEquals(dropped.retired, 1)
   assert(readComp(db, descriptor, 'retired'))
+  for (let eid of ['foreign', descriptor]) {
+    assertEquals(
+      delta(db, cursor).changes.find((c) => c.eid == eid && c.name == 'entity')
+        ?.comp?.archetype,
+      readComp(db, eid, 'entity')!.archetype,
+    )
+  }
   parity(db)
+  let reopened = migrateArchetypes(db)
+  assertEquals([reopened.entities, reopened.archetypes, reopened.retired], [
+    0,
+    0,
+    0,
+  ])
+  db.close()
+})
+
+Deno.test('boot classifies populated new tables on previously assigned owners', () => {
+  let db = bareDb()
+  db.exec("insert into entity(eid) values ('grafted')")
+  migrateArchetypes(db)
+  let cursor = cursorOf(db)
+  db.exec(
+    `create table grafted_facet(entity integer primary key references entity(id));
+    insert into grafted_facet select id from entity where eid = 'grafted'`,
+  )
+  migrateArchetypes(db)
+  assertEquals(
+    readComp(db, 'grafted', 'entity')!.archetype,
+    eidOf(['grafted_facet']),
+  )
+  assertEquals(
+    delta(db, cursor).changes.find((c) =>
+      c.eid == 'grafted' && c.name == 'entity'
+    )
+      ?.comp?.archetype,
+    eidOf(['grafted_facet']),
+  )
+  parity(db)
+  let again = migrateArchetypes(db)
+  assertEquals([again.entities, again.archetypes, again.retired], [0, 0, 0])
   db.close()
 })
 

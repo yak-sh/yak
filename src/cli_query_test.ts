@@ -20,7 +20,7 @@ Deno.test('CLI query reads any kind, full grammar and JSONL bundles (T-36540)', 
       eid: design,
       name: 'doc',
       comp: {
-        title: 'archetype design',
+        title: 'blueprint design',
         body: 'Full design body\nsecond line\u0085',
       },
     },
@@ -28,7 +28,7 @@ Deno.test('CLI query reads any kind, full grammar and JSONL bundles (T-36540)', 
     {
       eid: memory,
       name: 'doc',
-      comp: { title: 'archetype memory', body: 'Full memory body' },
+      comp: { title: 'blueprint memory', body: 'Full memory body' },
     },
     { eid: task, name: 'task', comp: {} },
     { eid: task, name: 'filed', comp: { priority: 1 } },
@@ -59,12 +59,12 @@ Deno.test('CLI query reads any kind, full grammar and JSONL bundles (T-36540)', 
   let bundles = (text: string) =>
     text.split('\n').filter(Boolean).map((s) => JSON.parse(s))
   try {
-    let md = await run('query', '.doc.title~=archetype')
+    let md = await run('query', '.doc.title~=blueprint')
     assertStringIncludes(md, 'Full design body')
     assertStringIncludes(md, 'Full memory body')
-    assertEquals(seen[0], ['.doc.title~=archetype'])
+    assertEquals(seen[0], ['.doc.title~=blueprint'])
 
-    let json = await run('query', 'archetype', '?memory', '--json')
+    let json = await run('query', 'blueprint', '?memory', '--json')
     let hits = bundles(json)
     assertEquals(hits.length, 2)
     assertEquals(
@@ -80,11 +80,11 @@ Deno.test('CLI query reads any kind, full grammar and JSONL bundles (T-36540)', 
     assertEquals(json.includes('\u0085'), false) // escaped, not terminal control bytes
 
     assertEquals(
-      bundles(await run('query', 'archetype', '--limit=1', '--json')).length,
+      bundles(await run('query', 'blueprint', '--limit=1', '--json')).length,
       1,
     )
     assertEquals(
-      bundles(await run('query', 'archetype', '.limit=1', '--json')).length,
+      bundles(await run('query', 'blueprint', '.limit=1', '--json')).length,
       1,
     )
     assertEquals(
@@ -93,12 +93,23 @@ Deno.test('CLI query reads any kind, full grammar and JSONL bundles (T-36540)', 
       memory,
     )
     assertEquals(
-      bundles(await run('query', '?memory', '!task', '--json')).length,
-      2,
+      new Set(
+        bundles(await run('query', '?memory', '!task', '--json')).map((b) =>
+          b.entity.eid
+        ),
+      ),
+      new Set([
+        design,
+        memory,
+        ...db.prepare(
+          'select e.eid from archetype a join entity e on e.id = a.entity',
+        )
+          .all<{ eid: string }>().map((r) => r.eid),
+      ]),
     )
 
-    assertEquals(bundles(await run('list', 'archetype', '--json')).length, 2)
-    assertEquals(seen[0], ['?task', 'archetype'])
+    assertEquals(bundles(await run('list', 'blueprint', '--json')).length, 2)
+    assertEquals(seen[0], ['?task', 'blueprint'])
     assertEquals(
       bundles(await run('list', 'memories', '--json'))[0].entity.eid,
       memory,
@@ -107,7 +118,10 @@ Deno.test('CLI query reads any kind, full grammar and JSONL bundles (T-36540)', 
       bundles(await run('list', '--json')).map((r) => r.entity.eid),
       [task],
     )
-    assertEquals(bundles(await run('list', '--all', '--json')).length, 4)
+    assertEquals(
+      bundles(await run('list', '--all', '.doc!', '--json')).length,
+      4,
+    )
     assertEquals(await run('query', '.doc.title~=no-such-title', '--json'), '')
     assertEquals(errors, [])
     assertEquals(await run('query', '.doc.title~=no-such-title'), '')

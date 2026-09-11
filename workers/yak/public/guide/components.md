@@ -422,7 +422,7 @@ whole:
 
 These are the names, all of them:
 
-    about accept alias anchor app apply architecture archived attachment
+    about accept alias anchor app apply archetype architecture archived attachment
     attention bash blob blocked board brief bug call camera cancel cancelled
     canvas card chat checkpoint claim client comment commit completed
     conflict contains content created cursor decided delegates deliver
@@ -434,7 +434,7 @@ These are the names, all of them:
     persona pin plan process project prompt proposed provider published
     quarantined reads
     reasoning recall recalled redaction references repo report requires
-    response result resume review role run runner runtime satisfies service
+    response result resume retired review role run runner runtime satisfies service
     session setting settled shelf signin space spawn stderr stop stop_request
     subscription supersedes supervises task task_context timeout tool
     updated usage venture verifier wake wants web worked worktree yield

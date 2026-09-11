@@ -75,6 +75,7 @@ import type { Vocab as FleetVocab } from '@yaks/vocab'
 import {
   backfill,
   type Bundle,
+  componentTables,
   type Driver,
   read as sqliteRead,
 } from '@yaks/sqlite'
@@ -2438,7 +2439,7 @@ export let resolveId = (
       checkPrefix(
         id,
         kindOf(
-          Object.fromEntries(worn(db, fromEid, hit).map((n) => [n, true])),
+          Object.fromEntries(worn(db, hit).map((n) => [n, true])),
         ),
       )
       return hit
@@ -3576,53 +3577,142 @@ export let archetypeBoots = new WeakMap<Sql, {
   retired: number
   ms: number
 }>()
-export let migrateArchetypes = (db: Sql) => {
-  let before = new Set(
-    prep(db, 'select entity from archetype').all<{ entity: number }>()
-      .map((r) => r.entity),
-  )
-  let retired = new Set(
-    prep(db, 'select entity from retired').all<{ entity: number }>()
-      .map((r) => r.entity),
-  )
-  let driver: Driver = {
-    ...readDriver(db),
-    exec: (sql) => db.exec(sql),
-  }
-  let start = performance.now()
-  let result = backfill(driver, false)
-  let changes = prep(
-    db,
-    `select a.entity, e.eid, a.tables, d.eid as descriptor from archetype a
-    join entity e on e.id = a.entity left join entity d on d.id = e.archetype`,
-  ).all<{ entity: number; eid: string; tables: string; descriptor: string }>()
-    .filter((r) => !before.has(r.entity))
-    .flatMap((r): Change[] => [
-      {
-        eid: r.eid,
-        name: 'entity',
-        comp: { eid: r.eid, num: null, archetype: r.descriptor },
-      },
-      { eid: r.eid, name: 'archetype', comp: { tables: r.tables } },
-    ])
-  changes.push(
-    ...prep(
+export let migrateArchetypes = (db: Sql) =>
+  db.transaction(() => {
+    let before = new Set(
+      prep(db, 'select entity from archetype').all<{ entity: number }>()
+        .map((r) => r.entity),
+    )
+    let retired = new Set(
+      prep(db, 'select entity from retired').all<{ entity: number }>()
+        .map((r) => r.entity),
+    )
+    let driver: Driver = {
+      ...readDriver(db),
+      exec: (sql) => db.exec(sql),
+    }
+    let start = performance.now()
+    // Schema growth can arrive with populated tables (a graft/import), while
+    // their owners already have non-null pointers. The descriptor catalog alone
+    // cannot tell us which physical tables this file classified on its last boot.
+    let names = componentTables(driver)
+    let signature = JSON.stringify(names)
+    let previous = prep(
       db,
-      `select r.entity, e.eid from retired r
+      "select v from server_meta where k = 'archetype:tables'",
+    )
+      .get<{ v: string }>()?.v
+    let known = new Set<string>(previous ? JSON.parse(previous) : [])
+    let reclassified = new Map<number, number>()
+    let remember = (rows: { id: number; archetype: number }[]) => {
+      for (let row of rows) reclassified.set(row.id, row.archetype)
+    }
+    if (before.size && previous != signature) {
+      for (let name of names.filter((n) => !known.has(n))) {
+        remember(
+          prep(
+            db,
+            `select e.id, e.archetype from ${sqlName(name)} c
+        join entity e on e.id = c.entity join archetype a on a.entity = e.archetype
+        where not exists (select 1 from json_each(a.tables) where value = ?)`,
+          )
+            .all<{ id: number; archetype: number }>(name),
+        )
+      }
+    }
+    // Missing-table retirement also changes the descriptor's own archetype.
+    // Existing clients need these pointer moves as well as the retired facet.
+    let obsolete = prep(
+      db,
+      `select a.entity from archetype a
+    where exists (select 1 from json_each(a.tables) t
+      where not exists (select 1 from sqlite_schema s where s.type = 'table' and s.name = t.value))`,
+    )
+      .all<{ entity: number }>().map((r) => r.entity)
+    if (obsolete.length) {
+      remember(
+        prep(
+          db,
+          `select id, archetype from entity e
+      where archetype in (select value from json_each(?))
+        or (id in (select value from json_each(?))
+          and not exists (select 1 from retired r where r.entity = e.id))`,
+        )
+          .all<{ id: number; archetype: number }>(
+            JSON.stringify(obsolete),
+            JSON.stringify(obsolete),
+          ),
+      )
+    }
+    if (reclassified.size) {
+      prep(
+        db,
+        'update entity set archetype = null where id in (select value from json_each(?))',
+      )
+        .run(JSON.stringify([...reclassified.keys()]))
+    }
+    let result = backfill(driver, false)
+    let changes = prep(
+      db,
+      `select a.entity, e.eid, a.tables, d.eid as descriptor from archetype a
+    join entity e on e.id = a.entity left join entity d on d.id = e.archetype`,
+    ).all<{ entity: number; eid: string; tables: string; descriptor: string }>()
+      .filter((r) => !before.has(r.entity))
+      .flatMap((r): Change[] => [
+        {
+          eid: r.eid,
+          name: 'entity',
+          comp: { eid: r.eid, num: null, archetype: r.descriptor },
+        },
+        { eid: r.eid, name: 'archetype', comp: { tables: r.tables } },
+      ])
+    changes.push(
+      ...prep(
+        db,
+        `select r.entity, e.eid from retired r
     join entity e on e.id = r.entity`,
-    ).all<{ entity: number; eid: string }>()
-      .filter((r) => !retired.has(r.entity))
-      .map((r): Change => ({ eid: r.eid, name: 'retired', comp: {} })),
-  )
-  if (changes.length) {
-    journalWrite(db, new Date().toISOString(), null, null, null, changes)
-  }
-  watchArchetypes(db, driver)
-  db.exec('delete from archetype_delta; delete from archetype_pending')
-  let measured = { ...result, ms: performance.now() - start }
-  archetypeBoots.set(db, measured)
-  return measured
-}
+      ).all<{ entity: number; eid: string }>()
+        .filter((r) => !retired.has(r.entity))
+        .map((r): Change => ({ eid: r.eid, name: 'retired', comp: {} })),
+    )
+    if (reclassified.size) {
+      for (
+        let row of prep(
+          db,
+          `select e.id, e.eid, e.archetype, a.eid as descriptor
+      from entity e join entity a on a.id = e.archetype
+      where e.id in (select value from json_each(?))
+        and not exists (select 1 from tombstone t where t.entity = e.id)`,
+        )
+          .all<
+            { id: number; eid: string; archetype: number; descriptor: string }
+          >(JSON.stringify([...reclassified.keys()]))
+      ) {
+        if (row.archetype != reclassified.get(row.id)) {
+          changes.push({
+            eid: row.eid,
+            name: 'entity',
+            comp: { archetype: row.descriptor },
+          })
+        }
+      }
+    }
+    if (changes.length) {
+      journalWrite(db, new Date().toISOString(), null, null, null, changes)
+    }
+    watchArchetypes(db, driver)
+    db.exec('delete from archetype_delta; delete from archetype_pending')
+    if (previous != signature) {
+      prep(
+        db,
+        "insert into server_meta(k, v) values ('archetype:tables', ?) on conflict(k) do update set v = excluded.v",
+      )
+        .run(signature)
+    }
+    let measured = { ...result, ms: performance.now() - start }
+    archetypeBoots.set(db, measured)
+    return measured
+  }, true)
 
 /** Drain physical presence moves under the caller's write transaction. */
 export let settleArchetypes = (db: Sql): Change[] => {
@@ -6092,7 +6182,7 @@ export let redact = (
       if (comp) updated = { eid: target, name: 'updated', comp }
     }
 
-    let archetypes = settleArchetypes(db)
+    let archetypes = flushArchetypes(db)
     let redaction = {
       eid: audit,
       name: 'redaction',
@@ -6122,6 +6212,7 @@ export let redact = (
       ...(docChange ? [docChange] : []),
       redaction,
       entity,
+      ...archetypes.filter((c) => !(c.eid == audit && c.name == 'entity')),
     ]
     // The redaction AUDIT event is a fresh journaled transaction, like any
     // apply. An EMPTY trace, not null: redaction historically dispatched with
@@ -6131,7 +6222,6 @@ export let redact = (
 
     let changes: Change[] = [
       ...logged,
-      ...archetypes,
       ...settleArchetypes(db),
       created,
       ...(updated ? [updated] : []),

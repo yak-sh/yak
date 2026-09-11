@@ -73,7 +73,9 @@ Deno.test('human reads the spine and worn names, not one table per kind', () => 
   let cheap = 'dead1234-0000-4000-8000-00000000cafe'
   expect(cheap, 'E#dead123400', 2)
   db.prepare('insert into entity (eid) values (?)').run(cheap)
-  expect(cheap, 'E#dead123400', 2)
+  // An unclassified raw-SQL birth needs one physical fallback census. Normal
+  // writes above retain their exact two-statement bound.
+  expect(cheap, 'E#dead123400', 3)
 })
 
 // What reading ONE entity by id costs in statements. A read visits the

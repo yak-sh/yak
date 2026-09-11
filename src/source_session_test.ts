@@ -37,7 +37,9 @@ let OWNED = `entity = (select id from entity where eid = ?)`
 let idOf = `(select id from entity where eid = ?)`
 
 let count = (db: import('./store/sqlite.ts').DatabaseSync) =>
-  (db.prepare('select count(*) as n from entity').get() as { n: number }).n
+  (db.prepare(
+    'select count(*) as n from entity where id not in (select entity from archetype)',
+  ).get() as { n: number }).n
 
 let withSource = (
   fn: (db: import('./store/sqlite.ts').DatabaseSync) => void,
@@ -45,10 +47,14 @@ let withSource = (
 ) => {
   let db = freshDb()
   let before = count(db)
+  let descriptors = () =>
+    db.prepare('select count(*) as n from archetype').get()
+  let beforeDescriptors = descriptors()
   forgetSessionIndex() // pick up the fixture regardless of cache state
   let off = registerSessionSource()
   try {
     fn(db)
+    if (!written) assertEquals(descriptors(), beforeDescriptors)
     assertEquals(count(db), before + written) // reads never persist rows
   } finally {
     off()
