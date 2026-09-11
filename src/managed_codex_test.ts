@@ -2783,3 +2783,111 @@ Deno.test('restart of an old error-bearing call never exposes a terminal recover
     db.close()
   }
 })
+
+for (
+  let mode of [
+    'orphan',
+    'expired',
+    'leased',
+    'completed',
+    'parked',
+    'terminal',
+    'imported',
+    'stop',
+  ]
+) {
+  Deno.test(`idle graph recovery: ${mode} (T-37365)`, async () => {
+    let db = freshDb(), sid = session(db), old = uuid()
+    let clock = () => new Date('2026-08-10T12:00:01Z')
+    writeSession(db, sid, {
+      status: mode == 'terminal' ? 'interrupted' : 'running',
+    })
+    apply(db, [{ eid: old, name: 'runner', comp: { name: 'old' } }])
+    let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
+    let gen = append(db, sid, [{
+      generation: { through: input, provider: 'codex', model: 'gpt-requested' },
+    }]).eids[0]
+    let lease = takeEntry(
+      db,
+      gen,
+      old,
+      mode == 'leased' ? 60_000 : 100,
+      () => new Date('2026-08-10T12:00:00Z'),
+    )!
+    append(db, sid, [{
+      output: {
+        source: gen,
+        ...(mode == 'completed' ? { phase: 'final_answer' } : {}),
+      },
+      message: { role: 'agent' },
+      content: { body: 'done' },
+    }])
+    if (!['expired', 'leased'].includes(mode)) settleGeneration(db, lease.token)
+    if (mode == 'imported') {
+      db.prepare(
+        `insert into imported (entity, source, line) values ((select id from entity where eid = ?), 'managed', 1)`,
+      ).run(gen)
+    }
+    if (mode == 'parked') {
+      let wake = uuid()
+      apply(db, [
+        { eid: wake, name: 'wake', comp: { at: '2026-08-11T00:00:00Z' } },
+        { eid: wake, name: 'deliver', comp: { to: sid } },
+      ])
+    }
+    let changes: Change[] = []
+    let service = managedCodex({
+      db,
+      clock,
+      cast: (out) => changes.push(...out),
+      transport: {
+        run: () => {
+          throw new Error('no work to replay')
+        },
+      },
+      tools: () => Promise.resolve(tools([])),
+      prepare: () => Promise.resolve(),
+    })
+    try {
+      if (mode == 'stop') {
+        let request = uuid()
+        apply(db, [{
+          eid: request,
+          name: 'stop_request',
+          comp: { target: sid },
+        }])
+      }
+      await service.sweep()
+      let rows = readEntries(db, sid)
+      let interrupted = ['orphan', 'expired', 'stop'].includes(mode)
+      assertEquals(
+        rows.filter((r) => r.comps.cancel).length,
+        interrupted ? 1 : 0,
+      )
+      if (interrupted) {
+        assertEquals(sessionStateOf(rows), {
+          standing: 'terminal',
+          end: 'interrupted',
+        })
+        assertEquals(rows.at(-1)?.comps.cancel?.target, gen)
+        if (mode != 'stop') {
+          assertMatch(
+            String(rows.at(-1)?.comps.content?.body),
+            /runner disappeared; operation outcome is ambiguous/,
+          )
+        }
+        assert(changes.some((c) => c.name == 'cancel'))
+        assertEquals(
+          rows.some((r) => r.comps.error || r.comps.exception),
+          false,
+        )
+      }
+      let count = rows.length
+      await service.sweep()
+      assertEquals(readEntries(db, sid).length, count)
+    } finally {
+      await service.settle()
+      db.close()
+    }
+  })
+}

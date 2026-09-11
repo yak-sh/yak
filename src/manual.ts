@@ -1029,6 +1029,10 @@ export let manuals = declare({
     root: true,
     args: [arg('command', text, true, false)],
   },
+  'session stop': {
+    about: 'request that a session stop through a durable stop_request',
+    args: [arg('id', id)],
+  },
   'session wait': {
     about:
       'block until a session is over, print its brief; exit 0 on a quiet ' +

@@ -138,6 +138,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       'session brief': 'session brief [text…] [--body=BODY]',
       'session peek': 'session peek <id> [--lines=N]',
       'session turn': 'session turn [idle|busy] [sid] [--hook]',
+      'session stop': 'session stop <id>',
       'session wait':
         'session wait <id> [--timeout=DURATION] [--interval=N] [--json]',
       sessions: 'sessions [-n=N] [--live] [--json]',

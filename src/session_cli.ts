@@ -13,9 +13,10 @@ import { toolTiming } from '@yaks/session'
 // at all, its status is derived from its newest entry (`statusOf`), and its
 // entries print through the package's own renderers. Every read goes through client.ts
 // `query`, so the local arm answers when this process stands beside the db file
-// and the wire answers otherwise. Nothing here writes.
+// and the wire answers otherwise. Only stop writes: it files a stop_request,
+// never edits lifecycle state.
 
-import { jsonOf, needed, query, type Row } from './client.ts'
+import { jsonOf, needed, query, type Row, send } from './client.ts'
 import { duration, type Got } from './verb.ts'
 import {
   type EntryRow,
@@ -24,7 +25,7 @@ import {
   sessionStateOf,
 } from './entry_log.ts'
 import { renderEntry } from './log_text.ts'
-import { idOf } from './types.ts'
+import { idOf, uuid } from './types.ts'
 import { safe } from './terminal.ts'
 import {
   sessionDoc,
@@ -490,4 +491,11 @@ export let waitFor = async (id: string, got: Got) => {
     if (brief) out(brief)
   }
   if (code) Deno.exit(code)
+}
+
+/** Request cancellation through the same durable effect as every other client. */
+export let stop = async (got: Got) => {
+  let r = await sessionAt(got.args.id)
+  await send([{ eid: uuid(), name: 'stop_request', comp: { target: r.eid } }])
+  console.log(`${idOf(r)}: stop requested`)
 }

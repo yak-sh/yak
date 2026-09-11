@@ -39,6 +39,7 @@ import { type ToolHost } from './harness_tools.ts'
 import { interrupted } from './hosted_shell.ts'
 import { type Observation } from './observations.ts'
 import { sessionRow } from './session_store.ts'
+import { sessionStateOf } from './entry_log.ts'
 import { type Change, uuid } from './types.ts'
 
 type Cast = (changes: Change[]) => void
@@ -562,6 +563,59 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     return retries
   }
 
+  // Lease recovery cannot see a delivered generation with no terminal output
+  // and no next operation (T-37365). Close only that abandoned idle boundary.
+  // A lease is authoritative even if another runner owns it; tool loops and
+  // queued input belong to advance(), not to interruption recovery.
+  let reconcileIdle = () => {
+    let candidates = db.prepare(
+      `select o.eid as session from session s
+       join entity o on o.id = s.entity
+       left join run r on r.entity = s.entity
+       where coalesce(r.status, s.status) in ('starting', 'running', 'stopping')`,
+    ).all() as { session: string }[]
+    for (let { session } of candidates) {
+      if (
+        retired(session) || blocked.has(session) || starting.has(session) ||
+        prepared.has(session) ||
+        [...flights.values()].some((f) => f.session == session)
+      ) continue
+      // Keep the liveness check and interruption in one write transaction:
+      // another runner cannot acquire work between the check and the boundary.
+      let changes = db.transaction(() => {
+        if (!graphSession(db, session)) return []
+        let state = sessionRow(db, session)
+        if (
+          !['starting', 'running', 'stopping'].includes(state?.status ?? '')
+        ) return []
+        if (graphBusy(db, session) || advanceable(db, session).length) return []
+        if (
+          db.prepare(
+            `select 1 from deliver d join wake w on w.entity = d.entity
+           where d."to" = (select id from entity where eid = ?)
+             and not exists (select 1 from delivered v where v.entity = d.entity)
+             and not exists (select 1 from error x where x.entity = d.entity)`,
+          ).get(session)
+        ) return []
+        let rows = readEntries(db, session)
+        if (sessionStateOf(rows).standing != 'idle') return []
+        let latest = rows.findLast((r) =>
+          r.comps.generation && !r.comps.imported
+        )
+        if (!latest) return []
+        // Cancellation is an interruption boundary, NOT a provider failure.
+        // The shared standing effect stamps settled and releases claims from it.
+        return append(db, session, [{
+          cancel: { target: latest.eid },
+          content: {
+            body: 'runner disappeared; operation outcome is ambiguous',
+          },
+        }], runner).changes
+      }, true)
+      if (changes.length) cast(changes)
+    }
+  }
+
   let runnable = (session: string) => {
     if (retired(session)) return false
     let row = sessionRow(db, session)
@@ -617,6 +671,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       ).all() as { request: string; session: string }[]
     ) stop(row.request, row.session)
     let recovered = expire()
+    reconcileIdle()
     let moved = advance(
       db,
       cast,
@@ -811,7 +866,10 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       // Close the whole turn, including input already queued when stop lands.
       // Another stop after new input needs a new boundary even on the same gen.
       // A stop overtaken by completion only needs its delivery receipt.
-      if (work.size || advanceable(db, session).length) {
+      if (
+        work.size || advanceable(db, session).length ||
+        sessionStateOf(readEntries(db, session)).standing == 'idle'
+      ) {
         let latest = db.prepare(
           `select o.eid as eid from entry e
            join entity o on o.id = e.entity

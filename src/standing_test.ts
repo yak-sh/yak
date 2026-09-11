@@ -23,10 +23,11 @@ import {
   cancelEntry,
   failEntry,
   readEntries,
+  settleGeneration,
   takeEntry,
 } from './entries.ts'
 import { standingOf } from './entry_log.ts'
-import { runnerSessions } from './managed_codex.ts'
+import { managedCodex, runnerSessions } from './managed_codex.ts'
 import { sessionRow } from './session_store.ts'
 
 let uid = () => crypto.randomUUID()
@@ -517,4 +518,66 @@ Deno.test('finished_at holds steady across re-derives (no lastHeard churn)', () 
   maintainStanding(eid, cast)
   maintainStanding(eid, cast)
   assertEquals(finishedAt(eid), first)
+})
+
+Deno.test('boot interrupts a quiescent graph orphan and releases its claim (T-37365)', async () => {
+  let eid = native(), input = uid(), gen = uid(), runner = uid(), task = uid()
+  apply(db, [
+    { eid: runner, name: 'runner', comp: { name: 'old' } },
+    { eid: task, name: 'task', comp: {} },
+    { eid: task, name: 'doc', comp: { title: 'orphaned work' } },
+    { eid: task, name: 'claim', comp: { session: eid } },
+  ])
+  cast(
+    append(
+      db,
+      eid,
+      [
+        { message: { role: 'user' }, content: { body: 'Do the task.' } },
+        { generation: { through: input, provider: 'codex', model: 'm' } },
+      ],
+      runner,
+      [input, gen],
+    ).changes,
+  )
+  let lease = takeEntry(db, gen, runner)!
+  cast(
+    append(db, eid, [{
+      output: { source: gen },
+      message: { role: 'agent' },
+      content: { body: 'done' },
+    }], runner).changes,
+  )
+  cast(settleGeneration(db, lease.token))
+  assertEquals(sessionRow(db, eid)?.status, 'running')
+  assertEquals(standing(eid), 'idle')
+  let service = managedCodex({
+    db,
+    cast,
+    transport: {
+      run: () => {
+        throw new Error('orphan has no runnable operation')
+      },
+    },
+    tools: () => {
+      throw new Error('orphan has no tool')
+    },
+    prepare: () => Promise.resolve(),
+  })
+  try {
+    await service.sweep()
+    assertEquals(sessionRow(db, eid)?.status, 'interrupted')
+    assertEquals(standing(eid), 'terminal')
+    assert(finishedAt(eid))
+    assertEquals(
+      db.prepare(`select 1 from claim where ${OWNED}`).get(task),
+      undefined,
+    )
+    let end = finishedAt(eid), count = readEntries(db, eid).length
+    await service.sweep()
+    assertEquals(finishedAt(eid), end)
+    assertEquals(readEntries(db, eid).length, count)
+  } finally {
+    await service.settle()
+  }
 })

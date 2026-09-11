@@ -3320,3 +3320,44 @@ slow(
     }
   },
 )
+
+Deno.test('session stop files a stop_request, not a lifecycle edit (T-37365)', async () => {
+  let fake = graphServer({
+    changes: [
+      { eid: N, name: 'entity', comp: { eid: N, num: 3 } },
+      {
+        eid: N,
+        name: 'session',
+        comp: { id: 'running-session', status: 'running' },
+      },
+    ],
+    deps: [],
+  })
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '--cached-only',
+        '-A',
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
+        'session',
+        'stop',
+        'S-3',
+      ],
+      clearEnv: true,
+      env: {
+        TASKS_HOST: fake.host,
+        TASKS_BACKOFF: '',
+        ...(runnerCache ? { DENO_DIR: runnerCache } : {}),
+      },
+    }).output()
+    assertEquals(out.code, 0, text(out.stderr))
+    assertEquals(text(out.stdout), 'S-3: stop requested\n')
+    assertEquals(fake.acked.length, 1)
+    assertEquals(fake.acked[0].name, 'stop_request')
+    assertEquals(fake.acked[0].comp, { target: N })
+    assert(fake.acked[0].eid != N)
+  } finally {
+    await fake.server.shutdown()
+  }
+})
