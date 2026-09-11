@@ -20,6 +20,7 @@ export type ViewportState = { anchor?: Anchor; follow: boolean }
  */
 export class VirtualWindow<T extends VirtualItem> {
   anchor?: Anchor
+  selected?: string
   follow: boolean
   private items: readonly T[] = []
   private indices = new Map<string, number>()
@@ -51,6 +52,34 @@ export class VirtualWindow<T extends VirtualItem> {
       let item = items[Math.min(this.oldIndex, items.length - 1)]
       this.anchor = item ? { id: item.id, offset: 0 } : undefined
     }
+  }
+
+  /** Item navigation uses only cached heights, never measures intervening history. */
+  selectionKey(key: Key, selected: string | undefined): string | undefined {
+    if (key.alt || key.shift) return undefined
+    let average = this.cache.size
+      ? [...this.cache.values()].reduce((n, item) => n + item.lines.length, 0) /
+        this.cache.size
+      : 1
+    let page = Math.max(1, Math.floor(this.height / average))
+    let half = Math.max(1, Math.floor(this.height / average / 2))
+    let delta = key.ctrl
+      ? key.text == 'u' ? -half : key.text == 'd' ? half : undefined
+      : key.name == 'up'
+      ? -1
+      : key.name == 'down'
+      ? 1
+      : key.name == 'pageup'
+      ? -page
+      : key.name == 'pagedown'
+      ? page
+      : undefined
+    let index = selected === undefined ? -1 : this.indices.get(selected) ?? -1
+    if (key.name == 'home') index = 0
+    else if (key.name == 'end') index = this.items.length - 1
+    else if (delta !== undefined) index = index < 0 ? 0 : index + delta
+    else return undefined
+    return this.items[Math.max(0, Math.min(this.items.length - 1, index))]?.id
   }
 
   key(key: Key): boolean {
@@ -168,18 +197,62 @@ export class VirtualWindow<T extends VirtualItem> {
       }
       offset = Math.min(offset, get(i).length - 1)
     }
+    // Probe only the existing viewport. Jump directly to a distant selection,
+    // then measure at most one screen backwards to reveal its trailing edge.
+    let selected = this.selected === undefined
+      ? undefined
+      : this.indices.get(this.selected)
+    if (selected !== undefined) {
+      let end = i, remaining = height + offset, seen = false
+      while (end < this.items.length && remaining > 0) {
+        remaining -= get(end).length
+        if (end == selected) {
+          seen = true
+          break
+        }
+        end++
+      }
+      if (selected < i || (selected == i && offset > 0)) {
+        i = selected
+        offset = 0
+        this.follow = false
+      } else if (!seen || remaining < 0) {
+        i = selected
+        let room = height - get(i).length
+        while (i > 0 && room > 0) {
+          i--
+          room -= get(i).length
+        }
+        offset = Math.max(0, -room)
+        // Oversized entries show their beginning, not just their final lines.
+        if (i == selected) offset = 0
+        this.follow = false
+      }
+    }
     let exhausted = false
     let out: Line[] = [], end = i, local = offset
     while (end < this.items.length && out.length < height) {
       let lines = get(end)
       exhausted = end == this.items.length - 1 &&
         lines.length - local <= height - out.length
-      out.push(...lines.slice(local, local + height - out.length))
+      let visible = lines.slice(local, local + height - out.length)
+      out.push(
+        ...(end == selected
+          ? visible.map((line) =>
+            line.map((seg) => ({
+              ...seg,
+              style: { ...seg.style, bg: seg.style.bg ?? '#343f44' },
+            }))
+          )
+          : visible),
+      )
       local = 0
       end++
     }
     // Scrolling down into the end snaps; an append while detached never does.
-    if (!this.follow && this.movement > 0 && exhausted) {
+    if (
+      selected === undefined && !this.follow && this.movement > 0 && exhausted
+    ) {
       this.follow = true
       this.movement = 0
       return this.layout(width, height, style)
@@ -205,9 +278,14 @@ export let VirtualList = <T extends VirtualItem>(
     pending = false,
     value,
     onViewportChange,
+    selected,
+    onSelect,
     ...attrs
   }: {
     items: readonly T[]
+    /** Controlled selected item; onSelect enables item-navigation keys. */
+    selected?: string
+    onSelect?: (id: string) => void
     textOf?: (item: T) => string
     renderItem: (item: T) => ComponentChildren
     version?: (item: T) => string
@@ -317,14 +395,22 @@ export let VirtualList = <T extends VirtualItem>(
       return { text: item && textOf ? textOf(item) : '' }
     },
   })
+  state.current.selected = selected
   useKeys((key) => {
+    if (onSelect) {
+      let id = state.current!.selectionKey(key, selected)
+      if (id !== undefined) {
+        onSelect(id)
+        return true
+      }
+    }
     if (!state.current!.key(key)) return false
     touch()
     return true
   }, String(attrs.id))
   useLayoutEffect(() => {
     touch()
-  }, [items, renderItem])
+  }, [items, renderItem, selected])
   return h('div', {
     ...attrs,
     onWheel: (event: MouseEvent) => {

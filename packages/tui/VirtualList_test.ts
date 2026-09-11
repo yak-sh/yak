@@ -245,3 +245,96 @@ Deno.test('controlled viewport publishes anchors and restores externally owned p
     ui.free()
   }
 })
+
+Deno.test('controlled selection jumps lazily and reveals the complete entry', () => {
+  let v = window(false)
+  let data = items(10000)
+  data[9000].text = 'selected '.repeat(20)
+  v.update(data)
+  v.layout(80, 8)
+  v.selected = '9000'
+  let lines = text(v.layout(80, 8)).join('')
+  assert(lines.includes(data[9000].text))
+  assert(v.stats.measured < 30)
+  assertEquals(v.follow, false)
+  v.selected = '2'
+  assertEquals(text(v.layout(80, 8))[0], '2')
+  assert(v.stats.measured < 40)
+})
+
+Deno.test('item keys use estimated page heights and preserve scrolling API', () => {
+  let v = window(false)
+  v.update(items(100))
+  v.layout(80, 10)
+  assertEquals(v.selectionKey({ name: 'down' }, '20'), '21')
+  assertEquals(v.selectionKey({ name: 'up' }, '0'), '0')
+  assertEquals(v.selectionKey({ name: 'pageup' }, '20'), '10')
+  assertEquals(v.selectionKey({ name: 'pagedown' }, '20'), '30')
+  assertEquals(
+    v.selectionKey({ name: 'char', text: 'u', ctrl: true }, '20'),
+    '15',
+  )
+  assertEquals(
+    v.selectionKey({ name: 'char', text: 'd', ctrl: true }, '20'),
+    '25',
+  )
+  assertEquals(v.selectionKey({ name: 'home' }, '20'), '0')
+  assertEquals(v.selectionKey({ name: 'end' }, '20'), '99')
+  assertEquals(v.selectionKey({ name: 'wheelup' }, '20'), undefined)
+  assert(v.key({ name: 'down' }))
+  assertEquals(text(v.layout(80, 10))[0], '1')
+})
+
+Deno.test('selection at exact viewport boundary is revealed', () => {
+  let v = window(false)
+  v.update(items(100))
+  v.layout(80, 5)
+  v.selected = '5'
+  assertEquals(text(v.layout(80, 5)), ['1', '2', '3', '4', '5'])
+  let anchor = v.anchor
+  v.layout(80, 5)
+  assertEquals(v.anchor, anchor)
+  v.selected = '99'
+  assertEquals(text(v.layout(80, 5)).at(-1), '99')
+})
+
+Deno.test('mounted generic controlled list reveals offscreen selection lazily', async () => {
+  let { signal } = await import('@preact/signals')
+  let selected = signal('9000'), count = 0
+  let data = items(10000)
+  let ui = await mount(
+    () =>
+      h(VirtualList, {
+        items: data,
+        selected: selected.value,
+        onSelect: (id: string) => {
+          selected.value = id
+        },
+        renderItem: (item) => {
+          count++
+          return h('div', null, item.id)
+        },
+      }),
+    40,
+    8,
+  )
+  try {
+    assert(ui.text().includes('9000'))
+    assert(count < 30)
+    selected.value = '2'
+    await ui.resize(41, 8)
+    assert(ui.text().includes('2'))
+    assert(count < 50)
+  } finally {
+    ui.free()
+  }
+})
+
+Deno.test('selected oversized entry shows its beginning after resize', () => {
+  let v = window(false)
+  v.update([{ id: 'a', text: 'before' }, { id: 'b', text: 'abcdefghij' }])
+  v.selected = 'b'
+  assertEquals(text(v.layout(2, 3)), ['ab', 'cd', 'ef'])
+  assertEquals(text(v.layout(1, 2)), ['a', 'b'])
+  assertEquals(v.anchor, { id: 'b', offset: 0 })
+})
