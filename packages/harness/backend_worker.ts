@@ -94,9 +94,10 @@ async function handle(method: string, value: unknown): Promise<unknown> {
     closing = true
     let drained = a.d.stop()
     await Promise.allSettled([...active])
-    subs.drop(link.frame)
     // Do not finalize native SQLite statements while a model turn still owns them.
     await drained
+    // Keep subscribers attached through final writes from admitted work.
+    subs.drop(link.frame)
     await a.close()
     a = undefined
     removeErrors()
