@@ -25,7 +25,6 @@ import {
 } from '@yaks/tui'
 import { type Context, type Panel, panels, type UIAgent } from './panels.ts'
 import type { Agent } from './run.ts'
-import { INSTRUCTIONS } from './cli.ts'
 
 /** UI contributions and an event door, independent of the terminal backend. */
 export type Opts = {
@@ -535,7 +534,7 @@ export let tui = async (): Promise<void> => {
   const { remote } = await import('./remote.ts')
   const { openDrafts } = await import('./draft_vault.ts')
   const drafts = await openDrafts()
-  const backend = await remote({ instructions: INSTRUCTIONS, cwd: Deno.cwd() })
+  const backend = await remote({ cwd: Deno.cwd() })
     .catch(async (error) => {
       await drafts.close()
       throw error

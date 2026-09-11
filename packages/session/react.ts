@@ -85,6 +85,8 @@ export type Deps = {
   tools: Tool[]
   signal?: AbortSignal
   instructions?: string
+  /** Resolve inherited base instructions for future asks without rewriting history. */
+  resolveInstructions?: (inherited: string | undefined) => string | undefined
   /** Optional bounded model-facing tool-result projection; storage stays unchanged. */
   resultText?: (entry: Bundle) => Promise<string>
   /** Resolve explicitly admitted multimodal context without storing bytes in entries. */
@@ -323,7 +325,11 @@ export let react = async (
     signal: deps.signal,
     model: modelName,
     effort: effort == null ? undefined : String(effort),
-    instructions: using?.instructions == null
+    instructions: deps.resolveInstructions
+      ? deps.resolveInstructions(
+        using?.instructions == null ? undefined : String(using.instructions),
+      )
+      : using?.instructions == null
       ? deps.instructions
       : String(using.instructions),
     items: project(
@@ -345,7 +351,7 @@ export let react = async (
       ? {
         [USING]: {
           ...using,
-          ...req.instructions ? { instructions: req.instructions } : {},
+          instructions: req.instructions ?? null,
         },
       }
       : {},

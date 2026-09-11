@@ -592,3 +592,10 @@ Local unencrypted recovery files use private permissions under
 `HARNESS_DRAFT_DIR` to relocate storage. See
 [frontend state](FRONTEND.md#local-draft-recovery) for isolation, retention, and
 crash-recovery limits.
+
+The CLI and terminal frontend do not add a built-in agent description or style
+instruction. Instruction files are admitted through `@yaks/context`; callers can
+still supply explicit `instructions`. Existing sessions retain their served
+request history, but the retired built-in harness instruction is omitted from
+future requests. A restart loads this behavior; it cannot retract instructions
+from a request already in progress.

@@ -15,13 +15,6 @@ import { codexPaths, fromCodex, fromEnv } from '@yaks/openai'
 import { type Agent, agent, titleOf } from './run.ts'
 import { dbPath } from './store.ts'
 
-/** What every transcript here is told it is. */
-export let INSTRUCTIONS =
-  'You are an agent in a self-contained harness. You have a shell, and the ' +
-  'graph you yourself live in: your transcript, the work on your list and ' +
-  'the programs you start are all entities you can read and write with the ' +
-  'graph_ tools. Be terse; say what you did, not what you are about to do.'
-
 let said = (c: Ctx) => {
   let { opts, words } = saidIn(c.args)
   let opt = (name: string) => {
@@ -36,7 +29,6 @@ let said = (c: Ctx) => {
 let running = (c: Ctx, name?: string): Agent => {
   let a: Agent = agent({
     name,
-    instructions: INSTRUCTIONS,
     each: (step) => step.added.forEach((b) => c.out('  ' + a.line(b))),
   })
   return a

@@ -1,3 +1,4 @@
+import { inheritedInstructions } from './legacy_instructions.ts'
 import { stepLock } from './step_lock.ts'
 import { type RuntimeAction, runtimeAction, runtimeRows } from './runtime.ts'
 import { streamingEnabled } from './streaming.ts'
@@ -202,6 +203,8 @@ export let agent = (opts: Opts = {}): Agent => {
       streaming: streamingEnabled(opts),
       checkpointMs: opts.checkpointMs,
       instructions: opts.instructions,
+      resolveInstructions: (inherited) =>
+        inheritedInstructions(inherited, opts.instructions),
       contextItems: (window, entries) =>
         imageContext(h.g, window, entries, opts.images),
       resultText: tools.some((t) => t.name == 'graph_value_read')
