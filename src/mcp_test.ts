@@ -42,7 +42,7 @@ Deno.env.set('DB_PATH', ':memory:')
 let { depsOf, journalOf, mutate: applyMutation, snapshot, touch } =
   await import('./db.ts')
 let { open } = await import('./store/sqlite.ts')
-let { freshDb } = await import('./testdb.ts')
+let { bareDb } = await import('./testdb.ts')
 let { append } = await import('./entries.ts')
 
 Deno.test('MCP prompt makes task trees the default for multi-step work', () => {
@@ -1071,7 +1071,7 @@ let getFrom = (all: Row[]) => (ids: string[]) =>
   Promise.resolve(ids.flatMap((id) => find(all, id) ?? []))
 
 let graph = () => {
-  let db = freshDb()
+  let db = bareDb()
   let pages = new Map<string, string>()
   let io: IO = {
     read: () => Promise.resolve(snapshot(db)),

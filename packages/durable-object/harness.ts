@@ -61,46 +61,85 @@ let out = (row: Record<string, unknown>) => {
 /**
  * A stand-in for `ctx.storage` over a fresh in-memory database.
  *
- * Three members beyond {@link DurableStorage}. Two because the runtime has
+ * Members beyond {@link DurableStorage}: two because the runtime has
  * them and an object may ask: `databaseSize`, how many bytes it holds, and
  * `deleteAll`, the one way to empty it — dropping the tables leaves metadata
- * behind, and an object whose storage is empty ceases to exist. The third,
- * `beneath`, is the runtime's own hand rather than the object's.
+ * behind, and an object whose storage is empty ceases to exist. `beneath` is
+ * the runtime's own hand rather than the object's. `Symbol.dispose` lets the
+ * fixture owner release native allocations without waiting for JS GC.
  */
 export let durable = (): DurableStorage & {
   sql: { databaseSize: number }
   deleteAll(): Promise<void>
   beneath(query: string): Record<string, unknown>[]
+  [Symbol.dispose](): void
 } => {
   let db = new Database(':memory:')
+  // sql.exec consumes/reset every row before returning; no cursor escapes.
+  // Bound native statements rather than waiting for JS GC to notice their
+  // off-heap cost (hundreds of Store requests share this connection).
+  let statements = new Map<string, ReturnType<typeof db.prepare>>()
+  // @db/sqlite caches column names on a prepared statement. SQLite recompiles
+  // its VM after DDL, but cannot refresh that JS metadata: discard the cache
+  // when either schema changes (including a transaction rolling DDL back).
+  let mainVersion = db.prepare('pragma main.schema_version')
+  let tempVersion = db.prepare('pragma temp.schema_version')
+  let schema = ''
+  let clear = () => {
+    for (let stmt of statements.values()) stmt.finalize()
+    statements.clear()
+  }
   let depth = 0
   let run = (query: string, bindings: SqlValue[]) => {
+    if (!db.open) throw new Error('storage is disposed')
+    let version = `${mainVersion.value()}|${tempVersion.value()}`
+    if (version !== schema) {
+      clear()
+      schema = version
+    }
     // The runtime takes an ArrayBuffer; the library underneath takes bytes.
     let binds = bindings.map((b) =>
       b instanceof ArrayBuffer ? new Uint8Array(b) : b
     )
     try {
-      let stmt = db.prepare(query)
-      // The runtime's `exec` runs EVERY statement in the string it is handed; a
-      // prepared statement is only the FIRST, and the rest would be dropped in
-      // silence — which is how a whole DDL script reads as "the second table is
-      // missing". `sql` is what this statement consumed, so a remainder means
-      // the string belongs to `exec`, which runs all of it and has no rows.
-      if (!bindings.length && stmt.sql.trim().length < query.trim().length) {
-        db.exec(query)
-        return []
+      let stmt = statements.get(query)
+      if (!stmt) {
+        stmt = db.prepare(query)
+        if (!bindings.length && stmt.sql.trim().length < query.trim().length) {
+          stmt.finalize()
+          db.exec(query)
+          return []
+        }
+        if (statements.size >= 256) {
+          let key = statements.keys().next().value!
+          statements.get(key)!.finalize()
+          statements.delete(key)
+        }
+        statements.set(query, stmt)
       }
       return stmt.all(...binds) as Record<string, unknown>[]
     } catch (e) {
       // A statement SQLite will not prepare (a pragma script, a trigger body)
       // still runs; it just has no rows. With bindings there is nothing to fall
       // back to.
+      let failed = statements.get(query)
+      if (failed) {
+        statements.delete(query)
+        try {
+          failed.finalize()
+        } catch { /* preserve the step error */ }
+      }
       if (bindings.length) throw e
       db.exec(query)
       return []
     }
   }
   return {
+    // Native SQLite allocations are invisible to the JS heap's GC pressure.
+    // A scenario that owns this storage can release it at the end of the test.
+    [Symbol.dispose]: () => {
+      if (db.open) db.close()
+    },
     sql: {
       exec: (query, ...bindings) => {
         for (let b of bindings) {
@@ -135,6 +174,7 @@ export let durable = (): DurableStorage & {
         "select type, name from sqlite_master where name not like 'sqlite_%'",
         [],
       ) as { type: string; name: string }[]
+      clear()
       db.exec('pragma writable_schema = off')
       for (let kind of ['trigger', 'view', 'index', 'table']) {
         for (let it of names.filter((n) => n.type == kind)) {

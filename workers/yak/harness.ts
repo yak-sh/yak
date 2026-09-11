@@ -331,6 +331,12 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
  * guide the builder reads).
  */
 export let platform = (secret: string, vars: Partial<Env> = {}) => {
+  let stores: ReturnType<typeof state>[] = []
+  let ownedState = () => {
+    let ctx = state()
+    stores.push(ctx)
+    return ctx
+  }
   let objects = new Map<string, Store>()
   let sockets = new Map<string, Wire[]>()
   // What the runtime did to each object, beside what the object did: the
@@ -340,7 +346,7 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
   let object = (name: string) => {
     let held = objects.get(name)
     if (!held) {
-      let ctx = state()
+      let ctx = ownedState()
       sockets.set(name, ctx.live)
       recovery.set(name, ctx.pitr)
       objects.set(name, held = new Store(ctx, env))
@@ -353,7 +359,7 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
   let builders = new Map<string, Builder>()
   let builder = (name: string): Builder => {
     let held = builders.get(name)
-    if (!held) builders.set(name, held = new Builder(state(), env))
+    if (!held) builders.set(name, held = new Builder(ownedState(), env))
     return held
   }
   let files = bucket()
@@ -394,5 +400,16 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
     },
     ...vars,
   } as unknown as Env
-  return { env, files, object, sockets, builder, recovery }
+  return {
+    env,
+    files,
+    object,
+    sockets,
+    builder,
+    recovery,
+    [Symbol.dispose]: () => {
+      for (let ctx of stores) ctx.storage[Symbol.dispose]()
+      stores.length = 0
+    },
+  }
 }

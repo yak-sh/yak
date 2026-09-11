@@ -38,7 +38,7 @@ import { verificationPending } from './verification.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { depsOf } = await import('./db.ts')
-let { bareDb } = await import('./testdb.ts')
+let { bareDb, dbFixture } = await import('./testdb.ts')
 let { localQuery } = await import('./graph_query.ts')
 let { backlog } = await import('./dispatch.ts')
 
@@ -143,8 +143,7 @@ let workVerifier = (
   return eid
 }
 
-let world = () => {
-  let db = bareDb()
+let fixture = dbFixture((db) => {
   let P = uuid(), N = uuid(), S = uuid()
   let old = uuid(), fresh = uuid(), urgent = uuid()
   let gated = uuid(), blocker = uuid(), pending = uuid(), declined = uuid()
@@ -216,10 +215,7 @@ let world = () => {
     ...link(root, 'requires', heldGate),
     ...link(heldGate, 'requires', grandchild),
   ])
-  let read = readFor(db)
   return {
-    db,
-    read,
     P,
     N,
     old,
@@ -233,6 +229,10 @@ let world = () => {
     heldGate,
     grandchild,
   }
+})
+let world = () => {
+  let w = fixture()
+  return { ...w, read: readFor(w.db) }
 }
 
 Deno.test('build readiness excludes every non-runnable state', async () => {

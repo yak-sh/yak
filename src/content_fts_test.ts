@@ -15,6 +15,7 @@ import { parseQuery } from './query.ts'
 import { freshDb } from './testdb.ts'
 import { connect, open } from './store/sqlite.ts'
 import { uuid } from './types.ts'
+import { until } from './testing.ts'
 
 let indexes = ['content_fts', 'content_gram']
 let world = () => {
@@ -163,11 +164,14 @@ Deno.test('content FTS: substring candidates precede the 5000-entry scan cap', (
   let owner = db.prepare('select id from entity where eid = ?').get(
     session,
   ) as { id: number }
+  let entity = db.prepare('insert into entity (eid) values (?)')
+  let entry = db.prepare(
+    'insert into entry (entity, session, seq) values (?, ?, ?)',
+  )
   db.transaction(() => {
     for (let i = 2; i <= 5002; i++) {
-      db.prepare('insert into entity (eid) values (?)').run(uuid())
-      db.prepare('insert into entry (entity, session, seq) values (?, ?, ?)')
-        .run(db.lastInsertRowId, owner.id, i)
+      entity.run(uuid())
+      entry.run(db.lastInsertRowId, owner.id, i)
     }
   })
   assertEquals(evalGraph(db, '.content.body~=iquewid').hits.map((h) => h.eid), [
@@ -187,14 +191,14 @@ Deno.test('content FTS: open starts the off-thread backfill on a file', async ()
     db.close()
     db = open(path)
     assert(contentFtsPending(db)) // open returned before any worker slice
-    let deadline = Date.now() + 10_000
-    while (contentFtsPending(db) && Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 25))
-    }
+    await until(() => !contentFtsPending(db), {
+      timeout: 10_000,
+      label: 'FTS backfill',
+    })
     assert(!contentFtsPending(db))
     assertEquals(search(db, 'workerproof').length, 1)
-    // Let the worker's completion message close its handle before teardown.
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    // Wait for the worker's completion message, not a guessed teardown delay.
+    await until(() => !db.backfillingFts, { label: 'FTS worker close' })
     db.close()
     db = connect(path)
     complete(db)

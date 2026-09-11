@@ -7,10 +7,9 @@
 // that exercises open()/migrations/seed itself keeps calling open() directly,
 // since replaying the DDL is the thing it checks.
 //
-// This lives apart from testing.ts on purpose: it imports db.ts, whose
-// module-init opens the graph, so it carries the same DB_PATH import-order
-// discipline — set DB_PATH before importing it. testing.ts (slow/tick/until)
-// stays db-free so the ~40 files that want only those primitives never trip it.
+// This lives apart from testing.ts on purpose: db.ts is now an inert library,
+// but its schema/import graph is still unnecessary for slow/tick/until users.
+// Only live_db.ts opens the process singleton; this module does not import it.
 
 import { apply } from './db.ts'
 import { DatabaseSync, open } from './store/sqlite.ts'
@@ -57,7 +56,17 @@ let clone = (bytes: Uint8Array) => {
   return db
 }
 
-export let freshDb = () => clone(snap ??= open(':memory:').serialize())
+export let freshDb = () => {
+  if (!snap) {
+    let db = open(':memory:')
+    try {
+      snap = db.serialize()
+    } finally {
+      db.close()
+    }
+  }
+  return clone(snap)
+}
 
 // A freshDb clone with the vector extension loaded onto its connection. The
 // extension's functions (vector_quantize, vector_quantize_scan) are per-
@@ -100,6 +109,29 @@ export let bareDb = () => {
     d.close()
   }
   return clone(bareSnap)
+}
+
+// Build a repeated scenario once, then give every test its own writable image.
+// Metadata must be connection-independent (ids, not prepared statements or
+// closures over the builder's db). Like bareDb, calling this closes the previous
+// clone. Only setup is shared: reads, writes and assertions still run per test.
+export let dbFixture = <T extends Record<string, unknown>>(
+  build: (db: DatabaseSync) => T,
+) => {
+  let bytes: Uint8Array | undefined
+  let values: T
+  return (): T & { db: DatabaseSync } => {
+    if (!bytes) {
+      let db = bareDb()
+      try {
+        values = build(db)
+        bytes = db.serialize()
+      } finally {
+        db.close()
+      }
+    }
+    return { ...values, db: clone(bytes) }
+  }
 }
 
 // Fail after journal_tx and journal_change have inserted, proving that a writer

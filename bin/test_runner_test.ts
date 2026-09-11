@@ -1,5 +1,75 @@
+import { until } from '../src/testing.ts'
 import { fileURLToPath } from 'node:url'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertThrows } from '@std/assert'
+import { shards } from './test.ts'
+
+Deno.test('bulk shards are bounded, deterministic and run every module once', () => {
+  assertEquals(shards([], 8), [])
+  assertEquals(shards(['a', 'b'], 8), [['a'], ['b']])
+  assertEquals(shards(['a', 'b', 'c', 'd', 'e'], 2), [['a', 'c', 'e'], [
+    'b',
+    'd',
+  ]])
+  assertEquals(shards(['a', 'b'], 1), [['a', 'b']])
+  for (let n of [0, -1, NaN, Infinity, 1.5]) {
+    assertThrows(() => shards(['a'], n))
+  }
+})
+
+for (let failure of [false, true]) {
+  Deno.test(`bulk processes ${failure ? 'fail fast and settle a live sibling' : 'run every shard'}`, async () => {
+    let dir = await Deno.makeTempDir({ prefix: 'test-shards-' })
+    try {
+      let testing = new URL('../src/testing.ts', import.meta.url).href
+      await Deno.writeTextFile(
+        `${dir}/a_test.ts`,
+        `
+        import { until } from ${JSON.stringify(testing)};
+        Deno.test('a', async () => {
+          await until(() => { try { Deno.statSync(${
+          JSON.stringify(`${dir}/b.pid`)
+        }); return true } catch { return false } }, { timeout: 15000 });
+          ${failure ? "throw new Error('expected shard failure')" : ''}
+        });
+      `,
+      )
+      await Deno.writeTextFile(
+        `${dir}/b_test.ts`,
+        `
+        Deno.test('b', async () => {
+          Deno.writeTextFileSync(${
+          JSON.stringify(`${dir}/b.pid`)
+        }, String(Deno.pid));
+          ${
+          failure
+            ? 'setInterval(() => {}, 1000); await new Promise(() => {});'
+            : ''
+        }
+        });
+      `,
+      )
+      let out = await new Deno.Command(Deno.execPath(), {
+        args: ['run', '-A', fixture, 'bulk', 'broad', dir],
+      }).output()
+      assertEquals(
+        out.code,
+        failure ? 1 : 0,
+        new TextDecoder().decode(out.stderr),
+      )
+      let pid = Number(await Deno.readTextFile(`${dir}/b.pid`))
+      assertEquals(
+        await Deno.stat(`/proc/${pid}`).then(() => true, () => false),
+        false,
+      )
+      if (!failure) {
+        let text = new TextDecoder().decode(out.stdout)
+        assertEquals((text.match(/1 passed/g) ?? []).length, 2)
+      }
+    } finally {
+      await Deno.remove(dir, { recursive: true })
+    }
+  })
+}
 
 let fixture = fileURLToPath(
   new URL('./test_runner_fixture.ts', import.meta.url),
@@ -8,17 +78,15 @@ let fixture = fileURLToPath(
 async function waitFor(path: string): Promise<void> {
   // This module itself runs in the broad parallel pass, where process spawn
   // can be delayed substantially by the rest of the repository inventory.
-  let deadline = Date.now() + 15_000
-  while (Date.now() < deadline) {
+  await until(async () => {
     try {
       await Deno.stat(path)
-      return
+      return true
     } catch (error) {
       if (!(error instanceof Deno.errors.NotFound)) throw error
+      return false
     }
-    await new Promise((resolve) => setTimeout(resolve, 10))
-  }
-  throw new Error(`timed out waiting for ${path}`)
+  }, { timeout: 15_000, label: path })
 }
 
 async function fixtureExists(pid: number, dir: string): Promise<boolean> {
@@ -32,11 +100,22 @@ async function fixtureExists(pid: number, dir: string): Promise<boolean> {
 }
 
 async function waitForFixtureExit(pid: number, dir: string): Promise<void> {
-  let deadline = Date.now() + 2_000
-  while (Date.now() < deadline && await fixtureExists(pid, dir)) {
-    await new Promise((resolve) => setTimeout(resolve, 10))
-  }
-  assertEquals(await fixtureExists(pid, dir), false)
+  await until(async () => !await fixtureExists(pid, dir), {
+    label: `fixture ${pid} to exit`,
+  })
+}
+
+async function release(dir: string, count: number) {
+  await until(async () => {
+    try {
+      return (await Deno.readTextFile(`${dir}/orchestrator.signals`)).trim()
+        .split('\n').length >= count
+    } catch (e) {
+      if (!(e instanceof Deno.errors.NotFound)) throw e
+      return false
+    }
+  }, { timeout: 15_000, label: 'orchestrator signal receipts' })
+  await Deno.writeTextFile(`${dir}/release`, '')
 }
 
 async function cancellationCase(
@@ -54,6 +133,7 @@ async function cancellationCase(
     await waitFor(`${dir}/grandchild.pid`)
     let grandchild = Number(await Deno.readTextFile(`${dir}/grandchild.pid`))
     process.kill(signal)
+    await release(dir, 1)
     let status = await process.status
     assertEquals(status.signal, signal)
     assertEquals(await Deno.readTextFile(`${dir}/grandchild.signal`), signal)
@@ -90,10 +170,11 @@ async function overlappingCancellationCase(
     let startedAt = Date.now()
     process.kill(first)
     // This receipt proves the first signal was accepted and forwarded before
-    // the later delivery. The grandchild deliberately remains alive briefly,
+    // the later delivery. The grandchild remains alive until explicitly released,
     // keeping the orchestrator in process-group settlement during the probe.
     await waitFor(`${dir}/grandchild.signal`)
     process.kill(later)
+    await release(dir, 2)
 
     let status = await process.status
     let elapsed = Date.now() - startedAt
@@ -108,10 +189,11 @@ async function overlappingCancellationCase(
         await Deno.readTextFile(`${dir}/${phase}.leader.signals`),
         `${first}\n`,
       )
-      // Both handlers deliberately survive the accepted signal. A result
-      // below this budget proves escalation started without awaiting either
-      // the phase leader or its descendant.
-      if (elapsed < 1_800 || elapsed > 4_500) {
+      // Both handlers survive the accepted signal. The virtual deadline
+      // must elapse before SIGKILL; the wall budget catches a stuck cleanup.
+      let clock = Number(await Deno.readTextFile(`${dir}/clock`))
+      assertEquals(clock >= 2_000, true)
+      if (elapsed > 4_500) {
         throw new Error(`stubborn group settled in ${elapsed}ms`)
       }
     }

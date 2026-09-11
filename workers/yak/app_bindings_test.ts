@@ -33,10 +33,11 @@ let configuration = {
 // Only Cloudflare's account API is replaced: its resources and multipart
 // uploads are the effects this lifecycle test needs to inspect.
 let fixture = async () => {
-  let { env } = platform('bindings-probe', {
+  let scenario = platform('bindings-probe', {
     CF_ACCOUNT: 'acct',
     CF_WORKERS_TOKEN: 'test-token',
   })
+  let { env } = scenario
   let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
   await dir.apply({
     entities: [
@@ -171,7 +172,10 @@ let fixture = async () => {
     resources,
     state,
     rows: (q: string) => meta(env).query(q),
-    done: () => void (globalThis.fetch = was),
+    done: () => {
+      globalThis.fetch = was
+      scenario[Symbol.dispose]()
+    },
   }
 }
 

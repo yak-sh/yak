@@ -108,20 +108,20 @@ let bareCli = (env: Record<string, string>) =>
 let text = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
 
 Deno.test('spawn usage errors exit non-zero before dispatch (T-35458)', async () => {
-  for (
-    let args of [
-      ['--provider'],
-      ['--provider='],
-      ['--provider', '--wait'],
-      ['--model=gpt-6-astra', '--timeout=bad'],
-    ]
-  ) {
+  // These are independent offline CLI boots. Keep the real exit/stdout/stderr
+  // boundary for every spelling, without serializing four cold module graphs.
+  await Promise.all([
+    ['--provider'],
+    ['--provider='],
+    ['--provider', '--wait'],
+    ['--model=gpt-6-astra', '--timeout=bad'],
+  ].map(async (args) => {
     let out = await cli('spawn', 'T-35447', ...args)
     assertEquals(out.code, 1)
     assertEquals(text(out.stdout), '')
     assertMatch(text(out.stderr), /task: spawn --(?:provider|timeout) needs/)
     assertStringIncludes(text(out.stderr), 'usage: task spawn')
-  }
+  }))
 })
 
 let commentBody = (args: string[], io: Parameters<typeof parse>[3]) =>

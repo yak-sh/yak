@@ -20,7 +20,7 @@ Deno.env.set('DB_PATH', ':memory:')
 let { apply, eager, entriesOf, entriesScan, matching } = await import('./db.ts')
 let { open } = await import('./store/sqlite.ts')
 let { append } = await import('./entries.ts')
-let { bareDb, freshDb } = await import('./testdb.ts')
+let { bareDb, freshDb, dbFixture } = await import('./testdb.ts')
 
 let session = (db: ReturnType<typeof open>) => {
   let eid = uuid()
@@ -31,8 +31,7 @@ let session = (db: ReturnType<typeof open>) => {
 let seqs = (hits: { comps: Record<string, Record<string, unknown>> }[]) =>
   hits.map((h) => Number(h.comps.entry?.seq))
 
-let world = () => {
-  let db = freshDb()
+let world = dbFixture((db) => {
   let a = session(db)
   let b = session(db) // stays empty — the genuinely-empty scope
   // Appended one at a time so a generation can point `through` the prior entry,
@@ -45,8 +44,8 @@ let world = () => {
   }])
   append(db, a, [{ call: { key: 'c1' }, bash: { command: 'ls' } }])
   append(db, a, [{ response: { status: 500 }, content: { body: 'boom' } }])
-  return { db, a, b }
-}
+  return { a, b }
+})
 
 Deno.test('verifier facets round-trip, query, and preserve their base kinds', () => {
   let db = bareDb()

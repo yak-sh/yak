@@ -281,6 +281,10 @@ export class DatabaseSync implements Sql {
   // Historical indexing must not run on the serving event loop. The worker
   // owns a separate connection, yields between transactions, and resumes the
   // durable cursor after a process exit. New writes are indexed by triggers.
+  get backfillingFts() {
+    return !!this.#ftsWorker
+  }
+
   backfillFts(path: string) {
     if (path == ':memory:' || !contentFtsPending(this) || this.#ftsWorker) {
       return

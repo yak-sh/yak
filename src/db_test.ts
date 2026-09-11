@@ -5079,7 +5079,7 @@ Deno.test('the wire cannot set num — it stays server-owned', () => {
 })
 
 Deno.test('the grave keys on the spine; a legacy eid-keyed one is rebuilt', () => {
-  let d = open(':memory:')
+  let d = bareDb()
   let a = uid(), b = uid()
   apply(d, [
     { eid: a, name: 'doc', comp: { title: 'to bury' } },
@@ -5112,7 +5112,7 @@ Deno.test('the grave keys on the spine; a legacy eid-keyed one is rebuilt', () =
 })
 
 Deno.test('vectors key on the spine; a legacy eid-keyed table is rebuilt', () => {
-  let d = open(':memory:')
+  let d = bareDb()
   let a = uid()
   apply(d, [{ eid: a, name: 'doc', comp: { title: 'embedded' } }])
   assertEquals(hasCol(d, 'embedding', 'entity'), true)
@@ -5150,7 +5150,7 @@ Deno.test('vectors key on the spine; a legacy eid-keyed table is rebuilt', () =>
 })
 
 Deno.test('a conflict names its sides on the spine; legacy labels resolve', () => {
-  let d = open(':memory:')
+  let d = bareDb()
   let t = uid(), a = uid(), b = uid()
   applyNumbered(d, [
     { eid: t, name: 'doc', comp: { title: 'contested' } },

@@ -45,6 +45,8 @@ two environments.
 
 For a per-step investigation and a repeated-body write regression fixed without
 changing the timing threshold, see [check regression T-37417](check-37417.md).
+For the fleet suite’s per-file profile, fixture fixes and independent-process
+runner, see [fleet suite T-37421](test-37421.md).
 
 ## CI
 

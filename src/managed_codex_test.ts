@@ -1672,7 +1672,7 @@ slow('deleting a Session aborts its flight after entry cascades', async () => {
 })
 
 Deno.test('restart reclaims a lost generation without minting another', async () => {
-  let db = freshDb()
+  let db = bareDb()
   let tree = Deno.makeTempDirSync()
   let sid = session(db, tree), old = uuid(), calls = 0
   writeSession(db, sid, { base_revision: 'base' })
@@ -1846,7 +1846,7 @@ slow('restart reclaims task_context on the same call entry', async () => {
 })
 
 Deno.test('restart leaves an uncertain side-effecting call recoverable', async () => {
-  let db = freshDb()
+  let db = bareDb()
   let tree = Deno.makeTempDirSync()
   let sid = session(db, tree), old = uuid(), calls = 0
   let casts: Change[] = []
@@ -1916,7 +1916,7 @@ Deno.test('restart leaves an uncertain side-effecting call recoverable', async (
 })
 
 Deno.test('restart reattaches a shell on its original call and feeds its exit to the next turn', async () => {
-  let db = freshDb()
+  let db = bareDb()
   let tree = Deno.makeTempDirSync()
   let sid = session(db, tree), old = uuid(), calls = 0
   let casts: Change[] = []
@@ -2731,7 +2731,7 @@ slow(
 )
 
 Deno.test('restart of an old error-bearing call never exposes a terminal recovery gap (T-37196)', async () => {
-  let db = freshDb(), sid = session(db), old = uuid()
+  let db = bareDb(), sid = session(db), old = uuid()
   apply(db, [{ eid: old, name: 'runner', comp: { name: 'old' } }])
   let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
   let gen = append(db, sid, [{
@@ -2797,7 +2797,7 @@ for (
   ]
 ) {
   Deno.test(`idle graph recovery: ${mode} (T-37365)`, async () => {
-    let db = freshDb(), sid = session(db), old = uuid()
+    let db = bareDb(), sid = session(db), old = uuid()
     let clock = () => new Date('2026-08-10T12:00:01Z')
     writeSession(db, sid, {
       status: mode == 'terminal' ? 'interrupted' : 'running',

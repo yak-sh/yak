@@ -12,9 +12,9 @@
     },
     "test": {
       "baseline": {
-        "ratio": 1061.844253673215,
-        "controlFloorSeconds": 0.054619091761904805,
-        "seconds": 73.74940023
+        "ratio": 766.685215775247,
+        "controlFloorSeconds": 0.05178629543076968,
+        "seconds": 44.190207213
       }
     },
     "test:workerd": {

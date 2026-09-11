@@ -1,4 +1,4 @@
-// Run the broad suite with Deno's module-level parallelism while preserving
+// Run the broad suite in independent Deno processes while preserving
 // fresh-process isolation for fixtures whose contract is process-global state.
 // A parallel worker reuses one module graph and environment for several files:
 // sessions_contention owns a file DB_PATH, and sessions owns
@@ -31,36 +31,67 @@ let isolated = new Set([
   'src/harness_integration_test.ts',
 ])
 
-let tests: string[] = []
-// Ours only. `node_modules` is walked into otherwise, and a dependency that
-// ships its own `*_test.ts` — `@jsr/std__streams` does — is then run as if it
-// were this repo's, against an import map that is not its own. The workerd
-// probes install one under workers/yak, so this fires for anybody who runs
-// them before the suite.
-let SKIP = new Set(['vendor', 'node_modules'])
-let collect = async (dir: string): Promise<void> => {
-  for await (let entry of Deno.readDir(dir)) {
-    let path = `${dir}/${entry.name}`
-    if (entry.isFile && /_test\.tsx?$/.test(entry.name)) {
-      tests.push(path)
-    } else if (entry.isDirectory && !SKIP.has(entry.name)) {
-      await collect(path)
+// These modules guard every server/HOME/port side effect behind TASKS_SLOW.
+// Their fast tests (and the existing ignored cases) still run in the broad
+// pass; an inactive server fixture must not cost a fresh Deno process. New
+// server-importing files remain isolated by default until audited here.
+let slowIsolated = new Set([
+  'src/agg_sub_test.ts',
+  'src/bus_realdb_test.ts',
+  'src/claim_test.ts',
+  'src/cli_usage_server_test.ts',
+  'src/edges_sub_test.ts',
+  'src/effects_registry_test.ts',
+  'src/empty_sub_test.ts',
+  'src/hops_test.ts',
+  'src/inbox_server_test.ts',
+  'src/migrate_consumer_test.ts',
+  'src/outbox_test.ts',
+  'src/page_test.ts',
+  'src/precondition_test.ts',
+  'src/redaction_server_test.ts',
+  'src/subs_live_test.ts',
+  'src/verify_server_test.ts',
+  'src/worker_server_test.ts',
+  'src/wsworker_test.ts',
+])
+
+export async function inventory() {
+  let tests: string[] = []
+  // Ours only. `node_modules` is walked into otherwise, and a dependency that
+  // ships its own `*_test.ts` — `@jsr/std__streams` does — is then run as if it
+  // were this repo's, against an import map that is not its own. The workerd
+  // probes install one under workers/yak, so this fires for anybody who runs
+  // them before the suite.
+  let SKIP = new Set(['vendor', 'node_modules'])
+  let collect = async (dir: string): Promise<void> => {
+    for await (let entry of Deno.readDir(dir)) {
+      let path = `${dir}/${entry.name}`
+      if (entry.isFile && /_test\.tsx?$/.test(entry.name)) {
+        tests.push(path)
+      } else if (entry.isDirectory && !SKIP.has(entry.name)) {
+        await collect(path)
+      }
     }
   }
-}
-for (let dir of ['src', 'bin', 'channels', 'workers']) await collect(dir)
-tests.sort()
+  for (let dir of ['src', 'bin', 'channels', 'workers']) await collect(dir)
+  tests.sort()
 
-// A server import is itself process-global state: server.ts binds once, owns
-// one db singleton, and installs signal handlers. Addressing `http.addr` makes
-// accidental co-location correct for the in-memory HTTP tests, but file-db and
-// shutdown tests still require a fresh process, so keep the whole boundary in
-// the ordinary runner.
-for (let file of tests) {
-  let source = await Deno.readTextFile(file)
-  if (/(?:from\s*|import\s*\()\s*['"]\.\/server\.ts['"]/.test(source)) {
-    isolated.add(file)
+  // A server import is itself process-global state: server.ts binds once, owns
+  // one db singleton, and installs signal handlers. Addressing `http.addr` makes
+  // accidental co-location correct for the in-memory HTTP tests, but file-db and
+  // shutdown tests still require a fresh process, so keep the whole boundary in
+  // the ordinary runner.
+  for (let file of tests) {
+    let source = await Deno.readTextFile(file)
+    if (/(?:from\s*|import\s*\()\s*['"]\.\/server\.ts['"]/.test(source)) {
+      if (Deno.env.get('TASKS_SLOW') || !slowIsolated.has(file)) {
+        isolated.add(file)
+      }
+    }
   }
+
+  return tests
 }
 
 let common = [
@@ -81,7 +112,21 @@ export type TestCommand = {
   env?: Record<string, string>
 }
 
+export type SettlementClock = {
+  now(): number
+  wait(ms: number): Promise<void>
+}
+
+const realClock: SettlementClock = {
+  now: () => Date.now(),
+  wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+}
+
 export type TestCommandOptions = {
+  /** Deadline seam; process ownership and signals remain real. */
+  clock?: SettlementClock
+  /** Observe deliveries, including repeats while cleanup owns the outcome. */
+  onSignal?: (signal: Deno.Signal) => void
   /** Terminate this process with an accepted/owned signal after cleanup. */
   terminateOnSignal?: boolean
 }
@@ -141,7 +186,8 @@ async function groupExists(pid: number): Promise<boolean> {
 async function settleGroup(
   pid: number,
   alreadySignaled: boolean,
-  startedAt = Date.now(),
+  clock: SettlementClock,
+  startedAt = clock.now(),
 ): Promise<void> {
   if (!(await groupExists(pid))) return
   if (!alreadySignaled) signalGroup(pid, 'SIGTERM')
@@ -149,14 +195,14 @@ async function settleGroup(
   // Cancellation hands us its acceptance time. Time spent discovering a
   // stubborn group is part of the bound, rather than a prelude to it.
   let deadline = startedAt + 2_000
-  while (Date.now() < deadline) {
+  while (clock.now() < deadline) {
     if (!(await groupExists(pid))) return
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    await clock.wait(10)
   }
   signalGroup(pid, 'SIGKILL')
-  deadline = Date.now() + 2_000
-  while (Date.now() < deadline && await groupExists(pid)) {
-    await new Promise((resolve) => setTimeout(resolve, 10))
+  deadline = clock.now() + 2_000
+  while (clock.now() < deadline && await groupExists(pid)) {
+    await clock.wait(10)
   }
   if (await groupExists(pid)) {
     throw new Error(`test child process group ${pid} did not settle`)
@@ -168,6 +214,7 @@ export async function runTestCommands(
   commands: TestCommand[],
   options: TestCommandOptions = {},
 ): Promise<Result> {
+  let clock = options.clock ?? realClock
   let active: Deno.ChildProcess | undefined
   let cancellation: (typeof cancellationSignals)[number] | undefined
   let terminalSignal: Deno.Signal | undefined
@@ -179,7 +226,7 @@ export async function runTestCommands(
   let startSettlement = (signal?: Deno.Signal): Promise<void> => {
     if (!active) return Promise.resolve()
     if (!settlement) {
-      let startedAt = Date.now()
+      let startedAt = clock.now()
       if (signal) {
         forwarded = true
         signalGroup(active.pid, signal)
@@ -187,7 +234,7 @@ export async function runTestCommands(
       // Mint this promise exactly once while `active` still names the owned
       // group. In particular, do not put it behind active.status: a phase
       // leader is allowed to handle TERM/INT and remain alive.
-      settlement = settleGroup(active.pid, !!signal, startedAt)
+      settlement = settleGroup(active.pid, !!signal, clock, startedAt)
       settlementStarted?.()
     }
     return settlement
@@ -195,6 +242,7 @@ export async function runTestCommands(
 
   let handlers = Object.fromEntries(cancellationSignals.map((signal) => {
     let handler = () => {
+      options.onSignal?.(signal)
       // The first signal owns the result. Overlapping/repeated delivery cannot
       // change it or send a second signal while orderly cleanup is in flight.
       if (terminalSignal) return
@@ -284,7 +332,53 @@ export async function runTestCommands(
   }
 }
 
-if (import.meta.main) {
+/** Stable, bounded partition: every module runs exactly once. */
+export function shards(files: string[], jobs: number): string[][] {
+  if (!Number.isInteger(jobs) || jobs < 1) throw new Error('invalid test jobs')
+  let groups = Array.from(
+    { length: Math.min(jobs, files.length) },
+    () => [] as string[],
+  )
+  files.forEach((file, i) => groups[i % groups.length].push(file))
+  return groups
+}
+
+// Writes to a pipe may be short. Finish one report synchronously so another
+// shard cannot splice bytes into its test names/durations.
+function report(
+  stream: { writeSync(bytes: Uint8Array): number },
+  bytes: Uint8Array,
+) {
+  while (bytes.length) bytes = bytes.subarray(stream.writeSync(bytes))
+}
+
+if (import.meta.main && Deno.args[0] === '--bulk') {
+  // Deno --parallel shares a native SQLite allocator across its worker threads.
+  // Separate processes avoid its mutex contention. This coordinator and ALL
+  // its children stay in the outer runner's process group: fail-fast or a
+  // signal still settles the complete tree, not just a shard's leader.
+  let jobs = Number(Deno.env.get('DENO_JOBS') ?? navigator.hardwareConcurrency)
+  let children = shards(Deno.args.slice(1), jobs).map((files) =>
+    new Deno.Command(Deno.execPath(), {
+      args: [...common, ...files],
+      stdin: 'inherit',
+      // Keep each reporter intact: interleaved half-lines would also fool
+      // test:budget's per-test duration parser. Drain concurrently below.
+      stdout: 'piped',
+      stderr: 'piped',
+    }).spawn()
+  )
+  await Promise.all(children.map(async (child) => {
+    let status = await child.output()
+    report(Deno.stdout, status.stdout)
+    report(Deno.stderr, status.stderr)
+    if (!status.success) {
+      console.error(`test shard ${child.pid}: ${status.signal ?? status.code}`)
+      Deno.exit(status.code || 1)
+    }
+  }))
+} else if (import.meta.main) {
+  let tests = await inventory()
   let suite = Deno.env.get('TASKS_SLOW')
     ? await (await import('../workers/yak/probe-suite.ts')).probeSuite()
     : undefined
@@ -294,8 +388,11 @@ if (import.meta.main) {
       {
         command: Deno.execPath(),
         args: [
-          ...common,
-          '--parallel',
+          'run',
+          '-A',
+          '--unstable-worker-options',
+          import.meta.filename!,
+          '--bulk',
           ...tests.filter((f) => !isolated.has(f)),
         ],
         env,

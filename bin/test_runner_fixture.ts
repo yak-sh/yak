@@ -1,10 +1,25 @@
+import { tick, until } from '../src/testing.ts'
 import { runTestCommands, type TestCommand } from './test.ts'
 
 let [mode, phase, dir, codeText] = Deno.args
 let stubborn = phase.startsWith('stubborn-')
 let phaseName = phase.replace(/^stubborn-/, '')
 
-if (mode === 'grandchild') {
+if (mode === 'bulk') {
+  let result = await runTestCommands([{
+    command: Deno.execPath(),
+    args: [
+      'run',
+      '-A',
+      new URL('./test.ts', import.meta.url).pathname,
+      '--bulk',
+      `${dir}/a_test.ts`,
+      `${dir}/b_test.ts`,
+    ],
+    env: { DENO_JOBS: '2' },
+  }])
+  Deno.exit(result.code ?? 1)
+} else if (mode === 'grandchild') {
   let signal = ''
   let exiting = false
   for (let name of ['SIGINT', 'SIGTERM'] as const) {
@@ -19,9 +34,19 @@ if (mode === 'grandchild') {
       if (stubborn) return
       if (!exiting) {
         exiting = true
-        // Leave enough time for an overlapping delivery to reach the
-        // orchestrator while its accepted outcome and cleanup are settled.
-        setTimeout(() => Deno.exit(signal === 'SIGINT' ? 130 : 143), 250)
+        // The parent releases us only after the orchestrator has observed
+        // every signal in this case. No wall-clock padding for overlap.
+        void until(() => {
+          try {
+            Deno.statSync(`${dir}/release`)
+            return true
+          } catch (e) {
+            if (!(e instanceof Deno.errors.NotFound)) throw e
+            return false
+          }
+        }, { timeout: 15_000 }).then(() =>
+          Deno.exit(signal === 'SIGINT' ? 130 : 143)
+        )
       }
     })
   }
@@ -52,6 +77,24 @@ if (mode === 'grandchild') {
   setInterval(() => {}, 1_000)
   await new Promise(() => {})
 } else if (mode === 'orchestrator') {
+  let now = 0
+  let clock = {
+    now: () => now,
+    wait: async () => {
+      await until(() => {
+        try {
+          Deno.statSync(`${dir}/release`)
+          return true
+        } catch (e) {
+          if (!(e instanceof Deno.errors.NotFound)) throw e
+          return false
+        }
+      }, { timeout: 15_000 })
+      await tick()
+      now += 250
+      Deno.writeTextFileSync(`${dir}/clock`, String(now))
+    },
+  }
   let child = (name: string, code?: number): TestCommand => ({
     command: Deno.execPath(),
     args: [
@@ -71,6 +114,13 @@ if (mode === 'grandchild') {
     : phaseName === 'broad-code'
     ? [child('broad', Number(codeText)), child('isolated')]
     : [child('broad', 0), child('isolated', Number(codeText))]
-  let result = await runTestCommands(commands, { terminateOnSignal: true })
+  let result = await runTestCommands(commands, {
+    terminateOnSignal: true,
+    onSignal: (name) =>
+      Deno.writeTextFileSync(`${dir}/orchestrator.signals`, `${name}\n`, {
+        append: true,
+      }),
+    ...(stubborn ? { clock } : {}),
+  })
   Deno.exit(result.code)
 }
