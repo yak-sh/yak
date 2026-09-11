@@ -50,3 +50,29 @@ Deno.test('subscriptions transfer ordered append frames and snapshot live values
     body: 'abc'.repeat(100) + 'tail',
   })
 })
+
+Deno.test('resubscription clears a stale projection when finalization was missed', async () => {
+  const source = graph({ vocab, storage: ram(vocab) })
+  const target = graph({ vocab, storage: ram(vocab) })
+  await source.apply([{ entity: { eid: 'd' }, doc: { body: '' } }])
+  const subs = subscriptions(source)
+  let pending = Promise.resolve()
+  const sink = (f: Frame) => {
+    pending = pending.then(async () => {
+      await land(target, f)
+    })
+  }
+  await subs.open(sink, 'd', '.doc')
+  const w = await transient(source).begin('d', 'doc', 'body', 's')
+  w.append('old')
+  await Promise.resolve()
+  await pending
+  subs.close(sink, 'd')
+  w.append(' new')
+  await w.commit()
+  await subs.open(sink, 'd', '.doc')
+  await Promise.resolve()
+  await pending
+  assertEquals((await target.read('.doc'))[0].doc, { body: 'old new' })
+  assertEquals(transient(target).snapshots(), [])
+})

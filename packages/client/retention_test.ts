@@ -428,3 +428,64 @@ Deno.test('a synchronous first frame filters stale shared hits before watch retu
   assertEquals(readIds(a.value), ['a'])
   c.close()
 })
+
+Deno.test('query replica applies transient frames without persisting projections', async () => {
+  const { client } = await import('./client.ts')
+  const { loadVocab } = await import('@yaks/vocab')
+  const c = client(
+    loadVocab([{
+      $defs: { text: { properties: { body: { type: 'string' } } } },
+    }]),
+    [],
+    { vault: false },
+  )
+  try {
+    c.cache.subscribe('live', '.text')
+    await c.cache.land({
+      id: 'live',
+      bundles: [{ entity: { eid: 'd' }, text: { body: '' } }],
+    })
+    const watch = c.watch('.text')
+    await c.cache.land({
+      id: 'live',
+      transient: [{
+        id: 's',
+        entity: 'd',
+        component: 'text',
+        property: 'body',
+        seq: 0,
+        op: 'begin',
+        text: '',
+      }],
+    })
+    await c.cache.land({
+      id: 'live',
+      transient: [{
+        id: 's',
+        entity: 'd',
+        component: 'text',
+        property: 'body',
+        seq: 1,
+        op: 'append',
+        text: 'hello',
+      }],
+    })
+    assertEquals(watch.value[0].text, { body: 'hello' })
+    assertEquals(c.ent('d')!.text, { body: '' })
+    await c.cache.land({
+      id: 'live',
+      bundles: [{ entity: { eid: 'd' }, text: { body: 'hello' } }],
+      transient: [{
+        id: 's',
+        entity: 'd',
+        component: 'text',
+        property: 'body',
+        seq: 2,
+        op: 'end',
+      }],
+    })
+    assertEquals(watch.value[0].text, { body: 'hello' })
+  } finally {
+    c.close()
+  }
+})

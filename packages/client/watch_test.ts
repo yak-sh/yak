@@ -4,7 +4,7 @@
 // is closed.
 
 import { assertEquals } from '@std/assert'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, transient } from '@yaks/graph'
 import { boxClient, server, titles } from './harness.ts'
 import type { Hold, Make } from './watch.ts'
 
@@ -324,7 +324,6 @@ Deno.test('a refused remote subscription is never ready', async () => {
 })
 
 Deno.test('closing one watch does not disconnect other transient observers', async () => {
-  const { transient } = await import('@yaks/graph')
   const { client } = await import('./client.ts')
   const { loadVocab } = await import('@yaks/vocab')
   const c = client(

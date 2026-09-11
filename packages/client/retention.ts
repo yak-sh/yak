@@ -1,7 +1,7 @@
 // Payloads live ONLY in RAM. This policy keeps ids/order/ownership, not a
 // parallel query cache. A release retains; an authoritative absence forgets.
 import type { Bundle, Eid, Graph } from '@yaks/graph'
-import { comps, dead, then } from '@yaks/graph'
+import { comps, dead, then, transient } from '@yaks/graph'
 import type { Store } from '@yaks/ram'
 import {
   type Ask,
@@ -109,6 +109,7 @@ export let retention = (
       invalid.delete(eid)
       inactive.delete(eid)
       known.delete(eid)
+      transient(graph).forget([eid])
       let row = held(eid)
       if (!row || dead(row)) continue
       let patch: Bundle = { entity: row.entity }
@@ -253,6 +254,7 @@ export let retention = (
       frames++ // even an empty authoritative answer defeats late disk data
       let sub = subscriptions.get(frame.id)
       if (!sub) return []
+      transient(graph).forget(frame.transientReset ?? [])
       let arrived = new Set((frame.bundles ?? []).map((b) => b.entity.eid))
       let gone = new Set(frame.gone ?? [])
       if (frame.reset) {
@@ -279,6 +281,13 @@ export let retention = (
           ? land(graph, { ...frame, bundles, gone: [] })
           : snapshot(graph, bundles),
         (out) => {
+          if (sub.query !== true) {
+            for (const update of frame.transient ?? []) {
+              if (
+                sub.members.has(update.entity) && !pins.has(update.entity)
+              ) transient(graph).receive(update)
+            }
+          }
           sweep()
           notify(frame.id)
           return out

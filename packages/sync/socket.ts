@@ -48,6 +48,7 @@ export type Ask = string | true
  * it, or the refusal that closed the subscription. */
 export type Frame = {
   transient?: import('@yaks/graph').TransientFrame[]
+  transientReset?: string[]
   /** the subscription this frame answers */
   id: string
   /** the entities now in the set (whole), or the applied batch for a raw feed */

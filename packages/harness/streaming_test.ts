@@ -280,3 +280,24 @@ Deno.test('fork admission cannot capture mutable in-flight output', async () => 
     h.close()
   }
 })
+
+Deno.test('an empty successful reply completes its ask rather than issuing another request', async () => {
+  const h = open(':memory:')
+  let count = 0
+  const a = agent({
+    h,
+    streaming: true,
+    model: () => {
+      count++
+      return Promise.resolve({ id: 'empty', model: 'fake', items: [] })
+    },
+  })
+  try {
+    const id = await a.start('hello')
+    await a.idle(id)
+    assertEquals(count, 1)
+    assertEquals(statusOf(await a.transcript(id)), 'settled')
+  } finally {
+    await a.close()
+  }
+})

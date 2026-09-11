@@ -55,6 +55,14 @@ function create(g: Graph) {
     if (!Number.isSafeInteger(f.seq) || f.seq < 0) {
       throw new Error('Invalid transient sequence')
     }
+    if (
+      !f.id || !f.entity || !f.component || !f.property ||
+      !['begin', 'append', 'end'].includes(f.op) ||
+      (f.text !== undefined && typeof f.text != 'string')
+    ) throw new Error('Invalid transient frame')
+    if (f.op == 'begin' && (f.text?.length ?? 0) > 16 * 1024 * 1024) {
+      throw new Error('Transient snapshot too large')
+    }
     if (ended.has(f.id)) return
     const k = key(f), old = values.get(k)
     if (f.op == 'end') {

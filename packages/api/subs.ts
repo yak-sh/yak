@@ -44,6 +44,7 @@ import { type Refusal, refusal } from './refuse.ts'
  */
 export type Frame = {
   transient?: TransientFrame[]
+  transientReset?: Eid[]
   /** the subscription this frame answers */
   id: string
   /** the entities now in the set (whole), or the composed batch for a raw
@@ -176,6 +177,7 @@ export let subscriptions = (graph: Graph, opts: {
         sink({
           id,
           bundles,
+          transientReset: bundles.map((b) => b.entity.eid),
           ...snapshots.length ? { transient: snapshots } : {},
         })
       })

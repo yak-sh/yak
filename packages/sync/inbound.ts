@@ -55,7 +55,7 @@ export let land = (
   const live = transient(graph)
   let bundles = frame.bundles ?? []
   let gone = frame.gone ?? []
-  live.forget(gone)
+  live.forget([...gone, ...frame.transientReset ?? []])
   return then(
     bundles.length ? graph.apply(echo(bundles), { trusted: true }) : [],
     (applied) => {
