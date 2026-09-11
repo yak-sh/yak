@@ -74,10 +74,7 @@ export let App = (
   { agent: a, panels: sidebar = panels, subscribe, frontend: supplied }: Opts,
 ): JSX.Element => {
   let ui = useMemo(() => supplied ?? frontend(), [supplied])
-  let inspectKey = useMemo(() => inspector(ui, a, () => refresh.current()), [
-    ui,
-    a,
-  ])
+  let inspectKey = useMemo(() => inspector(ui, a), [ui, a])
   useLayoutEffect(() => () => {
     if (!supplied) ui.close()
   }, [ui, supplied])
