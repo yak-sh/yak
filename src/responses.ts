@@ -33,6 +33,13 @@ export type ResponseOptions =
     credentials: CredentialSource
   }
 
+// How long a turn keeps waiting out a backend incident before it gives up. A
+// 503 or a bus gone silent answers every attempt the same way, so the wire's
+// three attempts are spent in five seconds and the Session settles `failed`
+// over a blip (T-37332). Ten minutes of capped backoff outlives an ordinary
+// outage; a longer one still ends the session, honestly.
+export let PATIENCE_MS = 600_000
+
 export let responses = (options: ResponseOptions) =>
   transport({ ...options, store: false, redact: true })
 

@@ -72,6 +72,9 @@ let localDefinitions: ToolDefinition[] = [
       },
       timeout_ms: {
         type: ['integer', 'null'],
+        description:
+          'Hard kill deadline in MILLISECONDS, 100 to 120000. Null takes ' +
+          'the default of 60000; a build or test run wants most of the range.',
         minimum: 100,
         maximum: 120000,
       },
@@ -92,6 +95,9 @@ let localDefinitions: ToolDefinition[] = [
       },
       timeout_ms: {
         type: ['integer', 'null'],
+        description:
+          'Hard kill deadline in MILLISECONDS, 100 to 120000. Null takes ' +
+          'the default of 60000; a build or test run wants most of the range.',
         minimum: 100,
         maximum: 120000,
       },
@@ -170,7 +176,11 @@ let shown = (drained: Drained, name: string) =>
       `(${drained.total} bytes)]`
     : drained.text
 
-let bounded = (value: unknown, fallback = 30_000) => {
+// The unit is milliseconds at every hop — the schema says so, and the value
+// reaches `timeout` as `ms / 1000` seconds (hosted_shell.ts). The default is a
+// full minute because the commands a session runs are gates and test suites,
+// not `echo`; a caller that wants less passes less.
+export let deadline = (value: unknown, fallback = 60_000) => {
   let n = Number(value ?? fallback)
   if (!Number.isInteger(n) || n < 100 || n > 120_000) {
     throw new Error('timeout_ms must be an integer from 100 to 120000')
@@ -214,7 +224,7 @@ export let localTools = async (
     let rel = cwdValue ?? '.'
     let cwd = await Deno.realPath(resolve(tree, rel)).catch(() => '')
     if (!cwd) throw new Error('tool cwd does not exist')
-    let timeout = bounded(timeoutValue)
+    let timeout = deadline(timeoutValue)
     // A tool command is a TREE, not just its first shell. `task land`, test
     // runners, and most useful shell lines spawn descendants which inherit the
     // captured pipes. Killing only Bash at the deadline leaves those writers
@@ -315,7 +325,7 @@ export let localTools = async (
       command: args.command,
       cwd,
       env: childEnv(options.session, tree),
-      timeout: bounded(args.timeout_ms),
+      timeout: deadline(args.timeout_ms),
       limit,
       dir: options.processDir,
       signal: context.signal,

@@ -592,6 +592,8 @@ let hang = (init?: RequestInit) =>
 Deno.test('responses fails a connect that never returns a response', async () => {
   let client = responses({
     credentials: auth(),
+    // A stall is transient now (retry_test), so these measure the FAULT.
+    retries: 0,
     stallMs: 20,
     fetch: (_input, init) =>
       new Promise<Response>((_resolve, reject) => {
@@ -608,6 +610,8 @@ Deno.test('responses fails a connect that never returns a response', async () =>
 Deno.test('responses fails a stream that stalls after connecting', async () => {
   let client = responses({
     credentials: auth(),
+    // A stall is transient now (retry_test), so these measure the FAULT.
+    retries: 0,
     stallMs: 20,
     fetch: (_input, init) => Promise.resolve(new Response(hang(init))),
   })
@@ -736,6 +740,7 @@ Deno.test('watchdog bounds both a missing first frame and a stalled HTTP error b
   for (let status of [200, 400]) {
     let client = transport({
       credentials: auth(),
+      retries: 0,
       stallMs: 20,
       fetch: (_url, init) =>
         Promise.resolve(

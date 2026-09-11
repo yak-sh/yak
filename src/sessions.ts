@@ -1,4 +1,5 @@
 import { toolTiming } from '@yaks/session'
+import { literal } from '@yaks/process'
 // Managed sessions: spawn an agent on a task, in its own git worktree, and
 // keep its session row honest while it runs. Server-only. Everything here
 // enters through the GRAPH, not routes: a session created with a normalized
@@ -1812,7 +1813,10 @@ let spawn = (
       }" ` +
       `setsid sh "$WRAPPER_SH" "$@" 2>> "$TASKS_ERR" &`,
       'sh',
-      ...argv,
+      // `literal` (@yaks/process) escapes each `$` the same way WRAPPER's
+      // path avoids one: systemd expands the command line it launches, and an
+      // agent's argv carries prose (T-37332).
+      ...argv.map(literal),
     ],
     cwd,
     clearEnv: true,

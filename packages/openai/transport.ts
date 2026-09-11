@@ -75,8 +75,13 @@ export type ResponseOptions = {
   headers?: Record<string, string>
   /** Additional attempts for credential loads and transient wire failures;
    * default 2 (three total attempts). Wire backoff is 1s, 4s, then capped at
-   * 16s; Retry-After may extend it, up to 60s. */
+   * 60s; Retry-After may extend it, up to 60s. */
   retries?: number
+  /** How long a transient wire failure may go on being retried once `retries`
+   * is spent — a backend outage answers every attempt the same way, and five
+   * seconds of patience is not an outage. 0 (the default) stops at `retries`;
+   * the wait is the same backoff, so the total is wall-clock, not attempts. */
+  patienceMs?: number
   pause?: (ms: number) => Promise<void>
   id?: () => string
   /** Replace default body shaping for compatible providers. */
@@ -195,8 +200,12 @@ let busy = new Set([
 ])
 
 // Terminal provider failures and malformed events are not network failures.
+// A stall is one of them: a bus that connected and went silent said nothing
+// about this request, so the next attempt is as clean as a dropped connection
+// (T-37332 — two stalls ended a session that had retries left).
 let transient = (error: ResponseError) =>
   error.kind == 'transport' || error.kind == 'disconnected' ||
+  error.kind == 'stalled' ||
   error.kind == 'no_stream' || error.status == 429 ||
   (error.status != null && error.status >= 500 && error.status < 600) ||
   (error.code != null && busy.has(error.code))
@@ -528,6 +537,7 @@ export let transport = (options: ResponseOptions): {
   let fetcher = options.fetch ?? fetch
   let base = options.base?.replace(/\/$/, '')
   let retries = Math.max(0, options.retries ?? 2)
+  let patienceMs = Math.max(0, options.patienceMs ?? 0)
   let stallMs = Math.max(0, options.stallMs ?? 0)
   let pause = options.pause ?? sleep
   let id = options.id ?? (() => crypto.randomUUID())
@@ -559,6 +569,7 @@ export let transport = (options: ResponseOptions): {
     remember(auth)
     let refreshed = false
     let failures = 0
+    let waited = 0
     let requestId = id()
     let payload = JSON.stringify(
       options.shape?.(value) ?? request(value, options.store),
@@ -634,26 +645,31 @@ export let transport = (options: ResponseOptions): {
         return await terminal(response, secrets, run.event, dog.kick)
       } catch (error) {
         if (run.signal?.aborted) throw error
-        if (dog.stalled()) {
-          if (error instanceof ResponseError && error.kind == 'stalled') {
-            throw error
-          }
-          throw fault('stalled', 'responses: stream stalled')
-        }
+        let fail = error
         if (
-          !(error instanceof ResponseError) || !transient(error) ||
-          failures >= retries
+          dog.stalled() &&
+          !(error instanceof ResponseError && error.kind == 'stalled')
         ) {
-          throw error
+          fail = fault('stalled', 'responses: stream stalled')
+        }
+        // Patience outlives the attempt count: an outage answers every attempt
+        // the same way, and a caller that says how long it can wait keeps its
+        // turn alive through one instead of failing in five seconds.
+        if (
+          !(fail instanceof ResponseError) || !transient(fail) ||
+          (failures >= retries && waited >= patienceMs)
+        ) {
+          throw fail
         }
         // Nothing from this attempt is committed. Reuse the exact body and
         // correlation id; only a complete exchange may reach the runner.
         dog.close()
-        await backoff(
-          Math.max(Math.min(1000 * 4 ** failures++, 16_000), retryAfter(error)),
-          run.signal,
-          options.pause,
+        let wait = Math.max(
+          Math.min(1000 * 4 ** failures++, 60_000),
+          retryAfter(fail),
         )
+        waited += wait
+        await backoff(wait, run.signal, options.pause)
       } finally {
         dog.close()
       }

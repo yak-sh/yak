@@ -157,6 +157,15 @@ let userBus = () => {
   }
 }
 
+// systemd expands `$VAR` and `${VAR}` in the command line it launches, so an
+// argv element carrying a shell variable, a template literal or a heredoc body
+// reaches the program shredded: a hosted shell wrote a test file with every
+// `${…}` deleted and systemd's "Referenced but unset environment variable"
+// note in its stderr (T-37332). `$$` is systemd's escape for a literal `$`, so
+// the program sees exactly the argv the caller passed. Only the command LINE
+// is expanded — `%` specifiers are not — so this is the whole quoting rule.
+export let literal = (arg: string): string => arg.replaceAll('$', '$$$$')
+
 let spawn = (
   eid: string,
   argv: string[],
@@ -173,7 +182,7 @@ let spawn = (
       `systemd-run --user --scope --collect --quiet --unit="${unit(eid)}" ` +
       `setsid sh "$WRAPPER_SH" "$@" 2>> "$TASKS_ERR" &`,
       'sh',
-      ...argv,
+      ...argv.map(literal),
     ],
     cwd,
     clearEnv: true,

@@ -27,7 +27,7 @@ import { bootDoing, type Doing, wireDoing } from './doing.ts'
 import { known } from './catalog.ts'
 import { accountService } from './accounts.ts'
 import { codexIssuer, codexStore } from './codex_auth.ts'
-import { responses } from './responses.ts'
+import { PATIENCE_MS, responses } from './responses.ts'
 import { codexReadiness } from './codex_ready.ts'
 import { credentialService } from './credentials.ts'
 import { type OllamaConfig } from './ollama.ts'
@@ -74,6 +74,7 @@ let codexBus = responses({
   credentials: codexAccount.credentials,
   headers: { originator: 'tasks', version: '0' },
   retries: 2,
+  patienceMs: PATIENCE_MS,
   stallMs,
 })
 let codexReady = codexReadiness(

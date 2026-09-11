@@ -77,7 +77,7 @@ import { maintainStandingFor } from './sessions.ts'
 import { codexIssuer, codexStore } from './codex_auth.ts'
 import { accountHttp, accountService } from './accounts.ts'
 import { credentialHttp, credentialService } from './credentials.ts'
-import { responses } from './responses.ts'
+import { PATIENCE_MS, responses } from './responses.ts'
 import { codexReadiness } from './codex_ready.ts'
 import { type OllamaConfig, ollamaProbe } from './ollama.ts'
 import { resolve, settingRows } from './config.ts'
@@ -664,6 +664,7 @@ let codexTransport = responses({
   credentials: codexAccount.credentials,
   headers: { originator: 'tasks', version: '0' },
   retries: 2,
+  patienceMs: PATIENCE_MS,
   stallMs,
 })
 // The adapter table stamped with live readiness: the graph-native Codex

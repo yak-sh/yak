@@ -57,3 +57,20 @@ Deno.test('watch picks up an unfinished row and stamps the one already gone', as
   // Stamped, so the next boot's reconcile has nothing left to pick up.
   assertEquals(await watch(store(g), { dir: dir(), poll: 5 }), [])
 })
+
+// systemd expands the command line it launches, so an unescaped `$` reaches
+// the program as an empty string — a hosted shell wrote a heredoc with every
+// `${…}` deleted before anyone noticed (T-37332).
+Deno.test('a command keeps every dollar the caller wrote', async () => {
+  let g = tracked()
+  let run = await launch(store(g), {
+    command: 'sh',
+    args: ['-c', 'printf %s "$1"', 'sh', '${backend} $defs $$ $'],
+  }, { dir: dir(), poll: 5 })
+  assertEquals(await run.done, 0)
+  assertEquals(
+    (await g.read(`.content.source=${run.eid}`))
+      .map((b) => String(comp(b, 'content')?.body)),
+    ['${backend} $defs $$ $'],
+  )
+})

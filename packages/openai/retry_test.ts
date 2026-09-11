@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { ModelError } from '@yaks/model'
 import { ResponseError, responses, transport } from './mod.ts'
 
@@ -279,4 +279,72 @@ Deno.test('stop during backoff cancels the wait and prevents another attempt', a
     DOMException,
   )
   assertEquals(calls, 1)
+})
+
+// A bus that connects and goes silent, or never answers at all: the watchdog
+// aborts the attempt, and the next one is as clean as a dropped connection.
+let silent = (init?: RequestInit) =>
+  new Promise<Response>((_ok, no) =>
+    init?.signal?.addEventListener(
+      'abort',
+      () => no(new DOMException('aborted', 'AbortError')),
+    )
+  )
+
+Deno.test('a stall is transient: the attempt after it completes the turn', async () => {
+  let calls = 0
+  let pauses: number[] = []
+  let client = transport({
+    credentials,
+    stallMs: 20,
+    pause: (ms) => {
+      pauses.push(ms)
+      return Promise.resolve()
+    },
+    fetch: (_url, init) =>
+      ++calls == 1 ? silent(init) : Promise.resolve(complete()),
+  })
+  assertEquals((await client.run(req)).items, [item('done').item])
+  assertEquals(calls, 2)
+  assertEquals(pauses, [1000])
+})
+
+// The incident of 2026-09-10 (T-37332): every attempt answered 503 inside five
+// seconds, and the Session settled `failed` over a blip.
+Deno.test('an outage is waited out while patience remains, then gives up', async () => {
+  for (let outage of [8, Infinity]) {
+    let calls = 0
+    let pauses: number[] = []
+    let client = transport({
+      credentials,
+      patienceMs: 600_000,
+      pause: (ms) => {
+        pauses.push(ms)
+        return Promise.resolve()
+      },
+      fetch: () =>
+        Promise.resolve(
+          ++calls <= outage ? new Response('', { status: 503 }) : complete(),
+        ),
+    })
+    if (outage == 8) {
+      assertEquals((await client.run(req)).items, [item('done').item])
+      assertEquals(calls, 9)
+      assertEquals(pauses, [
+        1000,
+        4000,
+        16_000,
+        60_000,
+        60_000,
+        60_000,
+        60_000,
+        60_000,
+      ])
+    } else {
+      await assertRejects(() => client.run(req), ResponseError, 'HTTP 503')
+      // Backoff is capped at a minute, and the waiting stops at the patience.
+      assertEquals(pauses.at(-1), 60_000)
+      assert(pauses.reduce((a, b) => a + b, 0) >= 600_000)
+    }
+  }
 })

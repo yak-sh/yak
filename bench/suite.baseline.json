@@ -5,16 +5,16 @@
   "suites": {
     "check": {
       "baseline": {
-        "ratio": 723.5886076641813,
-        "controlFloorSeconds": 0.05611964133333347,
-        "seconds": 40.607533135000004
+        "ratio": 343.5826390831649,
+        "controlFloorSeconds": 0.053971192111110976,
+        "seconds": 18.543564619999998
       }
     },
     "test": {
       "baseline": {
-        "ratio": 1203.3240776229982,
+        "ratio": 1061.844253673215,
         "controlFloorSeconds": 0.054619091761904805,
-        "seconds": 65.724468215
+        "seconds": 73.74940023
       }
     }
   }

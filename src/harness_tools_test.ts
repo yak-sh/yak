@@ -1,14 +1,38 @@
 // Hosted-tool contracts: local calls receive host authority with an allowlisted
 // environment, Tasks identity stays outside model arguments, and calls return
 // durable facets.
-import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
-import { combineTools, localTools, tasksTools } from './harness_tools.ts'
+import {
+  assert,
+  assertEquals,
+  assertMatch,
+  assertRejects,
+  assertThrows,
+} from '@std/assert'
+import {
+  combineTools,
+  deadline,
+  localTools,
+  tasksTools,
+} from './harness_tools.ts'
 import { type IO } from './mcp.ts'
 import { type Change, type Snapshot } from './types.ts'
 import type { Mutation } from './mutation.ts'
 import { slow } from './testing.ts'
 
 let scratch = async () => await Deno.makeTempDir({ prefix: 'tasks-tools-' })
+
+// One unit at every hop: the schema says milliseconds, the caller's number is
+// taken as milliseconds, and an omitted one is a whole minute — long enough
+// for the gates and test runs a session actually shells out to (T-37332).
+Deno.test('the shell deadline is milliseconds, and a minute when unasked', () => {
+  assert(deadline(null) >= 60_000)
+  assertEquals(deadline(undefined), deadline(null))
+  assertEquals(deadline(1500), 1500)
+  assertEquals(deadline(120_000), 120_000)
+  for (let bad of [99, 120_001, 1.5, 'soon']) {
+    assertThrows(() => deadline(bad), Error, 'timeout_ms must be an integer')
+  }
+})
 
 slow(
   'local tools use Bash with host authority and managed identity',
