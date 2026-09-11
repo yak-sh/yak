@@ -8,6 +8,7 @@ import { idOf, uuid } from './types.ts'
 import {
   commentChanges,
   designChanges,
+  memoryChanges,
   mintedIn,
   normalizeLiterals,
   sessionFor,
@@ -99,6 +100,26 @@ Deno.test('numbers: design asks only for its document; spawned sessions do not a
   assert(spawned.changes.every((c) => !c.$num))
   apply(db, spawned.changes)
   assertEquals(readComp(db, spawned.eid, 'entity')?.num, null)
+})
+
+Deno.test('numbers: memories and recorded decisions ask only for their document', () => {
+  for (let decided of [undefined, '2026-09-10']) {
+    let db = bareDb()
+    let made = memoryChanges([], {
+      title: 'Human memory',
+      session: 'author',
+      decided,
+    })
+    assertEquals(made.changes.filter((c) => c.$num).map((c) => c.eid), [
+      made.eid,
+    ])
+    let out = apply(db, made.changes)
+    assertEquals(readComp(db, made.eid, 'entity')?.num, 1)
+    assertEquals(mintedIn(out, made.eid), 'M-1')
+    let session = made.changes.find((c) => c.name == 'session')!.eid
+    assertEquals(readComp(db, session, 'entity')?.num, null)
+    if (decided) assert(readComp(db, made.eid, 'decided'))
+  }
 })
 
 slow(

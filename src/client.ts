@@ -4909,7 +4909,12 @@ export let memoryChanges = (
   let eid = uuid()
   let changes: Change[] = [
     ...s.changes,
-    { eid, name: 'doc', comp: { title: m.title, body: m.body ?? '' } },
+    {
+      eid,
+      $num: true,
+      name: 'doc',
+      comp: { title: m.title, body: m.body ?? '' },
+    },
     { eid, name: 'memory', comp: { scope: scope?.eid ?? null } },
   ]
   if (m.feedback != null) changes.push(feedbackChange(all, eid, m.feedback))
