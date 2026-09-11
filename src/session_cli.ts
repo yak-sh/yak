@@ -454,7 +454,23 @@ export let waitFor = async (id: string, got: Got) => {
     if (show) emitEntries(show(again, entries))
     return { r: again, s: statusFor(again, entries), entries }
   }
-  let end = await poll(read, ({ s }) => over(s), { interval, timeout })
+  // A row and its entries are separate reads, and restart reconciliation can
+  // reopen a previously stamped end. Require the same terminal observation
+  // on the next poll; any live observation re-arms the wait. This supplements
+  // (rather than replaces) the runner/log contract that owed work isn't over.
+  let terminal: string | undefined
+  let end = await poll(read, ({ s, entries }) => {
+    let observed = over(s)
+      ? JSON.stringify([
+        s,
+        entries.at(-1)?.eid,
+        entries.at(-1)?.comps.entry?.seq,
+      ])
+      : undefined
+    let stable = observed != null && observed == terminal
+    terminal = observed
+    return stable
+  }, { interval, timeout })
   let code = exitCode(end.r, end.s, end.entries)
   let name = idOf({ eid: end.r.eid, kind: 'session', num: end.r.num })
   if (show) {

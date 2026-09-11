@@ -479,3 +479,53 @@ Deno.test('a runner that died mid-call answers the call, never fails the Session
   rows.push(row('next', 5, { generation: { through: 'result' } }))
   assertEquals(sessionStateOf(rows), { standing: 'busy' })
 })
+
+Deno.test('tool-loop boundaries stay nonterminal, including failed restart calls (T-37196)', () => {
+  for (let outcome of ['error', 'cancel', 'result', 'final']) {
+    let rows = [
+      row('input', 1, { message: { role: 'user' } }),
+      row('gen', 2, { generation: { through: 'input' }, delivered: {} }),
+      row('call', 3, {
+        output: { source: 'gen' },
+        call: { key: 'tool' },
+        ...outcome == 'error'
+          ? { error: { message: 'ambiguous restart' } }
+          : {},
+      }),
+      ...outcome == 'cancel'
+        ? [row('cancel', 4, { cancel: { target: 'call' } })]
+        : [row('result', 4, { result: { call: 'call' } })],
+      ...outcome == 'final'
+        ? [row('prose', 5, {
+          output: { source: 'gen', phase: 'final_answer' },
+          message: { role: 'agent' },
+        })]
+        : [],
+    ]
+    assertEquals(sessionStateOf(rows), { standing: 'idle' }, outcome)
+    assertEquals(
+      sessionStateOf([
+        ...rows,
+        row('stop', 6, { cancel: { target: 'gen' } }),
+      ]),
+      { standing: 'terminal', end: 'interrupted' },
+    )
+    assertEquals(
+      sessionStateOf([
+        ...rows,
+        row('next', 6, { generation: { through: rows.at(-1)!.eid } }),
+      ]),
+      { standing: 'busy' },
+    )
+  }
+  assertEquals(
+    sessionStateOf([
+      row('input', 1, { message: { role: 'user' } }),
+      row('gen', 2, {
+        generation: { through: 'input' },
+        error: { message: 'fatal' },
+      }),
+    ]),
+    { standing: 'terminal', end: 'failed' },
+  )
+})

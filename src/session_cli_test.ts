@@ -448,3 +448,37 @@ Deno.test('native follower defaults to notify/error/stop, including a hidden sto
   assert(lines.every((l) => l.length > 0 && !l.includes('\n')))
   assertEquals(show(r, es), [])
 })
+
+Deno.test('waitFor re-arms after a transient restart end and prints only the stable end (T-37196)', async () => {
+  let lines: string[] = []
+  let log = console.log
+  let reads = 0
+  let states = ['failed', 'running', 'running', 'done', 'done']
+  console.log = (line: string) => void lines.push(line)
+  arm.query = (filters) => {
+    if (filters.some((f) => f.startsWith('.entry'))) {
+      reads++
+      return Promise.resolve([])
+    }
+    return Promise.resolve([
+      legacy(
+        { status: states[Math.min(reads, 4)] },
+        reads >= 3 ? { brief: { text: 'really finished' } } : {},
+      ),
+    ])
+  }
+  try {
+    await waitFor(
+      'S-7',
+      parse('session wait', manuals['session wait'], [
+        'S-7',
+        '--interval=1',
+      ]),
+    )
+    assertEquals(reads, 5)
+    assertEquals(lines, ['S-7: settled', 'really finished'])
+  } finally {
+    console.log = log
+    delete arm.query
+  }
+})

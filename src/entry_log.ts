@@ -234,6 +234,17 @@ export let sessionStateOf = (
       (row.comps.message?.role == 'user' && !row.comps.output))
   )
   if (stopped && !input) return { standing: 'terminal', end: 'interrupted' }
+  // Match advanceable(): a healthy generation that asked for tools still
+  // owes the model their outcomes, even when a call failed or was cancelled.
+  // Between settling the last call and appending the next generation there
+  // is no lease, but this is NOT a terminal turn (not even if prose beside
+  // the calls was labelled final_answer). Boot recovery exposes this gap.
+  if (
+    generation && !generation.comps.error && !stopped &&
+    rows.some((row) =>
+      row.comps.call && row.comps.output?.source == generation.eid
+    )
+  ) return { standing: 'idle' }
   let completed = !input &&
     rows.some((row) =>
       row.comps.output?.source == generation?.eid &&

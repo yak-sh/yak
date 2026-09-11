@@ -362,11 +362,23 @@ Deno.test('the tool loop holds standing steady between edges', () => {
   )
   assertEquals(standing(eid), 'busy')
 
-  // The turn's real close (delivered + final answer) reconciles it exactly.
+  // The tool-producing generation owes another model turn even after its
+  // calls settle. The real close comes from that NEXT generation, not prose
+  // beside calls (which advanceable still considers runnable, T-37196).
   cast(apply(db, [{ eid: gen, name: 'delivered', comp: { at: 'now' } }]))
+  assertEquals(standingOf(readEntries(db, eid)), 'idle')
+  let next = append(db, eid, [{
+    generation: {
+      through: readEntries(db, eid).at(-1)!.eid,
+      provider: 'codex',
+      model: 'm',
+    },
+    delivered: { at: 'now' },
+  }])
+  cast(next.changes)
   cast(
     append(db, eid, [{
-      output: { source: gen, phase: 'final_answer' },
+      output: { source: next.eids[0], phase: 'final_answer' },
       message: { role: 'agent' },
       content: { body: 'done' },
     }]).changes,

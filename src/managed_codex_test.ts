@@ -2712,3 +2712,57 @@ slow(
     db.close()
   },
 )
+
+Deno.test('restart of an old error-bearing call never exposes a terminal recovery gap (T-37196)', async () => {
+  let db = freshDb(), sid = session(db), old = uuid()
+  apply(db, [{ eid: old, name: 'runner', comp: { name: 'old' } }])
+  let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
+  let gen = append(db, sid, [{
+    generation: { through: input, provider: 'codex', model: 'gpt-requested' },
+  }])
+    .eids[0]
+  let lease = takeEntry(db, gen, old)!
+  let call =
+    append(db, sid, [{ output: { source: gen }, call: { key: 'old-call' } }])
+      .eids[0]
+  settleGeneration(db, lease.token)
+  takeEntry(db, call, old, 100, () => new Date('2026-08-10T12:00:00Z'))
+  // Historical runners left this error on a call that is still owed a result.
+  apply(db, [{
+    eid: call,
+    name: 'error',
+    comp: { message: 'ambiguous restart' },
+  }])
+  let observed: string[] = []
+  let turns = 0
+  let service = managedCodex({
+    db,
+    clock: () => new Date('2026-08-10T12:00:01Z'),
+    cast: () => {
+      let state = sessionStateOf(readEntries(db, sid))
+      observed.push(state.end ?? state.standing)
+    },
+    transport: {
+      run: () => {
+        turns++
+        return Promise.resolve(result([{
+          type: 'message',
+          phase: 'final_answer',
+          content: [{ type: 'output_text', text: 'recovered' }],
+        }]))
+      },
+    },
+    tools: () => Promise.resolve(tools([])),
+    prepare: () => Promise.resolve(),
+  })
+  try {
+    await service.sweep()
+    assertEquals(turns, 1)
+    assertEquals(observed.includes('failed'), false)
+    assertEquals(observed.includes('interrupted'), false)
+    assertEquals(observed.includes('idle'), true)
+    assertEquals(observed.at(-1), 'completed')
+  } finally {
+    db.close()
+  }
+})
