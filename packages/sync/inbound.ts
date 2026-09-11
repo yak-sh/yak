@@ -15,6 +15,7 @@ import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { comps, dead, detached, then, transient } from '@yaks/graph'
 import { echo } from './mark.ts'
 import type { Frame } from './socket.ts'
+import { type Coverage, covers } from './coverage.ts'
 import { tierOf } from './tier.ts'
 
 // A patch that takes server components off an entity, preserving local state. The
@@ -52,6 +53,9 @@ export let land = (
   frame: Frame,
 ): Bundle[] | Promise<Bundle[]> => {
   if (frame.refused) return []
+  if (frame.coverage || frame.peerCoverage || frame.peers || frame.peerGone) {
+    throw new Error('coverage/rider delivery requires a working-set replica')
+  }
   const live = transient(graph)
   let bundles = frame.bundles ?? []
   let gone = frame.gone ?? []
@@ -73,6 +77,11 @@ export let land = (
 export let snapshot = (
   graph: Graph,
   bundles: Bundle[],
+  opts: {
+    coverage?: Record<Eid, Coverage>
+    /** Other owners protect their columns against this snapshot's omissions. */
+    preserve?: (eid: Eid, name: string, prop?: string) => boolean
+  } = {},
 ): Bundle[] | Promise<Bundle[]> =>
   then(
     detached(graph.storage).get(bundles.map((b) => b.entity.eid)),
@@ -81,21 +90,35 @@ export let snapshot = (
       let patches = bundles.map((b) => {
         if (dead(b)) return b
         let out: Bundle = { entity: b.entity }
-        for (
-          let [name, comp] of comps(
-            previous.get(b.entity.eid) ?? { entity: b.entity },
-          )
-        ) {
+        let scope = opts.coverage?.[b.entity.eid] ?? true
+        let keep = (name: string, prop?: string) =>
+          opts.preserve?.(b.entity.eid, name, prop) ?? false
+        for (let [name, comp] of comps(previous.get(b.entity.eid) ?? out)) {
           if (tierOf(graph.vocab, name) != 'wire') continue
-          out[name] = b[name] == null ? null : Object.fromEntries(
-            Object.keys(comp ?? {}).map((key) => [key, null]),
-          )
+          if (!covers(scope, name)) continue
+          if (
+            b[name] == null && (scope === true || scope[name] === true) &&
+            !keep(name)
+          ) {
+            out[name] = null
+          } else {
+            let cut = Object.fromEntries(
+              Object.keys(comp ?? {}).filter((key) =>
+                covers(scope, name, key) && !keep(name, key)
+              ).map((key) => [key, null]),
+            )
+            if (Object.keys(cut).length) out[name] = cut
+          }
         }
         for (let [name, comp] of comps(b)) {
-          if (tierOf(graph.vocab, name) == 'wire') {
-            out[name] = comp == null
-              ? null
-              : { ...(out[name] as Comp ?? {}), ...comp }
+          if (
+            tierOf(graph.vocab, name) != 'wire' || !covers(scope, name)
+          ) continue
+          out[name] = comp == null ? null : {
+            ...(out[name] as Comp ?? {}),
+            ...Object.fromEntries(
+              Object.entries(comp).filter(([key]) => covers(scope, name, key)),
+            ),
           }
         }
         return out

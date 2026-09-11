@@ -40,6 +40,8 @@ export type Replica = {
 export type SubscribeOpts = {
   /** Seed ownership from a local query before the first answer (default true). */
   prime?: boolean
+  /** Exact app semantic identity, including query options, for bounded reopen. */
+  answerKey?: string
 }
 
 /** How a graph is wired to a server. Only `url` is required; both transports
@@ -187,6 +189,13 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
       // With a working-set policy, ownership lives there, not in a duplicate
       // registry here. Standalone sync still protects cross-subscription rows.
       if (!opts.replica) {
+        if (
+          frame.coverage || frame.peerCoverage || frame.peers || frame.peerGone
+        ) {
+          throw new Error(
+            'coverage/rider delivery requires a working-set replica',
+          )
+        }
         let held = members.get(frame.id) ?? new Set<Eid>()
         if (frame.reset) held.clear()
         for (let b of frame.bundles ?? []) held.add(b.entity.eid)

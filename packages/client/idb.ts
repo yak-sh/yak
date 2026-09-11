@@ -12,6 +12,7 @@
 // a browser that refuses storage (private mode, a blocked origin) fails at that
 // first call rather than at import time.
 
+import { answerCache } from './answers.ts'
 import type { Eid } from '@yaks/graph'
 import type { Saved, Vault } from './vault.ts'
 
@@ -188,11 +189,39 @@ export let wireIdb = (
     }
   }
   return {
+    loadAnswers: (epoch, bytes) =>
+      transaction(async (_rows, meta) => {
+        let bounded = answerCache(bytes)
+        if (await ask(meta.get('epoch')) !== epoch) return []
+        // Inspect the scalar envelope before materializing the checkpoint. A
+        // smaller new budget discards it whole, never reads an oversized blob.
+        let size = await ask(meta.get('answerBytes'))
+        if (typeof size !== 'number' || size > bytes) {
+          meta.delete('answers')
+          meta.delete('answerBytes')
+          return []
+        }
+        for (let answer of await ask(meta.get('answers')) ?? []) {
+          bounded.put(answer)
+        }
+        return bounded.values()
+      }),
+    saveAnswers: (epoch, answers, bytes) =>
+      transaction(async (_rows, meta) => {
+        let bounded = answerCache(bytes)
+        for (let answer of answers) bounded.put(answer)
+        if (await ask(meta.get('epoch')) === epoch) {
+          meta.put(bounded.values(), 'answers')
+          meta.put(bounded.bytes(), 'answerBytes')
+        }
+      }),
     load: (epoch, limit) => {
       check(limit)
       return transaction(async (rows, meta) => {
         if (await ask(meta.get('epoch')) !== epoch) {
           rows.clear()
+          meta.delete('answers')
+          meta.delete('answerBytes')
           meta.put(epoch, 'epoch')
           meta.put(0, 'order')
           return []

@@ -15,6 +15,7 @@
 // and did not hear again is reported as gone.
 
 import type { Bundle, Eid } from '@yaks/graph'
+import type { Coverage } from './coverage.ts'
 
 /** The part of a WebSocket this package uses. The standard `WebSocket`
  * satisfies it, and so does any stand-in a test or a host provides. */
@@ -53,6 +54,17 @@ export type Frame = {
   id: string
   /** the entities now in the set (whole), or the applied batch for a raw feed */
   bundles?: Bundle[]
+  /** Per-row coverage for result bundles. Omitted entries are full rows. Each delivery
+   * replaces that role's coverage. Adapters must repeat projected coverage on
+   * deltas, including exclusions for deliberately omitted bodies. */
+  coverage?: Record<Eid, Coverage>
+  /** Rider coverage, independent even when an eid has both roles in a frame.
+   * Omitted entries cover only delivered columns. */
+  peerCoverage?: Record<Eid, Coverage>
+  /** Payload riders, pinned by this subscription but NEVER query members. */
+  peers?: Bundle[]
+  /** Rider departures, independent of result membership. reset replaces both. */
+  peerGone?: Eid[]
   /** entities that left the set — deleted, or no longer matching */
   gone?: Eid[]
   /** why the subscription was refused, when it was */
@@ -146,7 +158,7 @@ export let wire = (opts: WireOpts): Wire => {
     members.set(frame.id, held)
     let gone = [...(frame.gone ?? [])]
     let arrived = (frame.bundles ?? []).map((b) => b.entity.eid)
-    if (!frame.refused && resetting.delete(frame.id)) {
+    if (!frame.refused && (resetting.delete(frame.id) || frame.reset)) {
       let seen = new Set(arrived)
       for (let eid of held) if (!seen.has(eid)) gone.push(eid)
       held.clear()

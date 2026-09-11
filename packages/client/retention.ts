@@ -5,6 +5,9 @@ import { comps, dead, then, transient } from '@yaks/graph'
 import type { Store } from '@yaks/ram'
 import {
   type Ask,
+  type Coverage,
+  covers,
+  delivered,
   echoed,
   land,
   type Replica,
@@ -15,13 +18,19 @@ import {
 import type { Watches } from './watch.ts'
 import type { Saved } from './vault.ts'
 import type { WireVault } from './wire-vault.ts'
+import { ANSWER_BYTES, answerCache, type SavedAnswer } from './answers.ts'
 
 /** Default number of inactive server rows retained in memory and disk. */
 export const RETENTION_ROWS = 20_000
 
 /** The client's working set policy and epoch-scoped paint floor. */
 export type Retained = Replica & {
-  /** Whether this remote answer owns a row (or it has a pending local write). */
+  /** Active coverage (including riders). False means unloaded, NOT deleted.
+   * Unready restored owners cover only the columns actually present in RAM. */
+  loaded: (eid: Eid, component: string, property?: string) => boolean
+  /** Encoded bytes of retained answer metadata, independent of payload budget. */
+  answerBytes: () => number
+  /** Whether this remote answer includes a row (or it has a pending local write). */
   includes: (id: string, eid: Eid) => boolean
   /** Current server members in delivery order, with payloads from RAM. No
    * local matcher, no speculative inclusion of unrelated pending writes. */
@@ -50,6 +59,7 @@ export let retention = (
   watches: Watches,
   opts: {
     limit?: number
+    answerBytes?: number
     vault?: WireVault
     localOnly?: boolean
     report?: (error: unknown) => void
@@ -59,9 +69,19 @@ export let retention = (
   if (!Number.isSafeInteger(limit) || limit < 0) {
     throw new Error('invalid retention limit')
   }
+  let answerLimit = opts.answerBytes ?? ANSWER_BYTES
+  let answers = answerCache(answerLimit)
+  type Sub = {
+    query: Ask
+    members: Map<Eid, Coverage>
+    peers: Map<Eid, Coverage>
+    prime: boolean
+    key?: string
+    confirmed: boolean
+  }
   let subscriptions = new Map<
     string,
-    { query: Ask; members: Set<Eid>; prime: boolean }
+    Sub
   >()
   let rowListeners = new Set<(eids: Eid[]) => void>()
   let changedRows = (eids: Eid[]) => {
@@ -90,6 +110,68 @@ export let retention = (
   let held = (eid: Eid) => store.tx((tx) => tx.get([eid]))[0]
   let protectedByOwner = (eid: Eid) => !!owners.get(eid)?.size
   let protectedRow = (eid: Eid) => protectedByOwner(eid) || pins.has(eid)
+  let payloads = (sub: Sub) =>
+    new Set([...sub.members.keys(), ...sub.peers.keys()])
+  let covered = (
+    eid: Eid,
+    name: string,
+    prop?: string,
+    except?: Map<Eid, Coverage>,
+  ) => {
+    for (let id of owners.get(eid) ?? []) {
+      let sub = subscriptions.get(id)!
+      for (let role of [sub.members, sub.peers]) {
+        let scope = role.get(eid)
+        if (
+          role !== except && scope !== undefined && covers(scope, name, prop)
+        ) return true
+      }
+    }
+    return false
+  }
+  let savingAnswers: string | undefined
+  let saveAnswers = () => {
+    let epoch = current
+    if (!epoch || !opts.vault?.saveAnswers) return
+    if (savingAnswers === epoch) return
+    savingAnswers = epoch
+    enqueue(async () => {
+      if (savingAnswers === epoch) savingAnswers = undefined
+      if (current === epoch) {
+        await opts.vault!.saveAnswers!(epoch, answers.values(), answerLimit)
+      }
+    })
+  }
+  let remember = (sub: Sub) => {
+    if (!sub.key || !sub.confirmed) return
+    answers.put({
+      key: sub.key,
+      members: [...sub.members],
+      peers: [...sub.peers],
+    })
+    saveAnswers()
+  }
+  // Restored memberships are paint, not fresh field knowledge. Intersect them
+  // with RAM; never re-run the server query, nor claim evicted fields loaded.
+  let floor = (entries: SavedAnswer['members']) =>
+    new Map(entries.flatMap(([eid, scope]) => {
+      let row = held(eid)
+      return known.has(eid) && row && !dead(row)
+        ? [
+          [
+            eid,
+            Object.fromEntries(
+              comps(row).filter(([name]) => covers(scope, name)).map((
+                [name, comp],
+              ) => [
+                name,
+                Object.keys(comp ?? {}).filter((p) => covers(scope, name, p)),
+              ]),
+            ),
+          ] as [Eid, Coverage],
+        ]
+        : []
+    }))
   let touch = (eids: Eid[]) => {
     for (let eid of eids) if (inactive.delete(eid)) inactive.add(eid)
   }
@@ -101,7 +183,9 @@ export let retention = (
   // deletion. Watch invalidation sees the physically absent payload too.
   let forget = (eids: Eid[], stale = false) => {
     let changed: Eid[] = []
+    let dropped: Eid[] = []
     for (let eid of eids) {
+      if (stale && !protectedByOwner(eid)) dropped.push(eid)
       if (protectedRow(eid)) {
         if (stale && !protectedByOwner(eid)) invalid.add(eid)
         continue
@@ -123,7 +207,7 @@ export let retention = (
       })
       changed.push(eid)
     }
-    if (stale) diskDrop(eids)
+    if (dropped.length) diskDrop(dropped)
     if (changed.length) {
       changedRows(changed)
       void watches.invalidate(changed)
@@ -149,13 +233,49 @@ export let retention = (
     set?.delete(id)
     if (!set?.size) owners.delete(eid)
   }
+  // Relinquishing a role can unload columns while another role still pins the
+  // row. This is storage maintenance, never a graph deletion or outbound write.
+  let trim = (eids: Eid[]) => {
+    let changed: Eid[] = []
+    for (let eid of eids) {
+      if (!protectedByOwner(eid) || pins.has(eid)) continue
+      let b = held(eid)
+      if (!b || dead(b)) continue
+      let cuts: Bundle = { entity: b.entity }
+      let rest: Bundle = { entity: b.entity }
+      for (let [name, comp] of comps(b)) {
+        if (tierOf(graph.vocab, name) !== 'wire') continue
+        if (!covered(eid, name)) {
+          cuts[name] = null
+          continue
+        }
+        let kept = Object.fromEntries(
+          Object.entries(comp ?? {}).filter(([p]) => covered(eid, name, p)),
+        )
+        if (Object.keys(kept).length !== Object.keys(comp ?? {}).length) {
+          cuts[name] = null
+          rest[name] = kept
+        }
+      }
+      if (!comps(cuts).length) continue
+      store.tx((tx) => tx.patch([cuts, rest]))
+      changed.push(eid)
+    }
+    if (changed.length) {
+      save(changed)
+      changedRows(changed)
+      void watches.invalidate(changed)
+    }
+  }
   let unsubscribe = (id: string) => {
     let sub = subscriptions.get(id)
     subscriptions.delete(id)
-    for (let eid of sub?.members ?? []) {
+    let eids = sub ? [...payloads(sub)] : []
+    for (let eid of eids) {
       disown(id, eid)
       retain(eid)
     }
+    trim(eids)
     sweep()
   }
   let save = (eids: Eid[]) => {
@@ -170,7 +290,7 @@ export let retention = (
           comps(b).filter(([name]) => tierOf(graph.vocab, name) == 'wire'),
         )
         : {}
-      if (Object.keys(wire).length) {
+      if (b && !dead(b) && (Object.keys(wire).length || known.has(eid))) {
         saved.push({ eid, num: b!.entity.num, comps: wire as Saved['comps'] })
       } else gone.push(eid)
     }
@@ -206,6 +326,8 @@ export let retention = (
   })
   return {
     touch,
+    loaded: (eid, name, prop) => !!held(eid) && covered(eid, name, prop),
+    answerBytes: answers.bytes,
     close: () => {
       closed = true
       generation++
@@ -215,7 +337,9 @@ export let retention = (
     },
     answer: (id) =>
       transient(graph).project(
-        store.tx((tx) => tx.get([...(subscriptions.get(id)?.members ?? [])]))
+        store.tx((tx) =>
+          tx.get([...(subscriptions.get(id)?.members.keys() ?? [])])
+        )
           .filter((b) => !dead(b)),
       ),
     onRows: (fn) => {
@@ -237,59 +361,133 @@ export let retention = (
       // Re-pointing the same id must not drop the old floor before new pins.
       let old = subscriptions.get(id)
       let prime = subOpts.prime !== false
-      let members = new Set(
+      let cached = subOpts.answerKey
+        ? answers.get(subOpts.answerKey)
+        : undefined
+      let members = cached ? floor(cached.members) : new Map<Eid, Coverage>(
         query === true || !prime
           ? []
-          : store.read(query).map((b) => b.entity.eid),
+          : store.read(query).map((b) => [b.entity.eid, delivered(b)]),
       )
-      subscriptions.set(id, { query, members, prime })
-      for (let eid of members) own(id, eid)
-      for (let eid of old?.members ?? []) {
-        if (!members.has(eid)) {
+      let peers = cached ? floor(cached.peers) : new Map<Eid, Coverage>()
+      let sub: Sub = {
+        query,
+        members,
+        peers,
+        prime,
+        key: subOpts.answerKey,
+        confirmed: false,
+      }
+      subscriptions.set(id, sub)
+      let next = payloads(sub)
+      for (let eid of next) own(id, eid)
+      for (let eid of old ? payloads(old) : []) {
+        if (!next.has(eid)) {
           disown(id, eid)
           retain(eid)
         }
       }
+      trim(old ? [...payloads(old)] : [])
       sweep()
     },
     land: (frame) => {
-      frames++ // even an empty authoritative answer defeats late disk data
       let sub = subscriptions.get(frame.id)
-      if (!sub) return []
+      if (!sub || frame.refused) return []
+      if (
+        sub.query === true &&
+        (frame.coverage || frame.peerCoverage || frame.peers || frame.peerGone)
+      ) {
+        throw new Error(
+          'coverage/rider delivery is a query snapshot, not a raw feed',
+        )
+      }
+      frames++ // even an empty authoritative answer defeats late disk data
       transient(graph).forget(frame.transientReset ?? [])
-      let arrived = new Set((frame.bundles ?? []).map((b) => b.entity.eid))
-      let gone = new Set(frame.gone ?? [])
+      let bundles = frame.bundles ?? []
+      let peers = frame.peers ?? []
+      // A content delta must not re-pin/trim every row in a large answer.
+      let affected = new Set([
+        ...bundles.map((b) => b.entity.eid),
+        ...peers.map((b) => b.entity.eid),
+        ...frame.gone ?? [],
+        ...frame.peerGone ?? [],
+        ...frame.reset ? payloads(sub) : [],
+      ])
+      let owns = (eid: Eid) => sub.members.has(eid) || sub.peers.has(eid)
+      let before = new Set([...affected].filter(owns))
+      let changed = !!frame.reset || !sub.confirmed
       if (frame.reset) {
-        for (let eid of sub.members) if (!arrived.has(eid)) gone.add(eid)
-        // A replacement also replaces ranking; retaining Set insertion order
-        // would keep the previous ranking when the same members move.
         sub.members.clear()
+        sub.peers.clear()
       }
-      for (let eid of arrived) {
-        sub.members.add(eid)
-        known.add(eid)
-        own(frame.id, eid)
+      let add = (role: Map<Eid, Coverage>, eid: Eid, scope: Coverage) => {
+        let was = role.get(eid)
+        if (was !== scope && JSON.stringify(was) !== JSON.stringify(scope)) {
+          changed = true
+        }
+        role.set(eid, scope)
       }
-      for (let eid of gone) {
-        sub.members.delete(eid)
-        disown(frame.id, eid)
+      for (let b of bundles) {
+        add(sub.members, b.entity.eid, frame.coverage?.[b.entity.eid] ?? true)
       }
-      forget([...gone], true)
+      for (let b of peers) {
+        add(
+          sub.peers,
+          b.entity.eid,
+          frame.peerCoverage?.[b.entity.eid] ?? delivered(b),
+        )
+      }
+      for (let eid of frame.gone ?? []) {
+        if (sub.members.delete(eid)) changed = true
+      }
+      for (let eid of frame.peerGone ?? []) {
+        if (sub.peers.delete(eid)) changed = true
+      }
+      for (let eid of affected) {
+        if (owns(eid)) {
+          known.add(eid)
+          own(frame.id, eid)
+        }
+      }
+      let gone = [...before].filter((eid) => !owns(eid))
+      for (let eid of gone) disown(frame.id, eid)
+      forget(gone, true)
       // Pending optimistic state beats subscription snapshots. The post reply
       // reconciles it; a query snapshot must not roll it backwards meanwhile.
-      let bundles = (frame.bundles ?? []).filter((b) => !pins.has(b.entity.eid))
+      let receive = (rows: Bundle[], role: Map<Eid, Coverage>) =>
+        snapshot(
+          graph,
+          rows.filter((b) => role.has(b.entity.eid) && !pins.has(b.entity.eid)),
+          {
+            coverage: Object.fromEntries(
+              rows.map((b) => [b.entity.eid, role.get(b.entity.eid)!]),
+            ),
+            preserve: (eid, name, prop) => covered(eid, name, prop, role),
+          },
+        )
       return then(
         sub.query === true
-          ? land(graph, { ...frame, bundles, gone: [] })
-          : snapshot(graph, bundles),
+          ? land(graph, {
+            ...frame,
+            bundles: bundles.filter((b) => !pins.has(b.entity.eid)),
+            gone: [],
+          })
+          : then(
+            receive(bundles, sub.members),
+            (out) =>
+              then(receive(peers, sub.peers), (rode) => [...out, ...rode]),
+          ),
         (out) => {
           if (sub.query !== true) {
             for (const update of frame.transient ?? []) {
-              if (
-                sub.members.has(update.entity) && !pins.has(update.entity)
-              ) transient(graph).receive(update)
+              if (owns(update.entity) && !pins.has(update.entity)) {
+                transient(graph).receive(update)
+              }
             }
           }
+          trim([...affected])
+          sub.confirmed = true
+          if (changed) remember(sub)
           sweep()
           notify(frame.id)
           return out
@@ -312,7 +510,10 @@ export let retention = (
           if (n) pins.set(eid, n)
           else pins.delete(eid)
           if (invalid.has(eid)) forget([eid], true)
-          else retain(eid)
+          else {
+            trim([eid])
+            retain(eid)
+          }
         }
         sweep()
         for (let id of subscriptions.keys()) notify(id)
@@ -326,8 +527,13 @@ export let retention = (
       let touched = new Set<Eid>()
       loading = touched
       if (current !== undefined && current !== epoch) {
+        answers.clear()
         owners.clear()
-        for (let sub of subscriptions.values()) sub.members.clear()
+        for (let sub of subscriptions.values()) {
+          sub.members.clear()
+          sub.peers.clear()
+          sub.confirmed = false
+        }
         forget([...known], true)
         for (let id of subscriptions.keys()) notify(id)
       }
@@ -338,9 +544,13 @@ export let retention = (
       }
       // Order epoch validation after previous writes; future writes queue behind
       // it. A stale tab's save/drop is independently guarded by the vault.
-      let read = queued.then(() => opts.vault!.load(epoch, limit))
+      let read = queued.then(async () => {
+        let rows = await opts.vault!.load(epoch, limit)
+        let saved = await opts.vault!.loadAnswers?.(epoch, answerLimit) ?? []
+        return { rows, saved }
+      })
       queued = read.then(() => undefined, report)
-      let rows = await read
+      let { rows, saved } = await read
       if (generation !== turn) return
       loading = undefined
       if (frames !== beforeFrames) return
@@ -348,15 +558,25 @@ export let retention = (
         !touched.has(r.eid) && !pins.has(r.eid) && !known.has(r.eid)
       )
         .map((r) => ({ entity: { eid: r.eid, num: r.num }, ...r.comps }))
+      for (let answer of saved) {
+        if (!answers.get(answer.key)) answers.put(answer)
+      }
       // A reopened watch owns its cached hits BEFORE the first frame. Hydration
       // must add late hits to that same ownership set, not invent another watch.
       await then(snapshot(graph, bundles), () => {
         for (let [id, sub] of subscriptions) {
-          if (sub.query === true || !sub.prime) continue
-          for (let b of store.read(sub.query)) {
-            sub.members.add(b.entity.eid)
-            own(id, b.entity.eid)
+          if (sub.confirmed) continue
+          let cached = sub.key ? answers.get(sub.key) : undefined
+          if (cached) {
+            sub.members = floor(cached.members)
+            sub.peers = floor(cached.peers)
+          } else if (sub.query !== true && sub.prime) {
+            for (let b of store.read(sub.query)) {
+              sub.members.set(b.entity.eid, delivered(b))
+            }
           }
+          for (let eid of payloads(sub)) own(id, eid)
+          trim([...payloads(sub)])
           notify(id)
         }
         sweep()

@@ -87,3 +87,5 @@ export { idb, type IdbOpts, wireIdb } from './idb.ts'
 
 export { type Retained, retention, RETENTION_ROWS } from './retention.ts'
 export { wireStash, type WireVault } from './wire-vault.ts'
+
+export { ANSWER_BYTES, type SavedAnswer } from './answers.ts'

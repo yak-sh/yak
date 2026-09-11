@@ -61,6 +61,8 @@ export type ClientOpts = {
   vault?: Vault | false
   /** Maximum inactive wire payloads (default: 20,000). */
   retention?: number
+  /** Maximum encoded bytes of retained server membership/coverage metadata. */
+  answerBytes?: number
   /** Server tier, separate from local drafts. Default: wireIdb in browsers.
    * No disk reads/writes occur until an authoritative epoch is supplied. */
   wireVault?: WireVault | false
@@ -115,7 +117,7 @@ export type ClientWatchOpts = WatchOpts & {
   remote?: boolean
   /** Let the server alone evaluate membership/order, without parsing or
    * priming from incomplete local data. Requires a remote watch. Cached
-   * payloads remain readable with ent(), but this answer starts empty. */
+   * payloads remain in RAM; a bounded same-epoch answer may prime an unready reopen. */
   evaluate?: 'local' | 'server'
 }
 
@@ -179,6 +181,7 @@ export let client = (
 
   cache = retention(g, store, seen, {
     limit: opts.retention,
+    answerBytes: opts.answerBytes,
     localOnly: !opts.url,
     vault: opts.wireVault === false
       ? undefined
@@ -216,7 +219,10 @@ export let client = (
       if (remote) {
         let id: string
         try {
-          id = wire!.subscribe(query, undefined, { prime: !server })
+          id = wire!.subscribe(query, undefined, {
+            prime: !server,
+            answerKey: server ? key : undefined,
+          })
         } catch (error) {
           local?.close()
           throw error

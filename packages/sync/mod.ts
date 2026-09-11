@@ -102,3 +102,5 @@ export {
   SENT,
 } from './mark.ts'
 export { type Port, type PortLink, portLink } from './port.ts'
+
+export { type Coverage, covers, delivered } from './coverage.ts'
