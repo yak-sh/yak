@@ -348,6 +348,7 @@ sidebar remains hidden below `min` terminal columns (90 by default).
 the terminal size, not a nested container's measured width. Nested layouts
 should use the painter's row/column sizing or pass an explicit fixed `width`.
 This option does not add general CSS percentage sizing.
+
 ### Controlled item selection
 
 `VirtualList` accepts `selected: string` and `onSelect(id)` for item navigation.
