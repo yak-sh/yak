@@ -88,12 +88,9 @@ export let none = (): Counts => ({ requests: 0, rows_read: 0, rows_written: 0 })
 
 // ---- the ceilings (T-32758) ------------------------------------------------
 //
-// Adoption over revenue (T-32756): a ceiling is something the person's agent
-// SEES COMING and is told about, not a wall the person hits. So only what
-// costs money is refused outright — a sixth app, data past the ceiling, the
-// 101st letter SENT — and requests past 50,000 are served and reported. At 80%
-// of any of them the agent gets one line on the unseen channel (unseen.ts
-// `ceiling`), marked the way an error is, so it rides one reply.
+// At 80% the agent gets one line on the unseen channel (unseen.ts `ceiling`).
+// At the monthly request ceiling, apps.ts refuses serving with 429 (T-37150).
+// This is a soft quota: the hourly analytics reading can lag live traffic.
 
 let GB = 1024 ** 3
 
@@ -113,8 +110,7 @@ export let FILES: Record<Tier, number> = { free: FREE.files, plus: PLUS.files }
 // Where the warning line sits, as a fraction of a ceiling.
 export let WARN = 0.8
 
-// Visits are reported, not refused. Comped spaces retain their app/data
-// exemption independently of the paid Plus allowance.
+// Comped spaces retain their app/data/visit exemption independently of Plus.
 export let ceilings = (tier: Tier | null, slug = '') =>
   COMPED.includes(slug) ? null : tier == 'plus' ? PLUS : FREE
 
@@ -173,6 +169,36 @@ export let spent = (space: Space, now = new Date()) =>
       ...empty(monthOf(now), space.meter?.built ?? 0),
       files: space.meter?.files ?? 0,
     }
+
+/** The serving quota uses the existing hourly reading, not a per-hit write.
+ * Keep refusing an over-limit reading until the UTC month turns or the plan
+ * changes; an absent reading permits serving. Management stays outside this
+ * gate, so an owner can still change plans or work on their apps. */
+export let refusedVisit = (
+  space: Space,
+  req: Request,
+  env: Host = {},
+  now = new Date(),
+): Response | null => {
+  let limit = ceilings(space.tier, space.slug)
+  if (!limit || spent(space, now).requests < limit.requests) return null
+  let reset = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
+  return new Response(
+    req.method == 'HEAD'
+      ? null
+      : `This space has reached its ${count(limit.requests)} monthly visits. ` +
+        `Its apps will be available again on the 1st (UTC). ` +
+        `The owner can still manage the space. Plans: ${url(env, '/pricing')}`,
+    {
+      status: 429,
+      headers: {
+        'content-type': 'text/plain; charset=utf-8',
+        'cache-control': 'no-store',
+        'retry-after': reset.toUTCString(),
+      },
+    },
+  )
+}
 
 // Both plans count completed builds in the current calendar month.
 export let usedBuilds = (space: Space, now = new Date()) =>
@@ -245,7 +271,8 @@ export let standing = (
       `${made} (${cost}), and ${files}.`
   }
   let refused =
-    `Requests are never refused; an app past ${free.apps}, a build past ${
+    `App serving pauses at ${count(free.requests)} monthly visits ` +
+    `(HTTP 429, checked hourly; resets on the 1st UTC); an app past ${free.apps}, a build past ${
       count(builds(space.tier))
     }, data past ${size(free.bytes)}, files past ${size(free.files)}, or the ${
       count(letters(space.tier) + 1)

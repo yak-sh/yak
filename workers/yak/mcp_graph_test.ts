@@ -16,7 +16,7 @@ import {
   signed,
   signIn,
 } from './probe.ts'
-import { monthOf, PLUS } from './meter.ts'
+import { FREE, monthOf, PLUS } from './meter.ts'
 import { minted } from './mcp-probe.ts'
 
 // An entity spans apps (T-32699): a read that names no app asks every store
@@ -450,7 +450,8 @@ slow('app_list answers what the month cost', async () => {
 // The ceilings the agent sees coming (T-32758): a line at 80%, said once; the
 // sixth app refused and the fifth not; data past 1 GB refused at the door.
 slow('the free tier: a warning once, then the refusals', async () => {
-  let k = await kernel()
+  let secret = 'whsec_quota_probe'
+  let k = await kernel({ STRIPE_WEBHOOK_SECRET: secret })
   try {
     let { cookie, eids } = await seed(k, [
       { slug: 'brim', apps: ['one'] },
@@ -487,7 +488,7 @@ slow('the free tier: a warning once, then the refusals', async () => {
     let said = await agent.tool('app_list', { space: 'brim' })
     assertStringIncludes(said, '## ceiling')
     assertStringIncludes(said, '40,500 of 50,000 requests')
-    assertStringIncludes(said, 'Requests are never refused')
+    assertStringIncludes(said, 'App serving pauses at')
     let again = await agent.tool('app_list', { space: 'brim' })
     assert(!again.includes('## ceiling'), 'the ceiling line is said once')
 
@@ -524,6 +525,47 @@ slow('the free tier: a warning once, then the refusals', async () => {
     let why = (await stopped.json()).error
     assertEquals(why.code, 'space_full')
     assertStringIncludes(why.message, 'of app data')
+
+    await meta(k, cookie).apply([{
+      entity: { eid: eids.brim },
+      meter: { ...row, requests: FREE.requests },
+    }])
+    await agent.tool('space_new', { slug: 'quota-cache', title: 'Quota' })
+    let over = await k.at('brim.yaks.app', '/one/')
+    assertEquals(over.status, 429)
+    assertStringIncludes(await over.text(), '50,000 monthly visits')
+    let manage = await k.at('brim.yaks.app', '/_yaks', { headers: { cookie } })
+    assertEquals(manage.status, 200)
+    await manage.body?.cancel()
+    // MCP management still works, and raising the allowance reopens serving.
+    assertStringIncludes(await agent.tool('app_list', { space: 'brim' }), 'one')
+    let created = Math.floor(Date.now() / 1000)
+    let raw = JSON.stringify({
+      id: 'evt_quota_upgrade',
+      type: 'customer.subscription.updated',
+      created,
+      data: {
+        object: {
+          id: 'sub_quota',
+          customer: 'cus_quota',
+          status: 'active',
+          metadata: { space: eids.brim },
+        },
+      },
+    })
+    let paid = await k.at('yaks.app', '/stripe/webhook', {
+      method: 'POST',
+      body: raw,
+      headers: {
+        'content-type': 'application/json',
+        'stripe-signature': await signed(secret, raw, created),
+      },
+    })
+    assertEquals(paid.status, 200)
+    assertEquals((await paid.json()).did, 'brim is plus')
+    let reopened = await k.at('brim.yaks.app', '/one/api/graph')
+    assertEquals(reopened.status, 200)
+    await reopened.body?.cancel()
   } finally {
     await k.stop()
   }

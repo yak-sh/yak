@@ -45,6 +45,7 @@ import { call, type Ctx, wrote } from './tools.ts'
 import { archive, openIn, serve } from './unseen.ts'
 import { PLATFORM_STORE } from './door.ts'
 import { sweep } from './usage.ts'
+import { FREE, monthOf, PLUS } from './meter.ts'
 
 let SECRET = 'a probe secret'
 
@@ -711,6 +712,71 @@ let router = async (
       files.held.set(key, new TextEncoder().encode(body)),
   }
 }
+
+Deno.test('monthly visit quota stops all app serving before dispatch or files', async () => {
+  for (let tier of ['free', 'plus'] as const) {
+    let calls = 0
+    let k = await router(() => {
+      calls++
+      return new Response('the router')
+    }, ['/garden/*'])
+    k.put('ada/garden/index.html', '<!doctype html><body>garden</body>')
+    let limit = tier == 'plus' ? PLUS.requests : FREE.requests
+    let meter = async (requests: number, month = monthOf(new Date())) =>
+      await stamp(k.env, {
+        entities: [{
+          entity: { eid: k.space.eid },
+          plan: { tier },
+          meter: { month, requests },
+        }],
+      })
+    await meter(limit - 1)
+    assertEquals(await (await k.at('/')).text(), 'the router')
+    assertEquals(calls, 1)
+    await meter(limit)
+    for (
+      let path of [
+        '/',
+        '/garden/',
+        '/cookbook/style.css',
+        '/api/graph',
+        '/garden/api/query',
+      ]
+    ) {
+      let res = await k.at(path)
+      assertEquals(res.status, 429, path)
+      assertStringIncludes(await res.text(), 'monthly visits')
+    }
+    // Neither a claimed internal request nor a socket upgrade skips the gate.
+    for (
+      let headers of [
+        new Headers({ 'x-yak-grant': 'forged' }),
+        new Headers({ upgrade: 'websocket' }),
+      ]
+    ) {
+      let res = await apps.fetch(visit('/garden/api/ws', { headers }), k.env)
+      assertEquals(res.status, 429)
+      await res.body?.cancel()
+    }
+    assertEquals(calls, 1, 'over-quota traffic invoked app code')
+    let manage = await k.at('/_yaks')
+    assertEquals(manage.status, 303)
+    assertStringIncludes(manage.headers.get('location')!, '/login')
+    await manage.body?.cancel()
+    // A prior month's count cannot keep serving blocked before the next sweep.
+    await meter(limit, '2020-01')
+    assertEquals(await (await k.at('/')).text(), 'the router')
+    await meter(limit)
+    await stamp(k.env, {
+      entities: [{ entity: { eid: k.space.eid }, space: { slug: 'yourname' } }],
+    })
+    let comped = await apps.fetch(
+      new Request('https://yourname.yaks.app/'),
+      k.env,
+    )
+    assertEquals(await comped.text(), 'the router')
+  }
+})
 
 Deno.test('rung 1: a platform path never reaches an app', async () => {
   let k = await router(() => new Response('the router', { status: 200 }))

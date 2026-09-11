@@ -23,6 +23,7 @@ import {
   level,
   PLUS,
   refusedBuild,
+  refusedVisit,
   size,
   spent,
   standing,
@@ -225,6 +226,52 @@ Deno.test('a space is near a ceiling at 80% and over it at 100%', () => {
   )
 })
 
+Deno.test('monthly serving quota: both tiers, comped spaces, and UTC reset', async () => {
+  let req = new Request('https://jeff.yaks.app/')
+  for (let tier of [null, 'free', 'plus'] as const) {
+    let limit = tier == 'plus' ? PLUS.requests : FREE.requests
+    for (let requests of [0, limit * 0.8, limit - 1]) {
+      assertEquals(refusedVisit(space({ requests }, tier), req, {}, NOW), null)
+    }
+    for (let requests of [limit, limit + 1]) {
+      let full = space({ requests }, tier)
+      let out = refusedVisit(full, req, {}, NOW)!
+      assertEquals(out.status, 429)
+      assertEquals(out.headers.get('cache-control'), 'no-store')
+      assertEquals(
+        out.headers.get('retry-after'),
+        'Thu, 01 Oct 2026 00:00:00 GMT',
+      )
+      assertStringIncludes(await out.text(), limit.toLocaleString('en-US'))
+      assertEquals(
+        refusedVisit({ ...full, slug: 'yourname' }, req, {}, NOW),
+        null,
+      )
+      assertEquals(refusedVisit({ ...full, meter: null }, req, {}, NOW), null)
+      assertEquals(
+        refusedVisit(full, req, {}, new Date('2026-10-01T00:00:00Z')),
+        null,
+      )
+    }
+  }
+  let full = space({ requests: FREE.requests })
+  assertEquals(refusedVisit({ ...full, tier: 'plus' }, req, {}, NOW), null)
+  let head = refusedVisit(full, new Request(req, { method: 'HEAD' }), {}, NOW)!
+  assertEquals(head.status, 429)
+  assertEquals(await head.text(), '')
+  let december = refusedVisit(
+    space({ month: '2026-12', requests: FREE.requests }),
+    req,
+    {},
+    new Date('2026-12-31T23:59:59Z'),
+  )!
+  assertEquals(
+    december.headers.get('retry-after'),
+    'Fri, 01 Jan 2027 00:00:00 GMT',
+  )
+  await december.body?.cancel()
+})
+
 Deno.test('Plus ceilings are distinct and comped apps/data stay uncapped', () => {
   assertEquals(ceilings(null), FREE)
   assertEquals(ceilings('free'), FREE)
@@ -248,7 +295,7 @@ Deno.test('Plus ceilings are distinct and comped apps/data stay uncapped', () =>
   assertStringIncludes(said, 'plus tier')
   assertStringIncludes(said, '50 of 50 apps')
   assertStringIncludes(said, '10 GB of 10 GB')
-  assertStringIncludes(said, 'Requests are never refused')
+  assertStringIncludes(said, 'App serving pauses at')
   assertStringIncludes(
     atCeiling(space({}, 'plus'), 'apps'),
     'plus tier, which is 50 apps',
@@ -272,7 +319,7 @@ Deno.test('the line says every number against its ceiling', () => {
   // The hour those figures were read: the meter is an hourly rollup, and a
   // bare number reads as live (C-32869 item 6).
   assertStringIncludes(said, '(as of 12:00 UTC)')
-  assertStringIncludes(said, 'Requests are never refused')
+  assertStringIncludes(said, 'App serving pauses at')
 })
 
 Deno.test('before the first sweep the line says so, not zero', () => {
@@ -283,7 +330,7 @@ Deno.test('before the first sweep the line says so, not zero', () => {
   // number even here (T-33688).
   assertStringIncludes(said, '3 of 100 emails')
   assert(!said.includes('of 50,000 requests'), 'it claimed a request count')
-  assertStringIncludes(said, 'Requests are never refused')
+  assertStringIncludes(said, 'App serving pauses at')
 })
 
 // A refusal points at the page that DESCRIBES the plans and never at anything

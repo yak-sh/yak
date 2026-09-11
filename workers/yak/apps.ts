@@ -88,6 +88,7 @@ import { type Door, storeOf } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { noted, refusal, serving } from './unseen.ts'
 import { full, fullFiles } from './usage.ts'
+import { refusedVisit } from './meter.ts'
 import { sha256 } from './versions.ts'
 // The space index's own visitor block reads views.ts directly (`visits`
 // below): drawing a page out of another module's data is not a slot, it is one
@@ -1554,6 +1555,10 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
       ? posting(env, space, req, who)
       : joining(env, space.eid, req, who)
   }
+  // Before home routing, speculative file reads, dispatch and app APIs alike.
+  // A forged worker grant must not bypass the space's monthly quota.
+  let quota = refusedVisit(space, req, env)
+  if (quota) return quota
   let app = r.app ? await c.time('app', () => dir.app(space!, r.app!)) : null
   // In the trash (erase.ts, T-34430): the address is held for it and answers
   // nothing while it waits. Not a 410 and not a redirect — to the web this is
