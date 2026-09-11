@@ -1,5 +1,5 @@
 // Browser inbox candidate reads. The shared inboxItem predicate still owns
-// policy; these server-side screens run BEFORE the row window. A badge needs
+// policy; these server-side screens run BEFORE delivery. A badge needs
 // only unread policy columns, never letter bodies or delivery job payloads.
 import type { Reader } from './client.ts'
 
@@ -8,8 +8,7 @@ const POLICY =
 
 let valuesOf = (values: (string | undefined)[]) =>
   [...new Set(values.filter((v): v is string => !!v))].sort()
-let values = (items: (string | undefined)[]) =>
-  valuesOf(items).join(',')
+let values = (items: (string | undefined)[]) => valuesOf(items).join(',')
 
 export let inboxQueries = (who: Reader, unreadOnly = false): string[] => {
   let watched = [...who.watching ?? []]
@@ -34,11 +33,17 @@ export let inboxQueries = (who: Reader, unreadOnly = false): string[] => {
     select('notice.target', targets),
     select('deliver.to', [who.actor], '&.knock!'),
     select('knock.target', watched, exclude('deliver.to', [who.actor])),
-    select('mail.target', mailTargets, '&.mail.message_id!'),
+    select(
+      'mail.target',
+      watched.includes(who.scope!) ? [] : [who.scope],
+      '&.mail.message_id!',
+    ),
     select(
       'mail.to_addr',
       [...who.addrs ?? []],
       '&.mail.message_id!' + exclude('mail.target', mailTargets),
     ),
+    // Watching overrides direct-address policy, including outbound letters.
+    select('mail.target', watched),
   ]
 }

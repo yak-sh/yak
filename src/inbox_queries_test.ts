@@ -3,13 +3,14 @@
 import { assertEquals, assertFalse } from '@std/assert'
 import { inboxItem, isUnread, type Reader, type Row } from './client.ts'
 import { inboxQueries } from './inbox_queries.ts'
+import { parseQuery } from './query.ts'
 import { liveClient } from './live_client.ts'
 import type { Sub } from './live.ts'
 import { subserve } from './subserve.ts'
 import { applyNumbered, bareDb } from './testdb.ts'
 import { type Change, kindOf, uuid } from './types.ts'
 
-Deno.test('inbox projects and dedupes authoritative mail/knock reads; stamps stay live', () => {
+Deno.test('inbox projects authoritative mail/knock reads; stamps stay live', () => {
   let db = bareDb(), actor = uuid(), watched = uuid(), other = uuid()
   let frames: Sub[] = [], source = new Map<string, Row['comps']>()
   let client = liveClient({
@@ -25,8 +26,33 @@ Deno.test('inbox projects and dedupes authoritative mail/knock reads; stamps sta
     }
   })
   let write = (changes: Change[]) => {
-    applyNumbered(db, changes)
+    applyNumbered(
+      db,
+      changes.map((c) =>
+        c.name == 'mail' && c.comp
+          ? {
+            ...c,
+            comp: Object.fromEntries(
+              Object.entries(c.comp).filter(([p]) =>
+                !['message_id', 'to_addr'].includes(p)
+              ),
+            ),
+          }
+          : c
+      ),
+    )
+    // Inbound envelope columns are server-owned; reproduce the inbound
+    // stamper, rather than expecting wire apply() to accept them.
     for (let c of changes) {
+      if (c.name == 'mail' && c.comp) {
+        for (let prop of ['message_id', 'to_addr']) {
+          if (prop in c.comp) {
+            db.prepare(
+              `update mail set ${prop} = ? where entity = (select id from entity where eid = ?)`,
+            ).run(c.comp[prop] == null ? null : String(c.comp[prop]), c.eid)
+          }
+        }
+      }
       let comps = source.get(c.eid) ?? {}
       if (c.comp == null) delete comps[c.name]
       else comps[c.name] = { ...comps[c.name], ...c.comp }
@@ -101,6 +127,7 @@ Deno.test('inbox projects and dedupes authoritative mail/knock reads; stamps sta
       mail: { to_addr: 'person@example.test', message_id: 'address-only' },
     })
     add({ mail: { target: watched, to_addr: actor, message_id: 'watched' } })
+    add({ mail: { target: watched }, opened: {} })
     let read = add({ mail: { target: actor, message_id: 'read' }, opened: {} })
     let archived = add({
       mail: { target: actor, message_id: 'archived' },
@@ -116,6 +143,7 @@ Deno.test('inbox projects and dedupes authoritative mail/knock reads; stamps sta
     })
     let knock = add({ knock: { target: watched }, deliver: { to: actor } })
     add({ knock: { target: watched }, deliver: { to: other } })
+    add({ knock: { target: watched } })
     add({ comment: { target: actor } })
     add({ notice: { target: watched, event: 'wake' } })
     for (let unread of [false, true]) {
@@ -139,6 +167,10 @@ Deno.test('inbox projects and dedupes authoritative mail/knock reads; stamps sta
         f.changes?.some((c) => c.name == 'doc' && c.comp?.body)
       ),
     )
+    assertFalse(frames.some((f) =>
+      f.sub.startsWith('true:') &&
+      f.changes?.some((c) => c.name == 'doc' || c.name == 'created')
+    ))
     parity()
     write([{ eid: mail, name: 'opened', comp: {} }])
     parity()
@@ -150,7 +182,7 @@ Deno.test('inbox projects and dedupes authoritative mail/knock reads; stamps sta
     parity()
     write([{ eid: mail, name: 'archived', comp: {} }])
     parity()
-    // Move between the two mail arms without losing the item or double counting.
+    // Move between mail arms without losing the item or double counting.
     write([{
       eid: read,
       name: 'mail',
@@ -183,5 +215,29 @@ Deno.test('inbox query identity is stable and address values cannot become gramm
       watching: new Set([...who.watching!].reverse()),
       addrs: new Set([...who.addrs!].reverse()),
     }),
+  )
+})
+
+Deno.test('person inbox uses addresses without project mail; quoted addresses stay values', () => {
+  let actor = uuid(), watched = uuid(), addr = 'odd&.archived!@example.test'
+  let queries = inboxQueries({
+    actor,
+    addrs: new Set([addr]),
+    watching: new Set([watched]),
+  }, true)
+  assertEquals(queries[4], '')
+  let preds = parseQuery(queries[5])
+  assertEquals(
+    preds.filter((p) => p.comp == 'mail' && p.prop == 'to_addr').map((p) =>
+      p.value
+    ),
+    [addr],
+  )
+  assertEquals(preds.filter((p) => p.comp == 'archived').map((p) => p.op), [''])
+  assertEquals(
+    parseQuery(queries[6]).some((p) =>
+      p.prop == 'message_id' && p.op == 'exists'
+    ),
+    false,
   )
 })

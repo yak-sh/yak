@@ -33,6 +33,7 @@ export let useInbox = (actor: string, unreadOnly = false): Row[] => {
   let watchedKnocks = useQueryEids(queries[3])
   let mailTargets = useQueryEids(queries[4])
   let mailAddresses = useQueryEids(queries[5])
+  let watchedMail = useQueryEids(queries[6])
   let found = rows([
     ...comments,
     ...notices,
@@ -40,6 +41,7 @@ export let useInbox = (actor: string, unreadOnly = false): Row[] => {
     ...watchedKnocks,
     ...mailTargets,
     ...mailAddresses,
+    ...watchedMail,
   ])
   let items = seeded.length ? seeded : uniq(found).filter(inboxItem(who))
   return unreadOnly ? items.filter(isUnread) : items
