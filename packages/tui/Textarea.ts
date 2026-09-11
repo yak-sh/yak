@@ -16,7 +16,7 @@ import { useTextSurface } from './visual.ts'
 import { h, type JSX } from 'preact'
 import { useRef, useState } from 'preact/hooks'
 import type { Key } from './input.ts'
-import { size, useKeys, useMetric } from './screen.ts'
+import { size, terminalFocused, useKeys, useMetric } from './screen.ts'
 
 /** The editor's whole state: the text, and where the cursor sits in it. */
 export type Edit = { text: string; at: number }
@@ -213,7 +213,7 @@ export let Textarea = (
         'div',
         { key: i },
         gutter(i),
-        active && i == row
+        active && terminalFocused.value && i == row
           ? [
             h('span', {}, line.slice(0, col)),
             h('span', { class: 'Cursor' }, line[col] ?? ' '),

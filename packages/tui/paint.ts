@@ -591,12 +591,12 @@ export let ansiBackend = (opts: {
     // terminal collapses Shift+Enter to a bare CR.
     start: () =>
       write(
-        '\x1b[?1049h\x1b[?25l\x1b[?2004h\x1b[?1007h\x1b[?1000s\x1b[?1006s\x1b[?1000h\x1b[?1006h\x1b[>4;2m\x1b[>1u',
+        '\x1b[?1049h\x1b[?25l\x1b[?2004h\x1b[?1007h\x1b[?1000s\x1b[?1004s\x1b[?1004h\x1b[?1006s\x1b[?1000h\x1b[?1006h\x1b[>4;2m\x1b[>1u',
       ),
     stop: () =>
       write(
         pictures.close() +
-          '\x1b[<u\x1b[>4;0m\x1b[?1006r\x1b[?1000r\x1b[?1007l\x1b[?2004l\x1b[?25h\x1b[?1049l',
+          '\x1b[<u\x1b[>4;0m\x1b[?1004r\x1b[?1006r\x1b[?1000r\x1b[?1007l\x1b[?2004l\x1b[?25h\x1b[?1049l',
       ),
     reset: () => {
       last = []

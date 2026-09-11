@@ -145,3 +145,23 @@ Deno.test('partial CSI does not expire into keys; plain Enter stays Enter', () =
   assertEquals(read('\r\n'), [{ name: 'enter' }, { name: 'enter' }])
   assertEquals(read('hello'), [{ name: 'char', text: 'hello' }])
 })
+
+Deno.test('terminal focus reports survive every chunk boundary and paste stays literal', () => {
+  for (
+    let [bytes, name] of [['\x1b[I', 'focusin'], [
+      '\x1b[O',
+      'focusout',
+    ]] as const
+  ) {
+    assertEquals(decode(bytes), [{ name }])
+    for (let i = 1; i < bytes.length; i++) {
+      let read = feed()
+      assertEquals(read(bytes.slice(0, i)), [])
+      assertEquals(read(bytes.slice(i)), [{ name }])
+    }
+  }
+  assertEquals(decode('\x1b[200~\x1b[O\x1b[201~'), [{
+    name: 'paste',
+    text: '\x1b[O',
+  }])
+})

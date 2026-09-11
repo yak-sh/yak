@@ -318,3 +318,13 @@ Deno.test('full-width pre background is stable on warm paints', () => {
   assertEquals(backend.draw(root).written, 3)
   assertEquals(backend.draw(root).written, 0)
 })
+
+Deno.test('terminal focus reporting is saved, enabled, and restored', () => {
+  let out: string[] = []
+  let back = ansiBackend({ write: (s) => void out.push(s) })
+  back.start()
+  assert(out.join('').includes('\x1b[?1004s\x1b[?1004h'))
+  out.length = 0
+  back.stop()
+  assert(out.join('').includes('\x1b[?1004r'))
+})

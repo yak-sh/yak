@@ -39,6 +39,8 @@ export type Input = Key | Mouse
 
 /** The keys this decoder names. Anything else is dropped. */
 export type Name =
+  | 'focusin'
+  | 'focusout'
   | 'char'
   | 'enter'
   | 'escape'
@@ -116,6 +118,8 @@ let named: Record<number, Name> = {
 // One escape sequence at `i`: the key it means (null = drop it) and its length.
 let escape = (s: string, i: number): [Input | null, number] => {
   let rest = s.slice(i)
+  if (rest.startsWith('\x1b[I')) return [{ name: 'focusin' }, 3]
+  if (rest.startsWith('\x1b[O')) return [{ name: 'focusout' }, 3]
   // xterm modifyOtherKeys, also used by tmux's extended-keys mode.
   // deno-lint-ignore no-control-regex -- ESC is part of the terminal protocol
   let extended = rest.match(/^\x1b\[27;(\d+);(\d+)~/)

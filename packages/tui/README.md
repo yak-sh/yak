@@ -381,3 +381,16 @@ collection cannot overwrite the saved position.
 The widget remains storage-independent. It uses the same item identity,
 selection, and measured-line cache as a complete list. Its scrollbar estimates
 unloaded ranges; it does not fetch or measure history to compute exact totals.
+
+### Terminal focus and the input caret
+
+The backend enables terminal focus reporting and restores its previous setting
+on shutdown. `terminalFocused` describes terminal focus independently of widget
+focus. `Textarea` hides its synthetic block caret on focus-out and restores it
+on focus-in without changing its value or cursor position. Focus reports are
+consumed before keyboard shortcuts and never become input text.
+
+When no reports arrive, the terminal is assumed focused. Under tmux, focus
+forwarding may require `set -g focus-events on`; the application does not change
+your tmux configuration. Detection of inactive panes/windows depends on the
+terminal and multiplexer forwarding those reports.

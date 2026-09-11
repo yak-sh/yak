@@ -23,6 +23,10 @@ export let size: Signal<{ columns: number; rows: number }> = signal({
   rows: 24,
 })
 
+/** Terminal focus reporting is independent of application/widget focus.
+ * Defaults to focused when the terminal does not send focus reports. */
+export let terminalFocused = signal(true)
+
 /** What the last paint measured, per element id. */
 export let metrics: Signal<Metrics> = signal<Metrics>({})
 
@@ -37,6 +41,10 @@ export let pressTo = (id: string, key: Key): boolean => !!targets.get(id)?.(key)
 
 /** Offer a key to the focus stack, topmost first. */
 export let press = (key: Key): boolean => {
+  if (key.name == 'focusin' || key.name == 'focusout') {
+    terminalFocused.value = key.name == 'focusin'
+    return true
+  }
   if (interceptKey(key)) return true
   if (visualKey(key)) return true
   return pressFocused(key)
@@ -93,4 +101,7 @@ export let measured = (next: Metrics): void => {
 }
 
 /** Forget the focus stack — for a test that mounts more than one app. */
-export let clear = (): void => void (stack.length = 0)
+export let clear = (): void => {
+  stack.length = 0
+  terminalFocused.value = true
+}

@@ -195,3 +195,36 @@ Deno.test('a one-column input hides its gutter and keeps the cursor visible', as
     ui.free()
   }
 })
+
+Deno.test('terminal blur hides the synthetic caret without changing the draft', async () => {
+  let changes = 0
+  let ui = await mount(
+    () =>
+      h(Textarea, {
+        value: { text: 'hello', at: 2 },
+        onChange: () => {
+          changes++
+        },
+        onSubmit: () => {},
+      }),
+    30,
+    4,
+  )
+  try {
+    let text = ui.text()
+    assertEquals(/(?:;|\[)7m/.test(ui.out.join('')), true)
+    let before = ui.out.length
+    await ui.send('\x1b[O')
+    let blurred = ui.out.slice(before).join('')
+    assertEquals(/(?:;|\[)7m/.test(blurred), false)
+    assertEquals(ui.text(), text)
+    assertEquals(changes, 0)
+    before = ui.out.length
+    await ui.send('\x1b[I')
+    assertEquals(/(?:;|\[)7m/.test(ui.out.slice(before).join('')), true)
+    assertEquals(ui.text(), text)
+    assertEquals(changes, 0)
+  } finally {
+    ui.free()
+  }
+})
