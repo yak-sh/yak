@@ -146,9 +146,10 @@ new schema back to an old vocabulary during plugin activation.
   payloads rather than renaming existing APIs prematurely.
 - Cross-plugin command collisions are checked when the entire command set is
   adapted; other subsystems retain their established merge/override semantics.
-- The first CLI example still uses the existing harness runtime factory, which
-  starts more machinery than a read-only command strictly needs. This pilot does
-  not hide that host-lifecycle debt behind a new wrapper object.
+- The structured read-only CLI opens storage without constructing the agent
+  runtime or starting model execution. Existing short commands retain their old
+  runtime path; migrating them is outside this pilot. Opening storage still runs
+  the existing host initialization and migration policy.
 - There is no `:` adapter yet. It should use `resolveCommand`, a host-supplied
   argument decoder, and the same handler rather than duplicate business logic.
 - Compiled distributions should assemble selected imports at build time. Do not

@@ -15,7 +15,7 @@ import type { Comp, Eid } from '@yaks/graph'
 import { type Ctx, type Plugin, saidIn } from '@yaks/cli'
 import { codexPaths, fromCodex, fromEnv } from '@yaks/openai'
 import { type Agent, agent, titleOf } from './run.ts'
-import { dbPath } from './store.ts'
+import { dbPath, open } from './store.ts'
 
 let said = (c: Ctx) => {
   let { opts, words } = saidIn(c.args)
@@ -218,12 +218,12 @@ export const structured = commandPlugin(commands, async (command, args, c) => {
     c.note('session list takes no arguments')
     return 2
   }
-  const a = running(c)
+  const h = open()
   try {
     const result = await command.run({}, {
-      graph: a.h.g,
+      graph: h.g,
       actor: null,
-      read: (query, opts) => a.h.g.read(query, opts),
+      read: (query, opts) => h.g.read(query, opts),
       apply: () => {
         throw new Error('Read-only command context')
       },
@@ -231,6 +231,6 @@ export const structured = commandPlugin(commands, async (command, args, c) => {
     c.out(JSON.stringify(result, null, 2))
     return 0
   } finally {
-    await a.close()
+    h.close()
   }
 })
