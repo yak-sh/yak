@@ -522,18 +522,33 @@ let Draft = (
 export let tui = async (): Promise<void> => {
   const { remote } = await import('./remote.ts')
   const backend = await remote({ instructions: INSTRUCTIONS, cwd: Deno.cwd() })
+  const ui = frontend()
   try {
     await backend.resume()
     await run(
-      () => h(App, { agent: backend.agent, subscribe: backend.subscribe }),
+      () =>
+        h(App, {
+          agent: backend.agent,
+          subscribe: backend.subscribe,
+          frontend: ui,
+        }),
       {
         graphics: Deno.env.get('HARNESS_GRAPHICS') == 'kitty'
           ? 'kitty'
           : 'none',
         tmux: !!Deno.env.get('TMUX'),
+        shutdown: () => {
+          ui.patch({
+            error:
+              'Shutting down—waiting for active operations; Ctrl+C again to force.',
+          })
+          return backend.close({ timeout: null })
+        },
+        force: backend.force,
       },
     )
   } finally {
     await backend.close()
+    ui.close()
   }
 }

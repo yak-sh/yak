@@ -358,3 +358,12 @@ Page distances use measured average item heights; they do not measure unseen
 history. The `List_Selected` theme token styles selection. A changed selection
 is revealed automatically; wheel scrolling can subsequently move away from it.
 Without `onSelect`, the existing row-scrolling behavior remains unchanged.
+
+### Graceful quit
+
+`run(App, {shutdown, force})` supports two-stage interruption. The first Ctrl+C
+(or SIGINT) calls asynchronous `shutdown` and stops routing ordinary input.
+Completion exits without another keypress. A second interrupt calls `force` and
+exits without awaiting the drain. Applications can update their existing view
+state inside `shutdown` to explain the wait. Without these callbacks, Ctrl+C
+exits immediately. Fatal errors still restore the terminal.

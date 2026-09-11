@@ -15,6 +15,7 @@ import { ansiBackend, type Backend } from './paint.ts'
 import { routeMouse } from './mouse.ts'
 import type { Line } from './paint.ts'
 import { feed } from './input.ts'
+import { shutdown } from './shutdown.ts'
 import { clear, measured, press, size } from './screen.ts'
 import type { Sheet } from './theme.ts'
 
@@ -34,6 +35,9 @@ export let run = async (
     sheet?: Sheet
     graphics?: 'kitty' | 'none'
     tmux?: boolean
+    /** First interrupt drains; a second invokes force. Input stays open meanwhile. */
+    shutdown?: () => Promise<unknown>
+    force?: () => void
   } = {},
 ): Promise<void> => {
   let backend = opts.backend ??
@@ -45,6 +49,8 @@ export let run = async (
   let screen = install()
   let host = screen.root as unknown as Parameters<typeof render>[1]
   let done = false
+  let quitting = shutdown({ drain: opts.shutdown, force: opts.force })
+  let interrupt = () => quitting.interrupt()
   let escapeTimer: ReturnType<typeof setTimeout> | undefined
   stop.fn = () => done = true
 
@@ -64,6 +70,7 @@ export let run = async (
     screen.free()
     try {
       Deno.removeSignalListener('SIGWINCH', resize)
+      Deno.removeSignalListener('SIGINT', interrupt)
     } catch { /* never added */ }
     setClipboard()
     backend.stop()
@@ -78,6 +85,7 @@ export let run = async (
     setClipboard(backend.copy ? (text) => backend.copy!(text) : undefined)
     size.value = backend.size()
     Deno.addSignalListener('SIGWINCH', resize)
+    Deno.addSignalListener('SIGINT', interrupt)
     onPaint(() => {
       let frame = backend.draw(screen.root)
       painted = frame.lines ?? []
@@ -88,6 +96,11 @@ export let run = async (
     let keys = feed((body) => backend.control?.(body))
     let dispatch = (events: ReturnType<typeof keys>) => {
       for (let key of events) {
+        if (key.name != 'mouse' && key.ctrl && key.text == 'c') {
+          interrupt()
+          continue
+        }
+        if (quitting.draining) continue
         if (key.name == 'mouse') {
           routeMouse(key, painted)
           continue
@@ -99,8 +112,17 @@ export let run = async (
     let buf = new Uint8Array(4096)
     let dec = new TextDecoder()
     while (!done) {
-      let n = await Deno.stdin.read(buf)
-      if (n == null) break
+      let n = await Promise.race([
+        Deno.stdin.read(buf),
+        quitting.done.then(() => null),
+      ])
+      if (n == null) {
+        if (!quitting.draining) {
+          interrupt()
+          await quitting.done
+        }
+        break
+      }
       clearTimeout(escapeTimer)
       dispatch(keys(dec.decode(buf.subarray(0, n), { stream: true })))
       escapeTimer = setTimeout(() => dispatch(keys.flush()), 25)

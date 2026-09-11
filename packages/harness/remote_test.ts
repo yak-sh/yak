@@ -281,3 +281,64 @@ Deno.test('selection subscription does not invalidate its own awaiting projectio
     await Deno.remove(dir, { recursive: true })
   }
 })
+
+Deno.test('unbounded graceful close finishes a slow response beyond the old deadline', async () => {
+  let dir = await Deno.makeTempDir()
+  let db = dir + '/graceful.db'
+  let r = await remote({ db, cwd: dir, fake: { delayMs: 2300 } })
+  try {
+    let id = await r.agent.start('finish before exit')
+    for (;;) {
+      let entries = await r.agent.transcript(id)
+      if (
+        entries.some((b) =>
+          (b.attempt as { state?: string })?.state == 'inflight'
+        )
+      ) break
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+    assertEquals(await r.close({ timeout: null }), { drained: true })
+    let reopened = await remote({ db, cwd: dir, fake: true })
+    try {
+      let entries = await reopened.agent.transcript(id)
+      assert(
+        entries.some((b) => (b.content as { body?: string })?.body == 'ok'),
+      )
+      assert(
+        !entries.some((b) =>
+          (b.attempt as { state?: string })?.state == 'interrupted'
+        ),
+      )
+    } finally {
+      await reopened.close()
+    }
+  } finally {
+    await r.close()
+    await Deno.remove(dir, { recursive: true })
+  }
+})
+
+Deno.test('explicit force releases unbounded close while a provider is stuck', async () => {
+  let dir = await Deno.makeTempDir()
+  let r = await remote({ db: ':memory:', cwd: dir, fake: 'stuck' })
+  try {
+    let id = await r.agent.start('wait')
+    for (;;) {
+      let entries = await r.agent.transcript(id)
+      if (
+        entries.some((b) =>
+          (b.attempt as { state?: string })?.state == 'inflight'
+        )
+      ) break
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+    let closing = r.close({ timeout: null })
+    r.force()
+    r.force()
+    assertEquals(await closing, { drained: false })
+    assertEquals(await r.close(), { drained: false })
+  } finally {
+    await r.close()
+    await Deno.remove(dir, { recursive: true })
+  }
+})

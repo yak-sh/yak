@@ -55,14 +55,16 @@ separate fault-isolated process.
   admitted operations and the daemon before diagnostics and SQLite are closed.
   Inline callers must await it; a callback that never returns keeps storage
   open.
-- Remote close stops commands immediately, allows two seconds for drain, then
-  terminates the worker. It returns `{ drained: boolean }`; reaching the
-  deadline on Ctrl+C is expected, not an exception. The terminal is restored by
-  the TUI before backend shutdown. No independent supervised process receives a
-  signal. Termination is not a provider cancellation acknowledgment: an
-  unfinished request can still consume provider resources, and external side
-  effects may have happened. Committed entries remain resumable; uncommitted
-  model replies are not saved.
+- Interactive shutdown has two stages: the first Ctrl+C stops new commands and
+  model turns, then waits for admitted callbacks to finish. The UI shows a
+  shutdown message and accepts only another Ctrl+C. There is no automatic
+  deadline. A second Ctrl+C terminates the worker immediately, preserving the
+  last durable checkpoints; independent supervised processes remain running. OS
+  SIGINT follows the same two-stage path. Programmatic `remote.close()` retains
+  its two-second default; `close({timeout: null})` drains indefinitely, and
+  `force()` releases that wait explicitly. Terminal cleanup follows drain or
+  explicit force. Queued children remain queued for restart.
+
 - Port close notifies its peer and rejects pending requests. Transport error and
   messageerror events do likewise. A silent disappear without an event or close
   packet can only be detected by request timeout; there is no heartbeat/restart.

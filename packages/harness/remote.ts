@@ -72,6 +72,10 @@ export let remote = async (
   worker.addEventListener('messageerror', fatal)
   let closing = false
   let shutdown: Promise<{ drained: boolean }> | undefined
+  let forceExit!: () => void
+  let forced = new Promise<{ drained: boolean }>((resolve) => {
+    forceExit = () => resolve({ drained: false })
+  })
   let request = async (method: string, args: unknown[] = []) => {
     if (closing && method != 'close') throw new Error('Worker is shutting down')
     if (failure) throw failure
@@ -196,17 +200,27 @@ export let remote = async (
     },
     resume: () => request('resume'),
     idle: (session: string) => request('idle', [session]),
-    close: () =>
+    /** Force is explicit and also releases an outstanding graceful close. */
+    force: () => {
+      closing = true
+      forceExit()
+      worker.terminate()
+      link.close()
+    },
+    close: (options: { timeout?: number | null } = {}) =>
       shutdown ??= (async () => {
         closing = true
+        listeners.clear()
         let timer: ReturnType<typeof setTimeout> | undefined
         try {
           return await Promise.race([
             request('close').then(() => ({ drained: true })),
+            forced,
             new Promise<{ drained: boolean }>((resolve) => {
+              if (options.timeout === null) return
               timer = setTimeout(
                 () => resolve({ drained: false }),
-                2000,
+                options.timeout ?? 2000,
               )
             }),
           ])
