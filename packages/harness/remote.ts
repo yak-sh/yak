@@ -168,19 +168,8 @@ export let remote = async (
     return pending
   }
   let agent: UIAgent = {
-    search: async (session, query, cursor) =>
-      await request('search', [
-        session,
-        query,
-        cursor,
-      ]) as import('./inspection.ts').SearchPage,
-    inspect: async (session, entity, start, revision) =>
-      await request('inspect', [
-        session,
-        entity,
-        start,
-        revision,
-      ]) as import('./inspection.ts').SourcePage,
+    search: async (session, query, cursor) => await request('search', [session, query, cursor]) as import('./inspection.ts').SearchPage,
+    inspect: async (session, entity, start, revision) => await request('inspect', [session, entity, start, revision]) as import('./inspection.ts').SourcePage,
     start: async (text) => await request('start', [text]) as string,
     send: async (id, text) => await request('send', [id, text]) as string,
     taskEntry: async (id, text) =>

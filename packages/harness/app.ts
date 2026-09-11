@@ -1,4 +1,4 @@
-import { InspectionPanel, inspector } from './inspect_ui.ts'
+import { inspector, InspectionPanel } from './inspect_ui.ts'
 import { transient } from '@yaks/graph'
 import { Keyboard } from './keyboard.ts'
 import { useVisualController, type VisualState } from '@yaks/tui'

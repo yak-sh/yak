@@ -1,5 +1,5 @@
 import { stepLock } from './step_lock.ts'
-import { type Inspection, inspection } from './inspection.ts'
+import { inspection, type Inspection } from './inspection.ts'
 import { streamingEnabled } from './streaming.ts'
 import { imageContext } from './artifact_tools.ts'
 import { configuredImages, type ImageOptions, readImage } from './images.ts'

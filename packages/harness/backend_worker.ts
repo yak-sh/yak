@@ -126,18 +126,9 @@ async function handle(method: string, value: unknown): Promise<unknown> {
     case 'children':
       return a.children(String(args[0]))
     case 'search':
-      return a.search(
-        String(args[0]),
-        String(args[1]),
-        args[2] as import('./inspection.ts').SearchCursor | undefined,
-      )
+      return a.search(String(args[0]), String(args[1]), args[2] as import('./inspection.ts').SearchCursor | undefined)
     case 'inspect':
-      return a.inspect(
-        String(args[0]),
-        String(args[1]),
-        args[2] as number | undefined,
-        args[3] as string | undefined,
-      )
+      return a.inspect(String(args[0]), String(args[1]), args[2] as number | undefined, args[3] as string | undefined)
     case 'transcriptPlan': {
       let id = String(args[0]), plans: string[] = []
       let limit: number | undefined
