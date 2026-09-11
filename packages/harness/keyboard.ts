@@ -13,21 +13,94 @@ import {
 } from '@yaks/tui'
 import type { Frontend } from './frontend.ts'
 
+// NORMAL bindings own both routing and help; aliases share one definition.
+type Binding = {
+  keys: string[]
+  help: string
+  focus?: 'transcript' | 'sidebar'
+  transcript?: Key
+  sidebar?: Key
+  action?: Key
+}
+const ctrl = (text: string): Key => ({ name: 'char', text, ctrl: true })
+const bindings: Binding[] = [
+  { keys: ['h', 'left'], help: 'focus transcript (left)', focus: 'transcript' },
+  { keys: ['l', 'right'], help: 'focus sidebar (right)', focus: 'sidebar' },
+  {
+    keys: ['j', 'down'],
+    help: 'next entry / sidebar item',
+    transcript: { name: 'down' },
+    sidebar: ctrl('j'),
+  },
+  {
+    keys: ['k', 'up'],
+    help: 'previous entry / sidebar item',
+    transcript: { name: 'up' },
+    sidebar: ctrl('k'),
+  },
+  {
+    keys: ['Ctrl+u'],
+    help: 'half page up in focused pane',
+    transcript: ctrl('u'),
+    sidebar: ctrl('u'),
+  },
+  {
+    keys: ['Ctrl+d'],
+    help: 'half page down in focused pane',
+    transcript: ctrl('d'),
+    sidebar: ctrl('d'),
+  },
+  {
+    keys: ['gg', 'Ctrl+home'],
+    help: 'focused pane start',
+    transcript: { name: 'home', ctrl: true },
+    sidebar: { name: 'home', ctrl: true },
+  },
+  {
+    keys: ['G', 'Ctrl+end'],
+    help: 'focused pane end',
+    transcript: { name: 'end', ctrl: true },
+    sidebar: { name: 'end', ctrl: true },
+  },
+  {
+    keys: ['Ctrl+b', 'pageup'],
+    help: 'transcript previous page',
+    transcript: { name: 'pageup' },
+  },
+  {
+    keys: ['Ctrl+f', 'pagedown'],
+    help: 'transcript next page',
+    transcript: { name: 'pagedown' },
+  },
+  {
+    keys: ['n'],
+    help: 'next / previous root session: n / p',
+    action: ctrl('n'),
+  },
+  { keys: ['p'], help: 'previous root session', action: ctrl('p') },
+  { keys: ['o'], help: 'new session', action: ctrl('o') },
+  { keys: ['t'], help: 'toggle message / task', action: { name: 'tab' } },
+  {
+    keys: ['a'],
+    help: 'archive selected session',
+    action: { name: 'char', text: 'a', alt: true },
+  },
+  {
+    keys: ['z'],
+    help: 'show archived',
+    action: { name: 'char', text: 'z', alt: true },
+  },
+  { keys: ['s'], help: 'show settled', action: ctrl('s') },
+]
 export const shortcuts = [
   ['i', 'INSERT: edit the draft'],
-  ['j / k', 'transcript down / up; sidebar next / previous sibling'],
-  ['h / l', 'transcript previous / next page; sidebar parent / child'],
-  ['gg / G', 'transcript start / end (follow)'],
-  ['Tab', 'switch transcript / sidebar focus'],
+  ...bindings.map(({ keys, help }) => [keys[0], help]),
+  ['Tab', 'toggle focus (prefer h / l)'],
   ['v', 'VISUAL source selection; hjkl move, y copy, Esc NORMAL'],
-  ['n / p', 'next / previous root session'],
-  ['o', 'new session'],
-  ['t', 'toggle message / task'],
-  ['a / z / s', 'archive root / show archived / show settled'],
   ['? / Esc', 'show / dismiss help'],
-  ['Ctrl+U', 'cut entire draft: copy then clear (all modes)'],
+  ['Ctrl+U', 'INSERT / VISUAL: cut entire draft'],
   ['Ctrl+C', 'quit'],
-] as const
+]
 
 export let Keyboard = ({ ui, action }: {
   ui: Frontend
@@ -35,8 +108,9 @@ export let Keyboard = ({ ui, action }: {
 }) => {
   let state = ui.keyboard.value[0].keyboard as Comp
   useKeymap((key) => {
+    let current = () => ui.client.ent('keyboard')!.keyboard as Comp
     if (key.ctrl && key.text == 'c') return false
-    if (key.ctrl && key.text == 'u') {
+    if (key.ctrl && key.text == 'u' && current().mode != 'NORMAL') {
       let text = String((ui.client.ent('draft')!.draft as Comp).text ?? '')
       if (!text) return true
       let visual = ui.client.ent('visual')!.visual as VisualState
@@ -57,7 +131,6 @@ export let Keyboard = ({ ui, action }: {
       }
       return true
     }
-    let current = () => ui.client.ent('keyboard')!.keyboard as Comp
     let s = current()
     let visual = ui.client.ent('visual')!.visual as VisualState
     if (s.mode == 'VISUAL' || visual.surface) {
@@ -133,38 +206,19 @@ export let Keyboard = ({ ui, action }: {
         return true
       }
       ui.keys({ pending: '' })
-      if (text == 'G' || text == 'g' && s.pending == 'g') {
-        pressTo(id, { name: text == 'G' ? 'end' : 'home', ctrl: true })
-        return true
-      }
-      let direction = text ??
-        ({ up: 'k', down: 'j', left: 'h', right: 'l' } as Record<
-          string,
-          string
-        >)[k.name]
-      if (['h', 'j', 'k', 'l'].includes(direction ?? '')) {
+      let chord = text == 'g' && s.pending == 'g'
+        ? 'gg'
+        : !k.alt
+        ? (k.ctrl ? 'Ctrl+' : '') + (k.name == 'char' ? k.text : k.name)
+        : ''
+      let binding = bindings.find((binding) => binding.keys.includes(chord))
+      if (binding?.focus) ui.keys({ focus: binding.focus })
+      else if (binding?.action) action(binding.action)
+      else if (binding) {
         if (s.focus == 'sidebar') {
-          action({ name: 'char', text: direction, ctrl: true })
-        } else {pressTo(id, {
-            name: ({ h: 'pageup', j: 'down', k: 'up', l: 'pagedown' } as Record<
-              string,
-              Key['name']
-            >)[direction!],
-          })}
-        return true
+          if (binding.sidebar) action(binding.sidebar)
+        } else if (binding.transcript) pressTo(id, binding.transcript)
       }
-      let mapped: Record<string, Key> = {
-        n: { name: 'char', text: 'n', ctrl: true },
-        p: { name: 'char', text: 'p', ctrl: true },
-        o: { name: 'char', text: 'o', ctrl: true },
-        t: { name: 'tab' },
-        a: { name: 'char', text: 'a', alt: true },
-        z: { name: 'char', text: 'z', alt: true },
-        s: { name: 'char', text: 's', ctrl: true },
-      }
-      if (text && mapped[text]) action(mapped[text])
-      else if (k.ctrl && k.name == 'end') pressTo(id, k)
-      else if (k.name == 'pageup' || k.name == 'pagedown') pressTo(id, k)
       return true
     }
   })

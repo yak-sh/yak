@@ -10,6 +10,8 @@ import type { Comp } from '@yaks/graph'
 import { mount } from '../tui/harness.ts'
 import { frontend } from './frontend.ts'
 import { Keyboard } from './keyboard.ts'
+import { useKeys } from '../tui/screen.ts'
+import type { Key } from '@yaks/tui'
 
 Deno.test('controlled NORMAL routing preserves draft, selects sources, and hides help in INSERT', async () => {
   let f = frontend(), sent: string[] = [], actions: string[] = []
@@ -68,7 +70,7 @@ Deno.test('controlled NORMAL routing preserves draft, selects sources, and hides
     await ui.send('\x1b')
     assertEquals(keys().help, false)
     assertEquals(keys().mode, 'NORMAL')
-    await ui.send('g')
+    await ui.send('hg')
     await ui.send('g')
     assert(ui.text().includes('row 0'))
     await ui.send('G')
@@ -82,7 +84,7 @@ Deno.test('controlled NORMAL routing preserves draft, selects sources, and hides
     assertEquals(keys().mode, 'NORMAL')
     await ui.send('\tjl')
     assertEquals(keys().focus, 'sidebar')
-    assertEquals(actions.slice(-2), ['j', 'l'])
+    assertEquals(actions.slice(-1), ['j'])
     await ui.send('ixy')
     assertEquals(keys().mode, 'INSERT')
     assertEquals(text(), 'draft?xy')
@@ -138,11 +140,11 @@ Deno.test('NORMAL sidebar commands use the same session actions and INSERT remai
     await ui.send('\x1b')
     await ui.send('n')
     assertEquals(selected(), 'root')
-    await ui.send('\tl')
+    await ui.send('lj')
     assertEquals(selected(), 'child')
     await ui.send('h')
-    assertEquals(selected(), 'root')
-    await ui.send('j')
+    assertEquals(selected(), 'child')
+    await ui.send('lj')
     assertEquals(selected(), 'other')
     await ui.send('?')
     assert(ui.text().includes('next / previous root'))
@@ -156,7 +158,7 @@ Deno.test('NORMAL sidebar commands use the same session actions and INSERT remai
   }
 })
 
-Deno.test('Ctrl+U cuts the complete draft in every mode, preserving a private recovery yank', async () => {
+Deno.test('Ctrl+U cuts the complete draft in INSERT and VISUAL, preserving a private recovery yank', async () => {
   let { setClipboard } = await import('../tui/visual.ts')
   let { osc52 } = await import('../tui/paint.ts')
   let f = frontend()
@@ -186,7 +188,7 @@ Deno.test('Ctrl+U cuts the complete draft in every mode, preserving a private re
       assertEquals((f.client.ent('visual')!.visual as Comp).yank, source)
       writes.push(osc52(text))
     })
-    for (let mode of ['INSERT', 'NORMAL', 'VISUAL']) {
+    for (let mode of ['INSERT', 'VISUAL']) {
       f.keys({ mode, focus: 'sidebar', help: false })
       f.edit({ text: source, at: 5 })
       await ui.send('\x15')
@@ -198,9 +200,9 @@ Deno.test('Ctrl+U cuts the complete draft in every mode, preserving a private re
         'sidebar',
       )
     }
-    assertEquals(writes, [osc52(source), osc52(source), osc52(source)])
+    assertEquals(writes, [osc52(source), osc52(source)])
     await ui.send('\x15')
-    assertEquals(writes.length, 3) // Empty drafts do not overwrite the clipboard.
+    assertEquals(writes.length, 2) // Empty drafts do not overwrite the clipboard.
     setClipboard()
     f.edit({ text: source, at: 0 })
     await ui.send('\x15')
@@ -216,6 +218,68 @@ Deno.test('Ctrl+U cuts the complete draft in every mode, preserving a private re
     assertEquals(sent, [])
   } finally {
     setClipboard()
+    ui.free()
+    f.close()
+  }
+})
+
+Deno.test('NORMAL registry routes spatial focus and contextual movement without editing the draft', async () => {
+  let f = frontend(), transcript: Key[] = [], sidebar: Key[] = []
+  let Target = () => {
+    useKeys((key) => {
+      transcript.push(key)
+      return true
+    }, 'transcript-new')
+    return h('div', null, 'transcript')
+  }
+  let ui = await mount(
+    () =>
+      h(
+        'div',
+        null,
+        h(Target, {}),
+        h(Keyboard, {
+          ui: f,
+          action: (key) => {
+            sidebar.push(key)
+          },
+        }),
+      ),
+    100,
+    40,
+  )
+  let ctrl = (text: string): Key => ({ name: 'char', text, ctrl: true })
+  let edge = (name: 'home' | 'end'): Key => ({ name, ctrl: true })
+  try {
+    f.edit({ text: 'keep draft', at: 4 })
+    f.keys({ mode: 'NORMAL', focus: 'transcript' })
+    await ui.send('ll')
+    assertEquals((f.client.ent('keyboard')!.keyboard as Comp).focus, 'sidebar')
+    assertEquals(sidebar, [])
+    await ui.send('jk\x15\x04ggG')
+    assertEquals(sidebar, [
+      ctrl('j'),
+      ctrl('k'),
+      ctrl('u'),
+      ctrl('d'),
+      edge('home'),
+      edge('end'),
+    ])
+    assertEquals(transcript, [])
+    await ui.send('hhjk\x15\x04ggG\x02\x06')
+    assertEquals(transcript, [
+      { name: 'down' },
+      { name: 'up' },
+      ctrl('u'),
+      ctrl('d'),
+      edge('home'),
+      edge('end'),
+      { name: 'pageup' },
+      { name: 'pagedown' },
+    ])
+    assertEquals(f.client.ent('draft')!.draft, { text: 'keep draft', at: 4 })
+    assertEquals((f.client.ent('keyboard')!.keyboard as Comp).mode, 'NORMAL')
+  } finally {
     ui.free()
     f.close()
   }
