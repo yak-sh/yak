@@ -4,6 +4,7 @@
 // (light imports, sub-ms); keep only the render tests here.
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
+import { loadVocab } from '@yaks/vocab'
 import { Admin } from './Admin.tsx'
 import { route } from './nav.tsx'
 import { cache, landSub, useRoute } from '../live.ts'
@@ -86,6 +87,42 @@ Deno.test('the index is a typed grid and grid mode is bare tiles', async () => {
     await Promise.resolve()
     assertEquals(root.querySelector('.Admin_Grid > .Tile') != null, true)
     assertEquals(root.querySelector('.Admin_Grid > div > .Tile'), null)
+  } finally {
+    render(null, root)
+    restore()
+    cache.value = {}
+    route.value = '/'
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})
+
+Deno.test('the index shows the component description from its vocabulary', async () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let vocabulary = loadVocab({
+    $defs: {
+      task: {
+        type: 'object',
+        description: 'a thing to do',
+        properties: {},
+      },
+    },
+  })
+  route.value = '/admin/task'
+  let root = document.querySelector('main')!
+  let restore = stubFetch()
+  try {
+    render(h(Admin, { vocabulary }), root)
+    await settle(root, '.Admin_Description')
+    assertEquals(
+      root.querySelector('.Admin_Description')?.textContent,
+      'a thing to do',
+    )
   } finally {
     render(null, root)
     restore()

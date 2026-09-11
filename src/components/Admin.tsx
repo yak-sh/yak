@@ -6,6 +6,8 @@ import { entityPath } from '../url.ts'
 // to types.ts and this interface grows a section, a column set, and a
 // form with zero edits — the same property every other surface holds.
 import { useEffect, useState } from 'preact/hooks'
+import type { Vocab } from '@yaks/vocab'
+import type { ComponentChildren } from 'preact'
 import { comps, type Ent, idOf, kindOf, type PropType, uuid } from '../types.ts'
 import { aggValue, dropAgg, ent, holdAgg, mutate, rows } from '../live.ts'
 import { block } from './ui.tsx'
@@ -22,6 +24,7 @@ import { pickLine, useHits } from './hits.ts'
 import { Prop } from './editors.tsx'
 import { Id } from './views/Inline.tsx'
 import { Entity } from './Entity.tsx'
+import { vocab } from './registry.ts'
 import { follow, navigate, route } from './nav.tsx'
 import { title } from './title.tsx'
 
@@ -33,7 +36,9 @@ let Frame = block('div', 'Admin', {
   Count: 'span',
   Main: 'section',
   Head: 'header',
+  Intro: 'div',
   Name: 'h1',
+  Description: 'p',
   Tools: 'span',
   Tool: 'button',
   Table: 'div',
@@ -55,7 +60,9 @@ let {
   Count,
   Main,
   Head,
+  Intro,
   Name,
+  Description,
   Tools,
   Tool,
   Table,
@@ -71,6 +78,25 @@ let {
 } = Frame
 
 let CAP = 200
+
+// A component's meaning belongs to the loaded vocabulary, beside its shape.
+// Keep absence honest: legacy fleet manifests do not describe every component,
+// so the page says nothing rather than deriving prose from the component name.
+let CompIntro = (
+  { kind, vocabulary, prefix = '' }: {
+    kind: string
+    vocabulary: Vocab
+    prefix?: string
+  },
+) => {
+  let description = vocabulary.comp(kind)?.description
+  return (
+    <Intro>
+      <Name>{prefix}{kind}</Name>
+      {description && <Description>{description}</Description>}
+    </Intro>
+  )
+}
 
 // ---- cells: a value's read-only face, picked by its PropType ----
 
@@ -99,7 +125,12 @@ let sortVal = (e: Ent, col: Col): string | number => {
 }
 
 let Index = (
-  { kind, query, total }: { kind: string; query: string; total?: number },
+  { kind, query, total, vocabulary }: {
+    kind: string
+    query: string
+    total?: number
+    vocabulary: Vocab
+  },
 ) => {
   let [grid, setGrid] = useState(false)
   let [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null)
@@ -163,7 +194,7 @@ let Index = (
   return (
     <Main>
       <Head>
-        <Name>{kind}</Name>
+        <CompIntro kind={kind} vocabulary={vocabulary} />
         <FilterInput key={filter} eid={filter} initial={query} />
         <Tools>
           <Tool
@@ -324,7 +355,7 @@ let Control = (
   )
 }
 
-let NewForm = ({ kind }: { kind: string }) => {
+let NewForm = ({ kind, vocabulary }: { kind: string; vocabulary: Vocab }) => {
   let props = comps[kind] ?? {}
   // enums start on their first value — a select never submits unanswered
   let seed: Record<string, unknown> = {}
@@ -358,7 +389,7 @@ let NewForm = ({ kind }: { kind: string }) => {
   return (
     <Main>
       <Head>
-        <Name>new {kind}</Name>
+        <CompIntro kind={kind} vocabulary={vocabulary} prefix='new ' />
       </Head>
       <Form onSubmit={submit}>
         <Field>
@@ -402,7 +433,12 @@ let NewForm = ({ kind }: { kind: string }) => {
 
 // ---- the frame: sidebar + whichever page the route names ----
 
-export let Admin = () => {
+export let Admin = (
+  { vocabulary = vocab }: {
+    vocabulary?: Vocab
+    children?: ComponentChildren
+  },
+) => {
   let url = new URL(route.value, 'http://x')
   let { kind, form } = adminRoute(url.pathname)
   let query = url.searchParams.get('q') ?? ''
@@ -433,9 +469,14 @@ export let Admin = () => {
         </Note>
         <Group>{censusComps().map(link)}</Group>
       </Side>
-      {form
-        ? <NewForm kind={kind} />
-        : <Index kind={kind} query={query} total={total} />}
+      {form ? <NewForm kind={kind} vocabulary={vocabulary} /> : (
+        <Index
+          kind={kind}
+          query={query}
+          total={total}
+          vocabulary={vocabulary}
+        />
+      )}
     </Frame>
   )
 }
