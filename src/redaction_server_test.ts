@@ -1,6 +1,7 @@
 // Redaction's HTTP/client seam. The database tests own the mutation details;
 // this slow probe proves a removed literal stays in the POST body and the
 // server returns only its hash-backed audit, never the bytes it forgot.
+import { fileURLToPath } from 'node:url'
 import { assertEquals, assertMatch } from '@std/assert'
 import { slow } from './testing.ts'
 
@@ -57,7 +58,7 @@ slow(
       args: [
         'run',
         '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
         'redact',
         second,
         '@-',

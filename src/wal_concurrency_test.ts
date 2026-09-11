@@ -3,11 +3,12 @@
 // and commit. Checkpointing must not replace the WAL generation beneath those
 // connections; after every connection closes, normal SQLite cleanup may remove
 // the sidecars and the next generation must contain the same history.
+import { fileURLToPath } from 'node:url'
 import { assert, assertEquals } from '@std/assert'
 import { DatabaseSync } from './store/sqlite.ts'
 import { slow, until } from './testing.ts'
 
-let root = new URL('../', import.meta.url).pathname
+let root = fileURLToPath(new URL('../', import.meta.url))
 let text = new TextDecoder()
 
 let sqlite = async (db: string, sql: string) => {

@@ -3,6 +3,7 @@
 // one-time account operation, kept behind the Worker's Wrangler door so it
 // uses the same pin, config and install discipline as deploys.
 
+import { fileURLToPath } from 'node:url'
 export let DISPATCH = 'yak-apps-staging'
 export let BUCKETS = ['yak-blobs-staging', 'yak-store-exports-staging']
 export let VECTORIZE = 'yak-memories-staging'
@@ -42,7 +43,7 @@ export type Result = { success: boolean; stdout: string; stderr: string }
 export type Run = (args: string[]) => Promise<Result>
 
 let root = new URL('../', import.meta.url)
-let wrapper = new URL('../workers/yak/wrangler.ts', import.meta.url).pathname
+let wrapper = fileURLToPath(new URL('../workers/yak/wrangler.ts', import.meta.url))
 let decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes).trim()
 
 export let wrangler: Run = async (args) => {

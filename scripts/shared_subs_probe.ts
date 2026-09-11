@@ -7,7 +7,8 @@
 // Run: deno run -A --unstable-net --unstable-worker-options \
 //   scripts/shared_subs_probe.ts
 
-let root = new URL('..', import.meta.url).pathname
+import { fileURLToPath } from 'node:url'
+let root = fileURLToPath(new URL('..', import.meta.url))
 let temp = await Deno.makeTempDir({ prefix: 'tasks-shared-subs-' })
 let profile = await Deno.makeTempDir({ prefix: 'tasks-shared-chrome-' })
 let db = `${temp}/tasks.db`

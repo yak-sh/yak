@@ -1,5 +1,6 @@
 // The tiny turn-hook executable durably queues lifecycle payloads without
 // importing the full CLI graph or waiting for the server event loop.
+import { fileURLToPath } from 'node:url'
 import { assertEquals } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { slow } from './testing.ts'
@@ -70,7 +71,7 @@ slow('concurrent hook processes never tear or lose a line', async () => {
   let dir = Deno.makeTempDirSync()
   let path = `${dir}/turns.jsonl`
   let writers = 8, each = 25
-  let mod = new URL('./turn.ts', import.meta.url).pathname
+  let mod = fileURLToPath(new URL('./turn.ts', import.meta.url))
   let procs = Array.from(
     { length: writers },
     (_, w) =>

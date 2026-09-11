@@ -1,6 +1,9 @@
+import { fileURLToPath } from 'node:url'
 import { assertEquals } from '@std/assert'
 
-let fixture = new URL('./test_runner_fixture.ts', import.meta.url).pathname
+let fixture = fileURLToPath(
+  new URL('./test_runner_fixture.ts', import.meta.url),
+)
 
 async function waitFor(path: string): Promise<void> {
   // This module itself runs in the broad parallel pass, where process spawn

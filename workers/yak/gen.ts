@@ -23,6 +23,7 @@
 // directory of files on somebody else's disk: the guide has to travel as bytes
 // there too, one skill per page, and the icon with it. Same deal, same refusal.
 import { front, read } from '@yaks/yaml'
+import { fileURLToPath } from 'node:url'
 
 let HERE = new URL('.', import.meta.url)
 let TARGET = new URL('content.ts', HERE)
@@ -166,7 +167,7 @@ let formatted = async (text: string) => {
   let tmp = new URL('.content.gen.ts', HERE)
   await Deno.writeTextFile(tmp, text)
   let p = await new Deno.Command('deno', {
-    args: ['fmt', '-q', `--ignore=!${tmp.pathname}`, tmp.pathname],
+    args: ['fmt', '-q', `--ignore=!${fileURLToPath(tmp)}`, fileURLToPath(tmp)],
   }).output()
   if (!p.success) {
     refuse(`deno fmt failed: ${new TextDecoder().decode(p.stderr)}`)
@@ -208,7 +209,7 @@ let formattedMd = async (held: Record<string, string>) => {
     await Deno.writeTextFile(to, text)
   }
   let p = await new Deno.Command('deno', {
-    args: ['fmt', '-q', `--ignore=!${tmp.pathname}`, tmp.pathname],
+    args: ['fmt', '-q', `--ignore=!${fileURLToPath(tmp)}`, fileURLToPath(tmp)],
   }).output()
   if (!p.success) {
     refuse(`deno fmt failed: ${new TextDecoder().decode(p.stderr)}`)

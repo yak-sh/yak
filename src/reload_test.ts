@@ -7,6 +7,7 @@
 // this claim but sampled eight paths that all happened to be present, which is
 // how eight modules went missing beneath a green suite.)
 import { assert, assertEquals } from '@std/assert'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   devFile,
   effectsGraph,
@@ -25,6 +26,24 @@ import { slow } from './testing.ts'
 let specifiers =
   /\bimport\b(\s+type\b)?\s*(?:\(\s*|(?:[^'"]*?\bfrom\s*)?)(["'])([^"']+)\2/g
 let isRelative = (s: string) => s.startsWith('./') || s.startsWith('../')
+
+Deno.test('file URL paths are decoded once for filesystem reload events', () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'tasks-reload-# %23 ' })
+  try {
+    Deno.writeTextFileSync(`${dir}/entry.ts`, "import './child%23%20%2523.ts'")
+    Deno.writeTextFileSync(`${dir}/child# %23.ts`, 'export let value = 1')
+    let root = pathToFileURL(dir + '/')
+    assertEquals(
+      graph('entry.ts', root),
+      new Set(['entry.ts', 'child# %23.ts']),
+    )
+    let classify = serverClassifier('entry.ts', root)
+    assert(classify(`${dir}/child# %23.ts`))
+    assertEquals(classify(`${dir}/child%23%20%2523.ts`), false)
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
 
 // The grammar itself, driven by strings — the teeth of this file. A path-
 // sampling test can pass while a whole import FORM goes unrecognized (side-
@@ -74,7 +93,7 @@ let walk = async (entry: string, root: URL): Promise<Set<string>> => {
     } catch {
       continue
     }
-    paths.add(file.pathname)
+    paths.add(fileURLToPath(file))
     for (let match of source.matchAll(specifiers)) {
       if (match[1]) continue // import type … — erased by sucrase
       let spec = match[3]
@@ -100,7 +119,7 @@ Deno.test('effectsd graph reaches workspace transport; server graph is unchanged
   assert(effects.has('packages/openai/transport.ts'))
   assert(effects.has('packages/session/mod.ts'))
   assertEquals(
-    new Set([...server].map((name) => new URL(name, src).pathname)),
+    new Set([...server].map((name) => fileURLToPath(new URL(name, src)))),
     originalServer,
   )
   assertEquals(server.has('packages/openai/transport.ts'), false)
@@ -109,13 +128,15 @@ Deno.test('effectsd graph reaches workspace transport; server graph is unchanged
 slow(
   'process edits include watched packages without widening browser server edits',
   () => {
-    let transport = new URL('../packages/openai/transport.ts', src).pathname
+    let transport = fileURLToPath(
+      new URL('../packages/openai/transport.ts', src),
+    )
     assert(processRoots.some((root) => transport.startsWith(`${root}/`)))
     assert(processFile(transport))
     assertEquals(serverFile(transport), false)
     assertEquals(processFile(`${transport}.old`), false)
     assertEquals(
-      processFile(new URL('components/Card.tsx', src).pathname),
+      processFile(fileURLToPath(new URL('components/Card.tsx', src))),
       false,
     )
   },
@@ -125,7 +146,7 @@ slow(
   'workspace walk follows new barrel exports, not type exports or outside files',
   () => {
     let dir = Deno.makeTempDirSync({ prefix: 'tasks-effects-reload-' })
-    let root = new URL(`file://${dir}/`)
+    let root = pathToFileURL(dir + '/')
     try {
       Deno.mkdirSync(`${dir}/src`)
       Deno.mkdirSync(`${dir}/packages`)
@@ -205,7 +226,7 @@ slow(
 
 slow('serverFile: sees imports added after the classifier was made', () => {
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-reload-' })
-  let root = new URL(`file://${dir}/`)
+  let root = pathToFileURL(dir + '/')
   try {
     Deno.writeTextFileSync(
       `${dir}/server.ts`,

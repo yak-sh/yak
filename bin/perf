@@ -35,6 +35,7 @@
 //   bin/perf --url URL        # profile a running server instead
 //   bin/perf --keep           # leave chrome + server up for inspection
 
+import { fileURLToPath } from 'node:url'
 import { uuid } from '../src/types.ts'
 
 // ---- thresholds (a blown one fails the run) ----
@@ -47,7 +48,7 @@ let PATCH_MAX_MS = 50 // one unrelated patch may never be a long task
 let TOUCHED_MAX_MS = 250 // one task repeated across mounted boards
 let PATCH_SETTLE_MS = 3000 // shadow snapshots stay outside the patch fence
 
-let root = new URL('..', import.meta.url).pathname
+let root = fileURLToPath(new URL('..', import.meta.url))
 
 // ---- tiny CDP client over a Deno WebSocket ----
 // send(method, params) -> result; on(method, fn) for events. One id space,

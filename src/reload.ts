@@ -16,6 +16,7 @@
 // (`import('x')`, `await import('x')`), a binding + `from`
 // (`import x from 'x'`), or nothing at all (a side-effect `import 'x'`). The
 // last two `from`-less forms carry no `type` and are always followed.
+import { fileURLToPath } from 'node:url'
 let specifiers =
   /\bimport\b(\s+type\b)?\s*(?:\(\s*|(?:[^'"]*?\bfrom\s*)?)(["'])([^"']+)\2/g
 
@@ -69,7 +70,7 @@ export let graph = (
     // Name a file only once it has READ — a specifier lifted from a comment or
     // string (imports() is a text scanner, not a parser) points at no file and
     // must never join the graph, or serverFile would claim a phantom module.
-    names.add(file.pathname.slice(root.pathname.length))
+    names.add(fileURLToPath(file).slice(fileURLToPath(root).length))
     let specs = imports(source)
     if (workspace) {
       for (let match of source.matchAll(reexports)) specs.push(match[2])
@@ -119,7 +120,7 @@ export let processFile = (path: string) =>
 
 // Watch only source trees, not .git, databases, or node_modules at repo root.
 export let processRoots = ['.', '../packages'].map((path) =>
-  new URL(path, import.meta.url).pathname
+  fileURLToPath(new URL(path, import.meta.url))
 )
 
 // The supervisor's OWN module graph — the files dev.ts imports. These need a

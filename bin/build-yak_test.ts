@@ -1,9 +1,10 @@
+import { fileURLToPath } from 'node:url'
 import { assertEquals } from '@std/assert'
 
 // Fake executables prove shell exit behavior without opening either deploy door.
 Deno.test('build-yak: production precedes staging, and either failure fails Builds', async () => {
   let dir = await Deno.makeTempDir({
-    dir: new URL('./', import.meta.url).pathname,
+    dir: fileURLToPath(new URL('./', import.meta.url)),
     prefix: 'yak-build-',
   })
   try {
@@ -35,7 +36,7 @@ esac
       await Deno.writeTextFile(guards, '')
       let out = await new Deno.Command('sh', {
         args: [
-          new URL('./build-yak', import.meta.url).pathname,
+          fileURLToPath(new URL('./build-yak', import.meta.url)),
           'deploy',
           '--dry-run',
         ],

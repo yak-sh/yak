@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { agent } from './run.ts'
 import { open } from './store.ts'
@@ -62,7 +63,7 @@ Deno.test('prompt admission tests never open the environment database', async ()
       args: [
         'test',
         '-A',
-        new URL('./prompts_test.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./prompts_test.ts', import.meta.url)),
       ],
       env: {
         HARNESS_HOME: home,

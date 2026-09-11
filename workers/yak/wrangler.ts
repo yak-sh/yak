@@ -25,9 +25,13 @@
 // and drops kernels under the parallel slow tier (`Network connection lost`),
 // where 4.111.0 runs it at the old pin's pace. Measure before moving.
 // Exact pins can reuse npm's restored cache without registry revalidation.
+import { fileURLToPath } from 'node:url'
 export let WRANGLER = ['npx', '--yes', '--prefer-offline', 'wrangler@4.111.0']
 
-export let dir = new URL('./', import.meta.url).pathname.replace(/\/$/, '')
+export let dir = fileURLToPath(new URL('./', import.meta.url)).replace(
+  /\/$/,
+  '',
+)
 
 let at = (path: string) => {
   try {

@@ -17,13 +17,14 @@
 // Wrangler binds the inspector on a FIXED 9229 unless told otherwise, so both
 // ask for port zero. Parallel probes neither share that default nor race over
 // a port selected and released before their child can bind it.
+import { fileURLToPath } from 'node:url'
 import { apex } from './host.ts'
 import { until } from '../../src/testing.ts'
 import { COOKIE, sign, verify } from '../../src/token.ts'
 import { ready, WRANGLER } from './wrangler.ts'
 import type { Custom } from './domains.ts'
 
-let root = new URL('./', import.meta.url).pathname
+let root = fileURLToPath(new URL('./', import.meta.url))
 let wrangler = (Deno.env.get('WRANGLER') ?? WRANGLER.join(' ')).split(' ')
 
 // Let workerd bind its own ephemeral port. Selecting a free port and closing

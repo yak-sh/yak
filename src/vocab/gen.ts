@@ -21,6 +21,7 @@
 //
 // The emitted file is deno-fmt'ed via a subprocess so the stale check
 // compares post-format bytes, never a formatting phantom.
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { capture } from './fixture.ts'
 
 type ColSpec =
@@ -54,7 +55,7 @@ type Manifest = {
   session_facets?: string[]
 }
 
-let dir = new URL('.', import.meta.url).pathname
+let dir = fileURLToPath(new URL('.', import.meta.url))
 
 let refuse = (msg: string): never => {
   throw new Error(`vocab: ${msg}`)
@@ -450,7 +451,7 @@ if (import.meta.main) {
   await Deno.writeTextFile(tmp, body)
   await fmt(tmp)
   let fresh = await Deno.readTextFile(tmp)
-  let mod = await import(`file://${tmp}#${crypto.randomUUID()}`)
+  let mod = await import(`${pathToFileURL(tmp).href}#${crypto.randomUUID()}`)
   let fixture = JSON.stringify(capture(mod), null, 2) + '\n'
   await Deno.remove(tmp)
 

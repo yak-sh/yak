@@ -12,10 +12,11 @@
 // server (a different, long-held pid) can never be the target. Pid-only is the
 // ONE door; there is no pattern to get wrong.
 
+import { fileURLToPath } from 'node:url'
 import { DatabaseSync } from './store/sqlite.ts'
 import { commOf } from './proc.ts'
 
-let root = new URL('..', import.meta.url).pathname
+let root = fileURLToPath(new URL('..', import.meta.url))
 let liveDb = () =>
   Deno.env.get('DB_PATH') ?? `${Deno.env.get('HOME')}/.tasks/tasks.db`
 

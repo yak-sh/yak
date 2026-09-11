@@ -1044,7 +1044,7 @@ slow('a fake session runs end to end', async () => {
   )
   assertEquals(JSON.parse(String(s.usage_json)).output_tokens, 34)
   assertEquals(failure(eid), undefined)
-  assertMatch(String(s.branch), /^session\/S#[0-9a-f]{10}$/)
+  assertMatch(String(s.branch), /^session\/[0-9a-f]{10}$/)
   assertMatch(String(s.base_revision), /^[0-9a-f]{40}$/)
   assert(Deno.statSync(String(s.cwd)).isDirectory) // it ran in its worktree
   // The summary rode the wire as whole session comps, never as raw log.
@@ -1058,7 +1058,7 @@ slow('a fake session runs end to end', async () => {
   assertEquals(first.seq, 1)
   assert(readEntries(db, eid)[0].comps.prompt)
   assertEquals(first.row?.kind, 'say')
-  assertMatch(sayText(first), /T-\d+/)
+  assertStringIncludes(sayText(first), human(db, t))
   assert(entries.length > 1) // the child's turns followed
   // Paging bounds the OUTPUT (pageEntries), and stderr rides the session as a
   // bounded graph facet now — the diagnostics, unordered, off the transcript.

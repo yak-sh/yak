@@ -28,6 +28,7 @@
 // and a bot's sign-in code is read out of the tasks graph (yaks_api.ts
 // `codeFor`). Both are this repo, and neither is something a `deno install`
 // off jsr could reach.
+import { fileURLToPath } from 'node:url'
 import {
   forgetToken,
   main,
@@ -237,7 +238,7 @@ let one = (all: Account[], want: string): Account => {
 
 // Infrastructure belongs to the platform owner. Its credentials are the
 // box's Wrangler/GitHub logins, independent of a yaks.app account session.
-let root = new URL('../', import.meta.url).pathname.replace(/\/$/, '')
+let root = fileURLToPath(new URL('../', import.meta.url)).replace(/\/$/, '')
 let platform = (args: string[], note: (line: string) => void): Said => {
   // --admin and --owner are booleans here, wherever they stand; the general
   // key/value grammar otherwise consumes a following version or sha as a value.

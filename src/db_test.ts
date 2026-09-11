@@ -1,5 +1,6 @@
 // apply()/snapshot() semantics against an in-memory db — the wire's
 // contract: patches, creates, deletes, tombstones, and the claim lease.
+import { fileURLToPath } from 'node:url'
 import { applyNumbered } from './testdb.ts'
 import type { Dep } from './types.ts'
 Deno.env.set('DB_PATH', ':memory:')
@@ -5318,8 +5319,8 @@ let walWreck = (dir: string) => {
       'run',
       '-A',
       '--config',
-      new URL('../deno.json', import.meta.url).pathname,
-      new URL('./testing/wal_wreck.ts', import.meta.url).pathname,
+      fileURLToPath(new URL('../deno.json', import.meta.url)),
+      fileURLToPath(new URL('./testing/wal_wreck.ts', import.meta.url)),
       path,
     ],
   }).outputSync()
@@ -5337,8 +5338,8 @@ let connectInChild = (path: string) => {
       '-A',
       '--unstable-worker-options',
       '--config',
-      new URL('../deno.json', import.meta.url).pathname,
-      new URL('./testing/connect_once.ts', import.meta.url).pathname,
+      fileURLToPath(new URL('../deno.json', import.meta.url)),
+      fileURLToPath(new URL('./testing/connect_once.ts', import.meta.url)),
       path,
     ],
     env: { DB_PATH: ':memory:', TASKS_SYNC: 'off', TASKS_EMBED: '0' },
@@ -5371,7 +5372,7 @@ slow('connect() fails closed on a malformed WAL without mutating files', () => {
 slow('concurrent openers serialize one idempotent migration', async () => {
   let dir = Deno.makeTempDirSync()
   let path = `${dir}/g.db`
-  let script = new URL('./testing/open_once.ts', import.meta.url).pathname
+  let script = fileURLToPath(new URL('./testing/open_once.ts', import.meta.url))
   let children = Array.from(
     { length: 12 },
     () =>
@@ -5381,7 +5382,7 @@ slow('concurrent openers serialize one idempotent migration', async () => {
           '-A',
           '--unstable-worker-options',
           '--config',
-          new URL('../deno.json', import.meta.url).pathname,
+          fileURLToPath(new URL('../deno.json', import.meta.url)),
           script,
           path,
         ],

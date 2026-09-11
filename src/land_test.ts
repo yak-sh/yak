@@ -3,6 +3,7 @@
 // moved fast-forwards; a base that moved makes land rebase and RETURN without
 // merging, so a second land fast-forwards cleanly. No gate runs. No remote is
 // needed except the two publish cases, which wire a real bare upstream.
+import { fileURLToPath } from 'node:url'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { land } from './land.ts'
 import { slow } from './testing.ts'
@@ -129,8 +130,8 @@ slow(
     let r = await setup()
     try {
       let candidate = await command(r.tree, 'rev-parse', 'HEAD')
-      let cli = new URL('./cli.ts', import.meta.url).pathname
-      let config = new URL('../deno.json', import.meta.url).pathname
+      let cli = fileURLToPath(new URL('./cli.ts', import.meta.url))
+      let config = fileURLToPath(new URL('../deno.json', import.meta.url))
       let out = await new Deno.Command(Deno.execPath(), {
         args: [
           'run',

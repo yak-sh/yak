@@ -177,10 +177,10 @@ export let codexUsage = (raw: unknown): Tokens | null => {
   return Object.keys(u).length ? u : null
 }
 
-// The fake provider ships in this repo: run it by absolute path — script
-// AND binary. Deno.execPath() is the deno running this server, so the
-// child never depends on the service manager's PATH carrying one.
-let fake = new URL('./fake-provider.ts', import.meta.url).pathname
+// Deno accepts the script's URL directly, preserving escaped filesystem names
+// without pulling a host-only path library into this browser-shared module.
+// The binary is absolute too: no service-manager PATH dependency.
+let fake = new URL('./fake-provider.ts', import.meta.url).href
 
 export let adapters: Record<string, Adapter> = {
   fake: {

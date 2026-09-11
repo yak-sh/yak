@@ -2,6 +2,7 @@
 // CLI grammar is dot-params. The guard must catch both the glued `--project=P`
 // and the space-separated `--project P` forms — the latter is what agents
 // actually type, and the bug that let it through polluted the owner board.
+import { fileURLToPath } from 'node:url'
 import {
   assert,
   assertEquals,
@@ -78,7 +79,7 @@ let cli = (...args: string[]) =>
       'run',
       '--cached-only',
       '-A',
-      new URL('./cli.ts', import.meta.url).pathname,
+      fileURLToPath(new URL('./cli.ts', import.meta.url)),
       ...args,
     ],
     // A dead host on purpose; fail on the first refusal instead of retrying
@@ -98,7 +99,7 @@ let bareCli = (env: Record<string, string>) =>
       'run',
       '--cached-only',
       '-A',
-      new URL('./cli.ts', import.meta.url).pathname,
+      fileURLToPath(new URL('./cli.ts', import.meta.url)),
     ],
     clearEnv: true,
     env,
@@ -1067,7 +1068,7 @@ slow(
         args: [
           'run',
           '-A',
-          new URL('./cli.ts', import.meta.url).pathname,
+          fileURLToPath(new URL('./cli.ts', import.meta.url)),
           ...args,
         ],
         env: { TASKS_HOST: `127.0.0.1:${empty.addr.port}` },
@@ -1134,7 +1135,7 @@ slow('a bare session brief displays the current brief', async () => {
       args: [
         'run',
         '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
         'session',
         'brief',
       ],
@@ -1225,7 +1226,7 @@ slow('task set --body patches the document body', async () => {
       args: [
         'run',
         '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
         'set',
         'T-2',
         '--body=revised brief',
@@ -1258,7 +1259,7 @@ slow('task set sends a $edit body as the operator, not as text', async () => {
       args: [
         'run',
         '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
         'set',
         'T-2',
         arg,
@@ -1307,7 +1308,7 @@ slow('task set adds and removes empty writable facets', async () => {
       args: [
         'run',
         '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
         'set',
         ...args,
       ],
@@ -1346,7 +1347,7 @@ slow(
         args: [
           'run',
           '-A',
-          new URL('./cli.ts', import.meta.url).pathname,
+          fileURLToPath(new URL('./cli.ts', import.meta.url)),
           'set',
           'T-2',
           `.status=${status}`,
@@ -1743,7 +1744,7 @@ Deno.test('session wait exits non-zero after printing failed (T-35458)', async (
         'run',
         '--cached-only',
         '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
         'session',
         'wait',
         'S-3',
@@ -1817,7 +1818,7 @@ slow(
         args: [
           'run',
           '-A',
-          new URL('./cli.ts', import.meta.url).pathname,
+          fileURLToPath(new URL('./cli.ts', import.meta.url)),
           'work',
           'verify',
           '--json',
@@ -1862,7 +1863,7 @@ slow(
         args: [
           'run',
           '-A',
-          new URL('./cli.ts', import.meta.url).pathname,
+          fileURLToPath(new URL('./cli.ts', import.meta.url)),
           'verify',
           'verify-me',
         ],
@@ -1906,7 +1907,7 @@ slow('task undo sends a named mutation through generic /apply', async () => {
       args: [
         'run',
         '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
         'undo',
         'T-91',
       ],
@@ -1937,7 +1938,7 @@ slow('task archive writes the inbox archived facet', async () => {
       args: [
         'run',
         '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
         'archive',
         'K-20995',
       ],
@@ -1986,7 +1987,7 @@ slow(
         args: [
           'run',
           '-A',
-          new URL('./cli.ts', import.meta.url).pathname,
+          fileURLToPath(new URL('./cli.ts', import.meta.url)),
           'backfill',
           'worked',
         ],
@@ -2032,7 +2033,7 @@ slow(
         args: [
           'run',
           '-A',
-          new URL('./cli.ts', import.meta.url).pathname,
+          fileURLToPath(new URL('./cli.ts', import.meta.url)),
           'backfill',
           'worked',
         ],
@@ -2081,7 +2082,7 @@ slow(
         args: [
           'run',
           '-A',
-          new URL('./cli.ts', import.meta.url).pathname,
+          fileURLToPath(new URL('./cli.ts', import.meta.url)),
           ...args,
         ],
         clearEnv: true,
@@ -2189,7 +2190,7 @@ slow(
         args: [
           'run',
           '-A',
-          new URL('./cli.ts', import.meta.url).pathname,
+          fileURLToPath(new URL('./cli.ts', import.meta.url)),
           ...args,
         ],
         clearEnv: true,
@@ -2221,7 +2222,7 @@ slow('task require writes the subject-first requires edge', async () => {
       args: [
         'run',
         '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
         'require',
         'T-2',
         'T-4',
@@ -2249,7 +2250,7 @@ slow('release drops several leases in one atomic batch', async () => {
       args: [
         'run',
         '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
         'release',
         'T-2',
         'T-4',
@@ -2340,7 +2341,7 @@ slow('inbox asks only for its reader and keeps order when read', async () => {
       args: [
         'run',
         '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
         'inbox',
         '--json',
       ],
@@ -2377,7 +2378,7 @@ slow('list strips terminal controls from graph text', async () => {
       args: [
         'run',
         '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
         'list',
       ],
       clearEnv: true,
@@ -2414,7 +2415,7 @@ slow(
         args: [
           'run',
           '-A',
-          new URL('./cli.ts', import.meta.url).pathname,
+          fileURLToPath(new URL('./cli.ts', import.meta.url)),
           'list',
           '.kind=wake',
           '.wake.at>=now',
@@ -2474,7 +2475,7 @@ slow(
         args: [
           'run',
           '-A',
-          new URL('./cli.ts', import.meta.url).pathname,
+          fileURLToPath(new URL('./cli.ts', import.meta.url)),
           ...args,
         ],
         clearEnv: true,
@@ -2541,7 +2542,7 @@ slow('setting a wake shows every pending wake for that session', async () => {
       args: [
         'run',
         '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
         'wake',
         'S-71',
         'in 3 hours',
@@ -2561,7 +2562,7 @@ slow('setting a wake shows every pending wake for that session', async () => {
       args: [
         'run',
         '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
         'wake',
         '--list',
       ],
@@ -2615,7 +2616,7 @@ slow(
         args: [
           'run',
           '-A',
-          new URL('./cli.ts', import.meta.url).pathname,
+          fileURLToPath(new URL('./cli.ts', import.meta.url)),
           ...args,
         ],
         env: { TASKS_HOST: host },
@@ -2665,7 +2666,7 @@ slow('colon open prints the public entity URL', async () => {
       args: [
         'run',
         '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
         ':open',
         'T-2',
       ],
@@ -2736,7 +2737,7 @@ slow('invalid help reports the exact CLI usage failure', async () => {
       args: [
         'run',
         '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
         'help',
         'missing',
       ],
@@ -2792,7 +2793,7 @@ slow('a verb that reads nothing does not serve agent input', async () => {
       args: [
         'run',
         '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
         'help',
       ],
       clearEnv: true,
@@ -2820,7 +2821,7 @@ slow(
           args: [
             'run',
             '-A',
-            new URL('./cli.ts', import.meta.url).pathname,
+            fileURLToPath(new URL('./cli.ts', import.meta.url)),
             ...args,
           ],
           clearEnv: true,
@@ -2845,7 +2846,7 @@ slow('the boot digest is the hook that delivers, on stdout', async () => {
       args: [
         'run',
         '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
         'session',
         'context',
         'sub-1',
@@ -2870,7 +2871,7 @@ slow('a graph-reading verb does not append agent input', async () => {
       args: [
         'run',
         '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
         'show',
         'T-2',
       ],
@@ -2903,7 +2904,7 @@ slow(
         args: [
           'run',
           '-A',
-          new URL('./cli.ts', import.meta.url).pathname,
+          fileURLToPath(new URL('./cli.ts', import.meta.url)),
           'cancel',
           'T-4',
           'duplicate of the umbrella',
@@ -2943,7 +2944,7 @@ slow(
         args: [
           'run',
           '-A',
-          new URL('./cli.ts', import.meta.url).pathname,
+          fileURLToPath(new URL('./cli.ts', import.meta.url)),
           'done',
           'T-4',
         ],
@@ -2972,7 +2973,7 @@ slow(
         args: [
           'run',
           '-A',
-          new URL('./cli.ts', import.meta.url).pathname,
+          fileURLToPath(new URL('./cli.ts', import.meta.url)),
           'wip',
           'T-4',
         ],
@@ -3007,7 +3008,7 @@ slow(
         args: [
           'run',
           '-A',
-          new URL('./cli.ts', import.meta.url).pathname,
+          fileURLToPath(new URL('./cli.ts', import.meta.url)),
           'cancel',
           'duplicate',
           'of',
@@ -3191,7 +3192,7 @@ slow(
         args: [
           'run',
           '-A',
-          new URL('./cli.ts', import.meta.url).pathname,
+          fileURLToPath(new URL('./cli.ts', import.meta.url)),
           'transcript',
           'S-71',
         ],
@@ -3216,7 +3217,7 @@ slow(
         args: [
           'run',
           '-A',
-          new URL('./cli.ts', import.meta.url).pathname,
+          fileURLToPath(new URL('./cli.ts', import.meta.url)),
           'session',
           'peek',
           'S-71',
@@ -3295,7 +3296,7 @@ slow(
         args: [
           'run',
           '-A',
-          new URL('./cli.ts', import.meta.url).pathname,
+          fileURLToPath(new URL('./cli.ts', import.meta.url)),
           ...args,
         ],
         clearEnv: true,

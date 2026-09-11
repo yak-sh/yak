@@ -1,5 +1,6 @@
 // Local CLI writes use the graph kernel and journal without a serving process.
 // A separate read-only HTTP process observes those commits through its feed.
+import { fileURLToPath } from 'node:url'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import {
   apply,
@@ -17,7 +18,7 @@ import { sha } from './sha.ts'
 import { slow, until } from './testing.ts'
 import type { Change } from './types.ts'
 
-let root = new URL('../', import.meta.url).pathname
+let root = fileURLToPath(new URL('../', import.meta.url))
 let decoder = new TextDecoder()
 let uid = () => crypto.randomUUID()
 let fixture = (network = false) => {

@@ -12,9 +12,10 @@
 //
 // It guards the whole repo, not just this package: however many module graphs
 // reach for the driver, they all land on one native library per process.
+import { fileURLToPath } from 'node:url'
 import { assertEquals } from '@std/assert'
 
-let root = new URL('../../', import.meta.url).pathname
+let root = fileURLToPath(new URL('../../', import.meta.url))
 
 // git names the tracked files that say it at all — one subprocess instead of
 // reading a thousand sources to find the dozen that matter.

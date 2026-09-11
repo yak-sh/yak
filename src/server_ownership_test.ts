@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { DatabaseSync, open } from './store/sqlite.ts'
 import { slow, until } from './testing.ts'
@@ -8,7 +9,7 @@ import {
   releaseServerOwnership,
 } from './server_ownership.ts'
 
-let root = new URL('../', import.meta.url).pathname
+let root = fileURLToPath(new URL('../', import.meta.url))
 let decoder = new TextDecoder()
 let freePort = () => {
   let seat = Deno.listen({ hostname: '127.0.0.1', port: 0 })

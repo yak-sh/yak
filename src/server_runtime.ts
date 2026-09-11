@@ -8,6 +8,7 @@
 // clients: component edits re-import under a fresh ?v generation (state
 // survives — it lives in live.ts, above the swap), css edits re-fetch the
 // stylesheet, and only shell/server edits still cost a real reload.
+import { fileURLToPath } from 'node:url'
 import { transform } from 'sucrase'
 import { dirname } from 'node:path'
 import retiredDataDoorList from './retired_data_doors.json' with {
@@ -124,8 +125,8 @@ globalThis.addEventListener('unhandledrejection', (e) => {
 // property that matters; within one, only that it climbs.
 let gen = Date.now()
 
-let src = new URL('.', import.meta.url).pathname
-let packages = new URL('../packages/', import.meta.url).pathname
+let src = fileURLToPath(new URL('.', import.meta.url))
+let packages = fileURLToPath(new URL('../packages/', import.meta.url))
 
 let mime: Record<string, string> = {
   html: 'text/html; charset=utf-8',
@@ -953,7 +954,7 @@ await loadPlugins(specs)
 // remote specifiers stay server-only. specs are resolved file:// URLs, so the
 // browser path is what sits under the repo root. Empty by default, so the shell
 // below is served byte-for-byte as today.
-let repo = new URL('..', import.meta.url).pathname
+let repo = fileURLToPath(new URL('..', import.meta.url))
 let repoUrl = new URL('..', import.meta.url).href
 let browserPlugins = specs
   .filter((s) => s.startsWith(`${repoUrl}plugins/`))

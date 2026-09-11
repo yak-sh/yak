@@ -19,6 +19,7 @@
 // kinds; the token crosses only between the file and an http header — and the
 // cookie's own name comes from token.ts rather than retyped, because a session
 // pasted in by hand arrives as the whole `yak_session=…` pair a browser shows.
+import { fileURLToPath } from 'node:url'
 import { COOKIE } from './token.ts'
 
 export let BOT = '@bot.yak.sh'
@@ -300,7 +301,7 @@ export let envPath = (env = (k: string) => Deno.env.get(k)): string => {
   if (said) return said
   let out = new Deno.Command('git', {
     args: ['worktree', 'list', '--porcelain'],
-    cwd: new URL('../', import.meta.url).pathname,
+    cwd: fileURLToPath(new URL('../', import.meta.url)),
     stdout: 'piped',
     stderr: 'null',
   }).outputSync()

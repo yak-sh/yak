@@ -5,6 +5,7 @@
 // under that garbage row; `task land` then reported "no task" (T-16487). This
 // drives the REAL CLI against a REAL server, so it is slow(): the fast tier
 // skips it, and it takes an ephemeral port handed back before the server binds.
+import { fileURLToPath } from 'node:url'
 import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
 import { query } from './client.ts'
 import type { Sql } from './store/sql.ts'
@@ -70,7 +71,12 @@ let T = uid(3) // the task to claim, human id T-3
 
 let run = (...args: string[]) =>
   new Deno.Command(Deno.execPath(), {
-    args: ['run', '-A', new URL('./cli.ts', import.meta.url).pathname, ...args],
+    args: [
+      'run',
+      '-A',
+      fileURLToPath(new URL('./cli.ts', import.meta.url)),
+      ...args,
+    ],
     env: { TASKS_HOST: U, TASKS_BACKOFF: '' },
   }).output()
 

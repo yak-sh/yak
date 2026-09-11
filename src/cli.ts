@@ -9,6 +9,7 @@
 // Dot-params route by prop through the shared vocabulary (.title → doc);
 // collisions use the explicit .comp.prop spelling. TASKS_HOST points at a
 // non-default server.
+import { fileURLToPath } from 'node:url'
 import { EID, SHORT } from './types.ts'
 import {
   addressed,
@@ -3105,7 +3106,7 @@ let sync = async (got: Got) => {
 }
 
 let backup = async () => {
-  let script = new URL('../bin/backup', import.meta.url).pathname
+  let script = fileURLToPath(new URL('../bin/backup', import.meta.url))
   let { code } = await new Deno.Command(script, {
     stdin: 'null',
     stdout: 'inherit',
@@ -3521,7 +3522,7 @@ let codex = async (got: Got) => {
 let tui = async () => {
   // The same be-reborn loop as `deno task tui`, so a global install hot
   // reloads too. The TUI source lives next to this module.
-  let main = new URL('./tui/main.tsx', import.meta.url).pathname
+  let main = fileURLToPath(new URL('./tui/main.tsx', import.meta.url))
   while (true) {
     let { code } = await new Deno.Command(Deno.execPath(), {
       args: ['run', '-A', main],

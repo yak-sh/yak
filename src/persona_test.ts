@@ -3,6 +3,7 @@
 // temp dir (never a repo). The server effect and the CLI verb render
 // through these same functions, so what passes here is what lands on
 // disk everywhere.
+import { fileURLToPath } from 'node:url'
 import {
   assert,
   assertEquals,
@@ -347,7 +348,7 @@ slow('task sync --check accepts a projected persona role', async () => {
       args: [
         'run',
         '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
+        fileURLToPath(new URL('./cli.ts', import.meta.url)),
         'sync',
         '--check',
       ],

@@ -1,10 +1,11 @@
 // Backups use private SQLite paths, so a failed or concurrent run cannot
 // replace a database another reader or restore verifier still has open.
+import { fileURLToPath } from 'node:url'
 import { assert, assertEquals } from '@std/assert'
 import { DatabaseSync } from '../src/store/sqlite.ts'
 import { slow } from '../src/testing.ts'
 
-let script = new URL('./backup', import.meta.url).pathname
+let script = fileURLToPath(new URL('./backup', import.meta.url))
 let decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
 let run = async (cmd: string, args: string[], cwd: string) => {
   let out = await new Deno.Command(cmd, { args, cwd }).output()
