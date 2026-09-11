@@ -61,6 +61,7 @@ export let frontendVocab = loadVocab([{
         text: { type: 'string' },
         owner: { type: 'string' },
         order: { type: 'number' },
+        generation: { type: 'number' },
       },
     },
     savedDraft: {
@@ -227,6 +228,7 @@ export let frontend = (vault: Vault | false = false): Frontend => {
           text: submitted.text ?? '',
           owner: owner ?? '',
           order: Date.now(),
+          generation,
         },
       }])
       mutate([{ entity: { eid: 'draft' }, draft: { text: '', at: 0 } }])
@@ -239,7 +241,11 @@ export let frontend = (vault: Vault | false = false): Frontend => {
             // owner, including those whose acknowledgements arrive later.
             const outstanding = c.watch('.pendingDraft')
             for (const row of outstanding.value) {
-              if ((row.pendingDraft as Record<string, unknown>).owner === '') {
+              if (
+                (row.pendingDraft as Record<string, unknown>).owner === '' &&
+                (row.pendingDraft as Record<string, unknown>).generation ===
+                  generation
+              ) {
                 mutate([{
                   entity: row.entity,
                   pendingDraft: { owner: session },

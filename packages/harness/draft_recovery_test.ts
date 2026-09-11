@@ -164,3 +164,24 @@ Deno.test('draft vocabulary registers local and ephemeral tiers, not default wir
   assertEquals(tierOf(frontendVocab, 'draft'), 'none')
   assertEquals(tierOf(frontendVocab, 'visual'), 'none')
 })
+
+Deno.test('independent pending new sessions keep recovery ownership separate', async () => {
+  const vault = stash()
+  let ui = frontend(vault)
+  await ui.ready
+  ui.edit({ text: 'first generation', at: 3 })
+  const first = ui.submission()
+  ui.patch({ selected: null, generation: 1 })
+  ui.edit({ text: 'second generation', at: 3 })
+  ui.submission()
+  first.accepted('first-session')
+  await ui.flush()
+  ui.close()
+  ui = frontend(vault)
+  await ui.ready
+  assertEquals(text(ui).text, 'second generation')
+  ui.patch({ selected: 'first-session' })
+  assertEquals(text(ui).text, '')
+  await ui.flush()
+  ui.close()
+})
