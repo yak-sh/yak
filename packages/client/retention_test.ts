@@ -410,3 +410,21 @@ Deno.test('local-only graphs do not evict their sole copy of wire-default data',
   assertEquals(c.cache.size(), 0)
   c.close()
 })
+
+Deno.test('a synchronous first frame filters stale shared hits before watch returns', () => {
+  let { c, frame, sockets } = fixture()
+  let a = c.watch('.doc!')
+  sockets[0].emit('open')
+  frame('s1', [row('a')])
+  let send = sockets[0].send
+  sockets[0].send = (data) => {
+    send(data)
+    let message = JSON.parse(data)
+    if (message.subscribe) frame(message.id)
+  }
+  let b = c.watch('.title=a')
+  assertEquals(b.ready, true)
+  assertEquals(b.value, [])
+  assertEquals(readIds(a.value), ['a'])
+  c.close()
+})

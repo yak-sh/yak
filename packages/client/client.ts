@@ -216,7 +216,9 @@ export let client = (
         let ready = (opts.signal ?? (<T>(value: T) => ({ value })))(
           wire!.ready(id),
         )
-        let value = (opts.signal ?? (<T>(value: T) => ({ value })))(local.value)
+        let value = (opts.signal ?? (<T>(value: T) => ({ value })))(
+          local.value.filter((b) => cache.includes(id, b.entity.eid)),
+        )
         let listeners = new Set<(bundles: Bundle[]) => void>()
         let publish = (force = false) => {
           let next = local.value.filter((b) => cache.includes(id, b.entity.eid))
