@@ -105,6 +105,10 @@ async function handle(method: string, value: unknown): Promise<unknown> {
   }
   // Narrow command/projection API: never evaluate caller-provided code.
   switch (method) {
+    case 'runtime':
+      return a.runtime(String(args[0]))
+    case 'control':
+      return a.control(String(args[0]), args[1] as import('./runtime.ts').RuntimeAction)
     case 'image':
       return await a.image(String(args[0]))
     case 'start':

@@ -1,4 +1,5 @@
 import { stepLock } from './step_lock.ts'
+import { type RuntimeAction, runtimeAction, runtimeRows } from './runtime.ts'
 import { streamingEnabled } from './streaming.ts'
 import { imageContext } from './artifact_tools.ts'
 import { configuredImages, type ImageOptions, readImage } from './images.ts'
@@ -147,6 +148,8 @@ export type Agent = {
   line: (b: Bundle, view?: string, ctx?: Record<string, unknown>) => string
   /** Explicit instruction admission; appends a snapshot, never a user turn. */
   instruct: (session: Eid, text: string, source?: string) => Promise<Eid>
+  runtime: (session: Eid) => Promise<Bundle[]>
+  control: (session: Eid, action: RuntimeAction) => Promise<string>
   close: () => Promise<void>
 }
 
@@ -292,6 +295,8 @@ export let agent = (opts: Opts = {}): Agent => {
           },
         })),
       ),
+    runtime: (session) => runtimeRows(h.g, session),
+    control: (session, action) => runtimeAction(a, session, action),
     children: (session) => children(h.g, session),
     tasks: async () =>
       (await h.g.read('.task.status=open,wip')).toSorted(byBirth),

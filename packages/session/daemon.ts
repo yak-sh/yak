@@ -23,6 +23,8 @@ import { type Deps, react, type Step } from './react.ts'
 export type Daemon = {
   /** Stop admission, then wait for every admitted callback. Never closes storage. */
   stop: () => Promise<void>
+  /** Abort this session's current model request; does not stop tools/processes. */
+  interrupt: (session: Eid) => boolean
   /** Serialize a write with this session’s model/tool steps. */
   enqueue: <T>(session: Eid, work: () => Promise<T>) => Promise<T>
   /** queue one step over this transcript; answers when that step is done */
@@ -59,6 +61,7 @@ export let daemon = (
   let effects = new Set<Promise<unknown>>()
   let p = pool(g)
   let active = new Set<Eid>()
+  let requests = new Map<Eid, AbortController>()
   let resumes = new Map<Eid, () => void>()
   let recovered = false
   let scheduling: Promise<void> | undefined
@@ -215,7 +218,14 @@ export let daemon = (
         return { did: 'nothing', status: 'running', added: [] } as Step
       }
       try {
-        let step = await react(g, session, deps)
+        let controller = new AbortController()
+        requests.set(session, controller)
+        let step: Step
+        try {
+          step = await react(g, session, { ...deps, signal: controller.signal })
+        } finally {
+          requests.delete(session)
+        }
         each(step)
         if (['settled', 'failed', 'stopped'].includes(step.status)) {
           let [self] = await g.storage.tx((tx) => tx.get([session]))
@@ -414,5 +424,10 @@ export let daemon = (
       }
     })()
   }
-  return { wake, idle, enqueue, stop }
+  return { wake, idle, enqueue, stop, interrupt: (session) => {
+    let controller = requests.get(session)
+    if (!controller) return false
+    controller.abort()
+    return true
+  } }
 }

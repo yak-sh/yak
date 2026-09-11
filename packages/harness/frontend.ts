@@ -14,6 +14,9 @@ export let frontendVocab = loadVocab([{
         help: { type: 'boolean' },
         pending: { type: 'string' },
         clipboard: { type: 'string' },
+        runtime: { type: 'boolean' },
+        runtimeSelected: { type: 'string' },
+        runtimeFeedback: { type: 'string' },
       },
     },
     frontend: {

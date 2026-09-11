@@ -98,6 +98,7 @@ export const shortcuts = [
   ['Tab', 'toggle focus (prefer h / l)'],
   ['v', 'VISUAL source selection; hjkl move, y copy, Esc NORMAL'],
   ['? / Esc', 'show / dismiss help'],
+  ['r', 'runtime panel: j/k select, x interrupt/cancel queued, c continue'],
   ['Ctrl+U', 'INSERT / VISUAL: cut entire draft'],
   ['Ctrl+C', 'quit'],
 ]
@@ -141,7 +142,7 @@ export let Keyboard = ({ ui, action }: {
       return true
     }
     if (key.name == 'escape') {
-      ui.keys({ mode: 'NORMAL', help: false, pending: '' })
+      ui.keys({ mode: 'NORMAL', help: false, runtime: false, pending: '' })
       return true
     }
     if (s.mode == 'INSERT') {
@@ -174,6 +175,8 @@ export let Keyboard = ({ ui, action }: {
     function command(k: Key): boolean {
       s = current()
       let text = k.name == 'char' && !k.alt && !k.ctrl ? k.text : undefined
+      if (text == 'r') { ui.keys({ runtime: !s.runtime }); return true }
+      if (s.runtime) return false
       if (s.help) {
         if (text == '?' || k.name == 'escape') ui.keys({ help: false })
         return true

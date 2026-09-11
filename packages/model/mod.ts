@@ -77,6 +77,8 @@ export type Tool = {
  * Index identifies the final assistant item order in Reply.items. */
 export type TextDelta = { index: number; id?: string; text: string }
 export type Request = {
+  /** Optional cancellation of this request, not of independent tool processes. */
+  signal?: AbortSignal
   onText?: (delta: TextDelta) => void
   model: string
   effort?: string

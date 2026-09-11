@@ -208,7 +208,9 @@ let ask = (opts: Options) => {
       let out = await client.run(
         body(req, opts.store, selected, opts.web ?? true),
         {
-          signal: opts.signal,
+          signal: req.signal && opts.signal
+            ? AbortSignal.any([req.signal, opts.signal])
+            : req.signal ?? opts.signal,
           noRetry: !!req.onText,
           // Image payloads must never escape through diagnostic/event subscribers.
           event: (event) => {

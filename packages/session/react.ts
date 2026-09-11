@@ -83,6 +83,7 @@ export type Deps = {
   checkpointMs?: number
   model: Model
   tools: Tool[]
+  signal?: AbortSignal
   instructions?: string
   /** Optional bounded model-facing tool-result projection; storage stays unchanged. */
   resultText?: (entry: Bundle) => Promise<string>
@@ -319,6 +320,7 @@ export let react = async (
     )
     : undefined
   let req: Request = {
+    signal: deps.signal,
     model: modelName,
     effort: effort == null ? undefined : String(effort),
     instructions: using?.instructions == null

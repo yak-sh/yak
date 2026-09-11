@@ -175,6 +175,8 @@ export let remote = async (
     archive: async (id, value) => {
       await request('archive', [id, value])
     },
+    runtime: async (id) => await request('runtime', [id]) as Bundle[],
+    control: async (id, action) => await request('control', [id, action]) as string,
     sessions: () => summary('sessions'),
     tasks: () => summary('tasks'),
     children: async (id) => await request('children', [id]) as Bundle[],

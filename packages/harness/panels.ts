@@ -20,7 +20,7 @@ export type UIAgent =
     | 'line'
     | 'entry'
   >
-  & Partial<Pick<Agent, 'archive'>>
+  & Partial<Pick<Agent, 'archive' | 'runtime' | 'control'>>
 
 /** The selection and graph doors handed to every panel. */
 export type Context = {
