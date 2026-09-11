@@ -2,7 +2,9 @@
 // exists (or existed) on the box: the point is not that the sweep finds
 // orphans — it is that it declines everything else, one bright line per test.
 
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import { stub } from '@std/testing/mock'
+import { gitSync } from './repo.ts'
 import { slow } from './testing.ts'
 import {
   browser,
@@ -13,6 +15,7 @@ import {
   probe,
   type Proc,
   profiles,
+  prune,
   sweepProfile,
   throwaway,
   type Tree,
@@ -461,3 +464,65 @@ Deno.test('sweepProfile: a dir that never frees is returned as a leak', async ()
   assertEquals(leak, '/tmp/p') // reported, never swallowed
   assertEquals(n, 5) // the first attempt plus four retries
 })
+
+slow(
+  'a deleted checkout is a failed run, not a skipped forest or a clean tree',
+  () => {
+    let root = Deno.makeTempDirSync({ prefix: 'tasks-sweep-gone-' })
+    let errors: string[] = []
+    using _report = stub(console, 'error', (text: string) => errors.push(text))
+    let git = (...args: string[]) => {
+      let r = gitSync(root, args)
+      assert(r.ok, r.err)
+    }
+    try {
+      git('init', '--initial-branch=main')
+      git('config', 'user.email', 'test@example.com')
+      git('config', 'user.name', 'Test')
+      git('-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '-m', 'base')
+      let missing = `${root}/tasks-worktrees/a-gone`
+      let healthy = `${root}/tasks-worktrees/z-healthy`
+      git('worktree', 'add', '-b', 'gone', missing)
+      git('worktree', 'add', '-b', 'healthy', healthy)
+      Deno.removeSync(missing, { recursive: true })
+      let forest = trees(root, nobody, [], Date.now(), 0)
+      let gone = forest.find((t) => t.path == missing)!
+      let kept = forest.find((t) => t.path == healthy)!
+      assertEquals(gone.clean, false)
+      assertEquals(judgeTree(gone).prune, false)
+      assertEquals(judgeTree(kept).prune, true)
+      assertEquals(errors.length, 1)
+      assertStringIncludes(errors[0], `git status --porcelain in ${missing}`)
+      assertStringIncludes(errors[0], 'failed with exit -1')
+      assert(prune(root, kept))
+      assertEquals(
+        gitSync(root, ['show-ref', '--verify', 'refs/heads/healthy']).ok,
+        false,
+      )
+      // Existing cwd, broken git metadata: an ordinary exit failure has the
+      // same empty stdout as ENOENT, and must not become "clean" either.
+      let broken = `${root}/tasks-worktrees/b-broken`
+      git('worktree', 'add', '-b', 'broken', broken)
+      Deno.writeTextFileSync(`${broken}/.git`, `gitdir: ${root}/not-here\n`)
+      errors.length = 0
+      let bad = trees(root, nobody, [], Date.now(), 0).find((t) =>
+        t.path == broken
+      )!
+      assertEquals(bad.clean, false)
+      assertEquals(judgeTree(bad).prune, false)
+      assertEquals(errors.length, 2)
+      assertStringIncludes(errors[1], `git status --porcelain in ${broken}`)
+      assertStringIncludes(errors[1], 'failed with exit 128')
+      // List and removal failures must also report a failed run, not masquerade
+      // as an empty forest or successful cleanup.
+      errors.length = 0
+      assertEquals(trees(missing, nobody, [], Date.now(), 0), [])
+      assertEquals(prune(missing, kept), false)
+      assertEquals(errors.length, 2)
+      assertStringIncludes(errors[0], 'git worktree list --porcelain')
+      assertStringIncludes(errors[1], 'git worktree remove')
+    } finally {
+      Deno.removeSync(root, { recursive: true })
+    }
+  },
+)

@@ -25,6 +25,7 @@ import {
   ownerOf,
   pids,
 } from './proc.ts'
+import { gitSync } from './repo.ts'
 
 // The provider comms. An agent is never reaped, and everything descending
 // from a live one is its business, not the sweep's.
@@ -357,12 +358,21 @@ export let judgeTree = (t: Tree): TreeVerdict =>
     ? { tree: t, prune: false, why: 'not merged into main' }
     : { tree: t, prune: true, why: 'merged and clean' }
 
+// The same PATH lookup and failed-run contract as land. A stale worktree
+// registration can name a deleted cwd: that must neither abort the forest
+// nor turn failed `status` (empty stdout) into proof the checkout is clean.
 let git = (args: string[], cwd: string) => {
-  let out = new Deno.Command('git', { args, cwd, stderr: 'piped' }).outputSync()
-  return {
-    ok: out.success,
-    text: new TextDecoder().decode(out.stdout).trim(),
+  let r = gitSync(cwd, args)
+  // Ancestry's exit 1 is an answer; every other failure needs its own account,
+  // including list/remove failures that otherwise look like "nothing to do".
+  if (!r.ok && !(args[0] == 'merge-base' && r.code == 1)) {
+    console.error(
+      `sweep: git ${args.join(' ')} in ${cwd} failed with exit ${r.code}: ${
+        (r.err || r.out).trim()
+      }`,
+    )
   }
+  return r
 }
 
 // Last git activity in a worktree. Every command an agent runs there
@@ -407,19 +417,22 @@ export let trees = (
       : idle < grace
       ? `git ran here ${Math.round(idle / 60_000)}m ago`
       : undefined
+    let status = git(['status', '--porcelain'], path)
     out.push({
       path,
       head: entry.head ?? '',
       branch: entry.branch,
       busy,
-      clean: git(['status', '--porcelain'], path).text == '',
+      clean: status.ok && status.out.trim() == '',
       merged: entry.head
         ? git(['merge-base', '--is-ancestor', entry.head, 'main'], repo).ok
         : false,
     })
   }
   for (
-    let line of git(['worktree', 'list', '--porcelain'], repo).text.split('\n')
+    let line of git(['worktree', 'list', '--porcelain'], repo).out.trim().split(
+      '\n',
+    )
   ) {
     if (line.startsWith('worktree ')) {
       finish()

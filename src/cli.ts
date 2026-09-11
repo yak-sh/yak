@@ -1551,7 +1551,9 @@ let land = async () => {
   )
   // Landing is already complete. Sibling collection is housekeeping and a
   // graph outage cannot turn the successful git transition into a refusal.
-  // Keep the failure legible on stderr; the next land/probe sweep can retry.
+  // Individual git failures are failed runs reported by probes.ts; a stale
+  // sibling cwd cannot abort the forest. This catch is for graph/read failures;
+  // keep those legible on stderr so the next land/probe sweep can retry.
   try {
     let sessions = await query(['.kind=session'])
     for (let t of sweep(sessionsOf(sessions), outcome.root).trees) {

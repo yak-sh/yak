@@ -153,3 +153,34 @@ slow('a directory that is no repo refuses, and never throws', async () => {
     gone(dir)
   }
 })
+
+Deno.test('both git runners resolve PATH and convert a missing executable', async () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'tasks-git-path-' })
+  let path = Deno.env.get('PATH')
+  try {
+    // A private PATH proves neither runner hardcodes the host's /usr/bin/git.
+    Deno.writeTextFileSync(`${dir}/git`, '#!/bin/sh\nprintf "from PATH\\n"\n')
+    Deno.chmodSync(`${dir}/git`, 0o755)
+    Deno.env.set('PATH', dir)
+    for (
+      let r of [await git(dir, ['--version']), gitSync(dir, ['--version'])]
+    ) {
+      assert(r.ok)
+      assertEquals(r.out, 'from PATH\n')
+    }
+    Deno.removeSync(`${dir}/git`)
+    for (
+      let r of [await git(dir, ['--version']), gitSync(dir, ['--version'])]
+    ) {
+      assertEquals(r.ok, false)
+      assertEquals(r.code, -1)
+      assertEquals(r.out, '')
+      assertStringIncludes(r.err, `git --version in ${dir}`)
+      assertStringIncludes(r.err, 'Failed to spawn')
+    }
+  } finally {
+    if (path === undefined) Deno.env.delete('PATH')
+    else Deno.env.set('PATH', path)
+    gone(dir)
+  }
+})

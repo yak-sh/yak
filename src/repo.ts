@@ -46,13 +46,18 @@ let read = (out: Deno.CommandOutput): Ran => ({
 // A spawn that failed to spawn (no git, no such directory, EAGAIN under load)
 // is a not-ok run carrying why, never a throw: every caller here already has a
 // refusal path for a git that said no, and none has one for an exception.
-let broke = (e: unknown): Ran => ({ ok: false, code: -1, out: '', err: `${e}` })
+let broke = (cwd: string, args: string[], e: unknown): Ran => ({
+  ok: false,
+  code: -1,
+  out: '',
+  err: `git ${args.join(' ')} in ${cwd}: ${e}`,
+})
 
 export let git = async (cwd: string, args: string[], signal?: AbortSignal) => {
   try {
     return read(await new Deno.Command('git', opts(cwd, args, signal)).output())
   } catch (e) {
-    return broke(e)
+    return broke(cwd, args, e)
   }
 }
 
@@ -64,7 +69,7 @@ export let gitSync = (cwd: string, args: string[]) => {
   try {
     return read(new Deno.Command('git', opts(cwd, args)).outputSync())
   } catch (e) {
-    return broke(e)
+    return broke(cwd, args, e)
   }
 }
 

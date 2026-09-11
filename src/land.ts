@@ -86,20 +86,7 @@ let message = (label: string, r: Ran) => {
 }
 
 export let land = async (ops: LandOps = {}): Promise<Outcome> => {
-  // A spawn-level failure (EAGAIN under fork pressure, a vanished binary)
-  // REJECTS instead of returning a code, which would crash land after a
-  // successful merge — the exact "Failed to spawn '/usr/bin/git'" seen when
-  // the box is loaded (T-22282). Convert it to a failed run so every
-  // caller keeps its own contract: need() throws its labeled error, publish
-  // stays best-effort.
-  let chosen = ops.run ?? run
-  let command: Run = async (args, cwd) => {
-    try {
-      return await chosen(args, cwd)
-    } catch (e) {
-      return { ok: false, code: -1, out: '', err: `${e}` }
-    }
-  }
+  let command = ops.run ?? run
   let write = ops.write ?? defaultWrite
   let cwd = ops.cwd ?? Deno.cwd()
   let git = async (at: string, args: string[], show = true) => {

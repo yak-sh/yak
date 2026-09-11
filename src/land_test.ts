@@ -360,19 +360,16 @@ slow(
   },
 )
 
-// A run whose spawn REJECTS (EAGAIN under load, a vanished binary) must come
-// back as a failed Result, not an unhandled rejection crashing land after its
-// merge — the T-22282 shape. The first call land makes is need('find
-// worktree'), so the guard surfaces as that labeled error.
+// Exercise the real shared seam: a deleted cwd rejects at spawn, but land
+// receives a failed run and labels the operation rather than leaking ENOENT.
 Deno.test('a spawn-level failure is a failed result, never a crash', async () => {
+  let cwd = Deno.makeTempDirSync({ prefix: 'tasks-land-gone-' })
+  Deno.removeSync(cwd)
   await assertRejects(
-    () =>
-      land({
-        ...quiet,
-        run: () => Promise.reject(new Error("Failed to spawn 'git'")),
-      }),
+    () => land({ ...quiet, cwd }),
     Error,
-    'find worktree failed',
+    'find worktree failed with exit -1: git rev-parse --show-toplevel in ' +
+      cwd,
   )
 })
 
