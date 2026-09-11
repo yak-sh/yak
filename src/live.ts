@@ -1593,6 +1593,41 @@ let settleInitial = () => {
   initialResolve()
 }
 
+// That wait is BOUNDED, because it can be a wait on a PEER. A follower is
+// painted by the leader's state frame (leader.ts), and a leader that cannot
+// answer — an older tab with no state to send, one frozen mid-answer, one
+// closed between hello and state — leaves every other tab awaiting a message
+// that will never come: a white page, no exception, nothing in telemetry, and
+// a reload lands in the same place. So the wait gets a floor: after `ms` this
+// tab stops waiting on the peer and opens its OWN socket, whose snapshot
+// settles the same gate; a second tab-owned socket is the abnormal-recovery
+// cost of never being stuck. If even that lands nothing, the page paints and
+// says so — a visible, reported stall beats a blank screen.
+export let BOOT_WAIT = 6_000
+let nap = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+export let firstPaint = async (
+  landed: Promise<void>,
+  ms: number,
+  rescue: () => void,
+  stall: () => void,
+  sleep: (ms: number) => Promise<void> = nap,
+) => {
+  let ready = landed.then(() => 'ready' as const)
+  let late = () => sleep(ms).then(() => 'late' as const)
+  if (await Promise.race([ready, late()]) == 'ready') return
+  rescue()
+  if (await Promise.race([ready, late()]) == 'ready') return
+  stall()
+}
+// The boot-time binding of firstPaint: reconnect this tab, then give up on the
+// gate rather than hang on it.
+let painted = () =>
+  firstPaint(initialReady, BOOT_WAIT, () => connect(), () => {
+    problem.value =
+      'no state arrived — showing what this tab has; reload to retry'
+    settleInitial()
+  })
+
 // A current bootstrap for a tab joining after the leader's original server
 // snapshot. The cache is deliberately partial, but every row in it is current;
 // defining subscriptions opened by the newcomer fill the rest. In particular
@@ -2753,7 +2788,7 @@ export let boot = async () => {
   if (!canShare()) {
     await once()
     connect()
-    await initialReady
+    await painted()
     return
   }
   let nav = (globalThis as { navigator: Navigator }).navigator
@@ -2772,13 +2807,13 @@ export let boot = async () => {
       lead: async () => {
         await once()
         connect()
-        await initialReady
+        await painted()
       },
       follow: () => once(),
       solo: async () => {
         await once()
         connect()
-        await initialReady
+        await painted()
       },
       receive: (frame) => {
         serial = serial.then(() => land(frame, 'follower'))
@@ -2799,7 +2834,7 @@ export let boot = async () => {
   )
   addEventListener('pagehide', owner.leave)
   await owner.start()
-  await initialReady
+  await painted()
 }
 ;(globalThis as {
   __sync?: () => {

@@ -25,6 +25,7 @@ import {
   edgeSub,
   ent,
   findEid,
+  firstPaint,
   foldFor,
   gated,
   holdCommentCount,
@@ -3036,4 +3037,37 @@ Deno.test('evicting a peer payload does not cascade independently held edge sent
   assertEquals(deps.peek(), [])
   unsubscribe('edge-holder')
   unsubscribe('peer-holder')
+})
+
+// A tab must never wait forever on a peer that cannot answer: that is the
+// blank page with no exception and nothing in telemetry. firstPaint gives the
+// wait a floor — reconnect once, then paint and say so.
+Deno.test('first paint waits for state, then rescues, then gives up', async () => {
+  let never = () => new Promise<void>(() => {})
+  let soon = () => Promise.resolve()
+  let run = async (
+    landed: Promise<void>,
+    sleep: () => Promise<void>,
+    rescue: (log: string[]) => void = () => {},
+  ) => {
+    let log: string[] = []
+    await firstPaint(
+      landed,
+      0,
+      () => {
+        log.push('rescue')
+        rescue(log)
+      },
+      () => log.push('stall'),
+      sleep,
+    )
+    return log
+  }
+  // State in hand: no rescue, no stall, however long the floor is.
+  assertEquals(await run(Promise.resolve(), never), [])
+  // State only after the floor: one rescue, and the page never gives up.
+  let late = Promise.withResolvers<void>()
+  assertEquals(await run(late.promise, soon, () => late.resolve()), ['rescue'])
+  // Nothing ever lands: the tab paints and names the stall.
+  assertEquals(await run(never(), soon), ['rescue', 'stall'])
 })
