@@ -7,16 +7,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { slow } from '../../src/testing.ts'
 import { REPLY_TO } from './mail.ts'
-import {
-  BUILDS,
-  CURRENCY,
-  FILES,
-  FREE,
-  LETTERS,
-  PLUS,
-  PRICE,
-  size,
-} from './meter.ts'
+import { CURRENCY, FILES, FREE, LETTERS, PLUS, PRICE, size } from './meter.ts'
 import { quoted, rate } from './sell.ts'
 import { page as galleryPage } from './gallery.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
@@ -196,7 +187,6 @@ Deno.test('the plan cards and Plus offer carry the meter allowances', () => {
       `${limits.requests.toLocaleString('en-US')} visits a month`,
       `${size(limits.bytes)} of app data`,
       `${LETTERS[tier].toLocaleString('en-US')} emails a month`,
-      `${BUILDS[tier]} built-in builds a month`,
       ...(FILES[tier] == null
         ? []
         : [`${size(FILES[tier])} of photos and files`]),
@@ -338,9 +328,14 @@ Deno.test('every public page hands a stranger sign-in, never /connect', () => {
     assert(!body.includes('href="/connect"'), `${page} points at /connect`)
   }
   let html = read('index.html')
-  let doors = [...html.matchAll(/<a class="Button" href="([^"]+)"/g)]
+  let doors = [...html.matchAll(/<a class="Button"\s+href="([^"]+)"/g)]
     .map((m) => m[1])
-  assertEquals(doors, ['/login', '/login'], 'a home-page door misses sign-in')
+  assertEquals(doors, [
+    '/login',
+    '/login',
+    '/login?return=%2Fconnect%23plan',
+    '/login',
+  ], 'a home-page door misses sign-in')
 })
 
 Deno.test('an assistant name is escaped on the sign-in page', async () => {
@@ -785,5 +780,25 @@ Deno.test('the signed-in plan copy derives both tiers from the meter', async () 
         limits.requests.toLocaleString('en-US')
       } visits a month, ${size(limits.bytes)} of app data`,
     )
+  }
+})
+
+Deno.test('pricing cards offer signup and omit build quotas', () => {
+  for (let page of ['index.html', 'pricing.html']) {
+    let { document } = parseHTML(read(page))
+    let cards = [...document.querySelectorAll('.Plan')]
+    assertEquals(cards.length, 2)
+    assertEquals(cards.map((c) => c.querySelector('.Button')?.textContent), [
+      'Start Free',
+      'Get Started',
+    ])
+    assertEquals(
+      cards.map((c) => c.querySelector('.Button')?.getAttribute('href')),
+      [
+        '/login',
+        '/login?return=%2Fconnect%23plan',
+      ],
+    )
+    assert(!read(page).includes('built-in builds a month'))
   }
 })

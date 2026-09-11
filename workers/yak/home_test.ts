@@ -563,3 +563,27 @@ slow('the front page is served at the space root', async () => {
     await k.stop()
   }
 })
+
+Deno.test('settings Billing tab uses the space checkout and portal', async () => {
+  let settings = await block({ view: 'settings' })
+  assertStringIncludes(settings, `href="${managePath('billing')}"`)
+  for (let plus of [false, true]) {
+    let page = await block({
+      view: 'billing',
+      plan: { plus, known: true, ends: '2026-10-01T00:00:00Z' },
+    })
+    let { document } = parseHTML(page)
+    assertEquals(!!document.querySelector('[data-door="checkout"]'), !plus)
+    assertEquals(
+      document.querySelector('[data-door="portal"]')?.getAttribute(
+        'data-target',
+      ),
+      managePath('billing'),
+    )
+    assertEquals(
+      document.querySelector('.Settings_Tabs [aria-current]')?.textContent,
+      'Billing',
+    )
+    if (plus) assertStringIncludes(page, 'stops renewing')
+  }
+})

@@ -1,11 +1,7 @@
 <!doctype html>
 <!--
-  What yaks.app costs (D-32751, T-33125). INFORMATIONAL, on purpose: it
-  describes the plans and it does not start a purchase. OpenAI's app-directory
-  policy forbids a plugin selling a subscription and allows it to explain that
-  a feature needs a plan and to link to a page describing the plans (C-33033),
-  so this is the page an assistant may point at — and the reason there is no
-  subscribe button on it. Paying happens on the connector page, signed in.
+  What yaks.app costs. Each plan links to signed-in setup; purchases use the
+  account's Stripe checkout, never an anonymous payment link.
 
   Plan allowances come from D-32751; the price from T-37141. The price is
   tax-INCLUSIVE (owner's decision): $9 is what a
@@ -95,9 +91,9 @@
               <li>1 GB of app data</li>
               <li>1 GB of photos and files</li>
               <li>100 emails a month, sent or received</li>
-              <li>5 built-in builds a month</li>
               <li>Your own address at <span class="Address"><strong class="Address_Name">yourname</strong>.yaks.app</span></li>
             </ul>
+            <a class="Button" href="/login">Start Free</a>
           </div>
 
           <div class="Card Plan Plan-plus">
@@ -110,9 +106,10 @@
               <li>10 GB of app data</li>
               <li>50 GB of photos and files</li>
               <li>2,500 emails a month, sent or received</li>
-              <li>100 built-in builds a month</li>
               <li>A domain of your own, like <b>ourbookclub.com</b></li>
             </ul>
+            <a class="Button"
+              href="/login?return=%2Fconnect%23plan">Get Started</a>
           </div>
         </div>
         <p class="Note Note-small">

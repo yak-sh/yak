@@ -44,7 +44,7 @@ import * as dirPart from './directory.ts'
 import { ahead, bearing, granted, itsApp, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { pilled, standing } from './gallery.ts'
-import { broke, checkout } from './billing.ts'
+import { broke, checkout, portal } from './billing.ts'
 import {
   buying,
   connect,
@@ -1242,6 +1242,14 @@ let index = async (
     // button that cannot work is worse than no block.
     sell: owner && env.STRIPE_KEY ? selling(space) : undefined,
     plus: owner ? space.tier == 'plus' : undefined,
+    plan: owner
+      ? {
+        plus: space.tier == 'plus',
+        ends: space.plan?.ending ?? '',
+        known: !!space.plan?.customer,
+      }
+      : undefined,
+    paid: new URL(req.url).searchParams.get('paid') == '1',
     fee: rate(await feeOf(dir)),
     name: owner ? await dir.nameAt(owner) ?? '' : '',
     connections: owner ? await (await identity()).connections(env, owner) : [],
@@ -1322,6 +1330,7 @@ let saved = async (
   if (who.role != 'owner' || !who.person) return nothingHere(env)
   let form = await req.formData().catch(() => new FormData())
   if (form.get('billing') == 'checkout') return checkout(env, req, space)
+  if (form.get('billing') == 'portal') return portal(env, req, space)
   // The other button on this page: one app out of the trash (erase.ts,
   // T-34430). Its own form, so it is its own POST — a plain button and no
   // script, the way the drop zone and the settings form are — and it lands

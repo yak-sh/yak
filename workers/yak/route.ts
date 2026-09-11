@@ -19,6 +19,7 @@ export type ManageView =
   | 'visits'
   | 'selling'
   | 'settings'
+  | 'billing'
   | 'trash'
 export let managePath = (view: ManageView = 'apps') =>
   MANAGE + (view == 'apps' ? '' : `/${view}`)
@@ -30,6 +31,7 @@ export let manageView = (path: string): ManageView | null => {
     'visits',
     'selling',
     'settings',
+    'billing',
     'trash',
   ]
   return views.find((view) =>

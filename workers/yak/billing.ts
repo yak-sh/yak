@@ -36,10 +36,11 @@
 // write that does not carry the kernel flag. `tier` is what usage.ts
 // `ceilings()` reads, and a tier a person could write is a person who can lift
 // their own ceilings.
+import { managePath } from './route.ts'
 import * as dirPart from './directory.ts'
 import { directory, type Plan, type Space, stamp } from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { apex, type Host } from './host.ts'
+import { apex, type Host, spaceHost } from './host.ts'
 
 import { cookieValue, verify } from '../../src/token.ts'
 import { metaBreaks, noted } from './unseen.ts'
@@ -408,8 +409,12 @@ export let checkout = async (env: Env, req: Request, at?: Space) => {
       mode: 'subscription',
       customer,
       line_items: { 0: { price: env.STRIPE_PRICE, quantity: 1 } },
-      success_url: backTo(true, env),
-      cancel_url: backTo(false, env),
+      success_url: at
+        ? `https://${spaceHost(env, at.slug)}${managePath('billing')}?paid=1`
+        : backTo(true, env),
+      cancel_url: at
+        ? `https://${spaceHost(env, at.slug)}${managePath('billing')}?paid=0`
+        : backTo(false, env),
       client_reference_id: space.eid,
       metadata: { space: space.eid, slug: space.slug },
       subscription_data: { metadata: { space: space.eid, slug: space.slug } },
@@ -433,14 +438,14 @@ export let checkout = async (env: Env, req: Request, at?: Space) => {
 // person cancels, changes their card and reads their invoices. It needs a
 // portal CONFIGURATION on the account; without one Stripe refuses, and the
 // refusal is filed and said rather than swallowed.
-let portal = async (env: Env, req: Request) => {
+export let portal = async (env: Env, req: Request, at?: Space) => {
   let person = await buyer(env, req)
   if (!person) return json(401, 'unauthorized', 'sign in first')
   if (!env.STRIPE_KEY) {
     return json(503, 'no_billing', 'the paid tier is not switched on here')
   }
   let dir = dirOf(env)
-  let space = await dir.own(person)
+  let space = at ?? await dir.own(person)
   if (await dir.role(space, person) != 'owner') {
     return json(
       403,
@@ -459,7 +464,9 @@ let portal = async (env: Env, req: Request) => {
   try {
     let made = await ask(env, '/v1/billing_portal/sessions', {
       customer,
-      return_url: `https://${apex(env)}/connect`,
+      return_url: at
+        ? `https://${spaceHost(env, at.slug)}${managePath('billing')}`
+        : `https://${apex(env)}/connect`,
     })
     let url = String(made.url ?? '')
     if (!url) throw new Error('stripe made a portal session with no url')

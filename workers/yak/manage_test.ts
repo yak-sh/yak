@@ -3,7 +3,7 @@
 // that keep another space's page from changing this account.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { slow } from '../../src/testing.ts'
-import { client, connector, kernel, meta, signIn } from './probe.ts'
+import { client, connector, kernel, meta, signIn, stripe } from './probe.ts'
 import { MANAGE, managePath } from './route.ts'
 
 slow('account pages remain reachable behind a custom home app', async () => {
@@ -160,3 +160,63 @@ slow('account pages remain reachable behind a custom home app', async () => {
     await k.stop()
   }
 })
+
+slow(
+  'Billing settings open checkout and the customer portal for this space',
+  async () => {
+    let fake = stripe(({ path }) =>
+      path == '/v1/customers'
+        ? { id: 'cus_settings' }
+        : { url: 'https://checkout.stripe.com/settings-test' }
+    )
+    let k = await kernel({
+      STRIPE_KEY: 'sk_test_probe',
+      STRIPE_PRICE: 'price_probe',
+      STRIPE_API: fake.url,
+    })
+    try {
+      let them = await signIn(k)
+      let host = `${them.email.split('@')[0]}.yaks.app`
+      let path = managePath('billing')
+      let headers = { cookie: them.cookie, origin: `https://${host}` }
+      let page = await (await k.at(host, path, { headers })).text()
+      assertStringIncludes(page, 'Billing')
+      assertStringIncludes(page, 'data-door="checkout"')
+      for (let door of ['checkout', 'portal']) {
+        let response = await k.at(host, path, {
+          method: 'POST',
+          headers,
+          body: new URLSearchParams({ billing: door }),
+        })
+        assertEquals(response.status, 200)
+        assertEquals(
+          (await response.json()).url,
+          'https://checkout.stripe.com/settings-test',
+        )
+      }
+      let checkout = fake.at('/v1/checkout/sessions')!
+      assertEquals(
+        checkout.sent.get('success_url'),
+        `https://${host}${path}?paid=1`,
+      )
+      assertEquals(
+        checkout.sent.get('cancel_url'),
+        `https://${host}${path}?paid=0`,
+      )
+      let portal = fake.at('/v1/billing_portal/sessions')!
+      assertEquals(portal.sent.get('customer'), 'cus_settings')
+      assertEquals(portal.sent.get('return_url'), `https://${host}${path}`)
+      page = await (await k.at(host, path, { headers })).text()
+      assertStringIncludes(page, 'data-door="portal"')
+      let denied = await k.at(host, path, {
+        method: 'POST',
+        headers: { ...headers, origin: 'https://evil.example' },
+        body: new URLSearchParams({ billing: 'portal' }),
+      })
+      assertEquals(denied.status, 404)
+    } finally {
+      await k.stop()
+      await fake.stop()
+    }
+  },
+)
