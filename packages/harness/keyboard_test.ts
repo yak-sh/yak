@@ -152,7 +152,9 @@ Deno.test('NORMAL sidebar commands use the same session actions and INSERT remai
     assert(ui.text().includes('next / previous root'))
     await ui.send('\x1b')
     await ui.send('i?hjkl')
-    assertEquals((f.client.ent('draft')!.draft as Comp).text, 'draft?hjkl')
+    assertEquals((f.client.ent('draft')!.draft as Comp).text, '?hjkl')
+    f.patch({ selected: null })
+    assertEquals((f.client.ent('draft')!.draft as Comp).text, 'draft')
     assertEquals(sent, [])
   } finally {
     ui.free()

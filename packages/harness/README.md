@@ -578,6 +578,7 @@ that cancellation was requested, not that the server stopped billing or that an
 external operation was undone. Process termination remains the separate,
 explicit process tool; this panel intentionally does not offer a kill-all
 action.
+
 ### Draft recovery
 
 Draft text, cursor, and message/task mode are restored per session, including
