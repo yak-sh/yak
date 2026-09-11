@@ -212,7 +212,7 @@ export let react = async (
     if (t) toolEntities.set(b.entity.eid, t)
   }
 
-  // Open tool calls: perform every one the newest ask asked for that has no
+  // Open tool calls: perform every one the current ask asked for that has no
   // result yet, in one batch, so the model is never asked with a call it made
   // still unanswered (the provider refuses that). A tool that throws is an
   // exception and a result saying so, so the model hears what happened and
@@ -220,6 +220,18 @@ export let react = async (
   // a transcript is never called settled with work left here (T-35230).
   let asked = newestAsk(entries)
   let open = openCalls(entries)
+  // A superseded call may already have performed side effects. Do not replay
+  // it or send an invalid transcript to the provider; expose it for repair.
+  let orphan = open.find((b) => comp(b, CALL)?.source != asked?.entity.eid)
+  if (orphan) {
+    return append([
+      line(
+        { [EXCEPTION]: {} },
+        `Unanswered tool call from an older request: ${orphan.entity.eid}. ` +
+          'Verify execution before recording its result.',
+      ),
+    ])
+  }
   if (open.length) {
     let added: Bundle[] = []
     for (let pending of open) {

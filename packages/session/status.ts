@@ -102,20 +102,16 @@ export let ordered = (entries: Bundle[]): Bundle[] =>
 export let newestAsk = (entries: Bundle[]): Bundle | undefined =>
   ordered(entries).filter((b) => kindOf(b) == 'ask').at(-1)
 
-/** The calls the newest ask asked for that no result answers — what the daemon
+/** The calls that no result answers — what the daemon
  * performs next, and what keeps a transcript running past the prose the model
  * said beside them. */
 export let openCalls = (entries: Bundle[]): Bundle[] => {
   let all = ordered(entries)
-  let ask = newestAsk(all)
-  if (!ask) return []
   let answered = new Set(
     all.filter((b) => kindOf(b) == 'result')
       .map((b) => String((b[RESULT] as Comp)?.call)),
   )
-  return all.filter((b) =>
-    (b[CALL] as Comp)?.source == ask.entity.eid && !answered.has(b.entity.eid)
-  )
+  return all.filter((b) => kindOf(b) == 'call' && !answered.has(b.entity.eid))
 }
 
 /** The status of a transcript, from its entries in any order. */

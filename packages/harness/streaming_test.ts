@@ -464,3 +464,41 @@ Deno.test('input admitted during an aborted turn is served once after interrupti
     await a.close()
   }
 })
+
+Deno.test('invalid provider history records a healable exception, not an operational interruption', async () => {
+  let { responses } = await import('@yaks/openai')
+  let h = open(':memory:')
+  let a = agent({
+    h,
+    streaming: true,
+    model: responses({
+      credential: () => ({ token: 'test', base: 'https://provider.invalid' }),
+      fetch: () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              error: {
+                type: 'invalid_request_error',
+                message: 'No tool output found for function call call_test',
+              },
+            }),
+            { status: 400 },
+          ),
+        ),
+    }),
+  })
+  try {
+    let id = await a.start('hello')
+    await a.idle(id)
+    let rows = await a.transcript(id)
+    assertEquals(statusOf(rows), 'failed')
+    assert(
+      rows.some((b) =>
+        b.exception &&
+        String((b.content as Comp)?.body).includes('No tool output found')
+      ),
+    )
+  } finally {
+    await a.close()
+  }
+})

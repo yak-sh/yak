@@ -343,3 +343,54 @@ Deno.test('provider completion allocates positions after concurrently admitted n
   assertEquals(all[1].entity.eid, 'during')
   assertEquals((all[2].ask as Comp).through, 'e1')
 })
+
+Deno.test('an unanswered older call fails without replay or provider dispatch', async () => {
+  let g = world()
+  let { model, asked } = scripted([calls(['old-call', 'hi'])])
+  let runs = 0
+  let deps = {
+    model,
+    tools: [{
+      ...echo,
+      run: () => {
+        runs++
+        return 'ok'
+      },
+    }],
+  }
+  await react(g, ids.s, deps)
+  await g.apply([
+    {
+      entity: { eid: 'new-ask' },
+      entry: { session: ids.s },
+      ask: { to: ids.m, through: 'e1' },
+    },
+    {
+      entity: { eid: 'new-input' },
+      entry: { session: ids.s },
+      content: { body: 'continue' },
+    },
+  ])
+  let step = await react(g, ids.s, deps)
+  assertEquals(step.status, 'failed')
+  assertEquals(step.added.some((b) => !!b.exception), true)
+  assertEquals(runs, 0)
+  assertEquals(asked.length, 1)
+  let orphan = (await transcript(g, ids.s)).find((b) => b.call)!
+  await g.apply([
+    {
+      entity: { eid: 'repaired-result' },
+      entry: { session: ids.s },
+      result: { call: orphan.entity.eid },
+      content: { body: 'Verified not executed; skipped superseded call.' },
+    },
+  ])
+  let recovery = scripted(
+    [{ id: 'recovered', model: 'fake-1', items: [] }],
+    false,
+  )
+  let resumed = await react(g, ids.s, { ...deps, model: recovery.model })
+  assertEquals(resumed.did, 'asked')
+  assertEquals(recovery.asked.length, 1)
+  assertEquals(runs, 0)
+})

@@ -238,7 +238,12 @@ let ask = (opts: Options) => {
         ...tokenUsage(out.response.usage),
       }
     } catch (error) {
-      if (!(error instanceof ResponseError)) throw error
+      // Invalid request history is a caller defect, not an operational refusal.
+      // Keep the transport exception (including provider details) healable.
+      if (
+        !(error instanceof ResponseError) ||
+        error.code == 'invalid_request_error'
+      ) throw error
       throw new ModelError(error.code ?? error.kind, error.message)
     }
   }
