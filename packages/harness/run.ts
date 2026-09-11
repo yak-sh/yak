@@ -1,3 +1,4 @@
+import { stepLock } from './step_lock.ts'
 import { streamingEnabled } from './streaming.ts'
 import { imageContext } from './artifact_tools.ts'
 import { configuredImages, type ImageOptions, readImage } from './images.ts'
@@ -209,6 +210,7 @@ export let agent = (opts: Opts = {}): Agent => {
     opts.each,
     (error, session) =>
       diagnostics().report(error, { phase: 'daemon', session }),
+    h.path == ':memory:' ? undefined : stepLock(h.path),
   )
 
   let names: Record<string, string> = {

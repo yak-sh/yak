@@ -51,6 +51,8 @@ export let daemon = (
   deps: Deps,
   each: (step: Step) => void = () => {},
   report: (err: unknown, session?: Eid) => void = (err) => console.error(err),
+  // Host-level exclusion across runtimes; an occupied step is not a crash.
+  acquire?: (session: Eid) => (() => void) | undefined,
 ): Daemon => {
   let stopping = false
   let stopped: Promise<void> | undefined
@@ -208,6 +210,10 @@ export let daemon = (
       if (stopping) {
         return { did: 'nothing', status: 'stopped', added: [] } as Step
       }
+      let release = acquire?.(session)
+      if (acquire && !release) {
+        return { did: 'nothing', status: 'running', added: [] } as Step
+      }
       try {
         let step = await react(g, session, deps)
         each(step)
@@ -234,6 +240,8 @@ export let daemon = (
       } catch (err) {
         report(err, session)
         return { did: 'nothing', status: 'failed', added: [] } as Step
+      } finally {
+        release?.()
       }
     })
     queued.set(session, step)
