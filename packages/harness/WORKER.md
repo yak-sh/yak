@@ -162,3 +162,45 @@ same fixture measured 786 ms for the cold selection, 194 ms warm median, 284 ms
 warm p95, and 142 ms maximum timer delay. Runs were taken on a shared host, not
 under controlled load. Both elapsed time and main-thread stalls should continue
 to be measured as the projection and transfer APIs change.
+
+## Startup reconciliation
+
+Startup previously woke every settled child to reconcile completion receipts.
+For forks, this read each inherited transcript before checking whether the
+receipt already existed. Finished pooled children could also enter scheduling
+again. A large parent shared by many forks therefore caused repeated reads and
+status evaluation ahead of the first sidebar response.
+
+Resume now queues receipt reconciliation directly, tracked by daemon shutdown,
+rather than another child execution. Reconciliation checks the child's latest
+local entry and existing receipt first. Only missing receipts require the full
+inherited transcript. A child that finishes during those reads uses the final
+snapshot for both receipt identity and content.
+
+An isolated benchmark is available:
+
+```sh
+HARNESS_DB=:memory: deno run -A packages/harness/startup_bench.ts 150 4000
+```
+
+It creates a temporary database with 150 sessions, a 4,000-entry parent, and
+settled forks with existing receipts. It never opens the configured database.
+Three cached-module runs on a shared host measured:
+
+| Stage                                                 | Before           | After      |
+| ----------------------------------------------------- | ---------------- | ---------- |
+| SQLite open                                           | 10–23 ms         | 15–16 ms   |
+| Worker initialization                                 | 271–295 ms       | 276–333 ms |
+| Resume command response                               | 33–37 ms         | 33–38 ms   |
+| First session summary, including queued recovery work | 12,204–12,468 ms | 287–309 ms |
+| Selected transcript replication/read                  | 257–385 ms       | 223–346 ms |
+
+A separate process importing the application with cached modules took 310 ms
+wall time (216 ms in dynamic imports). These results reproduce a roughly
+12-second recovery stall; they do not prove every live startup has that cause.
+The benchmark also reports mounted frontend paint after the initial read. That
+stage used 14–41 ms in another three-run sample. Initial full-transcript
+transfer and summary derivation are still required; this change is not
+pagination. First installation downloads, module compilation, missing-receipt
+delivery, and live provider recovery can have different costs. Timing results
+are not latency guarantees, and the fixture uses a fake provider only.

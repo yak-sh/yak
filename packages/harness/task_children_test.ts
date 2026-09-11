@@ -550,3 +550,53 @@ Deno.test('existing fork receipts do not read inherited transcript bodies on res
     await a.close()
   }
 })
+
+Deno.test('receipt fast-path refreshes its tail when a child finishes between reads', async () => {
+  let h = open(':memory:')
+  await h.g.apply([
+    { entity: { eid: 'p' }, session: {} },
+    {
+      entity: { eid: 'p-input' },
+      entry: { session: 'p' },
+      content: { body: 'parent' },
+    },
+    { entity: { eid: 'c' }, session: {}, spawned: { parent: 'p' } },
+    {
+      entity: { eid: 'request' },
+      entry: { session: 'c' },
+      content: { body: 'work' },
+    },
+    {
+      entity: { eid: 'attempt' },
+      entry: { session: 'c' },
+      ask: { through: 'request' },
+      attempt: { state: 'inflight' },
+    },
+  ])
+  let read = h.g.read.bind(h.g)
+  let finished = false
+  h.g.read = (async (query: string, ...rest: unknown[]) => {
+    let rows = await read(query, ...rest as [])
+    if (!finished && query.includes('.order=-entry.seq')) {
+      finished = true
+      await h.g.apply([
+        { entity: { eid: 'attempt' }, attempt: { state: 'completed' } },
+        {
+          entity: { eid: 'final' },
+          entry: { session: 'c' },
+          content: { body: 'final answer', source: 'attempt' },
+        },
+      ])
+    }
+    return rows
+  }) as typeof h.g.read
+  try {
+    await deliverChild(h.g, 'c')
+    let rows = await read('.entry.session=p')
+    assertEquals(rows.length, 2)
+    assertEquals(rows[1].entity.eid, 'delivery:c:final')
+    assert(textOf(rows[1]).includes('final answer'))
+  } finally {
+    h.close()
+  }
+})
