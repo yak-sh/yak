@@ -60,7 +60,7 @@ export let theme: Sheet = {
   Dim: { fg: everforest.grey, dim: true },
   Key: { fg: everforest.yellow },
   Accent: { fg: everforest.blue },
-  Code: { fg: everforest.blue, bg: everforest.surface },
+  Code: { fg: everforest.blue, bg: '#343434' },
   Quote: { fg: everforest.fg, bg: everforest.surface, dim: false },
   Good: { fg: everforest.green },
   Task: { fg: everforest.orange },

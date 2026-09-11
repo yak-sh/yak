@@ -333,9 +333,11 @@ width calculation just for tables.
 ### Code block backgrounds
 
 Semantic `pre` elements fill their available width with the `Code` theme style,
-including blank lines. Enclosing borders and indentation reduce that width.
-Inline `code` styles only its text. Source text and the enclosing layout's
-existing long-line wrapping or clipping behavior are unchanged.
+including blank lines. The default code background is neutral dark grey
+(`#343434`), without a blue tint; the foreground is unchanged. Enclosing borders
+and indentation reduce that width. Inline `code` styles only its text. Source
+text and the enclosing layout's existing long-line wrapping or clipping behavior
+are unchanged.
 
 ### Proportional terminal sidebar
 

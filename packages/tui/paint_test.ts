@@ -175,10 +175,10 @@ Deno.test('inline and fenced code use a subtle theme background and blue text', 
   ])
   let output = lines.map(ansi).join('\n')
   assert(
-    output.includes('\x1b[38;2;127;187;179;48;2;52;63;68ma < b\x1b[0m after'),
+    output.includes('\x1b[38;2;127;187;179;48;2;52;52;52ma < b\x1b[0m after'),
   )
-  assert(output.includes('\x1b[38;2;127;187;179;48;2;52;63;68m  first'))
-  assert(output.includes('\x1b[38;2;127;187;179;48;2;52;63;68msecond'))
+  assert(output.includes('\x1b[38;2;127;187;179;48;2;52;52;52m  first'))
+  assert(output.includes('\x1b[38;2;127;187;179;48;2;52;52;52msecond'))
   assert(!output.includes('\x1b[7m'))
   let custom = screenful(tree, 40, 4, {
     Code: { fg: '#112233', bg: '#223344' },
@@ -277,13 +277,13 @@ Deno.test('pre backgrounds fill allocated width including empty lines; inline co
     'three       ',
   ])
   for (let row of lines) {
-    assert(row.every((s) => s.style.bg == '#343f44'))
+    assert(row.every((s) => s.style.bg == '#343434'))
   }
   let inline =
     screenful(el('root', {}, el('div', {}, el('code', {}, 'x'), 'y')), 12, 1)
       .lines[0]
   assertEquals(inline.map((s) => s.text).join(''), 'xy')
-  assertEquals(inline[0].style.bg, '#343f44')
+  assertEquals(inline[0].style.bg, '#343434')
   assertEquals(inline[1].style.bg, undefined)
 })
 
