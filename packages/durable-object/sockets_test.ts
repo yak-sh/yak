@@ -57,7 +57,7 @@ Deno.test('a subscription is answered, and a commit pushes to the socket', () =>
   ctx.live.push(ws)
 
   live.message(ws, ask('p', '.kind=product'))
-  assertEquals(ws.sent, [{ id: 'p', bundles: [] }])
+  assertEquals(ws.sent, [{ id: 'p', bundles: [], transientReset: [] }])
 
   g.apply([{ entity: { eid: 'p1' }, product: { price: 3 } }])
   let last = ws.sent.at(-1)!
@@ -78,7 +78,11 @@ Deno.test('a woken object serves the socket it inherited', () => {
   // The socket, and what it asked for, are not.
   let [g, woken] = instance(storage, ctx)
   woken.wake()
-  assertEquals(ws.sent, [{ id: 'p', bundles: [] }], 'the set again, on waking')
+  assertEquals(
+    ws.sent,
+    [{ id: 'p', bundles: [], transientReset: [] }],
+    'the set again, on waking',
+  )
 
   g.apply([{ entity: { eid: 'p1' }, product: { price: 3 } }])
   assertEquals((ws.sent.at(-1)!.bundles as Bundle[])[0].entity.eid, 'p1')

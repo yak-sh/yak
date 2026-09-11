@@ -239,7 +239,7 @@ Deno.test('a subscription is answered, and a commit reaches the socket', async (
     ws,
     JSON.stringify({ subscribe: '.recipe!', id: 'r' }),
   )
-  assertEquals(ws.sent, [{ id: 'r', bundles: [] }])
+  assertEquals(ws.sent, [{ id: 'r', bundles: [], transientReset: [] }])
 
   await post(store, '/apply', [{
     entity: { eid: CAKE },
@@ -267,7 +267,7 @@ Deno.test('a subscription asking `*` answers what /query answers', async () => {
   let line = '.recipe!&*'
 
   store.webSocketMessage(ws, JSON.stringify({ subscribe: line, id: 'r' }))
-  assertEquals(ws.sent, [{ id: 'r', bundles: [] }])
+  assertEquals(ws.sent, [{ id: 'r', bundles: [], transientReset: [] }])
 
   await post(store, '/apply', [{
     entity: { eid: CAKE },

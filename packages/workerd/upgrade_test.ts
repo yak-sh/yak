@@ -40,7 +40,7 @@ Deno.test('/ws through this upgrade serves subscriptions', async () => {
     let socket = made[0][1]
 
     socket.emit('message', JSON.stringify({ subscribe: '.price<20', id: 'c' }))
-    assertEquals(socket.taken(), [{ id: 'c', bundles: [] }])
+    assertEquals(socket.taken(), [{ id: 'c', bundles: [], transientReset: [] }])
 
     await handler(req('/apply', {
       method: 'POST',

@@ -15,7 +15,20 @@ export type TransientFrame = {
   text?: string
 }
 type Value = { frame: TransientFrame; text: string }
-export type Transients = ReturnType<typeof create>
+export type Transients = {
+  project(bundles: Bundle[]): Bundle[]
+  receive(frame: TransientFrame): void
+  forget(eids: Eid[]): void
+  subscribe(fn: (frame: TransientFrame) => void): () => boolean
+  snapshots(): TransientFrame[]
+  begin(entity: Eid, component: string, property: string, id: string): Promise<{
+    expected(): string | null
+    append(text: string): void
+    checkpoint(): Promise<void>
+    commit(): Promise<void>
+    discard(): void
+  }>
+}
 const stores = new WeakMap<Graph, Transients>()
 
 /** One projection registry per graph. No storage transactions or effect hooks. */
@@ -27,7 +40,7 @@ export function transient(g: Graph): Transients {
   }
   return found
 }
-function create(g: Graph) {
+function create(g: Graph): Transients {
   const values = new Map<string, Value>()
   const ended = new Set<string>()
   const listeners = new Set<(f: TransientFrame) => void>()
@@ -119,7 +132,7 @@ function create(g: Graph) {
       let expected = token(text)
       const frame = { id, entity, component, property }
       receive({ ...frame, seq, op: 'begin', text })
-      return {
+      const writer = {
         expected: () => expected,
         append(text: string) {
           if (closed) throw new Error('Transient writer closed')
@@ -149,6 +162,7 @@ function create(g: Graph) {
           receive({ ...frame, seq: ++seq, op: 'end' })
         },
       }
+      return writer
     },
   }
 }
