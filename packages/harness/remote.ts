@@ -1,3 +1,4 @@
+import { streamingEnabled } from './streaming.ts'
 import { transient } from '@yaks/graph'
 import type { ImageOptions } from './images.ts'
 /** Opt-in worker frontend. UI state remains in the frontend's private graph. */
@@ -18,6 +19,7 @@ export let remote = async (
     cwd?: string
     images?: ImageOptions | false
     streaming?: boolean
+    stream?: boolean
     instructions?: string
     fake?: boolean | 'stuck' | { delayMs: number; deltas?: number }
   } = {},
@@ -77,8 +79,8 @@ export let remote = async (
   let init: { names: Record<string, string> }
   try {
     init = await request('init', [{
-      streaming: Deno.env.get('HARNESS_STREAM') == '1',
       ...options,
+      streaming: streamingEnabled(options),
     }]) as typeof init
   } catch (e) {
     link.close()

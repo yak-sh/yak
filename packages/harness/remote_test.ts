@@ -165,7 +165,9 @@ Deno.test('worker publishes a second input while a slow model is still pending',
       ),
     )
     assert(
-      !entries.some((b) => b.ask),
+      entries.some((b) =>
+        (b.attempt as { state?: string })?.state == 'inflight'
+      ),
       'send must not wait for provider completion',
     )
     await r.idle(id)
@@ -216,6 +218,12 @@ Deno.test('stuck model deadline is an expected bounded exit, not a crash', async
       await resumed.idle(id)
       assert(
         (await resumed.agent.transcript(id)).some((b) =>
+          (b.attempt as { state?: string })?.state == 'interrupted'
+        ),
+        'an ambiguously dispatched streaming request must not be replayed',
+      )
+      assert(
+        !(await resumed.agent.transcript(id)).some((b) =>
           (b.content as { body?: string })?.body == 'ok'
         ),
       )

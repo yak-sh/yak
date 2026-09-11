@@ -1,8 +1,16 @@
-# Streamed response pilot
+# Streamed responses
 
-Enable explicitly with `HARNESS_STREAM=1 deno task harness`, or pass
-`streaming: true` to `agent` / `remote`. The default remains unchanged while the
-transient projection and failure semantics are evaluated.
+Response streaming is enabled by default in both `agent` and the worker-backed
+`remote` frontend. Disable it with `HARNESS_STREAM=0 deno task harness`, or pass
+`streaming: false` (also accepted as `stream: false`) to `agent` / `remote`.
+Explicit programmatic configuration overrides the environment; `streaming` wins
+if both option names are supplied. `HARNESS_STREAM=1` remains supported.
+
+Models that return only a final reply still work; they simply have no partial
+text to display. Disabling streaming uses the older completed-response path: the
+ask is recorded after the model returns, and existing non-streaming retry
+behavior applies. Streaming attempts retain the interruption rules below.
+Terminal graphics are configured separately and are not enabled by this change.
 
 The worker receives each OpenAI public output-text delta, assigns the provider's
 item ID to one response entry, and publishes ordered graph text projections.

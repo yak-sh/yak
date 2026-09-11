@@ -354,7 +354,10 @@ Deno.test('send commits during a provider turn and unserved input reaches the ne
       ),
     )
     assertEquals(requests.length, 1)
-    assert(!committed.some((b) => b.ask), 'first provider has not returned')
+    assert(
+      committed.some((b) => (b.attempt as Comp)?.state == 'inflight'),
+      'first provider has not returned',
+    )
     release({
       id: 'r-first',
       model: 'fake',

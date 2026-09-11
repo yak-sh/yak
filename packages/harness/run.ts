@@ -1,3 +1,4 @@
+import { streamingEnabled } from './streaming.ts'
 import { imageContext } from './artifact_tools.ts'
 import { configuredImages, type ImageOptions, readImage } from './images.ts'
 import { outputView } from '@yaks/context'
@@ -97,9 +98,12 @@ export type Opts = ChildLimits & NotHarness & {
   images?: ImageOptions | false
   /** what the agent may call (default: the shell and the graph) */
   tools?: Tool[]
-  /** the system prompt every ask carries */
+  /** Stream responses by default; false overrides HARNESS_STREAM. */
   streaming?: boolean
+  /** Alias for streaming. If both are supplied, streaming takes precedence. */
+  stream?: boolean
   checkpointMs?: number
+  /** The system prompt every ask carries. */
   instructions?: string
   /** Maximum tool-result code points before model-facing handle projection. */
   outputLimit?: number
@@ -189,7 +193,7 @@ export let agent = (opts: Opts = {}): Agent => {
     {
       model,
       tools,
-      streaming: opts.streaming,
+      streaming: streamingEnabled(opts),
       checkpointMs: opts.checkpointMs,
       instructions: opts.instructions,
       contextItems: (window, entries) =>

@@ -527,4 +527,6 @@ images. These tools currently inspect signatures rather than fully decoding
 images; animated GIF, SVG, remote URL import, and video are unsupported. Unknown
 imported files receive `application/octet-stream`.
 
-For the opt-in response streaming experiment, see [STREAMING.md](STREAMING.md).
+Responses stream by default. Set `HARNESS_STREAM=0` or pass `streaming: false`
+to disable streaming. See [STREAMING.md](STREAMING.md) for lifecycle and
+limitations.
