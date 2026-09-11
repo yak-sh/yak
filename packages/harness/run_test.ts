@@ -339,7 +339,8 @@ Deno.test('send commits during a provider turn and unserved input reaches the ne
   model.mark = (reply) => ({ openai: { response_id: reply.id } })
   model.anchor = (b) =>
     (b.openai as Comp | undefined)?.response_id as string | undefined
-  let a = started(model)
+  // The inflight attempt assertion requires streaming, regardless of HARNESS_STREAM.
+  let a = agent({ h: open(':memory:'), model, tools: [], streaming: true })
   let s = await a.start('first')
   try {
     await called
