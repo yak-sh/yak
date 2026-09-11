@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "The wire tier for a client @yaks/graph: committed batches forwarded to a server, pushed batches applied back, optimistic writes reconciled or reverted.",
+  "description": "Synchronizes a client graph with a server, applies live query updates, and reconciles optimistic writes or reverts them when refused.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

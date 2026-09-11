@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "A yaks storage adapter over a Cloudflare Durable Object's embedded SQLite, plus the socket plumbing behind @yaks/api's subscriptions.",
+  "description": "Provides graph storage on a Cloudflare Durable Object's embedded SQLite and connects hibernatable WebSockets to query subscriptions.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "@db/sqlite": "jsr:@db/sqlite@0.13.0",

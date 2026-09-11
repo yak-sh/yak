@@ -6,7 +6,7 @@
     "./bin": "./bin.ts"
   },
   "license": "Apache-2.0",
-  "description": "A self-contained agent harness: one SQLite file, the session daemon, the shell and graph tools, and a command that drives them.",
+  "description": "Runs an agent from one SQLite file, combining the session daemon, shell and graph tools, and a command-line interface without a server.",
   "imports": {
     "@std/path": "jsr:@std/path@^1.0.0",
     "@std/assert": "jsr:@std/assert@^1.0.0",

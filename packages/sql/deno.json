@@ -1,7 +1,7 @@
 {
   "name": "@yaks/sql",
   "version": "0.1.0",
-  "description": "Compile a @yaks/query AST against a @yaks/vocab schema into a SQL string and bound params, through a dialect-agnostic relational IR.",
+  "description": "Compiles a query AST and component vocabulary into SQL with bound parameters through a dialect-independent relational representation.",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "imports": {

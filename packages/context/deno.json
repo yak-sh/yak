@@ -6,6 +6,7 @@
     "./host": "./host.ts"
   },
   "license": "Apache-2.0",
+  "description": "Constructs instruction snapshots and prompt entries for graph transcripts, leaving admission, storage, and execution to the caller.",
   "publish": {
     "exclude": [
       "**/*_test.ts"

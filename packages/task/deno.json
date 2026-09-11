@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "A to-do list as a component domain for a yaks graph: tasks, projects, boards as saved queries, and a status read off the marks a task wears.",
+  "description": "Defines tasks, projects, dependencies, and saved-query boards as graph components, with task status derived from completion and cancellation marks.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

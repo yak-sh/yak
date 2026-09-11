@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "The values an entity answers to, as entities: the key{of, value} carrier for a yaks graph, tagged by your own kinds, with each key named by what it says.",
+  "description": "Represents an entity's identifying values as separate graph entities, with ids derived from each value and its kind to enforce uniqueness.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

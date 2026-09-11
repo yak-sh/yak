@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "A generic, environment-portable HTTP and WebSocket handler for a yaks graph: /apply, /query, /ws, and query subscriptions.",
+  "description": "Serves graph writes, queries, and live query subscriptions through an HTTP and WebSocket request handler.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "@db/sqlite": "jsr:@db/sqlite@0.13.0"

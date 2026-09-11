@@ -3,6 +3,6 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "Content-addressed component-table sets, cached presence matching and transitions, and graph archetype assignment.",
+  "description": "Identifies component-table sets by content hash, caches presence matches and transitions, and maintains each graph entity's archetype.",
   "publish": { "exclude": ["**/*_test.ts", "**/*_bench.ts", "browser.json"] }
 }

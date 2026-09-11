@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "The Preact host for portable renderers, with a subscribed Entity component over an injected bundle store.",
+  "description": "Renders registry-selected views with Preact and binds them to an entity store with subscriptions scoped to mounted components.",
   "imports": {
     "preact": "npm:preact@^10.29.1",
     "preact/hooks": "npm:preact@^10.29.1/hooks",

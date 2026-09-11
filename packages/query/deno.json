@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
+  "description": "Parses query strings into a serializable AST and provides builders for the same AST without interpreting a component schema.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

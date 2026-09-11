@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "The Cloudflare Workers adapter that serves @yaks/api from a Worker: the socket upgrade, the fetch entrypoint, and the door.",
+  "description": "Serves the graph API from Cloudflare Workers with WebSocket upgrades, request authentication, and forwarding to Durable Objects.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

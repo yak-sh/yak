@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "The post-commit effect registry for a yaks graph — created/changed/removed handlers, isolated runs, and an optional durable ledger. The mechanism, not any concrete effect.",
+  "description": "Runs isolated handlers for component creation, changes, and removal after a graph transaction commits, with an optional durable ledger.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

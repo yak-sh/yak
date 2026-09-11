@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "A session is a transcript: its entries, the daemon that reacts to the newest one, a lock on any entity, and the record of two sessions wanting one thing.",
+  "description": "Represents sessions as graph transcripts, derives status from their entries, manages claims, and runs a daemon that responds to new entries.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

@@ -6,7 +6,7 @@
     "./stdio": "./stdio.ts"
   },
   "license": "Apache-2.0",
-  "description": "An MCP server for a yaks graph: bundles in and out over five generic tools, served as a portable fetch handler or over stdio.",
+  "description": "Exposes a graph through generic MCP tools for writes, queries, entity inspection, schema inspection, and optional search.",
   "imports": {
     "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.29.0",
     "@std/assert": "jsr:@std/assert@^1.0.0",

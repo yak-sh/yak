@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "Markdown and plain-text hosts for portable renderer trees, with a strict text and href control-byte boundary.",
+  "description": "Serializes portable renderer trees as Markdown or plain text without a DOM, removing control bytes from text and link destinations.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "linkedom": "npm:linkedom@^0.18.12",

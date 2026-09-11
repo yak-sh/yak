@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "OpenAI's Responses API as a @yaks/model Model: one streamed exchange over fetch, a bearer from the environment or the Codex sign-in.",
+  "description": "Implements the model interface over OpenAI's streaming Responses API using fetch, with API-key or Codex sign-in authentication.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

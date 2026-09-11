@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "Letters as entities: the mail component domain for a yaks graph — a letter, its recipient, its outcome, the sending effect, and the arrival of one.",
+  "description": "Represents letters and their delivery outcomes as graph components, sends them through an injected sender, and converts arrivals to bundles.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

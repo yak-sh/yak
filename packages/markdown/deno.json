@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
+  "description": "Parses GitHub Flavored Markdown into structural renderer nodes rather than HTML strings or terminal escape sequences.",
   "imports": {
     "marked": "npm:marked@18.0.6",
     "preact": "npm:preact@^10.29.1",

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "Write attribution and history for a yaks graph: every committed batch recorded as batch/delta components, with history, undo, and a cursor feed.",
+  "description": "Records graph changes and their authors within each transaction, providing entity history, batch undo, and a cursor-based delta feed.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "@db/sqlite": "jsr:@db/sqlite@0.13.0"

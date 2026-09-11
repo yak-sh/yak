@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "A yaks storage adapter over Cloudflare D1: queries answered as bundles, and a change written as one atomic batch.",
+  "description": "Adapts Cloudflare D1 to graph storage with asynchronous queries and writes submitted as atomic statement batches.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "@db/sqlite": "jsr:@db/sqlite@0.13.0",

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "Server-side HTML from portable registry views through the Preact host.",
+  "description": "Serializes registry-selected views to server-side HTML through Preact without a DOM.",
   "imports": {
     "preact-render-to-string": "npm:preact-render-to-string@6.7.0",
     "preact": "npm:preact@^10.29.1",

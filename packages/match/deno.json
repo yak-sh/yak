@@ -1,7 +1,7 @@
 {
   "name": "@yaks/match",
   "version": "0.1.0",
-  "description": "Evaluate a @yaks/query AST as a predicate over entity bundles in memory — the grammar @yaks/sql compiles, answered with no database.",
+  "description": "Evaluates query ASTs against entity bundles in memory, without SQL or a database.",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "imports": {

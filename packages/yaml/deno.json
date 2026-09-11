@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "The warm path for declaration files: YAML (which reads JSON too) as a value, and a markdown file's frontmatter as a bundle.",
+  "description": "Parses YAML and JSON declarations and extracts Markdown frontmatter as graph bundles.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "@std/yaml": "jsr:@std/yaml@^1.2.0"

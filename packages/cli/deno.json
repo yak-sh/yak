@@ -6,7 +6,7 @@
     "./yak": "./yak.ts"
   },
   "license": "Apache-2.0",
-  "description": "The yak command: an MCP server's tool list read at run time, every tool a subcommand, and a plugin seam for the verbs a box adds.",
+  "description": "Builds the yak command's subcommands from an MCP server's tool schemas at runtime, with plugins for additional commands.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

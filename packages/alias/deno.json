@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "A name for an entity, worth as much as its id: the alias component domain for a yaks graph — write the same name twice and it lands on the same entity.",
+  "description": "Assigns persistent, unique names to graph entities and resolves those names wherever an entity id is accepted.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

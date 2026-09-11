@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "A Preact terminal host: a fake DOM, a swappable backend, a diffing ANSI painter, and the scroll, input and frame widgets over them.",
+  "description": "Renders Preact trees in a terminal through a replaceable backend, with a diffing ANSI painter and scrolling, input, and layout widgets.",
   "imports": {
     "preact": "npm:preact@^10.29.1",
     "preact/hooks": "npm:preact@^10.29.1/hooks",

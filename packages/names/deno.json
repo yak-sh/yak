@@ -1,7 +1,7 @@
 {
   "name": "@yaks/names",
   "version": "0.1.0",
-  "description": "Resolve an entity by name: the components a vocabulary marks by_name, the column their name lives in, and the match for a name someone typed.",
+  "description": "Resolves entity names from the columns a component vocabulary marks for name lookup.",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "imports": {

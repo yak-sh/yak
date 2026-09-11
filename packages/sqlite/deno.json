@@ -6,7 +6,7 @@
     "./db": "./db.ts"
   },
   "license": "Apache-2.0",
-  "description": "A SQLite storage adapter for @yaks/graph: a vocabulary's schema, queries answered as bundles, and transactional writes.",
+  "description": "Builds a SQLite schema from a component vocabulary, reads query results as entity bundles, and applies transactional patches.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "@db/sqlite": "jsr:@db/sqlite@0.13.0"

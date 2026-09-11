@@ -1,7 +1,7 @@
 {
   "name": "@yaks/id",
   "version": "0.1.0",
-  "description": "Entity ids for a yaks graph: mint an eid, and turn a component's declared prefix plus a number into a human id (B-7) and back.",
+  "description": "Mints entity UUIDs and formats and parses human-readable ids using vocabulary-declared prefixes and storage-assigned numbers.",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "imports": {

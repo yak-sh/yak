@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "The spatial UI as data: canvases, cards, pins, cameras and cursors as graph components, plus the framework-free geometry a renderer needs.",
+  "description": "Represents canvases, cards, viewports, and split layouts as graph components and supplies geometry functions for rendering them.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

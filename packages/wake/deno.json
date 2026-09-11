@@ -7,7 +7,7 @@
     "./deno": "./deno.ts"
   },
   "license": "Apache-2.0",
-  "description": "Coming back to something later, as data: a wake component for a yaks graph, the wakes due at an instant, and the recurrence rule that moves one on.",
+  "description": "Stores one-shot and recurring schedules as graph components, marking due wakes as fired and advancing their next scheduled times.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "croner": "jsr:@hexagon/croner@^10.0.1"

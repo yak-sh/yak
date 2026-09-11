@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "Host-independent renderer selection by query, role-rightmost views, and actions contributed per component.",
+  "description": "Selects views, editors, and actions for entity bundles through a query-matched registry independent of the rendering host.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },
