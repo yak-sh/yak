@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Comp } from '@yaks/graph'
-import { taskEntry } from '@yaks/session'
+import { taskEntry, transcript } from '@yaks/session'
 import { agent } from './run.ts'
 import { open } from './store.ts'
 
@@ -239,6 +239,55 @@ Deno.test('taskEntry records latest inputs beyond mutable output without replay 
     }])
     assertEquals(await transcript(h.g, result.child), before)
     assertEquals(await transcript(h.g, result.child), before)
+  } finally {
+    h.close()
+  }
+})
+
+Deno.test('taskEntry inherits completed output and tool results with recent inputs', async () => {
+  let h = open(':memory:')
+  try {
+    await h.g.apply([
+      { entity: { eid: 'p' }, session: {} },
+      {
+        entity: { eid: 'input' },
+        entry: { session: 'p' },
+        content: { body: 'request' },
+      },
+      {
+        entity: { eid: 'ask' },
+        entry: { session: 'p' },
+        ask: { through: 'input' },
+        attempt: { state: 'completed' },
+      },
+      {
+        entity: { eid: 'output' },
+        entry: { session: 'p' },
+        content: { body: 'full answer', source: 'ask' },
+      },
+      {
+        entity: { eid: 'call' },
+        entry: { session: 'p' },
+        call: { source: 'ask', args: '{}' },
+      },
+      {
+        entity: { eid: 'result' },
+        entry: { session: 'p' },
+        result: { call: 'call' },
+        content: { body: 'full tool result' },
+      },
+      {
+        entity: { eid: 'recent' },
+        entry: { session: 'p' },
+        content: { body: 'latest input' },
+      },
+    ])
+    let parent = await transcript(h.g, 'p')
+    let child = await taskEntry(h.g, 'p', 'Follow up')
+    assertEquals(
+      (await transcript(h.g, child.child)).slice(0, parent.length),
+      parent,
+    )
   } finally {
     h.close()
   }

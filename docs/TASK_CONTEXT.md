@@ -26,5 +26,6 @@ submitted task.
 
 This is an intentionally bounded snapshot, not a complete copy of ongoing tool
 execution: a task requiring results of unfinished parent tools must receive
-those results later or be submitted after completion. Midstream snapshot
-exclusion needs parent approval before landing as the default policy.
+those results later or be submitted after completion. This default policy is
+user-approved: include full outputs only, omit incomplete streamed outputs, and
+retain recent inputs.
