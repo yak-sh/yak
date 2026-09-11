@@ -1,13 +1,13 @@
 {
   "task": "T-37383",
   "snapshot_sha256": "893826a82ba5316e6780cc6c840b63dc80e16afd02ad159e43a33d445e39bfbe",
-  "before_commit": "c856f55f",
-  "after_commit": "35bd1515",
+  "before_commit": "c165dab4",
+  "after_commit": "9b0a1d6b",
   "notes": [
     "Both servers use separate fresh copies of the same snapshot, PROBE=1, sync/embeddings disabled, isolated HOME/TMPDIR and shared explicit DENO_DIR.",
     "1440x1000, fresh Chrome profiles, root canvas, same six targets; inbound WebSocket UTF-8 payload bytes, not HTTP or compressed network bytes.",
     "Driver waits for wire quiet AND the browser subscription apply queue; an earlier under-load wire-only measurement was discarded.",
-    "Baseline and optimized scenarios completed minutes apart; fresh browser identity and clock-sensitive maintenance can vary counts.",
+    "Both scenarios ran concurrently; fresh browser identity and clock-sensitive maintenance can vary counts.",
     "No new lower membership cap; policy fields projected and irrelevant/duplicate arms screened server-side. The ~0.48 MB historical target is not claimed."
   ],
   "before": {
@@ -21,15 +21,15 @@
       "03f45fb2-1168-40b0-8a21-68c8cc510901"
     ],
     "cold": {
-      "bytes": 3751508,
-      "distinctIDs": 2227,
+      "bytes": 3922704,
+      "distinctIDs": 2673,
       "subs": 138,
       "unsubs": 10,
-      "received": 190,
+      "received": 191,
       "cards": 11,
       "peeks": 0,
-      "cache": 2478,
-      "queries": 100,
+      "cache": 2924,
+      "queries": 99,
       "transports": 128
     },
     "six": {
@@ -40,8 +40,8 @@
       "received": 50,
       "cards": 11,
       "peeks": 0,
-      "cache": 2841,
-      "queries": 100,
+      "cache": 3287,
+      "queries": 99,
       "transports": 128,
       "opens": [
         {
@@ -69,11 +69,11 @@
           "text": 1098
         },
         {
-          "bytes": 10699,
+          "bytes": 10709,
           "distinctIDs": 6,
           "subs": 8,
           "unsubs": 2,
-          "received": 8,
+          "received": 9,
           "body": {
             "length": 3918,
             "sha256": "b414018d249c77ddcfb0aa2bb566d0b7b3a1eaf02c612402169f628c02a2726a"
@@ -190,12 +190,12 @@
       "received": 6,
       "cards": 11,
       "peeks": 1,
-      "cache": 2841,
-      "queries": 104,
+      "cache": 3287,
+      "queries": 103,
       "transports": 133
     },
     "errors": [],
-    "mail_deliver_answer_bytes_all_stages": 3166387,
+    "mail_deliver_answer_bytes_all_stages": 3166007,
     "addressed_errors": []
   },
   "after": {
@@ -209,15 +209,15 @@
       "03f45fb2-1168-40b0-8a21-68c8cc510901"
     ],
     "cold": {
-      "bytes": 622613,
-      "distinctIDs": 549,
+      "bytes": 871940,
+      "distinctIDs": 993,
       "subs": 138,
       "unsubs": 10,
-      "received": 139,
+      "received": 192,
       "cards": 11,
       "peeks": 0,
-      "cache": 582,
-      "queries": 100,
+      "cache": 1026,
+      "queries": 99,
       "transports": 128
     },
     "six": {
@@ -228,8 +228,8 @@
       "received": 50,
       "cards": 11,
       "peeks": 0,
-      "cache": 947,
-      "queries": 100,
+      "cache": 1391,
+      "queries": 99,
       "transports": 128,
       "opens": [
         {
@@ -378,12 +378,41 @@
       "received": 6,
       "cards": 11,
       "peeks": 1,
-      "cache": 947,
-      "queries": 104,
+      "cache": 1391,
+      "queries": 103,
       "transports": 133
     },
     "errors": [],
-    "mail_deliver_answer_bytes_all_stages": 124190,
+    "mail_deliver_answer_bytes_all_stages": 123810,
     "addressed_errors": []
+  },
+  "previous_base": {
+    "before_commit": "c856f55f",
+    "after_commit": "35bd1515",
+    "before_cold": {
+      "bytes": 3751508,
+      "distinctIDs": 2227,
+      "subs": 138,
+      "unsubs": 10,
+      "received": 190,
+      "cards": 11,
+      "peeks": 0,
+      "cache": 2478,
+      "queries": 100,
+      "transports": 128
+    },
+    "after_cold": {
+      "bytes": 622613,
+      "distinctIDs": 549,
+      "subs": 138,
+      "unsubs": 10,
+      "received": 139,
+      "cards": 11,
+      "peeks": 0,
+      "cache": 582,
+      "queries": 100,
+      "transports": 128
+    },
+    "note": "Passed before rebase onto archetype boot changes; final before/after below include those changes on both sides."
   }
 }

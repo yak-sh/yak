@@ -185,34 +185,35 @@ now waits for browser subscription readiness as well as addressed wire replies
 and network quiet. Under host load, wire quiet alone captured a partially
 applied boot; those failed reports were discarded.
 
-- Before: `c856f55f` (authoritative package-cache browser, without this task).
-- After: `35bd1515` (this task on main through `cf5fced5`).
+- Before: `c165dab4` (authoritative package-cache browser plus archetype boot,
+  without this task).
+- After: `9b0a1d6b` (this task rebased onto `c165dab4`).
 - Snapshot SHA-256:
   `893826a82ba5316e6780cc6c840b63dc80e16afd02ad159e43a33d445e39bfbe`.
 - Fresh scratch DB copies on ports 35925/35927, `PROBE=1`, isolated HOME/TMPDIR,
   shared explicit DENO_DIR, sync/embeddings disabled. Fresh Chrome profiles,
-  1440×1000 root canvas with 11 cards and the same six targets. Runs completed
-  minutes apart; identity and clock-sensitive maintenance can vary counts.
+  1440×1000 root canvas with 11 cards and the same six targets. Runs proceeded
+  concurrently; identity and clock-sensitive maintenance can vary counts.
 
 | Scenario           | Before bytes / IDs | After bytes / IDs | Before sub/unsub sends | After sub/unsub sends |
 | ------------------ | -----------------: | ----------------: | ---------------------: | --------------------: |
-| Cold canvas        |  3,751,508 / 2,227 |     622,613 / 549 |               138 / 10 |              138 / 10 |
+| Cold canvas        |  3,922,704 / 2,673 |     871,940 / 993 |               138 / 10 |              138 / 10 |
 | Six opens + closes |      169,860 / 369 |     169,860 / 369 |                49 / 49 |               49 / 49 |
 | Reopen first       |        22,598 / 56 |       22,598 / 56 |                  6 / 1 |                 6 / 1 |
 
-Cold traffic falls **83.4%**, to **0.62 MB**, not the historical T-37034
+Cold traffic falls **77.8%**, to **0.87 MB**, not the historical T-37034
 **479,778 B / 297 IDs** target. Across all stages, addressed mail/deliver answer
-payloads fall from **3,166,387 B to 124,190 B**. Subscription count does not
+payloads fall from **3,166,007 B to 123,810 B**. Subscription count does not
 fall: this is chiefly narrower selection and projection, not fewer inbox readers
 or a return to incomplete-cache answers.
 
 Both runs have identical six-card body lengths/SHA-256s, no browser exceptions
 or addressed errors, and unchanged query/transport counts after all six closes
-(100/128). Reopening retains visible content while all six reads are loading;
-all become ready after paused delivery resumes. The reopen still transfers
-22,598 B: this change does not promise delta-only freshness. Runtime evidence
-covers the root canvas/card scenario; live inbox policy changes are covered by
-the SQLite integration tests, not asserted from this static CDP snapshot.
+(99/128). Reopening retains visible content while all six reads are loading; all
+become ready after paused delivery resumes. The reopen still transfers 22,598 B:
+this change does not promise delta-only freshness. Runtime evidence covers the
+root canvas/card scenario; live inbox policy changes are covered by the SQLite
+integration tests, not asserted from this static CDP snapshot.
 
 Required gates are `deno task check` and `DB_PATH=:memory: deno task test`; the
 T-37383 done comment records the landed SHA and final gate result.
