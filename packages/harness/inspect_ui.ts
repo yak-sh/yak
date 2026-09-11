@@ -10,7 +10,11 @@ import type { Frontend } from './frontend.ts'
 import type { UIAgent } from './panels.ts'
 import type { SearchCursor, SourceMatch } from './inspection.ts'
 
-export const inspector = (ui: Frontend, agent: UIAgent) => {
+export const inspector = (
+  ui: Frontend,
+  agent: UIAgent,
+  revealEntry?: (entity: string) => void,
+) => {
   const state = () => ui.client.ent('inspection')!.inspection as Comp
   const session = () =>
     String((ui.client.ent('view')!.frontend as Comp).selected ?? '')
@@ -27,9 +31,12 @@ export const inspector = (ui: Frontend, agent: UIAgent) => {
       viewport: { selected: match.entity },
     }])
     ui.keys({ focus: 'transcript' })
+    revealEntry?.(match.entity)
     set({
       entity: match.entity,
-      message: 'Match at source character ' + match.offset,
+      message: 'Match ' + (Number(state().index) + 1) +
+        ' at source character ' + match.offset + ': ' +
+        match.text.replaceAll('\n', ' ↵ '),
     })
   }
   const find = async (fresh: boolean) => {
