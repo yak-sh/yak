@@ -157,16 +157,7 @@ export const inspector = (
       return true
     }
     if (text == '/' && session()) {
-      set({
-        mode: 'query',
-        session: session(),
-        query: '',
-        matches: '[]',
-        cursor: null,
-        index: -1,
-        generation: Number(s.generation) + 1,
-        message: '',
-      })
+      set({ mode: 'query', session: session(), query: '', message: '' })
       return true
     }
     if ((text == 'n' || text == 'N') && s.query) {
