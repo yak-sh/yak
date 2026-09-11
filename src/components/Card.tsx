@@ -19,7 +19,6 @@ import { cardMenuAt } from './nav.tsx'
 import { overShelf, shelve } from './shelf.ts'
 import { useEntity } from './subscriptions.ts'
 import { useInbox } from './useInbox.ts'
-import { isUnread } from '../client.ts'
 
 // Each tab view wears an icon; the name moves into an anchored tooltip.
 // Exported: the fullscreen Screen bar (App.tsx) draws the same tabs.
@@ -61,7 +60,7 @@ export let TabFace = ({ view, eid }: { view: string; eid: string }) => {
 }
 
 let InboxBadge = ({ eid }: { eid: string }) => {
-  let n = useInbox(eid).filter(isUnread).length
+  let n = useInbox(eid, true).length
   return n > 0 ? <Badge>{n > 99 ? '99+' : n}</Badge> : null
 }
 

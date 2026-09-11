@@ -3,9 +3,10 @@
 // policy decision, so adding transport does not create a second attention
 // policy. The hook owns every actor-keyed subscription for the view lifetime.
 import { useQueryEids } from './useQuery.ts'
-import { inboxItem, readerAt, type Row, uniq } from '../client.ts'
+import { inboxItem, isUnread, readerAt, type Row, uniq } from '../client.ts'
 import { inbox as seededInbox, row } from '../live.ts'
 import { kindOf } from '../types.ts'
+import { inboxQueries } from '../inbox_queries.ts'
 
 let rows = (eids: string[]): Row[] =>
   eids.flatMap((eid) => {
@@ -20,34 +21,18 @@ let rows = (eids: string[]): Row[] =>
       : []
   })
 
-let line = (
-  prop: string,
-  values: (string | undefined)[],
-  extra = '',
-) => {
-  let got = [...new Set(values.filter((v): v is string => !!v))]
-  return got.length ? `.${prop}=${got.join(',')}&.archived=${extra}` : ''
-}
-
-export let useInbox = (actor: string): Row[] => {
+export let useInbox = (actor: string, unreadOnly = false): Row[] => {
   // Tests and host integrations may plant an inbox without a socket.
   let seeded = seededInbox(actor)
   let subs = rows(useQueryEids(`.subscription.actor=${actor}`))
   let who = readerAt([...rows([actor]), ...subs], actor)
-  let watched = [...(who.watching ?? [])]
-  let targets = [actor, ...watched]
-  let comments = useQueryEids(line('comment.target', targets))
-  let notices = useQueryEids(line('notice.target', targets))
-  let knocks = useQueryEids(line('deliver.to', [actor]))
-  let watchedKnocks = useQueryEids(line('knock.target', watched))
-  // Screens belong in each subscription, before subserve's bounded window:
-  // an archive or outbound letter must not spend one of the inbox's slots.
-  let mailTargets = useQueryEids(
-    line('mail.target', targets, '&.mail.message_id!'),
-  )
-  let mailAddresses = useQueryEids(
-    line('mail.to_addr', [...(who.addrs ?? [])], '&.mail.message_id!'),
-  )
+  let queries = inboxQueries(who, unreadOnly)
+  let comments = useQueryEids(queries[0])
+  let notices = useQueryEids(queries[1])
+  let knocks = useQueryEids(queries[2])
+  let watchedKnocks = useQueryEids(queries[3])
+  let mailTargets = useQueryEids(queries[4])
+  let mailAddresses = useQueryEids(queries[5])
   let found = rows([
     ...comments,
     ...notices,
@@ -56,5 +41,6 @@ export let useInbox = (actor: string): Row[] => {
     ...mailTargets,
     ...mailAddresses,
   ])
-  return seeded.length ? seeded : uniq(found).filter(inboxItem(who))
+  let items = seeded.length ? seeded : uniq(found).filter(inboxItem(who))
+  return unreadOnly ? items.filter(isUnread) : items
 }

@@ -6,7 +6,6 @@ import { useQueryResult } from '../useQuery.ts'
 import { useInbox } from '../useInbox.ts'
 import { SubscriptionFailure } from '../SubscriptionFailure.tsx'
 import type { QueryResult } from '../useQuery.ts'
-import { isUnread } from '../../client.ts'
 
 // The Project Cockpit (D-14587): a project's facets in a fixed grid —
 // Boards · Inbox · Roles · Sessions · Lately — the same vocabulary in the
@@ -123,7 +122,7 @@ export let Dashboard = ({ e }: { e: Ent }) => {
   let tasks = useQueryResult(
     `.filed.project=${e.eid}&.order=hot&.limit=${CAP}`,
   )
-  let unread = useInbox(e.eid).filter(isUnread).length
+  let unread = useInbox(e.eid, true).length
   return (
     <Frame>
       <Facet name='boards' ids={boards.eids} reads={[boards]} />
