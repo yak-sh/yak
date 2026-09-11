@@ -2,5 +2,20 @@
   "version": 1,
   "metric": "wall-seconds / mean-concurrent-8M-LCG-seconds",
   "tolerance": 0.25,
-  "suites": {}
+  "suites": {
+    "check": {
+      "baseline": {
+        "ratio": 723.5886076641813,
+        "controlFloorSeconds": 0.05611964133333347,
+        "seconds": 40.607533135000004
+      }
+    },
+    "test": {
+      "baseline": {
+        "ratio": 1203.3240776229982,
+        "controlFloorSeconds": 0.054619091761904805,
+        "seconds": 65.724468215
+      }
+    }
+  }
 }
