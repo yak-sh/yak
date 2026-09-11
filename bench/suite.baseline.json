@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "metric": "wall-seconds / mean-concurrent-8M-LCG-seconds",
+  "tolerance": 0.25,
+  "suites": {}
+}

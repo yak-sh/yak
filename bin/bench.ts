@@ -216,7 +216,14 @@ export async function main(mode = 'run') {
     : undefined
   if (base) validateNames(base.ns)
   let current = await measure()
-  write(RESULTS, current)
+  // Suite wall clocks share the results artifact, not this bench's metric.
+  let suiteTimings: unknown
+  try {
+    suiteTimings = JSON.parse(Deno.readTextFileSync(RESULTS)).suiteTimings
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) throw error
+  }
+  write(RESULTS, { ...current, suiteTimings })
   for (let [name, ns] of Object.entries(current.ns)) {
     console.log(
       `${name.padEnd(30)} ${ns.toFixed(0).padStart(12)} ns/op  ${

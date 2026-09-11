@@ -1,19 +1,6 @@
 {
   "tasks": {
-    "check": {
-      "dependencies": [
-        "check:fmt",
-        "check:lint",
-        "check:bytes",
-        "check:types",
-        "check:publish",
-        "check:browser",
-        "check:workers",
-        "check:codegen",
-        "check:content",
-        "check:packages"
-      ]
-    },
+    "check": "deno run -A bin/suite-time.ts check deno task check:run",
     "check:fmt": "deno fmt --check",
     "check:lint": "deno lint",
     "check:bytes": "deno run --allow-read --allow-run=git bin/check-bytes.ts",
@@ -114,7 +101,7 @@
     "codegen": "deno run --allow-read --allow-write --allow-run=deno src/vocab/gen.ts",
     "content": "deno run --allow-read --allow-write --allow-run=deno workers/yak/gen.ts",
     "test:packages": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno test --parallel -A packages/",
-    "test:workerd": "TASKS_SLOW=1 deno test -A --unstable-net --unstable-worker-options workers/yak/ workers/yak-tail/",
+    "test:workerd": "deno run -A bin/suite-time.ts test:workerd deno task test:workerd:run",
     "test:workers": "deno test -A workers/yak/ workers/yak-tail/",
     "gate": "deno task check && deno task test && deno task bench:gate && deno task bench:gate:web && deno run -A src/cli.ts sync --check",
     "dev": "sh -c 'while :; do deno run -A --unstable-net --unstable-worker-options src/dev.ts && break; [ $? -eq 42 ] || break; done'",
@@ -136,7 +123,7 @@
     "mcp": "deno run -A --unstable-worker-options src/mcp.ts",
     "seed": "deno run -A src/store/sqlite.ts",
     "icons": "deno run -A bin/gen-icons.ts",
-    "test": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno run -A bin/test.ts",
+    "test": "deno run -A bin/suite-time.ts test deno task test:run",
     "test:all": "TASKS_SLOW=1 DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno run -A bin/test.ts",
     "test:budget": "deno run -A bin/test-budget.ts",
     "bench": "bash bin/bench.sh",
@@ -146,7 +133,23 @@
     "bench:accept:web": "BENCH_ACCEPT=1 deno run -A --unstable-net --unstable-worker-options bin/webperf-gate.ts",
     "bench:check": "bash bin/bench.sh check",
     "bench:ratchet": "bash bin/bench.sh ratchet",
-    "bench:hotpaths": "deno bench -A src"
+    "bench:hotpaths": "deno bench -A src",
+    "check:run": {
+      "dependencies": [
+        "check:fmt",
+        "check:lint",
+        "check:bytes",
+        "check:types",
+        "check:publish",
+        "check:browser",
+        "check:workers",
+        "check:codegen",
+        "check:content",
+        "check:packages"
+      ]
+    },
+    "test:run": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno run -A bin/test.ts",
+    "test:workerd:run": "TASKS_SLOW=1 deno test -A --unstable-net --unstable-worker-options workers/yak/ workers/yak-tail/"
   },
   "workspace": [
     "./workers/yak",
