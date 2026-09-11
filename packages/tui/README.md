@@ -306,17 +306,20 @@ clearing editable text. This API does not modify a textarea or VISUAL selection.
 Semantic `table`, `thead`, `tbody`, `tfoot`, `tr`, `th`, and `td` elements use
 measured columns rather than text separated with pipes. Header cells are bold;
 `Table_Header` and `Table_Border` theme tokens control their appearance. Borders
-are dim by default. Cells retain text styles and links, wrap words and long
-runs, and preserve explicit line breaks. Use `align="left"`, `"center"`, or
-`"right"` on cells; a CSS `text-align` declaration is also recognized. Shared
-Markdown rendering supplies the alignment from its column markers.
+are dim by default, with a horizontal divider between every logical row. Cells
+retain text styles and links, wrap words and long runs, and preserve explicit
+line breaks. Use `align="left"`, `"center"`, or `"right"` on cells; a CSS
+`text-align` declaration is also recognized. Shared Markdown rendering supplies
+the alignment from its column markers.
 
-Columns start at three text positions and grow toward sampled content widths, up
-to forty positions each, within the available width. Sizing samples the first 32
+Tables fill the available content width. Columns start at three text positions
+and grow toward sampled content widths, capped at forty positions for this
+initial allocation. Any remaining space is shared evenly across columns, with
+leftmost columns receiving rounding remainders. Sizing samples the first 32
 rows, at most 128 text positions/nodes per cell. Later or larger values wrap
-rather than widening every column. Missing cells are empty. If there is not room
-for these columns and their borders, rows become stacked records with header
-labels repeated above each value. No columns are silently discarded.
+rather than changing the allocation. Missing cells are empty. If there is not
+room for these columns and their borders, rows become stacked records with
+header labels repeated above each value. No columns are silently discarded.
 
 Tables nested in quotes, lists, or bordered boxes use the remaining inner width.
 A whole table is still laid out when its virtual-list item is measured; rows

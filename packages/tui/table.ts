@@ -104,6 +104,10 @@ export let table = (
     }
     if (!grew) break
   }
+  // Intrinsic widths guide the first allocation; share all remaining space.
+  let extra = Math.floor(remaining / count)
+  let remainder = remaining % count
+  widths = widths.map((w, i) => w + extra + (i < remainder ? 1 : 0))
   let rule = (left: string, middle: string, right: string): Line => [seg(
     left + widths.map((w) => '─'.repeat(w + 2)).join(middle) + right,
     edge,
@@ -135,7 +139,7 @@ export let table = (
       })
       out.push(line)
     }
-    if (index < rows.length - 1 && row.some((c) => c.localName == 'th')) {
+    if (index < rows.length - 1) {
       out.push(rule('├', '┼', '┤'))
     }
   })

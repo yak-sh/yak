@@ -33,12 +33,13 @@ Deno.test('semantic tables align columns and distinguish header and subtle rules
     ),
   )
   assertEquals(read(node), [
-    '┌──────┬───────┐',
-    '│ Name │ Count │',
-    '├──────┼───────┤',
-    '│ a    │     2 │',
-    '│ é    │   9   │',
-    '└──────┴───────┘',
+    '┌─────────────┬──────────────┐',
+    '│ Name        │ Count        │',
+    '├─────────────┼──────────────┤',
+    '│ a           │            2 │',
+    '├─────────────┼──────────────┤',
+    '│ é           │      9       │',
+    '└─────────────┴──────────────┘',
   ])
   let lines = screenful(node, 30, 20).lines
   assert(lines[0][0].style.dim)
@@ -81,9 +82,9 @@ Deno.test('narrow tables stack labeled values, handle empty and irregular rows',
   assertEquals(read(node, 0), [])
   assertEquals(read(el('table')), [])
   assertEquals(read(el('table', el('tr', cell(''))), 12), [
-    '┌─────┐',
-    '│     │',
-    '└─────┘',
+    '┌──────────┐',
+    '│          │',
+    '└──────────┘',
   ])
 })
 
@@ -100,14 +101,16 @@ Deno.test('nested table respects quote and outer box width', () => {
   let lines = read(node, 26)
   assert(lines.every((line) => line.length <= 26))
   assert(lines.some((line) => line.startsWith('│  ┌')))
+  let top = lines.find((line) => line.includes('┌'))!
+  assertEquals(top.indexOf('┐'), 24)
 })
 
 Deno.test('Markdown tables keep alignment, escaped pipes and streamed incomplete source', async () => {
   let source = '| Name | Count |\n| :--- | ---: |\n| a\\|b | 2 |'
   let ui = await mount(() => h(Markdown, { source }), 30, 10)
   try {
-    assert(ui.text().includes('│ a|b  │     2 │'), ui.text())
-    assert(ui.text().includes('├──────┼───────┤'))
+    assert(ui.text().includes('│ a|b         │            2 │'), ui.text())
+    assert(ui.text().includes('├─────────────┼──────────────┤'))
     assertEquals(await ui.send('x'), 0) // unchanged tree paints no rows
   } finally {
     ui.free()
@@ -171,4 +174,19 @@ Deno.test('Markdown table inside a list reflows on resize without losing code pi
   } finally {
     ui.free()
   }
+})
+
+Deno.test('full-width tables separate logical rows, not wrapped cell lines', () => {
+  let node = el(
+    'table',
+    el('tr', el('td', 'one', el('br'), 'two'), cell('right')),
+    el('tr', cell(''), cell('last')),
+  )
+  let lines = read(node, 25)
+  assert(lines.every((line) => line.length == 25))
+  assertEquals(lines.filter((line) => line.startsWith('├')).length, 1)
+  assert(lines[1].includes('one'))
+  assert(lines[2].includes('two'))
+  assert(lines[3].startsWith('├'))
+  assert(lines[4].includes('last'))
 })
