@@ -24,8 +24,10 @@ import {
   sync,
   type Timer,
 } from '@yaks/sync'
-import { idb } from './idb.ts'
+import { idb, wireIdb } from './idb.ts'
 import { keep, type Vault } from './vault.ts'
+import { type Retained, retention } from './retention.ts'
+import type { WireVault } from './wire-vault.ts'
 import {
   type Make,
   type Watch,
@@ -57,6 +59,13 @@ export type ClientOpts = {
   /** where the local tier is kept: a {@link Vault}, or `false` for none.
    * Default: IndexedDB where the browser has it, nothing where it does not. */
   vault?: Vault | false
+  /** Maximum inactive wire payloads (default: 20,000). */
+  retention?: number
+  /** Server tier, separate from local drafts. Default: wireIdb in browsers.
+   * No disk reads/writes occur until an authoritative epoch is supplied. */
+  wireVault?: WireVault | false
+  /** Authoritative boot epoch, never an unvalidated disk epoch. */
+  epoch?: string
   /** the signal factory every watch's `value` is held in — pass `signal` from
    * `@preact/signals` and a render tracks it (default: a plain object) */
   signal?: Make
@@ -77,7 +86,12 @@ export type Client = {
   wire?: Sync
   /** the watches on this graph */
   watches: Watches
-  /** resolves when the local tier is back in the graph */
+  /** Working-set retention and persistence diagnostics. */
+  cache: Retained
+  /** Validate a boot epoch, invalidate server-only state on mismatch, and
+   * request fresh subscription answers. Local drafts are never invalidated. */
+  setEpoch: (epoch: string) => Promise<void>
+  /** Resolves after local hydration and any explicitly supplied epoch restore. */
   ready: Promise<void>
   /** watch a query: its answer now, and every later one. Identical query lines
    * and options share one evaluation and server subscription. Each returned
@@ -136,11 +150,8 @@ export let client = (
   // `adopt`: the numbers come from the server, not from this map.
   let store = ram(vocab, { adopt: true })
   let g = graph({ storage: store, vocab, plugins, mint: opts.mint })
-  let seen = watches(g, { signal: opts.signal })
-
-  let vault = opts.vault === undefined ? ordinary() : opts.vault || null
-  let kept = vault ? keep(g, vault) : null
-
+  // Sync pins local commits before any rendering or asynchronous vault effect.
+  let cache: Retained
   let wire = opts.url
     ? sync(g, {
       url: opts.url,
@@ -151,8 +162,27 @@ export let client = (
       wait: opts.wait,
       most: opts.most,
       report: opts.report,
+      get replica() {
+        return cache
+      },
     })
     : undefined
+
+  let seen = watches(g, { signal: opts.signal })
+
+  let vault = opts.vault === undefined ? ordinary() : opts.vault || null
+  let kept = vault ? keep(g, vault) : null
+
+  cache = retention(g, store, seen, {
+    limit: opts.retention,
+    vault: opts.wireVault === false
+      ? undefined
+      : opts.wireVault ?? (globalThis.indexedDB ? wireIdb() : undefined),
+    report: opts.report
+      ? (error) => opts.report!({ sent: [], error, reverted: false })
+      : undefined,
+  })
+  let restored = opts.epoch ? cache.epoch(opts.epoch) : Promise.resolve()
 
   type Shared = {
     watch: Watch
@@ -185,27 +215,40 @@ export let client = (
         let ready = (opts.signal ?? (<T>(value: T) => ({ value })))(
           wire!.ready(id),
         )
+        let value = (opts.signal ?? (<T>(value: T) => ({ value })))(local.value)
         let listeners = new Set<(bundles: Bundle[]) => void>()
-        let publish = () => {
-          for (let fn of listeners) fn(local.value)
+        let publish = (force = false) => {
+          let next = local.value.filter((b) => cache.includes(id, b.entity.eid))
+          if (
+            next.length !== value.value.length ||
+            next.some((b, i) => b !== value.value[i])
+          ) {
+            value.value = next
+            force = true
+          }
+          if (force) { for (let fn of listeners) fn(value.value) }
         }
-        let stopLocal = local.subscribe(publish)
+        let stopMembership = cache.onMembership((changed) => {
+          if (changed === id) publish()
+        })
+        let stopLocal = local.subscribe(() => publish())
         let stopReady = wire!.onReady((changed, value) => {
           if (changed !== id) return
           ready.value = value
-          publish()
+          publish(true)
         })
         release = () => {
           stopReady()
+          stopMembership()
           stopLocal()
           listeners.clear()
-          wire!.unsubscribe(id)
           local.close()
+          wire!.unsubscribe(id)
         }
         w = {
           query,
           get value() {
-            return local.value
+            return value.value
           },
           get ready() {
             return ready.value && local.ready
@@ -265,15 +308,29 @@ export let client = (
     store,
     wire,
     watches: seen,
-    ready: kept?.ready ?? Promise.resolve(),
+    cache,
+    setEpoch: (epoch) => {
+      let ready = cache.epoch(epoch)
+      wire?.refresh()
+      return ready
+    },
+    ready: Promise.all([kept?.ready, restored]).then(() => undefined),
     watch,
-    read: (query, readOpts) => store.read(query, readOpts),
-    ent: (eid) => store.tx((tx) => tx.get([eid]))[0],
+    read: (query, readOpts) => {
+      let rows = store.read(query, readOpts)
+      cache.touch(rows.map((b) => b.entity.eid))
+      return rows
+    },
+    ent: (eid) => {
+      cache.touch([eid])
+      return store.tx((tx) => tx.get([eid]))[0]
+    },
     mutate: (change) => g.apply(change),
     close: () => {
       closed = true
       for (let close of handles) close()
       wire?.close()
+      cache.close()
       seen.close()
     },
   }

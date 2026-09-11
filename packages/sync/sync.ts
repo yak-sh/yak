@@ -12,7 +12,7 @@
 // either order, and the second one's answer could then reconcile the first
 // one's fields backwards. One chain, in the order the writes committed.
 
-import type { Graph, Plugin } from '@yaks/graph'
+import type { Bundle, Eid, Graph, Plugin } from '@yaks/graph'
 import { then } from '@yaks/graph'
 import { asking, clean, echoed } from './mark.ts'
 import { type Fetch, post, type Report } from './outbound.ts'
@@ -26,11 +26,22 @@ import {
   wire,
 } from './socket.ts'
 
+/** Optional working-set policy. The client supplies retention here, rather
+ * than intercepting sockets or building a second sync/readiness registry. */
+export type Replica = {
+  subscribe: (id: string, query: Ask) => void
+  unsubscribe: (id: string) => void
+  land: (frame: Frame) => Bundle[] | Promise<Bundle[]>
+  protect: (eids: Eid[]) => () => void
+}
+
 /** How a graph is wired to a server. Only `url` is required; both transports
  * default to the platform's own. */
 export type SyncOpts = {
   /** the server's base URL — the origin `/apply`, `/query` and `/ws` sit under */
   url: string
+  /** Working-set ownership, retention and pending-write protection. */
+  replica?: Replica
   /** how a batch is sent (default: the global `fetch`) */
   fetch?: Fetch
   /** how the socket is opened (default: the global `WebSocket`) */
@@ -57,6 +68,8 @@ export type Sync = {
   subscribe: (query: Ask, id?: string) => string
   /** drop one subscription */
   unsubscribe: (id: string) => void
+  /** Ask every subscription for a fresh authoritative frame. */
+  refresh: () => void
   /** whether the socket is open right now */
   connected: () => boolean
   /** whether this subscription has successfully applied an answer on the
@@ -94,6 +107,8 @@ let warn: Report = (t) =>
 export let sync = (graph: Graph, opts: SyncOpts): Sync => {
   let report = opts.report ?? warn
   let sending: Promise<void> = Promise.resolve()
+  let asks = new Map<string, Ask>()
+  let members = new Map<string, Set<Eid>>()
   // A fresh object on every invalidation guards asynchronous apply completion
   // against a disconnect, re-point or unsubscribe while it was in flight.
   let states = new Map<string, { ready: boolean }>()
@@ -125,6 +140,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
       effect: (bundles) => {
         if (!bundles.some(echoed)) {
           let batch = bundles
+          let release = opts.replica?.protect(bundles.map((b) => b.entity.eid))
           sending = sending.then(() =>
             post(batch, {
               graph,
@@ -132,6 +148,8 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
               fetch: opts.fetch ?? ((r) => globalThis.fetch(r)),
               headers: opts.headers,
               report,
+            }).then((settled) => {
+              if (settled) release?.()
             })
           ).catch((error) => report({ sent: [], error, reverted: false }))
         }
@@ -158,12 +176,31 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
         })
       }
       let state = states.get(frame.id)
-      let out = then(land(graph, frame), () => {
-        if (state && states.get(frame.id) === state && !state.ready) {
-          state.ready = true
-          notify(frame.id, true)
+      let safe = frame
+      // With a working-set policy, ownership lives there, not in a duplicate
+      // registry here. Standalone sync still protects cross-subscription rows.
+      if (!opts.replica) {
+        let held = members.get(frame.id) ?? new Set<Eid>()
+        if (frame.reset) held.clear()
+        for (let b of frame.bundles ?? []) held.add(b.entity.eid)
+        for (let eid of frame.gone ?? []) held.delete(eid)
+        members.set(frame.id, held)
+        safe = {
+          ...frame,
+          gone: frame.gone?.filter((eid) =>
+            ![...members.values()].some((set) => set.has(eid))
+          ),
         }
-      })
+      }
+      let out = then(
+        opts.replica ? opts.replica.land(frame) : land(graph, safe),
+        () => {
+          if (state && states.get(frame.id) === state && !state.ready) {
+            state.ready = true
+            notify(frame.id, true)
+          }
+        },
+      )
       if (out instanceof Promise) {
         out.catch((error: unknown) =>
           report({ sent: [], error, reverted: false })
@@ -173,14 +210,38 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
     report: (error) => report({ sent: [], error, reverted: false }),
   })
 
+  let serial = 0
   return {
     plugin,
     open: w.open,
-    subscribe: w.subscribe,
+    subscribe: (query, id) => {
+      // Register ownership before a synchronous transport can answer.
+      let key = id
+      if (key === undefined) {
+        do {
+          key = 's' + ++serial
+        } while (asks.has(key))
+      }
+      asks.set(key, query)
+      opts.replica?.subscribe(key, query)
+      try {
+        return w.subscribe(query, key)
+      } catch (error) {
+        asks.delete(key)
+        opts.replica?.unsubscribe(key)
+        throw error
+      }
+    },
+    refresh: () => {
+      for (let [id, query] of asks) w.subscribe(query, id)
+    },
     unsubscribe: (id) => {
       let ready = states.get(id)?.ready
       states.delete(id)
+      asks.delete(id)
+      members.delete(id)
       w.unsubscribe(id)
+      opts.replica?.unsubscribe(id)
       if (ready) notify(id, false)
     },
     connected: w.connected,
@@ -192,6 +253,9 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
     idle: () => sending,
     close: () => {
       w.close()
+      for (let id of asks.keys()) opts.replica?.unsubscribe(id)
+      asks.clear()
+      members.clear()
       states.clear()
       listeners.clear()
     },

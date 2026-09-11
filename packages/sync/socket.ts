@@ -144,7 +144,7 @@ export let wire = (opts: WireOpts): Wire => {
     members.set(frame.id, held)
     let gone = [...(frame.gone ?? [])]
     let arrived = (frame.bundles ?? []).map((b) => b.entity.eid)
-    if (resetting.delete(frame.id) && !frame.refused) {
+    if (!frame.refused && resetting.delete(frame.id)) {
       let seen = new Set(arrived)
       for (let eid of held) if (!seen.has(eid)) gone.push(eid)
       held.clear()

@@ -66,15 +66,17 @@ let refusalOf = async (res: Response): Promise<Refusal> => {
 /**
  * Send one committed batch to the server and reconcile the answer. Returns
  * when the exchange is over — the caller (the `effect` hook) does not wait for
- * it, so a local write stays as fast as the local store.
+ * it, so a local write stays as fast as the local store. Returns true when
+ * settled (accepted/refused/no wire writes), false for uncertain transport;
+ * retention must keep the optimistic payload pinned in the latter case.
  */
 export let post = async (
   batch: Bundle[],
   opts: PostOpts,
-): Promise<void> => {
+): Promise<boolean> => {
   let { graph } = opts
   let sent = outward(batch, graph.vocab)
-  if (!sent.length) return // an entirely local batch: nothing to tell
+  if (!sent.length) return true // an entirely local batch: nothing to tell
   let res: Response
   try {
     res = await opts.fetch(
@@ -87,17 +89,18 @@ export let post = async (
   } catch (error) {
     // Undelivered is not refused: the batch may have landed.
     opts.report({ sent, error, reverted: false })
-    return
+    return false
   }
   if (!res.ok) {
     let refused = await refusalOf(res)
     let back = inverse(batch)
     if (back.length) await graph.apply(echo(back), { trusted: true })
     opts.report({ sent, refused, reverted: back.length > 0 })
-    return
+    return true
   }
   let applied = await res.json() as Bundle[]
   if (Array.isArray(applied) && applied.length) {
     await graph.apply(echo(applied), { trusted: true })
   }
+  return true
 }

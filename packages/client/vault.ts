@@ -119,6 +119,9 @@ let concerns = (bundles: Bundle[], vocab: Vocab) =>
  */
 export let keep = (graph: Graph, vault: Vault): Kept => {
   let vocab = graph.vocab
+  // A late boot read must not overwrite edits made while storage was opening.
+  let loading = new Set<Eid>()
+  let hydrated = false
 
   let write = (bundles: Bundle[]) => {
     let touched = [...new Set(bundles.map((b) => b.entity.eid))]
@@ -146,10 +149,19 @@ export let keep = (graph: Graph, vault: Vault): Kept => {
   let plugin: Plugin = {
     name: '@yaks/client/vault',
     hooks: {
-      effect: (bundles) =>
-        concerns(bundles, vocab)
+      effect: (bundles) => {
+        if (!hydrated) {
+          for (let b of bundles) {
+            if (
+              dead(b) ||
+              comps(b).some(([name]) => tierOf(vocab, name) == 'local')
+            ) loading.add(b.entity.eid)
+          }
+        }
+        return concerns(bundles, vocab)
           ? then(write(bundles), () => bundles)
-          : bundles,
+          : bundles
+      },
     },
   }
   graph.use(plugin)
@@ -159,11 +171,13 @@ export let keep = (graph: Graph, vault: Vault): Kept => {
   // at a server, and marked as this package's own so the hook above does not
   // write back what it just read.
   let ready = vault.load().then((recs) => {
-    let bundles = recs.map((r): Bundle => ({
+    hydrated = true
+    let bundles = recs.filter((r) => !loading.has(r.eid)).map((r): Bundle => ({
       entity: { eid: r.eid, num: r.num },
       ...r.comps,
       [KEPT]: true,
     }))
+    loading.clear()
     if (!bundles.length) return
     return then(graph.apply(echo(bundles), { trusted: true }), () => undefined)
   })

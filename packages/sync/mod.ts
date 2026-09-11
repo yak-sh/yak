@@ -56,7 +56,7 @@
  * @module
  */
 
-export { type Sync, sync, type SyncOpts } from './sync.ts'
+export { type Replica, type Sync, sync, type SyncOpts } from './sync.ts'
 export {
   type Fetch,
   post,
@@ -65,7 +65,7 @@ export {
   type Report,
   type Trouble,
 } from './outbound.ts'
-export { land, strip } from './inbound.ts'
+export { land, snapshot, strip } from './inbound.ts'
 export {
   type Ask,
   backoff,

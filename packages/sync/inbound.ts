@@ -11,23 +11,26 @@
 // where a tombstone could never be lifted. A DELETE still tombstones, because
 // a real death arrives as a `tombstone` component in the bundles.
 
-import type { Bundle, Eid, Graph } from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { comps, dead, detached, then } from '@yaks/graph'
 import { echo } from './mark.ts'
 import type { Frame } from './socket.ts'
+import { tierOf } from './tier.ts'
 
-// A patch that takes every component off an entity, leaving its identity. The
+// A patch that takes server components off an entity, preserving local state. The
 // entity is then invisible to every query, which is the local shape of "no
 // longer in the set".
-let bare = (b: Bundle): Bundle[] => {
+let bare = (graph: Graph, b: Bundle): Bundle[] => {
   if (dead(b)) return [] // already in the grave; nothing left to take
   let out: Bundle = { entity: { eid: b.entity.eid } }
-  for (let [name] of comps(b)) out[name] = null
+  for (let [name] of comps(b)) {
+    if (tierOf(graph.vocab, name) == 'wire') out[name] = null
+  }
   return comps(out).length ? [out] : []
 }
 
 /**
- * Take these entities out of the local graph: every component they wear is
+ * Take these entities out of the local graph: their wire-tier components are
  * dropped, their identity stays. What a subscription's `gone` list means.
  */
 export let strip = (
@@ -35,7 +38,7 @@ export let strip = (
   eids: Eid[],
 ): Bundle[] | Promise<Bundle[]> =>
   then(detached(graph.storage).get(eids), (held) => {
-    let out = held.flatMap(bare)
+    let out = held.flatMap((b) => bare(graph, b))
     return out.length ? graph.apply(echo(out), { trusted: true }) : []
   })
 
@@ -59,3 +62,40 @@ export let land = (
         : applied,
   )
 }
+
+/** Replace the wire tier with a query's whole rows, including absent columns.
+ * Raw feeds are patches and must use land() instead. Local/none never come
+ * from the server, and are never removed by a query snapshot. */
+export let snapshot = (
+  graph: Graph,
+  bundles: Bundle[],
+): Bundle[] | Promise<Bundle[]> =>
+  then(
+    detached(graph.storage).get(bundles.map((b) => b.entity.eid)),
+    (held) => {
+      let previous = new Map(held.map((b) => [b.entity.eid, b]))
+      let patches = bundles.map((b) => {
+        if (dead(b)) return b
+        let out: Bundle = { entity: b.entity }
+        for (
+          let [name, comp] of comps(
+            previous.get(b.entity.eid) ?? { entity: b.entity },
+          )
+        ) {
+          if (tierOf(graph.vocab, name) != 'wire') continue
+          out[name] = b[name] == null ? null : Object.fromEntries(
+            Object.keys(comp ?? {}).map((key) => [key, null]),
+          )
+        }
+        for (let [name, comp] of comps(b)) {
+          if (tierOf(graph.vocab, name) == 'wire') {
+            out[name] = comp == null
+              ? null
+              : { ...(out[name] as Comp ?? {}), ...comp }
+          }
+        }
+        return out
+      })
+      return patches.length ? graph.apply(echo(patches), { trusted: true }) : []
+    },
+  )

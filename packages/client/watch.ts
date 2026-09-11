@@ -77,6 +77,8 @@ export type WatchesOpts = {
 export type Watches = {
   /** open a watch on a query */
   watch: (query: string, opts?: WatchOpts) => Watch
+  /** Notify watches after storage-only cache eviction (not a graph deletion). */
+  invalidate: (eids: Eid[]) => void | Promise<void>
   /** how many watches are open — what a test asserts on after a close */
   size: () => number
   /** close every watch */
@@ -235,6 +237,7 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
 
   return {
     watch,
+    invalidate: (eids) => commit(eids.map((eid) => ({ entity: { eid } }))),
     size: () => held.size,
     close: () => {
       closed = true

@@ -99,3 +99,122 @@ export let idb = (opts: IdbOpts = {}): Vault => {
     clear: () => write((s) => s.clear()),
   }
 }
+
+/** Epoch-scoped wire-tier IndexedDB. Uses a separate database (default:
+ * `yaks-wire`), so epoch invalidation cannot erase the local Vault. Reads use
+ * an ordered cursor, never getAll; both disk and the returned array are bounded.
+ * The supplied name must be distinct from the local vault's database name. */
+export let wireIdb = (
+  opts: IdbOpts = {},
+): import('./wire-vault.ts').WireVault => {
+  let held: Promise<IDBDatabase> | undefined
+  let db = () =>
+    held ??= new Promise<IDBDatabase>((ok, no) => {
+      let factory = opts.indexedDB ?? globalThis.indexedDB
+      if (!factory) {
+        throw new Error('@yaks/client — no indexedDB in this environment')
+      }
+      let req = factory.open(opts.name ?? 'yaks-wire', 1)
+      req.onupgradeneeded = () => {
+        let rows = req.result.createObjectStore('rows', { keyPath: 'eid' })
+        rows.createIndex('order', 'order')
+        req.result.createObjectStore('meta')
+      }
+      req.onsuccess = () => ok(req.result)
+      req.onerror = () => no(req.error)
+    })
+  let transaction = async <T>(
+    body: (rows: IDBObjectStore, meta: IDBObjectStore) => Promise<T>,
+  ): Promise<T> => {
+    let tx = (await db()).transaction(['rows', 'meta'], 'readwrite')
+    let finish = done(tx)
+    try {
+      let out = await body(tx.objectStore('rows'), tx.objectStore('meta'))
+      await finish
+      return out
+    } catch (error) {
+      try {
+        tx.abort()
+      } catch { /* already aborted */ }
+      await finish.catch(() => {})
+      throw error
+    }
+  }
+  // Prune by key: a legacy oversized store never materializes unbounded rows.
+  let prune = async (rows: IDBObjectStore, limit: number) => {
+    let extra = await ask(rows.count()) - limit
+    if (extra <= 0) return
+    await new Promise<void>((ok, no) => {
+      let req = rows.index('order').openKeyCursor()
+      req.onerror = () => no(req.error)
+      req.onsuccess = () => {
+        let cursor = req.result
+        if (!cursor || extra-- <= 0) {
+          ok()
+          return
+        }
+        rows.delete(cursor.primaryKey)
+        cursor.continue()
+      }
+    })
+  }
+  let bounded = (rows: IDBObjectStore, limit: number): Promise<Saved[]> =>
+    new Promise((ok, no) => {
+      if (!limit) {
+        ok([])
+        return
+      }
+      let req = rows.index('order').openCursor(null, 'prev')
+      let saved: Saved[] = []
+      req.onerror = () => no(req.error)
+      req.onsuccess = () => {
+        let cursor = req.result
+        if (!cursor) {
+          ok(saved.reverse())
+          return
+        }
+        let r = cursor.value
+        saved.push({ eid: r.eid, num: r.num, comps: r.comps })
+        if (saved.length === limit) {
+          ok(saved.reverse())
+          return
+        }
+        cursor.continue()
+      }
+    })
+  let check = (limit: number) => {
+    if (!Number.isSafeInteger(limit) || limit < 0) {
+      throw new Error('invalid retention limit')
+    }
+  }
+  return {
+    load: (epoch, limit) => {
+      check(limit)
+      return transaction(async (rows, meta) => {
+        if (await ask(meta.get('epoch')) !== epoch) {
+          rows.clear()
+          meta.put(epoch, 'epoch')
+          meta.put(0, 'order')
+          return []
+        }
+        await prune(rows, limit)
+        return await bounded(rows, limit)
+      })
+    },
+    save: (epoch, saved, limit) => {
+      check(limit)
+      return transaction(async (rows, meta) => {
+        if (await ask(meta.get('epoch')) !== epoch) return
+        let order = Number(await ask(meta.get('order')) ?? 0)
+        for (let r of saved) rows.put({ ...r, order: ++order })
+        meta.put(order, 'order')
+        await prune(rows, limit)
+      })
+    },
+    drop: (epoch, eids) =>
+      transaction(async (rows, meta) => {
+        if (await ask(meta.get('epoch')) !== epoch) return
+        for (let eid of eids) rows.delete(eid)
+      }),
+  }
+}

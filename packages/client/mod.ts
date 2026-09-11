@@ -83,4 +83,7 @@ export {
   stash,
   type Vault,
 } from './vault.ts'
-export { idb, type IdbOpts } from './idb.ts'
+export { idb, type IdbOpts, wireIdb } from './idb.ts'
+
+export { type Retained, retention, RETENTION_ROWS } from './retention.ts'
+export { wireStash, type WireVault } from './wire-vault.ts'

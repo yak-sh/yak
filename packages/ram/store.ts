@@ -52,6 +52,9 @@ export type Tx = {
   get: (eids: Eid[]) => Bundle[]
   /** patch the bundles in → the entities this patch MINTED, with their `num` */
   patch: (bundles: Bundle[]) => Entity[]
+  /** Evict live payloads, not identities. A later patch keeps the same number.
+   * Tombstones remain permanent; eviction is never deletion. */
+  evict: (eids: Eid[]) => void
   /** remove these entities: their components go, their identity is tombstoned */
   remove: (entities: Entity[]) => void
 }
@@ -97,12 +100,14 @@ let bundleOf = (r: Rec): Bundle =>
  */
 export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   let rows = new Map<Eid, Rec>()
+  // Compact identity reservations survive payload eviction. They are not query rows.
+  let cold = new Map<Eid, Entity>()
   let next = 1
   // The undo log: for each entity a transaction is about to change, the record
   // it held first. Replayed backwards, it is the rollback.
-  let log: [Eid, Rec | undefined][] = []
+  let log: [Eid, Rec | undefined, Entity | undefined][] = []
   let depth = 0
-  let save = (eid: Eid) => log.push([eid, rows.get(eid)])
+  let save = (eid: Eid) => log.push([eid, rows.get(eid), cold.get(eid)])
 
   let isRef = (comp: string, prop: string) =>
     vocab.column(comp, prop)?.category == 'ref'
@@ -165,14 +170,21 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         return
       }
       save(eid)
-      let entity = {
-        eid,
-        ...base.number === false || excluded.has(eid)
-          ? {}
-          : { num: numberFor(num) },
-      }
+      let reserved = cold.get(eid)
+      cold.delete(eid)
+      let entity = reserved
+        ? {
+          ...reserved,
+          ...(base.adopt && num !== undefined ? { num: numberFor(num) } : {}),
+        }
+        : {
+          eid,
+          ...base.number === false || excluded.has(eid)
+            ? {}
+            : { num: numberFor(num) },
+        }
       rows.set(eid, { entity, comps: {} })
-      born.push(entity)
+      if (!reserved) born.push(entity)
     }
     for (let b of bundles) {
       if (rows.get(b.entity.eid)?.dead) continue
@@ -216,12 +228,22 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         return rec ? [bundleOf(rec)] : []
       }),
     patch,
+    evict: (eids) => {
+      for (let eid of eids) {
+        let rec = rows.get(eid)
+        if (!rec || rec.dead) continue
+        save(eid)
+        cold.set(eid, { eid, num: rec.entity.num })
+        rows.delete(eid)
+      }
+    },
     remove: (entities) => {
       for (let { eid } of entities) {
-        let rec = rows.get(eid)
-        if (!rec) continue
+        let entity = rows.get(eid)?.entity ?? cold.get(eid)
+        if (!entity) continue
         save(eid)
-        rows.set(eid, { entity: rec.entity, comps: {}, dead: true })
+        cold.delete(eid)
+        rows.set(eid, { entity, comps: {}, dead: true })
       }
     },
   }
@@ -240,7 +262,9 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       depth++
       let undo = (e: unknown): never => {
         while (log.length > mark) {
-          let [eid, rec] = log.pop()!
+          let [eid, rec, identity] = log.pop()!
+          if (identity) cold.set(eid, identity)
+          else cold.delete(eid)
           if (rec) rows.set(eid, rec)
           else rows.delete(eid)
         }

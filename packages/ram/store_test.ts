@@ -173,3 +173,51 @@ Deno.test('a mirror adopts an explicit unnumbered spine and corrects optimistic 
   put(s, { entity: { eid: 'optimistic' }, doc: { title: 'still unnumbered' } })
   assertEquals(at(s, 'optimistic').entity.num, null)
 })
+
+Deno.test('physical eviction reserves identity and rolls back with nested transactions', () => {
+  let s = ram(shop, { adopt: true })
+  put(s, { entity: { eid: 'p1', num: 90 }, doc: { title: 'payload' } })
+  assertThrows(() =>
+    s.tx((tx) => {
+      tx.evict(['p1'])
+      assertEquals(tx.get(['p1']), [])
+      s.tx((inner) =>
+        inner.patch([{ entity: { eid: 'p1' }, doc: { title: 'new' } }])
+      )
+      throw new Error('rollback')
+    })
+  )
+  assertEquals(comp(at(s, 'p1'), 'doc').title, 'payload')
+  s.tx((tx) => tx.evict(['p1']))
+  assertEquals(at(s, 'p1'), undefined)
+  assertEquals(s.read(''), [])
+  assertThrows(() =>
+    s.tx((tx) => {
+      tx.patch([{
+        entity: { eid: 'p1', num: 91 },
+        doc: { title: 'temporary' },
+      }])
+      throw new Error('rollback')
+    })
+  )
+  assertEquals(at(s, 'p1'), undefined)
+  assertEquals(
+    put(s, { entity: { eid: 'p1' }, doc: { title: 'restored' } }),
+    [],
+  )
+  assertEquals(at(s, 'p1').entity.num, 90)
+  s.tx((tx) => tx.remove([{ eid: 'p1' }]))
+  s.tx((tx) => tx.evict(['p1']))
+  put(s, { entity: { eid: 'p1' }, doc: { title: 'cannot revive' } })
+  assertEquals(at(s, 'p1').tombstone, {})
+})
+
+Deno.test('a real delete after payload eviction still makes death permanent', () => {
+  let s = ram(shop)
+  put(s, { entity: { eid: 'p1' }, doc: { title: 'live' } })
+  s.tx((tx) => tx.evict(['p1']))
+  s.tx((tx) => tx.remove([{ eid: 'p1' }]))
+  put(s, { entity: { eid: 'p1' }, doc: { title: 'late snapshot' } })
+  assertEquals(at(s, 'p1').tombstone, {})
+  assertEquals(at(s, 'p1').entity.num, 1)
+})

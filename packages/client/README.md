@@ -236,3 +236,74 @@ worker, a test, or a CLI holding a working set gets the same live queries.
 ## License
 
 Apache-2.0
+
+## Bounded working set and server-tier restore
+
+The client retains **20,000 inactive wire rows** by default (`retention: n`
+changes the bound; zero disables the inactive floor). Active subscription
+members and pending optimistic writes do not consume that budget and are never
+evicted to meet it. Identical watches still share the phase-1 subscription;
+different subscriptions share payload ownership. A query's `gone` removes it
+from that answer without stripping another owner's row.
+
+`ent()` and `read()` touch the inactive LRU. Storage enumeration and watch
+refreshes do not touch it, and touching never changes query/first-match order.
+Reopening a query pins its cached hits before the first frame. Cached values can
+paint, but `ready` stays false. The authoritative first frame reconciles missing
+hits, including hits retained from a different query. Whole query rows replace
+absent wire fields; raw feeds remain patches. Neither path overwrites local or
+`none` components. A subscription snapshot cannot overwrite a pending local
+write; the post response reconciles it. An uncertain transport failure keeps its
+pin: it is **not** an acknowledgement (a durable outbox/retry policy belongs to
+the host).
+
+Eviction is not graph deletion: it does not tombstone, cascade, send an outbound
+write, or erase drafts. RAM physically removes wire-only payloads and notifies
+watches. Compact eid/number reservations survive eviction, so restoring an eid
+is not a new birth; genuine tombstones remain permanent. The inactive
+**payload** bound does not bound active rows, pending writes, local/ephemeral
+data, or these identity reservations. Eviction is a cache operation, not a
+committed graph batch; hosts maintaining additional derived indexes must use the
+cache boundary rather than treating it as a user deletion.
+
+Wire disk state is separate from the local `Vault`:
+
+```ts
+import { client, idb, wireIdb } from '@yaks/client'
+
+let box = client(vocab, [], {
+  url,
+  vault: idb({ name: 'recipes-local' }),
+  wireVault: wireIdb({ name: 'recipes-wire' }),
+  retention: 20_000,
+})
+await box.setEpoch(authoritativeBootEpoch)
+```
+
+An already validated epoch can instead be supplied as `opts.epoch`; then
+`client.ready` waits for both local and wire restoration. Without a validated
+epoch there are **no wire disk reads or writes**. Never pass a disk-stored epoch
+as proof of the server's current epoch. `setEpoch()` also requests fresh answers
+from existing subscriptions and invalidates their readiness. Epoch negotiation
+and application-specific boot messages remain the host's responsibility.
+
+`wireIdb()` defaults to a **separate** `yaks-wire` database; `idb()` defaults to
+`yaks`. Use distinct names. `wireVault: false` disables wire durability without
+disabling local drafts. `wireStash()` is the in-memory implementation of the
+same three-method `WireVault` contract. A mismatch atomically clears only wire
+rows. Writes/departures check the epoch in their transaction, so stale-tab
+writes cannot revive a previous epoch. Disk keeps the newest written rows up to
+the bound (including active rows); RAM separately uses read-touched LRU. Reads
+use bounded ordered cursors, and oversized legacy data is pruned by key, not
+loaded with `getAll()`.
+
+Restoration is a non-authoritative paint floor. Existing RAM rows and writes
+made while disk opens win over it; any intervening socket answer (even empty)
+defeats the late restore. A newer epoch or client close cancels an older
+restore. Local-vault hydration likewise cannot overwrite an edit made while
+loading. `await box.cache.idle()` waits for queued disk writes, and
+`box.cache.size()` reports inactive RAM payloads.
+
+The Tasks frontend adapter, protocol/epoch negotiation, durable outbox/refusal
+ledger, richer query parity and scratch-probe CDP comparisons are a subsequent
+integration phase; this package does not yet replace `src/live.ts`.
