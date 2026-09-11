@@ -6,10 +6,11 @@
     "Both probes started from fresh copies of the same snapshot; new browser profiles, parallel wall-clock runs.",
     "Before server has only the subscription queue cancellation guard backported; before frontend is unchanged.",
     "Inbound WebSocket UTF-8 payload bytes, not HTTP assets or compressed transport bytes.",
-    "Clock-sensitive maintenance and new browser identity account for run-to-run differences. No graph edits were driven by the script."
+    "Clock-sensitive maintenance and new browser identity account for run-to-run differences. No graph edits were driven by the script.",
+    "After includes incoming main changes through 7ff78e07, including archetype migration; this is an integrated before/after measurement, not an isolated adapter microbenchmark."
   ],
   "before": {
-    "base": "http://localhost:35909",
+    "base": "http://localhost:35919",
     "targets": [
       "33365ea3-f3e5-42e5-9035-85bbb6ab85e1",
       "8a88b12a-ae7f-4bee-891a-e431e41b3dd5",
@@ -19,22 +20,22 @@
       "03f45fb2-1168-40b0-8a21-68c8cc510901"
     ],
     "cold": {
-      "bytes": 464461,
-      "distinctIDs": 399,
+      "bytes": 461948,
+      "distinctIDs": 398,
       "subs": 64,
       "unsubs": 6,
       "received": 68,
       "cards": 11,
       "peeks": 0,
-      "cache": 400,
+      "cache": 399,
       "queries": 26
     },
     "six": {
-      "bytes": 151728,
+      "bytes": 149359,
       "distinctIDs": 369,
       "subs": 48,
       "unsubs": 42,
-      "received": 51,
+      "received": 49,
       "cards": 11,
       "peeks": 0,
       "cache": 399,
@@ -53,11 +54,11 @@
           "text": 1247
         },
         {
-          "bytes": 31171,
+          "bytes": 31181,
           "distinctIDs": 89,
           "subs": 8,
           "unsubs": 1,
-          "received": 8,
+          "received": 9,
           "body": {
             "length": 532,
             "sha256": "8e045e6cac7bca76976d71ccce52f855d52a0a0d7932bbf5cf281cfd70843f3a"
@@ -65,11 +66,11 @@
           "text": 1102
         },
         {
-          "bytes": 10199,
+          "bytes": 10189,
           "distinctIDs": 6,
           "subs": 8,
           "unsubs": 2,
-          "received": 9,
+          "received": 8,
           "body": {
             "length": 3918,
             "sha256": "b414018d249c77ddcfb0aa2bb566d0b7b3a1eaf02c612402169f628c02a2726a"
@@ -192,7 +193,7 @@
     "errors": []
   },
   "after": {
-    "base": "http://localhost:35907",
+    "base": "http://localhost:35917",
     "targets": [
       "33365ea3-f3e5-42e5-9035-85bbb6ab85e1",
       "8a88b12a-ae7f-4bee-891a-e431e41b3dd5",
@@ -202,23 +203,23 @@
       "03f45fb2-1168-40b0-8a21-68c8cc510901"
     ],
     "cold": {
-      "bytes": 3510992,
-      "distinctIDs": 2225,
-      "subs": 136,
+      "bytes": 3660691,
+      "distinctIDs": 2224,
+      "subs": 135,
       "unsubs": 10,
-      "received": 137,
+      "received": 136,
       "cards": 11,
       "peeks": 0,
-      "cache": 2477,
-      "queries": 98,
-      "transports": 126
+      "cache": 2476,
+      "queries": 97,
+      "transports": 125
     },
     "six": {
-      "bytes": 152645,
+      "bytes": 169860,
       "distinctIDs": 369,
       "subs": 49,
-      "unsubs": 50,
-      "received": 52,
+      "unsubs": 49,
+      "received": 50,
       "cards": 11,
       "peeks": 0,
       "cache": 2839,
@@ -226,7 +227,7 @@
       "transports": 125,
       "opens": [
         {
-          "bytes": 21160,
+          "bytes": 24067,
           "distinctIDs": 56,
           "subs": 7,
           "unsubs": 2,
@@ -238,7 +239,7 @@
           "text": 1543
         },
         {
-          "bytes": 32088,
+          "bytes": 36831,
           "distinctIDs": 89,
           "subs": 9,
           "unsubs": 2,
@@ -250,10 +251,10 @@
           "text": 1097
         },
         {
-          "bytes": 10199,
+          "bytes": 10709,
           "distinctIDs": 6,
           "subs": 8,
-          "unsubs": 3,
+          "unsubs": 2,
           "received": 9,
           "body": {
             "length": 3918,
@@ -262,7 +263,7 @@
           "text": 4418
         },
         {
-          "bytes": 15662,
+          "bytes": 17549,
           "distinctIDs": 36,
           "subs": 7,
           "unsubs": 2,
@@ -274,11 +275,11 @@
           "text": 1893
         },
         {
-          "bytes": 17320,
+          "bytes": 16787,
           "distinctIDs": 35,
           "subs": 7,
           "unsubs": 2,
-          "received": 9,
+          "received": 7,
           "body": {
             "length": 1078,
             "sha256": "b72e4ee2fa1f32bafb16bb7a760edf4f0a7a0f2f89d717a7099872cef4f3df9d"
@@ -286,7 +287,7 @@
           "text": 1367
         },
         {
-          "bytes": 51173,
+          "bytes": 58874,
           "distinctIDs": 147,
           "subs": 8,
           "unsubs": 2,
@@ -364,7 +365,7 @@
           "status": "ready"
         }
       ],
-      "bytes": 19742,
+      "bytes": 22598,
       "distinctIDs": 56,
       "subs": 6,
       "unsubs": 1,
@@ -376,5 +377,6 @@
       "transports": 130
     },
     "errors": []
-  }
+  },
+  "performanceFollowup": "T-37383"
 }

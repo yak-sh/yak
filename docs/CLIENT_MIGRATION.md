@@ -98,10 +98,11 @@ Servers must be scratch-copy `PROBE=1` instances, never a production URL.
   queue cancellation guard was backported to keep the comparison's socket
   usable.
 - After frontend/server: the commit containing this report (rescued adapter
-  `e89cd137` plus integration fixes). Final landed SHA is on T-37276/T-37035.
+  `4715e7be` plus integration fixes and incoming main through `7ff78e07`). Final
+  landed SHA is on T-37276/T-37035.
 - Both servers freshly copied snapshot SHA-256
   `cfe241eb832a19286b33f85ec124ae85d8a8ae8da4c6053d9959287a17817dc7`. Ports
-  35909/35907; isolated HOME/TMPDIR; sync and embeddings disabled. Both
+  35919/35917; isolated HOME/TMPDIR; sync and embeddings disabled. Both
   scenarios ran at the same wall-clock time. Fresh browser identity and
   clock-sensitive maintenance can still change counts between runs.
 - 1440×1000 cold root canvas (11 cards), six fixed target cards opened and
@@ -112,18 +113,21 @@ Servers must be scratch-copy `PROBE=1` instances, never a production URL.
 
 | Scenario           | Before bytes / IDs | After bytes / IDs | Before sub/unsub sends | After sub/unsub sends |
 | ------------------ | -----------------: | ----------------: | ---------------------: | --------------------: |
-| Cold canvas        |      464,461 / 399 | 3,510,992 / 2,225 |                 64 / 6 |              136 / 10 |
-| Six opens + closes |      151,728 / 369 |     152,645 / 369 |                48 / 42 |               49 / 50 |
-| Reopen first       |        19,742 / 56 |       19,742 / 56 |                  6 / 0 |                 6 / 1 |
+| Cold canvas        |      461,948 / 398 | 3,660,691 / 2,224 |                 64 / 6 |              135 / 10 |
+| Six opens + closes |      149,359 / 369 |     169,860 / 369 |                48 / 42 |               49 / 49 |
+| Reopen first       |        19,742 / 56 |       22,598 / 56 |                  6 / 0 |                 6 / 1 |
 
 The earlier T-37034 baseline was **479,778 B / 297 IDs**, not this snapshot/run.
 The integrated migration is **not a cold-byte improvement**: current cold
-traffic is ~7.56× the same-snapshot before. Most additional bytes are now-real
+traffic is ~7.92× the same-snapshot before. Most additional bytes are now-real
 mail/deliver inbox queries with missing-component/property-presence predicates;
 the old serializer declined these and silently scanned the incomplete local
 cache. Do not regain the old number by restoring that correctness bug. Narrowing
-these authoritative reads is a separate performance opportunity. Closing the six
-cards does not leave six additional query sets/transport subscriptions.
+these authoritative reads is tracked as **T-37383**, without restoring
+partial-cache fallback. Incoming archetype wire metadata also increases per-row
+bytes; this is the integrated before/after result, not an isolated adapter
+microbenchmark. Closing the six cards does not leave six additional query
+sets/transport subscriptions.
 
 All six body lengths and SHA-256s agree across before/after. The first card
 paints its full retained body before any queued response lands (six replies
@@ -134,14 +138,15 @@ now-authoritative inbox/relationship state changes surrounding UI, not body
 truncation.
 
 Retention improves **immediate paint**, not wire freshness: reopen still asks
-for authoritative confirmation and transfers 19,742 B in this scenario. No claim
-of a delta-only or zero-byte reopen is made.
+for authoritative confirmation and transfers 22,598 B after integration (19,742
+B before) in this scenario. No claim of a delta-only or zero-byte reopen is
+made.
 
 ## Gates and cleanup
 
 Required gates: `deno task check` and `DB_PATH=:memory: deno task test`; both
-passed on the integrated branch before landing. Re-run after a landing rebase.
-The task's final comment is the receipt for the landed SHA and post-rebase
-gates. Probe servers are reaped by their registered PIDs and scratch DB/profile
-trees removed. No live graph, credentials, renderer, `src/db.ts`, harness, TUI
-or session implementation was changed for this migration.
+passed again after the landing rebase (1,616 package tests in `check`). The
+task's final comment is the receipt for the landed SHA and post-rebase gates.
+Probe servers are reaped by their registered PIDs and scratch DB/profile trees
+removed. No live graph, credentials, renderer, `src/db.ts`, harness, TUI or
+session implementation was changed for this migration.
