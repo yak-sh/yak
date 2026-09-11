@@ -1878,6 +1878,7 @@
         "dependencies": [
           "jsr:@db/sqlite@0.13.0",
           "jsr:@std/assert@1",
+          "jsr:@std/path@1",
           "npm:@preact/signals@^2.9.0",
           "npm:preact@^10.29.1",
           "npm:zod-to-json-schema@^3.25.1",

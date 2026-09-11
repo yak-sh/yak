@@ -324,6 +324,7 @@ export let App = (
   useKeys(action)
 
   let submit = (text: string) => {
+    let receipt = ui.submission()
     let s = current()
     let key = s.id ?? 'new-' + s.generation
     let previous = pending.get(key)
@@ -346,6 +347,7 @@ export let App = (
       : a.start(text)
     pending.set(key, write)
     void write.then((id) => {
+      receipt.accepted(id)
       if (current().generation == s.generation && current().id == s.id) {
         ui.patch({ selected: id })
       }
@@ -512,6 +514,7 @@ let frontendViews = define<ComponentRenderer>([{
       onEdit: edit as Frontend['edit'],
       passKey: (k: import('@yaks/tui').Key) =>
         !!k.ctrl && ['h', 'j', 'k', 'l'].includes(k.text ?? ''),
+      clearOnSubmit: false,
       onSubmit: submit as (text: string) => void,
     })
   },
@@ -530,17 +533,14 @@ let Draft = (
 /** No-verb entry. The worker owns SQLite while the terminal is open. */
 export let tui = async (): Promise<void> => {
   const { remote } = await import('./remote.ts')
+  const { openDrafts } = await import('./draft_vault.ts')
+  const drafts = await openDrafts()
   const backend = await remote({ instructions: INSTRUCTIONS, cwd: Deno.cwd() })
-  const ui = frontend()
+  const ui = drafts.ui
   try {
     await backend.resume()
     await run(
-      () =>
-        h(App, {
-          agent: backend.agent,
-          subscribe: backend.subscribe,
-          frontend: ui,
-        }),
+      () => h(App, { agent: backend.agent, subscribe: backend.subscribe, frontend: drafts.ui }),
       {
         graphics: Deno.env.get('HARNESS_GRAPHICS') == 'kitty'
           ? 'kitty'
@@ -557,7 +557,6 @@ export let tui = async (): Promise<void> => {
       },
     )
   } finally {
-    await backend.close()
-    ui.close()
+    try { await backend.close() } finally { await drafts.close() }
   }
 }

@@ -8,6 +8,7 @@
   "license": "Apache-2.0",
   "description": "A self-contained agent harness: one SQLite file, the session daemon, the shell and graph tools, and a command that drives them.",
   "imports": {
+    "@std/path": "jsr:@std/path@^1.0.0",
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "@db/sqlite": "jsr:@db/sqlite@0.13.0",
     "zod": "npm:zod@^3.24.0",
