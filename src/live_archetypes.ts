@@ -2,7 +2,7 @@
 // Hold it before first paint and learn new sets as they arrive. A missing set
 // is never inferred from a partial entity projection.
 import { effect, signal } from '@preact/signals'
-import { Archetypes, tablesOf } from '@yaks/archetype'
+import { Archetypes, eidOf, tablesOf } from '@yaks/archetype'
 import { cache, subscribe, subscriptionState } from './live.ts'
 
 let sets = new Archetypes()
@@ -26,16 +26,19 @@ export let bootArchetypes = (): Promise<void> => {
       if (state.status != 'ready') return
       let rows = cache.peek()
       let added = false
-      for (let eid of state.eids) {
-        if (sets.get(eid)) continue
-        let value = rows[eid]?.archetype?.tables
-        if (value === undefined) continue
-        let set = sets.intern(tablesOf(value))
-        added = true
-        if (set.eid != eid) {
-          reject(new Error(`Invalid archetype descriptor: ${eid}`))
-          return
+      try {
+        for (let eid of state.eids) {
+          if (sets.get(eid)) continue
+          let tables = tablesOf(rows[eid]?.archetype?.tables)
+          if (eidOf(tables) != eid) {
+            throw new Error(`Invalid archetype descriptor: ${eid}`)
+          }
+          sets.intern(tables)
+          added = true
         }
+      } catch (error) {
+        reject(error)
+        return
       }
       if (added) version.value = version.peek() + 1
       resolve()

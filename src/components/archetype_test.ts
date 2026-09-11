@@ -1,4 +1,4 @@
-// The frozen 432-set census contains table names only (no owner bodies/IDs).
+// The frozen 432-set sample contains table names only (no owner bodies/IDs).
 // Every curated web registration and terminal overlay must keep its old pick,
 // including qualified views, unnamed defaults, tabs and registration ties.
 import './Entity.tsx'
@@ -6,12 +6,35 @@ import { overrides } from '../tui/App.tsx'
 import { assertEquals, assertStrictEquals } from '@std/assert'
 import { Archetypes } from '@yaks/archetype'
 import { applicable, define, extend, resolve } from '@yaks/render'
-import { registry, vocab } from './registry.ts'
+import { bundle, registry, vocab } from './registry.ts'
+import type { Ent } from '../types.ts'
 import fixture from './fixtures/archetypes.json' with { type: 'json' }
 
 let sets = new Archetypes()
 let entries = fixture.map((tables) => sets.intern(tables))
 let archetypes = (id: string) => sets.get(id)?.tables
+
+Deno.test('the fleet Ent boundary selects from the spine without touching bodies', () => {
+  let a = sets.intern(['doc', 'task'])
+  let e = new Proxy({
+    eid: 'projected',
+    num: 0,
+    entity: { archetype: a.eid },
+  }, {
+    get: (target, key) => {
+      if (!(key in target)) throw Error(`body read: ${String(key)}`)
+      return Reflect.get(target, key)
+    },
+    ownKeys: () => {
+      throw Error('body enumeration')
+    },
+  }) as unknown as Ent
+  let reg = define(registry.renderers, { views: registry.views, archetypes })
+  assertStrictEquals(
+    resolve(reg, bundle(e), 'Tile', vocab),
+    resolve(reg, { entity: { eid: e.eid }, doc: {}, task: {} }, 'Tile', vocab),
+  )
+})
 
 for (let terminal of [false, true]) {
   Deno.test(`432 archetypes preserve every ${terminal ? 'TUI' : 'web'} registry pick`, () => {

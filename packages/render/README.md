@@ -42,6 +42,15 @@ returns matching exact view names in `options.views` order, or registration
 order when views are omitted. It does not use the JSON fallback to invent tabs
 for unmatched names.
 
+Hosts can supply `define(renderers, {archetypes: eid => tables})`, where
+`tables` is an immutable array of physical table names from `@yaks/archetype`.
+Presence-only queries then match `bundle.entity.archetype` without reading
+component bodies, with one cached answer per query, vocabulary and table set.
+Scores, view traversal and overlays are unchanged. Value predicates and column
+controls still use the ordinary matcher; absent or unknown descriptor ids also
+fall back to it. Hosts must load descriptors before painting projected bundles
+and keep their descriptor subscription open for newly minted sets.
+
 Actions are contributed with
 `define(renderers, {vocab, actions: {doc: [
 {name: 'clear', run: () => ({doc: {title: null}})}]}})`.
