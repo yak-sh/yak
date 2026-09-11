@@ -55,7 +55,7 @@ export const commandTools = (commands: readonly Command[]): Tool[] =>
 export const resolveCommand = (
   commands: readonly Command[],
   argv: readonly string[],
-) => {
+): { command: Command; args: string[] } | undefined => {
   for (const command of commands) {
     for (const path of [pathOf(command), ...command.aliases ?? []]) {
       if (path.every((part, i) => argv[i] === part)) {
