@@ -20,11 +20,16 @@ export let runtimeRows = async (
     let [tail] = await g.read(
       '.entry.session=' + id + '&.notice=&.order=-entry.seq&.limit=1',
     )
+    let [call] = await g.read(
+      '.entry.session=' + id + '&.call&.order=-entry.seq&.limit=1',
+    )
+    let waiting = call &&
+      !(await g.read('.result.call=' + call.entity.eid + '&.limit=1')).length
     // Project existing facts only; nothing is written back as duplicate status.
     return {
       ...b,
       ...attempt ? { attempt: attempt.attempt } : {},
-      ...tail?.call ? { call: tail.call } : {},
+      ...waiting ? { call: call.call } : {},
       ...tail?.error ? { error: tail.error } : {},
       ...(attempt ?? tail)?.created
         ? { updated: (attempt ?? tail)!.created }
