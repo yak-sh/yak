@@ -551,3 +551,29 @@ Transcript selection is controlled by the frontend graph. The generic TUI
 item without measuring the full history. Key routing and help share a binding
 registry in `keyboard.ts`. Ctrl+U cuts the draft in INSERT/VISUAL, but moves
 half a page in NORMAL. Tab remains a compatibility focus shortcut.
+
+## Transcript search and entry inspection
+
+In NORMAL mode, `/` opens a literal, case-sensitive source search. Type a query
+and press Enter. `n` and `N` move through loaded matches; `n` also requests the
+next page when available. Once searching, use Ctrl+N/P rather than `n` to switch
+root sessions. Esc cancels the query editor. Search does not parse or render
+entries and does not send their bodies to the frontend.
+
+Enter with transcript focus opens the selected entry's source. Prompt entries
+show the full instruction source here rather than their compact transcript
+summary. Tool output and error text remain literal. Entries without prose show
+structured metadata. `j/k` scroll the current chunk, `]` and `[` read the next
+or previous source chunk, and Esc closes the detail panel without modifying the
+draft or transcript anchor. Changing sessions dismisses the old detail view.
+
+The backend reads at most 64 entries and returns at most 20 matches per search
+request. A no-match page can still have a continuation: press `n` to search
+further. The frontend retains the last 200 matches; `N` cycles within that
+loaded set. Source reads return at most 4,096 Unicode code points, using the
+same revision-checked reader as graph value inspection. A changed source asks
+you to search/open it again rather than mixing revisions. Text properties are
+currently loaded in full inside the backend before searching or slicing; this is
+not an index. Search observes durable text/checkpoints, not uncommitted
+streaming projections. The current match is selected and revealed at its entry;
+character offsets refer to source, not rendered Markdown cell positions.
