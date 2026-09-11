@@ -137,7 +137,7 @@ let files = (dir: string, eid: string) => ({
 // own $-expansion to the command it launches and `$$` is its escape for a
 // literal `$` — a bare path carries no metacharacter for it to shred.
 let WRAPPER = '"$@" >> "$TASKS_OUT" 2>> "$TASKS_ERR" & trap "" INT TERM; ' +
-  'echo "$$ $!" > "$TASKS_PID"; wait $!; code=$?; date +%s%3N > "$TASKS_ENDED"; echo $code > "$TASKS_CODE"'
+  'echo "$$ $!" > "$TASKS_PID"; wait $!; code=$?; ns=$(date +%s%N); echo $((ns / 1000000)) > "$TASKS_ENDED"; echo $code > "$TASKS_CODE"'
 
 // A transient scope name, unique per LAUNCH: systemd refuses a name whose
 // predecessor is still loaded, and --collect frees a settled scope but not
@@ -230,7 +230,13 @@ let codeOf = (path: string) => {
 let elapsedOf = (dir: string, eid: string) => {
   let f = files(dir, eid)
   let start = codeOf(f.started) ?? Date.now()
-  return () => Math.max(0, (codeOf(f.ended) ?? Date.now()) - start)
+  return () => {
+    let end = codeOf(f.ended) ?? Date.now()
+    // Some date implementations ignore %3N's width. Recover their old
+    // nanosecond stamps too; new wrappers divide explicitly.
+    if (end > 1e16) end = Math.floor(end / 1e6)
+    return Math.max(0, end - start)
+  }
 }
 
 // The agent is never our child, so waitpid is out of reach from the first

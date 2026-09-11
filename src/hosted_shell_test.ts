@@ -24,6 +24,9 @@ Deno.test('hosted recovery reads the original durable wall-clock, not the recove
     assertEquals(result.ms, 252_000)
     assertEquals(result.output, 'done')
     assertEquals(await hostedShell({ ...o, resume: true }), result)
+    Deno.writeTextFileSync(`${path}.started`, '1789089000000')
+    Deno.writeTextFileSync(`${path}.ended`, '1789089252000000000')
+    assertEquals((await hostedShell({ ...o, resume: true })).ms, 252_000)
   } finally {
     Deno.removeSync(o.dir!, { recursive: true })
   }
@@ -64,7 +67,9 @@ slow(
       Deno.writeTextFileSync(`${o.dir}/release`, '')
       let result = await recovered
       assertEquals(result.output, 'once\ndone\n')
-      assert(typeof result.ms == 'number' && result.ms >= 0)
+      assert(
+        typeof result.ms == 'number' && result.ms >= 0 && result.ms < 30_000,
+      )
       assertEquals(result.facets?.exit, { code: 7 })
       assertEquals(result.facets?.stderr, { text: 'err\n' })
       // Another restart after exit but before graph settlement reads the same

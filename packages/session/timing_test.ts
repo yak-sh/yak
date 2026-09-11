@@ -5,6 +5,8 @@ import { project } from './react.ts'
 Deno.test('wall-clock formats quick calls and flags only commands over a minute', () => {
   assertEquals(duration(12.3), '12ms')
   assertEquals(duration(999), '999ms')
+  assertEquals(took('', 850), 'took 850ms')
+  assertEquals(duration(90_000), '1m30s')
   assertEquals(duration(60_000), '1m0s')
   assertEquals(duration(252_000), '4m12s')
   assertEquals(took('', 60_000), 'took 1m0s')
