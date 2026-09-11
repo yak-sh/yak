@@ -39,3 +39,20 @@ Deno.test('connectors account for filtered siblings without expansion state', ()
     ['b', '└─'],
   ])
 })
+
+Deno.test('unnumbered task children without a call are visible and child archive is local', () => {
+  let parent = row('parent')
+  let child = row('child', 'parent')
+  child.spawned = { parent: 'parent', call: null }
+  let sibling = row('sibling', 'parent')
+  assertEquals(
+    sessionTree([parent, child, sibling]).map((r) => r.bundle.entity.eid),
+    ['parent', 'child', 'sibling'],
+  )
+  child.archived = {}
+  assertEquals(
+    sessionTree([parent, child, sibling]).map((r) => r.bundle.entity.eid),
+    ['parent', 'sibling'],
+  )
+  assertEquals(parent.archived, undefined)
+})

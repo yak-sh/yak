@@ -79,6 +79,7 @@ export let theme: Sheet = {
   Scrollbar_Snapped: { dim: true },
   Frame_Side: {},
   Session_Selected: { bg: '#343f44' },
+  List_Selected: { bg: '#343f44' },
   Panel: { gap: true },
   Panel_Title: { fg: everforest.grey, bold: true },
   Entry: { fg: everforest.fg },

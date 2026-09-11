@@ -1,7 +1,7 @@
 import { transient } from '@yaks/graph'
 import { Keyboard } from './keyboard.ts'
 import { useVisualController, type VisualState } from '@yaks/tui'
-import { parentId, rootOf, sessionTree } from './tree.ts'
+import { rootOf, sessionTree } from './tree.ts'
 import { ToolError } from '@yaks/session'
 import { diagnostics } from './diagnostics.ts'
 /** The harness on @yaks/tui: local editing, graph-backed content. */
@@ -13,7 +13,15 @@ import { parse } from '@yaks/query'
 import { signal } from '@preact/signals'
 import { type Frontend, frontend } from './frontend.ts'
 import type { Bundle, Comp, Eid } from '@yaks/graph'
-import { Frame, run, Textarea, useKeys, VirtualList } from '@yaks/tui'
+import {
+  Frame,
+  metrics,
+  run,
+  size,
+  Textarea,
+  useKeys,
+  VirtualList,
+} from '@yaks/tui'
 import { type Context, type Panel, panels, type UIAgent } from './panels.ts'
 import type { Agent } from './run.ts'
 import { INSTRUCTIONS } from './cli.ts'
@@ -101,7 +109,11 @@ export let App = (
   }
   let refresh = useRef(() => {})
   let choose = (s: Selection) => {
-    ui.patch({ selected: s.id ?? null, generation: current().generation + 1 })
+    ui.patch({
+      selected: s.id ?? null,
+      sidebar: s.id ?? 'new',
+      generation: current().generation + 1,
+    })
     setData((d) => ({ ...d, entries: [], loadedFor: undefined }))
   }
 
@@ -222,49 +234,76 @@ export let App = (
     let state = current()
     let rows = projection.peek().sessions
     let tree = sessionTree(rows, { ...state, selected: state.id })
-    let selected = tree.find((r) => r.bundle.entity.eid == state.id)
     if (k.alt && k.text == 'z') {
       ui.patch({ showArchived: !state.showArchived })
       return true
     }
     if (k.alt && k.text == 'a') {
-      let root = rows.find((b) => b.entity.eid == rootOf(rows, state.id))
+      let root = rows.find((b) =>
+        b.entity.eid ==
+          String((ui.client.ent('view')!.frontend as Comp).sidebar ?? state.id)
+      )
       if (root && a.archive) {
         let archiving = !root.archived
         void a.archive(root.entity.eid, archiving).then(() => {
           if (
             archiving && !current().showArchived &&
-            rootOf(rows, current().id) == root.entity.eid
+            current().id == root.entity.eid
           ) choose({})
           refresh.current()
         }).catch((e) => setError(String(e)))
       }
       return true
     }
-    if (k.ctrl && k.text == 'l') {
-      let child = selected && tree.find((r) => parentId(r.bundle) == state.id)
-      if (child) choose({ id: child.bundle.entity.eid })
+    if (k.ctrl && ['h', 'l'].includes(k.text ?? '')) {
+      ui.keys({ focus: k.text == 'h' ? 'transcript' : 'sidebar' })
       return true
     }
-    if (k.ctrl && k.text == 'h') {
-      let parent = selected && parentId(selected.bundle)
-      if (parent && tree.some((r) => r.bundle.entity.eid == parent)) {
-        choose({ id: parent })
+    if (
+      k.ctrl &&
+      (['j', 'k', 'u', 'd'].includes(k.text ?? '') ||
+        ['home', 'end'].includes(k.name))
+    ) {
+      const ctx: Context = {
+        agent: a,
+        session: state.id,
+        sessions: rows,
+        showSettled: state.showSettled,
+        showArchived: state.showArchived,
       }
-      return true
-    }
-    if (k.ctrl && (k.text == 'j' || k.text == 'k')) {
-      let siblings = tree.filter((r) =>
-        selected
-          ? (selected.depth == 0
-            ? r.depth == 0
-            : parentId(r.bundle) == parentId(selected.bundle))
-          : r.depth == 0
+      const snapshot = projection.value
+      const choices = sidebar.flatMap((panel, i) =>
+        (panel.selectable?.(ctx, snapshot.rows[i] ?? []) ?? []).map((row) => ({
+          ...row,
+          viewport: panel.selectionViewport,
+        }))
       )
-      let at = siblings.findIndex((r) => r.bundle.entity.eid == state.id)
-      let delta = k.text == 'j' ? 1 : -1
-      let next = siblings[(at + delta + siblings.length) % siblings.length]
-      if (next) choose({ id: next.bundle.entity.eid })
+      const cursor = String(
+        (ui.client.ent('view')!.frontend as Comp).sidebar ?? state.id ?? 'new',
+      )
+      const at = choices.findIndex((r) => r.id == cursor)
+      const height = metrics.value[choices[at]?.viewport ?? '']?.height ??
+        size.value.rows
+      const step = k.text == 'u' || k.text == 'd'
+        ? Math.max(1, Math.floor(height / 2))
+        : 1
+      const index = k.name == 'home'
+        ? 0
+        : k.name == 'end'
+        ? choices.length - 1
+        : Math.max(
+          0,
+          Math.min(
+            choices.length - 1,
+            at + (k.text == 'k' || k.text == 'u' ? -step : step),
+          ),
+        )
+      const next = choices[index]
+      if (next) {
+        if (next.id == 'new') choose({})
+        else if (next.session) choose({ id: next.session })
+        ui.patch({ sidebar: next.id })
+      }
       return true
     }
     let delta = k.ctrl && k.text == 'n' || k.alt && k.name == 'down'
@@ -325,6 +364,7 @@ export let App = (
     session: selection.id,
     sessions: data.sessions,
     showSettled,
+    sidebar: state.sidebar == null ? undefined : String(state.sidebar),
     showArchived: Boolean(state.showArchived),
   }
   let transcriptItems = useMemo(
@@ -435,6 +475,14 @@ let Transcript = ({ ui, id, items, agent, pending }: {
       },
     },
     onViewportChange: viewport.set,
+    selected: position?.selected == null
+      ? undefined
+      : String(position.selected),
+    onSelect: (selected: string) =>
+      ui.client.mutate([{
+        entity: { eid: 'viewport-' + id },
+        viewport: { selected },
+      }]),
     textOf: (item: { bundle: Bundle }) =>
       String((item.bundle.content as Comp | undefined)?.body ?? ''),
     renderItem: (item: { id: string; bundle: Bundle }) =>

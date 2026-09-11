@@ -27,6 +27,7 @@ export type Context = {
   agent: UIAgent
   session?: Eid
   sessions: Bundle[]
+  sidebar?: string
   showSettled?: boolean
   showArchived?: boolean
 }
@@ -36,6 +37,12 @@ export type Panel = {
   titleClass?: string
   scrollable?: boolean
   fit?: boolean
+  /** Metric id of the viewport used for selection paging. */
+  selectionViewport?: string
+  selectable?: (
+    ctx: Context,
+    rows: Bundle[],
+  ) => { id: string; session?: string }[]
   read: (ctx: Context) => Bundle[] | Promise<Bundle[]>
   Render: ComponentType<Context & { rows: Bundle[] }>
 }
@@ -73,7 +80,7 @@ let list = (
     'div',
     null,
     rows.length
-      ? rows.map((b) => h('div', { key: b.entity.eid, wrap: '1' }, line(b)))
+      ? rows.map((b) => h('div', { key: b.entity.eid }, line(b)))
       : h('div', { class: 'Muted' }, empty),
   )
 
@@ -81,9 +88,21 @@ let list = (
 export let panels: Panel[] = [
   {
     title: 'Sessions',
+    selectionViewport: 'session-tree',
+    selectable: (ctx, rows) => [
+      { id: 'new' },
+      ...sessionTree(rows, {
+        selected: ctx.session,
+        showSettled: ctx.showSettled,
+        showArchived: ctx.showArchived,
+      }).map(({ bundle }) => ({
+        id: bundle.entity.eid,
+        session: bundle.entity.eid,
+      })),
+    ],
     scrollable: true,
     read: (c) => c.sessions,
-    Render: ({ rows, session, showSettled, showArchived }) => {
+    Render: ({ rows, session, sidebar, showSettled, showArchived }) => {
       let tree = sessionTree(rows, {
         selected: session,
         showSettled,
@@ -99,7 +118,8 @@ export let panels: Panel[] = [
           scrollbar: true,
           reveal: Math.max(
             0,
-            tree.findIndex((r) => r.bundle.entity.eid == session) + 1,
+            tree.findIndex((r) => r.bundle.entity.eid == (sidebar ?? session)) +
+              1,
           ),
         },
         h(
@@ -107,7 +127,12 @@ export let panels: Panel[] = [
           null,
           h(
             'div',
-            { class: session ? 'Muted' : 'Session_Selected', fill: '1' },
+            {
+              class: (sidebar ?? session ?? 'new') == 'new'
+                ? 'Session_Selected'
+                : 'Muted',
+              fill: '1',
+            },
             'New session',
           ),
           ...tree.map(({ bundle: b, prefix }) =>
@@ -116,7 +141,9 @@ export let panels: Panel[] = [
               {
                 key: b.entity.eid,
                 fill: '1',
-                class: session == b.entity.eid ? 'Session_Selected' : '',
+                class: (sidebar ?? session) == b.entity.eid
+                  ? 'Session_Selected'
+                  : '',
               },
               h('span', { class: 'Muted' }, prefix),
               indicator(b),
@@ -130,22 +157,42 @@ export let panels: Panel[] = [
   },
   {
     title: 'Tasks',
+    selectionViewport: 'task-list',
+    scrollable: true,
+    selectable: (_ctx, rows) =>
+      rows.map((b) => ({
+        id: b.entity.eid,
+        session: (b.claim as Comp | undefined)?.session as string | undefined,
+      })),
     fit: true,
     titleClass: 'Task',
     read: (c) => c.agent.tasks(),
-    Render: ({ rows, sessions }) =>
-      list(rows, (b) => {
-        let held = (b.claim as Comp | undefined)?.session
-        return h(
-          'span',
-          null,
-          indicator(b, sessions),
-          ' ',
-          `${b.entity.num ?? b.entity.eid.slice(0, 8)} ${
-            (b.doc as Comp | undefined)?.title ?? b.entity.eid
-          }${held ? ` [${shortSessionId(String(held))}]` : ''}`,
-        )
-      }, 'No open tasks'),
+    Render: ({ rows, sessions, sidebar }) =>
+      h(
+        Scroll,
+        {
+          id: 'task-list',
+          follow: false,
+          keyboard: false,
+          grow: '1',
+          reveal: Math.max(0, rows.findIndex((b) => b.entity.eid == sidebar)),
+        },
+        list(rows, (b) => {
+          let held = (b.claim as Comp | undefined)?.session
+          return h(
+            'div',
+            {
+              fill: '1',
+              class: sidebar == b.entity.eid ? 'Session_Selected' : '',
+            },
+            indicator(b, sessions),
+            ' ',
+            `${b.entity.num ?? b.entity.eid.slice(0, 8)} ${
+              (b.doc as Comp | undefined)?.title ?? b.entity.eid
+            }${held ? ` [${shortSessionId(String(held))}]` : ''}`,
+          )
+        }, 'No open tasks'),
+      ),
   },
   {
     title: 'Context usage',

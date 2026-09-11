@@ -348,3 +348,12 @@ sidebar remains hidden below `min` terminal columns (90 by default).
 the terminal size, not a nested container's measured width. Nested layouts
 should use the painter's row/column sizing or pass an explicit fixed `width`.
 This option does not add general CSS percentage sizing.
+### Controlled item selection
+
+`VirtualList` accepts `selected: string` and `onSelect(id)` for item navigation.
+Up/down select adjacent items, Home/End select endpoints, PageUp/PageDown move
+approximately one viewport, and Ctrl+U/D move approximately half a viewport.
+Page distances use measured average item heights; they do not measure unseen
+history. The `List_Selected` theme token styles selection. A changed selection
+is revealed automatically; wheel scrolling can subsequently move away from it.
+Without `onSelect`, the existing row-scrolling behavior remains unchanged.

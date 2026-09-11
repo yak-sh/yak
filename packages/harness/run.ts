@@ -2,7 +2,6 @@ import { streamingEnabled } from './streaming.ts'
 import { imageContext } from './artifact_tools.ts'
 import { configuredImages, type ImageOptions, readImage } from './images.ts'
 import { outputView } from '@yaks/context'
-import { rootOf } from './tree.ts'
 import { diagnostics } from './diagnostics.ts'
 import { promptEntry } from '@yaks/context'
 import { instructionFiles } from '@yaks/context/host'
@@ -273,12 +272,11 @@ export let agent = (opts: Opts = {}): Agent => {
       }),
     archive: async (session, archived) => {
       let rows = await h.g.read('.session')
-      let root = rootOf(rows, session)
-      if (!root || !rows.some((b) => b.entity.eid == root)) {
+      if (!rows.some((b) => b.entity.eid == session)) {
         throw new Error('Unknown session')
       }
       await h.g.apply([{
-        entity: { eid: root },
+        entity: { eid: session },
         archived: archived ? { at: new Date().toISOString() } : null,
       }])
     },
@@ -288,12 +286,7 @@ export let agent = (opts: Opts = {}): Agent => {
           ...b,
           session: {
             ...b.session as Comp,
-            title: titleOf(
-              await h.g.read(
-                '.entry.session=' + b.entity.eid +
-                  '&.content&.prompt=&.notice=&.order=entry.seq&.limit=1',
-              ),
-            ),
+            title: await sessionTitle(h.g, b),
           },
         })),
       ),
@@ -395,6 +388,25 @@ export let agent = (opts: Opts = {}): Agent => {
     })
   }
   return a
+}
+
+/** Child assignment is explicit admission data; copied fork context is not its title. */
+export let sessionTitle = async (
+  g: Agent['h']['g'],
+  session: Bundle,
+): Promise<string> => {
+  if (session.spawned) {
+    const [assignment] = await g.storage.tx((tx) =>
+      tx.get([session.entity.eid + ':input'])
+    )
+    if (assignment?.content) return titleOf([assignment])
+  }
+  return titleOf(
+    await g.read(
+      '.entry.session=' + session.entity.eid +
+        '&.content&.prompt=&.notice=&.order=entry.seq&.limit=1',
+    ),
+  )
 }
 
 /** What a transcript is called on a listing line: the first words anybody said

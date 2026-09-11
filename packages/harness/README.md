@@ -37,19 +37,21 @@ returns to editing without changing the draft or cursor. NORMAL commands never
 submit or type into the composer. `?` opens help; `?` or Escape dismisses it.
 There is no permanent shortcut panel.
 
-| NORMAL key                | Action                                                         |
-| ------------------------- | -------------------------------------------------------------- |
-| `j` / `k`                 | Scroll transcript one row down / up                            |
-| `h` / `l`                 | Previous / next transcript page (not horizontal text movement) |
-| `gg` / `G`                | Transcript start / end; `G` resumes bottom-follow              |
-| Tab                       | Switch transcript / sidebar focus                              |
-| `hjkl` with sidebar focus | Parent / next sibling / previous sibling / child               |
-| `n` / `p`                 | Next / previous root                                           |
-| `o`                       | New session                                                    |
-| `t`                       | Toggle message / task composer                                 |
-| `a` / `z` / `s`           | Archive root / show archived / show settled                    |
-| `v`                       | VISUAL selection of the transcript's anchored item source      |
-| `i`                       | Return to INSERT                                               |
+| NORMAL key                | Action                                                    |
+| ------------------------- | --------------------------------------------------------- |
+| `j` / `k`                 | Select next / previous transcript entry                   |
+| `h` / `l`                 | Focus transcript / sidebar                                |
+| `gg` / `G`                | Transcript start / end; `G` resumes bottom-follow         |
+| Tab                       | Switch transcript / sidebar focus                         |
+| `hjkl` with sidebar focus | h/l changes pane; j/k selects visible rows                |
+| `n` / `p`                 | Next / previous root                                      |
+| `o`                       | New session                                               |
+| `t`                       | Toggle message / task composer                            |
+| `a` / `z` / `s`           | Archive selected session / show archived / show settled   |
+| `v`                       | VISUAL selection of the transcript's anchored item source |
+| Ctrl+U / Ctrl+D           | Move selection half a page up / down                      |
+| Ctrl+B / Ctrl+F           | Move transcript selection a page up / down                |
+| `i`                       | Return to INSERT                                          |
 
 In VISUAL, `hjkl` extend selection, `y` copies and returns to NORMAL, and Escape
 cancels to NORMAL. Tab cycles selectable surfaces. In INSERT, Alt+v starts draft
@@ -323,11 +325,14 @@ editing an existing mark preserves its original author.
 ### Session tree
 
 Sessions are grouped beneath their root, with assignment titles and compact IDs.
-Branches are always open. `Ctrl+j/k` select the next/previous sibling, `Ctrl+h`
-selects the parent, and `Ctrl+l` enters its first visible child. `Ctrl+N/P`
-(also Alt+Down/Up) switch roots, skipping descendants. The selected row has a
-subtle background; tree connectors show relationships without selection or
-expansion arrows. `Ctrl+S` reveals settled children.
+Branches are always open. `Ctrl+j/k` traverse selectable sidebar rows in visual
+order, including New session and tasks. `Ctrl+h/l` focus the transcript/sidebar.
+Panels expose selectable contributions alongside their renderers, so navigation
+follows the same panel order as rendering. Selecting a claimed task opens its
+worker session; an unclaimed task stays highlighted without changing transcript.
+`Ctrl+N/P` (also Alt+Down/Up) switch roots, skipping descendants. The selected
+row has a subtle background; tree connectors show relationships without
+selection or expansion arrows. `Ctrl+S` reveals settled children.
 
 Ctrl+h and Ctrl+j require extended keyboard reporting to distinguish them from
 Backspace and Enter. Legacy Backspace/Enter continue editing/submitting; they
@@ -338,13 +343,13 @@ still types; VISUAL mode retains priority.
 Tasks shrinks to their content within bounded shares. Context usage is last at
 the bottom; the session tree receives remaining height and scrolls.
 
-`Alt+a` archives/unarchives the selected root, even when invoked on a
-descendant. `Alt+z` shows archived roots so they can be selected and restored.
-Archival is a persistent `archived` facet: it neither stops execution nor
-removes history. Descendants inherit visibility from their root; they receive no
-archive marks. Selection and visibility preferences live only in the frontend
-graph. Trees are keyboard-controlled for now; no coordinate-specific mouse hacks
-were added.
+`Alt+a` archives/unarchives only the selected session, never its root. `Alt+z`
+shows archived roots so they can be selected and restored. Archival is a
+persistent `archived` facet: it neither stops execution nor removes history.
+Archiving a session hides its subtree; descendants receive no additional archive
+marks. Selection and visibility preferences live only in the frontend graph.
+Trees are keyboard-controlled for now; no coordinate-specific mouse hacks were
+added.
 
 The session title projection reads original local input, excluding inherited
 fork history and instruction/notice entries. This currently adds transcript
@@ -540,3 +545,9 @@ programmatic configuration takes precedence over the environment. The worker
 receives the same configuration. Final response citations appear as source
 links. This is provider-hosted browsing, not an unrestricted filesystem/network
 fetch function; provider compatibility errors remain visible.
+
+Transcript selection is controlled by the frontend graph. The generic TUI
+`VirtualList` accepts `selected` and `onSelect`; navigation reveals the selected
+item without measuring the full history. Key routing and help share a binding
+registry in `keyboard.ts`. Ctrl+U cuts the draft in INSERT/VISUAL, but moves
+half a page in NORMAL. Tab remains a compatibility focus shortcut.

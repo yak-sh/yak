@@ -20,6 +20,7 @@ export let frontendVocab = loadVocab([{
       persist: 'none',
       properties: {
         selected: { type: 'string' },
+        sidebar: { type: 'string' },
         generation: { type: 'number' },
         showSettled: { type: 'boolean' },
         showArchived: { type: 'boolean' },
@@ -44,6 +45,7 @@ export let frontendVocab = loadVocab([{
       persist: 'none',
       properties: {
         item: { type: 'string' },
+        selected: { type: 'string' },
         offset: { type: 'number' },
         follow: { type: 'boolean' },
       },

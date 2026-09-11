@@ -482,7 +482,7 @@ Deno.test('settled subagents are hidden, toggled and retained while selected', a
     await settle()
     assert(ui.text().includes('parent retains child result'))
     assert(!ui.text().includes('DONE_CHILD'))
-    await ui.send('\x1b[108;5u') // enter child
+    await ui.send('\x1b[106;5u') // next visible row is the active child
     await settle()
     assert(ui.text().includes('● ACTIVE_CHILD'))
     await ui.send('\x13')
@@ -494,8 +494,7 @@ Deno.test('settled subagents are hidden, toggled and retained while selected', a
     assert(ui.text().includes('child transcript intact'))
     await ui.send('\x13') // selected child remains even with filter on
     assert(ui.text().includes('● DONE_CHILD'))
-    await ui.send('\x1b[104;5u')
-    await ui.send('\x1b[104;5u') // root has no parent
+    await ui.send('\x1b[107;5u') // previous visual row is the root
     await settle()
     assert(ui.text().includes('parent retains child result'))
     assert(!ui.text().includes('DONE_CHILD'))
@@ -544,7 +543,7 @@ Deno.test('tree navigation skips children between roots and archive toggles stay
     await ui.send('\x0e')
     await settle()
     assertEquals(selected(), 'a')
-    await ui.send('\x1b[108;5u')
+    await ui.send('\x1b[106;5u')
     assert(ui.text().includes('Research widgets'), ui.text())
     await settle()
     assertEquals(selected(), 'child')
@@ -741,7 +740,7 @@ Deno.test('transcript publishes before slow sidebar reads and despite ongoing ch
   }
 })
 
-Deno.test('Ctrl directions navigate siblings and parents; legacy Enter and Backspace edit', async () => {
+Deno.test('Ctrl directions navigate visual rows and spatial focus; legacy Enter and Backspace edit', async () => {
   let rows: Bundle[] = [
     { entity: { eid: 'root' }, session: { id: 'Root', status: 'running' } },
     {
@@ -797,25 +796,28 @@ Deno.test('Ctrl directions navigate siblings and parents; legacy Enter and Backs
     assert(!ui.text().includes('▸'))
     assert(!ui.text().includes('▾'))
     await key(108)
+    assertEquals(selected(), 'root')
+    assertEquals((f.client.ent('keyboard')!.keyboard as Comp).focus, 'sidebar')
+    await key(106)
     assertEquals(selected(), 'a')
     await key(106)
-    assertEquals(selected(), 'b') // skips a's grandchild
+    assertEquals(selected(), 'aa')
+    await key(106)
+    assertEquals(selected(), 'b')
     await key(107)
-    assertEquals(selected(), 'a')
-    await key(108)
     assertEquals(selected(), 'aa')
     await key(104)
-    assertEquals(selected(), 'a')
-    await key(104)
-    assertEquals(selected(), 'root')
-    await key(106)
-    assertEquals(selected(), 'other')
+    assertEquals(selected(), 'aa')
+    assertEquals(
+      (f.client.ent('keyboard')!.keyboard as Comp).focus,
+      'transcript',
+    )
     await ui.send('xy\x08')
     assertEquals((f.client.ent('draft')!.draft as Comp).text, 'x')
     await ui.send('\n')
     await settle()
     assertEquals(sent, ['x'])
-    assertEquals(selected(), 'other')
+    assertEquals(selected(), 'aa')
     await ui.send('preserve')
     await key(107)
     assertEquals((f.client.ent('draft')!.draft as Comp).text, 'preserve')
@@ -823,6 +825,75 @@ Deno.test('Ctrl directions navigate siblings and parents; legacy Enter and Backs
       ui.out.join('').includes('48;2;52;63;68'),
       'selected background reaches ANSI',
     )
+  } finally {
+    ui.free()
+    f.close()
+  }
+})
+
+Deno.test('sidebar selectable contributions follow visual order and archive only selected session', async () => {
+  const f = frontend()
+  const sessions: Bundle[] = [
+    { entity: { eid: 'root' }, session: { id: 'Root', status: 'running' } },
+    {
+      entity: { eid: 'child' },
+      session: { id: 'Child', status: 'running' },
+      spawned: { parent: 'root', call: null },
+    },
+  ]
+  const task: Bundle = {
+    entity: { eid: 'task' },
+    task: {},
+    doc: { title: 'Selectable task' },
+    claim: { session: 'child' },
+  }
+  const archived: string[] = []
+  const a: UIAgent = {
+    sessions: () => Promise.resolve(sessions),
+    children: () => Promise.resolve([]),
+    tasks: () => Promise.resolve([task]),
+    transcript: () => Promise.resolve([]),
+    entry: () => null,
+    line: () => '',
+    start: () => Promise.resolve('root'),
+    send: () => Promise.resolve('input'),
+    taskEntry: () => Promise.resolve({ task: 'task', child: 'child' }),
+    archive: (id, value) => {
+      archived.push(id)
+      sessions.find((b) => b.entity.eid == id)!.archived = value
+        ? {}
+        : undefined
+      return Promise.resolve()
+    },
+  }
+  const ui = await mount(
+    () => h(App, { agent: a, frontend: f, subscribe: () => () => {} }),
+    120,
+    40,
+  )
+  const cursor = () => (f.client.ent('view')!.frontend as Comp).sidebar
+  try {
+    await settle()
+    await ui.send('\x1bl') // legacy unrelated key stays editing; use NORMAL below
+    await ui.send('\x1b')
+    await ui.send('l')
+    await ui.send('j')
+    await settle()
+    assertEquals(cursor(), 'root')
+    await ui.send('j')
+    await settle()
+    assertEquals(cursor(), 'child')
+    await ui.send('j')
+    await settle()
+    assertEquals(cursor(), 'task')
+    assert(ui.text().includes('Selectable task'))
+    await ui.send('k')
+    await settle()
+    assertEquals(cursor(), 'child')
+    await ui.send('a')
+    await settle()
+    assertEquals(archived, ['child'])
+    assertEquals(sessions[0].archived, undefined)
   } finally {
     ui.free()
     f.close()

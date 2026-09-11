@@ -21,6 +21,7 @@ export type ViewportState = { anchor?: Anchor; follow: boolean }
 export class VirtualWindow<T extends VirtualItem> {
   anchor?: Anchor
   selected?: string
+  selectionStyle: Style = { bg: '#343f44' }
   follow: boolean
   private items: readonly T[] = []
   private indices = new Map<string, number>()
@@ -30,6 +31,9 @@ export class VirtualWindow<T extends VirtualItem> {
   private start = false
   private oldIndex = 0
   private style = ''
+  private revealedSelection?: string
+  private revealedWidth = 0
+  private revealedHeight = 0
   stats = { measured: 0, hits: 0 }
   constructor(
     private measure: (item: T, width: number) => Line[],
@@ -74,10 +78,14 @@ export class VirtualWindow<T extends VirtualItem> {
       : key.name == 'pagedown'
       ? page
       : undefined
-    let index = selected === undefined ? -1 : this.indices.get(selected) ?? -1
-    if (key.name == 'home') index = 0
-    else if (key.name == 'end') index = this.items.length - 1
-    else if (delta !== undefined) index = index < 0 ? 0 : index + delta
+    let index = this.indices.get(selected ?? this.anchor?.id ?? '') ?? -1
+    if (key.name == 'home') {
+      index = 0
+      this.follow = false
+    } else if (key.name == 'end') {
+      index = this.items.length - 1
+      this.follow = true
+    } else if (delta !== undefined) index = index < 0 ? 0 : index + delta
     else return undefined
     return this.items[Math.max(0, Math.min(this.items.length - 1, index))]?.id
   }
@@ -202,7 +210,12 @@ export class VirtualWindow<T extends VirtualItem> {
     let selected = this.selected === undefined
       ? undefined
       : this.indices.get(this.selected)
-    if (selected !== undefined) {
+    const reveal = this.selected != this.revealedSelection ||
+      width != this.revealedWidth || height != this.revealedHeight
+    this.revealedSelection = this.selected
+    this.revealedWidth = width
+    this.revealedHeight = height
+    if (selected !== undefined && !this.follow && reveal) {
       let end = i, remaining = height + offset, seen = false
       while (end < this.items.length && remaining > 0) {
         remaining -= get(end).length
@@ -241,7 +254,7 @@ export class VirtualWindow<T extends VirtualItem> {
           ? visible.map((line) =>
             line.map((seg) => ({
               ...seg,
-              style: { ...seg.style, bg: seg.style.bg ?? '#343f44' },
+              style: { ...seg.style, ...this.selectionStyle },
             }))
           )
           : visible),
@@ -379,7 +392,7 @@ export let VirtualList = <T extends VirtualItem>(
     enabled: Boolean(textOf),
     snapshot: () => {
       selectedIndex.current = items.findIndex((i) =>
-        i.id == state.current!.anchor?.id
+        i.id == (selected ?? state.current!.anchor?.id)
       )
       let item = items[selectedIndex.current] ?? items.at(-1)
       return { text: item && textOf ? textOf(item) : '' }
@@ -400,6 +413,9 @@ export let VirtualList = <T extends VirtualItem>(
     if (onSelect) {
       let id = state.current!.selectionKey(key, selected)
       if (id !== undefined) {
+        // Ordinary selection detaches; End explicitly resumes following.
+        if (key.name != 'end') state.current!.follow = false
+        publish()
         onSelect(id)
         return true
       }
@@ -429,6 +445,7 @@ export let VirtualList = <T extends VirtualItem>(
       ;(el as TElement).viewport = (width, height, style, sheet) => {
         selectionWidth.current = width
         env.current = { style, sheet }
+        state.current!.selectionStyle = sheet.List_Selected ?? { bg: '#343f44' }
         let inner = attrs.scrollbar && width >= 2 ? width - 1 : width
         if (pending) return []
         let lines = state.current!.layout(

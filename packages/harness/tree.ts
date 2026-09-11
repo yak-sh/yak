@@ -51,7 +51,7 @@ export let sessionTree = (
     let id = b.entity.eid
     if (visited.has(id)) return
     visited.add(id)
-    if (depth == 0 && b.archived && !opts.showArchived && !path.has(id)) return
+    if (b.archived && !opts.showArchived && !path.has(id)) return
     if (
       depth > 0 && !opts.showSettled && !path.has(id) &&
       (b.session as Comp)?.status == 'settled'

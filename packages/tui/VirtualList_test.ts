@@ -281,6 +281,9 @@ Deno.test('item keys use estimated page heights and preserve scrolling API', () 
   assertEquals(v.selectionKey({ name: 'home' }, '20'), '0')
   assertEquals(v.selectionKey({ name: 'end' }, '20'), '99')
   assertEquals(v.selectionKey({ name: 'wheelup' }, '20'), undefined)
+  assert(v.follow) // End selection resumes following.
+  v.key({ name: 'home', ctrl: true })
+  v.layout(80, 10)
   assert(v.key({ name: 'down' }))
   assertEquals(text(v.layout(80, 10))[0], '1')
 })
@@ -337,4 +340,15 @@ Deno.test('selected oversized entry shows its beginning after resize', () => {
   assertEquals(text(v.layout(2, 3)), ['ab', 'cd', 'ef'])
   assertEquals(text(v.layout(1, 2)), ['a', 'b'])
   assertEquals(v.anchor, { id: 'b', offset: 0 })
+})
+
+Deno.test('wheel scrolling remains possible after selected item is revealed', () => {
+  const v = window(false)
+  v.update(items(100))
+  v.selected = '20'
+  v.layout(80, 10)
+  const before = v.anchor!.id
+  v.key({ name: 'wheeldown' })
+  v.layout(80, 10)
+  assert(v.anchor!.id !== before)
 })

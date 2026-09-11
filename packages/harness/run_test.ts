@@ -2,7 +2,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Comp } from '@yaks/graph'
 import type { Model } from '@yaks/model'
 import { react, statusOf, transcript, UnknownSession } from '@yaks/session'
-import { agent, idOf, seed, titleOf } from './run.ts'
+import { agent, idOf, seed, sessionTitle, titleOf } from './run.ts'
 import { open } from './store.ts'
 
 // A model that answers with whatever it was last told, so a test can see the
@@ -255,12 +255,9 @@ Deno.test('session titles use local assignment, not inherited parent context', a
       Boolean(
         (await a.sessions()).find((b) => b.entity.eid == 'parent')?.archived,
       ),
-      true,
+      false,
     )
-    assertEquals(
-      (await a.sessions()).find((b) => b.entity.eid == 'worker')?.archived,
-      undefined,
-    )
+    assert((await a.sessions()).find((b) => b.entity.eid == 'worker')?.archived)
   } finally {
     await a.close()
   }
@@ -406,6 +403,54 @@ Deno.test('session titles read only the first eligible local entry', async () =>
     assertEquals(titles.length, 1)
     assertEquals(titles[0].includes('.limit=1'), true)
     assertEquals(titles[0].includes('.order=entry.seq'), true)
+  } finally {
+    await a.close()
+  }
+})
+
+Deno.test('task fork title uses assignment rather than copied local context', async () => {
+  const h = open(':memory:')
+  try {
+    await h.g.apply([
+      { entity: { eid: 'parent' }, session: { id: 'parent' } },
+      {
+        entity: { eid: 'child' },
+        session: { id: 'child' },
+        spawned: { parent: 'parent' },
+      },
+      {
+        entity: { eid: 'copied' },
+        entry: { session: 'child' },
+        content: { body: 'old conversation message' },
+      },
+      {
+        entity: { eid: 'child:input' },
+        entry: { session: 'child' },
+        content: { body: 'Improve sidebar navigation' },
+      },
+    ], { trusted: true })
+    const [child] = await h.g.read('.eid=child')
+    assertEquals(await sessionTitle(h.g, child), 'Improve sidebar navigation')
+  } finally {
+    h.close()
+  }
+})
+
+Deno.test('archive marks exactly the selected child, not its root', async () => {
+  const a = started()
+  try {
+    await a.h.g.apply([
+      { entity: { eid: 'root' }, session: { id: 'root' } },
+      {
+        entity: { eid: 'child' },
+        session: { id: 'child' },
+        spawned: { parent: 'root' },
+      },
+    ], { trusted: true })
+    await a.archive('child', true)
+    const rows = await a.h.g.read('.session')
+    assertEquals(rows.find((b) => b.entity.eid == 'root')!.archived, undefined)
+    assert(rows.find((b) => b.entity.eid == 'child')!.archived)
   } finally {
     await a.close()
   }
