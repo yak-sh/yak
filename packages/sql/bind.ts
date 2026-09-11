@@ -604,6 +604,50 @@ let walk = (ctx: Ctx, c: Walk): Cond => {
   return walkSql(ctx.d.ownerKey('entity'), c, step)
 }
 
+// A spine facet the archetype index can answer, or null for every other
+// clause. The same reading `single()` gives a bare one-word predicate, so a
+// folded conjunction and a clause-by-clause one say the same thing.
+let facetOf = (
+  ctx: Ctx,
+  c: Clause,
+): { comp: string; present: boolean } | null => {
+  if (c.kind != 'pred' || c.path.length != 1) return null
+  if (c.not || c.where || claims(ctx, 'pred')) return null
+  let name = c.path[0]
+  if (name == 'kind' || name == 'entity' || ctx.v.assoc(name)) return null
+  let op = opOf(c)
+  if (op == 'want') return null
+  let hop: Hop
+  try {
+    hop = c.facet ? { comp: name, prop: '' } : ctx.v.aim(name, bare(c))[0]
+  } catch {
+    return null // an unrouted word: clause() owns the refusal
+  }
+  if (hop.prop || hop.comp == 'entity' || !ctx.v.comp(hop.comp)) return null
+  return { comp: hop.comp, present: op == '~' || op == EXISTS }
+}
+
+// A conjunction of spine facets is ONE archetype question. Asked clause by
+// clause, `.kind=memory`'s expansion — the kind present and every earlier kind
+// absent — bound its own id list per facet: kinds × archetypes parameters,
+// past both SQLite's variable ceiling and V8's spread (`task list memory
+// yaks`, T-37437). Asked together it binds at most one id per archetype.
+let conjuncts = (ctx: Ctx, cs: Clause[]): Cond[] => {
+  let all: string[] = []
+  let none: string[] = []
+  let rest: Clause[] = []
+  for (let c of cs) {
+    let f = facetOf(ctx, c)
+    if (!f) rest.push(c)
+    else (f.present ? all : none).push(f.comp)
+  }
+  let shape = all.length + none.length > 1
+    ? byArchetype(ctx, { all, none })
+    : null
+  if (!shape) return cs.map((x) => clause(ctx, x))
+  return [shape, ...rest.map((x) => clause(ctx, x))]
+}
+
 // One filter clause to a condition. Directives are stripped before this runs.
 let clause = (ctx: Ctx, c: Clause): Cond => {
   if (
@@ -615,7 +659,7 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
   let ext = extended(ctx, c)
   if (ext) return ext
   if (c.kind == 'never') return FALSE
-  if (c.kind == 'and') return and(...c.clauses.map((x) => clause(ctx, x)))
+  if (c.kind == 'and') return and(...conjuncts(ctx, c.clauses))
   if (c.kind == 'or') return or(...(c as Or).clauses.map((x) => clause(ctx, x)))
   if (c.kind == 'refs') return refsUnion(ctx, c)
   if (c.kind == 'walk') return walk(ctx, c)
@@ -714,7 +758,7 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
     }
   }
   let filters = cs.filter((c) => !DIRECTIVES.has(c.kind) || claims(ctx, c.kind))
-  let where = and(...filters.map((c) => clause(ctx, c)), raw(ctx.d.live()))
+  let where = and(...conjuncts(ctx, filters), raw(ctx.d.live()))
 
   let count = find<Count>(cs, 'count')
   let distinct = find<Distinct>(cs, 'distinct')

@@ -5,9 +5,9 @@
   "suites": {
     "check": {
       "baseline": {
-        "ratio": 335.86446502842864,
+        "ratio": 320.0575530642966,
         "controlFloorSeconds": 0.04952385293749997,
-        "seconds": 16.633302373
+        "seconds": 19.028932877
       }
     },
     "test": {

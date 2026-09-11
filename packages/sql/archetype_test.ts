@@ -65,3 +65,23 @@ Deno.test('boolean presence trees retain their composition without component joi
   assert(sql.sql.includes(' or '), sql.sql)
   assertEquals(sql.params, [11, 12, 12, 13, 10, 11, 12])
 })
+
+// A conjunction of facets is one question, not one per facet. `.kind=K`
+// expands to K present and every earlier kind absent, and a list per facet
+// bound kinds × archetypes parameters — 20,228 on the fleet graph, past V8's
+// spread and SQLite's variable ceiling (T-37437).
+Deno.test('an AND of facets binds one archetype list, not one per facet', () => {
+  let ids = (q: string) => compile(parse(q), v, { archetypes }).params
+  let sql = compile(parse('.task .doc! !.claim'), v, { archetypes })
+  assertEquals(
+    sql.params,
+    ids('.task').filter((x) =>
+      ids('.doc!').includes(x) && ids('!.claim').includes(x)
+    ),
+  )
+  assertEquals(sql.sql.split('"entity"."archetype" in (').length - 1, 1)
+  assertEquals(bind(parse('.task .doc! !.claim'), v, { archetypes }).joins, [])
+  // A facet beside a value keeps the value's own join and its parameter.
+  let mixed = compile(parse('.task !.claim .title=hello'), v, { archetypes })
+  assertEquals(mixed.params, [12, 'hello'])
+})
