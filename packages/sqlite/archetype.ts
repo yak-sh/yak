@@ -1,3 +1,4 @@
+import { sha256 } from '@yaks/graph'
 import { Archetypes, tablesOf } from '@yaks/archetype'
 import type { Driver } from './driver.ts'
 import { componentTables } from './physical.ts'
@@ -40,7 +41,37 @@ export function backfill(driver: Driver, number = true): Backfill {
     ) {
       let a = cache.intern(tablesOf(row.tables))
       if (a.eid != row.eid) {
-        throw new Error(`Invalid archetype identity: ${row.eid}`)
+        // The original contract used a bare SHA, sharing blobs' address space.
+        // Rename only verified legacy descriptors, never arbitrary occupants.
+        // Keeping the spine id preserves every integer ref (including owners
+        // and retirement); the enclosing savepoint makes this all-or-nothing.
+        if (row.eid != sha256(a.tables.join('|'))) {
+          throw new Error(`Invalid archetype identity: ${row.eid}`)
+        }
+        // A legacy blob could have been added AFTER this descriptor was born.
+        // Renaming that shared spine would steal the blob's content address.
+        // References to a mixed entity are ambiguous: refuse rather than guess
+        // which ones belong to the descriptor. Ordinary descriptors only wear
+        // archetype and (optionally) retired.
+        if (
+          tables.some((t) =>
+            t != 'archetype' && t != 'retired' &&
+            run(`select entity from ${quote(t)} where entity = ?`, [
+              Number(row.entity),
+            ]).length
+          )
+        ) {
+          throw new Error(
+            `Legacy archetype identity has extra facets: ${row.eid}`,
+          )
+        }
+        if (run('select id from entity where eid = ?', [a.eid]).length) {
+          throw new Error(`Archetype identity is occupied: ${a.eid}`)
+        }
+        run('update entity set eid = ? where id = ?', [
+          a.eid,
+          Number(row.entity),
+        ])
       }
       let id = Number(row.entity)
       ids.set(a.eid, id)

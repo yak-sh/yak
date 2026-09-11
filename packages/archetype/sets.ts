@@ -1,11 +1,11 @@
-import { sha256 } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph'
 import type { Presence, VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 
 /** The archetype and retired components, loaded beside a host's vocabulary. */
 export const archetypeDoc: VocabDoc = doc
 
-/** A canonical table set with its full, portable SHA-256 entity id. */
+/** A canonical table set with its portable, domain-separated derived entity id. */
 export type Archetype = {
   readonly eid: string
   readonly tables: readonly string[]
@@ -15,9 +15,11 @@ export type Archetype = {
 export function canonical(tables: Iterable<string>): string[] {
   let encoder = new TextEncoder()
   let entries = [...new Set(tables)].map((name) => {
-    // The decided hash framing reserves |; refuse ambiguity rather than let
+    // The identity framing reserves comma and |; refuse ambiguity rather than let
     // two different sets share an address. SQLite component names never use it.
-    if (!name || name.includes('|') || name.includes('\0')) {
+    if (
+      !name || name.includes('|') || name.includes(',') || name.includes('\0')
+    ) {
       throw new Error(`Invalid archetype table name: ${JSON.stringify(name)}`)
     }
     return { name, bytes: encoder.encode(name) }
@@ -31,9 +33,9 @@ export function canonical(tables: Iterable<string>): string[] {
   return entries.map((e) => e.name)
 }
 
-/** SHA-256 of the bytewise-sorted, de-duplicated table names joined with `|`. */
+/** Domain-separated UUID of bytewise-sorted, de-duplicated table names. */
 export function eidOf(tables: Iterable<string>): string {
-  return sha256(canonical(tables).join('|'))
+  return derivedEid('archetype|' + canonical(tables).join(','))
 }
 
 /** Decode the scalar wire/storage representation of archetype.tables. */
@@ -74,7 +76,7 @@ export class Archetypes {
     let found = this.bySet.get(key)
     if (found) return found
     let value = Object.freeze({
-      eid: sha256(key),
+      eid: eidOf(names),
       tables: Object.freeze(names),
     })
     this.bySet.set(key, value)

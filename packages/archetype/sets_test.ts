@@ -1,21 +1,33 @@
-import { assertEquals, assertStrictEquals, assertThrows } from '@std/assert'
+import { derivedEid, sha256 } from '@yaks/graph'
+import {
+  assertEquals,
+  assertNotEquals,
+  assertStrictEquals,
+  assertThrows,
+} from '@std/assert'
 import { Archetypes, canonical, eidOf, satisfies, tablesOf } from './mod.ts'
 
-Deno.test('archetype identity is full SHA-256, bytewise, duplicate/order independent', async () => {
+Deno.test('archetype identity is namespaced, bytewise, duplicate/order independent', () => {
   let names = ['\u{10000}', 'z', 'a', '\ue000', 'a']
   assertEquals(canonical(names), ['a', 'z', '\ue000', '\u{10000}'])
-  let digest = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode('a|z|\ue000|\u{10000}'),
-  )
-  let hex = [...new Uint8Array(digest)].map((n) =>
-    n.toString(16).padStart(2, '0')
-  ).join('')
-  assertEquals(eidOf(names), hex)
-  assertEquals(eidOf(names.reverse()), hex)
+  let id = derivedEid('archetype|a,z,\ue000,\u{10000}')
+  assertEquals(eidOf(names), id)
+  assertEquals(eidOf(names.reverse()), id)
   assertEquals(tablesOf('["z","a"]'), ['a', 'z'])
   assertThrows(() => eidOf(['a|b']))
+  assertThrows(() => eidOf(['a,b']))
   assertThrows(() => tablesOf('[1]'))
+  for (let tables of [[], ['doc'], ['doc', 'task']]) {
+    let eid = eidOf(tables)
+    assertEquals(eid, new Archetypes().intern(tables).eid)
+    // UUID vs full hex is a disjoint address space, not merely a different hash
+    // preimage: even a blob containing our exact sentence cannot collide.
+    assertEquals(eid.length, 36)
+    for (let text of ['', tables.join('|'), 'archetype|' + tables.join(',')]) {
+      assertNotEquals(eid, sha256(text))
+      assertEquals(sha256(text).length, 64)
+    }
+  }
 })
 
 Deno.test('archetype transitions and presence answers are cached and invalidate on new sets', () => {

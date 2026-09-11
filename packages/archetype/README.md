@@ -1,10 +1,12 @@
 # @yaks/archetype
 
 One entity per set of component **tables**, shared by every entity wearing that
-set. The full SHA-256 of bytewise-sorted UTF-8 names joined with `|` is its eid;
+set. Its eid is `derivedEid('archetype|' + canonicalNames.join(','))`: the
+shared graph derivation (SHA-256 worn as a version-8 UUID), with names sorted
+bytewise by UTF-8. This is disjoint from blobs' full SHA-256 hex addresses;
 `archetype.tables` stores the sorted list as a JSON string, the vocabulary's
 scalar JSON representation. Empty sets are valid. Duplicates collapse. Names
-containing `|` or NUL are refused rather than producing ambiguous hashes.
+containing `,`, `|` or NUL are refused rather than producing ambiguous hashes.
 
 ```ts
 import { archetypeDoc, archetypes } from '@yaks/archetype'
@@ -56,8 +58,15 @@ incomplete owners, discovering actual component tables through SQLite's schema
 Virtual/shadow/infrastructure tables are excluded. Tombstones and archetype
 entities are classified too. Missing-table descriptors are marked `retired`,
 never deleted, and their owners are reclassified. Repeated boot is idempotent.
-Boot is a storage migration rather than a graph apply; graph-time descriptor
-creations are journaled when the journal plugin is composed in.
+Legacy bare-SHA descriptors are renamed atomically at boot, preserving spine
+ids, integer references, tables and retirement marks. An occupied destination is
+refused without partial migration. Legacy descriptors carrying extra facets
+(beyond `archetype` and `retired`) also refuse migration: a shared
+blob/descriptor cannot be renamed without stealing the blob address, and its
+references require disambiguation first. External copies of legacy eids must
+reload the descriptors; legacy ids are not accepted on new writes. Boot is a
+storage migration rather than a graph apply; graph-time descriptor creations are
+journaled when the journal plugin is composed in.
 
 Use `g.apply()` for ongoing writes; low-level storage patch is intentionally
 still a byte-writing primitive. A later boot catches its unclassified births,

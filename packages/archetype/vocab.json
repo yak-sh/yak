@@ -5,7 +5,7 @@
     "archetype": {
       "type": "object",
       "kind": true,
-      "description": "Immutable component-table set; its eid is the full SHA-256 of bytewise-sorted table names joined with |.",
+      "description": "Immutable component-table set; its eid is derivedEid('archetype|' + bytewise-sorted table names joined with ',').",
       "properties": {
         "tables": {
           "type": "string",
