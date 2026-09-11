@@ -93,6 +93,9 @@ const bindings: Binding[] = [
   { keys: ['s'], help: 'show settled', action: ctrl('s') },
 ]
 export const shortcuts = [
+  ['/', 'search transcript source; Enter search; Esc cancel'],
+  ['n / N', 'next / previous search match (Ctrl+N/P roots)'],
+  ['Enter', 'inspect selected entry source; ]/[ chunks; Esc close'],
   ['i', 'INSERT: edit the draft'],
   ...bindings.map(({ keys, help }) => [keys[0], help]),
   ['Tab', 'toggle focus (prefer h / l)'],
@@ -102,14 +105,16 @@ export const shortcuts = [
   ['Ctrl+C', 'quit'],
 ]
 
-export let Keyboard = ({ ui, action }: {
+export let Keyboard = ({ ui, action, inspectKey }: {
   ui: Frontend
+  inspectKey?: (key: Key) => boolean
   action: (key: Key) => boolean | void
 }) => {
   let state = ui.keyboard.value[0].keyboard as Comp
   useKeymap((key) => {
     let current = () => ui.client.ent('keyboard')!.keyboard as Comp
     if (key.ctrl && key.text == 'c') return false
+    if (inspectKey?.(key)) return true
     if (key.ctrl && key.text == 'u' && current().mode != 'NORMAL') {
       let text = String((ui.client.ent('draft')!.draft as Comp).text ?? '')
       if (!text) return true
@@ -172,6 +177,7 @@ export let Keyboard = ({ ui, action }: {
     }
     return command(key)
     function command(k: Key): boolean {
+      if (inspectKey?.(k)) return true
       s = current()
       let text = k.name == 'char' && !k.alt && !k.ctrl ? k.text : undefined
       if (s.help) {

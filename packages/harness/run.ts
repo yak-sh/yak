@@ -1,4 +1,5 @@
 import { stepLock } from './step_lock.ts'
+import { inspection, type Inspection } from './inspection.ts'
 import { streamingEnabled } from './streaming.ts'
 import { imageContext } from './artifact_tools.ts'
 import { configuredImages, type ImageOptions, readImage } from './images.ts'
@@ -114,7 +115,7 @@ export type Opts = ChildLimits & NotHarness & {
 }
 
 /** A running harness. */
-export type Agent = {
+export type Agent = Inspection & {
   h: Harness
   d: Daemon
   tools: Tool[]
@@ -227,6 +228,7 @@ export let agent = (opts: Opts = {}): Agent => {
   let shutdown: Promise<void> | undefined
   let operations = new Set<Promise<unknown>>()
   let a: Agent = {
+    ...inspection(h.g),
     h,
     d,
     tools,

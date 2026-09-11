@@ -1,3 +1,4 @@
+import { inspector, InspectionPanel } from './inspect_ui.ts'
 import { transient } from '@yaks/graph'
 import { Keyboard } from './keyboard.ts'
 import { useVisualController, type VisualState } from '@yaks/tui'
@@ -73,6 +74,7 @@ export let App = (
   { agent: a, panels: sidebar = panels, subscribe, frontend: supplied }: Opts,
 ): JSX.Element => {
   let ui = useMemo(() => supplied ?? frontend(), [supplied])
+  let inspectKey = useMemo(() => inspector(ui, a), [ui, a])
   useLayoutEffect(() => () => {
     if (!supplied) ui.close()
   }, [ui, supplied])
@@ -405,7 +407,8 @@ export let App = (
         }),
       ),
     ),
-    h(Keyboard, { ui, action }),
+    h(InspectionPanel, { ui }),
+    h(Keyboard, { ui, action, inspectKey }),
     h(Feedback, { ui }),
     h(Composer, { ui, submit }),
   )
