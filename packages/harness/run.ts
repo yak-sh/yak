@@ -265,14 +265,10 @@ export let agent = (opts: Opts = {}): Agent => {
       return eid
     },
     taskEntry: (session, text) =>
-      d.enqueue(
-        session,
-        () =>
-          taskEntry(h.g, session, text, {
-            ...workspace(h.g, opts.cwd),
-            ...opts,
-          }),
-      ),
+      taskEntry(h.g, session, text, {
+        ...workspace(h.g, opts.cwd),
+        ...opts,
+      }),
     archive: async (session, archived) => {
       let rows = await h.g.read('.session')
       let root = rootOf(rows, session)

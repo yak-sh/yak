@@ -32,12 +32,14 @@ Deno.test('taskEntry atomically mints bare work, contains it, and spawns with in
     let [child] = await h.g.read(`.spawned.parent=p`)
     assertEquals((child.spawned as Comp).parent, 'p')
     assert(!(child.spawned as Comp).call) // no invented tool call
-    let [input] = await h.g.read(`.entry.session=${first.child}`)
+    let input = (await h.g.read(`.entry.session=${first.child}`)).find((b) =>
+      b.using
+    )!
     assertEquals((input.using as Comp).model, 'm')
     assertEquals((input.using as Comp).effort, 'high')
     assertEquals(
       (input.content as Comp).body,
-      'Title\n\nTitle\n\nComplete body',
+      'Title\n\nComplete body',
     )
     await h.g.apply([
       { entity: { eid: 'work1' }, task: {}, claim: { session: 'p' } },

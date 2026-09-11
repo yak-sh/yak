@@ -18,6 +18,8 @@ import {
 } from './status.ts'
 
 export type ChildLimits = {
+  /** Defaults for user-created tasks, resolved before durable queue admission. */
+  taskDefaults?: (parent: Eid, child: Eid) => Promise<Record<string, unknown>>
   maxChildren?: number
   maxSessions?: number
   /** Host-owned optional spawn parameters and preparation, when the child is admitted. */
@@ -106,9 +108,7 @@ let delegation = (
     properties: {
       ...limits.childProperties,
       prompt: { type: 'string' },
-      ...fork
-        ? {}
-        : { task: { type: 'string', description: 'task entity id or T-id' } },
+      task: { type: 'string', description: 'task entity id or T-id' },
       instructions: { type: 'string' },
       model: {
         type: 'string',
@@ -116,18 +116,16 @@ let delegation = (
       },
       effort: { type: 'string' },
     },
-    ...fork ? { required: ['prompt'] } : {
-      oneOf: [{ required: ['prompt'] }, { required: ['task'] }],
-    },
+    oneOf: [{ required: ['prompt'] }, { required: ['task'] }],
   },
   run: async (args, context) => {
     let ctx = caller(context)
     if (
-      fork ? args.task != null : (args.task != null) == (args.prompt != null)
+      (args.task != null) == (args.prompt != null)
     ) {
       throw new ToolError(
         'spawn',
-        'name exactly one prompt or task (fork requires prompt)',
+        'name exactly one prompt or task',
       )
     }
     if (
@@ -153,9 +151,10 @@ let delegation = (
         : []
       let parents = work.length ? work.map((b) => b.entity.eid) : [ctx.session]
       let doc = comp(task, 'doc')
-      let prompt = task
-        ? [doc?.title, doc?.body].filter(Boolean).join('\n\n')
-        : args.prompt
+      let prompt = task ? doc?.body || doc?.title || '' : args.prompt
+      if (minted && limits.taskDefaults) {
+        args = { ...await limits.taskDefaults(ctx.session, eid), ...args }
+      }
       let using = { ...usingBefore(ctx.entries) }
       let models: Bundle[] = []
       if (args.model != null) {
@@ -180,9 +179,20 @@ let delegation = (
       // Never inherit the unanswered delegation call (or any sibling calls).
       let anchorId = comp(newestAsk(ctx.entries), 'ask')?.through
       let anchor = ctx.entries.find((b) => b.entity.eid == anchorId)
-      if (fork && !anchor) throw new ToolError('fork', 'no prefix to fork')
+      if (minted) {
+        // User admission has no model tool-turn boundary. Include the newest
+        // stable prefix, stopping before the first mutable provider attempt.
+        let active = ctx.entries.findIndex((b) =>
+          (b.attempt as Comp | undefined)?.state == 'inflight'
+        )
+        anchor = ctx.entries.at(active < 0 ? -1 : active - 1)
+        if (active == 0) anchor = undefined
+      }
+      if (fork && !anchor && !minted) {
+        throw new ToolError('fork', 'no prefix to fork')
+      }
       if (
-        fork &&
+        fork && anchor &&
         ctx.entries.some((b) =>
           (b.attempt as Comp | undefined)?.state == 'inflight' &&
           Number((b.entry as Comp)?.seq) <= Number((anchor!.entry as Comp)?.seq)
@@ -211,7 +221,7 @@ let delegation = (
           prompt: { scope: 'local', source: 'harness:fork' },
           content: {
             body:
-              'You are executing an assignment in a fork of the parent transcript. Perform the assigned work here. Do not reflexively delegate it because the inherited parent conversation discusses delegation.',
+              'This is your assigned task in a fork of the parent conversation. Continue the work here; delegate to subagents or a fresh session when that is useful.',
           },
         })
       }
@@ -270,7 +280,7 @@ let delegation = (
             parent: ctx.session,
             ...minted ? {} : { call: ctx.call.entity.eid },
           },
-          ...fork ? { fork: { from: anchor!.entity.eid } } : {},
+          ...fork && anchor ? { fork: { from: anchor.entity.eid } } : {},
         },
         {
           entity: { eid: `${eid}:input` },
@@ -305,7 +315,7 @@ export let taskEntry = async (
     doc: { title: text.trim().split('\n')[0].slice(0, 120), body: text },
     task: {},
   }
-  let child = await delegation(g, limits, false, minted).run({ task }, {
+  let child = await delegation(g, limits, true, minted).run({ task }, {
     session,
     // Identity only; no fabricated tool call is written into the transcript.
     call: { entity: { eid: task } },

@@ -333,3 +333,89 @@ Deno.test('queued fork preserves anchor and prepares checkout on admission', asy
     await f.free()
   }
 })
+
+Deno.test('user task forks stable context and prepares an independent pinned checkout', async () => {
+  let f = await fixture()
+  let a = agent({
+    h: f.h,
+    cwd: f.repo,
+    maxChildren: 0,
+    name: 'fake',
+    model: () => Promise.resolve({ id: 'r', model: 'fake', items: [] }),
+  })
+  try {
+    let root = await a.start('We are implementing a TUI, not browser CSS')
+    await a.idle(root)
+    await a.send(root, 'Keep components graph-free')
+    await a.idle(root)
+    let before = await a.transcript(root)
+    let head = await git(f.repo, 'rev-parse', 'HEAD')
+    await Deno.writeTextFile(f.repo + '/file', 'dirty parent')
+    let admitted = await a.taskEntry(root, 'Fix table dividers')
+    let child = (await f.h.g.storage.tx((tx) => tx.get([admitted.child])))[0]
+    assertEquals((child.fork as Comp).from, before.at(-1)!.entity.eid)
+    let args = JSON.parse(String((child.dispatch as Comp).args))
+    assertEquals(args.worktree.base, head)
+    await assertRejects(
+      () => Deno.stat(args.worktree.path),
+      Deno.errors.NotFound,
+    )
+    let inherited = await a.transcript(admitted.child)
+    assertEquals(inherited.slice(0, before.length), before)
+    assertEquals(
+      inherited.filter((b) => (b.content as Comp)?.body == 'Fix table dividers')
+        .length,
+      1,
+    )
+    let prepared = await workspace(f.h.g, f.repo).prepareChild!({
+      parent: root,
+      child: admitted.child,
+      args,
+    })
+    await f.h.g.apply([{ entity: child.entity, ...prepared }])
+    assertEquals(
+      await sessionCwd(f.h.g, admitted.child, '/wrong'),
+      args.worktree.path,
+    )
+    assertEquals(
+      await Deno.readTextFile(args.worktree.path + '/file'),
+      'committed',
+    )
+    assertEquals(await Deno.readTextFile(f.repo + '/file'), 'dirty parent')
+    assertEquals(
+      await workspace(f.h.g, f.repo).prepareChild!({
+        parent: root,
+        child: admitted.child,
+        args,
+      }),
+      prepared,
+    )
+    await git(f.repo, 'worktree', 'remove', args.worktree.path)
+  } finally {
+    await a.close()
+    await Deno.remove(f.dir, { recursive: true })
+  }
+})
+
+Deno.test('user task outside a repository fails before minting work', async () => {
+  let dir = await Deno.makeTempDir()
+  let a = agent({
+    h: open(':memory:'),
+    cwd: dir,
+    name: 'fake',
+    model: () => Promise.resolve({ id: 'r', model: 'fake', items: [] }),
+  })
+  try {
+    let root = await a.start('nonrepo')
+    await a.idle(root)
+    await assertRejects(
+      () => a.taskEntry(root, 'work'),
+      Error,
+      'requires a Git repository',
+    )
+    assertEquals(await a.tasks(), [])
+  } finally {
+    await a.close()
+    await Deno.remove(dir, { recursive: true })
+  }
+})

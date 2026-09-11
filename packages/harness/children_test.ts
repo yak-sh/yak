@@ -71,7 +71,7 @@ for (let kind of ['fork', 'spawn']) {
     assertEquals(
       req.items.some((i) =>
         i.kind == 'instruction' &&
-        i.text.includes('You are executing an assignment')
+        i.text.includes('This is your assigned task')
       ),
       kind == 'fork',
     )

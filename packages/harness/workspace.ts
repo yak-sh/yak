@@ -30,6 +30,30 @@ export let sessionCwd = async (g: Graph, session: string, fallback: string) => {
   return fallback
 }
 export let workspace = (g: Graph, cwd = Deno.cwd()): ChildLimits => ({
+  taskDefaults: async (parent, child) => {
+    let inherited = (await row(g, parent))?.home as Comp | undefined
+    let tree = inherited?.worktree
+      ? await row(g, String(inherited.worktree))
+      : await checkoutAt(g, await sessionCwd(g, parent, cwd))
+    let path = (tree?.worktree as Comp | undefined)?.path
+    if (!path) {
+      throw new Error(
+        'Task worktree requires a Git repository; start the parent in a checkout',
+      )
+    }
+    let observed = await discover(g, String(path))
+    let head = (observed.worktree as Comp).head
+    if (!head) throw new Error('Task worktree requires a committed HEAD')
+    let directory = Deno.env.get('HARNESS_WORKTREE_DIR') ??
+      `${Deno.env.get('HOME')}/.harness/worktrees`
+    return {
+      worktree: {
+        path: `${directory}/${child.replaceAll(':', '-')}`,
+        base: String(head),
+        branch: 'task-' + child.replaceAll(':', '-'),
+      },
+    }
+  },
   childProperties: {
     worktree: {
       type: 'object',
