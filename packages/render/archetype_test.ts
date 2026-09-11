@@ -64,3 +64,17 @@ Deno.test('archetype groups, missing/unknown descriptors, moves and value condit
   b.entity.archetype = 'shape'
   assertStrictEquals(resolve(reg, b, undefined, vocab), group)
 })
+
+Deno.test('value-only selection does not request a lazy archetype descriptor', () => {
+  let value = r('value', '.doc.title=yes')
+  let reg = define([value, r('any', true)], {
+    archetypes: () => {
+      throw Error('unnecessary descriptor read')
+    },
+  })
+  let b = {
+    entity: { eid: 'projected', archetype: 'not-loaded' },
+    doc: { title: 'yes' },
+  }
+  assertStrictEquals(resolve(reg, b, 'Tile', vocab), value)
+})

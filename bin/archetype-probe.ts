@@ -99,7 +99,15 @@ try {
   let settled = async () => {
     for (let i = 0; i < 900; i++) {
       if ([...active.values()].every(Boolean) && Date.now() - last > 2000) {
-        return
+        // The browser applies frames on a serialized queue after CDP sees
+        // them. Wire quiet alone is not a settled cache under host load.
+        if (
+          await evaluate(
+            `${
+              JSON.stringify([...active.keys()])
+            }.every(sub=>__live.subscriptionState(sub).status!=='loading')`,
+          )
+        ) return
       }
       await pause(100)
     }
@@ -134,7 +142,7 @@ try {
           descriptor.set.call(this, function(e) {
             try {
               let f = JSON.parse(e.data);
-              if (f.sub === 'archetypes') globalThis.__descriptors = {
+              if (f.sub === 'archetypes' || f.sub?.startsWith('archetypes:')) globalThis.__descriptors = {
                 at: performance.now(),
                 rows: (f.changes ?? []).filter(c => c.name === 'archetype').length,
               };
@@ -183,6 +191,9 @@ try {
   )
   let firstCPU = await send('Performance.getMetrics')
   let firstWire = metrics()
+  await evaluate(
+    `(async()=>{globalThis.__live=await import('/live.ts')})()`,
+  )
   await pause(15000)
   await settled()
   let cold = { ...metrics(), ...await stats() }

@@ -20,11 +20,11 @@ import {
 import { type ComponentRenderer, type Events, render } from '@yaks/preact'
 import type { JSX } from 'preact'
 import { parseProp, propAt } from '../props.ts'
-import { ent, findEid, mutate, problem } from '../live.ts'
+import { cache, ent, findEid, mutate, problem } from '../live.ts'
 import { editorViews } from './editors.tsx'
 import { and, present } from '@yaks/query'
 import { type Ent, statusOf } from '../types.ts'
-import { archetypeTables } from '../live_archetypes.ts'
+import { archetypeTables, rememberArchetype } from '../live_archetypes.ts'
 import { fleetVocab } from '../vocab/fleet_vocab.ts'
 
 export type Renderer = ComponentRenderer<Ent> & {
@@ -58,6 +58,7 @@ export let registry = registryOf<Entry, Action, Ent>(columns(), {
 // Ent flattens the spine and adds display/edge data. Queries read components;
 // native views and action factories still receive the original Ent.
 export let bundle = (e: Ent): Bundle => {
+  rememberArchetype(cache.peek()[e.eid])
   let entity = { ...(e.entity as object), eid: e.eid, num: e.num }
   // Presence selection reads only the spine. Bodies and derived task status
   // are projected lazily when a value predicate or the selected view asks.

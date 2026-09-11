@@ -8,7 +8,6 @@
 // Then db.ts snapshot() dissolves into @yaks/api subscriptions and @yaks/sync,
 // not a new package primitive. Never restore whole-db sync or an unbounded cache.
 import { IdError } from './types.ts'
-import { bootArchetypes } from './live_archetypes.ts'
 import {
   batch,
   computed,
@@ -2150,7 +2149,7 @@ let oneShots = new Map<
     timer: ReturnType<typeof setTimeout>
   }
 >()
-let oneShot = (
+export let oneShot = (
   sub: string,
   q: string,
   done: () => void,
@@ -2714,7 +2713,6 @@ export let boot = async () => {
   if (!canShare()) {
     await once()
     connect()
-    await bootArchetypes()
     return
   }
   let nav = (globalThis as { navigator: Navigator }).navigator
@@ -2757,7 +2755,6 @@ export let boot = async () => {
   )
   addEventListener('pagehide', owner.leave)
   await owner.start()
-  await bootArchetypes()
 }
 ;(globalThis as {
   __sync?: () => {

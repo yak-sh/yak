@@ -41,8 +41,6 @@ export let archetypeMatch = (
   if (!lookup) return
   let id = (bundle.entity as Record<string, unknown>).archetype
   if (typeof id != 'string') return
-  let tables = lookup(id)
-  if (!tables) return
   let byVocab = queries.get(query)
   if (!byVocab) queries.set(query, byVocab = new WeakMap())
   let compiled = byVocab.get(vocab)
@@ -53,6 +51,9 @@ export let archetypeMatch = (
     byVocab.set(vocab, compiled)
   }
   if (!compiled) return
+  // A lazy host should not fetch a descriptor for a query it cannot answer.
+  let tables = lookup(id)
+  if (!tables) return
   let answer = compiled.answers.get(tables)
   if (answer === undefined) {
     // Use the existing evaluator once per set, preserving grouped-query rules
