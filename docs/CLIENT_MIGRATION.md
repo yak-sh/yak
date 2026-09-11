@@ -207,6 +207,12 @@ payloads fall from **3,166,007 B to 123,810 B**. Subscription count does not
 fall: this is chiefly narrower selection and projection, not fewer inbox readers
 or a return to incomplete-cache answers.
 
+The earlier passing pair on main through `cf5fced5` was **3,751,508 → 622,613
+B** (83.4% lower). Before landing, main gained the archetype boot subscription,
+so both sides were rebased/reprobed. The final table above includes that extra
+traffic rather than claiming the older 0.62 MB as the landed result. The earlier
+cold metrics remain in the JSON under `previous_base`.
+
 Both runs have identical six-card body lengths/SHA-256s, no browser exceptions
 or addressed errors, and unchanged query/transport counts after all six closes
 (99/128). Reopening retains visible content while all six reads are loading; all
