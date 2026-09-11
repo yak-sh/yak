@@ -76,3 +76,22 @@ Deno.test('resubscription clears a stale projection when finalization was missed
   assertEquals((await target.read('.doc'))[0].doc, { body: 'old new' })
   assertEquals(transient(target).snapshots(), [])
 })
+
+Deno.test('transient subscription respects fields withheld by the authoritative reader', async () => {
+  const source = graph({ vocab, storage: ram(vocab) })
+  await source.apply([{ entity: { eid: 'd' }, doc: { body: 'secret' } }])
+  const read = source.read.bind(source)
+  source.read = (query, options) =>
+    Promise.resolve(read(query, options)).then((rows) =>
+      rows.map((b) => ({ entity: b.entity, doc: {} }))
+    )
+  const subs = subscriptions(source)
+  const frames: Frame[] = []
+  await subs.open((f) => frames.push(f), 'redacted', '.doc')
+  const writer = await transient(source).begin('d', 'doc', 'body', 's')
+  writer.append(' hidden')
+  await Promise.resolve()
+  assertEquals(frames.length, 1)
+  assertEquals(frames[0].transient, undefined)
+  writer.discard()
+})

@@ -86,6 +86,7 @@ type Sub = {
   query: string
   /** the entities currently in the set */
   members: Set<Eid>
+  fields: Map<Eid, Set<string>>
   /** the per-bundle test, or `null` when this subscription re-reads instead */
   test: Filter | null
 }
@@ -150,6 +151,24 @@ export let subscriptions = (graph: Graph, opts: {
     }
   }
 
+  const rememberFields = (sub: Sub, bundles: Bundle[]) => {
+    for (const b of bundles) {
+      sub.fields.set(
+        b.entity.eid,
+        new Set(
+          Object.entries(b).flatMap(([comp, value]) =>
+            value && typeof value == 'object'
+              ? Object.keys(value).map((prop) => comp + '.' + prop)
+              : []
+          ),
+        ),
+      )
+    }
+  }
+  const visible = (sub: Sub, f: TransientFrame) =>
+    sub.members.has(f.entity) &&
+    sub.fields.get(f.entity)?.has(f.component + '.' + f.property)
+
   let open = (sink: Sink, id: string, query: Ask) => {
     flush()
     let mine = held.get(sink) ?? new Map<string, Sub>()
@@ -161,6 +180,7 @@ export let subscriptions = (graph: Graph, opts: {
       raw: query === true,
       query: line,
       members: new Set(),
+      fields: new Map(),
       test: null,
     }
     mine.set(id, sub)
@@ -171,9 +191,8 @@ export let subscriptions = (graph: Graph, opts: {
       sub.test = judge(parse(line), line, graph.vocab)
       return then(graph.read(line, { durable: true }), (bundles) => {
         for (let b of bundles) sub.members.add(b.entity.eid)
-        const snapshots = live.snapshots().filter((f) =>
-          sub.members.has(f.entity)
-        )
+        rememberFields(sub, bundles)
+        const snapshots = live.snapshots().filter((f) => visible(sub, f))
         sink({
           id,
           bundles,
@@ -202,6 +221,8 @@ export let subscriptions = (graph: Graph, opts: {
       for (let eid of touched) {
         if (!seen.has(eid) && sub.members.delete(eid)) gone.push(eid)
       }
+      rememberFields(sub, bundles)
+      for (const eid of gone) sub.fields.delete(eid)
       if (bundles.length || gone.length) sub.sink({ id: sub.id, bundles, gone })
       return
     }
@@ -210,6 +231,7 @@ export let subscriptions = (graph: Graph, opts: {
       let ids = new Set(set.map((b) => b.entity.eid))
       let gone = [...sub.members].filter((e) => !ids.has(e))
       sub.members = ids
+      rememberFields(sub, set)
       if (gone.length || touched.some((e) => ids.has(e))) {
         sub.sink({ id: sub.id, bundles: set, gone })
       }
@@ -240,6 +262,7 @@ export let subscriptions = (graph: Graph, opts: {
                 let ids = new Set(set.map((b) => b.entity.eid))
                 let gone = [...s.members].filter((id) => !ids.has(id))
                 s.members = ids
+                rememberFields(s, set)
                 s.sink({ id: s.id, bundles: set, gone })
               })
             }
@@ -265,7 +288,7 @@ export let subscriptions = (graph: Graph, opts: {
   live.subscribe((frame) => {
     for (const mine of held.values()) {
       for (const sub of mine.values()) {
-        if (!sub.raw && !sub.members.has(frame.entity)) continue
+        if (!sub.raw && !visible(sub, frame)) continue
         let ids = pending.get(sub.sink)
         if (!ids) pending.set(sub.sink, ids = new Map())
         const frames = ids.get(sub.id) ?? []
