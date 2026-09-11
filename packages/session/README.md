@@ -186,3 +186,31 @@ provider acknowledgment or stop independent tool processes. The harness checks
 for an in-flight model attempt before offering this operation. Models receive
 the signal through `Request.signal`; custom models must observe it. This is
 separate from `daemon.stop()`, which stops admission and drains the daemon.
+
+## Bounded transcript reads
+
+`transcriptWindow(graph, session, options)` reads a page of transcript entries,
+including the bounded parent history of a fork. It does not change the full
+transcript used for model requests.
+
+```ts
+import { transcriptWindow } from '@yaks/session'
+
+const newest = await transcriptWindow(graph, session, { limit: 64 })
+const around = await transcriptWindow(graph, session, { anchor: entryId })
+const oldest = await transcriptWindow(graph, session, { edge: 'start' })
+```
+
+A page returns `{ entries, before, after }`. `before` and `after` indicate
+unloaded neighbors, not additional locally available rows. Limits count entries,
+not bytes, and are clamped to 1–256 (default 64). An unknown or out-of-prefix
+anchor falls back to the newest page. Entries remain in logical transcript
+order. A fork's newer parent entries never enter its pages.
+
+`transcriptPlan` provides ordinary bounded query strings for the same page. It
+first reads entry identity/position projections, then limits body reads to the
+selected ranges. Hosts can use those queries with `@yaks/api` subscriptions. A
+plan is not a transactionally frozen snapshot: hosts must refresh it when
+transcript membership changes. `transcriptSegments` describes the contributing
+ancestor ranges. `transcriptUsage` reads the latest reported ask/usage fields
+without loading transcript prose.

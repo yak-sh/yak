@@ -101,17 +101,17 @@ Deno.test('mounted bounded transcript navigates beyond loaded edges and restores
   let ui = frontend(), read = 0, maximum = 0
   ui.patch({ selected: 's' })
   let a: import('./panels.ts').UIAgent = {
-    start: async () => 's',
-    send: async () => 'sent',
-    taskEntry: async () => ({ task: 't', child: 'c' }),
+    start: () => Promise.resolve('s'),
+    send: () => Promise.resolve('sent'),
+    taskEntry: () => Promise.resolve({ task: 't', child: 'c' }),
     sessions: () =>
       Promise.resolve([{ entity: { eid: 's' }, session: { id: 'Session' } }, {
         entity: { eid: 'other' },
         session: { id: 'Other' },
       }]),
-    usage: async () => [],
-    children: async () => [],
-    tasks: async () => [],
+    usage: () => Promise.resolve([]),
+    children: () => Promise.resolve([]),
+    tasks: () => Promise.resolve([]),
     transcript: () => {
       throw new Error('full transcript must not load')
     },
@@ -215,5 +215,128 @@ Deno.test('usage panel reads latest inherited ask metadata without transcript bo
     assert(!rows[0].content)
   } finally {
     store.close()
+  }
+})
+
+Deno.test('bounded worker subscriptions deliver transient text before final completion', async () => {
+  const { until } = await import('../process/harness.ts')
+  let dir = await Deno.makeTempDir()
+  let r = await remote({
+    db: ':memory:',
+    cwd: dir,
+    fake: { delayMs: 800, deltas: 20 },
+    streaming: true,
+  })
+  let partial = false
+  try {
+    let id = await r.agent.start('stream a page')
+    let inspect = async () => {
+      let page = await r.agent.transcriptWindow!(id)
+      if (
+        page.entries.some((b) =>
+          (b.content as { body?: string })?.body?.startsWith('x')
+        ) &&
+        page.entries.some((b) =>
+          (b.attempt as { state?: string })?.state == 'inflight'
+        )
+      ) partial = true
+    }
+    let free = r.subscribe(() => {
+      void inspect()
+    })
+    try {
+      await inspect()
+      await until(() => partial, 'partial bounded response', 10000)
+      await r.idle(id)
+      let page = await r.agent.transcriptWindow!(id)
+      assert(
+        page.entries.some((b) =>
+          (b.attempt as { state?: string })?.state == 'completed'
+        ),
+      )
+      let sent = r.traffic.sent
+      await r.agent.transcriptWindow!(id)
+      assertEquals(
+        r.traffic.sent,
+        sent,
+        'unchanged window requires no worker query',
+      )
+    } finally {
+      free()
+    }
+  } finally {
+    await r.close()
+    await Deno.remove(dir, { recursive: true })
+  }
+})
+
+Deno.test('ten thousand large entries load only a bounded body window', async () => {
+  let store = open(':memory:')
+  try {
+    const body = 'x'.repeat(100000)
+    for (let offset = 0; offset < 10000; offset += 250) {
+      await store.g.apply([
+        ...offset == 0 ? [{ entity: { eid: 's' }, session: {} }] : [],
+        ...Array.from(
+          { length: 250 },
+          (_, i) => ({
+            entity: { eid: 'e' + (offset + i) },
+            entry: { session: 's', seq: offset + i + 1 },
+            content: { body },
+          }),
+        ),
+      ])
+    }
+    let page = await transcriptWindow(store.g, 's', { limit: 8 })
+    assertEquals(page.entries.length, 8)
+    assertEquals(page.entries[0].entity.eid, 'e9992')
+    assert(JSON.stringify(page).length < 810000)
+  } finally {
+    store.close()
+  }
+})
+
+Deno.test('detached windows receive frontier notices without loading new offscreen bodies', async () => {
+  let dir = await Deno.makeTempDir(), path = dir + '/db.sqlite'
+  let store = open(path)
+  await store.g.apply([
+    { entity: { eid: 's' }, session: {} },
+    ...Array.from({ length: 100 }, (_, i) => ({
+      entity: { eid: 'e' + i },
+      entry: { session: 's', seq: i + 1 },
+      content: { body: String(i) },
+    })),
+  ])
+  store.close()
+  let r = await remote({ db: path, cwd: dir, fake: true })
+  try {
+    let page = await r.agent.transcriptWindow!('s', {
+      anchor: 'e30',
+      limit: 16,
+    })
+    assertEquals(page.after, true)
+    let notices = 0,
+      free = r.subscribe(() => {
+        notices++
+      })
+    try {
+      let input = await r.agent.send('s', 'large offscreen input'.repeat(10000))
+      await r.idle('s')
+      let next = await r.agent.transcriptWindow!('s', {
+        anchor: 'e30',
+        limit: 16,
+      })
+      assertEquals(
+        next.entries.map((b) => b.entity.eid),
+        page.entries.map((b) => b.entity.eid),
+      )
+      assert(!r.replica.ent(input)?.content)
+      assert(notices > 0)
+    } finally {
+      free()
+    }
+  } finally {
+    await r.close()
+    await Deno.remove(dir, { recursive: true })
   }
 })

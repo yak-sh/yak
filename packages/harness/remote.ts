@@ -6,7 +6,7 @@ import type {
 import { streamingEnabled } from './streaming.ts'
 import { transient } from '@yaks/graph'
 import type { ImageOptions } from './images.ts'
-/** Opt-in worker frontend. UI state remains in the frontend's private graph. */
+/** Worker frontend. UI state remains in the frontend's private graph. */
 import { client } from '@yaks/client'
 import { type Frame, portLink } from '@yaks/sync'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -44,13 +44,18 @@ export let remote = async (
   // as a new change would invalidate that same read and force a second refresh.
   let initializing = new Set<string>()
   let failure: Error | undefined
+  let windowRevision = 0
   let queued = Promise.resolve()
   let link = portLink(worker, {
     frame: (frame: Frame) => {
       queued = queued.then(async () => {
         if (frame.refused) throw new Error(frame.refused.message)
         summaries.delete(frame.id)
+        if (frame.id.startsWith('window:') && frame.gone?.length) {
+          windowRevision++
+        }
         if (frame.id.startsWith('frontier:')) {
+          windowRevision++
           if (!initializing.has(frame.id)) {
             for (let notify of listeners) notify()
           }
@@ -147,6 +152,7 @@ export let remote = async (
         await queued
         return snapshot()
       }
+      if (windowKeys.length || frontierKeys.length) await clearWindow()
       for (let id of plans) {
         await request('unsubscribe', [id])
         await queued
@@ -171,7 +177,11 @@ export let remote = async (
     windowQueries: string[] = [],
     frontierKeys: string[] = []
   let windowKeys: string[] = []
-  let windowSerial: Promise<unknown> = Promise.resolve()
+  let lastWindow: {
+    key: string
+    revision: number
+    plan: TranscriptPlan & { frontiers: string[] }
+  } | undefined
   let clearWindow = async () => {
     for (let id of [...windowKeys, ...frontierKeys]) {
       await request('unsubscribe', [id])
@@ -182,12 +192,13 @@ export let remote = async (
     windowKeys = []
     frontierKeys = []
     windowQueries = []
+    lastWindow = undefined
   }
   let windowed = (
     session: string,
     options: TranscriptWindow = {},
   ): Promise<TranscriptPage> => {
-    let result = windowSerial.catch(() => {}).then(async () => {
+    let result = serial.catch(() => {}).then(async () => {
       for (let id of plans) {
         await request('unsubscribe', [id])
         await queued
@@ -196,9 +207,15 @@ export let remote = async (
       }
       plans = []
       selected = undefined
-      let plan = await request('transcriptWindowPlan', [session, options]) as
-        & TranscriptPlan
-        & { frontiers: string[] }
+      let key = JSON.stringify([session, options])
+      let revision = windowRevision
+      let plan = lastWindow?.key == key && lastWindow.revision == revision
+        ? lastWindow.plan
+        : await request('transcriptWindowPlan', [session, options]) as
+          & TranscriptPlan
+          & { frontiers: string[] }
+      let replaced = windowSession != session ||
+        JSON.stringify(plan.queries) != JSON.stringify(windowQueries)
       if (
         windowSession != session ||
         JSON.stringify(plan.queries) != JSON.stringify(windowQueries)
@@ -218,6 +235,14 @@ export let remote = async (
         }
       }
       await queued
+      // Recheck once after installing frontier subscriptions. A write between
+      // planning and the initial frontier snapshot must not disappear.
+      lastWindow = { key, revision, plan }
+      if (replaced) {
+        queueMicrotask(() => {
+          for (let notify of listeners) notify()
+        })
+      }
       return {
         entries: windowKeys.flatMap((key) =>
           rows(key).sort((a, b) =>
@@ -228,7 +253,7 @@ export let remote = async (
         after: plan.after,
       }
     })
-    windowSerial = result
+    serial = result
     return result
   }
   // Summaries still use the existing authoritative projection because session

@@ -367,3 +367,17 @@ Completion exits without another keypress. A second interrupt calls `force` and
 exits without awaiting the drain. Applications can update their existing view
 state inside `shutdown` to explain the wait. Without these callbacks, Ctrl+C
 exits immediately. Fatal errors still restore the terminal.
+
+### Partially loaded virtual lists
+
+`VirtualList` accepts optional `range: { before, after }` and
+`onRange({ anchor?, edge? })`. The flags describe unloaded neighbors. The widget
+requests an overlapping range near a visible boundary; Home/End can request the
+actual start/end rather than treating the loaded slice as the entire list. The
+host fetches data, preserves the controlled item anchor, and replaces the loaded
+items. Set `pending` while replacing a requested edge so the temporary
+collection cannot overwrite the saved position.
+
+The widget remains storage-independent. It uses the same item identity,
+selection, and measured-line cache as a complete list. Its scrollbar estimates
+unloaded ranges; it does not fetch or measure history to compute exact totals.
