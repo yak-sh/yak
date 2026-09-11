@@ -332,7 +332,15 @@ Deno.test('client writes cannot relocate an owned managed tree; server regrow ca
   let { db } = world()
   let session = uuid()
   apply(db, [{ eid: session, name: 'session', comp: { id: uuid() } }])
-  for (let branch of [`session/${session}`, null, 'borrowed']) {
+  for (
+    let branch of [
+      `session/${session}`,
+      `session/${session.replaceAll('-', '').slice(0, 10)}`,
+      `session/S#${session.replaceAll('-', '').slice(0, 10)}`,
+      null,
+      'borrowed',
+    ]
+  ) {
     writeSession(db, session, { origin: 'managed', cwd: '/tree', branch })
     let owned = branch != 'borrowed'
     for (let name of ['session', 'worktree']) {

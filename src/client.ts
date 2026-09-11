@@ -7,6 +7,7 @@
 //                       geometry) or clarity
 // Values that look like numbers become numbers.
 import { IdError } from './types.ts'
+import { ownsSessionBranch } from './session_worktree.ts'
 import {
   byName,
   type Change,
@@ -2405,8 +2406,7 @@ export let sessionFor = (
   // may refresh a provider pid, but never relocate a tree the server cut.
   let tree = s?.comps.worktree
   let owned = s?.comps.session.origin == 'managed' && tree &&
-    (!tree.branch || tree.branch == `session/${s.eid}` ||
-      tree.branch == `session/S-${s.num}`)
+    ownsSessionBranch(s.eid, tree.branch, s.num)
   if (cwd && !owned && s?.comps.session.cwd != cwd) comp.cwd = cwd
   if (pid && s?.comps.session.pid != pid) comp.pid = pid
   for (let k of ['agent_type', 'source', 'transcript', 'turn'] as const) {

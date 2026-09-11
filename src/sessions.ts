@@ -33,7 +33,7 @@ import { literal } from '@yaks/process'
 //    return takes — server-constructed, post-commit, so every cache hears
 //    the truth exactly once and none of it ever rode the wire inbound.
 import { basename, dirname, resolve } from 'node:path'
-import { shortId } from './types.ts'
+import { ownsSessionBranch, sessionHandle } from './session_worktree.ts'
 import { processStore } from './processes.ts'
 import { childEnv } from './agent_env.ts'
 import { sentences } from './edge.ts'
@@ -746,21 +746,10 @@ export let projectRepo = (
   }
 }
 
-// A checkout's identity never changes when a human later requests a num.
-let sidOf = (row: Row) => String(row.eid)
-
-// A session owns the tree it CUT, and says so in its branch: spawn and regrow
-// both name it `session/S#<hex>` (legacy trees used eids or S-N). Any other branch on the row is the caller's own
-// (`task spawn --worktree <path>`) — a tree we neither remove nor recreate,
-// because attaching borrows a checkout, it does not adopt one. A swept row has
-// shed its branch (null), and is ours to regrow.
-let owns = (row: Row) => {
-  let branch = row.branch ? String(row.branch) : ''
-  let sid = sidOf(row)
-  return !branch || branch == `session/${sid}` ||
-    branch == `session/${shortId(sid, 'session')}` ||
-    branch == `session/${human(db, String(row.eid))}`
-}
+// A swept row has shed its branch (null), and is ours to regrow.
+let owns = (row: Row) =>
+  ownsSessionBranch(String(row.eid), row.branch) ||
+  row.branch == `session/${human(db, String(row.eid))}`
 
 // The caller's tree, judged once at the spawn door so a bad `--worktree` is a
 // one-line refusal instead of a launch that dies deeper in. It must be the TOP
@@ -920,24 +909,26 @@ let regrow = async (row: Row) => {
   if (!owns(row)) throw new Error(`attached worktree is gone: ${row.cwd}`)
   let repo = repoOf(row)
   if (!repo) throw new Error("the task's project has no repo")
-  let sid = row.cwd ? basename(String(row.cwd)) : human(db, String(row.eid))
-  // Rows cleaned before the visible-root migration shed cwd. They were born
-  // under the old convention, so deriving that path is the only way to keep
-  // their provider thread resumable. New rows retain the path they were born
-  // with, and therefore never take this fallback.
+  let sid = sessionHandle(String(row.eid))
+  let branch = row.branch ? String(row.branch) : `session/${sid}`
+  // Keep recorded paths (including historical spellings) for provider thread
+  // continuity. Rows cleaned before the visible-root migration shed cwd;
+  // retain their numbered path, but never derive a new path from a # display id.
+  let old = human(db, String(row.eid))
+  let fallback = old.includes('#') ? sid : old
   let tree = String(row.cwd ?? '') ||
-    `${legacyWorktreesDir()}/${basename(repo.path)}/${sid}`
+    `${legacyWorktreesDir()}/${basename(repo.path)}/${fallback}`
   Deno.mkdirSync(dirname(tree), { recursive: true })
   ok(
     await gitRepo(repo.path).worktreeCreate(
       tree,
-      `session/${sid}`,
+      branch,
       repo.base_branch,
     ),
     'worktree',
   )
   await installTrailer(tree, String(row.eid))
-  return { cwd: tree, branch: `session/${sid}` }
+  return { cwd: tree, branch }
 }
 
 let directory = (path: unknown) => {
@@ -961,7 +952,7 @@ export let recoverWorktree = async (
   cast: Cast,
 ): Promise<{ cwd: string; branch: string } | undefined> => {
   let row = db.prepare(
-    `select o.eid as eid, s.cwd as cwd,
+    `select o.eid as eid, s.cwd as cwd, s.branch as branch,
             ${refEid('s.requested_task')} as requested_task
      from session s join entity o on o.id = s.entity where s.${OWNED}`,
   ).get(eid) as
@@ -2101,7 +2092,7 @@ export let spawned =
       `Acting as ${voice.comps.doc?.title ?? human(db, voice.eid)} (${
         human(db, voice.eid)
       })${project ? ` for ${human(db, String(project))}` : ''}.`
-    let sid = human(db, eid)
+    let sid = sessionHandle(eid)
     // `task spawn --worktree <path>`: the request already names a tree, riding
     // in as worktree.cwd. The session ATTACHES to it — on the branch it stands
     // on, with nothing created here and nothing swept later (owns()) — because

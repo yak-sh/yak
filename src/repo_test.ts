@@ -118,7 +118,7 @@ slow('a worktree is cut from the repo and given back to it', async () => {
 
 Deno.test('worktree creation reuses an orphaned short session branch without resetting it', async () => {
   let { dir, repo: r } = await repo()
-  let tree = `${dir}-tree`, branch = 'session/S#3f9a1c2e7b'
+  let tree = `${dir}-tree`, branch = 'session/3f9a1c2e7b'
   try {
     assert((await r.worktreeCreate(tree, branch, 'main')).ok)
     write(`${tree}/a.txt`, 'unmerged session work\n')

@@ -402,9 +402,11 @@ Deno.test('a task spawn is told how a run ends: land, done, release', async () =
   let prompt = ''
   await spawned(cast, (_got, launch) => {
     prompt = String(launch.prompt ?? '')
-    let sid = 'S#' + eid.replaceAll('-', '').slice(0, 10)
+    let sid = eid.replaceAll('-', '').slice(0, 10)
     assertEquals(launch.branch, `session/${sid}`)
     assertEquals(launch.tree?.endsWith('/' + sid), true)
+    assert(!launch.branch?.includes('#'))
+    assert(!launch.tree?.includes('#'))
     return Promise.resolve()
   })(eid, spawnRow(eid) ?? {})
   let id = human(db, t)
@@ -701,6 +703,64 @@ slow('worktree preparation adopts its matching crash remnant', async () => {
   assertEquals(new TextDecoder().decode(found.stdout).trim(), branch)
 })
 
+slow(
+  'spawned safe worktrees survive num allocation and reuse an orphaned branch',
+  async () => {
+    let { t } = seed()
+    for (let numbered of [false, true]) {
+      let eid = uid()
+      apply(db, [{
+        eid,
+        name: 'session',
+        $num: numbered,
+        comp: {
+          id: uid(),
+          provider: 'codex',
+          model: 'gpt-5.6-sol',
+          requested_task: t,
+        },
+      }])
+      await spawned(cast, async (_got, job) => {
+        assert(job.tree && job.branch && job.repo)
+        let launch = {
+          ...job,
+          tree: job.tree,
+          branch: job.branch,
+          repo: job.repo,
+        }
+        let handle = eid.replaceAll('-', '').slice(0, 10)
+        assertEquals(launch.branch, `session/${handle}`)
+        assertEquals(launch.tree.split('/').at(-1), handle)
+        assert(!launch.tree.includes('#'))
+        assert(!launch.branch.includes('#'))
+        await prepareWorktree(eid, launch, cast)
+        // A later human handle must not rename the checkout or its branch.
+        apply(db, [{ eid, name: 'entity', comp: {}, $num: true }])
+        Deno.writeTextFileSync(
+          `${launch.tree}/README.md`,
+          'unmerged session work',
+        )
+        assert(gitIn(launch.tree, 'commit', '-am', 'session work').success)
+        let head = gitOut(launch.tree, 'rev-parse', 'HEAD')
+        assert(gitIn(scratch, 'worktree', 'remove', launch.tree).success)
+        await prepareWorktree(eid, launch, cast)
+        assertEquals(gitOut(launch.tree, 'rev-parse', 'HEAD'), head)
+        // Recovery also uses the recorded branch, not the directory's basename.
+        let moved = launch.tree + '-moved'
+        assert(gitIn(scratch, 'worktree', 'move', launch.tree, moved).success)
+        writeSession(db, eid, { cwd: moved })
+        assert(gitIn(scratch, 'worktree', 'remove', moved).success)
+        assertEquals(await recoverWorktree(eid, cast), {
+          cwd: moved,
+          branch: launch.branch,
+        })
+        assertEquals(gitOut(moved, 'rev-parse', 'HEAD'), head)
+        assert(gitIn(scratch, 'worktree', 'remove', moved).success)
+      })(eid, spawnRow(eid) ?? {})
+    }
+  },
+)
+
 let gitIn = (cwd: string, ...args: string[]) =>
   new Deno.Command('git', { args, cwd, stdout: 'null', stderr: 'null' })
     .outputSync()
@@ -759,7 +819,8 @@ slow(
   'recoverWorktree regrows a reaped checkout, and no-ops a live one',
   async () => {
     let { t } = seed()
-    let eid = uid(), tree = `${tmp}/gone-${eid}`, branch = `session/${eid}`
+    let eid = uid(), tree = `${tmp}/gone-${eid}`
+    let branch = `session/${eid.replaceAll('-', '').slice(0, 10)}`
     apply(db, [{
       eid,
       name: 'session',
@@ -783,6 +844,7 @@ slow(
     // The next turn regrows it at the recorded path.
     let back = await recoverWorktree(eid, cast)
     assertEquals(back?.cwd, tree)
+    assertEquals(back?.branch, branch)
     assert(existsSync(tree))
     assertEquals(row(eid)?.cwd, tree)
   },
@@ -937,6 +999,8 @@ slow('a fake session runs end to end', async () => {
   let s = row(eid)!
   assertEquals(s.status, 'completed')
   assertEquals(s.exit_code, 0)
+  assertEquals(s.branch, `session/${eid.replaceAll('-', '').slice(0, 10)}`)
+  assert(!String(s.cwd).includes('#'))
   assertEquals(s.origin, 'managed')
   assertEquals(s.provider_session_id, s.id) // the child was told who it is
   assertEquals(s.serving_model, 'fake-fast')

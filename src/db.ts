@@ -11,6 +11,7 @@
 // Ids: `eid` is a UUID so ANY side (client included) can mint entities;
 // `num` is the server-minted human number (T-7 in the UI, one global counter).
 import { IdError } from './types.ts'
+import { ownsSessionBranch } from './session_worktree.ts'
 import type { SchemaOp, Sql, SqlValue, Statement } from './store/sql.ts'
 import { SEED } from './catalog.ts'
 import { asBundle, asChanges } from './store/wire.ts'
@@ -5515,18 +5516,16 @@ let projectFleet = (db: Sql, changes: Change[], context: FleetWrite) => {
     let owned = new Set<string>()
     for (let c of changes) {
       if (c.name != 'session' && c.name != 'worktree') continue
-      if (
-        prep(
-          db,
-          `select 1 from session s
-           join entity e on e.id = s.entity
-           join worktree w on w.entity = s.entity
-           where e.eid = ? and s.origin = 'managed'
-             and (w.branch is null or w.branch = ''
-               or w.branch = 'session/S-' || e.num
-               or w.branch = 'session/' || e.eid)`,
-        ).get(c.eid)
-      ) owned.add(c.eid)
+      let tree = prep(
+        db,
+        `select e.num, w.branch from session s
+         join entity e on e.id = s.entity
+         join worktree w on w.entity = s.entity
+         where e.eid = ? and s.origin = 'managed'`,
+      ).get(c.eid) as { num: number | null; branch: string | null } | undefined
+      if (tree && ownsSessionBranch(c.eid, tree.branch, tree.num)) {
+        owned.add(c.eid)
+      }
     }
     changes = changes.flatMap((c) => {
       if (!owned.has(c.eid)) return [c]

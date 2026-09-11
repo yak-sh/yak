@@ -1418,7 +1418,16 @@ Deno.test('sessionFor: task context fills only a missing actor', () => {
 })
 
 Deno.test('sessionFor: hooks cannot relocate an owned managed worktree', () => {
-  for (let branch of ['session/S-1', null, 'borrowed']) {
+  for (
+    let branch of [
+      'session/S-1',
+      `session/${S}`,
+      `session/${S.replaceAll('-', '').slice(0, 10)}`,
+      `session/S#${S.replaceAll('-', '').slice(0, 10)}`,
+      null,
+      'borrowed',
+    ]
+  ) {
     let g = all.map((r) =>
       r.eid != S ? r : {
         ...r,
