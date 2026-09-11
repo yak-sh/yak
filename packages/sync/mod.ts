@@ -56,7 +56,13 @@
  * @module
  */
 
-export { type Replica, type Sync, sync, type SyncOpts } from './sync.ts'
+export {
+  type Replica,
+  type SubscribeOpts,
+  type Sync,
+  sync,
+  type SyncOpts,
+} from './sync.ts'
 export {
   type Fetch,
   post,

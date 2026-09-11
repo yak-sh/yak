@@ -113,6 +113,10 @@ export type ClientWatchOpts = WatchOpts & {
   /** open the server's subscription for this query too (default: true when the
    * client has a `url`) */
   remote?: boolean
+  /** Let the server alone evaluate membership/order, without parsing or
+   * priming from incomplete local data. Requires a remote watch. Cached
+   * payloads remain readable with ent(), but this answer starts empty. */
+  evaluate?: 'local' | 'server'
 }
 
 // The vault a browser gets for free, and nothing anywhere else. Building it is
@@ -199,32 +203,45 @@ export let client = (
   let watch = (query: string, o: ClientWatchOpts = {}): Watch => {
     if (closed) throw new Error('client is closed')
     let remote = !!wire && o.remote !== false
-    let key = JSON.stringify([query, o.now ?? null, remote])
+    let server = o.evaluate === 'server'
+    if (server && !remote) {
+      throw new Error('server evaluation requires a remote watch')
+    }
+    let key = JSON.stringify([query, o.now ?? null, remote, server])
     let entry = shared.get(key)
     if (!entry) {
-      let local = seen.watch(query, o)
+      let local = server ? undefined : seen.watch(query, o)
       let w = local
-      let release = local.close
+      let release = () => local?.close()
       if (remote) {
         let id: string
         try {
-          id = wire!.subscribe(query)
+          id = wire!.subscribe(query, undefined, { prime: !server })
         } catch (error) {
-          local.close()
+          local?.close()
           throw error
         }
         let ready = (opts.signal ?? (<T>(value: T) => ({ value })))(
           wire!.ready(id),
         )
-        let value = (opts.signal ?? (<T>(value: T) => ({ value })))(
-          local.value.filter((b) => cache.includes(id, b.entity.eid)),
-        )
+        let read = () =>
+          server
+            ? cache.answer(id)
+            : local!.value.filter((b) => cache.includes(id, b.entity.eid))
+        let value = (opts.signal ?? (<T>(value: T) => ({ value })))(read())
         let listeners = new Set<(bundles: Bundle[]) => void>()
         let publish = (force = false) => {
-          let next = local.value.filter((b) => cache.includes(id, b.entity.eid))
+          let next = read()
           if (
             next.length !== value.value.length ||
-            next.some((b, i) => b !== value.value[i])
+            next.some((b, i) => {
+              let was = value.value[i]
+              // RAM get() assembles a bundle, but unchanged component/identity
+              // references are stable. Do not wake on another answer's pins.
+              return b !== was && (!server ||
+                Object.keys(b).length !== Object.keys(was).length ||
+                Object.keys(b).some((name) => b[name] !== was[name]))
+            })
           ) {
             value.value = next
             force = true
@@ -234,7 +251,12 @@ export let client = (
         let stopMembership = cache.onMembership((changed) => {
           if (changed === id) publish()
         })
-        let stopLocal = local.subscribe(() => publish())
+        let stopLocal = local
+          ? local.subscribe(() => publish())
+          : cache.onRows((eids) => {
+            let touched = new Set(eids)
+            if (value.value.some((b) => touched.has(b.entity.eid))) publish()
+          })
         let stopReady = wire!.onReady((changed, value) => {
           if (changed !== id) return
           ready.value = value
@@ -245,7 +267,7 @@ export let client = (
           stopMembership()
           stopLocal()
           listeners.clear()
-          local.close()
+          local?.close()
           wire!.unsubscribe(id)
         }
         w = {
@@ -254,7 +276,7 @@ export let client = (
             return value.value
           },
           get ready() {
-            return ready.value && local.ready
+            return ready.value && (local?.ready ?? true)
           },
           subscribe: (fn) => {
             listeners.add(fn)
@@ -263,7 +285,7 @@ export let client = (
           close: release,
         }
       }
-      entry = { watch: w, release, holders: 0 }
+      entry = { watch: w!, release, holders: 0 }
       shared.set(key, entry)
     }
     let own = entry

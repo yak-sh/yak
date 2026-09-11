@@ -9,6 +9,7 @@ import {
   land,
   type Replica,
   snapshot,
+  type SubscribeOpts,
   tierOf,
 } from '@yaks/sync'
 import type { Watches } from './watch.ts'
@@ -22,6 +23,12 @@ export const RETENTION_ROWS = 20_000
 export type Retained = Replica & {
   /** Whether this remote answer owns a row (or it has a pending local write). */
   includes: (id: string, eid: Eid) => boolean
+  /** Current server members in delivery order, with payloads from RAM. No
+   * local matcher, no speculative inclusion of unrelated pending writes. */
+  answer: (id: string) => Bundle[]
+  /** Payload changes, including storage-only eviction. Read the current row
+   * from the client; absence here is eviction, not proof of graph deletion. */
+  onRows: (fn: (eids: Eid[]) => void) => () => void
   /** Membership can change without the shared payload changing. */
   onMembership: (fn: (id: string) => void) => () => void
   /** Stop late hydration and persistence observation when the client closes. */
@@ -52,7 +59,14 @@ export let retention = (
   if (!Number.isSafeInteger(limit) || limit < 0) {
     throw new Error('invalid retention limit')
   }
-  let subscriptions = new Map<string, { query: Ask; members: Set<Eid> }>()
+  let subscriptions = new Map<
+    string,
+    { query: Ask; members: Set<Eid>; prime: boolean }
+  >()
+  let rowListeners = new Set<(eids: Eid[]) => void>()
+  let changedRows = (eids: Eid[]) => {
+    for (let fn of rowListeners) fn(eids)
+  }
   let listeners = new Set<(id: string) => void>()
   let notify = (id: string) => {
     for (let fn of listeners) fn(id)
@@ -109,7 +123,10 @@ export let retention = (
       changed.push(eid)
     }
     if (stale) diskDrop(eids)
-    if (changed.length) void watches.invalidate(changed)
+    if (changed.length) {
+      changedRows(changed)
+      void watches.invalidate(changed)
+    }
   }
   let sweep = () => {
     while (inactive.size > limit) forget([inactive.values().next().value!])
@@ -165,8 +182,10 @@ export let retention = (
     name: '@yaks/client/retention',
     hooks: {
       effect: (bundles) => {
-        if (closed || (opts.localOnly && !bundles.some(echoed))) return bundles
+        if (closed) return bundles
         let eids = [...new Set(bundles.map((b) => b.entity.eid))]
+        changedRows(eids)
+        if (opts.localOnly && !bundles.some(echoed)) return bundles
         for (let eid of eids) {
           loading?.add(eid)
           if (
@@ -191,6 +210,16 @@ export let retention = (
       generation++
       loading = undefined
       listeners.clear()
+      rowListeners.clear()
+    },
+    answer: (id) =>
+      store.tx((tx) => tx.get([...(subscriptions.get(id)?.members ?? [])]))
+        .filter((b) => !dead(b)),
+    onRows: (fn) => {
+      rowListeners.add(fn)
+      return () => {
+        rowListeners.delete(fn)
+      }
     },
     includes: (id, eid) =>
       !!subscriptions.get(id)?.members.has(eid) || pins.has(eid),
@@ -201,13 +230,16 @@ export let retention = (
       }
     },
     unsubscribe,
-    subscribe: (id, query) => {
+    subscribe: (id, query, subOpts: SubscribeOpts = {}) => {
       // Re-pointing the same id must not drop the old floor before new pins.
       let old = subscriptions.get(id)
+      let prime = subOpts.prime !== false
       let members = new Set(
-        query === true ? [] : store.read(query).map((b) => b.entity.eid),
+        query === true || !prime
+          ? []
+          : store.read(query).map((b) => b.entity.eid),
       )
-      subscriptions.set(id, { query, members })
+      subscriptions.set(id, { query, members, prime })
       for (let eid of members) own(id, eid)
       for (let eid of old?.members ?? []) {
         if (!members.has(eid)) {
@@ -225,6 +257,9 @@ export let retention = (
       let gone = new Set(frame.gone ?? [])
       if (frame.reset) {
         for (let eid of sub.members) if (!arrived.has(eid)) gone.add(eid)
+        // A replacement also replaces ranking; retaining Set insertion order
+        // would keep the previous ranking when the same members move.
+        sub.members.clear()
       }
       for (let eid of arrived) {
         sub.members.add(eid)
@@ -306,7 +341,7 @@ export let retention = (
       // must add late hits to that same ownership set, not invent another watch.
       await then(snapshot(graph, bundles), () => {
         for (let [id, sub] of subscriptions) {
-          if (sub.query === true) continue
+          if (sub.query === true || !sub.prime) continue
           for (let b of store.read(sub.query)) {
             sub.members.add(b.entity.eid)
             own(id, b.entity.eid)

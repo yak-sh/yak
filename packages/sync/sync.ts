@@ -29,10 +29,17 @@ import {
 /** Optional working-set policy. The client supplies retention here, rather
  * than intercepting sockets or building a second sync/readiness registry. */
 export type Replica = {
-  subscribe: (id: string, query: Ask) => void
+  subscribe: (id: string, query: Ask, opts?: SubscribeOpts) => void
   unsubscribe: (id: string) => void
   land: (frame: Frame) => Bundle[] | Promise<Bundle[]>
   protect: (eids: Eid[]) => () => void
+}
+
+/** Local priming is optional: an authoritative server query may not be
+ * evaluable over the client's incomplete graph (search, ranking, walks). */
+export type SubscribeOpts = {
+  /** Seed ownership from a local query before the first answer (default true). */
+  prime?: boolean
 }
 
 /** How a graph is wired to a server. Only `url` is required; both transports
@@ -65,7 +72,7 @@ export type Sync = {
   /** open the socket without subscribing to anything */
   open: () => void
   /** subscribe to a query (or `true` for every committed batch) */
-  subscribe: (query: Ask, id?: string) => string
+  subscribe: (query: Ask, id?: string, opts?: SubscribeOpts) => string
   /** drop one subscription */
   unsubscribe: (id: string) => void
   /** Ask every subscription for a fresh authoritative frame. */
@@ -214,7 +221,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
   return {
     plugin,
     open: w.open,
-    subscribe: (query, id) => {
+    subscribe: (query, id, subOpts) => {
       // Register ownership before a synchronous transport can answer.
       let key = id
       if (key === undefined) {
@@ -223,7 +230,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
         } while (asks.has(key))
       }
       asks.set(key, query)
-      opts.replica?.subscribe(key, query)
+      opts.replica?.subscribe(key, query, subOpts)
       try {
         return w.subscribe(query, key)
       } catch (error) {

@@ -308,3 +308,48 @@ loading. `await box.cache.idle()` waits for queued disk writes, and
 The Tasks frontend adapter, protocol/epoch negotiation, durable outbox/refusal
 ledger, richer query parity and scratch-probe CDP comparisons are a subsequent
 integration phase; this package does not yet replace `src/live.ts`.
+
+### Server-evaluated membership
+
+A partial cache cannot prove a server query's membership. In particular, RAM's
+word matcher is not SQLite FTS, and a far reference, ordering column or semantic
+vector may never have been delivered to the browser. Opt into a watch which
+never parses, evaluates or primes the query locally:
+
+```ts
+let hits = box.watch('café', { evaluate: 'server' })
+```
+
+The query text is opaque to this path. The server must validate it and send
+ordinary bundle frames (or a refusal). Membership and order come only from its
+frames: a reset replaces both; deltas update standing members without sorting
+them. A ranking change must therefore be delivered as a reset. A local edit to
+an existing member updates its payload immediately but cannot change membership;
+an unrelated optimistic write cannot insert itself into a ranked server answer.
+Payloads still live only in RAM, and another subscription's `gone` cannot remove
+an owned row. `ready`, ref-counted deduplication, independent disposal and
+reconnect/refusal behavior are the same as for other remote watches. Evaluation
+mode is part of the dedupe key. Server evaluation requires a remote watch;
+`remote: false` or a client without a URL is refused rather than silently
+reinterpreted.
+
+This is **not yet a full rich-query protocol**. `Watch.value` is still bundles,
+not an aggregate map or a semantic score. Projection coverage, peer riders,
+tally/window metadata and persisted ordered query membership require the host
+adapter work described in
+[the Tasks migration audit](../../docs/CLIENT_MIGRATION.md). In particular,
+server-evaluated watches start empty when newly opened, even if retained or
+restored payloads exist. A standing watch keeps its last answer while
+disconnected (`ready=false`), but closing and reopening does not guess a
+semantic answer from payloads. Do not use this mode as a claim of completed
+reopen-before-frame parity.
+
+`box.cache.onRows(eids => ...)` observes payload changes, including RAM-only
+retention eviction, epoch invalidation and hydration. Read each current row with
+`box.ent(eid)` to update application-derived indexes; an absent payload means
+unloaded, not deleted. The callback is synchronous after the payload change,
+returns an unsubscribe function, and is cleared on client close. This is the
+observation boundary for derived UI signals, not a second cache owner. The
+callback should not mutate the graph. Low-level sync users can disable local
+ownership priming with `wire.subscribe(query, id, { prime: false })`; ordinary
+subscriptions retain the existing local priming behavior.
