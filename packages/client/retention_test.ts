@@ -401,3 +401,12 @@ Deno.test('refusal releases pending protection after restoring the old image', a
   assertEquals(c.ent('a'), undefined)
   c.close()
 })
+
+Deno.test('local-only graphs do not evict their sole copy of wire-default data', async () => {
+  let c = client(box, [], { vault: false, retention: 0 })
+  await c.mutate([row('a'), row('b')])
+  await Promise.resolve()
+  assertEquals(readIds(c.read('.doc!')), ['a', 'b'])
+  assertEquals(c.cache.size(), 0)
+  c.close()
+})

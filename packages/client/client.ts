@@ -175,6 +175,7 @@ export let client = (
 
   cache = retention(g, store, seen, {
     limit: opts.retention,
+    localOnly: !opts.url,
     vault: opts.wireVault === false
       ? undefined
       : opts.wireVault ?? (globalThis.indexedDB ? wireIdb() : undefined),

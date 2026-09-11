@@ -3,7 +3,14 @@
 import type { Bundle, Eid, Graph } from '@yaks/graph'
 import { comps, dead, then } from '@yaks/graph'
 import type { Store } from '@yaks/ram'
-import { type Ask, land, type Replica, snapshot, tierOf } from '@yaks/sync'
+import {
+  type Ask,
+  echoed,
+  land,
+  type Replica,
+  snapshot,
+  tierOf,
+} from '@yaks/sync'
 import type { Watches } from './watch.ts'
 import type { Saved } from './vault.ts'
 import type { WireVault } from './wire-vault.ts'
@@ -37,6 +44,7 @@ export let retention = (
   opts: {
     limit?: number
     vault?: WireVault
+    localOnly?: boolean
     report?: (error: unknown) => void
   } = {},
 ): Retained => {
@@ -157,7 +165,7 @@ export let retention = (
     name: '@yaks/client/retention',
     hooks: {
       effect: (bundles) => {
-        if (closed) return bundles
+        if (closed || (opts.localOnly && !bundles.some(echoed))) return bundles
         let eids = [...new Set(bundles.map((b) => b.entity.eid))]
         for (let eid of eids) {
           loading?.add(eid)

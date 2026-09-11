@@ -240,11 +240,12 @@ Apache-2.0
 ## Bounded working set and server-tier restore
 
 The client retains **20,000 inactive wire rows** by default (`retention: n`
-changes the bound; zero disables the inactive floor). Active subscription
-members and pending optimistic writes do not consume that budget and are never
-evicted to meet it. Identical watches still share the phase-1 subscription;
-different subscriptions share payload ownership. A query's `gone` removes it
-from that answer without stripping another owner's row.
+changes the bound; zero disables the inactive floor). Local-only graphs do not
+evict their sole copy of locally written data. Active subscription members and
+pending optimistic writes do not consume that budget and are never evicted to
+meet it. Identical watches still share the phase-1 subscription; different
+subscriptions share payload ownership. A query's `gone` removes it from that
+answer without stripping another owner's row.
 
 `ent()` and `read()` touch the inactive LRU. Storage enumeration and watch
 refreshes do not touch it, and touching never changes query/first-match order.
