@@ -43,6 +43,9 @@ models every suite. Investigate repeated regressions before accepting them. Keep
 cold CI rows separate from local suite rows; do not compare seconds across the
 two environments.
 
+For a per-step investigation and a repeated-body write regression fixed without
+changing the timing threshold, see [check regression T-37417](check-37417.md).
+
 ## CI
 
 The gate's custom shell times every executed **run step**, including path

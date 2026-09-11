@@ -53,9 +53,8 @@ let written = (b: Bundle, cols: Body[]): [Body, string][] =>
 // store already holds them, which is what makes a repeated value one object.
 let swap = (
   b: Bundle,
-  store: Blobs,
   cols: Body[],
-  reference: Reference,
+  intern: (value: string) => string | number | Promise<string | number>,
 ): Bundle | Promise<Bundle> => {
   let mine = written(b, cols)
   if (!mine.length) return b
@@ -63,20 +62,11 @@ let swap = (
   let out: Bundle = { ...b }
   return then(
     each(mine, null, (_, [{ comp, prop }, value]) => {
-      let sha = address(value)
       stash[`${comp}.${prop}`] = value
-      return then(
-        store.has(sha),
-        (held) =>
-          then(
-            held ? undefined : store.put(sha, encode(value)),
-            () =>
-              then(reference(sha), (ref) => {
-                out[comp] = { ...patch(out, comp)!, [prop]: ref }
-                return null
-              }),
-          ),
-      )
+      return then(intern(value), (ref) => {
+        out[comp] = { ...patch(out, comp)!, [prop]: ref }
+        return null
+      })
     }),
     () => {
       out[STASH] = stash
@@ -145,13 +135,36 @@ export let blobs = (
   return {
     name: '@yaks/blob',
     hooks: {
-      precondition: (bundles) =>
-        each(
+      precondition: (bundles) => {
+        // Intern equal text once per batch, BEFORE hashing it. The backend
+        // deduplicates bytes, but repeatedly hashing a shared large body still
+        // costs its size times the number of rows. Keep this transaction-local:
+        // a rollback (or an independent apply) must never reuse an uncommitted
+        // reference. `each` visits values sequentially even for async stores.
+        let refs = new Map<string, string | number>()
+        let intern = (value: string) => {
+          let held = refs.get(value)
+          if (held !== undefined) return held
+          let sha = address(value)
+          return then(
+            store.has(sha),
+            (exists) =>
+              then(
+                exists ? undefined : store.put(sha, encode(value)),
+                () =>
+                  then(reference(sha), (ref) => {
+                    refs.set(value, ref)
+                    return ref
+                  }),
+              ),
+          )
+        }
+        return each(
           bundles,
           [] as Bundle[],
-          (out, b) =>
-            then(swap(b, store, cols, reference), (one) => [...out, one]),
-        ),
+          (out, b) => then(swap(b, cols, intern), (one) => [...out, one]),
+        )
+      },
       commit: (bundles) => bundles.map(restore),
     },
   }
