@@ -8,7 +8,7 @@ import { transient } from '@yaks/graph'
 import type { ImageOptions } from './images.ts'
 /** Opt-in worker frontend. UI state remains in the frontend's private graph. */
 import { client } from '@yaks/client'
-import { type Frame, land, portLink, strip } from '@yaks/sync'
+import { type Frame, portLink } from '@yaks/sync'
 import type { Bundle, Comp } from '@yaks/graph'
 import { render as tree } from '@yaks/preact'
 import { render } from '@yaks/text'
@@ -34,7 +34,7 @@ export let remote = async (
     new URL('./backend_worker.ts', import.meta.url).href,
     { type: 'module' },
   )
-  let replica = client(vocab, [], { vault: false })
+  let replica = client(vocab, [], { vault: false, retention: 256 })
   let listeners = new Set<() => void>()
   let members = new Map<string, string[]>()
   // Memoize the asynchronous projection until its authoritative subscription
@@ -56,7 +56,7 @@ export let remote = async (
           }
           return
         }
-        await land(replica.graph, frame)
+        await replica.cache.land(frame)
         let ids = new Set(members.get(frame.id) ?? [])
         for (let b of frame.bundles ?? []) ids.add(b.entity.eid)
         for (let id of frame.gone ?? []) ids.delete(id)
@@ -112,6 +112,9 @@ export let remote = async (
     })
   let listen = async (id: string, query: string) => {
     initializing.add(id)
+    if (!id.startsWith('frontier:')) {
+      replica.cache.subscribe(id, query, { prime: false })
+    }
     try {
       await request('subscribe', [id, query])
       await queued
@@ -147,10 +150,8 @@ export let remote = async (
       for (let id of plans) {
         await request('unsubscribe', [id])
         await queued
-        let old = members.get(id) ?? []
         members.delete(id)
-        let retained = new Set([...members.values()].flat())
-        await strip(replica.graph, old.filter((eid) => !retained.has(eid)))
+        replica.cache.unsubscribe(id)
       }
       plans = []
       selected = undefined
@@ -175,10 +176,8 @@ export let remote = async (
     for (let id of [...windowKeys, ...frontierKeys]) {
       await request('unsubscribe', [id])
       await queued
-      let old = members.get(id) ?? []
       members.delete(id)
-      let retained = new Set([...members.values()].flat())
-      await strip(replica.graph, old.filter((eid) => !retained.has(eid)))
+      replica.cache.unsubscribe(id)
     }
     windowKeys = []
     frontierKeys = []
@@ -192,10 +191,8 @@ export let remote = async (
       for (let id of plans) {
         await request('unsubscribe', [id])
         await queued
-        let old = members.get(id) ?? []
         members.delete(id)
-        let retained = new Set([...members.values()].flat())
-        await strip(replica.graph, old.filter((eid) => !retained.has(eid)))
+        replica.cache.unsubscribe(id)
       }
       plans = []
       selected = undefined

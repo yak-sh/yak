@@ -143,7 +143,9 @@ Deno.test('worker subscribes only to selected fork ancestry, respecting each bou
     assertEquals((await r.agent.transcript('other')).map((b) => b.entity.eid), [
       'd',
     ])
-    assert(!r.replica.ent('a')?.entry)
+    // Unsubscribed rows may be retained, but they are not active coverage.
+    assert(!r.replica.cache.loaded('a', 'entry'))
+    assert(r.replica.cache.size() <= 256)
   } finally {
     await r.close()
     await Deno.remove(dir, { recursive: true })

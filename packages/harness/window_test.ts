@@ -58,14 +58,14 @@ Deno.test('worker pages retained graph data and keeps initial transfer independe
       limit: 16,
     })
     assertEquals(middle.entries[0].entity.eid, 'entry142')
-    assert(!r.replica.ent('entry299')?.content)
+    assert(r.replica.cache.size() <= 256)
     let [head, tail] = await Promise.all([
       r.agent.transcriptWindow!('s', { edge: 'start', limit: 8 }),
       r.agent.transcriptWindow!('s', { edge: 'end', limit: 8 }),
     ])
     assertEquals(head.entries[0].entity.eid, 'entry0')
     assertEquals(tail.entries.at(-1)!.entity.eid, 'entry299')
-    assert(!r.replica.ent('entry150')?.content)
+    assert(r.replica.cache.size() <= 256)
     await r.agent.send('s', 'new message')
     await r.idle('s')
     let end = await r.agent.transcriptWindow!('s', { limit: 16 })
