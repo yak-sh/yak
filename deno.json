@@ -1,13 +1,119 @@
 {
   "tasks": {
-    "check": "deno fmt --check && deno lint && deno task check:bytes && deno check && deno task check:publish && deno task check:browser && deno task check:workers && deno task codegen --check && deno task content --check && deno task test:packages",
-    "check:publish": "deno publish --dry-run --allow-dirty",
+    "check": {
+      "dependencies": [
+        "check:fmt",
+        "check:lint",
+        "check:bytes",
+        "check:types",
+        "check:publish",
+        "check:browser",
+        "check:workers",
+        "check:codegen",
+        "check:content",
+        "check:packages"
+      ]
+    },
+    "check:fmt": "deno fmt --check",
+    "check:lint": "deno lint",
     "check:bytes": "deno run --allow-read --allow-run=git bin/check-bytes.ts",
-    "check:browser": "deno check --config packages/context/browser.json packages/context/mod.ts && deno check --config packages/graph/browser.json packages/graph/mod.ts && deno check --config packages/archetype/browser.json packages/archetype/mod.ts && deno check --config packages/ram/browser.json packages/ram/mod.ts && deno check --config packages/sync/browser.json packages/sync/mod.ts && deno check --config packages/client/browser.json packages/client/mod.ts && deno check --config packages/edge/browser.json packages/edge/mod.ts && deno check --config packages/effects/browser.json packages/effects/mod.ts && deno check --config packages/journal/browser.json packages/journal/mod.ts && deno check --config packages/blob/browser.json packages/blob/mod.ts && deno check --config packages/doc/browser.json packages/doc/mod.ts && deno check --config packages/key/browser.json packages/key/mod.ts && deno check --config packages/git/browser.json packages/git/mod.ts && deno check --config packages/alias/browser.json packages/alias/mod.ts && deno check --config packages/member/browser.json packages/member/mod.ts && deno check --config packages/session/browser.json packages/session/mod.ts && deno check --config packages/model/browser.json packages/model/mod.ts && deno check --config packages/openai/browser.json packages/openai/mod.ts && deno check --config packages/canvas/browser.json packages/canvas/mod.ts && deno check --config packages/task/browser.json packages/task/mod.ts && deno check --no-lock --config packages/wake/browser.json packages/wake/mod.ts && deno check --config packages/mail/browser.json packages/mail/mod.ts && deno check --config packages/memory/browser.json packages/memory/mod.ts",
-    "check:workers": "deno check --no-lock --config packages/workers/workers.json packages/workers/conform.ts && deno check --no-lock --config packages/durable-object/workers.json packages/durable-object/conform.ts && deno check --no-lock --config packages/blob/workers.json packages/blob/conform.ts && deno check --no-lock --config packages/d1/workers.json packages/d1/conform.ts && deno check --no-lock --config packages/mail/workers.json packages/mail/conform.ts && deno check --no-lock --config workers/yak/workers.json workers/yak/conform.ts workers/yak-tail/conform.ts",
+    "check:types": "deno check",
+    "check:publish": {
+      "command": "deno publish --dry-run --allow-dirty",
+      "files": [
+        "deno.json",
+        "deno.lock",
+        ".gitignore",
+        "packages/**/*",
+        "workers/**/*",
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "src/**/*.js",
+        "src/**/*.mjs",
+        "src/**/*.json",
+        "src/**/*.jsonc",
+        "!**/node_modules/**",
+        "!**/.wrangler/**",
+        "!src/vocab/.gen.tmp.ts",
+        "!src/vocab/.schema.tmp.json",
+        "!workers/yak/.content.gen.ts",
+        "!**/.dev.vars*",
+        "!**/.env*"
+      ]
+    },
+    "check:browser": {
+      "command": "deno run --allow-read --allow-write --allow-run=deno bin/check-platform.ts browser",
+      "files": [
+        "deno.json",
+        "deno.lock",
+        "bin/check-platform.ts",
+        "packages/**/*.ts",
+        "packages/**/*.tsx",
+        "packages/**/*.js",
+        "packages/**/*.mjs",
+        "packages/**/*.json",
+        "packages/**/*.jsonc",
+        "workers/**/*.ts",
+        "workers/**/*.tsx",
+        "workers/**/*.js",
+        "workers/**/*.mjs",
+        "workers/**/*.json",
+        "workers/**/*.jsonc",
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "src/**/*.js",
+        "src/**/*.mjs",
+        "src/**/*.json",
+        "src/**/*.jsonc",
+        "!**/node_modules/**",
+        "!**/.wrangler/**",
+        "!src/vocab/.gen.tmp.ts",
+        "!src/vocab/.schema.tmp.json",
+        "!workers/yak/.content.gen.ts"
+      ]
+    },
+    "check:workers": {
+      "command": "deno run --allow-read --allow-write --allow-run=deno bin/check-platform.ts workers",
+      "files": [
+        "deno.json",
+        "deno.lock",
+        "bin/check-platform.ts",
+        "packages/**/*.ts",
+        "packages/**/*.tsx",
+        "packages/**/*.js",
+        "packages/**/*.mjs",
+        "packages/**/*.json",
+        "packages/**/*.jsonc",
+        "workers/**/*.ts",
+        "workers/**/*.tsx",
+        "workers/**/*.js",
+        "workers/**/*.mjs",
+        "workers/**/*.json",
+        "workers/**/*.jsonc",
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "src/**/*.js",
+        "src/**/*.mjs",
+        "src/**/*.json",
+        "src/**/*.jsonc",
+        "!**/node_modules/**",
+        "!**/.wrangler/**",
+        "!src/vocab/.gen.tmp.ts",
+        "!src/vocab/.schema.tmp.json",
+        "!workers/yak/.content.gen.ts"
+      ]
+    },
+    "check:codegen": "deno task codegen --check",
+    "check:content": "deno task content --check",
+    "check:packages": {
+      "command": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno test --parallel --no-check -A packages/",
+      "dependencies": [
+        "check:types"
+      ]
+    },
     "codegen": "deno run --allow-read --allow-write --allow-run=deno src/vocab/gen.ts",
     "content": "deno run --allow-read --allow-write --allow-run=deno workers/yak/gen.ts",
-    "test:packages": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno test -A packages/",
+    "test:packages": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno test --parallel -A packages/",
     "test:workerd": "TASKS_SLOW=1 deno test -A --unstable-net --unstable-worker-options workers/yak/ workers/yak-tail/",
     "test:workers": "deno test -A workers/yak/ workers/yak-tail/",
     "gate": "deno task check && deno task test && deno task bench:gate && deno task bench:gate:web && deno run -A src/cli.ts sync --check",
@@ -106,7 +212,11 @@
     ".tasks",
     ".claude",
     "AGENTS.md",
-    "CLAUDE.md"
+    "CLAUDE.md",
+    "src/vocab/.gen.tmp.ts",
+    "src/vocab/.schema.tmp.json",
+    "workers/yak/.content.gen.ts",
+    "plugins/.gen"
   ],
   "fmt": {
     "semiColons": false,

@@ -429,7 +429,10 @@ let loadManifests = (): Manifest[] => {
 }
 
 let fmt = async (path: string) => {
-  let p = await new Deno.Command('deno', { args: ['fmt', '-q', path] }).output()
+  // The repo-wide concurrent scans exclude scratch; only its owner formats it.
+  let p = await new Deno.Command('deno', {
+    args: ['fmt', '-q', `--ignore=!${path}`, path],
+  }).output()
   if (!p.success) {
     refuse(`deno fmt failed: ${new TextDecoder().decode(p.stderr)}`)
   }

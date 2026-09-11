@@ -166,7 +166,7 @@ let formatted = async (text: string) => {
   let tmp = new URL('.content.gen.ts', HERE)
   await Deno.writeTextFile(tmp, text)
   let p = await new Deno.Command('deno', {
-    args: ['fmt', '-q', tmp.pathname],
+    args: ['fmt', '-q', `--ignore=!${tmp.pathname}`, tmp.pathname],
   }).output()
   if (!p.success) {
     refuse(`deno fmt failed: ${new TextDecoder().decode(p.stderr)}`)
@@ -208,7 +208,7 @@ let formattedMd = async (held: Record<string, string>) => {
     await Deno.writeTextFile(to, text)
   }
   let p = await new Deno.Command('deno', {
-    args: ['fmt', '-q', tmp.pathname],
+    args: ['fmt', '-q', `--ignore=!${tmp.pathname}`, tmp.pathname],
   }).output()
   if (!p.success) {
     refuse(`deno fmt failed: ${new TextDecoder().decode(p.stderr)}`)
