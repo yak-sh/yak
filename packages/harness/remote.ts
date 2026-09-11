@@ -1,3 +1,8 @@
+import type {
+  TranscriptPage,
+  TranscriptPlan,
+  TranscriptWindow,
+} from '@yaks/session'
 import { streamingEnabled } from './streaming.ts'
 import { transient } from '@yaks/graph'
 import type { ImageOptions } from './images.ts'
@@ -45,6 +50,12 @@ export let remote = async (
       queued = queued.then(async () => {
         if (frame.refused) throw new Error(frame.refused.message)
         summaries.delete(frame.id)
+        if (frame.id.startsWith('frontier:')) {
+          if (!initializing.has(frame.id)) {
+            for (let notify of listeners) notify()
+          }
+          return
+        }
         await land(replica.graph, frame)
         let ids = new Set(members.get(frame.id) ?? [])
         for (let b of frame.bundles ?? []) ids.add(b.entity.eid)
@@ -155,6 +166,74 @@ export let remote = async (
     serial = result
     return result
   }
+  let windowSession: string | undefined,
+    windowQueries: string[] = [],
+    frontierKeys: string[] = []
+  let windowKeys: string[] = []
+  let windowSerial: Promise<unknown> = Promise.resolve()
+  let clearWindow = async () => {
+    for (let id of [...windowKeys, ...frontierKeys]) {
+      await request('unsubscribe', [id])
+      await queued
+      let old = members.get(id) ?? []
+      members.delete(id)
+      let retained = new Set([...members.values()].flat())
+      await strip(replica.graph, old.filter((eid) => !retained.has(eid)))
+    }
+    windowKeys = []
+    frontierKeys = []
+    windowQueries = []
+  }
+  let windowed = (
+    session: string,
+    options: TranscriptWindow = {},
+  ): Promise<TranscriptPage> => {
+    let result = windowSerial.catch(() => {}).then(async () => {
+      for (let id of plans) {
+        await request('unsubscribe', [id])
+        await queued
+        let old = members.get(id) ?? []
+        members.delete(id)
+        let retained = new Set([...members.values()].flat())
+        await strip(replica.graph, old.filter((eid) => !retained.has(eid)))
+      }
+      plans = []
+      selected = undefined
+      let plan = await request('transcriptWindowPlan', [session, options]) as
+        & TranscriptPlan
+        & { frontiers: string[] }
+      if (
+        windowSession != session ||
+        JSON.stringify(plan.queries) != JSON.stringify(windowQueries)
+      ) {
+        await clearWindow()
+        windowSession = session
+        windowQueries = plan.queries
+        for (let [i, query] of plan.queries.entries()) {
+          let id = 'window:' + session + ':' + i
+          await listen(id, query)
+          windowKeys.push(id)
+        }
+        for (let [i, query] of plan.frontiers.entries()) {
+          let id = 'frontier:' + session + ':' + i
+          await listen(id, query)
+          frontierKeys.push(id)
+        }
+      }
+      await queued
+      return {
+        entries: windowKeys.flatMap((key) =>
+          rows(key).sort((a, b) =>
+            Number((a.entry as Comp).seq) - Number((b.entry as Comp).seq)
+          )
+        ),
+        before: plan.before,
+        after: plan.after,
+      }
+    })
+    windowSerial = result
+    return result
+  }
   // Summaries still use the existing authoritative projection because session
   // status and local titles are derived. This is a measured pilot limitation.
   let summary = (method: string) => {
@@ -182,6 +261,7 @@ export let remote = async (
     tasks: () => summary('tasks'),
     children: async (id) => await request('children', [id]) as Bundle[],
     transcript: (id) => select(id),
+    transcriptWindow: windowed,
     entry: (b) =>
       tree(transcriptViews, b, 'Transcript', vocab, {
         names: init.names,

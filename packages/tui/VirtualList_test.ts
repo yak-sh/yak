@@ -385,3 +385,38 @@ Deno.test('hidden selection retains logical position without painting highlight'
   v.selectionVisible = true
   assert(v.layout(40, 5)[0].some((s) => s.style.bg == '#123456'))
 })
+
+Deno.test('partial ranges load neighbors without mistaking a page boundary for the end', async () => {
+  let { signal } = await import('@preact/signals')
+  let data = items(200), visible = signal(data.slice(90, 110))
+  let value = signal({ anchor: { id: '90', offset: 0 }, follow: false })
+  let requests: unknown[] = []
+  let ui = await mount(
+    () =>
+      h(VirtualList, {
+        items: visible.value,
+        value: value.value,
+        onViewportChange: (next) => {
+          value.value = next as typeof value.value
+        },
+        range: { before: true, after: true },
+        onRange: (request) => {
+          requests.push(request)
+        },
+        renderItem: (item) => h('div', null, item.id),
+      }),
+    40,
+    5,
+  )
+  try {
+    assert(requests.some((r) => (r as { anchor: string }).anchor == '90'))
+    visible.value = data.slice(80, 110)
+    await ui.resize(41, 5)
+    assertEquals(value.value.anchor.id, '90')
+    assertEquals(value.value.follow, false)
+    await ui.send('\x1b[1;5F')
+    assert(requests.some((r) => (r as { edge: string }).edge == 'end'))
+  } finally {
+    ui.free()
+  }
+})

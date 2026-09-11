@@ -10,6 +10,9 @@ import { type Sheet, type Style } from './theme.ts'
 import { useKeys } from './screen.ts'
 import type { Key } from './input.ts'
 
+export type ListRange = { before: boolean; after: boolean }
+export type RangeRequest = { anchor?: string; edge?: 'start' | 'end' }
+
 export type VirtualItem = { id: string }
 type Cached = { version: string; width: number; style: string; lines: Line[] }
 export type Anchor = { id: string; offset: number }
@@ -35,6 +38,8 @@ export class VirtualWindow<T extends VirtualItem> {
   private revealedSelection?: string
   private revealedWidth = 0
   private revealedHeight = 0
+  range: ListRange = { before: false, after: false }
+  visibleEnd = 0
   stats = { measured: 0, hits: 0 }
   constructor(
     private measure: (item: T, width: number) => Line[],
@@ -147,7 +152,20 @@ export class VirtualWindow<T extends VirtualItem> {
       total += correction
       if (at < index) top += correction
     }
-    return { total, top, height: this.height, bottom: this.follow }
+    // Unknown ranges are estimated as another loaded page; the scrollbar is
+    // deliberately approximate and never controls the logical anchor.
+    let unknown = Math.max(this.height, this.items.length * average)
+    if (this.range.before) {
+      top += unknown
+      total += unknown
+    }
+    if (this.range.after) total += unknown
+    return {
+      total,
+      top,
+      height: this.height,
+      bottom: this.follow && !this.range.after,
+    }
   }
 
   layout(width: number, height: number, style = ''): Line[] {
@@ -179,7 +197,7 @@ export class VirtualWindow<T extends VirtualItem> {
     }
     let i = this.anchor ? this.indices.get(this.anchor.id) ?? 0 : 0
     let offset = this.anchor?.offset ?? 0
-    if (this.follow) {
+    if (this.follow && !this.range.after) {
       i = this.items.length - 1
       let remaining = height
       while (i > 0 && get(i).length < remaining) {
@@ -265,12 +283,13 @@ export class VirtualWindow<T extends VirtualItem> {
     }
     // Scrolling down into the end snaps; an append while detached never does.
     if (
-      !this.follow && this.movement > 0 && exhausted
+      !this.range.after && !this.follow && this.movement > 0 && exhausted
     ) {
       this.follow = true
       this.movement = 0
       return this.layout(width, height, style)
     }
+    this.visibleEnd = end
     this.movement = 0
     this.anchor = { id: this.items[i].id, offset }
     return out.concat(
@@ -296,9 +315,14 @@ export let VirtualList = <T extends VirtualItem>(
     selectionVisible = true,
     selectionClass = 'List_Selected',
     onSelect,
+    range,
+    onRange,
     ...attrs
   }: {
     items: readonly T[]
+    /** Unloaded neighbors. Boundary requests never imply the data is empty. */
+    range?: ListRange
+    onRange?: (request: RangeRequest) => void
     /** Controlled selected item; onSelect enables item-navigation keys. */
     selected?: string
     /** Keep the logical selection while hiding its painted highlight. */
@@ -325,6 +349,19 @@ export let VirtualList = <T extends VirtualItem>(
   id?: string
   grow?: string
 }> => {
+  let rangeRequest = useRef<string>()
+  let rangeItems = useRef(items)
+  if (rangeItems.current !== items) {
+    rangeRequest.current = undefined
+    rangeItems.current = items
+  }
+  let requestRange = (request: RangeRequest) => {
+    if (!onRange) return
+    let key = JSON.stringify(request)
+    if (rangeRequest.current === key) return
+    rangeRequest.current = key
+    queueMicrotask(() => onRange(request))
+  }
   let props = useRef({ renderItem, version })
   props.current = { renderItem, version }
   let selectionWidth = useRef(80)
@@ -415,8 +452,33 @@ export let VirtualList = <T extends VirtualItem>(
     },
   })
   state.current.selectionVisible = selectionVisible
+  state.current.range = range ?? { before: false, after: false }
   state.current.selected = selected
   useKeys((key) => {
+    if (
+      range && (key.name == 'home' || key.name == 'end') &&
+      (key.ctrl || onSelect)
+    ) {
+      let edge: 'start' | 'end' = key.name == 'home' ? 'start' : 'end'
+      if (edge == 'start' ? range.before : range.after) {
+        requestRange({ edge })
+        return true
+      }
+    }
+    if (range && selected) {
+      let index = items.findIndex((item) => item.id == selected)
+      let up = key.name == 'up' || key.name == 'pageup' ||
+        key.ctrl && key.text == 'u'
+      let down = key.name == 'down' || key.name == 'pagedown' ||
+        key.ctrl && key.text == 'd'
+      if (
+        up && range.before && index <= 1 ||
+        down && range.after && index >= items.length - 2
+      ) {
+        requestRange({ anchor: selected })
+        return true
+      }
+    }
     if (onSelect) {
       let id = state.current!.selectionKey(key, selected)
       if (id !== undefined) {
@@ -462,6 +524,23 @@ export let VirtualList = <T extends VirtualItem>(
           JSON.stringify([style, sheet]),
         )
         publish()
+        if (range && items.length) {
+          let at = items.findIndex((item) =>
+            item.id == state.current!.anchor?.id
+          )
+          if (
+            range.before && at < 8 ||
+            range.after && state.current!.visibleEnd > items.length - 8
+          ) {
+            requestRange({
+              anchor: range.before && at < 8
+                ? state.current!.anchor?.id
+                : items[
+                  Math.min(items.length - 1, state.current!.visibleEnd - 1)
+                ].id,
+            })
+          }
+        }
         return attrs.scrollbar
           ? drawScrollbar(lines, width, state.current!.position(inner), sheet)
           : lines

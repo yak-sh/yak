@@ -1,3 +1,8 @@
+import {
+  transcriptPlan,
+  transcriptSegments,
+  type TranscriptWindow,
+} from '@yaks/session'
 import type { ImageOptions } from './images.ts'
 /** Worker owns the authoritative database and all agent execution. */
 import { portLink } from '@yaks/sync'
@@ -132,6 +137,20 @@ async function handle(method: string, value: unknown): Promise<unknown> {
       return a.tasks()
     case 'children':
       return a.children(String(args[0]))
+    case 'transcriptWindowPlan': {
+      let session = String(args[0])
+      let plan = await transcriptPlan(
+        a.h.g,
+        session,
+        args[1] as TranscriptWindow,
+      )
+      let frontiers = (await transcriptSegments(a.h.g, session)).map((s) =>
+        '.entry.session=' + s.session +
+        (Number.isFinite(s.through) ? '&.entry.seq<=' + s.through : '') +
+        '&.fields=entry.seq&.order=-entry.seq&.limit=1'
+      )
+      return { ...plan, frontiers }
+    }
     case 'transcriptPlan': {
       let id = String(args[0]), plans: string[] = []
       let limit: number | undefined

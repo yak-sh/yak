@@ -1,4 +1,5 @@
 import { RuntimePanel } from './RuntimePanel.ts'
+import type { TranscriptPage, TranscriptWindow } from '@yaks/session'
 import { transient } from '@yaks/graph'
 import { Keyboard } from './keyboard.ts'
 import { useVisualController, type VisualState } from '@yaks/tui'
@@ -62,6 +63,7 @@ export let changes = (a: Agent): Opts['subscribe'] => {
 
 type Selection = { id?: Eid }
 type Snapshot = {
+  page?: Pick<TranscriptPage, 'before' | 'after'>
   loadedFor?: string
   sessions: Bundle[]
   entries: Bundle[]
@@ -129,12 +131,27 @@ export let App = (
         while (alive && transcriptDirty) {
           transcriptDirty = false
           let s = current()
-          let entries = s.id ? await a.transcript(s.id) : []
+          let position = ui.client.ent('viewport-' + s.id)?.viewport as
+            | Comp
+            | undefined
+          let options: TranscriptWindow = position?.windowEdge
+            ? { edge: position.windowEdge as 'start' | 'end' }
+            : {
+              anchor: position?.windowAnchor
+                ? String(position.windowAnchor)
+                : position?.follow === false && position.item
+                ? String(position.item)
+                : undefined,
+            }
+          let page = s.id && a.transcriptWindow
+            ? await a.transcriptWindow(s.id, options)
+            : undefined
+          let entries = page?.entries ?? (s.id ? await a.transcript(s.id) : [])
           if (
             alive && s.id == current().id &&
             s.generation == current().generation
           ) {
-            setData((d) => ({ ...d, entries, loadedFor: s.id }))
+            setData((d) => ({ ...d, entries, page, loadedFor: s.id }))
           }
         }
       } catch (e) {
@@ -405,6 +422,10 @@ export let App = (
           ui,
           id: selection.id ?? 'new',
           pending: data.loadedFor !== selection.id,
+          page: data.page,
+          load: () => {
+            refresh.current()
+          },
           items: transcriptItems,
           agent: a,
         }),
@@ -456,7 +477,9 @@ let Composer = (
 }
 
 /** Position is per transcript, but its rendering cache remains in VirtualList. */
-let Transcript = ({ ui, id, items, agent, pending }: {
+let Transcript = ({ ui, id, items, agent, pending, page, load }: {
+  page?: Pick<TranscriptPage, 'before' | 'after'>
+  load: () => void
   pending: boolean
   ui: Frontend
   id: string
@@ -469,6 +492,25 @@ let Transcript = ({ ui, id, items, agent, pending }: {
     ?.viewport as Comp | undefined
   return h(VirtualList<{ id: string; bundle: Bundle }>, {
     id: 'transcript-' + id,
+    range: page,
+    onRange: (request: { edge?: 'start' | 'end'; anchor?: string }) => {
+      ui.client.mutate([{
+        entity: { eid: 'viewport-' + id },
+        viewport: {
+          windowAnchor: request.anchor ?? null,
+          windowEdge: request.edge ?? null,
+          ...request.edge
+            ? {
+              follow: request.edge == 'end',
+              item: null,
+              selected: null,
+              offset: 0,
+            }
+            : {},
+        },
+      }])
+      load()
+    },
     grow: '1',
     scrollbar: true,
     pending,
@@ -480,7 +522,18 @@ let Transcript = ({ ui, id, items, agent, pending }: {
         offset: Number(position.offset),
       },
     },
-    onViewportChange: viewport.set,
+    onViewportChange: (
+      next: { anchor?: { id: string; offset: number }; follow: boolean },
+    ) => {
+      viewport.set(next)
+      ui.client.mutate([{
+        entity: { eid: 'viewport-' + id },
+        viewport: {
+          windowAnchor: null,
+          windowEdge: next.follow ? 'end' : null,
+        },
+      }])
+    },
     selected: position?.selected == null
       ? undefined
       : String(position.selected),

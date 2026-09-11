@@ -1,6 +1,11 @@
 import { inheritedInstructions } from './legacy_instructions.ts'
 import { stepLock } from './step_lock.ts'
 import { type RuntimeAction, runtimeAction, runtimeRows } from './runtime.ts'
+import {
+  type TranscriptPage,
+  type TranscriptWindow,
+  transcriptWindow,
+} from '@yaks/session'
 import { streamingEnabled } from './streaming.ts'
 import { imageContext } from './artifact_tools.ts'
 import { configuredImages, type ImageOptions, readImage } from './images.ts'
@@ -139,6 +144,10 @@ export type Agent = {
   children: (session: Eid) => Promise<Bundle[]>
   /** one transcript's entries, in order */
   transcript: (session: Eid) => Promise<Bundle[]>
+  transcriptWindow: (
+    session: Eid,
+    request?: TranscriptWindow,
+  ) => Promise<TranscriptPage>
   /** wake every transcript a restart left mid-step */
   resume: () => Promise<Eid[]>
   /** wait for a transcript to run out of things to do */
@@ -304,6 +313,8 @@ export let agent = (opts: Opts = {}): Agent => {
     tasks: async () =>
       (await h.g.read('.task.status=open,wip')).toSorted(byBirth),
     transcript: entries,
+    transcriptWindow: (session, request) =>
+      transcriptWindow(h.g, session, request),
     resume: async () => {
       let live = await h.g.read('.session.status=pending,running,queued')
       // Reconcile receipts lost between a child commit and its effect.

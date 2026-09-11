@@ -13,12 +13,17 @@ export type TranscriptPage = {
   before: boolean
   after: boolean
 }
-export type TranscriptPlan = Omit<TranscriptPage, 'entries'> & { queries: string[] }
+export type TranscriptPlan = Omit<TranscriptPage, 'entries'> & {
+  queries: string[]
+}
 type Segment = { session: Eid; through: number }
 type Position = { entity: { eid: Eid }; entry: Comp }
 
 /** A fork contributes a bounded prefix of each ancestor, followed by local rows. */
-export let transcriptSegments = async (g: Graph, session: Eid): Promise<Segment[]> => {
+export let transcriptSegments = async (
+  g: Graph,
+  session: Eid,
+): Promise<Segment[]> => {
   let segments: Segment[] = [], seen = new Set<Eid>(), through = Infinity
   while (!seen.has(session)) {
     seen.add(session)
@@ -27,7 +32,9 @@ export let transcriptSegments = async (g: Graph, session: Eid): Promise<Segment[
     segments.unshift({ session, through })
     let from = (row.fork as Comp | undefined)?.from
     if (!from) break
-    let [anchor] = await g.read('.eid=' + from + '&.fields=entry.session,entry.seq')
+    let [anchor] = await g.read(
+      '.eid=' + from + '&.fields=entry.session,entry.seq',
+    )
     if (!anchor?.entry) break
     let entry = anchor.entry as Comp
     session = String(entry.session)
@@ -35,34 +42,50 @@ export let transcriptSegments = async (g: Graph, session: Eid): Promise<Segment[
   }
   return segments
 }
-let base = (s: Segment) => '.entry.session=' + s.session +
+let base = (s: Segment) =>
+  '.entry.session=' + s.session +
   (Number.isFinite(s.through) ? '&.entry.seq<=' + s.through : '')
 
 /** Only positions are read while locating a page: no old content/blob bodies. */
 export let transcriptPlan = async (
-  g: Graph, session: Eid, request: TranscriptWindow = {},
+  g: Graph,
+  session: Eid,
+  request: TranscriptWindow = {},
 ): Promise<TranscriptPlan> => {
   let size = Math.max(1, Math.min(256, Math.floor(request.limit ?? 64)))
   if (!Number.isFinite(size)) throw new Error('Invalid transcript window limit')
   let segments = await transcriptSegments(g, session)
   let anchor: { segment: number; seq: number } | undefined
   if (request.anchor && !request.edge) {
-    let [row] = await g.read('.eid=' + request.anchor + '&.fields=entry.session,entry.seq')
+    let [row] = await g.read(
+      '.eid=' + request.anchor + '&.fields=entry.session,entry.seq',
+    )
     let entry = row?.entry as Comp | undefined
-    let segment = segments.findIndex((s) => s.session == entry?.session && Number(entry.seq) <= s.through)
+    let segment = segments.findIndex((s) =>
+      s.session == entry?.session && Number(entry.seq) <= s.through
+    )
     if (segment >= 0) anchor = { segment, seq: Number(entry!.seq) }
   }
-  let positions = async (direction: 'before' | 'after', n: number): Promise<Position[]> => {
+  let positions = async (
+    direction: 'before' | 'after',
+    n: number,
+  ): Promise<Position[]> => {
     let found: Position[] = []
     let order = direction == 'before' ? '-' : ''
     let indices = segments.map((_, i) => i)
     if (direction == 'before') indices.reverse()
     for (let i of indices) {
-      if (anchor && (direction == 'before' ? i > anchor.segment : i < anchor.segment)) continue
+      if (
+        anchor &&
+        (direction == 'before' ? i > anchor.segment : i < anchor.segment)
+      ) continue
       let bound = anchor && i == anchor.segment
-        ? '&.entry.seq' + (direction == 'before' ? '<' : '>=') + anchor.seq : ''
-      let rows = await g.read(base(segments[i]) + bound + '&.fields=entry.session,entry.seq&.order=' +
-        order + 'entry.seq&.limit=' + (n - found.length))
+        ? '&.entry.seq' + (direction == 'before' ? '<' : '>=') + anchor.seq
+        : ''
+      let rows = await g.read(
+        base(segments[i]) + bound + '&.fields=entry.session,entry.seq&.order=' +
+          order + 'entry.seq&.limit=' + (n - found.length),
+      )
       found.push(...rows as Position[])
       if (found.length >= n) break
     }
@@ -71,14 +94,23 @@ export let transcriptPlan = async (
   let chosen: Position[], before: boolean, after: boolean
   if (anchor) {
     let left = await positions('before', Math.floor(size / 2) + 1)
-    let right = await positions('after', size - Math.min(left.length, Math.floor(size / 2)) + 1)
+    let right = await positions(
+      'after',
+      size - Math.min(left.length, Math.floor(size / 2)) + 1,
+    )
     // Near the end, use unused right-hand capacity for older entries.
-    let leftSize = size - Math.min(right.length, size - Math.min(left.length, Math.floor(size / 2)))
-    if (leftSize > Math.floor(size / 2)) left = await positions('before', leftSize + 1)
+    let leftSize = size -
+      Math.min(right.length, size - Math.min(left.length, Math.floor(size / 2)))
+    if (leftSize > Math.floor(size / 2)) {
+      left = await positions('before', leftSize + 1)
+    }
     let rightSize = size - Math.min(left.length, leftSize)
     before = left.length > leftSize
     after = right.length > rightSize
-    chosen = [...left.slice(0, leftSize).reverse(), ...right.slice(0, rightSize)]
+    chosen = [
+      ...left.slice(0, leftSize).reverse(),
+      ...right.slice(0, rightSize),
+    ]
   } else {
     let start = request.edge == 'start'
     chosen = await positions(start ? 'after' : 'before', size + 1)
@@ -94,12 +126,23 @@ export let transcriptPlan = async (
     let own = chosen.filter((r) => r.entry.session == s.session)
     if (!own.length) continue
     let low = Number(own[0].entry.seq), high = Number(own.at(-1)!.entry.seq)
-    queries.push(base(s) + '&.entry.seq>=' + low + '&.entry.seq<=' + high + '&.order=entry.seq&.limit=' + size)
+    queries.push(
+      base(s) + '&.entry.seq>=' + low + '&.entry.seq<=' + high +
+        '&.order=entry.seq&.limit=' + size,
+    )
   }
   return { queries, before, after }
 }
 
-export let transcriptWindow = async (g: Graph, session: Eid, request?: TranscriptWindow): Promise<TranscriptPage> => {
+export let transcriptWindow = async (
+  g: Graph,
+  session: Eid,
+  request?: TranscriptWindow,
+): Promise<TranscriptPage> => {
   let plan = await transcriptPlan(g, session, request)
-  return { entries: (await Promise.all(plan.queries.map((q) => g.read(q)))).flat(), before: plan.before, after: plan.after }
+  return {
+    entries: (await Promise.all(plan.queries.map((q) => g.read(q)))).flat(),
+    before: plan.before,
+    after: plan.after,
+  }
 }

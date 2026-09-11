@@ -51,6 +51,8 @@ export let frontendVocab = loadVocab([{
       properties: {
         item: { type: 'string' },
         selected: { type: 'string' },
+        windowAnchor: { type: 'string' },
+        windowEdge: { type: 'string' },
         offset: { type: 'number' },
         follow: { type: 'boolean' },
       },
