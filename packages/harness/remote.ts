@@ -17,6 +17,7 @@ export let remote = async (
   options: {
     db?: string
     cwd?: string
+    web?: boolean
     images?: ImageOptions | false
     streaming?: boolean
     stream?: boolean
@@ -81,6 +82,7 @@ export let remote = async (
     init = await request('init', [{
       ...options,
       streaming: streamingEnabled(options),
+      web: options.web ?? Deno.env.get('HARNESS_WEB') != '0',
     }]) as typeof init
   } catch (e) {
     link.close()

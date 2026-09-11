@@ -33,6 +33,8 @@ export type Options = Omit<ResponseOptions, 'credentials'> & RunOptions & {
   refresh?: () => Credential | Promise<Credential>
   /** Configure native image storage and offer the tool on every ask. */
   images?: Images
+  /** Offer provider-hosted web search, page opening, and find-in-page. */
+  web?: boolean
 }
 
 type Frame = Record<string, unknown>
@@ -100,6 +102,7 @@ export let body = (
   req: Request,
   store = false,
   images?: Images,
+  web = false,
 ): ResponseRequest =>
   request({
     model: req.model,
@@ -108,10 +111,30 @@ export let body = (
     tools: [
       ...req.tools.map((t) => ({ type: 'function', strict: false, ...t })),
       ...images ? [{ ...images.tool, type: 'image_generation' }] : [],
+      ...web ? [{ type: 'web_search' }] : [],
     ],
     ...req.effort ? { reasoning: { effort: req.effort } } : {},
     ...req.anchor ? { previous_response_id: req.anchor } : {},
   }, store)
+
+/** Keep provider citations as clickable Markdown in the stored final text. */
+let citedText = (part: Frame): string => {
+  let text = str(part.text ?? part.refusal)
+  let annotations = Array.isArray(part.annotations) ? part.annotations : []
+  let links = annotations.filter((a): a is Frame =>
+    record(a) && a.type == 'url_citation' && typeof a.url == 'string'
+  )
+  for (let a of links) {
+    try {
+      let url = new URL(String(a.url))
+      if (url.protocol != 'https:' && url.protocol != 'http:') continue
+      let title = str(a.title, url.hostname).replace(/[\[\]\\\r\n]/g, ' ')
+      // Source links remain available even if provider offsets are absent.
+      text += ` [${title}](<${url.href.replaceAll('>', '%3E')}>)`
+    } catch { /* Invalid provider URLs are not rendered as links. */ }
+  }
+  return text
+}
 
 /** Completed output items as neutral items; reasoning and anything else the
  * API adds are not part of the conversation and are dropped. */
@@ -120,9 +143,7 @@ export let items = (done: Frame[]): Item[] => {
   for (let item of done) {
     if (item.type == 'message') {
       let parts = Array.isArray(item.content) ? item.content : []
-      let text = parts.map((p: unknown) =>
-        record(p) ? str(p.text ?? p.refusal) : ''
-      )
+      let text = parts.map((p: unknown) => record(p) ? citedText(p) : '')
         .join('')
       out.push({
         kind: 'assistant',
@@ -184,27 +205,30 @@ let ask = (opts: Options) => {
       // Never retry without the tool based on an ambiguous provider error.
       let selected = opts.images
       const textIndexes = new Map<string, number>()
-      let out = await client.run(body(req, opts.store, selected), {
-        signal: opts.signal,
-        noRetry: !!req.onText,
-        // Image payloads must never escape through diagnostic/event subscribers.
-        event: (event) => {
-          if (
-            (event.type == 'response.output_text.delta' ||
-              event.type == 'response.refusal.delta') &&
-            typeof event.delta == 'string'
-          ) {
-            const key = String(event.item_id ?? event.output_index)
-            if (!textIndexes.has(key)) textIndexes.set(key, textIndexes.size)
-            req.onText?.({
-              index: textIndexes.get(key)!,
-              id: key,
-              text: event.delta,
-            })
-          }
-          opts.event?.(imageSafe(event))
+      let out = await client.run(
+        body(req, opts.store, selected, opts.web ?? true),
+        {
+          signal: opts.signal,
+          noRetry: !!req.onText,
+          // Image payloads must never escape through diagnostic/event subscribers.
+          event: (event) => {
+            if (
+              (event.type == 'response.output_text.delta' ||
+                event.type == 'response.refusal.delta') &&
+              typeof event.delta == 'string'
+            ) {
+              const key = String(event.item_id ?? event.output_index)
+              if (!textIndexes.has(key)) textIndexes.set(key, textIndexes.size)
+              req.onText?.({
+                index: textIndexes.get(key)!,
+                id: key,
+                text: event.delta,
+              })
+            }
+            opts.event?.(imageSafe(event))
+          },
         },
-      })
+      )
       let artifacts = await generatedImages(out.items, selected)
       return {
         id: str(out.response.id),

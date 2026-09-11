@@ -157,3 +157,19 @@ Provider errors propagate without a speculative retry that removes the tool.
 There is no reliable structured capability-rejection contract across these
 endpoints, so the adapter does not infer support from error-message substrings
 or cache negative observations. No paid capability probes are performed.
+
+## Hosted web tools
+
+`responses()` offers OpenAI's native `web_search` tool by default, alongside
+function and image tools. Set `web: false` to disable it. The provider executes
+search actions; supported reasoning models can also open pages (`open_page`) and
+find text within them (`find_in_page`). There is no separate generic fetch tool
+in this integration. These actions do not run as local function calls.
+
+Final response URL citations are preserved as clickable Markdown source links.
+During streaming, source links become available when the final response arrives.
+Provider/model support and account permissions still apply; an unsupported-tool
+error is reported rather than silently retrying without web access. This was
+validated with mocked responses, not a paid live request.
+
+Reference: https://developers.openai.com/api/docs/guides/tools-web-search

@@ -530,3 +530,13 @@ imported files receive `application/octet-stream`.
 Responses stream by default. Set `HARNESS_STREAM=0` or pass `streaming: false`
 to disable streaming. See [STREAMING.md](STREAMING.md) for lifecycle and
 limitations.
+
+### Provider web access
+
+Native OpenAI web search is enabled by default, including OAuth configurations.
+Supported models can search, open pages, and find text within pages. Disable it
+with `HARNESS_WEB=0`, or pass `web: false` to `agent()` or `remote()`. Explicit
+programmatic configuration takes precedence over the environment. The worker
+receives the same configuration. Final response citations appear as source
+links. This is provider-hosted browsing, not an unrestricted filesystem/network
+fetch function; provider compatibility errors remain visible.

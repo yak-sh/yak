@@ -103,6 +103,9 @@ let knownEvents = new Set([
   'response.created',
   'response.in_progress',
   'response.completed',
+  'response.web_search_call.in_progress',
+  'response.web_search_call.searching',
+  'response.web_search_call.completed',
   'response.failed',
   'response.incomplete',
   'response.output_item.added',
@@ -124,6 +127,7 @@ let knownEvents = new Set([
 
 let knownItems = new Set([
   'image_generation_call',
+  'web_search_call',
   'message',
   'reasoning',
   'function_call',

@@ -96,6 +96,7 @@ Deno.test('streamed image output persists before reply and event observers never
     },
   ]
   let model = responses({
+    web: false,
     credential: () => ({ token: 'key', base: 'https://api.openai.com/v1' }),
     images: { store: artifactStore(m.blobs) },
     event: (e) => observed.push(e),
@@ -158,6 +159,7 @@ Deno.test('configured image tools are offered on OAuth, unknown models and custo
   ) {
     let sent: Record<string, unknown>[] = []
     let model = responses({
+      web: false,
       credential: () => ({ token: 'test', base: endpoint }),
       images: { auto, store: artifactStore(memory().blobs) },
       fetch: ((_url, init) => {
@@ -189,6 +191,7 @@ Deno.test('image-tool rejection propagates without stripping tools or caching a 
   for (let status of [400, 403]) {
     let sent: Record<string, unknown>[] = []
     let model = responses({
+      web: false,
       credential: () => ({
         token: 'test',
         base: 'https://chatgpt.com/backend-api/codex',
@@ -228,6 +231,7 @@ Deno.test('image-tool rejection propagates without stripping tools or caching a 
 Deno.test('unconfigured image tools remain disabled on OAuth', async () => {
   let sent: Record<string, unknown>[] = []
   let model = responses({
+    web: false,
     credential: () => ({
       token: 'test',
       base: 'https://chatgpt.com/backend-api/codex',

@@ -96,6 +96,7 @@ export type Opts = ChildLimits & NotHarness & {
   /** the model to ask for by name (default `gpt-6-astra`) */
   name?: string
   /** Enable native OpenAI image generation with durable external blobs. */
+  web?: boolean
   images?: ImageOptions | false
   /** what the agent may call (default: the shell and the graph) */
   tools?: Tool[]
@@ -185,6 +186,7 @@ export let agent = (opts: Opts = {}): Agent => {
     responses({
       credential: credential(Deno.env.get, (p) => Deno.readTextFile(p)),
       images: configuredImages(opts.images),
+      web: opts.web ?? Deno.env.get('HARNESS_WEB') != '0',
     })
   let tools = opts.tools ?? harnessTools(h.g, opts)
   h.g.apply(seed({ model: name, tools }), { trusted: true })

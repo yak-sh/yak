@@ -31,6 +31,7 @@ async function handle(method: string, value: unknown): Promise<unknown> {
     let options = args[0] as {
       db?: string
       cwd?: string
+      web?: boolean
       images?: ImageOptions | false
       streaming?: boolean
       instructions?: string
@@ -42,6 +43,7 @@ async function handle(method: string, value: unknown): Promise<unknown> {
       streaming: options.streaming,
       instructions: options.instructions,
       images: options.images,
+      web: options.web,
       ...(options.fake
         ? {
           name: 'fake',
