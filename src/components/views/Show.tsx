@@ -19,7 +19,7 @@ import {
   statuses,
 } from '../../live.ts'
 import { actionsAt, linkProps } from '../nav.tsx'
-import { useBacklinks, useBoardsOver } from '../useQuery.ts'
+import { useBoardsOver, useQueryEids } from '../useQuery.ts'
 import { block, Stamp } from '../ui.tsx'
 import { Comments, viaName } from '../Comments.tsx'
 import { Dot } from '../Dot.tsx'
@@ -416,9 +416,10 @@ export let CommentDependencies = ({ e }: { e: Ent }) => (
 // is the door to the agents that served it.
 export let Runs = ({ e }: { e: Ent }) => {
   let ids = new Set(
-    useBacklinks(e.eid)
-      .filter((b) => ['session.requested_task', 'session.role'].includes(b.via))
-      .map((b) => b.from),
+    [
+      ...useQueryEids(`.session.requested_task=${e.eid}`),
+      ...useQueryEids(`.session.role=${e.eid}`),
+    ],
   )
   if (e.claim) ids.add(e.claim.session)
   if (!ids.size) return null
@@ -446,10 +447,8 @@ export let Boards = ({ e }: { e: Ent }) => {
 // Open work only, board-ordered (status column, then rank): the project
 // page is a working view; the full history lives on its boards.
 export let Tasks = ({ e }: { e: Ent }) => {
-  let ids = useBacklinks(e.eid)
-    .filter((b) => b.via == 'filed.project')
-    .map((b) => ent(b.from))
-    .filter((t) => t.task && !settled(statusOf(t)))
+  let ids = useQueryEids(`.filed.project=${e.eid}&.task!&.status=open,wip`)
+    .map(ent)
     .sort((a, b) =>
       statuses.findIndex((s) => s == statusOf(a)) -
         statuses.findIndex((s) => s == statusOf(b)) ||

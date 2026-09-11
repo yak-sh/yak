@@ -3,7 +3,7 @@ import { ent, sessionDetail } from '../../live.ts'
 import { block } from '../ui.tsx'
 import { Entity } from '../Entity.tsx'
 import { useQueryResult } from '../useQuery.ts'
-import { useInbox } from '../useInbox.ts'
+import { useInboxCount } from '../useInbox.ts'
 import { SubscriptionFailure } from '../SubscriptionFailure.tsx'
 import type { QueryResult } from '../useQuery.ts'
 
@@ -122,14 +122,14 @@ export let Dashboard = ({ e }: { e: Ent }) => {
   let tasks = useQueryResult(
     `.filed.project=${e.eid}&.order=hot&.limit=${CAP}`,
   )
-  let unread = useInbox(e.eid, true).length
+  let unread = useInboxCount(e.eid)
   return (
     <Frame>
       <Facet name='boards' ids={boards.eids} reads={[boards]} />
       <Cell>
         <Name>
           inbox
-          {unread > 0 && <Badge>{unread}</Badge>}
+          {unread != null && unread > 0 && <Badge>{unread}</Badge>}
         </Name>
         <Entity eid={e.eid} view='Inbox' limit={CAP} />
       </Cell>

@@ -1,4 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
+import { wireBreakdown } from './cdp-wire.ts'
+
 // deno run -A bin/probe-client.ts http://localhost:PORT /tmp/fixed-targets.json
 // Scratch CDP gate: no auth, same snapshot and target file for both runs.
 const [base, targetFile] = Deno.args
@@ -171,6 +173,7 @@ try {
   await pause(15000)
   await settled()
   const cold = { ...metrics(), ...await stats() }
+  const breakdown = wireBreakdown(events)
   let targets: string[]
   try {
     targets = JSON.parse(await Deno.readTextFile(targetFile))
@@ -274,7 +277,7 @@ try {
   })
   console.log(
     JSON.stringify(
-      { base, targets, cold, six, reopen, errors, answers },
+      { base, targets, cold, breakdown, six, reopen, errors, answers },
       null,
       2,
     ),

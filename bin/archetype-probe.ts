@@ -1,4 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
+import { wireBreakdown } from './cdp-wire.ts'
+
 // First-card CPU and settled wire measurements for renderer dispatch.
 // Run against a scratch server only: deno run -A bin/archetype-probe.ts URL.
 // The caller owns DB_PATH/TASKS_HOME/HARNESS_HOME and the server cleanup.
@@ -197,11 +199,13 @@ try {
   await pause(15000)
   await settled()
   let cold = { ...metrics(), ...await stats() }
+  const breakdown = wireBreakdown(events)
   if (!cold.cards) throw Error('No cards mounted')
   console.log(JSON.stringify(
     {
       base,
       cold,
+      breakdown,
       firstCPU,
       firstWire,
       descriptors: await evaluate(`globalThis.__descriptors??null`),

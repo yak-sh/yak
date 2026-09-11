@@ -47,3 +47,29 @@ export let inboxQueries = (who: Reader, unreadOnly = false): string[] => {
     select('mail.target', watched),
   ]
 }
+
+// Unread badge counts for a browser reader with NO standing subscriptions.
+// These arms mirror addressed()'s component precedence, not merely the union
+// of candidate queries above: a row with comment + mail is a comment first.
+// The caller must have an authoritative empty subscription.actor result; a
+// reader with watch/mute instructions uses inboxQueries + inboxItem instead.
+export let inboxCountQueries = (who: Reader): string[] => {
+  let select = (prop: string, items: (string | undefined)[], extra = '') => {
+    let got = values(items)
+    return got
+      ? `.${prop}=${JSON.stringify(got)}&.archived=&.opened=${extra}&.count!`
+      : ''
+  }
+  let mail = '&.comment=&.notice=&.knock=&.mail.message_id!='
+  return [
+    select('comment.target', [who.actor]),
+    select('notice.target', [who.actor], '&.comment='),
+    select('deliver.to', [who.actor], '&.knock!&.comment=&.notice='),
+    select('mail.target', [who.scope], mail),
+    select(
+      'mail.to_addr',
+      [...who.addrs ?? []],
+      mail + (who.scope ? `&.mail.target!=${JSON.stringify(who.scope)}` : ''),
+    ),
+  ]
+}

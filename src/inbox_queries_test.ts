@@ -2,7 +2,7 @@
 // must never be inferred from whichever rows a different card happened to load.
 import { assertEquals, assertFalse } from '@std/assert'
 import { inboxItem, isUnread, type Reader, type Row } from './client.ts'
-import { inboxQueries } from './inbox_queries.ts'
+import { inboxCountQueries, inboxQueries } from './inbox_queries.ts'
 import { parseQuery } from './query.ts'
 import { liveClient } from './live_client.ts'
 import type { Sub } from './live.ts'
@@ -79,6 +79,31 @@ Deno.test('inbox projects authoritative mail/knock reads; stamps stay live', () 
     watching: new Set([watched]),
     muting: new Set(),
   }
+  let countWho = {
+    ...who,
+    watching: new Set<string>(),
+    muting: new Set<string>(),
+  }
+  let counts = new Map<string, number>()
+  let countReaders = [countWho, { ...countWho, scope: undefined }]
+  let countQueries = countReaders.map(inboxCountQueries)
+  let countParity = () => {
+    for (let f of frames) {
+      if (!f.sub.startsWith('count:')) continue
+      assertEquals(f.error, undefined)
+      assertEquals(f.changes?.length ?? 0, 0)
+      if (f.agg) counts.set(f.sub, f.agg[''] ?? 0)
+    }
+    for (let [index, reader] of countReaders.entries()) {
+      let want = [...source].map(([eid, comps]) => row(eid, comps))
+        .filter(inboxItem(reader)).filter(isUnread).length
+      let actual = [...counts].filter(([name]) =>
+        name.startsWith(`count:${index}:`)
+      )
+        .reduce((sum, [, n]) => sum + n, 0)
+      assertEquals(actual, want)
+    }
+  }
   let arms = (unread: boolean) => inboxQueries(who, unread)
   let name = (unread: boolean, i: number) => `${unread}:${i}`
   let ids = (
@@ -104,6 +129,7 @@ Deno.test('inbox projects authoritative mail/knock reads; stamps stay live', () 
         r.eid
       ).sort()
   let parity = () => {
+    countParity()
     for (let unread of [false, true]) {
       assertEquals(actual(unread), expected(unread))
     }
@@ -145,7 +171,35 @@ Deno.test('inbox projects authoritative mail/knock reads; stamps stay live', () 
     add({ knock: { target: watched }, deliver: { to: other } })
     add({ knock: { target: watched } })
     add({ comment: { target: actor } })
+    add({ notice: { target: actor, event: 'wake' } })
+
     add({ notice: { target: watched, event: 'wake' } })
+    // Disjoint counts obey component precedence and inbound truthiness,
+    // including rows the ordinary candidate union would double-count.
+    add({
+      comment: { target: actor },
+      mail: { target: actor, message_id: 'both' },
+    })
+    add({
+      comment: { target: other },
+      notice: { target: actor, event: 'wake' },
+      mail: { target: actor, message_id: 'not-addressed' },
+    })
+    add({
+      notice: { target: other, event: 'wake' },
+      knock: { target: actor },
+      deliver: { to: actor },
+    })
+    add({
+      knock: { target: actor },
+      mail: { target: actor, message_id: 'not-delivered' },
+    })
+    add({ mail: { target: actor, message_id: '' } })
+    for (let [index, queries] of countQueries.entries()) {
+      for (let [i, q] of queries.entries()) {
+        if (q) server.frame({ sub: `count:${index}:${i}`, q })
+      }
+    }
     for (let unread of [false, true]) {
       for (let [i, q] of arms(unread).entries()) {
         if (!q) continue
