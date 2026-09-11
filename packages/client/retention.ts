@@ -214,8 +214,10 @@ export let retention = (
       rowListeners.clear()
     },
     answer: (id) =>
-      store.tx((tx) => tx.get([...(subscriptions.get(id)?.members ?? [])]))
-        .filter((b) => !dead(b)),
+      transient(graph).project(
+        store.tx((tx) => tx.get([...(subscriptions.get(id)?.members ?? [])]))
+          .filter((b) => !dead(b)),
+      ),
     onRows: (fn) => {
       rowListeners.add(fn)
       return () => {

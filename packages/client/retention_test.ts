@@ -471,6 +471,7 @@ Deno.test('query replica applies transient frames without persisting projections
       }],
     })
     assertEquals(watch.value[0].text, { body: 'hello' })
+    assertEquals(c.cache.answer('live')[0].text, { body: 'hello' })
     assertEquals(c.ent('d')!.text, { body: '' })
     await c.cache.land({
       id: 'live',
