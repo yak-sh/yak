@@ -146,8 +146,12 @@ export let render = <Node>(tokens: Token[], host: H<Node>): Node => {
               host(
                 'tr',
                 null,
-                ...v.header.map((cell) =>
-                  host('th', null, ...children(cell.tokens))
+                ...v.header.map((cell, col) =>
+                  host(
+                    'th',
+                    { align: v.align[col] ?? undefined },
+                    ...children(cell.tokens),
+                  )
                 ),
               ),
             ),
@@ -158,8 +162,12 @@ export let render = <Node>(tokens: Token[], host: H<Node>): Node => {
                 host(
                   'tr',
                   null,
-                  ...row.map((cell) =>
-                    host('td', null, ...children(cell.tokens))
+                  ...row.map((cell, col) =>
+                    host(
+                      'td',
+                      { align: v.align[col] ?? undefined },
+                      ...children(cell.tokens),
+                    )
                   ),
                 )
               ),

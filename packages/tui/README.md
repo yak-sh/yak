@@ -300,3 +300,29 @@ to hide its cursor while another mode owns input.
 accepted the clipboard contents. The terminal backend uses OSC52 with UTF-8
 base64 encoding. Callers own any local recovery buffer and should keep it before
 clearing editable text. This API does not modify a textarea or VISUAL selection.
+
+## Tables
+
+Semantic `table`, `thead`, `tbody`, `tfoot`, `tr`, `th`, and `td` elements use
+measured columns rather than text separated with pipes. Header cells are bold;
+`Table_Header` and `Table_Border` theme tokens control their appearance. Borders
+are dim by default. Cells retain text styles and links, wrap words and long
+runs, and preserve explicit line breaks. Use `align="left"`, `"center"`, or
+`"right"` on cells; a CSS `text-align` declaration is also recognized. Shared
+Markdown rendering supplies the alignment from its column markers.
+
+Columns start at three text positions and grow toward sampled content widths, up
+to forty positions each, within the available width. Sizing samples the first 32
+rows, at most 128 text positions/nodes per cell. Later or larger values wrap
+rather than widening every column. Missing cells are empty. If there is not room
+for these columns and their borders, rows become stacked records with header
+labels repeated above each value. No columns are silently discarded.
+
+Tables nested in quotes, lists, or bordered boxes use the remaining inner width.
+A whole table is still laid out when its virtual-list item is measured; rows
+within an individual table are not virtualized. Cached items are reused on warm
+paints. Column/row spanning and CSS table sizing are not supported. Like the
+rest of the current text painter, widths count UTF-16 code units, not terminal
+grapheme widths; wide CJK characters, combining marks and emoji can therefore
+misalign. This renderer does not introduce a separate, incompatible Unicode
+width calculation just for tables.

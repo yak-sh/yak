@@ -31,6 +31,7 @@ import { scrollbar } from './scrollbar.ts'
 import { safe as strip, safeHref } from '@yaks/text'
 import type { TElement, TNode } from './dom.ts'
 import { touch, TText } from './dom.ts'
+import { table } from './table.ts'
 import { graphics } from './graphics.ts'
 import { type Sheet, type Style, theme as base } from './theme.ts'
 
@@ -335,7 +336,30 @@ let layout = (
     0,
     w - (o.indent ?? 0) - (framed ? 2 : 0) - (bar ? 1 : 0),
   )
-  let lines = el.attr('row') != null
+  let lines = el.localName == 'table'
+    ? table(
+      el,
+      contentWidth,
+      s,
+      c.sheet,
+      (cell, width) => {
+        let ancestors: TElement[] = []
+        for (
+          let node = cell.parentNode;
+          node && node !== el;
+          node = node.parentNode
+        ) {
+          ancestors.unshift(node)
+        }
+        let inherited = ancestors.reduce(
+          (style, node) => inherit(style, own(node, c.sheet)),
+          s,
+        )
+        return lay(cell, inherited, width, null, c)
+      },
+      wrap,
+    )
+    : el.attr('row') != null
     ? row(el, s, contentWidth, box, c)
     : el.attr('col') != null
     ? col(el, s, contentWidth, box, c)

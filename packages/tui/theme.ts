@@ -68,6 +68,8 @@ export let theme: Sheet = {
   Warn: { fg: everforest.yellow },
   Bad: { fg: everforest.red },
   Link: { fg: everforest.blue, underline: true },
+  Table_Border: { fg: everforest.grey, dim: true },
+  Table_Header: { bold: true },
   Rule: { fg: everforest.grey },
   Sel: { inverse: true },
   // The text cursor is a painted cell: the terminal's own cursor is hidden, so

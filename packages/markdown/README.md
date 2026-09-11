@@ -24,10 +24,12 @@ remote loads. The harness applies Markdown to message prose through
 query-matched transcript renderers. Tool calls/results stay literal (results
 stay dim).
 
-The terminal uses simple table rows separated by `|`, not a measured column
-grid. Code is styled but not syntax highlighted. Graph-entity linkification and
-repository-specific commit links are not provided. Applications can add those
-behaviors separately. Rendering does not fetch images or other remote content.
+The terminal lays out tables with aligned columns, wrapping, and subtle borders.
+Narrow tables switch to stacked header/value records. Markdown column alignment
+is preserved in the shared semantic cells. Code is styled but not syntax
+highlighted. Graph-entity linkification and repository-specific commit links are
+not provided. Applications can add those behaviors separately. Rendering does
+not fetch images or other remote content.
 
 Run `deno test packages/markdown/` from the repository root for parser,
 structural rendering and URL-safety tests.
