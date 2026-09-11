@@ -2,8 +2,8 @@
  * The screen's shape: a main column with a sidebar of panels on the right. A
  * panel is `{title, Render}` — anything that draws, contributed by whoever
  * knows what belongs there — so the frame itself knows nothing about what it
- * shows. The sidebar takes a fixed width and folds away below `min` columns,
- * because a narrow terminal wants the transcript, not the furniture.
+ * shows. The sidebar takes a fixed or proportional terminal width and folds away
+ * below `min` terminal columns.
  *
  * @module
  */
@@ -25,16 +25,27 @@ export type Panel = {
   Render: ComponentType
 }
 
-/** Main column plus right sidebar; below `min` columns the sidebar folds. */
+/** Terminal frame with a right sidebar; below `min` columns it is hidden. */
 export let Frame = (
-  { sidebar = [], width = 30, min = 90, children }: {
+  { sidebar = [], width = 30, ratio, min = 90, children }: {
     sidebar?: Panel[]
+    /** Fixed columns, or minimum columns when ratio is supplied. */
     width?: number
+    /** Fraction of terminal width (0–1). Rounded down; leaves one main column. */
+    ratio?: number
     min?: number
     children?: ComponentChildren
   },
 ): JSX.Element => {
-  let wide = sidebar.length > 0 && size.value.columns >= min
+  if (ratio != null && (!Number.isFinite(ratio) || ratio < 0 || ratio > 1)) {
+    throw new RangeError('Frame ratio must be between 0 and 1')
+  }
+  let columns = size.value.columns
+  let sidebarWidth = ratio == null ? width : Math.min(
+    Math.max(width, Math.floor(columns * ratio)),
+    Math.max(0, columns - 1),
+  )
+  let wide = sidebar.length > 0 && columns >= min
   return h(
     'div',
     { row: '1' },
@@ -42,7 +53,7 @@ export let Frame = (
     wide
       ? h(
         'div',
-        { width: String(width), col: '1', class: 'Frame_Side' },
+        { width: String(sidebarWidth), col: '1', class: 'Frame_Side' },
         ...sidebar.map((p) =>
           h(
             'div',

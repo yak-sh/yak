@@ -336,3 +336,15 @@ Semantic `pre` elements fill their available width with the `Code` theme style,
 including blank lines. Enclosing borders and indentation reduce that width.
 Inline `code` styles only its text. Source text and the enclosing layout's
 existing long-line wrapping or clipping behavior are unchanged.
+
+### Proportional terminal sidebar
+
+`Frame` defaults to a fixed 30-column sidebar. Set `ratio={0.2}` to use 20% of
+terminal columns, rounded down, with `width` acting as the minimum (30 by
+default). It leaves at least one terminal column for the main content. The
+sidebar remains hidden below `min` terminal columns (90 by default).
+
+`Frame` is a terminal-level layout: its width ratio and visibility threshold use
+the terminal size, not a nested container's measured width. Nested layouts
+should use the painter's row/column sizing or pass an explicit fixed `width`.
+This option does not add general CSS percentage sizing.

@@ -123,3 +123,52 @@ Deno.test('fit panels shrink and return their unused height to the expanding tre
     ui.free()
   }
 })
+
+Deno.test('proportional terminal sidebar keeps its minimum and reflows on resize', async () => {
+  let ui = await mount(
+    () =>
+      h(Frame, {
+        ratio: 0.2,
+        sidebar: [{ title: 'Side', Render: () => h('div', null, 'content') }],
+      }, h('div', null, 'main')),
+    90,
+    5,
+  )
+  try {
+    for (let [columns, width] of [[90, 30], [150, 30], [200, 40], [203, 40]]) {
+      await ui.resize(columns, 5)
+      assertEquals(ui.text().split('\n')[0].indexOf('Side'), columns - width)
+    }
+    await ui.resize(89, 5)
+    assertEquals(ui.text().includes('Side'), false)
+    assertEquals(ui.text().includes('main'), true)
+  } finally {
+    ui.free()
+  }
+})
+
+Deno.test('fixed sidebar width remains the default on wide terminals', async () => {
+  let ui = await mount(
+    () => h(Frame, { sidebar: panels }, h('div', null, 'main')),
+    200,
+    6,
+  )
+  try {
+    assertEquals(ui.text().split('\n')[0].indexOf('One'), 170)
+  } finally {
+    ui.free()
+  }
+})
+
+Deno.test('proportional sidebar leaves room for the main column at small custom thresholds', async () => {
+  let ui = await mount(
+    () => h(Frame, { ratio: 1, min: 1, sidebar: panels }, h('div', null, 'M')),
+    8,
+    6,
+  )
+  try {
+    assertEquals(ui.text().split('\n')[0], 'MOne')
+  } finally {
+    ui.free()
+  }
+})

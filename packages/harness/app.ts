@@ -341,6 +341,7 @@ export let App = (
       h(
         Frame,
         {
+          ratio: 0.2,
           sidebar: sidebar.map((p, i) => ({
             title: p.title,
             titleClass: p.titleClass,

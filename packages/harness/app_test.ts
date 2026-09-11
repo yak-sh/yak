@@ -390,7 +390,7 @@ Deno.test('composer spans the bottom below transcript and responsive sidebar', a
     entry: () => h('span', null, 'entry'),
     line: () => '',
   }
-  for (let width of [120, 80]) {
+  for (let width of [90, 150, 200, 80]) {
     let ui = await mount(
       () =>
         h(App, {
@@ -415,6 +415,13 @@ Deno.test('composer spans the bottom below transcript and responsive sidebar', a
       assert(lines[10].includes(draft), ui.text())
       assert(lines[9].includes('message · Esc NORMAL'), ui.text())
       assertEquals(ui.text().includes('Sidebar'), width >= 90)
+      if (width >= 90) {
+        assertEquals(
+          lines.find((line) => line.includes('Sidebar'))!.indexOf('Sidebar'),
+          width - Math.max(30, Math.floor(width * 0.2)),
+        )
+      }
+      assertEquals(lines[11].length, width)
       await ui.send('\x1b[13;2usecond line')
       lines = ui.text().split('\n')
       assert(lines[8].includes('message · Esc NORMAL'), ui.text())
