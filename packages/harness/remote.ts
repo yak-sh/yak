@@ -27,7 +27,7 @@ export let remote = async (
     streaming?: boolean
     stream?: boolean
     instructions?: string
-    fake?: boolean | 'stuck' | { delayMs: number; deltas?: number }
+    fake?: boolean | 'stuck' | 'held' | { delayMs: number; deltas?: number }
   } = {},
 ) => {
   let worker = new Worker(
@@ -93,7 +93,9 @@ export let remote = async (
     forceExit = () => resolve({ drained: false })
   })
   let request = async (method: string, args: unknown[] = []) => {
-    if (closing && method != 'close') throw new Error('Worker is shutting down')
+    if (closing && method != 'close' && method != 'fakeRelease') {
+      throw new Error('Worker is shutting down')
+    }
     if (failure) throw failure
     return await link.request(method, args)
   }
@@ -306,6 +308,13 @@ export let remote = async (
     },
     resume: () => request('resume'),
     idle: (session: string) => request('idle', [session]),
+    /** Fake-provider barriers: observe dispatch and explicitly allow replies. */
+    testing: options.fake
+      ? {
+        started: () => request('fakeStarted'),
+        release: () => request('fakeRelease'),
+      }
+      : undefined,
     /** Force is explicit and also releases an outstanding graceful close. */
     force: () => {
       closing = true

@@ -15,6 +15,9 @@ let closing = false
 let a: Agent | undefined
 let subs: ReturnType<typeof subscriptions> | undefined
 let active = new Set<Promise<unknown>>()
+let fake = false
+let started = Promise.withResolvers<void>()
+let released = Promise.withResolvers<void>()
 let link = portLink({
   postMessage: (value) => postMessage(value),
   addEventListener: self.addEventListener.bind(self),
@@ -29,6 +32,11 @@ let link = portLink({
   },
 })
 async function handle(method: string, value: unknown): Promise<unknown> {
+  // Releasing the test provider must also work while close drains its turn.
+  if (method == 'fakeRelease' && fake) {
+    released.resolve()
+    return true
+  }
   if (closing) throw new Error('Worker is shutting down')
   let args = (value ?? []) as unknown[]
   if (method == 'init') {
@@ -40,8 +48,9 @@ async function handle(method: string, value: unknown): Promise<unknown> {
       images?: ImageOptions | false
       streaming?: boolean
       instructions?: string
-      fake?: boolean | 'stuck' | { delayMs: number; deltas?: number }
+      fake?: boolean | 'stuck' | 'held' | { delayMs: number; deltas?: number }
     }
+    fake = Boolean(options.fake)
     a = agent({
       h: open(options.db),
       cwd: options.cwd,
@@ -53,6 +62,7 @@ async function handle(method: string, value: unknown): Promise<unknown> {
         ? {
           name: 'fake',
           model: async (req: import('@yaks/model').Request) => {
+            started.resolve()
             if (typeof options.fake == 'object' && options.fake.deltas) {
               for (let i = 0; i < options.fake.deltas; i++) {
                 req.onText?.({ index: 0, text: 'x' })
@@ -61,6 +71,7 @@ async function handle(method: string, value: unknown): Promise<unknown> {
             if (options.fake == 'stuck') {
               return new Promise(() => {})
             }
+            if (options.fake == 'held') await released.promise
             if (typeof options.fake == 'object') {
               let delay = options.fake.delayMs
               await new Promise((resolve) => setTimeout(resolve, delay))
@@ -87,6 +98,7 @@ async function handle(method: string, value: unknown): Promise<unknown> {
     return { names: a.names }
   }
   if (!a || !subs) throw new Error('Worker not initialized')
+  if (method == 'fakeStarted' && fake) return await started.promise
   if (method == 'subscribe') {
     await subs.open(link.frame, String(args[0]), args[1] as string)
     return true

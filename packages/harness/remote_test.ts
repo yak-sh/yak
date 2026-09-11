@@ -1,4 +1,5 @@
 import { assert, assertEquals } from '@std/assert'
+import { FakeTime } from '@std/testing/time'
 import { remote } from './remote.ts'
 Deno.test('worker owns an isolated database; selected entries replicate and commands stay explicit', async () => {
   let dir = await Deno.makeTempDir()
@@ -154,9 +155,15 @@ Deno.test('worker subscribes only to selected fork ancestry, respecting each bou
 
 Deno.test('worker publishes a second input while a slow model is still pending', async () => {
   let dir = await Deno.makeTempDir()
-  let r = await remote({ db: ':memory:', cwd: dir, fake: { delayMs: 500 } })
+  let r = await remote({
+    db: ':memory:',
+    cwd: dir,
+    fake: 'held',
+    streaming: true,
+  })
   try {
     let id = await r.agent.start('first')
+    await r.testing!.started()
     // Ensure replication is watching before admitting the next message.
     await r.agent.transcript(id)
     await r.agent.send(id, 'second before reply')
@@ -172,10 +179,13 @@ Deno.test('worker publishes a second input while a slow model is still pending',
       ),
       'send must not wait for provider completion',
     )
+    assert(!entries.some((b) => (b.content as { body?: string })?.body == 'ok'))
+    await r.testing!.release()
     await r.idle(id)
     entries = await r.agent.transcript(id)
     assert(entries.some((b) => b.ask))
   } finally {
+    await r.testing!.release()
     await r.close()
     await Deno.remove(dir, { recursive: true })
   }
@@ -203,15 +213,25 @@ Deno.test('worker exit drains a burst and is idempotent', async () => {
 Deno.test('stuck model deadline is an expected bounded exit, not a crash', async () => {
   let dir = await Deno.makeTempDir()
   let db = dir + '/shutdown.db'
-  let r = await remote({ db, cwd: dir, fake: 'stuck' })
+  let r = await remote({ db, cwd: dir, fake: 'stuck', streaming: true })
   try {
     await r.agent.start('stuck')
-    // Let the admitted turn enter the model callback.
-    await new Promise((resolve) => setTimeout(resolve, 100))
-    let start = performance.now()
-    assertEquals(await r.close(), { drained: false })
-    assert(performance.now() - start < 4000)
-    let resumed = await remote({ db, cwd: dir, fake: true })
+    await r.testing!.started()
+    {
+      // Only the frontend deadline uses this clock; dispatch is acknowledged
+      // by the real worker before advancing it. Test the existing 2s boundary.
+      using time = new FakeTime()
+      let settled = false
+      let closing = r.close().then((result) => {
+        settled = true
+        return result
+      })
+      await time.tickAsync(1999)
+      assertEquals(settled, false)
+      await time.tickAsync(1)
+      assertEquals(await closing, { drained: false })
+    }
+    let resumed = await remote({ db, cwd: dir, fake: true, streaming: true })
     try {
       await resumed.resume()
       let sessions = await resumed.agent.sessions()
@@ -287,19 +307,22 @@ Deno.test('selection subscription does not invalidate its own awaiting projectio
 Deno.test('unbounded graceful close finishes a slow response beyond the old deadline', async () => {
   let dir = await Deno.makeTempDir()
   let db = dir + '/graceful.db'
-  let r = await remote({ db, cwd: dir, fake: { delayMs: 2300 } })
+  let r = await remote({ db, cwd: dir, fake: 'held', streaming: true })
   try {
     let id = await r.agent.start('finish before exit')
-    for (;;) {
-      let entries = await r.agent.transcript(id)
-      if (
-        entries.some((b) =>
-          (b.attempt as { state?: string })?.state == 'inflight'
-        )
-      ) break
-      await new Promise((resolve) => setTimeout(resolve, 5))
+    await r.testing!.started()
+    {
+      using time = new FakeTime()
+      let settled = false
+      let closing = r.close({ timeout: null }).then((result) => {
+        settled = true
+        return result
+      })
+      await time.tickAsync(2300)
+      assertEquals(settled, false, 'graceful close must keep draining')
+      await r.testing!.release()
+      assertEquals(await closing, { drained: true })
     }
-    assertEquals(await r.close({ timeout: null }), { drained: true })
     let reopened = await remote({ db, cwd: dir, fake: true })
     try {
       let entries = await reopened.agent.transcript(id)
@@ -315,6 +338,8 @@ Deno.test('unbounded graceful close finishes a slow response beyond the old dead
       await reopened.close()
     }
   } finally {
+    // Also clean up if an assertion fails while the held turn is draining.
+    r.force()
     await r.close()
     await Deno.remove(dir, { recursive: true })
   }
@@ -324,16 +349,8 @@ Deno.test('explicit force releases unbounded close while a provider is stuck', a
   let dir = await Deno.makeTempDir()
   let r = await remote({ db: ':memory:', cwd: dir, fake: 'stuck' })
   try {
-    let id = await r.agent.start('wait')
-    for (;;) {
-      let entries = await r.agent.transcript(id)
-      if (
-        entries.some((b) =>
-          (b.attempt as { state?: string })?.state == 'inflight'
-        )
-      ) break
-      await new Promise((resolve) => setTimeout(resolve, 5))
-    }
+    await r.agent.start('wait')
+    await r.testing!.started()
     let closing = r.close({ timeout: null })
     r.force()
     r.force()
