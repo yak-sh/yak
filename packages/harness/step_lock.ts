@@ -25,6 +25,14 @@ export let stepLock = (path: string) => {
       file.close()
       throw error
     }
-    return () => file.close()
+    return () => {
+      // A concurrent fork can retain this open file description until exec.
+      // Close alone then leaves the lock held; release it explicitly first.
+      try {
+        file.unlockSync()
+      } finally {
+        file.close()
+      }
+    }
   }
 }
