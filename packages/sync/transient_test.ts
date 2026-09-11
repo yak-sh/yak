@@ -25,6 +25,7 @@ Deno.test('subscriptions transfer ordered append frames and snapshot live values
   await subs.open(sink, 'docs', '.doc')
   const w = await transient(source).begin('d', 'doc', 'body', 's')
   for (let i = 0; i < 100; i++) w.append('abc')
+  await Promise.resolve()
   await pending
   assertEquals((await target.read('.doc'))[0].doc, { body: 'abc'.repeat(100) })
   assertEquals((await target.storage.read('.doc'))[0].doc, { body: '' })
@@ -36,11 +37,13 @@ Deno.test('subscriptions transfer ordered append frames and snapshot live values
   subs.close(sink, 'docs')
   w.append('tail')
   await subs.open(sink, 'docs', '.doc')
+  await Promise.resolve()
   await pending
   assertEquals((await target.read('.doc'))[0].doc, {
     body: 'abc'.repeat(100) + 'tail',
   })
   await w.commit()
+  await Promise.resolve()
   await pending
   assertEquals(transient(target).snapshots(), [])
   assertEquals((await target.storage.read('.doc'))[0].doc, {

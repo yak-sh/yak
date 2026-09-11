@@ -338,7 +338,7 @@ export let react = async (
     }
   >()
   let tail = Promise.resolve(), streamFailure: unknown
-  let accepting = true, checkpointAt = Date.now()
+  let accepting = true, checkpointAt = Date.now(), pendingDeltas = 0
   const checkpointMs = deps.checkpointMs ?? 2000
   const enqueue = (work: () => Promise<void>) => {
     tail = tail.then(work).catch((e) => {
@@ -354,6 +354,9 @@ export let react = async (
     ;[ask] = await g.apply([ask], { trusted: true })
     req.onText = ({ index, id, text }) => {
       if (!accepting) return
+      if (++pendingDeltas > 4096) {
+        throw new Error('Streaming consumer backlog exceeds 4096 deltas')
+      }
       const key = id ?? String(index)
       enqueue(async () => {
         if (!Number.isSafeInteger(index) || index < 0) {
@@ -375,6 +378,7 @@ export let react = async (
           }
           stream.set(key, active)
         }
+        pendingDeltas--
         active.writer.append(text)
         if (checkpointMs > 0 && Date.now() - checkpointAt >= checkpointMs) {
           for (const item of stream.values()) await item.writer.checkpoint()
@@ -395,7 +399,14 @@ export let react = async (
   } catch (e) {
     accepting = false
     await tail
-    for (const active of stream.values()) await active.writer.commit()
+    for (const active of stream.values()) {
+      try {
+        await active.writer.commit()
+      } catch (failure) {
+        active.writer.discard()
+        deps.report?.(failure, session, 'stream-checkpoint')
+      }
+    }
     if (!(e instanceof ModelError)) deps.report?.(e, session, 'model')
     if (deps.streaming) {
       return append([
@@ -431,6 +442,7 @@ export let react = async (
         active
           ? {
             entity: active.entry.entity,
+            $was: { [CONTENT]: { body: active.writer.expected() } },
             [CONTENT]: { body: item.text, source: ask.entity.eid },
           }
           : line({ [CONTENT]: { body: item.text, source: ask.entity.eid } }),
@@ -471,17 +483,34 @@ export let react = async (
       },
     }))
   }
-  for (const active of stream.values()) {
-    if (!added.some((b) => b.entity.eid == active.entry.entity.eid)) {
-      // A provider omitted a streamed item from its final response: preserve
-      // evidence, but never present it as a successfully completed message.
-      await active.writer.commit()
-      throw new Error('Completed reply omitted a streamed text item')
-    }
+  if (
+    [...stream.values()].some((active) =>
+      !added.some((b) => b.entity.eid == active.entry.entity.eid)
+    )
+  ) {
+    for (const active of stream.values()) await active.writer.commit()
+    return append([
+      { entity: ask.entity, attempt: { state: 'interrupted' } },
+      line(
+        { [EXCEPTION]: {} },
+        'Completed reply omitted a streamed text item; retained partial output',
+      ),
+    ])
   }
-  const result = await append(added)
-  for (const active of stream.values()) active.writer.discard()
-  return result
+  try {
+    return await append(added)
+  } catch (e) {
+    if (!deps.streaming) throw e
+    return append([
+      { entity: ask.entity, attempt: { state: 'interrupted' } },
+      line(
+        { [EXCEPTION]: {} },
+        'Could not finalize provider reply: ' + String(e),
+      ),
+    ])
+  } finally {
+    for (const active of stream.values()) active.writer.discard()
+  }
 }
 
 /** Run `react` until the transcript settles, stops, or fails, or `cap` steps

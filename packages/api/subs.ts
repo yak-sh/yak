@@ -150,6 +150,7 @@ export let subscriptions = (graph: Graph, opts: {
   }
 
   let open = (sink: Sink, id: string, query: Ask) => {
+    flush()
     let mine = held.get(sink) ?? new Map<string, Sub>()
     held.set(sink, mine)
     let line = query === true ? '' : query
@@ -167,7 +168,7 @@ export let subscriptions = (graph: Graph, opts: {
       // Parsed here, outside `judge`, so an unreadable query is refused rather
       // than quietly demoted to a subscription that re-reads it forever.
       sub.test = judge(parse(line), line, graph.vocab)
-      return then(graph.storage.read(line), (bundles) => {
+      return then(graph.read(line, { durable: true }), (bundles) => {
         for (let b of bundles) sub.members.add(b.entity.eid)
         const snapshots = live.snapshots().filter((f) =>
           sub.members.has(f.entity)
@@ -203,7 +204,7 @@ export let subscriptions = (graph: Graph, opts: {
       return
     }
     // Refresh: the answer is a property of the whole set, so ask for it again.
-    return then(graph.storage.read(sub.query), (set) => {
+    return then(graph.read(sub.query, { durable: true }), (set) => {
       let ids = new Set(set.map((b) => b.entity.eid))
       let gone = [...sub.members].filter((e) => !ids.has(e))
       sub.members = ids
@@ -214,6 +215,7 @@ export let subscriptions = (graph: Graph, opts: {
   }
 
   let commit = (applied: Bundle[]) => {
+    flush()
     let subs = all()
     // A raw feed carries the batch to a CLIENT, and this hook is handed what
     // the phases said to each other — one patch each, the `$` keys still on.
@@ -232,7 +234,7 @@ export let subscriptions = (graph: Graph, opts: {
         over(queries, (s) =>
           attempt(s, () => {
             if (opts.invalidate?.(s.query, applied)) {
-              return then(graph.storage.read(s.query), (set) => {
+              return then(graph.read(s.query, { durable: true }), (set) => {
                 let ids = new Set(set.map((b) => b.entity.eid))
                 let gone = [...s.members].filter((id) => !ids.has(id))
                 s.members = ids
@@ -246,13 +248,32 @@ export let subscriptions = (graph: Graph, opts: {
   }
 
   const live = transient(graph)
+  const pending = new Map<Sink, Map<string, TransientFrame[]>>()
+  let scheduled = false
+  const flush = () => {
+    scheduled = false
+    const batch = [...pending]
+    pending.clear()
+    for (const [sink, ids] of batch) {
+      for (const [id, frames] of ids) {
+        if (held.get(sink)?.has(id)) sink({ id, transient: frames })
+      }
+    }
+  }
   live.subscribe((frame) => {
     for (const mine of held.values()) {
       for (const sub of mine.values()) {
-        if (sub.raw || sub.members.has(frame.entity)) {
-          sub.sink({ id: sub.id, transient: [frame] })
-        }
+        if (!sub.raw && !sub.members.has(frame.entity)) continue
+        let ids = pending.get(sub.sink)
+        if (!ids) pending.set(sub.sink, ids = new Map())
+        const frames = ids.get(sub.id) ?? []
+        frames.push(frame)
+        ids.set(sub.id, frames)
       }
+    }
+    if (!scheduled) {
+      scheduled = true
+      queueMicrotask(flush)
     }
   })
 
@@ -264,9 +285,11 @@ export let subscriptions = (graph: Graph, opts: {
   return {
     open,
     close: (sink, id) => {
+      pending.get(sink)?.delete(id)
       held.get(sink)?.delete(id)
     },
     drop: (sink) => {
+      pending.delete(sink)
       held.delete(sink)
     },
     commit,

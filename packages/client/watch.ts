@@ -167,25 +167,25 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
       return
     }
     // Refresh: the answer is a property of the whole set, so ask for it again.
-    return then(graph.read(w.query, { now: w.now }), (set) => {
+    return then(graph.read(w.query, { now: w.now, durable: true }), (set) => {
       let ids = new Set(set.map((b) => b.entity.eid))
       let left = [...w.members.keys()].some((eid) => !ids.has(eid))
       w.members = new Map(set.map((b) => [b.entity.eid, b]))
-      if (left || touched.some((eid) => ids.has(eid))) publish(w, set)
+      if (left || touched.some((eid) => ids.has(eid))) {
+        publish(w, live.project(set))
+      }
     })
   }
 
   const live = transient(graph)
-  live.subscribe((f) => {
+  const offLive = live.subscribe((f) => {
     for (const w of held) {
-      if (!w.members.has(f.entity)) continue
-      // Read the durable base again on discard/finalize; never persist projections.
-      then(detached(graph.storage).get([f.entity]), (base) => {
-        for (const b of base) w.members.set(b.entity.eid, b)
+      if (w.members.has(f.entity)) {
         publish(w, live.project([...w.members.values()]))
-      })
+      }
     }
   })
+
   let commit = (applied: Bundle[]) => {
     if (!held.size) return
     let touched = [...new Set(applied.map((b) => b.entity.eid))]
@@ -217,13 +217,13 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
     // The first answer, before the watch is registered: a query the graph
     // cannot answer throws HERE, out of `watch()`, rather than on every later
     // commit for the life of the page.
-    then(graph.read(query, { now }), (set) => {
+    then(graph.read(query, { now, durable: true }), (set) => {
       if (!active || closed) return
       w.members = new Map(set.map((b) => [b.entity.eid, b]))
-      w.hold.value = set
+      w.hold.value = live.project(set)
       w.ready.value = true
       held.add(w)
-      for (let fn of w.listeners) fn(set)
+      for (let fn of w.listeners) fn(w.hold.value)
     })
     return {
       query,
@@ -239,6 +239,7 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
         return () => w.listeners.delete(fn)
       },
       close: () => {
+        offLive()
         active = false
         held.delete(w)
         w.listeners.clear()
@@ -251,6 +252,7 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
     invalidate: (eids) => commit(eids.map((eid) => ({ entity: { eid } }))),
     size: () => held.size,
     close: () => {
+      offLive()
       closed = true
       for (let w of held) w.listeners.clear()
       held.clear()

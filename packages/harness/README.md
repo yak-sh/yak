@@ -526,3 +526,5 @@ new bytes under the old admission. Requests are limited to 20 MiB of inspected
 images. These tools currently inspect signatures rather than fully decoding
 images; animated GIF, SVG, remote URL import, and video are unsupported. Unknown
 imported files receive `application/octet-stream`.
+
+For the opt-in response streaming experiment, see [STREAMING.md](STREAMING.md).

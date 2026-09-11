@@ -160,3 +160,6 @@ reference or component does not by itself grant or restrict access.
 The core imports no host-specific APIs and can be used in browsers, workers, and
 server runtimes. A chosen storage adapter or plugin may have narrower runtime
 requirements.
+
+Experimental live text projections are described in
+[TRANSIENT.md](TRANSIENT.md).

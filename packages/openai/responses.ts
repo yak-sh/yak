@@ -120,7 +120,9 @@ export let items = (done: Frame[]): Item[] => {
   for (let item of done) {
     if (item.type == 'message') {
       let parts = Array.isArray(item.content) ? item.content : []
-      let text = parts.map((p: unknown) => record(p) ? str(p.text) : '')
+      let text = parts.map((p: unknown) =>
+        record(p) ? str(p.text ?? p.refusal) : ''
+      )
         .join('')
       out.push({
         kind: 'assistant',
@@ -188,7 +190,8 @@ let ask = (opts: Options) => {
         // Image payloads must never escape through diagnostic/event subscribers.
         event: (event) => {
           if (
-            event.type == 'response.output_text.delta' &&
+            (event.type == 'response.output_text.delta' ||
+              event.type == 'response.refusal.delta') &&
             typeof event.delta == 'string'
           ) {
             const key = String(event.item_id ?? event.output_index)

@@ -15,7 +15,7 @@
 // in a rule's match).
 
 import type { Bundle, Comp, Hook } from '@yaks/graph'
-import { then } from '@yaks/graph'
+import { over, then } from '@yaks/graph'
 import { MODEL, PROVIDER } from '@yaks/model'
 import { ENTRY, FORK, USING } from './native.ts'
 
@@ -52,7 +52,7 @@ let checks = (b: Bundle): Check[] => {
 
 /** The precondition: every `fork.from` is an entry; every `using.provider` is a
  * provider and `using.model` a model — in the graph, or in this batch. */
-export let naming: Hook = (bundles, tx) => {
+const names: Hook = (bundles, tx) => {
   let all = bundles.flatMap(checks)
   if (!all.length) return bundles
   let inBatch = (eid: string, comp: string) =>
@@ -67,3 +67,33 @@ export let naming: Hook = (bundles, tx) => {
     return bundles
   })
 }
+
+/** Fork boundaries cannot include mutable, unfinished provider output. */
+export const naming: Hook = (bundles, tx, err) =>
+  then(
+    over(bundles.filter((b) => ref(b, FORK, 'from')), (b) => {
+      const from = ref(b, FORK, 'from')!
+      return then(tx.get([from]), (rows) => {
+        const anchor = bundles.find((v) => v.entity.eid == from && v.entry) ??
+          rows[0]
+        const entry = anchor?.entry as Comp | undefined
+        if (!entry) return
+        return then(
+          tx.read('.entry.session=' + String(entry.session)),
+          (entries) => {
+            if (
+              entries.some((v) =>
+                (v.attempt as Comp | undefined)?.state == 'inflight' &&
+                Number((v.entry as Comp)?.seq) <= Number(entry.seq)
+              )
+            ) {
+              throw new Error(
+                'Cannot fork through an in-flight provider attempt',
+              )
+            }
+          },
+        )
+      })
+    }),
+    () => names(bundles, tx, err),
+  )

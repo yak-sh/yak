@@ -181,6 +181,19 @@ let delegation = (
       let anchorId = comp(newestAsk(ctx.entries), 'ask')?.through
       let anchor = ctx.entries.find((b) => b.entity.eid == anchorId)
       if (fork && !anchor) throw new ToolError('fork', 'no prefix to fork')
+      if (
+        fork &&
+        ctx.entries.some((b) =>
+          (b.attempt as Comp | undefined)?.state == 'inflight' &&
+          Number((b.entry as Comp)?.seq) <= Number((anchor!.entry as Comp)?.seq)
+        )
+      ) {
+        throw new ToolError(
+          'fork',
+          'Cannot inherit an in-flight response; wait for its completion',
+        )
+      }
+
       // Fork history is immutable. Fresh children receive the same shared
       // snapshots, never a filesystem reread or a replacement persona.
       let context: Bundle[] = fork

@@ -37,7 +37,10 @@ function create(g: Graph) {
     bundles.map((b) => {
       let out = b
       for (const { frame: f, text } of values.values()) {
-        if (f.entity != b.entity.eid) continue
+        if (
+          f.entity != b.entity.eid ||
+          !Object.hasOwn((b[f.component] as Comp | undefined) ?? {}, f.property)
+        ) continue
         out = {
           ...out,
           [f.component]: { ...(out[f.component] as Comp), [f.property]: text },
@@ -46,7 +49,8 @@ function create(g: Graph) {
       return out
     })
   const read = g.read.bind(g)
-  g.read = (q, opts) => then(read(q, opts), project)
+  g.read = (q, opts) =>
+    opts?.durable ? read(q, opts) : then(read(q, opts), project)
   const receive = (f: TransientFrame) => {
     if (!Number.isSafeInteger(f.seq) || f.seq < 0) {
       throw new Error('Invalid transient sequence')
@@ -78,6 +82,14 @@ function create(g: Graph) {
   return {
     project,
     receive,
+    /** A replica dropped these entities. Forget projections without ending
+     * the remote writer: a later subscription may supply its snapshot. */
+    forget(eids: Eid[]) {
+      const ids = new Set(eids)
+      for (const [key, value] of values) {
+        if (ids.has(value.frame.entity)) values.delete(key)
+      }
+    },
     subscribe(fn: (f: TransientFrame) => void) {
       listeners.add(fn)
       return () => listeners.delete(fn)
@@ -94,11 +106,13 @@ function create(g: Graph) {
       if (typeof text != 'string') {
         throw new Error('Transient text requires an existing string property')
       }
+      if (ended.has(id)) throw new Error('Transient identity already finalized')
       let seq = 0, closed = false
       let expected = token(text)
       const frame = { id, entity, component, property }
       receive({ ...frame, seq, op: 'begin', text })
       return {
+        expected: () => expected,
         append(text: string) {
           if (closed) throw new Error('Transient writer closed')
           receive({ ...frame, seq: ++seq, op: 'append', text })

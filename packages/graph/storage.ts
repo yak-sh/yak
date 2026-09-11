@@ -19,7 +19,7 @@ export type Row = Record<string, unknown>
 export type Query = string | Ast
 
 /** Options that ride a read, such as a fixed `now` for relative time phrases. */
-export type ReadOpts = { now?: number }
+export type ReadOpts = { now?: number; durable?: boolean }
 
 /** One entity the cascade takes, and the rung it fell on: the entities the
  * batch named are depth 0, what died with them 1, and so on. The order the
