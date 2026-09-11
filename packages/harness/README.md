@@ -631,3 +631,16 @@ been converted to asynchronous preannounced migrations. Do not assume opening a
 new harness version is coordinated with older running connections. Stop those
 connections before such upgrades. Already-completed migrations are not a version
 compatibility check when an older binary first opens the file.
+
+## Package composition pilot
+
+The `./plugin` export supplies a lazy manifest containing session vocabulary,
+session rules, and one structured command. Hosts can select these contributions
+independently using `@yaks/plugin`; importing the manifest opens no database and
+starts no services. It is not yet a complete replacement for harness startup.
+
+The existing executable also accepts `session list` and `list session`,
+returning session bundles as JSON. The same definition can be exposed as MCP
+`session_list` using `commandTools` from `@yaks/cli/structured`. Existing
+commands remain available. See [the design and limits](../plugin/DESIGN.md). No
+daemon, installer, or `:` command interface is added in this pilot.

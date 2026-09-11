@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "exports": {
     ".": "./mod.ts",
-    "./bin": "./bin.ts"
+    "./bin": "./bin.ts",
+    "./plugin": "./plugin.ts"
   },
   "license": "Apache-2.0",
   "description": "Runs an agent from one SQLite file, combining the session daemon, shell and graph tools, and a command-line interface without a server.",

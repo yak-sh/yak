@@ -9,7 +9,7 @@
 
 import { main } from '@yaks/cli'
 import { diagnostics, uncaught } from './diagnostics.ts'
-import { plugin } from './cli.ts'
+import { plugin, structured } from './cli.ts'
 
 if (import.meta.main) {
   let reporter = diagnostics()
@@ -28,7 +28,7 @@ if (import.meta.main) {
     if (!Deno.args.length) {
       let { tui } = await import('./app.ts')
       await tui()
-    } else Deno.exitCode = await main(Deno.args, [plugin])
+    } else Deno.exitCode = await main(Deno.args, [structured, plugin])
   } catch (error) {
     reporter.report(error, { phase: 'harness-main' })
     throw error

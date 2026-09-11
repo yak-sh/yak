@@ -1,0 +1,9 @@
+{
+  "name": "@yaks/plugin",
+  "version": "0.1.0",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "Selects explicitly configured lazy contributions for application subsystems.",
+  "compilerOptions": { "lib": ["dom", "esnext"] },
+  "publish": { "exclude": ["**/*_test.ts"] }
+}

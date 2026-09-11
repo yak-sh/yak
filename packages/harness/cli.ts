@@ -1,3 +1,5 @@
+import { commandPlugin } from '@yaks/cli/structured'
+import { commands } from './commands.ts'
 // The verbs, over @yaks/cli's plugin seam: start a transcript, say something
 // more to one, list them, read one back, and ask what the credential can
 // reach. Five words and no state of their own — each one opens the graph, does
@@ -209,3 +211,26 @@ export let plugin: Plugin = {
     },
   ],
 }
+
+/** Optional structured entrypoint alongside the existing short CLI verbs. */
+export const structured = commandPlugin(commands, async (command, args, c) => {
+  if (args.length) {
+    c.note('session list takes no arguments')
+    return 2
+  }
+  const a = running(c)
+  try {
+    const result = await command.run({}, {
+      graph: a.h.g,
+      actor: null,
+      read: (query, opts) => a.h.g.read(query, opts),
+      apply: () => {
+        throw new Error('Read-only command context')
+      },
+    })
+    c.out(JSON.stringify(result, null, 2))
+    return 0
+  } finally {
+    await a.close()
+  }
+})

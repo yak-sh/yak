@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "exports": {
     ".": "./mod.ts",
-    "./yak": "./yak.ts"
+    "./yak": "./yak.ts",
+    "./structured": "./structured.ts"
   },
   "license": "Apache-2.0",
   "description": "Builds the yak command's subcommands from an MCP server's tool schemas at runtime, with plugins for additional commands.",

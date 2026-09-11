@@ -151,3 +151,16 @@ yak apply --change '[{"entity":{"eid":"$r"},"doc":{"title":"Lemon cake"}}]'
 The runtime uses native fetch and implements `initialize`, `tools/list` and
 `tools/call` without an MCP SDK dependency. Command execution and credential
 storage require Deno filesystem, environment and network permissions.
+
+## Structured command pilot
+
+`@yaks/cli/structured` exports `defineCommands`, `commandPlugin`,
+`commandTools`, and `resolveCommand`. A command supplies a noun path and verb
+plus an existing graph Tool definition. CLI aliases are explicit; MCP names use
+the canonical path joined with underscores. The CLI host supplies argument
+decoding and output formatting. This is opt-in and does not alter the existing
+plugin API.
+
+See the [composition design](../plugin/DESIGN.md) and the working
+[session-list definition](../harness/commands.ts). Installing a dependency does
+not register or activate its commands automatically.
