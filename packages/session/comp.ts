@@ -1,3 +1,4 @@
+import { callDoc } from '@yaks/tools/vocab'
 import { contextDoc } from '@yaks/context'
 // The vocabulary this package ships, as one document to load beside your own
 // (./vocab.json — plain JSON Schema). A session is a TRANSCRIPT: nothing is
@@ -56,7 +57,7 @@ import doc from './vocab.json' with { type: 'json' }
  * `loadVocab([sessionDoc, modelDoc, ...mine])`. */
 export let sessionDoc: VocabDoc = {
   ...doc,
-  $defs: { ...doc.$defs, ...contextDoc.$defs },
+  $defs: { ...doc.$defs, ...contextDoc.$defs, ...callDoc.$defs },
 }
 
 export let SESSION = 'session'

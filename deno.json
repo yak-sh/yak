@@ -176,6 +176,7 @@
     "./packages/d1",
     "./packages/journal",
     "./packages/effects",
+    "./packages/tools",
     "./packages/edge",
     "./packages/blob",
     "./packages/fts",

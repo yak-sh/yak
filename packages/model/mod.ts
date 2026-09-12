@@ -1,3 +1,4 @@
+import { toolDoc } from '@yaks/tools/vocab'
 import { type Artifact, artifactDoc } from '@yaks/blob'
 /**
  * @yaks/model is the seam between a conversation and whoever serves it: the
@@ -43,7 +44,7 @@ import doc from './vocab.json' with { type: 'json' }
 /** The `provider`, `model` and `tool` components, to load beside your own. */
 export let modelDoc: VocabDoc = {
   ...doc,
-  $defs: { ...doc.$defs, ...artifactDoc.$defs },
+  $defs: { ...doc.$defs, ...artifactDoc.$defs, ...toolDoc.$defs },
 }
 
 export let PROVIDER = 'provider'

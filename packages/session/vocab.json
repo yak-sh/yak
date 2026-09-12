@@ -116,22 +116,6 @@
         ]
       ]
     },
-    "content": {
-      "type": "object",
-      "description": "the prose of an entry, when it has any. On its own it is an input, an instruction from a person or a system (the first one is the request that starts the session); with a `source` it is what a model said; beside a result, error or exception it is theirs",
-      "properties": {
-        "body": {
-          "type": "string",
-          "store": "blob"
-        },
-        "source": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "description": "what said it \u2014 the ask, for a model's own words, or the stream it came off (@yaks/process); absent on prose a person or a system wrote"
-        }
-      }
-    },
     "using": {
       "type": "object",
       "description": "provider, model and effort: on an input it sets or switches them, on an ask it records what was served",
@@ -173,65 +157,9 @@
         }
       }
     },
-    "call": {
-      "type": "object",
-      "description": "a tool the model asked for",
-      "properties": {
-        "to": {
-          "type": "string",
-          "ref": "tool",
-          "death": "keep",
-          "description": "the tool entity called"
-        },
-        "id": {
-          "type": "string",
-          "description": "the provider's id for it, echoed in the result"
-        },
-        "args": {
-          "type": "string",
-          "description": "its arguments, as JSON"
-        },
-        "source": {
-          "type": "string",
-          "ref": "entry",
-          "death": "keep",
-          "description": "the ask that asked for it"
-        }
-      }
-    },
-    "result": {
-      "type": "object",
-      "description": "what a tool answered",
-      "properties": {
-        "ms": {
-          "type": "number",
-          "description": "measured tool wall-clock milliseconds"
-        },
-        "call": {
-          "type": "string",
-          "ref": "entry",
-          "death": "keep",
-          "description": "the tool call it answers"
-        }
-      }
-    },
     "stop": {
       "type": "object",
       "description": "a mark in the transcript: the daemon performs nothing after it",
-      "properties": {}
-    },
-    "error": {
-      "type": "object",
-      "description": "an outcome the code expected and recorded: normal",
-      "properties": {
-        "code": {
-          "type": "string"
-        }
-      }
-    },
-    "exception": {
-      "type": "object",
-      "description": "an outcome the code did not expect, whoever caused it: a defect report, not a stop",
       "properties": {}
     },
     "spawned": {

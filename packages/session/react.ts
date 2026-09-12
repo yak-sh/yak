@@ -1,3 +1,9 @@
+import {
+  CallError as ToolError,
+  executeCall,
+  UnfinishedCall,
+} from '@yaks/tools'
+export { CallError as ToolError } from '@yaks/tools'
 import { transient } from '@yaks/graph'
 // The daemon's one step. `react(graph, session)` reads the newest entry of a
 // transcript and does the one next thing it says: a pending input or result
@@ -57,12 +63,6 @@ import {
 export type ToolContext = { session: Eid; call: Bundle; entries: Bundle[] }
 
 /** A refused tool invocation: expected, recorded as an error and a result. */
-export class ToolError extends Error {
-  constructor(public code: string, message: string) {
-    super(message)
-  }
-}
-
 export { UnknownSession } from './unknown.ts'
 import { UnknownSession } from './unknown.ts'
 import { took } from './timing.ts'
@@ -241,43 +241,36 @@ export let react = async (
     ])
   }
   if (open.length) {
-    let added: Bundle[] = []
-    for (let pending of open) {
-      let c = comp(pending, CALL)!
-      let tool = toolEntities.get(String(c.to))
-      let args: Record<string, unknown> = {}
+    const added: Bundle[] = []
+    for (const pending of open) {
       try {
-        args = JSON.parse(String(c.args ?? '{}'))
-      } catch { /* malformed arguments are the tool's problem to report */ }
-      let out: string
-      let started = performance.now()
-      try {
-        out = tool
-          ? String(await tool.run(args, { session, call: pending, entries }))
-          : `no such tool: ${String(c.to)}`
-      } catch (e) {
-        if (!(e instanceof ToolError)) deps.report?.(e, session, 'tool')
-        out = `tool failed: ${String(e)}`
         added.push(
-          line(
-            e instanceof ToolError
-              ? { [ERROR]: { code: e.code } }
-              : { [EXCEPTION]: {} },
-            String(e),
-          ),
+          ...await executeCall(g, pending.entity.eid, {
+            resolve: (target) => {
+              const tool = toolEntities.get(target)
+              return tool
+                ? {
+                  run: (args) =>
+                    tool.run(args, { session, call: pending, entries }),
+                  format: String,
+                  inputSchema: tool.parameters,
+                }
+                : undefined
+            },
+            mint,
+            report: (error) => deps.report?.(error, session, 'tool'),
+          }),
         )
+      } catch (error) {
+        if (!(error instanceof UnfinishedCall)) throw error
+        return append([line(
+          { [EXCEPTION]: {} },
+          'Unfinished tool execution; inspect before retrying: ' +
+            pending.entity.eid,
+        )])
       }
-      added.push(
-        line({
-          [RESULT]: {
-            call: pending.entity.eid,
-            ms: Math.round(performance.now() - started),
-          },
-        }, out),
-      )
     }
-    let step = await append(added)
-    return { ...step, did: 'ran' }
+    return { did: 'ran', status: statusOf(await transcript(g, session)), added }
   }
   if (status == 'running') return nothing
 

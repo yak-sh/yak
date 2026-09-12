@@ -20,6 +20,9 @@
     "@yaks/edge": "../edge/mod.ts",
     "@yaks/sql": "../sql/mod.ts",
     "@yaks/context": "../context/mod.ts",
-    "@yaks/blob": "../blob/mod.ts"
+    "@yaks/blob": "../blob/mod.ts",
+    "@yaks/tools": "../tools/mod.ts",
+    "@yaks/vocab/tools": "../vocab/tools.ts",
+    "@yaks/tools/vocab": "../tools/vocab.ts"
   }
 }

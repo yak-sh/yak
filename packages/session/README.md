@@ -214,3 +214,18 @@ plan is not a transactionally frozen snapshot: hosts must refresh it when
 transcript membership changes. `transcriptSegments` describes the contributing
 ancestor ranges. `transcriptUsage` reads the latest reported ask/usage fields
 without loading transcript prose.
+
+## Recorded tool execution
+
+Tool invocation vocabulary and execution live in `@yaks/tools`. `sessionDoc`
+includes the invocation declarations for compatibility. Session execution calls
+the shared executor under its existing scheduling lock; it does not install a
+second tool observer. A precommit membership rule adds `entry.session` to
+results that reference transcript calls, before the independent sequence
+allocator runs.
+
+A durable `execution.state = started` without a result requires explicit
+recovery; it is not automatically replayed. Tools retain their existing trusted
+session context, including fork and wait behavior. See
+[tool execution](../tools/README.md) for non-session callers and recovery
+limitations.

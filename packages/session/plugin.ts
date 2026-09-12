@@ -1,3 +1,4 @@
+import { resultEntries } from './result-entry.ts'
 import { sequencing } from './append.ts'
 // The package as a graph plugin: the vocabulary, the rules, and the audit.
 //
@@ -47,7 +48,10 @@ export let sessions = (opts: SessionOpts = {}): Plugin => {
   let precondition: Hook = (bundles, tx, err) =>
     then(
       lease(bundles, tx, err),
-      (b) => then(naming(b, tx, err), (named) => sequencing(named, tx, err)),
+      (b) =>
+        then(naming(b, tx, err), (named) =>
+          then(resultEntries(named, tx, err), (joined) =>
+            sequencing(joined, tx, err))),
     )
   return {
     name: '@yaks/session',

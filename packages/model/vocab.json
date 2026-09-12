@@ -31,19 +31,6 @@
         }
       }
     },
-    "tool": {
-      "type": "object",
-      "kind": true,
-      "description": "something a model may call",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        }
-      }
-    },
     "usage": {
       "type": "object",
       "description": "provider-reported token counts for one completed model request, stored on its ask entry; not cumulative and not a live context estimate",
