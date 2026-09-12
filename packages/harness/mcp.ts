@@ -12,6 +12,7 @@ export const configuredMCP = (servers?: Server[]): Server[] => {
   if (!Array.isArray(value)) {
     throw new Error('HARNESS_MCP must be an array of server configurations')
   }
+  const names = new Set<string>()
   for (const s of value) {
     if (
       !s || typeof s.name !== 'string' || typeof s.url !== 'string' ||
@@ -27,7 +28,16 @@ export const configuredMCP = (servers?: Server[]): Server[] => {
         'Invalid MCP server configuration; use name, url, allow, credential',
       )
     }
-    if (s.credential && new URL(s.url).hostname !== s.credential) {
+    if (!s.name || names.has(s.name)) {
+      throw new Error('MCP server names must be nonempty and unique')
+    }
+    names.add(s.name)
+    const url = new URL(s.url)
+    if (
+      !['https:', 'http:'].includes(url.protocol) || url.username ||
+      url.password
+    ) throw new Error('MCP URL must be HTTP(S) without embedded credentials')
+    if (s.credential && url.hostname !== s.credential) {
       throw new Error('MCP credential host must match the server hostname')
     }
   }

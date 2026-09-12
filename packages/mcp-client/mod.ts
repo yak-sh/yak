@@ -177,6 +177,7 @@ export const connect = (server: Server, options: Options = {}): Connection => {
         name: await nameOf(server.name, t.name),
         description: `[${server.name}] ${t.description ?? t.name}`,
         inputSchema: t.inputSchema,
+        output: t.outputSchema,
         readOnly: t.annotations?.readOnlyHint,
         destructive: t.annotations?.destructiveHint,
         idempotent: t.annotations?.idempotentHint,
