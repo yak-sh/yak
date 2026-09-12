@@ -1,4 +1,5 @@
 import { Scroll } from '@yaks/tui'
+import { compactCount } from './numbers.ts'
 import { hideCompletedChild, sessionTree } from './tree.ts'
 /** Sidebar contributions: one graph read and one renderer, added as one row. */
 import { type ComponentType, h } from 'preact'
@@ -230,7 +231,7 @@ export let panels: Panel[] = [
         | undefined
       let tokens = (value: unknown) =>
         typeof value == 'number' && Number.isFinite(value) && value >= 0
-          ? String(value)
+          ? compactCount(value)
           : undefined
       let input = tokens(usage?.input_tokens)
       let output = tokens(usage?.output_tokens)

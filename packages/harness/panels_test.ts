@@ -142,3 +142,20 @@ Deno.test('sidebar labels keep names and indicators without redundant status tex
     }
   }
 })
+
+Deno.test('context panel compacts displayed counts without changing usage', async () => {
+  const usage = {
+    input_tokens: 273000,
+    output_tokens: 1200,
+    cached_tokens: 999999,
+    total_tokens: 274200,
+    reasoning_tokens: 1000,
+  }
+  const before = JSON.stringify(usage)
+  const rendered = await text([row('large', 1, usage)])
+  assert(rendered.includes('Input context: 273k tokens'))
+  assert(rendered.includes('Output: 1.2k tokens'))
+  assert(rendered.includes('Cached: 1m tokens'))
+  assert(!rendered.includes('Last reported request'))
+  assertEquals(JSON.stringify(usage), before)
+})
