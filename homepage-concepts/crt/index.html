@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>yaks.app — Make it yours</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <header><a class="wordmark" href="#">yaks<span>.app</span></a><span class="concept">An interactive homepage concept</span><a class="nav-link" href="#story">Take it for a spin <span>↘</span></a></header>
+    <main>
+      <section
+        class="intro"><div class="eyebrow">YOUR IDEAS. YOUR ASSISTANT. YOUR SOFTWARE.</div><h1>It starts with an idea.<br>Then you <em>make it yours.</em></h1><p>Ask your assistant to make something useful.<br>Keep changing it until it fits the way you do things.</p><a href="#story" class="start">Put an idea to work <span>↓</span></a><span class="margin-note">No software aisle required.</span></section>
+      <section id="story" class="story"
+        aria-label="Interactive software demonstration">
+        <div class="scene">
+          <div class="wall-grid"></div>
+          <div
+            class="scene-caption">A familiar feeling. A different kind of software.</div>
+          <aside
+            class="pinboard"><div class="pin"></div><div class="paper"><div class="paper-top"><span>YOU + YOUR ASSISTANT</span><span id="page-number">01 / 03</span></div><div id="conversation"></div><div class="paper-foot">Same app. A little more yours.</div></div><span class="board-note">The conversation<br>is how you build it. ↙</span></aside>
+          <div class="computer">
+            <div class="monitor">
+              <div
+                class="monitor-top"><span>yaks personal computer</span><span class="model">MODEL 01</span></div>
+              <div class="bezel">
+                <div class="glass">
+                  <div id="app-screen" aria-label="Demo app preview"></div>
+                  <div class="screen-glint"></div>
+                </div>
+              </div>
+              <div
+                class="monitor-bottom"><span class="hardware-logo">yaks<span>▰</span></span><div class="hardware-controls"><span class="power-light"></span><span class="power-label">POWER</span><button class="power-button" aria-label="Replay recipe demonstration" title="Replay demonstration"></button></div></div>
+            </div>
+            <div class="neck"></div>
+            <div class="stand"></div>
+            <div class="base">
+              <div class="vents"><i></i><i></i><i></i><i></i><i></i></div>
+              <div
+                class="drive"><div class="drive-slot"></div><span id="drive-label">RECIPE BOX</span><div class="drive-light"></div><div class="eject"></div></div>
+            </div>
+            <div class="keyboard" aria-hidden="true">
+              <div class="keys">▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦</div>
+              <div class="spacebar"></div>
+            </div>
+          </div>
+          <div class="desk"></div>
+          <div class="disk-shelf">
+            <div class="shelf-note">Pick something to make <span>↘</span></div>
+            <div class="disks" role="group" aria-label="Choose a demo app">
+              <button class="floppy selected" data-app="recipes"
+                aria-pressed="true"><span class="shutter"><i></i></span><span class="disk-label"><span class="handwriting">Recipe box</span><span class="label-rule"></span><span class="versions" data-versions="recipes"><b>V1</b></span><small>GOOD THINGS, KEPT TOGETHER</small></span><span class="disk-foot">3½″ · YOUR SOFTWARE</span><span class="disk-notch"></span></button>
+              <button class="floppy terracotta" data-app="garden"
+                aria-pressed="false"><span class="shutter"><i></i></span><span class="disk-label"><span class="handwriting">Garden notes</span><span class="label-rule"></span><span class="versions" data-versions="garden"><b>V1</b></span><small>A PLACE TO GROW</small></span><span class="disk-foot">3½″ · YOUR SOFTWARE</span><span class="disk-notch"></span></button>
+              <button class="floppy blue" data-app="club"
+                aria-pressed="false"><span class="shutter"><i></i></span><span class="disk-label"><span class="handwriting">Book club</span><span class="label-rule"></span><span class="versions" data-versions="club"><b>V1</b></span><small>BETTER WITH COMPANY</small></span><span class="disk-foot">3½″ · YOUR SOFTWARE</span><span class="disk-notch"></span></button>
+            </div>
+            <div
+              class="selection-caption"><span class="small-led"></span><span id="selection-text">Recipe box is in the drive</span><span class="scroll-hint">Scroll to see it change ↓</span></div>
+          </div>
+          <div class="stage-controls" role="group"
+            aria-label="Demo version"><button data-stage="0" aria-label="Show version 1" aria-pressed="true">01</button><span></span><button data-stage="1" aria-label="Show version 2" aria-pressed="false">02</button><span></span><button data-stage="2" aria-label="Show version 3" aria-pressed="false">03</button></div>
+        </div>
+        <div class="scroll-steps" aria-hidden="true">
+          <div data-step="0"></div>
+          <div data-step="1"></div>
+          <div data-step="2"></div>
+        </div>
+      </section>
+      <section
+        class="outro"><div class="eyebrow">THE COMPUTER IS JUST THE DEMO.</div><h2>The app is a website.<br><em>The possibilities are yours.</em></h2><p>No disks to install. No retro interface required. Your finished app lives on the web, ready to use and share. This is just a way to show how an idea can keep becoming something better.</p><div class="outro-notes"><div><span>01</span><h3>Make the app.</h3><p>Describe what you want to do, in your own words.</p></div><div><span>02</span><h3>Change the app.</h3><p>Add a field, a view, or a whole new way of working.</p></div><div><span>03</span><h3>Use it together.</h3><p>Your assistant can work with the same data you see.</p></div></div><a class="start" href="#story">Try another disk <span>↗</span></a><small class="demo-disclosure">Interactive concept · Demonstrations are scripted and run locally. No live AI requests.</small></section>
+    </main>
+    <footer><span class="wordmark">yaks<span>.app</span></span><span>Something useful, made your way.</span><a href="#">Back to the desk ↑</a></footer>
+    <div class="sr-only" id="announcement" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
