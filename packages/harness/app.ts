@@ -412,7 +412,7 @@ export let App = (
     agent: a,
     select: (row) => {
       selectSidebar(row)
-      ui.keys({ mode: 'NORMAL', focus: 'sidebar' })
+      ui.keys({ focus: 'sidebar' })
     },
     session: selection.id,
     sessions: data.sessions,

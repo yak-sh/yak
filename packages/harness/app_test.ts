@@ -914,7 +914,7 @@ Deno.test('sidebar selectable contributions follow visual order and archive only
   }
 })
 
-Deno.test('mouse clicks select sessions, new session and task rows without changing drafts', async () => {
+Deno.test('mouse clicks preserve mode while selecting sessions, new session and task rows', async () => {
   const f = frontend()
   const sessions: Bundle[] = ['s1', 's2'].map((id) => ({
     entity: { eid: id },
@@ -958,18 +958,31 @@ Deno.test('mouse clicks select sessions, new session and task rows without chang
     )
     await settle()
   }
+  const mode = () => (f.client.ent('keyboard')?.keyboard as Comp)?.mode
   try {
     await settle()
     await ui.send('unsent')
+    assertEquals(mode(), 'INSERT')
     await click('s1')
+    assertEquals(mode(), 'INSERT')
     assertEquals((f.client.ent('view')?.frontend as Comp)?.selected, 's1')
     assertEquals((f.client.ent('keyboard')?.keyboard as Comp)?.focus, 'sidebar')
     await click('click task')
+    assertEquals(mode(), 'INSERT')
     assertEquals((f.client.ent('view')?.frontend as Comp)?.selected, 's2')
     assertEquals((f.client.ent('view')?.frontend as Comp)?.sidebar, 't1')
     await click('New session')
+    assertEquals(mode(), 'INSERT')
     assertEquals((f.client.ent('view')?.frontend as Comp)?.selected, null)
     assertEquals((f.client.ent('draft')?.draft as Comp)?.text, 'unsent')
+    await ui.send(' more')
+    assertEquals((f.client.ent('draft')?.draft as Comp)?.text, 'unsent more')
+    f.keys({ mode: 'NORMAL' })
+    await settle()
+    for (const label of ['s1', 'click task', 'New session']) {
+      await click(label)
+      assertEquals(mode(), 'NORMAL')
+    }
   } finally {
     ui.free()
     await f.close()
