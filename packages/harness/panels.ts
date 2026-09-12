@@ -24,7 +24,12 @@ export type UIAgent =
   & Partial<
     Pick<
       Agent,
-      'archive' | 'runtime' | 'control' | 'transcriptWindow' | 'usage'
+      | 'archive'
+      | 'runtime'
+      | 'control'
+      | 'transcriptWindow'
+      | 'usage'
+      | 'entrySource'
     >
   >
 

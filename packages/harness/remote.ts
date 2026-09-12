@@ -1,3 +1,4 @@
+import type { EntrySource } from './detail.ts'
 import type { Server as MCPServer } from '@yaks/mcp-client'
 import type {
   TranscriptPage,
@@ -292,6 +293,8 @@ export let remote = async (
     tasks: () => summary('tasks'),
     usage: async (session) => await request('usage', [session]) as Bundle[],
     children: async (id) => await request('children', [id]) as Bundle[],
+    entrySource: async (session, eid, options) =>
+      await request('entrySource', [session, eid, options]) as EntrySource,
     transcript: (id) => select(id),
     transcriptWindow: windowed,
     entry: (b) =>

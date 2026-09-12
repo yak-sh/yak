@@ -1,3 +1,4 @@
+import type { SourceRequest } from './detail.ts'
 import type { Server as MCPServer } from '@yaks/mcp-client'
 import {
   transcriptPlan,
@@ -159,6 +160,12 @@ async function handle(method: string, value: unknown): Promise<unknown> {
       return a.tasks()
     case 'children':
       return a.children(String(args[0]))
+    case 'entrySource':
+      return a.entrySource(
+        String(args[0]),
+        String(args[1]),
+        args[2] as SourceRequest,
+      )
     case 'transcriptWindowPlan': {
       let session = String(args[0])
       let plan = await transcriptPlan(

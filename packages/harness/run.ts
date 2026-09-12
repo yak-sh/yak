@@ -1,3 +1,4 @@
+import { type EntrySource, entrySource, type SourceRequest } from './detail.ts'
 import { configuredMCP, mcpTools } from './mcp.ts'
 import type { Server as MCPServer } from '@yaks/mcp-client'
 import { watchMigrations } from '@yaks/sqlite'
@@ -156,6 +157,11 @@ export type Agent = {
     session: Eid,
     request?: TranscriptWindow,
   ) => Promise<TranscriptPage>
+  entrySource: (
+    session: Eid,
+    eid: Eid,
+    request?: SourceRequest,
+  ) => Promise<EntrySource>
   usage: (session: Eid) => Promise<Bundle[]>
   /** wake every transcript a restart left mid-step */
   resume: () => Promise<Eid[]>
@@ -356,6 +362,8 @@ export let agent = (opts: Opts = {}): Agent => {
     children: (session) => children(h.g, session),
     tasks: async () =>
       (await h.g.read('.task.status=open,wip')).toSorted(byBirth),
+    entrySource: (session, eid, request) =>
+      entrySource(h.g, session, eid, request),
     transcript: entries,
     usage: (session) => transcriptUsage(h.g, session),
     transcriptWindow: (session, request) =>
