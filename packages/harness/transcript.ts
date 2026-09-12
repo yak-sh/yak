@@ -176,6 +176,6 @@ export let transcriptViews = define([
   row('.entry&.ask', 'ask', 'Muted'),
   row('.entry&.stop', 'stop', 'Warn'),
   row('.entry&.content.source!', 'output', 'Accent', false, true),
-  row('.entry&.content', 'input', 'Good', true, true, true),
+  row('.entry&.content', 'input', 'Good', false, true, true),
   row('.entry', 'entry', 'Muted'),
 ])

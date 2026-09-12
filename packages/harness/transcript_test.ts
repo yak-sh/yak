@@ -56,7 +56,7 @@ Deno.test('transcript dims sequence and tool prose and colors each entry kind', 
       assert(ansi.includes(kind.padEnd(9) + '\x1b[0m'), ansi)
       assertEquals(
         ansi.includes('\x1b[38;2;122;132;120;2mfirst line'),
-        kind == 'result' || kind == 'input',
+        kind == 'result',
       )
     } finally {
       ui.free()
@@ -400,7 +400,7 @@ Deno.test('result previews cap source and wrapped rows without changing stored t
   }
 })
 
-Deno.test('input Markdown keeps dim text and emphasis', async () => {
+Deno.test('input Markdown uses normal brightness and preserves emphasis', async () => {
   const entry: Bundle = {
     entity: { eid: 'input' },
     entry: { session: 's', seq: 1 },
@@ -414,7 +414,9 @@ Deno.test('input Markdown keeps dim text and emphasis', async () => {
   try {
     assert(!ui.text().includes('**bold**'))
     assert(ui.text().includes('next line'))
-    assert(ui.out.join('').includes(';1;2mbold'), ui.out.join(''))
+    assert(ui.out.join('').includes('\x1b[1mbold'), ui.out.join(''))
+    assert(!ui.out.join('').includes(';1;2mbold'), ui.out.join(''))
+    assert(ui.out.join('').includes('\x1b[3mitalic'), ui.out.join(''))
   } finally {
     ui.free()
   }

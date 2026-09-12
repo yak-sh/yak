@@ -661,7 +661,9 @@ Shell calls show the command from their arguments. Tool results remain literal
 and dim, with previews limited to five displayed rows (and 2,000 source code
 points). Truncated previews are labeled; stored text and provider context are
 unchanged. Explicit source selection and graph-value inspection still use the
-full text. User input is rendered as dim Markdown inside its existing box.
+full text. User input is rendered as normal-brightness Markdown inside its
+dim-bordered box.
+
 ## Remote MCP tools
 
 The optional host-wide MCP configuration consumes servers through
