@@ -712,3 +712,27 @@ handler for an already-issued call. This is not durable remote capability
 versioning: after restart, removed tools cannot be reconstructed from their old
 schema alone. The server remains responsible for validating current invocation
 arguments and permissions. The retained handler map is process-lifetime state.
+
+### Transcript cursor and source detail
+
+In NORMAL, `hjkl` moves a block cursor over the rendered transcript. The entry
+containing the cursor retains a subtle background. `v` extends an in-place text
+selection, `y` copies it, and Escape cancels it; Markdown stays rendered
+throughout. `i` returns to the composer and hides the transcript
+cursor/highlight. Use `Ctrl+w h` / `Ctrl+w l` to focus transcript/sidebar; Tab
+remains an alias. Sidebar `j/k` still selects its rows. Half/full-page and
+`gg/G` navigation remain.
+
+Enter explicitly opens the current entry's source, including compact prompts and
+clipped tool output, in a bounded detail panel. `j/k` scroll the chunk, `[` /
+`]` fetch adjacent chunks, and Escape returns to the transcript. Source reads
+are authorized through the session's fork ancestry and revision-checked, with at
+most 4,096 Unicode code points per read. This does not restore transcript
+search. A source change while paging requires closing and reopening the detail.
+
+Rendered copies omit box/table borders and generated padding and join ordinary
+soft wraps. They are bounded to retained measured entries and 65,536 UTF-16
+units; a larger or evicted range reports an error instead of silently copying
+less. Viewport reflow retains the entry identity and clamps row/column, rather
+than promising stable character identity through arbitrary live Markdown
+changes. The composer keeps its existing explicit source-selection behavior.

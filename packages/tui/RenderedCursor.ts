@@ -43,13 +43,19 @@ export let cursorLine = (
   const [low, high] = anchor && comparePoint(anchor, cursor, ids) < 0
     ? [anchor, cursor]
     : [cursor, anchor ?? cursor]
+  const index = ids.indexOf(id),
+    lowIndex = ids.indexOf(low.id),
+    highIndex = ids.indexOf(high.id)
+  const inRange = index >= lowIndex && index <= highIndex
   let col = 0
   const result: Line = []
   for (let seg of line) {
     for (let text of seg.text) {
-      const point = { id, row, col }
-      const active = anchor && comparePoint(point, low, ids) >= 0 &&
-        comparePoint(point, high, ids) <= 0
+      const active = anchor && inRange &&
+        (index > lowIndex || row > low.row ||
+          row == low.row && col >= low.col) &&
+        (index < highIndex || row < high.row ||
+          row == high.row && col <= high.col)
       const caret = id == cursor.id && row == cursor.row && col == cursor.col
       result.push({
         ...seg,
@@ -106,7 +112,9 @@ export let copyRendered = (
       if (hasText || !(lines[row] ?? []).length) {
         size += text.length + 1
         if (size > limit) {
-          throw new Error('Selection exceeds 64 KiB; select a smaller range')
+          throw new Error(
+            'Selection exceeds 65,536 characters; select a smaller range',
+          )
         }
         const nextSoft = (lines[row] ?? []).some((seg) => seg.softBreak)
         if (soft && rows.length) rows[rows.length - 1] += text

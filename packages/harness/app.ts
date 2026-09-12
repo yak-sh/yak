@@ -574,7 +574,7 @@ let Transcript = ({ ui, id, items, agent, pending, page, load }: {
         items.length
       ? {
         id: String(position?.selected ?? position?.item ?? items.at(-1)!.id),
-        row: Number(position?.cursorRow ?? 0),
+        row: Number(position?.cursorRow ?? position?.offset ?? 0),
         col: Number(position?.cursorCol ?? 0),
         ...position?.anchorId
           ? {
@@ -615,10 +615,7 @@ let Transcript = ({ ui, id, items, agent, pending, page, load }: {
       })
     },
     selectionVisible: (ui.keyboard.value[0].keyboard as Comp).mode != 'INSERT',
-    selectionClass:
-      (ui.keyboard.value[0].keyboard as Comp).focus == 'transcript'
-        ? 'List_Selected'
-        : 'List_Selected',
+    selectionClass: 'List_Selected',
     onSelect: (selected: string) =>
       ui.client.mutate([{
         entity: { eid: 'viewport-' + id },

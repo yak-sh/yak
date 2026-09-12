@@ -52,7 +52,7 @@ export async function entrySource(
   )
   if (!component) throw new Error('Entry has no text source')
   let property = component == 'call' ? 'args' : 'body'
-  let tool = valueTools(async (id) => id == eid ? row : undefined)[0]
+  let tool = valueTools((id) => Promise.resolve(id == eid ? row : undefined))[0]
   let page = JSON.parse(
     await tool.run({
       entity: eid,

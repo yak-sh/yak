@@ -104,3 +104,45 @@ Deno.test('NORMAL and VISUAL operate on rendered Markdown without replacing it; 
     await f.close()
   }
 })
+
+Deno.test('rendered Markdown tables, quotes, code and boxes keep layout while selecting', async () => {
+  const { TElement, install } = await import('../tui/dom.ts')
+  const { render } = await import('preact')
+  const { lay } = await import('../tui/paint.ts')
+  const { theme } = await import('../tui/theme.ts')
+  const { copyRendered } = await import('../tui/RenderedCursor.ts')
+  const dom = install()
+  const root = new TElement('div')
+  try {
+    render(
+      h(
+        'div',
+        { border: 'Composer_Border', wrap: '1' },
+        h(Markdown, {
+          source:
+            '> **quote**\n\n```\ncode\n\nline\n```\n\n| A | B |\n|---|---|\n| one | two |',
+        }),
+      ),
+      root as unknown as Element,
+    )
+    const rows = lay(root, {}, 40, null, { sheet: theme, metrics: {} })
+    const text = copyRendered(
+      {
+        id: 'a',
+        row: rows.length - 1,
+        col: 39,
+        anchor: { id: 'a', row: 0, col: 0 },
+      },
+      ['a'],
+      () => rows,
+    )
+    assert(text.includes('quote'))
+    assert(text.includes('code'))
+    assert(text.includes('one'))
+    assert(!/[╭╮╰╯│─┼┬┴]/.test(text), text)
+    assert(!text.includes('**'))
+  } finally {
+    render(null, root as unknown as Element)
+    dom.free()
+  }
+})

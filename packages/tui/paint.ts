@@ -410,7 +410,9 @@ let layout = (
     }
   }
   if (o.indent) {
-    lines = lines.map((l) => [{ text: ' '.repeat(o.indent!), style: s }, ...l])
+    lines = lines.map((
+      l,
+    ) => [{ text: ' '.repeat(o.indent!), style: s, decorative: true }, ...l])
   }
   if (o.gap && lines.length) lines.push([])
   if (box != null) lines = fit(lines, box)
@@ -438,7 +440,11 @@ let layout = (
         0,
         w - clipped.reduce((n, part) => n + part.text.length, 0),
       )
-      return [...clipped, { text: ' '.repeat(remaining), style: s }]
+      return [...clipped, {
+        text: ' '.repeat(remaining),
+        style: s,
+        decorative: true,
+      }]
     })
   }
   return outer == null ? lines : fit(lines, outer)
@@ -471,7 +477,9 @@ let width = (l: Line) => l.reduce((n, s) => n + s.text.length, 0)
 
 let pad = (l: Line, w: number): Line => {
   let n = w - width(l)
-  return n > 0 ? [...l, { text: ' '.repeat(n), style: {} }] : l
+  return n > 0
+    ? [...l, { text: ' '.repeat(n), style: {}, decorative: true }]
+    : l
 }
 
 /** Cut a line to a column count, keeping whole segments where it can. */

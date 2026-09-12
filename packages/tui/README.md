@@ -413,3 +413,29 @@ selection.
 A block can set `max-height` to cap its rendered rows without padding shorter
 content. Optional `overflow-text` adds a plain-text final row only when the cap
 is exceeded. This is presentation clipping, not source truncation.
+
+### Rendered text cursor
+
+`VirtualList` optionally accepts a controlled `cursor` (`id`, local rendered
+`row`, UTF-16 `col`, and optional selection `anchor`), `onCursor`, and `onYank`.
+With these present, arrows move within rendered lines rather than selecting
+whole items. Movement measures only visited items and requests neighboring data
+through its existing `onRange` interface. `v` starts a range, `y` copies, and
+Escape clears the range. The caller chooses keyboard aliases and stores the
+cursor state.
+
+Cursor and range styling are applied to cached lines without changing Markdown
+or reparsing it. `Seg.decorative` marks borders and generated padding that must
+not be copied. `Seg.softBreak` distinguishes wrapping from explicit line breaks.
+Copies preserve rendered text, not original Markdown syntax. Selected tables
+copy their visible cell text and spacing, not a CSV or Markdown reconstruction.
+
+Selection can span overlapping loaded pages while their measured text remains in
+the bounded cache. A missing endpoint or evicted item refuses the copy rather
+than silently truncating it. Copies are capped at 65,536 UTF-16 code units. This
+is a visible-text selection API, not an unbounded export API. Resizing or
+streamed reflow clamps the local row/column to valid positions; it does not
+preserve a semantic character offset across a completely different Markdown
+layout. Surrogate pairs are kept together, but terminal width still uses UTF-16
+units; wide CJK, combining sequences, and emoji can require further width
+handling.

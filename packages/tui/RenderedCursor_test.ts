@@ -119,3 +119,19 @@ Deno.test('copy joins soft wraps but keeps explicit newlines', () => {
     'hello world\nnext',
   )
 })
+
+Deno.test('cursor is clamped after reflow and first NORMAL paint preserves follow', () => {
+  const w = new VirtualWindow<{ id: string }>(
+    (_item, width) => wrap(lines('abcdefghij')[0], width),
+    () => 'v',
+    true,
+  )
+  w.update([{ id: 'a' }])
+  w.cursor = { id: 'a', row: 0, col: 8 }
+  w.layout(10, 2)
+  assertEquals(w.follow, true)
+  w.layout(5, 2)
+  assertEquals(w.cursor.col, 4)
+  w.cursor = w.moveCursor({ name: 'down' }, w.cursor)!
+  assertEquals(w.cursor.row, 1)
+})

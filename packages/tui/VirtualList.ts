@@ -309,7 +309,6 @@ export class VirtualWindow<T extends VirtualItem> {
             offset: Math.max(0, this.cursor.row - height + 1),
           }
         }
-        this.follow = false
         this.revealedSelection = this.cursor.id
         this.revealedWidth = width
         this.revealedHeight = height
@@ -637,6 +636,7 @@ export let VirtualList = <T extends VirtualItem>(
       }
       const moved = state.current!.moveCursor(key, cursor)
       if (moved) {
+        state.current!.follow = false
         state.current!.cursor = moved
         state.current!.selected = moved.id
         onCursor(moved)
@@ -722,6 +722,14 @@ export let VirtualList = <T extends VirtualItem>(
           JSON.stringify([style, sheet]),
         )
         publish()
+        const normalized = state.current!.cursor
+        if (
+          cursor && normalized &&
+          (selected !== normalized.id || cursor.row != normalized.row ||
+            cursor.col != normalized.col)
+        ) {
+          onCursor?.(normalized)
+        }
         if (range && items.length) {
           let at = items.findIndex((item) =>
             item.id == state.current!.anchor?.id
