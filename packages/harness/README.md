@@ -645,3 +645,10 @@ returning session bundles as JSON. The same definition can be exposed as MCP
 from the same Tool noun/verb fields, without alias declarations. Existing
 commands remain available. See [the design and limits](../plugin/DESIGN.md). No
 daemon, installer, or `:` command interface is added in this pilot.
+
+Mouse clicks select session rows, **New session**, and task rows in the sidebar.
+A claimed task opens its worker session; an unclaimed task selects only the row.
+Clicking a row focuses the sidebar in NORMAL mode without submitting or changing
+the draft. The whole painted row, including its trailing background, is
+clickable. Mouse reporting must reach the application through the
+terminal/multiplexer.

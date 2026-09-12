@@ -119,6 +119,14 @@ export let App = (
     setData((d) => ({ ...d, entries: [], loadedFor: undefined }))
   }
 
+  const selectSidebar = (row: { id: string; session?: string }) => {
+    if (row.id == 'new') choose({})
+    else if (row.session && row.session != current().id) {
+      choose({ id: row.session })
+    }
+    ui.patch({ sidebar: row.id })
+  }
+
   useLayoutEffect(() => {
     let alive = true, dirty = false, busy = false
     // Transcript publication must not wait for sidebar projections or a quiet
@@ -340,9 +348,7 @@ export let App = (
         )
       const next = choices[index]
       if (next) {
-        if (next.id == 'new') choose({})
-        else if (next.session) choose({ id: next.session })
-        ui.patch({ sidebar: next.id })
+        selectSidebar(next)
       }
       return true
     }
@@ -404,6 +410,10 @@ export let App = (
 
   let ctx: Context = {
     agent: a,
+    select: (row) => {
+      selectSidebar(row)
+      ui.keys({ mode: 'NORMAL', focus: 'sidebar' })
+    },
     session: selection.id,
     sessions: data.sessions,
     showSettled,

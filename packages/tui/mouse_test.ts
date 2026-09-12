@@ -202,3 +202,56 @@ Deno.test('nested Preact handlers bubble from inline target and disappear on unm
     next.free()
   }
 })
+
+Deno.test('clicks bubble after primary press/release; drags and other buttons do not click', async () => {
+  let clicks = 0
+  let parentClicks = 0
+  const ui = await mount(
+    () =>
+      h(
+        'div',
+        { onClick: () => parentClicks++ },
+        h('span', { onClick: () => clicks++ }, 'target'),
+        h('span', null, ' other'),
+      ),
+    30,
+    3,
+  )
+  try {
+    await ui.send('\x1b[<0;2;1M')
+    assertEquals(clicks, 0)
+    await ui.send('\x1b[<0;2;1m')
+    assertEquals([clicks, parentClicks], [1, 1])
+    await ui.send('\x1b[<2;2;1M\x1b[<2;2;1m')
+    await ui.send('\x1b[<0;2;1M\x1b[<0;9;1m')
+    await ui.send('\x1b[<0;2;1M\x1b[<32;3;1M\x1b[<0;2;1m')
+    assertEquals([clicks, parentClicks], [1, 1])
+  } finally {
+    ui.free()
+  }
+})
+
+Deno.test('click propagation can be stopped with normal Preact handlers', async () => {
+  let outer = 0, inner = 0
+  const ui = await mount(
+    () =>
+      h(
+        'div',
+        { onClick: () => outer++ },
+        h('span', {
+          onClick: (event: { stopPropagation(): void }) => {
+            inner++
+            event.stopPropagation()
+          },
+        }, 'target'),
+      ),
+    20,
+    2,
+  )
+  try {
+    await ui.send('\x1b[<0;1;1M\x1b[<0;1;1m')
+    assertEquals([inner, outer], [1, 0])
+  } finally {
+    ui.free()
+  }
+})

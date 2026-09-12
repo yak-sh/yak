@@ -907,3 +907,65 @@ Deno.test('sidebar selectable contributions follow visual order and archive only
     f.close()
   }
 })
+
+Deno.test('mouse clicks select sessions, new session and task rows without changing drafts', async () => {
+  const f = frontend()
+  const sessions: Bundle[] = ['s1', 's2'].map((id) => ({
+    entity: { eid: id },
+    session: { id, title: id, status: 'settled' },
+  }))
+  const a: UIAgent = {
+    sessions: () => Promise.resolve(sessions),
+    tasks: () =>
+      Promise.resolve([{
+        entity: { eid: 't1' },
+        task: {},
+        doc: { title: 'click task' },
+        claim: { session: 's2' },
+      }]),
+    children: () => Promise.resolve([]),
+    transcript: () => Promise.resolve([]),
+    start: () => Promise.resolve('created'),
+    send: () => Promise.resolve('sent'),
+    taskEntry: () => Promise.resolve({ task: 'task', child: 'child' }),
+    line: () => '',
+    entry: () => null,
+  }
+  const ui = await mount(
+    () =>
+      h(App, {
+        agent: a,
+        frontend: f,
+        subscribe: () => () => {},
+      }),
+    120,
+    40,
+  )
+  const click = async (label: string) => {
+    const lines = ui.text().split('\n')
+    const y = lines.findIndex((line) => line.includes(label))
+    assert(y >= 0, ui.text())
+    const x = lines[y].indexOf(label)
+    await ui.send(
+      '\x1b[<0;' + (x + 1) + ';' + (y + 1) + 'M' +
+        '\x1b[<0;' + (x + 1) + ';' + (y + 1) + 'm',
+    )
+    await settle()
+  }
+  try {
+    await settle()
+    await ui.send('unsent')
+    await click('s1')
+    assertEquals((f.client.ent('view')?.frontend as Comp)?.selected, 's1')
+    assertEquals((f.client.ent('keyboard')?.keyboard as Comp)?.focus, 'sidebar')
+    await click('click task')
+    assertEquals((f.client.ent('view')?.frontend as Comp)?.selected, 's2')
+    assertEquals((f.client.ent('view')?.frontend as Comp)?.sidebar, 't1')
+    await click('New session')
+    assertEquals((f.client.ent('view')?.frontend as Comp)?.selected, null)
+    assertEquals((f.client.ent('draft')?.draft as Comp)?.text, 'unsent')
+  } finally {
+    ui.free()
+    await f.close()
+  }
+})

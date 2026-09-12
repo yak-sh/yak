@@ -12,7 +12,7 @@ import { setClipboard } from './visual.ts'
 import { type ComponentType, h, render } from 'preact'
 import { install, onPaint, touch } from './dom.ts'
 import { ansiBackend, type Backend } from './paint.ts'
-import { routeMouse } from './mouse.ts'
+import { clearMouse, routeMouse } from './mouse.ts'
 import type { Line } from './paint.ts'
 import { feed } from './input.ts'
 import { shutdown } from './shutdown.ts'
@@ -67,6 +67,7 @@ export let run = async (
     painted = []
     render(null, host)
     onPaint(() => {})
+    clearMouse()
     clear()
     screen.free()
     try {

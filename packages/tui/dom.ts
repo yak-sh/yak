@@ -70,6 +70,7 @@ export class TElement extends TNode {
 
   // Preact uses native property presence to normalize event names to lowercase.
   onwheel = null
+  onclick = null
   onmousedown = null
   onmouseup = null
   onmousemove = null

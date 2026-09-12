@@ -32,6 +32,7 @@ export type Context = {
   agent: UIAgent
   session?: Eid
   sessions: Bundle[]
+  select?: (row: { id: string; session?: string }) => void
   active?: boolean
   sidebar?: string
   showSettled?: boolean
@@ -108,7 +109,9 @@ export let panels: Panel[] = [
     ],
     scrollable: true,
     read: (c) => c.sessions,
-    Render: ({ rows, session, sidebar, active, showSettled, showArchived }) => {
+    Render: (
+      { rows, session, sidebar, active, showSettled, showArchived, select },
+    ) => {
       let tree = sessionTree(rows, {
         selected: session,
         showSettled,
@@ -138,6 +141,7 @@ export let panels: Panel[] = [
                 ? (active ? 'Selection_Active' : 'Session_Selected')
                 : 'Muted',
               fill: '1',
+              onClick: () => select?.({ id: 'new' }),
             },
             'New session',
           ),
@@ -146,6 +150,8 @@ export let panels: Panel[] = [
               'div',
               {
                 key: b.entity.eid,
+                onClick: () =>
+                  select?.({ id: b.entity.eid, session: b.entity.eid }),
                 fill: '1',
                 class: (sidebar ?? session) == b.entity.eid
                   ? (active ? 'Selection_Active' : 'Session_Selected')
@@ -173,7 +179,7 @@ export let panels: Panel[] = [
     fit: true,
     titleClass: 'Task',
     read: (c) => c.agent.tasks(),
-    Render: ({ rows, sessions, sidebar, active }) =>
+    Render: ({ rows, sessions, sidebar, active, select }) =>
       h(
         Scroll,
         {
@@ -188,6 +194,11 @@ export let panels: Panel[] = [
           return h(
             'div',
             {
+              onClick: () =>
+                select?.({
+                  id: b.entity.eid,
+                  session: held == null ? undefined : String(held),
+                }),
               fill: '1',
               class: sidebar == b.entity.eid
                 ? (active ? 'Selection_Active' : 'Session_Selected')

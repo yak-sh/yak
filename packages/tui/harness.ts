@@ -1,5 +1,5 @@
 import { clip } from './paint.ts'
-import { routeMouse } from './mouse.ts'
+import { clearMouse, routeMouse } from './mouse.ts'
 /**
  * A mounted app for a test: a fake terminal of a fixed size, the ANSI backend
  * writing into an array instead of a tty, and keys delivered the way the real
@@ -79,6 +79,7 @@ export let mount = async (
     free: () => {
       render(null, screen.root as unknown as Parameters<typeof render>[1])
       onPaint(() => {})
+      clearMouse()
       clear()
       screen.free()
     },

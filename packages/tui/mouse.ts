@@ -4,7 +4,8 @@ import type { Mouse } from './input.ts'
 import type { Line } from './paint.ts'
 
 /** DOM-compatible event delivered to Preact onWheel/onMouseDown/onMouseUp. */
-export type MouseEvent = Mouse & {
+export type MouseEvent = Omit<Mouse, 'type'> & {
+  type: Mouse['type'] | 'click'
   target: TElement
   currentTarget: TElement | null
   defaultPrevented: boolean
@@ -27,11 +28,38 @@ export let hit = (
   }
 }
 
+let pressed: TElement | undefined
+let clickable = (node: TElement | undefined): TElement | undefined => {
+  for (let at = node; at; at = at.parentNode ?? undefined) {
+    if (at.handlers.has('click')) return at
+  }
+  return node
+}
+
+/** Drop an unfinished gesture when the screen is unmounted. */
+export let clearMouse = () => {
+  pressed = undefined
+}
+
 /** Return true when consumed. A missed report never falls into keyboard focus. */
 export let routeMouse = (report: Mouse, lines: Line[]): boolean => {
   // Freeze normal navigation while reading a selection snapshot.
-  if (visualState()?.surface) return true
+  if (visualState()?.surface) {
+    pressed = undefined
+    return true
+  }
   let target = hit(lines, report.x, report.y)
+  if (report.type == 'mousedown') {
+    pressed = report.button == 0 && !report.ctrl && !report.alt && !report.shift
+      ? clickable(target)
+      : undefined
+  }
+  const click = report.type == 'mouseup' && report.button == 0 &&
+    target != null && pressed === clickable(target)
+  if (
+    report.type == 'mouseup' || report.type == 'mousemove' ||
+    report.type == 'wheel'
+  ) pressed = undefined
   if (!target) return false
   let event: MouseEvent = {
     ...report,
@@ -46,14 +74,22 @@ export let routeMouse = (report: Mouse, lines: Line[]): boolean => {
       this.cancelBubble = true
     },
   }
-  for (let node: TElement | null = target; node; node = node.parentNode) {
-    event.currentTarget = node
-    let handler = node.handlers.get(event.type)
-    if (typeof handler == 'function' && handler.call(node, event) === true) {
-      event.preventDefault()
+  const dispatch = () => {
+    for (let node: TElement | null = target; node; node = node.parentNode) {
+      event.currentTarget = node
+      let handler = node.handlers.get(event.type)
+      if (typeof handler == 'function' && handler.call(node, event) === true) {
+        event.preventDefault()
+      }
+      if (event.defaultPrevented || event.cancelBubble) break
     }
-    if (event.defaultPrevented || event.cancelBubble) break
+    event.currentTarget = null
+    return event.defaultPrevented || event.cancelBubble
   }
-  event.currentTarget = null
-  return event.defaultPrevented || event.cancelBubble
+  const consumed = dispatch()
+  if (!click) return consumed
+  event.type = 'click'
+  event.defaultPrevented = false
+  event.cancelBubble = false
+  return dispatch() || consumed
 }

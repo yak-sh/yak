@@ -396,3 +396,16 @@ When no reports arrive, the terminal is assumed focused. Under tmux, focus
 forwarding may require `set -g focus-events on`; the application does not change
 your tmux configuration. Detection of inactive panes/windows depends on the
 terminal and multiplexer forwarding those reports.
+
+### Mouse clicks
+
+Preact `onClick` handlers receive primary-button clicks through the same clipped
+hit-testing and bubbling used for wheel events. A click requires a press and
+release on the same clickable element (including its inline children). Right
+clicks, modified presses, and reported drags do not activate it. Handlers can
+call `stopPropagation()` or `preventDefault()`. Unmounting clears unfinished
+presses. VISUAL source selection continues to suppress mouse navigation.
+
+Virtualized item contents still target their list host, not individual controls
+inside the item; this does not yet provide per-item controls or mouse text
+selection.
