@@ -1,8 +1,4 @@
-import {
-  CallError as ToolError,
-  executeCall,
-  UnfinishedCall,
-} from '@yaks/tools'
+import { executeCall, UnfinishedCall } from '@yaks/tools'
 export { CallError as ToolError } from '@yaks/tools'
 import { transient } from '@yaks/graph'
 // The daemon's one step. `react(graph, session)` reads the newest entry of a

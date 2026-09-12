@@ -39,6 +39,9 @@ export const graphInvocation = (tool: Tool, ctx: ToolCtx): Invocation => ({
   inputSchema: tool.inputSchema,
   validate: (args) => {
     try {
+      if (tool.inputSchema && tool.input) {
+        throw new Error('Tool cannot declare both input and inputSchema')
+      }
       if (!tool.inputSchema) {
         for (const [key, schema] of Object.entries(tool.input ?? {})) {
           const parser = schema as { parse?: (value: unknown) => unknown }
