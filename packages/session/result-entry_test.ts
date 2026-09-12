@@ -61,3 +61,44 @@ Deno.test('same-batch call/result join respects the absence gate and detached ca
   })
   assertEquals(rows.find((b) => b.entity.eid == 'detached-r')?.entry, undefined)
 })
+
+Deno.test('independent callers can complete out of order without losing transcript association', async () => {
+  const vocab = loadVocab([sessionDoc, modelDoc])
+  const g = graph({ vocab, storage: ram(vocab), plugins: [sessions()] })
+  await g.apply([
+    { entity: { eid: 's' }, session: {} },
+    { entity: { eid: 't' }, tool: { name: 'echo' } },
+    {
+      entity: { eid: 'a' },
+      entry: { session: 's' },
+      call: { to: 't', args: '{}' },
+    },
+    {
+      entity: { eid: 'b' },
+      entry: { session: 's' },
+      call: { to: 't', args: '{}' },
+    },
+  ])
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => release = resolve)
+  const slow = executeCall(g, 'a', {
+    resolve: () => ({
+      run: async () => {
+        await gate
+        return 'a'
+      },
+    }),
+  })
+  await executeCall(g, 'b', { resolve: () => ({ run: () => 'b' }) })
+  release()
+  await slow
+  const results = await g.read('.result .order=entry.seq')
+  assertEquals(results.map((b) => b.result), [
+    { call: 'b', ms: (results[0].result as { ms: number }).ms },
+    { call: 'a', ms: (results[1].result as { ms: number }).ms },
+  ])
+  assertEquals(results.map((b) => b.entry), [
+    { session: 's', seq: 3 },
+    { session: 's', seq: 4 },
+  ])
+})

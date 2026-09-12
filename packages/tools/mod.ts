@@ -1,5 +1,14 @@
+import { and, eq } from '@yaks/query'
 /** Recorded tool execution, independent of sessions and provider transports. */
-import type { Bundle, Comp, Eid, Graph, Tool, ToolCtx } from '@yaks/graph'
+import {
+  type Bundle,
+  type Comp,
+  type Eid,
+  type Graph,
+  token,
+  type Tool,
+  type ToolCtx,
+} from '@yaks/graph'
 import { validateToolInput } from '@yaks/vocab/tools'
 export { callDoc, toolDoc, toolsDoc } from './vocab.ts'
 
@@ -45,7 +54,10 @@ export const graphInvocation = (tool: Tool, ctx: ToolCtx): Invocation => ({
       if (!tool.inputSchema) {
         for (const [key, schema] of Object.entries(tool.input ?? {})) {
           const parser = schema as { parse?: (value: unknown) => unknown }
-          if (parser.parse) args[key] = parser.parse(args[key])
+          if (!parser?.parse) {
+            throw new Error('Legacy schema requires a parse adapter: ' + key)
+          }
+          args[key] = parser.parse(args[key])
         }
       }
     } catch (error) {
@@ -75,7 +87,7 @@ export const executeCall = (
   const run = async (): Promise<Bundle[]> => {
     const [call] = await graph.storage.tx((tx) => tx.get([id]))
     if (!call?.call) throw new CallError('call', 'Not a call: ' + id)
-    const results = await graph.read('.result.call=' + id)
+    const results = await graph.read(and(eq('result.call', id)))
     if (results.length) return results
     if (call.execution) throw new UnfinishedCall(id)
     const c = call.call as Comp
@@ -85,7 +97,10 @@ export const executeCall = (
     await graph.apply([{
       entity: call.entity,
       execution: { state: 'started' },
-      $was: { execution: { state: null } },
+      $was: {
+        execution: { state: null },
+        call: { to: token(c.to), args: token(c.args) },
+      },
     }], { trusted: true })
     const mint = options.mint ?? (() => crypto.randomUUID())
     const added: Bundle[] = []
@@ -126,7 +141,11 @@ export const executeCall = (
       entity: { eid: mint() },
       result: { call: id, ms: Math.round(performance.now() - started) },
       content: { body: output },
-    }, { entity: call.entity, execution: { state: 'completed' } })
+    }, {
+      entity: call.entity,
+      execution: { state: 'completed' },
+      $was: { execution: { state: token('started') } },
+    })
     // Storage failure intentionally leaves the durable started record. Running
     // the tool again could repeat an external action that already succeeded.
     return await graph.apply(added, { trusted: true })

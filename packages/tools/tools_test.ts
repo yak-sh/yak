@@ -181,3 +181,27 @@ Deno.test('schema refusal happens before the handler, with a recorded result', a
   assertEquals((await g.read('.error'))[0].error, { code: 'arguments' })
   assertEquals((await g.read('.result')).length, 1)
 })
+
+Deno.test('mutation between resolution and claim refuses execution of stale arguments', async () => {
+  const g = await setup()
+  let ran = false
+  // The resolver is trusted host code but may cause another graph update.
+  // A call argument revision must still match when execution is claimed.
+  let changed: unknown
+  const options = {
+    resolve: () => {
+      changed = g.apply([{
+        entity: { eid: 'call' },
+        call: { args: '{"changed":true}' },
+      }])
+      return {
+        run: () => {
+          ran = true
+        },
+      }
+    },
+  }
+  await assertRejects(() => executeCall(g, 'call', options))
+  await changed
+  assertEquals(ran, false)
+})
