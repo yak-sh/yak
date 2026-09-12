@@ -67,7 +67,7 @@ Deno.test('context panel uses latest reported ask in transcript order, not total
       usage: { input_tokens: 999 },
     },
   ])
-  assert(rendered.includes('Last reported request (not a live estimate)'))
+  assert(!rendered.includes('Last reported request'))
   assert(rendered.includes('Input context: 25 tokens'))
   assert(rendered.includes('Output: 3 tokens'))
   assert(rendered.includes('Cached: 0 tokens'))

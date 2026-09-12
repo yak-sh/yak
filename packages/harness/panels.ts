@@ -240,11 +240,6 @@ export let panels: Panel[] = [
         null,
         h(
           'div',
-          { class: 'Muted', wrap: '1' },
-          'Last reported request (not a live estimate)',
-        ),
-        h(
-          'div',
           { wrap: '1' },
           input === undefined
             ? 'Input context: unavailable'
