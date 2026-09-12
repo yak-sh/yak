@@ -171,3 +171,37 @@ Deno.test('401 does not retry a call, and error text excludes credential and bod
     await c.close()
   }
 })
+
+Deno.test('graph Tool is usable through the CLI adapter without any session runtime', async () => {
+  const { commandPlugin } = await import('@yaks/cli/structured')
+  const f = fixture()
+  const c = connect({ name: 'site', url: 'https://example.test/mcp' }, {
+    fetch: f.fetcher,
+  })
+  try {
+    const [tool] = await c.tools()
+    const lines: string[] = []
+    // A CLI host may explicitly assign a local spelling; the remote name stays opaque.
+    const plugin = commandPlugin(
+      [{ ...tool, noun: 'mockup', verb: 'publish' }],
+      async (tool, args, ctx) => {
+        ctx.out(JSON.stringify(await tool.run(args, {} as never)))
+        return 0
+      },
+    )
+    const ctx = {
+      args: ['publish', '--html', '<b>demo</b>'],
+      out: (s: string) => lines.push(s),
+      note: (s: string) => lines.push(s),
+    } as never
+    const verbs = await plugin.verbs(ctx)
+    assertEquals(await verbs[0].run(ctx), 0)
+    assert(lines.join('').includes('mockup/1'))
+    assertEquals(
+      f.calls.find((x) => x.method === 'tools/call')?.params.arguments,
+      { html: '<b>demo</b>' },
+    )
+  } finally {
+    await c.close()
+  }
+})

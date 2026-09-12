@@ -72,3 +72,20 @@ elicitation, OAuth registration, automatic reconnect, mutation retries, or
 task-based remote tools. Embedded resource content and links can still be
 returned by tools. Tool discovery is bounded to 1,000 tools; MCP response bodies
 themselves are buffered by the SDK, not byte-streamed into blob storage.
+
+A CLI can assign explicit local noun/verb metadata without guessing the server's
+naming convention:
+
+```ts
+const tools = (await remote.tools()).map((tool) => ({
+  ...tool,
+  // Chosen by this application, not parsed from the remote name.
+  noun: 'mockup',
+  verb: 'publish',
+}))
+```
+
+For multiple tools, choose a unique pair for each. The `@yaks/cli/structured`
+adapter accepts these definitions and an execution callback that invokes
+`tool.run(args, context)`. The same original definition remains usable by graph
+executors and model adapters without a CLI spelling.

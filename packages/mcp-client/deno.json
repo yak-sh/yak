@@ -1,11 +1,25 @@
 {
   "name": "@yaks/mcp-client",
   "version": "0.1.0",
-  "exports": { ".": "./mod.ts" },
+  "exports": {
+    ".": "./mod.ts"
+  },
   "license": "Apache-2.0",
   "imports": {
     "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.29.0",
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },
-  "compilerOptions": { "lib": ["dom", "esnext"] }
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "esnext"
+    ]
+  },
+  "description": "Consume remote MCP tools as portable graph Tool definitions over Streamable HTTP.",
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "testing.ts"
+    ]
+  }
 }

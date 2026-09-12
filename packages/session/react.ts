@@ -84,7 +84,7 @@ export type Deps = {
   model: Model
   tools: Tool[]
   /** Resolve a stable tool registry for one execution step. */
-  toolSnapshot?: () => Promise<Tool[]>
+  toolSnapshot?: (phase: 'ask' | 'call') => Promise<Tool[]>
   signal?: AbortSignal
   instructions?: string
   /** Resolve inherited base instructions for future asks without rewriting history. */
@@ -211,7 +211,9 @@ export let react = async (
       ),
     ])
   }
-  const tools = deps.toolSnapshot ? await deps.toolSnapshot() : deps.tools
+  const tools = deps.toolSnapshot
+    ? await deps.toolSnapshot(openCalls(entries).length ? 'call' : 'ask')
+    : deps.tools
   let toolEntities = new Map<Eid, Tool>()
   for (let b of await g.read(`.${TOOL}`)) {
     let t = tools.find((t) => t.name == comp(b, TOOL)?.name)

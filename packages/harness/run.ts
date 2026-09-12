@@ -213,6 +213,7 @@ export let agent = (opts: Opts = {}): Agent => {
     })
   let tools = opts.tools ?? harnessTools(h.g, opts)
   let remoteSignature = ''
+  const remoteHandlers = new Map<string, Tool>()
   const mcp = servers.length ? mcpTools(h.g, servers) : undefined
   h.g.apply(seed({ model: name, tools }), { trusted: true })
   let d = daemon(
@@ -222,8 +223,15 @@ export let agent = (opts: Opts = {}): Agent => {
       model,
       tools,
       toolSnapshot: mcp
-        ? async () => {
+        ? async (phase) => {
+          if (phase === 'call' && remoteHandlers.size) {
+            return [
+              ...tools,
+              ...remoteHandlers.values(),
+            ]
+          }
           const remote = await mcp.snapshot()
+          for (const tool of remote) remoteHandlers.set(tool.name, tool)
           const all = [...tools, ...remote]
           if (
             new Set(all.map((t) => t.name)).size !== all.length

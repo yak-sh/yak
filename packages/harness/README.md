@@ -669,15 +669,17 @@ The optional host-wide MCP configuration consumes servers through
 sign-in as `yak`:
 
 ```sh
-yak login
+yak login "$YAKS_TOKEN"
 HARNESS_MCP='[{"name":"yaks","url":"https://yaks.app/mcp","credential":"yaks.app"}]' deno task harness
 ```
 
-Check `yak --help` for selecting another host. `credential` is the hostname key
-in the existing yak token store; `YAKS_TOKEN` retains its existing override
-behavior. The credential hostname must match the endpoint. This is independent
-of OpenAI/Codex authentication. Configuration never contains a token, and the
-client does not inspect Claude or other agent configuration files.
+Obtain a yaks.app bearer through your existing account workflow;
+`yak login <token>` stores it rather than initiating OAuth. Check `yak --help`
+for selecting another host. `credential` is the hostname key in the existing yak
+token store; `YAKS_TOKEN` retains its existing override behavior. The credential
+hostname must match the endpoint. This is independent of OpenAI/Codex
+authentication. Configuration never contains a token, and the client does not
+inspect Claude or other agent configuration files.
 
 Programmatic hosts pass `mcp: [{name, url, credential?, allow?}]`. `mcp: []`
 disables environment configuration. `allow` contains exact remote tool names;
@@ -703,3 +705,10 @@ This first integration is tools-only Streamable HTTP. It does not implement
 stdio, resources/prompts selection, automatic OAuth registration/refresh, or
 reconnect. The local mock publish flow is tested; no public mockup is published
 during tests.
+
+In-flight tool handlers are retained locally when a later discovery snapshot
+changes; a server withdrawing a tool does not silently substitute a different
+handler for an already-issued call. This is not durable remote capability
+versioning: after restart, removed tools cannot be reconstructed from their old
+schema alone. The server remains responsible for validating current invocation
+arguments and permissions. The retained handler map is process-lifetime state.
