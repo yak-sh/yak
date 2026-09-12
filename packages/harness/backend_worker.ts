@@ -95,7 +95,10 @@ async function handle(method: string, value: unknown): Promise<unknown> {
     subs = subscriptions(a.h.g, {
       invalidate: (query, applied) =>
         query == '.session' &&
-        applied.some((b) => b.entry != null),
+        applied.some((b) =>
+          b.entry != null || 'task' in b || 'claim' in b ||
+          'completed' in b || 'cancelled' in b || '$delete' in b
+        ),
     })
     return { names: a.names }
   }

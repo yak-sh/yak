@@ -440,17 +440,22 @@ Deno.test('composer spans the bottom below transcript and responsive sidebar', a
   }
 })
 
-Deno.test('settled subagents are hidden, toggled and retained while selected', async () => {
+Deno.test('completed subagents hide but unfinished settled workers stay visible', async () => {
   let sessions: Bundle[] = [
     { entity: { eid: 'parent' }, session: { id: 'ROOT', status: 'settled' } },
     {
       entity: { eid: 'child' },
-      session: { id: 'DONE_CHILD', status: 'settled' },
+      session: { id: 'DONE_CHILD', status: 'settled', tasksCompleted: true },
       spawned: { parent: 'parent' },
     },
     {
       entity: { eid: 'active' },
       session: { id: 'ACTIVE_CHILD', status: 'running' },
+      spawned: { parent: 'parent' },
+    },
+    {
+      entity: { eid: 'unfinished' },
+      session: { id: 'QUIET_WORKER', status: 'settled', tasksCompleted: false },
       spawned: { parent: 'parent' },
     },
   ]
@@ -482,6 +487,7 @@ Deno.test('settled subagents are hidden, toggled and retained while selected', a
     await settle()
     assert(ui.text().includes('ROOT'))
     assert(ui.text().includes('ACTIVE_CHILD'))
+    assert(ui.text().includes('QUIET_WORKER'))
     assert(!ui.text().includes('DONE_CHILD'))
     assert(!ui.text().includes('Keys'))
     await ui.send('\x0e')
@@ -504,7 +510,7 @@ Deno.test('settled subagents are hidden, toggled and retained while selected', a
     await settle()
     assert(ui.text().includes('parent retains child result'))
     assert(!ui.text().includes('DONE_CHILD'))
-    assertEquals(sessions.length, 3)
+    assertEquals(sessions.length, 4)
   } finally {
     ui.free()
   }

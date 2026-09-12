@@ -1,5 +1,5 @@
 import { Scroll } from '@yaks/tui'
-import { sessionTree } from './tree.ts'
+import { hideCompletedChild, sessionTree } from './tree.ts'
 /** Sidebar contributions: one graph read and one renderer, added as one row. */
 import { type ComponentType, h } from 'preact'
 import type { Bundle, Comp, Eid } from '@yaks/graph'
@@ -62,7 +62,7 @@ export let visibleSessions = (
 ): Bundle[] =>
   rows.filter((b) =>
     showSettled || b.entity.eid == session || !b.spawned ||
-    (b.session as Comp | undefined)?.status != 'settled'
+    !hideCompletedChild(b)
   )
 
 /** Compact generated identifiers without truncating meaningful session names. */

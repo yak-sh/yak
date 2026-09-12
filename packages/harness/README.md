@@ -13,12 +13,14 @@ host and are not sandboxed.
 
 ## Use
 
-Settled subagents are hidden from Sessions and Subagents by default. **Ctrl+S**
-toggles **Show settled**; NORMAL mode also provides `s`. Root sessions and the
-selected child stay visible. This is only a display/navigation filter: parent
-completion messages and child transcripts are retained; enable the toggle to
-revisit a settled child. Failed and stopped children remain visible for
-attention.
+Subagents are hidden automatically only when their turn has settled and all
+currently assigned tasks are completed. Unfinished, cancelled, and unassigned
+work stays visible even when the worker is quiet. **Ctrl+S** toggles **Show
+settled**; NORMAL mode also provides `s`, revealing completed workers too. Root
+sessions, the selected child, and ancestors of visible work stay reachable.
+Explicit archival remains separate. This filter changes display/navigation only;
+completion messages and child transcripts remain available. Failed and stopped
+children remain visible for attention.
 
 ## Keyboard modes
 

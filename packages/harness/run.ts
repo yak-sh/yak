@@ -304,16 +304,35 @@ export let agent = (opts: Opts = {}): Agent => {
         archived: archived ? { at: new Date().toISOString() } : null,
       }])
     },
-    sessions: async () =>
-      Promise.all(
-        (await h.g.read('.session')).toSorted(byBirth).map(async (b) => ({
-          ...b,
-          session: {
-            ...b.session as Comp,
-            title: await sessionTitle(h.g, b),
-          },
-        })),
-      ),
+    sessions: async () => {
+      // A settled turn does not finish its task. Join task ownership once for
+      // this projection; do not store another completion flag in the graph.
+      const tasks = await h.g.read('.task')
+      const assigned = new Map<string, Bundle[]>()
+      for (const task of tasks) {
+        const owner = (task.claim as Comp | undefined)?.session
+        if (typeof owner != 'string') continue
+        const group = assigned.get(owner) ?? []
+        group.push(task)
+        assigned.set(owner, group)
+      }
+      return Promise.all(
+        (await h.g.read('.session')).toSorted(byBirth).map(async (b) => {
+          const work = assigned.get(b.entity.eid) ?? []
+          return {
+            ...b,
+            session: {
+              ...b.session as Comp,
+              title: await sessionTitle(h.g, b),
+              tasksCompleted: work.length > 0 &&
+                work.every((task) =>
+                  task.completed != null && task.cancelled == null
+                ),
+            },
+          }
+        }),
+      )
+    },
     runtime: (session) => runtimeRows(h.g, session),
     control: (session, action) => runtimeAction(a, session, action),
     children: (session) => children(h.g, session),

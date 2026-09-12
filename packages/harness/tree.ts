@@ -20,6 +20,11 @@ export type TreeRow = {
   depth: number
   prefix: string
 }
+/** Completion is a read-time task projection, never inferred from a quiet turn. */
+export const hideCompletedChild = (b: Bundle): boolean =>
+  (b.session as Comp | undefined)?.status == 'settled' &&
+  (b.session as Comp | undefined)?.tasksCompleted === true
+
 export type TreeOptions = {
   selected?: string
   showSettled?: boolean
@@ -46,6 +51,18 @@ export let sessionTree = (
     path.add(id)
     id = byId.get(id) && parentId(byId.get(id)!)
   }
+  const neededAncestors = new Set<string>()
+  // Keep completed ancestors reachable when they contain unfinished work.
+  for (const b of rows) {
+    if (hideCompletedChild(b) || b.archived) continue
+    let parent = parentId(b)
+    const seen = new Set<string>()
+    while (parent && !seen.has(parent)) {
+      seen.add(parent)
+      neededAncestors.add(parent)
+      parent = byId.get(parent) && parentId(byId.get(parent)!)
+    }
+  }
   let out: TreeRow[] = [], visited = new Set<string>()
   let visit = (b: Bundle, depth: number) => {
     let id = b.entity.eid
@@ -54,7 +71,8 @@ export let sessionTree = (
     if (b.archived && !opts.showArchived && !path.has(id)) return
     if (
       depth > 0 && !opts.showSettled && !path.has(id) &&
-      (b.session as Comp)?.status == 'settled'
+      !neededAncestors.has(id) &&
+      hideCompletedChild(b)
     ) return
     out.push({ bundle: b, depth, prefix: '' })
     for (let child of children.get(id) ?? []) visit(child, depth + 1)

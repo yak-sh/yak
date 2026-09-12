@@ -456,3 +456,45 @@ Deno.test('archive marks exactly the selected child, not its root', async () => 
     await a.close()
   }
 })
+
+Deno.test('session summaries hide only workers whose assigned tasks are all completed', async () => {
+  const a = started()
+  try {
+    const id = await a.start('answer')
+    await a.idle(id)
+    const state = async () =>
+      (await a.sessions()).find((b) => b.entity.eid == id)!.session as Record<
+        string,
+        unknown
+      >
+    assertEquals((await state()).tasksCompleted, false)
+    await a.h.g.apply([{
+      entity: { eid: 'assigned' },
+      task: {},
+      claim: { session: id },
+    }])
+    assertEquals((await state()).tasksCompleted, false)
+    await a.h.g.apply([{ entity: { eid: 'assigned' }, completed: {} }])
+    assertEquals((await state()).tasksCompleted, true)
+    await a.h.g.apply([{
+      entity: { eid: 'second' },
+      task: {},
+      claim: { session: id },
+    }])
+    assertEquals((await state()).tasksCompleted, false)
+    await a.h.g.apply([{ entity: { eid: 'second' }, completed: {} }])
+    assertEquals((await state()).tasksCompleted, true)
+    await a.h.g.apply([{ entity: { eid: 'second' }, completed: null }])
+    assertEquals((await state()).tasksCompleted, false)
+    await a.h.g.apply([{ entity: { eid: 'second' }, cancelled: {} }])
+    assertEquals((await state()).tasksCompleted, false)
+    // Projection metadata is not another stored source of task state.
+    const [stored] = await a.h.g.read('.entity.eid=' + id)
+    assertEquals(
+      (stored.session as Record<string, unknown>).tasksCompleted,
+      undefined,
+    )
+  } finally {
+    await a.close()
+  }
+})
