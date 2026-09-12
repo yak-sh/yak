@@ -409,3 +409,7 @@ presses. VISUAL source selection continues to suppress mouse navigation.
 Virtualized item contents still target their list host, not individual controls
 inside the item; this does not yet provide per-item controls or mouse text
 selection.
+
+A block can set `max-height` to cap its rendered rows without padding shorter
+content. Optional `overflow-text` adds a plain-text final row only when the cap
+is exceeded. This is presentation clipping, not source truncation.

@@ -384,6 +384,12 @@ let layout = (
   if (el.attr('wrap') != null) {
     lines = lines.flatMap((line) => wrap(line, contentWidth))
   }
+  const maximum = num(el, 'max-height')
+  if (maximum != null && maximum >= 0 && lines.length > maximum) {
+    lines = lines.slice(0, maximum)
+    const overflow = el.attr('overflow-text')
+    if (overflow) lines.push([{ text: safe(overflow), style: s }])
+  }
   if (el.attr('scroll') != null) {
     let total = lines.length
     lines = windowed(el, lines, box, c, contentWidth)

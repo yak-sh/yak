@@ -328,3 +328,15 @@ Deno.test('terminal focus reporting is saved, enabled, and restored', () => {
   back.stop()
   assert(out.join('').includes('\x1b[?1004r'))
 })
+
+Deno.test('maximum height bounds wrapped previews and emits overflow only when needed', () => {
+  const attrs = { wrap: '1', 'max-height': '2', 'overflow-text': 'more' }
+  assertEquals(seen(el('div', attrs, 'x'.repeat(50)), 10, 6).filter(Boolean), [
+    'xxxxxxxxxx',
+    'xxxxxxxxxx',
+    'more',
+  ])
+  assertEquals(seen(el('div', attrs, 'short'), 10, 6).filter(Boolean), [
+    'short',
+  ])
+})

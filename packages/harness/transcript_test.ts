@@ -3,7 +3,7 @@ import { define, resolve } from '@yaks/render'
 import { assert, assertEquals } from '@std/assert'
 import { render } from '@yaks/preact'
 import { vocab } from './store.ts'
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
 import { mount } from '../tui/harness.ts'
 import { transcriptViews } from './transcript.ts'
 
@@ -44,7 +44,7 @@ Deno.test('transcript dims sequence and tool prose and colors each entry kind', 
         ui.text().includes(
           kind == 'entry'
             ? '7 entry'
-            : kind == 'input' || kind == 'output'
+            : kind == 'input' || kind == 'output' || kind == 'result'
             ? '7 ' + kind
             : '7 ' + kind.padEnd(9) + ' first line',
         ),
@@ -56,7 +56,7 @@ Deno.test('transcript dims sequence and tool prose and colors each entry kind', 
       assert(ansi.includes(kind.padEnd(9) + '\x1b[0m'), ansi)
       assertEquals(
         ansi.includes('\x1b[38;2;122;132;120;2mfirst line'),
-        kind == 'result',
+        kind == 'result' || kind == 'input',
       )
     } finally {
       ui.free()
@@ -125,7 +125,7 @@ Deno.test('message markdown is semantic ANSI while tool results remain literal',
       let text = ui.text()
       let ansi = ui.out.join('')
       assertEquals(text.includes('**bold**'), result, text)
-      assert(text.includes('<script>bad</script>'), text)
+      assertEquals(text.includes('<script>bad</script>'), !result, text)
       if (!result) {
         assert(ansi.includes('\x1b[1mbold'), ansi)
         assert(ansi.includes('\x1b[3mitalic'), ansi)
@@ -339,6 +339,82 @@ Deno.test('fenced code fills the boxed message interior without changing source'
     assert(output.includes('short' + ' '.repeat(23)), output)
     assert(output.includes('last' + ' '.repeat(24)), output)
     assertEquals((entry.content as { body: string }).body, source)
+  } finally {
+    ui.free()
+  }
+})
+
+Deno.test('shell call shows command arguments and malformed args remain safe', async () => {
+  for (const args of [JSON.stringify({ command: 'printf hello\npwd' }), '{']) {
+    const entry: Bundle = {
+      entity: { eid: 'shell-call' },
+      entry: { session: 's', seq: 2 },
+      call: { to: 'tool:shell', args },
+    }
+    const ui = await mount(
+      () => render(transcriptViews, entry, 'Transcript', vocab),
+      60,
+      8,
+    )
+    try {
+      if (args != '{') {
+        assert(ui.text().includes('$ printf hello'), ui.text())
+        assert(ui.text().includes('pwd'))
+      } else assert(ui.text().includes('tool:shell'))
+      assertEquals((entry.call as Comp).args, args)
+    } finally {
+      ui.free()
+    }
+  }
+})
+
+Deno.test('result previews cap source and wrapped rows without changing stored text', async () => {
+  for (
+    const source of [
+      Array.from({ length: 100 }, (_, i) => 'row ' + i).join('\n'),
+      'x'.repeat(1000),
+    ]
+  ) {
+    const entry: Bundle = {
+      entity: { eid: 'result' },
+      entry: { session: 's', seq: 3 },
+      result: { call: 'c' },
+      content: { body: source },
+    }
+    const ui = await mount(
+      () => render(transcriptViews, entry, 'Transcript', vocab),
+      70,
+      15,
+    )
+    try {
+      assert(ui.text().includes('output preview'), ui.text())
+      assert(!ui.text().includes('row 6'))
+      assert(
+        ui.text().split('\n').filter((line) => line.trim()).length <= 7,
+        ui.text(),
+      )
+      assertEquals((entry.content as Comp).body, source)
+    } finally {
+      ui.free()
+    }
+  }
+})
+
+Deno.test('input Markdown keeps dim text and emphasis', async () => {
+  const entry: Bundle = {
+    entity: { eid: 'input' },
+    entry: { session: 's', seq: 1 },
+    content: { body: '**bold** and *italic*\nnext line' },
+  }
+  const ui = await mount(
+    () => render(transcriptViews, entry, 'Transcript', vocab),
+    70,
+    10,
+  )
+  try {
+    assert(!ui.text().includes('**bold**'))
+    assert(ui.text().includes('next line'))
+    assert(ui.out.join('').includes(';1;2mbold'), ui.out.join(''))
   } finally {
     ui.free()
   }

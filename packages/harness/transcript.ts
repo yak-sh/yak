@@ -13,6 +13,7 @@ let row = (
   dim = false,
   prose = false,
   boxed = false,
+  content?: Renderer['render'],
 ): Renderer => ({
   view: 'Transcript',
   match: parse(query),
@@ -28,8 +29,12 @@ let row = (
       ' ',
       h('span', { class: color }, label.padEnd(9)),
       ' ',
-      prose
-        ? renderMarkdown(markdown(String((b.content as Comp)?.body ?? '')), h)
+      content ? content(b, h, ctx) : prose
+        ? h(
+          'div',
+          { class: dim ? 'Dim' : undefined },
+          renderMarkdown(markdown(String((b.content as Comp)?.body ?? '')), h),
+        )
         : h(
           'span',
           { class: dim ? 'Dim' : undefined },
@@ -37,6 +42,65 @@ let row = (
         ),
     ),
 })
+
+// Previews affect presentation only. Inspection and model context use the
+// original content. Bound characters as well as lines for minified tool output.
+const resultPreview: Renderer['render'] = (b, h) => {
+  const text = String((b.content as Comp | undefined)?.body ?? '')
+  const lines = text.split('\n', 6)
+  const head = lines.slice(0, 5).join('\n')
+  const preview = Array.from(head.slice(0, 4000)).slice(0, 2000).join('')
+  const clipped = preview.length < text.length
+  return h(
+    'div',
+    { class: 'Dim' },
+    h(
+      'div',
+      {
+        wrap: '1',
+        'max-height': '5',
+        ...(!clipped
+          ? {
+            'overflow-text':
+              '… output preview; full text retained in transcript storage',
+          }
+          : {}),
+      },
+      ...preview.split('\n').flatMap((line, i) =>
+        i ? [h('br', null), line] : [line]
+      ),
+    ),
+    clipped
+      ? h(
+        'div',
+        null,
+        '… output preview; full text retained in transcript storage',
+      )
+      : null,
+  )
+}
+
+const shellCommand: Renderer['render'] = (b, h, ctx) => {
+  try {
+    const args: unknown = JSON.parse(String((b.call as Comp)?.args ?? ''))
+    if (
+      args && typeof args == 'object' && 'command' in args &&
+      typeof args.command == 'string'
+    ) {
+      return h(
+        'div',
+        { wrap: '1' },
+        h('span', { class: 'Muted' }, '$ '),
+        ...args.command.split('\n').flatMap((line, i) =>
+          i ? [h('br', null), line] : [line]
+        ),
+      )
+    }
+  } catch {
+    /* Streaming or malformed arguments still get the ordinary view. */
+  }
+  return body.render(b, h, { ...ctx, full: true })
+}
 
 // More predicates beat the generic entry/content rows. Equal facet scores use
 // registration order: failures outrank tool results, which outrank prose.
@@ -96,13 +160,22 @@ export let transcriptViews = define([
   row('.entry&.error', 'error', 'Bad'),
   row('.entry&.exception', 'exception', 'Bad'),
   row('.entry&.notice&.content', 'notice', 'Muted', true),
-  row('.entry&.result', 'result', 'Muted', true),
+  row('.entry&.result', 'result', 'Muted', true, false, false, resultPreview),
+  row(
+    '.entry&.call&.call.to=tool:shell',
+    'call',
+    'Key',
+    false,
+    false,
+    false,
+    shellCommand,
+  ),
   row('.entry&.call', 'call', 'Key'),
   row('.entry&.ask&.attempt.state=inflight', 'asking', 'Key'),
   row('.entry&.ask&.attempt.state=interrupted', 'interrupted', 'Muted'),
   row('.entry&.ask', 'ask', 'Muted'),
   row('.entry&.stop', 'stop', 'Warn'),
   row('.entry&.content.source!', 'output', 'Accent', false, true),
-  row('.entry&.content', 'input', 'Good', false, true, true),
+  row('.entry&.content', 'input', 'Good', true, true, true),
   row('.entry', 'entry', 'Muted'),
 ])

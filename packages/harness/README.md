@@ -654,3 +654,11 @@ Clicking a row focuses the sidebar in NORMAL mode without submitting or changing
 the draft. The whole painted row, including its trailing background, is
 clickable. Mouse reporting must reach the application through the
 terminal/multiplexer.
+
+### Transcript previews
+
+Shell calls show the command from their arguments. Tool results remain literal
+and dim, with previews limited to five displayed rows (and 2,000 source code
+points). Truncated previews are labeled; stored text and provider context are
+unchanged. Explicit source selection and graph-value inspection still use the
+full text. User input is rendered as dim Markdown inside its existing box.
