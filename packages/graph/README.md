@@ -177,3 +177,10 @@ command framework.
 [`@yaks/vocab` tool declarations](../vocab/README.md#tool-definitions-experimental)
 for shared validation and optional positional/short-flag presentation. Tool
 nouns are independent of graph component names.
+
+## Experimental multi-entity rules
+
+The optional `joinRule()` evaluator accepts host-supplied, bounded candidate
+sets and produces patches on matched entities. It does not register effects or
+scan storage. See [JOIN_RULES.md](./JOIN_RULES.md) for syntax, transaction
+examples, and the unresolved planning and phase-ordering boundaries.

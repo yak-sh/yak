@@ -91,3 +91,5 @@ export { numbers } from './number.ts'
 export * from './transient.ts'
 
 export { type NamedTool, namedTool, toolName } from './tool.ts'
+
+export * from './join.ts'

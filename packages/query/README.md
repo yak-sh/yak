@@ -188,3 +188,11 @@ left as raw tokens for a schema-aware compiler such as `@yaks/sql`:
   `.distinct`/`.fields` path is a single column, is schema.
 - **Evaluation** — matching rows, compiling SQL, and interpreting `.order`
   rankings (`hot`, `search`, `similar`) against real data.
+
+## Experimental multi-entity rules
+
+`parseJoinRule()` parses semicolon-separated entity patterns, curly property
+bindings, and absent/add gates. It is separate from `parse()` and does not
+change storage queries. See
+[the prototype design and limitations](../graph/JOIN_RULES.md) before using it;
+automatic join planning and general rule registration are not implemented.
