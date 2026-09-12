@@ -100,7 +100,11 @@ export let remote = async (
       throw new Error('Worker is shutting down')
     }
     if (failure) throw failure
-    return await link.request(method, args)
+    return await link.request(
+      method,
+      args,
+      method == 'close' ? { timeout: null } : undefined,
+    )
   }
   let init: { names: Record<string, string> }
   try {

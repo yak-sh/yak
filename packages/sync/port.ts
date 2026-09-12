@@ -16,9 +16,17 @@ type Packet = {
   closed?: boolean
 }
 /** One end of a link: what it has carried, and the three things it can do. */
+export type RequestOptions = {
+  /** Override the link deadline; null waits until reply or disconnect. */
+  timeout?: number | null
+}
 export type PortLink = {
   stats: { sent: number; received: number; frames: number }
-  request: (method: string, value?: unknown) => Promise<unknown>
+  request: (
+    method: string,
+    value?: unknown,
+    options?: RequestOptions,
+  ) => Promise<unknown>
   frame: (frame: Frame) => void
   close: (reason?: Error) => void
 }
@@ -37,7 +45,7 @@ export let portLink = (port: Port, opts: {
     {
       resolve: (v: unknown) => void
       reject: (e: Error) => void
-      timer: ReturnType<typeof setTimeout>
+      timer: ReturnType<typeof setTimeout> | undefined
     }
   >()
   let send = (packet: Omit<Packet, 'channel'>) => {
@@ -110,17 +118,24 @@ export let portLink = (port: Port, opts: {
   if ('start' in port) (port as MessagePort).start()
   return {
     stats,
-    request: (method: string, value?: unknown): Promise<unknown> => {
+    request: (
+      method: string,
+      value?: unknown,
+      options: RequestOptions = {},
+    ): Promise<unknown> => {
       if (closed) return Promise.reject(new Error('Message link closed'))
       if (held.size >= (opts.maxPending ?? 256)) {
         return Promise.reject(new Error('Too many pending message requests'))
       }
       let id = ++next
       return new Promise((resolve, reject) => {
-        let timer = setTimeout(() => {
+        let timeout = options.timeout === undefined
+          ? opts.timeout ?? 30000
+          : options.timeout
+        let timer = timeout === null ? undefined : setTimeout(() => {
           held.delete(id)
           reject(new Error('Message request timed out: ' + method))
-        }, opts.timeout ?? 30000)
+        }, timeout)
         held.set(id, { resolve, reject, timer })
         try {
           send({ id, method, value })

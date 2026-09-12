@@ -263,3 +263,17 @@ retry mutations. `close()` removes the listener and rejects pending requests,
 but does not terminate or close the caller-owned port. `stats` counts sent,
 received, and subscription-frame messages. Frame streams have no credit-based
 backpressure yet.
+
+### Request deadlines
+
+`portLink` requests use the link's configured timeout (30 seconds by default). A
+caller can override it per request:
+
+```ts
+await link.request('close', undefined, { timeout: null })
+```
+
+`null` disables the deadline for that request only. Link closure, peer
+disconnection, and worker errors still reject it. This supports graceful drains
+whose duration is unknown without removing deadlines from ordinary requests.
+Callers can retain a separate explicit force-close action.

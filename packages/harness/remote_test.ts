@@ -318,7 +318,7 @@ Deno.test('unbounded graceful close finishes a slow response beyond the old dead
         settled = true
         return result
       })
-      await time.tickAsync(2300)
+      await time.tickAsync(31000)
       assertEquals(settled, false, 'graceful close must keep draining')
       await r.testing!.release()
       assertEquals(await closing, { drained: true })

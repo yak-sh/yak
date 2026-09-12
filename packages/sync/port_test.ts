@@ -1,5 +1,6 @@
 /// <reference lib="deno.ns" />
 import { assertEquals, assertRejects } from '@std/assert'
+import { FakeTime } from '@std/testing/time'
 import { portLink } from './port.ts'
 Deno.test('MessagePort requests, frames, failures and pending shutdown', async () => {
   let { port1, port2 } = new MessageChannel()
@@ -67,5 +68,43 @@ Deno.test('real worker crash rejects pending requests', async () => {
   } finally {
     link.close()
     worker.terminate()
+  }
+})
+
+Deno.test('request deadline override can wait indefinitely but disconnect still rejects', async () => {
+  using time = new FakeTime()
+  const { port1, port2 } = new MessageChannel()
+  const link = portLink(port1, { timeout: 10 })
+  try {
+    const ordinary = assertRejects(
+      () => link.request('ordinary'),
+      Error,
+      'timed out',
+    )
+    const bounded = assertRejects(
+      () => link.request('bounded', null, { timeout: 20 }),
+      Error,
+      'timed out',
+    )
+    let ended = false
+    const pending = link.request('close', null, { timeout: null })
+    const disconnected = assertRejects(
+      () =>
+        pending.finally(() => {
+          ended = true
+        }),
+      Error,
+      'Message link closed',
+    )
+    await time.tickAsync(31000)
+    await ordinary
+    await bounded
+    assertEquals(ended, false)
+    link.close()
+    await disconnected
+  } finally {
+    link.close()
+    port1.close()
+    port2.close()
   }
 })
