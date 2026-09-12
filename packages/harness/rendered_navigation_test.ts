@@ -146,3 +146,85 @@ Deno.test('rendered Markdown tables, quotes, code and boxes keep layout while se
     dom.free()
   }
 })
+
+Deno.test('rendered cursor requests bounded neighboring windows and selects across overlap', async () => {
+  const f = frontend(), copies: string[] = [], requested: string[] = []
+  const entries: Bundle[] = Array.from(
+    { length: 140 },
+    (_, i) => ({
+      entity: { eid: 'e' + i },
+      entry: { session: 's', seq: i + 1 },
+      content: { body: 'row' + i },
+    }),
+  )
+  const a: UIAgent = {
+    sessions: () =>
+      Promise.resolve([{
+        entity: { eid: 's' },
+        session: { id: 's', status: 'settled' },
+      }]),
+    tasks: () => Promise.resolve([]),
+    children: () => Promise.resolve([]),
+    transcript: () => Promise.reject(new Error('full transcript forbidden')),
+    transcriptWindow: (_s, request = {}) => {
+      requested.push(request.anchor ?? request.edge ?? 'tail')
+      const at = request.anchor
+        ? entries.findIndex((e) => e.entity.eid == request.anchor)
+        : request.edge == 'start'
+        ? 0
+        : 139
+      const start = Math.max(0, Math.min(76, at - 24)),
+        end = Math.min(140, start + 64)
+      return Promise.resolve({
+        entries: entries.slice(start, end),
+        before: start > 0,
+        after: end < 140,
+      })
+    },
+    start: () => Promise.resolve('s'),
+    send: () => Promise.resolve('x'),
+    taskEntry: () => Promise.resolve({ task: 't', child: 'c' }),
+    line: () => '',
+    entry: (b) => h('div', null, String((b.content as Comp).body)),
+  }
+  f.patch({ selected: 's' })
+  f.keys({ mode: 'NORMAL', focus: 'transcript' })
+  f.client.mutate([{
+    entity: { eid: 'viewport-s' },
+    viewport: {
+      selected: 'e0',
+      item: 'e0',
+      offset: 0,
+      follow: false,
+      windowEdge: 'start',
+    },
+  }])
+  const ui = await mount(
+    () => h(App, { agent: a, frontend: f, subscribe: () => () => {} }),
+    100,
+    25,
+  )
+  setClipboard((t) => copies.push(t))
+  try {
+    await settle()
+    await ui.send('')
+    for (let i = 0; i < 60; i++) {
+      await ui.send('j')
+      await settle()
+    }
+    await ui.send('v')
+    for (let i = 0; i < 12; i++) {
+      await ui.send('j')
+      await settle()
+    }
+    await ui.send('y')
+    assert(copies[0]?.includes('row60'), String(copies))
+    assert(copies[0]?.includes('row71'), String(copies))
+    assert(requested.length < 20, JSON.stringify(requested))
+    assertEquals((f.client.ent('viewport-s')!.viewport as Comp).selected, 'e72')
+  } finally {
+    setClipboard()
+    ui.free()
+    await f.close()
+  }
+})
