@@ -662,3 +662,44 @@ and dim, with previews limited to five displayed rows (and 2,000 source code
 points). Truncated previews are labeled; stored text and provider context are
 unchanged. Explicit source selection and graph-value inspection still use the
 full text. User input is rendered as dim Markdown inside its existing box.
+## Remote MCP tools
+
+The optional host-wide MCP configuration consumes servers through
+`@yaks/mcp-client`. No servers are enabled implicitly. To use the same yaks.app
+sign-in as `yak`:
+
+```sh
+yak login
+HARNESS_MCP='[{"name":"yaks","url":"https://yaks.app/mcp","credential":"yaks.app"}]' deno task harness
+```
+
+Check `yak --help` for selecting another host. `credential` is the hostname key
+in the existing yak token store; `YAKS_TOKEN` retains its existing override
+behavior. The credential hostname must match the endpoint. This is independent
+of OpenAI/Codex authentication. Configuration never contains a token, and the
+client does not inspect Claude or other agent configuration files.
+
+Programmatic hosts pass `mcp: [{name, url, credential?, allow?}]`. `mcp: []`
+disables environment configuration. `allow` contains exact remote tool names;
+omitting it exposes every tool from that explicitly trusted server. Treat both
+tool descriptions and returned content as untrusted data, not instruction files.
+
+The backend worker owns these connections; sessions share configuration, not new
+connection definitions. Discovery occurs at execution boundaries, never while
+typing. List-change notifications affect later tool snapshots, not requests
+already dispatched. Remote tools use deterministic namespaced names;
+descriptions and metadata identify their source. The existing session executor
+writes normal call/result entries—there is no second MCP executor.
+
+Text and structured output use ordinary transcript storage and large-output
+handles. Image/audio/embedded binary resource blocks are stored through external
+blob storage and attached as artifact references; they are not automatically
+sent back as model vision inputs. Binary blocks are limited to 20 MiB each.
+Transport failures and `isError` tool replies are expected tool errors, not
+silent success. The client never automatically retries a remote mutation.
+Re-sign in and restart after an authentication/connection failure.
+
+This first integration is tools-only Streamable HTTP. It does not implement
+stdio, resources/prompts selection, automatic OAuth registration/refresh, or
+reconnect. The local mock publish flow is tested; no public mockup is published
+during tests.

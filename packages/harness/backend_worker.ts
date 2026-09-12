@@ -1,3 +1,4 @@
+import type { Server as MCPServer } from '@yaks/mcp-client'
 import {
   transcriptPlan,
   transcriptSegments,
@@ -45,6 +46,7 @@ async function handle(method: string, value: unknown): Promise<unknown> {
       db?: string
       cwd?: string
       web?: boolean
+      mcp?: MCPServer[]
       images?: ImageOptions | false
       streaming?: boolean
       migrationPollMs?: number
@@ -59,6 +61,7 @@ async function handle(method: string, value: unknown): Promise<unknown> {
       instructions: options.instructions,
       migrationPollMs: options.migrationPollMs,
       images: options.images,
+      mcp: options.mcp,
       web: options.web,
       ...(options.fake
         ? {

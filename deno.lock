@@ -1938,6 +1938,12 @@
           "npm:zod@^3.24.0"
         ]
       },
+      "packages/mcp-client": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:@modelcontextprotocol/sdk@^1.29.0"
+        ]
+      },
       "packages/member": {
         "dependencies": [
           "jsr:@std/assert@1"

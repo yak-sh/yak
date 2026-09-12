@@ -201,7 +201,8 @@
     "./packages/yaml",
     "./packages/harness",
     "./packages/tui",
-    "./packages/context"
+    "./packages/context",
+    "./packages/mcp-client"
   ],
   "exclude": [
     "src/vendor",

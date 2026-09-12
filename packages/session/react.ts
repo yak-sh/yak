@@ -83,6 +83,8 @@ export type Deps = {
   checkpointMs?: number
   model: Model
   tools: Tool[]
+  /** Resolve a stable tool registry for one execution step. */
+  toolSnapshot?: () => Promise<Tool[]>
   signal?: AbortSignal
   instructions?: string
   /** Resolve inherited base instructions for future asks without rewriting history. */
@@ -209,9 +211,10 @@ export let react = async (
       ),
     ])
   }
+  const tools = deps.toolSnapshot ? await deps.toolSnapshot() : deps.tools
   let toolEntities = new Map<Eid, Tool>()
   for (let b of await g.read(`.${TOOL}`)) {
-    let t = deps.tools.find((t) => t.name == comp(b, TOOL)?.name)
+    let t = tools.find((t) => t.name == comp(b, TOOL)?.name)
     if (t) toolEntities.set(b.entity.eid, t)
   }
 
@@ -338,7 +341,7 @@ export let react = async (
       anchorId ? asked!.entity.eid : undefined,
       results,
     ),
-    tools: deps.tools.map(({ name, description, parameters }) => ({
+    tools: tools.map(({ name, description, parameters }) => ({
       name,
       description,
       parameters,

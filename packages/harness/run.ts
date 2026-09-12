@@ -1,3 +1,5 @@
+import { configuredMCP, mcpTools } from './mcp.ts'
+import type { Server as MCPServer } from '@yaks/mcp-client'
 import { watchMigrations } from '@yaks/sqlite'
 import { inheritedInstructions } from './legacy_instructions.ts'
 import { stepLock } from './step_lock.ts'
@@ -109,6 +111,8 @@ export type Opts = ChildLimits & NotHarness & {
   images?: ImageOptions | false
   /** what the agent may call (default: the shell and the graph) */
   tools?: Tool[]
+  /** Explicit host-wide remote MCP servers. Empty disables environment configuration. */
+  mcp?: MCPServer[]
   /** Stream responses by default; false overrides HARNESS_STREAM. */
   streaming?: boolean
   /** Alias for streaming. If both are supplied, streaming takes precedence. */
@@ -197,6 +201,7 @@ export let agent = (opts: Opts = {}): Agent => {
       )
     }
   }
+  const servers = configuredMCP(opts.mcp)
   let h = opts.h ?? open()
   let detachDiagnostics = diagnostics().attach(h.g)
   let name = opts.name ?? ASTRA
@@ -207,6 +212,8 @@ export let agent = (opts: Opts = {}): Agent => {
       web: opts.web ?? Deno.env.get('HARNESS_WEB') != '0',
     })
   let tools = opts.tools ?? harnessTools(h.g, opts)
+  let remoteSignature = ''
+  const mcp = servers.length ? mcpTools(h.g, servers) : undefined
   h.g.apply(seed({ model: name, tools }), { trusted: true })
   let d = daemon(
     h.g,
@@ -214,6 +221,25 @@ export let agent = (opts: Opts = {}): Agent => {
     {
       model,
       tools,
+      toolSnapshot: mcp
+        ? async () => {
+          const remote = await mcp.snapshot()
+          const all = [...tools, ...remote]
+          if (
+            new Set(all.map((t) => t.name)).size !== all.length
+          ) throw new Error('Duplicate local/MCP tool name')
+          const signature = JSON.stringify(
+            remote.map((t) => [t.name, t.description, t.parameters]),
+          )
+          if (signature !== remoteSignature) {
+            await h.g.apply(seed({ model: name, tools: remote }), {
+              trusted: true,
+            })
+            remoteSignature = signature
+          }
+          return all
+        }
+        : undefined,
       streaming: streamingEnabled(opts),
       checkpointMs: opts.checkpointMs,
       instructions: opts.instructions,
@@ -399,6 +425,7 @@ export let agent = (opts: Opts = {}): Agent => {
         let drained = d.stop()
         await Promise.allSettled([...operations])
         await drained
+        await mcp?.close()
         await diagnostics().drain()
         detachDiagnostics()
         h.close()
