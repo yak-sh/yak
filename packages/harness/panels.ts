@@ -54,7 +54,7 @@ export type Panel = {
   Render: ComponentType<Context & { rows: Bundle[] }>
 }
 
-/** Hide only completed delegated sessions; a selected child stays reachable. */
+/** Hide settled delegated sessions; a selected child stays reachable. */
 export let visibleSessions = (
   rows: Bundle[],
   session?: Eid,

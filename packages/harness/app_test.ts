@@ -487,7 +487,7 @@ Deno.test('completed subagents hide but unfinished settled workers stay visible'
     await settle()
     assert(ui.text().includes('ROOT'))
     assert(ui.text().includes('ACTIVE_CHILD'))
-    assert(ui.text().includes('QUIET_WORKER'))
+    assert(!ui.text().includes('QUIET_WORKER'))
     assert(!ui.text().includes('DONE_CHILD'))
     assert(!ui.text().includes('Keys'))
     await ui.send('\x0e')

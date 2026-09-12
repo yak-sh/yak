@@ -13,14 +13,12 @@ host and are not sandboxed.
 
 ## Use
 
-Subagents are hidden automatically only when their turn has settled and all
-currently assigned tasks are completed. Unfinished, cancelled, and unassigned
-work stays visible even when the worker is quiet. **Ctrl+S** toggles **Show
-settled**; NORMAL mode also provides `s`, revealing completed workers too. Root
-sessions, the selected child, and ancestors of visible work stay reachable.
-Explicit archival remains separate. This filter changes display/navigation only;
-completion messages and child transcripts remain available. Failed and stopped
-children remain visible for attention.
+Settled subagents are hidden by default regardless of their assigned tasks.
+Tasks remain available in the Tasks panel. **Ctrl+S** toggles **Show settled**;
+NORMAL mode also provides `s`. Root sessions, the selected child, and ancestors
+of active descendants stay reachable. Explicit archival remains separate. This
+filter changes display/navigation only; completion messages and child
+transcripts remain available. Failed and stopped children remain visible.
 
 ## Keyboard modes
 

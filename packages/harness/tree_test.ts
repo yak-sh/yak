@@ -57,14 +57,13 @@ Deno.test('unnumbered task children without a call are visible and child archive
   assertEquals(parent.archived, undefined)
 })
 
-Deno.test('quiet children remain unless all assigned tasks are complete', () => {
+Deno.test('settled children hide regardless of assigned task completion', () => {
   const root = row('root')
   const child = row('child', 'root', 'settled')
-  for (const tasksCompleted of [undefined, false]) {
+  for (const tasksCompleted of [undefined, false, true]) {
     child.session = { status: 'settled', tasksCompleted }
     assertEquals(sessionTree([root, child]).map((r) => r.bundle.entity.eid), [
       'root',
-      'child',
     ])
   }
   child.session = { status: 'settled', tasksCompleted: true }
@@ -75,11 +74,10 @@ Deno.test('quiet children remain unless all assigned tasks are complete', () => 
   assertEquals(sessionTree([root, child]).length, 2)
 })
 
-Deno.test('completed parent stays visible for unfinished descendants, not archived trees', () => {
+Deno.test('settled parent stays visible for active descendants, not archived trees', () => {
   const root = row('root')
   const parent = row('parent', 'root', 'settled')
-  const child = row('child', 'parent', 'settled')
-  child.session = { status: 'settled', tasksCompleted: false }
+  const child = row('child', 'parent', 'running')
   assertEquals(sessionTree([root, parent, child]).length, 3)
   root.archived = {}
   assertEquals(sessionTree([root, parent, child]).length, 0)
