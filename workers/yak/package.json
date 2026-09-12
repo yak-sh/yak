@@ -8,12 +8,14 @@
     "@modelcontextprotocol/sdk": "1.29.0",
     "@std/csv": "npm:@jsr/std__csv@1.0.6",
     "@std/yaml": "npm:@jsr/std__yaml@1.2.0",
+    "ajv": "8.20.0",
     "croner": "10.0.1",
     "lucide": "1.31.0",
     "postal-mime": "3.0.0",
     "preact": "10.29.7",
     "preact-render-to-string": "6.7.0",
-    "zod": "3.25.76"
+    "zod": "3.25.76",
+    "zod-to-json-schema": "3.25.2"
   },
   "devDependencies": {
     "wrangler": "4.111.0"

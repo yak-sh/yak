@@ -40,6 +40,7 @@
     "npm:@sqliteai/sqlite-vector-linux-arm64@1.0.0": "1.0.0",
     "npm:@sqliteai/sqlite-vector-linux-x86_64@1.0.0": "1.0.0",
     "npm:@sqliteai/sqlite-vector-win32-x86_64@1.0.0": "1.0.0",
+    "npm:ajv@8.20.0": "8.20.0",
     "npm:ajv@^8.17.1": "8.20.0",
     "npm:croner@10.0.1": "10.0.1",
     "npm:es-module-lexer@1.7.0": "1.7.0",
@@ -55,6 +56,7 @@
     "npm:preact@^10.29.1": "10.29.7_preact-render-to-string@6.7.0",
     "npm:sucrase@^3.35.0": "3.35.1",
     "npm:wrangler@4.111.0": "4.111.0_@cloudflare+workers-types@4.20260702.1",
+    "npm:zod-to-json-schema@3.25.2": "3.25.2_zod@3.25.76",
     "npm:zod-to-json-schema@^3.25.1": "3.25.2_zod@3.25.76",
     "npm:zod@3.25.76": "3.25.76",
     "npm:zod@^3.24.0": "3.25.76"
@@ -2061,12 +2063,14 @@
             "npm:@jsr/std__csv@1.0.6",
             "npm:@jsr/std__yaml@1.2.0",
             "npm:@modelcontextprotocol/sdk@1.29.0",
+            "npm:ajv@8.20.0",
             "npm:croner@10.0.1",
             "npm:lucide@1.31.0",
             "npm:postal-mime@3.0.0",
             "npm:preact-render-to-string@6.7.0",
             "npm:preact@10.29.7",
             "npm:wrangler@4.111.0",
+            "npm:zod-to-json-schema@3.25.2",
             "npm:zod@3.25.76"
           ]
         }
