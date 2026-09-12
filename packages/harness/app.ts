@@ -16,9 +16,11 @@ import { signal } from '@preact/signals'
 import { type Frontend, frontend } from './frontend.ts'
 import type { Bundle, Comp, Eid } from '@yaks/graph'
 import {
+  copyText,
   Frame,
   metrics,
   run,
+  Scroll,
   size,
   Textarea,
   useKeys,
@@ -464,6 +466,7 @@ export let App = (
         }),
       ),
     ),
+    h(EntryDetail, { ui, agent: a }),
     h(Keyboard, { ui, action }),
     h(RuntimePanel, { ui, agent: a, session: selection.id, subscribe }),
     h(Feedback, { ui }),
@@ -564,10 +567,57 @@ let Transcript = ({ ui, id, items, agent, pending, page, load }: {
     selected: position?.selected == null
       ? undefined
       : String(position.selected),
-    selectionVisible: (ui.keyboard.value[0].keyboard as Comp).mode == 'NORMAL',
+    cursor: ['NORMAL', 'VISUAL'].includes(
+        String((ui.keyboard.value[0].keyboard as Comp).mode),
+      ) &&
+        (ui.keyboard.value[0].keyboard as Comp).focus == 'transcript' &&
+        items.length
+      ? {
+        id: String(position?.selected ?? position?.item ?? items.at(-1)!.id),
+        row: Number(position?.cursorRow ?? 0),
+        col: Number(position?.cursorCol ?? 0),
+        ...position?.anchorId
+          ? {
+            anchor: {
+              id: String(position.anchorId),
+              row: Number(position.anchorRow ?? 0),
+              col: Number(position.anchorCol ?? 0),
+            },
+          }
+          : {},
+      }
+      : undefined,
+    onCursor: (point) => {
+      ui.client.mutate([{
+        entity: { eid: 'viewport-' + id },
+        viewport: {
+          selected: point.id,
+          cursorRow: point.row,
+          cursorCol: point.col,
+          anchorId: point.anchor?.id ?? null,
+          anchorRow: point.anchor?.row ?? null,
+          anchorCol: point.anchor?.col ?? null,
+        },
+      }])
+      ui.keys({ mode: point.anchor ? 'VISUAL' : 'NORMAL' })
+    },
+    onYank: (text, error) => {
+      if (error) {
+        ui.keys({ clipboard: text })
+        return
+      }
+      ui.client.mutate([{ entity: { eid: 'visual' }, visual: { yank: text } }])
+      const copied = copyText(text)
+      ui.keys({
+        clipboard: copied
+          ? 'Copied rendered text; clipboard requested'
+          : 'Rendered text saved in local yank',
+      })
+    },
+    selectionVisible: (ui.keyboard.value[0].keyboard as Comp).mode != 'INSERT',
     selectionClass:
       (ui.keyboard.value[0].keyboard as Comp).focus == 'transcript'
-        ? 'Selection_Active'
+        ? 'List_Selected'
         : 'List_Selected',
     onSelect: (selected: string) =>
       ui.client.mutate([{
@@ -651,4 +701,65 @@ export let tui = async (): Promise<void> => {
       await drafts.close()
     }
   }
+}
+
+/** Explicit bounded source inspection, separate from rendered cursor selection. */
+const EntryDetail = ({ ui, agent }: { ui: Frontend; agent: UIAgent }) => {
+  const state = ui.keyboard.value[0].keyboard as Comp
+  const session = (ui.view.value[0].frontend as Comp).selected as
+    | string
+    | undefined
+  const viewport = session
+    ? ui.client.ent('viewport-' + session)?.viewport as Comp | undefined
+    : undefined
+  const eid = viewport?.selected as string | undefined
+  useLayoutEffect(() => {
+    if (!state.detail) return
+    let live = true
+    if (!session || !eid || !agent.entrySource) {
+      ui.keys({ detailError: 'No selected source is available' })
+      return
+    }
+    ui.keys({ detailText: '', detailError: '' })
+    agent.entrySource(session, eid, {
+      start: Number(state.detailStart ?? 0),
+      ...state.detailRevision ? { revision: String(state.detailRevision) } : {},
+    }).then((source) => {
+      if (live) {
+        ui.keys({
+          detailText: source.text,
+          detailRevision: source.revision,
+          detailNext: source.next,
+          detailTotal: source.total,
+        })
+      }
+    }).catch((error) => {
+      if (live) ui.keys({ detailError: String(error) })
+    })
+    return () => {
+      live = false
+    }
+  }, [state.detail, state.detailStart, session, eid, agent])
+  return state.detail
+    ? h(
+      'div',
+      { border: 'Composer_Border' },
+      h(
+        'div',
+        { class: 'Entry_Hint' },
+        'SOURCE · ' + String(eid ?? '') + ' · ' +
+          String(state.detailStart ?? 0) + '/' +
+          String(state.detailTotal ?? '?') + ' · [/] chunks · Esc close',
+      ),
+      h(
+        Scroll,
+        { id: 'entry-detail', height: '10', follow: false },
+        h(
+          'div',
+          { wrap: '1' },
+          String(state.detailError || state.detailText || 'Loading source…'),
+        ),
+      ),
+    )
+    : null
 }

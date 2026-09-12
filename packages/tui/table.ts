@@ -48,7 +48,11 @@ export let table = (
   let count = rows.reduce((n, r) => Math.max(n, r.length), 0)
   if (!count || available < 1) return []
   let edge = { ...style, ...sheet.Table_Border }
-  let seg = (text: string, st = style) => ({ text, style: st })
+  let seg = (text: string, st = style) => ({
+    text,
+    style: st,
+    decorative: st === edge,
+  })
   let cellLines = (cell: Cell, w: number): Line[] => {
     if (!cell) return [[]]
     let result = layout(cell, w).flatMap((line) => wrap(line, w))

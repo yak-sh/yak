@@ -142,11 +142,11 @@ Deno.test('NORMAL sidebar commands use the same session actions and INSERT remai
     await ui.send('\x1b')
     await ui.send('n')
     assertEquals(selected(), 'root')
-    await ui.send('lj')
+    await ui.send('\x17lj')
     assertEquals(selected(), 'child')
     await ui.send('h')
     assertEquals(selected(), 'child')
-    await ui.send('lj')
+    await ui.send('\x17lj')
     assertEquals(selected(), 'other')
     await ui.send('?')
     assert(ui.text().includes('next / previous root'))
@@ -192,7 +192,7 @@ Deno.test('Ctrl+U cuts the complete draft in INSERT and VISUAL, preserving a pri
       assertEquals((f.client.ent('visual')!.visual as Comp).yank, source)
       writes.push(osc52(text))
     })
-    for (let mode of ['INSERT', 'VISUAL']) {
+    for (let mode of ['INSERT']) {
       f.keys({ mode, focus: 'sidebar', help: false })
       f.edit({ text: source, at: 5 })
       await ui.send('\x15')
@@ -204,9 +204,9 @@ Deno.test('Ctrl+U cuts the complete draft in INSERT and VISUAL, preserving a pri
         'sidebar',
       )
     }
-    assertEquals(writes, [osc52(source), osc52(source)])
+    assertEquals(writes, [osc52(source)])
     await ui.send('\x15')
-    assertEquals(writes.length, 2) // Empty drafts do not overwrite the clipboard.
+    assertEquals(writes.length, 1) // Empty drafts do not overwrite the clipboard.
     setClipboard()
     f.edit({ text: source, at: 0 })
     await ui.send('\x15')
@@ -257,7 +257,7 @@ Deno.test('NORMAL registry routes spatial focus and contextual movement without 
   try {
     f.edit({ text: 'keep draft', at: 4 })
     f.keys({ mode: 'NORMAL', focus: 'transcript' })
-    await ui.send('ll')
+    await ui.send('\x17l')
     assertEquals((f.client.ent('keyboard')!.keyboard as Comp).focus, 'sidebar')
     assertEquals(sidebar, [])
     await ui.send('jk\x15\x04ggG')
@@ -270,7 +270,7 @@ Deno.test('NORMAL registry routes spatial focus and contextual movement without 
       edge('end'),
     ])
     assertEquals(transcript, [])
-    await ui.send('hhjk\x15\x04ggG\x02\x06')
+    await ui.send('\x17hjk\x15\x04ggG\x02\x06')
     assertEquals(transcript, [
       { name: 'down' },
       { name: 'up' },

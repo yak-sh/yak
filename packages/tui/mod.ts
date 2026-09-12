@@ -74,3 +74,5 @@ export { pressFocused, pressTo } from './screen.ts'
 export { beginVisual, copyText, visualKey } from './visual.ts'
 
 export { terminalFocused } from './screen.ts'
+
+export type { RenderedCursor, TextPoint } from './RenderedCursor.ts'

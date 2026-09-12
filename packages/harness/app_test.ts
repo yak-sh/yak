@@ -890,7 +890,7 @@ Deno.test('sidebar selectable contributions follow visual order and archive only
     await settle()
     await ui.send('\x1bl') // legacy unrelated key stays editing; use NORMAL below
     await ui.send('\x1b')
-    await ui.send('l')
+    await ui.send('\x17l')
     await ui.send('j')
     await settle()
     assertEquals(cursor(), 'root')

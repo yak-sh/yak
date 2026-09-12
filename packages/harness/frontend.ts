@@ -17,6 +17,13 @@ export let frontendVocab = loadVocab([{
         pending: { type: 'string' },
         clipboard: { type: 'string' },
         runtime: { type: 'boolean' },
+        detail: { type: 'boolean' },
+        detailStart: { type: 'number' },
+        detailNext: { type: 'number' },
+        detailRevision: { type: 'string' },
+        detailText: { type: 'string' },
+        detailError: { type: 'string' },
+        detailTotal: { type: 'number' },
         runtimeSelected: { type: 'string' },
         runtimeFeedback: { type: 'string' },
       },
@@ -51,6 +58,11 @@ export let frontendVocab = loadVocab([{
       properties: {
         item: { type: 'string' },
         selected: { type: 'string' },
+        cursorRow: { type: 'number' },
+        cursorCol: { type: 'number' },
+        anchorId: { type: 'string' },
+        anchorRow: { type: 'number' },
+        anchorCol: { type: 'number' },
         windowAnchor: { type: 'string' },
         windowEdge: { type: 'string' },
         windowLoading: { type: 'boolean' },
@@ -299,7 +311,7 @@ export let frontend = (vault: Vault | false = false): Frontend => {
     },
     client: c,
     keyboard: c.watch('.keyboard'),
-    keys: (fields: Record<string, string | boolean>) =>
+    keys: (fields: Record<string, string | boolean | number | null>) =>
       mutate([{ entity: { eid: 'keyboard' }, keyboard: fields }]),
     visual: c.watch('.visual'),
     select: (state: import('@yaks/tui').VisualState) => {
@@ -395,7 +407,7 @@ export type Frontend = {
   submission: () => { accepted: (session: string) => void; failed: () => void }
   keyboard: Watch
   keys: (
-    fields: Record<string, string | boolean>,
+    fields: Record<string, string | boolean | number | null>,
   ) => ReturnType<Client['mutate']>
   client: Client
   visual: Watch

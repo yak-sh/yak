@@ -37,6 +37,10 @@ import { type Sheet, type Style, theme as base } from './theme.ts'
 
 /** A run of text under one style. */
 export type Seg = {
+  /** Layout decoration, excluded from text selection copies. */
+  decorative?: boolean
+  /** This segment ends a visual wrap, not a source line break. */
+  softBreak?: boolean
   text: string
   style: Style
   owner?: TElement
@@ -415,13 +419,14 @@ let layout = (
     let rule = (left: string, right: string): Line => [{
       text: left + '─'.repeat(Math.max(0, w - 2)) + right,
       style: edge,
+      decorative: true,
     }]
     lines = [
       rule('╭', '╮'),
       ...lines.map((line): Line => [
-        { text: '│', style: edge },
+        { text: '│', style: edge, decorative: true },
         ...pad(clip(line, w - 2), w - 2),
-        { text: '│', style: edge },
+        { text: '│', style: edge, decorative: true },
       ]),
       rule('╰', '╯'),
     ]
@@ -514,6 +519,9 @@ export let wrap = (line: Line, columns: number): Line[] => {
         seg++
         offset = 0
       }
+    }
+    if (end < text.length && row.length) {
+      row[row.length - 1] = { ...row.at(-1)!, softBreak: true }
     }
     out.push(row)
     start = end

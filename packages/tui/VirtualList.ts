@@ -1,3 +1,10 @@
+import {
+  clampPoint,
+  copyRendered,
+  cursorLine,
+  type RenderedCursor,
+  stepColumn,
+} from './RenderedCursor.ts'
 import { useTextSurface } from './visual.ts'
 import { scrollbar as drawScrollbar, type ScrollPosition } from './scrollbar.ts'
 import type { MouseEvent } from './mouse.ts'
@@ -7,7 +14,7 @@ import { useLayoutEffect, useRef } from 'preact/hooks'
 import { TElement, touch } from './dom.ts'
 import { lay, type Line } from './paint.ts'
 import { type Sheet, type Style } from './theme.ts'
-import { useKeys } from './screen.ts'
+import { terminalFocused, useKeys } from './screen.ts'
 import type { Key } from './input.ts'
 
 export type ListRange = { before: boolean; after: boolean }
@@ -23,12 +30,18 @@ export type ViewportState = { anchor?: Anchor; follow: boolean }
  */
 export class VirtualWindow<T extends VirtualItem> {
   anchor?: Anchor
+  cursor?: RenderedCursor
+  cursorStyle: Style = { inverse: true }
+  cursorVisible = true
+  private cursorStamp = ''
+  private reader?: (id: string) => Line[] | undefined
   selected?: string
   selectionVisible = true
   selectionStyle: Style = { bg: '#343f44' }
   follow: boolean
   private items: readonly T[] = []
   private indices = new Map<string, number>()
+  private retainedOrder: string[] = []
   private cache = new Map<string, Cached>()
   private height = 0
   private movement = 0
@@ -55,6 +68,27 @@ export class VirtualWindow<T extends VirtualItem> {
     this.oldIndex = this.anchor
       ? this.indices.get(this.anchor.id) ?? this.oldIndex
       : 0
+    // Keep bounded ordering metadata across overlapping loaded pages for selection.
+    const nextIds = items.map((item) => item.id)
+    const firstOverlap = nextIds.findIndex((id) =>
+      this.retainedOrder.includes(id)
+    )
+    if (firstOverlap < 0) this.retainedOrder = nextIds
+    else {
+      const oldAt = this.retainedOrder.indexOf(nextIds[firstOverlap])
+      this.retainedOrder = [
+        ...new Set([
+          ...this.retainedOrder.slice(0, oldAt),
+          ...nextIds,
+          ...this.retainedOrder.slice(oldAt).filter((id) =>
+            !nextIds.includes(id)
+          ),
+        ]),
+      ]
+      if (this.retainedOrder.length > 512) {
+        this.retainedOrder = this.retainedOrder.slice(-512)
+      }
+    }
     this.items = items
     this.indices = new Map(items.map((item, i) => [item.id, i]))
     // A removed anchor falls to its former successor (or the last remaining item).
@@ -134,6 +168,49 @@ export class VirtualWindow<T extends VirtualItem> {
     return true
   }
 
+  /** Move a rendered cursor; only visited items are measured. */
+  moveCursor(key: Key, point: RenderedCursor): RenderedCursor | undefined {
+    if (!this.reader) return
+    let index = this.indices.get(point.id)
+    if (index == null) return
+    let lines = this.reader(point.id)!, p = clampPoint(point, lines)
+    let row = p.row, col = p.col
+    if (key.name == 'left' || key.name == 'right') {
+      col = stepColumn(lines[row], col, key.name == 'left' ? -1 : 1)
+    } else if (key.name == 'up') row--
+    else if (key.name == 'down') row++
+    else if (key.name == 'pageup' || key.name == 'pagedown') {
+      row += (key.name == 'pageup' ? -1 : 1) * Math.max(1, this.height - 1)
+    } else if (key.ctrl && (key.text == 'u' || key.text == 'd')) {
+      row += (key.text == 'u' ? -1 : 1) *
+        Math.max(1, Math.floor(this.height / 2))
+    } else if (key.name == 'home' && !key.ctrl) col = 0
+    else if (key.name == 'end' && !key.ctrl) {
+      col = lines[row].reduce((n, s) => n + s.text.length, 0) - 1
+    } else return
+    while (row < 0 && index > 0) {
+      index--
+      lines = this.reader(this.items[index].id)!
+      row += lines.length
+    }
+    while (row >= lines.length && index < this.items.length - 1) {
+      row -= lines.length
+      index++
+      lines = this.reader(this.items[index].id)!
+    }
+    return {
+      ...point,
+      ...clampPoint({ id: this.items[index].id, row, col }, lines),
+    }
+  }
+  copyCursor(point: RenderedCursor): string {
+    return copyRendered(
+      point,
+      this.retainedOrder,
+      (id) => this.reader?.(id) ?? this.cache.get(id)?.lines,
+    )
+  }
+
   /** Estimate unvisited heights from the bounded measurement cache. No layout. */
   position(width: number): ScrollPosition {
     let known = [...this.cache].filter(([, c]) =>
@@ -194,6 +271,49 @@ export class VirtualWindow<T extends VirtualItem> {
         this.cache.delete(this.cache.keys().next().value!)
       }
       return cached.lines
+    }
+    this.reader = (id) => {
+      const index = this.indices.get(id)
+      return index == null ? undefined : get(index)
+    }
+    if (this.cursor && this.indices.has(this.cursor.id)) {
+      this.cursor = {
+        ...this.cursor,
+        ...clampPoint(this.cursor, get(this.indices.get(this.cursor.id)!)),
+      }
+      this.selected = this.cursor.id
+      const stamp = JSON.stringify([
+        this.cursor.id,
+        this.cursor.row,
+        this.cursor.col,
+        width,
+      ])
+      if (stamp != this.cursorStamp) {
+        this.cursorStamp = stamp
+        const startIndex = this.anchor
+          ? this.indices.get(this.anchor.id)
+          : undefined
+        let distance = -(this.anchor?.offset ?? 0)
+        let index = startIndex ?? this.indices.get(this.cursor.id)!
+        const target = this.indices.get(this.cursor.id)!
+        let visible = target >= index
+        while (visible && index < target && distance < height) {
+          distance += get(index++).length
+        }
+        distance += this.cursor.row
+        visible = visible && index == target && distance >= 0 &&
+          distance < height
+        if (!visible) {
+          this.anchor = {
+            id: this.cursor.id,
+            offset: Math.max(0, this.cursor.row - height + 1),
+          }
+        }
+        this.follow = false
+        this.revealedSelection = this.cursor.id
+        this.revealedWidth = width
+        this.revealedHeight = height
+      }
     }
     let i = this.anchor ? this.indices.get(this.anchor.id) ?? 0 : 0
     let offset = this.anchor?.offset ?? 0
@@ -268,6 +388,18 @@ export class VirtualWindow<T extends VirtualItem> {
       exhausted = end == this.items.length - 1 &&
         lines.length - local <= height - out.length
       let visible = lines.slice(local, local + height - out.length)
+      if (this.cursor) {
+        visible = visible.map((line, row) =>
+          cursorLine(
+            line,
+            this.items[end].id,
+            row + local,
+            this.cursor!,
+            this.retainedOrder,
+            this.cursorVisible ? this.cursorStyle : {},
+          )
+        )
+      }
       out.push(
         ...(this.selectionVisible && end == selected
           ? visible.map((line) =>
@@ -312,6 +444,9 @@ export let VirtualList = <T extends VirtualItem>(
     value,
     onViewportChange,
     selected,
+    cursor,
+    onCursor,
+    onYank,
     selectionVisible = true,
     selectionClass = 'List_Selected',
     onSelect,
@@ -325,6 +460,9 @@ export let VirtualList = <T extends VirtualItem>(
     onRange?: (request: RangeRequest) => void
     /** Controlled selected item; onSelect enables item-navigation keys. */
     selected?: string
+    cursor?: RenderedCursor
+    onCursor?: (cursor: RenderedCursor) => void
+    onYank?: (text: string, error?: boolean) => void
     /** Keep the logical selection while hiding its painted highlight. */
     selectionClass?: string
     selectionVisible?: boolean
@@ -432,7 +570,7 @@ export let VirtualList = <T extends VirtualItem>(
   if (!pending) state.current.update(items)
   useTextSurface({
     id: attrs.id ?? 'list',
-    enabled: Boolean(textOf),
+    enabled: Boolean(textOf) && !onCursor,
     snapshot: () => {
       selectedIndex.current = items.findIndex((i) =>
         i.id == (selected ?? state.current!.anchor?.id)
@@ -454,7 +592,58 @@ export let VirtualList = <T extends VirtualItem>(
   state.current.selectionVisible = selectionVisible
   state.current.range = range ?? { before: false, after: false }
   state.current.selected = selected
+  state.current.cursor = cursor
   useKeys((key) => {
+    const cursor = state.current!.cursor
+    if (cursor && onCursor) {
+      const text = key.name == 'char' && !key.ctrl && !key.alt
+        ? key.text
+        : undefined
+      if (text == 'v') {
+        const next = {
+          ...cursor,
+          anchor: { id: cursor.id, row: cursor.row, col: cursor.col },
+        }
+        state.current!.cursor = next
+        onCursor(next)
+        return true
+      }
+      if (key.name == 'escape') {
+        state.current!.cursor = { ...cursor, anchor: undefined }
+        onCursor(state.current!.cursor)
+        return true
+      }
+      if (text == 'y' && cursor.anchor) {
+        try {
+          onYank?.(state.current!.copyCursor(cursor))
+          state.current!.cursor = { ...cursor, anchor: undefined }
+          onCursor(state.current!.cursor)
+        } catch (error) {
+          onYank?.(String(error), true)
+        }
+        return true
+      }
+      const down = key.name == 'down' || key.name == 'pagedown' ||
+        key.ctrl && key.text == 'd'
+      const up = key.name == 'up' || key.name == 'pageup' ||
+        key.ctrl && key.text == 'u'
+      const index = items.findIndex((item) => item.id == cursor.id)
+      if (
+        range &&
+        (down && range.after && index >= items.length - 2 ||
+          up && range.before && index < 2)
+      ) {
+        requestRange({ anchor: cursor.id })
+      }
+      const moved = state.current!.moveCursor(key, cursor)
+      if (moved) {
+        state.current!.cursor = moved
+        state.current!.selected = moved.id
+        onCursor(moved)
+        touch()
+        return true
+      }
+    }
     if (
       range && (key.name == 'home' || key.name == 'end') &&
       (key.ctrl || onSelect)
@@ -486,6 +675,14 @@ export let VirtualList = <T extends VirtualItem>(
         if (key.name != 'end') state.current!.follow = false
         publish()
         onSelect(id)
+        if (cursor && onCursor) {
+          onCursor({
+            id,
+            row: key.name == 'end' ? Number.MAX_SAFE_INTEGER : 0,
+            col: 0,
+            anchor: cursor.anchor,
+          })
+        }
         return true
       }
     }
@@ -495,7 +692,7 @@ export let VirtualList = <T extends VirtualItem>(
   }, String(attrs.id))
   useLayoutEffect(() => {
     touch()
-  }, [items, renderItem, selected, selectionVisible, selectionClass])
+  }, [items, renderItem, selected, selectionVisible, selectionClass, cursor])
   return h('div', {
     ...attrs,
     onWheel: (event: MouseEvent) => {
@@ -514,6 +711,7 @@ export let VirtualList = <T extends VirtualItem>(
       ;(el as TElement).viewport = (width, height, style, sheet) => {
         selectionWidth.current = width
         env.current = { style, sheet }
+        state.current!.cursorVisible = terminalFocused.value
         state.current!.selectionStyle = sheet[selectionClass] ??
           { bg: '#343f44' }
         let inner = attrs.scrollbar && width >= 2 ? width - 1 : width

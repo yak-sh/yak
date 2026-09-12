@@ -24,8 +24,8 @@ type Binding = {
 }
 const ctrl = (text: string): Key => ({ name: 'char', text, ctrl: true })
 const bindings: Binding[] = [
-  { keys: ['h', 'left'], help: 'focus transcript (left)', focus: 'transcript' },
-  { keys: ['l', 'right'], help: 'focus sidebar (right)', focus: 'sidebar' },
+  { keys: ['h', 'left'], help: 'cursor left', transcript: { name: 'left' } },
+  { keys: ['l', 'right'], help: 'cursor right', transcript: { name: 'right' } },
   {
     keys: ['j', 'down'],
     help: 'next entry / sidebar item',
@@ -95,8 +95,9 @@ const bindings: Binding[] = [
 export const shortcuts = [
   ['i', 'INSERT: edit the draft'],
   ...bindings.map(({ keys, help }) => [keys[0], help]),
-  ['Tab', 'toggle focus (prefer h / l)'],
-  ['v', 'VISUAL source selection; hjkl move, y copy, Esc NORMAL'],
+  ['Ctrl+w h/l', 'focus transcript / sidebar (Tab toggles)'],
+  ['v', 'VISUAL rendered selection; hjkl move, y copy, Esc NORMAL'],
+  ['Enter', 'inspect selected entry source; [/] chunks; Esc returns'],
   ['? / Esc', 'show / dismiss help'],
   ['r', 'runtime panel: j/k select, x interrupt/cancel queued, c continue'],
   ['Ctrl+U', 'INSERT / VISUAL: cut entire draft'],
@@ -112,7 +113,11 @@ export let Keyboard = ({ ui, action }: {
   useKeymap((key) => {
     let current = () => ui.client.ent('keyboard')!.keyboard as Comp
     if (key.ctrl && key.text == 'c') return false
-    if (key.ctrl && key.text == 'u' && current().mode != 'NORMAL') {
+    if (
+      key.ctrl && key.text == 'u' &&
+      (current().mode == 'INSERT' ||
+        Boolean((ui.client.ent('visual')!.visual as VisualState).surface))
+    ) {
       let text = String((ui.client.ent('draft')!.draft as Comp).text ?? '')
       if (!text) return true
       let visual = ui.client.ent('visual')!.visual as VisualState
@@ -152,14 +157,34 @@ export let Keyboard = ({ ui, action }: {
     }
     let s = current()
     let visual = ui.client.ent('visual')!.visual as VisualState
-    if (s.mode == 'VISUAL' || visual.surface) {
+    if (visual.surface) {
       visualKey(key)
       if (!((ui.client.ent('visual')!.visual as VisualState).surface)) {
         ui.keys({ mode: 'NORMAL', pending: '' })
       }
       return true
     }
+    if (s.detail) {
+      if (key.name == 'escape' || key.text == 'q') {
+        ui.keys({ detail: false, detailText: '', detailError: '' })
+      } else if (key.text == ']' && s.detailNext != null) {
+        ui.keys({ detailStart: Number(s.detailNext) })
+      } else if (key.text == '[') {
+        ui.keys({ detailStart: Math.max(0, Number(s.detailStart ?? 0) - 4096) })
+      } else {pressTo(
+          'entry-detail',
+          key.text == 'j'
+            ? { name: 'down' }
+            : key.text == 'k'
+            ? { name: 'up' }
+            : key,
+        )}
+      return true
+    }
     if (key.name == 'escape') {
+      const session = (ui.client.ent('view')!.frontend as Comp).selected ??
+        'new'
+      pressTo('transcript-' + session, key)
       ui.keys({
         mode: 'NORMAL',
         ...(s.mode == 'INSERT' ? { focus: 'transcript' } : {}),
@@ -187,10 +212,7 @@ export let Keyboard = ({ ui, action }: {
       for (let text of key.text!) {
         if (current().mode == 'INSERT') pressFocused({ ...key, text })
         else if (current().mode == 'VISUAL') {
-          visualKey({ ...key, text })
-          if (!(ui.client.ent('visual')!.visual as VisualState).surface) {
-            ui.keys({ mode: 'NORMAL' })
-          }
+          command({ ...key, text })
         } else command({ ...key, text })
       }
       return true
@@ -199,6 +221,21 @@ export let Keyboard = ({ ui, action }: {
     function command(k: Key): boolean {
       s = current()
       let text = k.name == 'char' && !k.alt && !k.ctrl ? k.text : undefined
+      if (k.ctrl && k.text == 'w') {
+        ui.keys({ pending: 'window' })
+        return true
+      }
+      if (s.pending == 'window') {
+        ui.keys({
+          pending: '',
+          ...(text == 'h'
+            ? { focus: 'transcript' }
+            : text == 'l'
+            ? { focus: 'sidebar' }
+            : {}),
+        })
+        return true
+      }
       if (text == 'r') {
         ui.keys({ runtime: !s.runtime })
         return true
@@ -213,6 +250,9 @@ export let Keyboard = ({ ui, action }: {
         return true
       }
       if (text == 'i') {
+        const selectedSession =
+          (ui.client.ent('view')!.frontend as Comp).selected ?? 'new'
+        pressTo('transcript-' + selectedSession, { name: 'escape' })
         ui.keys({ mode: 'INSERT', pending: '' })
         return true
       }
@@ -225,10 +265,25 @@ export let Keyboard = ({ ui, action }: {
       }
       let id = 'transcript-' +
         String((ui.client.ent('view')!.frontend as Comp).selected ?? 'new')
+      if (k.name == 'enter' && s.focus == 'transcript') {
+        ui.keys({
+          detail: true,
+          detailStart: 0,
+          detailText: '',
+          detailError: '',
+          detailRevision: '',
+          detailNext: null,
+        })
+        return true
+      }
       if (text == 'v') {
-        if (beginVisual(id)) {
+        if (!pressTo(id, { name: 'char', text: 'v' }) && beginVisual(id)) {
           ui.keys({ mode: 'VISUAL', focus: 'transcript', pending: '' })
         }
+        return true
+      }
+      if (text == 'y' && s.mode == 'VISUAL') {
+        pressTo(id, k)
         return true
       }
       if (text == 'g' && s.pending != 'g') {
