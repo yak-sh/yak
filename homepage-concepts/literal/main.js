@@ -10,7 +10,7 @@ const directions = {
     label: 'B · Walkthrough',
     title: 'From an AI conversation<br>to an app people use.',
     text:
-      'Watch an assistant make a shared equipment app, publish it, and change it after people start using it. Yaks provides the hosting, database, and realtime updates.',
+      'Connect Yaks to your existing assistant. Watch it make a shared equipment app, publish it, and change it after people start using it. Yaks provides the hosting, database, and realtime updates.',
     kicker: 'ONE APP, FROM FIRST REQUEST TO EVERYDAY USE',
   },
   bring: {
