@@ -564,9 +564,15 @@ slow('the front page is served at the space root', async () => {
   }
 })
 
-Deno.test('settings Billing tab uses the space checkout and portal', async () => {
+Deno.test('Billing is a management page beside Settings with space checkout and portal', async () => {
   let settings = await block({ view: 'settings' })
   assertStringIncludes(settings, `href="${managePath('billing')}"`)
+  let { document: profile } = parseHTML(settings)
+  assertEquals(profile.querySelector('.Settings_Tabs'), null)
+  assertEquals(
+    profile.querySelector('.SideNav [aria-current]')?.getAttribute('href'),
+    managePath('settings'),
+  )
   for (let plus of [false, true]) {
     let page = await block({
       view: 'billing',
@@ -581,8 +587,17 @@ Deno.test('settings Billing tab uses the space checkout and portal', async () =>
       managePath('billing'),
     )
     assertEquals(
-      document.querySelector('.Settings_Tabs [aria-current]')?.textContent,
-      'Billing',
+      document.querySelector('.SideNav [aria-current]')?.getAttribute('href'),
+      managePath('billing'),
+    )
+    assertEquals(document.querySelector('.Settings_Tabs'), null)
+    assertEquals(
+      [...document.querySelectorAll('.SideNav a')].map((a) =>
+        a.getAttribute('href')
+      ).slice(-4),
+      ['visits', 'billing', 'settings', 'trash'].map((view) =>
+        `/_yaks/${view}`
+      ),
     )
     if (plus) assertStringIncludes(page, 'stops renewing')
   }

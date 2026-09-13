@@ -614,8 +614,6 @@ export type SpacePage = {
 
 let deskCss = `
 .Desk { display: block }
-.Settings_Tabs { display: flex; gap: 1.5rem; margin-bottom: 1.5rem }
-.Settings_Tabs [aria-current] { font-weight: 700; text-decoration: underline }
 .Desk main { display: grid; grid-template-columns: 13.5rem minmax(0, 1fr); align-items: start; max-width: 80rem; min-height: 100vh; margin: auto; padding: 0; text-align: left }
 .Desk_Side { position: sticky; top: 0; display: flex; flex-direction: column; gap: 2rem; min-height: 100vh; padding: 2rem 1.25rem; border-right: 1px solid var(--line) }
 .Desk_Brand { display: flex; align-items: center; gap: .65rem; color: var(--ink); font-size: 1.25rem; font-weight: 800; text-decoration: none }
@@ -693,6 +691,7 @@ let navIcons = {
   connect: 'bot',
   visits: 'chart-no-axes-column-increasing',
   selling: 'credit-card',
+  billing: 'credit-card',
   settings: 'settings-2',
   trash: 'trash-2',
 } satisfies Record<string, IconName>
@@ -700,8 +699,7 @@ let navIcons = {
 let navigation = (at: SpacePage, view: ManageView, env: Host) => {
   let link = (key: keyof typeof navIcons, label: string) =>
     `<a href="${managePath(key)}"${
-      view == key || (view == 'new' && key == 'apps') ||
-        (view == 'billing' && key == 'settings')
+      view == key || (view == 'new' && key == 'apps')
         ? ' aria-current="page"'
         : ''
     }>
@@ -718,7 +716,9 @@ ${icon(navIcons[key])}${label}${
 <nav class="SideNav" aria-label="Manage your apps">
 ${link('apps', 'Apps')}${link('connect', 'Agents')}<hr>
 ${link('visits', 'Visits')}${at.sell ? link('selling', 'Selling') : ''}
-${link('settings', 'Settings')}${link('trash', 'Trash')}
+${link('billing', 'Billing')}${link('settings', 'Settings')}${
+    link('trash', 'Trash')
+  }
 </nav>
 <div class="Desk_Foot"><a href="/" target="_blank" rel="noopener">View homepage ${
     icon('external-link')
@@ -897,15 +897,9 @@ let desk = (at: SpacePage, env: Host) => {
       : '<section class="Desk_Empty"><h2>No visits yet</h2><p>Your app visits will appear here once you have an app.</p></section>'
   }
   if (view == 'selling') body = selling(at, env)
-  if (view == 'settings' || view == 'billing') {
-    body = `<nav class="Settings_Tabs" aria-label="Settings">
-<a href="${managePath('settings')}"${
-      view == 'settings' ? ' aria-current="page"' : ''
-    }>Profile</a>
-<a href="${managePath('billing')}"${
-      view == 'billing' ? ' aria-current="page"' : ''
-    }>Billing</a>
-</nav>` + (view == 'settings' ? preferences(at, env) : plan(
+  if (view == 'settings') body = preferences(at, env)
+  if (view == 'billing') {
+    body = plan(
       {
         slug: at.space,
         plan: at.plan ?? { plus: false, ends: '', known: false },
@@ -913,7 +907,7 @@ let desk = (at: SpacePage, env: Host) => {
       },
       env,
       managePath('billing'),
-    ) + billing)
+    ) + billing
   }
   if (view == 'trash') body = trash(at)
   return shell(

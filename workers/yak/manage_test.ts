@@ -162,7 +162,7 @@ slow('account pages remain reachable behind a custom home app', async () => {
 })
 
 slow(
-  'Billing settings open checkout and the customer portal for this space',
+  'Billing management opens checkout and the customer portal for this space',
   async () => {
     let fake = stripe(({ path }) =>
       path == '/v1/customers'
