@@ -24,6 +24,7 @@
 // follows (tools.ts `homesIn`): the schema an agent reads is the words it can
 // actually write.
 import { z } from 'zod'
+import { platformOutput, structuredOutput } from './tool_outputs.ts'
 import type { Bundle, Graph, Plugin, Row, Storage, Tool, Tx } from '@yaks/graph'
 import { composed as perEntity, detached } from '@yaks/graph'
 import { addressed, wordish } from '@yaks/alias'
@@ -116,16 +117,16 @@ export let outputOf = (
 export let answered = async (ctx: Ctx, out: Out): Promise<Say> => {
   // Nobody signed in has no space to be told what is unseen in (anon.ts): the
   // breaks in an app are its members', and a stranger is not one.
-  if (!out.space || !ctx.person) return new Say(out.text, out.data)
+  if (!out.space || !ctx.person) {
+    return new Say(out.text, structuredOutput(out.text, out.data))
+  }
   let who = {
     person: ctx.person,
     role: await ctx.dir.role(out.space, ctx.person),
   }
-  return new Say(
-    out.text + unseenBlock(await serve(ctx.env, out.space, who)) +
-      await ceiling(ctx.env, out.space),
-    out.data,
-  )
+  const text = out.text + unseenBlock(await serve(ctx.env, out.space, who)) +
+    await ceiling(ctx.env, out.space)
+  return new Say(text, structuredOutput(text, out.data))
 }
 
 /**
@@ -170,7 +171,11 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
   // What it answers, where it says: the `Say`'s data rides as the reply's
   // structuredContent unwrapped (@yaks/mcp `server`), so the schema describes
   // that object itself rather than a value under a key.
-  ...(t.output ? { output: outputOf(t.output, ctx.env) } : {}),
+  output: t.output
+    ? (outputOf(t.output, ctx.env) as z.AnyZodObject).extend({
+      text: z.string(),
+    }).passthrough()
+    : platformOutput(t.name),
   // The page a host renders this answer in (MCP Apps): the tool names it, the
   // transport hands it over verbatim, and a host without views ignores it.
   ...metaOf(t),

@@ -185,3 +185,86 @@ Deno.test('the write door names its own words, and stays open to newer ones', as
   // describes; the server decides, and says which columns are declared.
   assertEquals(at(comp('book'), 'additionalProperties'), true)
 })
+
+Deno.test('JSON Schema output declarations reach listing unchanged and validate structured replies', async () => {
+  const { Say } = await import('@yaks/mcp')
+  const outputSchema = {
+    type: 'object',
+    required: ['count'],
+    additionalProperties: false,
+    properties: { count: { type: 'integer', minimum: 0 } },
+  }
+  const client = await connect({
+    tools: [
+      {
+        name: 'count_good',
+        description: 'Count records',
+        outputSchema,
+        run: () => new Say('two records', { count: 2 }),
+      },
+      {
+        name: 'count_bad',
+        description: 'Invalid implementation',
+        outputSchema,
+        run: () => new Say('wrong', { count: 'two' }),
+      },
+      {
+        name: 'list_values',
+        description: 'Return a wrapped list',
+        outputSchema: {
+          type: 'object',
+          required: ['result'],
+          properties: {
+            result: { type: 'array', items: { type: 'string' } },
+          },
+        },
+        run: () => ['one', 'two'],
+      },
+    ],
+  })
+  try {
+    const listed = await client.listTools()
+    assertEquals(
+      listed.tools.find((t: { name: string }) => t.name == 'count_good')
+        ?.outputSchema,
+      outputSchema,
+    )
+    const good = await client.callTool({ name: 'count_good', arguments: {} })
+    assertEquals(good.structuredContent, { count: 2 })
+    assertEquals(good.content[0].text, 'two records')
+    const bad = await client.callTool({ name: 'count_bad', arguments: {} })
+    assertEquals(bad.isError, true)
+    const list = await client.callTool({ name: 'list_values', arguments: {} })
+    assertEquals(list.structuredContent, { result: ['one', 'two'] })
+  } finally {
+    await client.close()
+  }
+})
+
+Deno.test('output validation does not invent defaulted result fields', async () => {
+  const { Say } = await import('@yaks/mcp')
+  const client = await connect({
+    tools: [{
+      name: 'missing_count',
+      description: 'Missing required result property',
+      outputSchema: {
+        type: 'object',
+        required: ['count'],
+        properties: {
+          count: { type: 'integer', default: 0 },
+        },
+      },
+      run: () => new Say('no count', {}),
+    }],
+  })
+  try {
+    const answer = await client.callTool({
+      name: 'missing_count',
+      arguments: {},
+    })
+    assertEquals(answer.isError, true)
+    assert(String(answer.content[0].text).includes('Invalid tool result'))
+  } finally {
+    await client.close()
+  }
+})

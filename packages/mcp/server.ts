@@ -1,4 +1,4 @@
-import { validateToolInput } from '@yaks/vocab/tools'
+import { validateToolInput, validateToolOutput } from '@yaks/vocab/tools'
 import { type NamedTool, namedTool, toolName } from '@yaks/graph'
 import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { zodToJsonSchema } from 'zod-to-json-schema'
@@ -303,6 +303,12 @@ export let server = (opts: Options): McpServer => {
   let names = tools.map((t) => t.name)
 
   for (let t of tools) {
+    if (t.output && t.outputSchema) {
+      throw new Error(`Tool ${t.name} declares both output and outputSchema`)
+    }
+    if (t.outputSchema && t.outputSchema.type != 'object') {
+      throw new Error(`Tool ${t.name} outputSchema must describe an object`)
+    }
     let output = zodOf(t.name, 'output', t.output)
     let meta = metaOf(t, opts.security)
     let config = {
@@ -318,9 +324,10 @@ export let server = (opts: Options): McpServer => {
         let value = await t.run(validateToolInput(t, args), ctx)
         out = value instanceof Say
           ? spoke(value)
-          : output
+          : output || t.outputSchema
           ? said(value)
           : bare(value)
+        validateToolOutput(t, out.structuredContent)
       } catch (err) {
         out = failed(err)
       }
@@ -334,7 +341,7 @@ export let server = (opts: Options): McpServer => {
   }
   // Preserve JSON Schema declarations exactly on the wire. SDK argument parsing
   // for these tools is passthrough; the shared validator runs before the handler.
-  if (tools.some((t) => t.inputSchema)) {
+  if (tools.some((t) => t.inputSchema || t.outputSchema)) {
     mcp.server.setRequestHandler(ListToolsRequestSchema, () => ({
       tools: tools.map((t) => ({
         name: t.name,
@@ -344,7 +351,7 @@ export let server = (opts: Options): McpServer => {
           target: 'jsonSchema7',
           $refStrategy: 'none',
         })) as { type: 'object'; [key: string]: unknown },
-        ...(t.output
+        ...(t.outputSchema ? { outputSchema: t.outputSchema } : t.output
           ? {
             outputSchema: zodToJsonSchema(zodOf(t.name, 'output', t.output)!, {
               target: 'jsonSchema7',

@@ -26,6 +26,30 @@ export const validateToolInput = (
   return value
 }
 
+/** Validate the emitted object without applying defaults or changing the result. */
+const outputAjv = new Ajv2020({ strict: false, allErrors: true })
+const outputValidators = new WeakMap<
+  object,
+  ReturnType<typeof outputAjv.compile>
+>()
+
+export const validateToolOutput = (
+  tool: { outputSchema?: Record<string, unknown> },
+  value: unknown,
+): void => {
+  if (!tool.outputSchema) return
+  let validate = outputValidators.get(tool.outputSchema)
+  if (!validate) {
+    validate = outputAjv.compile(tool.outputSchema)
+    outputValidators.set(tool.outputSchema, validate)
+  }
+  if (!validate(value)) {
+    throw new Error(
+      'Invalid tool result: ' + outputAjv.errorsText(validate.errors),
+    )
+  }
+}
+
 /** Serializable tool metadata; independent of component declarations. */
 export type ToolDefinition = {
   noun: string
@@ -34,6 +58,7 @@ export type ToolDefinition = {
   name?: string
   title?: string
   inputSchema?: Record<string, unknown>
+  outputSchema?: Record<string, unknown>
   options?: {
     positional?: readonly string[]
     short?: Readonly<Record<string, string>>
@@ -57,6 +82,7 @@ export const toolDefinitionSchema: Record<string, unknown> = {
     title: { type: 'string' },
     description: { type: 'string' },
     inputSchema: { type: 'object' },
+    outputSchema: { type: 'object' },
     options: {
       type: 'object',
       additionalProperties: false,
@@ -86,6 +112,7 @@ export const toolDefinition = (value: unknown): ToolDefinition => {
     value as Record<string, unknown>,
   ) as unknown as ToolDefinition
   if (candidate.inputSchema) ajv.compile(candidate.inputSchema)
+  if (candidate.outputSchema) ajv.compile(candidate.outputSchema)
   const props = candidate.inputSchema?.properties as
     | Record<string, unknown>
     | undefined

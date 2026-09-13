@@ -156,6 +156,8 @@ export type Tool = {
   input?: Record<string, Schema>
   /** the shape of the structured result */
   output?: Schema
+  /** JSON Schema describing the MCP structured result object. */
+  outputSchema?: Record<string, unknown>
   /** this tool only reads — a client may call it without asking first */
   readOnly?: boolean
   /** this tool can DELETE or otherwise irreversibly change what it touches, so

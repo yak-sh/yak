@@ -332,3 +332,14 @@ describes the server's initial static registry; dynamically adding, disabling,
 or modifying SDK tools after construction is not supported when JSON Schema
 tools are present. This is an explicit adapter limitation, not a second schema
 compiler. Output schemas retain the existing Zod path.
+
+### JSON Schema results
+
+Custom tools may declare `outputSchema` as a JSON Schema object, alongside
+`inputSchema`. The schema describes the complete `structuredContent` object.
+Return `new Say(text, data)` to keep a human-readable message and expose `data`
+unwrapped. For ordinary return values, the server wraps the value as
+`{ result: value }`; declare that wrapper in the output schema. Failed calls use
+`isError` and do not need to conform to the success schema. JSON Schema outputs
+are validated before being returned. Existing Zod `output` declarations remain
+supported; prefer one declaration format per tool.
