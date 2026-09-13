@@ -159,7 +159,7 @@ import {
   spaceHost,
   url as hostUrl,
 } from './host.ts'
-import { foreign, SLUG } from './route.ts'
+import { foreign, planSettings, SLUG } from './route.ts'
 import { globs } from './router.ts'
 import type { Reach } from './reach.ts'
 import { titling, vouched, type Who } from './session.ts'
@@ -3288,6 +3288,7 @@ let OURS: Row[] = [
             days: daysLeft(a.trashed!),
           })),
           tier: space.tier ?? 'free',
+          settings_url: planSettings(space.slug, ctx.env),
           usage: spent(space),
           // The letters and the builds are the allowances every plan carries,
           // so they are beside the app, visit and data ceilings
@@ -3423,6 +3424,17 @@ let OURS: Row[] = [
             `the person owns somewhere else. ${space.slug} already answers ` +
             `at https://${spaceHost(ctx.env, space.slug)}/`,
         )
+      }
+      if (space.tier != 'plus' && ceilings(space.tier, space.slug)) {
+        const settings = planSettings(space.slug, ctx.env)
+        return {
+          text:
+            `Custom domains require Plus. Open your space's plan settings ` +
+            `to compare paid plans: ${settings}. Sign in if asked; you will ` +
+            `return to settings. No domain or DNS changes have been made.`,
+          space,
+          data: { code: 'plan_required', settings_url: settings },
+        }
       }
       // One hostname is one place. Whose it is stays out of the refusal
       // unless it is this space's: another space's app names are not this

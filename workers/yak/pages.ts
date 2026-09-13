@@ -1289,9 +1289,11 @@ let plan = (
 ) => {
   let ends = y.plan.ends ? day(y.plan.ends) : ''
   let limits = y.plan.plus ? PLUS : FREE
-  let allowance = `${limits.apps} apps, ${
-    limits.requests.toLocaleString('en-US')
-  } visits a month, ${size(limits.bytes)} of app data`
+  let allowance = `${
+    limits.apps == null ? 'Unlimited apps' : `${limits.apps} apps`
+  }, ${limits.requests.toLocaleString('en-US')} visits a month, ${
+    size(limits.bytes)
+  } of app data`
   let head = y.plan.plus
     ? `<p>${esc(spaceHost(env, y.slug))} is on <b>Plus</b> — ${allowance}.${
       ends ? ` It runs until ${esc(ends)} and then stops renewing.` : ''

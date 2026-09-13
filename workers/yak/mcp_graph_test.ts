@@ -510,7 +510,7 @@ slow('the free tier: a warning once, then the refusals', async () => {
     await assertRejects(
       () => agent.tool('app_new', { space: 'brim', slug: 'a6', title: 'A6' }),
       Error,
-      'Plus lifts it: https://yaks.app/pricing',
+      'Compare paid plans in settings: https://brim.yaks.app/_yaks/billing',
     )
 
     // Data past the ceiling is refused at the app's own door, in the

@@ -417,6 +417,10 @@ domain_attach:
     panel — you know what GoDaddy's and Namecheap's look like. Nothing
     serves until that record is in place, so tell them the record and then
     domain_status to watch it come up. Only the space owner may attach one.
+    Custom domains require Plus unless the space is exempt. On plan_required,
+    give the person settings_url to compare paid plans in their space settings;
+    never provide a checkout link. Sign-in returns them to that page. No
+    hostname is provisioned until the space is eligible.
 
 domain_status:
   title: Domain progress

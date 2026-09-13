@@ -337,8 +337,8 @@ Deno.test('a refusal names the ceiling and where the plans are written', () => {
   for (let what of ['apps', 'bytes', 'emails'] as const) {
     let said = atCeiling(space(), what)
     assertStringIncludes(said, 'free tier')
-    assertStringIncludes(said, 'https://yaks.app/pricing')
-    assert(!/checkout|billing|subscribe|upgrade/i.test(said), said)
+    assertStringIncludes(said, 'https://jeff.yaks.app/_yaks/billing')
+    assert(!/checkout|subscribe/i.test(said), said)
   }
   assertStringIncludes(atCeiling(space(), 'apps'), '5 apps')
   // The letters are the one refusal that is not the free tier's alone, and
@@ -350,7 +350,7 @@ Deno.test('a refusal names the ceiling and where the plans are written', () => {
     '2,500 emails a month',
   )
   assert(
-    !/checkout|billing/i.test(standing(space(), 3)),
+    !/checkout/i.test(standing(space(), 3)),
     'the standing line names no purchase either',
   )
 })
@@ -393,8 +393,8 @@ Deno.test('a free space gets five builds each month regardless of lifetime use',
   let after = space({ builds: 5, tokens: 1_000, built: 45 })
   let no = refusedBuild(after, NOW)!
   assert(no)
-  assertStringIncludes(no, 'https://yaks.app/pricing')
-  assert(!/checkout|billing|subscribe/i.test(no), no)
+  assertStringIncludes(no, 'https://jeff.yaks.app/_yaks/billing')
+  assert(!/checkout|subscribe/i.test(no), no)
   assert(refusedBuild(space({ builds: 6 }), NOW))
 
   // A refusal costs them nothing — not the build, and not the sentence: the
@@ -416,7 +416,7 @@ Deno.test('a paid space counts its builds down, and the month gives them back', 
   let no = refusedBuild(plus(BUILDS.plus), NOW)!
   assertStringIncludes(no, `${BUILDS.plus} built-in builds this month`)
   assertStringIncludes(no, 'build again on the 1st')
-  assertStringIncludes(no, 'https://yaks.app/pricing')
+  assertStringIncludes(no, 'https://jeff.yaks.app/_yaks/billing')
   // Last month's builds are not this month's.
   assertEquals(refusedBuild(plus(BUILDS.plus, '2026-08'), NOW), null)
 
@@ -613,4 +613,26 @@ Deno.test('R2 accounting sweeps without analytics, follows deletion and survives
     standing(space({ files: FILES.plus }, 'plus'), 0, NOW),
     '50 GB of 50 GB photos and files',
   )
+})
+
+Deno.test('all quota guidance uses space plan settings without promising a Plus upgrade', () => {
+  for (const what of ['apps', 'bytes', 'files', 'emails', 'builds'] as const) {
+    const free = atCeiling(space(), what, { APEX: 'yaks.fyi' })
+    assertStringIncludes(free, 'https://jeff.yaks.fyi/_yaks/billing')
+    assertStringIncludes(free, 'Compare paid plans')
+    assert(!free.includes('checkout'))
+    if (what != 'apps') {
+      const paid = atCeiling(space({}, 'plus'), what)
+      assertStringIncludes(paid, 'Manage usage and plan settings')
+      assert(!paid.includes('Plus lifts'))
+      assert(!paid.includes('Compare paid plans'))
+    }
+  }
+  const response = refusedVisit(
+    space({ requests: FREE.requests }),
+    new Request('https://jeff.yaks.app/'),
+    {},
+    NOW,
+  )!
+  assertEquals(response.status, 429)
 })

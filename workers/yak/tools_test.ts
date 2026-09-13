@@ -467,3 +467,76 @@ Deno.test('one read of the bindings still lands each on its own app', async () =
     [['recipes', 1], ['garden', 0]],
   )
 })
+
+Deno.test('free custom domains return plan settings before provisioning', async () => {
+  const { env } = platform('domain-plan-test', { APEX: 'yaks.fyi' })
+  const dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  const ctx: Ctx = { env, dir, person: 'a0000000-0000-4000-8000-0000000000ad' }
+  await call(ctx, 'space_new', { slug: 'ada', title: 'Ada' })
+  await call(ctx, 'app_new', {
+    space: 'ada',
+    slug: 'recipes',
+    title: 'Recipes',
+  })
+  for (const args of [{}, { app: 'recipes' }]) {
+    const result = await call(ctx, 'domain_attach', {
+      space: 'ada',
+      hostname: 'recipes.example.com',
+      ...args,
+    })
+    assertEquals(result.data, {
+      code: 'plan_required',
+      settings_url: 'https://ada.yaks.fyi/_yaks/billing',
+    })
+    assertStringIncludes(result.text, 'Sign in if asked')
+    assertEquals(result.text.includes('checkout'), false)
+    assertEquals(await dir.serves('recipes.example.com'), null)
+  }
+})
+
+Deno.test('paid and comped domain attachment still provisions normally', async () => {
+  const { env } = platform('domain-paid-test', {
+    CF_ZONE: 'test-zone',
+    CF_HOSTNAMES_TOKEN: 'test-only',
+  })
+  const dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  const ctx: Ctx = { env, dir, person: 'a0000000-0000-4000-8000-0000000000ad' }
+  const original = globalThis.fetch
+  let provisions = 0
+  globalThis.fetch = (input, init) => {
+    assertStringIncludes(String(input), '/zones/test-zone/custom_hostnames')
+    assertEquals(init?.method, 'POST')
+    provisions++
+    const host = JSON.parse(String(init?.body)).hostname
+    return Promise.resolve(Response.json({
+      success: true,
+      result: {
+        id: 'fake-host',
+        hostname: host,
+        status: 'pending',
+        ssl: { status: 'initializing' },
+      },
+    }))
+  }
+  try {
+    for (const slug of ['paid', 'yourname']) {
+      await call(ctx, 'space_new', { slug, title: slug })
+      if (slug == 'paid') {
+        const space = (await dir.space(slug))!
+        await dirPart.stamp(env, {
+          entities: [{ entity: { eid: space.eid }, plan: { tier: 'plus' } }],
+        })
+      }
+      const result = await call({ ...ctx, once: undefined }, 'domain_attach', {
+        space: slug,
+        hostname: slug + '.example.com',
+      })
+      assertStringIncludes(result.text, 'CNAME')
+      assertEquals((result.data as { code?: string }).code, undefined)
+      assertEquals((await dir.serves(slug + '.example.com'))?.space.slug, slug)
+    }
+    assertEquals(provisions, 2)
+  } finally {
+    globalThis.fetch = original
+  }
+})

@@ -66,7 +66,12 @@ let store = () => {
 }
 
 Deno.test('a letter’s link carries the code, and what it was finishing', async () => {
-  let url = await onceLink(SECRET, { email: ME, code: '123456', q: 'a=b' })
+  let url = await onceLink(SECRET, {
+    email: ME,
+    code: '123456',
+    q: 'a=b',
+    back: 'https://jeff.yaks.app/_yaks/billing',
+  })
   let t = new URL(url).searchParams.get('t')!
   let pass = await passOf(t, SECRET)
   assertEquals(pass?.once?.email, ME)
@@ -74,6 +79,7 @@ Deno.test('a letter’s link carries the code, and what it was finishing', async
   // The authorize request in flight rides in the SEAL, so a leaked link cannot
   // be re-aimed at a stranger's page.
   assertEquals(pass?.once?.q, 'a=b')
+  assertEquals(pass?.once?.back, 'https://jeff.yaks.app/_yaks/billing')
   assert(!url.includes('a=b'))
   assertEquals(await passOf(t, ELSE), null)
 })

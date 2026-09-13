@@ -437,3 +437,13 @@ Deno.test('the guide describes main as server source, not the upload wrapper', (
     assert(!plain.includes('uploaded entry name'))
   }
 })
+
+Deno.test('domain guidance directs unpaid users to settings, not checkout', () => {
+  const domains = pageText('domains')
+  assert(domains.includes('settings_url'))
+  assert(domains.includes('/_yaks/billing'))
+  assert(domains.includes('never link directly to checkout'))
+  const tool = TOOLS.find((t) => t.name == 'domain_attach')!
+  assert(tool.description.includes('settings_url'))
+  assert(tool.description.includes('never provide a checkout link'))
+})

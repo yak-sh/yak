@@ -865,6 +865,11 @@ serves it exactly as `jeff.yaks.app` does — the front page at `/`, every app a
 `/<app>/`. `herbusiness.com` on an APP serves that app at the root, and nothing
 else is there. Both can stand at once. Three tools, all the space owner's:
 
+Custom domains require Plus unless the space is exempt. If `domain_attach`
+returns `plan_required`, share its `settings_url` so the person can compare
+plans in their space's settings. Never provide a direct checkout link. Sign-in
+preserves that destination; no domain changes occur until the space is eligible.
+
 - `domain_attach(app?, hostname)` — provisions the hostname and answers with the
   DNS record to add, as data: `records: [{type, name, value}]`. Name an `app`
   for the app's own domain; leave it out for the space's.
@@ -1068,3 +1073,9 @@ few an hour is plenty; past that it waits.
 
 An error inside the person's own app is not this. That is theirs, it is already
 in `app_errors`, and fixing it is yours.
+
+When a plan limit is reached, share the space's plan settings link returned in
+the refusal (`https://<space>.yaks.app/_yaks/billing`), not checkout. For Free,
+the page explains the paid allowances. For Plus, explain the relevant deletion
+or monthly-reset option instead of promising that another upgrade removes the
+limit. Sign-in returns the person to the same settings page.

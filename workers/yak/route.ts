@@ -52,6 +52,10 @@ export let manageView = (path: string): ManageView | null => {
 // link — checkout is the signed-in web page's, and email's.
 export let PRICING = url({}, '/pricing')
 
+/** Signed-in plan settings; login preserves this destination. Never checkout. */
+export let planSettings = (slug: string, env: Host = {}) =>
+  `https://${spaceHost(env, slug)}${managePath('billing')}`
+
 // The agent door, as an address a person types into a connector form: two
 // spellings of ONE resource (mcp.ts). `MCP` is lazy — it tells a stranger
 // what this place is before anybody has signed in — and `MCP_ASK` never does,

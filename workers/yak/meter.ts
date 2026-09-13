@@ -11,7 +11,8 @@
 // the runtime's own types with nothing of Deno in its graph (conform.ts), so
 // the sweep is loaded only when its directory wake fires, after the plugin
 // list has been composed.
-import { type Host, url } from './host.ts'
+import type { Host } from './host.ts'
+import { planSettings } from './route.ts'
 import type { Sender } from '@yaks/mail'
 import * as dirPart from './directory.ts'
 import {
@@ -188,7 +189,9 @@ export let refusedVisit = (
       ? null
       : `This space has reached its ${count(limit.requests)} monthly visits. ` +
         `Its apps will be available again on the 1st (UTC). ` +
-        `The owner can still manage the space. Plans: ${url(env, '/pricing')}`,
+        `The owner can still manage the space. Plan settings: ${
+          planSettings(space.slug, env)
+        }`,
     {
       status: 429,
       headers: {
@@ -279,7 +282,7 @@ export let standing = (
     }, files past ${size(free.files)}, or the ${
       count(letters(space.tier) + 1)
     }st letter SENT is — a letter that ` +
-    `arrives always lands. What the plans hold: ${url(env, '/pricing')}`
+    `arrives always lands. Plan settings: ${planSettings(space.slug, env)}`
   let head = `${space.slug} (${
     space.tier ?? 'free'
   } tier, ${m.month}): ${apps}${
@@ -303,7 +306,7 @@ export let standing = (
 // The refusal, one sentence: what the ceiling is, and where the plans are
 // written down. Every door that says no says it this way.
 //
-// It names the PRICING PAGE and never a checkout link, and that is a policy
+// It names account plan settings, never a checkout link. This is a policy
 // line rather than a preference (C-33033 on D-32751): an agent surface may
 // explain that a feature needs a plan and may link to a page describing the
 // plans; it may not hand back anything that starts a purchase. Paying is the
@@ -347,8 +350,10 @@ export let atCeiling = (
       `or keep building with a connected agent`,
   }[what]()
   return `${said}. ${
-    tier == 'plus' ? `What the plans hold` : `Plus lifts it`
-  }: ${url(env, '/pricing')}`
+    tier == 'plus'
+      ? `Manage usage and plan settings`
+      : `Compare paid plans in settings`
+  }: ${planSettings(space.slug, env)}`
 }
 
 // ---- the letters (T-33688) --------------------------------------------------

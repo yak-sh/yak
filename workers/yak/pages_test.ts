@@ -93,3 +93,13 @@ Deno.test('pages: only production offers its repository marketplace shortcut', a
     assertEquals(html.includes('yak-sh/yak'), host == env ? false : true)
   }
 })
+
+Deno.test('paid plan settings describe unlimited apps', async () => {
+  const html = await spaceIndex({
+    ...page,
+    view: 'billing',
+    plan: { plus: true, ends: '', known: true },
+  }, env).text()
+  assertStringIncludes(html, 'Unlimited apps')
+  assertEquals(html.includes('null apps'), false)
+})

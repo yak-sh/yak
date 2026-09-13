@@ -45,6 +45,19 @@ it.
 
 Back to the map: <https://yaks.app/guide.md>
 
+## Before attaching a domain
+
+Custom domains require Plus (or an explicitly exempt space). If the space is not
+eligible, `domain_attach` returns `plan_required` and `settings_url` without
+provisioning a hostname. Give the person that settings link to compare paid
+plans; never link directly to checkout. It is their space's
+`https://<space>.yaks.app/_yaks/billing` page. If they need to sign in, the
+normal sign-in flow returns them to that page. The sign-in email already offers
+a single-use link; do not create or expose a login token in the conversation.
+
+Wait for the plan change before continuing with DNS setup. Keep using the
+existing `.yaks.app` address in the meantime.
+
 ## The three tools
 
 - `domain_attach(app?, hostname)` — provisions the hostname and answers with the
