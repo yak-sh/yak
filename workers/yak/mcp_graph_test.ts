@@ -16,7 +16,7 @@ import {
   signed,
   signIn,
 } from './probe.ts'
-import { FREE, monthOf, PLUS } from './meter.ts'
+import { FREE, monthOf } from './meter.ts'
 import { minted } from './mcp-probe.ts'
 
 // An entity spans apps (T-32699): a read that names no app asks every store
@@ -725,7 +725,7 @@ slow('a word the space already has is used where it lives', async () => {
 })
 
 slow(
-  'Plus app ceilings count live apps at both creation doors; comps stay exempt',
+  'Plus and comped spaces can create and install more than fifty apps',
   async () => {
     let k = await kernel({ STRIPE_WEBHOOK_SECRET: 'plus-limits-test' })
     try {
@@ -769,9 +769,9 @@ slow(
       })
       assertEquals(paid.status, 200)
       await paid.body?.cancel()
-      await meta(k, cookie).apply([
+      const seeded = [
         ...['plus-limits', 'yourname'].flatMap((slug) =>
-          Array.from({ length: PLUS.apps - 2 }, (_, i) => ({
+          Array.from({ length: 50 }, (_, i) => ({
             entity: { eid: crypto.randomUUID() },
             doc: { title: `App ${i}` },
             app: {
@@ -781,7 +781,10 @@ slow(
             },
           }))
         ),
-      ])
+      ]
+      for (let i = 0; i < seeded.length; i += 10) {
+        await meta(k, cookie).apply(seeded.slice(i, i + 10))
+      }
       // Refresh the directory after seeding through its graph.
       await agent.tool('space_new', {
         slug: 'limits-refresh',
@@ -792,27 +795,11 @@ slow(
         slug: 'last',
         title: 'Last',
       })
-      await assertRejects(
-        () =>
-          agent.tool('app_new', {
-            space: 'plus-limits',
-            slug: 'over',
-            title: 'Over',
-          }),
-        Error,
-        'plus tier, which is 50 apps',
-      )
-      await assertRejects(
-        () =>
-          agent.tool('app_install', {
-            space: 'plus-limits',
-            name: 'limits-example',
-            as: 'copy',
-          }),
-        Error,
-        'plus tier, which is 50 apps',
-      )
-      await agent.tool('app_delete', { space: 'plus-limits', app: 'last' })
+      await agent.tool('app_new', {
+        space: 'plus-limits',
+        slug: 'over',
+        title: 'Over',
+      })
       assertStringIncludes(
         await agent.tool('app_install', {
           space: 'plus-limits',
@@ -827,7 +814,7 @@ slow(
         slug: 'replacement',
         title: 'Replacement',
       })
-      // Bring the comped space above the paid ceiling through both doors.
+      // Comped spaces also remain uncapped through both doors.
       for (let i = 0; i < 3; i++) {
         await agent.tool('app_new', {
           space: 'yourname',

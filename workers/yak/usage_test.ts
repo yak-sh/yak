@@ -277,7 +277,7 @@ Deno.test('Plus ceilings are distinct and comped apps/data stay uncapped', () =>
   assertEquals(ceilings('free'), FREE)
   assertEquals(ceilings('plus'), PLUS)
   assertEquals(PLUS, {
-    apps: 50,
+    apps: null,
     requests: 1_000_000,
     bytes: 10 * 1024 ** 3,
     files: 50 * 1024 ** 3,
@@ -287,19 +287,16 @@ Deno.test('Plus ceilings are distinct and comped apps/data stay uncapped', () =>
   for (let tier of [null, 'free', 'plus'] as const) {
     assertEquals(ceilings(tier, 'yourname'), null)
   }
-  assertEquals(level(space({}, 'plus'), PLUS.apps, NOW), 'over')
+  assertEquals(level(space({}, 'plus'), 10000, NOW), 'ok')
   assertEquals(level(space({ bytes: PLUS.bytes }, 'plus'), 1, NOW), 'over')
   let comped = { ...space({ bytes: PLUS.bytes * 2 }, 'plus'), slug: 'yourname' }
-  assertEquals(level(comped, PLUS.apps * 2, NOW), 'ok')
-  let said = standing(space({ bytes: PLUS.bytes }, 'plus'), PLUS.apps, NOW)
+  assertEquals(level(comped, 10000, NOW), 'ok')
+  let said = standing(space({ bytes: PLUS.bytes }, 'plus'), 51, NOW)
   assertStringIncludes(said, 'plus tier')
-  assertStringIncludes(said, '50 of 50 apps')
+  assertStringIncludes(said, '51 apps (unlimited)')
   assertStringIncludes(said, '10 GB of 10 GB')
   assertStringIncludes(said, 'App serving pauses at')
-  assertStringIncludes(
-    atCeiling(space({}, 'plus'), 'apps'),
-    'plus tier, which is 50 apps',
-  )
+  assertEquals(JSON.parse(JSON.stringify(PLUS)).apps, null)
   assertStringIncludes(
     atCeiling(space({}, 'plus'), 'bytes'),
     'plus tier, which is 10 GB',

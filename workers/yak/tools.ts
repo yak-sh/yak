@@ -1968,7 +1968,7 @@ let OURS: Row[] = [
       // What the space HAS: an app in the trash is one the person has already
       // said they are done with, so it stands against nothing (erase.ts).
       let apps = (await ctx.dir.apps(space)).filter((a) => !a.trashed)
-      if (free && apps.length >= free.apps) {
+      if (free?.apps != null && apps.length >= free.apps) {
         throw new Error(atCeiling(space, 'apps', ctx.env))
       }
       let taken = await ctx.dir.app(space, s)
@@ -3839,7 +3839,7 @@ let OURS: Row[] = [
       // other (T-32758) — the same refusal app_new gives.
       let free = ceilings(space.tier, space.slug)
       let apps = (await ctx.dir.apps(space)).filter((a) => !a.trashed)
-      if (free && apps.length >= free.apps) {
+      if (free?.apps != null && apps.length >= free.apps) {
         throw new Error(atCeiling(space, 'apps', ctx.env))
       }
       // The address the copy takes: the SOURCE app's own slug, not the

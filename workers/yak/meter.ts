@@ -97,7 +97,7 @@ let GB = 1024 ** 3
 // The free tier, as decided (D-32751): what a space gets for nothing.
 export let FREE = { apps: 5, requests: 50_000, bytes: GB, files: GB }
 export let PLUS = {
-  apps: 50,
+  apps: null,
   requests: 1_000_000,
   bytes: 10 * GB,
   files: 50 * GB,
@@ -217,7 +217,7 @@ export let fullness = (space: Space, apps: number, now = new Date()) => {
   }
   return free
     ? {
-      apps: apps / free.apps,
+      ...(free.apps == null ? {} : { apps: apps / free.apps }),
       requests: m.requests / free.requests,
       bytes: m.bytes / free.bytes,
       ...both,
@@ -272,17 +272,19 @@ export let standing = (
   }
   let refused =
     `App serving pauses at ${count(free.requests)} monthly visits ` +
-    `(HTTP 429, checked hourly; resets on the 1st UTC); an app past ${free.apps}, a build past ${
-      count(builds(space.tier))
-    }, data past ${size(free.bytes)}, files past ${size(free.files)}, or the ${
+    `(HTTP 429, checked hourly; resets on the 1st UTC); ${
+      free.apps == null ? '' : `an app past ${free.apps}, `
+    }a build past ${count(builds(space.tier))}, data past ${
+      size(free.bytes)
+    }, files past ${size(free.files)}, or the ${
       count(letters(space.tier) + 1)
     }st letter SENT is — a letter that ` +
     `arrives always lands. What the plans hold: ${url(env, '/pricing')}`
-  let head =
-    `${space.slug} (${
-      space.tier ?? 'free'
-    } tier, ${m.month}): ${apps} of ${free.apps} ` +
-    'apps'
+  let head = `${space.slug} (${
+    space.tier ?? 'free'
+  } tier, ${m.month}): ${apps}${
+    free.apps == null ? ' apps (unlimited)' : ` of ${free.apps} apps`
+  }`
   let read = asOf(m.at)
   // The apps, the letters and the builds are counted here and now; the rest
   // waits on the sweep. Before the first one this month there is no reading at
