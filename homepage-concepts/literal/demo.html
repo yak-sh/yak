@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Neighborhood equipment — interactive example</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body class="demo-body">
+    <header class="app-head">
+      <div class="app-icon" aria-hidden="true">↗</div>
+      <div>
+        <p class="eyebrow">OAK STREET · DEMONSTRATION</p>
+        <h1>Borrow from the neighbors.</h1>
+      </div>
+    </header>
+    <p
+      class="app-description">Reserve equipment for Saturday. Everyone uses the same list—not a separate chat.</p>
+    <form
+      id="booking"><label>Your name <input name="person" value="You" maxlength="40" required></label><label>What do you need? <select name="item"><option value="projector">Projector</option><option value="speaker">Portable speaker</option><option value="screen">Outdoor screen</option></select></label><button type="submit">Reserve for Saturday</button></form>
+    <p id="feedback" class="feedback" role="status"></p>
+    <section id="items" aria-label="Available equipment"></section>
+    <section id="answer" class="answer" hidden>
+      <p class="eyebrow">DEMO ASSISTANT · READING THIS APP’S RECORDS</p>
+      <p id="answer-text"></p>
+    </section>
+    <footer
+      class="app-foot"><span id="save-state">Saved only in this browser</span><button id="reset" class="text-button">Reset example</button></footer>
+    <script type="module" src="demo.js"></script>
+  </body>
+</html>
