@@ -334,14 +334,19 @@ Deno.test('the tool teaches every op it answers', () => {
   }
 })
 
-// What a host is told about a page it RENDERS (T-34350, T-34433). Both halves
-// are mandatory once a plugin ships UI — a dedicated sandbox origin and the
-// exact domains the page fetches from — and ChatGPT reads the older `openai/*`
-// spelling, so both go out at once.
-Deno.test('a view declares its sandbox origin and what it may reach', () => {
+// Portable hosts choose their sandbox. ChatGPT may use its namespaced origin.
+Deno.test('view metadata leaves portable sandbox selection to the host', () => {
   let bare = uiMeta('https://yaks.app')
-  assertEquals(bare.ui.domain, 'https://yaks.app')
   assertEquals(bare['openai/widgetDomain'], 'https://yaks.app')
+  // A strict Claude host rejects a website origin in ui.domain; omission is
+  // allowed. Unknown hosts must not receive a guessed Claude or OpenAI domain.
+  const acceptsClaude = (meta: { ui: { domain?: string; csp?: unknown } }) =>
+    meta.ui.domain == null ||
+    /^[a-f0-9]{32}\.claudemcpcontent\.com$/.test(meta.ui.domain)
+  assertEquals(acceptsClaude({ ui: { domain: 'https://yaks.app' } }), false)
+  assertEquals(acceptsClaude(bare), true)
+  assertEquals(Object.hasOwn(bare.ui, 'domain'), false)
+
   // An empty allowlist is a DECLARATION — this page fetches nothing — and is
   // what the platform's own two inline views say. Saying nothing at all is
   // what a host reads as no policy, and stamps "CSP off" on.

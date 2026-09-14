@@ -117,12 +117,10 @@ slow('an app declares its own commands, and command runs them', async () => {
     assertEquals(page._meta.ui.csp.resourceDomains, [
       `https://${space}.yaks.app`,
     ])
-    // The other half a plugin shipping UI owes a host (T-34350): the sandbox
-    // origin, which is the SPACE's own site — so one person's app view never
-    // shares an origin with another's — said in both spellings, on the
-    // listing and on the bytes.
+    // Only the OpenAI compatibility key selects a custom sandbox origin.
+    // Portable hosts use their default; CSP still permits the app's assets.
     for (let said of [listed, page]) {
-      assertEquals(said._meta.ui.domain, `https://${space}.yaks.app`)
+      assertEquals(said._meta.ui.domain, undefined)
       assertEquals(
         said._meta['openai/widgetDomain'],
         `https://${space}.yaks.app`,

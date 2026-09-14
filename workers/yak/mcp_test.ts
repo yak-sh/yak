@@ -365,11 +365,11 @@ slow(
       assertStringIncludes(drawn.text, 'ui/notifications/tool-result')
       assertStringIncludes(drawn.text, 'ui/initialize')
       // What a host is told ABOUT the page, on the listing and on the bytes
-      // both (T-34350): the sandbox origin the plugin gets, and an empty
+      // portable CSP plus the OpenAI-only sandbox origin, and an empty
       // allowlist, since this page is one file that fetches nothing. Missing,
       // ChatGPT stamps it "CSP off" and the widget fails to load (T-34433).
       for (let said of [view, drawn]) {
-        assertEquals(said._meta.ui.domain, 'https://yaks.app')
+        assertEquals(said._meta.ui.domain, undefined)
         assertEquals(said._meta.ui.csp, {})
         assertEquals(said._meta['openai/widgetDomain'], 'https://yaks.app')
         assertEquals(said._meta['openai/widgetCSP'], {
@@ -399,7 +399,7 @@ slow(
       assertEquals(cards.mimeType, 'text/html;profile=mcp-app')
       assertStringIncludes(cards.text, 'ui/notifications/tool-result')
       assertStringIncludes(cards.text, "name: 'app_errors'")
-      assertEquals(cards._meta.ui.domain, 'https://yaks.app')
+      assertEquals(cards._meta.ui.domain, undefined)
       assertEquals(cards._meta.ui.csp, {})
       // Both views accept the host's alternate result bridge.
       for (let page of [drawn.text, cards.text]) {

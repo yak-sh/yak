@@ -1543,25 +1543,16 @@ export type Csp = {
   baseUriDomains?: string[]
 }
 
-// What a host is told ABOUT a view, beside its bytes.
-//
-// `domain` is the origin the host gives the page its own sandbox subdomain
-// from — one per site, so two spaces' views never share an origin — and it is
-// MANDATORY for a plugin that ships UI
-// (developers.openai.com/plugins/reference). `csp` is the exact set of places
-// the page reaches for, which the submission checklist requires as well
-// (developers.openai.com/plugins/deploy/submission). Declaring neither is what
-// ChatGPT stamps "CSP off" on and what leaves the widget failing to load at
-// all (T-34433).
-//
-// Both are said twice on purpose. The standard `ui` surface is the spec's;
-// the `openai/*` aliases beside it are the older spelling ChatGPT still reads,
-// snake_case and all, and a host that knows both reads `ui` first. And the
-// whole thing rides on the resource in `resources/list` AND on each content
-// item of `resources/read` — the content item is what governs the iframe the
-// host actually builds (spec 2026-01-26 §Resources).
+// Resource metadata for both portable MCP Apps and ChatGPT.
+// ui.domain is optional and host-specific: Claude expects a hashed hostname,
+// while ChatGPT accepts a website origin. Do not copy the OpenAI value into
+// the portable field. Other hosts choose their default sandbox origin.
+// CSP still lists the actual network destinations; it does not set the
+// sandbox origin. Include this metadata on resource listings and read contents.
+// https://github.com/modelcontextprotocol/ext-apps/blob/main/specification/2026-01-26/apps.mdx
+// https://developers.openai.com/plugins/reference
 export let uiMeta = (domain: string, csp: Csp = {}) => ({
-  ui: { domain, csp },
+  ui: { csp },
   'openai/widgetDomain': domain,
   'openai/widgetCSP': {
     connect_domains: csp.connectDomains ?? [],
