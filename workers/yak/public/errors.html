@@ -261,8 +261,9 @@
     // The host sizes the frame from what we report (spec §Sizing), so the
     // measure is the CONTENT's — the document fills whatever frame we were
     // given and would only ever report that back.
+    let initialized = false
     let sized = () =>
-      call('ui/notifications/size-changed', {
+      initialized && call('ui/notifications/size-changed', {
         width: document.body.scrollWidth,
         height: document.body.scrollHeight,
       })
@@ -291,8 +292,12 @@
     request('ui/initialize', {
       protocolVersion: '2026-01-26',
       appCapabilities: { availableDisplayModes: ['inline'] },
-      clientInfo: { name: 'yaks.app errors view', version: '1' },
+      appInfo: { name: 'yaks.app errors view', version: '1' },
     }).then((reply) => {
+      if (reply.error || !reply.result) {
+        quiet('Could not initialize this view. Try again.')
+        return
+      }
       let vars = (((reply || {}).result || {}).hostContext || {}).styles
       vars = (vars || {}).variables || {}
       // The host's own theme, where it has one to lend.
@@ -306,6 +311,7 @@
         if (theirs) document.documentElement.style.setProperty(ours, theirs)
       }
       call('ui/notifications/initialized', {})
+      initialized = true
       // ChatGPT also leaves the answer on its own bridge, which is what a
       // page that mounted after the notification went out still has.
       let bridge = window.openai

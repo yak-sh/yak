@@ -321,7 +321,7 @@ slow(
       assertEquals(guide.annotations.readOnlyHint, true)
       assertEquals(
         guide.outputSchema.required.sort(),
-        ['markdown', 'page'],
+        ['markdown', 'page', 'text'],
       )
       for (let p of PAGES) assertStringIncludes(guide.description, p.slug)
       let map = await agent.tool('guide')
