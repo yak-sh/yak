@@ -183,7 +183,7 @@ Deno.test('the plan cards and Plus offer carry the meter allowances', () => {
   let allowances = (tier: 'free' | 'plus') => {
     let limits = tier == 'plus' ? PLUS : FREE
     return [
-      `${limits.apps} apps`,
+      limits.apps == null ? 'Unlimited apps' : `${limits.apps} apps`,
       `${limits.requests.toLocaleString('en-US')} visits a month`,
       `${size(limits.bytes)} of app data`,
       `${LETTERS[tier].toLocaleString('en-US')} emails a month`,
@@ -776,7 +776,7 @@ Deno.test('the signed-in plan copy derives both tiers from the meter', async () 
     )
     assertStringIncludes(
       html,
-      `${limits.apps} apps, ${
+      `${limits.apps == null ? 'Unlimited apps' : `${limits.apps} apps`}, ${
         limits.requests.toLocaleString('en-US')
       } visits a month, ${size(limits.bytes)} of app data`,
     )
