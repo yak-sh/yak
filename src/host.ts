@@ -18,3 +18,8 @@ export type Host = {
   upgrade: (req: Request) => { socket: WebSocket; response: Response }
   onSignal: (sig: 'SIGINT' | 'SIGTERM', fn: () => void) => void
 }
+
+// A plain GET at a socket door is a client mistake, not a crash: `upgrade`
+// throws on it, so the route answers 400 before asking the host.
+export let upgradable = (req: Request) =>
+  (req.headers.get('upgrade') ?? '').toLowerCase() == 'websocket'

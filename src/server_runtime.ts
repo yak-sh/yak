@@ -16,7 +16,7 @@ import retiredDataDoorList from './retired_data_doors.json' with {
 }
 import { guard, type Serving } from './bind.ts'
 import { counts, type Tally, tallying } from './hops.ts'
-import type { Handler } from './host.ts'
+import { type Handler, upgradable } from './host.ts'
 import { host } from './host_deno.ts'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { known } from './catalog.ts'
@@ -576,6 +576,7 @@ setTimeout(warm)
 // owner's socket, one frame per delta, write-only. A reader-plane server takes
 // them too — fanning a frame out to a watcher is serving, not writing.
 let observed = (req: Request) => {
+  if (!upgradable(req)) return notUpgrade()
   let { socket, response } = host.upgrade(req)
   socket.onmessage = (m) => {
     try {
@@ -589,7 +590,10 @@ let observed = (req: Request) => {
 }
 
 let TRACE = Deno.env.get('TASKS_WS_TRACE') == '1'
+let notUpgrade = () =>
+  new Response('websocket upgrade required\n', { status: 400 })
 let ws = (req: Request) => {
+  if (!upgradable(req)) return notUpgrade()
   let { socket, response } = host.upgrade(req)
   let sockN = ++sockCount
   let t0 = performance.now()
