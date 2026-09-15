@@ -128,6 +128,8 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['lemo*', and(text('lemo*'))],
   ['.limit=200', and(limit(200))],
   ['.after=13882', and(after(13882))],
+  // a human id is the same number wearing its display prefix
+  ['.after=T-13882', and(after(13882))],
   ['.edges!', and(edges())],
   [
     '.edges.peers=status,title',
@@ -208,6 +210,8 @@ Deno.test('quotes glue a value across & and spaces', () => {
     and(contains('title', 'say "hi"')),
   )
   assertThrows(() => parse('.title~="open'), Error, 'unclosed quote')
+  assertThrows(() => parse('.after=T-'), Error, 'entity number or id')
+  assertThrows(() => parse('.limit=T-3'), Error, 'whole number')
 })
 
 // A quoted bare word stays one phrase text term; an apostrophe inside a word

@@ -137,9 +137,10 @@ operator is part of the value (`.title~=x[1]`).
 - Quotes glue a value across whitespace; the empty query selects nothing
   (`{ kind: 'never' }`).
 - `.after=<num>` is the window's cursor: the entity number of the entity to
-  continue past, and the ONLY cursor spelling. It is order-agnostic on purpose —
-  an evaluator derives the anchor's place in whatever order the query asked for,
-  so a caller pages without ever learning the order key. This parser only says
+  continue past, and the ONLY cursor spelling (`.after=T-13882` is the same
+  number wearing its display prefix). It is order-agnostic on purpose — an
+  evaluator derives the anchor's place in whatever order the query asked for, so
+  a caller pages without ever learning the order key. This parser only says
   which entity it names; where that sits is evaluation (`@yaks/sql`,
   `@yaks/match`).
 

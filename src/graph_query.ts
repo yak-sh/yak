@@ -12,6 +12,7 @@
 // call site). sql_test.ts holds the index and the matcher against each other,
 // entry predicates included, so the fast path cannot silently disagree.
 import type { Sql } from './store/sql.ts'
+import { cursor } from '@yaks/query'
 import {
   capabilities,
   type Change,
@@ -1449,7 +1450,7 @@ export let askOf = (segs: string[]): Ask => {
     // means restart, but inventing one here erases every in-line cursor.
     after: rider(segs, 'after=') == null
       ? undefined
-      : Number(rider(segs, 'after=')) || 0,
+      : cursor(rider(segs, 'after=')!) || 0,
     limit: Number(rider(segs, 'limit=')) || undefined,
     reveal: segs.includes('quarantined=1'),
     backlinks: segs.includes('backlinks=1'),

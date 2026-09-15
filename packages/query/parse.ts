@@ -166,6 +166,15 @@ let PRESENCE: Record<string, Clause> = {
   refs: { kind: 'refs', op: '!', value: '' },
 }
 
+// The entity a cursor names, read off its number or its human id (the number
+// wearing a display prefix); `undefined` for anything else, so a door refuses a
+// guessed bound rather than restarting from the front. `.after=` and a door's
+// `after=` rider read the same spelling through this one function.
+export let cursor = (val: string): number | undefined => {
+  let m = val.match(/^(?:[A-Za-z]+-)?(\d+)$/)
+  return m ? Number(m[1]) : undefined
+}
+
 // A component word wearing a sigil, or null when the token wears none. `!comp`
 // and `.comp` are ordinary predicates — absence and presence are questions any
 // evaluator answers from data — and the other four are the rule's own words.
@@ -340,16 +349,25 @@ export let parseDot = (token: string): Clause[] | null => {
     })
     return [{ kind: 'fields', fields }]
   }
-  // `.limit=200` / `.after=13882` — the window. A bound that is a guess is
-  // worse than none, so a non-integer is refused, not dropped. `.after` names an
-  // ENTITY by its spine number, never a position or an order key: an evaluator
-  // derives where that entity sits in whatever order the query asked for, so
-  // one cursor spelling serves every ordering.
-  if (pathStr == 'limit' || pathStr == 'after') {
+  // `.limit=200` — the window's bound. A bound that is a guess is worse than
+  // none, so a non-integer is refused, not dropped.
+  if (pathStr == 'limit') {
     if (op != '=' || !/^\d+$/.test(val)) {
-      throw new Error(`.${pathStr} takes a whole number: .${pathStr}=200`)
+      throw new Error('.limit takes a whole number: .limit=200')
     }
-    return [{ kind: pathStr, n: Number(val) }]
+    return [{ kind: 'limit', n: Number(val) }]
+  }
+  // `.after=13882` / `.after=T-13882` — the window's cursor. It names an ENTITY
+  // by its spine number, never a position or an order key: an evaluator derives
+  // where that entity sits in whatever order the query asked for, so one cursor
+  // spelling serves every ordering. A human id is that number wearing a display
+  // prefix, so it is read here without a store: inputs accept human ids.
+  if (pathStr == 'after') {
+    let n = op == '=' ? cursor(val) : undefined
+    if (n == null) {
+      throw new Error('.after takes an entity number or id: .after=T-200')
+    }
+    return [{ kind: 'after', n }]
   }
   // `.edges!` / `.edges.peers=status,title` — the rider.
   if (segs[0] == 'edges') {

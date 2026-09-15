@@ -58,6 +58,8 @@ Deno.test('askOf: one segment vocabulary, riders lifted off the filter line', ()
   assertEquals(ask.ids, ['T-1', 'T-2'])
   assertEquals(ask.filters, ['.status=open', '.priority=1'])
   assertEquals(ask.after, 7)
+  // the rider reads a human id as the same cursor
+  assertEquals(askOf(['after=T-7']).after, 7)
   assertEquals(ask.limit, 3)
   assertEquals([ask.reveal, ask.backlinks, ask.deps, ask.recursive], [
     true,
