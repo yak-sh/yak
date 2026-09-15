@@ -123,8 +123,9 @@ Deno.test('a hundred rows cost the components they wear, not the vocabulary', as
   })
   assertEquals(rows.length, 100)
   // Filing is now a separate worn component: one extra table read, not N.
-  // Two plan-time catalog reads replace the component census.
-  assertEquals(counts(tally).hops, 8)
+  // Two plan-time catalog reads replace the component census, and the
+  // catalog's version probe rides beside them on a connection's first plan.
+  assertEquals(counts(tally).hops, 9)
 })
 
 // And the same number on the wire. The boot is the heavy tier's (agg_sub_test.ts

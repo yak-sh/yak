@@ -102,7 +102,9 @@ Deno.test('archetype plans and gathers observe commits from another SQLite handl
       } finally {
         stmt.finalize()
       }
-      if (db == first && sql == 'select entity, tables from archetype') {
+      // The planner consults the catalog through its version probe; a
+      // commit landing right after it is the race this test stages.
+      if (db == first && sql.startsWith('select count(*) n, max(entity) m')) {
         let hook = afterCatalog
         afterCatalog = undefined
         hook?.()

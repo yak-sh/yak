@@ -107,7 +107,12 @@ Deno.test('classified gathers select only present tables and only their owners',
   assertEquals(asked.length, 1) // value-only queries do not load the catalog
   asked = []
   s.rows('.doc! .marker!')
-  assertEquals(asked.length, 3) // completeness, one shared catalog, entity scan
-  assert(asked[2].sql.includes('"entity"."archetype" in ('))
-  assert(!/join "(doc|marker)"/.test(asked[2].sql))
+  // completeness, catalog version, one shared catalog, entity scan
+  assertEquals(asked.length, 4)
+  assert(asked[3].sql.includes('"entity"."archetype" in ('))
+  assert(!/join "(doc|marker)"/.test(asked[3].sql))
+  asked = []
+  s.rows('.doc! .marker!')
+  assertEquals(asked.length, 3) // the version proves the snapshot; no re-read
+  assert(!asked.some((q) => q.sql == 'select entity, tables from archetype'))
 })
