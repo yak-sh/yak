@@ -2451,8 +2451,14 @@ export let retryEntrySub = (session: string) =>
 let routeUses = new Map<string, number>()
 export let routeName = (eid: string, fields?: string) =>
   `route:${eid}${fields ? `:${fields}` : ''}`
+// A tile paints one row and nothing about its neighbours: `ROW` asks for the
+// whole entity with no edge rider, where a bare route carries 100 edges and
+// their peers (a shelved session: 4.8 KB and ~40 ms of serving, for a chip).
+export let ROW = '*'
 let routeLine = (eid: string, fields?: string) =>
-  `id=${eid}&${fields ? `.fields=${fields}` : ROUTE_EDGES}`
+  fields == ROW
+    ? `id=${eid}`
+    : `id=${eid}&${fields ? `.fields=${fields}` : ROUTE_EDGES}`
 
 export let entityRead = (eid: string, fields?: string) => {
   let sub = routeName(eid, fields)

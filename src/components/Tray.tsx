@@ -13,7 +13,7 @@ import { awake, type Session } from '../types.ts'
 import { block } from './ui.tsx'
 import { dragData } from './drag.ts'
 import { Entity } from './Entity.tsx'
-import { PENDING_WAKE, SessionDot } from './session_status.tsx'
+import { SessionDot } from './session_status.tsx'
 import { Card, icons } from './Card.tsx'
 import { usePinTargets } from './subscriptions.ts'
 import { Icon } from './icons.tsx'
@@ -82,9 +82,6 @@ export let traySessions = (rows: [string, Session][]) =>
 let useLive = () => {
   // Fixed query list: hooks and ownership stay stable across renders.
   let ids = traySessionQueries.flatMap((q) => useQueryEids(q, true))
-  // The dots' one defining sub: every pending wake, with the session it is
-  // aimed at, so each dot resolves its own locally (SessionDot local).
-  useQueryEids(`${PENDING_WAKE}&.fields=deliver.to`, true)
   return traySessions([...new Set(ids)].flatMap((eid) => {
     let s = ent(eid).session
     return s && shown(eid, s) ? [[eid, s] as [string, Session]] : []
@@ -227,7 +224,7 @@ export let Tray = () => {
           onClick={() => toggle(!trayOpen.value)}
         >
           <Dots>
-            {ls.map(([eid]) => <SessionDot key={eid} e={ent(eid)} local />)}
+            {ls.map(([eid]) => <SessionDot key={eid} e={ent(eid)} />)}
           </Dots>
           <Chevron>{trayOpen.value ? '⌄' : '⌃'}</Chevron>
         </Live>
