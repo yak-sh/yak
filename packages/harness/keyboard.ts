@@ -99,6 +99,7 @@ export const shortcuts = [
   ['v', 'VISUAL rendered selection; hjkl move, y copy, Esc NORMAL'],
   ['Enter', 'inspect selected entry source; [/] chunks; Esc returns'],
   ['? / Esc', 'show / dismiss help'],
+  ['A', 'authorize an MCP server (private return-URL input)'],
   ['r', 'runtime panel: j/k select, x interrupt/cancel queued, c continue'],
   ['Ctrl+U', 'INSERT / VISUAL: cut entire draft'],
   ['Alt+p', 'insert saved local yank into draft'],

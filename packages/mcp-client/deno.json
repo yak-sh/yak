@@ -2,7 +2,9 @@
   "name": "@yaks/mcp-client",
   "version": "0.1.0",
   "exports": {
-    ".": "./mod.ts"
+    ".": "./mod.ts",
+    "./oauth": "./oauth.ts",
+    "./host": "./host.ts"
   },
   "license": "Apache-2.0",
   "imports": {

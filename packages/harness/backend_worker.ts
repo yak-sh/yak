@@ -138,6 +138,12 @@ async function handle(method: string, value: unknown): Promise<unknown> {
         String(args[0]),
         args[1] as import('./runtime.ts').RuntimeAction,
       )
+    case 'authorizeMCP':
+      return a.authorizeMCP(
+        args[0] as import('./mcp_auth.ts').MCPAuthAction,
+        String(args[1] ?? ''),
+        String(args[2] ?? ''),
+      )
     case 'image':
       return await a.image(String(args[0]))
     case 'start':

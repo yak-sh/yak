@@ -1,6 +1,6 @@
 /** Host composition: shared MCP connections and the existing yak credential store. */
-import { clients, type Server } from '@yaks/mcp-client'
-import { tokenFor } from '@yaks/cli'
+import type { Server } from '@yaks/mcp-client'
+import { authorizedMCP } from './mcp_auth.ts'
 import { type Graph, type Tool as GraphTool, toolName } from '@yaks/graph'
 import { type Tool, type ToolContext, ToolError } from '@yaks/session'
 import { images } from './images.ts'
@@ -21,15 +21,26 @@ export const configuredMCP = (servers?: Server[]): Server[] => {
         (!Array.isArray(s.allow) ||
           s.allow.some((x: unknown) => typeof x !== 'string'))) ||
       Object.keys(s).some((k) =>
-        !['name', 'url', 'allow', 'credential'].includes(k)
+        !['name', 'url', 'allow', 'credential', 'oauth'].includes(k)
       )
     ) {
       throw new Error(
-        'Invalid MCP server configuration; use name, url, allow, credential',
+        'Invalid MCP server configuration; use name, url, allow, credential, oauth',
       )
     }
     if (!s.name || names.has(s.name)) {
       throw new Error('MCP server names must be nonempty and unique')
+    }
+    if (
+      s.oauth != null &&
+      (typeof s.oauth !== 'object' || Array.isArray(s.oauth) ||
+        Object.entries(s.oauth).some(([key, value]) =>
+          !['redirectUrl', 'clientId', 'clientMetadataUrl', 'scope'].includes(
+            key,
+          ) || typeof value !== 'string'
+        ))
+    ) {
+      throw new Error('Invalid MCP OAuth settings')
     }
     names.add(s.name)
     const url = new URL(s.url)
@@ -45,9 +56,7 @@ export const configuredMCP = (servers?: Server[]): Server[] => {
 }
 
 export const mcpTools = (g: Graph, servers: Server[]) => {
-  const connections = clients(servers, {
-    token: (s) => s.credential ? tokenFor(s.credential) : null,
-  })
+  const connections = authorizedMCP(servers)
   const store = images({}).store
   const ctx = {
     graph: g,
@@ -168,5 +177,6 @@ export const mcpTools = (g: Graph, servers: Server[]) => {
         },
       })),
     close: connections.close,
+    authorize: connections.control,
   }
 }

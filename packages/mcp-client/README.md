@@ -21,12 +21,12 @@ try {
 ```
 
 `credentialFromYourHost` above is supplied by the application. There is no
-credential file, OAuth flow, or implicit configuration discovery in this
-package. Token callbacks are consulted per HTTP request. Redirects are refused;
-credentials require HTTPS except for loopback development servers. A rejected
-call is not replayed, including after a 401 or a lost session. Recreate the
-connection after connection failure; never assume a lost response means a
-mutation did not execute.
+credential file or implicit configuration discovery in this package. Token
+callbacks are consulted per HTTP request. Redirects are refused; credentials
+require HTTPS except for loopback development servers. A rejected call is not
+replayed, including after a 401 or a lost session. Recreate the connection after
+connection failure; never assume a lost response means a mutation did not
+execute.
 
 ## Graph and CLI use
 
@@ -68,10 +68,10 @@ shutdown.
 
 This version supports tools over Streamable HTTP only. It does not provide
 stdio, legacy HTTP+SSE fallback, prompts/resources browsing, sampling,
-elicitation, OAuth registration, automatic reconnect, mutation retries, or
-task-based remote tools. Embedded resource content and links can still be
-returned by tools. Tool discovery is bounded to 1,000 tools; MCP response bodies
-themselves are buffered by the SDK, not byte-streamed into blob storage.
+elicitation, automatic reconnect, mutation retries, or task-based remote tools.
+Embedded resource content and links can still be returned by tools. Tool
+discovery is bounded to 1,000 tools; MCP response bodies themselves are buffered
+by the SDK, not byte-streamed into blob storage.
 
 A CLI can assign explicit local noun/verb metadata without guessing the server's
 naming convention:
@@ -89,3 +89,54 @@ For multiple tools, choose a unique pair for each. The `@yaks/cli/structured`
 adapter accepts these definitions and an execution callback that invokes
 `tool.run(args, context)`. The same original definition remains usable by graph
 executors and model adapters without a CLI spelling.
+
+## Browser authorization with a pasted return URL
+
+`@yaks/mcp-client/oauth` provides `authorization(options)`, independently of
+sessions or a UI. It uses the MCP SDK for protected-resource and authorization
+server discovery, dynamic client registration, PKCE, token exchange, and
+refresh. A pre-registered public `clientId` or `clientMetadataUrl` can be
+configured when the server does not support dynamic registration.
+
+```ts
+import { authorization } from '@yaks/mcp-client/oauth'
+import { fileAuthorizationStore } from '@yaks/mcp-client/host'
+
+const login = authorization({
+  serverUrl: 'https://example.com/mcp',
+  store: fileAuthorizationStore('/home/me/.yaks/mcp-auth.json'),
+})
+const { url } = await login.begin()
+// Display url. The person authorizes in their browser, then supplies the
+// complete return URL through a private input, not an agent conversation.
+await login.complete(returnUrl)
+const token = await login.token() // trusted host code only
+```
+
+The default return address is `http://127.0.0.1:8765/oauth/callback`. This flow
+starts no HTTP listener: after authorization, the browser may show a connection
+error. Copy its full address bar. A server must accept that registered redirect;
+configure `redirectUrl` to match a pre-registered client when necessary. A
+loopback listener or hosted return page can be supplied by another host. This is
+not the deprecated out-of-band OAuth grant.
+
+The pending state/verifier expires after ten minutes and lives only in memory.
+Restarting or cancelling requires a new authorization. Callback origin/path,
+state, and any issuer parameter are checked before exchanging the code. An
+exchange is not replayed after failure. Tokens refresh shortly before a known
+expiry; an unsuccessful refresh requires sign-in again. A server revoking a
+token before expiry may return an error; mutations are never replayed merely to
+try another credential.
+
+`AuthorizationStore` has `read` and serialized `update` operations. The host
+implementation uses a versioned JSON file, private file permissions, an advisory
+file lock across processes, and atomic file replacement. It is **not
+encrypted**. Token expiry is stored with the private record; no OAuth graph
+vocabulary is introduced by this first implementation. Application-specific
+secret stores can implement the same interface. The access token must only be
+passed to trusted request code, never returned as a model tool result.
+
+The configured server controls OAuth discovery. Configure only trusted servers;
+HTTP is accepted only for loopback addresses. Discovery requests and token
+requests have bounded network deadlines and do not follow redirects. This is not
+a general SSRF sandbox or a provider-independent OAuth package.

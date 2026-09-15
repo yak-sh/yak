@@ -1,3 +1,4 @@
+import { MCPAuthPanel } from './MCPAuthPanel.ts'
 import { ShuttingDown } from './shutdown.ts'
 import { RuntimePanel } from './RuntimePanel.ts'
 import type { TranscriptPage, TranscriptWindow } from '@yaks/session'
@@ -492,6 +493,7 @@ export let App = (
     h(EntryDetail, { ui, agent: a }),
     h(Keyboard, { ui, action }),
     h(RuntimePanel, { ui, agent: a, session: selection.id, subscribe }),
+    h(MCPAuthPanel, { ui, agent: a }),
     h(Feedback, { ui }),
     h(Composer, { ui, submit }),
   )

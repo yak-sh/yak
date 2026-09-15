@@ -736,3 +736,34 @@ units; a larger or evicted range reports an error instead of silently copying
 less. Viewport reflow retains the entry identity and clamps row/column, rather
 than promising stable character identity through arbitrary live Markdown
 changes. The composer keeps its existing explicit source-selection behavior.
+
+### Sign in to an MCP server
+
+Configure `HARNESS_MCP` as above, then press **Esc**, **A** in the TUI. Choose a
+server with j/k and Enter. Open the displayed authorization link in your
+browser. After approval, copy the complete return URL from the address bar and
+paste it into the authorization panel; press Enter. The return URL is hidden and
+never sent to the model, a transcript, or draft recovery storage. Esc cancels.
+
+The default callback is `http://127.0.0.1:8765/oauth/callback`. No listener is
+started, so a browser connection error at that address is expected; copy the
+address bar anyway. If a server requires pre-registration, add an `oauth` object
+to its configuration with `clientId`, `redirectUrl`, and optionally `scope` or
+`clientMetadataUrl`. The callback must match the registered redirect. Browser
+and provider policies can restrict this copy-address-bar workflow.
+
+Tokens and client registrations are stored separately from the graph in
+`~/.yaks/mcp-auth.json` (0600), or `HARNESS_MCP_AUTH`. This private JSON file is
+unencrypted and does not overwrite the existing yak bearer store. Back it up as
+credentials, not as app data. Pending logins do not survive restart. Existing
+`credential` bearer configuration remains a fallback. Successful OAuth connects
+the shared server and makes its tools available on the next model request.
+Unauthorized optional servers are omitted until signed in; other discovery
+failures remain errors. Refresh uses the SDK and private store, not a model
+tool.
+
+Programmatic hosts can call
+`agent.authorizeMCP('list' | 'begin' | 'complete' |
+'cancel', serverName?, returnUrl?)`.
+These calls are host controls, not agent instructions. Never paste a return URL
+into the ordinary conversation input.

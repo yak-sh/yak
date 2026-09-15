@@ -16,6 +16,13 @@ export type Server = {
   allow?: string[]
   /** Private credential reference interpreted by the host. */
   credential?: string
+  /** Explicit OAuth settings; tokens remain in host storage. */
+  oauth?: {
+    redirectUrl?: string
+    clientId?: string
+    clientMetadataUrl?: string
+    scope?: string
+  }
 }
 export type Options = {
   token?: (server: Server) => string | null | Promise<string | null>
@@ -27,6 +34,7 @@ export class MCPError extends Error {
     super(message)
   }
 }
+export class MCPAuthorizationRequired extends MCPError {}
 /** Encode opaque remote names without collisions or inferring noun/verb semantics. */
 export const nameOf = async (server: string, name: string): Promise<string> => {
   const hash = await crypto.subtle.digest(
@@ -70,17 +78,27 @@ export const connect = (server: Server, options: Options = {}): Connection => {
     generation++
     listing = undefined
   })
+  let unauthorized = false
   const fetcher: typeof fetch = async (input, init) => {
     const headers = new Headers(init?.headers)
     const token = await options.token?.(server)
     if (token) {
+      const target = new URL(
+        input instanceof Request ? input.url : String(input),
+      )
+      if (target.origin !== url.origin) {
+        throw new MCPError(
+          'Refusing cross-origin credential forwarding',
+          server.name,
+        )
+      }
       if (
         url.protocol !== 'https:' &&
         !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
       ) throw new MCPError('Credentials require HTTPS', server.name)
       headers.set('authorization', `Bearer ${token}`)
     }
-    return (options.fetch ?? fetch)(input, {
+    const response = await (options.fetch ?? fetch)(input, {
       ...init,
       headers,
       redirect: 'error',
@@ -91,12 +109,20 @@ export const connect = (server: Server, options: Options = {}): Connection => {
         ])
         : AbortSignal.timeout(options.timeout ?? 60000),
     })
+    unauthorized = response.status === 401
+    return response
   }
   const transport = new StreamableHTTPClientTransport(url, { fetch: fetcher })
   const ensure = () => {
     if (closed) throw new MCPError('MCP connection is closed', server.name)
     return ready ??= sdk.connect(transport).catch(async () => {
       await sdk.close().catch(() => {})
+      if (unauthorized) {
+        throw new MCPAuthorizationRequired(
+          'MCP sign-in required; open authorization in the host',
+          server.name,
+        )
+      }
       throw new MCPError(
         'MCP connection failed; check server URL and sign-in',
         server.name,

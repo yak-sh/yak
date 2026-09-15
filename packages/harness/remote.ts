@@ -105,7 +105,11 @@ export let remote = async (
     return await link.request(
       method,
       args,
-      method == 'close' ? { timeout: null } : undefined,
+      method == 'close'
+        ? { timeout: null }
+        : method == 'authorizeMCP'
+        ? { timeout: 120000 }
+        : undefined,
     )
   }
   let init: { names: Record<string, string> }
@@ -289,6 +293,12 @@ export let remote = async (
     archive: async (id, value) => {
       await request('archive', [id, value])
     },
+    authorizeMCP: async (action, name, callback) =>
+      await request('authorizeMCP', [
+        action,
+        name,
+        callback,
+      ]) as import('./mcp_auth.ts').MCPAuthReply,
     runtime: async (id) => await request('runtime', [id]) as Bundle[],
     control: async (id, action) =>
       await request('control', [id, action]) as string,

@@ -1,3 +1,4 @@
+import type { MCPAuthAction, MCPAuthReply } from './mcp_auth.ts'
 import { type EntrySource, entrySource, type SourceRequest } from './detail.ts'
 import { configuredMCP, mcpTools } from './mcp.ts'
 import type { Server as MCPServer } from '@yaks/mcp-client'
@@ -131,6 +132,11 @@ export type Opts = ChildLimits & NotHarness & {
 
 /** A running harness. */
 export type Agent = {
+  authorizeMCP: (
+    action: MCPAuthAction,
+    name?: string,
+    callback?: string,
+  ) => Promise<MCPAuthReply>
   h: Harness
   d: Daemon
   tools: Tool[]
@@ -318,6 +324,11 @@ export let agent = (opts: Opts = {}): Agent => {
         ])
         return session
       }),
+    authorizeMCP: (action, name, callback) =>
+      mcp ? mcp.authorize(action, name, callback) : Promise.resolve({
+        servers: [],
+        message: 'No MCP servers configured.',
+      }),
     send: async (session, text) => {
       // Admission is independent of the provider/tool execution queue. The
       // session plugin assigns seq inside this write's transaction.
@@ -435,6 +446,7 @@ export let agent = (opts: Opts = {}): Agent => {
   for (
     let key of [
       'start',
+      'authorizeMCP',
       'send',
       'taskEntry',
       'archive',

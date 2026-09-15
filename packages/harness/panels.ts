@@ -25,6 +25,7 @@ export type UIAgent =
     Pick<
       Agent,
       | 'archive'
+      | 'authorizeMCP'
       | 'runtime'
       | 'control'
       | 'transcriptWindow'
