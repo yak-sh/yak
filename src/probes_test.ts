@@ -466,7 +466,7 @@ Deno.test('sweepProfile: a dir that never frees is returned as a leak', async ()
 })
 
 slow(
-  'a deleted checkout is a failed run, not a skipped forest or a clean tree',
+  'a deleted checkout is skipped; a broken one is a failed run, not a clean tree',
   () => {
     let root = Deno.makeTempDirSync({ prefix: 'tasks-sweep-gone-' })
     let errors: string[] = []
@@ -485,15 +485,12 @@ slow(
       git('worktree', 'add', '-b', 'gone', missing)
       git('worktree', 'add', '-b', 'healthy', healthy)
       Deno.removeSync(missing, { recursive: true })
+      // A gone directory is git's `prunable`: skipped, no git run, no noise.
       let forest = trees(root, nobody, [], Date.now(), 0)
-      let gone = forest.find((t) => t.path == missing)!
       let kept = forest.find((t) => t.path == healthy)!
-      assertEquals(gone.clean, false)
-      assertEquals(judgeTree(gone).prune, false)
+      assertEquals(forest.find((t) => t.path == missing), undefined)
       assertEquals(judgeTree(kept).prune, true)
-      assertEquals(errors.length, 1)
-      assertStringIncludes(errors[0], `git status --porcelain in ${missing}`)
-      assertStringIncludes(errors[0], 'failed with exit -1')
+      assertEquals(errors.length, 0)
       assert(prune(root, kept))
       assertEquals(
         gitSync(root, ['show-ref', '--verify', 'refs/heads/healthy']).ok,
@@ -510,9 +507,9 @@ slow(
       )!
       assertEquals(bad.clean, false)
       assertEquals(judgeTree(bad).prune, false)
-      assertEquals(errors.length, 2)
-      assertStringIncludes(errors[1], `git status --porcelain in ${broken}`)
-      assertStringIncludes(errors[1], 'failed with exit 128')
+      assertEquals(errors.length, 1)
+      assertStringIncludes(errors[0], `git status --porcelain in ${broken}`)
+      assertStringIncludes(errors[0], 'failed with exit 128')
       // List and removal failures must also report a failed run, not masquerade
       // as an empty forest or successful cleanup.
       errors.length = 0

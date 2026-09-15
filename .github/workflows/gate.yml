@@ -88,6 +88,7 @@ jobs:
       - name: deno task check
         env:
           SUITE_STEP: deno task check
+          DENO_JOBS: 4
         run: deno task check
 
       # Quoted: a bare YAML scalar cannot carry a `: ` — the runner would never
@@ -95,6 +96,7 @@ jobs:
       - name: tests
         env:
           SUITE_STEP: tests
+          DENO_JOBS: 4
         run: 'DB_PATH=:memory: deno task test'
 
       # No install step: the Worker's npm dependencies are gitignored, and

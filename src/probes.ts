@@ -404,9 +404,11 @@ export let trees = (
   grace = GRACE,
 ): Tree[] => {
   let out: Tree[] = []
-  let entry: Partial<Tree> = {}
+  let entry: Partial<Tree> & { dead?: boolean } = {}
   let finish = () => {
-    if (!entry.path || !worktree(entry.path)) return
+    // git marks an entry whose directory is gone `prunable`; running status
+    // there only fails slowly. `git worktree prune` is its remedy, not ours.
+    if (!entry.path || entry.dead || !worktree(entry.path)) return
     let path = entry.path
     let idle = now - touched(path)
     let inside = procs.find((p) => within(p.cwd, path))
@@ -438,6 +440,7 @@ export let trees = (
       finish()
       entry = { path: line.slice(9) }
     } else if (line.startsWith('HEAD ')) entry.head = line.slice(5)
+    else if (line.startsWith('prunable ')) entry.dead = true
     else if (line.startsWith('branch ')) {
       entry.branch = line.slice(7).replace(/^refs\/heads\//, '')
     }
