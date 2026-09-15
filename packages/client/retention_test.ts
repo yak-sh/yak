@@ -343,15 +343,19 @@ Deno.test('a render can close its watch during an optimistic write without evict
   c.close()
 })
 
+// A frame that lands BEFORE validation is what an addressed boot paints from
+// (the fleet seeds its entity, then validates): the disk floor still hydrates
+// behind it, and never over it.
 Deno.test('same epoch validation never overwrites an already newer RAM row', async () => {
   let vault = wireStash()
   await vault.load('one', 10)
-  await vault.save('one', [saved('a')], 10)
+  await vault.save('one', [saved('a'), saved('b')], 10)
   let { c, frame } = fixture({ wireVault: vault })
   c.watch('.doc!')
   frame('s1', [{ entity: { eid: 'a' }, doc: { title: 'newer than disk' } }])
   await c.setEpoch('one')
   assertEquals(comp(c.ent('a'), 'doc').title, 'newer than disk')
+  assertEquals(comp(c.ent('b'), 'doc').title, 'b')
   c.close()
 })
 

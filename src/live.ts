@@ -590,6 +590,14 @@ export let holdQuery = (preds: Pred[], source?: string): Signal<string[]> => {
   s.n++
   return s.ids
 }
+// A query resolved over the rows this tab already HOLDS, never the server: for
+// a per-row lookup keyed by the row's own eid (a strip of session dots each
+// asking "a wake pending for me?") whose DEFINING sub the surface holds once
+// for all of them (T-37445: 13 dots opened 13 server subs, one per session).
+// Held for the caller's life like holdQuery; reads through the same narrow
+// signal queryEids gives an unheld query.
+export let holdLocal = (preds: Pred[]): Signal<string[]> => mem.hold(preds)
+export let dropLocal = (preds: Pred[]) => mem.drop(preds)
 export let dropQuery = (preds: Pred[]) => {
   let s = queryUses.get(qkey(preds))
   if (!s) return void mem.drop(preds)
@@ -614,7 +622,7 @@ export let dropQuery = (preds: Pred[]) => {
 // reads behind ensureClientRows) or explicitly accept a best-effort working-set
 // answer (a tile badge before its aggregate sub goes live). Anything needing
 // the complete result goes through queryEids — the server answers.
-let localEids = (preds: Pred[]): Signal<string[]> => mem.subscribe(preds)
+export let localEids = (preds: Pred[]): Signal<string[]> => mem.subscribe(preds)
 
 // The reverse-reference reads phrased as the queries the vocabulary already
 // answers: an eid EQUALITY anchors on the derived refs index (index.ts), a
@@ -2517,8 +2525,20 @@ export let boardQuery = (e: Ent) => {
 // disk checkpoint replaces rows and epoch in one transaction, never the outbox.
 export let seedFrom = async (snap: Snapshot, write = true) => {
   ensureClient()
-  if (snap.epoch) await replica.box.setEpoch(snap.epoch)
-  else replica.box.wire?.refresh()
+  // The disk floor hydrates BEHIND the seed, never ahead of it (T-37445): an
+  // addressed tab paints its entity the moment the handshake lands, and the
+  // vault's rows (up to the retention floor) fill in the rest of the page
+  // afterwards. Only a MOVED epoch validates first, since it invalidates every
+  // old row, the seed's included. A failed hydration is a missing floor, not
+  // a broken boot; the client's own report already names it.
+  let moved = !!held.epoch && !!snap.epoch && held.epoch !== snap.epoch
+  if (moved) await replica.box.setEpoch(snap.epoch!)
+  let hydrate = () =>
+    snap.epoch && !moved
+      ? replica.box.setEpoch(snap.epoch).catch(() => {})
+      : snap.epoch
+      ? undefined
+      : replica.box.wire?.refresh()
   clearObservations()
   pinZs.clear()
   // A seed replaces the ROWS; the edge table is rebuilt by the subs that hold
@@ -2542,6 +2562,7 @@ export let seedFrom = async (snap: Snapshot, write = true) => {
     vocabHash: snap.vocabHash,
     capabilities: snap.capabilities,
   }
+  void hydrate()
   void write
   return false
 }
@@ -2678,8 +2699,13 @@ export let boot = async () => {
     if (doc.visibilityState != 'visible' || !ws) return
     if (socketStale(ws.readyState, seen, Date.now())) ws.close()
   })
-  await once()
+  // The socket dials while the vault opens (T-37445): the handshake needs
+  // nothing from disk, and every frame it answers with lands behind once()
+  // on the serial chain, so no ack can outrun the outbox entry it clears.
+  let ready = once()
+  serial = serial.then(() => ready)
   connect()
+  await ready
   await painted()
 }
 ;(globalThis as {

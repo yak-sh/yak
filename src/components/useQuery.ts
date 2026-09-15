@@ -12,13 +12,16 @@
 import { useEffect, useLayoutEffect, useMemo } from 'preact/hooks'
 import {
   type Backlink,
+  dropLocal,
   dropQuery,
   edgeSub,
   ent,
   findEid,
+  holdLocal,
   holdQuery,
   linksVia,
   loaded,
+  localEids,
   queryEids,
   querySubscription,
   type References,
@@ -64,6 +67,18 @@ export let useQueryResult = (
     ready: !subscription || subscription.state.status == 'ready',
     loaded,
   }
+}
+
+// The matching eids over the rows this tab holds, no server sub: for a query
+// evaluated PER RENDERED ROW whose defining sub the surface holds once (the
+// tray's session dots, live.ts holdLocal).
+export let useLocalEids = (query: string): string[] => {
+  let preds = useMemo(() => resolve(query), [query])
+  useLayoutEffect(() => {
+    holdLocal(preds)
+    return () => dropLocal(preds)
+  }, [preds])
+  return localEids(preds).value
 }
 
 // The matching eids, as a live array. Prefer this when the caller only needs

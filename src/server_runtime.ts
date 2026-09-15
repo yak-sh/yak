@@ -608,11 +608,17 @@ let ws = (req: Request) => {
     try {
       let w = spare ?? spawnWorker()
       spare = null
-      setTimeout(warm)
+      // The NEXT spare is built once this socket's first answer is out: a
+      // spawn racing the handshake cost it ~10 ms of the seed's 12 (T-37445).
+      let answered = false
       w.onmessage = (m) => {
         let d = m.data
         if (typeof d?.frame == 'string') {
           if (socket.readyState == WebSocket.OPEN) socket.send(d.frame)
+          if (!answered) {
+            answered = true
+            setTimeout(warm)
+          }
         } else if (Array.isArray(d?.apply)) {
           applyFrom(socket, writer, d.apply as Change[], d.id)
         } else if (d?.closed) {

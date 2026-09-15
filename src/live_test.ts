@@ -23,6 +23,7 @@ import {
   config,
   deps,
   domains,
+  dropLocal,
   dropQuery,
   edgeSub,
   ent,
@@ -31,6 +32,7 @@ import {
   foldFor,
   gated,
   holdCommentCount,
+  holdLocal,
   holdQuery,
   hostFrom,
   inbox,
@@ -506,6 +508,37 @@ Deno.test('queryEids resolves pending wakes off the reverse index, narrowly', ()
   } finally {
     stop()
     dropQuery(pendingWakeQ('session'))
+  }
+})
+
+// T-37445: a strip of session dots asks the same per-row question once per
+// session; each resolves over the rows the strip's ONE defining sub holds, so
+// no dot opens a server sub of its own.
+Deno.test('holdLocal answers a per-row query off held rows, opening no server sub', () => {
+  let probe =
+    (globalThis as unknown as { __probe: { subN: () => number } }).__probe
+  cache.value = {
+    s1: { entity: { eid: 's1', num: 1 }, session: { eid: 's1', id: 'a' } },
+    s2: { entity: { eid: 's2', num: 2 }, session: { eid: 's2', id: 'b' } },
+    w1: {
+      entity: { eid: 'w1', num: 3 },
+      wake: { eid: 'w1', at: 'soon' },
+      deliver: { eid: 'w1', to: 's1' },
+    },
+  }
+  deps.value = []
+  let n0 = probe.subN()
+  let mine = holdLocal(pendingWakeQ('s1'))
+  let theirs = holdLocal(pendingWakeQ('s2'))
+  try {
+    assertEquals(mine.value, ['w1'])
+    assertEquals(theirs.value, [])
+    assertEquals(probe.subN(), n0)
+    applyLocal([{ eid: 'w1', name: 'delivered', comp: { at: 'now' } }])
+    assertEquals(mine.value, [])
+  } finally {
+    dropLocal(pendingWakeQ('s1'))
+    dropLocal(pendingWakeQ('s2'))
   }
 })
 

@@ -17,6 +17,7 @@ import { registerManagedSource } from './source_managed.ts'
 import { registerSessionSource } from './source_session.ts'
 import { type Frame, type Subserve, subserve } from './subserve.ts'
 import { subqueue } from './subqueue.ts'
+import { addressed } from './graph_query.ts'
 
 type In =
   | { init: string }
@@ -82,6 +83,10 @@ self.onmessage = (m: MessageEvent<In>) => {
       db.exec('pragma busy_timeout = 5000')
       sub = subserve(db, (frame) => post({ frame: JSON.stringify(frame) }))
       queue = subqueue(db, (f) => guard(() => sub?.frame(f)))
+      // A spare is built ahead of its socket (server_runtime.ts warm), so
+      // its first handshake need not pay for preparing the seed's statements:
+      // the addressed read compiles them (~12 ms on the live graph, T-37445).
+      addressed(db, 'T-1')
       return
     }
     if ('close' in d) {

@@ -5,7 +5,7 @@ import { useEffect } from 'preact/hooks'
 import { ent, entrySub, subscriptionState } from '../live.ts'
 import { type Ent, standing } from '../types.ts'
 import { type EntryRow, type GraphLog, graphLog } from '../entry_log.ts'
-import { useQueryEids } from './useQuery.ts'
+import { useLocalEids, useQueryEids } from './useQuery.ts'
 import { Dot } from './Dot.tsx'
 
 // A wake still pending for this session: a `wake` entity aimed at it (the
@@ -14,8 +14,16 @@ import { Dot } from './Dot.tsx'
 // bespoke index. The dot re-renders only when ITS wake membership changes; a
 // patch to any other entity (another session's wake included) triggers zero
 // re-render (T-17036).
+export let PENDING_WAKE = '.wake!&.delivered=&.error='
+let pendingWakeFor = (session: string) =>
+  `.wake! .deliver.to=${session} .delivered= .error=`
 export let usePendingWake = (session: string): boolean =>
-  useQueryEids(`.wake! .deliver.to=${session} .delivered= .error=`).length > 0
+  useQueryEids(pendingWakeFor(session)).length > 0
+// The same fact read off rows the tray already holds (its one PENDING_WAKE
+// sub with `deliver.to`), so a strip of dots costs one server sub, not one
+// per session (T-37445).
+export let usePendingWakeLocal = (session: string): boolean =>
+  useLocalEids(pendingWakeFor(session)).length > 0
 
 let entryRow = (e: Ent): EntryRow | undefined => {
   if (!e.entry?.seq) return undefined
@@ -84,8 +92,13 @@ export let graphStanding = (
 // The dot reads the facet O(1): no useEntryLog subscription, so a busy agent's
 // growing log costs the dot nothing (was 157ms/render). Only the cheap pending-
 // wake query re-renders it.
-export let SessionDot = ({ e }: { e: Ent }) => (
-  <Dot status={graphStanding(e, usePendingWake(e.eid))} />
+export let SessionDot = ({ e, local = false }: { e: Ent; local?: boolean }) => (
+  <Dot
+    status={graphStanding(
+      e,
+      local ? usePendingWakeLocal(e.eid) : usePendingWake(e.eid),
+    )}
+  />
 )
 
 // The Session VIEW still loads the full log — it renders the transcript — but
