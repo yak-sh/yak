@@ -63,6 +63,7 @@ import {
   routeSub,
   ROW,
   row,
+  rowsSub,
   serverEid,
   serverName,
   sessionRows,
@@ -3209,6 +3210,44 @@ Deno.test('first paint waits for state, then rescues, then gives up', async () =
   assertEquals(await run(late.promise, soon, () => late.resolve()), ['rescue'])
   // Nothing ever lands: the tab paints and names the stall.
   assertEquals(await run(never(), soon), ['rescue', 'stall'])
+})
+
+// T-37445: a list of tiles is ONE addressed sub, named by its ids, so ten
+// reference rows cost one serve and one frame instead of ten route subs.
+Deno.test('a list of rows is held in one sub and freed by its last holder', async () => {
+  let sent: Record<string, unknown>[] = []
+  let prior = useRoute((f) => sent.push(f as Record<string, unknown>))
+  let ids = ['a', 'b', 'c'].map((c) =>
+    `c0000000-0000-4000-8000-00000000000${c}`
+  )
+  let name = `rows:${ids.join(',')}`
+  let offs = [rowsSub(ids), rowsSub(ids)]
+  try {
+    await Promise.resolve()
+    let asks = sent.filter((f) => f.sub == name)
+    assertEquals(asks.length, 1)
+    assertEquals(asks[0].q, `id=${ids.join(',')}`)
+    landSub({
+      sub: name,
+      replace: true,
+      changes: ids.flatMap((eid, i) => [
+        { eid, name: 'entity', comp: { eid, num: 30 + i } },
+        { eid, name: 'doc', comp: { eid, title: `r${i}` } },
+      ]),
+    })
+    assertEquals(ids.map((id) => ent(id).doc?.title), ['r0', 'r1', 'r2'])
+    // Two holders, one sub: the first drop keeps it, the last one frees it.
+    offs.shift()!()
+    await Promise.resolve()
+    assertEquals(sent.some((f) => f.unsub == name), false)
+    offs.shift()!()
+    await Promise.resolve()
+    assertEquals(sent.some((f) => f.unsub == name), true)
+  } finally {
+    for (let off of offs) off()
+    unsubscribe(name)
+    useRoute(prior)
+  }
 })
 
 // T-37445: every frame the socket carried by the time the timer turns lands

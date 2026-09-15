@@ -14,7 +14,7 @@ import {
   repoTrace,
   routeName,
   routeSub,
-  ROW,
+  rowsSub,
   type SubscriptionRead,
   subscriptionState,
 } from '../live.ts'
@@ -58,16 +58,11 @@ export let useEntity = (eid?: string | null, fields?: string) => {
 
 // The same hold for a LIST of pins. The canvas List face and the tray's shelf
 // chips paint a pin's target without mounting a Card, so they hold it here; the
-// joined key means a re-render that moves no pin re-subscribes nothing. A tile
-// reads the row alone, never its edges (live.ts ROW).
+// joined key means a re-render that moves no pin re-subscribes nothing. The
+// tiles read their rows alone, never their edges, in one sub (live.ts rowsSub).
 export let usePinTargets = (ps: { target: string }[]) => {
   let key = ps.map((p) => p.target).join(',')
-  useLayoutEffect(() => {
-    let offs = key ? key.split(',').map((t) => routeSub(t, ROW)) : []
-    return () => {
-      for (let off of offs) off()
-    }
-  }, [key])
+  useLayoutEffect(() => rowsSub(key ? key.split(',') : []), [key])
 }
 
 // Ref columns are not edge peers. Ask for the small face, not its document,

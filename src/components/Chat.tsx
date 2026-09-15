@@ -3,7 +3,7 @@
 // session, so a reload or another browser finds the same transcript.
 import { useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { sessionFrames } from '../client.ts'
-import { capable, ent, mutate, myActor, routeSub, ROW, uuid } from '../live.ts'
+import { capable, ent, mutate, myActor, rowsSub, uuid } from '../live.ts'
 import { catalog, type Provider } from '../providers.ts'
 import type { Change, Ent } from '../types.ts'
 import { block } from './ui.tsx'
@@ -47,20 +47,23 @@ export let chatPlan = (
   }
 }
 
-// A tile reads the row alone (live.ts ROW): a referencing session's bare route
-// carried its hundred edges, 4.8 KB and the last frame of a page load.
-export let ReferenceRow = ({ eid }: { eid: string }) => {
-  useLayoutEffect(() => routeSub(eid, ROW), [eid])
-  return <Entity eid={eid} view='List.Tile' />
-}
+// A tile reads the row alone, never its edges: a referencing session's bare
+// route carried its hundred edges, 4.8 KB and the last frame of a page load.
+export let ReferenceRow = ({ eid }: { eid: string }) => (
+  <Entity eid={eid} view='List.Tile' />
+)
 
+// The list holds its rows in ONE sub (live.ts rowsSub): ten referencing
+// sessions were ten route subs and ten frames after the edges answered.
 export let ReferenceList = (
   { label, items }: {
     label: string
     items: { eid: string }[]
   },
-) =>
-  items.length
+) => {
+  let key = items.map((i) => i.eid).join(',')
+  useLayoutEffect(() => rowsSub(key ? key.split(',') : []), [key])
+  return items.length
     ? (
       <References>
         <Label>{label}</Label>
@@ -74,6 +77,7 @@ export let ReferenceList = (
       </References>
     )
     : null
+}
 
 export let chatChanges = (
   old: string | undefined,

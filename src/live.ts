@@ -2052,6 +2052,7 @@ let implicitQuery = (sub: string) => {
   if (sub.startsWith('route:')) {
     return routeLine(...sub.slice(6).split(':') as [string, string?])
   }
+  if (sub.startsWith('rows:')) return `id=${sub.slice(5)}`
   if (sub.startsWith('q:')) {
     try {
       return predsToQuery(JSON.parse(sub.slice(2))) ?? `remote:${sub}`
@@ -2480,6 +2481,8 @@ export let retrySubscription = (sub: string) => {
       ? `.entry.session=${sub.slice('entries:'.length)}`
       : sub.startsWith('route:')
       ? routeLine(...sub.slice(6).split(':') as [string, string?])
+      : sub.startsWith('rows:')
+      ? `id=${sub.slice(5)}`
       : undefined)
   if (!q) return false
   if (replica?.has(sub)) replica.retry(sub)
@@ -2537,6 +2540,26 @@ export let routeSub = (eid: string, fields?: string) => {
     let held = (routeUses.get(sub) ?? 1) - 1
     if (held > 0) return void routeUses.set(sub, held)
     routeUses.delete(sub)
+    dropBoard(sub)
+  }
+}
+
+// Several tiles' rows in ONE sub. A reference list or a shelf of pins paints N
+// entities, and N `route:<eid>:*` subs cost N serves and N frames where one
+// `id=a,b,c` line answers the same rows together (T-37445). Named by the joined
+// ids and refcounted like a route sub; a list that changes re-asks under the
+// new name, which is what a per-target hold already did.
+let rowsUses = new Map<string, number>()
+export let rowsSub = (eids: string[]) => {
+  if (!eids.length) return () => {}
+  let sub = `rows:${eids.join(',')}`
+  let n = rowsUses.get(sub) ?? 0
+  rowsUses.set(sub, n + 1)
+  if (!n) ownBoard(sub, `id=${eids.join(',')}`)
+  return () => {
+    let held = (rowsUses.get(sub) ?? 1) - 1
+    if (held > 0) return void rowsUses.set(sub, held)
+    rowsUses.delete(sub)
     dropBoard(sub)
   }
 }
