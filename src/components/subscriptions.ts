@@ -1,7 +1,7 @@
 // View lifecycles for live query subscriptions. The board hook opens the
 // shadow set beside the complete cache and closes it with the last view; the
 // entity hooks hold ONE row (and its edges) for as long as a view paints it.
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import {
   boardQuery,
   boardSub,
@@ -22,7 +22,7 @@ import { type Ent } from '../types.ts'
 
 export let useBoardSub = (e?: Ent): SubscriptionRead | undefined => {
   let q = String(e?.board?.query ?? '')
-  useEffect(() => e ? boardSub(e) : undefined, [e?.eid])
+  useLayoutEffect(() => e ? boardSub(e) : undefined, [e?.eid])
   useEffect(() => {
     if (e) boardQuery(e)
   }, [e?.eid, q])
@@ -52,7 +52,7 @@ export let useBoardTally = (e?: Ent) => {
 // SAYS so, and the row — with the `.edges!` rider's edges and their far
 // endpoints — streams in on mount and is evicted with the last view of it.
 export let useEntity = (eid?: string | null, fields?: string) => {
-  useEffect(() => eid ? routeSub(eid, fields) : undefined, [eid, fields])
+  useLayoutEffect(() => eid ? routeSub(eid, fields) : undefined, [eid, fields])
   return eid ? entityRead(eid, fields) : undefined
 }
 
@@ -62,7 +62,7 @@ export let useEntity = (eid?: string | null, fields?: string) => {
 // reads the row alone, never its edges (live.ts ROW).
 export let usePinTargets = (ps: { target: string }[]) => {
   let key = ps.map((p) => p.target).join(',')
-  useEffect(() => {
+  useLayoutEffect(() => {
     let offs = key ? key.split(',').map((t) => routeSub(t, ROW)) : []
     return () => {
       for (let off of offs) off()
@@ -93,7 +93,7 @@ export let useRepoUrl = (e: Ent): string | undefined => {
   for (let eid of trace.eids) {
     subscriptionState(routeName(eid, repoFields))
   }
-  useEffect(() => {
+  useLayoutEffect(() => {
     let want = new Set(key.split(','))
     for (let [eid, off] of held.current) {
       if (want.has(eid)) continue

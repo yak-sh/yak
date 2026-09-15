@@ -1570,6 +1570,9 @@ export type Sub = {
   // neighbourhood — which is what a card reads to say "and 1,747 more" rather
   // than passing a page off as everything the entity is joined to.
   edgeWindow?: Window
+  // The archetype descriptors this frame's rows wear that the socket had not
+  // shipped before (T-37445); learned before the rows render.
+  archetypes?: Change[]
   // An addressed read refusal. `reference` is stable enough to correlate the
   // visible failure with server read telemetry without marking the entity.
   error?: string
@@ -1751,9 +1754,8 @@ let connect = () => {
     // A heartbeat frame is liveness only (T-21511) — pet the watchdog, land
     // nothing.
     if (isPing(data)) return
-    serial = serial.then(() => land(data)).catch((e) => {
-      problem.value = String(e)
-    })
+    arrived.push(data)
+    if (arrived.length == 1) setTimeout(landArrived, 0)
   }
   socket.onclose = () => {
     unpet()
@@ -2590,9 +2592,72 @@ export let seedFrom = async (snap: Snapshot, write = true) => {
 // this one: a landing returns as soon as the rows are in memory, and the
 // package coalesces the vault writes behind it (T-37445).
 
+// Frames land in BATCHES (T-37445). A burst of fifty answers used to cost
+// fifty render passes: each frame landed in its own microtask, and the
+// signals it moved re-rendered the page before the next one landed, ~250 ms
+// of Preact for ~35 ms of landing. Now every frame the socket has carried by
+// the time the timer turns lands inside one signals batch, so the burst is
+// one render. A macrotask boundary is the coalescing point on purpose: the
+// message events already queued behind the current one run before it.
+let arrived: unknown[] = []
+let landArrived = () => {
+  let frames = arrived
+  arrived = []
+  serial = serial.then(() => landAll(frames))
+}
+let isSnapshot = (data: unknown) =>
+  !!data && typeof data == 'object' &&
+  !!(data as { snapshot?: unknown }).snapshot
+// A seed is the one frame that awaits (the vault's epoch check); everything
+// around it lands synchronously, in order, one batch per run.
+let landAll = async (frames: unknown[]) => {
+  for (let i = 0; i < frames.length;) {
+    if (isSnapshot(frames[i])) {
+      try {
+        await land(frames[i])
+      } catch (e) {
+        problem.value = String(e)
+      }
+      i++
+      continue
+    }
+    let j = i
+    while (j < frames.length && !isSnapshot(frames[j])) j++
+    batch(() => {
+      for (; i < j; i++) {
+        try {
+          landNow(frames[i])
+        } catch (e) {
+          problem.value = String(e)
+        }
+      }
+    })
+  }
+}
+
+// Descriptors ride frames; the archetype module registers its learner here,
+// since it imports this module and not the other way round.
+let learnArchetypes: (rows: Change[]) => void = () => {}
+export let onArchetypes = (fn: (rows: Change[]) => void) => {
+  learnArchetypes = fn
+}
+let learnFrom = (data: unknown) => {
+  let rows = (data as { archetypes?: Change[] } | null)?.archetypes
+  if (Array.isArray(rows)) learnArchetypes(rows)
+}
+
 // Every incoming shape has one landing door; a cursor-stamped frame is
 // checkpointed to disk once it has landed.
 let land = async (data: unknown) => {
+  learnFrom(data)
+  if (isSnapshot(data)) {
+    mark('reset')
+    await seedFrom((data as Reset).snapshot)
+    settleInitial()
+  } else landNow(data)
+}
+let landNow = (data: unknown) => {
+  learnFrom(data)
   if (data && typeof data == 'object' && 'disconnected' in data) {
     replica?.invalidate()
     return
@@ -2650,10 +2715,6 @@ let land = async (data: unknown) => {
   if (frame.catchup !== undefined) {
     applyLocal(frame.catchup)
     if (frame.cursor !== undefined) held = { ...held, cursor: frame.cursor }
-    settleInitial()
-  } else if (frame.snapshot) {
-    mark('reset')
-    await seedFrom(frame.snapshot)
     settleInitial()
   } else if (typeof frame.sub == 'string') {
     landSub(frame as Sub)

@@ -9,7 +9,7 @@
 // The signal's backing is the store-agnostic seam (live.ts queryEids): today an
 // in-memory index, tomorrow an IDB indexed cursor — the call site never
 // changes (T-17046).
-import { useEffect, useLayoutEffect, useMemo } from 'preact/hooks'
+import { useLayoutEffect, useMemo } from 'preact/hooks'
 import {
   type Backlink,
   dropLocal,
@@ -131,7 +131,7 @@ let REFERENCED = '.edges[referenced,entry.session]!'
 // projects entry endpoints to their Session through the indexed entry.session
 // column; this hook only owns the subscription and reads its scoped edge set.
 export let useReferences = (eid: string): References => {
-  useEffect(() => edgeSub(eid, REFERENCED), [eid])
+  useLayoutEffect(() => edgeSub(eid, REFERENCED), [eid])
   return references(eid)
 }
 
@@ -146,7 +146,7 @@ export let useResultComponent = (
   enabled = true,
 ): Record<string, unknown> | null | undefined => {
   let value = resultComponent(eid, name).value
-  useEffect(
+  useLayoutEffect(
     () => enabled ? resultSub(eid, name) : undefined,
     [eid, name, enabled],
   )

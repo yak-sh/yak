@@ -1,5 +1,5 @@
 import { useReference, useRepoUrl } from '../subscriptions.ts'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { type ComponentChildren } from 'preact'
 import { type Ent, statusOf } from '../../types.ts'
 import { statusChanges } from '../../client.ts'
@@ -599,7 +599,7 @@ export let Meta = (
   },
 ) => {
   let claimant = useReference(e.claim?.session)
-  useEffect(() => holdCommentCount(e.eid), [e.eid])
+  useLayoutEffect(() => holdCommentCount(e.eid), [e.eid])
   let talk = commentCount(e.eid).value
   let edges = tallies(e)
   let hasEdges = edges.some(([, open, done]) => open > 0 || done > 0)

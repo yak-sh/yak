@@ -647,8 +647,39 @@ export type Frame = Record<string, unknown> | Change[]
 
 export type Subserve = ReturnType<typeof subserve>
 
-export let subserve = (db: Sql, send: (frame: Frame) => void) => {
+export let subserve = (db: Sql, out: (frame: Frame) => void) => {
   let map = new Map<string, Sub>()
+  // An archetype descriptor rides the frame that first ships a row wearing
+  // it (T-37445). Descriptors are content-addressed and immutable, so a socket
+  // hears each one once, and the client knows a row's renderer before it
+  // paints it instead of round-tripping an `archetypes:N` read after.
+  let told = new Set<string>()
+  let withArchetypes = (frame: Frame): Frame => {
+    if (Array.isArray(frame)) return frame
+    let rows = [
+      ...(frame.changes as Change[] | undefined ?? []),
+      ...(frame.peers as Change[] | undefined ?? []),
+      ...(frame.catchup as Change[] | undefined ?? []),
+      ...(frame.live as Change[] | undefined ?? []),
+      ...((frame.snapshot as { changes?: Change[] } | undefined)?.changes ??
+        []),
+    ]
+    let fresh = new Set<string>()
+    for (let c of rows) {
+      let a = c.name == 'entity' &&
+        (c.comp as { archetype?: unknown } | null)?.archetype
+      if (typeof a == 'string' && !told.has(a)) fresh.add(a)
+    }
+    if (!fresh.size) return frame
+    for (let a of fresh) told.add(a)
+    let archetypes = rowsOf(db, [...fresh]).flatMap((r) =>
+      r.comps.archetype
+        ? [{ eid: r.eid, name: 'archetype', comp: r.comps.archetype }]
+        : []
+    )
+    return archetypes.length ? { ...frame, archetypes } : frame
+  }
+  let send = (frame: Frame) => out(withArchetypes(frame))
   // `joined` = the {since} handshake ran, so the live stream may reach this
   // socket; `filtered` = a non-shadow sub owns the socket's cache, so the
   // complete stream must NOT. A socket that declared neither hears nothing.

@@ -1,7 +1,7 @@
 // One graph-native Session status for every browser surface. Entry work is a
 // lazy partition; wakes stay in the root graph because their timer and outcome
 // are ordinary shared facets.
-import { useEffect } from 'preact/hooks'
+import { useLayoutEffect } from 'preact/hooks'
 import { ent, entrySub, subscriptionState } from '../live.ts'
 import { type Ent, standing } from '../types.ts'
 import { type EntryRow, type GraphLog, graphLog } from '../entry_log.ts'
@@ -52,7 +52,7 @@ export let useEntryLog = (
   eid: string,
   enabled = true,
 ): EntryReadState => {
-  useEffect(() => enabled ? entrySub(eid) : undefined, [eid, enabled])
+  useLayoutEffect(() => enabled ? entrySub(eid) : undefined, [eid, enabled])
   if (!enabled) return { status: 'loading' }
   let state = subscriptionState(`entries:${eid}`)
   if (state.status != 'ready') return state

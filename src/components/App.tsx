@@ -1,5 +1,5 @@
 import { entityPath } from '../url.ts'
-import { useEffect } from 'preact/hooks'
+import { useEffect, useLayoutEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
 import { census, ent, mode, routeSub, serverName } from '../live.ts'
 import { Admin } from './Admin.tsx'
@@ -147,7 +147,7 @@ export let App = () => {
   let rootEid = route.value.startsWith('/admin')
     ? undefined
     : screenTarget()?.eid
-  useEffect(() => rootEid ? routeSub(rootEid) : undefined, [rootEid])
+  useLayoutEffect(() => rootEid ? routeSub(rootEid) : undefined, [rootEid])
   let goto = (t: string) => navigate(entityPath(idOf(ent(t))))
 
   // The census rides beside the canvas: /admin* swaps the body wholesale;

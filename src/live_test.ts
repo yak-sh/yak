@@ -59,6 +59,9 @@ import {
   resolvingId,
   resultComponent,
   resultSub,
+  routeName,
+  routeSub,
+  ROW,
   row,
   serverEid,
   serverName,
@@ -3169,6 +3172,75 @@ Deno.test('first paint waits for state, then rescues, then gives up', async () =
   assertEquals(await run(late.promise, soon, () => late.resolve()), ['rescue'])
   // Nothing ever lands: the tab paints and names the stall.
   assertEquals(await run(never(), soon), ['rescue', 'stall'])
+})
+
+// T-37445: every frame the socket carried by the time the timer turns lands
+// in one batch, so a burst of answers is one render pass, not one per frame.
+Deno.test('frames that arrive together land in one batch', async () => {
+  let RealWS = (globalThis as { WebSocket: unknown }).WebSocket
+  type Fake = {
+    readyState: number
+    onopen: (() => void) | null
+    onmessage: ((m: { data: string }) => void) | null
+  }
+  let socket: Fake | null = null
+  ;(globalThis as { WebSocket: unknown }).WebSocket = class {
+    readyState = 1
+    onopen = null
+    onmessage = null
+    onclose = null
+    constructor() {
+      socket = this as unknown as Fake
+    }
+    send() {}
+    addEventListener() {}
+    close() {}
+  }
+  let probe = (globalThis as unknown as {
+    __probe: {
+      socket: () => { readyState: number } | null
+      connect: () => void
+    }
+  }).__probe
+  let host = config.host
+  let ids = ['a', 'b', 'c'].map((c) =>
+    `b0000000-0000-4000-8000-00000000000${c}`
+  )
+  let offs: (() => void)[] = []
+  try {
+    config.host = '127.0.0.1:0'
+    cache.value = {}
+    let prior = probe.socket()
+    if (prior) prior.readyState = 3
+    probe.connect()
+    offs = ids.map((id) => routeSub(id, ROW))
+    let runs = 0
+    let stop = effect(() => {
+      cache.value
+      runs++
+    })
+    let before = runs
+    for (let [i, eid] of ids.entries()) {
+      socket!.onmessage!({
+        data: JSON.stringify({
+          sub: routeName(eid, ROW),
+          replace: true,
+          changes: [
+            { eid, name: 'entity', comp: { eid, num: 20 + i } },
+            { eid, name: 'doc', comp: { eid, title: `t${i}` } },
+          ],
+        }),
+      })
+    }
+    await until(() => ent(ids[2]).doc?.title == 't2')
+    assertEquals(ids.map((id) => ent(id).doc?.title), ['t0', 't1', 't2'])
+    assertEquals(runs - before, 1)
+    stop()
+  } finally {
+    for (let off of offs) off()
+    config.host = host
+    ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
+  }
 })
 
 // T-37445: boot waits on nothing from disk. The durable outbox here never

@@ -1,7 +1,7 @@
 // The document-side conversation: indexed cited-entity associations above one
 // actor's selected graph-native Session. The binding is graph data on the
 // session, so a reload or another browser finds the same transcript.
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { sessionFrames } from '../client.ts'
 import { capable, ent, mutate, myActor, routeSub, ROW, uuid } from '../live.ts'
 import { catalog, type Provider } from '../providers.ts'
@@ -50,7 +50,7 @@ export let chatPlan = (
 // A tile reads the row alone (live.ts ROW): a referencing session's bare route
 // carried its hundred edges, 4.8 KB and the last frame of a page load.
 export let ReferenceRow = ({ eid }: { eid: string }) => {
-  useEffect(() => routeSub(eid, ROW), [eid])
+  useLayoutEffect(() => routeSub(eid, ROW), [eid])
   return <Entity eid={eid} view='List.Tile' />
 }
 
