@@ -4,7 +4,7 @@
 // every form and asserting the exact specifier set proves the coverage.
 import { assertEquals } from '@std/assert'
 import { pathToFileURL } from 'node:url'
-import { graph, imports } from './imports.ts'
+import { graph, imports, stamp } from './imports.ts'
 
 Deno.test('graph: file URL paths are decoded once', () => {
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-imports-# %23 ' })
@@ -46,4 +46,24 @@ Deno.test('imports: every import form yields its specifier', () => {
       [`let u = import.meta.url`, []],
     ] as [string, string[]][]
   ) assertEquals(imports(source), want, source)
+})
+
+Deno.test('stamp: relative value imports carry the generation, nothing else does', () => {
+  let source = [
+    `import { a } from './a.ts'`,
+    `import type { T } from './t.ts'`,
+    `import 'preact'`,
+    `import('../lazy.tsx')`,
+    `import "./double.ts"`,
+  ].join('\n')
+  assertEquals(
+    stamp(source, 42),
+    [
+      `import { a } from './a.ts?v=42'`,
+      `import type { T } from './t.ts'`,
+      `import 'preact'`,
+      `import('../lazy.tsx?v=42')`,
+      `import "./double.ts?v=42"`,
+    ].join('\n'),
+  )
 })

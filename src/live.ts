@@ -1673,6 +1673,15 @@ let settleObservations = (changes: Change[]) => {
   if (changed) observations.value = next
 }
 
+// The entity a cold tab should be seeded with: the route's id, when the URL
+// names one (`/T-123`); nothing for the root canvas or /admin.
+let seedOf = () => {
+  let path = (globalThis as { location?: { pathname?: string } }).location
+    ?.pathname ?? ''
+  let id = decodeURIComponent(path.slice(1))
+  return id && !id.startsWith('admin') ? { seed: id } : {}
+}
+
 // One physical socket per tab. Incoming JSON is parsed once here and landed
 // in order.
 let connect = () => {
@@ -1696,6 +1705,9 @@ let connect = () => {
       // ws:1 asks a cold boot to seed the WORKING SET, not the whole graph
       // (M-21143) — server-backed membership keeps a partial cache complete.
       ws: 1,
+      // A tab on an entity route seeds that entity alone (T-37445): the doc
+      // paints from the handshake, and the shell's subscriptions fill the rest.
+      ...seedOf(),
     }))
   }
   socket.onmessage = (m) => {
@@ -2531,11 +2543,15 @@ export let seedFrom = async (snap: Snapshot, write = true) => {
     capabilities: snap.capabilities,
   }
   void write
-  await replica.box.cache.idle()
   return false
 }
-let persist = (_touched: { eids: string[]; edges: Dep[] }, _cursor: number) =>
-  replica.box.cache.idle()
+// The disk checkpoint is a paint floor for the NEXT visit, never a gate on
+// this one: a landing returns as soon as the rows are in memory, and the
+// vault writes drain behind it (T-37445 — awaiting the checkpoint held every
+// later frame, and first paint, behind an IndexedDB commit).
+let persist = (_touched: { eids: string[]; edges: Dep[] }, _cursor: number) => {
+  void replica.box.cache.idle()
+}
 
 // Every incoming shape has one landing door; a cursor-stamped frame is
 // checkpointed to disk once it has landed.
@@ -2563,7 +2579,7 @@ let land = async (data: unknown) => {
       : (data as Partial<Live>).cursor
     if (cursor !== undefined) {
       held = { ...held, cursor }
-      await persist(touched, cursor)
+      persist(touched, cursor)
     }
     tell(changes)
     return
@@ -2599,7 +2615,7 @@ let land = async (data: unknown) => {
     let touched = applyLocal(frame.catchup)
     if (frame.cursor !== undefined) {
       held = { ...held, cursor: frame.cursor }
-      await persist(touched, frame.cursor)
+      persist(touched, frame.cursor)
     }
     settleInitial()
   } else if (frame.snapshot) {
@@ -2610,7 +2626,7 @@ let land = async (data: unknown) => {
     let touched = landSub(frame as Sub)
     if (frame.cursor !== undefined) {
       held = { ...held, cursor: frame.cursor }
-      await persist(touched, frame.cursor)
+      persist(touched, frame.cursor)
     }
   }
 }

@@ -19,12 +19,11 @@ measurement land together; the task comments record the final landed SHA.
   channels remain app metadata, not synthetic entity components.
 - **Tasks (`live.ts`):** the `Ent` facade and render signals, derived human-id,
   reference, edge and topology indexes; grammar serialization and original query
-  source; client identity;
-  boot/cursor/epoch negotiation; durable outbox, refusal ledger and reload
-  drain. Compatibility `cache` signals expose the replica's components;
-  `cache.onRows` drives them for commits, hydration **and storage eviction**.
-  Test/host wholesale fixture assignments are imported explicitly. Production
-  has no separate retained payload map.
+  source; client identity; boot/cursor/epoch negotiation; durable outbox,
+  refusal ledger and reload drain. Compatibility `cache` signals expose the
+  replica's components; `cache.onRows` drives them for commits, hydration **and
+  storage eviction**. Test/host wholesale fixture assignments are imported
+  explicitly. Production has no separate retained payload map.
 - **Disk:** only the package's `tasks-client-wire` database restores replica
   rows, and only after an authoritative server epoch. The legacy `schema/idb.ts`
   resolver is no longer imported by `live.ts`; its standalone tests remain.

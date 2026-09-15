@@ -35,6 +35,21 @@ export let imports = (source: string): string[] => {
 
 let isRelative = (s: string) => s.startsWith('./') || s.startsWith('../')
 
+// The cache-busting stamp (T-37445): every relative value-import specifier in
+// a served module gets `?v=<gen>`, so the browser can hold the module
+// immutable and a new gen names a fresh URL. Bare specifiers resolve through
+// the import map, which the shell stamps itself.
+///   stamp("import a from './a.ts'\nimport 'preact'", 7)
+///     -> "import a from './a.ts?v=7'\nimport 'preact'"
+export let stamp = (source: string, gen: number): string =>
+  source.replace(
+    specifiers,
+    (all, type, q, spec) =>
+      type || !isRelative(spec)
+        ? all
+        : `${all.slice(0, -spec.length - 1)}${spec}?v=${gen}${q}`,
+  )
+
 // Every module `entry` statically imports, transitively, relative to `root`
 // (src/ by default). Value imports only; an `import type` is gone before
 // anything runs. This reads source files, so it is server/test-only — nothing

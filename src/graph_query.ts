@@ -1405,6 +1405,30 @@ export let workingSet = (db: Sql): Snapshot => {
   }
 }
 
+// The addressed boot (T-37445): a tab opened on `/T-123` needs THAT entity
+// first and nothing else to paint — the sidebar's own subscriptions stream the
+// rest — so its cold seed is one entity's rows, not the root canvas's working
+// set (211 KB, ~1,000 changes, 265 ms on the live graph). An id that names
+// nothing live seeds nothing: the tab's route resolve answers "gone".
+export let addressed = (db: Sql, id: string): Snapshot => {
+  let eid = locate(db, id)
+  let ids = eid && !buried(db, eid) ? [eid] : []
+  let changes: Change[] = []
+  for (let { eid, comps } of rowsOf(db, ids)) {
+    for (let [name, comp] of Object.entries(comps)) {
+      changes.push({ eid, name, comp: comp as Change['comp'] })
+    }
+  }
+  return {
+    changes,
+    deps: [],
+    cursor: cursorOf(db),
+    epoch: epochOf(db),
+    vocabHash,
+    capabilities,
+  }
+}
+
 // What a filter line carries BESIDE its predicates. `id=` ADDRESSES (locate:
 // T-3, num, slug, uuid) where the rest of the line SCREENS; the others name the
 // window, the quarantine reveal, the work lane, and the layers a hit ships

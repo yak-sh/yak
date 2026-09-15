@@ -44,7 +44,13 @@ import {
 } from './db.ts'
 import { edgeEid, moves, natureOf, typeOf } from './edge.ts'
 import { record } from './telemetry.ts'
-import { evalAgg, evalSub, walker, workingSet } from './graph_query.ts'
+import {
+  addressed,
+  evalAgg,
+  evalSub,
+  walker,
+  workingSet,
+} from './graph_query.ts'
 import {
   inputsOf,
   resultDirty,
@@ -861,15 +867,25 @@ export let subserve = (db: Sql, send: (frame: Frame) => void) => {
   // queue as this frame — a commit racing the join lands in the delta AND as a
   // later cast, a dup the wire contract absorbs, never a gap.
   let join = (
-    f: { since?: number; epoch?: string; vocab?: string; live?: number },
+    f: {
+      since?: number
+      epoch?: string
+      vocab?: string
+      live?: number
+      seed?: string
+    },
     drain?: () => void,
   ) => {
     drain?.()
     envelope = f.live == 1
     if (f.since == null || cursorStale(db, f.epoch, f.vocab, f.since)) {
       // A cold or stale client seeds the WORKING SET — never the whole graph
-      // (M-21143); its subscriptions stream the rest on demand.
-      send({ reset: true, snapshot: workingSet(db) })
+      // (M-21143); its subscriptions stream the rest on demand. A client on an
+      // entity route names it in `seed` and gets that one entity instead.
+      let snapshot = typeof f.seed == 'string' && f.seed
+        ? addressed(db, f.seed)
+        : workingSet(db)
+      send({ reset: true, snapshot })
     } else {
       let d = delta(db, f.since)
       send({ catchup: d.changes, cursor: d.cursor })

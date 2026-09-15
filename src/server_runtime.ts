@@ -84,7 +84,7 @@ import { type OllamaConfig, ollamaProbe } from './ollama.ts'
 import { resolve, settingRows } from './config.ts'
 import { type Observation, safeObservation } from './observations.ts'
 import { outcome, recent, record, stats, toolCall } from './telemetry.ts'
-import { graph as browserGraph } from './imports.ts'
+import { graph as browserGraph, stamp } from './imports.ts'
 import { requestVerifier } from './verify.ts'
 import { askOf, askRows, evalAgg, layered, setRanker } from './graph_query.ts'
 
@@ -111,7 +111,34 @@ globalThis.addEventListener('unhandledrejection', (e) => {
   console.error('unhandled rejection —', e.reason)
 })
 
+// The module generation: the newest mtime under src/ and packages/, stamped
+// as `?v=<gen>` onto every served module's relative imports and the shell's
+// script and import map (imports.ts stamp). A stamped URL is served immutable,
+// so a refresh re-fetches nothing while the code is unchanged, and since the
+// stamp is content-derived it survives a restart too — the browser's ESM
+// cache outlives this process, and it used to re-fetch ~275 modules on every
+// one (T-37445). An edit moves the mtime and so the URL.
+let newest = (dirs: string[]) => {
+  let at = 0
+  let walk = (dir: string) => {
+    for (let e of Deno.readDirSync(dir)) {
+      if (e.name.startsWith('.') || e.name == 'node_modules') continue
+      let full = `${dir}/${e.name}`
+      if (e.isDirectory) walk(full)
+      else at = Math.max(at, Deno.statSync(full).mtime?.getTime() ?? 0)
+    }
+  }
+  for (let d of dirs) {
+    try {
+      walk(d)
+    } catch { /* an absent dir stamps nothing */ }
+  }
+  return at
+}
+
 let src = fileURLToPath(new URL('.', import.meta.url))
+let packages = fileURLToPath(new URL('../packages/', import.meta.url))
+let gen = newest([src.slice(0, -1), packages.slice(0, -1)]) || Date.now()
 
 let mime: Record<string, string> = {
   html: 'text/html; charset=utf-8',
@@ -128,14 +155,34 @@ let mime: Record<string, string> = {
 
 // Serve a file from under a root, refusing path escapes. TS/TSX comes back
 // as JS, translated on the fly and cached by mtime.
+//
+// Caching: a URL stamped with the current `?v=<gen>` is immutable — the stamp
+// changes whenever the content can — so a refresh re-fetches none of them. An
+// unstamped URL (the shell, live.ts/types.ts, styles.css) carries an ETag and
+// answers a matching If-None-Match with 304, so it costs a round trip, not
+// its bytes.
 let ts = new Map<string, { mtime: number; js: string }>()
-let file = async (root: string, path: string) => {
+let shellStamp = (html: string) =>
+  html.replace(
+    /"(\/(?!theme\.css)[^"?]+\.(?:tsx?|m?js|css))"/g,
+    `"$1?v=${gen}"`,
+  )
+let cached = (req: Request | undefined, etag: string) => {
+  let stamped = req && new URL(req.url).searchParams.get('v') == String(gen)
+  let headers: Record<string, string> = stamped
+    ? { 'cache-control': 'public, max-age=31536000, immutable' }
+    : { 'cache-control': 'no-cache', etag }
+  let hit = !stamped && req?.headers.get('if-none-match') == etag
+  return { headers, hit }
+}
+let file = async (root: string, path: string, req?: Request) => {
   let full = root + path
   if (full.includes('..')) return new Response('no', { status: 400 })
   let ext = path.split('.').pop() ?? ''
   try {
+    let stat = await Deno.stat(full)
+    let mtime = stat.mtime?.getTime() ?? 0
     if (ext == 'ts' || ext == 'tsx') {
-      let mtime = (await Deno.stat(full)).mtime?.getTime() ?? 0
       let hit = ts.get(full)
       if (!hit || hit.mtime != mtime) {
         hit = {
@@ -150,14 +197,22 @@ let file = async (root: string, path: string) => {
         }
         ts.set(full, hit)
       }
-      return new Response(hit.js, {
-        headers: { 'content-type': mime.js, 'cache-control': 'no-cache' },
+      // The body carries `?v=<gen>` on its imports, so the tag names gen too.
+      let c = cached(req, `W/"${mtime}-${gen}"`)
+      if (c.hit) return new Response(null, { status: 304, headers: c.headers })
+      return new Response(stamp(hit.js, gen), {
+        headers: { 'content-type': mime.js, ...c.headers },
       })
     }
-    return new Response(await Deno.readFile(full), {
+    let c = cached(req, `W/"${mtime}-${stat.size}-${ext == 'html' ? gen : 0}"`)
+    if (c.hit) return new Response(null, { status: 304, headers: c.headers })
+    let body: BodyInit = ext == 'html'
+      ? shellStamp(await Deno.readTextFile(full))
+      : await Deno.readFile(full)
+    return new Response(body, {
       headers: {
         'content-type': mime[ext] ?? 'application/octet-stream',
-        'cache-control': 'no-cache',
+        ...c.headers,
       },
     })
   } catch {
@@ -440,6 +495,28 @@ let workersWanted = Deno.env.get('TASKS_WS_WORKERS') != '0'
 let workerCap = Number(Deno.env.get('TASKS_WS_WORKER_CAP')) ||
   navigator.hardwareConcurrency || 8
 let liveWorkers = 0
+// A worker costs ~200 ms to construct (its isolate loads the server's module
+// graph, then opens its read connection) — measured on an empty graph, and the
+// whole of a cold tab's handshake latency there. So one is kept WARM: built
+// and initialized ahead of the next socket, which adopts it and warms the next
+// (T-37445). The spare holds one read connection; the cap counts it.
+let spare: Worker | null = null
+let spawnWorker = () => {
+  let w = new Worker(new URL('./wsworker.ts', import.meta.url), {
+    type: 'module',
+    name: `ws#${++workerN}`,
+  })
+  w.postMessage({ init: graph })
+  return w
+}
+let warm = () => {
+  if (spare || !workersWanted || graph == ':memory:') return
+  if (liveWorkers + 1 >= workerCap) return
+  try {
+    spare = spawnWorker()
+  } catch { /* the next socket serves inline, as before */ }
+}
+setTimeout(warm)
 
 // The inbound half of the observation stream (observe_link.ts): the doing
 // owner's socket, one frame per delta, write-only. A reader-plane server takes
@@ -512,11 +589,9 @@ let ws = (req: Request) => {
   }
   if (workersWanted && graph != ':memory:' && liveWorkers < workerCap) {
     try {
-      let w = new Worker(new URL('./wsworker.ts', import.meta.url), {
-        type: 'module',
-        name: `ws#${++workerN}`,
-      })
-      w.postMessage({ init: graph })
+      let w = spare ?? spawnWorker()
+      spare = null
+      setTimeout(warm)
       w.onmessage = (m) => {
         let d = m.data
         if (typeof d?.frame == 'string') {
@@ -1355,7 +1430,7 @@ let handle: Handler = async (req) => {
   // way src is (TS → JS, mtime-cached), so the browser imports the same
   // modules the server did — a path prefix, not a bundler (D-18663 seam 1).
   // Reachable only when a plugin is configured; otherwise nothing links here.
-  if (path.startsWith('/plugins/')) return file(repo.slice(0, -1), path)
+  if (path.startsWith('/plugins/')) return file(repo.slice(0, -1), path, req)
   // Retired data doors never masquerade as browser routes. Their capability
   // lives in /query, /ws, or a local library now; serving index.html here
   // would turn a caller bug into a convincing 200 response.
@@ -1371,7 +1446,7 @@ let handle: Handler = async (req) => {
     return methodNotAllowed('GET, HEAD')
   }
   // Workspace modules use the same TS/TSX translation as application modules.
-  if (path.startsWith('/packages/')) return file(repo.slice(0, -1), path)
+  if (path.startsWith('/packages/')) return file(repo.slice(0, -1), path, req)
   // An extensionless path is a ROUTE (/T-123): the app boots and reads
   // the URL — same shell, different root card.
   let shell = path.includes('.') ? path : '/index.html'
@@ -1384,11 +1459,12 @@ let handle: Handler = async (req) => {
     let tag = `<script type="application/json" id="tasks-plugins">${
       JSON.stringify(browserPlugins)
     }</script>`
-    return new Response(html.replace('</head>', `  ${tag}\n  </head>`), {
-      headers: { 'content-type': mime.html, 'cache-control': 'no-cache' },
-    })
+    return new Response(
+      shellStamp(html).replace('</head>', `  ${tag}\n  </head>`),
+      { headers: { 'content-type': mime.html, 'cache-control': 'no-cache' } },
+    )
   }
-  return file(src.slice(0, -1), shell)
+  return file(src.slice(0, -1), shell, req)
 }
 
 // Pass-through legacy sessions materialize on read from their transcript files

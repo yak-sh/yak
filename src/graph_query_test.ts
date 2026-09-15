@@ -9,6 +9,7 @@ import { assertEquals, assertThrows } from '@std/assert'
 import { kindOf, uuid } from './types.ts'
 import { edgeEid, link } from './edge.ts'
 import {
+  addressed,
   evalAgg,
   evalCapped as evalCappedDoor,
   evalGraph,
@@ -607,4 +608,29 @@ Deno.test('an edge answers the plain grammar: .edge.to=X & .<nature>!', () => {
   assertEquals(eids(`.edge.to=${c}&.requires!`), [sentence])
   // a consumer names the nature it knows; another's stays invisible
   assertEquals(eids(`.edge.to=${c}&.contains!`), [])
+})
+
+// The addressed boot seed (T-37445): a tab on `/T-1` is seeded with that one
+// entity's rows and nothing else; an unknown or dead id seeds nothing, and the
+// route resolve says "gone" instead.
+Deno.test("addressed: one entity's rows, nothing for an unknown or dead id", () => {
+  let db = freshDb()
+  let eid = uuid()
+  let other = uuid()
+  apply(db, [
+    { eid, name: 'doc', comp: { title: 'the one' }, $num: true },
+    { eid, name: 'task', comp: {} },
+    { eid: other, name: 'doc', comp: { title: 'noise' }, $num: true },
+  ])
+  let id = `T-${eager(db, eid).entity?.num}`
+  let seed = addressed(db, id)
+  assertEquals([...new Set(seed.changes.map((c) => c.eid))], [eid])
+  assertEquals(
+    seed.changes.find((c) => c.name == 'doc')?.comp?.title,
+    'the one',
+  )
+  assertEquals((seed.cursor ?? 0) > 0, true)
+  assertEquals(addressed(db, 'T-999999').changes, [])
+  apply(db, [{ eid, name: 'entity', comp: null }])
+  assertEquals(addressed(db, id).changes, [])
 })
