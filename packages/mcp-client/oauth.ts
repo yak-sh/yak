@@ -165,6 +165,13 @@ export const authorization = (options: AuthorizationOptions): Authorization => {
           }
           let url = ''
           const p = provider(record, (u) => {
+            if (
+              u.username || u.password || (u.protocol !== 'https:' &&
+                !(u.protocol === 'http:' &&
+                  ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname)))
+            ) {
+              throw new AuthorizationError('Authorization URL requires HTTPS')
+            }
             url = u.href
           })
           // Explicit sign-in starts a new consent flow, rather than refreshing an old grant.
@@ -221,9 +228,10 @@ export const authorization = (options: AuthorizationOptions): Authorization => {
                     ?.authorization_response_iss_parameter_supported === true &&
               !u.searchParams.has('iss') ||
             u.searchParams.has('iss') &&
-              u.searchParams.get('iss') !==
-                (discovery ?? record.discovery)?.authorizationServerMetadata
-                  ?.issuer
+              (u.searchParams.getAll('iss').length !== 1 ||
+                u.searchParams.get('iss') !==
+                  (discovery ?? record.discovery)?.authorizationServerMetadata
+                    ?.issuer)
           ) {
             throw new AuthorizationError('Return URL issuer does not match')
           }
