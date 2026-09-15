@@ -420,3 +420,57 @@ Deno.test('partial ranges load neighbors without mistaking a page boundary for t
     ui.free()
   }
 })
+
+Deno.test('scroll estimates retain heights after text-cache eviction and page replacement', () => {
+  type Item = { id: string; rows: number }
+  let measured = 0
+  const v = new VirtualWindow<Item>(
+    (item) => {
+      measured++
+      return Array.from(
+        { length: item.rows },
+        () => [{ text: item.id, style: {} }],
+      )
+    },
+    (item) => String(item.rows),
+    false,
+    1,
+  )
+  v.range = { before: false, after: true, total: 100, offset: 0 }
+  v.update([{ id: 'a', rows: 10 }])
+  v.layout(20, 2)
+  assertEquals(v.position(20).total, 1000)
+  v.range = { before: true, after: true, total: 100, offset: 50 }
+  v.update([{ id: 'b', rows: 2 }])
+  v.anchor = { id: 'b', offset: 0 }
+  v.layout(20, 2)
+  // Both measurements count even though only b remains in the render cache.
+  assertEquals(v.position(20).total, 600)
+  assertEquals(v.position(20).top, 304)
+  const before = measured
+  for (let i = 0; i < 20; i++) v.position(20)
+  assertEquals(measured, before)
+  v.layout(20, 2)
+  assertEquals(v.position(20).total, 600)
+  assertEquals(v.anchor, { id: 'b', offset: 0 })
+  // Different geometry discards old heights, not the logical anchor.
+  v.layout(10, 2)
+  assertEquals(v.position(10).total, 200)
+  v.update([{ id: 'b', rows: 4 }])
+  v.layout(10, 2)
+  assertEquals(v.position(10).total, 400)
+})
+
+Deno.test('uniform partial pages have stable global scroll positions', () => {
+  const v = window(false)
+  const data = items(10000)
+  for (const offset of [0, 100, 5000, 9900]) {
+    v.range = { before: offset > 0, after: true, offset, total: 10000 }
+    v.update(data.slice(offset, offset + 64))
+    v.anchor = { id: String(offset), offset: 0 }
+    v.layout(80, 10)
+    assertEquals(v.position(80).total, 10000)
+    assertEquals(v.position(80).top, offset)
+  }
+  assert(v.stats.measured <= 40)
+})

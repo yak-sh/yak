@@ -22,6 +22,8 @@ Deno.test('SQLite fork window reads limited bodies and projects position metadat
     let page = await transcriptWindow(h.g, 'p', { limit: 32 })
     assertEquals(page.entries.length, 32)
     assertEquals(page.entries[0].entity.eid, 'p1968')
+    assertEquals(page.total, 2000)
+    assertEquals(page.offset, 1968)
     assert(
       queries.every((q) => q.includes('.fields=') || q.includes('.limit=32')),
     )
@@ -47,6 +49,7 @@ Deno.test('worker pages retained graph data and keeps initial transfer independe
     let page = await r.agent.transcriptWindow!('s', { limit: 16 })
     assertEquals(page.entries.length, 16)
     assertEquals(page.entries[0].entity.eid, 'entry284')
+    assertEquals([page.total, page.offset], [300, 284])
     assertEquals([page.before, page.after], [true, false])
     assert(!r.replica.ent('entry0'))
     assertEquals(
@@ -58,6 +61,7 @@ Deno.test('worker pages retained graph data and keeps initial transfer independe
       limit: 16,
     })
     assertEquals(middle.entries[0].entity.eid, 'entry142')
+    assertEquals([middle.total, middle.offset], [300, 142])
     assert(r.replica.cache.size() <= 256)
     let [head, tail] = await Promise.all([
       r.agent.transcriptWindow!('s', { edge: 'start', limit: 8 }),
@@ -338,5 +342,40 @@ Deno.test('detached windows receive frontier notices without loading new offscre
   } finally {
     await r.close()
     await Deno.remove(dir, { recursive: true })
+  }
+})
+
+Deno.test('window counts exclude fork ancestor entries beyond its boundary', async () => {
+  const h = open(':memory:')
+  try {
+    await h.g.apply([
+      { entity: { eid: 'parent' }, session: {} },
+      ...Array.from({ length: 10 }, (_, i) => ({
+        entity: { eid: 'p' + i },
+        entry: { session: 'parent', seq: i + 1 },
+        content: { body: 'parent' },
+      })),
+      { entity: { eid: 'child' }, session: {}, fork: { from: 'p4' } },
+      {
+        entity: { eid: 'c0' },
+        entry: { session: 'child', seq: 6 },
+        content: { body: 'child' },
+      },
+      {
+        entity: { eid: 'c1' },
+        entry: { session: 'child', seq: 7 },
+        content: { body: 'child' },
+      },
+    ])
+    const tail = await transcriptWindow(h.g, 'child', { limit: 3 })
+    assertEquals(tail.entries.map((b) => b.entity.eid), ['p4', 'c0', 'c1'])
+    assertEquals([tail.total, tail.offset], [7, 4])
+    const head = await transcriptWindow(h.g, 'child', {
+      limit: 3,
+      edge: 'start',
+    })
+    assertEquals([head.total, head.offset], [7, 0])
+  } finally {
+    h.close()
   }
 })

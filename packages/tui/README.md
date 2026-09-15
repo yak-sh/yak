@@ -439,3 +439,21 @@ preserve a semantic character offset across a completely different Markdown
 layout. Surrogate pairs are kept together, but terminal width still uses UTF-16
 units; wide CJK, combining sequences, and emoji can require further width
 handling.
+
+### Estimated virtual scroll ranges
+
+A partial `VirtualList` can supply `range.total` (the logical item count) and
+`range.offset` (the index of its first loaded item), alongside `before`/`after`.
+The scrollbar estimates unknown items using the average height of measured items
+and retains numeric heights after their rendered content is evicted. Replacing
+an overlapping page does not reset those measurements. Drawing the scrollbar
+never measures additional items or changes the logical scroll anchor.
+
+Height metadata grows with the items visited, not their text size. It is kept
+for the current width and theme; changing either invalidates those measurements.
+Revisited items with changed versions are remeasured. Measurements for unloaded
+items remain estimates until revisited; arbitrary insertions/removals outside
+the loaded page can temporarily make remembered positions approximate. Callers
+without counts retain the older neighboring-page estimate. A fixed three-row
+thumb still rounds to terminal rows; estimation improvements do not make it a
+pixel-accurate scrollbar.

@@ -261,6 +261,8 @@ export let remote = async (
         ),
         before: plan.before,
         after: plan.after,
+        total: plan.total,
+        offset: plan.offset,
       }
     })
     serial = result

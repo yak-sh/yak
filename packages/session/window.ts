@@ -12,6 +12,10 @@ export type TranscriptPage = {
   entries: Bundle[]
   before: boolean
   after: boolean
+  /** Logical entry counts, including unloaded fork ancestors. */
+  total?: number
+  /** Zero-based index of the first entry in this page. */
+  offset?: number
 }
 export type TranscriptPlan = Omit<TranscriptPage, 'entries'> & {
   queries: string[]
@@ -131,7 +135,35 @@ export let transcriptPlan = async (
         '&.order=entry.seq&.limit=' + size,
     )
   }
-  return { queries, before, after }
+  // Count metadata, not bodies. Fork segments are disjoint logical ranges.
+  const counts = await Promise.all(
+    segments.map(async (s) =>
+      Number((await g.rows(base(s) + '&.count!'))[0]?.n ?? 0)
+    ),
+  )
+  let offset = 0
+  if (chosen.length) {
+    const first = chosen[0]
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i]
+      if (segment.session == first.entry.session) {
+        offset += Number(
+          (await g.rows(
+            base(segment) + '&.entry.seq<' + first.entry.seq + '&.count!',
+          ))[0]?.n ?? 0,
+        )
+        break
+      }
+      offset += counts[i]
+    }
+  }
+  return {
+    queries,
+    before,
+    after,
+    total: counts.reduce((a, b) => a + b, 0),
+    offset,
+  }
 }
 
 export let transcriptWindow = async (
@@ -144,6 +176,8 @@ export let transcriptWindow = async (
     entries: (await Promise.all(plan.queries.map((q) => g.read(q)))).flat(),
     before: plan.before,
     after: plan.after,
+    total: plan.total,
+    offset: plan.offset,
   }
 }
 

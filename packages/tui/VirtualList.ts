@@ -17,7 +17,14 @@ import { type Sheet, type Style } from './theme.ts'
 import { terminalFocused, useKeys } from './screen.ts'
 import type { Key } from './input.ts'
 
-export type ListRange = { before: boolean; after: boolean }
+export type ListRange = {
+  before: boolean
+  after: boolean
+  /** Number of items in the whole list, not just the loaded page. */
+  total?: number
+  /** Logical index of the first loaded item. Supply together with total. */
+  offset?: number
+}
 export type RangeRequest = { anchor?: string; edge?: 'start' | 'end' }
 
 export type VirtualItem = { id: string }
@@ -43,6 +50,16 @@ export class VirtualWindow<T extends VirtualItem> {
   private indices = new Map<string, number>()
   private retainedOrder: string[] = []
   private cache = new Map<string, Cached>()
+  // Retain numeric heights independently of the bounded text/layout cache.
+  // Only the current width/style is kept; no extra layout is performed.
+  private heights = new Map<
+    string,
+    { version: string; rows: number; index: number }
+  >()
+  private heightWidth = -1
+  private heightStyle = ''
+  private heightItems?: readonly T[]
+  private heightOffset = -1
   private height = 0
   private movement = 0
   private start = false
@@ -211,35 +228,43 @@ export class VirtualWindow<T extends VirtualItem> {
     )
   }
 
-  /** Estimate unvisited heights from the bounded measurement cache. No layout. */
+  /** Exact measured rows plus the observed average for unmeasured items.
+   * The estimate is presentation only: it never changes the scroll anchor.
+   */
   position(width: number): ScrollPosition {
-    let known = [...this.cache].filter(([, c]) =>
-      c.width == width && c.style == this.style
-    )
-    let average = known.length
-      ? known.reduce((n, [, c]) => n + c.lines.length, 0) / known.length
+    const known = width == this.heightWidth && this.style == this.heightStyle
+      ? [...this.heights.values()]
+      : []
+    const average = known.length
+      ? known.reduce((sum, item) => sum + item.rows, 0) / known.length
       : 1
-    let index = this.anchor ? this.indices.get(this.anchor.id) ?? 0 : 0
-    let total = this.items.length * average
+    const counted = this.range.total != null && this.range.offset != null
+    const offset = counted ? this.range.offset! : 0
+    const index = offset +
+      (this.anchor ? this.indices.get(this.anchor.id) ?? 0 : 0)
+    let total = (counted ? this.range.total! : this.items.length) * average
     let top = index * average + (this.anchor?.offset ?? 0)
-    for (let [id, cached] of known) {
-      let at = this.indices.get(id)
-      if (at == null) continue
-      let correction = cached.lines.length - average
+    for (const item of known) {
+      if (!counted && (item.index < 0 || item.index >= this.items.length)) {
+        continue
+      }
+      const correction = item.rows - average
       total += correction
-      if (at < index) top += correction
+      if (item.index < index) top += correction
     }
-    // Unknown ranges are estimated as another loaded page; the scrollbar is
-    // deliberately approximate and never controls the logical anchor.
-    let unknown = Math.max(this.height, this.items.length * average)
-    if (this.range.before) {
-      top += unknown
-      total += unknown
+    // Older callers may only know whether neighbors exist. Keep their fallback
+    // without pretending that those booleans describe the full item count.
+    if (!counted) {
+      const unknown = Math.max(this.height, this.items.length * average)
+      if (this.range.before) {
+        top += unknown
+        total += unknown
+      }
+      if (this.range.after) total += unknown
     }
-    if (this.range.after) total += unknown
     return {
       total,
-      top,
+      top: Math.max(0, Math.min(top, Math.max(0, total - this.height))),
       height: this.height,
       bottom: this.follow && !this.range.after,
     }
@@ -248,6 +273,30 @@ export class VirtualWindow<T extends VirtualItem> {
   layout(width: number, height: number, style = ''): Line[] {
     this.height = height
     this.style = style
+    if (width != this.heightWidth || style != this.heightStyle) {
+      this.heights.clear()
+      this.heightWidth = width
+      this.heightStyle = style
+    }
+    const pageOffset = this.range.offset ?? 0
+    if (this.items !== this.heightItems || pageOffset != this.heightOffset) {
+      this.heightItems = this.items
+      this.heightOffset = pageOffset
+      const complete = !this.range.before && !this.range.after
+      // Loaded rows are authoritative for version and position; rows outside a
+      // partial page retain their last measurements until encountered again.
+      if (complete) {
+        for (const id of this.heights.keys()) {
+          if (!this.indices.has(id)) this.heights.delete(id)
+        }
+      }
+      for (let i = 0; i < this.items.length; i++) {
+        const item = this.items[i], known = this.heights.get(item.id)
+        if (known && known.version != this.version(item)) {
+          this.heights.delete(item.id)
+        } else if (known) known.index = pageOffset + i
+      }
+    }
     if (!this.items.length || height <= 0 || width <= 0) return []
     let get = (i: number): Line[] => {
       let item = this.items[i], version = this.version(item)
@@ -265,6 +314,11 @@ export class VirtualWindow<T extends VirtualItem> {
         }
         this.stats.measured++
       } else this.stats.hits++
+      this.heights.set(item.id, {
+        version,
+        rows: cached.lines.length,
+        index: pageOffset + i,
+      })
       this.cache.delete(item.id)
       this.cache.set(item.id, cached)
       while (this.cache.size > this.capacity) {
