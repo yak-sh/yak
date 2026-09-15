@@ -8,12 +8,18 @@
 // batch, without waiting: a local write over a local store is synchronous, and
 // staying synchronous is most of the reason to run a graph in a page at all.
 //
+// One exception: a batch that DELETES is not applied optimistically. Death is
+// final in this model, so a refused delete could never be put back; the
+// precondition hook holds the whole batch out of the transaction and sends it
+// as it stands, and the server's applied answer lands as an echo carrying its
+// own tombstones — exactly as an accepted batch's answer does.
+//
 // Posts are SERIALIZED. Two batches sent at once could reach the server in
 // either order, and the second one's answer could then reconcile the first
 // one's fields backwards. One chain, in the order the writes committed.
 
 import type { Bundle, Eid, Graph, Plugin } from '@yaks/graph'
-import { then } from '@yaks/graph'
+import { dead, then } from '@yaks/graph'
 import { asking, clean, echoed } from './mark.ts'
 import { type Fetch, post, type Report } from './outbound.ts'
 import { land } from './inbound.ts'
@@ -131,6 +137,24 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
     if (was) notify(id, false)
   }
 
+  // Post one batch on the chain. `held` says it never went in locally, so a
+  // refusal has nothing to revert and an unanswered post has nothing to pin.
+  let send = (batch: Bundle[], held = false) => {
+    let release = opts.replica?.protect(batch.map((b) => b.entity.eid))
+    sending = sending.then(() =>
+      post(batch, {
+        graph,
+        url: opts.url,
+        fetch: opts.fetch ?? ((r) => globalThis.fetch(r)),
+        headers: opts.headers,
+        report,
+        held,
+      }).then((settled) => {
+        if (settled || held) release?.()
+      })
+    ).catch((error) => report({ sent: [], error, reverted: false }))
+  }
+
   let plugin: Plugin = {
     name: '@yaks/sync',
     hooks: {
@@ -140,28 +164,23 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
         let eids = [...new Set(bundles.map((b) => b.entity.eid))]
         return then(tx.get(eids), (held) => {
           let was = new Map(held.map((b) => [b.entity.eid, b]))
-          return bundles.map((b) => asking(b, was.get(b.entity.eid) ?? null))
+          let asked = bundles.map((b) =>
+            asking(b, was.get(b.entity.eid) ?? null)
+          )
+          // A delete waits for the server: the batch leaves as one, and
+          // nothing of it lands here until the answer does.
+          if (bundles.some(dead)) {
+            send(asked, true)
+            return []
+          }
+          return asked
         })
       },
       // After the commit: tell the server, and reconcile whatever it says.
       // The marks come off what the caller gets back — they were this
       // package's note to itself, not part of anybody's data.
       effect: (bundles) => {
-        if (!bundles.some(echoed)) {
-          let batch = bundles
-          let release = opts.replica?.protect(bundles.map((b) => b.entity.eid))
-          sending = sending.then(() =>
-            post(batch, {
-              graph,
-              url: opts.url,
-              fetch: opts.fetch ?? ((r) => globalThis.fetch(r)),
-              headers: opts.headers,
-              report,
-            }).then((settled) => {
-              if (settled) release?.()
-            })
-          ).catch((error) => report({ sent: [], error, reverted: false }))
-        }
+        if (bundles.length && !bundles.some(echoed)) send(bundles)
         return bundles.map(clean)
       },
     },

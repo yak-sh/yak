@@ -95,8 +95,9 @@ export let outward = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
  * dropped — so the local graph lands where it stood before the optimistic
  * write.
  *
- * A DELETE has no inverse: death is final in this model, so a refused delete
- * leaves a tombstone the local graph cannot lift (see the README).
+ * A DELETE has no inverse: death is final in this model, which is why a batch
+ * that deletes is never applied optimistically — it waits for the server
+ * (sync.ts), so there is never a tombstone to lift.
  */
 export let inverse = (bundles: Bundle[]): Bundle[] =>
   bundles.flatMap((b) => {

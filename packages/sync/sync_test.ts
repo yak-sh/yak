@@ -6,7 +6,7 @@
 // harness IS the wire.
 
 import { assert, assertEquals } from '@std/assert'
-import { type Bundle, Refused } from '@yaks/graph'
+import { type Bundle, dead, Refused } from '@yaks/graph'
 import { at, client, comp, COOK, server } from './harness.ts'
 
 let dal = (eid = 'r1'): Bundle => ({
@@ -148,6 +148,47 @@ Deno.test('a refused write on an entity the server never had leaves it bare', as
   assertEquals(comp(at(c.graph, 'r1'), 'doc'), {})
   assertEquals((c.graph.read('.course=dinner') as Bundle[]).length, 0)
   assertEquals(c.trouble[0].reverted, true)
+  c.wire.close()
+})
+
+Deno.test('a delete waits for the server, and a refused one leaves the entity', async () => {
+  let srv = server()
+  srv.graph.use({
+    name: 'the cook',
+    hooks: {
+      precondition: (bundles) => {
+        if (bundles.some(dead)) throw new Refused('recipes are forever')
+        return bundles
+      },
+    },
+  })
+  let c = client(srv)
+  c.graph.apply([dal()])
+  await c.idle()
+
+  c.graph.apply([{ entity: { eid: 'r1' }, $delete: true }])
+  assertEquals(comp(at(c.graph, 'r1'), 'recipe').serves, 4) // not optimistic
+  await c.idle()
+  assertEquals(comp(at(c.graph, 'r1'), 'recipe').serves, 4)
+  assertEquals(comp(at(srv.graph, 'r1'), 'recipe').serves, 4)
+  assertEquals(c.trouble.length, 1)
+  assertEquals(c.trouble[0].refused?.error, 'Refused')
+  assertEquals(c.trouble[0].reverted, false)
+  c.wire.close()
+})
+
+Deno.test("an accepted delete lands from the server's answer", async () => {
+  let srv = server()
+  let c = client(srv)
+  c.graph.apply([dal()])
+  await c.idle()
+
+  c.graph.apply([{ entity: { eid: 'r1' }, $delete: true }])
+  assertEquals(comp(at(c.graph, 'r1'), 'recipe').serves, 4) // one round trip
+  await c.idle()
+  assertEquals(comp(at(c.graph, 'r1'), 'recipe'), {})
+  assertEquals(comp(at(srv.graph, 'r1'), 'recipe'), {})
+  assertEquals(c.trouble, [])
   c.wire.close()
 })
 

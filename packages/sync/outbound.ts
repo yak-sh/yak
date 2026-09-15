@@ -10,6 +10,8 @@
 //              marked as an echo so it is not sent again.
 //   refused    the server would not take it. The optimistic change is undone
 //              from the image captured before it, and the refusal is reported.
+//              A batch that was HELD (a delete — see sync.ts) never went in,
+//              so there is nothing to undo.
 //   unreachable  nothing is undone. The batch may have landed and the answer
 //              been lost, and a client that guesses wrong about that turns a
 //              network blip into data loss.
@@ -48,6 +50,9 @@ export type PostOpts = {
   fetch: Fetch
   headers?: Record<string, string>
   report: Report
+  /** the batch was held out of the local graph, not applied: a refusal has
+   * nothing to revert */
+  held?: boolean
 }
 
 // A refusal body, however the server phrased it. A door that answered with
@@ -93,7 +98,7 @@ export let post = async (
   }
   if (!res.ok) {
     let refused = await refusalOf(res)
-    let back = inverse(batch)
+    let back = opts.held ? [] : inverse(batch)
     if (back.length) await graph.apply(echo(back), { trusted: true })
     opts.report({ sent, refused, reverted: back.length > 0 })
     return true

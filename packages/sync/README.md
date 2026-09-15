@@ -81,11 +81,13 @@ have landed, and a client that guesses wrong about that turns a network blip
 into data loss. The trouble is reported with `reverted: false`, and the write
 stands locally until the next one reconciles it.
 
-One asymmetry, and it is the model's rather than this package's: **a refused
-DELETE cannot be undone.** Death is final in a yaks graph — an eid is tombstoned
-and can never be reused — so there is nothing to patch back. A client that
-deletes something the server will not let it delete has to be rebuilt from the
-server.
+One exception, and it is the model's rather than this package's: **a DELETE is
+not optimistic.** Death is final in a yaks graph — an eid is tombstoned and can
+never be reused — so a refused delete could never be patched back. A batch that
+deletes anything is instead held out of the local graph and sent as it stands;
+the server's answer lands as an echo carrying its own tombstones, and a refusal
+is reported with `reverted: false` because nothing went in. The cost is one
+round trip before the delete renders.
 
 ## Three tiers, one apply()
 
