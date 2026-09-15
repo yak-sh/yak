@@ -398,16 +398,19 @@ export let appDerived = (): Record<
  * of value that is a name. They are core rather than each app's own for the
  * reason every other core word is: a word means the same thing in every
  * store. */
+/** Derived classification metadata is readable but never client-authored. */
+export const classificationDoc: VocabDoc = {
+  ...archetypeDoc,
+  $defs: Object.fromEntries(
+    Object.entries(archetypeDoc.$defs ?? {}).map(
+      ([name, definition]) => [name, { ...definition, wire: false }],
+    ),
+  ),
+}
+
 export let coreDocs: VocabDoc[] = [
   coreDoc,
-  {
-    ...archetypeDoc,
-    $defs: Object.fromEntries(
-      Object.entries(archetypeDoc.$defs ?? {}).map(
-        ([name, definition]) => [name, { ...definition, wire: false }],
-      ),
-    ),
-  },
+  classificationDoc,
   docDoc,
   memberDoc,
   edgeDoc,
@@ -777,6 +780,7 @@ export let platformDoc: VocabDoc = {
  * are its `doc.body`, which is why @yaks/doc is loaded above every plugin. */
 export let platformDocs: VocabDoc[] = [
   coreDoc,
+  classificationDoc,
   docDoc,
   edgeDoc,
   relationDoc,
@@ -814,7 +818,14 @@ export let platformVocab = (): Vocab => loadVocab(platformDocs, appKeywords)
  * a branch belongs to one app, so its row is the DIRECTORY's (git.ts loads
  * @yaks/git's `refDoc` there). A word a store holds no rows under costs it
  * nothing. */
-export let gitDocs: VocabDoc[] = [coreDoc, edgeDoc, keyDoc, aliasDoc, gitDoc]
+export let gitDocs: VocabDoc[] = [
+  coreDoc,
+  classificationDoc,
+  edgeDoc,
+  keyDoc,
+  aliasDoc,
+  gitDoc,
+]
 
 /** The git object store's whole vocabulary (graph.ts, {@link gitDocs}). */
 export let gitVocab = (): Vocab => loadVocab(gitDocs, appKeywords)

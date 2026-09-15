@@ -145,7 +145,10 @@ export let indexed = (vocab: Vocab): string[] => [
   // Adapters that only replay schema() may still have the old spine. Until
   // they opt into archetypes/migration, do not index a column they lack.
   ...(vocab.comp('archetype')
-    ? [`create index if not exists entity_archetype on entity(archetype)`]
+    ? [
+      `create index if not exists entity_archetype on entity(archetype)`,
+      `create index if not exists entity_archetype_num on entity(archetype, num)`,
+    ]
     : []),
   ...vocab.all
     .filter((name) => name != 'entity')

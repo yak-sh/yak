@@ -380,3 +380,42 @@ This is not a production latency guarantee: savings depend on sparsity/query
 projection, and writes and descriptor storage have a cost. One large app still
 pays a synchronous first-wake backfill; large-data Cloudflare CPU limits need
 monitoring.
+
+## Store archetypes
+
+User apps, the platform directory, and the Git object store compose the same
+read-only archetype vocabulary and tracker. Each retains its own domain
+vocabulary; enabling classification does not give Git objects app components or
+make the platform directory a user app. The HTTP authorization paths are
+unchanged.
+
+The existing schema-fingerprint initialization barrier installs the tables and
+backfills physical component membership in the same transaction. It runs once
+when that fingerprint changes, not on each read. Legacy migrations that write
+SQL directly clear and rebuild classification after their transformations,
+before readers can observe them. Git object insertion and directory writes
+already go through the graph; no separate SQL writer was introduced. Git object
+IDs and external content hashes are unchanged.
+
+Existing stores upgrade on their next request. The directory is normally active;
+the Git store wakes when deploy/history/clone operations use it. The hourly app
+usage sweep is not a guarantee that the Git store has woken. Dormant stores are
+not all migrated when code is deployed. Backfill is synchronous; a large store
+will pay its initial migration cost before serving that request.
+
+Run `deno run -A workers/yak/platform_archetype_bench.ts` for an isolated,
+repeatable comparison (`BENCH_ROWS=20000` selects a larger fixture). With 20,000
+entities and fifty 25-row reads, one local run measured:
+
+| Store     | Statements/read before → after | Fifty reads before → after | Seed writes before → after | Backfill |
+| --------- | ------------------------------ | -------------------------- | -------------------------- | -------- |
+| Directory | 20 → 7                         | 47 → 27 ms                 | 3.50 → 4.26 s              | 172 ms   |
+| Git blobs | 9 → 7                          | 23 → 34 ms                 | 4.42 → 5.55 s              | 218 ms   |
+
+The rollout adds an `(archetype, num)` index: without it, SQLite sorted every
+matching entity before applying the default page limit, and the homogeneous Git
+fixture took 352 ms for those fifty reads. The index removes that scaling
+regression. Classification still adds descriptor work: narrow, homogeneous
+stores are not guaranteed a speedup. These are local adapter measurements, not
+production latency promises. Git gains the shared metadata and fewer table
+probes, not a claimed latency improvement for this workload.

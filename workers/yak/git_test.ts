@@ -130,6 +130,11 @@ Deno.test('a deploy mints one commit whose tree is the manifest', async () => {
   assert(head, 'the branch stands at a commit')
   let { row, body } = await bodyOf(env, git, head)
   assertEquals((row.gitobj as { type: string }).type, 'commit')
+  assert(row.entity.archetype, 'Git objects carry derived classification')
+  const shapes = await git.query('.archetype!')
+  assert(shapes.some((b) => b.entity.eid == row.entity.archetype))
+  const [ref] = await meta(env).query(`.ref.app=${app.eid}`)
+  assert(ref.entity.archetype, 'directory refs carry derived classification')
   // The platform signed it; the person who deployed authored it, under the
   // pseudonymous address a public history gets until somebody opts out of it.
   assert(body.includes(`author Ada <${ADA}@users.yaks.app>`), body)

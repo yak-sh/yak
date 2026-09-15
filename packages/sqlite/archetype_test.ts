@@ -328,3 +328,27 @@ Deno.test('physical archetype discovery never inspects provider-owned SQLite tab
   }
   assertEquals(componentTables(d), ['ordinary'])
 })
+
+Deno.test('one-archetype paged reads use the compound ordering index', async () => {
+  let d = mem()
+  let s = storage(d, vocab)
+  s.install()
+  let g = graph({ storage: s, vocab, plugins: [archetypes()] })
+  await g.apply([{ entity: { eid: 'one' }, doc: { title: 'One' } }])
+  const id =
+    d.query('select archetype from entity where eid=?', ['one'])[0].archetype
+  const plan = d.query(
+    'explain query plan select eid from entity where archetype in (?) order by num desc limit 25',
+    [Number(id)],
+  ).map((r) => String(r.detail)).join('\n')
+  assert(plan.includes('entity_archetype_num'), plan)
+  assert(!plan.includes('TEMP B-TREE'), plan)
+  // Installing into an existing tracked database adds the ordering index too.
+  d.exec('drop index entity_archetype_num')
+  s.install()
+  assert(
+    d.query('pragma index_list(entity)', []).some((r) =>
+      r.name == 'entity_archetype_num'
+    ),
+  )
+})
