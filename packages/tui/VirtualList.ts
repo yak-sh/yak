@@ -12,7 +12,7 @@ import type { MouseEvent } from './mouse.ts'
 import { type ComponentChildren, h, render, type VNode } from 'preact'
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import { TElement, touch } from './dom.ts'
-import { lay, type Line } from './paint.ts'
+import { clip, lay, type Line } from './paint.ts'
 import { type Sheet, type Style } from './theme.ts'
 import { terminalFocused, useKeys } from './screen.ts'
 import type { Key } from './input.ts'
@@ -567,8 +567,14 @@ export let VirtualList = <T extends VirtualItem>(
     trees.current.clear()
   }
   useLayoutEffect(() => clearTrees, [])
+  // Keep the last accepted viewport while its replacement is in flight.
+  // This is a paint cache, not a second source of item or scroll state.
+  let frame = useRef<
+    { lines: Line[]; position: ScrollPosition }
+  >()
   let identity = useRef(attrs.id)
   if (identity.current != attrs.id) {
+    frame.current = undefined
     let old = [...trees.current.values()]
     trees.current = new Map()
     queueMicrotask(() => {
@@ -647,6 +653,7 @@ export let VirtualList = <T extends VirtualItem>(
   state.current.selected = selected
   state.current.cursor = cursor
   useKeys((key) => {
+    if (pending) return false
     const cursor = state.current!.cursor
     if (cursor && onCursor) {
       const text = key.name == 'char' && !key.ctrl && !key.alt
@@ -750,6 +757,7 @@ export let VirtualList = <T extends VirtualItem>(
   return h('div', {
     ...attrs,
     onWheel: (event: MouseEvent) => {
+      if (pending) return
       if (
         !event.deltaY || event.release || event.ctrl || event.alt || event.shift
       ) return
@@ -769,7 +777,21 @@ export let VirtualList = <T extends VirtualItem>(
         state.current!.selectionStyle = sheet[selectionClass] ??
           { bg: '#343f44' }
         let inner = attrs.scrollbar && width >= 2 ? width - 1 : width
-        if (pending) return []
+        if (pending) {
+          let saved = frame.current
+          let lines = saved?.lines.slice(0, height).map((line) =>
+            clip(line, inner)
+          ) ??
+            [[{ text: 'Loading…', style: sheet.Muted ?? {} }]]
+          // Never normalize/publish an unloaded window or move its anchor.
+          // Keep the existing scrollbar position as well as its content.
+          let position = saved
+            ? { ...saved.position, height }
+            : { height, total: height, top: 0, bottom: true }
+          return attrs.scrollbar
+            ? drawScrollbar(lines, width, position, sheet)
+            : lines.slice(0, height)
+        }
         let lines = state.current!.layout(
           inner,
           height,
@@ -801,8 +823,12 @@ export let VirtualList = <T extends VirtualItem>(
             })
           }
         }
+        frame.current = {
+          lines,
+          position: state.current!.position(inner),
+        }
         return attrs.scrollbar
-          ? drawScrollbar(lines, width, state.current!.position(inner), sheet)
+          ? drawScrollbar(lines, width, frame.current.position, sheet)
           : lines
       }
     },

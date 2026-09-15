@@ -119,7 +119,16 @@ export let App = (
       sidebar: s.id ?? 'new',
       generation: current().generation + 1,
     })
-    setData((d) => ({ ...d, entries: [], loadedFor: undefined }))
+    // Preserve the accepted display while another session loads. A deliberate
+    // new-session selection is empty immediately, not a pending remote read.
+    if (!s.id) {
+      setData((d) => ({
+        ...d,
+        entries: [],
+        page: undefined,
+        loadedFor: undefined,
+      }))
+    }
   }
 
   const selectSidebar = (row: { id: string; session?: string }) => {
@@ -461,11 +470,15 @@ export let App = (
         h(
           'div',
           { class: 'Title' },
-          `Harness — ${selection.id?.slice(0, 8) ?? 'New session'}`,
+          data.loadedFor !== selection.id
+            ? `Harness — ${
+              data.loadedFor?.slice(0, 8) ?? 'New session'
+            } · Loading ${selection.id?.slice(0, 8)}…`
+            : `Harness — ${selection.id?.slice(0, 8) ?? 'New session'}`,
         ),
         h(Transcript, {
           ui,
-          id: selection.id ?? 'new',
+          id: data.loadedFor ?? 'new',
           pending: data.loadedFor !== selection.id,
           page: data.page,
           load: () => {

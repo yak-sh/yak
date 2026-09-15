@@ -474,3 +474,51 @@ Deno.test('uniform partial pages have stable global scroll positions', () => {
   }
   assert(v.stats.measured <= 40)
 })
+
+Deno.test('pending virtual windows retain their frame and scrollbar without repainting', async () => {
+  const { signal } = await import('@preact/signals')
+  const pending = signal(false), identity = signal('one')
+  const data = signal(items(100))
+  let renders = 0
+  const ui = await mount(
+    () =>
+      h(VirtualList<{ id: string; text: string }>, {
+        id: identity.value,
+        pending: pending.value,
+        items: data.value,
+        scrollbar: true,
+        renderItem: (item: { id: string; text: string }) => {
+          renders++
+          return h('div', null, item.text)
+        },
+        version: (item: { text: string }) => item.text,
+      }),
+    30,
+    8,
+  )
+  try {
+    const before = ui.text(), count = renders
+    const writes = ui.out.length
+    pending.value = true
+    data.value = []
+    await ui.send('')
+    assertEquals(ui.text(), before)
+    assertEquals(ui.out.length, writes)
+    assertEquals(renders, count)
+    assert(ui.text().includes('█'))
+    await ui.resize(20, 6)
+    assert(ui.text().includes('█'))
+    assert(ui.text().split('\n').every((line) => line.length <= 20))
+    identity.value = 'two'
+    await ui.send('')
+    assert(ui.text().includes('Loading…'))
+    assert(ui.text().includes('█'))
+    assert(!ui.text().includes('99'))
+    pending.value = false
+    await ui.send('')
+    assert(!ui.text().includes('Loading…'))
+    assert(ui.text().includes('█'))
+  } finally {
+    ui.free()
+  }
+})

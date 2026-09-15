@@ -378,7 +378,12 @@ requests an overlapping range near a visible boundary; Home/End can request the
 actual start/end rather than treating the loaded slice as the entire list. The
 host fetches data, preserves the controlled item anchor, and replaces the loaded
 items. Set `pending` while replacing a requested edge so the temporary
-collection cannot overwrite the saved position.
+collection cannot overwrite the saved position. While pending, the last painted
+viewport and scrollbar remain visible; an initially unloaded list displays
+`Loading…` with its scrollbar. Changing the list identity clears that paint
+cache. Pending lists do not accept navigation or publish normalized positions. A
+finished empty result must use `pending: false`, so it clears the previous
+content.
 
 The widget remains storage-independent. It uses the same item identity,
 selection, and measured-line cache as a complete list. Its scrollbar estimates

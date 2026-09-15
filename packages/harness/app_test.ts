@@ -625,10 +625,14 @@ Deno.test('session return preserves detached anchors through loading; Ctrl+End f
     let saved = { ...f.client.ent('viewport-a')!.viewport as Comp }
     assertEquals(saved.follow, false)
     await ui.send('\x0e')
+    assert(ui.text().includes('b-line-99'), ui.text())
     waiting = deferred<Bundle[]>()
     await ui.send('\x10')
     await settle()
     assertEquals(f.client.ent('viewport-a')!.viewport, saved)
+    assert(ui.text().includes('b-line-99'), ui.text())
+    assert(ui.text().includes('Harness — b · Loading a…'), ui.text())
+    assert(ui.text().includes('█'), ui.text())
     waiting.resolve(entries('a'))
     await settle()
     assertEquals(f.client.ent('viewport-a')!.viewport, saved)
@@ -1090,5 +1094,67 @@ Deno.test('shutdown refusal from pending transcript does not overwrite shutdown 
   } finally {
     screen.free()
     local.close()
+  }
+})
+
+Deno.test('delayed or failed refresh retains visible transcript until a successful empty answer', async () => {
+  const f = frontend()
+  const record: Bundle = {
+    entity: { eid: 'saved' },
+    content: { body: 'STABLE CONTENT' },
+  }
+  let refresh = () => {}
+  let read: () => Promise<Bundle[]> = () => Promise.resolve([record])
+  const a: UIAgent = {
+    sessions: () =>
+      Promise.resolve([{ entity: { eid: 's' }, session: { id: 's' } }]),
+    tasks: () => Promise.resolve([]),
+    children: () => Promise.resolve([]),
+    transcript: () => read(),
+    entry: (b) => h('div', null, String((b.content as Comp).body)),
+    line: () => '',
+    start: () => Promise.resolve('s'),
+    send: () => Promise.resolve('input'),
+    taskEntry: () => Promise.resolve({ task: 't', child: 'c' }),
+  }
+  const ui = await mount(
+    () =>
+      h(App, {
+        agent: a,
+        frontend: f,
+        subscribe: (fn) => {
+          refresh = fn
+          return () => {}
+        },
+      }),
+    70,
+    14,
+  )
+  try {
+    await ui.send('\x0e')
+    await settle()
+    assert(ui.text().includes('STABLE CONTENT'))
+    const pending = deferred<Bundle[]>()
+    read = () => pending.promise
+    refresh()
+    await settle()
+    assert(ui.text().includes('STABLE CONTENT'))
+    assert(ui.text().includes('█'))
+    pending.resolve([record])
+    await settle()
+    // An operational failure must not blank the previously accepted snapshot.
+    read = () => Promise.reject(new Error('fixture read failed'))
+    refresh()
+    await settle()
+    assert(ui.text().includes('STABLE CONTENT'))
+    assert(ui.text().includes('fixture read failed'))
+    read = () => Promise.resolve([])
+    refresh()
+    await settle()
+    assert(!ui.text().includes('STABLE CONTENT'))
+    assert(ui.text().includes('█'))
+  } finally {
+    ui.free()
+    f.close()
   }
 })
