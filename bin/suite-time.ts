@@ -87,7 +87,12 @@ type Results = {
   suites: Record<string, Row>
 }
 
-export function record(path: string, name: string, sample: Sample): string {
+export function record(
+  path: string,
+  name: string,
+  sample: Sample,
+  accept = Deno.env.get('SUITE_ACCEPT') === '1',
+): string {
   let tolerance = Number(Deno.env.get('SUITE_TOL') ?? '0.25')
   let read = (file: string) => {
     try {
@@ -121,12 +126,7 @@ export function record(path: string, name: string, sample: Sample): string {
   results.metric = 'wall-seconds / mean-concurrent-8M-LCG-seconds'
   results.tolerance = tolerance
   let previous = results.suites[name]?.baseline
-  let result = ratchet(
-    sample,
-    previous,
-    tolerance,
-    Deno.env.get('SUITE_ACCEPT') === '1',
-  )
+  let result = ratchet(sample, previous, tolerance, accept)
   results.suites[name] = {
     baseline: result.baseline,
     latest: {
@@ -145,7 +145,10 @@ export function record(path: string, name: string, sample: Sample): string {
   }
   document.suiteTimings = results
   write(path, document)
-  // The ignored results file holds observations; only floors are committed.
+  // The ignored results file holds observations and the live ratchet. The
+  // committed floor moves only on SUITE_ACCEPT=1, so a gate never dirties the
+  // tree.
+  if (!accept) return report(name, sample, result, previous, tolerance, reset)
   write(baselinePath, {
     version: VERSION,
     metric: results.metric,
@@ -156,6 +159,17 @@ export function record(path: string, name: string, sample: Sample): string {
       ) => [key, { baseline: row.baseline }]),
     ),
   })
+  return report(name, sample, result, previous, tolerance, reset)
+}
+
+let report = (
+  name: string,
+  sample: Sample,
+  result: ReturnType<typeof ratchet>,
+  previous: Baseline | undefined,
+  tolerance: number,
+  reset: boolean,
+) => {
   let delta = previous
     ? ` (${((result.ratio / previous.ratio - 1) * 100).toFixed(1)}%)`
     : ''

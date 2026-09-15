@@ -28,29 +28,32 @@ Deno.test('new metrics, explicit acceptance, and failed commands', () => {
   assertThrows(() => ratchet(sample(0), baseline))
   assertThrows(() => ratchet(sample(), baseline, NaN))
 })
-Deno.test('results preserve bench data and other suites; committed floors survive results deletion', async () => {
+Deno.test('results preserve bench data and other suites; committed floors survive results deletion and move only on accept', async () => {
   let dir = await Deno.makeTempDir()
   let path = dir + '/results.json'
   try {
     Deno.writeTextFileSync(path, JSON.stringify({ ns: { point: 42 } }))
-    record(path, 'check', sample())
-    record(path, 'test', sample())
+    let basePath = dir + '/suite.baseline.json'
+    record(path, 'check', sample(), true)
+    record(path, 'test', sample(), true)
+    let floors = Deno.readTextFileSync(basePath)
+    record(path, 'check', sample(8))
+    assertEquals(Deno.readTextFileSync(basePath), floors)
     let data = JSON.parse(Deno.readTextFileSync(path))
     assertEquals(data.ns, { point: 42 })
-    assertEquals(data.suiteTimings.suites.check.latest.seconds, 10)
+    assertEquals(data.suiteTimings.suites.check.latest.seconds, 8)
     assertEquals(data.suiteTimings.suites.test.latest.seconds, 10)
     Deno.removeSync(path)
     record(path, 'check', sample(30))
     data = JSON.parse(Deno.readTextFileSync(path))
     assertEquals(data.suiteTimings.suites.check.latest.verdict, 'REGRESSION')
     assertEquals(data.suiteTimings.suites.check.baseline.ratio, 200)
-    let basePath = dir + '/suite.baseline.json'
     let base = JSON.parse(Deno.readTextFileSync(basePath))
     base.version = VERSION - 1
     Deno.writeTextFileSync(basePath, JSON.stringify(base))
-    record(path, 'check', sample(30))
+    record(path, 'check', sample(30), true)
     data = JSON.parse(Deno.readTextFileSync(path))
-    assertEquals(data.suiteTimings.suites.check.latest.verdict, 'NEW')
+    assertEquals(data.suiteTimings.suites.check.latest.verdict, 'ACCEPTED')
     assertEquals(data.suiteTimings.suites.check.baseline.ratio, 600)
     Deno.writeTextFileSync(path, '{bad')
     assertThrows(() => record(path, 'check', sample()))
