@@ -512,12 +512,17 @@ let workersWanted = Deno.env.get('TASKS_WS_WORKERS') != '0'
 let workerCap = Number(Deno.env.get('TASKS_WS_WORKER_CAP')) ||
   navigator.hardwareConcurrency || 8
 let liveWorkers = 0
-// A worker costs ~200 ms to construct (its isolate loads the server's module
-// graph, then opens its read connection) — measured on an empty graph, and the
-// whole of a cold tab's handshake latency there. So one is kept WARM: built
-// and initialized ahead of the next socket, which adopts it and warms the next
-// (T-37445). The spare holds one read connection; the cap counts it.
-let spare: Worker | null = null
+// A worker costs ~350 ms of THIS thread to construct — its isolate's module
+// graph loads through the main isolate's loader — so a spawn on the request
+// path stalls every frame every other socket's worker posts meanwhile
+// (T-37445: 14 frames relayed 343 ms late, all at once). Spares are built off
+// the hot path: a small pool at boot, refilled on an idle timer rather than in
+// the turn a socket is being answered, and a worker whose socket closed is
+// reset and returned to the pool instead of torn down. Each spare holds one
+// read connection; the pool counts against the cap.
+let POOL = Number(Deno.env.get('TASKS_WS_SPARES')) || 2
+let WARM_MS = 5_000
+let spares: Worker[] = []
 let spawnWorker = () => {
   let w = new Worker(new URL('./wsworker.ts', import.meta.url), {
     type: 'module',
@@ -527,11 +532,22 @@ let spawnWorker = () => {
   return w
 }
 let warm = () => {
-  if (spare || !workersWanted || graph == ':memory:') return
-  if (liveWorkers + 1 >= workerCap) return
-  try {
-    spare = spawnWorker()
-  } catch { /* the next socket serves inline, as before */ }
+  if (!workersWanted || graph == ':memory:') return
+  while (spares.length < POOL && liveWorkers + spares.length < workerCap) {
+    try {
+      spares.push(spawnWorker())
+    } catch {
+      return // the next socket serves inline, as before
+    }
+  }
+}
+let warming: ReturnType<typeof setTimeout> | undefined
+let warmLater = () => {
+  if (warming !== undefined) return
+  warming = setTimeout(() => {
+    warming = undefined
+    warm()
+  }, WARM_MS)
 }
 setTimeout(warm)
 
@@ -586,6 +602,7 @@ let ws = (req: Request) => {
   // socket's onclose can both reach shut().
   let closedAck = () => {}
   let shutting = false
+  let dead = false
   let shut = () => {
     let w = s.worker
     if (!w || shutting) return
@@ -598,6 +615,22 @@ let ws = (req: Request) => {
       w.terminate()
     }
     let timer = setTimeout(kill, WORKER_CLOSE_MS)
+    // A healthy worker goes back to the pool (T-37445): its serving state is
+    // reset over the same connection, and it is adopted only on the ack, so
+    // no frame of this socket can reach the next one. Frames arriving before
+    // the ack still land here, on a socket that is already closed.
+    if (!dead && workersWanted && spares.length < POOL) {
+      w.onmessage = (m) => {
+        if (!m.data?.reset || torn) return
+        torn = true
+        clearTimeout(timer)
+        liveWorkers--
+        w.onmessage = null
+        spares.push(w)
+      }
+      w.postMessage({ reset: true })
+      return
+    }
     closedAck = () => {
       clearTimeout(timer)
       kill()
@@ -606,19 +639,14 @@ let ws = (req: Request) => {
   }
   if (workersWanted && graph != ':memory:' && liveWorkers < workerCap) {
     try {
-      let w = spare ?? spawnWorker()
-      spare = null
-      // The NEXT spare is built once this socket's first answer is out: a
-      // spawn racing the handshake cost it ~10 ms of the seed's 12 (T-37445).
-      let answered = false
+      let w = spares.shift() ?? spawnWorker()
+      // The pool refills on a timer, never in the turn this socket's first
+      // answer goes out: a spawn there held its burst 343 ms (T-37445).
+      warmLater()
       w.onmessage = (m) => {
         let d = m.data
         if (typeof d?.frame == 'string') {
           if (socket.readyState == WebSocket.OPEN) socket.send(d.frame)
-          if (!answered) {
-            answered = true
-            setTimeout(warm)
-          }
         } else if (Array.isArray(d?.apply)) {
           applyFrom(socket, writer, d.apply as Change[], d.id)
         } else if (d?.closed) {
@@ -632,6 +660,7 @@ let ws = (req: Request) => {
             `wsworker dead — serving inline from here on: ${d.dead}`,
           )
           workersWanted = false
+          dead = true
           shut()
           socket.close(1012, 'resubscribe')
         }

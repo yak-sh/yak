@@ -26,6 +26,7 @@ type In =
   | { aged: number }
   | { observe: Frame; session: string }
   | { close: true }
+  | { reset: true }
 
 let post = (m: unknown) =>
   (self as unknown as { postMessage(m: unknown): void }).postMessage(m)
@@ -41,6 +42,11 @@ let sub: Subserve | undefined
 // answered cheapest first, so a tally is not stuck behind a board.
 let queue: ReturnType<typeof subqueue> | undefined
 let sources = false
+// One socket's serving state over the open connection; a recycle rebuilds it.
+let serve = () => {
+  sub = subserve(db!, (frame) => post({ frame: JSON.stringify(frame) }))
+  queue = subqueue(db!, (f) => guard(() => sub?.frame(f)))
+}
 
 // Each Worker is its own JS isolate: the source registry installed by
 // server.ts belongs only to the delegator's isolate. Install the same adapters
@@ -81,12 +87,19 @@ self.onmessage = (m: MessageEvent<In>) => {
       // extension (write-capable extensions live only in the owning process).
       db = new DatabaseSync(d.init, { readOnly: true })
       db.exec('pragma busy_timeout = 5000')
-      sub = subserve(db, (frame) => post({ frame: JSON.stringify(frame) }))
-      queue = subqueue(db, (f) => guard(() => sub?.frame(f)))
+      serve()
       // A spare is built ahead of its socket (server_runtime.ts warm), so
       // its first handshake need not pay for preparing the seed's statements:
       // the addressed read compiles them (~12 ms on the live graph, T-37445).
       addressed(db, 'T-1')
+      return
+    }
+    if ('reset' in d) {
+      // The delegator recycles this worker for its next socket (T-37445):
+      // fresh serving state over the same read connection. Acked, so the
+      // delegator adopts it only once every frame of the old socket is out.
+      if (db) serve()
+      post({ reset: true })
       return
     }
     if ('close' in d) {
