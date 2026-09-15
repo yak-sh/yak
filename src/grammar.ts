@@ -82,6 +82,10 @@ Component names test facets directly: '.proposed=' means absent (the fix
 queue), while '.proposed!' means present (the idea backlog).
 Whitespace separates terms; every term stands alone. Between terms '&' and
 ',' are aliases for whitespace ('&' is the same query as a URL string);
+'|' between terms is OR and binds looser than the AND of adjacent terms
+('.status=open .priority=P1|.assignee=jeff' is open P1 tasks or anything
+of jeff's), and parentheses group ('.status=open (.priority=P1|.assignee=jeff)').
+A directive — order, fields, tally, edges, window — stays outside the '|';
 inside a value ',' is the list operator, with no spaces ('.status=open,wip',
 never 'open, wip'). Quotes, double or single, hold a value together against both
 separators: '.web.url="https://x.test/p?a=1&b=2"' is one predicate,

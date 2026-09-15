@@ -29,6 +29,7 @@ import {
   EDGES,
   EXISTS,
   NEVER,
+  OR,
   ORDER,
   type Pred,
   PROJECT,
@@ -103,6 +104,7 @@ let op = (p: Pred): q.Op => {
 // string, including the fleet predicate's list/range representation.
 let clause = (p: Pred): q.Clause => {
   if (p.op == NEVER) return q.never()
+  if (p.op == OR) return q.or(...p.alts!.map((a) => q.and(...a.map(clause))))
   if (p.op == TEXT) return q.text(p.value)
   if (p.reach) return q.walk(p.reach.type, p.reach.dir, p.value, p.reach.depth)
   if (p.refs) return p.op == EXISTS ? q.hasRefs() : q.refs(p.value)

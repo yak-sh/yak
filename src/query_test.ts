@@ -113,6 +113,25 @@ Deno.test('query: .kind= filters like a column and composes', () => {
   assertEquals(parseQuery('.kind=tasks'), kindPreds('task'))
 })
 
+Deno.test('query: | alternatives match when any holds; directives stay outside', () => {
+  assertEquals(hit('.status=open|.priority=1', { status: 'done' }), true)
+  assertEquals(hit('.status=open|.priority=3', { status: 'done' }), false)
+  // AND binds tighter: (open and P3) or P1
+  assertEquals(hit('.status=open&.priority=3|.priority=1'), true)
+  assertEquals(hit('.status=open&.priority=3|.priority=2'), false)
+  assertEquals(hit('.status=open&(.priority=3|.domain=Ops)'), true)
+  // an OR reads every component its alternatives read
+  assertEquals(
+    predComps(parseQuery('.task.status=open|.filed.priority=1')),
+    new Set(['task', 'completed', 'cancelled', 'claim', 'filed']),
+  )
+  assertThrows(
+    () => parseQuery('(.status=open&.order=hot|.priority=1)'),
+    Error,
+    'outside the | alternatives',
+  )
+})
+
 Deno.test('query: bare kind= is not a filter; .kind=typo is a named refusal', () => {
   // No leading dot: not a dot-param at all — a text term to the search line,
   // and the strict doors refuse it (noFilter teaches the dotted spelling).

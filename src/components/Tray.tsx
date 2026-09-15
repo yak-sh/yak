@@ -7,7 +7,6 @@ import {
   pinned,
   sessionDetail,
   shelfFor,
-  traySessionQueries,
 } from '../live.ts'
 import { awake, type Session } from '../types.ts'
 import { block } from './ui.tsx'
@@ -19,6 +18,7 @@ import { usePinTargets } from './subscriptions.ts'
 import { Icon } from './icons.tsx'
 import { shelfHost, shelfOpen, shelve } from './shelf.ts'
 import { useQueryEids } from './useQuery.ts'
+import { traySessionQuery } from '../tray_query.ts'
 
 // The Tray is bottom-right screen chrome: live-session attention plus a
 // per-client Shelf. A shelved entity is a normal Card while open and one icon
@@ -80,9 +80,8 @@ export let traySessions = (rows: [string, Session][]) =>
   rows.toSorted(([, a], [, b]) => started(b) - started(a))
 
 let useLive = () => {
-  // Fixed query list: hooks and ownership stay stable across renders.
-  let ids = traySessionQueries.flatMap((q) => useQueryEids(q, true))
-  return traySessions([...new Set(ids)].flatMap((eid) => {
+  let ids = useQueryEids(traySessionQuery, true)
+  return traySessions(ids.flatMap((eid) => {
     let s = ent(eid).session
     return s && shown(eid, s) ? [[eid, s] as [string, Session]] : []
   }))

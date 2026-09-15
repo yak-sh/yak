@@ -372,6 +372,11 @@ let COMPILES = [
   '.filed.priority=10',
   '.doc.title=10',
   '.filed.domain=Eng',
+  // OR across columns, and a group beside an ordinary AND
+  '.task.status=open|.filed.priority=10',
+  '.task.status=open|.filed.domain=',
+  '.filed.domain=Eng&(.task.status=done|.filed.priority=1)',
+  '.task.status=cancelled|.proposed!|boom',
   // any-of
   '.task.status=open,wip',
   '.filed.priority=0,10',

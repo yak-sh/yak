@@ -101,6 +101,11 @@ export type Pred = {
   // is one deref, the depth-1 path `.assignee.title`; `.comment.target.doc.title`
   // is that same deref spelled with explicit `comp.prop` on both sides.
   at?: Hop[]
+  // An OR (`.a=1|.b=2&.c=3`, op OR): alternatives, each an AND list, and no
+  // comp/prop/value of its own. Only filters live inside — a directive (order,
+  // fields, tally, edges, window) rides the top level, where every reader of
+  // the list looks for it.
+  alts?: Pred[][]
   // A REVERSE hop: the entities whose `rev.comp.rev.prop` reference points BACK
   // at this one (`.comments` = the comments whose comment.target is me). The
   // mirror of `at` — one-to-many instead of one deref — so it carries the
@@ -586,6 +591,14 @@ export let windowOf = (preds: Pred[]): Win => {
 export let predComps = (preds: Pred[]): Set<string> | null => {
   let out = new Set<string>()
   for (let p of preds) {
+    if (p.op == OR) {
+      for (let alt of p.alts!) {
+        let inner = predComps(alt)
+        if (!inner) return null
+        for (let c of inner) out.add(c)
+      }
+      continue
+    }
     if (p.refs || p.at || p.rev) return null
     if (p.op == ORDER && p.value == 'hot') return null
     if (p.op == ORDER && p.value == 'priority') out.add('filed')
@@ -975,6 +988,19 @@ let columnOf = (path: string[], vocab: Vocab, directive: string): Hop => {
   return at
 }
 
+// A directive inside an alternative would be read by nobody: orderOf, fieldsOf
+// and the riders scan the top-level list. Refuse it there rather than let
+// `(.a=1&.order=hot|.b=2)` quietly drop the order.
+let alternative = (preds: Pred[]): Pred[] => {
+  let rider = preds.find((p) =>
+    [ORDER, NEAR, AGG, WINDOW, PROJECT, EDGES, WANT].includes(p.op)
+  )
+  if (rider) {
+    throw new Error(`.${rider.op} belongs outside the | alternatives`)
+  }
+  return preds
+}
+
 export let bindClause = (c: Clause, vocab: Vocab = NONE): Pred[] => {
   let rider = (extra: Partial<Pred>): Pred[] => [{
     comp: '',
@@ -987,6 +1013,14 @@ export let bindClause = (c: Clause, vocab: Vocab = NONE): Pred[] => {
   switch (c.kind) {
     case 'and':
       return c.clauses.flatMap((c) => bindClause(c, vocab))
+    case 'or':
+      return [{
+        comp: '',
+        prop: '',
+        op: OR,
+        value: '',
+        alts: c.clauses.map((a) => alternative(bindClause(a, vocab))),
+      }]
     case 'never':
       return [never()]
     case 'text':
@@ -1223,6 +1257,9 @@ export type Fts = (eid: string, pred: Pred) => boolean
 // Empty reads select nothing. Whitespace, & and comma separation, quoting,
 // escaping and malformed-clause refusals are all owned by the package parser.
 export let NEVER = 'never'
+// The OR pred: see Pred.alts. Every evaluator (matchQuery, sql.ts, predComps)
+// recurses into the alternatives; every reader of directives ignores it.
+export let OR = 'or'
 export let never = (): Pred => ({ comp: '', prop: '', op: NEVER, value: '' })
 export let parseQuery = (q: string, vocab: Vocab = NONE): Pred[] =>
   bindClause(parse(q), vocab)
@@ -1333,6 +1370,9 @@ export let resolveRefs = (
   lookup: (id: string) => string | undefined,
 ): Pred[] =>
   preds.map((p) => {
+    if (p.op == OR) {
+      return { ...p, alts: p.alts!.map((a) => resolveRefs(a, lookup)) }
+    }
     // A multi-column reverse-union's value is an id like any reference — but it
     // owns no comp/prop to type it, so resolve it through the entity target. A
     // traversal's target is the same shape: one entity, no column to type it.
@@ -1472,9 +1512,14 @@ export let matchQuery = (
   kids?: Kids,
   walk?: Walk,
   fts?: Fts,
-) =>
+): boolean =>
   preds.every((p) => {
     if (p.op == NEVER) return false // the empty query: selects nothing
+    if (p.op == OR) {
+      return p.alts!.some((alt) =>
+        matchQuery(c, alt, ent, now, kids, walk, fts)
+      )
+    }
     if (
       p.op == ORDER || p.op == NEAR || p.op == AGG || p.op == PROJECT ||
       p.op == EDGES || p.op == WANT

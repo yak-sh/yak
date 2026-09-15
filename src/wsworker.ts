@@ -18,6 +18,7 @@ import { registerSessionSource } from './source_session.ts'
 import { type Frame, type Subserve, subserve } from './subserve.ts'
 import { subqueue } from './subqueue.ts'
 import { addressed, evalSub } from './graph_query.ts'
+import { traySessionQuery } from './tray_query.ts'
 
 type In =
   | { init: string }
@@ -112,6 +113,8 @@ self.onmessage = (m: MessageEvent<In>) => {
       // first evaluation on a fresh connection costs ~27 ms against 2 ms
       // warm — a quarter of the boot burst, ahead of the page's own subs.
       evalSub(db, '.canvas!')
+      // The tray's session strip is the next frame every tab sends.
+      evalSub(db, traySessionQuery)
       return
     }
     if ('reset' in d) {

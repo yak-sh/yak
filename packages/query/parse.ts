@@ -24,10 +24,12 @@
 
 import {
   And,
+  and,
   Clause,
   Dir,
   every,
   Op,
+  or,
   Qual,
   scalar,
   text,
@@ -419,26 +421,42 @@ export let parseDot = (token: string): Clause[] | null => {
 // (`jeff's`) stays a letter; a bracket opens only after a bare path, so one
 // inside a value is a character of the value. An unclosed quote or bracket is
 // refused: the rest of the line was not what the caller meant.
+// A `(` opening a token starts a GROUP: everything to its matching `)` is one
+// token, parsed on its own (parse below), so `|` and `&` inside it bind there.
+// A `|` outside quotes, brackets and groups is its own token, the OR separator.
 let tokens = (q: string): string[] => {
   let out: string[] = []
   let cur = ''
   let quote = ''
   let bracket = false
+  let depth = 0
   for (let i = 0; i < q.length; i++) {
     let c = q[i]
     if (quote) {
       cur += c
       if (c == '\\' && i + 1 < q.length) cur += q[++i]
       else if (c == quote) quote = ''
+    } else if (depth) {
+      if ((c == '"' || c == "'") && /[=<>,(\s&|]$/.test(cur)) quote = c
+      else if (c == '(') depth++
+      else if (c == ')') depth--
+      cur += c
     } else if (bracket) {
       cur += c
       if (c == ']') bracket = false
     } else if ((c == '"' || c == "'") && /^$|[=<>,]$/.test(cur)) {
       quote = c
       cur += c
+    } else if (c == '(' && !cur) {
+      depth = 1
+      cur = c
     } else if (c == '[' && PATH.test(cur)) {
       bracket = true
       cur += c
+    } else if (c == '|') {
+      if (cur) out.push(cur)
+      out.push('|')
+      cur = ''
     } else if (c == '&' || /\s/.test(c)) {
       if (cur) out.push(cur)
       cur = ''
@@ -446,6 +464,7 @@ let tokens = (q: string): string[] => {
   }
   if (quote) throw new Error(`unclosed quote: ${cur}`)
   if (bracket) throw new Error(`unclosed bracket: ${cur}`)
+  if (depth) throw new Error(`unclosed group: ${cur}`)
   if (cur) out.push(cur)
   return out
 }
@@ -478,6 +497,8 @@ let clauseish = (tok: string): boolean => {
   return first == '*' || /^["']/.test(first) || parseDot(first) != null
 }
 let parts = (tok: string, prev?: string, next?: string): string[] => {
+  // A group is one term; its commas belong to the clauses inside it.
+  if (tok.startsWith('(')) return [tok]
   if (
     tok.startsWith(',') && prev && VALUED.test(prev) && !clauseish(tok)
   ) throw new Error(LIST)
@@ -497,6 +518,7 @@ let parts = (tok: string, prev?: string, next?: string): string[] => {
 // component it might name is the dot-marked spelling (`.entity`).
 let read = (tok: string, opts: ParseOpts): Clause[] => {
   if (tok == '*') return [every()]
+  if (tok.startsWith('(')) return parse(tok.slice(1, -1), opts).clauses
   if (!/^["']/.test(tok)) {
     let cs = parseDot(tok)
     if (cs) return cs
@@ -523,10 +545,27 @@ let read = (tok: string, opts: ParseOpts): Clause[] => {
  * The empty query selects NOTHING: an empty string, or one with no clauses,
  * yields a lone `never`, so a blank board query does not stage the whole graph.
  */
-export let parse = (q: string, opts: ParseOpts = {}): And => {
-  let toks = tokens(q)
-  let out: Clause[] = toks.flatMap((tok, i) =>
+let clauses = (toks: string[], opts: ParseOpts): Clause[] =>
+  toks.flatMap((tok, i) =>
     parts(tok, toks[i - 1], toks[i + 1]).flatMap((p) => read(p, opts))
   )
+
+export let parse = (q: string, opts: ParseOpts = {}): And => {
+  // `|` is OR and binds LOOSER than the AND of adjacent terms: `.a=1 .b=2|.c=3`
+  // is (a and b) or c. A parenthesised group is one term, so `.a=1 (.b=2|.c=3)`
+  // is a and (b or c). An empty alternative is refused rather than read as
+  // "nothing", which would quietly select nothing.
+  let alts: string[][] = [[]]
+  for (let tok of tokens(q)) {
+    if (tok == '|') alts.push([])
+    else alts[alts.length - 1].push(tok)
+  }
+  let groups = alts.map((toks) => clauses(toks, opts))
+  if (groups.length > 1 && groups.some((g) => !g.length)) {
+    throw new Error(`an empty alternative beside |: ${q}`)
+  }
+  let out = groups.length == 1
+    ? groups[0]
+    : [or(...groups.map((g) => g.length == 1 ? g[0] : and(...g)))]
   return { kind: 'and', clauses: out.length ? out : [{ kind: 'never' }] }
 }

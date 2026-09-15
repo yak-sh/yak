@@ -28,6 +28,7 @@ import {
   ne,
   near,
   never,
+  or,
   order,
   parse,
   present,
@@ -183,6 +184,31 @@ Deno.test('each term stands alone', () => {
 })
 
 // The empty query selects nothing.
+Deno.test('| is OR, looser than the AND of adjacent terms; ( ) groups', () => {
+  assertEquals(
+    parse('.a=1 .b=2|.c=3'),
+    and(or(and(eq('a', '1'), eq('b', '2')), eq('c', '3'))),
+  )
+  assertEquals(
+    parse('.a=1&(.b=2|.c=3&.d=4)'),
+    and(eq('a', '1'), or(eq('b', '2'), and(eq('c', '3'), eq('d', '4')))),
+  )
+  // a group without | is just its terms, flattened into the list
+  assertEquals(parse('(.a=1 .b=2)'), and(eq('a', '1'), eq('b', '2')))
+  // a group's commas are its clauses' own lists, never a split of the group
+  assertEquals(
+    parse('.s!&(.a=1,2|.b=3)'),
+    and(present('s'), or(eq('a', list('1', '2')), eq('b', '3'))),
+  )
+  // quotes inside a group still glue
+  assertEquals(
+    parse('(.t~="a|b"|.c=3)'),
+    and(or(contains('t', 'a|b'), eq('c', '3'))),
+  )
+  assertThrows(() => parse('.a=1|'), Error, 'empty alternative')
+  assertThrows(() => parse('(.a=1'), Error, 'unclosed group')
+})
+
 Deno.test('empty query is never', () => {
   assertEquals(parse(''), and(never()))
   assertEquals(parse('   '), and(never()))

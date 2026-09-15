@@ -36,6 +36,7 @@ import {
   statusOf,
 } from './types.ts'
 import { moves, typeOf } from './edge.ts'
+import { dotFields } from './tray_query.ts'
 import { isUnread, type Row } from './client.ts'
 import type { WorkClaimMutation } from './mutation.ts'
 import {
@@ -3239,39 +3240,6 @@ export let projects = (): Ent[] =>
       (paint.peek()[b]?.entity?.num ?? Infinity)
     )
     .map(ent)
-// The session chrome, projected (D-22567 §3). `.session!` is the one UNBOUNDED
-// kind — thousands of rows — and unprojected it put 6.22 MB on the wire for
-// every tab, because a session entity's eager bag is its whole history: the
-// final_text and usage_json and stderr of every run that ever finished, plus
-// the created/updated/worktree/spawn provenance around them. The Tray's strip
-// is mounted in every tab and renders coloured DOTS.
-//
-// So the chrome asks for the columns it decides and paints with, and nothing
-// else: enough to tell awake from settled and recent from old (Tray `shown`),
-// sort by start, and give each dot its standing (session_status graphStanding —
-// which reads `error`/`exception` for PRESENCE, hence their timestamps). A
-// session's `provider`/`pid` are spawn-preferred through sessionOf, so both
-// spellings ride or the merge reads a stale one.
-let dotFields: Field[] = [
-  'session.status',
-  'session.pid',
-  'session.turn',
-  'session.origin',
-  'session.standing',
-  'session.started_at',
-  'session.finished_at',
-  'session.provider',
-  'spawn.provider',
-  'runtime.pid',
-  'run.started_at',
-  'settled.status',
-  'settled.at',
-  'error.at',
-  'exception.at',
-].map((f) => {
-  let [comp, prop] = f.split('.')
-  return { comp, prop, wake: true }
-})
 let sessionDots: Pred[] = [
   has('session'),
   { comp: '', prop: '', op: PROJECT, value: '', fields: dotFields },
@@ -3299,22 +3267,6 @@ export let sessionDetail = '.session!&.fields=' + [
   'created.at',
   'doc.title',
 ].join(',')
-
-// The strip shows active or recent sessions, not the first 1,000 historical
-// sessions. Separate indexed selections express that union without asking the
-// browser to infer it from a capped all-history result.
-export let traySessionQueries = [
-  '.session.status=starting,running,stopping',
-  '.session.pid!&.session.finished_at=&.settled=',
-  '.runtime.pid!&.session.finished_at=&.settled=',
-  '.session.started_at>=6-hours-ago',
-  '.run.started_at>=6-hours-ago',
-  '.session.finished_at>=6-hours-ago',
-  '.settled.at>=6-hours-ago',
-].map((q) =>
-  `.session!&${q}&.fields=` +
-  dotFields.map((f) => `${f.comp}.${f.prop}`).join(',')
-)
 
 export let sessionRows = (): [string, Session][] =>
   queryEids(sessionDots).value.flatMap((eid) => {
