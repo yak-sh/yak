@@ -421,6 +421,38 @@ Deno.test('partial ranges load neighbors without mistaking a page boundary for t
   }
 })
 
+Deno.test('an unchanged page answer does not re-request the same anchor', async () => {
+  let { signal } = await import('@preact/signals')
+  let data = items(20), visible = signal(data.slice(0, 10))
+  let requests: unknown[] = []
+  let ui = await mount(
+    () =>
+      h(VirtualList, {
+        items: visible.value,
+        value: { anchor: { id: '9', offset: 0 }, follow: false },
+        range: { before: false, after: true },
+        onRange: (request) => {
+          requests.push(request)
+          // The host answers with the same page as a fresh array.
+          visible.value = [...visible.value]
+        },
+        renderItem: (item) => h('div', null, item.id),
+      }),
+    40,
+    5,
+  )
+  try {
+    await ui.resize(41, 5)
+    await ui.resize(40, 5)
+    assertEquals(requests.length, 1)
+    visible.value = data.slice(0, 12)
+    await ui.resize(41, 5)
+    assertEquals(requests.length, 2)
+  } finally {
+    ui.free()
+  }
+})
+
 Deno.test('scroll estimates retain heights after text-cache eviction and page replacement', () => {
   type Item = { id: string; rows: number }
   let measured = 0
