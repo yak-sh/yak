@@ -8149,12 +8149,17 @@ let notLazy = (endpoint: string) =>
 // isn't, whichever side of the OR selected the row — so the multi-index OR is
 // untouched and each NOT EXISTS is one more seek per candidate edge.
 let MINE = `in (select eid from hit)`
+let myIds = `in (select e.id from entity e where e.eid ${MINE})`
+// The edge rows incident to the staged hits, as a rowid set. Spelled as a
+// UNION of the two endpoint seeks rather than `from in … or to in …`: under
+// the verb CASE and the recency bound the planner gave up the multi-index OR
+// and SCANNED the edge table, 12 ms for an entity with two edges (T-37445);
+// each half of the union is one covering-index seek whatever wraps it.
+let touching = `(select rowid from edge where "from" ${myIds}` +
+  ` union all select rowid from edge where "to" ${myIds})`
 let incidentFrom = (eagerOnly: boolean, type?: string) => {
-  let myIds = `in (select e.id from entity e where e.eid ${MINE})`
   let live = eagerOnly ? notLazy('d.parent') + notLazy('d.child') : ''
-  return `(${
-    sentences(type, `g."from" ${myIds} or g."to" ${myIds}`)
-  }) d where 1${live}`
+  return `(${sentences(type, `g.rowid in ${touching}`)}) d where 1${live}`
 }
 
 // The canonical reading order of an edge set: by parent, verb, listed order,
@@ -8219,9 +8224,21 @@ export let eagerDepsCount = (
 ): number => {
   if (!eids.length) return 0
   stage(db, eids)
+  // A count needs no verb: the sentence projection's per-row CASE over every
+  // nature table was two thirds of an 11 ms count on a 2,000-edge hub. Only
+  // the endpoint screens and, for one verb, that verb's own table are asked.
+  let verb = type == null
+    ? ''
+    : ` and exists (select 1 from "${
+      natureOf[type]
+    }" n where n.entity = g.entity)`
   return Number(
-    (prep(db, `select count(*) as n from ${incidentFrom(true, type)}`)
-      .get() as { n: number }).n,
+    (prep(
+      db,
+      `select count(*) as n from edge g where g.rowid in ${touching}${
+        notLazy('g."from"')
+      }${notLazy('g."to"')}${verb}`,
+    ).get() as { n: number }).n,
   )
 }
 
