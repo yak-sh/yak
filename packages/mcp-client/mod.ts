@@ -1,3 +1,4 @@
+import { extractWWWAuthenticateParams } from '@modelcontextprotocol/sdk/client/auth.js'
 /** MCP tools over Streamable HTTP, independent of a session or UI host. */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
@@ -34,7 +35,17 @@ export class MCPError extends Error {
     super(message)
   }
 }
-export class MCPAuthorizationRequired extends MCPError {}
+export class MCPAuthorizationRequired extends MCPError {
+  constructor(
+    server: string,
+    public readonly challenge: {
+      resourceMetadataUrl?: string
+      scope?: string
+    } = {},
+  ) {
+    super('MCP sign-in required; open authorization in the host', server)
+  }
+}
 /** Encode opaque remote names without collisions or inferring noun/verb semantics. */
 export const nameOf = async (server: string, name: string): Promise<string> => {
   const hash = await crypto.subtle.digest(
@@ -79,6 +90,7 @@ export const connect = (server: Server, options: Options = {}): Connection => {
     listing = undefined
   })
   let unauthorized = false
+  let challenge: { resourceMetadataUrl?: string; scope?: string } = {}
   const fetcher: typeof fetch = async (input, init) => {
     const headers = new Headers(init?.headers)
     const token = await options.token?.(server)
@@ -110,6 +122,13 @@ export const connect = (server: Server, options: Options = {}): Connection => {
         : AbortSignal.timeout(options.timeout ?? 60000),
     })
     unauthorized = response.status === 401
+    if (unauthorized) {
+      const found = extractWWWAuthenticateParams(response)
+      challenge = {
+        resourceMetadataUrl: found.resourceMetadataUrl?.href,
+        scope: found.scope,
+      }
+    }
     return response
   }
   const transport = new StreamableHTTPClientTransport(url, { fetch: fetcher })
@@ -118,10 +137,7 @@ export const connect = (server: Server, options: Options = {}): Connection => {
     return ready ??= sdk.connect(transport).catch(async () => {
       await sdk.close().catch(() => {})
       if (unauthorized) {
-        throw new MCPAuthorizationRequired(
-          'MCP sign-in required; open authorization in the host',
-          server.name,
-        )
+        throw new MCPAuthorizationRequired(server.name, challenge)
       }
       throw new MCPError(
         'MCP connection failed; check server URL and sign-in',

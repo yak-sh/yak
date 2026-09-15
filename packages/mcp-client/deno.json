@@ -13,6 +13,7 @@
   },
   "compilerOptions": {
     "lib": [
+      "deno.ns",
       "dom",
       "esnext"
     ]
@@ -21,7 +22,8 @@
   "publish": {
     "exclude": [
       "**/*_test.ts",
-      "testing.ts"
+      "testing.ts",
+      "browser.json"
     ]
   }
 }

@@ -33,8 +33,14 @@ export type AuthorizationOptions = {
   fetch?: typeof fetch
   now?: () => number
 }
+export type AuthorizationChallenge = {
+  resourceMetadataUrl?: string
+  scope?: string
+}
 export type Authorization = {
-  begin(): Promise<{ url: string; redirectUrl: string }>
+  begin(
+    challenge?: AuthorizationChallenge,
+  ): Promise<{ url: string; redirectUrl: string }>
   complete(callback: string): Promise<void>
   token(): Promise<string | undefined>
   cancel(): void
@@ -150,7 +156,7 @@ export const authorization = (options: AuthorizationOptions): Authorization => {
     },
   })
   return {
-    begin: () =>
+    begin: (challenge) =>
       serialized(() =>
         options.store.update(key, async (record) => {
           pending = {
@@ -163,10 +169,14 @@ export const authorization = (options: AuthorizationOptions): Authorization => {
           })
           // Explicit sign-in starts a new consent flow, rather than refreshing an old grant.
           p.tokens = () => undefined
+          if (challenge?.resourceMetadataUrl) p.discoveryState = () => undefined
           try {
             await auth(p, {
               serverUrl: server,
-              scope: options.scope,
+              scope: options.scope ?? challenge?.scope,
+              resourceMetadataUrl: challenge?.resourceMetadataUrl
+                ? new URL(challenge.resourceMetadataUrl)
+                : undefined,
               fetchFn: boundedFetch,
             })
             if (!url || !pending?.verifier) {
@@ -207,10 +217,13 @@ export const authorization = (options: AuthorizationOptions): Authorization => {
             )
           }
           if (
+            (discovery ?? record.discovery)?.authorizationServerMetadata
+                    ?.authorization_response_iss_parameter_supported === true &&
+              !u.searchParams.has('iss') ||
             u.searchParams.has('iss') &&
-            u.searchParams.get('iss') !==
-              (discovery ?? record.discovery)?.authorizationServerMetadata
-                ?.issuer
+              u.searchParams.get('iss') !==
+                (discovery ?? record.discovery)?.authorizationServerMetadata
+                  ?.issuer
           ) {
             throw new AuthorizationError('Return URL issuer does not match')
           }

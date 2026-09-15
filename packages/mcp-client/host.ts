@@ -1,4 +1,3 @@
-/// <reference lib="deno.ns" />
 /** Private local OAuth records. Portable callers can supply another AuthorizationStore. */
 import type { AuthorizationRecord, AuthorizationStore } from './oauth.ts'
 
@@ -26,6 +25,22 @@ export const fileAuthorizationStore = (path: string): AuthorizationStore => {
         typeof data.records !== 'object' || Array.isArray(data.records)
       ) {
         throw new Error('Unsupported OAuth store format')
+      }
+      for (const record of Object.values(data.records)) {
+        if (!record || typeof record !== 'object' || Array.isArray(record)) {
+          throw new Error('Invalid OAuth credential record')
+        }
+        const r = record as AuthorizationRecord
+        if (
+          r.tokens &&
+          (typeof r.tokens.access_token !== 'string' ||
+            typeof r.tokens.token_type !== 'string' ||
+            (r.tokens.refresh_token != null &&
+              typeof r.tokens.refresh_token !== 'string'))
+        ) throw new Error('Invalid OAuth credential record')
+        if (r.expiresAt != null && !Number.isFinite(r.expiresAt)) {
+          throw new Error('Invalid OAuth credential expiry')
+        }
       }
       return data
     } catch (e) {

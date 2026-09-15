@@ -702,9 +702,9 @@ silent success. The client never automatically retries a remote mutation.
 Re-sign in and restart after an authentication/connection failure.
 
 This first integration is tools-only Streamable HTTP. It does not implement
-stdio, resources/prompts selection, automatic OAuth registration/refresh, or
-reconnect. The local mock publish flow is tested; no public mockup is published
-during tests.
+stdio or resources/prompts selection. Browser OAuth and reconnect after sign-in
+are described below; failed tool mutations are not automatically retried. The
+local mock publish flow is tested; no public mockup is published during tests.
 
 In-flight tool handlers are retained locally when a later discovery snapshot
 changes; a server withdrawing a tool does not silently substitute a different

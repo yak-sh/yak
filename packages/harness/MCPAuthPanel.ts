@@ -1,6 +1,6 @@
 /** Authorization input is private component memory, deliberately outside draft/graph persistence. */
 import { h } from 'preact'
-import { useMemo } from 'preact/hooks'
+import { useLayoutEffect, useMemo } from 'preact/hooks'
 import { signal } from '@preact/signals'
 import type { Frontend } from './frontend.ts'
 import type { UIAgent } from './panels.ts'
@@ -10,24 +10,65 @@ import { useKeymap } from '@yaks/tui'
 export const MCPAuthPanel = (
   { ui, agent }: { ui: Frontend; agent: UIAgent },
 ) => {
-  const state = useMemo(
+  // Application mode/progress belongs to the private frontend graph. Sensitive
+  // URL/code/state material and async projection results never enter that graph.
+  const privateState = useMemo(
     () =>
       signal({
-        open: false,
         servers: [] as string[],
-        index: 0,
         url: '',
         redirect: '',
         input: '',
-        feedback: '',
-        busy: false,
         generation: 0,
       }),
     [],
   )
-  const patch = (value: Partial<typeof state.value>) => {
-    state.value = { ...state.value, ...value }
+  type State = typeof privateState.value & {
+    open: boolean
+    index: number
+    busy: boolean
+    feedback: string
   }
+  const state = {
+    get value(): State {
+      const keyboard = ui.keyboard.value[0]?.keyboard as Comp | undefined
+      return {
+        ...privateState.value,
+        open: Boolean(keyboard?.mcpAuth),
+        index: Number(keyboard?.mcpAuthIndex ?? 0),
+        busy: Boolean(keyboard?.mcpAuthBusy),
+        feedback: String(keyboard?.mcpAuthFeedback ?? ''),
+      }
+    },
+  }
+  const patch = (value: Partial<State>) => {
+    const { open, index, busy, feedback, ...privateFields } = value
+    privateState.value = { ...privateState.value, ...privateFields }
+    if (
+      open !== undefined || index !== undefined || busy !== undefined ||
+      feedback !== undefined
+    ) {
+      ui.keys({
+        ...(open !== undefined ? { mcpAuth: open } : {}),
+        ...(index !== undefined ? { mcpAuthIndex: index } : {}),
+        ...(busy !== undefined ? { mcpAuthBusy: busy } : {}),
+        ...(feedback !== undefined ? { mcpAuthFeedback: feedback } : {}),
+      })
+    }
+  }
+  useLayoutEffect(() => () => {
+    const s = state.value
+    if (s.open && agent.authorizeMCP) {
+      void agent.authorizeMCP('cancel', s.servers[s.index]).catch(() => {})
+    }
+    privateState.value = {
+      servers: [],
+      url: '',
+      redirect: '',
+      input: '',
+      generation: privateState.value.generation + 1,
+    }
+  }, [])
   const run = (action: 'list' | 'begin' | 'complete', callback = '') => {
     const current = state.value
     const generation = current.generation

@@ -24,6 +24,10 @@ export const authorizedMCP = (
   const store = fileAuthorizationStore(path)
   const auths = new Map<string, Authorization>()
   const connections = new Map<string, Connection>()
+  const challenges = new Map<
+    string,
+    { resourceMetadataUrl?: string; scope?: string }
+  >()
   const retired: Connection[] = []
   const getAuth = (s: Server) => {
     let a = auths.get(s.name)
@@ -58,7 +62,16 @@ export const authorizedMCP = (
       a.cancel()
       return { message: 'Authorization cancelled.' }
     }
-    if (action === 'begin') return await a.begin()
+    if (action === 'begin') {
+      try {
+        await get(s).list()
+      } catch (error) {
+        if (error instanceof MCPAuthorizationRequired) {
+          challenges.set(s.name, error.challenge)
+        } else throw error
+      }
+      return await a.begin(challenges.get(s.name))
+    }
     if (action !== 'complete') throw new Error('Unknown authorization action')
     await a.complete(callback)
     const previous = connections.get(name)
@@ -77,6 +90,7 @@ export const authorizedMCP = (
           return await get(s).tools()
         } catch (error) {
           if (!(error instanceof MCPAuthorizationRequired)) throw error
+          challenges.set(s.name, error.challenge)
           // An unauthenticated optional server must not prevent ordinary conversation.
           // A new connection is made after explicit successful authorization.
           return []

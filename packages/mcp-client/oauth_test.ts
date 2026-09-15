@@ -267,3 +267,39 @@ Deno.test('cancellation during exchange cannot persist a late token; wrong issue
     await Deno.remove(dir, { recursive: true })
   }
 })
+
+Deno.test('authorization honors a resource challenge URL and scope', async () => {
+  const dir = await Deno.makeTempDir()
+  try {
+    const f = mock()
+    let discovered = false
+    const a = authorization({
+      serverUrl: 'https://service.test/mcp',
+      store: fileAuthorizationStore(dir + '/auth.json'),
+      fetch: (input, init) => {
+        if (String(input) === 'https://service.test/resource-metadata') {
+          discovered = true
+          return Promise.resolve(
+            Response.json({
+              resource: 'https://service.test/mcp',
+              authorization_servers: ['https://issuer.test'],
+            }),
+          )
+        }
+        return f.fetcher(input, init)
+      },
+    })
+    const start = await a.begin({
+      resourceMetadataUrl: 'https://service.test/resource-metadata',
+      scope: 'tools:read tools:write',
+    })
+    assert(discovered)
+    assertEquals(
+      new URL(start.url).searchParams.get('scope'),
+      'tools:read tools:write',
+    )
+    a.cancel()
+  } finally {
+    await Deno.remove(dir, { recursive: true })
+  }
+})
