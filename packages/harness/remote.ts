@@ -1,3 +1,4 @@
+import { ShuttingDown } from './shutdown.ts'
 import type { EntrySource } from './detail.ts'
 import type { Server as MCPServer } from '@yaks/mcp-client'
 import type {
@@ -98,7 +99,7 @@ export let remote = async (
   })
   let request = async (method: string, args: unknown[] = []) => {
     if (closing && method != 'close' && method != 'fakeRelease') {
-      throw new Error('Worker is shutting down')
+      throw new ShuttingDown()
     }
     if (failure) throw failure
     return await link.request(

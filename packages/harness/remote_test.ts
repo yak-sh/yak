@@ -361,3 +361,18 @@ Deno.test('explicit force releases unbounded close while a provider is stuck', a
     await Deno.remove(dir, { recursive: true })
   }
 })
+
+Deno.test('new reads during graceful shutdown are typed expected refusals', async () => {
+  const { assertRejects } = await import('@std/assert')
+  const { ShuttingDown } = await import('./shutdown.ts')
+  const dir = await Deno.makeTempDir()
+  const r = await remote({ db: ':memory:', cwd: dir, fake: true })
+  try {
+    const closing = r.close({ timeout: null })
+    await assertRejects(() => r.agent.tasks(), ShuttingDown)
+    assertEquals((await closing).drained, true)
+  } finally {
+    await r.close()
+    await Deno.remove(dir, { recursive: true })
+  }
+})

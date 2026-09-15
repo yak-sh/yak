@@ -58,13 +58,16 @@ process, not a sandbox or a separate fault-isolated process.
   open.
 - Interactive shutdown has two stages: the first Ctrl+C stops new commands and
   model turns, then waits for admitted callbacks to finish. The UI shows a
-  shutdown message and accepts only another Ctrl+C. There is no automatic
-  deadline. A second Ctrl+C terminates the worker immediately, preserving the
-  last durable checkpoints; independent supervised processes remain running. OS
-  SIGINT follows the same two-stage path. Programmatic `remote.close()` retains
-  its two-second default; `close({timeout: null})` drains indefinitely, and
-  `force()` releases that wait explicitly. Terminal cleanup follows drain or
-  explicit force. Queued children remain queued for restart.
+  shutdown message and accepts only another Ctrl+C. Frontend refresh loops stop
+  scheduling reads, and a read already awaiting another stage cannot overwrite
+  that message with an expected shutdown refusal. Other failures still enter
+  diagnostics. There is no automatic deadline. A second Ctrl+C terminates the
+  worker immediately, preserving the last durable checkpoints; independent
+  supervised processes remain running. OS SIGINT follows the same two-stage
+  path. Programmatic `remote.close()` retains its two-second default;
+  `close({timeout: null})` drains indefinitely, and `force()` releases that wait
+  explicitly. Terminal cleanup follows drain or explicit force. Queued children
+  remain queued for restart.
 
 - Port close notifies its peer and rejects pending requests. Transport error and
   messageerror events do likewise. A silent disappear without an event or close

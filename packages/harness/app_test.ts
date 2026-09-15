@@ -988,3 +988,107 @@ Deno.test('mouse clicks preserve mode while selecting sessions, new session and 
     await f.close()
   }
 })
+
+Deno.test('shutdown stops a pending summary from starting sidebar reads', async () => {
+  const { frontend } = await import('./frontend.ts')
+  const local = frontend()
+  const pending = Promise.withResolvers<Bundle[]>()
+  let reads = 0, sidebarReads = 0
+  let notify = () => {}
+  const agent: UIAgent = {
+    sessions: () => {
+      reads++
+      return pending.promise
+    },
+    tasks: () => {
+      sidebarReads++
+      return Promise.resolve([])
+    },
+    children: () => Promise.resolve([]),
+    transcript: () => Promise.resolve([]),
+    entry: () => null,
+    line: () => '',
+    start: () => Promise.resolve('new'),
+    send: () => Promise.resolve('input'),
+    taskEntry: () => Promise.resolve({ task: 'task', child: 'child' }),
+  }
+  const screen = await mount(
+    () =>
+      h(App, {
+        agent,
+        frontend: local,
+        panels: [{
+          title: 'Tasks',
+          read: () => agent.tasks(),
+          Render: () => null,
+        }],
+        subscribe: (fn) => {
+          notify = fn
+          return () => {}
+        },
+      }),
+    120,
+    30,
+  )
+  try {
+    await until(() => reads == 1)
+    local.patch({ shuttingDown: true, error: 'Waiting for active operations' })
+    notify()
+    pending.resolve([])
+    await settle()
+    await screen.send('')
+    assertEquals(sidebarReads, 0)
+    assertEquals(reads, 1)
+    assert(screen.text().includes('Waiting for active operations'))
+  } finally {
+    screen.free()
+    local.close()
+  }
+})
+
+Deno.test('shutdown refusal from pending transcript does not overwrite shutdown feedback', async () => {
+  const { frontend } = await import('./frontend.ts')
+  const { ShuttingDown } = await import('./shutdown.ts')
+  const local = frontend()
+  local.patch({ selected: 'selected' })
+  const pending = Promise.withResolvers<Bundle[]>()
+  let reads = 0
+  const agent: UIAgent = {
+    sessions: () => Promise.resolve([]),
+    tasks: () => Promise.resolve([]),
+    children: () => Promise.resolve([]),
+    transcript: () => {
+      reads++
+      return pending.promise
+    },
+    entry: () => null,
+    line: () => '',
+    start: () => Promise.resolve('new'),
+    send: () => Promise.resolve('input'),
+    taskEntry: () => Promise.resolve({ task: 'task', child: 'child' }),
+  }
+  const screen = await mount(
+    () =>
+      h(App, {
+        agent,
+        frontend: local,
+        panels: [],
+        subscribe: () => () => {},
+      }),
+    120,
+    30,
+  )
+  try {
+    await until(() => reads == 1)
+    local.patch({ shuttingDown: true, error: 'Waiting for active operations' })
+    pending.reject(new ShuttingDown())
+    await settle()
+    await screen.send('')
+    assert(screen.text().includes('Waiting for active operations'))
+    assert(!screen.text().includes('Worker is shutting down'))
+    assertEquals(reads, 1)
+  } finally {
+    screen.free()
+    local.close()
+  }
+})

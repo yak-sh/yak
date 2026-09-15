@@ -35,6 +35,7 @@ export let frontendVocab = loadVocab([{
         sidebar: { type: 'string' },
         generation: { type: 'number' },
         showSettled: { type: 'boolean' },
+        shuttingDown: { type: 'boolean' },
         showArchived: { type: 'boolean' },
       },
     },

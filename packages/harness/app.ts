@@ -1,3 +1,4 @@
+import { ShuttingDown } from './shutdown.ts'
 import { RuntimePanel } from './RuntimePanel.ts'
 import type { TranscriptPage, TranscriptWindow } from '@yaks/session'
 import { transient } from '@yaks/graph'
@@ -131,14 +132,17 @@ export let App = (
 
   useLayoutEffect(() => {
     let alive = true, dirty = false, busy = false
+    const active = () =>
+      alive &&
+      !(ui.client.ent('view')?.frontend as Comp | undefined)?.shuttingDown
     // Transcript publication must not wait for sidebar projections or a quiet
     // database. Other sessions can keep producing changes indefinitely.
     let transcriptDirty = false, transcriptBusy = false
     let readTranscript = async () => {
-      if (transcriptBusy || !alive) return
+      if (transcriptBusy || !active()) return
       transcriptBusy = true
       try {
-        while (alive && transcriptDirty) {
+        while (active() && transcriptDirty) {
           transcriptDirty = false
           let s = current()
           let position = ui.client.ent('viewport-' + s.id)?.viewport as
@@ -158,7 +162,7 @@ export let App = (
             : undefined
           let entries = page?.entries ?? (s.id ? await a.transcript(s.id) : [])
           if (
-            alive && s.id == current().id &&
+            active() && s.id == current().id &&
             s.generation == current().generation
           ) {
             setData((d) => ({ ...d, entries, page, loadedFor: s.id }))
@@ -190,11 +194,12 @@ export let App = (
           }
         }
       } catch (e) {
+        if (e instanceof ShuttingDown && !active()) return
         diagnostics().report(e, {
           phase: 'frontend-transcript',
           session: current().id,
         })
-        if (alive) setError(String(e))
+        if (active()) setError(String(e))
       } finally {
         transcriptBusy = false
       }
@@ -202,31 +207,33 @@ export let App = (
     // At most one query batch in flight. A write during a read causes another
     // read, never an out-of-order snapshot; no timer or polling loop.
     let read = async () => {
-      if (busy) return
+      if (busy || !active()) return
       busy = true
       try {
-        while (alive && dirty) {
+        while (active() && dirty) {
           dirty = false
           let s = current()
           let sessions = await a.sessions()
+          if (!active()) return
           let ctx: Context = { agent: a, session: s.id, sessions }
           let rows = await Promise.all(sidebar.map((p) => p.read(ctx)))
           if (
-            alive && s.id == current().id &&
+            active() && s.id == current().id &&
             s.generation == current().generation
           ) {
             setData((d) => ({ ...d, sessions, rows }))
           }
         }
       } catch (e) {
+        if (e instanceof ShuttingDown && !active()) return
         diagnostics().report(e, {
           phase: 'frontend-projection',
           session: current().id,
         })
-        if (alive) setError(String(e))
+        if (active()) setError(String(e))
       } finally {
         busy = false
-        if (alive && dirty) {
+        if (active() && dirty) {
           queueMicrotask(() => {
             void read()
           })
@@ -234,6 +241,7 @@ export let App = (
       }
     }
     let changed = () => {
+      if (!active()) return
       dirty = true
       transcriptDirty = true
       // Return synchronously to the writer, and coalesce the batch's effects.
@@ -693,6 +701,7 @@ export let tui = async (): Promise<void> => {
         tmux: !!Deno.env.get('TMUX'),
         shutdown: () => {
           ui.patch({
+            shuttingDown: true,
             error:
               'Shutting down—waiting for active operations; Ctrl+C again to force.',
           })
