@@ -32,6 +32,7 @@ import {
 } from '../live.ts'
 import { parseQuery, resolveRefs, type ResultComp } from '../query.ts'
 import type { Ent } from '../types.ts'
+import { dotFields } from '../tray_query.ts'
 
 let resolve = (query: string) => resolveRefs(parseQuery(query), findEid)
 
@@ -125,7 +126,28 @@ export let useChatFor = (
   useQueryResult(`.chat.actor=${actor ?? ''}&.chat.target=${target}`, !!actor)
     .eids.map(ent)[0]
 
-let REFERENCED = '.edges[referenced,entry.session]!'
+// The far endpoints ride the citation answer as PEERS, cut to what a reference
+// row paints: a session's dot and its row line (tray_query dotFields plus the
+// model/effort/persona a SessionRow shows), a target's title and status. So the
+// referencing sessions of a task arrive in the edges frame itself, where they
+// were a second round trip of ten full rows, 27 KB and the last frame of the
+// page (T-37445). A view that needs a whole row still holds it (rowsSub).
+export let REFERENCE_PEERS = [
+  'doc.title',
+  'task.status',
+  'created.at',
+  'session.actor',
+  'session.persona',
+  'session.model',
+  'session.serving_model',
+  'session.effort',
+  'spawn.model',
+  'spawn.effort',
+  'spawn.persona',
+  ...dotFields.map((f) => `${f.comp}.${f.prop}`),
+]
+let REFERENCED = '.edges[referenced,entry.session]!&.edges.peers=' +
+  REFERENCE_PEERS.join(',')
 
 // Citations are a typed edge rider over one addressed entity. The server
 // projects entry endpoints to their Session through the indexed entry.session

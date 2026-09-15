@@ -54,14 +54,18 @@ export let ReferenceRow = ({ eid }: { eid: string }) => (
 )
 
 // The list holds its rows in ONE sub (live.ts rowsSub): ten referencing
-// sessions were ten route subs and ten frames after the edges answered.
+// sessions were ten route subs and ten frames after the edges answered. A
+// list whose rows already RIDE the citation answer as peers (useQuery
+// REFERENCE_PEERS: the referencing sessions of a task) is `held` and asks for
+// nothing more, so it paints from the edges frame itself.
 export let ReferenceList = (
-  { label, items }: {
+  { label, items, held }: {
     label: string
     items: { eid: string }[]
+    held?: boolean
   },
 ) => {
-  let key = items.map((i) => i.eid).join(',')
+  let key = held ? '' : items.map((i) => i.eid).join(',')
   useLayoutEffect(() => rowsSub(key ? key.split(',') : []), [key])
   return items.length
     ? (
@@ -163,7 +167,7 @@ export let Chat = ({ e }: { e: Ent }) => {
   return (
     <Frame>
       <ReferenceList label='references' items={cited.out} />
-      <ReferenceList label='referenced by' items={cited.in} />
+      <ReferenceList label='referenced by' items={cited.in} held />
       {actor && (
         <section class='Chat_Conversation'>
           <Head>
