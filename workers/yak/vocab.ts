@@ -1,3 +1,4 @@
+import { archetypeDoc } from '@yaks/archetype'
 // The vocabulary ONE app speaks (T-33811): the core documents every store on
 // the platform shares, plus the words that app declared for itself, loaded
 // through @yaks/vocab into one `Vocab` — the thing a Store reads its DDL, its
@@ -399,6 +400,14 @@ export let appDerived = (): Record<
  * store. */
 export let coreDocs: VocabDoc[] = [
   coreDoc,
+  {
+    ...archetypeDoc,
+    $defs: Object.fromEntries(
+      Object.entries(archetypeDoc.$defs ?? {}).map(
+        ([name, definition]) => [name, { ...definition, wire: false }],
+      ),
+    ),
+  },
   docDoc,
   memberDoc,
   edgeDoc,

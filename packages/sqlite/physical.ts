@@ -21,7 +21,7 @@ export function componentTables(driver: Driver): string[] {
     .map((r) => String(r.name))
     .filter((name) =>
       ordinary.has(name) && !['entity', 'journal', 'hit'].includes(name) &&
-      !name.startsWith('sqlite_')
+      !name.startsWith('sqlite_') && !/^_+cf_/i.test(name)
     )
     .filter((name) =>
       driver.query(`pragma table_info(${quote(name)})`, [])

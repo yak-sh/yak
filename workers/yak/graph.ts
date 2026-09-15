@@ -1,3 +1,5 @@
+import { backfill as backfillArchetypes } from '@yaks/sqlite'
+import { archetypes } from '@yaks/archetype'
 // The Store Durable Object, built out of the packages (T-33810, D-33490): one
 // app's graph, and nothing of the fleet's. It is composition, not code —
 //
@@ -536,6 +538,7 @@ export class Store {
         blobText(vocab),
         meta &&
           MARKS.indexOf(this.#get('migrated') ?? '') < MARKS.indexOf(HANDLED),
+        !this.#pending,
       )
       if (held) rebuild(drive)
       this.#put('schema', stamp)
@@ -561,6 +564,7 @@ export class Store {
       // store that cannot name its app has no access question to ask and the
       // kernel's own gate in front of it is the whole rule.
       plugins: [
+        ...(vocab.comp('archetype') ? [archetypes()] : []),
         // First, before anything reads a word that is not there. The DIRECTORY
         // is left out: its words are the platform's own, its callers are the
         // kernel's own, and `vocab.json` is not a sentence to say to any of
@@ -1064,6 +1068,13 @@ export class Store {
       wrote = path
       let report = ctx.storage.transactionSync(() => {
         let report = move(ctx.storage, { store: name, app, export: wrote })
+        // Legacy passes write physical tables directly, outside graph tracking.
+        // Reclassify their rows before any presence-based reads can observe them.
+        if (this.#graph.vocab.comp('archetype')) {
+          const sql = driver(ctx.storage)
+          sql.exec('update entity set archetype = null')
+          backfillArchetypes(sql, false)
+        }
         if (!report.ok) throw new Unreconciled(report)
         // A marker and its rows must commit together, including on write failure.
         this.#put('migrated', mark)

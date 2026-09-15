@@ -342,3 +342,41 @@ that actually catches a 5xx, cannot run there. A gate-side check would also race
 the Builds deploy and verify whichever version happened to be live, which is a
 green that means nothing. So it stays one command, run after a Builds deploy
 goes green. `--tail 0` skips the tail and needs no credential at all.
+
+## App archetype indexing
+
+Hosted app stores include the `archetype` vocabulary and tracker. Each entity's
+`entity.archetype` references a canonical set of component tables. The SQL
+reader uses these sets for presence predicates and to gather only the component
+tables present in a result. Value predicates still use their normal column
+indexes. Descriptors are readable but not writable by app clients; app manifests
+cannot redeclare `archetype` or `retired`. The platform directory and Git stores
+do not opt into this rollout.
+
+The existing Durable Object schema fingerprint triggers a transactional backfill
+on first wake after deployment. Backfill groups incomplete entities by physical
+component set; it is not repeated on every request. The same installer handles
+new apps and vocabulary changes. Historical direct-SQL migrations reclassify
+entities before committing so their added/removed components cannot leave stale
+presence indexes. Cloudflare-owned internal tables are excluded. If installation
+fails, the existing schema-refusal path prevents serving a partially initialized
+store. An app that already used a newly reserved component name needs explicit
+migration; its data is not silently reinterpreted.
+
+The hourly usage request also wakes app stores, but deployment does not eagerly
+visit every database. Until an app wakes, its old rows have not been backfilled.
+These changes use the Durable Object transaction/request barrier, not the local
+harness's migration-announcement polling. Do not run older writers against an
+upgraded store: they do not maintain the derived pointers. Rebuilding all
+pointers is an explicit repair, not a reason to change their values through the
+app API.
+
+An isolated benchmark is available with
+`deno run -A workers/yak/archetype_bench.ts`. In one run with 2,000 entities
+spread across 40 sparse component tables, 50 reads returning 25 entities took 48
+ms without tracking and 25 ms with it; SQL statements per read dropped from 13
+to 5. Seeding writes increased from 192 ms to 252 ms and backfill took 22 ms.
+This is not a production latency guarantee: savings depend on sparsity/query
+projection, and writes and descriptor storage have a cost. One large app still
+pays a synchronous first-wake backfill; large-data Cloudflare CPU limits need
+monitoring.

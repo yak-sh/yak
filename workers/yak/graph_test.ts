@@ -411,7 +411,9 @@ Deno.test('the object plants core + member + edge + the app, and nothing else', 
       'entity',
       'entity_sequence',
       'tombstone',
-      // core
+      // core and derived component-set descriptors
+      'archetype',
+      'retired',
       'doc',
       'person',
       'created',
@@ -574,4 +576,116 @@ Deno.test('the store dates the trash mark, and signs it', async () => {
     ),
   )).json()
   assertEquals(row.trashed.at, mark.at)
+})
+
+Deno.test('app archetypes classify writes and migrate old rows only on schema changes', async () => {
+  let ctx = state()
+  let store = await cookbook(ctx)
+  let added = await post(store, '/apply', [
+    { entity: { eid: CAKE }, recipe: { serves: 4 }, doc: { title: 'Cake' } },
+  ], owner)
+  assertEquals(added.status, 200)
+  let read = async (s: Store) =>
+    await (await get(s, '/query?q=.recipe!%26.doc?', owner)).json() as Bundle[]
+  let rows = await read(store)
+  let original = rows[0].entity.archetype
+  assert(typeof original == 'string')
+  let descriptors = await (await get(store, '/query?q=.archetype!', owner))
+    .json() as Bundle[]
+  assert(descriptors.some((b) => b.entity.eid == original))
+  // A returned pointer is not a writable classification.
+  await post(store, '/apply', [{
+    entity: { eid: CAKE, archetype: 'forged' },
+    recipe: { serves: 5 },
+  }], owner)
+  let updated = (await read(store))[0].entity.archetype
+  assert(updated != 'forged')
+  original = updated
+  // Simulate a pre-feature store whose data and blob values already exist.
+  ctx.storage.sql.exec('update entity set archetype = null')
+  const descriptorsBefore = ctx.storage.sql.exec('select entity from archetype')
+    .toArray()
+  ctx.storage.sql.exec('drop table retired')
+  ctx.storage.sql.exec('drop table archetype')
+  for (const row of descriptorsBefore) {
+    ctx.storage.sql.exec('delete from entity where id = ?', Number(row.entity))
+  }
+  ctx.storage.sql.exec(
+    "update yak_kv set v = 'previous-schema' where k = 'schema'",
+  )
+  store = new Store(ctx)
+  rows = await read(store)
+  assertEquals(rows[0].entity.archetype, original)
+  assertEquals((rows[0].doc as { title: string }).title, 'Cake')
+  assertEquals((rows[0].recipe as { serves: number }).serves, 5)
+  assertEquals(
+    ctx.storage.sql.exec(
+      'select count(*) as n from entity where archetype is null',
+    ).toArray()[0].n,
+    0,
+  )
+  // Schema stamp prevents the next wake from rescanning/backfilling rows.
+  let stamp =
+    ctx.storage.sql.exec("select v from yak_kv where k = 'schema'").toArray()[0]
+      .v
+  store = new Store(ctx)
+  assertEquals((await read(store))[0].entity.archetype, original)
+  assertEquals(
+    ctx.storage.sql.exec("select v from yak_kv where k = 'schema'").toArray()[0]
+      .v,
+    stamp,
+  )
+  await post(store, '/apply', [{ entity: { eid: CAKE }, recipe: null }], owner)
+  assertEquals((await read(store)).length, 0)
+  let without = await (await get(store, '/query?q=.doc!', owner))
+    .json() as Bundle[]
+  assert(
+    without.find((b) => b.entity.eid == CAKE)?.entity.archetype != original,
+  )
+})
+
+Deno.test('app archetype descriptors are read-only and vocabulary extension tracks new shapes', async () => {
+  let ctx = state(), store = await cookbook(ctx)
+  let vocab = await post(
+    store,
+    '/vocab',
+    '{"archetype":{"tables":"text"}}',
+    owner,
+  )
+  assertEquals(vocab.status, 400)
+  await post(store, '/apply', [{
+    entity: { eid: CAKE },
+    recipe: { serves: 2 },
+  }], owner)
+  let descriptors = await (await get(store, '/query?q=.archetype!', owner))
+    .json() as Bundle[]
+  let before = JSON.stringify(descriptors)
+  await post(store, '/apply', [{
+    entity: descriptors[0].entity,
+    archetype: { tables: '["recipe"]' },
+  }], owner)
+  assertEquals(
+    JSON.stringify(
+      await (await get(store, '/query?q=.archetype!', owner)).json(),
+    ),
+    before,
+  )
+  let extended = await post(
+    store,
+    '/vocab',
+    '{"recipe":{"serves":"number"},"specialty":{}}',
+    owner,
+  )
+  assertEquals(extended.status, 200)
+  await post(store, '/apply', [{ entity: { eid: CAKE }, specialty: {} }], owner)
+  let got = await (await get(store, '/query?q=.recipe!%26.specialty!', owner))
+    .json() as Bundle[]
+  assertEquals(got.length, 1)
+  assert(got[0].entity.archetype)
+  store = new Store(ctx)
+  assertEquals(
+    (await (await get(store, '/query?q=.recipe!%26.specialty!', owner)).json())
+      .length,
+    1,
+  )
 })

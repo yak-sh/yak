@@ -72,7 +72,7 @@ import { fields, schema as ftsSchema } from '@yaks/fts'
 import { driver, type DurableStorage, reserved } from '@yaks/durable-object'
 import { edgeEid } from '@yaks/edge'
 import { sha256 } from '@yaks/graph'
-import { grown, indexed, tabled, type Text } from '@yaks/sqlite'
+import { backfill, grown, indexed, tabled, type Text } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
 import { handle } from './directory.ts'
 
@@ -280,6 +280,7 @@ export let install = (
   vocab: Vocab,
   text: Text = {},
   handling = false,
+  classify = true,
 ) => {
   let d = driver(storage)
   for (let stmt of tabled(vocab, text)) d.exec(stmt)
@@ -304,6 +305,7 @@ export let install = (
   for (
     let stmt of ftsSchema(fields(vocab).filter((f) => f.comp == 'doc'), text)
   ) d.exec(stmt)
+  if (classify && vocab.comp('archetype')) backfill(d, false)
 }
 
 // A full-text index is several tables — the virtual one and its shadows — and

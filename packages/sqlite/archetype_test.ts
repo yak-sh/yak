@@ -313,3 +313,18 @@ Deno.test('archetype: boot respects number exclusions and the persistent high-wa
     assertEquals(backfill(d), { entities: 0, archetypes: 0, retired: 0 })
   }
 })
+
+Deno.test('physical archetype discovery never inspects provider-owned SQLite tables', () => {
+  let d = mem()
+  d.exec('create table _cf_KV (entity integer primary key, value text)')
+  d.exec('create table __cf_METADATA (entity integer primary key)')
+  d.exec('create table ordinary (entity integer primary key)')
+  const query = d.query.bind(d)
+  d.query = (sql, args) => {
+    if (/pragma table_info.*_cf_/i.test(sql)) {
+      throw new Error('provider table access prohibited')
+    }
+    return query(sql, args)
+  }
+  assertEquals(componentTables(d), ['ordinary'])
+})

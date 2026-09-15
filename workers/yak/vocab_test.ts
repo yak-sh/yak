@@ -208,7 +208,9 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
       'entity',
       'entity_sequence',
       'tombstone',
-      // core
+      // core and derived component-set descriptors
+      'archetype',
+      'retired',
       'doc',
       'person',
       'created',
@@ -316,7 +318,7 @@ Deno.test('none of the fleet vocabulary comes with it', () => {
   )
   let mine = new Set(tablesOf(schema(appVocab())))
   assert(fleet.length > 50, `the fleet plants ${fleet.length} tables`)
-  assert(mine.size < 50, `an app plants ${mine.size}`)
+  assert(mine.size < 55, `an app plants ${mine.size}`)
   // The words an app SHARES with the fleet are the ones the guide gives it to
   // reach for — `task` and its marks among them. What must not come with it is
   // the fleet's own working life: its sessions, its canvas, its memories.
