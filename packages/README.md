@@ -49,6 +49,10 @@ In dependency order:
 - **[@yaks/match](./match)** — the other evaluator of the same grammar: a
   `@yaks/query` AST run as a predicate over bundles held in memory, with no
   database. Tested query by query for parity with `@yaks/sql`.
+- **[@yaks/graph](./graph)** — the core the rest are plugins to: the
+  entity/component model, the bundle a write is sent as, and the phased,
+  pluggable `apply()` that admits, normalizes, guards and commits a batch
+  atomically over any `Storage`.
 - **[@yaks/render](./render)** — views selected by query specificity and a
   role-rightmost name, actions contributed per component, and column schemas
   matched by the same registry. Renderers take an injected hyperscript, so the
@@ -61,6 +65,9 @@ In dependency order:
 - **[@yaks/text](./text)** — Markdown and plain text from those same trees,
   preserving headings, lists, links, code and emphasis while stripping control
   bytes from every text leaf and destination.
+- **[@yaks/markdown](./markdown)** — GFM Markdown parsed to structural nodes for
+  that same element vocabulary, never an HTML string or a terminal escape, with
+  a link filter that refuses every scheme but `http`, `https` and `mailto`.
 - **[@yaks/tui](./tui)** — the same Preact trees on a terminal: a fake DOM, a
   swappable backend (a diffing ANSI painter today), and the three widgets a
   console app is made of — a scrolling transcript, a multi-line input box, and a
@@ -99,6 +106,10 @@ In dependency order:
   rendering are written once. Its `body` NAMES `@yaks/blob`'s `store` keyword
   without depending on the package that reads it — content-addressed where blob
   is composed in, plain text everywhere else.
+- **[@yaks/tools](./tools)** — a tool call as entities: the `tool` registered,
+  the `call` asking for it, the `execution` state it moves through and the
+  `result` it comes to rest as — run against a graph, independent of any session
+  or provider transport.
 - **[@yaks/member](./member)** — who belongs and what they may touch: a space
   roster (`member`), per-thing grants (`grant`), an access mode (`access`), the
   `precondition` hook that refuses a write the actor's role does not allow, and
@@ -117,6 +128,10 @@ In dependency order:
   supervise the wanted ones from a host's tick — plus the same rows as a
   session's `shell`, `wait` and `stop` tools, so a long tool call answers with
   the process instead of blocking on it.
+- **[@yaks/context](./context)** — the instructions a transcript was given, as
+  entries: a `prompt` entry with its source and a hash of the snapshot it was
+  made from, so what the model read is a row and not a guess. It persists
+  nothing; the host admits sources and writes the bundles.
 - **[@yaks/model](./model)** — the seam between a conversation and the model
   that serves it: provider-neutral items, one request and reply shape, and the
   `provider`, `model` and `tool` entities a graph keeps about serving.
@@ -136,6 +151,10 @@ In dependency order:
   entity, the `deliver` that asks for it to go, the `delivered`/`bounced` it
   comes to rest as, the `created(mail)` effect that hands it to an injected
   sender, and an arrival read into bundles.
+- **[@yaks/memory](./memory)** — what a person said, kept in their own words: a
+  `memory` on a `doc` whose body is the sentence itself with a few lines of
+  context, the filter line that recalls them, and the passage handed to an agent
+  at the start of its next conversation.
 - **[@yaks/api](./api)** — the transport: a plain `Request` → `Response` handler
   over a graph (`/apply`, `/query`, `/ws`), where the door authenticates the
   writer, and a subscription is a saved query whose answer is pushed again when
@@ -144,12 +163,19 @@ In dependency order:
   of five generic tools that take and answer bundles, served as a portable
   `fetch` handler or over stdio, each tool's output schema derived from the
   vocabulary.
+- **[@yaks/mcp-client](./mcp-client)** — the other side of that door: a remote
+  MCP server's tools over Streamable HTTP, exposed as the same `Tool`
+  definitions a graph hands its own model, with the host resolving credentials.
 - **[@yaks/cli](./cli)** — that door from a shell: the `yak` command, which
   reads an MCP server's `tools/list` at run time and makes every tool a
   subcommand, mapping the command line through each tool's own input schema. It
   has no verb list of its own, so it cannot drift from the connector an agent is
   talking to — and a PLUGIN, a table of verbs contributed at boot, is how a box
   adds words of its own beside them under one help.
+- **[@yaks/plugin](./plugin)** — the composition seam: a manifest of lazy
+  contributions (vocabulary, commands, graph plugins, views), each aimed at one
+  subsystem, and the `load`/`select` a host uses to pick what one subsystem
+  needs. It installs and discovers nothing.
 - **[@yaks/harness](./harness)** — the packages above as a working agent, with
   nothing under it but a file: one SQLite database it makes itself, the session
   daemon in the same process, the shell and the generic graph tools handed to
@@ -173,10 +199,23 @@ In dependency order:
   server pushes back, and reconciles — or reverts — the optimistic write in
   between. A `persist` keyword says per component which state syncs, which stays
   in the browser, and which dies with the tab.
+- **[@yaks/canvas](./canvas)** — the interface as data: a `canvas` of `card`s
+  each `pin`ned somewhere, the `camera` a window looks through, a `cursor`,
+  split `layout`s of `pane`s, folds and a shelf — layout stored, queried, shared
+  and undone like the content it frames, plus the geometry to paint it.
 - **[@yaks/client](./client)** — the frontend tier over all of that: one call
   assembles the graph, the wire and the plugins; a query becomes a value that
   changes as commits move it; and the components declared `local` are kept in
   IndexedDB between page loads.
+
+## Domain plugins
+
+`@yaks/doc`, `@yaks/member`, `@yaks/session`, `@yaks/process`, `@yaks/task`,
+`@yaks/wake`, `@yaks/mail`, `@yaks/memory`, `@yaks/tools`, `@yaks/context` and
+`@yaks/canvas` ship components rather than machinery. Each is a `vocab.json`
+(JSON Schema 2020-12, loaded by `@yaks/vocab`) plus, where it needs one, a graph
+plugin or an effect — the same shape a customer app declares its own components
+in, so an app's entities and these compose by eid with nothing in between.
 
 ## How they compose
 
