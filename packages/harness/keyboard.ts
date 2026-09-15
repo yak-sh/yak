@@ -192,6 +192,21 @@ export let Keyboard = ({ ui, action }: {
         runtime: false,
         pending: '',
       })
+      if (s.mode == 'INSERT') {
+        // Keep the desired end position while a bounded transcript fetches its
+        // tail. The list clamps these coordinates against the final entry.
+        ui.client.mutate([{
+          entity: { eid: 'viewport-' + session },
+          viewport: {
+            cursorRow: Number.MAX_SAFE_INTEGER,
+            cursorCol: Number.MAX_SAFE_INTEGER,
+            anchorId: null,
+            anchorRow: null,
+            anchorCol: null,
+          },
+        }])
+        pressTo('transcript-' + session, { name: 'end', ctrl: true })
+      }
       return true
     }
     if (s.mode == 'INSERT') {

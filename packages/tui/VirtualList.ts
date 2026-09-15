@@ -733,7 +733,7 @@ export let VirtualList = <T extends VirtualItem>(
           onCursor({
             id,
             row: key.name == 'end' ? Number.MAX_SAFE_INTEGER : 0,
-            col: 0,
+            col: key.name == 'end' ? Number.MAX_SAFE_INTEGER : 0,
             anchor: cursor.anchor,
           })
         }

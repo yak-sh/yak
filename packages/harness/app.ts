@@ -179,6 +179,8 @@ export let App = (
                         (edge == 'start' ? entries[0] : entries.at(-1)!).entity
                           .eid,
                       offset: 0,
+                      cursorRow: edge == 'end' ? Number.MAX_SAFE_INTEGER : 0,
+                      cursorCol: edge == 'end' ? Number.MAX_SAFE_INTEGER : 0,
                       follow: edge == 'end',
                     }
                     : {},
@@ -567,7 +569,7 @@ let Transcript = ({ ui, id, items, agent, pending, page, load }: {
     selected: position?.selected == null
       ? undefined
       : String(position.selected),
-    cursor: ['NORMAL', 'VISUAL'].includes(
+    cursor: !position?.windowLoading && ['NORMAL', 'VISUAL'].includes(
         String((ui.keyboard.value[0].keyboard as Comp).mode),
       ) &&
         (ui.keyboard.value[0].keyboard as Comp).focus == 'transcript' &&
@@ -588,6 +590,14 @@ let Transcript = ({ ui, id, items, agent, pending, page, load }: {
       }
       : undefined,
     onCursor: (point) => {
+      // A page result can update selection before Preact replaces the old
+      // layout. Do not let that layout overwrite the newly selected tail.
+      const current = ui.client.ent('viewport-' + id)?.viewport as
+        | Comp
+        | undefined
+      if (current?.windowLoading || current?.selected !== position?.selected) {
+        return
+      }
       ui.client.mutate([{
         entity: { eid: 'viewport-' + id },
         viewport: {

@@ -228,3 +228,122 @@ Deno.test('rendered cursor requests bounded neighboring windows and selects acro
     await f.close()
   }
 })
+
+Deno.test('INSERT Escape always selects the final rendered character, preserving the draft', async () => {
+  const f = frontend()
+  const entries: Bundle[] = [
+    { entity: { eid: 'old' }, content: { body: 'older' } },
+    { entity: { eid: 'last' }, content: { body: 'first\nlast character!' } },
+  ]
+  const requests: string[] = []
+  let release: (() => void) | undefined
+  let paged = false
+  const a: UIAgent = {
+    sessions: () =>
+      Promise.resolve([{
+        entity: { eid: 's' },
+        session: { id: 's', status: 'settled' },
+      }]),
+    tasks: () => Promise.resolve([]),
+    children: () => Promise.resolve([]),
+    transcript: () => Promise.resolve(entries),
+    transcriptWindow: (_session, request = {}) => {
+      requests.push(request.edge ?? 'anchor')
+      if (paged && request.edge == 'end') {
+        return new Promise((resolve) => {
+          release = () => {
+            paged = false
+            resolve({ entries, before: false, after: false })
+          }
+        })
+      }
+      return Promise.resolve({
+        entries: paged ? entries.slice(0, 1) : entries,
+        before: false,
+        after: paged,
+      })
+    },
+    start: () => Promise.resolve('s'),
+    send: () => Promise.resolve('sent'),
+    taskEntry: () => Promise.resolve({ task: 't', child: 'c' }),
+    line: () => '',
+    entry: (b) => h('div', null, String((b.content as Comp).body)),
+  }
+  f.patch({ selected: 's' })
+  f.edit({ text: 'keep draft', at: 3 })
+  f.client.mutate([{
+    entity: { eid: 'viewport-s' },
+    viewport: {
+      selected: 'old',
+      item: 'old',
+      follow: false,
+      offset: 0,
+      cursorRow: 0,
+      cursorCol: 1,
+    },
+  }])
+  const ui = await mount(
+    () =>
+      h(App, { agent: a, frontend: f, panels: [], subscribe: () => () => {} }),
+    50,
+    12,
+  )
+  try {
+    await settle()
+    await ui.send('\x1b')
+    await settle()
+    await ui.send('')
+    let point = f.client.ent('viewport-s')!.viewport as Comp
+    assertEquals([point.selected, point.cursorRow, point.cursorCol], [
+      'last',
+      1,
+      14,
+    ])
+    assertEquals(f.client.ent('draft')!.draft, { text: 'keep draft', at: 3 })
+    await ui.send('k')
+    await ui.send('\x1b') // NORMAL Escape does not jump.
+    point = f.client.ent('viewport-s')!.viewport as Comp
+    assertEquals(point.cursorRow, 0)
+    await ui.send('i')
+    await ui.send('\x1b')
+    await ui.send('')
+    point = f.client.ent('viewport-s')!.viewport as Comp
+    assertEquals([point.selected, point.cursorRow, point.cursorCol], [
+      'last',
+      1,
+      14,
+    ])
+    // Returning from INSERT while an older page is loaded must fetch the
+    // actual tail, not settle for the last entry of that page.
+    await ui.send('i')
+    paged = true
+    f.client.mutate([{
+      entity: { eid: 'viewport-s' },
+      viewport: {
+        selected: 'old',
+        item: 'old',
+        windowEdge: 'start',
+        follow: false,
+      },
+    }])
+    f.patch({ generation: 99 })
+    await settle()
+    await ui.send('')
+    await ui.send('\x1b')
+    await settle()
+    assertEquals(requests.at(-1), 'end')
+    assert(release, 'end page should be requested')
+    release()
+    await settle()
+    await ui.send('')
+    point = f.client.ent('viewport-s')!.viewport as Comp
+    assertEquals([point.selected, point.cursorRow, point.cursorCol], [
+      'last',
+      1,
+      14,
+    ])
+  } finally {
+    ui.free()
+    await f.close()
+  }
+})
