@@ -85,6 +85,7 @@ import { resolve, settingRows } from './config.ts'
 import { type Observation, safeObservation } from './observations.ts'
 import { outcome, recent, record, stats, toolCall } from './telemetry.ts'
 import { served as modules, stamp } from './imports.ts'
+import { build, mapFor, shellFor } from './bundle.ts'
 import { requestVerifier } from './verify.ts'
 import { askOf, askRows, evalAgg, layered, setRanker } from './graph_query.ts'
 
@@ -173,11 +174,18 @@ let shellImports = (): Record<string, string> => {
   return map ? JSON.parse(map[1]).imports : {}
 }
 let preloads = ''
+// The whole graph as one file (bundle.ts), built before readiness; the shell
+// then loads that instead of the entry and preloads nothing. Null when the
+// build failed, and the graph serves as before.
+let BUNDLE = '/main.bundle.js'
+let bundle: string | null = null
 let shellStamp = (html: string) => {
-  preloads ||= modules('/main.tsx', shellImports()).map((path) =>
-    `    <link rel="modulepreload" href="${path}?v=${gen}" />\n`
-  ).join('')
-  return html.replace(
+  preloads ||= bundle
+    ? ''
+    : modules('/main.tsx', shellImports()).map((path) =>
+      `    <link rel="modulepreload" href="${path}?v=${gen}" />\n`
+    ).join('')
+  return (bundle ? shellFor(html, '/main.tsx', BUNDLE) : html).replace(
     /"(\/(?!theme\.css)[^"?]+\.(?:tsx?|m?js|css))"/g,
     `"$1?v=${gen}"`,
   ).replace('</head>', `${preloads}  </head>`)
@@ -193,6 +201,13 @@ let cached = (req: Request | undefined, etag: string) => {
 let file = async (root: string, path: string, req?: Request) => {
   let full = root + path
   if (full.includes('..')) return new Response('no', { status: 400 })
+  if (path == BUNDLE && bundle) {
+    let c = cached(req, `W/"bundle-${gen}"`)
+    if (c.hit) return new Response(null, { status: 304, headers: c.headers })
+    return new Response(bundle, {
+      headers: { 'content-type': mime.js, ...c.headers },
+    })
+  }
   let ext = path.split('.').pop() ?? ''
   try {
     let stat = await Deno.stat(full)
@@ -238,14 +253,16 @@ let file = async (root: string, path: string, req?: Request) => {
 // The browser asks for this graph as a waterfall: every response reveals the
 // next imports. Fill the transform cache before readiness so the first page is
 // no slower than every page after it.
-let warmBrowser = () =>
-  Promise.all(
+let warmBrowser = async () => {
+  bundle = await build(`${src}main.tsx`, mapFor(shellImports(), { src, repo }))
+  await Promise.all(
     modules('/main.tsx', shellImports()).map((path) =>
       path.startsWith('/packages/')
         ? file(repo.slice(0, -1), path)
         : file(src.slice(0, -1), path)
     ),
   )
+}
 
 // The sync channel: clients send flat change batches ([{eid, name, comp}]),
 // the server applies them and rebroadcasts to every other client.
