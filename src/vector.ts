@@ -103,6 +103,11 @@ export let loadVector = (db: DatabaseSync) => {
 
 let count = (db: Sql) =>
   (db.prepare('select count(*) n from embedding').get() as { n: number }).n
+// The read path's emptiness guard. count(*) walks the whole embedding b-tree
+// (~16 ms over 19k rows on the live graph, on the MAIN thread, for every
+// Similar panel a card mounts — T-37445); one row proves non-empty in µs.
+let any = (db: Sql) =>
+  db.prepare('select 1 from embedding limit 1').get() != null
 
 export let refreshVector = (db: Sql) => {
   if (!ready.has(db) || !owns) return 0
@@ -144,7 +149,7 @@ export let knn = (
   model?: string,
 ): { eid: string; score: number }[] => {
   if (!ready.has(db)) return []
-  if (!count(db)) return []
+  if (!any(db)) return []
   let bytes = new Uint8Array(q.buffer, q.byteOffset, q.byteLength)
   try {
     return (db.prepare(
