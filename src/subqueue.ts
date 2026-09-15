@@ -5,9 +5,9 @@
 // answer whose own cost is 9ms (T-33753). Head-of-line blocking, and the ask
 // is scheduling, not a smaller answer.
 //
-// So this sits between the socket and subserve: it GATHERS the burst — one
-// event-loop turn, because a worker is handed every message already queued for
-// it before the next task runs — and then answers CHEAPEST FIRST. Nothing is
+// So this sits between the socket and subserve: it GATHERS the burst — hopping
+// until no new frame lands between two hops, since a worker is handed one
+// message per turn — and then answers CHEAPEST FIRST. Nothing is
 // preempted (a synchronous query evaluation cannot be) and nothing is dropped;
 // only the order changes. Two exceptions, both of them the client's own word:
 // a frame that is not a `{sub}` is served straight through (a join opens the
@@ -15,7 +15,7 @@
 // still waiting — the client stopped watching before anyone paid for it.
 import type { Sql } from './store/sql.ts'
 import { aggOf, parseQuery } from './query.ts'
-import { vocabOf } from './db.ts'
+import { locate, vocabOf } from './db.ts'
 import { comps, derivedProps, stamped } from './types.ts'
 
 // A control frame as it arrives off the socket: subserve parses it, this only
@@ -35,31 +35,41 @@ let closed = (comp: string, prop: string) => {
 // What a sub is expected to COST, cheapest first. An answer's size is known
 // only once it is computed, so this ranks what the query DECLARES about its own:
 //
-//   0 — a BOUNDED aggregate: `.count!` (one number), or a tally/distinct over a
+//   0 — the socket's OWN PAGE: a sub that names the entity the handshake seeded
+//       (`route:<seed>`, `id=<seed>`, `.comment.target=<seed>`). The tab opened
+//       on that entity, so its card comes before the shell around it — the
+//       tray's session strip and the rail's tiles arrive in the same burst and
+//       were answering first, the page's own route last (T-37445).
+//   1 — a BOUNDED aggregate: `.count!` (one number), or a tally/distinct over a
 //       closed-set column (`.tally=task.status`). One indexed statement, and an
 //       answer bounded by the vocabulary rather than by the graph.
-//   1 — everything else: a membership set, a route's whole entity, and an
+//   2 — everything else: a membership set, a route's whole entity, and an
 //       aggregate over an OPEN column — `.tally=comment.target` is one key per
 //       commented entity, 161 KB on the live graph. Bounded only by the data.
 //
-// Deliberately two tiers: addressedness does not predict cost (`route:<project>`
+// Deliberately coarse: addressedness does not predict cost (`route:<project>`
 // is the most expensive frame a board load sends), and a finer model would be
 // guessing where this one is reading a declaration.
-export let cost = (db: Sql, q: string) => {
+export let cost = (db: Sql, q: string, name = '', seed?: string) => {
+  if (seed && (name.includes(seed) || q.includes(seed))) return 0
   try {
     let agg = aggOf(parseQuery(q, vocabOf(db)))
-    if (!agg) return 1
-    return agg.op == 'count' || closed(agg.at.comp, agg.at.prop) ? 0 : 1
+    if (!agg) return 2
+    return agg.op == 'count' || closed(agg.at.comp, agg.at.prop) ? 1 : 2
   } catch {
     // A line this side cannot parse is one subserve will answer with its own
     // error frame. Cheapness is a claim; absent the parse, don't make it.
-    return 1
+    return 2
   }
 }
 
 export let subqueue = (db: Sql, serve: (f: Ctl) => void) => {
   let pending: { name: string; cost: number; f: Ctl }[] = []
   let draining = false
+  // A frame landed since the last hop: the burst is still arriving.
+  let dirty = false
+  // The entity this socket booted on, from the join's `seed` (subserve.ts).
+  let seed: string | undefined
 
   // The cheapest waiting sub — but never out of order with ITSELF: a client may
   // re-subscribe the same name (a board replacing its query), and those two
@@ -93,7 +103,15 @@ export let subqueue = (db: Sql, serve: (f: Ctl) => void) => {
       })
     try {
       while (pending.length) {
-        await turn()
+        // A worker is handed ONE message per turn, so a burst lands one frame
+        // per hop, interleaved with this hop: picking after a single hop sees
+        // one frame of lookahead. Keep hopping while frames are still landing
+        // (bounded, ~0.1 ms each), and pick once the burst has settled.
+        let hops = 0
+        do {
+          dirty = false
+          await turn()
+        } while (dirty && ++hops < 32)
         // An unsubscribe may cancel the last ask during the channel hop.
         let next = take()
         if (next) serve(next.f)
@@ -112,9 +130,11 @@ export let subqueue = (db: Sql, serve: (f: Ctl) => void) => {
     if (typeof f.unsub == 'string') {
       pending = pending.filter((p) => p.name != f.unsub)
     }
+    if (typeof f.seed == 'string') seed = locate(db, f.seed) ?? f.seed
     if (typeof f.sub != 'string') return serve(f)
     let q = typeof f.q == 'string' ? f.q : ''
-    pending.push({ name: f.sub, cost: cost(db, q), f })
+    pending.push({ name: f.sub, cost: cost(db, q, f.sub, seed), f })
+    dirty = true
     if (!draining) drain()
   }
 

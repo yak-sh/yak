@@ -9,7 +9,13 @@ import { until } from './testing.ts'
 let record = () => {
   let served: string[] = []
   let q = subqueue(db, (f) => {
-    served.push(f.sub ? `sub:${String(f.sub)}` : `unsub:${String(f.unsub)}`)
+    served.push(
+      f.sub
+        ? `sub:${String(f.sub)}`
+        : f.unsub
+        ? `unsub:${String(f.unsub)}`
+        : 'join',
+    )
   })
   let after = (n: number) =>
     until(() => served.length == n, { poll: 0, label: () => served.join() })
@@ -17,10 +23,27 @@ let record = () => {
 }
 
 Deno.test('cost: an answer the vocabulary bounds is cheap, an open one is not', () => {
-  assertEquals(cost(db, '.task!&.tally=task.status'), 0)
-  assertEquals(cost(db, '.task!&.count!'), 0)
-  assertEquals(cost(db, '.comment!&.tally=comment.target'), 1)
-  assertEquals(cost(db, '.task!&.limit=50'), 1)
+  assertEquals(cost(db, '.task!&.tally=task.status'), 1)
+  assertEquals(cost(db, '.task!&.count!'), 1)
+  assertEquals(cost(db, '.comment!&.tally=comment.target'), 2)
+  assertEquals(cost(db, '.task!&.limit=50'), 2)
+})
+
+Deno.test('cost: a sub about the seeded entity comes before everything', () => {
+  assertEquals(cost(db, 'id=e1', 'route:e1', 'e1'), 0)
+  assertEquals(cost(db, '.comment.target=e1', 'q:x', 'e1'), 0)
+  assertEquals(cost(db, '.task!&.tally=task.status', 'tally:b', 'e1'), 1)
+  assertEquals(cost(db, 'id=e2', 'route:e2', 'e1'), 2)
+})
+
+Deno.test('the page the socket booted on is answered before the shell', async () => {
+  let { served, push, after } = record()
+  push({ since: 0, seed: 'e1' })
+  push({ sub: 'tray', q: '.session!&.session.status=running' })
+  push({ sub: 'tally', q: '.task!&.tally=task.status' })
+  push({ sub: 'route:e1', q: 'id=e1' })
+  await after(4)
+  assertEquals(served, ['join', 'sub:route:e1', 'sub:tally', 'sub:tray'])
 })
 
 Deno.test('a burst is answered cheapest first, not in arrival order', async () => {

@@ -3349,7 +3349,10 @@ let aggSet = (name: string, line: string): AggSet => {
 // Re-asking keeps the SAME set, so every reader stays bound to it and simply
 // sees the answer go un-live and then land again — the way boardQuery replaces
 // a member sub without tearing down its ownership.
-let aggQuery = (name: string, line: string): AggSet => {
+// `keep` holds the last answer while the wider ask is out: the comment tally's
+// line GROWS as badges mount in layers, and every key it already answered stays
+// true, so blanking would flicker every badge three times per boot (T-37445).
+let aggQuery = (name: string, line: string, keep = false): AggSet => {
   let found = aggSet(name, line)
   if (!found.open) {
     found.open = true
@@ -3357,8 +3360,10 @@ let aggQuery = (name: string, line: string): AggSet => {
     ownBoard(name, line)
   } else if (found.line != line) {
     found.line = line
-    found.live.value = false
-    found.map.value = {}
+    if (!keep) {
+      found.live.value = false
+      found.map.value = {}
+    }
     ownBoard(name, line)
   }
   return found
@@ -3385,6 +3390,7 @@ let scheduleCommentTally = () => {
       aggQuery(
         COMMENTS,
         `${COMMENT_TALLY}&.comment.target=${targets.join(',')}`,
+        true,
       )
     }
   })
@@ -3404,12 +3410,13 @@ export let holdCommentCount = (target: string) => {
     }
   }
 }
+// A key the tally answered is the count; a target it has not (yet) named reads
+// the comments the cache holds, which is what it painted before the answer.
 export let commentCount = (target: string): Signal<number> =>
   computed(() => {
     let t = aggSet(COMMENTS, COMMENT_TALLY)
-    return t.live.value
-      ? t.map.value[target] ?? 0
-      : localEids([eq('comment', 'target', target)]).value.length
+    return t.map.value[target] ??
+      localEids([eq('comment', 'target', target)]).value.length
   })
 
 // An aggregate held for a VIEW's lifetime. The comment tally above is one

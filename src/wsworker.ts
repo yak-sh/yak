@@ -17,7 +17,7 @@ import { registerManagedSource } from './source_managed.ts'
 import { registerSessionSource } from './source_session.ts'
 import { type Frame, type Subserve, subserve } from './subserve.ts'
 import { subqueue } from './subqueue.ts'
-import { addressed } from './graph_query.ts'
+import { addressed, evalSub } from './graph_query.ts'
 
 type In =
   | { init: string }
@@ -108,6 +108,10 @@ self.onmessage = (m: MessageEvent<In>) => {
       // its first handshake need not pay for preparing the seed's statements:
       // the addressed read compiles them (~12 ms on the live graph, T-37445).
       addressed(db, 'T-1')
+      // The root-canvas lookup is the first frame every tab sends, and its
+      // first evaluation on a fresh connection costs ~27 ms against 2 ms
+      // warm — a quarter of the boot burst, ahead of the page's own subs.
+      evalSub(db, '.canvas!')
       return
     }
     if ('reset' in d) {
