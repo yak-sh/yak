@@ -261,6 +261,33 @@ Deno.test('epoch mismatch invalidates only server tier, including ready state', 
   c.close()
 })
 
+Deno.test('a burst of frames is one vault write, flushed by idle', async () => {
+  let writes: Saved[][] = []
+  let vault: WireVault = {
+    ...wireStash(),
+    save: (_epoch, rows) => {
+      writes.push(rows)
+      return Promise.resolve()
+    },
+  }
+  let { c, frame } = fixture({ epoch: 'one', wireVault: vault })
+  await c.ready
+  c.watch('.doc!')
+  frame('s1', [row('a')])
+  frame('s1', [row('b'), {
+    entity: { eid: 'a', num: 10 },
+    doc: { title: 'a2' },
+  }])
+  assertEquals(writes, [])
+  await c.cache.idle()
+  assertEquals(writes.length, 1)
+  assertEquals(writes[0].map((r) => [r.eid, r.comps.doc?.title]), [
+    ['a', 'a2'],
+    ['b', 'b'],
+  ])
+  c.close()
+})
+
 let deferredVault = () => {
   let read = Promise.withResolvers<Saved[]>()
   let base = wireStash()

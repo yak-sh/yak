@@ -205,6 +205,7 @@ export let client = (
     limit: opts.retention,
     answerBytes: opts.answerBytes,
     localOnly: !opts.url,
+    timer: opts.timer,
     vault: opts.wireVault === false
       ? undefined
       : opts.wireVault ?? (globalThis.indexedDB ? wireIdb() : undefined),

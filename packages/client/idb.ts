@@ -125,9 +125,10 @@ export let wireIdb = (
       req.onerror = () => no(req.error)
     })
   let transaction = async <T>(
+    mode: IDBTransactionMode,
     body: (rows: IDBObjectStore, meta: IDBObjectStore) => Promise<T>,
   ): Promise<T> => {
-    let tx = (await db()).transaction(['rows', 'meta'], 'readwrite')
+    let tx = (await db()).transaction(['rows', 'meta'], mode)
     let finish = done(tx)
     try {
       let out = await body(tx.objectStore('rows'), tx.objectStore('meta'))
@@ -141,16 +142,20 @@ export let wireIdb = (
       throw error
     }
   }
-  // Prune by key: a legacy oversized store never materializes unbounded rows.
-  let prune = async (rows: IDBObjectStore, limit: number) => {
-    let extra = await ask(rows.count()) - limit
-    if (extra <= 0) return
-    await new Promise<void>((ok, no) => {
+  // Every put takes a fresh order, so the newest `limit` orders hold at most
+  // `limit` rows: prune walks the oldest keys up to that bound, one step when
+  // there is nothing to delete, and never counts the store.
+  let prune = (rows: IDBObjectStore, order: number, limit: number) =>
+    new Promise<void>((ok, no) => {
+      if (order <= limit) {
+        ok()
+        return
+      }
       let req = rows.index('order').openKeyCursor()
       req.onerror = () => no(req.error)
       req.onsuccess = () => {
         let cursor = req.result
-        if (!cursor || extra-- <= 0) {
+        if (!cursor || Number(cursor.key) > order - limit) {
           ok()
           return
         }
@@ -158,7 +163,6 @@ export let wireIdb = (
         cursor.continue()
       }
     })
-  }
   let bounded = (rows: IDBObjectStore, limit: number): Promise<Saved[]> =>
     new Promise((ok, no) => {
       if (!limit) {
@@ -189,25 +193,30 @@ export let wireIdb = (
     }
   }
   return {
-    loadAnswers: (epoch, bytes) =>
-      transaction(async (_rows, meta) => {
-        let bounded = answerCache(bytes)
-        if (await ask(meta.get('epoch')) !== epoch) return []
+    loadAnswers: async (epoch, bytes) => {
+      let bounded = answerCache(bytes)
+      let oversized = await transaction('readonly', async (_rows, meta) => {
+        if (await ask(meta.get('epoch')) !== epoch) return false
         // Inspect the scalar envelope before materializing the checkpoint. A
         // smaller new budget discards it whole, never reads an oversized blob.
         let size = await ask(meta.get('answerBytes'))
-        if (typeof size !== 'number' || size > bytes) {
-          meta.delete('answers')
-          meta.delete('answerBytes')
-          return []
-        }
+        if (typeof size !== 'number' || size > bytes) return true
         for (let answer of await ask(meta.get('answers')) ?? []) {
           bounded.put(answer)
         }
-        return bounded.values()
-      }),
+        return false
+      })
+      if (oversized) {
+        await transaction('readwrite', (_rows, meta) => {
+          meta.delete('answers')
+          meta.delete('answerBytes')
+          return Promise.resolve()
+        })
+      }
+      return bounded.values()
+    },
     saveAnswers: (epoch, answers, bytes) =>
-      transaction(async (_rows, meta) => {
+      transaction('readwrite', async (_rows, meta) => {
         let bounded = answerCache(bytes)
         for (let answer of answers) bounded.put(answer)
         if (await ask(meta.get('epoch')) === epoch) {
@@ -217,7 +226,7 @@ export let wireIdb = (
       }),
     load: (epoch, limit) => {
       check(limit)
-      return transaction(async (rows, meta) => {
+      return transaction('readwrite', async (rows, meta) => {
         if (await ask(meta.get('epoch')) !== epoch) {
           rows.clear()
           meta.delete('answers')
@@ -226,22 +235,22 @@ export let wireIdb = (
           meta.put(0, 'order')
           return []
         }
-        await prune(rows, limit)
+        await prune(rows, Number(await ask(meta.get('order')) ?? 0), limit)
         return await bounded(rows, limit)
       })
     },
     save: (epoch, saved, limit) => {
       check(limit)
-      return transaction(async (rows, meta) => {
+      return transaction('readwrite', async (rows, meta) => {
         if (await ask(meta.get('epoch')) !== epoch) return
         let order = Number(await ask(meta.get('order')) ?? 0)
         for (let r of saved) rows.put({ ...r, order: ++order })
         meta.put(order, 'order')
-        await prune(rows, limit)
+        await prune(rows, order, limit)
       })
     },
     drop: (epoch, eids) =>
-      transaction(async (rows, meta) => {
+      transaction('readwrite', async (rows, meta) => {
         if (await ask(meta.get('epoch')) !== epoch) return
         for (let eid of eids) rows.delete(eid)
       }),

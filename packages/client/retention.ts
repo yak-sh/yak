@@ -64,6 +64,8 @@ export let retention = (
     vault?: WireVault
     localOnly?: boolean
     report?: (error: unknown) => void
+    /** how a disk flush is deferred (default: `setTimeout`) */
+    timer?: (fn: () => void, ms: number) => void
   } = {},
 ): Retained => {
   let limit = opts.limit ?? RETENTION_ROWS
@@ -130,18 +132,42 @@ export let retention = (
     }
     return false
   }
-  let savingAnswers: string | undefined
-  let saveAnswers = () => {
-    let epoch = current
-    if (!epoch || !opts.vault?.saveAnswers) return
-    if (savingAnswers === epoch) return
-    savingAnswers = epoch
+  // Disk writes coalesce: a burst of frames becomes one vault transaction per
+  // tick instead of one per frame, so a busy socket never keeps the store
+  // locked against the other tabs. idle() flushes first, so nothing waits on
+  // the timer.
+  let timer = opts.timer ?? ((fn, ms) => setTimeout(fn, ms))
+  let staged = () => ({
+    epoch: undefined as string | undefined,
+    saved: new Map<Eid, Saved>(),
+    gone: new Set<Eid>(),
+    answers: false,
+  })
+  let pending = staged()
+  let armed = false
+  let flush = () => {
+    let { epoch, saved, gone, answers: dirty } = pending
+    pending = staged()
+    if (!epoch || !opts.vault) return
+    let rows = [...saved.values()]
+    let eids = [...gone]
     enqueue(async () => {
-      if (savingAnswers === epoch) savingAnswers = undefined
-      if (current === epoch) {
-        await opts.vault!.saveAnswers!(epoch, answers.values(), answerLimit)
+      if (rows.length) await opts.vault!.save(epoch, rows, limit)
+      if (eids.length) await opts.vault!.drop(epoch, eids)
+      if (dirty && opts.vault!.saveAnswers && current === epoch) {
+        await opts.vault!.saveAnswers(epoch, answers.values(), answerLimit)
       }
     })
+  }
+  let stage = (epoch: string) => {
+    if (pending.epoch !== undefined && pending.epoch !== epoch) flush()
+    pending.epoch = epoch
+    if (armed) return
+    armed = true
+    timer(() => {
+      armed = false
+      flush()
+    }, 50)
   }
   let remember = (sub: Sub) => {
     if (!sub.key || !sub.confirmed) return
@@ -150,7 +176,10 @@ export let retention = (
       members: [...sub.members],
       peers: [...sub.peers],
     })
-    saveAnswers()
+    if (current && opts.vault?.saveAnswers) {
+      stage(current)
+      pending.answers = true
+    }
   }
   // Restored memberships are paint, not fresh field knowledge. Intersect them
   // with RAM; never re-run the server query, nor claim evicted fields loaded.
@@ -177,8 +206,12 @@ export let retention = (
     for (let eid of eids) if (inactive.delete(eid)) inactive.add(eid)
   }
   let diskDrop = (eids: Eid[]) => {
-    let epoch = current
-    if (epoch && opts.vault) enqueue(() => opts.vault!.drop(epoch, eids))
+    if (!current || !opts.vault) return
+    stage(current)
+    for (let eid of eids) {
+      pending.saved.delete(eid)
+      pending.gone.add(eid)
+    }
   }
   // Storage-only eviction: no tombstone, cascade, outbound post, or local-vault
   // deletion. Watch invalidation sees the physically absent payload too.
@@ -285,10 +318,8 @@ export let retention = (
     sweep()
   }
   let save = (eids: Eid[]) => {
-    let epoch = current
-    if (!epoch || !opts.vault) return
-    let saved: Saved[] = []
-    let gone: Eid[] = []
+    if (!current || !opts.vault) return
+    stage(current)
     for (let eid of eids) {
       let b = held(eid)
       let wire = b && !dead(b)
@@ -297,13 +328,17 @@ export let retention = (
         )
         : {}
       if (b && !dead(b) && (Object.keys(wire).length || known.has(eid))) {
-        saved.push({ eid, num: b!.entity.num, comps: wire as Saved['comps'] })
-      } else gone.push(eid)
+        pending.gone.delete(eid)
+        pending.saved.set(eid, {
+          eid,
+          num: b!.entity.num,
+          comps: wire as Saved['comps'],
+        })
+      } else {
+        pending.saved.delete(eid)
+        pending.gone.add(eid)
+      }
     }
-    enqueue(async () => {
-      if (saved.length) await opts.vault!.save(epoch, saved, limit)
-      if (gone.length) await opts.vault!.drop(epoch, gone)
-    })
   }
   graph.use({
     name: '@yaks/client/retention',
@@ -550,6 +585,7 @@ export let retention = (
       }
       // Order epoch validation after previous writes; future writes queue behind
       // it. A stale tab's save/drop is independently guarded by the vault.
+      flush()
       let read = queued.then(async () => {
         let rows = await opts.vault!.load(epoch, limit)
         let saved = await opts.vault!.loadAnswers?.(epoch, answerLimit) ?? []
@@ -589,6 +625,7 @@ export let retention = (
       })
     },
     idle: async () => {
+      flush()
       await queued
     },
     size: () => inactive.size,
