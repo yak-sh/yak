@@ -11,7 +11,7 @@ let { backfillCount, historicalPrompts, landBackfill, readBackfill } =
     './backfill.ts'
   )
 let { append } = await import('./entries.ts')
-let { graph } = await import('./reload.ts')
+let { graph } = await import('./imports.ts')
 let { edgeEid, link } = await import('./edge.ts')
 
 let uid = () => crypto.randomUUID()

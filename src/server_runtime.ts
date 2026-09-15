@@ -84,8 +84,7 @@ import { type OllamaConfig, ollamaProbe } from './ollama.ts'
 import { resolve, settingRows } from './config.ts'
 import { type Observation, safeObservation } from './observations.ts'
 import { outcome, recent, record, stats, toolCall } from './telemetry.ts'
-import { stamp } from './hot.ts'
-import { graph as browserGraph, serverFile } from './reload.ts'
+import { graph as browserGraph } from './imports.ts'
 import { requestVerifier } from './verify.ts'
 import { askOf, askRows, evalAgg, layered, setRanker } from './graph_query.ts'
 
@@ -112,21 +111,7 @@ globalThis.addEventListener('unhandledrejection', (e) => {
   console.error('unhandled rejection —', e.reason)
 })
 
-// The hot-swap generation: bumped by the watcher on every client-code or css
-// change, stamped into every served module's relative imports so a swap
-// re-fetches the whole component graph (see hot.ts).
-//
-// Seeded from the clock because the browser's ESM cache OUTLIVES this
-// process and is keyed by exact specifier. Counting from 1 each boot re-mints
-// `?v=2` after every restart — and a tab that already holds `App.tsx?v=2`
-// answers the re-import from cache, so the swap reports `code v2 live` while
-// running the previous process's modules. Nothing throws, so main.tsx's
-// `Good` fallback cannot see it either. Monotonic across processes is the
-// property that matters; within one, only that it climbs.
-let gen = Date.now()
-
 let src = fileURLToPath(new URL('.', import.meta.url))
-let packages = fileURLToPath(new URL('../packages/', import.meta.url))
 
 let mime: Record<string, string> = {
   html: 'text/html; charset=utf-8',
@@ -165,7 +150,7 @@ let file = async (root: string, path: string) => {
         }
         ts.set(full, hit)
       }
-      return new Response(stamp(hit.js, gen), {
+      return new Response(hit.js, {
         headers: { 'content-type': mime.js, 'cache-control': 'no-cache' },
       })
     }
@@ -191,8 +176,7 @@ let warmBrowser = () =>
   )
 
 // The sync channel: clients send flat change batches ([{eid, name, comp}]),
-// the server applies them and rebroadcasts to every other client. Non-array
-// frames are control messages ('reload', from the watcher).
+// the server applies them and rebroadcasts to every other client.
 //
 // Serving is per-connection (D-22388 step 4): each socket is served by ONE
 // subserve instance — in its own Worker for a file-backed graph (own thread,
@@ -1359,7 +1343,7 @@ let handle: Handler = async (req) => {
   // re-skinning is a file beside your data — never a fork of styles.css
   // (T-12778). Loaded after styles.css, it overrides the :root theme
   // contract. Absent is the normal case: an empty stylesheet, not a 404
-  // the log would cry about. themeWatch (below) hot-swaps it on save.
+  // the log would cry about. A save shows on the next load.
   if (path == '/theme.css') {
     let theme = `${Deno.env.get('HOME')}/.tasks/theme.css`
     let css = await Deno.readTextFile(theme).catch(() => '')
@@ -1451,47 +1435,6 @@ tick('subs', () => aged(), 30_000, false)
 // standingBackfill, the outbox relay) all WRITE, and a reader holds no baton.
 if (!appOnly && !splitEffects()) bootDoing(doingDeps, syncSoon)
 
-// Watch app and package source and tell every client what a save means
-// (debounced — editors fire several events per save):
-//   {hmr: gen}  component/logic edit — re-import the graph under ?v=gen
-//               and re-render; signals in live.ts keep all state
-//   {css: gen}  css-only edit — re-fetch the stylesheet, nothing else
-//   'reload'    a SHELL file (main.tsx, live.ts, index.html, vendor/) —
-//               the swap boundary itself moved; only a reload applies
-//               Package imports are unversioned in the import map, so package
-//               edits also reload the page to replace their cached modules.
-// The supervisor (dev.ts) owns server-graph restarts. We must not close client
-// sockets merely because this watcher saw a serverFile edit: the supervisor
-// first asks this process to settle and exit, then starts the replacement.
-// Returning here leaves the existing process serving until that ordered stop;
-// clients retry through the deliberate restart gap.
-let shellish = (p: string) =>
-  p.endsWith('/main.tsx') || p.endsWith('/live.ts') ||
-  p.endsWith('/index.html') || p.includes('/vendor/') ||
-  p.startsWith(packages)
-let watch = async () => {
-  let timer: ReturnType<typeof setTimeout> | null = null
-  let batch = new Set<string>()
-  for await (let e of Deno.watchFs([src, packages])) {
-    if (e.paths.some(serverFile)) return
-    for (let p of e.paths) batch.add(p)
-    if (timer) clearTimeout(timer)
-    timer = setTimeout(() => {
-      let paths = [...batch]
-      batch.clear()
-      let msg = paths.some(shellish)
-        ? 'reload' as const
-        : paths.every((p) => p.endsWith('.css'))
-        ? { css: ++gen }
-        : { hmr: ++gen }
-      for (let { sock } of served) {
-        if (sock.readyState == WebSocket.OPEN) sock.send(JSON.stringify(msg))
-      }
-    }, 50)
-  }
-}
-watch()
-
 // Turn hooks append to a durable local spool and return without waiting for a
 // loaded event loop. The server resolves the provider id through its unique
 // index and sends the ordinary graph change once it gets a turn.
@@ -1524,18 +1467,9 @@ function turnSweep() {
   }
 }
 
-// The theme hot-swaps without a reload; hook writes drain from a dedicated
-// subdirectory. Neither watch subscribes to the vault root's database churn.
-let stopVaultWatch = watchVault(
-  `${Deno.env.get('HOME')}/.tasks`,
-  () => {
-    let msg = JSON.stringify({ css: ++gen })
-    for (let { sock } of served) {
-      if (sock.readyState == WebSocket.OPEN) sock.send(msg)
-    }
-  },
-  turnSweep,
-)
+// Hook writes drain from a dedicated subdirectory; the watch never subscribes
+// to the vault root's database churn.
+let stopVaultWatch = watchVault(`${Deno.env.get('HOME')}/.tasks`, turnSweep)
 
 let draining = false
 let drain = async () => {

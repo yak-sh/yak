@@ -800,14 +800,10 @@ let sameProps = (
     keys.every((k) => Object.is(a[k], b[k]))
 }
 
-// Where the server lives and what a code reload means. The browser answers
-// both from its location; other hosts (the TUI) configure these before
-// boot() — a terminal process can't "reload the page". swap/css are the
-// hot doors: main.tsx installs them at boot, and a host that doesn't
-// (the TUI) just falls back to reload — a no-op without a location.
-let loc = (globalThis as {
-  location?: { host: string; protocol?: string; reload(): void }
-}).location
+// Where the server lives. The browser answers from its location; other hosts
+// (the TUI) configure it before boot().
+let loc = (globalThis as { location?: { host: string; protocol?: string } })
+  .location
 // The host a process starts with: a page's own, or NONE. A location-less
 // process names its server (the TUI, from TASKS_HOST) or has none. This used
 // to fall back to the dev port, which made every location-less process that
@@ -830,9 +826,6 @@ export let config: {
   // Legacy probe flag, accepted for URL compatibility only. The package RAM
   // replica is always the live surface; no alternate IDB query/cache owner.
   store: boolean
-  reload: () => void
-  swap?: (gen: number) => void
-  css?: (gen: number) => void
 } = {
   host: hostFrom(loc),
   // Behind an https front door the page's scheme must carry through to
@@ -841,7 +834,6 @@ export let config: {
   shared: true,
   agreement: false,
   store: false,
-  reload: () => loc?.reload(),
 }
 export let agreementProbe = (search: string) =>
   new URLSearchParams(search).get('probe') == 'subscriptions'
@@ -1572,7 +1564,6 @@ export type Sub = {
   reference?: string
 }
 type Observed = { observe: unknown }
-type Hot = 'reload' | { hmr: number } | { css: number }
 
 let owner: ReturnType<typeof topology<unknown>> | null = null
 let ws: WebSocket | null = null
@@ -1722,12 +1713,6 @@ let settleObservations = (changes: Change[]) => {
   if (changed) observations.value = next
 }
 
-let hot = (data: unknown): data is Hot => {
-  if (data == 'reload') return true
-  if (!data || typeof data != 'object') return false
-  return 'hmr' in data || 'css' in data
-}
-
 // One physical socket. Only the lock holder calls this in shared mode; the
 // fallback calls it per tab. Incoming JSON is parsed once here, serialized
 // through IDB, then fanned as structured-clone data.
@@ -1774,12 +1759,10 @@ let connect = () => {
     // nothing.
     if (isPing(data)) return
     serial = serial.then(async () => {
-      // Reload must leave the leader before its own page disappears.
       let share = owner
       let leader = share?.isLeader() ?? false
-      if (leader && hot(data)) share?.fan(data)
       await land(data, leader ? 'leader' : 'solo')
-      if (leader && !hot(data)) share?.fan(data)
+      if (leader) share?.fan(data)
     }).catch((e) => {
       problem.value = String(e)
     })
@@ -1794,38 +1777,25 @@ let connect = () => {
     owner?.fan({ observe: null })
     if (polling) return
     polling = true
+    // A lost socket is a SOCKET to get back, never a page to reload: what this
+    // tab painted stays painted, and the handshake on the new socket (held
+    // cursor, epoch) patches in whatever it missed. Reloading here is what
+    // turned every server restart into a blank tab — a page reborn into a
+    // half-up server, or as a follower of a leader mid-rebirth (T-37450).
     let poll = setInterval(async () => {
       try {
         await fetch(`${base()}/capabilities`, { method: 'HEAD' })
-        // The server is back — but this tab may hold writes it made while the
-        // socket was down. They leave through /apply before the reload that
-        // would discard them (T-21413); a failed drain leaves the poller
+        // The server is back. Writes made while the socket was down leave
+        // through /apply first (T-21413); a failed drain leaves the poller
         // running, so the next tick asks again.
         if (!(await drain())) return
         clearInterval(poll)
         polling = false
-        owner?.fan('reload')
-        setTimeout(config.reload)
+        connect()
       } catch { /* still down */ }
     }, 500)
   }
   return socket
-}
-
-// The follower half of the same promise: a fanned 'reload' must not outrun
-// this tab's own outbox — nor refresh into a server a code edit is still
-// restarting (the several-second brick). Confirm the successor is listening
-// (HEAD /capabilities) AND this tab's outbox has drained, THEN reload; otherwise
-// retry on the poller's cadence — the page stays live on the old JS across the
-// gap. This is the same reachability gate the reconnect poller already uses.
-let reloadDrained = async () => {
-  try {
-    await fetch(`${base()}/capabilities`, { method: 'HEAD' })
-  } catch {
-    return void setTimeout(reloadDrained, 500) // successor not up yet
-  }
-  if (await drain()) return config.reload()
-  setTimeout(reloadDrained, 500)
 }
 
 let wire = (frame: unknown) => {
@@ -2625,16 +2595,6 @@ type Land = 'leader' | 'follower' | 'solo'
 // cursor-stamped live frame before fan-out; followers land only in memory.
 // Catch-up/reset still persist in solo mode — the 2.1 boot write.
 let land = async (data: unknown, mode: Land) => {
-  if (hot(data)) {
-    // Undelivered writes leave through /apply BEFORE the page dies (T-21413);
-    // a failed drain (server flickered again) retries on the poller's cadence
-    // rather than reloading over the outbox.
-    if (data == 'reload') setTimeout(reloadDrained)
-    else if ('hmr' in data) {
-      config.swap ? config.swap(data.hmr) : config.reload()
-    } else config.css?.(data.css)
-    return
-  }
   if (data && typeof data == 'object' && 'disconnected' in data) {
     replica?.invalidate()
     return
@@ -2869,6 +2829,8 @@ let probe = globalThis as {
     cacheN: () => number
     retainedN: () => number
     wire: () => { total: number; subs: Record<string, number> }
+    socket: () => WebSocket | null
+    connect: () => WebSocket
   }
 }
 probe.__probe = {
@@ -2919,6 +2881,8 @@ probe.__probe = {
   cacheN: () => Object.keys(cache.peek()).length,
   retainedN: () => replica.box.cache.size(),
   wire: () => ({ total: carried.total, subs: { ...carried.subs } }),
+  socket: () => ws,
+  connect: () => connect(),
 }
 
 // The whole entity, assembled for a renderer: spine, components present,

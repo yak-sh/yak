@@ -1,8 +1,8 @@
-// The development and deployed server supervisor. A replacement starts only
-// after the old process has drained and exited: one serving process and one
-// server connection set per owner database. Direct SQLite clients continue
-// through the brief HTTP downtime.
-import { devFile, processFile, processRoots } from './reload.ts'
+// The development and deployed server supervisor: boots the server, then the
+// effects daemon behind it, and revives whichever dies. It watches no files —
+// a landed edit runs when tasksd is restarted by hand — so one serving process
+// and one server connection set exist per owner database for as long as the
+// supervisor lives.
 import { peer } from './bind.ts'
 
 let deno = Deno.execPath()
@@ -179,7 +179,6 @@ export let launch = async (
 let stopping = new WeakSet<Deno.ChildProcess>()
 // The server this supervisor is answerable for.
 let current: Deno.ChildProcess | undefined
-let exiting = false
 
 let gone = (e: unknown) =>
   e instanceof Deno.errors.NotFound ||
@@ -229,7 +228,7 @@ export let retire = async (
   }
 }
 
-// The sequencing seam shared by edit swaps, crash recovery, and exit 42.
+// The sequencing seam for crash recovery.
 // Stop the doing owner BEFORE closing the old server's connection set; start
 // its successor only AFTER launch has received the checkpointed READY beat.
 // Callers serialize this whole pair, including invalidating respawn backoffs.
@@ -257,9 +256,8 @@ export let handoff = (o: {
   }
 }
 
-// Every mint and retire runs here, one at a time. A crash-relaunch and an
-// edit-swap both replace `current`, and interleaved they can lose a handle to a
-// process nobody can stop or reload.
+// Every mint and retire runs here, one at a time: two crash-relaunches
+// interleaved can lose a handle to a process nobody can stop.
 let lock: Promise<unknown> = Promise.resolve()
 let serial = <T>(work: () => Promise<T>): Promise<T> => {
   let done = lock.then(work, work)
@@ -272,57 +270,18 @@ let serial = <T>(work: () => Promise<T>): Promise<T> => {
 // not spin it.
 const RETRY = [0, 1_000, 2_000, 5_000, 10_000, 30_000]
 
-// One attempt at a time, made once the edits stop arriving and made AGAIN —
-// on the same backoff a crash gets — until it reports success. An edit says
-// the tree is newer than the process, and a failed replacement does not make that
-// untrue, so the intent survives the failure. Dropping it is how a landed
-// change ran nowhere: one replacement failed — a boot past its readiness deadline
-// is enough — the supervisor kept the old child, and the tree stayed ahead of
-// the process until some unrelated later edit happened to swap (T-14046). A
-// crashed child was already healed this way; a failed replacement was not.
-export let insist = (
-  work: () => Promise<boolean>,
-  waits = RETRY,
-  quiet = 50,
-) => {
-  let pending = false
-  let running = false
-  let loop = async () => {
-    running = true
-    let n = 0
-    while (pending) {
-      pending = false
-      await wait(quiet)
-      if (pending) continue // still arriving — settle again
-      // A rejection is a failure like any other. The supervisor absorbs it
-      // (T-11139); an unhandled one would kill the process this loop serves.
-      if (await work().catch((e) => (console.error(e), false))) n = 0
-      else {
-        pending = true
-        await wait(waits[Math.min(++n, waits.length - 1)])
-      }
-    }
-    running = false
-  }
-  return () => {
-    pending = true
-    if (!running) loop()
-  }
-}
-
 // A supervisor ABSORBS its child's death; it never escalates one. Exiting
 // here hands the problem to systemd, and `Restart=always` mass-kills this
 // unit's cgroup — where the operator tmux tree lives — so a crash we could
 // heal in a second costs every operator mid-turn instead (T-11139). There is
 // no failure a child can have that the supervisor improves by dying too.
 let revive = async (departed: Deno.ChildProcess) => {
-  if (exiting || current != departed) return // a swap already replaced it
+  if (current != departed) return // already replaced
   await lifecycle.stop()
-  for (let n = 0; !exiting; n++) {
+  for (let n = 0;; n++) {
     let ms = RETRY[Math.min(n, RETRY.length - 1)]
     if (ms) await wait(ms)
     try {
-      if (exiting) return
       await lifecycle.start()
       return
     } catch (e) {
@@ -333,7 +292,7 @@ let revive = async (departed: Deno.ChildProcess) => {
 
 let watch = (child: Deno.ChildProcess) => {
   child.status.then((status) => {
-    if (exiting || stopping.has(child)) return
+    if (stopping.has(child)) return
     console.error(
       `server pid ${child.pid} stopped unexpectedly (${status.code}) — relaunching`,
     )
@@ -345,44 +304,6 @@ let watch = (child: Deno.ChildProcess) => {
 let stop = async (child: Deno.ChildProcess) => {
   stopping.add(child)
   await retire(child, 'server')
-}
-
-// Sequential replacement. Stop and reap the old server before a new process
-// opens the graph, migrates, or binds. A bad replacement is retried as a fresh
-// boot; the graph remains available to direct SQLite clients meanwhile.
-let swap = async () => {
-  let old = current!
-  try {
-    await lifecycle.replace()
-    return true
-  } catch (e) {
-    console.error('server replacement failed —', e)
-    await revive(old)
-    return false
-  }
-}
-
-// The supervisor keeps the code it IMPORTED at its own start, and no process
-// can re-import itself — so a landing that moves this file or reload.ts leaves
-// the fleet supervised by the earlier tree, deciding replacements and
-// readiness by names and deadlines that main no longer has. It cannot fix
-// itself in place; it can only ask to be born again. Stop the child first (the
-// replacement is an ordinary boot, and bind.ts refuses an occupied port
-// to everyone else), then exit 42 — the repo's ask-to-be-relaunched code, the
-// TUI's too. Whoever supervises this must run `deno task dev`, whose loop is
-// what turns 42 into a relaunch: systemd would turn it into a `Restart=always`
-// cgroup mass-kill instead (T-11139), and a bare `deno run src/dev.ts` gets a
-// clean stop and this line, which beats serving yesterday's code in silence.
-let relaunch = async () => {
-  exiting = true
-  console.error(
-    `supervisor pid ${Deno.pid} source changed — draining for exit 42`,
-  )
-  await serial(async () => {
-    await lifecycle.stop()
-  })
-  console.error(`supervisor pid ${Deno.pid} children exited — exiting 42`)
-  Deno.exit(42)
 }
 
 // The FIRST boot, made as resilient as every later one. A child can exit
@@ -441,7 +362,7 @@ let effectsGen = 0
 let spawnEffects = () => {
   let gen = ++effectsGen
   let boot = (n: number) => {
-    if (exiting || gen != effectsGen) return // replaced while backing off
+    if (gen != effectsGen) return // replaced while backing off
     try {
       let child = new Deno.Command(deno, {
         args: effectsArgs,
@@ -490,19 +411,7 @@ let lifecycle = handoff({
 let supervise = async () => {
   current = await firstBoot()
   spawnEffects()
-  let reload = insist(() =>
-    serial(async () => {
-      if (exiting) return true
-      return await swap()
-    })
-  )
-  for await (let event of Deno.watchFs(processRoots)) {
-    if (event.paths.some(devFile)) {
-      return relaunch()
-    }
-    // Either owner's graph uses the same debounced, serialized handoff.
-    if (event.paths.some(processFile)) reload()
-  }
+  await new Promise<never>(() => {}) // the children's deaths keep us busy
 }
 
 if (import.meta.main) await supervise()

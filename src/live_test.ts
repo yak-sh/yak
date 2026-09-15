@@ -1,5 +1,7 @@
 // The cache derivations: what the field pickers read out of the live
 // world. Pure functions of the cache signal — no DOM, no socket.
+import { stub } from '@std/testing/mock'
+import { FakeTime } from '@std/testing/time'
 import {
   agreementProbe,
   applyLocal,
@@ -2711,6 +2713,68 @@ Deno.test('commentCount shares one aggregate sub across targets (T-21283)', () =
     dropQuery(preds)
   } finally {
     useRoute(restore)
+  }
+})
+
+// T-37450: a painted tab keeps what it painted through a lost socket. The
+// poller gets the SOCKET back once the server answers; it never reloads the
+// page, and the rows in the cache are untouched the whole time.
+Deno.test('a lost socket reconnects in place; the painted cache survives', async () => {
+  let RealWS = (globalThis as { WebSocket: unknown }).WebSocket
+  let made = 0
+  ;(globalThis as { WebSocket: unknown }).WebSocket = class {
+    readyState = 0
+    onopen: unknown = null
+    onmessage: unknown = null
+    onclose: unknown = null
+    constructor() {
+      made++
+    }
+    send() {}
+    addEventListener() {}
+    close() {}
+  }
+  type Sock = { readyState: number; onclose: (() => void) | null }
+  let probe = (globalThis as unknown as {
+    __probe: { socket: () => Sock | null; connect: () => Sock }
+  }).__probe
+  let D = 'd0c00000-0000-4000-8000-0000000000d0'
+  let painted = {
+    [D]: { entity: { eid: D, num: 1 }, doc: { eid: D, title: 't', body: 'b' } },
+  }
+  let up = false
+  using _fetch = stub(
+    globalThis,
+    'fetch',
+    () =>
+      up
+        ? Promise.resolve(new Response(null, { status: 200 }))
+        : Promise.reject(new TypeError('connection refused')),
+  )
+  using time = new FakeTime()
+  let host = config.host
+  try {
+    config.host = '127.0.0.1:0'
+    cache.value = painted
+    // A socket an earlier test left behind is spent; this one opens its own.
+    let prior = probe.socket()
+    if (prior) prior.readyState = 3
+    let s = probe.connect()
+    assertEquals(made, 1)
+    s.onclose!()
+    // Down: the poller asks and hears nothing; nothing painted changes.
+    await time.tickAsync(1_500)
+    assertEquals(cache.value, painted)
+    assertEquals(made, 1)
+    // Back: one new socket, same page, same rows.
+    up = true
+    await time.tickAsync(500) // the poll hears the server
+    await time.runMicrotasks() // …drains, then dials
+    assertEquals(made, 2)
+    assertEquals(cache.value, painted)
+  } finally {
+    config.host = host
+    ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
   }
 })
 
