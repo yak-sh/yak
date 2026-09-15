@@ -1,7 +1,7 @@
 import { entityPath } from '../url.ts'
 import { useEffect, useLayoutEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
-import { census, ent, mode, routeSub, serverName } from '../live.ts'
+import { ent, mode, routeSub, row, serverName } from '../live.ts'
 import { Admin } from './Admin.tsx'
 import { block, Chip, el } from './ui.tsx'
 import { filterable, FilterInput } from './Filter.tsx'
@@ -92,7 +92,7 @@ let Resolving = () => {
 // out — the same "last 3 that render" the census filter gave before.
 let Crumbs = () => {
   let items = trail.value.flatMap((eid) => {
-    let loaded = census.value.includes(eid)
+    let loaded = row(eid).value != null
     let n = loaded ? undefined : serverName(eid) // kicks a resolve if unloaded
     if (!loaded && !n) return [] // gone, or not resolved yet — not a crumb
     let e = ent(eid)

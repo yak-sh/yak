@@ -1,5 +1,5 @@
 import { type ComponentChildren, createContext, h } from 'preact'
-import { useContext } from 'preact/hooks'
+import { useContext, useMemo } from 'preact/hooks'
 import { signal } from '@preact/signals'
 import { relative } from '../time.ts'
 
@@ -70,7 +70,10 @@ export let el = (tag: string, base: string) =>
       extra,
     ].filter(Boolean).join(' '),
   }, children)
-  return a.href ? h(Surround.Provider, { value: { href: a.href } }, node) : node
+  // One value object per href: a fresh object each render would wake every
+  // nested consumer as its own render, doubling the fan-out of any repaint.
+  let surround = useMemo(() => ({ href: a.href }), [a.href])
+  return a.href ? h(Surround.Provider, { value: surround }, node) : node
 }
 
 // Take the keyboard on mount: <Field elRef={focus} />. The `autofocus`

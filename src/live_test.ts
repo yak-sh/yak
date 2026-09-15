@@ -68,6 +68,7 @@ import {
   sessionRows,
   setInbox,
   shelfFor,
+  shown,
   sieve,
   socketStale,
   statusOf,
@@ -856,6 +857,42 @@ Deno.test('agreement diagnostics opt in through the named browser probe', () => 
   assertEquals(agreementProbe('?v=Board&probe=subscriptions'), true)
   assertEquals(agreementProbe('?probe=other'), false)
   assertEquals(agreementProbe(''), false)
+})
+
+Deno.test('a frame wakes only the readers of its own sub and rows', () => {
+  let change = (eid: string) => [
+    { eid, name: 'entity', comp: { eid, num: 1 } },
+  ]
+  landSub({ sub: 'wake:a', changes: change('wake-a'), replace: true })
+  landSub({ sub: 'wake:b', changes: change('wake-b'), replace: true })
+  let stateRuns = 0, shownRuns = 0, loadedRuns = 0
+  let stop = [
+    effect(() => {
+      subscriptionState('wake:a')
+      stateRuns++
+    }),
+    effect(() => {
+      shown('wake-a')
+      shownRuns++
+    }),
+    effect(() => {
+      loaded('wake-a', 'doc', 'title')
+      loadedRuns++
+    }),
+  ]
+  // A frame for the OTHER sub, moving the OTHER row: nothing here re-runs.
+  landSub({
+    sub: 'wake:b',
+    changes: [{ eid: 'wake-b', name: 'doc', comp: { title: 'moved' } }],
+  })
+  assertEquals([stateRuns, shownRuns, loadedRuns], [1, 1, 1])
+  // A frame for this sub carrying this row wakes each reader once.
+  landSub({
+    sub: 'wake:a',
+    changes: [{ eid: 'wake-a', name: 'doc', comp: { title: 'moved' } }],
+  })
+  assertEquals([stateRuns, shownRuns, loadedRuns], [2, 2, 2])
+  for (let s of stop) s()
 })
 
 Deno.test('a replacement frame forgets the prior query set', () => {

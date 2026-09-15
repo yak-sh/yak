@@ -4,7 +4,7 @@ import { parse } from '@yaks/query'
 import { useContext, useRef, useState } from 'preact/hooks'
 import { formatProp, propAt } from '../props.ts'
 import { type Ent, idOf } from '../types.ts'
-import { cache, domains, ent, problem } from '../live.ts'
+import { domains, ent, problem, row } from '../live.ts'
 import { ago, block, focus, pretty, Surround } from './ui.tsx'
 import { Dot } from './Dot.tsx'
 import { Edit, InlineEdit } from './Edit.tsx'
@@ -422,7 +422,7 @@ export let Prop = (
   let faceValue = p
     ? formatProp(p, value, {
       describe: (eid) => {
-        if (!cache.value[eid]) return
+        if (!row(eid).value) return
         let target = ent(eid)
         let title = target.doc?.title
         return title || idOf(target)

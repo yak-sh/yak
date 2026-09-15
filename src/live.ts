@@ -11,6 +11,7 @@ import { IdError } from './types.ts'
 import {
   batch,
   computed,
+  effect,
   type Signal,
   signal,
   untracked,
@@ -157,7 +158,7 @@ let makeClient = () =>
       }
       let agg = aggSets.get(sub)
       if (agg) agg.live.value = replica.ready(sub)
-      subVersion.value = subVersion.peek() + 1
+      ticked(sub)
     },
     changed: (eids) => {
       if (replacing) return
@@ -237,7 +238,7 @@ export let reveal = (eid: string) => {
   revealed.value = new Set([...revealed.peek(), eid])
 }
 export let shown = (eid: string) =>
-  !paint.value[eid]?.quarantined || revealed.value.has(eid)
+  !row(eid).value?.quarantined || revealed.value.has(eid)
 let canvasVersion = signal(0)
 let noRelations: Dep[] = []
 
@@ -710,6 +711,20 @@ let syncIds = () => {
 // Renderers hold these narrow signals; the complete cache remains the
 // persistence and query door. A signal is minted once per eid so a patch
 // cannot wake an unrelated entity.
+// An outside replacement of the cache (a test, a host) is the one write the
+// row signals cannot see coming: the browser's own writes go through setCache
+// and publish() the rows they moved. Nothing renders from the whole cache any
+// more, so re-prime every held row signal when the graph object is swapped.
+effect(() => {
+  let graph = cache.value
+  if (graph === liveGraph) return
+  // The raw graph, not cached(): the replica rebuild stays lazy, on the
+  // next read, so a replacement no one renders from costs no scan.
+  batch(() => {
+    for (let [eid, found] of rowSignals) found.value = graph[eid]
+  })
+})
+
 export let row = (eid: string) => {
   let current = untracked(() => cached(eid))
   let found = rowSignals.get(eid)
@@ -870,7 +885,7 @@ export let warmth = (e: Ent, now: number) =>
       task: e.task as unknown as Record<string, unknown> | undefined,
     },
     now,
-    (eid) => paint.value[eid],
+    (eid) => row(eid).value,
   )
 export let byWarmth = (now: number) => (a: Ent, b: Ent) =>
   (warmth(b, now) - warmth(a, now)) || (b.num - a.num)
@@ -900,7 +915,7 @@ export let openDeps = (e: Ent) => {
 // viewer that names none holds no standing instructions, so the verbs
 // that need one simply aren't offered.
 export let myActor = () => {
-  let c = config.client ? paint.value[config.client] : undefined
+  let c = config.client ? row(config.client).value : undefined
   return String(c?.client?.actor ?? '') || undefined
 }
 
@@ -912,12 +927,12 @@ export let myMode = (target: string) => {
   let me = myActor()
   if (!me) return undefined
   syncIx()
-  let g = paint.value
+  let g = (eid: string) => row(eid).value
   let hit = children(ix, target, 'subscription', 'target').find((eid) =>
-    !g[eid]?.quarantined && String(g[eid]?.subscription?.actor) == me
+    !g(eid)?.quarantined && String(g(eid)?.subscription?.actor) == me
   )
   return hit
-    ? (g[hit]?.subscription?.mode as 'watch' | 'mute' | undefined)
+    ? (g(hit)?.subscription?.mode as 'watch' | 'mute' | undefined)
     : undefined
 }
 
@@ -1822,7 +1837,34 @@ let primeSub = (sub: string, q: string, silent = false) => {
   replica.open(sub, q, silent)
   primeMetadata(sub)
 }
-let subVersion = signal(0)
+// One version signal PER SUB (T-37445): a frame for sub A wakes only the
+// readers of A. One global version woke every subscription-holding view on
+// every frame, so a zero-row tally answer re-rendered the whole page.
+let subTicks = new Map<string, Signal<number>>()
+let tick = (sub: string) => {
+  let found = subTicks.get(sub)
+  if (!found) subTicks.set(sub, found = signal(0))
+  return found
+}
+let ticked = (sub: string) => {
+  let found = subTicks.get(sub)
+  if (found) found.value = found.peek() + 1
+}
+// The same per ROW, for what the subs say about it: `loaded()` asks which
+// subs hold an eid and under what projection, so it wakes when a frame
+// carries that eid, not when any frame lands.
+let heldTicks = new Map<string, Signal<number>>()
+let holders = (eid: string) => {
+  let found = heldTicks.get(eid)
+  if (!found) heldTicks.set(eid, found = signal(0))
+  return found
+}
+let heldMoved = (eids: Iterable<string>) => {
+  for (let eid of eids) {
+    let found = heldTicks.get(eid)
+    if (found) found.value = found.peek() + 1
+  }
+}
 
 // What each sub's frames SAID about its bounds. A window is the server telling
 // a view "you hold the newest `limit` of `total`", so a face can say what it is
@@ -1831,7 +1873,7 @@ let subVersion = signal(0)
 export type Window = { limit: number; total?: number }
 let subWindows = new Map<string, Window>()
 export let subWindow = (sub: string): Window | undefined => {
-  subVersion.value
+  tick(sub).value
   return subWindows.get(sub)
 }
 
@@ -1840,7 +1882,7 @@ export let subWindow = (sub: string): Window | undefined => {
 // the card about that entity may say about the edges it is not showing.
 let routeWindows = new Map<string, Window>()
 export let edgeWindow = (eid: string): Window | undefined => {
-  subVersion.value
+  tick(routeName(eid)).value
   return routeWindows.get(eid)
 }
 
@@ -1869,7 +1911,7 @@ let subFields = new Map<string, Field[]>()
 // false. Erring toward "unloaded" costs a needless re-subscribe; erring the
 // other way is the masquerade this exists to prevent.
 export let loaded = (eid: string, comp: string, prop: string): boolean => {
-  subVersion.value
+  holders(eid).value
   row(eid).value
   if (replica.box.cache.loaded(eid, comp, prop)) return true
   // The location-less whole-graph host has no remote readiness contract. A
@@ -2042,6 +2084,7 @@ let primeMetadata = (sub: string) => {
   if (subWindows.has(source)) subWindows.set(sub, subWindows.get(source)!)
   if (subFields.has(source)) subFields.set(sub, subFields.get(source)!)
   if (subFailures.has(source)) subFailures.set(sub, subFailures.get(source)!)
+  ticked(sub)
   let agg = aggSets.get(sub), prior = aggSets.get(source)
   if (agg && prior) {
     agg.map.value = prior.map.peek()
@@ -2075,7 +2118,7 @@ let landSubFrame = (f: Sub & { changes: Change[] }) => {
     // any prior membership for cache ownership, but publish the failure so a
     // first read cannot remain silently undefined and an old read cannot pose
     // as current. Only a later successful replacement clears this state.
-    subVersion.value = subVersion.peek() + 1
+    ticked(f.sub)
     return { eids: [], edges: [] }
   }
   if (f.replace) subFailures.delete(f.sub)
@@ -2139,7 +2182,8 @@ let landSubFrame = (f: Sub & { changes: Change[] }) => {
     set.live = replica.ready(f.sub)
     seedWake(set, replica.members(f.sub))
   }
-  subVersion.value = subVersion.peek() + 1
+  ticked(f.sub)
+  heldMoved([...f.changes.map((c) => c.eid), ...f.drop ?? []])
   if (f.replace) {
     let one = oneShots.get(f.sub)
     if (one) {
@@ -2193,6 +2237,7 @@ export let oneShot = (
   subscribe(sub, q)
 }
 let forget = (sub: string) => {
+  let members = replica?.members(sub) ?? []
   replica?.close(sub)
   let lost = freeEdges(sub)
   subQueries.delete(sub)
@@ -2205,11 +2250,12 @@ let forget = (sub: string) => {
     clearObservations(sub.slice('entries:'.length))
   }
   settleEdges([], lost)
-  subVersion.value = subVersion.peek() + 1
+  ticked(sub)
+  heldMoved(members)
 }
 export let unsubscribe = (sub: string) => forget(sub)
 export let subEids = (sub: string): Set<string> | undefined => {
-  subVersion.value
+  tick(sub).value
   return replica?.ready(sub) ? new Set(replica.members(sub)) : undefined
 }
 
@@ -2404,7 +2450,7 @@ export type SubscriptionState =
 // unrelated renders, unmounts, cache reseeds, and reconnect attempts; the
 // successful replacement in landSub is the sole clearing event.
 export let subscriptionState = (sub: string): SubscriptionState => {
-  subVersion.value
+  tick(sub).value
   let failed = subFailures.get(sub)
   if (failed) return { status: 'failed', ...failed }
   let eids = subEids(sub)
@@ -3625,7 +3671,7 @@ export let topZ = (canvas: string) =>
 // The card must clear every OTHER pin, not merely match the canvas top —
 // a tie at the top (fresh pins all land at 0) still raises.
 export let toFront = (pin: string) => {
-  let p = paint.value[pin]?.pin
+  let p = paint.peek()[pin]?.pin
   if (!p) return
   let top = Math.max(
     -1,
