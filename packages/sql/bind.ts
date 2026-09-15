@@ -70,6 +70,7 @@ import {
   raw,
   type Rel,
   rel,
+  render,
   renderCond,
   TRUE,
 } from './ir.ts'
@@ -526,6 +527,29 @@ let inRefs = (ctx: Ctx, cols: [string, string][], value: string): Cond => {
   )
 }
 
+// An OR is a UNION of selections, never a where-level disjunction. SQLite drives
+// an OR from indexes only when every term sits on the FROM table; a term on a
+// left-joined component (`.settled.at>=…`) makes the whole disjunction a scan
+// of the spine's joined rows (5,301 sessions, 8 ms for the tray's strip on the
+// live graph, T-37445). Each alternative compiled alone is one indexed selection
+// of spine ids, and the outer statement seeks those ids. The joins are the
+// tables touched so far, which after compiling the alternatives is every table
+// they name; an extra left join on the spine key is a probe, never a scan.
+let union = (ctx: Ctx, alts: Clause[]): Cond => {
+  let conds = alts.map((x) => clause(ctx, x))
+  let joins = joinsOf(ctx)
+  // Over the spine alone (archetype facets, spine columns) a disjunction is
+  // already index-driven, and a presence tree keeps its boolean shape.
+  if (!joins.length) return or(...conds)
+  let arms = conds.map((where) =>
+    render(rel(ctx.d.spine, { cols: ['"entity"."id"'], joins, where }))
+  )
+  return raw({
+    sql: `"entity"."id" in (${arms.map((a) => a.sql).join(' union ')})`,
+    params: arms.flatMap((a) => a.params),
+  })
+}
+
 // The LEFT joins for the tables a bind touched, keyed on the row they hang off:
 // the spine for a membership, the child table inside a reverse hop's subquery
 // (which is the FROM there, so it is never re-joined).
@@ -699,7 +723,7 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
   if (ext) return ext
   if (c.kind == 'never') return FALSE
   if (c.kind == 'and') return and(...conjuncts(ctx, c.clauses))
-  if (c.kind == 'or') return or(...(c as Or).clauses.map((x) => clause(ctx, x)))
+  if (c.kind == 'or') return union(ctx, (c as Or).clauses)
   if (c.kind == 'refs') return refsUnion(ctx, c)
   if (c.kind == 'walk') return walk(ctx, c)
   if (c.kind == 'pred') {

@@ -275,6 +275,16 @@ Deno.test('.num and a human id name entities by their spine number', () => {
   assertEquals(both.params, ['a3f1', 7])
 })
 
+Deno.test('an OR compiles as a union of indexed selections of spine ids', () => {
+  let either = compile(parse('.doc.title=a|.task.priority=1'), v)
+  let [head, arms] = either.sql.split('"entity"."id" in (')
+  assert(head.includes('from "entity"'), either.sql)
+  // one arm per alternative, each its own selection over the same joins
+  assertEquals(arms.split(/\bunion\b/).length, 2)
+  assert(arms.startsWith('select "entity"."id" from "entity"'), arms)
+  assertEquals(either.params, ['a', 1])
+})
+
 Deno.test('a spine value that is no operand list keeps the column road', () => {
   // an empty value is still absence grammar, and a range is a comparison the
   // spine's untyped column declines exactly as it did before
