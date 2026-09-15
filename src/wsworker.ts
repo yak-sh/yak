@@ -30,6 +30,9 @@ type In =
 
 let post = (m: unknown) =>
   (self as unknown as { postMessage(m: unknown): void }).postMessage(m)
+let TRACE = Deno.env.get('TASKS_WS_TRACE') == '1'
+let trace = (msg: string) =>
+  TRACE && console.log(`wstrace ${Date.now()} ${self.name} ${msg}`)
 
 // The worker OWNS its read-only connection, so it must be the one to close it.
 // Worker.terminate() kills this isolate without ever closing an FFI-opened
@@ -44,8 +47,21 @@ let queue: ReturnType<typeof subqueue> | undefined
 let sources = false
 // One socket's serving state over the open connection; a recycle rebuilds it.
 let serve = () => {
-  sub = subserve(db!, (frame) => post({ frame: JSON.stringify(frame) }))
-  queue = subqueue(db!, (f) => guard(() => sub?.frame(f)))
+  sub = subserve(db!, (frame) => {
+    let s = JSON.stringify(frame)
+    trace(`post ${s.length}B ${s.slice(0, 40)}`)
+    post({ frame: s, t: Date.now() })
+  })
+  queue = subqueue(db!, (f) =>
+    guard(() => {
+      let t = performance.now()
+      sub?.frame(f)
+      trace(
+        `served ${(performance.now() - t).toFixed(1)}ms ${
+          String(f.sub ?? ('since' in f ? 'join' : 'ctl'))
+        } ${String(f.q ?? '').slice(0, 60)}`,
+      )
+    }))
 }
 
 // Each Worker is its own JS isolate: the source registry installed by
@@ -125,6 +141,7 @@ self.onmessage = (m: MessageEvent<In>) => {
     }
     if (!sub || !queue) return
     if ('raw' in d) {
+      trace(`raw ${d.raw.length}B ${d.raw.slice(0, 40)}`)
       let f = JSON.parse(d.raw)
       // Write batches route back to the writer process; the ack/error frames
       // come from there, straight onto the socket.

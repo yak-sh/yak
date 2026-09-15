@@ -522,13 +522,17 @@ let workersWanted = Deno.env.get('TASKS_WS_WORKERS') != '0'
 // client reconnecting at once after a restart — pegs op_create_worker and
 // balloons RSS until the process OOMs, which is itself the next restart: a
 // crashloop (T-34786). Above the cap a socket serves inline (the same fallback
-// a failed worker takes), cheaper than a worker anyway. Default one per core —
-// the parallel-read ceiling the hardware can actually use; a storm then spawns
-// at most that many isolates and queues the rest onto inline serving.
-// TASKS_WS_WORKER_CAP overrides for tuning without a code change.
+// a failed worker takes). Inline is cheaper in memory (~30 MB per worker,
+// measured) but every inline sub is served ON THIS THREAD, where every other
+// socket's frames are relayed: one inline boot burst (~100 ms of queries)
+// stalls every tab. Cores are not the bound — a worker mostly waits on its
+// socket — so the default is two per core, enough that the owner's tabs never
+// reach the inline path (T-37445); a storm still spawns at most that many
+// isolates. TASKS_WS_WORKER_CAP overrides for tuning without a code change.
 let workerCap = Number(Deno.env.get('TASKS_WS_WORKER_CAP')) ||
-  navigator.hardwareConcurrency || 8
+  2 * (navigator.hardwareConcurrency || 8)
 let liveWorkers = 0
+let sockCount = 0
 // A worker costs ~350 ms of THIS thread to construct — its isolate's module
 // graph loads through the main isolate's loader — so a spawn on the request
 // path stalls every frame every other socket's worker posts meanwhile
@@ -584,8 +588,19 @@ let observed = (req: Request) => {
   return response
 }
 
+let TRACE = Deno.env.get('TASKS_WS_TRACE') == '1'
 let ws = (req: Request) => {
   let { socket, response } = host.upgrade(req)
+  let sockN = ++sockCount
+  let t0 = performance.now()
+  let trace = (msg: string) =>
+    TRACE &&
+    console.log(
+      `wstrace ${Date.now()} main s${sockN} +${
+        (performance.now() - t0).toFixed(1)
+      } ${msg}`,
+    )
+  trace('up')
   // The tab names itself once, at connect: ?client=<eid> is the writer for
   // every batch on this socket, so a browser write journals a resolved
   // actor instead of nothing (T-6669). A tab that names none resolves to
@@ -656,13 +671,20 @@ let ws = (req: Request) => {
   }
   if (workersWanted && graph != ':memory:' && liveWorkers < workerCap) {
     try {
+      let pooled = spares.length > 0
       let w = spares.shift() ?? spawnWorker()
+      trace(pooled ? 'worker pooled' : 'worker spawned')
       // The pool refills on a timer, never in the turn this socket's first
       // answer goes out: a spawn there held its burst 343 ms (T-37445).
       warmLater()
       w.onmessage = (m) => {
         let d = m.data
         if (typeof d?.frame == 'string') {
+          trace(
+            `relay ${d.frame.length}B lag=${
+              typeof d.t == 'number' ? Date.now() - d.t : '?'
+            } ${d.frame.slice(0, 30)}`,
+          )
           if (socket.readyState == WebSocket.OPEN) socket.send(d.frame)
         } else if (Array.isArray(d?.apply)) {
           applyFrom(socket, writer, d.apply as Change[], d.id)
@@ -710,6 +732,7 @@ let ws = (req: Request) => {
     let raw = String(m.data)
     // Worker mode: the whole frame goes to the worker; it parses, serves
     // reads itself, and posts write batches back to applyFrom above.
+    trace(`raw ${raw.length}B ${raw.slice(0, 40)}`)
     if (s.worker) return s.worker.postMessage({ raw })
     let frame = JSON.parse(raw)
     // Object frames are control, structurally disjoint from the array
