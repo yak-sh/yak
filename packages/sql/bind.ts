@@ -293,6 +293,22 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     let eid = ctx.d.col(hop.comp, 'eid', ctx.v)!
     return raw({ sql: `${eid} is ${present ? 'not ' : ''}null`, params: [] })
   }
+  // A column several components share as a reference (`.client=<eid>`: a
+  // cursor's, a camera's, a fold's) routes with no owner (vocab route(): comp
+  // ''), and there is no one table to read. Equality is still one indexed
+  // question per owner, so it compiles the way `.refs=` does — a union over the
+  // owners' reference columns — instead of declining to a scan of every row.
+  if (!hop.comp) {
+    let value = flat(p.value)
+    if (op != '' || !value || value.includes(',') || value.includes('..')) {
+      throw new Unsupported('a shared reference', `.${hop.prop} ${p.op}`)
+    }
+    return inRefs(
+      ctx,
+      ctx.v.refCols().filter(([, prop]) => prop == hop.prop),
+      value,
+    )
+  }
   if (hop.comp != 'entity') ctx.tables.add(hop.comp)
   // On the spine, `=` NAMES entities instead of comparing a column.
   if (hop.comp == 'entity' && op == '') {
@@ -323,7 +339,24 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   if (!frag) {
     throw new Unsupported('this predicate', `.${hop.comp}.${hop.prop} ${p.op}`)
   }
-  return raw(frag)
+  // A test that needs a VALUE can only hold on a row wearing the component, and
+  // saying so lets the planner drive from that table instead of scanning the
+  // spine through a left join: `.board.query~=<id>` read every entity (243 ms)
+  // where the boards are 22 rows (4 ms). The same narrowing path() keeps; an
+  // absence (`=` empty) or a not-equals must still see the rows without it.
+  // A derived column carries its own null handling (updated.at reads the
+  // journal, not a table row), so only a stored column says it.
+  let needsComp = hop.comp != 'entity' && !!col?.persist &&
+    !ctx.derived[`${hop.comp}.${hop.prop}`] && (
+      op == EXISTS || ['<', '<=', '>', '>='].includes(op) ||
+      ((op == '' || op == '~') && flat(p.value) != '')
+    )
+  if (!needsComp) return raw(frag)
+  let owner = ctx.d.col(hop.comp, 'eid', ctx.v)!
+  return raw({
+    sql: `(${owner} is not null and ${frag.sql})`,
+    params: frag.params,
+  })
 }
 
 // A reference-deref path: a chain of one-to-one lookups through reference
@@ -471,7 +504,13 @@ let refsUnion = (ctx: Ctx, r: Refs): Cond => {
   if (r.op != '=' || !r.value) {
     throw new Unsupported('.refs', 'only .refs=<id> compiles')
   }
-  let cols = ctx.v.refCols()
+  return inRefs(ctx, ctx.v.refCols(), r.value)
+}
+
+// The rows some reference column among `cols` points at `value` from: one
+// `in` per group of arms, each arm a table's reference columns OR'd, cut to
+// what a compound may carry (compound.ts). No columns selects nothing.
+let inRefs = (ctx: Ctx, cols: [string, string][], value: string): Cond => {
   if (!cols.length) return FALSE
   let at = '(select id from entity where eid = ?)'
   let sub = ([c, props]: Arm) =>
@@ -481,7 +520,7 @@ let refsUnion = (ctx: Ctx, r: Refs): Cond => {
     ...cut(arms(cols), ARMS).map((group) =>
       raw({
         sql: `"entity"."id" in (${group.map(sub).join(' union ')})`,
-        params: group.flatMap(([, props]) => props.map(() => r.value!)),
+        params: group.flatMap(([, props]) => props.map(() => value)),
       })
     ),
   )

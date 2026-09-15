@@ -121,9 +121,13 @@ let clause = (p: Pred): q.Clause => {
     }
   }
   if (p.op == REACHES) throw new Unsupported('a malformed walk')
-  // Shared reference spellings have no one owning column. Keep the existing
-  // matcher fallback rather than arbitrarily choosing a component.
-  if (!p.comp && p.prop) throw new Unsupported('a shared reference', p.prop)
+  // A shared reference spelling has no one owning column. Its equality goes
+  // through as the bare word — the package unions the owners' columns (bind.ts
+  // single) — and every other shape keeps the matcher fallback, which reads
+  // each owner, rather than arbitrarily choosing a component.
+  if (!p.comp && p.prop && (p.op != '' || !p.value)) {
+    throw new Unsupported('a shared reference', p.prop)
+  }
   let path = [field(p), ...(p.at ?? []).map(field)].join('.')
   let leaf = p.at?.at(-1) ?? p
   return {

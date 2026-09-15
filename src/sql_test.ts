@@ -741,6 +741,27 @@ Deno.test('projection: select carries the named columns beside the eid', () => {
 
 // No projection: select IS where — eid only, byte-identical, so the migration can
 // route every membership query through the one door without a special case.
+// A shared reference (`.client=`: cursor, camera, fold and shelf all point at a
+// client) used to decline to the matcher, which read every row (8.9 s on the
+// live graph for a tab's own cursor). Its equality compiles; other shapes keep
+// the fallback.
+Deno.test('a shared reference equality compiles, its other shapes decline', () => {
+  let rel = where(
+    db,
+    parseQuery('.client=923e0000-0000-4000-8000-000000000000'),
+  )
+  let sql = rel ? toSql(rel).sql : ''
+  for (let comp of ['cursor', 'camera', 'fold', 'shelf']) {
+    assertEquals(
+      sql.includes(`from "${comp}" where "${comp}"."client" =`),
+      true,
+      sql,
+    )
+  }
+  assertEquals(where(db, parseQuery('.client~=x')), null)
+  assertEquals(where(db, parseQuery('.client=')), null)
+})
+
 Deno.test('projection: no .fields makes select the plain membership where', () => {
   let ps = parseQuery('.task.status=open')
   assertEquals(select(db, ps), where(db, ps))
@@ -836,10 +857,12 @@ Deno.test('a request joins no table, and narrows nothing', () => {
 // filter's LEFT JOINs, its condition, then the liveness test — and, windowed,
 // the cursor ANDed after that, the newest-first order, and the limit, with
 // binds in that order. A change to any of it is a change to every query the
-// server answers, so it is spelled here rather than derived.
+// server answers, so it is spelled here rather than derived. The value test
+// names its component present so the planner drives from that table, not the
+// spine (T-37445).
 let SKELETON = 'select "entity"."eid" as eid from "entity"' +
   ' left join "filed" on "filed"."entity" = "entity"."id"' +
-  ' where (cast("filed"."domain" as text) = ?' +
+  ' where (("filed"."entity" is not null and cast("filed"."domain" as text) = ?)' +
   ' and not exists (select 1 from tombstone "t" where "t"."entity" = "entity"."id"))'
 
 Deno.test('the compiled skeleton is unchanged, clause for clause', () => {

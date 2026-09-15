@@ -427,6 +427,56 @@ Deno.test('a builder can preserve a terminal component facet across name collisi
 // A bare prop several reference columns share routes to comp '' — one read
 // concept with no one table behind it. Lowered, its path leaf named the table
 // `""` and SQLite refused the statement; the contract is to decline (S-37088).
+Deno.test('a shared reference equality unions its owners, other shapes decline', () => {
+  // Two components hold a reference column of the same name: the bare word
+  // routes to neither (vocab route(): comp ''), and its equality is one indexed
+  // question per owner, spelled the way `.refs=` is.
+  let shared = loadVocab({
+    $defs: {
+      entity: { type: 'object', wire: false, properties: {} },
+      cursor: {
+        type: 'object',
+        properties: { client: { type: 'string', ref: 'entity' } },
+      },
+      camera: {
+        type: 'object',
+        properties: { client: { type: 'string', ref: 'entity' } },
+      },
+    } as VocabDoc['$defs'],
+  })
+  let { sql, params } = compile(parse('.client=c1'), shared)
+  assertEquals(params, ['c1', 'c1'])
+  assert(
+    sql.includes(
+      '"entity"."id" in (select "camera"."entity" from "camera" where ' +
+        '"camera"."client" = (select id from entity where eid = ?) union ' +
+        'select "cursor"."entity" from "cursor" where ' +
+        '"cursor"."client" = (select id from entity where eid = ?))',
+    ),
+    sql,
+  )
+  for (let line of ['.client!', '.client=', '.client~=c1', '.client=c1,c2']) {
+    let e = assertThrows(() => compile(parse(line), shared), Unsupported)
+    assertEquals(e.feature, 'a shared reference')
+  }
+})
+
+Deno.test('a column test says its component is present, so the planner drives from that table', () => {
+  // `.board.query~=<id>` scanned the spine through a left join (243 ms on
+  // the live graph) where the boards were 22 rows: a value test cannot hold
+  // on a row without the component, and saying so lets SQLite start there.
+  let guarded = ['.priority=1', '.priority~=1', '.priority>1', '.priority!']
+  for (let line of guarded) {
+    let { sql } = compile(parse(line), v)
+    assert(sql.includes('("task"."entity" is not null and '), `${line}: ${sql}`)
+  }
+  // An absence or a not-equals must still see the rows without the component.
+  for (let line of ['.priority=', '.priority!=1']) {
+    let { sql } = compile(parse(line), v)
+    assert(!sql.includes('"task"."entity" is not null'), `${line}: ${sql}`)
+  }
+})
+
 Deno.test('a path leaf shared by several reference columns declines', () => {
   let vocab = loadVocab({
     $defs: {
