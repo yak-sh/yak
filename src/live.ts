@@ -74,7 +74,6 @@ import { type MemoryResolver, memoryResolver } from './resolver.ts'
 import { type LiveClient, liveClient } from './live_client.ts'
 import { normalizeChanges } from './props.ts'
 import * as idb from './idb.ts'
-import { topology } from './leader.ts'
 import { liveChanges } from './wire.ts'
 import { diff, gaps } from './subs.ts'
 import { dead } from '@yaks/graph'
@@ -142,10 +141,8 @@ let makeClient = () =>
     send: (sub, q) => {
       if (replacing) return
       if (q !== undefined) {
-        owner
-          ? owner.use(sub, q)
-          : control({ sub, q, ...shadowSubs.has(sub) ? { shadow: true } : {} })
-      } else owner ? owner.drop(sub) : control({ unsub: sub })
+        control({ sub, q, ...shadowSubs.has(sub) ? { shadow: true } : {} })
+      } else control({ unsub: sub })
     },
     ready: (sub) => {
       if (replacing) return
@@ -605,7 +602,7 @@ export let dropQuery = (preds: Pred[]) => {
 // A query that is evaluated PER RENDERED ROW — a reverse-lookup keyed by the
 // row's own eid (a tile's comment count on every entity in a list or tree) —
 // must NEVER open a server sub: that scales with rows
-// on screen, not views, and a page of them floods the leader (1363 subs / a
+// on screen, not views, and a page of them floods the socket (1363 subs / a
 // stalled serial chain, measured — T-21283). These resolve LOCALLY
 // over the working set the DEFINING subs (boards/projects/sessions/canvases)
 // stream in — a tile badge is best-effort, and an OPEN card's own view keeps its
@@ -818,8 +815,6 @@ export let config: {
   // leaves it unset — localStorage is a browser thing — and its writes
   // resolve to the box owner.
   client?: string
-  // One switch restores 2.1's per-tab socket + boot-only IDB writes.
-  shared: boolean
   // Stage-2 migration probes compare shadow sets to scans. Deployed clients
   // maintain the shadow without carrying agreement telemetry.
   agreement: boolean
@@ -831,7 +826,6 @@ export let config: {
   // Behind an https front door the page's scheme must carry through to
   // the socket and fetches — a hardcoded http:// is mixed content there.
   secure: loc?.protocol == 'https:',
-  shared: true,
   agreement: false,
   store: false,
 }
@@ -1157,20 +1151,16 @@ let publishLocal = (
       if (live) live.value = z
     }
   })
-  // The touched keys feed either the boot catch-up write, or the Web-Lock
-  // leader's live persist. Followers and 2.1 fallback tabs never persist a
-  // live frame.
+  // The touched keys feed the disk checkpoint after every landing.
   return { eids: [...eids], edges }
 }
 
-// The cursor/epoch/vocab this tab holds. A promoted follower opens its socket
-// from this cursor; the server replays the handoff gap before joining it to
-// live broadcast.
+// The cursor/epoch/vocab this tab holds. A reconnect opens its socket from
+// this cursor; the server replays the gap before joining it to live broadcast.
 let held: idb.Meta = {}
 export let capable = (name: string) => !!held.capabilities?.includes(name)
 
-// Consumers that care about canonical live edits subscribe here. WebSocket is
-// an implementation detail now that follower tabs have none.
+// Consumers that care about canonical live edits subscribe here.
 let listeners = new Set<(changes: Change[]) => void>()
 export let hear = (fn: (changes: Change[]) => void) => {
   listeners.add(fn)
@@ -1442,7 +1432,7 @@ export let acked = (id: string) => {
 // Replay a crashed or reloaded tab's undelivered writes (T-21440). A prior
 // life may have parked writes it never saw acked; load them back under their
 // ORIGINAL delivery ids and route them once. The id is stable, so redelivery
-// dedups (leader.ts route) and a re-apply is the same harmless value-merge —
+// dedups (the outbox id) and a re-apply is the same harmless value-merge —
 // so replaying from more than one hydrating tab is safe: whichever boots first
 // owns them, the rest re-add nothing (the outbox.has guard) and their sends
 // collapse on that id. A write whose entity was since tombstoned is refused by
@@ -1565,7 +1555,6 @@ export type Sub = {
 }
 type Observed = { observe: unknown }
 
-let owner: ReturnType<typeof topology<unknown>> | null = null
 let ws: WebSocket | null = null
 let polling = false
 let serial = Promise.resolve()
@@ -1573,8 +1562,6 @@ let serial = Promise.resolve()
 // First paint is allowed only after an authoritative bootstrap has landed.
 // Opening a WebSocket is not that boundary: its snapshot arrives on a later
 // turn, and painting between the two made `/` claim there was no root canvas.
-// A follower gets the socket owner's current Reset frame over BroadcastChannel
-// (leader.ts), and crosses this same boundary when that frame lands.
 let initialResolve: () => void
 let initialReady = new Promise<void>((resolve) => initialResolve = resolve)
 let initialLanded = false
@@ -1584,16 +1571,13 @@ let settleInitial = () => {
   initialResolve()
 }
 
-// That wait is BOUNDED, because it can be a wait on a PEER. A follower is
-// painted by the leader's state frame (leader.ts), and a leader that cannot
-// answer — an older tab with no state to send, one frozen mid-answer, one
-// closed between hello and state — leaves every other tab awaiting a message
-// that will never come: a white page, no exception, nothing in telemetry, and
-// a reload lands in the same place. So the wait gets a floor: after `ms` this
-// tab stops waiting on the peer and opens its OWN socket, whose snapshot
-// settles the same gate; a second tab-owned socket is the abnormal-recovery
-// cost of never being stuck. If even that lands nothing, the page paints and
-// says so — a visible, reported stall beats a blank screen.
+// That wait is BOUNDED. A socket that opens but never answers — a server mid-
+// restart, a half-open connection — would leave the tab awaiting a frame that
+// never comes: a white page, no exception, nothing in telemetry. So the wait
+// gets a floor: after `ms` this tab reconnects once; if even that lands
+// nothing, the page paints and says so — a visible, reported stall beats a
+// blank screen. Every tab owns its socket (T-37445): no tab ever waits on a
+// peer tab, so a stale tab elsewhere can never blank this one.
 export let BOOT_WAIT = 6_000
 let nap = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 export let firstPaint = async (
@@ -1618,30 +1602,6 @@ let painted = () =>
       'no state arrived — showing what this tab has; reload to retry'
     settleInitial()
   })
-
-// A current bootstrap for a tab joining after the leader's original server
-// snapshot. The cache is deliberately partial, but every row in it is current;
-// defining subscriptions opened by the newcomer fill the rest. In particular
-// this carries the root canvas before the newcomer renders its first frame.
-let currentState = (): Reset | undefined => {
-  if (!initialLanded) return undefined
-  let changes = Object.entries(cache.peek()).flatMap(([eid, row]) =>
-    Object.entries(row).flatMap(([name, comp]) =>
-      comp ? [{ eid, name, comp } as Change] : []
-    )
-  )
-  return {
-    reset: true,
-    snapshot: {
-      changes,
-      deps: deps.peek(),
-      cursor: held.cursor,
-      epoch: held.epoch,
-      vocabHash: held.vocabHash,
-      capabilities: held.capabilities,
-    },
-  }
-}
 
 // Socket liveness (T-21511). A half-open socket (network drop with no FIN, a
 // suspended/backgrounded tab) stays `readyState == OPEN`, so onclose never fires
@@ -1713,9 +1673,8 @@ let settleObservations = (changes: Change[]) => {
   if (changed) observations.value = next
 }
 
-// One physical socket. Only the lock holder calls this in shared mode; the
-// fallback calls it per tab. Incoming JSON is parsed once here, serialized
-// through IDB, then fanned as structured-clone data.
+// One physical socket per tab. Incoming JSON is parsed once here and landed
+// in order.
 let connect = () => {
   if (ws && ws.readyState <= WebSocket.OPEN) return ws
   let socket = new WebSocket(
@@ -1758,12 +1717,7 @@ let connect = () => {
     // A heartbeat frame is liveness only (T-21511) — pet the watchdog, land
     // nothing.
     if (isPing(data)) return
-    serial = serial.then(async () => {
-      let share = owner
-      let leader = share?.isLeader() ?? false
-      await land(data, leader ? 'leader' : 'solo')
-      if (leader) share?.fan(data)
-    }).catch((e) => {
+    serial = serial.then(() => land(data)).catch((e) => {
       problem.value = String(e)
     })
   }
@@ -1773,8 +1727,6 @@ let connect = () => {
     ws = null
     clearObservations()
     replica?.invalidate()
-    owner?.fan({ disconnected: true })
-    owner?.fan({ observe: null })
     if (polling) return
     polling = true
     // A lost socket is a SOCKET to get back, never a page to reload: what this
@@ -1807,8 +1759,7 @@ let wire = (frame: unknown) => {
 
 // An acked delivery threads its id through so a retry REPLACES its queued
 // transport entry instead of piling up a duplicate per tick.
-let defaultRoute = (frame: unknown, id?: string) =>
-  owner ? owner.route(frame, id) : wire(frame)
+let defaultRoute = (frame: unknown, _id?: string) => wire(frame)
 let route = defaultRoute
 // The transport seam (mirrors useOutboxStore): a test counts redelivery sends
 // without a socket. Returns the prior route so the test can restore it.
@@ -2032,12 +1983,11 @@ let implicitQuery = (sub: string) => {
 export let landSub = (f: Sub) =>
   batch(() => {
     ensureClient()
-    // Boot/topology can deliver subscriptions installed by another tab. Attach
-    // without echoing a subscribe back into topology's ownership calculation.
+    // A frame may land for a sub this side never opened (a host fixture, a
+    // server-initiated replace). Attach without echoing a subscribe back.
     if (!replica.has(f.sub)) {
-      let q = owner?.query(f.sub) ?? subQueries.get(f.sub)
+      let q = subQueries.get(f.sub)
       // An in-flight frame after final release must not create a new owner.
-      // Host fixtures may inject frames; browser frames need topology intent.
       if (!q && config.host) return { eids: [], edges: [] }
       replica.open(f.sub, q ?? implicitQuery(f.sub), true)
     }
@@ -2302,8 +2252,8 @@ let resultSignals = new Map<
 let boardEntrySubs = new Map<string, Map<string, () => void>>()
 
 let ownBoard = (sub: string, q: string) => {
-  if (!config.host && !owner) shadowSubs.add(sub)
-  primeSub(sub, q, !config.host && !owner && route === defaultRoute)
+  if (!config.host) shadowSubs.add(sub)
+  primeSub(sub, q, !config.host && route === defaultRoute)
 }
 let dropBoard = (sub: string) => unsubscribe(sub)
 
@@ -2373,8 +2323,7 @@ export let boardLine = (q: string): string => {
 export let boardWindow = (e: Ent): Window | undefined =>
   subWindow(`board:${e.eid}`)
 
-// Several views in one tab share one ownership entry. Cross-tab references
-// reduce in leader.ts before the one logical board name reaches the socket.
+// Several views in one tab share one ownership entry.
 export let boardSub = (e: Ent) => {
   let sub = `board:${e.eid}`
   let q = boardLine(String(e.board?.query ?? ''))
@@ -2442,7 +2391,6 @@ export let querySubscription = (
 }
 
 export let retrySubscription = (sub: string) => {
-  if (owner?.retry(sub)) return true
   let direct = [...queryUses.values()].find((set) => set.sub == sub)
   let q = boardUses.get(sub)?.q ?? direct?.line ??
     (sub.startsWith('entries:')
@@ -2589,12 +2537,9 @@ export let seedFrom = async (snap: Snapshot, write = true) => {
 let persist = (_touched: { eids: string[]; edges: Dep[] }, _cursor: number) =>
   replica.box.cache.idle()
 
-type Land = 'leader' | 'follower' | 'solo'
-
-// Every incoming shape has one landing door. A leader durably lands a
-// cursor-stamped live frame before fan-out; followers land only in memory.
-// Catch-up/reset still persist in solo mode — the 2.1 boot write.
-let land = async (data: unknown, mode: Land) => {
+// Every incoming shape has one landing door; a cursor-stamped frame is
+// checkpointed to disk once it has landed.
+let land = async (data: unknown) => {
   if (data && typeof data == 'object' && 'disconnected' in data) {
     replica?.invalidate()
     return
@@ -2618,7 +2563,7 @@ let land = async (data: unknown, mode: Land) => {
       : (data as Partial<Live>).cursor
     if (cursor !== undefined) {
       held = { ...held, cursor }
-      if (mode == 'leader') await persist(touched, cursor)
+      await persist(touched, cursor)
     }
     tell(changes)
     return
@@ -2654,18 +2599,18 @@ let land = async (data: unknown, mode: Land) => {
     let touched = applyLocal(frame.catchup)
     if (frame.cursor !== undefined) {
       held = { ...held, cursor: frame.cursor }
-      if (mode != 'follower') await persist(touched, frame.cursor)
+      await persist(touched, frame.cursor)
     }
     settleInitial()
   } else if (frame.snapshot) {
     mark('reset')
-    await seedFrom(frame.snapshot, mode != 'follower')
+    await seedFrom(frame.snapshot)
     settleInitial()
   } else if (typeof frame.sub == 'string') {
     let touched = landSub(frame as Sub)
     if (frame.cursor !== undefined) {
       held = { ...held, cursor: frame.cursor }
-      if (mode == 'leader') await persist(touched, frame.cursor)
+      await persist(touched, frame.cursor)
     }
   }
 }
@@ -2699,113 +2644,34 @@ let once = async () => {
   booted = true
 }
 
-let canShare = () => {
-  let nav = (globalThis as { navigator?: Navigator }).navigator
-  return config.shared && !!config.client && !!nav?.locks &&
-    typeof globalThis.BroadcastChannel != 'undefined'
-}
-
-// Open BroadcastChannel + queue for the lock before touching IDB. Thus a
-// follower cannot miss a leader frame during hydration. The gate's fallback
-// is exactly slice 2.1: boot locally and open this tab's socket.
+// Every tab owns its socket and its subscriptions (T-37445). There is no
+// cross-tab leader: a tab that depended on a peer tab being fresh went blank
+// whenever that peer was frozen, mid-reload, or holding a dead socket.
 export let boot = async () => {
   // Accept the old probe flag, but it no longer selects a second cache owner.
   let search = (globalThis as { location?: { search?: string } }).location
     ?.search ?? ''
   config.store ||= storeProbe(search)
-  // Refocusing a tab that owns the socket must recover a stale connection
-  // WITHOUT a manual reload (T-21511): a backgrounded tab is frozen, so its
-  // watchdog and the socket both stall; on becoming visible, if this tab's
-  // socket is closed or has heard nothing for WATCHDOG_MS, force-close it so the
-  // onclose → poller → reconnect path runs. A live socket is left untouched (no
-  // needless reload). A follower holds no socket and is unaffected here.
+  // Refocusing a tab must recover a stale connection WITHOUT a manual reload
+  // (T-21511): a backgrounded tab is frozen, so its watchdog and the socket
+  // both stall; on becoming visible, if the socket is closed or has heard
+  // nothing for WATCHDOG_MS, force-close it so the onclose → poller →
+  // reconnect path runs. A live socket is left untouched (no needless reload).
   let doc = (globalThis as { document?: Document }).document
   doc?.addEventListener?.('visibilitychange', () => {
     if (doc.visibilityState != 'visible' || !ws) return
     if (socketStale(ws.readyState, seen, Date.now())) ws.close()
   })
-  // A FROZEN leader is the follower starvation T-21523 names: the Web Lock
-  // releases only on page DESTROY, so a leader Chrome freezes keeps the lock
-  // and the socket while pumping nothing, and every follower starves until the
-  // owner refocuses that one tab. The lifecycle `freeze` event is the tell —
-  // cede leadership BEFORE freezing, so the lock manager promotes a live tab.
-  // The socket handle is nulled before close so onclose skips the reconnect
-  // poller: this tab is deliberately parked, not cut off. On `resume` it
-  // re-queues for the lock — usually behind the tab promoted meanwhile. An
-  // ordinary hidden-but-running leader is untouched: throttled timers still
-  // pump, and ceding on mere visibilitychange would churn leadership on every
-  // tab switch.
-  doc?.addEventListener?.('freeze', () => {
-    if (!owner?.isLeader()) return
-    let s = ws
-    ws = null
-    replica?.invalidate()
-    owner.fan({ disconnected: true })
-    s?.close()
-    owner.cede()
-  })
-  doc?.addEventListener?.('resume', () => owner?.seek())
-  if (!canShare()) {
-    await once()
-    connect()
-    await painted()
-    return
-  }
-  let nav = (globalThis as { navigator: Navigator }).navigator
-  let bus = new BroadcastChannel('tasks-sync')
-  let channel: import('./leader.ts').Channel<unknown> = {
-    onmessage: null,
-    postMessage: (message) => bus.postMessage(message),
-  }
-  bus.onmessage = ({ data }) => channel.onmessage?.({ data })
-  owner = topology<unknown>(
-    {
-      request: (name, hold) => nav.locks.request(name, hold),
-    },
-    channel,
-    {
-      lead: async () => {
-        await once()
-        connect()
-        await painted()
-      },
-      follow: () => once(),
-      solo: async () => {
-        await once()
-        connect()
-        await painted()
-      },
-      receive: (frame) => {
-        serial = serial.then(() => land(frame, 'follower'))
-      },
-      send: wire,
-      state: currentState,
-      // NON-shadow on purpose (T-21491): the first sub flips this socket into
-      // the server's `filtered` set, so the whole-graph live broadcast stops
-      // and every row arrives owned by a subscription — landSub records its
-      // members, and the last release evicts them. Shadow subs were the
-      // compatibility mode that kept the complete stream as the cache owner;
-      // the browser is off it. (The ownerless fallback — TUI, tests — keeps
-      // shadow() and the full broadcast.)
-      subscribe: (sub, q) => wire({ sub, q }),
-      unsubscribe: (sub) => wire({ unsub: sub }),
-      forget,
-    },
-  )
-  addEventListener('pagehide', owner.leave)
-  await owner.start()
+  await once()
+  connect()
   await painted()
 }
 ;(globalThis as {
   __sync?: () => {
-    shared: boolean
-    leader: boolean
     socket: number | null
     cursor?: number
   }
 }).__sync = () => ({
-  shared: !!owner && !owner.isSolo(),
-  leader: owner?.isLeader() ?? false,
   socket: ws?.readyState ?? null,
   cursor: held.cursor,
 })

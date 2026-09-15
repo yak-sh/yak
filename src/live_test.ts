@@ -2683,7 +2683,7 @@ Deno.test('loaded: a row no projected sub holds is full', () => {
 
 // T-21283: a per-rendered-row reverse-lookup (commentCount on every tile) must
 // NEVER open a per-entity server sub — that scales with rows on screen and
-// floods the leader (1363 subs measured). ONE shared aggregate sub serves every
+// floods the socket (1363 subs measured). ONE shared aggregate sub serves every
 // tile, opened once at boot beside the socket — so a READ, any target, opens
 // nothing at all (T-33921: it used to open on first read, from inside the
 // computed, which dialled the wire from a render).
@@ -3103,7 +3103,7 @@ Deno.test('evicting a peer payload does not cascade independently held edge sent
   unsubscribe('peer-holder')
 })
 
-// A tab must never wait forever on a peer that cannot answer: that is the
+// A tab must never wait forever on a socket that cannot answer: that is the
 // blank page with no exception and nothing in telemetry. firstPaint gives the
 // wait a floor — reconnect once, then paint and say so.
 Deno.test('first paint waits for state, then rescues, then gives up', async () => {

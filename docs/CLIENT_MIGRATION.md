@@ -19,7 +19,7 @@ measurement land together; the task comments record the final landed SHA.
   channels remain app metadata, not synthetic entity components.
 - **Tasks (`live.ts`):** the `Ent` facade and render signals, derived human-id,
   reference, edge and topology indexes; grammar serialization and original query
-  source; Web Locks/BroadcastChannel leadership and client identity;
+  source; client identity;
   boot/cursor/epoch negotiation; durable outbox, refusal ledger and reload
   drain. Compatibility `cache` signals expose the replica's components;
   `cache.onRows` drives them for commits, hydration **and storage eviction**.

@@ -4,12 +4,9 @@
 // floor on reset. Raw IndexedDB, feature-detected; failure is never a broken
 // render. `ents` holds Comps by eid, `meta` scopes them and records LRU order.
 // The legacy full-seed/delta API remains available to full-replica callers.
-//
-// The Web-Lock leader is the sole live writer (T-6883). Without that layer,
-// writes stay boot-only: persisting per-tab live frames would let a throttled
-// tab clobber newer values after a peer advanced the shared cursor. Every
-// commit remains forward-only, so disabling leadership cleanly restores the
-// multi-writer 2.1 behavior.
+// Every tab writes its own checkpoints; a row here is a provisional floor the
+// server reconfirms, never a cursor to resume from, so tabs cannot clobber
+// each other into a wrong state.
 import { type Comps } from './live.ts'
 import { RETENTION_ROWS } from './retention.ts'
 import { type Change, type Dep } from './types.ts'
