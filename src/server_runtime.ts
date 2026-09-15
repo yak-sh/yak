@@ -84,7 +84,7 @@ import { type OllamaConfig, ollamaProbe } from './ollama.ts'
 import { resolve, settingRows } from './config.ts'
 import { type Observation, safeObservation } from './observations.ts'
 import { outcome, recent, record, stats, toolCall } from './telemetry.ts'
-import { graph as browserGraph, stamp } from './imports.ts'
+import { served as modules, stamp } from './imports.ts'
 import { requestVerifier } from './verify.ts'
 import { askOf, askRows, evalAgg, layered, setRanker } from './graph_query.ts'
 
@@ -162,11 +162,26 @@ let mime: Record<string, string> = {
 // answers a matching If-None-Match with 304, so it costs a round trip, not
 // its bytes.
 let ts = new Map<string, { mtime: number; js: string }>()
-let shellStamp = (html: string) =>
-  html.replace(
+// The shell also PRELOADS the served module graph (imports.ts served): a
+// browser discovers ES modules a level at a time, each level waiting on the
+// last one's parse, and ~250 levels of that cost ~350 ms even from cache
+// (T-37445). One `modulepreload` per module fetches the whole graph in one
+// wave. Walked once per process: gen fixes the URLs for the process's life.
+let shellImports = (): Record<string, string> => {
+  let html = Deno.readTextFileSync(`${src}index.html`)
+  let map = html.match(/<script type="importmap">([\s\S]*?)<\/script>/)
+  return map ? JSON.parse(map[1]).imports : {}
+}
+let preloads = ''
+let shellStamp = (html: string) => {
+  preloads ||= modules('/main.tsx', shellImports()).map((path) =>
+    `    <link rel="modulepreload" href="${path}?v=${gen}" />\n`
+  ).join('')
+  return html.replace(
     /"(\/(?!theme\.css)[^"?]+\.(?:tsx?|m?js|css))"/g,
     `"$1?v=${gen}"`,
-  )
+  ).replace('</head>', `${preloads}  </head>`)
+}
 let cached = (req: Request | undefined, etag: string) => {
   let stamped = req && new URL(req.url).searchParams.get('v') == String(gen)
   let headers: Record<string, string> = stamped
@@ -225,8 +240,10 @@ let file = async (root: string, path: string, req?: Request) => {
 // no slower than every page after it.
 let warmBrowser = () =>
   Promise.all(
-    [...browserGraph('main.tsx')].map((path) =>
-      file(src.slice(0, -1), `/${path}`)
+    modules('/main.tsx', shellImports()).map((path) =>
+      path.startsWith('/packages/')
+        ? file(repo.slice(0, -1), path)
+        : file(src.slice(0, -1), path)
     ),
   )
 

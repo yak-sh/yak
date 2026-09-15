@@ -4,7 +4,7 @@
 // every form and asserting the exact specifier set proves the coverage.
 import { assertEquals } from '@std/assert'
 import { pathToFileURL } from 'node:url'
-import { graph, imports, stamp } from './imports.ts'
+import { graph, imports, served, stamp } from './imports.ts'
 
 Deno.test('graph: file URL paths are decoded once', () => {
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-imports-# %23 ' })
@@ -44,6 +44,14 @@ Deno.test('imports: every import form yields its specifier', () => {
       [`import type { T } from './typed'`, []],
       // import.meta is not an import statement.
       [`let u = import.meta.url`, []],
+      // A re-export is an import too (T-37445).
+      [`export * from './star'`, ['./star']],
+      [`export * as ns from './starAs'`, ['./starAs']],
+      [`export { a, type B } from './list'`, ['./list']],
+      [`export {\n  a,\n} from './multiList'`, ['./multiList']],
+      [`export type { T } from './typed'`, []],
+      // A string that merely follows `export` is not a specifier.
+      [`export let s = './no'`, []],
     ] as [string, string[]][]
   ) assertEquals(imports(source), want, source)
 })
@@ -55,6 +63,10 @@ Deno.test('stamp: relative value imports carry the generation, nothing else does
     `import 'preact'`,
     `import('../lazy.tsx')`,
     `import "./double.ts"`,
+    `export * from './star.ts'`,
+    `export { a } from './list.ts'`,
+    `export type { T } from './typed.ts'`,
+    `export let s = './no.ts'`,
   ].join('\n')
   assertEquals(
     stamp(source, 42),
@@ -64,6 +76,41 @@ Deno.test('stamp: relative value imports carry the generation, nothing else does
       `import 'preact'`,
       `import('../lazy.tsx?v=42')`,
       `import "./double.ts?v=42"`,
+      `export * from './star.ts?v=42'`,
+      `export { a } from './list.ts?v=42'`,
+      `export type { T } from './typed.ts'`,
+      `export let s = './no.ts'`,
     ].join('\n'),
   )
+})
+
+Deno.test('served: the browser graph follows the import map into packages and vendor', () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'tasks-served-' })
+  try {
+    Deno.mkdirSync(`${dir}/src/vendor`, { recursive: true })
+    Deno.mkdirSync(`${dir}/packages/p`, { recursive: true })
+    Deno.writeTextFileSync(
+      `${dir}/src/main.tsx`,
+      "import './a.ts'\nimport '@yaks/p'\nimport 'lib'\nimport './a.css'",
+    )
+    Deno.writeTextFileSync(`${dir}/src/a.ts`, "export * from './b.ts'")
+    Deno.writeTextFileSync(`${dir}/src/b.ts`, '')
+    Deno.writeTextFileSync(`${dir}/src/vendor/lib.js`, '')
+    Deno.writeTextFileSync(`${dir}/packages/p/mod.ts`, "import './x.ts'")
+    Deno.writeTextFileSync(`${dir}/packages/p/x.ts`, "import '../../src/a.ts'")
+    let map = { '@yaks/p': '/packages/p/mod.ts', lib: '/vendor/lib.js' }
+    assertEquals(
+      served('/main.tsx', map, pathToFileURL(`${dir}/src/`)),
+      [
+        '/main.tsx',
+        '/a.ts',
+        '/packages/p/mod.ts',
+        '/vendor/lib.js',
+        '/b.ts',
+        '/packages/p/x.ts',
+      ],
+    )
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
 })
