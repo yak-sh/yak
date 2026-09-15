@@ -83,6 +83,19 @@ Deno.test('a load lands in chunks, and a blank line is not a bundle', async () =
   assertEquals((await (await handler(ask('.price>0'))).json()).length, 120)
 })
 
+Deno.test('the answer is line for line: bookkeeping stays out of it', async () => {
+  let graph = shopGraph()
+  let apply = graph.apply
+  // A plugin that lands a descriptor beside every batch, the way archetypes do.
+  graph.apply = async (change, opts) => [
+    ...await apply(change, opts),
+    { entity: { eid: 'meta' }, book: { price: 0 } },
+  ]
+  let handler = api({ graph, authenticate: () => ada })
+  let answered = await rows(await handler(ndjson('/apply', load(3).join('\n'))))
+  assertEquals(answered.map((b) => b.entity.eid), ['b1', 'b2', 'b3'])
+})
+
 Deno.test('a refusal is the last line: which line, and what landed', async () => {
   let { handler } = shop()
   let r = await handler(ndjson(

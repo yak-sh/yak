@@ -72,12 +72,24 @@ let culprit = async (graph: Graph, chunk: Change): Promise<number> => {
   return 0
 }
 
+// The lines of a chunk as the graph answered them, in the graph's order. A
+// bundle minted through an alias answers under `$alias`; every other under
+// its eid.
+let asked = (held: Bundle[], applied: Bundle[]): Bundle[] => {
+  let keys = new Set(held.map((b) => b.entity.eid))
+  return applied.filter((b) => keys.has(b.$alias ?? b.entity.eid))
+}
+
 /**
  * `POST /apply` with `content-type: application/x-ndjson` — one bundle per
  * line, applied {@link CHUNK} at a time, and answered the same way: the
  * composed bundles, one JSON object per line, written as each chunk commits.
  * Blank lines are skipped. Neither half is ever whole in memory, so a load is
  * bounded by the file rather than by the parser or the transaction.
+ *
+ * The answer is line for line: a bundle a plugin adds beside the batch (an
+ * archetype descriptor, a casualty) is the graph's bookkeeping, not a line the
+ * loader wrote, and stays out of it.
  *
  * The status is 200 whatever happens, because the first bundles are on the
  * wire before a later line can refuse. So a refusal is the LAST line of the
@@ -127,7 +139,7 @@ export let pour = (
         blame = at[await culprit(graph, batch)]
         throw err
       }
-      for (let b of applied) await say(b)
+      for (let b of asked(held, applied)) await say(b)
       committed += held.length
       held = []
       at = []
