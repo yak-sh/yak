@@ -26,7 +26,7 @@ let changes = (eid: string) => [
 
 Deno.test('reopen paints retained rows before sending; confirmation removes stale hits', () => {
   cache.value = {}
-  restore({}, {})
+  restore()
   let route = useRoute(() => {})
   let preds = parseQuery('.comment.target=card')
   let sub = `q:${JSON.stringify(preds)}`
@@ -61,7 +61,7 @@ Deno.test('reopen paints retained rows before sending; confirmation removes stal
   } finally {
     useRoute(route)
     cache.value = {}
-    restore({}, {})
+    restore()
   }
 })
 
@@ -100,7 +100,7 @@ Deno.test('ownership-only retention does not expand a confirmed bounded query', 
   } finally {
     useRoute(route)
     cache.value = {}
-    restore({}, {})
+    restore()
   }
 })
 
@@ -127,7 +127,7 @@ Deno.test('bounded confirmation does not invalidate retained rows outside its pa
   } finally {
     useRoute(route)
     cache.value = {}
-    restore({}, {})
+    restore()
   }
 })
 
@@ -152,27 +152,8 @@ Deno.test('full confirmation drops removed components without blanking retained 
   } finally {
     useRoute(route)
     cache.value = {}
-    restore({}, {})
+    restore()
   }
-})
-
-Deno.test('legacy disk rows never bypass package epoch validation', async () => {
-  cache.value = {}
-  restore({
-    old: { entity: { eid: 'old', num: 1 }, doc: { eid: 'old', title: 'old' } },
-  }, {
-    epoch: 'A',
-    cursor: 999,
-  })
-  assertEquals(cache.peek().old, undefined)
-  assertEquals(ent('old').doc, undefined)
-  assertEquals(subscriptionState('boot'), { status: 'loading' })
-  await seedFrom({ changes: [], deps: [], epoch: 'A', cursor: 1000 }, false)
-  assertEquals(ent('old').doc, undefined)
-  await seedFrom({ changes: [], deps: [], epoch: 'B', cursor: 1 }, false)
-  assertEquals(ent('old').doc, undefined)
-  restore({ unscoped: { doc: { eid: 'unscoped', title: 'untrusted' } } }, {})
-  assertEquals(ent('unscoped').doc, undefined)
 })
 
 Deno.test('bodyless confirmations preserve the paint floor without claiming body coverage', () => {
@@ -198,7 +179,7 @@ Deno.test('bodyless confirmations preserve the paint floor without claiming body
   } finally {
     useRoute(route)
     cache.value = {}
-    restore({}, {})
+    restore()
   }
 })
 
@@ -206,7 +187,7 @@ Deno.test('same-epoch reconnect retains live rows and re-primes mounted subscrip
   let route = useRoute(() => {})
   try {
     cache.value = {}
-    restore({}, { epoch: 'reconnect' })
+    restore()
     subscribe('route:reconnect', 'id=reconnect')
     landSub({
       sub: 'route:reconnect',
@@ -226,6 +207,6 @@ Deno.test('same-epoch reconnect retains live rows and re-primes mounted subscrip
   } finally {
     useRoute(route)
     cache.value = {}
-    restore({}, {})
+    restore()
   }
 })

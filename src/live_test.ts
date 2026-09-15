@@ -13,6 +13,7 @@ import {
   boardsOver,
   boardSub,
   boardTasks,
+  boot,
   byWarmth,
   cache,
   census,
@@ -74,6 +75,7 @@ import {
   topZ,
   unreadFor,
   unsubscribe,
+  useOutboxStore,
   useRoute,
 } from './live.ts'
 import { edgeEid, link } from './edge.ts'
@@ -3167,4 +3169,71 @@ Deno.test('first paint waits for state, then rescues, then gives up', async () =
   assertEquals(await run(late.promise, soon, () => late.resolve()), ['rescue'])
   // Nothing ever lands: the tab paints and names the stall.
   assertEquals(await run(never(), soon), ['rescue', 'stall'])
+})
+
+// T-37445: boot waits on nothing from disk. The durable outbox here never
+// answers, as a gigabyte legacy IndexedDB did for up to a minute in a long
+// profile; the seed still paints the moment the socket carries it.
+Deno.test('boot paints the seed while the durable outbox never answers', async () => {
+  let RealWS = (globalThis as { WebSocket: unknown }).WebSocket
+  type Fake = {
+    readyState: number
+    onopen: (() => void) | null
+    onmessage: ((m: { data: string }) => void) | null
+    onclose: (() => void) | null
+  }
+  let socket: Fake | null = null
+  ;(globalThis as { WebSocket: unknown }).WebSocket = class {
+    readyState = 0
+    onopen = null
+    onmessage = null
+    onclose = null
+    constructor() {
+      socket = this as unknown as Fake
+    }
+    send() {}
+    addEventListener() {}
+    close() {}
+  }
+  let probe = (globalThis as unknown as {
+    __probe: { socket: () => { readyState: number } | null }
+  }).__probe
+  let restoreStore = useOutboxStore({
+    park: () => {},
+    unpark: () => {},
+    parked: () => new Promise(() => {}),
+  })
+  let host = config.host
+  let D = 'd0c00000-0000-4000-8000-0000000000d1'
+  try {
+    config.host = '127.0.0.1:0'
+    cache.value = {}
+    let prior = probe.socket()
+    if (prior) prior.readyState = 3
+    let booting = boot()
+    socket!.readyState = 1
+    socket!.onopen!()
+    socket!.onmessage!({
+      data: JSON.stringify({
+        reset: true,
+        snapshot: {
+          changes: [
+            { eid: D, name: 'entity', comp: { eid: D, num: 7 } },
+            { eid: D, name: 'doc', comp: { eid: D, title: 't', body: 'b' } },
+          ],
+          deps: [],
+          cursor: 1,
+          epoch: 'e',
+          vocabHash: 'v',
+        },
+      }),
+    })
+    await until(() => ent(D).doc?.title == 't')
+    await booting
+    assertEquals(ent(D).doc?.title, 't')
+  } finally {
+    config.host = host
+    useOutboxStore(restoreStore)
+    ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
+  }
 })

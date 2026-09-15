@@ -1165,7 +1165,12 @@ let publishLocal = (
 
 // The cursor/epoch/vocab this tab holds. A reconnect opens its socket from
 // this cursor; the server replays the gap before joining it to live broadcast.
-let held: idb.Meta = {}
+let held: {
+  cursor?: number
+  epoch?: string
+  vocabHash?: string
+  capabilities?: string[]
+} = {}
 export let capable = (name: string) => !!held.capabilities?.includes(name)
 
 // Consumers that care about canonical live edits subscribe here.
@@ -1427,7 +1432,11 @@ let deliver = (changes: Change[]) => {
   armRedeliver()
   route({ apply: changes, id }, id)
 }
+// Acks that arrived before the durable outbox was read back: the replay must
+// drop these entries, not redeliver a write the server already took.
+let ackedEarly = new Set<string>()
 export let acked = (id: string) => {
+  if (!outbox.has(id)) ackedEarly.add(id)
   pendingPins.get(id)?.()
   pendingPins.delete(id)
   outbox.delete(id)
@@ -1445,17 +1454,22 @@ export let acked = (id: string) => {
 // owns them, the rest re-add nothing (the outbox.has guard) and their sends
 // collapse on that id. A write whose entity was since tombstoned is refused by
 // apply() and settles the id like any rejection (land()'s error arm), never
-// crashing boot. Runs inside once(), BEFORE the socket opens, so no ack can
-// outrun the entry it clears.
+// crashing boot. Runs behind the socket, never ahead of it: an ack that lands
+// first is remembered in ackedEarly, and its entry is dropped here.
 export let replayOutbox = async () => {
   let woke = false
   for (let [id, o] of await outboxStore.parked()) {
+    if (ackedEarly.has(id)) {
+      outboxStore.unpark(id)
+      continue
+    }
     if (outbox.has(id)) continue
     outbox.set(id, o)
     ensureClient()
     pendingPins.set(id, replica.box.cache.protect(o.changes.map((c) => c.eid)))
     woke = true
   }
+  ackedEarly.clear()
   if (woke) {
     syncOutbox()
     armRedeliver()
@@ -2652,33 +2666,31 @@ let land = async (data: unknown) => {
   }
 }
 
-// Hydrated rows are a bounded, provisional read floor, NOT a resumable
-// journal replica. Always request the working-set reset; it validates epoch
-// before any subscription confirms these rows. Never adopt the disk cursor.
-export let restore = (_ents: Record<string, Comps>, _meta: idb.Meta) => {
-  // Legacy disk rows are no longer trusted or mirrored. The package restores
-  // only after seedFrom receives the authoritative server epoch.
+// Tests replace the cache wholesale; this rebuilds the replica around it.
+export let restore = () => {
   ensureClient()
   resetSignals()
 }
-let local = async () => {
-  ensureClient()
-  await replica.box.ready
-  mark('working-set')
-}
 
+// Boot waits on NOTHING from disk (T-37445). A tab used to await its durable
+// outbox before the first frame could land, and IndexedDB answered that open
+// only after up to a minute in a long-lived profile: a blank page with a live
+// socket and pings coming in. Now the seed paints the moment it arrives; the
+// outbox replays behind it, and an ack that outruns the replay is remembered
+// (acked) so the replay drops that entry instead of redelivering it.
 let booted = false
-let once = async () => {
+let once = () => {
   if (booted) return
-  await local()
-  // Requeue any write a prior life left undelivered, BEFORE the socket opens —
-  // so a crash or manual reload can no longer silently lose it (T-21440).
-  await replayOutbox()
+  booted = true
+  ensureClient()
+  void replica.box.ready.then(() => mark('working-set'))
   // Read back what a prior life left refused — the post-reload half of the
   // durability guarantee (T-21441): a drain refusal wiped by its own reload
   // returns to view instead of vanishing.
   loadRefusals()
-  booted = true
+  // Requeue any write a prior life left undelivered (T-21440).
+  void replayOutbox()
+  idb.forgetLegacy()
 }
 
 // Every tab owns its socket and its subscriptions (T-37445). There is no
@@ -2699,13 +2711,8 @@ export let boot = async () => {
     if (doc.visibilityState != 'visible' || !ws) return
     if (socketStale(ws.readyState, seen, Date.now())) ws.close()
   })
-  // The socket dials while the vault opens (T-37445): the handshake needs
-  // nothing from disk, and every frame it answers with lands behind once()
-  // on the serial chain, so no ack can outrun the outbox entry it clears.
-  let ready = once()
-  serial = serial.then(() => ready)
+  once()
   connect()
-  await ready
   await painted()
 }
 ;(globalThis as {
