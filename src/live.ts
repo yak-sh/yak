@@ -2588,11 +2588,7 @@ export let seedFrom = async (snap: Snapshot, write = true) => {
 }
 // The disk checkpoint is a paint floor for the NEXT visit, never a gate on
 // this one: a landing returns as soon as the rows are in memory, and the
-// vault writes drain behind it (T-37445 — awaiting the checkpoint held every
-// later frame, and first paint, behind an IndexedDB commit).
-let persist = (_touched: { eids: string[]; edges: Dep[] }, _cursor: number) => {
-  void replica.box.cache.idle()
-}
+// package coalesces the vault writes behind it (T-37445).
 
 // Every incoming shape has one landing door; a cursor-stamped frame is
 // checkpointed to disk once it has landed.
@@ -2613,14 +2609,13 @@ let land = async (data: unknown) => {
   }
   let changes = liveChanges(data)
   if (changes) {
-    let touched = applyLocal(changes)
+    applyLocal(changes)
     settleObservations(changes)
     let cursor = Array.isArray(data)
       ? undefined
       : (data as Partial<Live>).cursor
     if (cursor !== undefined) {
       held = { ...held, cursor }
-      persist(touched, cursor)
     }
     tell(changes)
     return
@@ -2653,22 +2648,16 @@ let land = async (data: unknown) => {
     return
   }
   if (frame.catchup !== undefined) {
-    let touched = applyLocal(frame.catchup)
-    if (frame.cursor !== undefined) {
-      held = { ...held, cursor: frame.cursor }
-      persist(touched, frame.cursor)
-    }
+    applyLocal(frame.catchup)
+    if (frame.cursor !== undefined) held = { ...held, cursor: frame.cursor }
     settleInitial()
   } else if (frame.snapshot) {
     mark('reset')
     await seedFrom(frame.snapshot)
     settleInitial()
   } else if (typeof frame.sub == 'string') {
-    let touched = landSub(frame as Sub)
-    if (frame.cursor !== undefined) {
-      held = { ...held, cursor: frame.cursor }
-      persist(touched, frame.cursor)
-    }
+    landSub(frame as Sub)
+    if (frame.cursor !== undefined) held = { ...held, cursor: frame.cursor }
   }
 }
 
