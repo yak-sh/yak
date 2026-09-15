@@ -85,7 +85,8 @@ returns a `Store` — @yaks/graph's `Storage`, answered synchronously:
 - `read(query, opts?): Bundle[]` — a query → the matching entities as bundles,
   ordered and windowed as the query asks.
 - `rows(query, opts?): Row[]` — one raw `{ eid }` row per match, the membership
-  shape a database adapter answers with.
+  shape a database adapter answers with; `.count!` answers the one
+  `{ value: '', n }` row @yaks/sql does.
 - `tx(body): R` — run `body` against a transaction, committing when it returns
   and rolling back if it throws. Transactions nest: an inner one rolls back to
   where it opened, and an outer rollback still undoes what it committed. The
@@ -147,12 +148,12 @@ loose:
 - **A value keeps its type.** A boolean stays `true`, where a database column
   with integer affinity reads back as `1`.
 
-A question the reads cannot answer exactly — an aggregate (`.count`, `.tally`,
-`.distinct`), a nearest-neighbour (`.near`), the `.edges!` rider, a computed
-column — throws `@yaks/match`'s `Unsupported`, the same decline `@yaks/sql`
-throws; that package's README lists every one. There is no full-text index
-either: a bare word is matched token by token over the text the bundles hold,
-which selects what an index over the same words would select, without the
+A question the reads cannot answer exactly — an aggregate other than a count
+(`.tally`, `.distinct`), a nearest-neighbour (`.near`), the `.edges!` rider, a
+computed column — throws `@yaks/match`'s `Unsupported`, the same decline
+`@yaks/sql` throws; that package's README lists every one. There is no full-text
+index either: a bare word is matched token by token over the text the bundles
+hold, which selects what an index over the same words would select, without the
 ranking.
 
 ## Compatibility

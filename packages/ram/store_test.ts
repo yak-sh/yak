@@ -88,6 +88,7 @@ Deno.test('a read is the query grammar, answered from the map', () => {
     'p2',
   ])
   assertEquals(s.rows('.price<10'), [{ eid: 'p2' }])
+  assertEquals(s.rows('.price<10&.count!'), [{ value: '', n: 1 }])
 })
 
 Deno.test('a throwing transaction leaves the map exactly as it was', () => {

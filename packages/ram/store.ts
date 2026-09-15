@@ -21,6 +21,7 @@
 import type { Bundle, Comp, Eid, Entity, ReadOpts, Row } from '@yaks/graph'
 import { comps, isPromise, tombstoned } from '@yaks/graph'
 import { matcher, type Query } from '@yaks/match'
+import { and, parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 
 export type { Query }
@@ -123,6 +124,19 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
 
   let read = (query: Query, opts: ReadOpts = {}): Bundle[] =>
     matcher(query, vocab, { now: opts.now ?? base.now })(all())
+
+  // The raw-rows door: one `{ eid }` per match, or for `.count!` the one
+  // `{ value: '', n }` row @yaks/sql answers, so a caller counting a set reads
+  // the same shape from either storage. Match declines aggregates, so the count
+  // clause is lifted out and the rest of the query selects what to count.
+  let raw = (query: Query, opts?: ReadOpts): Row[] => {
+    let cs = (typeof query == 'string' ? parse(query) : query).clauses
+    if (!cs.some((c) => c.kind == 'count')) {
+      return read(query, opts).map((b) => ({ eid: b.entity.eid }))
+    }
+    let rest = and(...cs.filter((c) => c.kind != 'count'))
+    return [{ value: '', n: read(rest, opts).length }]
+  }
 
   // The number an identity gets: the one it arrived with when this store
   // mirrors another graph, else the next one this store has to give.
@@ -252,8 +266,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     ddl: () => [],
     install: () => {},
     read,
-    rows: (query, opts) =>
-      read(query, opts).map((b) => ({ eid: b.entity.eid })),
+    rows: raw,
     tx: (body) => {
       // A nested transaction is a savepoint: it rolls back to where it opened,
       // and its entries stay in the log for the outer one to undo in its turn.
