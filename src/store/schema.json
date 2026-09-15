@@ -1766,6 +1766,30 @@
   },
   {
     "kind": "exec",
+    "sql": "create index if not exists run_started_at on \"run\" (\"started_at\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists runtime_pid on \"runtime\" (\"pid\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists session_status on \"session\" (\"status\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists session_pid on \"session\" (\"pid\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists session_started_at on \"session\" (\"started_at\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists session_finished_at on \"session\" (\"finished_at\");"
+  },
+  {
+    "kind": "exec",
     "sql": "create index if not exists session_process on \"session\" (\"process\");"
   },
   {
@@ -1787,6 +1811,10 @@
   {
     "kind": "exec",
     "sql": "create index if not exists session_parent on \"session\" (\"parent\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists settled_at on \"settled\" (\"at\");"
   },
   {
     "kind": "exec",

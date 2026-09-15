@@ -676,6 +676,12 @@ export let indexes: Record<string, Idx[]> = {
   output: [{ cols: ['source', 'key'], unique: true, where: 'key is not null' }],
   published: [{ cols: ['name'], unique: true }],
   result: [{ cols: ['call'], unique: true }],
+  run: [{ cols: ['started_at'] }],
+  runtime: [{ cols: ['pid'] }],
+  session: [{ cols: ['status'] }, { cols: ['pid'] }, { cols: ['started_at'] }, {
+    cols: ['finished_at'],
+  }],
+  settled: [{ cols: ['at'] }],
   shelf: [{ cols: ['client'], unique: true }],
   space: [{ cols: ['slug'], unique: true }],
   subscription: [{ cols: ['actor', 'target'], unique: true }],

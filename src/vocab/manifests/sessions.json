@@ -320,7 +320,14 @@
         "started_at": "time",
         "stop_requested_at": "time",
         "input_at": "time"
-      }
+      },
+      "indexes": [
+        {
+          "cols": [
+            "started_at"
+          ]
+        }
+      ]
     },
     "runner": {
       "kind": true,
@@ -338,7 +345,14 @@
       "stamped": {
         "provider_session_id": "text",
         "serving_model": "text"
-      }
+      },
+      "indexes": [
+        {
+          "cols": [
+            "pid"
+          ]
+        }
+      ]
     },
     "session": {
       "kind": true,
@@ -412,7 +426,29 @@
         "final_text": "body",
         "usage_json": "text",
         "stderr": "body"
-      }
+      },
+      "indexes": [
+        {
+          "cols": [
+            "status"
+          ]
+        },
+        {
+          "cols": [
+            "pid"
+          ]
+        },
+        {
+          "cols": [
+            "started_at"
+          ]
+        },
+        {
+          "cols": [
+            "finished_at"
+          ]
+        }
+      ]
     },
     "settled": {
       "stamped": {
@@ -427,7 +463,14 @@
         },
         "exit_code": "number",
         "stop_reason": "text"
-      }
+      },
+      "indexes": [
+        {
+          "cols": [
+            "at"
+          ]
+        }
+      ]
     },
     "spawn": {
       "cols": {
