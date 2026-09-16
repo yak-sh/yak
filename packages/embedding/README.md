@@ -150,8 +150,24 @@ every component table does; the blob is the vector's raw bytes, so its dimension
 is the byte length over four and no column has to carry it.
 
 Ranking runs in TypeScript rather than a native SQLite vector extension. There
-is no persisted approximate-nearest-neighbor index. Supply a `Rank`
-implementation if your application needs indexed vector search.
+is no persisted approximate-nearest-neighbor index here. Supply a `Rank`
+implementation if your application needs indexed vector search — and read the
+mark to keep it true.
+
+## The mark
+
+An approximate index is built from the vector table and goes stale the moment a
+row moves. Beside the table sits `embedding_index`, one row whose `dirty` flag
+three triggers set inside the same statement as any insert, update or delete of
+a vector — so a crash between a write and a rebuild leaves the mark set, and the
+next owner rebuilds. `dirty(db)` reads it, `clean(db)` clears it once a rebuild
+has landed, `mark(db)` sets it by hand after rebuilding the vector table from
+elsewhere, and `state(db)` reports the mark beside the row count and the newest
+write for a health check. A fresh install starts dirty: an index that has never
+been built is owed one. The exact scan `nearest()` reads none of this.
+
+`schema()` is idempotent and additive, so tables an application already built in
+this shape are adopted as they are.
 
 The whole table is **derived**. Drop it and the next sweep rebuilds it from the
 text it was made from — which is why it has no history, no journal and no

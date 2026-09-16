@@ -17,7 +17,8 @@
  *
  * - {@link fields} reads the embedded properties off a
  *   {@link https://jsr.io/@yaks/vocab | @yaks/vocab} schema;
- * - {@link schema} emits the one table the vectors live in;
+ * - {@link schema} emits the table the vectors live in and the mark an
+ *   approximate index reads ({@link dirty}, {@link clean}) to stay true;
  * - {@link sweep} embeds what changed and drops what left, off the write path;
  * - {@link nearest} ranks the stored vectors against a query vector;
  * - {@link semantic} — the {@link https://jsr.io/@yaks/sql | @yaks/sql}
@@ -65,4 +66,5 @@ export * from './fields.ts'
 export * from './ddl.ts'
 export * from './sweep.ts'
 export * from './near.ts'
+export * from './mark.ts'
 export * from './compile.ts'
