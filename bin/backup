@@ -8,8 +8,10 @@
 #
 # Restore into a NEW directory with no database or SQLite sidecars, then
 #   cat snap/schema.sql snap/graph.sql.part.* snap/journal.sql.part.* | sqlite3 tasks.db
-# and start the server. The FTS index rebuilds from the boot-time integrity
-# check and embeddings backfill on the sweep, which is why neither is dumped.
+# and start the server. The FTS indexes refill as the rows load — the virtual
+# tables and their sync triggers ride along in schema.sql — and @yaks/fts
+# adopt()/heal() at boot cuts and rebuilds any index the dump predates;
+# embeddings backfill on the embed sweep. That is why neither is dumped.
 # The .part.NNN suffixes are zero-padded, so the glob reassembles them in order.
 #
 # TEXT, not the binary, because git cannot delta a SQLite file: every hourly
@@ -17,9 +19,8 @@
 # in 15 days), while the whole db as text costs ~29 KB per commit — measured,
 # two real consecutive snapshots. The same change makes the working files
 # smaller than the binary was, since the biggest tables are derived data nobody
-# needs to carry: embeddings and the two FTS indexes are over half the db —
-# doc_gram alone runs ~4x the size of the text it indexes — and all of them
-# rebuild themselves.
+# needs to carry: embeddings and the FTS indexes are over half the db, and all
+# of them rebuild themselves.
 #
 # SPLIT across files, and SHARDED into parts, because GitHub's hard 100 MB limit
 # is per FILE. The journal is the largest, fastest-growing data and append-only,
@@ -113,15 +114,47 @@ sq "$snapshot" "pragma integrity_check;" | grep -qx ok || {
   exit 1
 }
 
-# Derived tables carry no information the graph cannot rebuild: `embedding`
-# and its vector0 ANN data refill on the embed sweep; doc_fts*/doc_gram* and
-# content_fts*/content_gram* are external-content FTS5
-# indexes healed by the integrity check in db.ts open(). Their SCHEMA still
-# ships (the .schema dump below is complete) so a restored db has the tables to
-# fill. doc_gram is the biggest of the three by far — a trigram index runs ~4x
-# the size of the text it indexes — so dumping it would be the largest thing in
-# history and the least worth carrying.
-derived="name glob 'embedding*' or name glob 'vector0_embedding*' or name = '_sqliteai_vector' or name glob 'doc_fts*' or name glob 'doc_gram*' or name glob 'content_fts*' or name glob 'content_gram*'"
+# Derived tables carry no information the graph cannot rebuild, so their rows
+# never enter the dump — and WHICH tables those are is read out of the
+# snapshot's own SCHEMA, never from a list of names. A name list only knows the
+# indexes that existed the last time someone edited it: @yaks/fts took over
+# search and cut a new mail_fts (5db8be2b), this script went on dumping it, and
+# the restore proof failed every night from 2026-09-11.
+#
+# An FTS5 index announces itself — `using fts5` in its own CREATE — and owns
+# five shadow tables named after it. Its words refill from its three sync
+# triggers as the rows of the table it mirrors load, so index and shadows are
+# both skipped here while the virtual table and the triggers stay in the schema
+# below. The vectors are the other half: `embedding` and `embedding_index` are
+# @yaks/embedding's two tables (TABLE and MARK, packages/embedding/ddl.ts) and
+# refill on the embed sweep; `vector0_*` and `_sqliteai_vector` are the ANN
+# backend's own namespace, recut by vector_init at boot.
+#
+# Every index here is EXTERNAL-CONTENT (`content=` in its CREATE): it is an
+# inverted index over words some other table keeps, which is what makes its
+# rows derived. One without that clause would hold the only copy of its text,
+# and skipping it would drop that text out of the backup — refuse loudly rather
+# than lose it quietly.
+own=$(sq "$snapshot" "select group_concat(name, ' ') from sqlite_master
+  where type = 'table' and lower(sql) like '%using fts5%'
+    and sql not like '%content=%'")
+[ -z "$own" ] || {
+  echo "backup: fts5 index holds its own text, not derived: $own" >&2
+  exit 1
+}
+# A never-matching first element keeps both lists valid when there is no index.
+indexes="''"
+shadows="''"
+for t in $(sq "$snapshot" "select name from sqlite_master
+    where type = 'table' and lower(sql) like '%using fts5%' order by name"); do
+  indexes="$indexes, '$t'"
+  for s in _data _idx _docsize _config _content; do
+    shadows="$shadows, '$t$s'"
+  done
+done
+derived="name in ($indexes) or name in ($shadows)
+  or name in ('embedding', 'embedding_index')
+  or name glob 'vector0_*' or name = '_sqliteai_vector'"
 
 # Data as INSERT statements, no DDL — `.mode insert` names each table, so the
 # files concatenate onto the schema in any order.
@@ -147,14 +180,17 @@ dump_data() {
 }
 
 # The schema, minus the FTS SHADOW TABLES only. `.schema` writes those out as
-# ordinary CREATE TABLEs, but creating the virtual table makes them itself, so
-# replaying both collides ('doc_fts_data already exists') and every trigger
-# behind it then has no doc_fts to reference. The filter is on TYPE as well as
-# name because the sync triggers are called doc_fts_ai/ad/au (doc_gram_ai/ad/au
-# for the trigram index) and matching them by name alone would drop the very
-# things that refill the index — with them kept, loading the doc rows below
-# rebuilds both indexes on the way in.
-# glob, not like: `_` is a wildcard in LIKE and would also match doc_fts.
+# ordinary CREATE TABLEs, but creating the virtual table makes them itself, and
+# only one of the two spellings can stand. VACUUM decides which: it re-emits
+# the shadows BEFORE the virtual table they belong to, so the plain CREATEs win
+# the race and `create virtual table mail_fts` then fails with 'table
+# mail_fts_data already exists' — leaving every INSERT behind it with no such
+# table. Drop the shadows and the virtual table makes its own.
+# The filter is on TYPE as well as name so the sync triggers survive: they are
+# named after the index (mail_fts_insert/_delete/_update) and they are the very
+# things that refill it as the rows load — as is the `<comp>_text` view an
+# index whose columns are addresses reads its words back through.
+# glob, not like, for the two namespaces below: `_` is a wildcard in LIKE.
 # sqlite_stat1/sqlite_stat4 are the ANALYZE tables PRAGMA optimize (above)
 # materializes — same kind as the FTS/vector shadows: derived, and rebuilt by
 # ANALYZE, so they carry no information to keep. They MUST be dropped from the
@@ -166,9 +202,8 @@ dump_data() {
 sqlite3 -batch -init /dev/null "$snapshot" \
   "select sql || ';' from sqlite_master
    where sql is not null and not (type = 'table'
-     and (name glob 'doc_fts_*' or name glob 'doc_gram_*'
-       or name glob 'content_fts_*' or name glob 'content_gram_*'
-       or name glob 'vector0_embedding*' or name = '_sqliteai_vector'
+     and (name in ($shadows)
+       or name glob 'vector0_*' or name = '_sqliteai_vector'
        or name glob 'sqlite_stat*'))
    order by rowid" > "$work/schema.sql"
 journal="name in ('journal_tx', 'journal_change', 'journal_field')"

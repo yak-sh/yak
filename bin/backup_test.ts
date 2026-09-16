@@ -29,6 +29,18 @@ let fixture = async () => {
     return db
   }
   let db = database('tasks.db')
+  // A searched component, indexed the way @yaks/fts indexes one: an
+  // external-content FTS5 mirror plus the trigger that keeps it. Named after
+  // no index the script ever hard-coded, because that is the failure — a new
+  // index (mail_fts, 5db8be2b) that a list of names could not know about.
+  db.exec(`create table note (entity integer primary key, body text);
+    create virtual table "note_fts" using fts5(
+      "body", content='note', content_rowid='entity'
+    );
+    create trigger "note_fts_insert" after insert on "note" begin
+      insert into "note_fts"(rowid, "body") values (new.entity, coalesce(new."body", ''));
+    end;
+    insert into note values (1, 'the words the index holds')`)
   // Previous versions used these public names. Another process may still
   // hold either open; a new backup has no ownership of those files.
   database('snap/tasks.db')
@@ -73,6 +85,39 @@ slow(
       let pending = [...Deno.readDirSync(`${f.dir}/.git`)]
         .filter((e) => e.isDirectory && e.name.startsWith('tasks-backup.'))
       assertEquals(pending, [])
+    } finally {
+      await f.close()
+    }
+  },
+)
+
+// The dump must carry an index's DEFINITION and no byte of the index itself.
+// Its shadow tables cannot be written as plain CREATE TABLEs — VACUUM emits
+// them ahead of the virtual table, so they win and the virtual table then
+// fails to create, which is what left every `insert into mail_fts` with no
+// such table from 2026-09-11. The script's own round-trip gate is the rest of
+// the proof: a run that gets here loaded its dump back.
+slow(
+  'the dump defines each FTS5 index and dumps none of its rows',
+  async () => {
+    let f = await fixture()
+    try {
+      let out = await f.backup()
+      assert(out.success, decode(out.stderr))
+      let schema = await run('git', ['show', 'HEAD:snap/schema.sql'], f.dir)
+      assert(schema.includes('CREATE VIRTUAL TABLE "note_fts"'), schema)
+      assert(schema.includes('CREATE TRIGGER "note_fts_insert"'), schema)
+      assert(!/CREATE TABLE ['"]?note_fts_/.test(schema), schema)
+      let sql = await run(
+        'git',
+        ['show', 'HEAD:snap/graph.sql.part.000'],
+        f.dir,
+      )
+      assert(!sql.includes('note_fts'), sql)
+      assert(
+        sql.includes("INSERT INTO note VALUES(1,'the words the index holds');"),
+        sql,
+      )
     } finally {
       await f.close()
     }
