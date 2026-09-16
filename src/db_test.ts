@@ -3098,52 +3098,6 @@ Deno.test('apply refuses a newer schema committed before it acquires the writer 
   }
 })
 
-slow('open migrates the legacy instruction marker to prompt once', () => {
-  let root = Deno.makeTempDirSync({ prefix: 'tasks-prompt-' })
-  let path = `${root}/tasks.db`
-  let marker = uid()
-  try {
-    let legacy = open(path)
-    apply(legacy, [{ eid: marker, name: 'doc', comp: { title: 'marker' } }])
-    legacy.prepare(
-      `insert into prompt (entity) select id from entity where eid = ?`,
-    ).run(marker)
-    legacy.exec('alter table prompt rename to instruction')
-    // A rolling successor may have planted the new table before retiring the
-    // old one. Reopen must merge this interrupted two-table shape, then drop
-    // only the one-column legacy marker.
-    legacy.exec(`create table prompt (
-      entity integer primary key references entity(id)
-    )`)
-    legacy.close()
-
-    let migrated = open(path)
-    assertEquals(
-      migrated.prepare(
-        `select e.eid from prompt p join entity e on e.id = p.entity
-         where e.eid = ?`,
-      ).get(marker),
-      { eid: marker },
-    )
-    assertEquals(hasCol(migrated, 'instruction', 'entity'), false)
-
-    // The retired empty marker spelling is now an unknown-component no-op.
-    // It cannot silently create either a prompt or a future instruction.
-    let old = uid()
-    assertEquals(
-      apply(migrated, [{ eid: old, name: 'instruction', comp: {} }]),
-      [],
-    )
-    assertEquals(
-      migrated.prepare('select 1 from entity where eid = ?').get(old),
-      undefined,
-    )
-    migrated.close()
-  } finally {
-    Deno.removeSync(root, { recursive: true })
-  }
-})
-
 Deno.test('open refuses the live graph under a test, before touching disk', () => {
   // The footgun T-14260 disarmed: under `deno test` (main module ends
   // _test.ts) open() must reject the HOME-derived live path and create
@@ -3186,163 +3140,6 @@ slow('open adds the repo url in place', () => {
   Deno.removeSync(root, { recursive: true })
 })
 
-slow('open retires proposal into a stamp and rewrites stale boards', () => {
-  let root = Deno.makeTempDirSync({ prefix: 'tasks-proposal-' })
-  let path = `${root}/tasks.db`
-  let legacy = open(path)
-  let idea = uid(), declined = uid(), plain = uid(), board = uid()
-  apply(legacy, [
-    { eid: idea, name: 'task', comp: {} },
-    { eid: declined, name: 'task', comp: {} },
-    { eid: plain, name: 'task', comp: {} },
-    { eid: board, name: 'board', comp: { query: '.status=open' } },
-  ])
-  let filed = compOf(legacy, idea, 'created')!
-  legacy.exec('alter table task add column proposal integer')
-  legacy.prepare(`update task set proposal = ? where ${OWNED}`).run(1, idea)
-  legacy.prepare(`update task set proposal = ? where ${OWNED}`)
-    .run(0, declined)
-  legacy.prepare(`update board set query = ? where ${OWNED}`).run(
-    '.status=open&.proposal=true&.domain=Eng',
-    board,
-  )
-  legacy.close()
-
-  let healed = open(path)
-  assertEquals(hasCol(healed, 'task', 'proposal'), false)
-  assertEquals(compOf(healed, idea, 'proposed'), {
-    eid: idea,
-    at: filed.at,
-    by: filed.by,
-    via: filed.via,
-  })
-  assertEquals(compOf(healed, declined, 'proposed'), undefined)
-  assertEquals(compOf(healed, plain, 'proposed'), undefined)
-  assertEquals(
-    compOf(healed, board, 'board')?.query,
-    '.status=open&.proposed~=&.domain=Eng',
-  )
-  // A partially migrated database may have lost the column before its saved
-  // query changed. The rewrite is independently idempotent.
-  healed.prepare(`update board set query = ? where ${OWNED}`)
-    .run('.proposal=true', board)
-  healed.close()
-  let again = open(path)
-  assertEquals(compOf(again, board, 'board')?.query, '.proposed~=')
-  assertEquals(compOf(again, idea, 'proposed')?.at, filed.at)
-  again.close()
-  Deno.removeSync(root, { recursive: true })
-})
-
-slow('open dissolves task.status into lifecycle marks idempotently', () => {
-  let root = Deno.makeTempDirSync({ prefix: 'tasks-status-' })
-  let path = `${root}/tasks.db`
-  let legacy = open(path)
-  let session = uid(), openTask = uid(), liveWip = uid(), stuckWip = uid()
-  let done = uid(), cancelled = uid(), board = uid()
-  apply(legacy, [
-    { eid: session, name: 'session', comp: { id: 'status-migration' } },
-    ...[openTask, liveWip, stuckWip, done, cancelled].map((eid) => ({
-      eid,
-      name: 'task',
-      comp: {},
-    })),
-    { eid: liveWip, name: 'claim', comp: { session } },
-    { eid: board, name: 'board', comp: { query: '.status=open,wip' } },
-  ])
-  // Recreate the legacy shape after the current schema has seeded the file.
-  legacy.exec("alter table task add column status text not null default 'open'")
-  for (
-    let [eid, status] of [
-      [liveWip, 'wip'],
-      [stuckWip, 'wip'],
-      [done, 'done'],
-      [cancelled, 'cancelled'],
-    ]
-  ) {
-    legacy.prepare(`update task set status = ? where ${OWNED}`).run(status, eid)
-  }
-  legacy.close()
-
-  let healed = open(path)
-  assertEquals(hasCol(healed, 'task', 'status'), false)
-  let derived = (eid: string) =>
-    statusOf({
-      task: compOf(healed, eid, 'task'),
-      claim: compOf(healed, eid, 'claim'),
-      completed: compOf(healed, eid, 'completed'),
-      cancelled: compOf(healed, eid, 'cancelled'),
-    })
-  assertEquals(derived(openTask), 'open')
-  assertEquals(derived(liveWip), 'wip')
-  assertEquals(derived(stuckWip), 'open')
-  assertEquals(derived(done), 'done')
-  assertEquals(derived(cancelled), 'cancelled')
-  assertEquals(compOf(healed, board, 'board')?.query, '.status=open,wip')
-  let doneAt = compOf(healed, done, 'completed')?.at
-  let cancelledAt = compOf(healed, cancelled, 'cancelled')?.at
-  healed.close()
-
-  let again = open(path)
-  assertEquals(hasCol(again, 'task', 'status'), false)
-  assertEquals(compOf(again, done, 'completed')?.at, doneAt)
-  assertEquals(compOf(again, cancelled, 'cancelled')?.at, cancelledAt)
-  again.close()
-  Deno.removeSync(root, { recursive: true })
-})
-
-slow('open retires project timestamps into the archived stamp', () => {
-  let root = Deno.makeTempDirSync({
-    prefix: 'tasks-retired-project-',
-    suffix: '.db',
-  })
-  let path = `${root}/tasks.db`
-  let legacy = open(path)
-  let retired = uid(), both = uid(), board = uid()
-  apply(legacy, [
-    { eid: retired, name: 'project', comp: {} },
-    { eid: both, name: 'project', comp: {} },
-    { eid: both, name: 'archived', comp: {} },
-    { eid: board, name: 'board', comp: { query: '' } },
-  ])
-  legacy.exec('alter table project add column retired_at text')
-  legacy.prepare(`update project set retired_at = ? where ${OWNED}`)
-    .run('2026-07-01T00:00:00.000Z', retired)
-  legacy.prepare(`update project set retired_at = ? where ${OWNED}`)
-    .run('2026-06-01T00:00:00.000Z', both)
-  legacy.prepare(`update archived set at = ? where ${OWNED}`)
-    .run('2026-06-15T00:00:00.000Z', both)
-  legacy.prepare(`update board set query = ? where ${OWNED}`).run(
-    '.project.retired_at=&.retired_at>=2026-01-01 ' +
-      '"literal .retired_at=value"',
-    board,
-  )
-  legacy.close()
-
-  let healed = open(path)
-  assertEquals(hasCol(healed, 'project', 'retired_at'), false)
-  assertEquals(
-    compOf(healed, retired, 'archived')?.at,
-    '2026-07-01T00:00:00.000Z',
-  )
-  assertEquals(
-    compOf(healed, both, 'archived')?.at,
-    '2026-06-15T00:00:00.000Z',
-  )
-  assertEquals(
-    compOf(healed, board, 'board')?.query,
-    '.archived.at=&.archived.at>=2026-01-01 "literal .retired_at=value"',
-  )
-  healed.prepare(`update board set query = ? where ${OWNED}`)
-    .run('.retired_at=', board)
-  healed.close()
-
-  let again = open(path)
-  assertEquals(compOf(again, board, 'board')?.query, '.archived.at=')
-  again.close()
-  Deno.removeSync(root, { recursive: true })
-})
-
 slow('open heals canonical stored values once and preserves failures', () => {
   let root = Deno.makeTempDirSync({ prefix: 'tasks-heal-' })
   let path = `${root}/tasks.db`
@@ -3350,6 +3147,7 @@ slow('open heals canonical stored values once and preserves failures', () => {
   let project = uid(), task = uid(), session = uid()
   apply(legacy, [
     { eid: project, name: 'project', comp: {} },
+    { eid: project, name: 'archived', comp: {} },
     { eid: task, name: 'task', comp: {} },
     { eid: task, name: 'filed', comp: { priority: 2, project: project } },
     {
@@ -3364,8 +3162,7 @@ slow('open heals canonical stored values once and preserves failures', () => {
     .run(session)
   legacy.prepare(`update created set at = ? where ${OWNED}`)
     .run('2026-07-26T12:34:56Z', task)
-  legacy.exec('alter table project add column retired_at text')
-  legacy.prepare(`update project set retired_at = 'never' where ${OWNED}`)
+  legacy.prepare(`update archived set at = 'never' where ${OWNED}`)
     .run(project)
   // open() already marked this vocabulary's heal done; the cells above stand
   // in for an older vocabulary's writes, so unmark it the way a vocabulary
@@ -3964,110 +3761,6 @@ Deno.test('journal: a multi-entity batch is seekable from each entity', () => {
      where jc.tx = ? and jc.entity in (select id from entity where eid in (?, ?))`,
   ).get(batch, a, b) as { n: number }
   assertEquals(rows.n, 2)
-})
-
-// The one-time rekey (T-18883): a graph whose journal still names eids as
-// text is rebuilt by spine id on open, ids kept, history readable as before.
-// An eid the journal names and no spine carries -- a purged change, an actor
-// slug -- is given a retained spine (num null) and a grave dated by the last
-// transaction that named it, so entity is NOT NULL and every actor resolves.
-slow('open keys a text-eid journal by spine id once', () => {
-  let root = Deno.makeTempDirSync({ prefix: 'tasks-journal-keys-' })
-  let path = `${root}/tasks.db`
-  try {
-    let legacy = open(path)
-    let t = uid(), who = uid(), s = uid()
-    apply(legacy, [
-      { eid: who, name: 'doc', comp: { title: 'operator' } },
-      { eid: who, name: 'project', comp: {} },
-      { eid: s, name: 'session', comp: { id: `keys-${s}`, actor: who } },
-    ])
-    apply(
-      legacy,
-      [{ eid: t, name: 'doc', comp: { title: 'v1' } }],
-      undefined,
-      `keys-${s}`,
-    )
-    apply(legacy, [{ eid: t, name: 'doc', comp: { title: 'v2' } }])
-    let before = journalOf(legacy, t)
-    let tip = cursorOf(legacy)
-    // Regress to the text-keyed shape: eids where the ids are, plus one change
-    // and one actor nothing resolves.
-    legacy.exec(`pragma foreign_keys = off`)
-    legacy.exec(`
-      create table __old_tx (id integer primary key, ts text not null,
-        actor text, via text, trace text);
-      insert into __old_tx select id, ts, ${refEid('actor')}, ${
-      refEid('via')
-    }, trace from journal_tx;
-      drop table journal_tx;
-      alter table __old_tx rename to journal_tx;
-      create table __old_change (id integer primary key,
-        tx integer not null references journal_tx(id), ordinal integer not null,
-        eid text not null, component text not null, operation text not null);
-      insert into __old_change select jc.id, jc.tx, jc.ordinal, e.eid,
-        jc.component, jc.operation from journal_change jc
-        join entity e on e.id = jc.entity;
-      drop table journal_change;
-      alter table __old_change rename to journal_change;
-      create index journal_change_tx on journal_change(tx, ordinal);
-      create index journal_change_ent on journal_change(eid, component);
-      insert into journal_tx (ts, actor) values ('2026-01-01T00:00:00.000Z', 'nobody');
-      insert into journal_change (tx, ordinal, eid, component, operation)
-        values ((select max(id) from journal_tx), 0, 'purged', 'doc', 'upsert');
-    `)
-    legacy.close()
-
-    let keyed = open(path)
-    assertEquals(hasCol(keyed, 'journal_change', 'eid'), false)
-    assertEquals(
-      (keyed.prepare(
-        `select "notnull" as nn from pragma_table_info('journal_change')
-         where name = 'entity'`,
-      ).get() as { nn: number }).nn,
-      1,
-    )
-    assertEquals(journalOf(keyed, t), before)
-    assertEquals(journalOf(keyed, t)[0].id <= tip, true)
-    // The purged change and the slug actor were buried: a retained spine
-    // (num null) and a grave dated by the one transaction that named them.
-    let grave = (eid: string) =>
-      keyed.prepare(
-        `select e.num as num, t.deleted_at as at from entity e
-         join tombstone t on t.entity = e.id where e.eid = ?`,
-      ).get(eid)
-    assertEquals(grave('purged'), { num: null, at: '2026-01-01T00:00:00.000Z' })
-    assertEquals(grave('nobody'), { num: null, at: '2026-01-01T00:00:00.000Z' })
-    assertEquals(
-      keyed.prepare(
-        `select ${refEid('actor')} as actor from journal_tx
-         order by id desc limit 1`,
-      ).get(),
-      { actor: 'nobody' },
-    )
-    assertEquals(journalOf(keyed, 'purged')[0].changes, [{
-      eid: 'purged',
-      name: 'doc',
-      comp: {},
-    }])
-    // Buried means dead: the grave refuses a write at that eid.
-    assertThrows(() =>
-      apply(keyed, [{ eid: 'purged', name: 'doc', comp: { title: 'back' } }])
-    )
-    assertEquals(
-      (keyed.prepare(`pragma index_info('journal_change_ent')`).all() as {
-        name: string
-      }[]).map((i) => i.name),
-      ['entity', 'component'],
-    )
-    assertEquals(keyed.prepare('pragma foreign_key_check').all(), [])
-    // Writes after the rekey land by spine id and read back through the join.
-    apply(keyed, [{ eid: t, name: 'doc', comp: { title: 'v3' } }])
-    assertEquals(journalOf(keyed, t)[0].changes[0].comp, { title: 'v3' })
-    keyed.close()
-  } finally {
-    Deno.removeSync(root, { recursive: true })
-  }
 })
 
 Deno.test('num is monotonic: a grave keeps its number off the market', () => {
