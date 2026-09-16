@@ -16,8 +16,10 @@ Deno.test('bulk shards are bounded, deterministic and run every module once', ()
   }
 })
 
+// A failing shard no longer cancels its siblings: every shard runs to its own
+// end and prints its own report, and the coordinator fails afterwards.
 for (let failure of [false, true]) {
-  Deno.test(`bulk processes ${failure ? 'fail fast and settle a live sibling' : 'run every shard'}`, async () => {
+  Deno.test(`bulk processes run every shard${failure ? ' past a failing one' : ''}`, async () => {
     let dir = await Deno.makeTempDir({ prefix: 'test-shards-' })
     try {
       let testing = new URL('../src/testing.ts', import.meta.url).href
@@ -33,18 +35,15 @@ for (let failure of [false, true]) {
         });
       `,
       )
+      // b reports the shard's own pid and passes in both cases: the sibling of
+      // a failing shard is expected to finish, not to be killed mid-run.
       await Deno.writeTextFile(
         `${dir}/b_test.ts`,
         `
-        Deno.test('b', async () => {
+        Deno.test('b', () => {
           Deno.writeTextFileSync(${
           JSON.stringify(`${dir}/b.pid`)
         }, String(Deno.pid));
-          ${
-          failure
-            ? 'setInterval(() => {}, 1000); await new Promise(() => {});'
-            : ''
-        }
         });
       `,
       )
@@ -61,10 +60,9 @@ for (let failure of [false, true]) {
         await Deno.stat(`/proc/${pid}`).then(() => true, () => false),
         false,
       )
-      if (!failure) {
-        let text = new TextDecoder().decode(out.stdout)
-        assertEquals((text.match(/1 passed/g) ?? []).length, 2)
-      }
+      let text = new TextDecoder().decode(out.stdout)
+      assertEquals((text.match(/1 passed/g) ?? []).length, failure ? 1 : 2)
+      assertEquals(/1 failed/.test(text), failure)
     } finally {
       await Deno.remove(dir, { recursive: true })
     }
@@ -247,7 +245,7 @@ for (let phase of ['broad', 'isolated']) {
 for (
   let [phase, code] of [['broad-code', 23], ['isolated-code', 24]] as const
 ) {
-  Deno.test(`runner preserves ordinary nonzero status in ${phase}`, async () => {
+  Deno.test(`runner runs every phase and preserves ${phase}'s status`, async () => {
     let dir = await Deno.makeTempDir({ prefix: 'test-runner-' })
     try {
       let status = await new Deno.Command(Deno.execPath(), {
@@ -257,6 +255,10 @@ for (
       }).output()
       assertEquals(status.code, code)
       assertEquals(status.signal, null)
+      // Both phases ran: a failing one is a result to report, never a stop.
+      for (let name of ['broad', 'isolated']) {
+        await Deno.stat(`${dir}/${name}.ready`)
+      }
     } finally {
       await Deno.remove(dir, { recursive: true })
     }

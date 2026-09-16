@@ -104,12 +104,17 @@ let common = [
   '-A',
   '--unstable-net',
   '--unstable-worker-options',
-  '--fail-fast',
+  // No --fail-fast. A suite reports EVERY failure it has: stopping at the
+  // first one turns a red run into a single symptom, and the shard that never
+  // ran is indistinguishable from a green one. The slow tier hid 22 failures
+  // behind an early shard for hundreds of commits that way.
 ]
 export type TestCommand = {
   command: string
   args: string[]
   env?: Record<string, string>
+  /** Names this phase in the runner's closing failure list. */
+  label?: string
 }
 
 export type SettlementClock = {
@@ -127,6 +132,8 @@ export type TestCommandOptions = {
   clock?: SettlementClock
   /** Observe deliveries, including repeats while cleanup owns the outcome. */
   onSignal?: (signal: Deno.Signal) => void
+  /** Observe each failing phase as it ends; the run continues past it. */
+  onFailure?: (spec: TestCommand, code: number) => void
   /** Terminate this process with an accepted/owned signal after cleanup. */
   terminateOnSignal?: boolean
 }
@@ -216,6 +223,7 @@ export async function runTestCommands(
 ): Promise<Result> {
   let clock = options.clock ?? realClock
   let active: Deno.ChildProcess | undefined
+  let failure: Result | undefined
   let cancellation: (typeof cancellationSignals)[number] | undefined
   let terminalSignal: Deno.Signal | undefined
   let forwarded = false
@@ -308,10 +316,16 @@ export async function runTestCommands(
 
       if (cancellation) return await finish({ signal: cancellation })
       if (status.signal) return await finish({ signal: status.signal })
-      if (!status.success) return { code: status.code }
+      if (!status.success) {
+        // A failed phase is a result to report, not a reason to skip the
+        // phases after it. The first failing code is the run's code; a signal
+        // still ends the run at once, since the whole tree is going down.
+        failure ??= { code: status.code }
+        options.onFailure?.(spec, status.code)
+      }
       forwarded = false
     }
-    return { code: 0 }
+    return failure ?? { code: 0 }
   } finally {
     // A synchronous spawn failure and any future exception still cannot leave
     // an already-owned group behind.
@@ -368,21 +382,27 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
       stderr: 'piped',
     }).spawn()
   )
+  let failed: string[] = []
   await Promise.all(children.map(async (child) => {
     let status = await child.output()
     report(Deno.stdout, status.stdout)
     report(Deno.stderr, status.stderr)
+    // Every shard runs to its own end and prints its own report. Exiting here
+    // on the first failure killed the shards still running, so their failures
+    // were never printed at all.
     if (!status.success) {
-      console.error(`test shard ${child.pid}: ${status.signal ?? status.code}`)
-      Deno.exit(status.code || 1)
+      failed.push(`test shard ${child.pid}: ${status.signal ?? status.code}`)
     }
   }))
+  for (let line of failed) console.error(line)
+  if (failed.length) Deno.exit(1)
 } else if (import.meta.main) {
   let tests = await inventory()
   let suite = Deno.env.get('TASKS_SLOW')
     ? await (await import('../workers/yak/probe-suite.ts')).probeSuite()
     : undefined
   let env = { TEST_DENO_DIR: denoDir(), DENO_DIR: denoDir(), ...suite?.env }
+  let failed: string[] = []
   try {
     let result = await runTestCommands([
       {
@@ -396,6 +416,7 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
           ...tests.filter((f) => !isolated.has(f)),
         ],
         env,
+        label: 'the parallel pass',
       },
       // Deno's sequential test modules still share process environment. A file
       // that owns HOME must not redirect the next file's nested tools or cache.
@@ -403,10 +424,20 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
         command: Deno.execPath(),
         args: [...common, file],
         env,
+        label: file,
       })),
-    ], { terminateOnSignal: !suite })
+    ], {
+      terminateOnSignal: !suite,
+      onFailure: (spec) => failed.push(spec.label ?? spec.args.join(' ')),
+    })
     Deno.exitCode = result.code ?? (result.signal === 'SIGINT' ? 130 : 143)
   } finally {
     await suite?.stop()
+    // The closing word on a long run: which phases were red, after every one
+    // of them has printed its own report.
+    if (failed.length) {
+      console.error(`\n─── ${failed.length} failing phase(s) ───`)
+      for (let phase of failed) console.error(`  ${phase}`)
+    }
   }
 }

@@ -53,6 +53,9 @@ if (mode === 'bulk') {
   await Deno.writeTextFile(`${dir}/grandchild.pid`, `${Deno.pid}`)
   await new Promise(() => {})
 } else if (mode === 'child') {
+  // The ready marker precedes the exit so a phase that only reports a status
+  // still proves it ran — the runner now runs the phases after a failing one.
+  await Deno.writeTextFile(`${dir}/${phaseName}.ready`, `${Deno.pid}`)
   if (codeText) Deno.exit(Number(codeText))
   if (stubborn) {
     for (let name of ['SIGINT', 'SIGTERM'] as const) {
@@ -71,7 +74,6 @@ if (mode === 'bulk') {
     stdout: 'null',
     stderr: 'null',
   }).spawn()
-  await Deno.writeTextFile(`${dir}/${phaseName}.ready`, `${Deno.pid}`)
   // An unresolved promise alone does not keep Deno's event loop alive. Keep
   // this phase active until the orchestrator forwards its cancellation.
   setInterval(() => {}, 1_000)
@@ -112,7 +114,7 @@ if (mode === 'bulk') {
     : phaseName === 'isolated'
     ? [child('broad', 0), child('isolated')]
     : phaseName === 'broad-code'
-    ? [child('broad', Number(codeText)), child('isolated')]
+    ? [child('broad', Number(codeText)), child('isolated', 0)]
     : [child('broad', 0), child('isolated', Number(codeText))]
   let result = await runTestCommands(commands, {
     terminateOnSignal: true,
