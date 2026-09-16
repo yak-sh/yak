@@ -15,14 +15,14 @@
 import { Commits } from './commit.ts'
 import { sqlitePath as path } from './sqlitepath.ts'
 import * as sqlite from 'jsr:@db/sqlite@0.13.0'
-import { dirname, resolve } from 'node:path'
+import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   canonicalFile,
   registerGraphFile,
   unregisterGraphFile,
 } from './file_guard.ts'
-import { contentFtsPending, freshStats, migrate } from '../db.ts'
+import { freshStats, migrate } from '../db.ts'
 import { loadVector } from '../vector.ts'
 import {
   type Can,
@@ -118,7 +118,6 @@ export class StatementSync implements Statement {
 export class DatabaseSync implements Sql {
   #db: InstanceType<typeof DriverDatabase>
   #commits = new Commits()
-  #ftsWorker?: Worker
   #guard?: ReturnType<typeof registerGraphFile>
   can: Can = { fts: true, temp: true }
 
@@ -278,39 +277,7 @@ export class DatabaseSync implements Sql {
     }
   }
 
-  // Historical indexing must not run on the serving event loop. The worker
-  // owns a separate connection, yields between transactions, and resumes the
-  // durable cursor after a process exit. New writes are indexed by triggers.
-  get backfillingFts() {
-    return !!this.#ftsWorker
-  }
-
-  backfillFts(path: string) {
-    if (path == ':memory:' || !contentFtsPending(this) || this.#ftsWorker) {
-      return
-    }
-    let worker = this.#ftsWorker = new Worker(
-      new URL('./content_fts_worker.ts', import.meta.url),
-      { type: 'module' },
-    )
-    worker.onmessage = (event) => {
-      if (event.data.error) {
-        console.warn('content FTS backfill paused:', event.data.error)
-      }
-      this.#ftsWorker = undefined
-    }
-    worker.onerror = (event) => {
-      event.preventDefault()
-      console.warn('content FTS backfill worker failed:', event.message)
-      this.#ftsWorker = undefined
-    }
-    worker.postMessage({ path: resolve(path) })
-  }
-
   close() {
-    // Never terminate an FFI-owning worker: let it finish its current slice
-    // and close its own SQLite handle, including its WAL read mark.
-    this.#ftsWorker?.postMessage({ stop: true })
     this.#db.close()
     if (this.#guard) unregisterGraphFile(this.#guard)
     this.#guard = undefined
@@ -449,7 +416,6 @@ let wal = (db: DatabaseSync) => {
 export let open = (path = file, vector = false) => {
   let db = migrate(wal(connect(path, vector)))
   freshStats(db)
-  db.backfillFts(path)
   return db
 }
 

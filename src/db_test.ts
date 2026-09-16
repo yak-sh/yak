@@ -274,7 +274,7 @@ slow(
       // its derived token index no longer describes that content.
       // the deep check runs daily; a day has passed
       raw.exec(`delete from server_meta where k = 'fts_check'`)
-      raw.exec('drop trigger doc_fts_au')
+      raw.exec('drop trigger doc_fts_update')
       raw.prepare(
         'update doc set title = title || ? where rowid = (select min(rowid) from doc_value)',
       ).run(' ftsdriftproof')
@@ -304,30 +304,23 @@ slow(
     }),
 )
 
+// A repair the package cannot make rides up as it stands, under a sentence
+// saying what was being repaired and SQLite's own verdict on how wide the
+// damage is: "database disk image is malformed" reads the same for an index
+// and for the whole file, and quick_check is what tells them apart.
 slow(
-  'an unrepaired FTS failure names its index, operations, and diagnoses',
+  'an unrepaired FTS failure carries the engine error and a quick_check verdict',
   () =>
     withFtsCopy((path) => {
       let raw = new DatabaseSync(path)
       raw.exec(`delete from server_meta where k = 'fts_check'`)
-      raw.exec('drop table doc_gram_data')
-      let error = assertThrows(() => migrate(raw)) as AggregateError
-      assertEquals(error instanceof AggregateError, true)
-      assertMatch(
-        error.message,
-        /doc_gram rebuild failed after integrity-check/,
-      )
-      assertMatch(
-        error.message,
-        /integrity-check: fts5: corruption.*doc_gram/,
-      )
-      assertMatch(error.message, /rebuild: SQL logic error/)
-      assertMatch(error.message, /quick_check: fts5: corruption.*doc_gram/)
-      let causes = error.errors as (Error & {
-        errcode?: number
-      })[]
-      assertEquals(causes.length, 2)
-      assertEquals(causes.every((cause) => cause.errcode != null), true)
+      raw.exec('drop table doc_fts_data')
+      let error = assertThrows(() => migrate(raw)) as Error
+      assertMatch(error.message, /search index adoption failed/)
+      assertMatch(error.message, /quick_check: fts5: corruption.*doc_fts/)
+      let cause = error.cause as Error & { errcode?: number }
+      assertEquals(cause instanceof Error, true)
+      assertEquals(cause.errcode != null, true)
       raw.close()
     }),
 )
@@ -794,10 +787,10 @@ let outsideVocabulary: Record<string, string> = {
   server_meta: 'server-local key/value (the durable sync epoch): never synced',
 }
 // FTS5 and SQLite Vector generate physical tables for their derived indexes;
-// they refill from source rows and hold no vocabulary.
+// they refill from source rows and hold no vocabulary. One per searched
+// component (@yaks/fts names them `<comp>_fts`), plus the vector shadows.
 let derivedShadow = (t: string) =>
-  t.startsWith('doc_fts') || t.startsWith('doc_gram') ||
-  t.startsWith('content_fts') || t.startsWith('content_gram') ||
+  /^(doc|mail|content)_fts/.test(t) ||
   t.startsWith('vector0_embedding') || t == '_sqliteai_vector'
 
 // The universal invariant CLAUDE.md names: every stored column is declared in
@@ -2438,7 +2431,7 @@ Deno.test('fts: a letter is found by the address it was sent to', () => {
   db.exec(`insert into doc_fts (doc_fts, rank) values ('integrity-check', 1)`)
 })
 
-slow('boot grows the envelope into a text index that predates it', () => {
+slow('boot grows the envelope an index of its own, and fills it', () => {
   let d = open(':memory:'), m = uid()
   apply(d, [
     {
@@ -2450,25 +2443,18 @@ slow('boot grows the envelope into a text index that predates it', () => {
   ])
   d.prepare(`update mail set to_addr = ? where ${OWNED}`)
     .run('yaktest6@bot.yak.sh', m)
-  // Regress to the shape before T-32657: a two-column mirror over a view that
-  // carried no address, filled the way that boot filled it.
+  // Regress to a graph whose letters were never indexed: no mail_fts at all,
+  // which is every graph raised before the envelope became its own index.
   d.exec(`
-    drop trigger doc_fts_ai; drop trigger doc_fts_ad; drop trigger doc_fts_au;
-    drop trigger mail_fts_ai; drop trigger mail_fts_au; drop trigger mail_fts_ad;
-    drop table doc_fts;
-    drop view doc_value;
-    create view doc_value as
-      select d.entity as rowid, d.entity, d.title, b.value as body
-      from doc d join blob_text b on b.entity = d.body;
-    create virtual table doc_fts using fts5(
-      title, body, content='doc_value', content_rowid='rowid'
-    );
-    insert into doc_fts (doc_fts) values ('rebuild');
+    drop trigger mail_fts_insert;
+    drop trigger mail_fts_delete;
+    drop trigger mail_fts_update;
+    drop table mail_fts;
   `)
-  assertEquals(search(d, 'yaktest6').length, 0)
+  assertThrows(() => search(d, 'yaktest6')) // the arm has no index to read
   migrate(d)
-  assertEquals(search(d, 'yaktest6')[0]?.eid, m) // reindexed on this one boot
-  assertEquals(search(d, '441030')[0]?.eid, m) // and nothing it held was lost
+  assertEquals(search(d, 'yaktest6')[0]?.eid, m) // cut and filled on this boot
+  assertEquals(search(d, '441030')[0]?.eid, m) // and the prose still answers
   d.close()
 })
 

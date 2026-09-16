@@ -54,12 +54,7 @@ Deno.test('redact: live doc, journal, indexes, embedding, and audit move atomica
     readComp(db, target, 'doc')?.body,
     'before [redacted] after [redacted]',
   )
-  assertEquals(search(db, secret), [])
-  assertEquals(
-    db.prepare(`select count(*) as n from doc_gram where body like ?`)
-      .get(`%${secret}%`),
-    { n: 0 },
-  )
+  assertEquals(search(db, secret), []) // the index holds no term for it
   assertEquals(
     db.prepare(
       `select count(*) as n from embedding

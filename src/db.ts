@@ -20,6 +20,7 @@ import type { FleetWrite } from './store/fleet_stamps.ts'
 export type { SchemaOp } from './store/sql.ts'
 import { initVector } from './vector.ts'
 import { schema as telemetrySchema } from '@yaks/telemetry'
+import { adopt, type Field, type Text } from '@yaks/fts'
 import { schema as embeddingSchema, state as indexState } from '@yaks/embedding'
 import { dirname, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -249,20 +250,6 @@ let mailDdl = `create table if not exists mail (
     headers text
   )`
 
-// A letter's ENVELOPE as one indexable string: the two addresses that say who
-// wrote it and who received it (T-32657). An address is what an operator has
-// in hand when they go looking for a letter — `task search yaktest6` — and it
-// appears nowhere in the subject or the prose, so doc_value carries it beside
-// title and body and the FTS mirror indexes it. `mail."from"` needs its quotes
-// (a keyword) and both columns are nullable, so the empty envelope is '' both
-// here and in every trigger below.
-let addrOf = (at: string) =>
-  `trim(coalesce(${at}"from", '') || ' ' || coalesce(${at}to_addr, ''))`
-// The same envelope read through an entity id, for a trigger on `doc` that has
-// no mail row in hand: an entity that is not a letter has no address.
-let addrAt = (entity: string) =>
-  `coalesce((select ${addrOf('')} from mail where entity = ${entity}), '')`
-
 // The star: an entity spine plus one component table per kind, plus the edge
 // table. `if not exists` makes this idempotent — safe to run every boot.
 // A canvas is an entity with no component (yet) — its geometry lives in `pin`.
@@ -291,13 +278,17 @@ let schema = `
     entity integer primary key references blob(entity),
     value text not null
   );
-  -- The doc projection the FTS mirrors index and search reads back: title,
-  -- body and envelope, resolved through the blob backend.
-  create view if not exists doc_value as
-    select d.entity as rowid, d.entity, d.title, b.value as body,
-      ${addrOf('m.')} as addr
-    from doc d join blob_text b on b.entity = d.body
-    left join mail m on m.entity = d.entity;
+  -- The doc projection ordinary reads take: title and body, resolved through
+  -- the blob backend. What the SEARCH index reads back through is @yaks/fts's
+  -- own doc_text view, cut beside this one.
+  -- DROPPED and raised again rather than left standing: a create-if-not-exists
+  -- keeps whatever an older boot cut, so a view that lost a column would stand
+  -- at its old shape forever. A view holds no rows, so re-cutting it every boot
+  -- costs nothing.
+  drop view if exists doc_value;
+  create view doc_value as
+    select d.entity as rowid, d.entity, d.title, b.value as body
+    from doc d join blob_text b on b.entity = d.body;
   create table if not exists task (
     entity    integer primary key references entity(id)
   );
@@ -901,173 +892,34 @@ let schema = `
   );
 `
 
-// A letter's envelope arrives AFTER its doc — the batch writes doc, then mail —
-// and is stamped again when delivery resolves the address, so the doc triggers
-// alone would index an empty envelope forever. These re-index the doc row on
-// every move of its mail row. The 'delete' half names the PREVIOUS addr
-// explicitly ('' before the row existed, old's after): doc_value already reads
-// the new one, and an fts5 delete whose values miss what is indexed corrupts
-// the index. Same reason for the `when`: no doc row, no indexed row to correct.
-let mailFts = `create trigger if not exists mail_fts_ai after insert on mail
-  when exists (select 1 from doc where entity = new.entity) begin
-    insert into doc_fts (doc_fts, rowid, title, body, addr)
-      select 'delete', rowid, title, body, '' from doc_value
-       where rowid = new.entity;
-    insert into doc_fts (rowid, title, body, addr)
-      select rowid, title, body, addr from doc_value where rowid = new.entity;
-  end;
-  create trigger if not exists mail_fts_au after update on mail
-  when exists (select 1 from doc where entity = new.entity) begin
-    insert into doc_fts (doc_fts, rowid, title, body, addr)
-      select 'delete', rowid, title, body, ${addrOf('old.')} from doc_value
-       where rowid = new.entity;
-    insert into doc_fts (rowid, title, body, addr)
-      select rowid, title, body, addr from doc_value where rowid = new.entity;
-  end;
-  create trigger if not exists mail_fts_ad after delete on mail
-  when exists (select 1 from doc where entity = old.entity) begin
-    insert into doc_fts (doc_fts, rowid, title, body, addr)
-      select 'delete', rowid, title, body, ${addrOf('old.')} from doc_value
-       where rowid = old.entity;
-    insert into doc_fts (rowid, title, body, addr)
-      select rowid, title, body, '' from doc_value where rowid = old.entity;
-  end;`
+// WHICH prose the graph searches, as @yaks/fts fields. The package cuts one
+// FTS5 index per component from these, keeps it current with three triggers,
+// and heals one that drifts; the fleet only says which columns hold words.
+//
+// Not every text column the vocabulary declares — a repo path and a provider
+// name are not words anyone goes looking for. Three things are: a document's
+// title and body, a transcript entry's prose, and a letter's ENVELOPE
+// (T-32657), the two addresses saying who wrote it and who received it. An
+// address appears nowhere in the subject or the body, so a search for one
+// finds the letter only because the envelope is indexed — in mail_fts, its own
+// index over the mail table, rather than as a column of doc_fts joined in from
+// the letter.
+let SEARCHED: Field[] = [
+  { comp: 'doc', prop: 'title' },
+  { comp: 'doc', prop: 'body' },
+  { comp: 'mail', prop: 'from' },
+  { comp: 'mail', prop: 'to_addr' },
+  { comp: 'content', prop: 'body' },
+]
 
-// The FTS5 mirrors, apart from `schema` because they are the one part of it a
-// backend may lack (Can.fts): these derive from doc and the integrity pass in
-// migrate() rebuilds them, so a store without FTS5 skips them whole and its
-// search() refuses instead of failing on a missing table.
-let ftsSchema = `
-  create virtual table if not exists doc_fts using fts5(
-    title, body, addr, content='doc_value', content_rowid='rowid'
-  );
-  create trigger if not exists doc_fts_ai after insert on doc begin
-    insert into doc_fts (rowid, title, body, addr)
-    values (new.rowid, new.title,
-      (select value from blob_text where entity = new.body),
-      ${addrAt('new.entity')});
-  end;
-  create trigger if not exists doc_fts_ad after delete on doc begin
-    insert into doc_fts (doc_fts, rowid, title, body, addr)
-    values ('delete', old.rowid, old.title,
-      (select value from blob_text where entity = old.body),
-      ${addrAt('old.entity')});
-  end;
-  create trigger if not exists doc_fts_au after update on doc begin
-    insert into doc_fts (doc_fts, rowid, title, body, addr)
-    values ('delete', old.rowid, old.title,
-      (select value from blob_text where entity = old.body),
-      ${addrAt('old.entity')});
-    insert into doc_fts (rowid, title, body, addr)
-    values (new.rowid, new.title,
-      (select value from blob_text where entity = new.body),
-      ${addrAt('new.entity')});
-  end;
-  ${mailFts}
-  -- The SUBSTRING index, and the reason it cannot be doc_fts: doc_fts indexes
-  -- TOKENS, so a search for idget finds none of the rows holding widget — a
-  -- prefix search is a strict subset of a substring one and loses rows
-  -- silently. The trigram tokenizer indexes every 3-character window instead,
-  -- which is what lets SQLite answer LIKE %x% from an index (sql.ts) rather
-  -- than by lowercasing every body in the graph. Derived like doc_fts: never
-  -- on the wire, never dumped (bin/backup), healed by the same check below.
-  create virtual table if not exists doc_gram using fts5(
-    title, body, content='doc_value', content_rowid='rowid', tokenize='trigram'
-  );
-  create trigger if not exists doc_gram_ai after insert on doc begin
-    insert into doc_gram (rowid, title, body)
-    values (new.rowid, new.title,
-      (select value from blob_text where entity = new.body));
-  end;
-  create trigger if not exists doc_gram_ad after delete on doc begin
-    insert into doc_gram (doc_gram, rowid, title, body)
-    values ('delete', old.rowid, old.title,
-      (select value from blob_text where entity = old.body));
-  end;
-  create trigger if not exists doc_gram_au after update on doc begin
-    insert into doc_gram (doc_gram, rowid, title, body)
-    values ('delete', old.rowid, old.title,
-      (select value from blob_text where entity = old.body));
-    insert into doc_gram (rowid, title, body)
-    values (new.rowid, new.title,
-      (select value from blob_text where entity = new.body));
-  end;
-`
-
-// Content is already inline text (unlike doc.body's blob reference). Keep
-// token and substring semantics separate, just as for docs. docsize is FTS5's
-// actual membership, not count(*) on an external-content table (which reads
-// the source). Guard deletes because old rows may await the additive backfill.
-let contentIndexes = ['content_fts', 'content_gram']
-let contentFtsSchema = contentIndexes.map((t) => `
-  create virtual table if not exists ${t} using fts5(
-    body, content='content', content_rowid='entity'
-    ${t.endsWith('_gram') ? ", tokenize='trigram', detail='none'" : ''}
-  );
-  create trigger if not exists ${t}_ai after insert on content begin
-    insert into ${t} (rowid, body) values (new.entity, new.body);
-  end;
-  create trigger if not exists ${t}_ad after delete on content
-  when exists (select 1 from ${t}_docsize where id = old.entity) begin
-    insert into ${t} (${t}, rowid, body)
-      values ('delete', old.entity, old.body);
-  end;
-  create trigger if not exists ${t}_au after update on content begin
-    insert into ${t} (${t}, rowid, body)
-      select 'delete', old.entity, old.body
-      where exists (select 1 from ${t}_docsize where id = old.entity);
-    insert into ${t} (rowid, body) values (new.entity, new.body);
-  end;
-`).join('\n')
-
-export let contentFtsPending = (db: Sql): boolean =>
-  db.can.fts &&
-  !!prep(db, "select 1 from server_meta where k = 'content_fts_pending'").get()
-
-// One bounded, resumable maintenance slice, never a full rebuild on boot.
-// Writers and concurrent openers serialize with the slice: a source row is
-// read and indexed under the same lock, so edits/deletes cannot strand stale
-// prose. The cursor skips rows already maintained by triggers. A crash loses
-// at most this transaction; the next open resumes it.
-export let fillContentFts = (db: Sql, limit = 64): boolean => {
-  if (!contentFtsPending(db)) return false
-  return db.transaction(() => {
-    let state = prep(
-      db,
-      "select v from server_meta where k = 'content_fts_pending'",
-    ).get() as { v: string } | undefined
-    if (!state) return false
-    let rows = prep(
-      db,
-      `select entity, body from content
-      where entity > ? order by entity limit ?`,
-    ).all(Number(state.v), limit) as { entity: number; body: string }[]
-    // Bound text volume too: one unusually long entry is indivisible, but never
-    // compound it with another batch of long responses in the same slice.
-    let chars = 0, through = Number(state.v)
-    for (let row of rows) {
-      for (let t of contentIndexes) {
-        prep(
-          db,
-          `insert into ${t} (rowid, body)
-          select ?, ? where not exists (select 1 from ${t}_docsize where id = ?)`,
-        )
-          .run(row.entity, row.body, row.entity)
-      }
-      through = row.entity
-      chars += row.body.length
-      if (chars >= 256_000) break
-    }
-    if (!rows.length) {
-      db.exec("delete from server_meta where k = 'content_fts_pending'")
-      // Ask the usual integrity pass to verify the finished mirrors next boot.
-      db.exec("delete from server_meta where k = 'fts_check'")
-      return false
-    }
-    prep(db, "update server_meta set v = ? where k = 'content_fts_pending'")
-      .run(String(through))
-    return true
-  }, true)
+// doc.body is an ADDRESS, not its own words: the prose lives in blob_text. The
+// package resolves it on BOTH sides of the mirror — in the triggers, so every
+// write path indexes prose, and in the doc_text view the index reads back
+// through for snippets and rebuilds. Every other searched column is inline
+// text, content.body included, whatever the vocabulary's `body` shorthand says.
+let RESOLVE: Text = {
+  'doc.body': (stored) =>
+    `(select value from blob_text where entity = ${stored})`,
 }
 
 // The component tables DERIVED from the vocabulary (T-12764) rather than
@@ -1907,15 +1759,6 @@ export let migrate = <D extends Sql>(db: D): D => {
       // The version check belongs after that wait: reading it before BEGIN lets
       // an older waiter overwrite a newer migrator's version after it commits.
       let stored = writableVersion(db)
-      // A mirror about to be CREATED is born empty, and the boot integrity
-      // check below cannot see that: count(*) over an external-content table
-      // reads the content table, not the index. So whoever just dropped one —
-      // the body migration, the envelope migration, or a graph that never had
-      // it — has its rows put back here, once, in this transaction.
-      let unbuilt = !db.can.fts ? [] : ['doc_fts', 'doc_gram']
-        .filter((t) => !tableExists(db, t))
-      let contentUnbuilt = db.can.fts &&
-        contentIndexes.some((t) => !tableExists(db, t))
       db.exec(schema)
       // The tables the storage packages own, planted from what THEY declare:
       // the tool_call log and its source CHECK (@yaks/telemetry), the vector
@@ -1925,17 +1768,6 @@ export let migrate = <D extends Sql>(db: D): D => {
       // like every other create, so a fresh backend gets them too.
       for (let stmt of telemetrySchema()) db.exec(stmt)
       for (let stmt of embeddingSchema()) db.exec(stmt)
-      if (db.can.fts) {
-        db.exec(ftsSchema)
-        db.exec(contentFtsSchema)
-        if (contentUnbuilt && prep(db, 'select 1 from content limit 1').get()) {
-          db.exec(`insert or replace into server_meta (k, v)
-            values ('content_fts_pending', '0')`)
-        }
-      }
-      for (let t of unbuilt) {
-        db.exec(`insert into ${t} (${t}) values ('rebuild')`)
-      }
       let addCol = (table: string, col: string, ddl: string) => {
         if (!hasCol(db, table, col)) {
           // Quoted: a component may be named after a keyword (`commit`).
@@ -2072,104 +1904,58 @@ export let migrate = <D extends Sql>(db: D): D => {
       // board.query, project.color and the hook request columns (method/path/
       // headers/sig_ok) were planted here before their tables were derived
       // (T-12764); the addDerivedCols pass above now fills them from the vocabulary.
-      // All mirrors follow their source by trigger. Out-of-band writes and
-      // shadow-table damage show up as a failed integrity check or actual
-      // membership drift. Docs heal inline; the much larger transcript indexes
-      // reset here and resume their bounded backfill off the serving thread.
-      let count = (t: string) =>
-        (prep(db, `select count(*) as n from ${t}`).get() as { n: number }).n
-      type FtsFault = {
-        operation: 'integrity-check' | 'count-check'
-        error: unknown
-      }
-      let diagnosis = (error: unknown) =>
-        error instanceof Error ? error.message : String(error)
-      // The integrity-check reads both shadow tables whole — 2.3s of boot on
-      // the live graph — for damage none of our writers can cause, so it runs
-      // once a day (marked in server_meta); the count-check, which catches
-      // every drift a missed trigger leaves, stays on every boot.
+
+      // SEARCH, adopted rather than hand-cut: @yaks/fts makes the indexes that
+      // stand equal to what SEARCHED declares — keeping one whose columns
+      // already match, re-cutting and rebuilding one that differs, dropping any
+      // foreign trigger writing into it (an external-content index has exactly
+      // three writers; a fourth double-counts) — and then heals. A second boot
+      // changes nothing.
+      //
+      // heal is the boot check this replaces: membership read from the index's
+      // own _docsize shadow, which is what catches a drift a missed trigger
+      // left, and FTS5's whole-index integrity check beside it. The deep half
+      // reads both shadow tables whole — 2.3s of boot on the live graph — for
+      // damage none of our writers can cause, so it runs once a day, marked in
+      // server_meta; the membership count stays on every boot.
       let checked = prep(db, `select v from server_meta where k = 'fts_check'`)
         .get() as { v: string } | undefined
       let deep = !checked ||
         !(Date.now() - Date.parse(checked.v) < 24 * 3_600_000)
-      let fault = (t: string): FtsFault | undefined => {
-        if (deep) {
-          try {
-            db.exec(
-              `insert into ${t} (${t}, rank) values ('integrity-check', 1)`,
-            )
-          } catch (error) {
-            return { operation: 'integrity-check', error }
+      if (db.can.fts) {
+        // The SUBSTRING mirrors, dropped once and never planted again: they
+        // were maintained by six triggers and read by nothing. A trigram index
+        // accelerates LIKE only for a statement that names it, and no statement
+        // ever did — a `~=` predicate scans (sql.ts) exactly as it always has.
+        for (let t of ['doc_gram', 'content_gram']) {
+          for (let when of ['ai', 'ad', 'au']) {
+            db.exec(`drop trigger if exists ${t}_${when}`)
           }
+          db.exec(`drop table if exists ${t}`)
         }
         try {
-          let source = t.startsWith('content_') ? 'content' : 'doc'
-          let indexed = count(`${t}_docsize`), docs = count(source)
-          if (indexed != docs) {
-            return {
-              operation: 'count-check',
-              error: new Error(
-                `${t} returned ${indexed} rows; ${source} returned ${docs}`,
-              ),
+          adopt(driverOf(db), SEARCHED, RESOLVE, { deep })
+        } catch (error) {
+          // An FTS integrity failure often says only "database disk image is
+          // malformed", which reads the same whether the damage is index-wide
+          // or database-wide. quick_check's verdict tells them apart, and is
+          // paid only on this failed-repair path.
+          let quick = () => {
+            try {
+              let row = prep(db, 'pragma quick_check(1)').get() as Record<
+                string,
+                string
+              >
+              return row?.quick_check ?? String(Object.values(row ?? {})[0])
+            } catch (e) {
+              return `failed: ${e instanceof Error ? e.message : String(e)}`
             }
           }
-        } catch (error) {
-          return { operation: 'count-check', error }
-        }
-      }
-      let quick = () => {
-        try {
-          let row = prep(db, 'pragma quick_check(1)').get() as Record<
-            string,
-            string
-          >
-          return row?.quick_check ?? String(Object.values(row ?? {})[0])
-        } catch (error) {
-          return `failed: ${diagnosis(error)}`
-        }
-      }
-      for (
-        let t of db.can.fts ? ['doc_fts', 'doc_gram', ...contentIndexes] : []
-      ) {
-        if (contentIndexes.includes(t) && contentFtsPending(db)) continue
-        let before = fault(t)
-        if (!before) continue
-        if (contentIndexes.includes(t)) {
-          // Drop only derived mirrors on damage. Recreate both atomically,
-          // then refill off the boot path, with the same guarded triggers.
-          for (let index of contentIndexes) {
-            db.exec(`drop trigger if exists ${index}_ai;
-              drop trigger if exists ${index}_ad;
-              drop trigger if exists ${index}_au;
-              drop table ${index};`)
-          }
-          db.exec(contentFtsSchema)
-          db.exec(`insert or replace into server_meta (k, v)
-            values ('content_fts_pending', '0')`)
-          continue
-        }
-        try {
-          db.exec(`insert into ${t} (${t}) values ('rebuild')`)
-        } catch (error) {
-          // Keep BOTH SQLite errors: an FTS integrity failure often says only
-          // "database disk image is malformed", and dropping it made the later
-          // rebuild failure indistinguishable from damage to the main database.
-          // quick_check is paid only on this failed repair path; its verdict says
-          // whether SQLite sees a wider database problem or an FTS-only one.
-          throw new AggregateError(
-            [before.error, error],
-            `${t} rebuild failed after ${before.operation}; ` +
-              `${before.operation}: ${diagnosis(before.error)}; ` +
-              `rebuild: ${diagnosis(error)}; quick_check: ${quick()}`,
-          )
-        }
-        let after = fault(t)
-        if (after) {
-          throw new AggregateError(
-            [before.error, after.error],
-            `${t} ${after.operation} failed after rebuild; ` +
-              `before: ${diagnosis(before.error)}; ` +
-              `after: ${diagnosis(after.error)}; quick_check: ${quick()}`,
+          throw new Error(
+            `search index adoption failed: ${
+              error instanceof Error ? error.message : String(error)
+            }; quick_check: ${quick()}`,
+            { cause: error },
           )
         }
       }
@@ -2578,7 +2364,7 @@ export let graft = <D extends Sql>(db: D, ops: SchemaOp[]): D =>
 let defined = (ops: SchemaOp[]) =>
   ops.flatMap((op) => [
     ...op.sql.matchAll(
-      /create\s+(trigger|view|virtual\s+table)\s+(?:if\s+not\s+exists\s+)?(\w+)([^;]*)/gi,
+      /create\s+(trigger|view|virtual\s+table)\s+(?:if\s+not\s+exists\s+)?"?(\w+)"?([^;]*)/gi,
     ),
   ]).map(([, what, name, rest]) => ({
     name,
@@ -5769,11 +5555,15 @@ export let searchRead = (db: Sql, q: string, limit = 20, after?: number) => {
     where p.entity = e.id or p.entity =
       (select project from filed where filed.entity = e.id)
   )`
-  // These weights, recency and doc-over-content precedence are fleet policy,
-  // not the relevance-only/min-per-index policy of @yaks/fts.find(). FTS5's
-  // score/highlight/snippet must be read in the MATCH statement itself.
-  // The bm25 weights read title 8, body 1, envelope 8: an address is
-  // identity, so a letter to it outranks prose that merely mentions it.
+  // One arm per index, unioned: the words, then the addresses, then the
+  // transcripts. These weights, the recency term and the doc-over-the-rest
+  // precedence are fleet policy, not the relevance-only policy of
+  // @yaks/fts.find(). FTS5's score/highlight/snippet must be read in the MATCH
+  // statement itself, so the arms are spelled here rather than gathered.
+  // The bm25 weights read title 8, body 1, and both envelope addresses 8: an
+  // address is identity, so a letter to it outranks prose that mentions it.
+  // Each later arm drops what doc_fts already answered, so an entity that is
+  // both a document and a letter is one hit, ranked by its prose.
   let rows = match
     ? prep(
       db,
@@ -5781,7 +5571,7 @@ export let searchRead = (db: Sql, q: string, limit = 20, after?: number) => {
       select e.eid, d.title,
         highlight(doc_fts, 0, char(1), char(2)) as title_hit,
         snippet(doc_fts, 1, char(1), char(2), '…', 10) as snip,
-        -(bm25(doc_fts, 8.0, 1.0, 8.0)
+        -(bm25(doc_fts, 8.0, 1.0)
           - 2.0 / (1 + julianday('now') - julianday(coalesce(up.at, cr.at))))
           as score,
         e.num, ${retired} as retired
@@ -5791,6 +5581,21 @@ export let searchRead = (db: Sql, q: string, limit = 20, after?: number) => {
       left join updated up on up.entity = e.id
       left join created cr on cr.entity = e.id
       where doc_fts match ? ${screen}
+      union all
+      select e.eid, coalesce(d.title, '') as title,
+        coalesce(d.title, '') as title_hit,
+        snippet(mail_fts, -1, char(1), char(2), '…', 10) as snip,
+        -(bm25(mail_fts, 8.0, 8.0)
+          - 2.0 / (1 + julianday('now') - julianday(coalesce(up.at, cr.at))))
+          as score,
+        e.num, ${retired} as retired
+      from mail_fts
+      join entity e on e.id = mail_fts.rowid
+      left join doc d on d.entity = e.id
+      left join updated up on up.entity = e.id
+      left join created cr on cr.entity = e.id
+      where mail_fts match ? ${screen}
+        and e.id not in (select rowid from doc_fts where doc_fts match ?)
       union all
       select e.eid, '' as title, '' as title_hit,
         snippet(content_fts, 0, char(1), char(2), '…', 10) as snip,
@@ -5810,6 +5615,9 @@ export let searchRead = (db: Sql, q: string, limit = 20, after?: number) => {
     ).all(
       match,
       ...params,
+      match,
+      ...params,
+      match,
       match,
       ...params,
       match,

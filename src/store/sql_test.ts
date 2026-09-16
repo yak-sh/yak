@@ -186,12 +186,12 @@ slow('a store without FTS5 migrates whole and its search says so', () => {
 })
 
 // A store raised from an OLDER schema: `create … if not exists` leaves the
-// definition it found, so a store planted before the mail envelope joined the
-// index (T-32657) kept a two-column doc_fts under the current mail triggers,
-// which write doc_fts.addr — and SQLite compiles a table's triggers with the
-// statement that fires them, so EVERY delete stopped preparing (T-32826).
-// regraft() drops each definition and raises the current one, then refills the
-// mirrors it emptied.
+// definition it found, so a store planted before a column joined the index
+// keeps the narrower index under the current triggers, which write the column
+// — and SQLite compiles a table's triggers with the statement that fires them,
+// so EVERY write through that table stops preparing (T-32826). regraft() drops
+// each definition and raises the current one, then refills the mirrors it
+// emptied.
 slow('regraft() raises the definitions a graft cannot alter', () => {
   let ops = schemaDdl(new DatabaseSync(':memory:'))
   let db = plant(backend({ fts: true, temp: true }), ops)
@@ -200,21 +200,14 @@ slow('regraft() raises the definitions a graft cannot alter', () => {
     { eid: live, name: 'doc', comp: { title: 'planted' } },
     { eid: dead, name: 'doc', comp: { title: 'passing' } },
   ])
-  // The index as it stood before the envelope joined it, beside the mail
-  // triggers of the current schema.
+  // A one-column index where the current triggers write two.
   db.exec(`
-    drop trigger doc_fts_ai;
-    drop trigger doc_fts_ad;
-    drop trigger doc_fts_au;
+    drop trigger doc_fts_insert;
+    drop trigger doc_fts_update;
     drop table doc_fts;
     create virtual table doc_fts using fts5(
-      title, body, content='doc_value', content_rowid='rowid'
+      title, content='doc_text', content_rowid='entity'
     );
-    create trigger doc_fts_ad after delete on doc begin
-      insert into doc_fts (doc_fts, rowid, title, body)
-      values ('delete', old.rowid, old.title,
-        (select value from blob_text where entity = old.body));
-    end;
   `)
   assertThrows(() => apply(db, [{ eid: dead, name: 'entity', comp: null }]))
   regraft(db, ops)
