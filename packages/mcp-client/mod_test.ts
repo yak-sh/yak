@@ -274,7 +274,6 @@ Deno.test('about tool accepts declared draft-07 input and output through SDK val
   }
 })
 
-
 Deno.test('opaque separators cannot silently collide across distinct server namespaces', async () => {
   const { checkToolNames } = await import('./mod.ts')
   const a = await nameOf('a', 'b__c'), b = await nameOf('a__b', 'c')
