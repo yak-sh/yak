@@ -35,6 +35,14 @@
 // `heal()` is the other half. An index that drifts from its table (a trigger
 // that did not run, a file restored around it) answers wrong quietly, so it is
 // checked and rebuilt rather than trusted.
+//
+// `adopt()` is for a database that already HAS search objects — built by an
+// earlier version of this package, or by an application's own hand before it
+// used one. It makes what stands equal to what `schema()` says, keeping an
+// index whose columns already match (its words need no re-indexing) and
+// re-cutting one that does not, and it removes any other trigger that writes
+// into an index here: an external-content index has exactly three writers, and
+// a fourth double-counts every row.
 
 import {
   type Field,
@@ -129,33 +137,58 @@ export let schema = (fields: Field[], reads: Text | Derived = {}): string[] => {
 // then thorough: does it hold a row per row of the component, and does FTS5's
 // own integrity check pass. Answers the complaint, or undefined for a healthy
 // index.
-let fault = (db: Driver, comp: string): string | undefined => {
+//
+// Membership is read from the index's `_docsize` shadow table, never as
+// `count(*)` over the index itself: an external-content index answers that
+// from the table it mirrors, so it would agree with the table by construction
+// and never notice a row the triggers missed.
+//
+// The integrity check reads both shadow tables whole, which on a large index is
+// seconds of boot for damage no trigger causes; `deep: false` skips it and
+// keeps the count, which is what catches every drift a missed trigger leaves.
+let fault = (
+  db: Driver,
+  comp: string,
+  deep: boolean,
+): string | undefined => {
   let fts = indexName(comp)
   let count = (t: string) =>
     Number(db.query(`select count(*) as n from ${t}`, [])[0].n)
   try {
-    let [indexed, rows] = [count(q(fts)), count(q(comp))]
+    let [indexed, rows] = [count(q(`${fts}_docsize`)), count(q(comp))]
     if (indexed != rows) return `${fts} holds ${indexed} of ${rows} rows`
-    db.exec(
-      `insert into ${q(fts)}(${q(fts)}, rank) values('integrity-check', 1)`,
-    )
+    if (deep) {
+      db.exec(
+        `insert into ${q(fts)}(${q(fts)}, rank) values('integrity-check', 1)`,
+      )
+    }
   } catch (e) {
     return e instanceof Error ? e.message : String(e)
   }
+}
+
+export type HealOpts = {
+  // run FTS5's own integrity check beside the row count (default true)
+  deep?: boolean
 }
 
 // Check every index and rebuild the ones that drifted; answers the names of the
 // indexes rebuilt (usually none). A rebuild that does not fix the fault throws
 // with BOTH complaints — the first says what was wrong, the second whether the
 // damage is wider than the index.
-export let heal = (db: Driver, fields: Field[]): string[] => {
+export let heal = (
+  db: Driver,
+  fields: Field[],
+  opts: HealOpts = {},
+): string[] => {
+  let deep = opts.deep ?? true
   let healed: string[] = []
   for (let { comp } of indexes(fields)) {
-    let before = fault(db, comp)
+    let before = fault(db, comp, deep)
     if (!before) continue
     let fts = indexName(comp)
     db.exec(`insert into ${q(fts)}(${q(fts)}) values('rebuild')`)
-    let after = fault(db, comp)
+    let after = fault(db, comp, deep)
     if (after) {
       throw new Error(
         `${fts} is still broken after a rebuild; before: ${before}; after: ${after}`,
@@ -164,4 +197,100 @@ export let heal = (db: Driver, fields: Field[]): string[] => {
     healed.push(fts)
   }
   return healed
+}
+
+// What `adopt` did, by index name: the indexes it created or re-cut (and so
+// rebuilt from their tables), the triggers it dropped because they were not
+// this package's, and the indexes `heal` rebuilt afterwards.
+export type Adopted = {
+  recut: string[]
+  dropped: string[]
+  healed: string[]
+}
+
+// The columns an index declares, in order, as SQLite knows them; [] for none.
+let declared = (db: Driver, fts: string): string[] => {
+  try {
+    return db.query(`pragma table_info(${q(fts)})`, []).map((r) =>
+      String(r.name)
+    )
+  } catch {
+    return []
+  }
+}
+
+// What an index reads its words back out of: the `content=` name in its own
+// definition, or undefined for an index that is not there.
+let source = (db: Driver, fts: string): string | undefined => {
+  let row = db.query(
+    `select sql from sqlite_master where type = 'table' and name = ?`,
+    [fts],
+  )[0]
+  return row ? /content='([^']*)'/.exec(String(row.sql ?? ''))?.[1] : undefined
+}
+
+// The triggers that write into an index, by name, other than the three of
+// this package's own.
+let strays = (db: Driver, fts: string): string[] => {
+  let ours = new Set(['insert', 'delete', 'update'].map((s) => `${fts}_${s}`))
+  let word = new RegExp(`\\b${fts}\\b`)
+  return db.query(
+    `select name, sql from sqlite_master where type = 'trigger'`,
+    [],
+  )
+    .filter((r) => !ours.has(String(r.name)) && word.test(String(r.sql ?? '')))
+    .map((r) => String(r.name))
+}
+
+// Make a database's search objects equal to what `schema()` says, and true.
+//
+// Per index: one whose declared columns already match is kept, its words
+// intact; one that is missing or declares other columns is dropped and cut
+// again from the schema, then rebuilt from its table (an external-content
+// index is born empty). Any trigger writing into the index that is not one of
+// the package's three is dropped, and the three are (re)created. A text view is
+// always re-cut, since it holds no rows and must follow a table that grew.
+// Finally `heal` checks membership, so an index kept whole but missing rows —
+// one that predates some of its table — is rebuilt too.
+//
+// Everything runs through `if not exists`/`if exists`, so a second call on the
+// same database changes nothing and answers empty lists.
+export let adopt = (
+  db: Driver,
+  fields: Field[],
+  reads: Text | Derived = {},
+  opts: HealOpts = {},
+): Adopted => {
+  let recut: string[] = [], dropped: string[] = []
+  let stmts = schema(fields, reads)
+  for (let { comp, props } of indexes(fields)) {
+    let fts = indexName(comp)
+    let have = declared(db, fts)
+    let content = stmts.some((s) => s.includes(`content='${textName(comp)}'`))
+      ? textName(comp)
+      : comp
+    let same = have.length == props.length &&
+      have.every((c, i) => c == props[i]) && source(db, fts) == content
+    for (let t of strays(db, fts)) {
+      db.exec(`drop trigger if exists ${q(t)}`)
+      dropped.push(t)
+    }
+    db.exec(`drop view if exists ${q(textName(comp))}`)
+    if (!same) {
+      for (let s of ['insert', 'delete', 'update']) {
+        db.exec(`drop trigger if exists ${q(`${fts}_${s}`)}`)
+      }
+      db.exec(`drop table if exists ${q(fts)}`)
+    }
+    let mine = stmts.filter((s) =>
+      s.includes(q(fts)) || s.includes(q(textName(comp)))
+    )
+    for (let s of mine) db.exec(s)
+    if (!same) {
+      db.exec(`insert into ${q(fts)}(${q(fts)}) values('rebuild')`)
+      recut.push(fts)
+    }
+  }
+  let healed = heal(db, fields, opts)
+  return { recut, dropped, healed }
 }

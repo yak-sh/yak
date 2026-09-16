@@ -46,6 +46,13 @@ let hits = find(db, text, 'hobbit')
 Each piece stands alone: index without querying through `@yaks/sql`, or compile
 a query without ever calling `find`.
 
+One index per component is the whole design, and it is also why nothing here
+reads across components: a letter's envelope is text on the `mail` component and
+indexes in `mail_fts`, and a search over every index finds the letter by its
+address without the document's index carrying an `addr` column joined in from
+the letter. An application that ranks an address above prose does so in its own
+statement over the arms `hits()` builds.
+
 - **`fields(vocab, pick?)`** reads the text properties off a
   [@yaks/vocab](https://jsr.io/@yaks/vocab) schema. The default takes every
   stored text column; a `pick` narrows it (titles only, say).
@@ -56,8 +63,17 @@ a query without ever calling `find`.
   `schema(fields,
   blobText(vocab))` resolves it in both trigger sides and in
   the `<comp>_text` view the index reads back through, so the index holds prose
-  rather than hashes. **`heal(db, fields)`** checks each index against its table
-  and rebuilds one that drifted.
+  rather than hashes. **`heal(db, fields, {deep})`** checks each index against
+  its table — membership from the index's own `_docsize` shadow, since counting
+  an external-content index only re-reads its table — and rebuilds one that
+  drifted; `deep: false` skips FTS5's whole-index integrity check for a boot
+  that cannot spare the seconds. **`adopt(db, fields, text?)`** takes a database
+  that already has search objects, cut by hand or by an earlier version, and
+  makes them equal to what `schema` says: an index whose columns match is kept
+  with its words, one that differs is re-cut and rebuilt, any trigger writing
+  into an index that is not one of the package's three is dropped (an
+  external-content index has exactly three writers; a fourth double-counts), and
+  `heal` runs last. A second call changes nothing.
 - **`search(fields)`** is the [@yaks/sql](https://jsr.io/@yaks/sql) extension:
   it claims the `text` clause and compiles it to a `match` over every index.
   What a person typed is always spelled as a quoted phrase, so match syntax in a
