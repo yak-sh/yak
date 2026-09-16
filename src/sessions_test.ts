@@ -166,13 +166,18 @@ let scratch = (() => {
 })()
 
 // project(+repo) → task: the graph a spawn reads its workspace from.
+// Both ask for a human number, the way the doors a person authors through do
+// (`task new`, the web's new-project gesture): a num is REQUESTED per entity
+// since T-37071, never implied by a component. A session never asks — the
+// owner's rule is that child sessions carry no handle — so every S- id below
+// is the short eid form, and every T-/P- id is a number.
 let seed = (body = '', repo: string | null = scratch) => {
   let p = uid(), t = uid()
   apply(db, [
-    { eid: p, name: 'doc', comp: { title: 'Scratch project' } },
+    { eid: p, name: 'doc', comp: { title: 'Scratch project' }, $num: true },
     { eid: p, name: 'project', comp: {} },
     ...(repo ? [{ eid: p, name: 'repo', comp: { path: repo } }] : []),
-    { eid: t, name: 'doc', comp: { title: 'Do the thing', body } },
+    { eid: t, name: 'doc', comp: { title: 'Do the thing', body }, $num: true },
     { eid: t, name: 'task', comp: {} },
     { eid: t, name: 'filed', comp: { project: p } },
   ])
@@ -616,9 +621,12 @@ slow('a process provider names its projectless-task requirement', async () => {
   ])
   let { eid, done } = begin(task)
   await done
-  assertMatch(
-    failure(eid) ?? '',
-    /T-\d+ has no project; fake requires a repo-backed project/,
+  // A projectless task is a microtask (T-37071), so it wears no number and
+  // the refusal names it by the short eid form — whichever handle it has,
+  // the message must be the one the reader can paste back into a door.
+  assertEquals(
+    failure(eid),
+    `${human(db, task)} has no project; fake requires a repo-backed project`,
   )
 })
 
@@ -681,15 +689,20 @@ slow('a stale spawn claim preserves the session that won', () => {
     ).get(t),
     { session: other },
   )
+  // Any OTHER refusal is the caller's to see: only the claim bounce is
+  // swallowed. `task.status` no longer serves as the refused write — it is a
+  // DERIVED column (D-24102), and admit drops a column the graph computes
+  // just as it drops a stamped one, so a read-modify-write may echo it back.
+  // A column the vocabulary has never heard of still has no version story.
   assertThrows(
     () =>
       landSpawnClaim(mine, undefined, [{
         eid: t,
         name: 'task',
-        comp: { status: 'unknown' },
+        comp: { statuss: 'unknown' },
       }], cast),
     Error,
-    'task.status',
+    'task.statuss',
   )
 })
 
@@ -803,15 +816,15 @@ slow(
       branch,
       model: 'gpt-5.6-sol',
     }, cast)
-    let { num } = db.prepare('select num from entity where eid = ?')
-      .get(eid) as { num: number }
     Deno.writeTextFileSync(`${tree}/work.txt`, 'attributed\n')
     gitIn(tree, 'add', '-A')
     gitIn(tree, 'commit', '-m', 'do the thing')
     // The git-side link: `git show <sha>` names the session, no agent needed.
+    // A session asks for no human number (T-37071), so the handle baked into
+    // the hook is the short eid form — and the eid rides beside it either way.
     assertMatch(
       gitOut(tree, 'log', '-1', '--format=%B'),
-      new RegExp(`^Tasks-Session: S-${num} ${eid}$`, 'm'),
+      new RegExp(`^Tasks-Session: ${human(db, eid)} ${eid}$`, 'm'),
     )
     // Idempotent: a second commit stamps exactly one trailer, not two.
     Deno.writeTextFileSync(`${tree}/more.txt`, 'again\n')
@@ -1277,7 +1290,14 @@ slow('a worn persona rides the prompt whole — tiers and all', async () => {
   apply(db, [
     { eid: per, name: 'doc', comp: { title: 'probe', body: 'Be terse.' } },
     { eid: per, name: 'persona', comp: {} },
-    { eid: mem, name: 'doc', comp: { title: 'lesson', body: 'Front door.' } },
+    {
+      eid: mem,
+      name: 'doc',
+      comp: { title: 'lesson', body: 'Front door.' },
+      // memory_save asks for a handle (client.ts), and the materialized
+      // voice renders each contained memory under that id.
+      $num: true,
+    },
     ...link(per, 'contains', mem),
   ])
   let { eid, done } = begin(t, { persona: per })
@@ -1303,6 +1323,7 @@ slow('a bare spawn wears the project common persona (T-12867)', async () => {
     { eid: per, name: 'persona', comp: { home: p } },
     {
       eid: mem,
+      $num: true,
       name: 'doc',
       comp: { title: 'house lore', body: 'Wear the voice.' },
     },
@@ -1426,7 +1447,10 @@ slow('a settled session says so on its task', async () => {
   assertEquals(row(eid)?.status, 'completed')
   let said = settleComments(t, eid)
   assertEquals(said.length, 1)
-  assertMatch(said[0], /^S-\d+ completed · exit 0\n/)
+  assertMatch(
+    said[0],
+    new RegExp(`^${human(db, eid)} completed · exit 0\n`),
+  )
   assertMatch(said[0], /done: /) // the final text's gist rides along
   assert(!said[0].includes('UNLANDED'))
   assertEquals(failure(eid), undefined)
@@ -1486,7 +1510,7 @@ slow(
     let sha = gitOut(tree, 'log', '-1', '--format=%h')
     assertStringIncludes(
       gitOut(tree, 'log', '-1', '--format=%B'),
-      'Tasks-Session: S-',
+      `Tasks-Session: ${human(db, eid)}`,
     )
     assertMatch(said[0], new RegExp(`commits: ${sha}`))
   },
@@ -1512,7 +1536,7 @@ slow(
     assertEquals(row(eid)?.status, 'failed')
     let said = settleComments(t, eid)
     assertEquals(said.length, 1)
-    assertMatch(said[0], /^S-\d+ failed\n/)
+    assertMatch(said[0], new RegExp(`^${human(db, eid)} failed\n`))
     assertMatch(said[0], /unknown model/)
     assertEquals(settleComments(parent, eid), said)
     assertEquals(settleComments(spawner, eid), [])
@@ -1529,7 +1553,7 @@ slow(
     )
     let bus = noticesFor(snapshot(db), sid)
     assertEquals(bus.lines.length, 1)
-    assertMatch(bus.lines[0], /S-\d+ failed/)
+    assertMatch(bus.lines[0], new RegExp(`${human(db, eid)} failed`))
     spawned(cast)(eid, { provider: 'fake' })
     assertEquals(settleComments(t, eid).length, 1)
     assertEquals(settleComments(parent, eid).length, 1)
@@ -1752,13 +1776,27 @@ slow('the rule refuses sessions that are not ours to end', () => {
     Error,
     'external',
   )
+  // An entity with no session row of its own never reaches the rule's
+  // managed/active test: there is no session here to end.
+  let bare = uid()
+  apply(db, [{ eid: bare, name: 'doc', comp: { title: 'not a session' } }])
+  assertThrows(
+    () =>
+      apply(db, [
+        { eid: uid(), name: 'stop_request', comp: { target: bare } },
+      ]),
+    Error,
+    'gone',
+  )
+  // A target that was never minted is refused one layer earlier, by the
+  // reference guard every eid column passes through — the rule never sees it.
   assertThrows(
     () =>
       apply(db, [
         { eid: uid(), name: 'stop_request', comp: { target: uid() } },
       ]),
     Error,
-    'gone',
+    'no such entity',
   )
 })
 
@@ -1889,19 +1927,18 @@ slow('a settled lifecycle stamp is one replayable moved patch', async () => {
       },
     },
   ]
-  assertEquals(changes, want)
+  // The lifecycle patch is what must replay. Archetype bookkeeping rides the
+  // same batch — the shape this session now wears, minted once and pointed at
+  // — so name it rather than widen `want` or ignore the rest.
+  let lifecycle = (c: Change) =>
+    c.eid == eid && ['session', 'run', 'settled'].includes(c.name)
+  assertEquals(changes.filter(lifecycle), want)
   assertEquals(
-    heard.filter((c) =>
-      c.eid == eid && ['session', 'run', 'settled'].includes(c.name)
-    ),
-    want,
+    changes.filter((c) => !lifecycle(c)).map((c) => c.name),
+    ['entity', 'archetype', 'entity'],
   )
-  assertEquals(
-    delta(db, c0).changes.filter((c) =>
-      c.eid == eid && ['session', 'run', 'settled'].includes(c.name)
-    ),
-    want,
-  )
+  assertEquals(heard.filter(lifecycle), want)
+  assertEquals(delta(db, c0).changes.filter(lifecycle), want)
 })
 
 slow('tail diagnoses never override a successful ending', async () => {
