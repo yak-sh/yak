@@ -79,7 +79,7 @@ import {
   typed,
 } from './route.ts'
 import { term as ftsTerm } from '@yaks/fts'
-import { check } from '@yaks/match'
+import { type Check, check } from '@yaks/match'
 import type { Tag } from '@yaks/sql'
 import { type Clause, parse, parseDot, timeSpan, type Value } from '@yaks/query'
 export { ftsTerm }
@@ -933,6 +933,16 @@ let tagAt = (p: Pred): Tag => {
   return tagOf(typed(leaf.comp, leaf.prop))
 }
 
+// One compile per pred, because a sweep asks the same question of every row in
+// the set and the answer depends only on op, operand and tag. A time column is
+// the exception: its operand is a PHRASE read against the clock, which moves
+// (the subscription sweep hands the matcher a later moment on purpose).
+let checks = new WeakMap<Pred, Check | null>()
+let compiled = (p: Pred, tag: Tag): Check | null => {
+  if (!checks.has(p)) checks.set(p, check(p.op, p.value, tag, 0))
+  return checks.get(p)!
+}
+
 // One value against one predicate. Equality and its absent/list/range forms,
 // not-equals, contains, the comparisons and the time phrases all belong to
 // @yaks/match, which answers them exactly as the SQL lowering does — by the
@@ -940,8 +950,10 @@ let tagAt = (p: Pred): Tag => {
 // A question the type cannot answer (`.priority>soon`, `.title>5`) selects
 // nothing: @yaks/sql declines the same compile, and a board mid-render is no
 // place to throw.
-let test = (v: unknown, p: Pred, now?: number): boolean => {
-  let hit = check(p.op, p.value, tagAt(p), now ?? Date.now())
+let test = (v: unknown, p: Pred, now?: number, tag = tagAt(p)): boolean => {
+  let hit = tag == 'time'
+    ? check(p.op, p.value, tag, now ?? Date.now())
+    : compiled(p, tag)
   return !!hit && hit(v ?? null)
 }
 
@@ -1128,9 +1140,7 @@ export let matchQuery = (
       let children = self && kids ? kids(self, p.rev.comp, p.rev.prop) : []
       // The cardinality half: the same value road, over a count — which is a
       // number whatever the reference column it counts happens to be.
-      if (p.rev.count) {
-        return test(children.length, { ...p, tag: 'number' }, now)
-      }
+      if (p.rev.count) return test(children.length, p, now, 'number')
       let hit = children.some((k) =>
         !!k && matchQuery(k, p.rev!.preds, ent, now, kids, walk, fts)
       )
