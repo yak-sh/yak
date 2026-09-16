@@ -610,13 +610,15 @@ slow('space_sell connects an account and hands back one link', async () => {
     assertEquals(purchase.sent.get('line_items[0][price]'), 'price_probe')
     assertEquals(purchase.sent.get('managed_payments[enabled]'), 'true')
     assertEquals(purchase.sent.get('allow_promotion_codes'), 'true')
+    // Checkout started from a space's own page hands the person back to that
+    // space's plan settings, not to the apex connector (billing.ts `checkout`).
     assertEquals(
       purchase.sent.get('success_url'),
-      'https://yaks.app/connect?paid=1',
+      `https://ada.yaks.app${managePath('billing')}?paid=1`,
     )
     assertEquals(
       purchase.sent.get('cancel_url'),
-      'https://yaks.app/connect?paid=0',
+      `https://ada.yaks.app${managePath('billing')}?paid=0`,
     )
     let plan = async (status: string) => {
       let raw = JSON.stringify({
