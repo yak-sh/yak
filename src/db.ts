@@ -18,6 +18,7 @@ import { asBundle, asChanges } from './store/wire.ts'
 import type { FleetWrite } from './store/fleet_stamps.ts'
 export type { SchemaOp } from './store/sql.ts'
 import { initVector } from './vector.ts'
+import { schema as telemetrySchema } from '@yaks/telemetry'
 import { dirname, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { sha } from './sha.ts'
@@ -268,22 +269,6 @@ let mailDdl = `create table if not exists mail (
     sent_id     text,
     in_reply_to text,
     headers text
-  )`
-
-// Named apart from `schema` for the same reason mail is: the sources are a
-// baked CHECK, and a live db that shipped with the narrower list must be
-// rebuilt around this one or record() drops every row it doesn't know —
-// which would be exactly the rows nobody else reports (telemetry.ts `srv`).
-let callDdl = `create table if not exists tool_call (
-    ts         text not null
-               default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    source     text not null check (source in ('mcp','http','web','srv','cli')),
-    name       text not null,
-    session_id text,
-    ok         integer not null,
-    ms         integer,
-    error      text,
-    detail     text
   )`
 
 // A letter's ENVELOPE as one indexable string: the two addresses that say who
@@ -935,8 +920,8 @@ let schema = `
     v text not null
   );
   -- Log data, not graph: no eid, no components, so snapshot() (which walks
-  -- the comps vocabulary) never carries it. telemetry.ts owns the rows.
-  ${callDdl};
+  -- the comps vocabulary) never carries it. The tool_call log is the same kind
+  -- of thing and @yaks/telemetry plants it beside this, in migrate().
   ${embeddingDdl};
   create table if not exists embedding_index (
     id    integer primary key check (id = 1),
@@ -1961,6 +1946,10 @@ export let migrate = <D extends Sql>(db: D): D => {
       let contentUnbuilt = db.can.fts &&
         contentIndexes.some((t) => !tableExists(db, t))
       db.exec(schema)
+      // The tool_call log: @yaks/telemetry owns the table and its source
+      // CHECK, so the fleet plants what the package declares. Recorded by
+      // schemaDdl() like every other create, so a fresh backend gets it too.
+      for (let stmt of telemetrySchema()) db.exec(stmt)
       if (db.can.fts) {
         db.exec(ftsSchema)
         db.exec(contentFtsSchema)
