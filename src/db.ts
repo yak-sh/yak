@@ -81,6 +81,10 @@ import {
   type Bundle,
   componentTables,
   type Driver,
+  EPOCH,
+  epoch,
+  META,
+  meta,
   read as sqliteRead,
 } from '@yaks/sqlite'
 import { flushArchetypes, watchArchetypes } from './store/fleet_archetype.ts'
@@ -875,18 +879,20 @@ let schema = `
   create index if not exists journal_change_ent on journal_change(entity, component);
   create index if not exists journal_field_change on journal_field(change, ordinal);
   create index if not exists journal_field_ref on journal_field(ref) where ref is not null;
-  -- Server-local key/value, not graph: no eid, no components, so snapshot()
-  -- (which walks the comps vocabulary) never carries it, and apply() never
-  -- writes it. Holds the durable sync epoch (epochOf): the cursor-lineage
-  -- identity a delta client checks, minted ONCE per graph and stable across
-  -- process restarts, so a plain restart/deploy/listener-handoff lets a
-  -- returning client resume via a small delta instead of a full resnapshot
-  -- (T-20299). A restore that rewinds this graph's own journal keeps the same
-  -- epoch -- the since-past-tip guard in the join handshake reseeds any client
-  -- whose frontier is now beyond the journal -- while a different graph carries
-  -- its own epoch, so its rows can never be replayed against a stale cursor.
-  -- (Named server_meta, not meta -- meta is already a component table.)
-  create table if not exists server_meta (
+  -- The store's own key/value (@yaks/sqlite meta.ts), named by the package's
+  -- own constant so the two can never drift apart. Not graph: no eid, no
+  -- components, so snapshot() (which walks the comps vocabulary) never carries
+  -- it and apply() never writes it. It holds the durable sync epoch
+  -- (epochOf): the cursor-lineage identity a delta client checks, minted ONCE
+  -- per graph and stable across process restarts, so a plain
+  -- restart/deploy/listener-handoff lets a returning client resume via a small
+  -- delta instead of a full resnapshot (T-20299). A restore that rewinds this
+  -- graph's own journal keeps the same epoch -- the since-past-tip guard in the
+  -- join handshake reseeds any client whose frontier is now beyond the journal
+  -- -- while a different graph carries its own epoch, so its rows can never be
+  -- replayed against a stale cursor. (Spelled server_meta, not meta, because
+  -- meta is already a component table.)
+  create table if not exists ${META} (
     k text primary key,
     v text not null
   );
@@ -1717,13 +1723,12 @@ export let writerUrl = () =>
   env('TASKS_WRITER_URL')?.replace(/\/+$/, '') || undefined
 
 // Mint the durable sync epoch (T-20299) if absent — the cursor-lineage identity
-// a delta client checks (epochOf). This write runs once in transactional
-// migrate(), never on a read path. `insert or ignore` makes it idempotent — a no-op on a graph
-// that already carries the row, so a re-open writes nothing.
-export let mintEpoch = (db: Sql) =>
-  db.exec(
-    `insert or ignore into server_meta (k, v) values ('epoch', '${crypto.randomUUID()}')`,
-  )
+// a delta client checks (epochOf). The package's epoch() is insert-or-ignore,
+// so a graph that already carries the row keeps it and a re-open writes
+// nothing. This runs once in transactional migrate(), never on a read path.
+export let mintEpoch = (db: Sql) => {
+  epoch(driverOf(db))
+}
 
 // Bumped with every serving-schema change. Guards remain idempotent for
 // expand/contract upgrades; the version makes a newer database fail closed in
@@ -1918,10 +1923,10 @@ export let migrate = <D extends Sql>(db: D): D => {
       // reads both shadow tables whole — 2.3s of boot on the live graph — for
       // damage none of our writers can cause, so it runs once a day, marked in
       // server_meta; the membership count stays on every boot.
-      let checked = prep(db, `select v from server_meta where k = 'fts_check'`)
-        .get() as { v: string } | undefined
+      let marks = meta(driverOf(db))
+      let checked = marks.get('fts_check')
       let deep = !checked ||
-        !(Date.now() - Date.parse(checked.v) < 24 * 3_600_000)
+        !(Date.now() - Date.parse(checked) < 24 * 3_600_000)
       if (db.can.fts) {
         // The SUBSTRING mirrors, dropped once and never planted again: they
         // were maintained by six triggers and read by nothing. A trigram index
@@ -1959,12 +1964,7 @@ export let migrate = <D extends Sql>(db: D): D => {
           )
         }
       }
-      if (deep) {
-        prep(
-          db,
-          `insert or replace into server_meta (k, v) values ('fts_check', ?)`,
-        ).run(new Date().toISOString())
-      }
+      if (deep) marks.set('fts_check', new Date().toISOString())
       let { n } = prep(db, 'select count(*) as n from task').get() as {
         n: number
       }
@@ -5758,10 +5758,7 @@ export let epochOf = (db: Sql): string => {
   if (hit) return hit
   // A never-migrated graph may not have the table. Absent table or row reads
   // empty instead of making a read-only connection perform schema work.
-  let got = !tableExists(db, 'server_meta') ? '' : (prep(
-    db,
-    `select v from server_meta where k = 'epoch'`,
-  ).get() as { v: string } | undefined)?.v ?? ''
+  let got = !tableExists(db, META) ? '' : meta(driverOf(db)).get(EPOCH) ?? ''
   // Cache only a real value — never the '' of an un-minted graph, so a read that
   // preceded migrate()'s mint is not pinned to empty.
   if (got) epochs.set(db, got)
