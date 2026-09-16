@@ -10,7 +10,7 @@
 // describes it — and both the read door and the query planner trust that
 // pointer. The eids are never news: `record()` names the batch it journals,
 // which is the same list a raw writer already owes the journal.
-import { type Driver, reclassify } from '@yaks/sqlite'
+import { type Drift, drift, type Driver, reclassify } from '@yaks/sqlite'
 import { STOCK } from '@yaks/sql'
 import type { Change } from '../types.ts'
 import type { Sql, Statement } from './sql.ts'
@@ -80,4 +80,19 @@ export let classify = (db: Sql, eids: Iterable<string>): Change[] => {
     // deletion. A later metadata patch would resurrect it during delta replay.
     return gone.get(eid) ? [] : [{ eid, name: 'entity', comp: { archetype } }]
   })
+}
+
+export type { Drift }
+
+/**
+ * The contract above, audited: every owner's pointer against the components it
+ * physically wears (the doctor's `archetype` check, read through /integrity).
+ * A raw writer that forgot to name its eids is invisible everywhere else, so
+ * this is the only thing that sees it. Read-only, and taken in one DEFERRED
+ * transaction: a scan of a live file would otherwise read an owner's spine
+ * before a concurrent batch and its facets after, and report the seam as drift.
+ */
+export let drifted = (db: Sql, sample = 12): Drift => {
+  let scan = () => drift(cacheFor(db).driver, sample)
+  return db.inTransaction ? scan() : db.transaction(scan)
 }

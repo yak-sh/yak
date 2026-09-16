@@ -26,6 +26,7 @@ import { parseQuery } from '../query.ts'
 import { run, toSql } from '../relation.ts'
 import { where } from '../sql.ts'
 import { bareDb } from '../testdb.ts'
+import { drifted } from './fleet_archetype.ts'
 import type { Sql } from './sql.ts'
 import { open } from './sqlite.ts'
 
@@ -383,6 +384,20 @@ Deno.test('boot classifies populated new tables on previously assigned owners', 
   parity(db)
   let again = migrateArchetypes(db)
   assertEquals([again.entities, again.archetypes, again.retired], [0, 0, 0])
+  db.close()
+})
+
+Deno.test('drifted: the audit sees an owner a raw writer never named', () => {
+  let db = bareDb()
+  let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  apply(db, [{ eid, name: 'task', comp: {} }])
+  assertEquals(drifted(db).drifted, 0)
+  db.prepare(
+    `insert into completed(entity) select id from entity where eid = ?`,
+  ).run(eid)
+  assertEquals([drifted(db).drifted, drifted(db).sample], [1, [eid]])
+  db.transaction(() => settleArchetypes(db, [eid]))
+  assertEquals(drifted(db).drifted, 0)
   db.close()
 })
 

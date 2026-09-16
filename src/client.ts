@@ -66,6 +66,7 @@ import { FLOOR } from './twin.ts'
 import { type Provider, spawnDefault } from './providers.ts'
 import { env, request } from './http.ts'
 import type { Anomalies } from './db.ts'
+import type { Drift } from './store/fleet_archetype.ts'
 import type { Log, Stat } from './telemetry.ts'
 import type { Published } from './redaction.ts'
 import { unmime } from './rfc2047.ts'
@@ -208,7 +209,14 @@ export let serverCaps = async (): Promise<string[]> => {
 // predates the route serves index.html for the extensionless path (200 text/html,
 // not a 404), so an unexpected non-JSON body is treated as "absent" too, never a
 // crash — the JSON content-type is the proof the route actually answered.
-export let httpIntegrity = async (): Promise<Anomalies | null> => {
+// What the route answers: db.ts's anomaly scan, plus the archetype audit that
+// rides beside it (store/fleet_archetype.ts `drifted`) — a pointer that no
+// longer describes its owner is the same shape of wire-invisible damage, read
+// by the same one round trip. `archetypes` is absent from a server too old to
+// run the audit, which the doctor renders as unverified.
+export type Integrity = Anomalies & { archetypes?: Drift }
+
+export let httpIntegrity = async (): Promise<Integrity | null> => {
   let res = await request(`http://${host()}/integrity`)
   if (
     !res.ok || !res.headers.get('content-type')?.includes('application/json')
@@ -216,10 +224,10 @@ export let httpIntegrity = async (): Promise<Anomalies | null> => {
     await res.body?.cancel()
     return null
   }
-  return res.json() as Promise<Anomalies>
+  return res.json() as Promise<Integrity>
 }
 
-export let integrity = (): Promise<Anomalies | null> =>
+export let integrity = (): Promise<Integrity | null> =>
   arm.integrity ? arm.integrity() : httpIntegrity()
 
 export type TelemetryOpts = {

@@ -231,6 +231,64 @@ export function backfill(driver: Driver, number = true): Backfill {
   })
 }
 
+/** An audit's tally: owners read, pointers that disagree, and a few names. */
+export type Drift = { checked: number; drifted: number; sample: string[] }
+
+// Owners are audited a window of ids at a time, so a half-million-entity file
+// costs one window of JS rather than the whole file: each window is a slice of
+// the same scan, taken through the integer primary key every facet table wears.
+let WINDOW = 20_000
+
+/**
+ * The audit half of `reclassify`, and it writes nothing. A row written past
+ * the graph must NAME its owners; a writer that forgets leaves a pointer that
+ * no longer describes its entity, and both the read door and the query planner
+ * trust that pointer — nothing else notices. So this reads presence for EVERY
+ * owner, by the same rule and the same facet list classification uses, and
+ * answers where the two disagree. Descriptors are their own fixed point and
+ * are left out, exactly as `reclassify` leaves them out.
+ */
+export function drift(driver: Driver, sample = 12): Drift {
+  let run: Run = (sql, params = []) => driver.query(sql, params)
+  let tables = facets(driver)
+  let cache = new Archetypes()
+  // Presence set (as the joined table names) → the descriptor it interns to.
+  // The whole file holds a few hundred distinct sets, so hashing one per
+  // window's worth of owners would be the audit's dominant cost.
+  let known = new Map<string, string>()
+  let out: Drift = { checked: 0, drifted: 0, sample: [] }
+  let top = Number(run('select max(id) as top from entity')[0]?.top ?? 0)
+  for (let lo = 0; lo < top; lo += WINDOW) {
+    let hi = lo + WINDOW
+    let rows = run(
+      `select e.id, e.eid, d.eid as assigned from entity e
+         left join entity d on d.id = e.archetype
+         left join archetype a on a.entity = e.id
+        where a.entity is null and e.id > ? and e.id <= ?`,
+      [lo, hi],
+    )
+    if (!rows.length) continue
+    let owners = presence(
+      run,
+      tables,
+      new Map(rows.map((r) => [Number(r.id), [] as string[]])),
+      'where c.entity > ? and c.entity <= ?',
+      [lo, hi],
+    )
+    for (let r of rows) {
+      let names = owners.get(Number(r.id))!
+      let key = names.join('|')
+      let eid = known.get(key) ?? cache.intern(names).eid
+      known.set(key, eid)
+      out.checked++
+      if (eid == r.assigned) continue
+      out.drifted++
+      if (out.sample.length < sample) out.sample.push(String(r.eid))
+    }
+  }
+  return out
+}
+
 /**
  * Classify the named entities from their physical presence, now, inside the
  * caller's transaction. For rows a host wrote past the graph (raw SQL into a

@@ -20,6 +20,7 @@ import {
   scanAnomalies,
   schemaVersion,
 } from './db.ts'
+import { drifted } from './store/fleet_archetype.ts'
 import { fed } from './effects.ts'
 import { localQuery } from './graph_query.ts'
 import { catalog } from './catalog.ts'
@@ -176,7 +177,10 @@ export let armLocal = (path = envPath()): boolean => {
     (via, limit) => journalBy(db, via, limit),
     httpHistoryBy,
   )
-  arm.integrity = guarded(() => scanAnomalies(db), httpIntegrity)
+  arm.integrity = guarded(
+    () => ({ ...scanAnomalies(db), archetypes: drifted(db) }),
+    httpIntegrity,
+  )
   arm.telemetry = guarded((opts) => recent(db, opts), httpTelemetry)
   arm.telemetryStats = guarded((opts) => stats(db, opts), httpTelemetryStats)
   // The spawn catalog is graph data (catalog.ts), so a CLI beside the graph

@@ -39,6 +39,7 @@ import {
   settingValue,
   writerUrl,
 } from './db.ts'
+import { drifted } from './store/fleet_archetype.ts'
 import { file as graph } from './store/sqlite.ts'
 import { db } from './live_db.ts'
 import { checkpointBoot } from './boot_checkpoint.ts'
@@ -1186,7 +1187,11 @@ let handle: Handler = async (req) => {
   // The graph's storage-integrity anomalies (D-18866): orphaned component rows
   // and dangling {eid} references — both wire-invisible, so the doctor cannot
   // see them through /query and reads this raw db scan instead. Read-only.
-  if (path == '/integrity') return Response.json(scanAnomalies(db))
+  // The archetype audit rides along for the same reason (T-37533): a pointer
+  // that no longer describes its owner is invisible to every other door.
+  if (path == '/integrity') {
+    return Response.json({ ...scanAnomalies(db), archetypes: drifted(db) })
+  }
   if (path == '/query') {
     if (req.method != 'GET') return methodNotAllowed('GET')
     // The graph over plain GET: the query string IS the filter line —

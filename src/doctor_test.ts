@@ -14,6 +14,7 @@ import {
   projectOrphans,
   type Rules,
   run,
+  staleArchetypes,
   staleClaims,
   STATIC_RULES,
   stuckSessions,
@@ -291,6 +292,22 @@ Deno.test('integrityReport: a clean scan is silent', () => {
 
 Deno.test('integrityReport: no /integrity route is an unverified warn', () => {
   let out = integrityReport(null)
+  assertEquals(out.length, 1)
+  assertEquals(out[0].level, 'warn')
+  assertEquals(out[0].text.includes('UNVERIFIED'), true)
+})
+
+Deno.test('staleArchetypes: a pointer that stopped describing its owner', () => {
+  assertEquals(staleArchetypes({ checked: 9, drifted: 0, sample: [] }), [])
+  let out = staleArchetypes({ checked: 9, drifted: 3, sample: ['a', 'b'] })
+  assertEquals(out.length, 1)
+  assertEquals(out[0].level, 'fail')
+  assertEquals(out[0].text.includes('3 of 9'), true)
+  assertEquals(out[0].text.includes('a, b; 1 more'), true)
+})
+
+Deno.test('staleArchetypes: a server that does not audit is unverified', () => {
+  let out = staleArchetypes(undefined)
   assertEquals(out.length, 1)
   assertEquals(out[0].level, 'warn')
   assertEquals(out[0].text.includes('UNVERIFIED'), true)

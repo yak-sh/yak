@@ -6,6 +6,7 @@ import { journal, journalDoc } from '@yaks/journal'
 import {
   backfill,
   componentTables,
+  drift,
   reclassify,
   schema,
   storage,
@@ -389,4 +390,20 @@ Deno.test('archetype: reclassify classifies rows written past the graph, no trig
   reclassify(driver, ['a'])
   assertEquals(get('a').entity.archetype, eidOf(['hidden', 'task']))
   assertEquals(backfill(driver), { entities: 0, archetypes: 0, retired: 0 })
+})
+
+Deno.test('archetype: drift finds the pointer a raw writer left behind', () => {
+  let { driver, g } = setup()
+  g.apply([
+    { entity: { eid: 'a' }, doc: { title: 'A' } },
+    { entity: { eid: 'b' }, doc: {}, task: {} },
+  ])
+  assertEquals(drift(driver), { checked: 2, drifted: 0, sample: [] })
+  let id = driver.query('select id from entity where eid = ?', ['a'])[0].id
+  // The forgetful raw writer: rows in, no eids named, no reclassify.
+  driver.exec(`insert into task(entity) values (${id})`)
+  assertEquals(drift(driver), { checked: 2, drifted: 1, sample: ['a'] })
+  assertEquals(drift(driver, 0).sample, []) // a bound on the sample, not the count
+  reclassify(driver, ['a']) // an audit reports; only a writer repairs
+  assertEquals(drift(driver), { checked: 2, drifted: 0, sample: [] })
 })

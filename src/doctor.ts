@@ -24,6 +24,7 @@ import { parseQuery } from './query.ts'
 import { integrity } from './client.ts'
 import type { Querier, Row } from './client.ts'
 import type { Anomalies } from './db.ts'
+import type { Drift } from './store/fleet_archetype.ts'
 
 // The yak.sh zone — an identifier, not a secret (useless without a
 // token); CLOUDFLARE_ZONE_ID re-aims the doctor at another zone.
@@ -381,6 +382,34 @@ export let projectOrphans = (a: Anomalies | null): Report[] => {
   }]
 }
 
+// An archetype pointer that no longer describes its owner. Classification has
+// no triggers and no queue since T-37511 (8d55960c): a row written past the
+// graph names the owners it touched and `classify()` reclassifies them, so a
+// raw writer that forgets leaves a pointer the read door and the query planner
+// both believe — an entity that quietly stops matching its own components,
+// with nothing else in the system to notice. `fail`: measured, and the audit
+// reads presence from the physical file, the same rule the writer classifies
+// by. A server too old to carry the audit says so rather than all-clear.
+export let staleArchetypes = (d: Drift | undefined): Report[] => {
+  if (!d) {
+    return [{
+      level: 'warn',
+      text: 'this server does not audit archetype pointers — the ' +
+        'classification check is UNVERIFIED (upgrade the server to run it)',
+    }]
+  }
+  if (!d.drifted) return []
+  let rest = d.drifted - d.sample.length
+  return [{
+    level: 'fail',
+    text: `${d.drifted} of ${d.checked} archetype pointer(s) disagree with ` +
+      `the components their owner wears: ${d.sample.join(', ')}` +
+      `${rest > 0 ? `; ${rest} more` : ''}. A raw writer landed rows without ` +
+      `naming the owners it touched (store/fleet_archetype.ts classify) — ` +
+      `boot only classifies UNPOINTED owners, so find that writer`,
+  }]
+}
+
 // The ANN index has exactly ONE writer: the process running the embed sweep,
 // which claims it with ownVector() (D-22530 — a write-capable extension lives
 // only where its write does). The failure this exists for is the 2026-08-26
@@ -518,6 +547,11 @@ export let checks: Check[] = [
     name: 'project-root',
     about: 'all durable work and knowledge is reachable from a project',
     run: async () => projectOrphans(await integrity()),
+  },
+  {
+    name: 'archetype',
+    about: 'every archetype pointer matches the components its owner wears',
+    run: async () => staleArchetypes((await integrity())?.archetypes),
   },
   {
     name: 'vector',
