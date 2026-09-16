@@ -7,7 +7,13 @@ export type Options = {
   now?: () => number
 }
 export const STORE_KEY = 'https://openrouter.ai'
-export const authorization = (options: Options) => {
+export type Authorization = {
+  begin(): Promise<{ url: string; redirectUrl: string }>
+  complete(callback: string): Promise<void>
+  cancel(): void
+  token(): Promise<string | undefined>
+}
+export const authorization = (options: Options): Authorization => {
   let pending: (ReturnType<typeof attempt> & { verifier: string }) | undefined
   let busy = false
   let generation = 0

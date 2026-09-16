@@ -7,7 +7,7 @@ export type AuthorizationStore<R extends object> = {
 }
 /** One attempt. Identity checks prevent late exchanges saving after cancellation. */
 export type Attempt = { state: string; until: number; verifier?: string }
-export const attempt = (now = Date.now()): Attempt => ({
+export const attempt = (now: number = Date.now()): Attempt => ({
   state: crypto.randomUUID(),
   until: now + 10 * 60 * 1000,
 })
