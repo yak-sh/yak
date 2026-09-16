@@ -104,7 +104,20 @@ export let bareDb = () => {
            and name not like '%_fts%'
            and name not like '%_gram%'`,
       ).all() as { name: string }[]
-    ) d.exec(`delete from "${name}"`)
+    ) {
+      // The SEED is entities: the spine, the component rows keyed to it, and
+      // the journal of their birth. The schema's own singleton rows are not
+      // seed and must survive — `embedding_index` holds the ANN index's dirty
+      // mark, whose row the old wholesale delete removed, so the triggers had
+      // nothing to set, refreshVector() found the index clean, and semantic
+      // neighbours silently answered empty in every bareDb test.
+      let cols = d.prepare(`pragma table_info("${name}")`).all() as {
+        name: string
+      }[]
+      let seeded = name == 'entity' || name.startsWith('journal_') ||
+        cols.some((c) => c.name == 'entity')
+      if (seeded) d.exec(`delete from "${name}"`)
+    }
     bareSnap = d.serialize()
     d.close()
   }
