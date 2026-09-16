@@ -14,7 +14,8 @@
 // moves to IDB, `anchor` swaps its lookup; the derivation and callers stay put.
 import { type Dep, type Idx, indexes } from './types.ts'
 import { isRef } from './props.ts'
-import { EXISTS, ORDER, type Pred, refCols, TEXT, WANT } from './query.ts'
+import { EXISTS, ORDER, type Pred, TEXT, WANT } from './query.ts'
+import { refCols } from './route.ts'
 
 // A row as the index reads it — the merged-components shape both the live cache
 // and a client Row speak. Kept structural so index.ts carries no cycle back to

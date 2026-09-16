@@ -58,14 +58,9 @@ import {
 } from './props.ts'
 import { local } from './time.ts'
 import { nearest, offer } from './near.ts'
-import {
-  hot,
-  leafOf,
-  matchQuery,
-  parseQuery,
-  type Pred,
-  route,
-} from './query.ts'
+import { leafOf, matchQuery, parseQuery, type Pred } from './query.ts'
+import { hot } from './warmth.ts'
+import { route } from './route.ts'
 import { TEACH } from './store/vocab.ts'
 import { FLOOR } from './twin.ts'
 import { type Provider, spawnDefault } from './providers.ts'

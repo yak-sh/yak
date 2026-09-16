@@ -7,7 +7,8 @@ import { eager } from './db.ts'
 import { moves, typeOf } from './edge.ts'
 import { materialize } from './persona.ts'
 import { personaGraph } from './persona_graph.ts'
-import { EXISTS, type Pred, type ResultComp, resultComps } from './query.ts'
+import { EXISTS, type Pred } from './query.ts'
+import { type ResultComp, resultComps } from './route.ts'
 
 export type ResultState = {
   comp: Record<string, unknown> | null

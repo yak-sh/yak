@@ -12,7 +12,7 @@
 // committing what it wrote is git.ts's job, at the callers.
 import { type Dep, type Edge, idOf } from './types.ts'
 import { accepted, memoryHead, type Row } from './client.ts'
-import { hot } from './query.ts'
+import { hot } from './warmth.ts'
 import { entityUrl } from './url.ts'
 
 // A persona's home page in the UI — the header points hand-editors back

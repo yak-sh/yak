@@ -3,14 +3,12 @@ import {
   adopt,
   AGG,
   aggOf,
-  complete,
   distinctValues,
   edgeRider,
   EDGES,
   EXISTS,
   fieldsOf,
   ftsTerm,
-  hot,
   kidsOf,
   kindPreds,
   listed,
@@ -26,18 +24,14 @@ import {
   REACHES,
   resolution,
   resolveRefs,
-  reverseAssocs,
-  route,
   scopes,
   screened,
   selected,
-  SUNK,
-  sunk,
   tally,
   type Walk,
   WANT,
-  warm as rank, // the test file's own `warm` fixture predates the export
 } from './query.ts'
+import { reverseAssocs, route } from './route.ts'
 import { stamped } from './types.ts'
 import {
   assert,
@@ -932,35 +926,6 @@ Deno.test('mixed line: whitespace is AND; quotes protect a multiword value', () 
   assertEquals(parseQuery("'.env'")[0].op, 'text') // quote literal dot words
 })
 
-// ---- hot: the decay rank behind '.order=hot' ----
-
-let T0 = Date.parse('2026-07-20T12:00:00Z')
-let H = 3_600_000
-let D = 24 * H
-let ago = (ms: number) => new Date(T0 - ms).toISOString()
-let warm = (count: number, firstAgo: number, lastAgo: number) =>
-  hot({ recall: { count, first_at: ago(firstAgo), last_at: ago(lastAgo) } }, T0)
-
-Deno.test('hot: hours top of mind, days recallable, months rings a bell', () => {
-  assert(warm(1, 2 * H, 2 * H) > 0.9) // just touched
-  assert(warm(1, 5 * D, 5 * D) < 0.05) // one touch, days ago: faded
-  assert(warm(20, 200 * D, 7 * D) > 0.6) // a habit stays warm across weeks
-})
-
-Deno.test('hot: recalled often decays slower than recalled once', () => {
-  assert(warm(10, 30 * D, 5 * D) > warm(1, 5 * D, 5 * D))
-})
-
-Deno.test('hot: spaced recalls outlast crammed ones at equal count', () => {
-  assert(warm(10, 90 * D, 10 * D) > warm(10, 10 * D + H, 10 * D))
-})
-
-Deno.test('hot: no recalls yet — the last touch counts as a single touch', () => {
-  assert(hot({ created: { at: ago(H) } }, T0) > 0.9)
-  assert(hot({ created: { at: ago(10 * D) } }, T0) < 0.01)
-  assertEquals(hot({}, T0), 0)
-})
-
 Deno.test('noFilter teaches the door a stray predicate belongs to', () => {
   // A bare `kind=K` is the warm mistake — the door names the dotted spelling
   // that now works instead of a separate parameter to reach for.
@@ -1347,133 +1312,6 @@ Deno.test('resolveRefs: values resolve at match time, misses stay put', () => {
   assertEquals(r('.title~=jeff')[0].value, 'jeff') // not a reference
 })
 
-// ---- completion ----
-
-// candidates as text → kind, so a case asserts membership without
-// freezing the whole vocabulary into the test
-let cand = (token: string, wells?: Record<string, string[]>) =>
-  Object.fromEntries(complete(token, wells).map((c) => [c.text, c.kind]))
-
-let has: [string, string, string, string][] = [
-  ['comp name', '.', '.task.', 'comp'],
-  ['bare prop', '.', '.status', 'task'],
-  ['doc prop', '.', '.title', 'doc'],
-  ['spine is stamped', '.', '.num', 'entity · stamped'],
-  ['recall bare + stamped', '.', '.count', 'recall · stamped'],
-  ['reference', '.', '.assignee', 'filed · ref'],
-  ['shared reference', '.', '.actor', 'ref'],
-  ['prefix keeps the comp', '.mem', '.memory.', 'comp'],
-  ['comp columns', '.memory.', '.memory.scope', 'memory'],
-  [
-    'stamped column, dimmed',
-    '.memory.',
-    '.memory.last_confirmed_at',
-    'memory · stamped',
-  ],
-  ['recall columns', '.recall.', '.recall.count', 'recall · stamped'],
-  ['explicit spelling for collisions', '.pin.', '.pin.x', 'pin'],
-  ['ops after a prop', '.status', '.status=', 'equals'],
-  ['presence op', '.status', '.status!', 'exists'],
-  ['negation op', '.status', '.status!=', 'not'],
-  ['contains op', '.title', '.title~=', 'contains'],
-  ['facet absent', '.proposed', '.proposed=', 'absent'],
-  ['facet present', '.proposed', '.proposed~=', 'present'],
-  ['facet bang present', '.proposed', '.proposed!', 'present'],
-  ['range skeleton', '.priority', '.priority=..', 'range'],
-  ['half-typed op', '.status!', '.status!=', 'not'],
-  ['enum values', '.status=', '.status=open', 'status'],
-  ['enum by prefix', '.status=o', '.status=open', 'status'],
-  ['enum after a comma', '.status=open,w', '.status=open,wip', 'status'],
-  [
-    'enum on the explicit spelling',
-    '.task.status=',
-    '.task.status=open',
-    'status',
-  ],
-  ['path far side', '.assignee.', '.assignee.title', 'doc'],
-  ['path far side, any comp', '.assignee.', '.assignee.status', 'task'],
-  ['path value', '.assignee.status=', '.assignee.status=open', 'status'],
-  // multi-hop chains complete the same way, at any depth (T-17123)
-  [
-    'chain far columns',
-    '.comment.target.doc.',
-    '.comment.target.doc.title',
-    'doc',
-  ],
-  [
-    'chain fresh far side',
-    '.comment.target.',
-    '.comment.target.assignee',
-    'filed · ref',
-  ],
-  [
-    'chain leaf value',
-    '.comment.target.task.status=',
-    '.comment.target.task.status=open',
-    'status',
-  ],
-  ['time phrases on _at', '.updated.at=', '.updated.at=today', 'time'],
-  ['rank value', '.orde', '.order=hot', 'rank'],
-  ['rank value completes', '.order=h', '.order=hot', 'rank'],
-  ['similar rank value', '.order=simi', '.order=similar', 'rank'],
-  ['similar rank input', '.nea', '.near=', 'rank'],
-]
-for (let [name, token, text, kind] of has) {
-  Deno.test(`complete: ${name}`, () => assertEquals(cand(token)[text], kind))
-}
-
-Deno.test('complete: prefixes filter', () => {
-  let c = cand('.mem')
-  assertEquals(c['.status'], undefined)
-  assertEquals(c['.task.'], undefined)
-})
-
-Deno.test('complete: ambiguous columns only via the explicit spelling', () => {
-  assertEquals(cand('.')['.x'], undefined) // pin/camera collide
-  assertEquals(cand('.pin.')['.pin.x'], 'pin')
-})
-
-Deno.test("complete: wells are the caller's lists", () => {
-  assertEquals(
-    cand('.domain=', { domains: ['Eng', 'Ops'] })['.domain=Eng'],
-    'domains',
-  )
-  assertEquals(complete('.domain='), []) // pure: no lists passed, none invented
-})
-
-Deno.test("complete: {eid} params offer the caller's entities by kind", () => {
-  let ents = [
-    { id: 'P-19', kind: 'project' },
-    { id: 'P-30', kind: 'project' },
-    { id: 'T-3', kind: 'task' },
-    { id: 'U-7', kind: 'person' },
-  ]
-  // .project points at kind project — only projects; the task/person drop out
-  let proj = Object.fromEntries(
-    complete('.project=', undefined, ents).map((c) => [c.text, c.kind]),
-  )
-  assertEquals(proj['.project=P-19'], 'project')
-  assertEquals(proj['.project=P-30'], 'project')
-  assertEquals(proj['.project=T-3'], undefined)
-  // .assignee points at any entity — everything is offered
-  let any = complete('.assignee=', undefined, ents).map((c) => c.text)
-  assertEquals(any.includes('.assignee=T-3'), true)
-  assertEquals(any.includes('.assignee=U-7'), true)
-  // prefix-filtered like every value, and pure without the list
-  assertEquals(
-    complete('.project=P-3', undefined, ents).map((c) => c.text),
-    ['.project=P-30'],
-  )
-  assertEquals(complete('.project='), [])
-})
-
-Deno.test('complete: unknowns and non-tokens teach nothing', () => {
-  assertEquals(complete('.hovercraft.'), [])
-  assertEquals(complete('.hovercraft=x'), [])
-  assertEquals(complete('sandwich'), [])
-  assertEquals(complete('.status=open'), []) // the typed value is the value
-})
-
 // ---- the filter bar's seam ----
 
 // An ephemeral bar ANDs by concatenation: matchQuery is every(), so the
@@ -1485,28 +1323,6 @@ Deno.test('filter bar: extra preds AND into a saved query', () => {
   assert(!matchQuery(row({}, { completed: {} }), both))
   // a half-typed bar line throws like any query — the bar catches, inert
   assertThrows(() => parseQuery('.hovercraf=x'), Error, 'unknown prop')
-})
-
-// ---- retirement: the damper that sinks a dead venture ----
-
-Deno.test('sunk: own stamp, or the project the task is filed under', () => {
-  let P = 'p-eid'
-  let look = (eid: string) =>
-    eid == P ? { project: {}, archived: { at: '2026-01-01' } } : undefined
-  assertEquals(sunk({ project: {}, archived: { at: 'x' } }), true)
-  assertEquals(sunk({ project: {} }), false)
-  assertEquals(sunk({ archived: { at: 'x' } }), false)
-  assertEquals(sunk({ task: {}, filed: { project: P } }, look), true)
-  assertEquals(sunk({ task: {}, filed: { project: 'live' } }, look), false)
-  assertEquals(sunk({ task: {} }, look), false)
-})
-
-Deno.test('warm: retirement damps the rank, never zeroes it', () => {
-  let c = { created: { at: ago(H) }, project: {}, archived: { at: 'x' } }
-  assert(rank(c, T0) > 0) // sunk, not erased
-  assertEquals(rank(c, T0), hot(c, T0) * SUNK)
-  // fresh-but-retired sinks beneath merely-idle live work
-  assert(rank(c, T0) < hot({ created: { at: ago(2 * D) } }, T0))
 })
 
 Deno.test('.archived.at is filterable, and = means live', () => {

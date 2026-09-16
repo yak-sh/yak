@@ -25,7 +25,7 @@ import {
   shortId,
   stamped,
 } from '../types.ts'
-import { route } from '../query.ts'
+import { route } from '../route.ts'
 import { fleetVocab } from './fleet_vocab.ts'
 
 // The converter that maps the fleet manifests into @yaks/vocab documents lives

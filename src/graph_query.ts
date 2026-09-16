@@ -93,11 +93,11 @@ import {
   TEXT,
   type Walk,
   WANT,
-  warm,
   type Win,
   WINDOW,
   windowOf,
 } from './query.ts'
+import { warm } from './warmth.ts'
 import { inputsOf, resultsOf, withResults } from './result_component.ts'
 import {
   workAuthorizationSql,

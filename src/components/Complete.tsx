@@ -1,4 +1,4 @@
-// The vocabulary at the caret: wire any query input to complete() in
+// The vocabulary at the caret: wire any query input to suggest() in
 // query.ts and get a dropdown of the grammar's own candidates — comps,
 // props, ops, enum values, wells. The hook owns token detection (the
 // dot-token under the caret), selection, and acceptance (splice the
@@ -6,10 +6,10 @@
 // handlers — call key() FIRST in onKeyDown and stop when it returns true
 // (the dropdown consumed the press), track() from onInput. Wells and the
 // resident entities (for `{eid}` params) are read here, at the browser
-// boundary, so complete() itself stays pure. Resident-only, like wells: a
+// boundary, so suggest() itself stays pure. Resident-only, like wells: a
 // picker that must reach non-loaded entities asks the server (suggest.ts).
 import { useMemo, useRef, useState } from 'preact/hooks'
-import { type Cand, complete, type EntId } from '../query.ts'
+import { type Cand, type EntId, suggest } from '../suggest.ts'
 import { cache, domains } from '../live.ts'
 import { idOf, kindOf } from '../types.ts'
 import { block } from './ui.tsx'
@@ -58,7 +58,7 @@ export let useComplete = () => {
     let hit = tokenAt(el.value, caret)
     if (!hit) return close()
     at.current = { el, start: hit.start, end: caret }
-    let list = complete(hit.tok, { domains: domains.value }, ents).slice(0, CAP)
+    let list = suggest(hit.tok, { domains: domains.value }, ents).slice(0, CAP)
     setCands(list)
     setSel(0)
   }

@@ -54,15 +54,13 @@ import {
   type Pred,
   PROJECT,
   resolveRefs,
-  type ResultComp,
-  resultComps,
-  reverseAssocs,
   scopedSessions,
   TEXT,
   WANT,
-  warm,
   windowOf,
 } from './query.ts'
+import { type ResultComp, resultComps, reverseAssocs } from './route.ts'
+import { warm } from './warmth.ts'
 import {
   anchor,
   children,

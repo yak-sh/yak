@@ -35,12 +35,12 @@ import {
   PROJECT,
   type Reach,
   REACHES,
-  reverseAssocs,
   TEXT,
   WANT,
   type Win,
   WINDOW,
 } from './query.ts'
+import { reverseAssocs } from './route.ts'
 import { fromPackage, type Rel, toPackage } from './relation.ts'
 
 // Reads and writes share the handle's complete vocabulary. Replanting the

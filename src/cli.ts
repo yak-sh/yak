@@ -109,7 +109,8 @@ import { link, unlink } from './edge.ts'
 import { editChange, parsePropPatch } from './edit.ts'
 import { entityUrl } from './url.ts'
 import { prune, reap, sweep } from './probes.ts'
-import { EDGE_DOOR, edgeish, noFilter, type Pred, pred } from './query.ts'
+import { noFilter, type Pred, pred } from './query.ts'
+import { EDGE_DOOR, edgeish } from './route.ts'
 import { checks, mailCheck, type Result, run as runChecks } from './doctor.ts'
 import {
   type Change,

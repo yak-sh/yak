@@ -64,9 +64,9 @@ import {
   type Pred,
   type Reach,
   resolveRefs,
-  teaches,
   TEXT,
 } from './query.ts'
+import { teaches } from './route.ts'
 import { reachRows, textMatchesAt, where } from './sql.ts'
 import { type Frag, toSql } from './relation.ts'
 import { derivedCols, indexDdlOne, tableDdl } from './ddl.ts'

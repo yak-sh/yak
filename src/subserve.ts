@@ -59,7 +59,7 @@ import {
   resultStates,
   withResults,
 } from './result_component.ts'
-import type { ResultComp } from './query.ts'
+import type { ResultComp } from './route.ts'
 import { liveFrame } from './wire.ts'
 import { hasSources } from './source.ts'
 import {

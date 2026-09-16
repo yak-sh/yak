@@ -30,7 +30,8 @@ import {
   resultSub,
   type SubscriptionRead,
 } from '../live.ts'
-import { parseQuery, resolveRefs, type ResultComp } from '../query.ts'
+import { parseQuery, resolveRefs } from '../query.ts'
+import { type ResultComp } from '../route.ts'
 import type { Ent } from '../types.ts'
 import { dotFields } from '../tray_query.ts'
 
