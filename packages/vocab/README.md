@@ -196,8 +196,11 @@ const tool: Tool = { ...definition, run: (args) => args }
 
 `toolDefinitionSchema` is the JSON Schema for the declaration itself.
 `validateToolInput(tool, args)` validates a copy of the argument object and
-applies schema defaults. It uses JSON Schema draft 2020-12, including local
-references; it does not fetch remote references. Validators are cached per
+applies schema defaults. Schemas default to JSON Schema 2020-12; an explicit
+`$schema` selects draft-07, 2019-09, or 2020-12. Unsupported dialects are
+rejected. Local references work; remote references are not fetched.
+`toolOutputValidator(schema)` compiles the same dialects without applying
+defaults, for adapters that need a reusable validator. Validators are cached per
 schema object. Treat registered schemas as immutable.
 
 Nouns and verbs are single lowercase words (hyphens and digits allowed).

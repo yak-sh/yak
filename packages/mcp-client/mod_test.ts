@@ -205,3 +205,61 @@ Deno.test('graph Tool is usable through the CLI adapter without any session runt
     await c.close()
   }
 })
+
+Deno.test('about tool accepts declared draft-07 input and output through SDK validation', async () => {
+  // Matches the public yaks.app about schema shape observed on 2026-09-16.
+  const schema = {
+    type: 'object',
+    properties: { text: { type: 'string' } },
+    required: ['text'],
+    additionalProperties: true,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  }
+  let called = 0
+  let invalid = false
+  const c = connect({ name: 'public', url: 'https://example.test/mcp' }, {
+    fetch: async (input, init) => {
+      const req = new Request(input, init)
+      if (req.method === 'GET') return new Response(null, { status: 405 })
+      if (req.method === 'DELETE') return new Response(null, { status: 200 })
+      const body = await req.json()
+      if (!('id' in body)) return new Response(null, { status: 202 })
+      const result = body.method === 'initialize'
+        ? {
+          protocolVersion: '2025-06-18',
+          capabilities: { tools: {} },
+          serverInfo: { name: 'mock', version: '1' },
+        }
+        : body.method === 'tools/list'
+        ? {
+          tools: [{
+            name: 'about',
+            inputSchema: {
+              $schema: schema.$schema,
+              type: 'object',
+              properties: {},
+            },
+            outputSchema: schema,
+          }],
+        }
+        : (++called, {
+          content: [{ type: 'text', text: 'about' }],
+          structuredContent: { text: invalid ? 12 : 'about' },
+        })
+      return Response.json({ jsonrpc: '2.0', id: body.id, result })
+    },
+  })
+  try {
+    const [tool] = await c.tools()
+    const { validateToolInput } = await import('@yaks/vocab/tools')
+    const result = await tool.run(validateToolInput(tool, {}), {} as never)
+    assertEquals((result as { structuredContent: unknown }).structuredContent, {
+      text: 'about',
+    })
+    assertEquals(called, 1)
+    invalid = true
+    await assertRejects(async () => await tool.run({}, {} as never))
+  } finally {
+    await c.close()
+  }
+})

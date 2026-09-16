@@ -168,3 +168,8 @@ transports remain outside the graph.
 Low-level `connect(server)` and `clients(servers)` remain usable without a
 graph. The harness reads the shared graph instead of maintaining an
 environment-based server list.
+
+Remote schemas retain their declared dialect. Input and SDK output validation
+use the shared `@yaks/vocab/tools` validator: draft-07, 2019-09, and 2020-12 are
+supported; undeclared schemas default to 2020-12. Unsupported dialects fail
+explicitly, and validation does not fetch external schema references.

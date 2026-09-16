@@ -8,6 +8,24 @@ import {
   ToolListChangedNotificationSchema,
 } from '@modelcontextprotocol/sdk/types.js'
 import type { Tool } from '@yaks/graph'
+import { toolOutputValidator } from '@yaks/vocab/tools'
+import type { jsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/types.js'
+
+// The SDK's default output validator is 2020-only; remote servers also declare
+// draft-07. Use the same dialect-aware validation as local graph tools.
+const schemas: jsonSchemaValidator = {
+  getValidator<T>(schema: Record<string, unknown>) {
+    const validate = toolOutputValidator(schema)
+    return (input: unknown) =>
+      validate(input)
+        ? { valid: true as const, data: input as T, errorMessage: undefined }
+        : {
+          valid: false as const,
+          data: undefined,
+          errorMessage: JSON.stringify(validate.errors),
+        }
+  },
+}
 
 /** Host-wide trusted server configuration. Credentials are resolved separately. */
 export type Server = {
@@ -80,6 +98,7 @@ export const connect = (server: Server, options: Options = {}): Connection => {
     !['http:', 'https:'].includes(url.protocol) || url.username || url.password
   ) throw new Error('MCP requires an HTTP(S) URL without embedded credentials')
   const sdk = new Client({ name: 'yaks-mcp-client', version: '0.1.0' }, {
+    jsonSchemaValidator: schemas,
     capabilities: {},
   })
   let ready: Promise<void> | undefined, closed = false, generation = 0

@@ -1,7 +1,40 @@
 /** JSON Schema validation for portable tool arguments. Compiled once per schema. */
+import { Ajv } from 'ajv'
+import { Ajv2019 } from 'ajv/dist/2019.js'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 
-const ajv = new Ajv2020({ strict: false, allErrors: true, useDefaults: true })
+// Keep dialects in separate instances: 2020-12 changed tuple and ref semantics.
+// Schemas without a declaration retain this package's 2020-12 default.
+const dialects = (useDefaults: boolean) => {
+  const options = {
+    strict: false,
+    allErrors: true,
+    useDefaults,
+    addUsedSchema: false,
+  }
+  const current = new Ajv2020(options)
+  const draft7 = new Ajv(options)
+  const draft2019 = new Ajv2019(options)
+  return (schema: Record<string, unknown>) => {
+    const uri = schema.$schema
+    if (
+      uri === undefined ||
+      uri === 'https://json-schema.org/draft/2020-12/schema' ||
+      uri === 'https://json-schema.org/draft/2020-12/schema#'
+    ) return current
+    if (
+      uri === 'http://json-schema.org/draft-07/schema#' ||
+      uri === 'http://json-schema.org/draft-07/schema'
+    ) return draft7
+    if (
+      uri === 'https://json-schema.org/draft/2019-09/schema' ||
+      uri === 'https://json-schema.org/draft/2019-09/schema#'
+    ) return draft2019
+    throw new Error('Unsupported tool JSON Schema dialect: ' + String(uri))
+  }
+}
+const inputDialect = dialects(true)
+const ajv = inputDialect({})
 const validators = new WeakMap<object, ReturnType<typeof ajv.compile>>()
 
 export const validateToolInput = (
@@ -14,7 +47,7 @@ export const validateToolInput = (
   }
   let validate = validators.get(tool.inputSchema)
   if (!validate) {
-    validate = ajv.compile(tool.inputSchema)
+    validate = inputDialect(tool.inputSchema).compile(tool.inputSchema)
     validators.set(tool.inputSchema, validate)
   }
   const value = structuredClone(args)
@@ -27,22 +60,31 @@ export const validateToolInput = (
 }
 
 /** Validate the emitted object without applying defaults or changing the result. */
-const outputAjv = new Ajv2020({ strict: false, allErrors: true })
+const outputDialect = dialects(false)
+const outputAjv = outputDialect({})
 const outputValidators = new WeakMap<
   object,
   ReturnType<typeof outputAjv.compile>
 >()
+
+/** Compile a non-mutating validator using the schema's declared dialect. */
+export const toolOutputValidator = (
+  schema: Record<string, unknown>,
+): ReturnType<typeof outputAjv.compile> => {
+  let validate = outputValidators.get(schema)
+  if (!validate) {
+    validate = outputDialect(schema).compile(schema)
+    outputValidators.set(schema, validate)
+  }
+  return validate
+}
 
 export const validateToolOutput = (
   tool: { outputSchema?: Record<string, unknown> },
   value: unknown,
 ): void => {
   if (!tool.outputSchema) return
-  let validate = outputValidators.get(tool.outputSchema)
-  if (!validate) {
-    validate = outputAjv.compile(tool.outputSchema)
-    outputValidators.set(tool.outputSchema, validate)
-  }
+  const validate = toolOutputValidator(tool.outputSchema)
   if (!validate(value)) {
     throw new Error(
       'Invalid tool result: ' + outputAjv.errorsText(validate.errors),
@@ -111,8 +153,12 @@ export const toolDefinition = (value: unknown): ToolDefinition => {
     { inputSchema: toolDefinitionSchema },
     value as Record<string, unknown>,
   ) as unknown as ToolDefinition
-  if (candidate.inputSchema) ajv.compile(candidate.inputSchema)
-  if (candidate.outputSchema) ajv.compile(candidate.outputSchema)
+  if (candidate.inputSchema) {
+    inputDialect(candidate.inputSchema).compile(candidate.inputSchema)
+  }
+  if (candidate.outputSchema) {
+    outputDialect(candidate.outputSchema).compile(candidate.outputSchema)
+  }
   const props = candidate.inputSchema?.properties as
     | Record<string, unknown>
     | undefined
