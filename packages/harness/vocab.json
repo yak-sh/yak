@@ -1,0 +1,50 @@
+{
+  "title": "harness",
+  "$defs": {
+    "entity": {
+      "type": "object",
+      "wire": false,
+      "properties": {
+        "num": {
+          "type": "number",
+          "stamped": true
+        }
+      }
+    },
+    "created": {
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        }
+      }
+    },
+    "updated": {
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        }
+      }
+    },
+    "home": {
+      "type": "object",
+      "description": "An agent home checkout, separate from working directory; not a sandbox.",
+      "properties": {
+        "worktree": {
+          "type": "string",
+          "ref": "worktree",
+          "death": "keep"
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Optional default command directory, independent of the home checkout."
+        }
+      }
+    }
+  }
+}

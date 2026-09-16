@@ -9,48 +9,11 @@ import { sessionDoc } from '@yaks/session'
 import { taskDoc } from '@yaks/task'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { checkoutDoc } from '@yaks/git/checkout-vocab'
-export let workspaceDoc: VocabDoc = {
-  title: 'workspace',
-  $defs: {
-    home: {
-      type: 'object',
-      description:
-        'An agent home checkout, separate from working directory; not a sandbox.',
-      properties: {
-        worktree: { type: 'string', ref: 'worktree', death: 'keep' },
-        cwd: {
-          type: 'string',
-          description:
-            'Optional default command directory, independent of the home checkout.',
-        },
-      },
-    },
-  },
-}
-/** The words no package owns: the spine, and the two stamps @yaks/graph writes
- * when a vocabulary declares them — without which nothing here has a time. */
-export let harnessDoc: VocabDoc = {
-  title: 'harness',
-  $defs: {
-    entity: {
-      type: 'object',
-      wire: false,
-      properties: { num: { type: 'number', stamped: true } },
-    },
-    created: {
-      type: 'object',
-      properties: {
-        at: { type: 'string', format: 'date-time', stamped: true },
-      },
-    },
-    updated: {
-      type: 'object',
-      properties: {
-        at: { type: 'string', format: 'date-time', stamped: true },
-      },
-    },
-  },
-}
+import doc from './vocab.json' with { type: 'json' }
+
+const { home, ...core } = doc.$defs
+export let workspaceDoc: VocabDoc = { title: 'workspace', $defs: { home } }
+export let harnessDoc: VocabDoc = { title: doc.title, $defs: core }
 
 /** Everything the harness speaks, loaded once. */
 export let vocab: Vocab = loadVocab([

@@ -1,0 +1,232 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/sync": true
+  },
+  "$defs": {
+    "entity": {
+      "properties": {
+        "eid": {
+          "type": "string"
+        }
+      }
+    },
+    "keyboard": {
+      "persist": "none",
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "focus": {
+          "type": "string"
+        },
+        "help": {
+          "type": "boolean"
+        },
+        "pending": {
+          "type": "string"
+        },
+        "clipboard": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "boolean"
+        },
+        "mcpAuth": {
+          "type": "boolean"
+        },
+        "mcpAuthIndex": {
+          "type": "number"
+        },
+        "mcpAuthBusy": {
+          "type": "boolean"
+        },
+        "mcpAuthFeedback": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "boolean"
+        },
+        "detailStart": {
+          "type": "number"
+        },
+        "detailNext": {
+          "type": "number"
+        },
+        "detailRevision": {
+          "type": "string"
+        },
+        "detailText": {
+          "type": "string"
+        },
+        "detailError": {
+          "type": "string"
+        },
+        "detailTotal": {
+          "type": "number"
+        },
+        "runtimeSelected": {
+          "type": "string"
+        },
+        "runtimeFeedback": {
+          "type": "string"
+        }
+      }
+    },
+    "frontend": {
+      "persist": "none",
+      "properties": {
+        "selected": {
+          "type": "string"
+        },
+        "sidebar": {
+          "type": "string"
+        },
+        "generation": {
+          "type": "number"
+        },
+        "showSettled": {
+          "type": "boolean"
+        },
+        "shuttingDown": {
+          "type": "boolean"
+        },
+        "showArchived": {
+          "type": "boolean"
+        }
+      }
+    },
+    "visual": {
+      "persist": "none",
+      "properties": {
+        "surface": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "anchor": {
+          "type": "number"
+        },
+        "at": {
+          "type": "number"
+        },
+        "yank": {
+          "type": "string"
+        }
+      }
+    },
+    "composer": {
+      "persist": "none",
+      "properties": {
+        "mode": {
+          "enum": [
+            "message",
+            "task"
+          ]
+        }
+      }
+    },
+    "feedback": {
+      "persist": "none",
+      "properties": {
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "viewport": {
+      "persist": "none",
+      "properties": {
+        "item": {
+          "type": "string"
+        },
+        "selected": {
+          "type": "string"
+        },
+        "cursorRow": {
+          "type": "number"
+        },
+        "cursorCol": {
+          "type": "number"
+        },
+        "anchorId": {
+          "type": "string"
+        },
+        "anchorRow": {
+          "type": "number"
+        },
+        "anchorCol": {
+          "type": "number"
+        },
+        "windowAnchor": {
+          "type": "string"
+        },
+        "windowEdge": {
+          "type": "string"
+        },
+        "windowLoading": {
+          "type": "boolean"
+        },
+        "offset": {
+          "type": "number"
+        },
+        "follow": {
+          "type": "boolean"
+        }
+      }
+    },
+    "pendingDraft": {
+      "persist": "local",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "order": {
+          "type": "number"
+        },
+        "generation": {
+          "type": "number"
+        }
+      }
+    },
+    "savedDraft": {
+      "persist": "local",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "at": {
+          "type": "number"
+        },
+        "mode": {
+          "type": "string"
+        }
+      }
+    },
+    "recovery": {
+      "persist": "local",
+      "properties": {
+        "selected": {
+          "type": "string"
+        },
+        "yank": {
+          "type": "string"
+        }
+      }
+    },
+    "draft": {
+      "persist": "none",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "at": {
+          "type": "number"
+        }
+      }
+    }
+  }
+}

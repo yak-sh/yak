@@ -1,0 +1,36 @@
+{
+  "title": "runtime projection",
+  "$defs": {
+    "session": {
+      "properties": {
+        "status": {
+          "type": "string"
+        }
+      }
+    },
+    "dispatch": {
+      "properties": {
+        "state": {
+          "type": "string"
+        }
+      }
+    },
+    "attempt": {
+      "properties": {
+        "state": {
+          "type": "string"
+        }
+      }
+    },
+    "call": {
+      "properties": {}
+    },
+    "error": {
+      "properties": {
+        "code": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

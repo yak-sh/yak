@@ -1,0 +1,45 @@
+{
+  "title": "artifact",
+  "$defs": {
+    "artifact": {
+      "description": "A binary object in the configured external blob store.",
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "size": {
+          "type": "number"
+        }
+      }
+    },
+    "attachment": {
+      "description": "An artifact produced by a model response; the entry belongs to its session.",
+      "properties": {
+        "artifact": {
+          "type": "string",
+          "ref": "artifact",
+          "death": "keep"
+        },
+        "audience": {
+          "type": "string",
+          "enum": [
+            "user",
+            "model"
+          ]
+        },
+        "revision": {
+          "type": "string"
+        },
+        "call": {
+          "type": "string"
+        },
+        "revised_prompt": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

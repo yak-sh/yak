@@ -1,6 +1,7 @@
 /** Binary artifacts stored outside text columns, using any existing Blobs backend. */
 import type { Blobs } from './store.ts'
 import type { VocabDoc } from '@yaks/vocab'
+import doc from './vocab.json' with { type: 'json' }
 
 export type Artifact = {
   address: string
@@ -31,27 +32,4 @@ export let artifactStore =
     return { address, media_type: mediaType, size: bytes.byteLength }
   }
 
-export let artifactDoc: VocabDoc = {
-  title: 'artifact',
-  $defs: {
-    artifact: {
-      description: 'A binary object in the configured external blob store.',
-      properties: {
-        address: { type: 'string' },
-        media_type: { type: 'string' },
-        size: { type: 'number' },
-      },
-    },
-    attachment: {
-      description:
-        'An artifact produced by a model response; the entry belongs to its session.',
-      properties: {
-        artifact: { type: 'string', ref: 'artifact', death: 'keep' },
-        audience: { type: 'string', enum: ['user', 'model'] },
-        revision: { type: 'string' },
-        call: { type: 'string' },
-        revised_prompt: { type: 'string' },
-      },
-    },
-  },
-}
+export let artifactDoc: VocabDoc = doc

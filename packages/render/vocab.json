@@ -1,0 +1,21 @@
+{
+  "$defs": {
+    "column": {
+      "type": "object",
+      "properties": {
+        "comp": {
+          "type": "string"
+        },
+        "col": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

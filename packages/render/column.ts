@@ -8,21 +8,11 @@
 
 import type { Bundle } from '@yaks/match'
 import { type Column, loadVocab, type Vocab } from '@yaks/vocab'
+import doc from './vocab.json' with { type: 'json' }
 import type { Context } from './types.ts'
 
 /** The schema of the column projection, used by the ordinary query matcher. */
-export let columnVocab: Vocab = loadVocab([{
-  $defs: {
-    column: {
-      type: 'object',
-      properties: Object.fromEntries(
-        ['comp', 'col', 'type', 'ref'].map((
-          name,
-        ) => [name, { type: 'string' }]),
-      ),
-    },
-  },
-}])
+export let columnVocab: Vocab = loadVocab([doc])
 
 /** Read a declared column; an incomplete or unknown address is an error. */
 export let declared = (vocab: Vocab, ctx: Context): Column => {

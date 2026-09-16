@@ -1,107 +1,11 @@
 /** Frontend-local graph state. Only drafts and recovery data enter the local vault. */
 import { type Client, client, type Vault, type Watch } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
-import { SYNC_URI, syncKeywords } from '@yaks/sync'
+import doc from './frontend/vocab.json' with { type: 'json' }
+import { syncKeywords } from '@yaks/sync'
 import { signal } from '@preact/signals'
 
-export let frontendVocab = loadVocab([{
-  $vocabulary: { [SYNC_URI]: true },
-  $defs: {
-    entity: { properties: { eid: { type: 'string' } } },
-    keyboard: {
-      persist: 'none',
-      properties: {
-        mode: { type: 'string' },
-        focus: { type: 'string' },
-        help: { type: 'boolean' },
-        pending: { type: 'string' },
-        clipboard: { type: 'string' },
-        runtime: { type: 'boolean' },
-        mcpAuth: { type: 'boolean' },
-        mcpAuthIndex: { type: 'number' },
-        mcpAuthBusy: { type: 'boolean' },
-        mcpAuthFeedback: { type: 'string' },
-        detail: { type: 'boolean' },
-        detailStart: { type: 'number' },
-        detailNext: { type: 'number' },
-        detailRevision: { type: 'string' },
-        detailText: { type: 'string' },
-        detailError: { type: 'string' },
-        detailTotal: { type: 'number' },
-        runtimeSelected: { type: 'string' },
-        runtimeFeedback: { type: 'string' },
-      },
-    },
-    frontend: {
-      persist: 'none',
-      properties: {
-        selected: { type: 'string' },
-        sidebar: { type: 'string' },
-        generation: { type: 'number' },
-        showSettled: { type: 'boolean' },
-        shuttingDown: { type: 'boolean' },
-        showArchived: { type: 'boolean' },
-      },
-    },
-    visual: {
-      persist: 'none',
-      properties: {
-        surface: { type: 'string' },
-        text: { type: 'string' },
-        anchor: { type: 'number' },
-        at: { type: 'number' },
-        yank: { type: 'string' },
-      },
-    },
-    composer: {
-      persist: 'none',
-      properties: { mode: { enum: ['message', 'task'] } },
-    },
-    feedback: { persist: 'none', properties: { error: { type: 'string' } } },
-    viewport: {
-      persist: 'none',
-      properties: {
-        item: { type: 'string' },
-        selected: { type: 'string' },
-        cursorRow: { type: 'number' },
-        cursorCol: { type: 'number' },
-        anchorId: { type: 'string' },
-        anchorRow: { type: 'number' },
-        anchorCol: { type: 'number' },
-        windowAnchor: { type: 'string' },
-        windowEdge: { type: 'string' },
-        windowLoading: { type: 'boolean' },
-        offset: { type: 'number' },
-        follow: { type: 'boolean' },
-      },
-    },
-    pendingDraft: {
-      persist: 'local',
-      properties: {
-        text: { type: 'string' },
-        owner: { type: 'string' },
-        order: { type: 'number' },
-        generation: { type: 'number' },
-      },
-    },
-    savedDraft: {
-      persist: 'local',
-      properties: {
-        text: { type: 'string' },
-        at: { type: 'number' },
-        mode: { type: 'string' },
-      },
-    },
-    recovery: {
-      persist: 'local',
-      properties: { selected: { type: 'string' }, yank: { type: 'string' } },
-    },
-    draft: {
-      persist: 'none',
-      properties: { text: { type: 'string' }, at: { type: 'number' } },
-    },
-  },
-}], [syncKeywords])
+export let frontendVocab = loadVocab([doc], [syncKeywords])
 
 export let frontend = (vault: Vault | false = false): Frontend => {
   // No URL or socket: the local vault is never replicated to the backend.

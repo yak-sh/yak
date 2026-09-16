@@ -7,22 +7,14 @@ import { define, type Renderer } from '@yaks/render'
 import { parse } from '@yaks/query'
 import { render } from '@yaks/preact'
 import { loadVocab } from '@yaks/vocab'
+import doc from './runtime/vocab.json' with { type: 'json' }
 import { Scroll, useKeymap } from '@yaks/tui'
 import type { RuntimeAction } from './runtime.ts'
 import type { Frontend } from './frontend.ts'
 import type { UIAgent } from './panels.ts'
 import { sessionLine } from './panels.ts'
 
-let vocabulary = loadVocab([{
-  title: 'runtime projection',
-  $defs: {
-    session: { properties: { status: { type: 'string' } } },
-    dispatch: { properties: { state: { type: 'string' } } },
-    attempt: { properties: { state: { type: 'string' } } },
-    call: { properties: {} },
-    error: { properties: { code: { type: 'string' } } },
-  },
-}])
+let vocabulary = loadVocab([doc])
 let label = (match: string, text: string, color: string): Renderer => ({
   view: 'Runtime',
   match: parse(match),
