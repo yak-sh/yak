@@ -83,6 +83,9 @@ export const authorizedMCP = (
     }
   }
   return {
+    cancel: () => {
+      for (const a of auths.values()) a.cancel()
+    },
     control,
     tools: async () =>
       (await Promise.all(servers.map(async (s) => {

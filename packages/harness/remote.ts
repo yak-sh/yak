@@ -1,6 +1,5 @@
 import { ShuttingDown } from './shutdown.ts'
 import type { EntrySource } from './detail.ts'
-import type { Server as MCPServer } from '@yaks/mcp-client'
 import type {
   TranscriptPage,
   TranscriptPlan,
@@ -26,7 +25,6 @@ export let remote = async (
     db?: string
     cwd?: string
     web?: boolean
-    mcp?: MCPServer[]
     images?: ImageOptions | false
     streaming?: boolean
     stream?: boolean

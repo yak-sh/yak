@@ -1,7 +1,6 @@
 import type { MCPAuthAction, MCPAuthReply } from './mcp_auth.ts'
 import { type EntrySource, entrySource, type SourceRequest } from './detail.ts'
-import { configuredMCP, mcpTools } from './mcp.ts'
-import type { Server as MCPServer } from '@yaks/mcp-client'
+import { mcpTools } from './mcp.ts'
 import { watchMigrations } from '@yaks/sqlite'
 import { inheritedInstructions } from './legacy_instructions.ts'
 import { stepLock } from './step_lock.ts'
@@ -113,8 +112,6 @@ export type Opts = ChildLimits & NotHarness & {
   images?: ImageOptions | false
   /** what the agent may call (default: the shell and the graph) */
   tools?: Tool[]
-  /** Explicit host-wide remote MCP servers. Empty disables environment configuration. */
-  mcp?: MCPServer[]
   /** Stream responses by default; false overrides HARNESS_STREAM. */
   streaming?: boolean
   /** Alias for streaming. If both are supplied, streaming takes precedence. */
@@ -213,7 +210,6 @@ export let agent = (opts: Opts = {}): Agent => {
       )
     }
   }
-  const servers = configuredMCP(opts.mcp)
   let h = opts.h ?? open()
   let detachDiagnostics = diagnostics().attach(h.g)
   let name = opts.name ?? ASTRA
@@ -226,7 +222,9 @@ export let agent = (opts: Opts = {}): Agent => {
   let tools = opts.tools ?? harnessTools(h.g, opts)
   let remoteSignature = ''
   const remoteHandlers = new Map<string, Tool>()
-  const mcp = servers.length ? mcpTools(h.g, servers) : undefined
+  const mcp = mcpTools(h.g)
+  h.fx.created('mcp_server', mcp.refresh).changed('mcp_server', mcp.refresh)
+    .removed('mcp_server', mcp.refresh)
   h.g.apply(seed({ model: name, tools }), { trusted: true })
   let d = daemon(
     h.g,
@@ -234,32 +232,30 @@ export let agent = (opts: Opts = {}): Agent => {
     {
       model,
       tools,
-      toolSnapshot: mcp
-        ? async (phase) => {
-          if (phase === 'call' && remoteHandlers.size) {
-            return [
-              ...tools,
-              ...remoteHandlers.values(),
-            ]
-          }
-          const remote = await mcp.snapshot()
-          for (const tool of remote) remoteHandlers.set(tool.name, tool)
-          const all = [...tools, ...remote]
-          if (
-            new Set(all.map((t) => t.name)).size !== all.length
-          ) throw new Error('Duplicate local/MCP tool name')
-          const signature = JSON.stringify(
-            remote.map((t) => [t.name, t.description, t.parameters]),
-          )
-          if (signature !== remoteSignature) {
-            await h.g.apply(seed({ model: name, tools: remote }), {
-              trusted: true,
-            })
-            remoteSignature = signature
-          }
-          return all
+      toolSnapshot: async (phase) => {
+        if (phase === 'call' && remoteHandlers.size) {
+          return [
+            ...tools,
+            ...remoteHandlers.values(),
+          ]
         }
-        : undefined,
+        const remote = await mcp.snapshot()
+        for (const tool of remote) remoteHandlers.set(tool.name, tool)
+        const all = [...tools, ...remote]
+        if (
+          new Set(all.map((t) => t.name)).size !== all.length
+        ) throw new Error('Duplicate local/MCP tool name')
+        const signature = JSON.stringify(
+          remote.map((t) => [t.name, t.description, t.parameters]),
+        )
+        if (signature !== remoteSignature) {
+          await h.g.apply(seed({ model: name, tools: remote }), {
+            trusted: true,
+          })
+          remoteSignature = signature
+        }
+        return all
+      },
       streaming: streamingEnabled(opts),
       checkpointMs: opts.checkpointMs,
       instructions: opts.instructions,
@@ -325,10 +321,7 @@ export let agent = (opts: Opts = {}): Agent => {
         return session
       }),
     authorizeMCP: (action, name, callback) =>
-      mcp ? mcp.authorize(action, name, callback) : Promise.resolve({
-        servers: [],
-        message: 'No MCP servers configured.',
-      }),
+      mcp.authorize(action, name, callback),
     send: async (session, text) => {
       // Admission is independent of the provider/tool execution queue. The
       // session plugin assigns seq inside this write's transaction.

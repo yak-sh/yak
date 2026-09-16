@@ -2,9 +2,10 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { agent } from './run.ts'
 import { open } from './store.ts'
 import { remote } from './remote.ts'
-import { configuredMCP, mcpTools } from './mcp.ts'
+import { mcpTools } from './mcp.ts'
 import { fixture } from '../mcp-client/testing.ts'
-import { nameOf } from '@yaks/mcp-client'
+import { serverOf } from '@yaks/mcp-client/graph'
+import { graphToolName } from '@yaks/mcp-client/graph'
 
 Deno.test('configured remote MCP tool publishes mockup through existing call/result transcript', async () => {
   const f = fixture()
@@ -15,9 +16,15 @@ Deno.test('configured remote MCP tool publishes mockup through existing call/res
   const h = open(':memory:')
   const calls: string[] = []
   let requests = 0
+  await h.g.apply([{
+    entity: { eid: 'site' },
+    mcp_server: {
+      name: 'site',
+      url: `http://127.0.0.1:${server.addr.port}/mcp`,
+    },
+  }])
   const a = agent({
     h,
-    mcp: [{ name: 'site', url: `http://127.0.0.1:${server.addr.port}/mcp` }],
     model: (req) => {
       requests++
       if (requests === 1) {
@@ -53,7 +60,13 @@ Deno.test('configured remote MCP tool publishes mockup through existing call/res
     const entries = await a.transcript(id)
     assertEquals(entries.filter((b) => b.call).length, 1)
     assertEquals(entries.filter((b) => b.result).length, 1)
-    assertEquals(calls[0], await nameOf('site', 'publish_mockup'))
+    assertEquals(
+      calls[0],
+      await graphToolName('site', {
+        name: 'site',
+        url: `http://127.0.0.1:${server.addr.port}/mcp`,
+      }, 'publish_mockup'),
+    )
     assertEquals(f.calls.filter((c) => c.method === 'tools/list').length, 1)
     assertEquals(f.calls.filter((c) => c.method === 'tools/call').length, 1)
   } finally {
@@ -68,11 +81,18 @@ Deno.test('worker owns MCP connection and preserves exact configured tool schema
     { port: 0, hostname: '127.0.0.1', onListen() {} },
     (req) => f.fetcher(req),
   )
-  const a = await remote({
-    db: ':memory:',
-    fake: true,
-    mcp: [{ name: 'site', url: `http://127.0.0.1:${server.addr.port}/mcp` }],
-  })
+  const dir = await Deno.makeTempDir()
+  const db = dir + '/graph.db'
+  const seed = open(db)
+  await seed.g.apply([{
+    entity: { eid: 'site' },
+    mcp_server: {
+      name: 'site',
+      url: `http://127.0.0.1:${server.addr.port}/mcp`,
+    },
+  }])
+  seed.close()
+  const a = await remote({ db, fake: true })
   try {
     const id = await a.agent.start('hello')
     await a.idle(id)
@@ -85,22 +105,21 @@ Deno.test('worker owns MCP connection and preserves exact configured tool schema
   }
 })
 
-Deno.test('config does not accept inline secrets or mismatched credential hosts', () => {
-  assertEquals(configuredMCP([]), [])
-  for (
-    const value of [
-      [{ name: 'site', url: 'https://other.test/mcp', credential: 'yaks.app' }],
-      [{ name: 'site', url: 'https://example.test/mcp', token: 'secret' }],
-    ]
-  ) {
-    let failed = false
-    try {
-      configuredMCP(value as never)
-    } catch {
-      failed = true
-    }
-    assert(failed)
+Deno.test('graph server rejects mismatched credential host', () => {
+  let failed = false
+  try {
+    serverOf({
+      entity: { eid: 'site' },
+      mcp_server: {
+        name: 'site',
+        url: 'https://other.test/mcp',
+        credential: 'yaks.app',
+      },
+    })
+  } catch {
+    failed = true
   }
+  assert(failed)
 })
 
 Deno.test('tool isError uses expected tool failure rather than a defect', async () => {
@@ -111,10 +130,14 @@ Deno.test('tool isError uses expected tool failure rather than a defect', async 
     (req) => f.fetcher(req),
   )
   const h = open(':memory:')
-  const tools = mcpTools(h.g, [{
-    name: 'site',
-    url: `http://127.0.0.1:${server.addr.port}/mcp`,
+  await h.g.apply([{
+    entity: { eid: 'site' },
+    mcp_server: {
+      name: 'site',
+      url: `http://127.0.0.1:${server.addr.port}/mcp`,
+    },
   }])
+  const tools = mcpTools(h.g)
   try {
     const [tool] = await tools.snapshot()
     await assertRejects(async () => await tool.run({}), Error, 'mockup/1')
@@ -151,10 +174,14 @@ Deno.test('remote images use external artifacts while large text retains bounded
     },
   )
   const h = open(':memory:')
-  const tools = mcpTools(h.g, [{
-    name: 'site',
-    url: `http://127.0.0.1:${server.addr.port}/mcp`,
+  await h.g.apply([{
+    entity: { eid: 'site' },
+    mcp_server: {
+      name: 'site',
+      url: `http://127.0.0.1:${server.addr.port}/mcp`,
+    },
   }])
+  const tools = mcpTools(h.g)
   try {
     await h.g.apply([{ entity: { eid: 's' }, session: {} }, {
       entity: { eid: 'call' },

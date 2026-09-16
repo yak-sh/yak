@@ -1,3 +1,4 @@
+import { mcpDoc } from '@yaks/mcp-client/graph'
 import { blobKeywords } from '@yaks/blob'
 import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords } from '@yaks/edge'
@@ -54,6 +55,7 @@ export let harnessDoc: VocabDoc = {
 /** Everything the harness speaks, loaded once. */
 export let vocab: Vocab = loadVocab([
   harnessDoc,
+  mcpDoc,
   checkoutDoc,
   workspaceDoc,
   docDoc,

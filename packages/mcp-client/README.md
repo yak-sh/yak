@@ -140,3 +140,31 @@ The configured server controls OAuth discovery. Configure only trusted servers;
 HTTP is accepted only for loopback addresses. Discovery requests and token
 requests have bounded network deadlines and do not follow redirects. This is not
 a general SSRF sandbox or a provider-independent OAuth package.
+
+## Graph server definitions
+
+`@yaks/mcp-client/graph` exports `mcpDoc` and `serverOf(bundle)`. This optional
+adapter has no harness or session dependency. Load `mcpDoc` with the host's
+vocabulary and store shared server definitions as `mcp_server` components:
+
+```ts
+await graph.apply([{
+  entity: { eid: 'my-server' },
+  mcp_server: { name: 'Example', url: 'https://example.org/mcp' },
+}])
+```
+
+`serverOf` validates an enabled row and returns its display label, entity ID,
+and portable `Server` configuration. `graphToolName` derives a provider-safe
+name from the entity, connection configuration, and opaque remote tool name;
+hosts can retain handlers for previous configurations without name collisions.
+The entity ID is the tool namespace; renaming the display label does not rename
+tools. `enabled: false` disables the row. `allow` is optional JSON text
+containing an array of exact remote names. OAuth configuration uses
+`redirect_url`, `client_id`, `client_metadata_url`, and `scope`; `credential` is
+a host-interpreted reference, never a bearer token. Credentials and open
+transports remain outside the graph.
+
+Low-level `connect(server)` and `clients(servers)` remain usable without a
+graph. The harness reads the shared graph instead of maintaining an
+environment-based server list.

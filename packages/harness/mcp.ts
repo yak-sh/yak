@@ -1,62 +1,11 @@
 /** Host composition: shared MCP connections and the existing yak credential store. */
-import type { Server } from '@yaks/mcp-client'
-import { authorizedMCP } from './mcp_auth.ts'
+import { graphMCP } from './mcp_registry.ts'
 import { type Graph, type Tool as GraphTool, toolName } from '@yaks/graph'
 import { type Tool, type ToolContext, ToolError } from '@yaks/session'
 import { images } from './images.ts'
 
-/** Explicit JSON configuration only; no repository or other agent config discovery. */
-export const configuredMCP = (servers?: Server[]): Server[] => {
-  const value: unknown = servers ??
-    JSON.parse(Deno.env.get('HARNESS_MCP') ?? '[]')
-  if (!Array.isArray(value)) {
-    throw new Error('HARNESS_MCP must be an array of server configurations')
-  }
-  const names = new Set<string>()
-  for (const s of value) {
-    if (
-      !s || typeof s.name !== 'string' || typeof s.url !== 'string' ||
-      (s.credential != null && typeof s.credential !== 'string') ||
-      (s.allow != null &&
-        (!Array.isArray(s.allow) ||
-          s.allow.some((x: unknown) => typeof x !== 'string'))) ||
-      Object.keys(s).some((k) =>
-        !['name', 'url', 'allow', 'credential', 'oauth'].includes(k)
-      )
-    ) {
-      throw new Error(
-        'Invalid MCP server configuration; use name, url, allow, credential, oauth',
-      )
-    }
-    if (!s.name || names.has(s.name)) {
-      throw new Error('MCP server names must be nonempty and unique')
-    }
-    if (
-      s.oauth != null &&
-      (typeof s.oauth !== 'object' || Array.isArray(s.oauth) ||
-        Object.entries(s.oauth).some(([key, value]) =>
-          !['redirectUrl', 'clientId', 'clientMetadataUrl', 'scope'].includes(
-            key,
-          ) || typeof value !== 'string'
-        ))
-    ) {
-      throw new Error('Invalid MCP OAuth settings')
-    }
-    names.add(s.name)
-    const url = new URL(s.url)
-    if (
-      !['https:', 'http:'].includes(url.protocol) || url.username ||
-      url.password
-    ) throw new Error('MCP URL must be HTTP(S) without embedded credentials')
-    if (s.credential && url.hostname !== s.credential) {
-      throw new Error('MCP credential host must match the server hostname')
-    }
-  }
-  return value as Server[]
-}
-
-export const mcpTools = (g: Graph, servers: Server[]) => {
-  const connections = authorizedMCP(servers)
+export const mcpTools = (g: Graph) => {
+  const connections = graphMCP(g)
   const store = images({}).store
   const ctx = {
     graph: g,
@@ -159,6 +108,7 @@ export const mcpTools = (g: Graph, servers: Server[]) => {
     return text
   }
   return {
+    refresh: connections.refresh,
     snapshot: async (): Promise<Tool[]> =>
       (await connections.tools()).map((t: GraphTool) => ({
         name: toolName(t),

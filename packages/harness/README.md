@@ -668,23 +668,49 @@ The optional host-wide MCP configuration consumes servers through
 `@yaks/mcp-client`. No servers are enabled implicitly. To use the same yaks.app
 sign-in as `yak`:
 
-```sh
-yak login "$YAKS_TOKEN"
-HARNESS_MCP='[{"name":"yaks","url":"https://yaks.app/mcp","credential":"yaks.app"}]' deno task harness
+MCP server definitions live in the harness graph, shared by all sessions. Add a
+server with `graph_apply` (or ask an agent to add it):
+
+```json
+[
+  {
+    "entity": { "eid": "mcp-yaks" },
+    "mcp_server": { "name": "yaks.app", "url": "https://yaks.app/mcp" }
+  }
+]
 ```
 
-Obtain a yaks.app bearer through your existing account workflow;
-`yak login <token>` stores it rather than initiating OAuth. Check `yak --help`
-for selecting another host. `credential` is the hostname key in the existing yak
-token store; `YAKS_TOKEN` retains its existing override behavior. The credential
-hostname must match the endpoint. This is independent of OpenAI/Codex
-authentication. Configuration never contains a token, and the client does not
-inspect Claude or other agent configuration files.
+Press **Esc**, **A** to authorize the server. Server rows persist across
+restarts; configuration changes take effect on the next ask, without restarting.
+The panel identifies each server by display name and EID and reports invalid
+definitions. Query `.mcp_server` to list them. Set `mcp_server.enabled` to
+`false` to disable a server, patch its URL or options to edit it, or remove its
+`mcp_server` component to remove it. A rename preserves tool identity: the
+entity EID, not its display name, supplies the namespace. Tool names also
+include a configuration revision so changing an endpoint cannot retarget calls
+already issued by a model.
 
-Programmatic hosts pass `mcp: [{name, url, credential?, allow?}]`. `mcp: []`
-disables environment configuration. `allow` contains exact remote tool names;
-omitting it exposes every tool from that explicitly trusted server. Treat both
-tool descriptions and returned content as untrusted data, not instruction files.
+Optional fields are `credential` (a hostname reference into the existing yak
+bearer store), `allow` (a JSON-encoded array of exact remote tool names), and
+`redirect_url`, `client_id`, `client_metadata_url`, `scope` for OAuth settings.
+Omitting `allow` exposes all discovered tools; `"[]"` exposes none. The graph's
+current column vocabulary stores this list as JSON text. Token values, callback
+codes, and verifiers never belong in these fields. OAuth credentials remain in
+the private authorization store. Changing the endpoint/registration selects its
+own authorization record; renaming a server does not invalidate its credentials.
+
+A `credential` hostname must match the endpoint hostname. `yak login <token>`
+stores a bearer; it does not initiate OAuth. `YAKS_TOKEN` retains its existing
+credential override behavior. This is independent of model-provider credentials.
+No other agent's configuration is discovered automatically.
+
+Disabled/removed/reconfigured servers disappear from subsequent asks. Handlers
+already offered to a request keep their original connection so their results can
+still be delivered. Retired connections close when the harness drains and shuts
+down; repeated edits can therefore retain transports until shutdown. Invalid or
+unavailable optional servers do not block other servers or ordinary chat; open
+the authorization panel to inspect their errors. Treat descriptions/results as
+data, not instruction files.
 
 The backend worker owns these connections; sessions share configuration, not new
 connection definitions. Discovery occurs at execution boundaries, never while
@@ -739,11 +765,12 @@ changes. The composer keeps its existing explicit source-selection behavior.
 
 ### Sign in to an MCP server
 
-Configure `HARNESS_MCP` as above, then press **Esc**, **A** in the TUI. Choose a
-server with j/k and Enter. Open the displayed authorization link in your
-browser. After approval, copy the complete return URL from the address bar and
-paste it into the authorization panel; press Enter. The return URL is hidden and
-never sent to the model, a transcript, or draft recovery storage. Esc cancels.
+Add an `mcp_server` entity as above, then press **Esc**, **A** in the TUI.
+Choose a server with j/k and Enter. Open the displayed authorization link in
+your browser. After approval, copy the complete return URL from the address bar
+and paste it into the authorization panel; press Enter. The return URL is hidden
+and never sent to the model, a transcript, or draft recovery storage. Esc
+cancels.
 
 The default callback is `http://127.0.0.1:8765/oauth/callback`. No listener is
 started, so a browser connection error at that address is expected; copy the

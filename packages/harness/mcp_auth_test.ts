@@ -1,3 +1,4 @@
+import { open } from './store.ts'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { mount } from '../tui/harness.ts'
@@ -90,10 +91,18 @@ Deno.test('local HTTP OAuth exchange reconnects MCP discovery and works through 
     },
   )
   origin = 'http://127.0.0.1:' + server.addr.port
-  const config = [{ name: 'site', url: origin + '/mcp' }]
-  const backend = await remote({ db: ':memory:', fake: true, mcp: config })
+  const db = dir + '/graph.db'
+  const seed = open(db)
+  await seed.g.apply([{
+    entity: { eid: 'site' },
+    mcp_server: { name: 'site', url: origin + '/mcp' },
+  }])
+  seed.close()
+  const backend = await remote({ db, fake: true })
   try {
-    assertEquals((await backend.agent.authorizeMCP!('list')).servers, ['site'])
+    assertEquals((await backend.agent.authorizeMCP!('list')).servers, [
+      'site [site]',
+    ])
     const pending = await backend.agent.authorizeMCP!('begin', 'site')
     const callback = pending.redirectUrl + '?code=authorization-code&state=' +
       new URL(pending.url!).searchParams.get('state')
@@ -104,7 +113,10 @@ Deno.test('local HTTP OAuth exchange reconnects MCP discovery and works through 
     )
     assert(reply.message!.includes('Connected'))
     assertEquals(exchanges, 1)
-    const local = authorizedMCP(config, dir + '/auth.json')
+    const local = authorizedMCP(
+      [{ name: 'site', url: origin + '/mcp' }],
+      dir + '/auth.json',
+    )
     try {
       const tools = await local.tools()
       assertEquals(tools.length, 1)

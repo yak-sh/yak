@@ -4,7 +4,8 @@
   "exports": {
     ".": "./mod.ts",
     "./oauth": "./oauth.ts",
-    "./host": "./host.ts"
+    "./host": "./host.ts",
+    "./graph": "./graph.ts"
   },
   "license": "Apache-2.0",
   "imports": {
