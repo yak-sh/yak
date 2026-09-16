@@ -3,6 +3,7 @@
 // from the vocabulary — comps and statuses — so the teaching text cannot
 // drift from what the routing actually accepts. io-agnostic on purpose:
 // the CLI must import this without dragging in the MCP SDK.
+import { FORMAT } from '@yaks/query'
 import { comps, type PropType, statuses } from './types.ts'
 
 // A prop's type, said inline where it isn't obvious: enums spell their
@@ -62,66 +63,24 @@ rewriting a whole large value literally — cheaper, and safe against a
 concurrent edit. Example change:
 {"eid":"T-3","name":"doc","comp":{"body":{"$edit":[{"old":"foo","new":"bar"}]}}}`
 
-export let FILTERS = `Filters add operators to that routing: '.priority<=P1',
-'.domain=Ops,Eng' (any of), '.priority=P1..P3' (range; P1...P3 excludes
-the end), '.status!=done', '.title~=flux' (literal contains), '.domain='
-(absent), '.proposed.at!' (present), '.verified=yes', '.num=01,2,3'. Each
-scalar/list/range atom
-parses through the property's type; invalid enum, boolean, number, and
-priority values fail loudly. Timestamp columns take time phrases — today,
-yesterday, '2026-07-04', this|last|next week|month|year, '5 minutes ago',
-'in 2 days' (or 'in 60m' / 'after 8h'), clock times — 9am, 9:30pm,
-14:00, noon, '9am tomorrow' — and a full stamp, '2026-07-25T09:00'. A
-phrase is a RANGE: = within it, >= from its start, <= to its
-end ('.updated.at>="1 hour ago"'; glue with - where quoting is hard).
-The stamps share column names, so spell out the component: '.created.at',
-'.updated.at', '.created.by=jeff' (who authored), '.updated.by!=jeff'.
+// The format is the package's to teach (@yaks/query FORMAT); what follows is
+// what THIS vocabulary adds: typed atoms, the shared stamp columns, the kind
+// scope, id resolution, the rows a listing screens, and where a query lives.
+export let FILTERS = `${FORMAT}
+Here each scalar/list/range atom parses through the property's type, so
+invalid enum, boolean, number, and priority values fail loudly:
+'.priority<=P1', '.domain=Ops,Eng', '.priority=P1..P3', '.verified=yes',
+'.num=01,2,3'. The stamps share column names, so spell out the component:
+'.created.at', '.updated.at' (an entity never touched since reads its
+created.at), '.created.by=jeff' (who authored), '.updated.by!=jeff'.
 '.decided.at' is the DECISION's own date — it can be older than the row,
 which is why 'task decided' orders by it and not by when a thing was filed.
-Component names test facets directly: '.proposed=' means absent (the fix
-queue), while '.proposed!' means present (the idea backlog).
-Whitespace separates terms; every term stands alone. Between terms '&' and
-',' are aliases for whitespace ('&' is the same query as a URL string);
-'|' between terms is OR and binds looser than the AND of adjacent terms
-('.status=open .priority=P1|.assignee=jeff' is open P1 tasks or anything
-of jeff's), and parentheses group ('.status=open (.priority=P1|.assignee=jeff)').
-A directive — order, fields, tally, edges, window — stays outside the '|';
-inside a value ',' is the list operator, with no spaces ('.status=open,wip',
-never 'open, wip'). Quotes, double or single, hold a value together against both
-separators: '.web.url="https://x.test/p?a=1&b=2"' is one predicate,
-'.title~="two words"' one filter, where unquoted '.title~=two words' is the
-filter 'two' and the search word 'words'. '?comp' selects a component when
-present without filtering on it, the mirror of '!comp' (missing).
-Reference filters resolve aliases and human ids ('.assignee=jeff',
-'.project=P-19'),
-and a DOTTED path walks one reference: '.assignee.title~=jeff' — but a
-first segment naming a component stays the explicit spelling ('.pin.x=12',
-'.archived.at=' — absent means live), it never dereferences.
-A PLURAL first segment walks a reference the OTHER way — the entities
-pointing back at this one: '.comments.created.by=jeff' keeps every entity
-with a comment jeff wrote, ANY child matching (the default). '.comments!'
-has any comment, '.comments=' has none, '.comments>=5' counts them, and a
-'!' on the association negates — '.comments!.created.by=jeff' has NONE by
-jeff, '.comments!.created.by!=jeff' has EVERY comment by jeff (ALL, by De
-Morgan). Bare words are text terms (doc contains).
-A WALK follows a relation or a reference column transitively:
-By default it has no hop cap and returns at most 10,000 nearest non-seed nodes.
-'.requires->T-42' keeps what reaches T-42 through requires edges
-(its dependents), '.requires<-T-42' what T-42 reaches (its prerequisites),
-'.requires[<=3]->T-42' caps the depth, and '.comment.target->T-42' walks a
-reference column the same way. The bracket is a QUALIFIER on the path — the
-walk's cap is the only one today, so '.status[<=3]=open' is refused, never
-ignored.
-AGGREGATES reduce the selection to a VALUE instead of rows: '.count!' how
-many ('.status=open .count!'), '.tally=status' each value's count,
-'.distinct=domain' the values themselves. They ride beside the filters that
-select what they reduce, and they answer from the index — a caller wanting a
-number asks for the number, never for the rows to count.
-A WINDOW bounds the ANSWER without changing what matches: '.limit=200' is
-200 of them, newest by id when the line names no order, '.after=13882'
-continues past one you already have ('.after=T-13882' names the same one), so
-paging is '.limit=200' then the same line carrying your last id. An '.order=' SURVIVES a window and the
-window pages inside it — the cursor names an ENTITY, never a place, so the
-one spelling pages a ranking ('.order=hot') as well as an id order.
-A reply that carries a window says so, and says the total it is a prefix of.
-Boards persist these same queries (board.query).`
+'.proposed=' is the fix queue (absent), '.proposed!' the idea backlog.
+'.kind=memory' is the most specific kind present, a scope that composes like
+a column. Reference filters resolve aliases and human ids ('.assignee=jeff',
+'.project=P-19'), and '.archived.at=' means live. Reverse associations are
+named by pluralizing the referencing component ('.comments', '.claims'). A
+quarantined row is listed only by a filter naming '.quarantined'; a blob row
+only by one naming '.blob' or '.image'; session-log entries only by one naming
+an entry component ('.entry.session=S-1'). Boards persist these same queries
+(board.query).`

@@ -76,6 +76,7 @@ import type { Vocab } from './store/vocab.ts'
 import { term as ftsTerm } from '@yaks/fts'
 import {
   type Clause,
+  OPERATORS,
   parse,
   parseDot,
   type Span,
@@ -1723,18 +1724,10 @@ export function adopt(preds: Pred[], comp?: string) {
 // editor, and every filter bar, and a table test can pin each segment.
 export type Cand = { text: string; kind: string }
 
-// op → its one-word meaning: the time doc's words (a phrase names a
-// range, the op picks its edge), which read fine for scalars too.
-let OP_WORDS: [string, string][] = [
-  ['=', 'equals'],
-  ['!', 'exists'],
-  ['!=', 'not'],
-  ['~=', 'contains'],
-  ['<', 'before'],
-  ['<=', 'until'],
-  ['>', 'after'],
-  ['>=', 'since'],
-]
+// op → its one-word meaning, the package's own table (a request `?` completes
+// through presenceOps, not here).
+let OP_WORDS: [string, string][] = OPERATORS.filter((o) => o.spell != '?')
+  .map((o) => [o.spell, o.word])
 
 // a taste of the time grammar for *_at columns — hyphen-glued so a
 // candidate stays one token in a whitespace-split line
