@@ -76,6 +76,11 @@ export type Bundle =
     $actor?: Actor
     /** the alias this bundle was named by, when the graph picked its id */
     $alias?: Eid
+    /** written, but not news: a bundle a plugin synthesized as its own
+     * bookkeeping. It is patched, journaled and cascaded like any other, and
+     * an entity that ONLY quiet bundles spoke of is left out of the answer
+     * (see ./compose.ts) */
+    $quiet?: boolean
   }
   & {
     [comp: string]:

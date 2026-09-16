@@ -20,6 +20,14 @@
 // it is an ANSWER rather than a request, the caller's own word for an entity
 // whose id it could not know, and the only channel that maps the two.
 //
+// A `$quiet` bundle is the other half of that rule, one bundle wide instead of
+// one key: a plugin's own bookkeeping, written and journaled with everything
+// else, and an entity that only quiet bundles spoke of is not in the answer.
+// @yaks/archetype is why — classifying an entity mints a descriptor and may
+// move the pointer of some entity the batch merely referenced, and a caller
+// that wrote one recipe is answered one recipe, wearing whatever pointer the
+// classification gave it.
+//
 // Death is total. An entity this batch killed answers as the tombstone alone,
 // whatever the batch said about it on the way in — a cache that keeps the doc
 // row of a deleted entity keeps a ghost.
@@ -51,10 +59,12 @@ import { comps, dead, TOMBSTONE } from './bundle.ts'
 export let composed = (bundles: Bundle[]): Bundle[] => {
   let by = new Map<Eid, Bundle>()
   let gone = new Set<Eid>()
+  let said = new Set<Eid>()
   for (let b of bundles) {
     let eid = b.entity.eid
     let one = by.get(eid) ?? { entity: { eid } }
     by.set(eid, one)
+    if (!b.$quiet) said.add(eid)
     // The identity is merged rather than replaced: only the phase that minted
     // it knows the `num`, and only the caller's own bundle carries the alias.
     // The FIRST number wins, so a batch stitched from several stores reads the
@@ -74,7 +84,7 @@ export let composed = (bundles: Bundle[]): Bundle[] => {
         : { ...(one[name] as Comp | null ?? {}), ...comp }
     }
   }
-  return [...by.values()].map((b) =>
+  return [...by.values()].filter((b) => said.has(b.entity.eid)).map((b) =>
     gone.has(b.entity.eid)
       ? {
         entity: b.entity,

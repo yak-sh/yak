@@ -155,11 +155,16 @@ function tracking(
     tx: wrapped,
     flush: (bundles) => {
       if (!dirty.size) return bundles
+      // Classification is this plugin's own bookkeeping, so none of it is news
+      // by itself (@yaks/graph `composed`): the pointer still rides the bundle
+      // of an entity the batch is answering for, and an entity nothing else in
+      // the batch spoke of — a descriptor, a reference that minted a spine —
+      // is written and journaled without appearing in the answer.
       let assignments: Bundle[] = [...dirty].flatMap((eid) => {
         let h = held.get(eid)!
         return h.assigned == h.set.eid
           ? []
-          : [{ entity: { eid, archetype: h.set.eid } }]
+          : [{ entity: { eid, archetype: h.set.eid }, $quiet: true }]
       })
       dirty.clear()
       if (!assignments.length) return bundles
@@ -185,6 +190,7 @@ function tracking(
         ).map((a) => ({
           entity: { eid: a.eid, archetype: meta.eid },
           archetype: { tables: JSON.stringify(a.tables) },
+          $quiet: true,
         }))
         // A reference may have minted a bare spine with this content address.
         // It is a descriptor now, not an empty-set owner from the earlier write.
