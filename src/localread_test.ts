@@ -104,7 +104,10 @@ slow(
   async () => {
     let dir = await Deno.makeTempDir()
     let path = `${dir}/graph.db`
-    let { apply } = await import('./db.ts')
+    // The fleet's writers request a human number per entity (client.ts), and
+    // this fixture stands in for them: a session with no num reads back as a
+    // short-eid handle, never the S- id the verify envelope carries.
+    let { applyNumbered } = await import('./testdb.ts')
     let { open } = await import('./store/sqlite.ts')
     let {
       history,
@@ -121,8 +124,12 @@ slow(
     let session = crypto.randomUUID(), item = crypto.randomUUID()
     let project = crypto.randomUUID(), candidate = crypto.randomUUID()
     let verify = crypto.randomUUID()
-    apply(db, [{ eid: session, name: 'session', comp: { id: session } }])
-    apply(
+    applyNumbered(db, [{
+      eid: session,
+      name: 'session',
+      comp: { id: session },
+    }])
+    applyNumbered(
       db,
       [
         { eid: item, name: 'doc', comp: { title: 'localread proof' } },
@@ -144,7 +151,7 @@ slow(
       undefined,
       session,
     )
-    apply(
+    applyNumbered(
       db,
       [{
         eid: verify,
